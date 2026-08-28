@@ -899,19 +899,33 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
         // we don't have it and need to fetch
         const result = await fetchRGHUC(objectUrl)
 
-        if (result !== null) {
-          [modelDirectoryHandle, modelBlobFileHandle] = await writeTemporaryFileToOPFS(result, cacheKey, shaHash, onProgress)
-
-          if (modelBlobFileHandle) {
-            const mockResponse = generateMockResponse(shaHash)
-            await CacheModule.updateCacheRaw(cacheKey, mockResponse, null)
-
-            await postFinalDownloadEventAfterRename(
-              modelDirectoryHandle, modelBlobFileHandle,
-              originalFilePath, shaHash, cacheKey,
-              owner, repo, branch, accessToken, lastModifiedGithub)
-          }
+        // `fetchRGHUC` swallows the failure and returns null, and a
+        // partial write leaves `modelBlobFileHandle` unset. Either way
+        // the old code simply fell out of the branch without posting —
+        // but the caller's `awaitTerminalWorkerEvent` (OPFS/utils.js)
+        // has no timeout, so the load hung on "Downloading model
+        // data..." forever. Post a terminal error instead. Newly
+        // reachable for Git LFS models, which now take this download
+        // path rather than the inline-base64 one.
+        if (result === null) {
+          self.postMessage({error: `Failed to download model from ${objectUrl}`})
+          return
         }
+
+        [modelDirectoryHandle, modelBlobFileHandle] = await writeTemporaryFileToOPFS(result, cacheKey, shaHash, onProgress)
+
+        if (!modelBlobFileHandle) {
+          self.postMessage({error: `Failed to write downloaded model to OPFS: ${originalFilePath}`})
+          return
+        }
+
+        const mockResponse = generateMockResponse(shaHash)
+        await CacheModule.updateCacheRaw(cacheKey, mockResponse, null)
+
+        await postFinalDownloadEventAfterRename(
+          modelDirectoryHandle, modelBlobFileHandle,
+          originalFilePath, shaHash, cacheKey,
+          owner, repo, branch, accessToken, lastModifiedGithub)
       }
     } catch (error) {
       // Don't leave the listener hanging — surface the error so the caller's

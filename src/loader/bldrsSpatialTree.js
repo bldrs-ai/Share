@@ -40,7 +40,7 @@
 // writer is in-browser and trusted; the full pass lands with the share
 // flow.
 import * as pako from 'pako'
-import {glbInfo, glbVerbose} from './glbLog'
+import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 
 
 export const BLDRS_SPATIAL_TREE_EXTENSION_NAME = 'BLDRS_spatial_tree'
@@ -206,6 +206,18 @@ export async function captureBldrsSpatialTree(ifcManager, modelID) {
         modelID, includeProperties, {includeSolids: true}) :
       await ifcManager.getSpatialStructure(modelID, includeProperties)
     if (!root || root.expressID === undefined) {
+      // Loud, because the failure it hides is invisible everywhere else:
+      // Conway's `properties.*` shim optional-chains through
+      // `getPassthrough(modelID)`, so a capture addressed to a handle it
+      // never opened resolves to `undefined` rather than throwing. The
+      // writer then drops both the tree and (seeded from it) the
+      // element-properties extension, the write still reports success,
+      // and the loss only shows up a load later as an empty NavTree and
+      // Properties panel on the cache hit (#1776).
+      glbWarn(
+        `${BLDRS_SPATIAL_TREE_EXTENSION_NAME}: no spatial structure for ` +
+        `modelID=${modelID}; the cached GLB will have no NavTree and no ` +
+        'Properties. Check that this is the handle the model parsed under.')
       return null
     }
     if (canEnrichSync) {

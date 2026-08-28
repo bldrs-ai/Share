@@ -91,7 +91,7 @@ describe('Cutplanes', () => {
   })
 
   describe('View cut-plane permalink', () => {
-    const cpHashState = 'cp:y=17.077,x=-25.551,z=5.741;c:-133.022,131.828,161.85,-38.078,22.64,-2.314'
+    const cpHashState = 'cp:y=17.077,x=-25.551,z=5.741;c:-57.022,131.828,173.3,37.922,22.64,9.136'
     beforeEach(async ({page}) => {
       await homepageSetup(page)
       await setIsReturningUser(page.context())

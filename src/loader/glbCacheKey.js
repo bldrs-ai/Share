@@ -15,6 +15,39 @@
 /**
  * Current Bldrs GLB artifact schema version. Bumped on any backwards-
  * incompatible change to the BLDRS_* extension contract or cache-key shape.
+ * 0.16.0 — retires artifacts baked in the old coordination frame. conway
+ *         1.501.1426 (bldrs-ai/conway#501, issue conway#87) stopped anchoring
+ *         `COORDINATE_TO_ORIGIN` on whichever element a file happens to
+ *         declare first: a model inside the precision budget now keeps the
+ *         coordinates its file authored. index.ifc moved by (+76, 0,
+ *         +11.4504) — x ∈ [-76, 10] became x ∈ [0, 86] — and every other
+ *         near-origin model moved by its own old recentre.
+ *         Geometry is baked into the GLB in world coordinates and nothing in
+ *         the cache key identifies the engine, so without this bump a user
+ *         holding a pre-1.501 artifact keeps rendering the model at its old
+ *         position while the app's cameras — the homepage default in
+ *         `utils/navigate.js`, and every `#c:` permalink captured after the
+ *         bump — point at the new one. Reported as an offset homepage logo
+ *         that a cache clear fixed, which is exactly the shape of this bug:
+ *         cache-hit users see it, cache-miss users don't, so it survives
+ *         local testing.
+ *         Same failure mode and same remedy as 0.15.0 below; that entry's
+ *         note about pairing an engine bump with a schema bump is the rule
+ *         this follows.
+ * 0.15.0 — retires STEP artifacts baked at the wrong world scale. conway
+ *         1.460.1363 (bldrs-ai/conway#458, PR conway#460) stopped applying a
+ *         STEP file's length-unit factor as its RECIPROCAL, so a millimetre
+ *         model that used to arrive 1e6x too large now arrives at true size.
+ *         Geometry is baked into the GLB in world coordinates and nothing in
+ *         the cache key identifies the engine, so without this bump a user
+ *         holding a pre-1.460 artifact would keep loading the oversized
+ *         geometry indefinitely — never picking up the fix, and disagreeing
+ *         with cache-miss users on every shared camera / cut-plane link.
+ *         Older 0.14.0 artifacts read as miss; next miss rewrites at true
+ *         scale. IFC artifacts are unaffected (the IFC path folds
+ *         `linearScalingFactor` into its coordination matrix and never had
+ *         the defect), but the key is format-blind so they rewrite too.
+ *         Precedent for pairing an engine bump with a schema bump: d1a74ea.
  * 0.14.0 — fixed the batched writer dropping STEP per-occurrence data. The
  *         default render path is now the demandGeometry BatchedMesh, which
  *         has no `instanceMap`; the writer had read `occurrencePaths` /
@@ -123,7 +156,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.14.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.16.0'
 
 
 /**

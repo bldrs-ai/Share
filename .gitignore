@@ -15,6 +15,9 @@ test-results
 
 /coverage
 
+# browser load-measurement records (design/new/browser-load-measurement.md)
+tools/measure
+
 # symlink for test-models repo
 public/test-models
 

@@ -1,3 +1,4 @@
+import {gzipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {
   FilenameParseError,
   analyzeHeader,
@@ -7,6 +8,7 @@ import {
   isExtensionSupported,
   pathSuffixSupported,
   splitAroundExtension,
+  stepSchemaName,
   supportedTypes,
 } from './Filetype'
 
@@ -150,11 +152,24 @@ describe('Filetype', () => {
       expect(analyzeHeaderStr(`solid smth`)).toBe('stl')
     })
 
+    it('matches ply header', () => {
+      const header = `ply\n` +
+            `format binary_little_endian 1.0\n` +
+            `element vertex 100\n` +
+            `property float x\n`
+      expect(analyzeHeaderStr(header)).toBe('ply')
+    })
+
     it('matches xyz header', () => {
       const header = `# header1 \n` +
             `#  \n` +
             `  0.3517846     -0.7869986      -2.873479`
       expect(analyzeHeaderStr(header)).toBe('xyz')
+    })
+
+    it('matches usda header', () => {
+      const header = `#usda 1.0\n(\n    upAxis = "Y"\n)`
+      expect(analyzeHeaderStr(header)).toBe('usda')
     })
   })
 
@@ -223,6 +238,79 @@ describe('Filetype', () => {
       expect(analyzeHeader(buffer)).toBe(null)
     })
 
+    it('detects SPZ by its decompressed magic, not by gzip alone', () => {
+      // A real .spz is a gzip stream whose DECOMPRESSED bytes begin with
+      // SPZ's magic 'NGSP'. Gzip alone must not classify: every
+      // .tar.gz / gzipped log shares that signature, and routing those
+      // to the splat decoder turns a clean "unknown type" alert into a
+      // parse failure deep inside wasm (adding-model-formats.md).
+      const spzHead = new Uint8Array([...Array.from('NGSP', (c) => c.charCodeAt(0)), 2, 0, 0, 0])
+      expect(analyzeHeader(gzipSync(spzHead).buffer)).toBe('spz')
+    })
+
+    it('leaves a non-SPZ gzip stream unrecognized', () => {
+      const tarball = new TextEncoder().encode('not a splat, just gzipped text content')
+      expect(analyzeHeader(gzipSync(tarball).buffer)).toBe(null)
+    })
+
+    it('leaves a gzip header with no decodable payload unrecognized', () => {
+      const GZIP_MAGIC_NUMBER = 0x8B1F // gzip magic 1f 8b, little-endian
+      const buffer = new ArrayBuffer(GLB_MIN_SIZE)
+      new DataView(buffer).setUint16(0, GZIP_MAGIC_NUMBER, true)
+      expect(analyzeHeader(buffer)).toBe(null)
+    })
+
+    it('detects USDC crate binary format', () => {
+      const buffer = new TextEncoder().encode('PXR-USDC and then the rest of the crate file').buffer
+      expect(analyzeHeader(buffer)).toBe('usdc')
+    })
+
+    /**
+     * Build the start of a zip: a local file header whose first entry
+     * has the given name. Enough for the sniffing path, which only
+     * reads the signature, the name length, and the name.
+     *
+     * @param {string} firstEntryName
+     * @return {ArrayBuffer}
+     */
+    function makeZipHeader(firstEntryName) {
+      const zipNameOffset = 30
+      const zipNameLenOffset = 26
+      const nameBytes = new TextEncoder().encode(firstEntryName)
+      const buffer = new ArrayBuffer(zipNameOffset + nameBytes.length)
+      const bytes = new Uint8Array(buffer)
+      bytes.set([...Array.from('PK', (c) => c.charCodeAt(0)), 3, 4])
+      new DataView(buffer).setUint16(zipNameLenOffset, nameBytes.length, true)
+      bytes.set(nameBytes, zipNameOffset)
+      return buffer
+    }
+
+    it('detects a zip whose first entry is a USD layer as USDZ', () => {
+      expect(analyzeHeader(makeZipHeader('model.usdc'))).toBe('usdz')
+      expect(analyzeHeader(makeZipHeader('cube.usda'))).toBe('usdz')
+      expect(analyzeHeader(makeZipHeader('scene.USD'))).toBe('usdz')
+    })
+
+    it('detects a zip whose first entry is a SOG manifest as SOG', () => {
+      expect(analyzeHeader(makeZipHeader('meta.json'))).toBe('sog')
+      expect(analyzeHeader(makeZipHeader('bundle/meta.json'))).toBe('sog')
+    })
+
+    it('rejects non-USD non-SOG zip containers (docx, plain zip) as unknown', () => {
+      // Pre-USD behavior for these was a clean null -> "unknown type"
+      // alert on upload; classifying them usdz would fail deep in
+      // USDLoader instead.
+      expect(analyzeHeader(makeZipHeader('[Content_Types].xml'))).toBe(null)
+      expect(analyzeHeader(makeZipHeader('readme.txt'))).toBe(null)
+      // Not the manifest — only a first-entry meta.json marks a SOG.
+      expect(analyzeHeader(makeZipHeader('notmeta.json'))).toBe(null)
+    })
+
+    it('does not swallow text that merely starts with PK', () => {
+      const buffer = new TextEncoder().encode('PKX is not a zip at all, just text').buffer
+      expect(analyzeHeader(buffer)).toBe(null)
+    })
+
     it('detects GLTF text format with proper header', () => {
       // Note: Text starting with "glTF" will be detected as GLB because "glTF" encodes
       // to the same bytes as the GLB magic number. This is correct behavior since
@@ -265,6 +353,106 @@ describe('Filetype', () => {
       expect(getValidExtension('test.GLTF')).toBe('gltf')
       expect(getValidExtension('GLB')).toBe('glb')
       expect(getValidExtension('gltf')).toBe('gltf')
+    })
+
+    it('validates the USD family, matching the longest extension', () => {
+      // 'usd' is a prefix of the other three — the alternation must not
+      // stop at the prefix (typeRegexStr sorts longest-first).
+      expect(getValidExtension('model.usd')).toBe('usd')
+      expect(getValidExtension('model.usda')).toBe('usda')
+      expect(getValidExtension('model.usdc')).toBe('usdc')
+      expect(getValidExtension('model.USDZ')).toBe('usdz')
+    })
+  })
+
+  describe('stepSchemaName', () => {
+    // Real input, because the scan is bounded to the HEADER section: a bare
+    // fragment has no section to find and correctly reads as "did not say".
+    const hdr = (body) => `ISO-10303-21;\nHEADER;\n${body}\nENDSEC;\nDATA;\nENDSEC;\n`
+
+    it('returns the declared schema for both families', () => {
+      expect(stepSchemaName(hdr(`FILE_SCHEMA(('IFC4'));`))).toBe('IFC4')
+      expect(stepSchemaName(hdr(`FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));`))).toBe('AUTOMOTIVE_DESIGN')
+      expect(stepSchemaName(hdr(`FILE_SCHEMA  ( ( ' IFC2X3 ' ) );`))).toBe('IFC2X3')
+    })
+
+    it(`skips Part-21 comments the way conway's header parser does`, () => {
+      // ISO-10303-21 allows a comment anywhere whitespace is allowed, and
+      // conway's `StepHeaderParser` consumes one as whitespace — so
+      // `ModelFormatDetector` calls these IFC. Reading them as "no schema"
+      // would cost a large IFC its windowed parse.
+      expect(stepSchemaName(hdr(`FILE_SCHEMA /* exported by X */ (('IFC4'));`))).toBe('IFC4')
+      expect(stepSchemaName(hdr(`FILE_SCHEMA((/* why */'IFC4'));`))).toBe('IFC4')
+      expect(stepSchemaName(hdr(`FILE_SCHEMA/* a */(/* b */(/* c */'IFC4'));`))).toBe('IFC4')
+    })
+
+    it('ignores a FILE_SCHEMA entity that is itself inside a comment', () => {
+      // The dangerous direction, and the one a comment-tolerant gap pattern
+      // cannot fix: the whole entity sits INSIDE the comment, so no amount of
+      // tolerance BETWEEN tokens excludes it. conway's parser skips the
+      // comment and reads AP214; a raw-text scan would answer IFC, send a
+      // STEP file down conway's IFC-only store open, and burn a model handle.
+      const body = `/* FILE_SCHEMA(('IFC4')); */\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));`
+      expect(stepSchemaName(hdr(body))).toBe('AUTOMOTIVE_DESIGN')
+      expect(analyzeHeaderStr(hdr(body))).toBe('step')
+    })
+
+    it('takes the LAST FILE_SCHEMA, matching conway\'s last-wins Map', () => {
+      // conway stores header entities in a Map keyed by name
+      // (`step_parser.js:193`), so a duplicated FILE_SCHEMA overwrites.
+      // Reading the first would answer IFC here where conway answers AP214 —
+      // the dangerous direction again.
+      const body = `FILE_SCHEMA(('IFC4'));\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));`
+      expect(stepSchemaName(hdr(body))).toBe('AUTOMOTIVE_DESIGN')
+      expect(analyzeHeaderStr(hdr(body))).toBe('step')
+    })
+
+    it('ignores a FILE_SCHEMA lookalike past ENDSEC', () => {
+      // The caller sniffs a fixed 64 KiB prefix, which on any real model runs
+      // well into DATA, where a quoted string may contain anything. conway
+      // reads FILE_SCHEMA from the HEADER section only.
+      const text = `ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\nENDSEC;\n` +
+        `DATA;\n#1=IFCPROPERTYSINGLEVALUE('FILE_SCHEMA((''IFC4''));');\nENDSEC;\n`
+      expect(stepSchemaName(text)).toBe('AUTOMOTIVE_DESIGN')
+    })
+
+    it('keeps a comment-like sequence inside a string literal', () => {
+      // Inside a Part-21 string `/*` is ordinary text. Masking it would join
+      // the surrounding text and could resurrect the bug it exists to fix.
+      expect(stepSchemaName(hdr(
+        `FILE_NAME('/* not a comment','*/');\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));`,
+      ))).toBe('AUTOMOTIVE_DESIGN')
+      // A doubled apostrophe escapes one inside the string; the string stays
+      // open across it, so the `/*` after it is still literal.
+      expect(stepSchemaName(hdr(
+        `FILE_NAME('it''s /* fine');\nFILE_SCHEMA(('IFC4'));`,
+      ))).toBe('IFC4')
+    })
+
+    it('does not match FILE_SCHEMA inside a longer entity name', () => {
+      // conway parses header records under their exact names and inspects
+      // only the `FILE_SCHEMA` key, so `NOT_FILE_SCHEMA` is invisible to it.
+      // An unanchored scan reads it as the schema — and with last-wins that
+      // is the dangerous direction whenever the lookalike follows the real
+      // entity: we answer IFC where conway answers AP214.
+      const body = `FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\nNOT_FILE_SCHEMA(('IFC4'));`
+      expect(stepSchemaName(hdr(body))).toBe('AUTOMOTIVE_DESIGN')
+      expect(analyzeHeaderStr(hdr(body))).toBe('step')
+    })
+
+    it('separates "did not say" from "said STEP"', () => {
+      // The distinction `classifyStepFamily` cannot express, because it
+      // folds both into 'ifc'. A caller whose false-'ifc' is expensive —
+      // `Loader.js#canOpenFromStore` gating conway's IFC-only store open —
+      // needs a non-null name before it trusts the classification.
+      expect(stepSchemaName('HEADER;\nENDSEC;')).toBeNull()
+      expect(stepSchemaName(hdr(`FILE_SCHEMA(());`))).toBeNull()
+      expect(stepSchemaName(hdr(`FILE_SCHEMA((''));`))).toBeNull()
+      // No HEADER section at all — nothing conway would parse a schema from.
+      expect(stepSchemaName(`FILE_SCHEMA(('IFC4'));`)).toBeNull()
+      // Same inputs, classifier still answers 'ifc' — that default is why
+      // the guard above exists.
+      expect(analyzeHeaderStr(hdr(`FILE_SCHEMA((''));`))).toBe('ifc')
     })
   })
 })

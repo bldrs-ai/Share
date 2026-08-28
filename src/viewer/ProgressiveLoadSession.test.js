@@ -1,8 +1,29 @@
-import {BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, Scene} from 'three'
+import {Box3, BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, Scene, Sphere, Vector3} from 'three'
 import ProgressiveLoadSession, {SessionState} from './ProgressiveLoadSession'
+import {fitDistanceForRadius} from './three/cameraLimits'
 
 
 /* eslint-disable no-magic-numbers */
+
+
+/**
+ * Stream `count` unit boxes along x through notifyBounds, reusing one
+ * scratch box exactly as IncrementalBatchedBuilder does, then force one
+ * refit so the fitted sphere covers all of them.
+ *
+ * @param {ProgressiveLoadSession} target
+ * @param {number} count
+ * @param {Box3} scratch
+ */
+function streamRun(target, count, scratch) {
+  const size = new Vector3(1, 1, 1)
+  for (let i = 0; i < count; i++) {
+    target.notifyBounds(scratch.setFromCenterAndSize(new Vector3(i, 0, 0), size))
+  }
+  target.lastFitMs = 0
+  target.overflowPending = true
+  target.maybeRefit_()
+}
 
 
 /** @return {object} A camera-controls stand-in recording fit calls. */
@@ -33,6 +54,10 @@ function makeCamera() {
   return {
     fov: 45,
     aspect: 1.5,
+    // The IfcCamera constructor defaults. `near: 1` matters as much as
+    // the controls' minDistance: on a sub-metre model it sits beyond the
+    // whole thing, so the follow must bring it down (see cameraLimits).
+    near: 1,
     far: 100,
     updateProjectionMatrix() {/* no-op */},
   }
@@ -57,8 +82,14 @@ describe('ProgressiveLoadSession', () => {
   let controls
   let camera
   let session
+  let warnSpy
 
   beforeEach(() => {
+    // The outlier guard's console.warn is always-on by design (it must
+    // reach a user's console without a flag), so divert it here rather
+    // than let the outlier tests narrate. PLAYBOOK.md §"Keep the test
+    // console clean".
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
     scene = new Scene()
     controls = makeControls()
     camera = makeCamera()
@@ -72,6 +103,7 @@ describe('ProgressiveLoadSession', () => {
 
   afterEach(() => {
     session.finish()
+    warnSpy.mockRestore()
   })
 
   it('walks idle → previewing → assembling → finished', () => {
@@ -125,6 +157,44 @@ describe('ProgressiveLoadSession', () => {
     expect(controls.fits).toHaveLength(1)
   })
 
+  it('finish removes aabb imposters even if they left the preview group', () => {
+    session.addPreviewMesh(cubeAt(0))
+    const stray = cubeAt(5)
+    stray.userData.aabbImposter = true
+    scene.add(stray)
+    expect(scene.children).toContain(stray)
+    session.finish()
+    expect(scene.children).not.toContain(stray)
+    expect(stray.parent).toBeNull()
+  })
+
+  // Codex review on #1753: teardown had lost its dispose pass when the
+  // shared aabb cube arrived, retaining every load's uploaded preview
+  // buffers until page refresh. Resources are pooled across meshes
+  // (parsePreviewMesh caches; the imposter unit cube), so each unique
+  // one must be disposed exactly once — not per mesh, not zero times.
+  it('finish disposes shared preview resources exactly once', () => {
+    const geometry = new BoxGeometry(1, 1, 1)
+    const material = new MeshBasicMaterial()
+    const geometryDispose = jest.spyOn(geometry, 'dispose')
+    const materialDispose = jest.spyOn(material, 'dispose')
+    const shared = (x) => {
+      const mesh = new Mesh(geometry, material)
+      mesh.matrixAutoUpdate = false
+      mesh.matrix = new Matrix4().makeTranslation(x, 0, 0)
+      return mesh
+    }
+    session.addPreviewMesh(shared(0))
+    session.addPreviewMesh(shared(1))
+    const stray = shared(2)
+    stray.userData.aabbImposter = true
+    scene.add(stray)
+    session.finish()
+    expect(geometryDispose).toHaveBeenCalledTimes(1)
+    expect(materialDispose).toHaveBeenCalledTimes(1)
+  })
+
+
   it('abort tears the preview down and lands in aborted', () => {
     session.addPreviewMesh(cubeAt(0))
     session.abort()
@@ -157,6 +227,272 @@ describe('ProgressiveLoadSession', () => {
     session.maybeRefit_()
     expect(controls.maxDistance).toBe(grown)
   })
+
+  it('with frameCamera:false, previews render but the camera never moves', () => {
+    // A `#c:` permalink pinned the camera: streaming geometry must not drag
+    // it off the pinned pose. The preview still installs; no fit is issued,
+    // even for a mesh far outside any framed volume.
+    const pinned = new ProgressiveLoadSession({
+      scene,
+      getControls: () => controls,
+      getCamera: () => camera,
+      frameCamera: false,
+      onProgress: jest.fn(),
+    })
+    pinned.addPreviewMesh(cubeAt(0))
+    expect(scene.children).toContain(pinned.previewGroup)
+    pinned.lastFitMs = Date.now() - 10000
+    pinned.addPreviewMesh(cubeAt(100))
+    expect(controls.fits).toHaveLength(0)
+    pinned.finish()
+  })
+
+  describe('camera limits during the stream', () => {
+    /**
+     * Assert the follow left the camera able to actually reach the pose
+     * it asked for, and with the model inside the frustum.
+     *
+     * @param {object} fitted the sphere handed to fitToSphere
+     */
+    const expectReachableFit = (fitted) => {
+      const wantDistance = fitDistanceForRadius(camera, fitted.radius)
+      // fitToSphere dollies are clamped to [minDistance, maxDistance]. If
+      // the distance it wants falls outside, the camera silently parks at
+      // the clamp instead and the model is mis-sized.
+      expect(wantDistance).toBeGreaterThan(controls.minDistance)
+      expect(wantDistance).toBeLessThan(controls.maxDistance)
+      // Near must sit inside the model, not beyond it, or it clips.
+      expect(camera.near).toBeLessThan(wantDistance - fitted.radius)
+    }
+
+    it('brings minDistance and near DOWN for a sub-metre model', () => {
+      // Arty_Z7.stp is a true-scale millimetre PCB, ~0.1 scene units
+      // across. The follow used to grow only maxDistance and far, leaving
+      // minDistance and near at the activation default of 1 -- ten times
+      // the whole board. fitToSphere then clamped to minDistance so the
+      // board rendered tiny, and near=1 sat beyond it so it rendered
+      // half-clipped, until the end-of-load fit corrected both. That
+      // correction is what read as "resizing during load".
+      session.notifyBounds(
+        new Box3().setFromCenterAndSize(new Vector3(0, 0, 0), new Vector3(0.1, 0.1, 0.02)))
+
+      const fitted = controls.fits[0]
+      expect(fitted).toBeDefined()
+      expect(controls.minDistance).toBeLessThan(1)
+      expect(camera.near).toBeLessThan(1)
+      expectReachableFit(fitted)
+    })
+
+    it('grows maxDistance and far UP for a model past the defaults', () => {
+      const scratch = new Box3()
+      streamRun(session, 60, scratch)
+
+      const fitted = controls.fits[controls.fits.length - 1]
+      expect(controls.maxDistance).toBeGreaterThan(300)
+      expect(camera.far).toBeGreaterThan(100)
+      expectReachableFit(fitted)
+    })
+
+    it('never shrinks the outward range between refits', () => {
+      // growOnly: the union is monotonic, and letting maxDistance/far
+      // fall back mid-load would pop the projection between refits.
+      const scratch = new Box3()
+      streamRun(session, 60, scratch)
+      const wideMax = controls.maxDistance
+      const wideFar = camera.far
+
+      // A refit whose robust bounds are no larger must not pull them in.
+      session.lastFitMs = 0
+      session.overflowPending = true
+      session.fittedSphere = null
+      session.maybeRefit_()
+      session.lastFitMs = 0
+      session.overflowPending = true
+      session.maybeRefit_()
+
+      expect(controls.maxDistance).toBeGreaterThanOrEqual(wideMax)
+      expect(camera.far).toBeGreaterThanOrEqual(wideFar)
+    })
+  })
+
+
+  describe('mis-placed preview geometry', () => {
+    it('drops a preview the durable model would never place there', () => {
+      // conway's preview channel double-subtracts the site offset for
+      // some products: on Snowdon (site at 417622, 78714, 238) that put
+      // 88 previews ~425km out while the durable stream placed none
+      // there, and the follow chased them to a 318km framing sphere.
+      for (let i = 0; i < 40; i++) {
+        session.addPreviewMesh(cubeAt(i * 0.1))
+      }
+      const accepted = session.previewMeshCount
+
+      session.addPreviewMesh(cubeAt(-417589.5))
+      session.lastFitMs = 0
+      session.overflowPending = true
+      session.maybeRefit_()
+
+      expect(session.previewOutliers).toBe(1)
+      expect(session.previewMeshCount).toBe(accepted)
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('dropping mis-placed preview geometry'))
+      // The camera still frames the 40 cubes (~4 units), not the 417589
+      // the rejected placement would have dragged it to.
+      const after = controls.fits[controls.fits.length - 1]
+      expect(after.radius).toBeLessThan(100)
+    })
+
+    it('keeps ordinary geometry that merely extends the model', () => {
+      // A wing, crane or antenna is nowhere near 100x the model radius
+      // out, so the guard must not touch it.
+      for (let i = 0; i < 40; i++) {
+        session.addPreviewMesh(cubeAt(i * 0.1))
+      }
+      const accepted = session.previewMeshCount
+
+      session.addPreviewMesh(cubeAt(20))
+
+      expect(session.previewOutliers).toBe(0)
+      expect(session.previewMeshCount).toBe(accepted + 1)
+    })
+  })
+
+
+  describe('recovering an over-inflated frame', () => {
+    it('reclaims the frame when a stray blew it up', () => {
+      // Snowdon: a fit jumped to radius 318751 at 503 preview meshes and
+      // the following 650 meshes produced NO fit at all, because refits
+      // fire on overflow and nothing can overflow a sphere that large.
+      // The model sat on screen as a sub-pixel speck for the rest of the
+      // load and only looked right once the end-of-load fit ran.
+      const scratch = new Box3()
+      streamRun(session, 60, scratch)
+      const good = controls.fits[controls.fits.length - 1]
+
+      session.fittedSphere = new Sphere(good.center.clone(), good.radius * 5000)
+      session.overflowPending = false
+      session.lastFitMs = 0
+      const before = controls.fits.length
+
+      session.followTick_()
+      session.stopFollow_()
+
+      expect(controls.fits.length).toBeGreaterThan(before)
+      const recovered = controls.fits[controls.fits.length - 1]
+      expect(recovered.radius).toBeLessThan(good.radius * 2)
+    })
+
+    it('does not refit when the frame is merely a little loose', () => {
+      // The guard against trading one bug for camera thrash: ordinary
+      // growth is already handled by overflow, so a frame that is only
+      // somewhat larger than needed must be left alone.
+      const scratch = new Box3()
+      streamRun(session, 60, scratch)
+      const good = controls.fits[controls.fits.length - 1]
+
+      session.fittedSphere = new Sphere(good.center.clone(), good.radius * 1.5)
+      session.overflowPending = false
+      session.lastFitMs = 0
+      const before = controls.fits.length
+
+      session.followTick_()
+      session.stopFollow_()
+
+      expect(controls.fits).toHaveLength(before)
+    })
+  })
+
+
+  describe('robust framing during the stream', () => {
+    // Enough instances for the robust criterion to have statistics —
+    // below that it frames the exact union, as the tests above assert.
+    const STREAM_COUNT = 60
+    /** A test-models-private#26 catenary sliver: a km into the sky. */
+    const STRAY_AT = new Vector3(0, 0, 5000)
+
+    it('keeps framing the model when a stray lands mid-stream', () => {
+      // The whole point of #26's fix on this path: before it, one stray
+      // instance zoomed the camera out to a km-scale box for the rest of
+      // the load, so the model materialized as a speck.
+      const scratch = new Box3()
+      streamRun(session, STREAM_COUNT, scratch)
+      const framed = controls.fits[controls.fits.length - 1]
+      expect(framed.radius).toBeLessThan(STREAM_COUNT)
+
+      session.notifyBounds(scratch.setFromCenterAndSize(STRAY_AT, new Vector3(1, 1, 1)))
+      session.lastFitMs = 0
+      session.maybeRefit_()
+
+      const after = controls.fits[controls.fits.length - 1]
+      expect(after.radius).toBeCloseTo(framed.radius)
+      expect(after.center.z).toBeCloseTo(framed.center.z)
+    })
+
+    it('skips the no-op refit an excluded stray would otherwise cause', () => {
+      const scratch = new Box3()
+      streamRun(session, STREAM_COUNT, scratch)
+      const fitCount = controls.fits.length
+
+      session.notifyBounds(scratch.setFromCenterAndSize(STRAY_AT, new Vector3(1, 1, 1)))
+      session.lastFitMs = 0
+      session.maybeRefit_()
+
+      // The framing didn't change, so the camera was never told to move.
+      expect(controls.fits).toHaveLength(fitCount)
+      expect(session.overflowPending).toBe(false)
+    })
+
+    it('keeps skipped refits behind the cadence gate', () => {
+      // Deciding to skip still costs a full robust-bounds pass, so it
+      // has to stamp lastFitMs like a real fit — otherwise the throttle
+      // is defeated and every arriving stray pays for one.
+      const scratch = new Box3()
+      streamRun(session, STREAM_COUNT, scratch)
+
+      session.notifyBounds(scratch.setFromCenterAndSize(STRAY_AT, new Vector3(1, 1, 1)))
+      session.lastFitMs = 0
+      session.maybeRefit_()
+      const afterSkip = session.lastFitMs
+
+      expect(afterSkip).toBeGreaterThan(0)
+      // A second stray now finds the gate closed, so it costs nothing.
+      session.notifyBounds(scratch.setFromCenterAndSize(STRAY_AT, new Vector3(1, 1, 1)))
+      session.maybeRefit_()
+      expect(session.lastFitMs).toBe(afterSkip)
+    })
+
+    it('still follows real geometry that extends the model', () => {
+      const scratch = new Box3()
+      streamRun(session, STREAM_COUNT, scratch)
+      const framed = controls.fits[controls.fits.length - 1]
+
+      // A wing continuing the building — inside the fences, so framed.
+      session.notifyBounds(
+        scratch.setFromCenterAndSize(new Vector3(STREAM_COUNT + 20, 0, 0), new Vector3(1, 1, 1)))
+      session.lastFitMs = 0
+      session.maybeRefit_()
+
+      const after = controls.fits[controls.fits.length - 1]
+      expect(after.radius).toBeGreaterThan(framed.radius)
+    })
+
+    it('copies bounds out of the caller\'s scratch box', () => {
+      // IncrementalBatchedBuilder passes one scratch Box3 it overwrites
+      // per instance — retaining the reference would corrupt every
+      // recorded bound on the next append.
+      const scratch = new Box3()
+      streamRun(session, STREAM_COUNT, scratch)
+      const framed = controls.fits[controls.fits.length - 1]
+
+      scratch.set(new Vector3(-9999, -9999, -9999), new Vector3(9999, 9999, 9999))
+      session.lastFitMs = 0
+      session.overflowPending = true
+      session.maybeRefit_()
+
+      expect(controls.fits[controls.fits.length - 1].radius).toBeCloseTo(framed.radius)
+    })
+  })
+
 
   it('stampCoordination re-frames the union under the group transform', () => {
     session.addPreviewMesh(cubeAt(0))

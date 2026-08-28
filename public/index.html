@@ -10,6 +10,7 @@
           content="width=device-width, user-scalable=no, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
     <link rel="icon" href="/favicon.ico"/>
     <title>bldrs.ai</title>
+    <meta name="google-site-verification" content="soxvqCycG6656Bmiml345OQ0BPfPnfzHBx_CJ3dSEeQ" />
     <!-- Start Single Page Apps for GitHub Pages -->
     <script type="application/javascript">
       // Single Page Apps for GitHub Pages
@@ -26,6 +27,45 @@
       }(window.location))
     </script>
     <!-- End Single Page Apps for GitHub Pages -->
+    <!-- gtag stub only: buffers events into dataLayer everywhere (gtagEvent
+         calls + E2E assertions rely on it). The external gtag/js loader is
+         injected by src/index/ga.js, and only on prod hosts outside
+         automation — keeps preview/dev/CI traffic out of prod analytics.
+         The config ID below must match ga.js#GA_MEASUREMENT_ID. -->
+    <script type="application/javascript">
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      // Carried IN the config call rather than a `set` queued before it.
+      // config is what triggers page_view / session_start / first_visit — the
+      // events that make landing page and new-vs-returning queryable per user
+      // — and gtag only guarantees a user property reaches them when it is
+      // passed as config's own `user_properties` field. A preceding `set`
+      // relies on queue-drain ordering that gtag does not document.
+      //
+      // The bundle cannot do this: it loads long after config is queued.
+      // So the `cid.` prefix (analytics#OPEN_CID_PREFIX — a bare id is
+      // numeric-looking, and GA4 won't populate a text dimension from a
+      // number) and the consent rule (analytics#isAllowed) are duplicated
+      // here on purpose, the same arrangement the config ID already has with
+      // ga.js#GA_MEASUREMENT_ID.
+      //
+      // Host and automation are deliberately NOT re-checked. Everything the
+      // stub queues is inert off-prod because ga.js#shouldInitGa never
+      // injects gtag/js there (asserted in ga.test.js), and the E2E suite
+      // reads this buffer on localhost — the same reason isRealModelOpen
+      // documents localhost as a deliberate exception.
+      function userPropsBeforeConfig() {
+        var consent = document.cookie.match(/(?:^|;\s*)isAnalyticsAllowed=([^;]*)/);
+        // absent means allowed (the app's default); anything present but not
+        // exactly 'true' is a denial, matching isAllowed's === 'true' test
+        if (consent && consent[1] !== 'true') return {};
+        // _ga is `GA<version>.<domain depth>.<id>`, and the id itself has a dot
+        var m = document.cookie.match(/(?:^|;\s*)_ga=GA\d+\.\d+\.([^;]+)/);
+        return m ? {user_properties: {open_cid: 'cid.' + m[1]}} : {};
+      }
+      gtag('config', 'G-GRLNVMZRGW', userPropsBeforeConfig());
+    </script>
     <style>
       :root {
         color-scheme: light dark;
@@ -45,15 +85,7 @@
       loader.setAttribute('src', pathPrefix + '/index.js')
       document.body.appendChild(loader)
     </script>
-    <!-- gtags after app bundle; helps race with MSW in dev server and testing -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-GRLNVMZRGW" type="application/javascript"></script>
-    <script type="application/javascript">
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-GRLNVMZRGW');
-    </script>
-    <!-- AdSense site verification. Same body-after-bundle placement as gtag above so MSW takes control before the script's network requests fire in dev/test. design/new/ads.md captures why Auto ads stay OFF and which routes may carry ad slots. -->
+    <!-- AdSense site verification. Body-after-bundle placement so MSW takes control before the script's network requests fire in dev/test. design/new/ads.md captures why Auto ads stay OFF and which routes may carry ad slots. -->
     <script async
             src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2372655610709687"
             crossorigin="anonymous"></script>

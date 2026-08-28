@@ -54,6 +54,91 @@ function makeViewerStub() {
 }
 
 
+/**
+ * Viewer whose Conway API can optionally parse an OPFS File via
+ * OpenModelStream. Parse rejects after Loader has hashed so the
+ * hash/buffering spies stay observable.
+ *
+ * @param {object} [opts]
+ * @param {boolean} [opts.streamOpen]
+ * @return {object}
+ */
+function makeIfcViewer({streamOpen = false} = {}) {
+  const ifcAPI = {
+    OpenModel: jest.fn(() => {
+      throw new Error('open failed')
+    }),
+    StreamAllMeshes: jest.fn(),
+    GetCoordinationMatrix: jest.fn().mockResolvedValue(new Array(16).fill(0)),
+    getStatistics: jest.fn().mockReturnValue({
+      getGeometryMemory: () => 0,
+      getGeometryTime: () => 0,
+      getVersion: () => 'IFC4',
+      getLoadStatus: () => 'SUCCESS',
+      getOriginatingSystem: () => 'test',
+      getPreprocessorVersion: () => '1.0',
+      getParseTime: () => 0,
+      getTotalTime: () => 0,
+    }),
+    getConwayVersion: () => '1.0.0',
+  }
+  if (streamOpen) {
+    ifcAPI.OpenModelStream = jest.fn(() => {
+      throw new Error('stream open failed')
+    })
+    ifcAPI.ExtractGeometryBatchAsync = jest.fn()
+  }
+  const ifc = {
+    type: null,
+    ifcLastError: null,
+    addIfcModel: jest.fn(),
+    loader: {
+      parse: jest.fn(),
+      ifcManager: {
+        state: {models: []},
+        applyWebIfcConfig: jest.fn().mockResolvedValue(),
+        setupCoordinationMatrix: jest.fn(),
+        ifcAPI,
+      },
+    },
+    context: {
+      items: {ifcModels: []},
+      fitToFrame: jest.fn(),
+    },
+  }
+  return {
+    IFC: ifc,
+    ifcLoader: new ShareIfcLoader({ifcAPI, ifc}),
+  }
+}
+
+
+// Part-21 header fixtures. `canOpenFromStore` decides the store path from
+// FILE_SCHEMA, not from the suffix, so these tests need real headers: a body
+// of filler bytes would sniff as "no schema found" and buffer for a reason
+// the test did not intend to exercise.
+/**
+ * @param {string} schema the FILE_SCHEMA value, e.g. 'IFC4'
+ * @return {string} a minimal ISO-10303-21 header declaring it
+ */
+function part21(schema) {
+  return `ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION((''),'2;1');
+FILE_NAME('t','',(''),(''),'','','');
+FILE_SCHEMA(('${schema}'));
+ENDSEC;
+DATA;
+ENDSEC;
+END-ISO-10303-21;
+`
+}
+
+
+const IFC_SOURCE = part21('IFC4')
+const STEP_SOURCE = part21('AUTOMOTIVE_DESIGN')
+
+
 /** MockBlob with an arrayBuffer() that yields the given bytes. */
 class MockFile {
   /** @param {ArrayBuffer|Uint8Array|string} content */
@@ -61,18 +146,35 @@ class MockFile {
     this.content = content
   }
 
-  /** @return {Promise<ArrayBuffer>} */
-  async arrayBuffer() {
+  /** @return {Uint8Array} */
+  bytes_() {
     if (typeof this.content === 'string') {
-      return new TextEncoder().encode(this.content).buffer
+      return new TextEncoder().encode(this.content)
     }
     if (this.content instanceof Uint8Array) {
-      return this.content.buffer.slice(
-        this.content.byteOffset,
-        this.content.byteOffset + this.content.byteLength,
-      )
+      return this.content
     }
-    return this.content
+    return new Uint8Array(this.content)
+  }
+
+  /** @return {number} */
+  get size() {
+    return this.bytes_().byteLength
+  }
+
+  /**
+   * @param {number} start
+   * @param {number} [end]
+   * @return {MockFile}
+   */
+  slice(start, end = this.size) {
+    return new MockFile(this.bytes_().subarray(start, end))
+  }
+
+  /** @return {Promise<ArrayBuffer>} */
+  async arrayBuffer() {
+    const bytes = this.bytes_()
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
   }
 }
 
@@ -110,7 +212,48 @@ describe('Loader exported helpers', () => {
 })
 
 
+// `ShareIfcLoader#parse` logs the parse failure with `console.error` before
+// rethrowing, so every rejection-based case below emits one by design. A test
+// run should print nothing unexpected (STYLE.md §"Console hygiene"), so divert
+// them into a buffer — and assert on the buffer rather than silently
+// swallowing it, per PLAYBOOK §"Keep the test console clean" move 2. Anything
+// that is NOT one of these induced failures fails the test instead of
+// scrolling past in the noise.
+const EXPECTED_LOADER_ERRORS =
+  /open failed|is not a function|Failed to fetch model data|Unknown filetype|Could not guess filetype/i
+
+
+/**
+ * Divert `console.error` for one test. Returns the buffer plus a restore.
+ *
+ * @return {{lines: string[], restore: Function}}
+ */
+function divertConsoleError() {
+  const original = console.error
+  const lines = []
+  console.error = (...args) => {
+    lines.push(args.map((a) => (a instanceof Error ? `${a.name}: ${a.message}` : String(a))).join(' '))
+  }
+  return {lines, restore: () => {
+    console.error = original
+  }}
+}
+
+
 describe('load() with isOpfsAvailable=false (axios path)', () => {
+  let consoleError
+
+  beforeEach(() => {
+    consoleError = divertConsoleError()
+  })
+
+  afterEach(() => {
+    consoleError.restore()
+    for (const line of consoleError.lines) {
+      expect(line).toMatch(EXPECTED_LOADER_ERRORS)
+    }
+  })
+
   let viewer
   let onProgress
   let setOpfsFile
@@ -263,6 +406,19 @@ describe('load() with isOpfsAvailable=false (axios path)', () => {
 
 
 describe('load() error/edge paths with OPFS enabled', () => {
+  let consoleError
+
+  beforeEach(() => {
+    consoleError = divertConsoleError()
+  })
+
+  afterEach(() => {
+    consoleError.restore()
+    for (const line of consoleError.lines) {
+      expect(line).toMatch(EXPECTED_LOADER_ERRORS)
+    }
+  })
+
   let viewer
   let onProgress
   let setOpfsFile
@@ -410,6 +566,175 @@ describe('load() error/edge paths with OPFS enabled', () => {
     ).rejects.toThrow() // readModel still fails on junk bytes
 
     expect(getModelFromOPFS).toHaveBeenCalledTimes(1)
+  })
+
+
+  it('reads an uploaded OPFS file only once so SHA-1 shares the parse buffer', async () => {
+    // wantGlb is default-on. Non-GitHub sources hash the bytes for the
+    // GLB cache key; that used to be a second arrayBuffer() of the same
+    // File (~860 MB on PSB). The parse buffer is the hash input.
+    const file = new MockFile(new Uint8Array(4))
+    const spy = jest.spyOn(file, 'arrayBuffer')
+    getModelFromOPFS.mockReset()
+    getModelFromOPFS.mockResolvedValue(file)
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'blob:http://localhost/uuid.stl',
+      '',
+      false,
+      false,
+    ])
+
+    const uuidPath = '12345678-1234-4abc-9def-123456789abc.stl'
+
+    await expect(
+      load(uuidPath, viewer, onProgress, true, setOpfsFile, ''),
+    ).rejects.toThrow()
+
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+
+  it('does not arrayBuffer an uploaded IFC when OpenModelStream can take the File', async () => {
+    const file = new MockFile(IFC_SOURCE)
+    const arrayBufferSpy = jest.spyOn(file, 'arrayBuffer')
+    const sliceSpy = jest.spyOn(file, 'slice')
+    getModelFromOPFS.mockReset()
+    getModelFromOPFS.mockResolvedValue(file)
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'blob:http://localhost/uuid.ifc',
+      '',
+      false,
+      false,
+    ])
+
+    await expect(
+      load(
+        '12345678-1234-4abc-9def-123456789abc.ifc',
+        makeIfcViewer({streamOpen: true}),
+        onProgress, true, setOpfsFile, ''),
+    ).rejects.toThrow()
+
+    expect(arrayBufferSpy).not.toHaveBeenCalled()
+    expect(sliceSpy).toHaveBeenCalled()
+    expect(onProgress).toHaveBeenCalledWith('Hashing model...')
+  })
+
+
+  it('buffers an uploaded STEP file rather than offering it to the store open', async () => {
+    // Conway's store-backed open is IFC-only, and it reserves the model
+    // handle before it sniffs the format — so handing it a STEP file burns
+    // handle 0 on a model that never opens and the buffered retry parses as
+    // handle 1. Every Share call site that passes the scene-level id 0 then
+    // addresses a model Conway does not have, which is how a STEP model's
+    // cached GLB ended up with no NavTree and no Properties (#1776). Nothing
+    // is lost by buffering here: the store path had no STEP implementation.
+    const file = new MockFile(STEP_SOURCE)
+    const arrayBufferSpy = jest.spyOn(file, 'arrayBuffer')
+    getModelFromOPFS.mockReset()
+    getModelFromOPFS.mockResolvedValue(file)
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'blob:http://localhost/uuid.stp',
+      '',
+      false,
+      false,
+    ])
+
+    await expect(
+      load(
+        '12345678-1234-4abc-9def-123456789abc.stp',
+        makeIfcViewer({streamOpen: true}),
+        onProgress, true, setOpfsFile, ''),
+    ).rejects.toThrow()
+
+    expect(arrayBufferSpy).toHaveBeenCalledTimes(1)
+    expect(onProgress).toHaveBeenCalledWith('Buffering model bytes...')
+    expect(onProgress).not.toHaveBeenCalledWith('Hashing model...')
+  })
+
+
+  it('keeps the store open for IFC content carrying a STEP suffix', async () => {
+    // The suffix is not the format. `findLoader` takes `loader.type` from the
+    // filename, so a suffix test would deny this file the windowed parse and
+    // buffer its whole source — on a large mislabelled model that is exactly
+    // the hundreds-of-MB allocation M3 removed. FILE_SCHEMA says IFC4, conway's
+    // own sniff will agree, so the store path is both safe and worth taking.
+    const file = new MockFile(IFC_SOURCE)
+    const arrayBufferSpy = jest.spyOn(file, 'arrayBuffer')
+    getModelFromOPFS.mockReset()
+    getModelFromOPFS.mockResolvedValue(file)
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'blob:http://localhost/uuid.step',
+      '',
+      false,
+      false,
+    ])
+
+    await expect(
+      load(
+        '12345678-1234-4abc-9def-123456789abc.step',
+        makeIfcViewer({streamOpen: true}),
+        onProgress, true, setOpfsFile, ''),
+    ).rejects.toThrow()
+
+    expect(arrayBufferSpy).not.toHaveBeenCalled()
+    expect(onProgress).toHaveBeenCalledWith('Hashing model...')
+  })
+
+
+  it('buffers a part-21 file that declares no schema name', async () => {
+    // Unknown format buffers rather than gambling: a wrong "yes" burns a model
+    // handle and caches a GLB with no NavTree, a wrong "no" costs one load's
+    // memory win. Every real part-21 file carries FILE_SCHEMA well inside
+    // conway's 64 KiB sniff window, so this is a corrupt-file path.
+    //
+    // The entry is PRESENT here but empty — the case a bare "is FILE_SCHEMA in
+    // the header?" guard waves through, since `classifyStepFamily` answers
+    // 'ifc' for anything it cannot parse. The gate requires a parsed schema
+    // name (`Filetype.stepSchemaName`), so this buffers.
+    const file = new MockFile('ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'\'));\nENDSEC;\n')
+    const arrayBufferSpy = jest.spyOn(file, 'arrayBuffer')
+    getModelFromOPFS.mockReset()
+    getModelFromOPFS.mockResolvedValue(file)
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'blob:http://localhost/uuid.ifc',
+      '',
+      false,
+      false,
+    ])
+
+    await expect(
+      load(
+        '12345678-1234-4abc-9def-123456789abc.ifc',
+        makeIfcViewer({streamOpen: true}),
+        onProgress, true, setOpfsFile, ''),
+    ).rejects.toThrow()
+
+    expect(arrayBufferSpy).toHaveBeenCalledTimes(1)
+    expect(onProgress).toHaveBeenCalledWith('Buffering model bytes...')
+  })
+
+
+  it('hashes the single parse buffer when store-open is unavailable', async () => {
+    const file = new MockFile(IFC_SOURCE)
+    const arrayBufferSpy = jest.spyOn(file, 'arrayBuffer')
+    getModelFromOPFS.mockReset()
+    getModelFromOPFS.mockResolvedValue(file)
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'blob:http://localhost/uuid.ifc',
+      '',
+      false,
+      false,
+    ])
+
+    await expect(
+      load(
+        '12345678-1234-4abc-9def-123456789abc.ifc',
+        makeIfcViewer({streamOpen: false}),
+        onProgress, true, setOpfsFile, ''),
+    ).rejects.toThrow()
+
+    expect(arrayBufferSpy).toHaveBeenCalledTimes(1)
+    expect(onProgress).toHaveBeenCalledWith('Buffering model bytes...')
   })
 
 

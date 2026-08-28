@@ -3,22 +3,44 @@ import cypress from './vars.cypress.js'
 
 export default {
   ...cypress,
-  // OPFS_IS_ENABLED reverted to false (was flipped to true in PR #1531
-  // to unblock `Properties.cacheHit.spec.ts`). With it on, the
-  // loader's first IFC fetch goes through the OPFS worker
-  // (`downloadToOPFS` → `OPFS.worker.js` → `fetch(objectUrl)`); that
-  // worker-context fetch races MSW's service-worker activation, and
-  // when MSW isn't yet controlling the page the fetch fails to match
-  // the page-level `waitForResponse` listener in
-  // `visitHomepageWaitForModel` — ALL tests that wait for the model
-  // to load (≈80 specs) then time out at the 30s budget.
+  // OPFS on, so the GLB cache round-trip — writer → OPFS → reader — is
+  // reachable from a spec at all. Without it `Loader.js#load` skips the whole
+  // OPFS block, no artifact is ever written, and the cache-hit consumer
+  // surface (NavTree from `BLDRS_spatial_tree`, Properties from
+  // `BLDRS_element_properties`, picking from `BLDRS_face_ids`) has no
+  // coverage. bldrs-ai/Share#1776 shipped through that gap: every automated
+  // check passed on code whose second load rendered an empty NavTree.
   //
-  // The cacheHit specs that needed OPFS are still `test.fixme`'d
-  // (the OPFS-worker / MSW-SW interaction needs the proper fix
-  // tracked in design/new/viewer-replacement.md §4b.2 — gate the
-  // first `page.goto` on `waitForServiceWorker`, or add an MSW
-  // handler that fulfils worker-context fetches). Until that lands,
-  // flipping the flag is pure regression.
-  OPFS_IS_ENABLED: false,
+  // This was flipped on in PR #1531 and reverted, with the revert attributing
+  // an ≈80-spec timeout to the OPFS worker's `fetch` racing MSW's
+  // service-worker activation. That attribution does not survive checking.
+  // The cache-hit specs could not have passed either way, because they waited
+  // with `page.waitForFunction(pred, {logs: glbLogs})` — which serialises its
+  // argument into the page ONCE and re-invokes the predicate against that
+  // frozen copy, so the Node-side `page.on('console')` pushes never reached
+  // it. Every line they waited for arrives after the wait starts, so each
+  // wait burned its full timeout by construction. Demonstrated directly:
+  // against an array appended at 1s, `waitForFunction` times out at 4s while
+  // `expect.poll` resolves at 1.2s. The specs now use `expect.poll`.
+  //
+  // Whether the ≈80-spec regression was ever real is a separate question, and
+  // this flag is the way to find out — it is compile-time and all-or-nothing
+  // (`store/BrowserSlice.js` hard-gates the setter), so there is no per-spec
+  // opt-in to hide behind. If it does reappear, the fix belongs at its single
+  // source: `visitHomepageWaitForModel` and `navigateAndWaitForModel` gate
+  // navigation on a network response, where a DOM-state gate
+  // (`data-model-ready`, which `waitForModelReady` already uses) is correct
+  // whether the bytes come from the network, a worker, or a cache.
+  //
+  // What the flip changes suite-wide, beyond the cache-hit specs, because
+  // `Loader.js#load` gates the whole OPFS block on `isOpfsAvailable`: the
+  // model fetch moves into `OPFS.worker.js` (so page-level `context.route`
+  // handlers are no longer what keeps a GitHub-model spec hermetic — MSW's
+  // service worker is); a GLTFExporter + gzip + OPFS write is scheduled on
+  // `requestIdleCallback` at the tail of EVERY load; and `spillModelSource`
+  // + `ReleaseModelGeometry` free Conway's native geometry mid-test. None of
+  // that ran under Playwright before. It is the first thing to suspect if a
+  // spec unrelated to caching starts failing.
+  OPFS_IS_ENABLED: true,
   THEME_IS_ENABLED: true,
 }

@@ -171,22 +171,30 @@ export default class MeshClipper {
 
 
   /**
-   * Computes an appropriate arrow scale based on the model bounding sphere
+   * Computes the arrow scale as a pure fraction of the model radius.
+   *
+   * The fraction is the whole rule, and it must not be clamped to
+   * absolute world units. conway emits true-scale geometry, so a
+   * millimetre part and a building are ~1e5 apart in radius; the
+   * absolute [2, 40] clamp this replaced pinned a true-scale gear's
+   * arrow at 2 world units against a 0.0033m part, i.e. ~600x the
+   * model. Arrows draw `depthTest: false` at ARROW_RENDER_ORDER, so an
+   * oversized one doesn't merely look wrong — it paints over the model
+   * entirely. Same bug class as the #1742 camera near plane.
+   *
+   * DEFAULT_ARROW_SCALE is reserved for a model that yields no usable
+   * radius, where there is no model scale to be a fraction of.
    *
    * @return {number}
    */
   computeArrowScale() {
-    if (!this.modelBoundingSphere) {
+    const radius = this.modelBoundingSphere?.radius
+    // Covers a null sphere plus 0 / NaN / Infinity radius — every case
+    // where the model carries no scale to derive from.
+    if (!radius || !Number.isFinite(radius)) {
       return DEFAULT_ARROW_SCALE
     }
-
-    const radius = this.modelBoundingSphere.radius
-    if (!radius || Number.isNaN(radius)) {
-      return DEFAULT_ARROW_SCALE
-    }
-
-    const scaled = radius * ARROW_SCALE_RATIO
-    return Math.min(MAX_ARROW_SCALE, Math.max(MIN_ARROW_SCALE, scaled))
+    return radius * ARROW_SCALE_RATIO
   }
 
 
@@ -560,10 +568,11 @@ export default class MeshClipper {
 }
 
 
+// Only used when the model yields no usable radius; every other case
+// derives from the model, so there are deliberately no absolute
+// min/max companions here. See computeArrowScale.
 const DEFAULT_ARROW_SCALE = 5
 const ARROW_SCALE_RATIO = 0.25
-const MIN_ARROW_SCALE = 2
-const MAX_ARROW_SCALE = 40
 const ARROW_RENDER_ORDER = 999
 // Cut-plane arrow colors. Blue is deliberate (not a theme color): the
 // arrows must read against the model, and green arrows washed out on

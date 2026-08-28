@@ -727,17 +727,105 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
   is the second acquisition campaign's landing target), then STL/OBJ/FBX.
 - Doubles as the destination for paid Search (bizdev §4) — until these exist the
   campaigns land on the homepage, which is a viewer, not a pitch.
+- `/viewer/step`'s demo-model deep link has its target: `/share/v/p/index.step`,
+  the logo as an AP214 assembly (`tools/models/README.md`). It shares world space
+  with `index.ifc`, so the two pages can use the same `#c:` camera. `/viewer/ifc`
+  points at `index.ifc`; the remaining formats still need one each.
 - **Phase G.**
 
 **Epic `grow-120`: Funnel instrumentation + analytics hygiene** ⬜ (NEW)
 - Instrument the funnel stages the growth doc defines (§3 there):
   `share_link_created`, `share_link_opened`, `model_interacted` events in Share;
-  the derived `real_model_open` key event (built on `select_content` +
-  `stats_preprocessorVersion`) is GA4 config, not code.
-- Hygiene: skip GA init when `navigator.webdriver === true` or when
-  `location.hostname !== 'bldrs.ai'` — one guard cleans CI/e2e, localhost, and
-  preview-deploy pollution out of prod analytics. (Also: confirm whether scheduled
-  e2e runs ship the prod measurement ID.)
+  `real_model_open` is sent directly by Share (CadView#loadModel, guarded by
+  `analytics#isRealModelOpen` so neither the homepage's auto-loaded demo model
+  nor opens on `*.netlify.app` deploy-preview/dev hosts fire it — it replaced
+  `select_content`, whose counts were conflated with homepage visits); marking
+  it a key event + the Ads import stay GA4 config.
+- Hygiene: GA only initializes in prod (✅) — index.html keeps the inline
+  dataLayer/gtag stub (event buffering + E2E assertions), while
+  `src/index/ga.js#setupGa` injects the external gtag/js loader only on
+  bldrs.ai/www.bldrs.ai with `navigator.webdriver` false, cleaning CI/e2e,
+  localhost, and preview-deploy pollution out of prod analytics. Init failures
+  go to Sentry tagged `subsystem:ga_init`; ad-blocked clients will dominate
+  that stream — add a sentry.js filter (cf. `netlify_rum_blocked`) when it
+  gets noisy.
+- Per-user open depth (decided 2026-08-08): the GA4 Data API has no user-id
+  dimension, so "X users opened Y models" can't be derived — only the
+  eventCount ÷ totalUsers average. Share now sends GA4's client id as an
+  `open_cid` param on `real_model_open` (✅ `index/ga.js` requests it via
+  `gtag('get', …, 'client_id', …)`, `analytics#getGaClientId` holds it and
+  falls back to the `_ga` cookie for events that fire before that async
+  callback lands, CadView attaches it when present). **Not `ga_cid`** as
+  originally specced: GA4 reserves the `ga_`/`google_`/`firebase_`/`gtag.`
+  prefixes and silently disables matching params, so that name would have
+  ingested as nothing and left the dimension permanently empty.
+  The value is sent prefix-tagged (`cid.<client id>`) because gtag types
+  numeric-looking params as numbers (`epn.` in the beacon): a raw id landed
+  in GA4's numeric slot, rendering as `1.87152e+09` — float64 truncates the
+  id's 20 digits, colliding distinct clients, and a text dimension won't
+  populate from a numeric param.
+  **Remaining GA4-side config:** Admin → Custom definitions → new
+  event-scoped dimension `open_cid` from event parameter `open_cid` (a
+  *dimension*, not a metric); then query `customEvent:open_cid × eventCount`
+  and bucket client-side
+  (1 / 2 / 3–5 / 6+ opens, fixtures excluded). No backfill — the dimension
+  accrues from ship time, so land it early in a campaign window for a clean
+  baseline. At larger scale GA4 rolls high-cardinality values into "(other)";
+  that's the cue to move the query to the BigQuery export.
+- Per-user *behaviour* beyond open depth (2026-08-13): an event-scoped
+  dimension exists only on the events carrying it, so session count,
+  engagement duration, landing page and new-vs-returning are unreachable per
+  user however the query is written — filtering to `real_model_open` yields no
+  engagement, not filtering yields `(not set)` everywhere else. Share now also
+  publishes the same id as a **user property** (`analytics#setUserCidProperty`,
+  called from `index/ga.js` both at setup and from the `client_id` callback,
+  since user properties only attach to events sent after they are set).
+  **Remaining GA4-side config:** a second custom definition, scope **User**,
+  from user property `open_cid` — the event- and user-scoped dimensions
+  coexist because GA4 namespaces event parameters separately from user
+  properties. Query it as `customUser:<name>`. Withdrawing analytics consent
+  retracts the property explicitly (`analytics#setIsAllowed`): unlike an event,
+  which re-checks consent per call, a user property is sticky and gtag/js keeps
+  attaching it to its own automatic events until it is set to null. **Before
+  restoring PrivacyControl to the UI** (commented out of `AboutDialog` today),
+  confirm in GA4 DebugView that null actually clears the property rather than
+  storing null as a value — the retraction path rests on that.
+- Local time of day (2026-08-13): GA4's `hour` dimension is in the *property's*
+  timezone, which says nothing about when a Europe/Brazil-heavy audience
+  actually works. `real_model_open` now carries `local_hour`, the browser's own
+  hour, prefixed `h.` for the same typing reason `open_cid` is prefixed — and
+  note zero-padding alone does *not* achieve it, since `Number('08')` is 8, so
+  a padded-but-unprefixed hour would still beacon as a number and leave the
+  dimension empty for all 24 values. **Remaining GA4-side config:** an
+  event-scoped dimension from event parameter `local_hour`.
+- Time spent per model (2026-08-20): `analytics#startModelEngagement` emits a
+  `model_engagement` event for each foreground, focused interval a model is
+  open for, carrying the same `content_id`/`content_type` identity as the open
+  and the interval's duration in GA4's reserved `engagement_time_msec`.
+  **Remaining GA4-side config: none** — and deliberately so. Registering
+  `engagement_time_msec` as a custom metric was tried (2026-08-21) and is
+  impossible: Admin rejects the name inline with "Parameter name is not allowed
+  for this scope", so `customEvent:engagement_time_msec` can never resolve and
+  a report naming it 400s. The name is reserved because GA4 consumes it to
+  compute the standard `userEngagementDuration` metric, which is therefore
+  where these durations already are: query `userEngagementDuration` ×
+  `customEvent:content_id`, filtered to eventName `model_engagement`, for total
+  time per model across all users (the metric is in *seconds*, against the
+  milliseconds we send). This event carries no `open_cid` *param*, so that query
+  is all-users and the bizdev card labels it so. Per-user engagement is not
+  blocked on adding the param here: the user property above rides on every
+  event including this one, so it comes from registering the **User**-scoped
+  `open_cid` dimension — the config that bullet already lists as outstanding.
+  One caveat to settle in DebugView before anyone treats the number as exact:
+  gtag accrues foreground time itself, and whether it replaces that with the
+  value we pass or adds to it decides whether the metric is our intervals or
+  runs high.
+- Model *name* was considered and deliberately not sent. For remote models the
+  name is already derivable from `content_id`; the only case it would add
+  information is local uploads, which route by OPFS blob id — so sending it
+  would newly disclose user-chosen filenames to Google for exactly the files
+  that never leave the browser today. Left as a product decision rather than
+  slipped in with the rest.
 - Channel-grouping + dashboard slices are bizdev-side config; the Share-side
   deliverable is the events existing and firing.
 - v0.4 addition: capture **model size/complexity** (bucketed — bytes, element
@@ -1085,10 +1173,11 @@ into a funnel with no earned channels wastes the launch.
 **Goal:** the funnel is measurable, share links unfurl, and search intent has a
 landing page — before the MVP launch needs any of it.
 - `grow-120` first slice: GA hygiene guard (`navigator.webdriver` +
-  hostname check on GA init) — cleans CI/e2e/preview pollution out of prod data.
+  hostname check on GA init) — cleans CI/e2e/preview pollution out of prod
+  data (✅ `src/index/ga.js`).
 - `grow-120` events: `share_link_created`, `share_link_opened`,
   `model_interacted` wired into the share flow + viewer; `real_model_open`
-  derived key event configured GA4-side.
+  fires from Share on non-demo model opens (✅), key-event marking GA4-side.
 - `grow-100`: `/viewer/ifc` + `/viewer/step` landing pages on the marketing SSG
   build (then `/viewer/stl`, `/viewer/obj`, …). Unblocks the acquisition-campaign
   landing targets.

@@ -25,7 +25,9 @@ import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIf
 import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
 import {payloadToPreviewMesh} from './parsePreviewMesh'
-import {isOutOfMemoryError} from '../../utils/oom'
+import {isOutOfMemoryError, markIfOutOfMemory} from '../../utils/oom'
+import {hasParams} from '../../utils/location'
+import {HASH_PREFIX_CAMERA} from '../../Components/Camera/hashState'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ProgressiveLoadSession from '../ProgressiveLoadSession'
@@ -95,6 +97,146 @@ function logInstancedModelStats(ifcAPI, modelID, captured, force = false) {
 
 
 /**
+ * Last-N wire boxes: enough to read as a growing mass, cheap enough
+ * that the preview group stays fixed-mem.
+ */
+export const AABB_IMPOSTER_CAP = 100
+
+
+/**
+ * Whether parse-time spatial imposters (the storey/space AABB plates) are
+ * rendered. Off: they are cosmetic, and the last unpolished corner of an
+ * otherwise release-ready load path. The real prefix meshes still stream
+ * during parse, so first pixels are unaffected.
+ */
+const SHOW_AABB_IMPOSTERS = false
+
+
+/**
+ * Add an AABB wire cube to the preview, keyed by expressID and
+ * ring-tracked for eviction.
+ *
+ * Placement is NOT this function's business: conway emits imposter
+ * `flatTransformation` in the same durable coordination frame as regular
+ * preview meshes (metres, Y-up, COORDINATE_TO_ORIGIN-recentred), and
+ * `payloadToPreviewMesh` has already applied the shared Share-side
+ * `coordination` offset. This used to re-anchor every box by subtracting
+ * the first accepted box's translation — an arbitrary anchor that pushed
+ * the plates off the durable geometry by (first plate centre − durable
+ * anchor), and on near-origin models (where conway's model-zero policy
+ * recentres nothing) invented an offset that had not existed. See
+ * conway#515's review-findings comment for the frame contract.
+ *
+ * REPLACE-BY-EXPRESSID (conway#519): the store preview channel emits each
+ * spatial node TWICE by design — once early, from a prefix generation
+ * seconds into the parse (possibly a coarse Z band with degenerate XY),
+ * and again after the parse with full samples and the latched coordination
+ * frame. A re-emitted `aabb` payload REPLACES the plate already drawn for
+ * that expressID; it must not add a second one, and the replacement takes
+ * the old plate's slot rather than consuming a fresh one. Vertex-carrying
+ * payloads are unaffected — they are keyed by `geometryExpressID` and
+ * never re-sent.
+ *
+ * The old mesh is only detached, never disposed: the unit-cube geometry
+ * and the wire materials are pooled per load in
+ * `payloadToPreviewMesh`'s caches, so the replacement is very likely
+ * holding the same instances.
+ *
+ * `ProgressiveLoadSession`'s preview bounds union is grow-only, so a
+ * replaced coarse plate's old bounds linger in the camera-fit union until
+ * the next refit. Acceptable for preview scenery: it can only over-frame
+ * for a moment, and the whole imposter set is torn down at load end.
+ *
+ * Ring-track only meshes that `addPreviewMesh` actually parented —
+ * outlier rejects must not occupy a slot or evict a visible cube. That
+ * also means a REJECTED replacement leaves the standing plate for its
+ * expressID alone: a refused update must never delete visible scenery.
+ *
+ * @param {object} mesh three.js Mesh, matrix already stamped
+ * @param {object} session ProgressiveLoadSession
+ * @param {object} ring `{meshes, byExpressID, cap}`
+ * @param {number} [expressID] the payload's expressID — the replace key
+ */
+export function applyAabbImposter(mesh, session, ring, expressID) {
+  session.addPreviewMesh(mesh)
+  if (mesh.parent !== session.previewGroup) {
+    return
+  }
+  const keyed = expressID !== undefined && expressID !== null
+  const prior = keyed ? ring.byExpressID.get(expressID) : undefined
+  if (prior !== undefined) {
+    detachImposter_(prior, session)
+    // Eviction below deletes the map entry with the mesh, so a mapped
+    // mesh is always still in the ring — but take the push fallback
+    // rather than corrupting the ring on an index of -1.
+    const at = ring.meshes.indexOf(prior)
+    if (at === -1) {
+      ring.meshes.push(mesh)
+    } else {
+      ring.meshes[at] = mesh
+    }
+    ring.byExpressID.set(expressID, mesh)
+    return
+  }
+  if (ring.meshes.length >= ring.cap) {
+    const old = ring.meshes.shift()
+    if (old !== undefined) {
+      detachImposter_(old, session)
+      // Reverse lookup by scan: the ring is capped at AABB_IMPOSTER_CAP,
+      // so this is a bounded walk on an eviction that only happens once
+      // per accepted plate, and it keeps the ring to one map.
+      for (const [id, tracked] of ring.byExpressID) {
+        if (tracked === old) {
+          ring.byExpressID.delete(id)
+          break
+        }
+      }
+    }
+  }
+  ring.meshes.push(mesh)
+  if (keyed) {
+    ring.byExpressID.set(expressID, mesh)
+  }
+}
+
+
+/**
+ * Detach one imposter from the preview group. Geometry/materials are
+ * pooled per load, so nothing is disposed here.
+ *
+ * @param {object} mesh
+ * @param {object} session ProgressiveLoadSession
+ */
+function detachImposter_(mesh, session) {
+  if (session.previewGroup !== null && session.previewGroup !== undefined) {
+    session.previewGroup.remove(mesh)
+  }
+}
+
+
+/**
+ * Detach every accepted AABB wire cube. Called at the end of the load
+ * so none remain once the durable mesh is on screen.
+ *
+ * @param {object} ring `{meshes, byExpressID, cap}`
+ * @param {object} session ProgressiveLoadSession
+ */
+export function clearAabbImposters(ring, session) {
+  const group = session.previewGroup
+  for (const mesh of ring.meshes) {
+    if (group !== null && group !== undefined) {
+      group.remove(mesh)
+    }
+    mesh.removeFromParent?.()
+  }
+  ring.meshes.length = 0
+  // The replace key map holds a strong ref to every accepted plate —
+  // clearing the list alone would keep the whole ring alive past teardown.
+  ring.byExpressID.clear()
+}
+
+
+/**
  * IFC loader for ShareViewer. Single entry point: `parse(buffer)`.
  *
  * Holds a `ShareIfcManager` (`this.ifcManager`) — consumer code
@@ -149,6 +291,13 @@ export default class ShareIfcLoader {
    */
   async parse(buffer, onProgress, onError) {
     const ifc = this._ifc
+    // Clear any error stashed by a prior load on this shared IFC namespace.
+    // readModel (Loader.js) reads `viewer.IFC.ifcLastError` to surface the
+    // real engine failure when a parse returns falsy, so a stale value (and
+    // its sticky `.isOutOfMemory` tag) from an earlier failed load must not
+    // leak into this load's error path.
+    this.ifcLastError = null
+    ifc.ifcLastError = null
     if (ifc.context.items.ifcModels.length !== 0) {
       throw new Error('Model cannot be loaded.  A model is already present')
     }
@@ -159,10 +308,19 @@ export default class ShareIfcLoader {
     // knowledge stays below (payload/batch → mesh conversion).
     const scene = typeof ifc.context?.getScene === 'function' ?
       ifc.context.getScene() : null
+    // A `#c:` permalink pins the camera to an exact pose — the user asked
+    // for THAT view, not an auto-frame. Suppress the load-time camera
+    // follow so streaming geometry can't drag the camera off the pinned
+    // pose (the follow's last portrait fit was overriding the permalink on
+    // uncached mobile loads, where a desktop cache-hit — which runs no
+    // progressive session — showed the permalink correctly). The preview
+    // meshes still render; only the camera stays put.
+    const frameCamera = !hasParams(HASH_PREFIX_CAMERA)
     const session = new ProgressiveLoadSession({
       scene: scene !== null && isFeatureEnabled('demandGeometry') ? scene : null,
       getControls: () => ifc.context?.ifcCamera?.cameraControls,
       getCamera: () => ifc.context?.ifcCamera?.perspectiveCamera,
+      frameCamera,
       onProgress,
     })
 
@@ -186,13 +344,41 @@ export default class ShareIfcLoader {
       const usePreview = session.previewGroup !== null
       const previewGeometryCache = new Map()
       const previewMaterialCache = new Map()
+      // One origin-recenter frame for BOTH streaming paths, decided by
+      // the durable builder alone; previews read it and render
+      // unrecentred until the first durable batch lands. The preview
+      // channel is the unreliable half (conway#465 emitted payloads
+      // whose placement never resolved), so it must never decide where
+      // the durable model renders.
+      const coordination = {offset: undefined}
+      // `byExpressID` is the replace key for spatial imposters: conway's
+      // store path emits each spatial node early and again at parse end
+      // (conway#519), and the second emission must refine the first plate
+      // rather than stack a second one on top of it.
+      const aabbRing = {meshes: [], byExpressID: new Map(), cap: AABB_IMPOSTER_CAP}
 
       const onPreviewMesh = !usePreview ? undefined : (payload) => {
         try {
-          const mesh = payloadToPreviewMesh(payload, previewGeometryCache, previewMaterialCache)
-          if (mesh !== null) {
-            session.addPreviewMesh(mesh)
+          const mesh = payloadToPreviewMesh(
+            payload, previewGeometryCache, previewMaterialCache, coordination)
+          if (mesh === null) {
+            return
           }
+          if (payload.aabb) {
+            // Spatial imposters are off for this release: the plates are
+            // the least-settled part of the preview channel (rotation,
+            // scale and banding each took a conway round to get right)
+            // and they are cosmetic — the real prefix meshes below give
+            // first pixels on their own. Dropping the payload rather
+            // than asking conway not to emit it keeps the engine
+            // contract unchanged, so flipping this back is one constant.
+            if (!SHOW_AABB_IMPOSTERS) {
+              return
+            }
+            applyAabbImposter(mesh, session, aabbRing, payload.expressID)
+            return
+          }
+          session.addPreviewMesh(mesh)
         } catch (e) {
           debug(WARN).warn('parse preview mesh skipped:', e)
         }
@@ -208,6 +394,7 @@ export default class ShareIfcLoader {
           if (builder === null) {
             builder = new IncrementalBatchedBuilder(ifcAPI, batchModelID, {
               onBounds: (box) => session.notifyBounds(box),
+              coordination,
             })
             scene.add(builder.root)
           }
@@ -271,8 +458,9 @@ export default class ShareIfcLoader {
         decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
       }
 
-      // Swap the preview out before the real model installs — the
-      // session stops the camera follow and disposes preview meshes.
+      // Drop parse-time imposters before the durable model installs.
+      // finish() also scene-walks leftover aabb wire cubes.
+      clearAabbImposters(aabbRing, session)
       session.finish()
 
       ifc.addIfcModel(ifcModel)
@@ -293,7 +481,15 @@ export default class ShareIfcLoader {
         ifcModel.matrixAutoUpdate = false
       }
 
-      ifc.context.fitToFrame()
+      // Framing the freshly loaded model is the cross-format caller's job
+      // (CadView, right after it adds the model to the scene): it applies a
+      // `#c:` permalink pose when the URL carries one, and only auto-frames
+      // otherwise. A loader-local `fitToFrame()` here fought that — it ran
+      // unconditionally, so on the IFC/STEP path a permalink camera got
+      // overwritten by the auto-fit (the mobile "camera way off" bug),
+      // while other formats framed correctly through CadView alone. Keep
+      // scene/camera management uniform across formats: no format-specific
+      // fit lives in the loader.
 
       // `getStatistics` / `getConwayVersion` are Conway-adapter extensions
       // (Logger-backed); stock web-ifc (the USE_WEBIFC_SHIM=false engine)
@@ -304,17 +500,28 @@ export default class ShareIfcLoader {
       // `loadedModel.loadStats` before reading it.
       if (typeof ifcAPI.getStatistics === 'function') {
         const statsApi = ifcAPI.getStatistics(modelID)
+        const geometryMemory = statsApi.getGeometryMemory()
+        const totalTime = statsApi.getTotalTime()
+        const errorCount = statsApi.getErrorCount?.()
+        const warningCount = statsApi.getWarningCount?.()
         ifcModel.name = statsApi.projectName ?? undefined
         ifcModel.loadStats = {
           loaderVersion: ifcAPI.getConwayVersion?.(),
-          geometryMemory: statsApi.getGeometryMemory(),
+          geometryMemory,
           geometryTime: statsApi.getGeometryTime(),
           ifcVersion: statsApi.getVersion(),
           loadStatus: statsApi.getLoadStatus(),
           originatingSystem: statsApi.getOriginatingSystem(),
           preprocessorVersion: statsApi.getPreprocessorVersion(),
           parseTime: statsApi.getParseTime(),
-          totalTime: statsApi.getTotalTime(),
+          totalTime,
+          // These aliases are the cross-format GA names consumed by bizdev.
+          // For IFC/STEP they must describe Conway itself, rather than the
+          // browser-wide heap and console tee used as other-format fallbacks.
+          memoryUsed: geometryMemory,
+          loadTime: totalTime,
+          ...(errorCount === undefined ? {} : {errorCount}),
+          ...(warningCount === undefined ? {} : {warningCount}),
         }
       }
 
@@ -389,9 +596,11 @@ export default class ShareIfcLoader {
       this.ifcLastError = err
       this._ifc.ifcLastError = err
       // Rethrow OOM so callers can present a tailored UX message.
+      // markIfOutOfMemory tags in place but guards primitive throwables
+      // (Emscripten abort() can throw a bare string, and assigning a
+      // property to a primitive throws a TypeError in strict mode).
       if (isOutOfMemoryError(err)) {
-        err.isOutOfMemory = true // tag for convenience
-        throw err
+        throw markIfOutOfMemory(err)
       }
       console.error(err)
       if (onError) {

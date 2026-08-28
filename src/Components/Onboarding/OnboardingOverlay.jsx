@@ -4,6 +4,8 @@ import {Box, Fade, Paper, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {FileUpload as FileUploadIcon} from '@mui/icons-material'
 import useStore from '../../store/useStore'
+import useQuota from '../../hooks/useQuota'
+import QuotaLimitDialog from '../Open/QuotaLimitDialog'
 import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from '../../utils/dragAndDrop'
 
 
@@ -18,12 +20,14 @@ export default function OnboardingOverlay({isVisible, onClose}) {
   const [openButtonPosition, setOpenButtonPosition] = useState(null)
   const [shareButtonPosition, setShareButtonPosition] = useState(null)
   const [isDragActive, setIsDragActive] = useState(false)
+  const [showQuotaDialog, setShowQuotaDialog] = useState(false)
 
   // Store state and navigation
   const appPrefix = useStore((state) => state.appPrefix)
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const setAlert = useStore((state) => state.setAlert)
   const navigate = useNavigate()
+  const {tier, hasCapacity, record} = useQuota()
 
   // Find actual button positions when overlay becomes visible
   useEffect(() => {
@@ -73,132 +77,158 @@ export default function OnboardingOverlay({isVisible, onClose}) {
       isOpfsAvailable,
       setAlert,
       () => onClose(true), // onSuccess callback - close overlay and skip help dialog
+      undefined,
+      // Same quota gate as ViewerContainer's dropzone — a first-visit drop
+      // through the overlay is still a /v/new/ private load and must count.
+      {
+        hasCapacity,
+        record,
+        onExceeded: () => {
+          // Close the overlay first: its zIndex (9999) sits above MUI's
+          // modal layer, so the dialog would otherwise open underneath it.
+          onClose(false)
+          setShowQuotaDialog(true)
+        },
+      },
     )
   }
 
+  // Rendered outside the isVisible guard so the limit dialog survives the
+  // overlay closing itself in onExceeded above.
+  const quotaDialog = (
+    <QuotaLimitDialog
+      tier={tier}
+      isOpen={showQuotaDialog}
+      onClose={() => setShowQuotaDialog(false)}
+    />
+  )
+
   if (!isVisible) {
-    return null
+    return quotaDialog
   }
 
   return (
-    <Fade in={isVisible} timeout={300}>
-      <Box
-        onClick={() => onClose(false)}
-        onDragOver={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          handleDragOverOrEnter(event, setIsDragActive)
-        }}
-        onDragEnter={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          handleDragOverOrEnter(event, setIsDragActive)
-        }}
-        onDragLeave={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          handleDragLeave(event, setIsDragActive)
-        }}
-        onDrop={handleDrop}
-        sx={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: isDragActive ? 'rgba(0, 100, 200, 0.3)' : 'rgba(0, 0, 0, 0.5)',
-          zIndex: 9999,
-          pointerEvents: 'auto',
-          margin: '0 !important',
-          padding: '0 !important',
-          marginLeft: '0 !important',
-          marginRight: '0 !important',
-          marginTop: '0 !important',
-          marginBottom: '0 !important',
-          transition: 'background-color 0.2s ease',
-          // Create cutout mask for button positions - single mask with multiple holes
-          ...(openButtonPosition && shareButtonPosition && {
-            WebkitMask: `
-              radial-gradient(circle 35px at ${openButtonPosition.left}px ${openButtonPosition.top}px, 
-                transparent 0px, transparent 35px, black 36px),
-              radial-gradient(circle 35px at ${shareButtonPosition.left}px ${shareButtonPosition.top}px, 
-                transparent 0px, transparent 35px, black 36px)
-            `,
-            WebkitMaskComposite: 'source-in',
-            mask: `
-              radial-gradient(circle 35px at ${openButtonPosition.left}px ${openButtonPosition.top}px, 
-                transparent 0px, transparent 35px, black 36px),
-              radial-gradient(circle 35px at ${shareButtonPosition.left}px ${shareButtonPosition.top}px, 
-                transparent 0px, transparent 35px, black 36px)
-            `,
-            maskComposite: 'intersect',
-          }),
-        }}
-        data-testid='onboarding-overlay'
-      >
-        {/* Open Button Highlight */}
-        {openButtonPosition && (
-          <OnboardingHighlight
-            position={openButtonPosition}
-            text="Open models"
-            arrowDirection="bottom-right"
-          />
-        )}
-
-        {/* Share Button Highlight */}
-        {shareButtonPosition && (
-          <OnboardingHighlight
-            position={shareButtonPosition}
-            text="Share model"
-            arrowDirection="bottom-left"
-          />
-        )}
-
-        {/* Central Message */}
+    <>
+      <Fade in={isVisible} timeout={300}>
         <Box
-          sx={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            textAlign: 'center',
-            zIndex: 10000,
+          onClick={() => onClose(false)}
+          onDragOver={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            handleDragOverOrEnter(event, setIsDragActive)
           }}
+          onDragEnter={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            handleDragOverOrEnter(event, setIsDragActive)
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            handleDragLeave(event, setIsDragActive)
+          }}
+          onDrop={handleDrop}
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: isDragActive ? 'rgba(0, 100, 200, 0.3)' : 'rgba(0, 0, 0, 0.5)',
+            zIndex: 9999,
+            pointerEvents: 'auto',
+            margin: '0 !important',
+            padding: '0 !important',
+            marginLeft: '0 !important',
+            marginRight: '0 !important',
+            marginTop: '0 !important',
+            marginBottom: '0 !important',
+            transition: 'background-color 0.2s ease',
+            // Create cutout mask for button positions - single mask with multiple holes
+            ...(openButtonPosition && shareButtonPosition && {
+              WebkitMask: `
+                radial-gradient(circle 35px at ${openButtonPosition.left}px ${openButtonPosition.top}px, 
+                  transparent 0px, transparent 35px, black 36px),
+                radial-gradient(circle 35px at ${shareButtonPosition.left}px ${shareButtonPosition.top}px, 
+                  transparent 0px, transparent 35px, black 36px)
+              `,
+              WebkitMaskComposite: 'source-in',
+              mask: `
+                radial-gradient(circle 35px at ${openButtonPosition.left}px ${openButtonPosition.top}px, 
+                  transparent 0px, transparent 35px, black 36px),
+                radial-gradient(circle 35px at ${shareButtonPosition.left}px ${shareButtonPosition.top}px, 
+                  transparent 0px, transparent 35px, black 36px)
+              `,
+              maskComposite: 'intersect',
+            }),
+          }}
+          data-testid='onboarding-overlay'
         >
-          <Stack spacing={3} alignItems='center'>
-            <FileUploadIcon
-              sx={{
-                fontSize: '4rem',
-                color: '#ffffff',
-                filter: 'drop-shadow(0px 0px 10px rgba(255,255,255,0.3))',
-              }}
+          {/* Open Button Highlight */}
+          {openButtonPosition && (
+            <OnboardingHighlight
+              position={openButtonPosition}
+              text="Open models"
+              arrowDirection="bottom-right"
             />
-            <Typography
-              variant='h1'
-              sx={{
-                fontWeight: 600,
-                color: isDragActive ? '#00ff88' : '#ffffff',
-                textShadow: '2px 2px 8px rgba(0,0,0,0.8)',
-                letterSpacing: '0.5px',
-                transition: 'color 0.2s ease',
-              }}
-            >
-              {isDragActive ? 'Drop your file here!' : 'Drag and drop models into page to open'}
-            </Typography>
-            <Typography
-              variant='body1'
-              sx={{
-                color: 'rgba(255,255,255,0.9)',
-                textShadow: '1px 1px 4px rgba(0,0,0,0.8)',
-                fontSize: '1.1rem',
-              }}
-            >
-              Click anywhere to continue
-            </Typography>
-          </Stack>
+          )}
+
+          {/* Share Button Highlight */}
+          {shareButtonPosition && (
+            <OnboardingHighlight
+              position={shareButtonPosition}
+              text="Share model"
+              arrowDirection="bottom-left"
+            />
+          )}
+
+          {/* Central Message */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              textAlign: 'center',
+              zIndex: 10000,
+            }}
+          >
+            <Stack spacing={3} alignItems='center'>
+              <FileUploadIcon
+                sx={{
+                  fontSize: '4rem',
+                  color: '#ffffff',
+                  filter: 'drop-shadow(0px 0px 10px rgba(255,255,255,0.3))',
+                }}
+              />
+              <Typography
+                variant='h1'
+                sx={{
+                  fontWeight: 600,
+                  color: isDragActive ? '#00ff88' : '#ffffff',
+                  textShadow: '2px 2px 8px rgba(0,0,0,0.8)',
+                  letterSpacing: '0.5px',
+                  transition: 'color 0.2s ease',
+                }}
+              >
+                {isDragActive ? 'Drop your file here!' : 'Drag and drop models into page to open'}
+              </Typography>
+              <Typography
+                variant='body1'
+                sx={{
+                  color: 'rgba(255,255,255,0.9)',
+                  textShadow: '1px 1px 4px rgba(0,0,0,0.8)',
+                  fontSize: '1.1rem',
+                }}
+              >
+                Click anywhere to continue
+              </Typography>
+            </Stack>
+          </Box>
         </Box>
-      </Box>
-    </Fade>
+      </Fade>
+      {quotaDialog}
+    </>
   )
 }
 

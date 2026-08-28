@@ -428,6 +428,50 @@ describe('loader/glbExport', () => {
       expect(faceIdsExt.data.geometryItemIdentities).toBeUndefined()
     })
 
+    it('captures against the engine modelID, not the scene id on the model (#1776)', async () => {
+      // `CadView.jsx` pins `model.modelID = 0` (the scene-level id every
+      // ShareViewer call site passes) the moment `load()` resolves, and this
+      // writer runs later, from an idle callback. So the property no longer
+      // holds Conway's engine handle by the time we read it — the Loader
+      // latches that handle at parse time and hands it in. Reading
+      // `model.modelID` instead aimed every capture at a model Conway never
+      // opened, and the artifact cached with no NavTree and no Properties.
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(fakeGlbBytes.buffer))
+      const ifcManager = {
+        getSpatialStructure: jest.fn(() => Promise.resolve({
+          expressID: 5, type: 'product', children: [],
+        })),
+        getItemProperties: jest.fn(() => Promise.resolve({expressID: 5, type: 'product'})),
+        getPropertySets: jest.fn(() => Promise.resolve([])),
+      }
+
+      const ok = await exportAndCacheGlb({
+        model: {fake: 'model', modelID: 0},
+        ...ctx,
+        ifcManager,
+        modelID: 3,
+      })
+
+      expect(ok).toBe(true)
+      expect(ifcManager.getSpatialStructure).toHaveBeenCalledWith(3, true)
+    })
+
+    it('falls back to model.modelID when no engine modelID is passed', async () => {
+      // Call sites that predate the explicit argument keep working.
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(fakeGlbBytes.buffer))
+      const ifcManager = {
+        getSpatialStructure: jest.fn(() => Promise.resolve({
+          expressID: 5, type: 'product', children: [],
+        })),
+        getItemProperties: jest.fn(() => Promise.resolve({expressID: 5, type: 'product'})),
+        getPropertySets: jest.fn(() => Promise.resolve([])),
+      }
+
+      await exportAndCacheGlb({model: {fake: 'model', modelID: 2}, ...ctx, ifcManager})
+
+      expect(ifcManager.getSpatialStructure).toHaveBeenCalledWith(2, true)
+    })
+
     it('returns false (no throw) when the exporter produces no bytes', async () => {
       mockExporterParse.mockImplementation((_input, _onDone, onError) => onError(new Error('nope')))
       const ok = await exportAndCacheGlb({model: {}, ...ctx})

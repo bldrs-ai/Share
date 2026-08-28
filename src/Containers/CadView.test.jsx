@@ -21,7 +21,7 @@ import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
 import {makeTestTree} from '../utils/TreeUtils.test'
-import {actAsyncFlush} from '../utils/tests'
+import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
 
 
@@ -291,19 +291,32 @@ describe('CadView', () => {
     // `initViewer()` instance route through the same Jest mock.
     const setInstanceSelectionSpy = jest.spyOn(ShareViewer.prototype, 'setInstanceSelection')
       .mockImplementation(() => {})
-    const {result} = renderHook(() => useStore((state) => state))
-    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
-    await actAsyncFlush()
-    await waitFor(() => screen.getByTestId(aboutControlTestId))
-    // Set ONLY selectedInstanceIds — leave selectedElements at its
-    // empty-array default. The effect runs on the dep change; the
-    // guard should swallow it.
-    setInstanceSelectionSpy.mockClear()
-    const STALE_INSTANCE_ID = 42
-    await act(() => result.current.setSelectedInstanceIds([STALE_INSTANCE_ID]))
-    await actAsyncFlush()
-    expect(setInstanceSelectionSpy).not.toHaveBeenCalled()
+    // The mocked model load resolves on its own timers and drives CadView's
+    // mount setStates (setSelectedElement, ViewerContainer) *during* the
+    // waitFor below — outside any act scope RTL can enclose, so no amount of
+    // flushing catches them. This is the one test that trips it; swallow just
+    // that act warning. The behavior under test (setInstanceSelection is not
+    // called) is asserted directly and unaffected.
+    const restoreActWarnings = suppressActWarnings()
+    // try/finally so a failed assertion can't leave console.error mocked for
+    // the rest of the file — that would swallow every later test's errors.
+    try {
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => screen.getByTestId(aboutControlTestId))
+      // Set ONLY selectedInstanceIds — leave selectedElements at its
+      // empty-array default. The effect runs on the dep change; the
+      // guard should swallow it.
+      setInstanceSelectionSpy.mockClear()
+      const STALE_INSTANCE_ID = 42
+      await act(() => result.current.setSelectedInstanceIds([STALE_INSTANCE_ID]))
+      await actAsyncFlush()
+      expect(setInstanceSelectionSpy).not.toHaveBeenCalled()
+    } finally {
+      restoreActWarnings()
+    }
   })
 
 
@@ -580,7 +593,11 @@ describe('CadView', () => {
       expect(alert.message.toLowerCase()).toContain('out of memory')
     })
     expect(consoleErrorSpy).toHaveBeenCalledWith(oomErr)
-    expect(captureExceptionSpy).toHaveBeenCalledWith(oomErr)
+    // OOM is an expected, handled device-limit outcome (already surfaced to
+    // the user via the 'oom' alert), so it is intentionally NOT sent to
+    // Sentry's error stream — capturing it is what produced the SHARE-RS
+    // noise. Real (non-OOM) loader failures are still captured.
+    expect(captureExceptionSpy).not.toHaveBeenCalledWith(oomErr)
   })
 
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing

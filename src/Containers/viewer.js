@@ -55,23 +55,29 @@ export function disposeViewer() {
       currentViewer._resizeObserver = null
     }
 
+    // A degenerate scene (a partial test mock, or a viewer torn down before its
+    // scene was built) has no `traverse` — skip the per-object GPU cleanup
+    // rather than throwing into the outer catch, which logged "Error disposing
+    // viewer: scene.traverse is not a function" on every such teardown.
     const scene = currentViewer.context.getScene()
-    scene.traverse((obj) => {
-      if (obj.geometry) {
-        obj.geometry.dispose()
-      }
-      const materials = getMeshMaterials(obj)
-      if (materials.length > 0) {
-        materials.forEach((mat) => {
-          TEXTURE_MAP_SLOTS.forEach((slot) => {
-            if (mat[slot]) {
-              mat[slot].dispose()
-            }
+    if (scene && typeof scene.traverse === 'function') {
+      scene.traverse((obj) => {
+        if (obj.geometry) {
+          obj.geometry.dispose()
+        }
+        const materials = getMeshMaterials(obj)
+        if (materials.length > 0) {
+          materials.forEach((mat) => {
+            TEXTURE_MAP_SLOTS.forEach((slot) => {
+              if (mat[slot]) {
+                mat[slot].dispose()
+              }
+            })
+            mat.dispose()
           })
-          mat.dispose()
-        })
-      }
-    })
+        }
+      })
+    }
 
     const renderer = currentViewer.context.getRenderer()
     if (renderer && typeof renderer.dispose === 'function') {

@@ -46,7 +46,8 @@ substitution explicit (and visible to the user) rather than letting
 - `yarn test-flows [spec] -g "test name"` - Run a single test by name grep
 
 **Build config**: Playwright tests use `SHARE_CONFIG=playwright` (`tools/esbuild/vars.playwright.js`).
-Key differences from production: `OPFS_IS_ENABLED=false`, `MSW_IS_ENABLED=true`, `NODE_ENV=development`.
+Key differences from production: `MSW_IS_ENABLED=true`, `NODE_ENV=development`. `OPFS_IS_ENABLED` is
+**on**, as in production — it was off until #1779, so treat any older note saying otherwise as stale.
 
 **SPA routing**: The static file server (`http-server docs`) has no SPA fallback. Missing paths return
 a 404 which serves `docs/404.html`, which redirects to `/?/the/path`. `docs/index.html` then uses
@@ -66,12 +67,60 @@ await page.evaluate(() => {
 The `OpenModelDialog` reads `loadRecentFilesBySource('local')` from localStorage whenever the dialog
 opens (`isDialogDisplayed` → true), so the entry is visible immediately without a page reload.
 
-**OPFS in tests**: With `OPFS_IS_ENABLED=false`, `saveDnDFileToOpfs` is never called; the fallback
-(`saveDnDFileToOpfsFallback`) runs instead and produces a UUID without an extension. This makes
-post-DnD navigation unreliable in tests — prefer testing the persistence→UI layer directly (see above).
+**OPFS in tests**: on since #1779, so a spec exercises the same OPFS path as production —
+`saveDnDFileToOpfs` runs rather than `saveDnDFileToOpfsFallback`, and the GLB cache round-trip
+(writer → OPFS → reader) is reachable at all. That round-trip is what the cache-hit specs guard;
+without OPFS they could only ever have tested a live parse.
+
+The flag is compile-time and all-or-nothing (`store/BrowserSlice.js` hard-gates the setter), so it
+cannot be enabled per-spec. Four consequences worth knowing:
+
+- **It changes every model-loading spec, not just the cache-hit ones.** `Loader.js#load` gates the
+  whole OPFS block on `isOpfsAvailable`, so turning the flag on also turns on, suite-wide: the model
+  fetch moving into `OPFS.worker.js` (see "Intercept model fetches" below); a full GLTFExporter +
+  gzip + OPFS write scheduled on `requestIdleCallback` at the tail of every load, fire-and-forget and
+  often still in flight when the context closes; and `spillModelSource` + `ReleaseModelGeometry`,
+  which free Conway's native geometry mid-test. A spec that picks, isolates or screenshots late is
+  running against a materially different runtime state than it was written against. If a spec starts
+  failing after touching this flag, that is the first place to look.
+- Per-test isolation comes from Playwright's fresh `BrowserContext`, not from anything the app does —
+  Chromium partitions OPFS per context, and a retry gets a fresh context too. A spec that populates
+  the cache and then reloads can still `clearOpfs`, but put it in `beforeEach`: the case it insures
+  against is a run interrupted mid-write, which is exactly the case where an `afterEach` never runs.
+- Waiting on a `[glb]` console line is the way to observe cache state (`cache HIT`, `writer: wrote`).
+  Use `waitForGlbLog` from `src/tests/e2e/glbLogs.ts` and **not** `page.waitForFunction(pred, {logs})`
+  — that serialises its argument into the page once, so Node-side pushes never reach the predicate and
+  the wait can only succeed if the line already arrived. Two specs sat `fixme`'d on exactly that
+  mistake, and a third was written already-`fixme`'d beside them, for five weeks (#1779).
+- Wait for `writer: wrote`, never for a `.glb` to appear in OPFS. The file exists from creation, so
+  the existence check is satisfied while the artifact is still half-written and the reload then reads
+  it as a `cache MISS`.
 
 **Intercept model fetches**: For tests that navigate to a GitHub model URL, use `setupVirtualPathIntercept`
-from `src/tests/e2e/models.ts` to serve a fixture file in place of the real network request.
+from `src/tests/e2e/models.ts` to serve a fixture file in place of the real network request. Note that
+with OPFS on, the model fetch is issued from `OPFS.worker.js`, not the page — so page-level
+`context.route` handlers (`setupVirtualPathIntercept`'s own, and `blockExternalNetwork`'s
+real-network guard) are not the mechanism keeping it hermetic; MSW's service worker is. Gate
+navigation on the service worker being active (`visitHomepageWaitForModel` does; a bare `page.goto`
+does not) before assuming a fixture will be served.
+
+**Screenshot goldens**: A new `expectScreen(page, 'Name.png')` test has no baseline, so it fails until
+you generate one:
+```bash
+yarn test-flows src/path/To.spec.ts --update-snapshots -g "test name"
+```
+The PNG lands in `src/path/To.spec.ts-snapshots/` (see `snapshotPathTemplate` in
+`tools/playwright.config.js`) and is committed with the test. Two things to know:
+
+- **Look at the generated golden before committing it.** `--update-snapshots` writes whatever
+  rendered, so a broken render becomes the baseline and CI then enforces the bug.
+- **Fixtures must live in `src/tests/fixtures/github/...`,** not `docs/__test_fixtures__/`. The
+  `test-flows` web server runs `yarn test-flows-build`, which starts with `yarn clean` and then
+  copies the fixture tree in — so anything hand-placed under `docs/` is deleted before the run.
+
+Re-running `--update-snapshots` over an existing golden rewrites it, which is how you intentionally
+accept a visual change; without the flag, a diff fails the test and the actual/expected/diff PNGs
+land in `tools/playwright-report`.
 
 
 # Specific Guides
@@ -199,3 +248,97 @@ remote.
 
 After a push, verify with `git log origin/<branch>` or `git status` rather
 than trusting the push command's output alone.
+
+
+## Keep the test console clean
+
+**A test run should print nothing unexpected.** Noise isn't cosmetic: once a
+run logs a hundred lines of warnings, the one *new* warning that flags a real
+regression drowns in them and nobody sees it. So a green run is also a *quiet*
+run — treat a stray warning as a defect to resolve, not scenery. There are
+four moves, in priority order; reach for a lower one only when the one above
+it genuinely can't apply.
+
+**1. Fix the warning at the source.** Most React `act()` warnings mean a state
+update wasn't awaited. Await it — don't mute it. `actAsyncFlush()`
+(`src/utils/tests.js`) settles the pending microtask after a render:
+
+```js
+import {actAsyncFlush} from '../utils/tests'
+render(<Thing/>)
+await actAsyncFlush() // flush the mount effect's setState before asserting
+```
+
+Keep that helper **timer-agnostic** — a single awaited `Promise.resolve()`,
+never a `setTimeout(0)`. Under `jest.useFakeTimers()` a real timer never fires
+unless the clock is advanced, so a `setTimeout`-based flush would hang every
+caller that uses fake timers. Same rule for any flush helper you add.
+
+**2. Divert expected diagnostics into a buffer and assert on them.** When code
+is *supposed* to log — the `[glb]` loader emits error-path diagnostics by
+design — don't let it reach the console and don't silently swallow it either.
+Route it through a swappable sink and assert the expected line is present, so
+the diagnostic becomes a *tested signal* instead of spam:
+
+- `src/loader/glbLog.js` — the emit side. `glbInfo/glbWarn/glbVerbose` call an
+  active sink (default: console) that tests can swap via `setGlbLogSink`. The
+  sink lives on `globalThis` so it survives `jest.resetModules()`.
+- `tools/jest/glbLogCapture.js` — the test side. `installGlbLogCapture()`
+  (wired once in `setupTests.js`, cleared per test) buffers everything; a spec
+  reads it with `getGlbLogs()`:
+
+```js
+import {getGlbLogs} from '../../tools/jest/glbLogCapture'
+// ...trigger the malformed-GLB path...
+expect(getGlbLogs().some((l) => l.text.includes('out-of-range bufferView 99')))
+  .toBe(true)
+```
+
+Apply this pattern to any subsystem with intentional, assertable logging:
+give it a swappable sink rather than calling `console.*` directly.
+
+**3. Suppress only what you genuinely can't reach — narrowly, and restore it.**
+Some updates fire outside any `act` scope RTL can enclose: a mocked model load
+that resolves on its own timers and drives a `setState` *during* a `waitFor`.
+There's nothing to await. `suppressActWarnings()` (`src/utils/tests.js`)
+swallows **only** the `"not wrapped in act"` line and passes every other
+`console.error` through. Scope it to the one test and wrap in `try/finally` so
+a failed assertion can't leave `console.error` mocked for the rest of the file
+(which would hide every later test's real errors):
+
+```js
+const restore = suppressActWarnings()
+try {
+  // ...the one test whose cascade can't be awaited...
+} finally {
+  restore()
+}
+```
+
+This is the escape hatch, not the norm — prefer move 1 whenever the update is
+reachable.
+
+**4. If you mute a real signal globally, back it with a static test.** A global
+`console.warn` filter is a blunt instrument: it can hide a genuine problem
+alongside the false positive. `setupTests.js` mutes three's *"Multiple
+instances of Three.js"* warning because under jest it's a false positive (the
+harness resets the module registry and re-imports three against an already-set
+`window.__THREE__`). But that same warning would also fire for a *real* on-disk
+duplicate — a nested `node_modules/three` pulled in by some dependency's
+version range — which the filter would now swallow. So the mute is paired with
+`src/viewer/three/singleThreeInstance.test.js`, a static scan that fails if
+`three` appears in `node_modules` more than once. **Rule:** any global console
+filter that could mask a real defect needs a compensating detector for the case
+that actually ships.
+
+**Bonus — kill jsdom "not implemented" spam at the setup seam.** jsdom logs a
+`console.error` every time app code calls an unimplemented canvas method
+(`getContext`, `toDataURL` — PerfMonitor's overlay, screenshot capture). The
+code already treats their falsy return as "headless — skip", so
+`setupTests.js` stubs them to exactly those falsy values. Same runtime the code
+already saw under jsdom, minus the per-call error. A test needing a real
+context still overrides these on its own canvas object.
+
+The shared wiring lives in **`tools/jest/setupTests.js`** (glb capture install
++ per-test clear, the three filter, the canvas stubs); per-test helpers live in
+**`src/utils/tests.js`**.

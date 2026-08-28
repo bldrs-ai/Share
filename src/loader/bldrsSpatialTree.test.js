@@ -9,6 +9,7 @@ import {
   parseGlb,
   serializeGlb,
 } from './injectGlbExtensions'
+import {getGlbLogs} from '../../tools/jest/glbLogCapture'
 
 
 describe('loader/bldrsSpatialTree', () => {
@@ -30,6 +31,20 @@ describe('loader/bldrsSpatialTree', () => {
     it('returns null when the root has no expressID (malformed tree)', async () => {
       const mgr = {getSpatialStructure: () => ({type: 'IFCPROJECT', children: []})}
       expect(await captureBldrsSpatialTree(mgr, 0)).toBeNull()
+    })
+
+    it('warns when the manager has no model under that handle (#1776)', async () => {
+      // Conway's `properties.*` shim optional-chains through
+      // `getPassthrough(modelID)`, so a capture aimed at a handle it never
+      // opened resolves to `undefined` rather than throwing. Returning a
+      // silent null there is how bldrs-ai/Share#1776 stayed invisible: the
+      // writer dropped both BLDRS_* extensions, reported a successful write,
+      // and the loss only surfaced a load later as an empty NavTree and
+      // Properties panel on the cache hit.
+      const mgr = {getSpatialStructure: jest.fn(() => Promise.resolve(undefined))}
+      expect(await captureBldrsSpatialTree(mgr, 7)).toBeNull()
+      expect(getGlbLogs().some((l) =>
+        l.level === 'warn' && l.text.includes('no spatial structure for modelID=7'))).toBe(true)
     })
 
     it('returns null and swallows the error when the manager throws', async () => {
@@ -281,6 +296,8 @@ describe('loader/bldrsSpatialTree', () => {
       await expect(reader.afterRoot(gltf)).resolves.toBe(gltf)
       expect(gltf.scene.userData.bldrsSpatialTree).toBeUndefined()
       expect(reader.spatialTree).toBeNull()
+      // The skip announces itself through the captured [glb] channel.
+      expect(getGlbLogs().some((l) => l.text.includes('out-of-range bufferView 99'))).toBe(true)
     })
 
     it('skips a non-integer bufferView index without throwing', async () => {

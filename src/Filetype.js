@@ -1,4 +1,7 @@
 import axios from 'axios'
+// three's vendored fflate — already shipped for its EXR/other loaders,
+// so this adds no bundle weight beyond what the app carries.
+import {Gunzip} from 'three/examples/jsm/libs/fflate.module.js'
 import {assertDefined} from './utils/assert'
 import debug from './utils/debug'
 
@@ -10,19 +13,36 @@ export const supportedTypes = [
   'glb',
   'gltf',
   'ifc',
+  // Gaussian splat formats (loaded via Spark — see src/loader/splats.js).
+  // Listed with the rest so routes, drag-drop and permalinks all pick
+  // them up.
+  'ksplat',
   'obj',
   'pdb',
+  'ply',
+  'sog',
+  'splat',
+  'spz',
   'step',
   'stl',
   'stp',
+  'usd',
+  'usda',
+  'usdc',
+  'usdz',
   'xyz',
 ]
 
 export const supportedTypesUsageStr = `${supportedTypes.join(',')}`
 
 
-/** Make a non-capturing group of a choice of filetypes. */
-export const typeRegexStr = `(?:${supportedTypes.join('|')})`
+/**
+ * Make a non-capturing group of a choice of filetypes. Alternation is
+ * first-match, so sort longest-first: with 'usd' ahead of 'usda', a bare
+ * `exec('usda')` would match just the 'usd' prefix and misreport the
+ * extension.
+ */
+export const typeRegexStr = `(?:${[...supportedTypes].sort((a, b) => b.length - a.length).join('|')})`
 
 
 /** */
@@ -96,8 +116,28 @@ export function getValidExtension(pathOrExt) {
 // File header magic is clear by this offset
 const HEADER_LIMIT = 1024
 
-// GLB binary format magic number ("glTF" in little-endian)
-const GLB_MAGIC_NUMBER = 0x46546C67
+// GLB binary format magic ("glTF" in ASCII)
+const GLB_MAGIC = Array.from('glTF', (c) => c.charCodeAt(0))
+
+// USDC (crate) files start with the ASCII bytes "PXR-USDC"
+const USDC_MAGIC = Array.from('PXR-USDC', (c) => c.charCodeAt(0))
+
+// Zip local-file-header signature "PK\x03\x04". A zip signature alone
+// is NOT enough to classify as usdz — docx/xlsx/plain .zip uploads are
+// zips too, and they must keep failing sniffing cleanly ("unknown
+// type" alert) instead of dying downstream in USDLoader. See
+// looksLikeUsdzArchive for the disambiguation.
+const ZIP_MAGIC = [...Array.from('PK', (c) => c.charCodeAt(0)), 3, 4]
+
+// Zip local file header layout: filename length is a LE uint16 at
+// offset 26; the filename itself starts at offset 30.
+const ZIP_NAME_LEN_OFFSET = 26
+const ZIP_NAME_OFFSET = 30
+
+// gzip magic (0x1f 0x8b) read as a little-endian uint16. Among the
+// supported formats only .spz (gzipped gaussian-splat data) is a gzip
+// stream, so the magic is a sufficient discriminator here.
+const GZIP_MAGIC_NUMBER = 0x8B1F
 
 
 /**
@@ -141,19 +181,142 @@ export async function guessTypeFromFile(file) {
  * @return {string|null} type
  */
 export function analyzeHeader(headerBuffer) {
-  // Check for GLB binary format first (binary files won't decode properly as UTF-8)
-  const view = new DataView(headerBuffer)
-  if (headerBuffer.byteLength >= 4) {
-    // GLB files start with magic number ("glTF" in ASCII)
-    const magic = view.getUint32(0, true) // little-endian
-    if (magic === GLB_MAGIC_NUMBER) {
-      return 'glb'
+  // Check binary formats first (binary files won't decode properly as UTF-8)
+  if (matchesMagic(headerBuffer, GLB_MAGIC)) {
+    return 'glb'
+  }
+  if (matchesMagic(headerBuffer, USDC_MAGIC)) {
+    return 'usdc'
+  }
+  if (headerBuffer.byteLength >= 2 &&
+      new DataView(headerBuffer).getUint16(0, true) === GZIP_MAGIC_NUMBER) {
+    // The gzip signature is shared by SPZ splats and every ordinary
+    // gzipped upload (.tar.gz, gzipped logs/JSON) — same trap as the
+    // zip branch below. Decompress the head and require SPZ's own
+    // magic; anything else stays unrecognized so it fails sniffing
+    // cleanly instead of dying inside the splat decoder.
+    return looksLikeSpzStream(headerBuffer) ? 'spz' : null
+  }
+  if (matchesMagic(headerBuffer, ZIP_MAGIC)) {
+    // The zip signature is shared by USDZ packages, SOG splat bundles,
+    // and plain office/zip uploads — peek the first entry's name to
+    // tell them apart; anything else stays unrecognized so it fails
+    // sniffing cleanly instead of dying downstream in a loader.
+    if (looksLikeUsdzArchive(headerBuffer)) {
+      return 'usdz'
     }
+    if (looksLikeSogArchive(headerBuffer)) {
+      return 'sog'
+    }
+    return null
   }
 
   const decoder = new TextDecoder('utf-8')
   const headerStr = decoder.decode(headerBuffer)
   return analyzeHeaderStr(headerStr)
+}
+
+
+/**
+ * True when the buffer begins with the given magic byte sequence.
+ *
+ * @param {ArrayBuffer} headerBuffer
+ * @param {Array<number>} magicBytes
+ * @return {boolean}
+ */
+function matchesMagic(headerBuffer, magicBytes) {
+  if (headerBuffer.byteLength < magicBytes.length) {
+    return false
+  }
+  const bytes = new Uint8Array(headerBuffer, 0, magicBytes.length)
+  return magicBytes.every((b, i) => bytes[i] === b)
+}
+
+
+/**
+ * Distinguish a USDZ package from any other zip container (docx, xlsx,
+ * plain .zip) by peeking at the first entry's filename in the local
+ * file header. The USDZ spec requires the package's first entry to be
+ * the root USD layer, and three's USDLoader errors out otherwise — so
+ * gating on it here both rejects non-USD zips cleanly at sniff time
+ * and never rejects a USDZ the loader could actually open.
+ *
+ * @param {ArrayBuffer} headerBuffer at least the first zip local file
+ *   header (the sniff window is 1KB; the header + name fit comfortably)
+ * @return {boolean}
+ */
+function looksLikeUsdzArchive(headerBuffer) {
+  return /\.usd[ac]?$/i.test(firstZipEntryName(headerBuffer))
+}
+
+
+// SPZ header magic 0x5053474e, little-endian on disk: 'NGSP' as the
+// first four DECOMPRESSED bytes of every .spz file (Niantic spz spec).
+const SPZ_MAGIC = Array.from('NGSP', (c) => c.charCodeAt(0))
+
+
+/**
+ * Distinguish an SPZ splat from any other gzip stream by inflating the
+ * head and checking SPZ's own magic. The header buffer is a truncated
+ * prefix of the file, so this streams through fflate's `Gunzip` (which
+ * emits the decompressed prefix of a partial member) rather than
+ * `gunzipSync` (which would throw on the missing tail).
+ *
+ * @param {ArrayBuffer} headerBuffer
+ * @return {boolean}
+ */
+function looksLikeSpzStream(headerBuffer) {
+  try {
+    /** @type {Array<Uint8Array>} */
+    const chunks = []
+    const gunzip = new Gunzip()
+    gunzip.ondata = (chunk) => {
+      chunks.push(chunk)
+    }
+    gunzip.push(new Uint8Array(headerBuffer), false)
+    const decoded = chunks[0]
+    return decoded !== undefined && decoded.length >= SPZ_MAGIC.length &&
+      SPZ_MAGIC.every((byte, index) => decoded[index] === byte)
+  } catch {
+    // Truncated-at-an-awkward-boundary or corrupt gzip: not sniffable.
+    return false
+  }
+}
+
+
+/**
+ * Distinguish a PlayCanvas SOG splat bundle from other zip containers by
+ * the same first-entry peek: SOG bundles carry a `meta.json` manifest
+ * (splat-transform writes it as the leading entry) alongside the webp
+ * planes. First-entry order isn't formally guaranteed, so a bundle that
+ * leads with a webp fails sniffing — extension-carrying `.sog` paths
+ * never reach this and still load.
+ *
+ * @param {ArrayBuffer} headerBuffer
+ * @return {boolean}
+ */
+function looksLikeSogArchive(headerBuffer) {
+  return /(^|\/)meta\.json$/i.test(firstZipEntryName(headerBuffer))
+}
+
+
+/**
+ * The first zip entry's filename from a buffer holding at least the first
+ * local file header (the 1KB sniff window fits header + name comfortably).
+ * Empty string when the buffer is too short.
+ *
+ * @param {ArrayBuffer} headerBuffer
+ * @return {string}
+ */
+function firstZipEntryName(headerBuffer) {
+  if (headerBuffer.byteLength < ZIP_NAME_OFFSET) {
+    return ''
+  }
+  const view = new DataView(headerBuffer)
+  const nameLen = view.getUint16(ZIP_NAME_LEN_OFFSET, true)
+  const nameEnd = Math.min(ZIP_NAME_OFFSET + nameLen, headerBuffer.byteLength)
+  const nameBytes = new Uint8Array(headerBuffer, ZIP_NAME_OFFSET, nameEnd - ZIP_NAME_OFFSET)
+  return new TextDecoder('utf-8').decode(nameBytes)
 }
 
 
@@ -167,6 +330,13 @@ export function analyzeHeaderStr(header) {
   debug().log('Filetype#analyzeHeader, header:', header)
   if (header.includes('"metadata"')) {
     return 'bld'
+  } else if (header.startsWith('ply')) {
+    // PLY magic. Both mesh/point-cloud PLY and gaussian-splat PLY start
+    // this way; both route to the splat loader (spark renders plain
+    // point clouds as degenerate splats).
+    return 'ply'
+  } else if (header.startsWith('#usda')) {
+    return 'usda'
   } else if (header.includes('FBX')) {
     return 'fbx'
   } else if (header.startsWith('glTF')) {
@@ -213,11 +383,154 @@ export function analyzeHeaderStr(header) {
  * @return {string} 'ifc' or 'step'
  */
 export function classifyStepFamily(header) {
-  const schemaMatch = header.match(/FILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/i)
-  if (schemaMatch === null) {
+  const schema = stepSchemaName(header)
+  if (schema === null) {
     return 'ifc'
   }
-  return /^IFC/i.test(schemaMatch[1]) ? 'ifc' : 'step'
+  return /^IFC/i.test(schema) ? 'ifc' : 'step'
+}
+
+
+/**
+ * The FILE_SCHEMA value of an ISO-10303-21 header, or null when the entry
+ * is absent from the sniffed window or carries no parseable name — an
+ * empty `FILE_SCHEMA(( ))` / `FILE_SCHEMA(( '' ))`, which is malformed but
+ * does occur in the wild.
+ *
+ * Split out of {@link classifyStepFamily} so a caller can tell "this file
+ * says STEP" apart from "this file did not say". The classifier folds both
+ * into 'ifc': the right default when the answer only picks a filename, and
+ * the wrong one for a caller whose false-'ifc' costs more than a false
+ * 'step'. `Loader.js#canOpenFromStore` is the second kind — it gates
+ * conway's IFC-only store open, where guessing 'ifc' burns a model handle
+ * and caches a GLB with no NavTree (bldrs-ai/Share#1776) — so it requires a
+ * non-null name here before it trusts the classification.
+ *
+ * @param {string} header
+ * @return {string|null} the schema name, e.g. 'IFC4' or 'AUTOMOTIVE_DESIGN'
+ */
+export function stepSchemaName(header) {
+  const section = part21HeaderSection(maskPart21Comments(header))
+  if (section === null) {
+    return null
+  }
+  // LAST match, not first: conway's parser stores header entities in a Map
+  // keyed by name (`step_parser.js:193`), so a header carrying FILE_SCHEMA
+  // twice overwrites and the last one wins. Reading the first would have us
+  // answer from one entity and conway from the other — and on
+  // `FILE_SCHEMA(('IFC4')); FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));` that is the
+  // dangerous direction: we say IFC, conway says AP214, and a STEP file goes
+  // down the IFC-only store open (bldrs-ai/Share#1776).
+  const matches = [...section.matchAll(FILE_SCHEMA_VALUE)]
+  return matches.length === 0 ? null : matches[matches.length - 1][1]
+}
+
+
+// `\b` anchors the entity name so the scan cannot start inside a longer
+// identifier. conway parses header records under their exact names and
+// inspects only the `FILE_SCHEMA` key, so `NOT_FILE_SCHEMA(('IFC4'));` is
+// invisible to it — while an unanchored scan reads it as the schema. With
+// last-wins that is the dangerous direction whenever the lookalike follows
+// the real entity: we answer IFC, conway answers AP214. `\b` suffices
+// because `_` is a word character, so there is no boundary inside
+// `NOT_FILE_SCHEMA`.
+const FILE_SCHEMA_VALUE = /\bFILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/ig
+
+
+/**
+ * The HEADER section of a Part-21 file, or null when there is none in the
+ * window. Pass comment-masked text.
+ *
+ * Bounding matters because the caller sniffs a fixed 64 KiB prefix, which on
+ * any real model runs well into DATA — where a quoted string is free to
+ * contain something that looks like a header entity. conway reads FILE_SCHEMA
+ * from the parsed HEADER section only, so scanning past ENDSEC could have us
+ * answer IFC from a property value while conway answers AP214 from the real
+ * header. Truncating early (an `ENDSEC;` inside a header string literal, say)
+ * costs at worst a missed schema, which reads as "did not say" and buffers.
+ *
+ * @param {string} masked comment-masked Part-21 text
+ * @return {string|null} the header section's text
+ */
+function part21HeaderSection(masked) {
+  const start = masked.search(/\bHEADER\s*;/i)
+  if (start === -1) {
+    return null
+  }
+  const rest = masked.slice(start)
+  const end = rest.search(/\bENDSEC\s*;/i)
+  return end === -1 ? rest : rest.slice(0, end)
+}
+
+
+/**
+ * Blank out ISO-10303-21 `/* ... *``/` comments, leaving string literals
+ * intact, so a text scan sees what conway's parser sees.
+ *
+ * Two failures motivate this, and only masking fixes both. Part-21 permits a
+ * comment anywhere whitespace is allowed and conway's `StepHeaderParser`
+ * consumes one AS whitespace (its `whitespace()` loops on the comment
+ * parser), so:
+ *
+ *   - `FILE_SCHEMA /* note *``/ (('IFC4'))` is IFC to conway. A plain `\s*`
+ *     scan misses it and reports no schema — costing a large IFC its
+ *     windowed parse.
+ *   - `/* FILE_SCHEMA(('IFC4')); *``/ FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));` is
+ *     AP214 to conway. A raw-text scan finds the commented-out entity first
+ *     and reports IFC — the dangerous direction, which sends a STEP file
+ *     down conway's IFC-only store open and burns a model handle
+ *     (bldrs-ai/Share#1776).
+ *
+ * The second is why this masks rather than making the gap pattern
+ * comment-aware: a token can be *inside* a comment, not merely separated by
+ * one, and no amount of tolerance between tokens excludes it.
+ *
+ * String-literal aware, because inside a Part-21 string `/*` is ordinary
+ * text. An apostrophe is escaped by doubling it (`''`), which keeps the
+ * string open. An unterminated comment swallows the rest of the window,
+ * which matches conway's own reading and fails safe: no schema found.
+ *
+ * @param {string} text a Part-21 header window
+ * @return {string} the same text with comment spans replaced by a space
+ */
+function maskPart21Comments(text) {
+  let out = ''
+  let at = 0
+  let inString = false
+  while (at < text.length) {
+    const c = text[at]
+    if (inString) {
+      if (c === `'` && text[at + 1] === `'`) {
+        out += `''`
+        at += 2
+        continue
+      }
+      if (c === `'`) {
+        inString = false
+      }
+      out += c
+      at++
+      continue
+    }
+    if (c === `'`) {
+      inString = true
+      out += c
+      at++
+      continue
+    }
+    if (c === '/' && text[at + 1] === '*') {
+      const end = text.indexOf('*/', at + 2)
+      if (end === -1) {
+        return out
+      }
+      out += ' '
+      at = end + 2
+      continue
+    }
+    out += c
+    at++
+  }
+  return out
 }
 
 

@@ -7,7 +7,15 @@ import {captureException} from '@sentry/react'
 import {fileSuffixBoundaryRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
-import {gtagEvent} from '../privacy/analytics'
+import {
+  LOCAL_HOUR_PARAM,
+  OPEN_CID_PARAM,
+  getLocalHour,
+  getOpenCid,
+  gtagEvent,
+  isRealModelOpen,
+  startModelEngagement,
+} from '../privacy/analytics'
 import {getRenderMode} from '../privacy/preferences'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
@@ -15,9 +23,13 @@ import {load} from '../loader/Loader'
 import {
   attachLoadFailureContext,
   beginLoadProgress,
+  captureLoadDiagnostics,
   endLoadProgress,
+  getCompletedLoadStats,
+  reportFramingExclusion,
   reportLoadProgress,
 } from '../loader/loadProgress'
+import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
 import {getBrowser} from '../connections/registry'
 import useStore from '../store/useStore'
@@ -111,6 +123,7 @@ export default function CadView({
   // (not module-level state) so two CadView mounts in the same process —
   // tests, multi-pane layouts — don't stomp each other.
   const previousThemeChangeCbRef = useRef(null)
+  const stopModelEngagementRef = useRef(null)
 
   // Two useEffects below can each trigger `onViewer()` — the
   // [viewer]-dep effect fires when `onModelPath` sets a new viewer, and the
@@ -319,11 +332,20 @@ export default function CadView({
       }
 
       console.error(e)
-      // load.* tags + context from the last progress event, so this
-      // capture groups by phase in Sentry instead of landing in one
-      // detail-free "model loading failed" bucket (conway #301 §7).
-      attachLoadFailureContext()
-      captureException(e)
+      // Don't send the OOM/device-too-constrained case to Sentry's error
+      // stream: it's an expected, handled outcome on memory-constrained
+      // devices, already surfaced to the user with actionable advice (the
+      // 'oom' alert above). Capturing it generated the SHARE-RS noise
+      // (11k+ events / 2.7k users, ~100% old Android) — a device limit, not
+      // a code defect. Real (non-OOM) loader failures are still captured,
+      // and get load.* tags + context from the last progress event first
+      // (via attachLoadFailureContext), so they group by phase in Sentry
+      // instead of landing in one detail-free "model loading failed"
+      // bucket (conway #301 §7).
+      if (!isOOM) {
+        attachLoadFailureContext()
+        captureException(e)
+      }
       return
     } finally {
       // Whatever the outcome, this load attempt is over. The overlay/snack
@@ -535,6 +557,16 @@ export default function CadView({
     // viewer mock doesn't define it.
     viewer.groundModel?.(loadedModel)
 
+    // Framing just ran on outlier-robust bounds (robustBounds.js), and
+    // this repeats that cached measurement. If strays were excluded, say
+    // so: Health line + console warning + grace-snackbar note. After
+    // endLoadProgress by design — it amends the published loadResult.
+    // The traverse guard skips the Jest MockModel, which isn't an
+    // Object3D.
+    if (typeof loadedModel.traverse === 'function') {
+      reportFramingExclusion(robustBoundsFor(loadedModel))
+    }
+
     // §6e: apply the active render look's materials to the new model, so a
     // model opened while a non-default look is active still matches.
     viewer.applyLookToModel?.(loadedModel)
@@ -546,15 +578,59 @@ export default function CadView({
       console.warn('CadView#loadedModel: model without manager:', loadedModel)
     }
 
-    const selectContentObj = {
-      content_type: loadedModel.type || 'undefined',
-      content_id: filepath,
+    // Replaces the retired `select_content` event, whose counts were
+    // conflated with homepage visits because the demo model fired it
+    // too. The isRealModelOpen guard keeps that from recurring — see
+    // its doc for why the demo must stay out of this event.
+    // The successfully loaded model replaces the prior engagement window,
+    // including when this load is the bundled demo (which is never tracked).
+    stopModelEngagementRef.current?.()
+    stopModelEngagementRef.current = null
+    if (isRealModelOpen(routeResult)) {
+      const eventParams = {
+        content_type: loadedModel.type || 'undefined',
+        content_id: filepath,
+      }
+      // The progress reporter supplies cross-format fallbacks. Conway's
+      // IFC/STEP engine stats then override memory/time/diagnostic counts
+      // with engine-scoped values from loadedModel.loadStats.
+      addProperties(eventParams, getCompletedLoadStats() ?? {}, 'stats_')
+      if (loadedModel.loadStats) {
+        addProperties(eventParams, loadedModel.loadStats, 'stats_')
+      }
+      // Per-user open depth: GA4 has no user-id dimension, so the
+      // client id rides along as an event-scoped custom dimension,
+      // prefix-tagged by getOpenCid so GA4 can't type it as a number.
+      // Absent whenever GA didn't initialize — see analytics#gaClientId.
+      const openCid = getOpenCid()
+      if (openCid) {
+        eventParams[OPEN_CID_PARAM] = openCid
+      }
+      // GA4's own `hour` dimension is in the *property's* timezone, which
+      // says nothing about when a user in Milan or São Paulo actually
+      // works — and the real-opens audience is Europe + Brazil (bizdev
+      // growth-strategy §2). This is their local hour, prefixed so gtag
+      // keeps it in the text slot; see analytics#getLocalHour.
+      eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
+      gtagEvent('real_model_open', eventParams)
+      // Give a chip with non-zero errors/warnings a Sentry event to link
+      // to (issue #1767). Gated on the very counts just assembled above,
+      // because those are what colour the chip — for IFC/STEP they are
+      // Conway's, applied over the reporter's console-tee fallbacks a few
+      // lines up, so gating on the tee would let the event and the chip
+      // disagree. Siting the call here is also what keeps it to real,
+      // successful opens. See loadProgress#captureLoadDiagnostics.
+      captureLoadDiagnostics({
+        errorCount: eventParams.stats_errorCount,
+        warningCount: eventParams.stats_warningCount,
+        contentId: eventParams.content_id,
+        contentType: eventParams.content_type,
+      })
+      stopModelEngagementRef.current = startModelEngagement({
+        content_type: eventParams.content_type,
+        content_id: eventParams.content_id,
+      })
     }
-    // TODO(pablo): currently only IFC/STEP are populated with stats.
-    if (loadedModel.loadStats) {
-      addProperties(selectContentObj, loadedModel.loadStats, 'stats_')
-    }
-    gtagEvent('select_content', selectContentObj)
 
     return loadedModel
   }
@@ -681,14 +757,24 @@ export default function CadView({
       const picked = pickedAll[0]
       const mesh = picked.object
       // TODO(pablo): obsolete? needed this in h3 at some point.
-      // A BatchedMesh must NOT reach the OutlineEffect: three auto-enables
-      // `USE_BATCHING` for it, but postprocessing's outline ShaderMaterial
-      // (DepthComparisonMaterial) predates BatchedMesh and omits the batching
-      // shader chunks, so its program fails to compile (`batchingMatrix`
-      // undeclared) and blanks the frame. The batched path highlights by
-      // recoloring instances (batchedHighlight) instead, so clear the outline
-      // rather than feed it the batch.
-      viewer.setHighlighted(mesh.isBatchedMesh ? null : [mesh])
+      // Two pick targets must NOT reach the OutlineEffect:
+      // - A BatchedMesh: three auto-enables `USE_BATCHING` for it, but
+      //   postprocessing's outline ShaderMaterial (DepthComparisonMaterial)
+      //   predates BatchedMesh and omits the batching shader chunks, so its
+      //   program fails to compile (`batchingMatrix` undeclared) and blanks
+      //   the frame. The batched path highlights by recoloring instances
+      //   (batchedHighlight) instead, so clear the outline rather than feed
+      //   it the batch.
+      // - A geometry-less non-Mesh (Spark SplatMesh, #1726): the
+      //   OutlineEffect's per-frame update toggles its selection's
+      //   `.visible` off around an extra depth-pass scene render; the
+      //   scene-level SparkRenderer re-gathers splats during that pass and
+      //   sees the mesh hidden, so its async sort alternates between the
+      //   full and the empty splat set — the whole model flickers at the
+      //   sort cadence. An outline of a gaussian cloud carries no signal
+      //   anyway; store/NavTree selection below still applies.
+      const outlineable = !mesh.isBatchedMesh && mesh.isMesh === true
+      viewer.setHighlighted(outlineable ? [mesh] : null)
       // Per-instance picking path (Conway-direct):
       //   no-shift = just this PlacedGeometry
       //   shift     = the whole IFC element (every instance)
@@ -1441,6 +1527,8 @@ export default function CadView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => () => stopModelEngagementRef.current?.(), [])
 
 
   const abs = {position: 'absolute'}

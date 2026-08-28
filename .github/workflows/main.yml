@@ -9,22 +9,83 @@ on:
       - 'notes/**'
   pull_request:
     branches: [ main ]
+    # ready_for_review is what makes the draft gate below usable: without it,
+    # flipping a draft to ready fires no event and the PR would sit with no
+    # build until the next push. opened/synchronize/reopened are the Actions
+    # default set, restated because naming `types` at all replaces it.
+    #
+    # converted_to_draft is the other half of that gate, and it works by
+    # cancellation rather than by starting anything: pushing a PR back to
+    # draft fires an event in the run-level concurrency group below, so
+    # cancel-in-progress kills the build that is mid-flight and the run it
+    # schedules in its place skips (the PR is a draft again). Run-level, not
+    # job-level, for the reason given there — a skipped job never enters its
+    # own group, so a job-level group could not cancel anything here.
+    types: [ opened, synchronize, reopened, ready_for_review, converted_to_draft ]
+    # NOTE: this is a workflow-level skip, and it interacts badly with the
+    # job-level draft gate below in one specific way. A skipped-by-`if` job
+    # still reports a `skipped` conclusion, which satisfies a required status
+    # check; a path-skipped workflow reports NOTHING. So if `build` is ever
+    # made a required check in branch protection, a docs-only PR will have no
+    # check to satisfy it and will sit unmergeable forever. Convert this to a
+    # per-job `if` gate at that point. conway's build.yml carries the same
+    # note for the same reason.
     paths-ignore:
       - '**/*.md'
       - 'design/**'
       - 'notes/**'
   workflow_dispatch:
 
+# Hoisted here from the `build` job, which is where this used to live. A job
+# skipped by `if:` never enters its own concurrency group, so with the draft
+# gate in place a job-level group could not do the one thing converted_to_draft
+# needs it to do — have the replacement run's skipped job cancel the build the
+# withdrawn PR left in flight. At workflow level the group is claimed by the
+# run itself, so the cancellation happens regardless of what the jobs decide.
+#
+# Per-ref for PRs, so a push to one branch only cancels builds for that same
+# branch (the original static `build-group` cancelled across every branch in
+# the repo, so any push anywhere aborted running PR builds).
+#
+# Ref-keyed and cancel-always, which is what this was before the hoist —
+# superseded builds die rather than queue, on main as much as on a PR. Nothing
+# ships from a build here (Netlify deploys separately, and there is no publish
+# step), so only the newest commit's result is worth a runner.
+#
+# Do NOT narrow this to `${{ github.event_name == 'pull_request' }}`. Leaving
+# main uncancelled makes its runs queue in this group, and `cancel-in-progress:
+# false` does not mean "never cancel" — GitHub drops a run still PENDING in a
+# group when a newer one joins — so three quick merges would leave commit 3
+# waiting behind commit 1's already-superseded build and lose commit 2's
+# entirely. conway does scope its cancellation that way, but only because an
+# npm publish rides on the ordering there (conway#468); that reason does not
+# exist here.
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    # Draft PRs don't build. Several PRs are typically in flight at once and
+    # each draft push would otherwise burn a full build+lint+test slot on the
+    # shared runners while the change is still being reviewed and reworked.
+    # Netlify deploy previews are NOT affected — they come from Netlify's own
+    # GitHub integration, not from Actions — so a draft still gets a preview
+    # URL to look at. See AGENTS.md "PR lifecycle".
+    #
+    # A job-level `if` (rather than a workflow-level trigger filter) is what
+    # keeps this compatible with required status checks: a skipped-by-if job
+    # reports a conclusion, a workflow that never triggers reports nothing and
+    # leaves the PR waiting forever.
+    #
+    # The event_name clause is defensive, not load-bearing. On push and
+    # workflow_dispatch `github.event.pull_request` is null, and Actions
+    # coerces both sides of `==` to a number when the types differ, so a bare
+    # `draft == false` would evaluate `0 == 0` and run anyway. Relying on that
+    # coercion would make CI on main hinge on a documented-but-obscure corner
+    # of the expression language. The clause states the intent instead.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     timeout-minutes: 10
-    # Per-ref group so a push to one branch only cancels in-progress builds
-    # for that same branch. The previous static `build-group` cancelled
-    # across every branch in the repo, so any push anywhere aborted PR
-    # builds that happened to be running.
-    concurrency:
-      group: build-${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
     env:
       SHARE_CONFIG: dev
     runs-on: ubuntu-latest
@@ -32,7 +93,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - run: yarn install
       - run: yarn build-prod
       - run: yarn lint

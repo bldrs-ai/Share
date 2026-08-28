@@ -14,6 +14,7 @@ import {
   parseGlb,
   serializeGlb,
 } from './injectGlbExtensions'
+import {getGlbLogs} from '../../tools/jest/glbLogCapture'
 
 
 describe('loader/bldrsElementProperties', () => {
@@ -889,6 +890,8 @@ describe('loader/bldrsElementProperties', () => {
       const gltf = {scene: {userData: {}}}
       await expect(reader.afterRoot(gltf)).resolves.toBe(gltf)
       expect(gltf.scene.userData.bldrsElementProperties).toBeUndefined()
+      // The skip announces itself through the captured [glb] channel.
+      expect(getGlbLogs().some((l) => l.text.includes('out-of-range bufferView 99'))).toBe(true)
     })
 
     it('survives a gltf with no default scene (no attach, no throw)', async () => {

@@ -1,13 +1,14 @@
 'use client'
-import {Roboto} from 'next/font/google'
 import {createTheme, type Theme, type ThemeOptions} from '@mui/material/styles'
 
 
-const roboto = Roboto({
-  weight: ['300', '400', '500', '700'],
-  subsets: ['latin'],
-  display: 'swap',
-})
+// Roboto is self-hosted via @fontsource/roboto, whose per-weight CSS is
+// imported in src/app/layout.tsx. We deliberately avoid next/font/google here:
+// it fetches the font from Google's servers at build time, which fails in the
+// CI build sandbox (no outbound network) and breaks the marketing build (and
+// the Playwright webServer that chains off it). Keep these weights in sync with
+// the @fontsource/roboto/*.css imports in layout.tsx.
+const ROBOTO_FONT_FAMILY = '"Roboto", "Helvetica", "Arial", sans-serif'
 
 
 // Marketing brand accents — preserved in night mode. Day mode uses the SPA's
@@ -28,7 +29,7 @@ const SPA_DAY_PAPER = '#fafafa'
 
 
 const sharedTypography: ThemeOptions['typography'] = {
-  fontFamily: roboto.style.fontFamily,
+  fontFamily: ROBOTO_FONT_FAMILY,
   h1: {fontSize: 'clamp(2.2rem, 5vw, 3.5rem)', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.15},
   h2: {fontSize: 'clamp(2rem, 4vw, 3.2rem)', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.15},
   h3: {fontSize: 'clamp(1.5rem, 3vw, 2rem)', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1.2},

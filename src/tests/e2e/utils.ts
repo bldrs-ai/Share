@@ -1,6 +1,7 @@
 import {BrowserContext, Page, Request, Response, Route, expect} from '@playwright/test'
 import {readFile} from 'fs/promises'
 import {resolve} from 'path'
+import {isBlockedRealNetworkHost} from './networkGuard'
 
 
 /**
@@ -97,33 +98,6 @@ export async function clearOpfs(page: Page) {
 
 
 /**
- * Hosts whose traffic carries data the SPA reads or writes (model files,
- * GitHub API responses, auth tokens, AI completions). Reaching these from
- * a test is the leak we *must* fail on — it can paper over a broken mock
- * and produce non-hermetic results. Ad / analytics / tracking script
- * hosts (googletagmanager, google-analytics, googlesyndication,
- * doubleclick) are deliberately NOT in this list: MSW handles them, but
- * on the first page navigation a `<script>` tag for gtag or adsbygoogle
- * may fire before MSW's service worker takes control, and a hard abort
- * there only breaks page init without protecting any data.
- */
-const REAL_NETWORK_HOST_DENYLIST = [
-  // Real GitHub
-  'api.github.com',
-  'raw.githubusercontent.com',
-  'media.githubusercontent.com',
-  'github.com',
-  // The proxy this PR removed
-  'rawgit.bldrs.dev',
-  // Real auth + bldrs hosts that test setups suffix with .msw / .pw
-  'bldrs.us.auth0.com',
-  'git.bldrs.dev',
-  // Real OpenRouter (AI completions)
-  'openrouter.ai',
-]
-
-
-/**
  * Block real-internet network calls during tests.
  *
  * Tests must serve all traffic locally — fixtures, MSW handlers, page.route
@@ -137,13 +111,22 @@ const REAL_NETWORK_HOST_DENYLIST = [
  * 127.0.0.1, and any host whose hostname ends with one of the test-fake
  * suffixes (.msw, .pw, .jest, .cypress).
  *
+ * `allowHosts` names hosts the caller *deliberately* asked for and must not
+ * be blocked — the load-measurement harness pointed at a corpus model on
+ * raw.githubusercontent.com, for instance. Without it that request is
+ * aborted by this guard and the run dies as a model-ready timeout, which
+ * reads like a slow model rather than a blocked fetch. The allow is an
+ * exact host match; everything else stays blocked (see
+ * {@link isBlockedRealNetworkHost}).
+ *
  * @param context - Playwright browser context
+ * @param allowHosts - hosts the caller deliberately requested, exact match
  */
-export async function blockExternalNetwork(context: BrowserContext) {
+export async function blockExternalNetwork(context: BrowserContext, allowHosts: string[] = []) {
   await context.route('**/*', async (route) => {
     const url = new URL(route.request().url())
     const hostname = url.hostname.toLowerCase()
-    if (REAL_NETWORK_HOST_DENYLIST.includes(hostname)) {
+    if (isBlockedRealNetworkHost(hostname, allowHosts)) {
       console.error(`Blocked real-network request from test: ${route.request().method()} ${url}`)
       await route.abort('blockedbyclient')
       return
@@ -157,13 +140,15 @@ export async function blockExternalNetwork(context: BrowserContext) {
  * Setup homepage intercepts and navigate to root path
  *
  * @param page - Playwright page object
+ * @param allowHosts - real hosts this test deliberately needs, exact match;
+ *   defaults to none, which is what every hermetic spec wants
  */
-export async function homepageSetup(page: Page) {
+export async function homepageSetup(page: Page, allowHosts: string[] = []) {
   // Register the real-network guard FIRST so it sits at the bottom of the
   // route stack: fixture-specific routes registered later will match first
   // and short-circuit; only requests no test handler claimed reach this
   // guard.
-  await blockExternalNetwork(page.context())
+  await blockExternalNetwork(page.context(), allowHosts)
   // The next two steps are necessary to avoid font synthesis issues in GitHub Actions.
   // Wait for fonts to load
   /*
@@ -223,17 +208,23 @@ export async function returningUserVisitsHomepage(page: Page) {
 
 /**
  * Same as returningUserVisitsHomepage, but wait for model too
+ *
+ * @param search Optional query string (e.g. '?feature=quotas') appended to the
+ *   model URL so the SPA boots with feature flags active.
  */
-export async function returningUserVisitsHomepageWaitForModel(page: Page) {
+export async function returningUserVisitsHomepageWaitForModel(page: Page, search = '') {
   await setIsReturningUser(page.context())
-  await visitHomepageWaitForModel(page)
+  await visitHomepageWaitForModel(page, search)
 }
 
 
 /**
  * Assumes other setup, then visit homepage and wait for model
+ *
+ * @param search Optional query string (e.g. '?feature=quotas') appended to the
+ *   model URL so the SPA boots with feature flags active.
  */
-export async function visitHomepageWaitForModel(page: Page) {
+export async function visitHomepageWaitForModel(page: Page, search = '') {
   await Promise.all([
     // await page.waitForURL('/index.ifc', {timeout: 10_000}), // ensure the bounce happened
     page.waitForResponse(async (response: Response) => {
@@ -244,7 +235,7 @@ export async function visitHomepageWaitForModel(page: Page) {
       }
       return false
     }),
-    page.goto('/share/v/p/index.ifc', {waitUntil: 'domcontentloaded'}),
+    page.goto(`/share/v/p/index.ifc${search}`, {waitUntil: 'domcontentloaded'}),
   ])
   // MSW registers and activates its service worker during the first
   // navigation. Wait for it to be the page's active controller before
@@ -309,6 +300,52 @@ export async function dismissLoadGrace(page: Page) {
     }
     withStore.store?.getState().setLoadResult?.(null)
   })
+}
+
+
+/**
+ * Stop the viewer painting frames, for tests that drive UI over a loaded
+ * model but never assert on the canvas.
+ *
+ * The render loop is always-on: the fork's rAF loop calls the closure
+ * installed via `ThreeContext.setRenderUpdate`, which drives an
+ * `EffectComposer` (DESIGN.md §"Render loop & perf monitor"). Headless CI
+ * has no GPU, so that composer runs through SwiftShader and pins the page's
+ * main thread even when nothing on screen is moving. Playwright polls
+ * actionability on rAF, so the whole harness inherits the frame time.
+ * Measured on a 4-core headless runner: rAF every ~74ms and a single click
+ * ~978ms while painting, versus ~16ms and ~139ms once paused (#1759).
+ *
+ * Replacing the update closure leaves the rAF loop itself running, so the
+ * page keeps ticking normally — it just stops rendering, and the canvas
+ * holds its last painted frame. That makes this safe for dialog/panel flows
+ * and WRONG for anything that screenshots the scene, moves the camera, or
+ * asserts on highlighting. There is no resume: call it after the model is
+ * ready and treat the scene as frozen for the rest of the test.
+ *
+ * Throws rather than degrading if the seam moves. A silent no-op here would
+ * quietly restore the slow path and show up much later as unexplained
+ * timeouts, which is exactly the failure #1759 spent two runs diagnosing.
+ *
+ * @param page - Playwright page object
+ */
+export async function pauseViewerRendering(page: Page) {
+  const paused = await page.evaluate(() => {
+    // `window.useStore` is exposed by BaseRoutes under the test client id
+    // (see the OAUTH_2_CLIENT_ID guard there); `viewer` is set by CadView
+    // once the viewer is initialized.
+    const withStore = window as unknown as {
+      useStore?: {getState: () => {viewer?: {context?: {setRenderUpdate?: (fn: () => void) => void}}}}
+    }
+    const context = withStore.useStore?.getState().viewer?.context
+    if (typeof context?.setRenderUpdate !== 'function') {
+      return false
+    }
+    // Paused deliberately; see this helper's docstring.
+    context.setRenderUpdate(() => undefined)
+    return true
+  })
+  expect(paused, 'pauseViewerRendering: no render seam at window.useStore.getState().viewer.context').toBe(true)
 }
 
 

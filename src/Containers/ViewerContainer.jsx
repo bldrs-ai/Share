@@ -4,6 +4,8 @@ import {Box} from '@mui/material'
 import {useIsMobile} from '../Components/Hooks'
 import {PlacemarkHandlers as placemarkHandlers} from '../Components/Markers/MarkerControl'
 import useStore from '../store/useStore'
+import useQuota from '../hooks/useQuota'
+import QuotaLimitDialog from '../Components/Open/QuotaLimitDialog'
 import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from '../utils/dragAndDrop'
 
 
@@ -18,8 +20,10 @@ export default function ViewerContainer() {
   const isMobile = useIsMobile()
 
   const [, setIsDragActive] = useState(false)
+  const [showQuotaDialog, setShowQuotaDialog] = useState(false)
 
   const navigate = useNavigate()
+  const {tier, hasCapacity, record} = useQuota()
 
   /**
    * Handles file drop into drag-n-drop area
@@ -28,31 +32,42 @@ export default function ViewerContainer() {
    */
   async function onDrop(event) {
     setIsDragActive(false)
-    await handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert)
+    await handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert, undefined, undefined, {
+      hasCapacity,
+      record,
+      onExceeded: () => setShowQuotaDialog(true),
+    })
   }
 
 
   return (
-    <Box
-      id='viewer-container'
-      sx={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: isMobile ? `${vh}px` : '100vh',
-        margin: 0,
-        padding: 0,
-        textAlign: 'center',
-      }}
-      onMouseDown={async (event) => await onSceneSingleTap(event)}
-      onDoubleClick={async (event) => await onSceneDoubleTap(event)}
-      onDragOver={(event) => handleDragOverOrEnter(event, setIsDragActive)}
-      onDragEnter={(event) => handleDragOverOrEnter(event, setIsDragActive)}
-      onDragLeave={(event) => handleDragLeave(event, setIsDragActive)}
-      onDrop={onDrop}
-      data-testid='cadview-dropzone'
-      data-model-ready={isModelReady}
-    />
+    <>
+      <Box
+        id='viewer-container'
+        sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: isMobile ? `${vh}px` : '100vh',
+          margin: 0,
+          padding: 0,
+          textAlign: 'center',
+        }}
+        onMouseDown={async (event) => await onSceneSingleTap(event)}
+        onDoubleClick={async (event) => await onSceneDoubleTap(event)}
+        onDragOver={(event) => handleDragOverOrEnter(event, setIsDragActive)}
+        onDragEnter={(event) => handleDragOverOrEnter(event, setIsDragActive)}
+        onDragLeave={(event) => handleDragLeave(event, setIsDragActive)}
+        onDrop={onDrop}
+        data-testid='cadview-dropzone'
+        data-model-ready={isModelReady}
+      />
+      <QuotaLimitDialog
+        tier={tier}
+        isOpen={showQuotaDialog}
+        onClose={() => setShowQuotaDialog(false)}
+      />
+    </>
   )
 }

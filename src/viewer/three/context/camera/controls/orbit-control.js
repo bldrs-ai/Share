@@ -2,24 +2,11 @@
 // `web-ifc-viewer/dist/components/context/camera/controls/orbit-control.js`
 // in slice 5d.3.
 
-import {Box3, MathUtils, Sphere, Vector3} from 'three'
+import {Sphere, Vector3} from 'three'
 import {IfcComponent, NavigationModes} from '../../base-types'
 import {LiteEvent} from '../../LiteEvent'
-
-
-// Leave ~1/3 of the canvas as whitespace (≈1/6 per side): inflate the
-// framed sphere so the model fills ~2/3 of the viewport rather than
-// sitting edge-to-edge.
-const FRAMING_MARGIN = 1.5
-/** Zoom-in limit as a fraction of the fit distance. */
-const MIN_DISTANCE_FACTOR = 0.01
-/** Zoom-out headroom over the fit distance. */
-const MAX_DISTANCE_HEADROOM = 10
-/** Far plane must clear the whole zoom-out range plus the model. */
-const FAR_PLANE_SLACK = 1.5
-/** Floor for the near plane, in scene units. */
-const MIN_NEAR = 0.1
-const HALF = 0.5
+import {robustBoundsFor} from '../../../robustBounds'
+import {FRAMING_MARGIN, applyCameraLimits, cameraLimitsForSphere} from '../../../cameraLimits'
 
 
 export class OrbitControl extends IfcComponent {
@@ -81,8 +68,13 @@ export class OrbitControl extends IfcComponent {
     if (!framed) {
       return null
     }
-    const box = new Box3().setFromObject(framed)
-    if (box.isEmpty()) {
+    // Outlier-robust bounds: a handful of stray fragments flung far from
+    // the model (test-models-private#26) must not drag the frame out to a
+    // kilometre-scale box. Identical to Box3().setFromObject on clean
+    // models — see robustBounds.js for the (deliberately extreme-only)
+    // exclusion criterion.
+    const box = robustBoundsFor(framed)?.box
+    if (!box || box.isEmpty()) {
       return null
     }
 
@@ -97,22 +89,8 @@ export class OrbitControl extends IfcComponent {
     }
     sphere.radius *= FRAMING_MARGIN
 
-    // Distance camera-controls will dolly to for `sphere`, mirroring its
-    // getDistanceToFitSphere (radius / sin(½·limitingFOV); the limiting FOV is
-    // the narrower of the two axes). Computed here so the zoom limits below
-    // scale with the model instead of the old hardcoded cap.
     const camera = this.ifcCamera.perspectiveCamera
-    const vFov = MathUtils.degToRad(camera.fov)
-    const hFov = Math.atan(Math.tan(vFov * HALF) * camera.aspect) * 2
-    const limitingFov = camera.aspect > 1 ? vFov : hFov
-    const fitDistance = sphere.radius / Math.sin(limitingFov * HALF)
-
     const controls = this.ifcCamera.cameraControls
-    // Allow zooming out to 10x the fit distance (model shrinks to ~1/10 of the
-    // canvas) and well in. Replaces the hardcoded maxDistance = 300 that
-    // clamped fitToSphere on large models — pinning the camera too close and
-    // capping zoom-out before the whole model was visible.
-    controls.minDistance = fitDistance * MIN_DISTANCE_FACTOR
     // Never pull the range in under where the camera already sits —
     // `setPosition` doesn't clamp, but the first dolly afterwards does,
     // so a shrinking range would snap the camera inwards on the user's
@@ -124,15 +102,10 @@ export class OrbitControl extends IfcComponent {
     // by the 10x headroom instead — the same bound the link's own
     // maxDistance had when the link was created.
     const currentDistance = Number.isFinite(controls.distance) ? controls.distance : 0
-    controls.maxDistance = Math.max(fitDistance * MAX_DISTANCE_HEADROOM, currentDistance)
-
-    // Keep the model between the near/far planes across the whole zoom range:
-    // far must clear the pulled-back camera (maxDistance + model radius), near
-    // must stay inside the closest dolly. Without this, zooming out on a large
-    // model would clip it against the old far = 2000 plane.
-    camera.near = Math.max(controls.minDistance * HALF, MIN_NEAR)
-    camera.far = (controls.maxDistance + sphere.radius) * FAR_PLANE_SLACK
-    camera.updateProjectionMatrix()
+    // Shared with the streaming camera follow — see cameraLimits.js for
+    // why both fits must derive the whole set from one place.
+    applyCameraLimits(
+      camera, controls, cameraLimitsForSphere(camera, sphere, currentDistance))
 
     return sphere
   }

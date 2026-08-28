@@ -4,6 +4,10 @@ export const flags = [
   },
   {name: 'googleOAuth2', isActive: true},
   {name: 'googleDrive', isActive: true},
+  // Opt-in production GA on a Netlify deploy preview for manual analytics
+  // smoke tests. Branch deploys and local builds remain excluded, and
+  // navigator.webdriver still suppresses automated traffic.
+  {name: 'gaEnableInPreview', isActive: false},
   // Multi-user sharing UI (Share dialog, visibility chip). Provider scaffolding
   // ships unconditionally; this flag gates the consumer surface in PR2+.
   // See design/new/multi-user-sharing.md.
@@ -21,6 +25,16 @@ export const flags = [
   // is invisible until flipped.
   // See design/new/conversational-cad.md §2.
   {name: 'workspace', isActive: false},
+  // Usage quotas. The quota lib (src/quota), the record-load Netlify
+  // function, the useQuota hook and QuotaLimitDialog all ship
+  // unconditionally; this flag gates ENFORCEMENT. When off, useQuota
+  // reports unlimited capacity and record() is a no-op, so no load is
+  // ever counted or blocked and the QuotaBadge stays hidden. Off by
+  // default while quotas are validated against real Auth0 + public/private
+  // repos; enable per-session with `?feature=quotas`. Flip isActive to true
+  // to roll the limits out to everyone.
+  // See design/new/quotas.md.
+  {name: 'quotas', isActive: false},
   // GLB runtime artifact pipeline (design/new/glb-model-sharing.md).
   // `glb` enables both the writer (post-IFC-parse cache warm-up) and the
   // reader (skip-IFC-when-GLB-cached fast path in Loader.js).
@@ -146,6 +160,25 @@ export const flags = [
   // model-display-controls.md §1.2 (schema gate, round-trip parity,
   // re-derive determinism, third-party appearance).
   {name: 'glbBatched', isActive: false},
+  // Diagnostic OFF-switch for the full-screen loading overlay
+  // (Components/LoadingBackdrop.jsx). The overlay is a dimmer that sits
+  // above the canvas, so it also swallows pointer events for the whole
+  // load — which makes anything that goes wrong *during* a progressive
+  // load unobservable: you cannot orbit or zoom out to tell "the model
+  // shifted offscreen" apart from "the model isn't there".
+  // `?feature=disableLoadOverlay` leaves the canvas live so a load can be
+  // inspected while it streams.
+  //
+  // Note when using it: taking the camera fires `controlstart`, which
+  // stops ProgressiveLoadSession's camera follow permanently (by design
+  // — the user outranks the follow). So the first interaction freezes
+  // the camera for the rest of the load. That is what makes the flag
+  // useful for "where did it go", and also why the follow's own framing
+  // can't be observed in the same run.
+  //
+  // Inverted semantics on purpose: `?feature=` can only turn flags ON,
+  // so an off-switch for default-on behavior has to be an off-flag.
+  {name: 'disableLoadOverlay', isActive: false},
 ]
 
 
