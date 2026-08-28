@@ -127,8 +127,10 @@ this priority order:
   mute it. Keep flush helpers timer-agnostic (a single microtask, never
   `setTimeout` — it hangs under fake timers).
 - **Divert expected output and assert on it.** Code that logs *by design*
-  (the `[glb]` diagnostics) routes through a swappable sink and is checked via
-  `getGlbLogs()` — a tested signal, not console spam.
+  (the `[glb]` and `[conwayDirect]` diagnostics) routes through a swappable
+  sink — `createLogChannel` (`src/utils/logSink.js`) — and is checked via
+  `getGlbLogs()` / `getConwayDirectLogs()`: a tested signal, not console spam.
+  Assert the line's values, not just that some line was logged.
 - **Suppress only what you can't reach** — narrowly (`suppressActWarnings()`
   swallows just the one line), scoped to one test, restored in `try/finally`.
 - **Back any global mute with a static test** — e.g. three's muted "Multiple

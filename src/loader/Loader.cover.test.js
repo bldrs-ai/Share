@@ -6,6 +6,7 @@
 // error shapes.
 
 import axios from 'axios'
+import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 import {downloadToOPFS, downloadModel, getModelFromOPFS} from '../OPFS/utils'
 import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import {constructUploadedBlobPath, load, NotFoundError} from './Loader'
@@ -212,47 +213,28 @@ describe('Loader exported helpers', () => {
 })
 
 
-// `ShareIfcLoader#parse` logs the parse failure with `console.error` before
-// rethrowing, so every rejection-based case below emits one by design. A test
-// run should print nothing unexpected (STYLE.md §"Console hygiene"), so divert
-// them into a buffer — and assert on the buffer rather than silently
-// swallowing it, per PLAYBOOK §"Keep the test console clean" move 2. Anything
-// that is NOT one of these induced failures fails the test instead of
-// scrolling past in the noise.
-const EXPECTED_LOADER_ERRORS =
-  /open failed|is not a function|Failed to fetch model data|Unknown filetype|Could not guess filetype/i
+// `ShareIfcLoader#parse` logs the parse failure through the `[conwayDirect]`
+// channel before rethrowing, so every rejection-based case below emits one by
+// design. The jest setup buffers that channel instead of printing it
+// (PLAYBOOK §"Keep the test console clean" move 2); assert on the buffer
+// rather than ignoring it, so a diagnostic that is NOT one of these induced
+// failures fails the test instead of passing unnoticed.
+const EXPECTED_LOADER_ERRORS = /open failed|is not a function/i
 
 
 /**
- * Divert `console.error` for one test. Returns the buffer plus a restore.
- *
- * @return {{lines: string[], restore: Function}}
+ * Every `[conwayDirect]` line a rejection test produced must be one of the
+ * failures that test induced. Call from an afterEach.
  */
-function divertConsoleError() {
-  const original = console.error
-  const lines = []
-  console.error = (...args) => {
-    lines.push(args.map((a) => (a instanceof Error ? `${a.name}: ${a.message}` : String(a))).join(' '))
+function expectOnlyInducedLoaderErrors() {
+  for (const {text} of getConwayDirectLogs()) {
+    expect(text).toMatch(EXPECTED_LOADER_ERRORS)
   }
-  return {lines, restore: () => {
-    console.error = original
-  }}
 }
 
 
 describe('load() with isOpfsAvailable=false (axios path)', () => {
-  let consoleError
-
-  beforeEach(() => {
-    consoleError = divertConsoleError()
-  })
-
-  afterEach(() => {
-    consoleError.restore()
-    for (const line of consoleError.lines) {
-      expect(line).toMatch(EXPECTED_LOADER_ERRORS)
-    }
-  })
+  afterEach(expectOnlyInducedLoaderErrors)
 
   let viewer
   let onProgress
@@ -406,18 +388,7 @@ describe('load() with isOpfsAvailable=false (axios path)', () => {
 
 
 describe('load() error/edge paths with OPFS enabled', () => {
-  let consoleError
-
-  beforeEach(() => {
-    consoleError = divertConsoleError()
-  })
-
-  afterEach(() => {
-    consoleError.restore()
-    for (const line of consoleError.lines) {
-      expect(line).toMatch(EXPECTED_LOADER_ERRORS)
-    }
-  })
+  afterEach(expectOnlyInducedLoaderErrors)
 
   let viewer
   let onProgress
