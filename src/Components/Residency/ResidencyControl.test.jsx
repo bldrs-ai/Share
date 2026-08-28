@@ -1,5 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import React from 'react'
+import {Sphere, Vector3} from 'three'
 import {act, fireEvent, render, renderHook} from '@testing-library/react'
 import ShareMock from '../../ShareMock'
 import useStore from '../../store/useStore'
@@ -7,7 +8,15 @@ import ResidencyControl from './ResidencyControl'
 import {DEFAULT_COLOR} from '../../viewer/ifc/flatMeshToBatchedModel'
 import {activeColorMode} from '../../viewer/display/colorMode'
 import {activeShadingMode} from '../../viewer/display/shadingMode'
+import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
 
+
+// ShareMock pulls in BaseRoutesMock, whose module-top `jest.mock('three')`
+// Jest hoists over this whole file. Under that automock `Vector3.copy()`
+// returns undefined and `ResidencyController`'s constructor throws on the
+// first instance it walks, so the residency section could never render. Undo
+// it for this file the same way ShareViewer.test.js does.
+jest.mock('three', () => jest.requireActual('three'))
 
 // Shading is behind ?feature=displayControls; the color section is not. Mock
 // so a test can flip the flag without a real URL param.
@@ -40,6 +49,25 @@ function colorOnlyModel(sourceColors = [grey(), grey(), grey()]) {
     userData: {},
     setColorAt: jest.fn(),
   }
+}
+
+
+/**
+ * The colorOnlyModel double plus the tables `ResidencyController` needs to
+ * find something to evict, so the residency section renders. Three instances
+ * of increasing size at the origin.
+ *
+ * @return {object} model double
+ */
+function residencyModel() {
+  const model = colorOnlyModel()
+  model.instanceGeometry = [1, 2, 3].map((radius) => ({
+    boundingSphere: new Sphere(new Vector3(), radius),
+    getAttribute: () => ({count: radius * 100}),
+  }))
+  model.getMatrixAt = (index, matrix) => matrix.identity()
+  model.setVisibleAt = jest.fn()
+  return model
 }
 
 
@@ -161,5 +189,79 @@ describe('ResidencyControl shading section', () => {
     // exactly DOCUMENT_POSITION_FOLLOWING when color comes after shading.
     expect(getByTestId('shading-mode-group').compareDocumentPosition(getByTestId('color-mode-group')))
       .toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+  })
+})
+
+
+describe('ResidencyControl residency section', () => {
+  beforeEach(() => mockIsFeatureEnabled.mockReturnValue(false))
+  afterEach(async () => {
+    mockIsFeatureEnabled.mockReset()
+    window.location.hash = ''
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setModel(null)
+      result.current.resetDisplayOverrides()
+    })
+  })
+
+  it('writes the priority metric to the #d: token', async () => {
+    const {getByTestId} = await renderWithModel(residencyModel())
+    fireEvent.click(getByTestId('control-button-residency'))
+
+    fireEvent.click(getByTestId('residency-metric-memory').querySelector('input'))
+    // Full residency but a non-default metric: still a menu choice the user
+    // made, so the link carries it (percent first, metric appended).
+    expect(window.location.hash).toContain('res=100.memory')
+  })
+
+  it('restores percent AND metric from a #d: permalink on cold load', async () => {
+    // The ordering case: the residency controller is built in its own effect,
+    // so the override read out of the hash lands before there is anything to
+    // apply it to. It has to take effect anyway once the controller appears.
+    window.location.hash = '#d:res=40.memory'
+    const model = residencyModel()
+    const {getByTestId} = await renderWithModel(model)
+    fireEvent.click(getByTestId('control-button-residency'))
+
+    expect(getByTestId('residency-slider').querySelector('input').value).toBe('40')
+    expect(getByTestId('residency-metric-memory').querySelector('input').checked).toBe(true)
+    // Scene state, not just DOM state (design doc §8): instances were evicted.
+    expect(model.setVisibleAt).toHaveBeenCalledWith(expect.any(Number), false)
+  })
+
+  it('leaves the token alone for a default-residency model', async () => {
+    const {getByTestId} = await renderWithModel(residencyModel())
+    fireEvent.click(getByTestId('control-button-residency'))
+    // Untouched menu -> no `d:` token at all; the common share link stays as
+    // short as it was before view-140.
+    expect(window.location.hash).not.toContain('d:')
+    expect(getByTestId('residency-metric-occupancy').querySelector('input').checked).toBe(true)
+    expect(getByTestId('residency-slider').querySelector('input').value).toBe('100')
+  })
+
+  it('keeps the residency axis when another axis changes', async () => {
+    // setDisplayOverride merges axes but not within one, so the color click
+    // must not drop the residency term (or vice versa) from the token.
+    window.location.hash = '#d:res=40.memory'
+    const {getByTestId} = await renderWithModel(residencyModel())
+    fireEvent.click(getByTestId('control-button-residency'))
+    // This double loads showing source colors, so Auto is the move that
+    // actually fires the radio; Source after it is the term we assert on.
+    fireEvent.click(getByTestId('color-mode-auto').querySelector('input'))
+    fireEvent.click(getByTestId('color-mode-source').querySelector('input'))
+
+    expect(window.location.hash).toContain('res=40.memory')
+    expect(window.location.hash).toContain('color=src')
+  })
+
+  it('exposes the metric through the store, not local state', async () => {
+    const {getByTestId} = await renderWithModel(residencyModel())
+    fireEvent.click(getByTestId('control-button-residency'))
+    fireEvent.click(getByTestId('residency-metric-distance').querySelector('input'))
+
+    const {result} = renderHook(() => useStore((state) => state.displayOverrides))
+    expect(result.current.model.appearance.residency)
+      .toEqual({percent: 100, metric: ResidencyMetric.DISTANCE})
   })
 })

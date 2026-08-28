@@ -15,19 +15,17 @@ import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {ResidencyController, ResidencyMetric} from '../../viewer/residency/ResidencyController'
 import {ColorMode} from '../../viewer/display/colorMode'
+import {RESIDENCY_FULL} from '../../viewer/display/residencyMode'
 import {ShadingMode} from '../../viewer/display/shadingMode'
 import {
   applyDisplayOverrides,
+  applyResidencyOverrides,
   modelHasColorChoice,
   modelHasShadingChoice,
-  resolvedColorMode,
-  resolvedShadingMode,
+  resolvedAppearance,
 } from '../../viewer/display/DisplayController'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {readModelDisplayHash, writeModelDisplayHash} from './displayHash'
-
-
-const FULL = 100
 
 
 /**
@@ -48,8 +46,12 @@ const FULL = 100
  *
  * One popover with sections rather than a button each: they answer adjacent
  * questions ("how does it look" / "how much of it do I see") and the bottom
- * bar is already tight on mobile. Revisit if a third section lands —
- * design/new/model-display-controls.md §9.5.
+ * bar is already tight on mobile — design/new/model-display-controls.md §9.5,
+ * which flagged three sections as the point to revisit. It's crowded but
+ * still coherent; a fourth axis (opacity, hidden) should force the split.
+ *
+ * All three sections read and write the display-override stack, so the whole
+ * menu round-trips through the `#d:` permalink (S7) — see displayHash.
  *
  * Each section self-gates, and the button renders only if at least one has
  * something to offer: Shading needs the flag plus a model with materials,
@@ -62,33 +64,33 @@ export default function ResidencyControl() {
   const model = useStore((state) => state.model)
   const viewer = useStore((state) => state.viewer)
   const selectedElement = useStore((state) => state.selectedElement)
-  const [anchorEl, setAnchorEl] = useState(null)
-  const [percent, setPercent] = useState(FULL)
-  const [metric, setMetric] = useState(ResidencyMetric.OCCUPANCY)
-  const selectedRef = useRef(null)
-
-  // Color section, now driven by the display-override stack (S3) rather than
-  // local state: the radio writes a model-scope color override into the
-  // store, and DisplayController applies it. Same on-screen behavior as S2,
-  // but the choice now lives where the permalink (S7) and future scoped
-  // controls (S5) can see it.
-  //
-  // Offered only when the synthetic palette actually applies — on a model
-  // that shipped its own colors both options render identically, and an
-  // inert radio group implies a choice that does nothing. (The residency
-  // section below self-gates the same way.)
   const displayOverrides = useStore((state) => state.displayOverrides)
   const setDisplayOverride = useStore((state) => state.setDisplayOverride)
+  const [anchorEl, setAnchorEl] = useState(null)
+  const selectedRef = useRef(null)
+
+  // EVERY section is driven by the display-override stack (S3) — no local
+  // copy of any of it. The radios and the slider write a model-scope override
+  // into the store; DisplayController applies it. That's what lets the `#d:`
+  // permalink (S7) round-trip the whole menu and what future scoped controls
+  // (S5) will read.
+  const overrideList = Object.values(displayOverrides)
+  // Resolved per axis from the stack, falling back to the model's live state
+  // where there is one — so a freshly loaded (default auto-colored) model
+  // shows Auto without the store having to seed an override.
+  const appearance = resolvedAppearance(model, overrideList)
+  const {color: colorMode, shading: shadingMode, residency} = appearance
+  const {percent, metric} = residency
+
+  // Color is offered only when the synthetic palette actually applies — on a
+  // model that shipped its own colors both options render identically, and an
+  // inert radio group implies a choice that does nothing. (The shading and
+  // residency sections self-gate the same way.)
   const showColor = modelHasColorChoice(model)
-  // Resolved from the stack, falling back to the model's live mode when no
-  // override is set — so a freshly loaded (default auto-colored) model shows
-  // Auto without the store having to seed an override.
-  const colorMode = resolvedColorMode(model, Object.values(displayOverrides))
 
   // Shading section (S4) — behind ?feature=displayControls (additive UI
   // shipping dark), unlike the always-on color toggle. Whole-model scope.
   const showShading = isFeatureEnabled('displayControls') && modelHasShadingChoice(model)
-  const shadingMode = resolvedShadingMode(model, Object.values(displayOverrides))
 
   // Controller lifecycle belongs to an EFFECT, not useMemo: React
   // StrictMode's simulated unmount runs effect cleanups once on mount,
@@ -124,19 +126,32 @@ export default function ResidencyControl() {
     }
   }, [controller, selectedElement, metric])
 
+  // Residency reaches the scene from HERE rather than from the slider
+  // handler, because the controller is built in its own effect and does not
+  // exist yet on the tick the cold-load effect below seeds the store from
+  // `#d:`. Keying on (controller, overrides) closes that ordering gap in both
+  // directions: a residency override that arrived first lands the moment the
+  // controller appears, and a later user change lands on the next render.
+  // `applyResidencyOverrides` no-ops when nothing moved, so the extra runs
+  // this effect takes on unrelated axes (a color click) cost a comparison.
+  useEffect(() => {
+    applyResidencyOverrides(controller, Object.values(displayOverrides))
+  }, [controller, displayOverrides])
+
   // Cold-load: apply a shared `#d:` permalink's display state to the freshly
-  // loaded model, and seed the store so the radios reflect it. Mirrors how
+  // loaded model, and seed the store so the controls reflect it. Mirrors how
   // CutPlaneMenu restores `cp:` on model load. Model-scope only (S7); scoped
   // terms follow with S5. Runs once per model — the model swap is the load
   // event, and re-running on override changes would fight the user's clicks.
+  // The residency half of the patch is applied by the effect above, not here.
   useEffect(() => {
     if (!model) {
       return
     }
-    const appearance = readModelDisplayHash(window.location)
-    if (Object.keys(appearance).length > 0) {
-      setDisplayOverride({kind: 'model'}, appearance)
-      applyDisplayOverrides(model, [{scope: {kind: 'model'}, appearance}])
+    const hashAppearance = readModelDisplayHash(window.location)
+    if (Object.keys(hashAppearance).length > 0) {
+      setDisplayOverride({kind: 'model'}, hashAppearance)
+      applyDisplayOverrides(model, [{scope: {kind: 'model'}, appearance: hashAppearance}])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
@@ -145,30 +160,41 @@ export default function ResidencyControl() {
     return null
   }
 
+  /**
+   * Move one or more axes: store (the stack owns the state), scene, then the
+   * `#d:` token.
+   *
+   * The store set is async to this closure, so both the scene apply and the
+   * hash write compose the NEXT appearance explicitly rather than reading
+   * `displayOverrides` back this tick.
+   *
+   * @param {object} patch appearance axes to change
+   */
+  const setModelAppearance = (patch) => {
+    setDisplayOverride({kind: 'model'}, patch)
+    applyDisplayOverrides(model, [{scope: {kind: 'model'}, appearance: patch}])
+    writeModelDisplayHash(window.location, {...appearance, ...patch})
+  }
+
+  // `setDisplayOverride` merges axes but not WITHIN an axis, so a residency
+  // patch has to carry both halves or the untouched one is dropped.
   const onSlider = (event, value) => {
-    setPercent(value)
-    controller.setTarget(value / FULL)
+    // Store only while dragging: the effect above pushes it at the
+    // controller, and the `#d:` write waits for onChangeCommitted so a drag
+    // doesn't stamp a hash — and a browser history entry — per tick.
+    setDisplayOverride({kind: 'model'}, {residency: {percent: value, metric}})
+  }
+  const onSliderCommitted = (event, value) => {
+    writeModelDisplayHash(window.location, {...appearance, residency: {percent: value, metric}})
   }
   const onMetric = (event) => {
-    setMetric(event.target.value)
-    controller.setMetric(event.target.value)
+    setModelAppearance({residency: {percent, metric: event.target.value}})
   }
   const onColorMode = (event) => {
-    const mode = event.target.value
-    setDisplayOverride({kind: 'model'}, {color: mode})
-    // Apply immediately against the just-updated override list — the store
-    // set is async to this closure, so resolve from the explicit next value
-    // rather than reading `displayOverrides` back this tick.
-    applyDisplayOverrides(model, [{scope: {kind: 'model'}, appearance: {color: mode}}])
-    // Persist to the `#d:` permalink — the new color plus the shading axis
-    // as it currently stands (unchanged this tick).
-    writeModelDisplayHash(window.location, mode, shadingMode)
+    setModelAppearance({color: event.target.value})
   }
   const onShadingMode = (event) => {
-    const mode = event.target.value
-    setDisplayOverride({kind: 'model'}, {shading: mode})
-    applyDisplayOverrides(model, [{scope: {kind: 'model'}, appearance: {shading: mode}}])
-    writeModelDisplayHash(window.location, colorMode, mode)
+    setModelAppearance({shading: event.target.value})
   }
 
   return (
@@ -179,7 +205,7 @@ export default function ResidencyControl() {
         onClick={(event) => setAnchorEl(event.currentTarget)}
         placement='top'
         variant='solid'
-        selected={anchorEl !== null || percent < FULL ||
+        selected={anchorEl !== null || percent < RESIDENCY_FULL ||
           colorMode === ColorMode.SOURCE || shadingMode === ShadingMode.WIREFRAME}
         dataTestId='control-button-residency'
       />
@@ -255,26 +281,34 @@ export default function ResidencyControl() {
               <Slider
                 value={percent}
                 onChange={onSlider}
+                onChangeCommitted={onSliderCommitted}
                 min={0}
-                max={FULL}
+                max={RESIDENCY_FULL}
                 data-testid='residency-slider'
               />
               <Typography variant='caption'>Priority</Typography>
-              <RadioGroup value={metric} onChange={onMetric}>
+              <RadioGroup
+                value={metric}
+                onChange={onMetric}
+                data-testid='residency-metric-group'
+              >
                 <FormControlLabel
                   value={ResidencyMetric.OCCUPANCY}
                   control={<Radio size='small'/>}
                   label='Screen occupancy'
+                  data-testid='residency-metric-occupancy'
                 />
                 <FormControlLabel
                   value={ResidencyMetric.MEMORY}
                   control={<Radio size='small'/>}
                   label='Memory budget'
+                  data-testid='residency-metric-memory'
                 />
                 <FormControlLabel
                   value={ResidencyMetric.DISTANCE}
                   control={<Radio size='small'/>}
                   label='Distance from selection'
+                  data-testid='residency-metric-distance'
                 />
               </RadioGroup>
               <Box>

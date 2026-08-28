@@ -1,14 +1,19 @@
 /* eslint-disable no-magic-numbers */
 import {
   applyDisplayOverrides,
+  applyResidencyOverrides,
   modelHasColorChoice,
   modelHasShadingChoice,
+  resolvedAppearance,
   resolvedColorMode,
+  resolvedResidency,
   resolvedShadingMode,
 } from './DisplayController'
 import {ColorMode} from './colorMode'
+import {RESIDENCY_DEFAULT} from './residencyMode'
 import {ShadingMode} from './shadingMode'
 import {DEFAULT_COLOR} from '../ifc/flatMeshToBatchedModel'
+import {ResidencyMetric} from '../residency/ResidencyController'
 
 
 const grey = () => ({x: DEFAULT_COLOR.x, y: DEFAULT_COLOR.y, z: DEFAULT_COLOR.z, w: 1})
@@ -115,5 +120,104 @@ describe('modelHasColorChoice', () => {
   it('is true for a colorless multi-part model, false for none', () => {
     expect(modelHasColorChoice(colorlessModel())).toBe(true)
     expect(modelHasColorChoice(null)).toBe(false)
+  })
+})
+
+
+const modelResidency = (residency) => [{scope: {kind: 'model'}, appearance: {residency}}]
+
+
+describe('resolvedResidency', () => {
+  it('is the default with an empty stack', () => {
+    expect(resolvedResidency([])).toEqual({...RESIDENCY_DEFAULT})
+  })
+
+  it('reads the model-scope override', () => {
+    expect(resolvedResidency(modelResidency({percent: 40, metric: ResidencyMetric.MEMORY})))
+      .toEqual({percent: 40, metric: ResidencyMetric.MEMORY})
+  })
+
+  it('fills the defaults around a partial override', () => {
+    // The `#d:` reader emits partials when it understands only half of a
+    // `res=` term; the axis must still resolve to something applicable.
+    expect(resolvedResidency(modelResidency({percent: 40})))
+      .toEqual({percent: 40, metric: RESIDENCY_DEFAULT.metric})
+    expect(resolvedResidency(modelResidency({metric: ResidencyMetric.DISTANCE})))
+      .toEqual({percent: RESIDENCY_DEFAULT.percent, metric: ResidencyMetric.DISTANCE})
+  })
+})
+
+
+describe('applyResidencyOverrides', () => {
+  /**
+   * ResidencyController stand-in: the two setters this module calls, plus the
+   * `target` / `metric` fields it reads to decide whether calling them is
+   * worth the instance-table re-sort.
+   *
+   * @return {object} controller double
+   */
+  function controllerDouble() {
+    const controller = {target: 1, metric: RESIDENCY_DEFAULT.metric}
+    controller.setTarget = jest.fn((fraction) => {
+      controller.target = fraction
+    })
+    controller.setMetric = jest.fn((metric) => {
+      controller.metric = metric
+    })
+    return controller
+  }
+
+  it('pushes percent and metric at the controller', () => {
+    const controller = controllerDouble()
+    applyResidencyOverrides(controller, modelResidency({percent: 40, metric: ResidencyMetric.MEMORY}))
+    expect(controller.setTarget).toHaveBeenCalledWith(0.4)
+    expect(controller.setMetric).toHaveBeenCalledWith(ResidencyMetric.MEMORY)
+  })
+
+  it('no-ops when nothing moved', () => {
+    // The effect that calls this is keyed on the whole override map, so it
+    // re-runs on unrelated axes; each setter re-sorts the instance table.
+    const controller = controllerDouble()
+    applyResidencyOverrides(controller, [])
+    expect(controller.setTarget).not.toHaveBeenCalled()
+    expect(controller.setMetric).not.toHaveBeenCalled()
+  })
+
+  it('tolerates no controller', () => {
+    expect(() => applyResidencyOverrides(null, modelResidency({percent: 40}))).not.toThrow()
+  })
+})
+
+
+describe('resolvedAppearance', () => {
+  it('carries every axis at once', () => {
+    const model = colorlessModel()
+    expect(resolvedAppearance(model, [{
+      scope: {kind: 'model'},
+      appearance: {
+        color: ColorMode.SOURCE,
+        shading: ShadingMode.WIREFRAME,
+        residency: {percent: 40, metric: ResidencyMetric.MEMORY},
+      },
+    }])).toEqual({
+      color: ColorMode.SOURCE,
+      shading: ShadingMode.WIREFRAME,
+      residency: {percent: 40, metric: ResidencyMetric.MEMORY},
+    })
+  })
+
+  it('reports the default for an axis the model offers no choice on', () => {
+    // The point of the gate: `activeColorMode` says SOURCE for any model that
+    // shipped its own colors (live === source there), and serializing that
+    // would stamp `color=src` onto every colored IFC's share link.
+    const authored = colorlessModel()
+    authored.instanceColors[0] = {x: 0.6, y: 0.576, z: 0.749, w: 1}
+    authored.instanceSourceColors[0] = {x: 0.6, y: 0.576, z: 0.749, w: 1}
+    expect(modelHasColorChoice(authored)).toBe(false)
+    expect(resolvedAppearance(authored, []).color).toBe(ColorMode.AUTO)
+  })
+
+  it('trusts the stack alone when no model is loaded', () => {
+    expect(resolvedAppearance(null, modelColor(ColorMode.SOURCE)).color).toBe(ColorMode.SOURCE)
   })
 })
