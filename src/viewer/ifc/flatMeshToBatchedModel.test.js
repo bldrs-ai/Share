@@ -1,6 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {BatchedMesh, Matrix4} from 'three'
-import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
+import {CoincidenceSet, DEFAULT_COLOR, flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 
 
 /** Identity 4x4 in three.js column-major flat form. */
@@ -224,5 +224,126 @@ describe('viewer/ifc/flatMeshToBatchedModel', () => {
     expect(stats.skippedFlatMeshes).toBe(1)
     expect(stats.instanceCount).toBe(1)
     expect(batches.length).toBe(1)
+  })
+})
+
+
+describe('CoincidenceSet', () => {
+  // The duplicate guard silently DROPS geometry when two distinct placements
+  // are treated as one, so these pin its discriminating power field by field:
+  // the 85-bit fingerprint (conway#636) must separate everything the old
+  // string key separated, and merge everything it merged.
+
+  const RED = {x: 1, y: 0, z: 0, w: 1}
+
+  /** @return {Array<number>} a fresh identity matrix (mutable per test) */
+  const mat = () => IDENTITY_MAT.slice()
+
+  it('reports the first placement new and an exact repeat duplicate', () => {
+    const seen = new CoincidenceSet()
+    expect(seen.add(100, 999, mat(), RED)).toBe(true)
+    expect(seen.add(100, 999, mat(), RED)).toBe(false)
+    expect(seen.size).toBe(1)
+  })
+
+  it('discriminates parent and geometry express ids', () => {
+    const seen = new CoincidenceSet()
+    expect(seen.add(100, 999, mat(), RED)).toBe(true)
+    expect(seen.add(101, 999, mat(), RED)).toBe(true)
+    expect(seen.add(100, 998, mat(), RED)).toBe(true)
+    expect(seen.size).toBe(3)
+  })
+
+  it('discriminates every one of the 16 matrix slots independently', () => {
+    // A slot-blind key (e.g. one that summed or xor-ed the components) would
+    // pass a spot check on the translation row and still lose rotations.
+    const seen = new CoincidenceSet()
+    expect(seen.add(100, 999, mat(), RED)).toBe(true)
+    for (let i = 0; i < 16; i++) {
+      const perturbed = mat()
+      perturbed[i] += 1
+      expect(seen.add(100, 999, perturbed, RED)).toBe(true)
+    }
+    expect(seen.size).toBe(17)
+  })
+
+  it('discriminates every colour channel, alpha included', () => {
+    const seen = new CoincidenceSet()
+    expect(seen.add(100, 999, mat(), {x: 0.5, y: 0.5, z: 0.5, w: 1})).toBe(true)
+    expect(seen.add(100, 999, mat(), {x: 0.6, y: 0.5, z: 0.5, w: 1})).toBe(true)
+    expect(seen.add(100, 999, mat(), {x: 0.5, y: 0.6, z: 0.5, w: 1})).toBe(true)
+    expect(seen.add(100, 999, mat(), {x: 0.5, y: 0.5, z: 0.6, w: 1})).toBe(true)
+    expect(seen.add(100, 999, mat(), {x: 0.5, y: 0.5, z: 0.5, w: 0.4})).toBe(true)
+    expect(seen.size).toBe(5)
+  })
+
+  it('treats -0 and +0 as the same component in every matrix slot', () => {
+    // Conway emits signed zeros in rotation terms; a key that distinguished
+    // them would let a true duplicate through and z-fight. The `| 0` collapse
+    // is what prevents that.
+    const seen = new CoincidenceSet()
+    expect(seen.add(100, 999, mat(), RED)).toBe(true)
+    for (let i = 0; i < 16; i++) {
+      const negZero = mat()
+      if (negZero[i] !== 0) {
+        continue
+      }
+      negZero[i] = -0
+      expect(seen.add(100, 999, negZero, RED)).toBe(false)
+    }
+    expect(seen.size).toBe(1)
+  })
+
+  it('quantizes at COINCIDENCE_QUANT: sub-tick noise merges, a tick apart splits', () => {
+    const seen = new CoincidenceSet()
+    expect(seen.add(100, 999, mat(), RED)).toBe(true)
+    const noisy = mat()
+    noisy[12] = 1e-5 // below the 1e-4 tick: float noise, still the same spot
+    expect(seen.add(100, 999, noisy, RED)).toBe(false)
+    const moved = mat()
+    moved[12] = 1e-4 // exactly one tick: a distinct placement
+    expect(seen.add(100, 999, moved, RED)).toBe(true)
+    const noisyColor = {x: 1, y: 1e-5, z: 0, w: 1}
+    expect(seen.add(100, 999, mat(), noisyColor)).toBe(false)
+    expect(seen.size).toBe(2)
+  })
+
+  it('treats a missing colour as DEFAULT_COLOR', () => {
+    const seen = new CoincidenceSet()
+    const grey = {x: DEFAULT_COLOR.x, y: DEFAULT_COLOR.y, z: DEFAULT_COLOR.z, w: DEFAULT_COLOR.w}
+    expect(seen.add(100, 999, mat(), null)).toBe(true)
+    expect(seen.add(100, 999, mat(), undefined)).toBe(false)
+    expect(seen.add(100, 999, mat(), grey)).toBe(false)
+    expect(seen.size).toBe(1)
+  })
+
+  it('keeps thousands of distinct placements distinct', () => {
+    // Exercises the primary-hash chaining path at a scale where a weak or
+    // truncated fingerprint would start merging unrelated placements.
+    const seen = new CoincidenceSet()
+    const count = 5000
+    for (let i = 0; i < count; i++) {
+      const m = mat()
+      m[12] = i * 0.001
+      m[13] = (i % 7) * 0.25
+      expect(seen.add(1000 + (i % 13), 900 + (i % 17), m, RED)).toBe(true)
+    }
+    expect(seen.size).toBe(count)
+    // And every one of them is still recognised as already present.
+    for (let i = 0; i < count; i++) {
+      const m = mat()
+      m[12] = i * 0.001
+      m[13] = (i % 7) * 0.25
+      expect(seen.add(1000 + (i % 13), 900 + (i % 17), m, RED)).toBe(false)
+    }
+    expect(seen.size).toBe(count)
+  })
+
+  it('forgets everything on clear (what finalize() releases)', () => {
+    const seen = new CoincidenceSet()
+    seen.add(100, 999, mat(), RED)
+    seen.clear()
+    expect(seen.size).toBe(0)
+    expect(seen.add(100, 999, mat(), RED)).toBe(true)
   })
 })
