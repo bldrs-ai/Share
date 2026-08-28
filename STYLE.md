@@ -118,6 +118,82 @@ Use dash-separated, converted from CamelCase:
 - **Mock implementations**: Use `() => {}` freely for Jest mocks
 - **Test descriptions**: Clear, descriptive test names
 
+### Assertions must be able to fail
+
+An assertion that cannot fail is worse than a missing one, because it reads as
+coverage. The #1776 work stream (#1777, #1782, #1783, #1788, #1789, #1790)
+produced about a dozen of these — several inside code written to prevent exactly
+that. They are **three different diseases** wearing one symptom, and they take
+different remedies, so name which one you have before reaching for a fix.
+
+**1. The assertion genuinely cannot fail.** No input makes it red.
+
+- Iterating a collection that may be empty runs zero assertions and passes.
+  `expectOnlyInducedLoaderErrors` matched each line of a captured buffer, so a
+  buffer left empty *because the diagnostic had stopped emitting* sailed through
+  (#1789). Assert the size too, or pair the guard with a positive one.
+- A mock returning `undefined` where the return value is what the test
+  discriminates on. `jest.mock` auto-mocks `nextRequestId` to `undefined`, which
+  makes every worker reply match every listener — nine correlation tests would
+  have passed with no correlation at all (#1790). Give it a real implementation.
+- Alternatives nothing can reach: an expected-error regex carried five, only two
+  of which any code path could produce (#1789).
+
+**2. The assertion is sound but never runs.** This is the one most likely to be
+misread as the first, and the remedy is unrelated. Un-skipping three specs in
+#1783 surfaced a `role="treeitem"` selector the tree no longer emits, two
+`glbVerbose`-gated log waits, and a `GlobalId` row rendered on neither path —
+**each would have failed had it executed**, and none had executed for five
+weeks. A skipped spec (`test.fixme`, `test.skip`, `it.skip`) rots against the
+code around it. When you un-skip one, expect its assertions to be stale and
+re-derive them from the current behaviour rather than trusting that they still
+describe it.
+
+That remedy only helps once someone has already decided to un-skip, which
+leaves the harder half: **nothing tells you a skip has gone inert.** Jest and
+Playwright both count a skip as a non-failure, and `test-flows.yml` has no skip
+budget or expiry, so an inert spec satisfies every gate indefinitely — five
+weeks was luck, not a bound. Until that is enforced (#1796), the check is a
+convention you can grep: **a committed skip names an issue on the line above.**
+
+```js
+// SKIPPED #1234: needs setupVirtualPathIntercept for raw.githubusercontent.com
+test.skip('GitHub route (/gh) processes URL correctly', async ({page}) => {
+```
+
+```sh
+grep -rn "test\.skip\|describe\.skip\|it\.skip\|\.fixme" src netlify tools \
+  --include=*.test.* --include=*.spec.*
+```
+
+Cover every test root and extension, not the ones you happen to remember —
+Jest's `roots` are `src`, `netlify` and `__mocks__`, `tools` has its own
+suites, and specs come in `.js`, `.jsx`, `.ts` and `.tsx` (`BotChat.test.tsx`).
+A scan narrower than that reports a clean ratchet while a skip sits in the
+directory it did not look at.
+
+That returned 31 lines when this was written — one is prose mentioning the
+word, so **30 real skips, exactly one of which named an issue** (#956). Read
+the number as a ratchet, not a clean baseline. A skip without
+an issue has no owner and no condition for coming back; it is a deleted test
+that still counts itself as coverage.
+
+**3. The assertion runs, can fail, and says something false.** #1782's
+multi-entry test asserted the *wrong answer* outright, so it would have defended
+the defect against whoever noticed it next. #1788's threshold comment called
+`>= 5` a loose floor when five is the most either fixture can offer — the
+assertion was right, the explanation was not, and the next reader would have
+gone hunting for slack that does not exist. Check the claim, not just the pass;
+a green test proves nothing about the sentence above it.
+
+**For 1 and 3 the check is cheap: break the thing the assertion guards, watch it
+go red, restore it.** Every repair above was confirmed that way, and the mutation
+run is what caught two of them being vacuous a *second* time after a first fix,
+which reading alone had missed both times. Put the result in the PR — "26 passed
+before, 5 failed after" is evidence a reviewer can act on; "added a test" is not.
+Note that this check cannot reach disease 2 at all: a skipped test is not made
+honest by mutating the code it does not run against.
+
 ### Console hygiene
 A test run should print **nothing unexpected** — noise buries the one new
 warning that flags a real regression. Treat a stray warning as a defect, in

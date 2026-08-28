@@ -190,6 +190,93 @@ ports → `net::ERR_CONNECTION_REFUSED`. Tests look "broken" when they're not.
 Pre-existing quirk; flag as a separate cleanup if it bothers you.
 
 
+## Netlify's Lighthouse Best Practices score is flaky — check, don't assume
+
+The preview comment's **Best Practices** number moves between 83, 92 and 100
+across audits of unrelated commits, and presents each swing as "down 9 from
+production" / "up 8 from production". Twice it cost a real investigation:
+
+- On #1783 it read −9 on a diff of specs, docs and `vars.playwright.js` — none
+  of which reach the `SHARE_CONFIG=prod` bundle the audit loads — and later read
+  +8 on the same PR with no change in between.
+- On #1790 it read −9 on a diff that **does** touch production code. Building
+  `main` and the branch side by side under one config and capturing console
+  errors on load gave byte-identical results; the score recovered to 92 on the
+  next head unaided.
+
+So the score is known-flaky and a delta is not by itself evidence of a
+regression. **It is also not by itself evidence of nothing:**
+
+- **If the diff cannot reach the prod bundle** (specs, docs, Playwright-only
+  config), a delta is the audit. Nothing to do.
+- **If the diff can reach it, open the audit and read which check changed.**
+  Best Practices aggregates several — console errors are only one of them, so a
+  local console A/B is a useful first cut and *not* a clearance: a production
+  change can leave the console identical and still move a legitimate check. The
+  Netlify deploy log names the failing audit; that is the artefact to look at,
+  and it is what neither investigation above actually managed to read (the
+  agent sandbox's proxy blocks `netlify.app`, which is why both fell back to a
+  local A/B).
+
+## A git worktree is not a place to commit from, or to check config in
+
+Agents that work in a linked worktree (`.claude/worktrees/…`, gitignored
+since #1792) hit two problems that both present as "the repo is broken"
+rather than "this checkout is incomplete".
+
+**1. You cannot commit there, and the obvious workaround is the bad one.**
+`core.hooksPath = .husky` lives in `.git/config`, which linked worktrees
+*share*, so git looks for the hook in the worktree. `.husky/pre-commit` is
+tracked, so it is there — but it starts by sourcing `.husky/_/husky.sh`,
+which `husky install` generates and which is **untracked**, so it is not.
+Verified on a fresh worktree of this repo: the commit aborts with
+
+```
+.husky/pre-commit: 2: .: cannot open .husky/_/husky.sh: No such file
+```
+
+and exits 1. That failure is at least loud. The danger is what it invites:
+`--no-verify` clears it instantly and lands a commit that nothing has
+linted, typechecked or tested — the exact gate CLAUDE.md tells you to trust
+instead of running by hand. **Don't.** Either `yarn install` in the worktree
+(which reinstalls `.husky/_`, and a full `node_modules`), or — cheaper, and
+what actually worked here — do the editing in the worktree, export the change,
+and `git apply` + `git commit` it in the main checkout, where the hook is
+wired. Stage first and ask for binary, or the export quietly loses work:
+
+```sh
+# in the worktree
+git add -A && git diff --cached --binary > /tmp/x.patch
+# in the main checkout
+git apply /tmp/x.patch && git commit
+```
+
+A plain `git diff` shows tracked modifications only, so a **new** file — a
+module, a spec, a fixture — is simply absent from the patch, with no warning;
+`--binary` is what carries a changed image or model fixture. Measured on a
+scratch worktree: a patch made with plain `git diff` after adding one `.js`
+and one `.png` contained **zero** references to either, while the staged form
+above carried both and applied cleanly in the main checkout. The failure mode
+is the bad kind — the commit looks complete, and the missing work sits in a
+worktree that gets deleted.
+
+**2. Anything resolution-sensitive gives the wrong answer there.** A
+worktree starts with no `node_modules` at all, so the reflex is to symlink
+or copy the main checkout's. Both make the worktree lie about anything that
+depends on *where* a module resolves from:
+
+- `singleThreeInstance.test.js` failed in a worktree and passed in the main
+  checkout, on identical source — it asserts a single resolved `three`, and
+  a symlinked tree gives it two.
+- An eslint probe run in a worktree did **not** reproduce the plugin-
+  uniqueness error that motivated #1792's `root: true`, because the config
+  cascade above the worktree is a different set of directories.
+
+So a worktree is fine for reading and editing. Confirm any result about
+module resolution, the eslint/babel config cascade, or the hook in the main
+checkout before you believe it — and before you write it into a PR body.
+
+
 ## Drive Picker fails on Brave with Shields up
 
 When testing the Drive Picker on Brave at `bldrs.ai`:
