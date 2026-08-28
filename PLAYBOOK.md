@@ -218,6 +218,49 @@ regression. **It is also not by itself evidence of nothing:**
   agent sandbox's proxy blocks `netlify.app`, which is why both fell back to a
   local A/B).
 
+## A git worktree is not a place to commit from, or to check config in
+
+Agents that work in a linked worktree (`.claude/worktrees/…`, gitignored
+since #1792) hit two problems that both present as "the repo is broken"
+rather than "this checkout is incomplete".
+
+**1. You cannot commit there, and the obvious workaround is the bad one.**
+`core.hooksPath = .husky` lives in `.git/config`, which linked worktrees
+*share*, so git looks for the hook in the worktree. `.husky/pre-commit` is
+tracked, so it is there — but it starts by sourcing `.husky/_/husky.sh`,
+which `husky install` generates and which is **untracked**, so it is not.
+Verified on a fresh worktree of this repo: the commit aborts with
+
+```
+.husky/pre-commit: 2: .: cannot open .husky/_/husky.sh: No such file
+```
+
+and exits 1. That failure is at least loud. The danger is what it invites:
+`--no-verify` clears it instantly and lands a commit that nothing has
+linted, typechecked or tested — the exact gate CLAUDE.md tells you to trust
+instead of running by hand. **Don't.** Either `yarn install` in the worktree
+(which reinstalls `.husky/_`, and a full `node_modules`), or — cheaper, and
+what actually worked here — do the editing in the worktree, export the
+change (`git diff > /tmp/x.patch`), and `git apply` + `git commit` it in the
+main checkout, where the hook is wired.
+
+**2. Anything resolution-sensitive gives the wrong answer there.** A
+worktree starts with no `node_modules` at all, so the reflex is to symlink
+or copy the main checkout's. Both make the worktree lie about anything that
+depends on *where* a module resolves from:
+
+- `singleThreeInstance.test.js` failed in a worktree and passed in the main
+  checkout, on identical source — it asserts a single resolved `three`, and
+  a symlinked tree gives it two.
+- An eslint probe run in a worktree did **not** reproduce the plugin-
+  uniqueness error that motivated #1792's `root: true`, because the config
+  cascade above the worktree is a different set of directories.
+
+So a worktree is fine for reading and editing. Confirm any result about
+module resolution, the eslint/babel config cascade, or the hook in the main
+checkout before you believe it — and before you write it into a PR body.
+
+
 ## Drive Picker fails on Brave with Shields up
 
 When testing the Drive Picker on Brave at `bldrs.ai`:

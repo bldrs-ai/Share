@@ -95,6 +95,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Code style, lint rules | [STYLE.md](STYLE.md) |
 | Writing an assertion that can actually fail — the vacuous-assertion shapes seen in practice, and the break-it-and-watch-it-go-red check | [STYLE.md](STYLE.md) §"Assertions must be able to fail" |
 | Build, dev server, CI, Playwright setup | [PLAYBOOK.md](PLAYBOOK.md) |
+| Working in a `.claude/worktrees/` git worktree — why `git commit` aborts there, why `--no-verify` is the wrong fix, and which results a worktree gets wrong | [PLAYBOOK.md](PLAYBOOK.md) §"A git worktree is not a place to commit from" |
 | Where to put an E2E `*.spec.ts` (co-locate near the subject; `src/tests/e2e` is shared helpers only) | [src/tests/e2e/README.md](src/tests/e2e/README.md) |
 | Adding a new model format (`supportedTypes` + header sniffing → `findLoader` arm → `ShareModel` capabilities → fixtures/tests), what NavTree naming and raycast picking give you for free, Git LFS on GitHub-hosted models | [design/new/adding-model-formats.md](design/new/adding-model-formats.md) |
 | Asset pipeline, fonts, icons | [src/assets/README.md](src/assets/README.md) |
