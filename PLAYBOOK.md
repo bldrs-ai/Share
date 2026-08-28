@@ -280,12 +280,19 @@ design — don't let it reach the console and don't silently swallow it either.
 Route it through a swappable sink and assert the expected line is present, so
 the diagnostic becomes a *tested signal* instead of spam:
 
-- `src/loader/glbLog.js` — the emit side. `glbInfo/glbWarn/glbVerbose` call an
-  active sink (default: console) that tests can swap via `setGlbLogSink`. The
-  sink lives on `globalThis` so it survives `jest.resetModules()`.
-- `tools/jest/glbLogCapture.js` — the test side. `installGlbLogCapture()`
-  (wired once in `setupTests.js`, cleared per test) buffers everything; a spec
-  reads it with `getGlbLogs()`:
+- `src/utils/logSink.js` — the mechanism. `createLogChannel(prefix, sinkKey)`
+  returns `{emit, setSink}`: `emit` writes `<prefix> <args>` to the console
+  until a sink is installed. The sink lives on `globalThis` (under `sinkKey`)
+  so it survives `jest.resetModules()`.
+- `src/loader/glbLog.js` — the `[glb]` emit side. `glbInfo/glbWarn/glbVerbose`
+  emit on that channel; tests swap the sink via `setGlbLogSink`.
+  `src/viewer/ifc/conwayDirectLog.js` is the same for the `[conwayDirect]` IFC
+  parse summary and parse-failure error.
+- `tools/jest/logCapture.js` + its per-channel wrappers
+  (`glbLogCapture.js`, `conwayDirectLogCapture.js`) — the test side.
+  `installGlbLogCapture()` / `installConwayDirectLogCapture()` (wired once in
+  `setupTests.js`, cleared per test) buffer everything; a spec reads a buffer
+  with `getGlbLogs()` / `getConwayDirectLogs()`:
 
 ```js
 import {getGlbLogs} from '../../tools/jest/glbLogCapture'
@@ -294,8 +301,14 @@ expect(getGlbLogs().some((l) => l.text.includes('out-of-range bufferView 99')))
   .toBe(true)
 ```
 
+Pin values, not presence: `Loader.test.js` asserts the whole
+`parsed modelID=0 — vertices=3 triangles=1 …` text, so a regression that
+silently drops geometry fails the test — `some(l => l.text.includes('parsed'))`
+would not have.
+
 Apply this pattern to any subsystem with intentional, assertable logging:
-give it a swappable sink rather than calling `console.*` directly.
+build it a channel with `createLogChannel` rather than calling `console.*`
+directly.
 
 **3. Suppress only what you genuinely can't reach — narrowly, and restore it.**
 Some updates fire outside any `act` scope RTL can enclose: a mocked model load

@@ -1,5 +1,6 @@
 import {Object3D, Mesh, BufferGeometry, Material, BufferAttribute} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
+import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import {load, readModel} from './Loader'
 
@@ -343,6 +344,71 @@ describe('Loader', () => {
         warningCount: 3,
       })
       expect(model).toMatchSnapshot()
+
+      // The `[conwayDirect] parsed …` summary is the integration-boundary
+      // signal `conwayDirect.spec.ts` gates on in a real browser; here it
+      // rides the same swappable sink (src/viewer/ifc/conwayDirectLog.js), so
+      // assert its whole text rather than letting it print. This mock's
+      // StreamAllMeshes yields nothing, so every count is the empty-model
+      // zero — the non-empty counts are pinned in the test below.
+      expect(getConwayDirectLogs()).toEqual([{
+        level: 'info',
+        text: 'parsed modelID=0 — vertices=0 triangles=0 instances=0 parents=0 materials=0 ' +
+          'skippedFlatMeshes=0 skippedPlaced=0 skippedCoincident=0',
+      }])
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('reports the parsed element counts for a streamed FlatMesh', async () => {
+    // Same load path as above, but with one placement in the FlatMesh stream,
+    // so the summary reports what was actually assembled instead of zeros: a
+    // unit triangle is 3 vertices / 1 triangle at 1 instance under 1 parent.
+    // This is the assertion that would catch a regression that silently drops
+    // geometry — the counts are the payload, not the presence of a log line.
+    mockViewer.IFC.type = 'ifc'
+    const {ifcAPI} = mockViewer.IFC.loader.ifcManager
+    const IDENTITY_MAT = [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1,
+    ]
+    // Interleaved position+normal, the layout Conway's GetVertexArray returns.
+    const triangleVerts = new Float32Array([
+      0, 0, 0, 0, 0, 1,
+      1, 0, 0, 0, 0, 1,
+      0, 1, 0, 0, 0, 1,
+    ])
+    const triangleIndices = new Uint32Array([0, 1, 2])
+    const GEOMETRY_EXPRESS_ID = 999
+    ifcAPI.StreamAllMeshes = jest.fn((modelID, cb) => cb({
+      expressID: 100,
+      geometries: {
+        size: () => 1,
+        get: () => ({geometryExpressID: GEOMETRY_EXPRESS_ID, flatTransformation: IDENTITY_MAT}),
+      },
+    }))
+    ifcAPI.GetGeometry = jest.fn(() => ({
+      GetVertexData: () => 0,
+      GetIndexData: () => 0,
+      GetVertexDataSize: () => triangleVerts.length,
+      GetIndexDataSize: () => triangleIndices.length,
+    }))
+    ifcAPI.GetVertexArray = jest.fn(() => triangleVerts)
+    ifcAPI.GetIndexArray = jest.fn(() => triangleIndices)
+
+    const testPath = 'ifc/index.ifc'
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(model).toBeDefined()
+      expect(getConwayDirectLogs()).toEqual([{
+        level: 'info',
+        text: 'parsed modelID=0 — vertices=3 triangles=1 instances=1 parents=1 materials=1 ' +
+          'skippedFlatMeshes=0 skippedPlaced=0 skippedCoincident=0',
+      }])
     } finally {
       restoreArrayBuffer()
     }
