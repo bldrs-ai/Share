@@ -144,9 +144,33 @@ misread as the first, and the remedy is unrelated. Un-skipping three specs in
 #1783 surfaced a `role="treeitem"` selector the tree no longer emits, two
 `glbVerbose`-gated log waits, and a `GlobalId` row rendered on neither path —
 **each would have failed had it executed**, and none had executed for five
-weeks. A `test.fixme` spec rots against the code around it. When you un-skip
-one, expect its assertions to be stale and re-derive them from the current
-behaviour rather than trusting that they still describe it.
+weeks. A skipped spec (`test.fixme`, `test.skip`, `it.skip`) rots against the
+code around it. When you un-skip one, expect its assertions to be stale and
+re-derive them from the current behaviour rather than trusting that they still
+describe it.
+
+That remedy only helps once someone has already decided to un-skip, which
+leaves the harder half: **nothing tells you a skip has gone inert.** Jest and
+Playwright both count a skip as a non-failure, and `test-flows.yml` has no skip
+budget or expiry, so an inert spec satisfies every gate indefinitely — five
+weeks was luck, not a bound. Until that is enforced (#1796), the check is a
+convention you can grep: **a committed skip names an issue on the line above.**
+
+```js
+// SKIPPED #1234: needs setupVirtualPathIntercept for raw.githubusercontent.com
+test.skip('GitHub route (/gh) processes URL correctly', async ({page}) => {
+```
+
+```sh
+grep -rn "test\.skip\|describe\.skip\|it\.skip\|\.fixme" src \
+  --include=*.spec.ts --include=*.test.js --include=*.test.jsx --include=*.test.ts
+```
+
+That returned 31 lines when this was written — one is prose mentioning the
+word, so **30 real skips, exactly one of which named an issue** (#956). Read
+the number as a ratchet, not a clean baseline. A skip without
+an issue has no owner and no condition for coming back; it is a deleted test
+that still counts itself as coverage.
 
 **3. The assertion runs, can fail, and says something false.** #1782's
 multi-entry test asserted the *wrong answer* outright, so it would have defended
