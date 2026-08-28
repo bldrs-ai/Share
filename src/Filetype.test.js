@@ -442,9 +442,10 @@ describe('Filetype', () => {
 
     it('separates "did not say" from "said STEP"', () => {
       // The distinction `classifyStepFamily` cannot express, because it
-      // folds both into 'ifc'. A caller whose false-'ifc' is expensive —
-      // `Loader.js#canOpenFromStore` gating conway's IFC-only store open —
-      // needs a non-null name before it trusts the classification.
+      // folds both into 'ifc'. Kept for callers that want to report what a
+      // file declared rather than pick a name for it; the format decision
+      // that used to depend on it now goes through conway's detector
+      // (`src/loader/stepFormat.js`).
       expect(stepSchemaName('HEADER;\nENDSEC;')).toBeNull()
       expect(stepSchemaName(hdr(`FILE_SCHEMA(());`))).toBeNull()
       expect(stepSchemaName(hdr(`FILE_SCHEMA((''));`))).toBeNull()
