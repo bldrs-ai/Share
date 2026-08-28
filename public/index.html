@@ -27,25 +27,6 @@
       }(window.location))
     </script>
     <!-- End Single Page Apps for GitHub Pages -->
-    <style>
-      :root {
-        color-scheme: light dark;
-        background-color: Canvas;
-        color: CanvasText;
-      }
-    </style>
-    <link rel="stylesheet" href="/index.css">
-  </head>
-  <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
-    <script type="application/javascript">
-      const loader = document.createElement('script')
-      const pathPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
-      loader.setAttribute('type', 'module')
-      loader.setAttribute('src', pathPrefix + '/index.js')
-      document.body.appendChild(loader)
-    </script>
     <!-- gtag stub only: buffers events into dataLayer everywhere (gtagEvent
          calls + E2E assertions rely on it). The external gtag/js loader is
          injected by src/index/ga.js, and only on prod hosts outside
@@ -84,6 +65,25 @@
         return m ? {user_properties: {open_cid: 'cid.' + m[1]}} : {};
       }
       gtag('config', 'G-GRLNVMZRGW', userPropsBeforeConfig());
+    </script>
+    <style>
+      :root {
+        color-scheme: light dark;
+        background-color: Canvas;
+        color: CanvasText;
+      }
+    </style>
+    <link rel="stylesheet" href="/index.css">
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <script type="application/javascript">
+      const loader = document.createElement('script')
+      const pathPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
+      loader.setAttribute('type', 'module')
+      loader.setAttribute('src', pathPrefix + '/index.js')
+      document.body.appendChild(loader)
     </script>
     <!-- AdSense site verification. Body-after-bundle placement so MSW takes control before the script's network requests fire in dev/test. design/new/ads.md captures why Auto ads stay OFF and which routes may carry ad slots. -->
     <script async

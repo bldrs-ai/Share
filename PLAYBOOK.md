@@ -46,7 +46,8 @@ substitution explicit (and visible to the user) rather than letting
 - `yarn test-flows [spec] -g "test name"` - Run a single test by name grep
 
 **Build config**: Playwright tests use `SHARE_CONFIG=playwright` (`tools/esbuild/vars.playwright.js`).
-Key differences from production: `OPFS_IS_ENABLED=false`, `MSW_IS_ENABLED=true`, `NODE_ENV=development`.
+Key differences from production: `MSW_IS_ENABLED=true`, `NODE_ENV=development`. `OPFS_IS_ENABLED` is
+**on**, as in production — it was off until #1779, so treat any older note saying otherwise as stale.
 
 **SPA routing**: The static file server (`http-server docs`) has no SPA fallback. Missing paths return
 a 404 which serves `docs/404.html`, which redirects to `/?/the/path`. `docs/index.html` then uses
@@ -66,12 +67,42 @@ await page.evaluate(() => {
 The `OpenModelDialog` reads `loadRecentFilesBySource('local')` from localStorage whenever the dialog
 opens (`isDialogDisplayed` → true), so the entry is visible immediately without a page reload.
 
-**OPFS in tests**: With `OPFS_IS_ENABLED=false`, `saveDnDFileToOpfs` is never called; the fallback
-(`saveDnDFileToOpfsFallback`) runs instead and produces a UUID without an extension. This makes
-post-DnD navigation unreliable in tests — prefer testing the persistence→UI layer directly (see above).
+**OPFS in tests**: on since #1779, so a spec exercises the same OPFS path as production —
+`saveDnDFileToOpfs` runs rather than `saveDnDFileToOpfsFallback`, and the GLB cache round-trip
+(writer → OPFS → reader) is reachable at all. That round-trip is what the cache-hit specs guard;
+without OPFS they could only ever have tested a live parse.
+
+The flag is compile-time and all-or-nothing (`store/BrowserSlice.js` hard-gates the setter), so it
+cannot be enabled per-spec. Four consequences worth knowing:
+
+- **It changes every model-loading spec, not just the cache-hit ones.** `Loader.js#load` gates the
+  whole OPFS block on `isOpfsAvailable`, so turning the flag on also turns on, suite-wide: the model
+  fetch moving into `OPFS.worker.js` (see "Intercept model fetches" below); a full GLTFExporter +
+  gzip + OPFS write scheduled on `requestIdleCallback` at the tail of every load, fire-and-forget and
+  often still in flight when the context closes; and `spillModelSource` + `ReleaseModelGeometry`,
+  which free Conway's native geometry mid-test. A spec that picks, isolates or screenshots late is
+  running against a materially different runtime state than it was written against. If a spec starts
+  failing after touching this flag, that is the first place to look.
+- Per-test isolation comes from Playwright's fresh `BrowserContext`, not from anything the app does —
+  Chromium partitions OPFS per context, and a retry gets a fresh context too. A spec that populates
+  the cache and then reloads can still `clearOpfs`, but put it in `beforeEach`: the case it insures
+  against is a run interrupted mid-write, which is exactly the case where an `afterEach` never runs.
+- Waiting on a `[glb]` console line is the way to observe cache state (`cache HIT`, `writer: wrote`).
+  Use `waitForGlbLog` from `src/tests/e2e/glbLogs.ts` and **not** `page.waitForFunction(pred, {logs})`
+  — that serialises its argument into the page once, so Node-side pushes never reach the predicate and
+  the wait can only succeed if the line already arrived. Two specs sat `fixme`'d on exactly that
+  mistake, and a third was written already-`fixme`'d beside them, for five weeks (#1779).
+- Wait for `writer: wrote`, never for a `.glb` to appear in OPFS. The file exists from creation, so
+  the existence check is satisfied while the artifact is still half-written and the reload then reads
+  it as a `cache MISS`.
 
 **Intercept model fetches**: For tests that navigate to a GitHub model URL, use `setupVirtualPathIntercept`
-from `src/tests/e2e/models.ts` to serve a fixture file in place of the real network request.
+from `src/tests/e2e/models.ts` to serve a fixture file in place of the real network request. Note that
+with OPFS on, the model fetch is issued from `OPFS.worker.js`, not the page — so page-level
+`context.route` handlers (`setupVirtualPathIntercept`'s own, and `blockExternalNetwork`'s
+real-network guard) are not the mechanism keeping it hermetic; MSW's service worker is. Gate
+navigation on the service worker being active (`visitHomepageWaitForModel` does; a bare `page.goto`
+does not) before assuming a fixture will be served.
 
 **Screenshot goldens**: A new `expectScreen(page, 'Name.png')` test has no baseline, so it fails until
 you generate one:

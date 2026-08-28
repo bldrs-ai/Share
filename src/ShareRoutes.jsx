@@ -8,6 +8,7 @@ import {
 } from 'react-router-dom'
 import debug from './utils/debug'
 import {disablePageReloadApprovalCheck} from './utils/event'
+import {navWith} from './utils/navigate'
 import About from './pages/share/About'
 import Conway from './pages/share/Conway'
 import Quotas from './pages/share/Quotas'
@@ -119,7 +120,14 @@ function Forward({appPrefix}) {
       const dest = `${appPrefix}/v/p`
       debug().log('ShareRoutes#useEffect[location]: forwarding to: ', dest)
       disablePageReloadApprovalCheck()
-      navigate(dest)
+      // Pass the router's own location rather than letting navWith fall
+      // back to its `window.location` defaults. BrowserRouter keeps the two
+      // in sync, so production behaves the same either way — but under
+      // MemoryRouter the global is jsdom's empty default, and the search
+      // vanishes in the unit test exactly the way this bug dropped it in
+      // the browser. This effect is already keyed on the useLocation()
+      // value, so forward that.
+      navWith(navigate, dest, {search: location.search, hash: location.hash})
     }
   }, [location, appPrefix, navigate])
 
