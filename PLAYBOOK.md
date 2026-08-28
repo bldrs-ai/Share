@@ -190,6 +190,28 @@ ports → `net::ERR_CONNECTION_REFUSED`. Tests look "broken" when they're not.
 Pre-existing quirk; flag as a separate cleanup if it bothers you.
 
 
+## Netlify's Lighthouse Best Practices score oscillates on its own
+
+The preview comment's **Best Practices** number moves between 83, 92 and 100
+across audits of unrelated commits, and reports the swing as "down 9 from
+production" / "up 8 from production". It is not a signal about the diff.
+
+Established twice, at real cost, so it does not need establishing a third time:
+
+- On #1783 it read −9 on a diff of specs, docs and `vars.playwright.js` — none
+  of which reach the `SHARE_CONFIG=prod` bundle the audit loads — and later read
+  +8 on the same PR with no change.
+- On #1790 it read −9 on a diff that *does* touch production code, which is the
+  case worth checking rather than dismissing. Building `main` and the branch
+  side by side under one config and capturing console errors on load gave
+  byte-identical results (two events, both sandbox artefacts, neither from the
+  changed code). The score then recovered to 92 on the next head unaided.
+
+So: a Best Practices delta with no console-error delta is the audit, not you.
+Worth one check if the diff reaches production code — a local A/B on console
+errors is the cheap discriminator, since that category is largely console-driven
+— and worth nothing at all if it doesn't.
+
 ## Drive Picker fails on Brave with Shields up
 
 When testing the Drive Picker on Brave at `bldrs.ai`:

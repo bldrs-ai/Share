@@ -118,6 +118,47 @@ Use dash-separated, converted from CamelCase:
 - **Mock implementations**: Use `() => {}` freely for Jest mocks
 - **Test descriptions**: Clear, descriptive test names
 
+### Assertions must be able to fail
+
+An assertion that cannot fail is worse than a missing one, because it reads as
+coverage. The #1776 work stream (#1777, #1782, #1783, #1788, #1789, #1790)
+turned up about a dozen, several of them inside code written to prevent exactly
+this. They come in a small number of shapes, so check for them by name:
+
+- **A negative guard doing duty as a positive one.** "Nothing unexpected
+  appeared" is not "the thing appeared", and an empty collection satisfies the
+  first while disproving the second. `expectOnlyInducedLoaderErrors` iterates a
+  captured buffer, so a buffer left empty *because the diagnostic stopped
+  emitting* ran zero assertions and passed (#1789). Assert the collection's
+  size too, or pair the guard with a positive one — and say at both which is
+  which.
+- **A mock that disables what the test discriminates on.** `jest.mock`
+  auto-mocks return `undefined`. `nextRequestId` mocked that way makes every
+  worker reply match every listener, so nine correlation tests would have
+  passed with no correlation at all (#1790). Give a mocked helper a real
+  implementation whenever its return value is the thing being tested.
+- **A selector or flag that quietly stopped matching.** `[role="treeitem"]`
+  after the tree stopped emitting it; two `glbVerbose`-gated log lines asserted
+  without the flag on; a `GlobalId` row rendered on neither path (#1783). Each
+  matched nothing, and nothing said so.
+- **A threshold with no headroom.** `MIN_DISTINCT_LABELS = 5` reads as a loose
+  floor; both fixtures offer exactly five, so it is the ceiling (#1788). If a
+  bound is the most the fixture can give, say so at the constant, or the next
+  reader goes looking for slack that isn't there.
+- **A precondition satisfied earlier than you think.** Waiting for a `.glb` to
+  exist in OPFS passes at file *creation*, so the reload read a half-written
+  artifact and a spec named "cache-hit" never hit the cache (#1783). Wait for
+  the completion signal, not for existence.
+- **A test that codifies the bug.** #1782's multi-entry case asserted the wrong
+  answer outright, which would have defended the defect against whoever noticed
+  it next.
+
+**The check is cheap: break the thing the assertion guards, watch it go red,
+restore it.** Every repair above was confirmed that way, and the mutation run is
+what caught two of them being vacuous a *second* time after a first fix. Put the
+result in the PR — "26 passed before, 5 failed after" is evidence a reviewer can
+act on; "added a test" is not.
+
 ### Console hygiene
 A test run should print **nothing unexpected** — noise buries the one new
 warning that flags a real regression. Treat a stray warning as a defect, in
