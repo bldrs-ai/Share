@@ -318,9 +318,10 @@ describe('CoincidenceSet', () => {
   })
 
   it('keeps thousands of distinct placements distinct', () => {
-    // Exercises the primary-hash chaining path: 5,000 entries against a
-    // 32-bit primary means ~0.003 expected primary collisions, so this walks
-    // the `number` → `Array` chain rather than only the empty-slot path.
+    // A scale check: 5,000 placements that differ only in transform stay
+    // distinct, and every one is still recognised on a second pass. That
+    // catches an identity that degrades in bulk — a key that aliases once
+    // the table grows, or a lookup that stops finding what it stored.
     //
     // Two things this does NOT guard, both covered elsewhere:
     //
