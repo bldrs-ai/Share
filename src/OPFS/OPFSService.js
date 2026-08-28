@@ -4,6 +4,26 @@ import {GITHUB_BASE_URL_AUTHED, GITHUB_BASE_URL_UNAUTHED} from '../net/github/Oc
 
 let workerRef = null
 
+let requestCounter = 0
+
+
+/**
+ * Mint an id for one request to the OPFS worker.
+ *
+ * `initializeWorker` hands every caller the SAME worker, so its replies all
+ * arrive on one message stream; `OPFS/utils.js` matches on this id to tell its
+ * own reply from a concurrent operation's (#1785). A module-scoped counter is
+ * enough: ids only have to be unique among the requests in flight on this
+ * page's worker, never across pages or sessions.
+ *
+ * @return {string}
+ */
+export function nextRequestId() {
+  requestCounter++
+  return `opfs-${requestCounter}`
+}
+
+
 /**
  * Initializes and returns a reference to a web worker.
  *
@@ -69,8 +89,9 @@ export function terminateWorker() {
  *
  * @param {string} objectUrl - The URL of the object to be written to the file.
  * @param {string} fileName - The name of the file where the object's content will be written.
+ * @param {string} [requestId] Correlates the worker's replies with this request.
  */
-export function opfsWriteFile(objectUrl, fileName) {
+export function opfsWriteFile(objectUrl, fileName, requestId) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -79,6 +100,7 @@ export function opfsWriteFile(objectUrl, fileName) {
     command: 'writeObjectURLToFile',
     objectUrl: objectUrl,
     fileName: fileName,
+    requestId: requestId,
   })
 }
 
@@ -93,8 +115,9 @@ export function opfsWriteFile(objectUrl, fileName) {
  * @param {string} objectUrl The URL from which the model data is to be written
  * @param {string} originalFileName The original file name for the model in the repository
  * @param {string} commitHash The commit hash associated with the model data
+ * @param {string} [requestId] Correlates the worker's replies with this request.
  */
-export function opfsWriteModel(objectUrl, originalFileName, commitHash) {
+export function opfsWriteModel(objectUrl, originalFileName, commitHash, requestId) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -104,6 +127,7 @@ export function opfsWriteModel(objectUrl, originalFileName, commitHash) {
     objectUrl: objectUrl,
     objectKey: commitHash,
     originalFileName: originalFileName,
+    requestId: requestId,
   })
 }
 
@@ -119,8 +143,9 @@ export function opfsWriteModel(objectUrl, originalFileName, commitHash) {
  * @param {string} owner The owner of the repository
  * @param {string} repo The name of the repository
  * @param {string} branch The branch name where the file resides
+ * @param {string} [requestId] Correlates the worker's replies with this request.
  */
-export function opfsDeleteModel(originalFileName, commitHash, owner, repo, branch) {
+export function opfsDeleteModel(originalFileName, commitHash, owner, repo, branch, requestId) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -132,6 +157,7 @@ export function opfsDeleteModel(originalFileName, commitHash, owner, repo, branc
     owner: owner,
     repo: repo,
     branch: branch,
+    requestId: requestId,
   })
 }
 
@@ -147,8 +173,9 @@ export function opfsDeleteModel(originalFileName, commitHash, owner, repo, branc
  * @param {string} owner The owner of the repository
  * @param {string} repo The name of the repository
  * @param {string} branch The branch name where the file might reside
+ * @param {string} [requestId] Correlates the worker's replies with this request.
  */
-export function opfsDoesFileExist(originalFileName, commitHash, owner, repo, branch) {
+export function opfsDoesFileExist(originalFileName, commitHash, owner, repo, branch, requestId) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -160,6 +187,7 @@ export function opfsDoesFileExist(originalFileName, commitHash, owner, repo, bra
     owner: owner,
     repo: repo,
     branch: branch,
+    requestId: requestId,
   })
 }
 
@@ -177,8 +205,9 @@ export function opfsDoesFileExist(originalFileName, commitHash, owner, repo, bra
  * @param {string} owner The owner of the repository where the file is to be written
  * @param {string} repo The name of the repository
  * @param {string} branch The branch name where the file will be written
+ * @param {string} [requestId] Correlates the worker's replies with this request.
  */
-export function opfsWriteModelFileHandle(file, originalFilePath, commitHash, owner, repo, branch) {
+export function opfsWriteModelFileHandle(file, originalFilePath, commitHash, owner, repo, branch, requestId) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -192,6 +221,7 @@ export function opfsWriteModelFileHandle(file, originalFilePath, commitHash, own
     owner: owner,
     repo: repo,
     branch: branch,
+    requestId: requestId,
   })
 }
 
@@ -210,8 +240,9 @@ export function opfsWriteModelFileHandle(file, originalFilePath, commitHash, own
  * @param {string} repo The name of the repository
  * @param {string} branch The branch name where the file will be stored
  * @param {Function} onProgress A callback function to track the progress of the download
+ * @param {string} [requestId] Correlates the worker's replies with this request.
  */
-export function opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress) {
+export function opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress, requestId) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -225,6 +256,7 @@ export function opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owne
     repo: repo,
     branch: branch,
     onProgress: onProgress,
+    requestId: requestId,
   })
 }
 
@@ -244,8 +276,9 @@ export function opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owne
  * @param {string} branch The branch name where the file will be stored
  * @param {string} accessToken GitHub access token
  * @param {Function} onProgress A callback function to track the progress of the download
+ * @param {string} [requestId] Correlates the worker's replies with this request.
  */
-export function opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress) {
+export function opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress, requestId) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -260,6 +293,7 @@ export function opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, r
     branch: branch,
     accessToken: accessToken,
     onProgress: onProgress,
+    requestId: requestId,
   })
 }
 
@@ -278,8 +312,9 @@ export function opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, r
  * @param {string} repo The name of the repository
  * @param {string} branch The branch name where the file will be stored
  * @param {string} accessToken GitHub access token
+ * @param {string} [requestId] Correlates the worker's replies with this request.
  */
-export function opfsWriteBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken) {
+export function opfsWriteBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken, requestId) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -293,6 +328,7 @@ export function opfsWriteBase64Model(content, shaHash, originalFilePath, owner, 
     repo: repo,
     branch: branch,
     accessToken: accessToken,
+    requestId: requestId,
   })
 }
 
@@ -305,8 +341,9 @@ export function opfsWriteBase64Model(content, shaHash, originalFilePath, owner, 
  * an error message is logged indicating the initialization issue.
  *
  * @param {string} fileName The name of the file to be read from the storage
+ * @param {string} [requestId] Correlates the worker's replies with this request.
  */
-export function opfsReadFile(fileName) {
+export function opfsReadFile(fileName, requestId) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -315,6 +352,7 @@ export function opfsReadFile(fileName) {
   workerRef.postMessage({
     command: 'readObjectFromStorage',
     fileName: fileName,
+    requestId: requestId,
   })
 }
 
@@ -328,8 +366,9 @@ export function opfsReadFile(fileName) {
  * If the worker is not initialized, it logs an error message.
  *
  * @param {string} modelKey - The key associated with the model to be read from storage
+ * @param {string} [requestId] Correlates the worker's replies with this request.
  */
-export function opfsReadModel(modelKey) {
+export function opfsReadModel(modelKey, requestId) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -338,6 +377,7 @@ export function opfsReadModel(modelKey) {
   workerRef.postMessage({
     command: 'readModelFromStorage',
     modelKey: modelKey,
+    requestId: requestId,
   })
 }
 
@@ -352,8 +392,9 @@ export function opfsReadModel(modelKey) {
  * @param {string} owner
  * @param {string} repo
  * @param {string} branch
+ * @param {string} [requestId] Correlates the worker's replies with this request.
  */
-export function opfsWriteBytesByPath(bytes, originalFilePath, commitHash, owner, repo, branch) {
+export function opfsWriteBytesByPath(bytes, originalFilePath, commitHash, owner, repo, branch, requestId) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -366,6 +407,7 @@ export function opfsWriteBytesByPath(bytes, originalFilePath, commitHash, owner,
     owner: owner,
     repo: repo,
     branch: branch,
+    requestId: requestId,
   })
 }
 
@@ -381,8 +423,9 @@ export function opfsWriteBytesByPath(bytes, originalFilePath, commitHash, owner,
  * @param {string} owner
  * @param {string} repo
  * @param {string} branch
+ * @param {string} [requestId] Correlates the worker's replies with this request.
  */
-export function opfsReadModelByPath(originalFilePath, commitHash, owner, repo, branch) {
+export function opfsReadModelByPath(originalFilePath, commitHash, owner, repo, branch, requestId) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -394,14 +437,17 @@ export function opfsReadModelByPath(originalFilePath, commitHash, owner, repo, b
     owner: owner,
     repo: repo,
     branch: branch,
+    requestId: requestId,
   })
 }
 
 
 /**
  * Clears the OPFS cache
+ *
+ * @param {string} [requestId] Correlates the worker's replies with this request.
  */
-export function opfsClearCache() {
+export function opfsClearCache(requestId) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -409,6 +455,7 @@ export function opfsClearCache() {
 
   workerRef.postMessage({
     command: 'clearCache',
+    requestId: requestId,
   })
 }
 
@@ -416,8 +463,9 @@ export function opfsClearCache() {
  * Retrieves a directory snapshot of the OPFS cache.
  *
  * @param {number} [previewWindow] Number of leading bytes per file to include (0 = disabled).
+ * @param {string} [requestId] Correlates the worker's replies with this request.
  */
-export function opfsSnapshotCache(previewWindow = 0) {
+export function opfsSnapshotCache(previewWindow = 0, requestId = undefined) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -426,6 +474,7 @@ export function opfsSnapshotCache(previewWindow = 0) {
   workerRef.postMessage({
     command: 'snapshotCache',
     previewWindow: previewWindow,
+    requestId: requestId,
   })
 }
 

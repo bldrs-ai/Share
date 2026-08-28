@@ -21,6 +21,7 @@ import {Mesh} from 'three'
 import {assembleBatchedModel, buildBatchedConwayModel} from './buildBatchedConwayModel'
 import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
+import {conwayDirectError, conwayDirectInfo} from './conwayDirectLog'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
 import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
@@ -569,10 +570,12 @@ export default class ShareIfcLoader {
       // that the Conway-direct parse + assembly path completed
       // successfully on a real model. Kept at info level (not gated
       // on glbVerbose) so the signal is visible in production logs
-      // without the user opting in to the verbose channel.
-      // eslint-disable-next-line no-console
-      console.info(
-        `[conwayDirect] parsed modelID=${modelID} — ` +
+      // without the user opting in to the verbose channel. The
+      // `[conwayDirect]` tag comes from the channel's console sink, so
+      // the browser-visible line is unchanged; under jest the sink
+      // buffers it and `Loader.test.js` asserts these counts.
+      conwayDirectInfo(
+        `parsed modelID=${modelID} — ` +
         `vertices=${buildStats.vertexCount} triangles=${buildStats.triangleCount} ` +
         `instances=${buildStats.instanceCount} parents=${buildStats.parentCount} ` +
         `materials=${buildStats.materialCount} ` +
@@ -602,7 +605,7 @@ export default class ShareIfcLoader {
       if (isOutOfMemoryError(err)) {
         throw markIfOutOfMemory(err)
       }
-      console.error(err)
+      conwayDirectError(err)
       if (onError) {
         onError(err)
       }

@@ -15,37 +15,12 @@
 // default to `glbVerbose` unless the line earns its place in every load's
 // console.
 import {isFeatureEnabled} from '../FeatureFlags'
+import {createLogChannel} from '../utils/logSink'
 
 
-/**
- * Default sink: write to the console with a stable `[glb]` prefix. `level` is
- * a console method name ('info' | 'warn' | 'error').
- *
- * @param {string} level
- * @param {Array<*>} args
- */
-function consoleSink(level, args) {
-  // eslint-disable-next-line no-console
-  console[level]('[glb]', ...args)
-}
-
-
-// The active sink lives on globalThis, not a module variable, so it survives
-// `jest.resetModules()`: a harness that resets the registry and re-imports this
-// file (e.g. GlbWriterService.test.js) still shares the one sink the test setup
-// installed — module state resets, globals don't. A module-local `sink` would
-// spring back to the console on re-import, letting that path's `[glb]` lines
-// both escape the capture buffer AND print. Unset in production ⇒ console.
-const SINK_KEY = '__bldrsGlbLogSink'
-
-
-/**
- * @return {function(string, Array<*>): void} the active sink — the installed
- *   capturing sink under test, else the console default.
- */
-function activeSink() {
-  return (typeof globalThis !== 'undefined' && globalThis[SINK_KEY]) || consoleSink
-}
+// `createLogChannel` owns the console default and the globalThis-hosted
+// swappable sink (see its docs for why the sink can't be module state).
+const channel = createLogChannel('[glb]', '__bldrsGlbLogSink')
 
 
 /**
@@ -57,9 +32,7 @@ function activeSink() {
  * @param {?function(string, Array<*>): void} fn (level, args) => void
  */
 export function setGlbLogSink(fn) {
-  if (typeof globalThis !== 'undefined') {
-    globalThis[SINK_KEY] = fn ?? undefined
-  }
+  channel.setSink(fn)
 }
 
 
@@ -71,7 +44,7 @@ export function setGlbLogSink(fn) {
  * @param {...*} args
  */
 export function glbInfo(...args) {
-  activeSink()('info', args)
+  channel.emit('info', args)
 }
 
 
@@ -84,7 +57,7 @@ export function glbInfo(...args) {
  * @param {...*} args
  */
 export function glbWarn(...args) {
-  activeSink()('warn', args)
+  channel.emit('warn', args)
 }
 
 
@@ -97,6 +70,6 @@ export function glbWarn(...args) {
  */
 export function glbVerbose(...args) {
   if (isFeatureEnabled('glbVerbose')) {
-    activeSink()('info', args)
+    channel.emit('info', args)
   }
 }

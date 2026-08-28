@@ -33,7 +33,34 @@ function ghApiBase(accessToken) {
 }
 
 
+/**
+ * Post a reply to the main thread, stamped with the id of the request that
+ * produced it.
+ *
+ * The main thread shares ONE worker per origin (`OPFSService#initializeWorker`),
+ * so every helper in `OPFS/utils.js` listens to the same message stream. Without
+ * a correlation id a reply satisfies — or rejects — whichever promise happens to
+ * be listening, not the one that asked. That is the bug in #1785: the GLB cache
+ * writer resolved on any `wrote`, and the cache-hit specs reload the page on
+ * `writer: wrote`, so an early resolve hands them a half-written `.glb` (the
+ * exact defect #1783 fixed).
+ *
+ * `requestId` is threaded from the dispatcher through every function that can
+ * reply, including the shared helpers (`writeFileToPath`, `retrieveFileWithPath`,
+ * …) whose error posts terminate the caller's promise. Direct callers of the
+ * exported functions — the unit tests in `OPFS.worker.test.js` — pass no id and
+ * get the bare message, so the id never appears in a payload nobody asked for.
+ *
+ * @param {object} message The reply payload, as it was before correlation.
+ * @param {string} [requestId] Id of the originating request, when there is one.
+ */
+function postReply(message, requestId) {
+  self.postMessage(requestId === undefined ? message : {...message, requestId: requestId})
+}
+
+
 self.addEventListener('message', async (event) => {
+  const requestId = event.data.requestId
   try {
     if (event.data.command === 'initializeWorker') {
       const {GITHUB_BASE_URL_AUTHED, GITHUB_BASE_URL_UNAUTHED} =
@@ -44,70 +71,84 @@ self.addEventListener('message', async (event) => {
     } else if (event.data.command === 'writeObjectURLToFile') {
       const {objectUrl, fileName} =
       assertValues(event.data, ['objectUrl', 'fileName'])
-      await writeFileToOPFS(objectUrl, fileName)
+      await writeFileToOPFS(objectUrl, fileName, requestId)
     } else if (event.data.command === 'readObjectFromStorage') {
       const {fileName} = assertValues(event.data, ['fileName'])
-      await readFileFromOPFS(fileName)
+      await readFileFromOPFS(fileName, requestId)
     } else if (event.data.command === 'writeObjectModel') {
-      const {objectUrl, objectKey, originalFileName} =
+      // `originalFileName` is asserted (callers must send it) but
+      // `writeModelToOPFS` has only ever taken two params; passing it as a
+      // third was a silent no-op, and now that slot is `requestId`.
+      const {objectUrl, objectKey} =
           assertValues(event.data,
             ['objectUrl', 'objectKey', 'originalFileName'])
 
-      writeModelToOPFS(objectUrl, objectKey, originalFileName)
+      await writeModelToOPFS(objectUrl, objectKey, requestId)
     } else if (event.data.command === 'writeObjectModelFileHandle') {
       const {file, objectKey, originalFilePath, owner, repo, branch} =
           assertValues(event.data,
             ['file', 'objectKey', 'originalFilePath', 'owner', 'repo', 'branch'])
-      writeModelToOPFSFromFile(file, objectKey, originalFilePath, owner, repo, branch)
+      await writeModelToOPFSFromFile(file, objectKey, originalFilePath, owner, repo, branch, requestId)
     } else if (event.data.command === 'readModelFromStorage') {
       const {modelKey} = assertValues(event.data, ['modelKey'])
-      await readModelFromOPFS(modelKey)
+      await readModelFromOPFS(modelKey, requestId)
     } else if (event.data.command === 'readModelByPath') {
       const {commitHash, originalFilePath, owner, repo, branch} =
           assertValues(event.data,
             ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
-      await readModelByPathFromOPFS(commitHash, originalFilePath, owner, repo, branch)
+      await readModelByPathFromOPFS(commitHash, originalFilePath, owner, repo, branch, requestId)
     } else if (event.data.command === 'writeBytesByPath') {
       const {bytes, commitHash, originalFilePath, owner, repo, branch} =
           assertValues(event.data,
             ['bytes', 'commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
-      await writeBytesByPathToOPFS(bytes, commitHash, originalFilePath, owner, repo, branch)
+      await writeBytesByPathToOPFS(bytes, commitHash, originalFilePath, owner, repo, branch, requestId)
     } else if (event.data.command === 'downloadToOPFS') {
       const {objectUrl, commitHash, owner, repo, branch, onProgress, originalFilePath} =
           assertValues(event.data,
             ['objectUrl', 'commitHash', 'owner', 'repo', 'branch', 'onProgress', 'originalFilePath'])
-      await downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress)
+      await downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress, requestId)
     } else if (event.data.command === 'downloadModel') {
       const {objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress} =
       assertValues(event.data,
         ['objectUrl', 'shaHash', 'originalFilePath', 'owner', 'repo', 'branch', 'accessToken', 'onProgress'])
-      await downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress)
+      await downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress, requestId)
     } else if (event.data.command === 'writeBase64Model') {
       const {content, shaHash, originalFilePath, owner, repo, branch, accessToken} =
       assertValues(event.data, ['content', 'shaHash', 'originalFilePath', 'owner', 'repo', 'branch', 'accessToken'])
 
-      await writeBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken)
+      await writeBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken, requestId)
     } else if (event.data.command === 'doesFileExist') {
       const {commitHash, originalFilePath, owner, repo, branch} =
           assertValues(event.data,
             ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
 
-      await doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, branch)
+      await doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, branch, requestId)
     } else if (event.data.command === 'deleteModel') {
       const {commitHash, originalFilePath, owner, repo, branch} =
           assertValues(event.data,
             ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
 
-      await deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, branch)
+      await deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, branch, requestId)
     } else if (event.data.command === 'clearCache') {
-      await clearCache()
+      await clearCache(requestId)
     } else if (event.data.command === 'snapshotCache') {
       // Optional previewWindow parameter specifies how many leading bytes to include per file
       const previewWindow = Number.isFinite(event.data.previewWindow) ? event.data.previewWindow : parseInt(event.data.previewWindow, 10)
-      await snapshotCache(Number.isFinite(previewWindow) && previewWindow > 0 ? previewWindow : 0)
+      await snapshotCache(Number.isFinite(previewWindow) && previewWindow > 0 ? previewWindow : 0, requestId)
     }
   } catch (error) {
-    self.postMessage({error: error.message})
+    postReply({error: error.message}, requestId)
+  } finally {
+    // Close out the request even if the handler returned without replying.
+    // Several paths can do that — `writeBase64Model` with a falsy shaHash or an
+    // undecodable blob, a helper that posted a deep error and returned — and the
+    // main-thread listener has no timeout, so before correlation those hung
+    // forever AND left their listener attached to the shared worker for the life
+    // of the page (the leak asked about in #1785). Handlers that did reply have
+    // already detached their listener, so this sentinel is a no-op for them.
+    if (requestId !== undefined) {
+      postReply({requestFinished: true}, requestId)
+    }
   }
 })
 
@@ -119,14 +160,15 @@ self.addEventListener('message', async (event) => {
  * Return directory snapshot of OPFS cache including optional preview bytes per file.
  *
  * @param {number} [previewWindow] Number of leading bytes (per file) to include as hex via traverseDirectory.
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  */
-export async function snapshotCache(previewWindow = 0) {
+export async function snapshotCache(previewWindow = 0, requestId = undefined) {
   const opfsRoot = await navigator.storage.getDirectory()
 
   const directoryStructure = await traverseDirectory(opfsRoot, '', previewWindow)
 
   // Send the directory structure as a message to the main thread
-  self.postMessage({completed: true, event: 'snapshot', directoryStructure: directoryStructure.trimEnd()})
+  postReply({completed: true, event: 'snapshot', directoryStructure: directoryStructure.trimEnd()}, requestId)
 }
 
 
@@ -207,13 +249,15 @@ export async function traverseDirectory(dirHandle, path = '', previewLength = 0)
 
 /**
  * Clear OPFS cache
+ *
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  */
-export async function clearCache() {
+export async function clearCache(requestId) {
   const opfsRoot = await navigator.storage.getDirectory()
   await deleteAllEntries(opfsRoot)
 
   // Send the directory structure as a message to the main thread
-  self.postMessage({completed: true, event: 'clear'})
+  postReply({completed: true, event: 'clear'}, requestId)
 }
 
 
@@ -425,9 +469,10 @@ async function openSyncAccessHandleWithRetry(parentDirectory, fileHandle, fileNa
  * @param {string} originalFilePath - The path to the file.
  * @param {string} _etag - The ETag to use for the request.
  * @param {Function} onProgress - The function to call when the progress changes.
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
-export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag, onProgress) {
+export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag, onProgress, requestId) {
   const opfsRoot = await navigator.storage.getDirectory()
   let modelDirectoryHandle = null
   let modelBlobFileHandle = null
@@ -436,7 +481,7 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
   // Get file handle for file blob
   try {
     [modelDirectoryHandle, modelBlobFileHandle] = await
-    retrieveFileWithPathNew(opfsRoot, originalFilePath, _etag, null, false)
+    retrieveFileWithPathNew(opfsRoot, originalFilePath, _etag, null, false, requestId)
 
     if (modelBlobFileHandle !== undefined && modelBlobFileHandle !== null) {
       // Caller is responsible for posting the terminal completed event after
@@ -452,7 +497,7 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
   let blobAccessHandle = null
 
   try {
-    [modelDirectoryHandle, modelBlobFileHandle] = await writeFileToPath(opfsRoot, originalFilePath, _etag, null)
+    [modelDirectoryHandle, modelBlobFileHandle] = await writeFileToPath(opfsRoot, originalFilePath, _etag, null, requestId)
     // `openSyncAccessHandleWithRetry` handles Safari's stale-internal-ref
     // case — InvalidStateError on a fresh file, even after clearOPFSCache().
     // If the retry also fails, the throw propagates; the resilience fix in
@@ -468,7 +513,7 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
       } catch (_) {/* idempotent */}
     }
     const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
-    self.postMessage({error: workerMessage})
+    postReply({error: workerMessage}, requestId)
     return
   }
 
@@ -503,19 +548,19 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
         }
       } catch (error) {
         const workerMessage = `Error writing to ${response.headers.etag}: ${error}.`
-        self.postMessage({error: workerMessage})
+        postReply({error: workerMessage}, requestId)
         return
       }
 
       receivedLength += value.length
 
       if (onProgress) {
-        self.postMessage({
+        postReply({
           progressEvent: onProgress,
           lengthComputable: contentLength !== 0,
           contentLength: contentLength,
           receivedLength: receivedLength,
-        })
+        }, requestId)
       }
     }
 
@@ -525,7 +570,7 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
     }
   } catch (error) {
     reader.cancel()
-    self.postMessage({error: error})
+    postReply({error: error}, requestId)
   } finally {
     // Always close the sync access handle. Leaking it leaves the OPFS file
     // in a state Safari refuses subsequent createSyncAccessHandle() calls
@@ -546,9 +591,10 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
  * @param {Blob} blob - The blob to write to the file.
  * @param {string} originalFilePath - The path to the file.
  * @param {string} _etag - The ETag to use for the request.
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
-export async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath, _etag) {
+export async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath, _etag, requestId) {
   const opfsRoot = await navigator.storage.getDirectory()
   let modelDirectoryHandle = null
   let modelBlobFileHandle = null
@@ -556,7 +602,7 @@ export async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath,
   // lets see if our etag matches
   // Get file handle for file blob
   try {
-    [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPathNew(opfsRoot, originalFilePath, _etag, null, false)
+    [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPathNew(opfsRoot, originalFilePath, _etag, null, false, requestId)
 
     if (modelBlobFileHandle !== null) {
       // Caller posts the terminal completed event after rename; see the
@@ -569,7 +615,7 @@ export async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath,
   let blobAccessHandle = null
 
   try {
-    [modelDirectoryHandle, modelBlobFileHandle] = await writeFileToPath(opfsRoot, originalFilePath, _etag, null)
+    [modelDirectoryHandle, modelBlobFileHandle] = await writeFileToPath(opfsRoot, originalFilePath, _etag, null, requestId)
     // Create FileSystemSyncAccessHandle on the file.
     blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
     // Write buffer
@@ -579,7 +625,7 @@ export async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath,
     return [modelDirectoryHandle, modelBlobFileHandle]
   } catch (error) {
     const workerMessage = `Error writing file handle for ${originalFilePath}: ${error}`
-    self.postMessage({error: workerMessage})
+    postReply({error: workerMessage}, requestId)
   } finally {
     // Always close — see note in writeTemporaryFileToOPFS.
     if (blobAccessHandle) {
@@ -668,6 +714,7 @@ export function base64ToBlob(base64, mimeType = 'application/octet-stream') {
  * @param {string} branch
  * @param {string} accessToken
  * @param {number|null} fallbackLastModified Last-modified from cache, used
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  *   when rename succeeds but commit-date didn't come back (legacy cache rows).
  */
 export async function postFinalDownloadEventAfterRename(
@@ -680,7 +727,7 @@ export async function postFinalDownloadEventAfterRename(
   repo,
   branch,
   accessToken,
-  fallbackLastModified) {
+  fallbackLastModified, requestId) {
   let finalFileHandle = modelBlobFileHandle
   let renamed = false
   let lastModifiedGithub = fallbackLastModified
@@ -714,12 +761,12 @@ export async function postFinalDownloadEventAfterRename(
   }
 
   const finalFile = await finalFileHandle.getFile()
-  self.postMessage({
+  postReply({
     completed: true,
     event: renamed ? 'renamed' : 'download',
     file: finalFile,
     lastModifiedGithub: lastModifiedGithub,
-  })
+  }, requestId)
 }
 
 
@@ -733,8 +780,9 @@ export async function postFinalDownloadEventAfterRename(
  * @param {string} repo - The repository name.
  * @param {string} branch - The branch name
  * @param {string} accessToken - The access token
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  */
-export async function writeBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken) {
+export async function writeBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken, requestId) {
   let _etag = null
   let commitHash = null
   let cleanEtag = null
@@ -765,13 +813,13 @@ export async function writeBase64Model(content, shaHash, originalFilePath, owner
   if (shaHash) {
     try {
       [modelDirectoryHandle, modelBlobFileHandle] = await
-      retrieveFileWithPathNew(opfsRoot, cacheKey, shaHash, commitHash, false)
+      retrieveFileWithPathNew(opfsRoot, cacheKey, shaHash, commitHash, false, requestId)
 
       if (modelBlobFileHandle === null) {
         // couldn't find via shaHash or commitHash, see if we have an unauthed etag
         if (cleanEtag) {
           [modelDirectoryHandle, modelBlobFileHandle] = await
-          retrieveFileWithPathNew(opfsRoot, cacheKey, cleanEtag, null, false)
+          retrieveFileWithPathNew(opfsRoot, cacheKey, cleanEtag, null, false, requestId)
         }
       }
 
@@ -780,7 +828,7 @@ export async function writeBase64Model(content, shaHash, originalFilePath, owner
           // Commit hash already known — file in OPFS is at its final name.
           // Single terminal event.
           const blobFile = await modelBlobFileHandle.getFile()
-          self.postMessage({completed: true, event: 'exists', file: blobFile})
+          postReply({completed: true, event: 'exists', file: blobFile}, requestId)
           return
         }
 
@@ -791,13 +839,13 @@ export async function writeBase64Model(content, shaHash, originalFilePath, owner
         await postFinalDownloadEventAfterRename(
           modelDirectoryHandle, modelBlobFileHandle,
           originalFilePath, shaHash, cacheKey,
-          owner, repo, branch, accessToken, null /* lastModifiedGithub */)
+          owner, repo, branch, accessToken, null /* lastModifiedGithub */, requestId)
       } else {
         // we don't have it stored and need to decode the base64 blob to file and write to OPFS
         const blob = base64ToBlob(content)
 
         if (blob !== null) {
-          [modelDirectoryHandle, modelBlobFileHandle] = await writeTemporaryBase64BlobFileToOPFS(blob, cacheKey, shaHash)
+          [modelDirectoryHandle, modelBlobFileHandle] = await writeTemporaryBase64BlobFileToOPFS(blob, cacheKey, shaHash, requestId)
 
           const mockResponse = generateMockResponse(shaHash)
 
@@ -809,12 +857,12 @@ export async function writeBase64Model(content, shaHash, originalFilePath, owner
           await postFinalDownloadEventAfterRename(
             modelDirectoryHandle, modelBlobFileHandle,
             originalFilePath, shaHash, cacheKey,
-            owner, repo, branch, accessToken, null /* lastModifiedGithub */)
+            owner, repo, branch, accessToken, null /* lastModifiedGithub */, requestId)
         }
       }
     } catch (error) {
       const workerMessage = `Error writing base64 model for ${cacheKey}: ${error}`
-      self.postMessage({error: workerMessage})
+      postReply({error: workerMessage}, requestId)
     }
   }
 }
@@ -831,9 +879,10 @@ export async function writeBase64Model(content, shaHash, originalFilePath, owner
  * @param {string} branch - The branch to fetch the latest commit hash from.
  * @param {string} accessToken - The access token to use for the request.
  * @param {Function} onProgress - The function to call when the progress changes.
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  * @return {Promise<void>}
  */
-export async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress) {
+export async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress, requestId) {
   let commitHash = null
   let lastModifiedGithub = null
   let cleanEtag = null
@@ -870,13 +919,13 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
 
     try {
       [modelDirectoryHandle, modelBlobFileHandle] = await
-      retrieveFileWithPathNew(opfsRoot, cacheKey, shaHash, commitHash, false)
+      retrieveFileWithPathNew(opfsRoot, cacheKey, shaHash, commitHash, false, requestId)
 
       if (modelBlobFileHandle === null) {
         // couldn't find via shaHash or commitHash, see if we have an unauthed etag
         if (cleanEtag) {
           [modelDirectoryHandle, modelBlobFileHandle] = await
-          retrieveFileWithPathNew(opfsRoot, cacheKey, cleanEtag, null, false)
+          retrieveFileWithPathNew(opfsRoot, cacheKey, cleanEtag, null, false, requestId)
         }
       }
 
@@ -885,7 +934,7 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
           // Commit hash already known — file in OPFS is at its final name,
           // single terminal event.
           const blobFile = await modelBlobFileHandle.getFile()
-          self.postMessage({completed: true, event: 'exists', file: blobFile, lastModifiedGithub})
+          postReply({completed: true, event: 'exists', file: blobFile, lastModifiedGithub}, requestId)
           return
         }
 
@@ -894,7 +943,7 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
         await postFinalDownloadEventAfterRename(
           modelDirectoryHandle, modelBlobFileHandle,
           originalFilePath, shaHash, cacheKey,
-          owner, repo, branch, accessToken, lastModifiedGithub)
+          owner, repo, branch, accessToken, lastModifiedGithub, requestId)
       } else {
         // we don't have it and need to fetch
         const result = await fetchRGHUC(objectUrl)
@@ -908,14 +957,14 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
         // reachable for Git LFS models, which now take this download
         // path rather than the inline-base64 one.
         if (result === null) {
-          self.postMessage({error: `Failed to download model from ${objectUrl}`})
+          postReply({error: `Failed to download model from ${objectUrl}`}, requestId)
           return
         }
 
-        [modelDirectoryHandle, modelBlobFileHandle] = await writeTemporaryFileToOPFS(result, cacheKey, shaHash, onProgress)
+        [modelDirectoryHandle, modelBlobFileHandle] = await writeTemporaryFileToOPFS(result, cacheKey, shaHash, onProgress, requestId)
 
         if (!modelBlobFileHandle) {
-          self.postMessage({error: `Failed to write downloaded model to OPFS: ${originalFilePath}`})
+          postReply({error: `Failed to write downloaded model to OPFS: ${originalFilePath}`}, requestId)
           return
         }
 
@@ -925,7 +974,7 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
         await postFinalDownloadEventAfterRename(
           modelDirectoryHandle, modelBlobFileHandle,
           originalFilePath, shaHash, cacheKey,
-          owner, repo, branch, accessToken, lastModifiedGithub)
+          owner, repo, branch, accessToken, lastModifiedGithub, requestId)
       }
     } catch (error) {
       // Don't leave the listener hanging — surface the error so the caller's
@@ -934,7 +983,7 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
       // single-terminal-event contract; with the new contract, the listener
       // relies on either a `completed` or an `error` message.)
       const workerMessage = `Error in downloadModel for ${cacheKey}: ${error}`
-      self.postMessage({error: workerMessage})
+      postReply({error: workerMessage}, requestId)
       return
     }
 
@@ -959,9 +1008,10 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
  * @param {string} repo - The repo name
  * @param {string} branch - The branch name
  * @param {Function} onProgress - Progress callback
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
-export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress) {
+export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress, requestId) {
   const opfsRoot = await navigator.storage.getDirectory()
 
   let ownerFolderHandle = null
@@ -979,7 +1029,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       ownerFolderHandle = await opfsRoot.getDirectoryHandle(owner, {create: true})
     } catch (error) {
       const workerMessage = `Error getting folder handle for ${owner}: ${error}`
-      self.postMessage({error: workerMessage})
+      postReply({error: workerMessage}, requestId)
       return
     }
   }
@@ -996,7 +1046,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       repoFolderHandle = await ownerFolderHandle.getDirectoryHandle(repo, {create: true})
     } catch (error) {
       const workerMessage = `Error getting folder handle for ${repo}: ${error}`
-      self.postMessage({error: workerMessage})
+      postReply({error: workerMessage}, requestId)
       return
     }
   }
@@ -1013,7 +1063,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       branchFolderHandle = await repoFolderHandle.getDirectoryHandle(branch, {create: true})
     } catch (error) {
       const workerMessage = `Error getting folder handle for ${branch}: ${error}`
-      self.postMessage({error: workerMessage})
+      postReply({error: workerMessage}, requestId)
       return
     }
   }
@@ -1028,7 +1078,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
   // Get file handle for file blob
   try {
     [modelDirectoryHandle, modelBlobFileHandle] = await
-    retrieveFileWithPath(branchFolderHandle, originalFilePath, commitHash, false)
+    retrieveFileWithPath(branchFolderHandle, originalFilePath, commitHash, false, requestId)
   } catch (error) {
     // expected if file not found
   }
@@ -1047,14 +1097,15 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
     if (fileIsCached) {
       const blobFile = await modelBlobFileHandle.getFile()
 
-      self.postMessage({completed: true, event: 'exists', file: blobFile})
+      postReply({completed: true, event: 'exists', file: blobFile}, requestId)
       return
     } else {
       await modelBlobFileHandle.remove()
     }
   }
   try {
-    [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPath(branchFolderHandle, originalFilePath, commitHash, true)
+    [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPath(
+      branchFolderHandle, originalFilePath, commitHash, true, requestId)
     // Same Safari self-heal as in writeTemporaryFileToOPFS.
     const opened = await openSyncAccessHandleWithRetry(
       modelDirectoryHandle, modelBlobFileHandle, modelBlobFileHandle.name)
@@ -1067,7 +1118,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       } catch (_) {/* idempotent */}
     }
     const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
-    self.postMessage({error: workerMessage})
+    postReply({error: workerMessage}, requestId)
     return
   }
   // Fetch the file from the object URL
@@ -1104,7 +1155,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
         }
       } catch (error) {
         const workerMessage = `Error writing to ${commitHash}: ${error}.`
-        self.postMessage({error: workerMessage})
+        postReply({error: workerMessage}, requestId)
         return
       }
 
@@ -1113,14 +1164,14 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       if (onProgress) {
         // Variable names reflect MDN ProgressEvent field names
         // https://developer.mozilla.org/en-US/docs/Web/API/ProgressEvent
-        self.postMessage({
+        postReply({
           progressEvent: onProgress, // REVIEW: should this really be a function
           // value for an event varname, and tests
           // pass it a boolean?
           lengthComputable: contentLength !== 0,
           total: contentLength,
           loaded: receivedLength,
-        })
+        }, requestId)
       }
     }
 
@@ -1135,16 +1186,16 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       try {
         const blobFile = await modelBlobFileHandle.getFile()
 
-        self.postMessage({completed: true, event: 'download', file: blobFile})
+        postReply({completed: true, event: 'download', file: blobFile}, requestId)
       } catch (error) {
         const workerMessage = `Error Getting file handle: ${error}.`
-        self.postMessage({error: workerMessage})
+        postReply({error: workerMessage}, requestId)
         return
       }
     }
   } catch (error) {
     reader.cancel()
-    self.postMessage({error: error})
+    postReply({error: error}, requestId)
   } finally {
     // Always close the sync access handle. See writeTemporaryFileToOPFS for
     // the rationale (Safari InvalidStateError on subsequent loads if leaked).
@@ -1163,9 +1214,10 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
  * @param {string} filePath - The path to the file.
  * @param {string} etag - The ETag to use for the request.
  * @param {string} commitHash - The commit hash to use for the request.
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
-export async function writeFileToPath(rootHandle, filePath, etag, commitHash = null) {
+export async function writeFileToPath(rootHandle, filePath, etag, commitHash = null, requestId = undefined) {
   const pathSegments = safePathSplit(filePath)
   let currentHandle = rootHandle
 
@@ -1179,7 +1231,7 @@ export async function writeFileToPath(rootHandle, filePath, etag, commitHash = n
         currentHandle = await currentHandle.getDirectoryHandle(segment, {create: true})
       } catch (error) {
         const workerMessage = `Error getting/creating directory handle for segment(${segment}): ${error}.`
-        self.postMessage({error: workerMessage})
+        postReply({error: workerMessage}, requestId)
         return null
       }
     } else {
@@ -1192,7 +1244,7 @@ export async function writeFileToPath(rootHandle, filePath, etag, commitHash = n
         return [currentHandle, fileHandle] // Return the file handle for further processing
       } catch (error) {
         const workerMessage = `Error getting/creating file handle for file(${segment}): ${error}.`
-        self.postMessage({error: workerMessage})
+        postReply({error: workerMessage}, requestId)
         return null
       }
     }
@@ -1207,9 +1259,10 @@ export async function writeFileToPath(rootHandle, filePath, etag, commitHash = n
  * @param {string} filePath - The path to the file.
  * @param {string} commitHash - The commit hash to use for the request.
  * @param {boolean} shouldCreate - Whether to create the file if it doesn't exist.
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
-export async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCreate = true) {
+export async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCreate = true, requestId = undefined) {
   const pathSegments = safePathSplit(filePath)
   let currentHandle = rootHandle
 
@@ -1223,7 +1276,7 @@ export async function retrieveFileWithPath(rootHandle, filePath, commitHash, sho
         currentHandle = await currentHandle.getDirectoryHandle(segment, {create: true})
       } catch (error) {
         const workerMessage = `Error getting/creating directory handle for segment(${segment}): ${error}.`
-        self.postMessage({error: workerMessage})
+        postReply({error: workerMessage}, requestId)
         return null
       }
     } else {
@@ -1237,7 +1290,7 @@ export async function retrieveFileWithPath(rootHandle, filePath, commitHash, sho
           return null
         }
         const workerMessage = `Error getting/creating file handle for file(${segment}): ${error}.`
-        self.postMessage({error: workerMessage})
+        postReply({error: workerMessage}, requestId)
         return null
       }
     }
@@ -1252,9 +1305,10 @@ export async function retrieveFileWithPath(rootHandle, filePath, commitHash, sho
  * @param {string} etag - The ETag to use for the request.
  * @param {string} commitHash - The commit hash to use for the request.
  * @param {boolean} create - Whether to create the file if it doesn't exist.
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
-export async function retrieveFileWithPathNew(rootHandle, filePath, etag, commitHash, create = false) {
+export async function retrieveFileWithPathNew(rootHandle, filePath, etag, commitHash, create = false, requestId = undefined) {
   const pathSegments = safePathSplit(filePath)
   let currentHandle = rootHandle
 
@@ -1268,7 +1322,7 @@ export async function retrieveFileWithPathNew(rootHandle, filePath, etag, commit
         currentHandle = await currentHandle.getDirectoryHandle(segment, {create: true})
       } catch (error) {
         const workerMessage = `Error getting/creating directory handle for segment(${segment}): ${error}.`
-        self.postMessage({error: workerMessage})
+        postReply({error: workerMessage}, requestId)
         return [null, null]
       }
     } else {
@@ -1312,9 +1366,10 @@ export async function retrieveFileWithPathNew(rootHandle, filePath, etag, commit
  *
  * @param {FileSystemSyncAccessHandle} blobAccessHandle - The blob access handle.
  * @param {File} modelFile - The model file.
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  * @return {Promise<boolean>} True if the file was written successfully, false otherwise.
  */
-export async function writeFileToHandle(blobAccessHandle, modelFile) {
+export async function writeFileToHandle(blobAccessHandle, modelFile, requestId) {
   try {
     // Step 1: Convert the File to an ArrayBuffer
     const arrayBuffer = await modelFile.arrayBuffer()
@@ -1331,7 +1386,7 @@ export async function writeFileToHandle(blobAccessHandle, modelFile) {
     return true
   } catch (error) {
     const workerMessage = `Error writing file to handle: ${error}`
-    self.postMessage({error: workerMessage})
+    postReply({error: workerMessage}, requestId)
     return false
   }
 }
@@ -1346,8 +1401,9 @@ export async function writeFileToHandle(blobAccessHandle, modelFile) {
  * @param {string} owner - The owner of the repository.
  * @param {string} repo - The repository name.
  * @param {string} branch - The branch name
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  */
-export async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, owner, repo, branch) {
+export async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, owner, repo, branch, requestId) {
   const opfsRoot = await navigator.storage.getDirectory()
 
   // Compute file git sha1 hash
@@ -1365,19 +1421,19 @@ export async function writeModelToOPFSFromFile(modelFile, objectKey, originalFil
   try {
     // eslint-disable-next-line no-unused-vars
     [modelDirectoryHandle, modelBlobFileHandle] = await
-    retrieveFileWithPathNew(opfsRoot, cacheKey, computedShaHash, objectKey, true)
+    retrieveFileWithPathNew(opfsRoot, cacheKey, computedShaHash, objectKey, true, requestId)
     // Create FileSystemSyncAccessHandle on the file.
     blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
 
-    if (await writeFileToHandle(blobAccessHandle, modelFile)) {
+    if (await writeFileToHandle(blobAccessHandle, modelFile, requestId)) {
       // Update cache with new data
       const mockResponse = generateMockResponse(computedShaHash)
       await CacheModule.updateCacheRaw(cacheKey, mockResponse, objectKey)
-      self.postMessage({completed: true, event: 'write'})
+      postReply({completed: true, event: 'write'}, requestId)
     }
   } catch (error) {
     const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
-    self.postMessage({error: workerMessage})
+    postReply({error: workerMessage}, requestId)
   } finally {
     // writeFileToHandle closes the handle on success, but bails without
     // closing if its own try fails — and there's no close at all if create
@@ -1492,9 +1548,10 @@ export async function renameFileInOPFS(parentDirectory, fileHandle, newFileName,
  * @param {*} owner
  * @param {*} repo
  * @param {*} branch
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  * @return {string} postmessage specifying operation status
  */
-export async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, branch) {
+export async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, branch, requestId) {
   const opfsRoot = await navigator.storage.getDirectory()
   const cacheKey = `${owner}/${repo}/${branch}/${originalFilePath}`
   let modelDirectoryHandle = null
@@ -1502,8 +1559,7 @@ export async function doesFileExistInOPFS(commitHash, originalFilePath, owner, r
 
 
   [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPathNew(
-    opfsRoot, cacheKey, null, commitHash, false,
-  )
+    opfsRoot, cacheKey, null, commitHash, false, requestId)
 
   if (modelBlobFileHandle !== null ) {
     try {
@@ -1518,17 +1574,17 @@ export async function doesFileExistInOPFS(commitHash, originalFilePath, owner, r
           }
         } catch (_) {/* ignore deletion errors */}
 
-        self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+        postReply({completed: true, event: 'notexist', commitHash: commitHash}, requestId)
         return
       }
     } catch (_) {/* if we cannot read the file, treat as not existing */
-      self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+      postReply({completed: true, event: 'notexist', commitHash: commitHash}, requestId)
       return
     }
 
-    self.postMessage({completed: true, event: 'exist', commitHash: commitHash})
+    postReply({completed: true, event: 'exist', commitHash: commitHash}, requestId)
   } else {
-    self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+    postReply({completed: true, event: 'notexist', commitHash: commitHash}, requestId)
   }
 }
 
@@ -1547,13 +1603,14 @@ export async function doesFileExistInOPFS(commitHash, originalFilePath, owner, r
  * @param {string} owner
  * @param {string} repo
  * @param {string} branch
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  */
-export async function writeBytesByPathToOPFS(bytes, commitHash, originalFilePath, owner, repo, branch) {
+export async function writeBytesByPathToOPFS(bytes, commitHash, originalFilePath, owner, repo, branch, requestId) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
     const cacheKey = `${owner}/${repo}/${branch}/${originalFilePath}`
 
-    const handles = await writeFileToPath(opfsRoot, cacheKey, null, commitHash)
+    const handles = await writeFileToPath(opfsRoot, cacheKey, null, commitHash, requestId)
     if (handles === null) {
       // writeFileToPath already posted an error message
       return
@@ -1581,9 +1638,9 @@ export async function writeBytesByPathToOPFS(bytes, commitHash, originalFilePath
         await accessHandle.close()
       } catch (_) {/* idempotent */}
     }
-    self.postMessage({completed: true, event: 'wrote', commitHash: commitHash})
+    postReply({completed: true, event: 'wrote', commitHash: commitHash}, requestId)
   } catch (error) {
-    self.postMessage({error: `writeBytesByPath: ${error.message || error}`})
+    postReply({error: `writeBytesByPath: ${error.message || error}`}, requestId)
   }
 }
 
@@ -1602,35 +1659,35 @@ export async function writeBytesByPathToOPFS(bytes, commitHash, originalFilePath
  * @param {string} owner
  * @param {string} repo
  * @param {string} branch
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  */
-export async function readModelByPathFromOPFS(commitHash, originalFilePath, owner, repo, branch) {
+export async function readModelByPathFromOPFS(commitHash, originalFilePath, owner, repo, branch, requestId) {
   const opfsRoot = await navigator.storage.getDirectory()
   const cacheKey = `${owner}/${repo}/${branch}/${originalFilePath}`
   let modelBlobFileHandle = null
 
   try {
     [, modelBlobFileHandle] = await retrieveFileWithPathNew(
-      opfsRoot, cacheKey, null, commitHash, false,
-    )
+      opfsRoot, cacheKey, null, commitHash, false, requestId)
   } catch (error) {
-    self.postMessage({error: `readModelByPath: ${error.message || error}`})
+    postReply({error: `readModelByPath: ${error.message || error}`}, requestId)
     return
   }
 
   if (modelBlobFileHandle === null) {
-    self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+    postReply({completed: true, event: 'notexist', commitHash: commitHash}, requestId)
     return
   }
 
   try {
     const file = await modelBlobFileHandle.getFile()
     if (file.size === 0) {
-      self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+      postReply({completed: true, event: 'notexist', commitHash: commitHash}, requestId)
       return
     }
-    self.postMessage({completed: true, event: 'read', file: file})
+    postReply({completed: true, event: 'read', file: file}, requestId)
   } catch (error) {
-    self.postMessage({error: `readModelByPath: ${error.message || error}`})
+    postReply({error: `readModelByPath: ${error.message || error}`}, requestId)
   }
 }
 
@@ -1645,9 +1702,10 @@ export async function readModelByPathFromOPFS(commitHash, originalFilePath, owne
  * @param {string} owner - The owner of the repository.
  * @param {string} repo - The repository name.
  * @param {string} branch - The branch to use for the request.
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  * @return {Promise<void>}
  */
-export async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, branch) {
+export async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, branch, requestId) {
   const opfsRoot = await navigator.storage.getDirectory()
   let ownerFolderHandle = null
   let repoFolderHandle = null
@@ -1660,7 +1718,7 @@ export async function deleteModelFromOPFS(commitHash, originalFilePath, owner, r
   }
 
   if (ownerFolderHandle === null) {
-    self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+    postReply({completed: true, event: 'notexist', commitHash: commitHash}, requestId)
     return
   }
 
@@ -1672,7 +1730,7 @@ export async function deleteModelFromOPFS(commitHash, originalFilePath, owner, r
   }
 
   if (repoFolderHandle === null) {
-    self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+    postReply({completed: true, event: 'notexist', commitHash: commitHash}, requestId)
     return
   }
 
@@ -1684,7 +1742,7 @@ export async function deleteModelFromOPFS(commitHash, originalFilePath, owner, r
   }
 
   if (branchFolderHandle === null) {
-    self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+    postReply({completed: true, event: 'notexist', commitHash: commitHash}, requestId)
     return
   }
 
@@ -1696,7 +1754,7 @@ export async function deleteModelFromOPFS(commitHash, originalFilePath, owner, r
   // Get file handle for file blob
   try {
     [, modelBlobFileHandle] = await
-    retrieveFileWithPath(branchFolderHandle, originalFilePath, commitHash, false)
+    retrieveFileWithPath(branchFolderHandle, originalFilePath, commitHash, false, requestId)
   } catch (error) {
     // expected if file not found
   }
@@ -1714,7 +1772,7 @@ export async function deleteModelFromOPFS(commitHash, originalFilePath, owner, r
     modelBlobFileHandle.remove()
   }
 
-  self.postMessage({completed: true, event: 'deleted', commitHash: commitHash})
+  postReply({completed: true, event: 'deleted', commitHash: commitHash}, requestId)
 }
 
 
@@ -1723,10 +1781,10 @@ export async function deleteModelFromOPFS(commitHash, originalFilePath, owner, r
  *
  * @param {string} objectUrl - The URL to fetch the model from.
  * @param {string} objectKey - The object key to use for the request.
- * @param {string} originalFileName - The name of the original file.
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  * @return {Promise<void>}
  */
-export async function writeModelToOPFS(objectUrl, objectKey) {
+export async function writeModelToOPFS(objectUrl, objectKey, requestId) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
@@ -1737,7 +1795,7 @@ export async function writeModelToOPFS(objectUrl, objectKey) {
       newFolderHandle = await opfsRoot.getDirectoryHandle(objectKey, {create: true})
     } catch (error) {
       const workerMessage = `Error getting folder handle for ${objectKey}: ${error}`
-      self.postMessage({error: workerMessage})
+      postReply({error: workerMessage}, requestId)
       return
     }
 
@@ -1749,7 +1807,7 @@ export async function writeModelToOPFS(objectUrl, objectKey) {
       modelBlobFileHandle = await newFolderHandle.getFileHandle(objectKey, {create: true})
     } catch (error) {
       const workerMessage = `Error getting file handle for ${objectKey}: ${error}`
-      self.postMessage({error: workerMessage})
+      postReply({error: workerMessage}, requestId)
       return
     }
 
@@ -1767,10 +1825,10 @@ export async function writeModelToOPFS(objectUrl, objectKey) {
       // Write buffer at the beginning of the file
       await blobAccessHandle.write(fileArrayBuffer, {at: 0})
 
-      self.postMessage({completed: true, event: 'write', fileName: objectKey})
+      postReply({completed: true, event: 'write', fileName: objectKey}, requestId)
     } catch (error) {
       const workerMessage = `Error writing to ${objectKey}: ${error}.`
-      self.postMessage({error: workerMessage})
+      postReply({error: workerMessage}, requestId)
       return
     } finally {
       // See writeTemporaryFileToOPFS for the Safari rationale.
@@ -1782,7 +1840,7 @@ export async function writeModelToOPFS(objectUrl, objectKey) {
     }
   } catch (error) {
     const workerMessage = `Error writing object URL to file: ${error}`
-    self.postMessage({error: workerMessage})
+    postReply({error: workerMessage}, requestId)
   }
 }
 
@@ -1791,9 +1849,10 @@ export async function writeModelToOPFS(objectUrl, objectKey) {
  * Read model from OPFS
  *
  * @param {string} objectKey - The object key to use for the request.
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  * @return {Promise<void>}
  */
-export async function readModelFromOPFS(objectKey) {
+export async function readModelFromOPFS(objectKey, requestId) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
@@ -1803,7 +1862,7 @@ export async function readModelFromOPFS(objectKey) {
       modelFolderHandle = await opfsRoot.getDirectoryHandle(objectKey)
     } catch (error) {
       const errorMessage = `Folder ${objectKey} not found: ${error}`
-      self.postMessage({error: errorMessage})
+      postReply({error: errorMessage}, requestId)
       return // Exit if the file is not found
     }
 
@@ -1813,15 +1872,15 @@ export async function readModelFromOPFS(objectKey) {
 
       const blobFile = await blobFileHandle.getFile()
 
-      self.postMessage({completed: true, event: 'read', file: blobFile})
+      postReply({completed: true, event: 'read', file: blobFile}, requestId)
     } catch (error) {
       const errorMessage = `Error retrieving File from ${objectKey}: ${error}.`
-      self.postMessage({error: errorMessage})
+      postReply({error: errorMessage}, requestId)
       return
     }
   } catch (error) {
     const errorMessage = `Error retrieving File: ${error}.`
-    self.postMessage({error: errorMessage})
+    postReply({error: errorMessage}, requestId)
   }
 }
 
@@ -1831,9 +1890,10 @@ export async function readModelFromOPFS(objectKey) {
  *
  * @param {string} objectUrl - The URL to fetch the file from.
  * @param {string} fileName - The name of the file.
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  * @return {Promise<void>}
  */
-export async function writeFileToOPFS(objectUrl, fileName) {
+export async function writeFileToOPFS(objectUrl, fileName, requestId) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
@@ -1845,7 +1905,7 @@ export async function writeFileToOPFS(objectUrl, fileName) {
       newFileHandle = await opfsRoot.getFileHandle(fileName, {create: true})
     } catch (error) {
       const workerMessage = `Error getting file handle for ${fileName}: ${error}`
-      self.postMessage({error: workerMessage})
+      postReply({error: workerMessage}, requestId)
       return
     }
 
@@ -1864,14 +1924,14 @@ export async function writeFileToOPFS(objectUrl, fileName) {
       const writeSize = await accessHandle.write(fileArrayBuffer, {at: 0})
 
       if (writeSize > 0) {
-        self.postMessage({completed: true, event: 'write', fileName: fileName})
+        postReply({completed: true, event: 'write', fileName: fileName}, requestId)
       } else {
         const workerMessage = `Error writing to file: ${fileName}`
-        self.postMessage({error: workerMessage})
+        postReply({error: workerMessage}, requestId)
       }
     } catch (error) {
       const workerMessage = `Error writing to ${fileName}: ${error}.`
-      self.postMessage({error: workerMessage})
+      postReply({error: workerMessage}, requestId)
       return
     } finally {
       // See writeTemporaryFileToOPFS for the Safari rationale.
@@ -1883,7 +1943,7 @@ export async function writeFileToOPFS(objectUrl, fileName) {
     }
   } catch (error) {
     const workerMessage = `Error writing object URL to file: ${error}`
-    self.postMessage({error: workerMessage})
+    postReply({error: workerMessage}, requestId)
   }
 }
 
@@ -1892,9 +1952,10 @@ export async function writeFileToOPFS(objectUrl, fileName) {
  * Read file from OPFS
  *
  * @param {string} fileName - The name of the file.
+ * @param {string} [requestId] Id of the originating request, stamped on every reply; see postReply.
  * @return {Promise<void>}
  */
-export async function readFileFromOPFS(fileName) {
+export async function readFileFromOPFS(fileName, requestId) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
@@ -1904,22 +1965,22 @@ export async function readFileFromOPFS(fileName) {
       newFileHandle = await opfsRoot.getFileHandle(fileName)
     } catch (error) {
       const errorMessage = `File ${fileName} not found: ${error}`
-      self.postMessage({error: errorMessage})
+      postReply({error: errorMessage}, requestId)
       return // Exit if the file is not found
     }
 
     try {
       const fileHandle = await newFileHandle.getFile()
 
-      self.postMessage({completed: true, event: 'read', file: fileHandle})
+      postReply({completed: true, event: 'read', file: fileHandle}, requestId)
     } catch (error) {
       const errorMessage = `Error retrieving File from ${fileName}: ${error}.`
-      self.postMessage({error: errorMessage})
+      postReply({error: errorMessage}, requestId)
       return
     }
   } catch (error) {
     const errorMessage = `Error retrieving File: ${error}.`
-    self.postMessage({error: errorMessage})
+    postReply({error: errorMessage}, requestId)
   }
 }
 
