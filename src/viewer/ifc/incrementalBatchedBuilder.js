@@ -78,7 +78,16 @@ export class IncrementalBatchedBuilder {
     // idByBatch: Map(batchState → geometryId)} — geometry fetched from
     // Conway exactly once per model.
     this.geometryCache = new Map()
+    // Permanently unusable shapes: conway handed back nothing, or handed
+    // back a degenerate buffer (zero-size, or a vertex size that isn't a
+    // whole number of VERT_STRIDE verts). Those are properties of the
+    // SHAPE, so no later batch can do better — never retried.
     this.badGeometry = new Set()
+    // Ids whose Conway-boundary fetch THREW during the batch currently
+    // being appended (GEOMETRY_BUDGET eviction, see resolveGeometry_'s
+    // catch). Unlike badGeometry this is transient: cleared at the top of
+    // every appendBatch so the next batch retries.
+    this.failedThisBatch = new Set()
     // Running count backing warnBadRecord_'s console cap.
     this.badRecordWarnings = 0
     // coincidenceKeys already appended, across all batches — drops exact
@@ -134,6 +143,13 @@ export class IncrementalBatchedBuilder {
    * @param {object|Array} flatMeshes delta FlatMesh source
    */
   appendBatch(flatMeshes) {
+    // Eviction state is a property of THIS pump call: whatever the budget
+    // freed before it stays freed for its whole duration, and conway
+    // re-extracts an evicted shape only when a later product maps it. So
+    // a boundary throw suppresses further fetches of that id within this
+    // batch (they would fail identically) and no further — see
+    // resolveGeometry_.
+    this.failedThisBatch.clear()
     forEachVectorItem(flatMeshes, (flatMesh) => {
       try {
         const parentExpressId = flatMesh?.expressID
@@ -246,6 +262,20 @@ export class IncrementalBatchedBuilder {
   /**
    * Resolve (or reject) one placement and append its instance.
    *
+   * ORDERING IS LOAD-BEARING (codex P2 on Share#1798). Every read that
+   * crosses the Conway boundary — the PlacedGeometry's own accessors and
+   * the GetGeometry/GetVertexArray/GetIndexArray calls behind
+   * resolveGeometry_ — is staged into locals BEFORE the first mutation,
+   * because any of them can throw embind's "Cannot pass deleted object"
+   * when the geometry budget evicts the native asset (see appendBatch).
+   * A throw between `addInstance` and the pick-table pushes would leave
+   * the mesh holding an instance that `cursor` and the tables never
+   * recorded, so every later instance id maps to the wrong row of
+   * selection metadata — and appendBatch's per-placement guard would
+   * cheerfully keep appending into the now-corrupt builder. Once staging
+   * is done the rest is three.js writes into preallocated buffers and
+   * JS array pushes, which don't throw in practice.
+   *
    * @param {number} parentExpressId
    * @param {object} placed Conway PlacedGeometry
    */
@@ -255,20 +285,27 @@ export class IncrementalBatchedBuilder {
       this.totals.skippedPlacedGeometries++
       return
     }
+    const color = placed.color ?? DEFAULT_COLOR
+    // One staged read of the transform serves both the dedup key and the
+    // instance matrix: Matrix4.fromArray copies element-wise, so
+    // `matrix.elements` is value-identical to the source array (and the
+    // recenter offset is only subtracted from it further down, after the
+    // key is taken — matching the one-shot builder, which keys on the raw
+    // placement).
+    const matrix = this.scratchMatrix.fromArray(placed.flatTransformation)
+    const occurrencePath = placed.occurrencePath ?? null
     const entry = this.resolveGeometry_(geomExpressID)
     if (entry === null) {
       this.totals.skippedPlacedGeometries++
       return
     }
-    const color = placed.color ?? DEFAULT_COLOR
     // Drop an exact coincident duplicate (same part + geometry + transform +
     // colour): it would z-fight the one already appended. See coincidenceKey.
-    const dedupKey = coincidenceKey(parentExpressId, geomExpressID, placed.flatTransformation, color)
+    const dedupKey = coincidenceKey(parentExpressId, geomExpressID, matrix.elements, color)
     if (this.seenPlacements.has(dedupKey)) {
       this.totals.skippedCoincidentPlacements++
       return
     }
-    this.seenPlacements.add(dedupKey)
     const isTransparent = color.w < OPAQUE_ALPHA
     const state = this.ensureBatch_(isTransparent)
     this.ensureCapacity_(state, entry)
@@ -279,14 +316,13 @@ export class IncrementalBatchedBuilder {
       entry.idByBatch.set(state, geometryId)
     }
     const batchId = state.mesh.addInstance(geometryId)
-    const matrix = this.scratchMatrix.fromArray(placed.flatTransformation)
-    // Decide the model-wide origin-recenter offset from the first placement,
-    // then subtract it from every instance so a georeferenced model renders at
-    // the origin (float32-precise) instead of at ~1e7 m. See
-    // coordinationOffsetFor. Stamped on the root for consumers that need to
-    // map a rendered point back to true world coordinates.
+    // Decide the model-wide origin-recenter offset from the first placement
+    // that actually appends, then subtract it from every instance so a
+    // georeferenced model renders at the origin (float32-precise) instead of
+    // at ~1e7 m. See coordinationOffsetFor. Stamped on the root for consumers
+    // that need to map a rendered point back to true world coordinates.
     if (this.coordination.offset === undefined) {
-      this.coordination.offset = coordinationOffsetFor(placed.flatTransformation)
+      this.coordination.offset = coordinationOffsetFor(matrix.elements)
     }
     if (this.coordination.offset !== null) {
       this.root.userData.coordinationOffset = this.coordination.offset
@@ -301,12 +337,17 @@ export class IncrementalBatchedBuilder {
     // Per-occurrence identity (STEP): NAUO path + solid geometry id, so
     // the batched consumers can narrow selection / hide to one occurrence.
     state.instanceGeometryIds.push(geomExpressID)
-    state.instanceOccurrencePaths.push(placed.occurrencePath ?? null)
+    state.instanceOccurrencePaths.push(occurrencePath)
     state.instanceGeometry.push(entry.geometry)
     state.instanceColors.push(color)
     state.cursor++
     this.occurrenceId++
     this.totals.placements++
+    // Marked seen only once the append actually landed: a placement that
+    // died mid-append must not poison the dedup set, or the identical
+    // placement conway re-emits in a later batch would be dropped as a
+    // duplicate of an instance that was never drawn.
+    this.seenPlacements.add(dedupKey)
     if (isTransparent) {
       this.totals.transparentPlacements++
     }
@@ -332,7 +373,7 @@ export class IncrementalBatchedBuilder {
     if (cached !== undefined) {
       return cached
     }
-    if (this.badGeometry.has(geomExpressID)) {
+    if (this.badGeometry.has(geomExpressID) || this.failedThisBatch.has(geomExpressID)) {
       return null
     }
     let geom
@@ -366,11 +407,21 @@ export class IncrementalBatchedBuilder {
       // If eviction lands between the demand pump delivering this id and
       // our copying it out here, embind throws "Cannot pass deleted object
       // as a pointer of type IfcGeometry" from whichever of the calls
-      // above touches the freed wrapper. Cache it as bad (so no batch
-      // retries the same doomed id) and degrade to one skipped placement
+      // above touches the freed wrapper. Degrade to one skipped placement
       // — never let it escape and take the whole batch with it
       // (Sentry SHARE-1NK).
-      this.badGeometry.add(geomExpressID)
+      //
+      // This failure is TRANSIENT, unlike the degenerate-shape branches
+      // above, so it must NOT go in badGeometry: conway's contract is
+      // that an evicted shape is gone from GetGeometry only until
+      // something re-extracts it, which happens when a later product maps
+      // it — a retry in a LATER batch can therefore succeed and recover
+      // every placement that reuses the shape. Blacklisting it
+      // permanently would drop them all. Scope the suppression to this
+      // batch instead (cleared in appendBatch): within one pump call the
+      // eviction state can't change, so re-fetching here is a guaranteed
+      // second failure and only costs another boundary throw.
+      this.failedThisBatch.add(geomExpressID)
       this.warnBadRecord_(`geometry ${geomExpressID} fetch failed; skipping:`, e)
       return null
     }
