@@ -2,11 +2,11 @@ import {BatchedMesh, Box3, DoubleSide, Group, Matrix4, Vector4} from 'three'
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
 import {
+  CoincidenceSet,
   DEFAULT_COLOR,
   INDICES_PER_TRIANGLE,
   OPAQUE_ALPHA,
   VERT_STRIDE,
-  coincidenceKey,
   coordinationOffsetFor,
   localGeometry,
 } from './flatMeshToBatchedModel'
@@ -73,9 +73,10 @@ export class IncrementalBatchedBuilder {
     // Conway exactly once per model.
     this.geometryCache = new Map()
     this.badGeometry = new Set()
-    // coincidenceKeys already appended, across all batches — drops exact
-    // duplicate placements that would z-fight (see coincidenceKey).
-    this.seenPlacements = new Set()
+    // Placement identities already appended, across all batches — drops
+    // exact duplicate placements that would z-fight (see CoincidenceSet).
+    // Load-time only: `finalize` releases it (conway#636).
+    this.seenPlacements = new CoincidenceSet()
     // Origin-recenter frame for georeferenced models (see
     // coordinationOffsetFor). `offset` is `undefined` until the first
     // placement decides it; then `[x,y,z]` (subtracted from every
@@ -178,6 +179,10 @@ export class IncrementalBatchedBuilder {
         parents.add(parent)
       }
     }
+    // The duplicate guard is load-time only and is at its maximum right here,
+    // at the end of the load — nothing reads it afterwards, so release it
+    // rather than retaining it for the life of the model (conway#636).
+    this.seenPlacements.clear()
     return {
       batches,
       stats: {
@@ -215,13 +220,11 @@ export class IncrementalBatchedBuilder {
     }
     const color = placed.color ?? DEFAULT_COLOR
     // Drop an exact coincident duplicate (same part + geometry + transform +
-    // colour): it would z-fight the one already appended. See coincidenceKey.
-    const dedupKey = coincidenceKey(parentExpressId, geomExpressID, placed.flatTransformation, color)
-    if (this.seenPlacements.has(dedupKey)) {
+    // colour): it would z-fight the one already appended. See CoincidenceSet.
+    if (!this.seenPlacements.add(parentExpressId, geomExpressID, placed.flatTransformation, color)) {
       this.totals.skippedCoincidentPlacements++
       return
     }
-    this.seenPlacements.add(dedupKey)
     const isTransparent = color.w < OPAQUE_ALPHA
     const state = this.ensureBatch_(isTransparent)
     this.ensureCapacity_(state, entry)
