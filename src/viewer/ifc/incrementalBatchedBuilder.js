@@ -1,4 +1,5 @@
 import {BatchedMesh, Box3, DoubleSide, Group, Matrix4, Vector4} from 'three'
+import debug, {WARN} from '../../utils/debug'
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
 import {
@@ -21,6 +22,11 @@ const INITIAL_INSTANCES = 1024
 const INITIAL_VERTICES = 1 << 18
 const INITIAL_INDICES = 1 << 19
 const GROWTH = 2
+// Console cap for per-record skip warnings (see warnBadRecord_): a model
+// with many budget-evicted geometries (conway#535) shouldn't flood the
+// console one line per id -- the load report's skipped* counts already
+// carry the full total (Sentry SHARE-1NK).
+const MAX_BAD_RECORD_WARNINGS = 5
 /* eslint-enable no-magic-numbers */
 
 
@@ -73,6 +79,8 @@ export class IncrementalBatchedBuilder {
     // Conway exactly once per model.
     this.geometryCache = new Map()
     this.badGeometry = new Set()
+    // Running count backing warnBadRecord_'s console cap.
+    this.badRecordWarnings = 0
     // coincidenceKeys already appended, across all batches — drops exact
     // duplicate placements that would z-fight (see coincidenceKey).
     this.seenPlacements = new Set()
@@ -112,20 +120,59 @@ export class IncrementalBatchedBuilder {
    * on per-record problems — mirrors the one-shot builder's skip
    * accounting.
    *
+   * Both loop bodies below are guarded individually rather than once
+   * around the whole method: conway's GEOMETRY_BUDGET eviction
+   * (conwayDirectIfcLoader.js, conway#535) can free a native asset
+   * between delivery and our reading it, and embind then throws
+   * "Cannot pass deleted object as a pointer of type IfcGeometry" from
+   * whichever wrapper touches it next — a FlatMesh's own accessors, or
+   * one of its PlacedGeometry entries inside appendPlacement_. Letting
+   * either throw escape this method would abort the whole batch (up to
+   * 64 products) instead of the one poisoned record, which is exactly
+   * the Sentry SHARE-1NK regression: don't reintroduce it here.
+   *
    * @param {object|Array} flatMeshes delta FlatMesh source
    */
   appendBatch(flatMeshes) {
     forEachVectorItem(flatMeshes, (flatMesh) => {
-      const parentExpressId = flatMesh?.expressID
-      const placedVec = flatMesh?.geometries
-      if (parentExpressId === undefined || !placedVec) {
+      try {
+        const parentExpressId = flatMesh?.expressID
+        const placedVec = flatMesh?.geometries
+        if (parentExpressId === undefined || !placedVec) {
+          this.totals.skippedFlatMeshes++
+          return
+        }
+        forEachVectorItem(placedVec, (placed) => {
+          try {
+            this.appendPlacement_(parentExpressId, placed)
+          } catch (e) {
+            this.totals.skippedPlacedGeometries++
+            this.warnBadRecord_('appendPlacement_ failed; skipping placement:', e)
+          }
+        })
+      } catch (e) {
         this.totals.skippedFlatMeshes++
-        return
+        this.warnBadRecord_('FlatMesh read failed; skipping:', e)
       }
-      forEachVectorItem(placedVec, (placed) => {
-        this.appendPlacement_(parentExpressId, placed)
-      })
     })
+  }
+
+
+  /**
+   * Log one per-record skip, deduped/capped so a model with many bad
+   * records (e.g. every geometry evicted past the budget) doesn't flood
+   * the console — see MAX_BAD_RECORD_WARNINGS. The load report's
+   * skipped* totals (finalize()) carry the full count regardless of how
+   * many lines actually printed.
+   *
+   * @param {string} message
+   * @param {Error} e underlying error, logged so a Sentry load report
+   *   still shows why geometry was skipped.
+   */
+  warnBadRecord_(message, e) {
+    if (this.badRecordWarnings++ < MAX_BAD_RECORD_WARNINGS) {
+      debug(WARN).warn(`IncrementalBatchedBuilder: ${message}`, e)
+    }
   }
 
 
@@ -288,25 +335,45 @@ export class IncrementalBatchedBuilder {
     if (this.badGeometry.has(geomExpressID)) {
       return null
     }
-    // eslint-disable-next-line new-cap
-    const geom = this.api.GetGeometry(this.modelID, geomExpressID)
-    if (!geom) {
+    let geom
+    let indexSize
+    let vertCount
+    let rawVerts
+    let rawIndices
+    try {
+      // eslint-disable-next-line new-cap
+      geom = this.api.GetGeometry(this.modelID, geomExpressID)
+      if (!geom) {
+        this.badGeometry.add(geomExpressID)
+        return null
+      }
+      // eslint-disable-next-line new-cap
+      indexSize = geom.GetIndexDataSize()
+      // eslint-disable-next-line new-cap
+      const vertSize = geom.GetVertexDataSize()
+      if (indexSize === 0 || vertSize === 0 || vertSize % VERT_STRIDE !== 0) {
+        this.badGeometry.add(geomExpressID)
+        return null
+      }
+      vertCount = (vertSize / VERT_STRIDE) | 0
+      // eslint-disable-next-line new-cap
+      rawVerts = this.api.GetVertexArray(geom.GetVertexData(), vertCount * VERT_STRIDE)
+      // eslint-disable-next-line new-cap
+      rawIndices = this.api.GetIndexArray(geom.GetIndexData(), indexSize)
+    } catch (e) {
+      // conway's GEOMETRY_BUDGET_MB (conwayDirectIfcLoader.js) evicts the
+      // least-recently-used native geometry at each pump batch (conway#535).
+      // If eviction lands between the demand pump delivering this id and
+      // our copying it out here, embind throws "Cannot pass deleted object
+      // as a pointer of type IfcGeometry" from whichever of the calls
+      // above touches the freed wrapper. Cache it as bad (so no batch
+      // retries the same doomed id) and degrade to one skipped placement
+      // — never let it escape and take the whole batch with it
+      // (Sentry SHARE-1NK).
       this.badGeometry.add(geomExpressID)
+      this.warnBadRecord_(`geometry ${geomExpressID} fetch failed; skipping:`, e)
       return null
     }
-    // eslint-disable-next-line new-cap
-    const indexSize = geom.GetIndexDataSize()
-    // eslint-disable-next-line new-cap
-    const vertSize = geom.GetVertexDataSize()
-    if (indexSize === 0 || vertSize === 0 || vertSize % VERT_STRIDE !== 0) {
-      this.badGeometry.add(geomExpressID)
-      return null
-    }
-    const vertCount = (vertSize / VERT_STRIDE) | 0
-    // eslint-disable-next-line new-cap
-    const rawVerts = this.api.GetVertexArray(geom.GetVertexData(), vertCount * VERT_STRIDE)
-    // eslint-disable-next-line new-cap
-    const rawIndices = this.api.GetIndexArray(geom.GetIndexData(), indexSize)
     const geometry = localGeometry(rawVerts, rawIndices, vertCount)
     geometry.computeBoundingBox()
     const entry = {

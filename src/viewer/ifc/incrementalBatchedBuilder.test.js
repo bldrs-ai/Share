@@ -22,11 +22,22 @@ function unitTriangleVerts() {
 
 /**
  * @param {object} byGeomExpressId geomExpressID → {vertexData, indexData}
- * @return {object} mock Conway IfcAPI
+ * @param {object} [opts]
+ * @param {Set<number>} [opts.deletedGeomIds] ids whose GetGeometry call
+ *   throws the embind "deleted object" error, simulating a conway#535
+ *   budget eviction that lands between delivery and our reading it.
+ * @return {object} mock Conway IfcAPI. `GetGeometry` is a jest.fn so
+ *   tests can assert it isn't retried once an id lands in badGeometry.
  */
-function makeApi(byGeomExpressId) {
+function makeApi(byGeomExpressId, opts = {}) {
+  const deletedGeomIds = opts.deletedGeomIds ?? new Set()
   return {
-    GetGeometry(_modelID, geomExpressID) {
+    GetGeometry: jest.fn((_modelID, geomExpressID) => {
+      if (deletedGeomIds.has(geomExpressID)) {
+        // Matches the real embind wording (Sentry SHARE-1NK) so a
+        // message-sniffing fallback would also see the right shape.
+        throw new Error('Cannot pass deleted object as a pointer of type IfcGeometry')
+      }
       const g = byGeomExpressId[geomExpressID]
       if (!g) {
         return null
@@ -37,7 +48,7 @@ function makeApi(byGeomExpressId) {
         GetVertexDataSize: () => g.vertexData.length,
         GetIndexDataSize: () => g.indexData.length,
       }
-    },
+    }),
     GetVertexArray(ptr) {
       return byGeomExpressId[ptr].vertexData
     },
@@ -275,5 +286,62 @@ describe('IncrementalBatchedBuilder', () => {
     const {stats} = builder.finalize()
     expect(stats.skippedPlacedGeometries).toBe(1)
     expect(builder.hasContent()).toBe(true)
+  })
+
+  it('skips one budget-evicted geometry without dropping the rest of the batch, and never retries it (SHARE-1NK)', () => {
+    // conway's GEOMETRY_BUDGET_MB eviction (conwayDirectIfcLoader.js,
+    // conway#535) can free geometry 777's native asset between the demand
+    // pump delivering it and this call reading it, so GetGeometry throws
+    // embind's "Cannot pass deleted object..." for that one id while 999
+    // and 888 are unaffected. Before the fix this propagated out of
+    // resolveGeometry_, appendBatch caught it at the batch level (or, pre
+    // Sentry SHARE-1NK, ShareIfcLoader.js dropped the whole up-to-64-product
+    // batch into the preview fallback) -- either way the healthy placements
+    // in the SAME batch were lost too. They must survive now.
+    const api = makeApi(shapes, {deletedGeomIds: new Set([777])})
+    const builder = new IncrementalBatchedBuilder(api, 0)
+
+    expect(() => builder.appendBatch([
+      flatMesh(1, [{geomExpressID: 999, color: OPAQUE}]),
+      flatMesh(2, [{geomExpressID: 777, color: OPAQUE}]),
+      flatMesh(3, [{geomExpressID: 888, color: OPAQUE}]),
+    ])).not.toThrow()
+
+    // A later batch re-referencing the same evicted id must not retry the
+    // Conway call -- resolveGeometry_ caches it in badGeometry so a model
+    // with the eviction repeating across many products doesn't repeatedly
+    // fail the same doomed fetch.
+    expect(() => builder.appendBatch([
+      flatMesh(4, [{geomExpressID: 777, color: OPAQUE}]),
+    ])).not.toThrow()
+
+    const {stats} = builder.finalize()
+    expect(stats.instanceCount).toBe(2) // 999 and 888 only
+    expect(stats.skippedPlacedGeometries).toBe(2) // 777, once per batch it appeared in
+    expect(api.GetGeometry).toHaveBeenCalledTimes(3) // 999, 777 (once), 888 -- not 4
+  })
+
+  it('skips one unreadable FlatMesh without dropping the rest of the batch', () => {
+    // The same conway eviction can free a FlatMesh's own wrapper, not just
+    // the geometry it points to -- reading `.expressID` off a deleted
+    // vector element throws the same way. appendBatch must count and skip
+    // that ONE FlatMesh and still append the healthy ones around it.
+    const poisoned = {
+      get expressID() {
+        throw new Error('Cannot pass deleted object as a pointer of type FlatMesh')
+      },
+      geometries: [],
+    }
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+
+    expect(() => builder.appendBatch([
+      flatMesh(1, [{geomExpressID: 999, color: OPAQUE}]),
+      poisoned,
+      flatMesh(3, [{geomExpressID: 888, color: OPAQUE}]),
+    ])).not.toThrow()
+
+    const {stats} = builder.finalize()
+    expect(stats.instanceCount).toBe(2) // 999 and 888
+    expect(stats.skippedFlatMeshes).toBe(1)
   })
 })
