@@ -3,11 +3,11 @@ import debug, {WARN} from '../../utils/debug'
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
 import {
+  CoincidenceSet,
   DEFAULT_COLOR,
   INDICES_PER_TRIANGLE,
   OPAQUE_ALPHA,
   VERT_STRIDE,
-  coincidenceKey,
   coordinationOffsetFor,
   localGeometry,
 } from './flatMeshToBatchedModel'
@@ -90,9 +90,10 @@ export class IncrementalBatchedBuilder {
     this.failedThisBatch = new Set()
     // Running count backing warnBadRecord_'s console cap.
     this.badRecordWarnings = 0
-    // coincidenceKeys already appended, across all batches — drops exact
-    // duplicate placements that would z-fight (see coincidenceKey).
-    this.seenPlacements = new Set()
+    // Placement identities already appended, across all batches — drops
+    // exact duplicate placements that would z-fight (see CoincidenceSet).
+    // Load-time only: `finalize` releases it (conway#636).
+    this.seenPlacements = new CoincidenceSet()
     // Origin-recenter frame for georeferenced models (see
     // coordinationOffsetFor). `offset` is `undefined` until the first
     // placement decides it; then `[x,y,z]` (subtracted from every
@@ -241,6 +242,10 @@ export class IncrementalBatchedBuilder {
         parents.add(parent)
       }
     }
+    // The duplicate guard is load-time only and is at its maximum right here,
+    // at the end of the load — nothing reads it afterwards, so release it
+    // rather than retaining it for the life of the model (conway#636).
+    this.seenPlacements.clear()
     return {
       batches,
       stats: {
@@ -300,9 +305,16 @@ export class IncrementalBatchedBuilder {
       return
     }
     // Drop an exact coincident duplicate (same part + geometry + transform +
-    // colour): it would z-fight the one already appended. See coincidenceKey.
-    const dedupKey = coincidenceKey(parentExpressId, geomExpressID, matrix.elements, color)
-    if (this.seenPlacements.has(dedupKey)) {
+    // colour): it would z-fight the one already appended. See CoincidenceSet.
+    //
+    // The combined test-and-set runs on the STAGED matrix elements, after
+    // every Conway-boundary read and the geometry fetch above, so a
+    // boundary throw can never mark an identity as seen (codex P2 on
+    // Share#1798). Only the three.js tail below — writes into preallocated
+    // buffers and JS array pushes, which don't throw in practice — follows
+    // the mark; CoincidenceSet has no remove, so that residual is accepted
+    // rather than guarded with rollback machinery.
+    if (!this.seenPlacements.add(parentExpressId, geomExpressID, matrix.elements, color)) {
       this.totals.skippedCoincidentPlacements++
       return
     }
@@ -343,11 +355,6 @@ export class IncrementalBatchedBuilder {
     state.cursor++
     this.occurrenceId++
     this.totals.placements++
-    // Marked seen only once the append actually landed: a placement that
-    // died mid-append must not poison the dedup set, or the identical
-    // placement conway re-emits in a later batch would be dropped as a
-    // duplicate of an instance that was never drawn.
-    this.seenPlacements.add(dedupKey)
     if (isTransparent) {
       this.totals.transparentPlacements++
     }

@@ -178,6 +178,17 @@ describe('IncrementalBatchedBuilder', () => {
     expect(batches[0].instanceParents).toHaveLength(1)
   })
 
+  it('releases the duplicate guard at finalize', () => {
+    // The guard is load-time only and peaks exactly when the load ends, so
+    // holding it past finalize is pure retention (conway#636 measured
+    // 396.65 MB of it on D3D).
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([flatMesh(1, [{geomExpressID: 999, color: OPAQUE}])])
+    expect(builder.seenPlacements.size).toBe(1)
+    builder.finalize()
+    expect(builder.seenPlacements.size).toBe(0)
+  })
+
   it('keeps same-shape placements that differ in transform', () => {
     const moved = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5, 0, 0, 1]
     const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
