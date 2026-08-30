@@ -45,8 +45,13 @@ jest.mock('../search/SearchIndex')
 // wit-three-shape fake the rest of the CadView assertions expect).
 // Scoped to this test file because production unit tests for
 // `buildConwayIfcModel` need the real implementation.
+// `recapture` is part of the parse's return contract, not an optional
+// extra: since conway#638 the streaming path keeps no copy of the mesh
+// stream, so it — not `captured` — is what the degraded end-of-load builds
+// read. A double that omits it makes `ShareIfcLoader#parse` throw
+// "recapture is not a function" on the fallback path.
 jest.mock('../viewer/ifc/conwayDirectIfcLoader', () => ({
-  parseIfcWithConway: () => ({modelID: 0, captured: []}),
+  parseIfcWithConway: () => ({modelID: 0, captured: [], recapture: () => []}),
   decorateConwayDirectIfcModel: () => {},
 }))
 jest.mock('../viewer/ifc/buildConwayIfcModel', () => ({
