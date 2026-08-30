@@ -284,13 +284,13 @@ export function itemsMapFromOrderedRanges(ranges, opts = {}) {
  * is no prior walk to collide with.
  *
  * conway#657 closes this at the source for models opened with
- * `STREAMING_CONSUMER` (which `conwayDirectIfcLoader` now declares on every
- * deferred open): there is no cache for the walk to re-push into, so
- * conway's own re-walk clears and rebuilds instead of appending and the
- * second call returns what the first did. It stays true on the pinned
- * engine and on every non-streaming open, so this entry point is not going
- * away — but a doubling seen after the pin bump is a bug rather than the
- * documented behaviour.
+ * `STREAMING_CONSUMER` (which `conwayDirectIfcLoader` declares on every
+ * deferred open, and which this pin now carries): there is no cache for the
+ * walk to re-push into, so conway's own re-walk clears and rebuilds instead
+ * of appending and the second call returns what the first did. Doubling
+ * still happens on every non-streaming open, so this entry point is not
+ * going away — but a doubling seen on a `STREAMING_CONSUMER` open is now a
+ * bug rather than the documented behaviour.
  *
  * @param {object|Array} flatMeshes FlatMesh source (size()/get(i) or Array)
  * @param {object} api Conway-compatible IfcAPI (needs GetGeometry)

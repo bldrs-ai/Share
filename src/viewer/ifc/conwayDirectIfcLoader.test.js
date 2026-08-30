@@ -392,10 +392,10 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       }
 
       it('declares STREAMING_CONSUMER on the deferred open', async () => {
-        // Inert on the pinned engine (an unknown setting is dropped); after
-        // the pin bumps past conway#657 it is what stops conway retaining
-        // the other two spines. Share must send it either way — the two
-        // halves land independently.
+        // Live on this pin (conway#657, 1.1578.666-g39d59784): this is what
+        // stops conway retaining the other two spines. Jest mocks the
+        // engine, so this test only asserts Share sends the setting — the
+        // engine-side contract is verified against the real pin separately.
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(10)
         await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
@@ -450,12 +450,12 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
 
       it('retains the stream on a WINDOWED open, where re-extraction throws', async () => {
         // Verified against the pinned engine
-        // (compiled/src/compat/web-ifc/ifc_api_proxy_ifc.js:1482):
+        // (compiled/src/compat/web-ifc/ifc_api_proxy_ifc.js:1527):
         // `streamAllMeshes` on a deferred model drains through the
         // SYNCHRONOUS `ExtractGeometryBatch`, which refuses a windowed
         // source outright. conway#657 does not change that — its re-walk
-        // hangs off the same drain — so there is nothing to re-extract with
-        // here and the contents must be kept.
+        // (`recaptureWholeModel_`) hangs off the same drain — so there is
+        // nothing to re-extract with here and the contents must be kept.
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeWindowedDemandAPI(20)
         ifcAPI.StreamAllMeshes = jest.fn(() => {

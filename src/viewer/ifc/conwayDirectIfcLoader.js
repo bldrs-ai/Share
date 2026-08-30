@@ -169,11 +169,10 @@ export async function parseIfcWithConway(
       // pointers, because the other holders keep the 475 MB graph alive.
       // This is the Share half of that; conway's is the flag's other end.
       //
-      // Ignored as an unknown key by the pinned engine (verified: no
-      // `STREAMING_CONSUMER` in node_modules/@bldrs-ai/conway), so it is
-      // inert until the pin bumps past conway#657 and then activates the
-      // no-retention contract with no further change here. Ordering
-      // against that bump therefore does not matter.
+      // Live on this pin (conway#657 landed at 1.1578.666-g39d59784):
+      // conway now honours `STREAMING_CONSUMER` and keeps no reference to
+      // the pumped stream, so the no-retention contract above is in effect
+      // with no further change needed here.
       STREAMING_CONSUMER: true,
     }
     if (onPreviewMesh) {
@@ -231,11 +230,11 @@ export async function parseIfcWithConway(
     //      drains through the SYNCHRONOUS `ExtractGeometryBatch` — and that
     //      throws outright on a windowed source ("ExtractGeometryBatch is
     //      synchronous and cannot page a windowed source", pinned engine
-    //      `compiled/src/compat/web-ifc/ifc_api_proxy_ifc.js:1509`, reached
-    //      from `streamAllMeshes`' deferred drain loop at `:2632`).
+    //      `compiled/src/compat/web-ifc/ifc_api_proxy_ifc.js:1527`, reached
+    //      from `streamAllMeshes`' deferred drain loop at `:2771`).
     //      conway#657 does
-    //      not change that: its re-walk hangs off the same drain, and there
-    //      is no async whole-model entry point on either version.
+    //      not change that: its re-walk (`recaptureWholeModel_`) hangs off
+    //      the same drain, and there is no async whole-model entry point.
     //      `ExtractGeometryBatchAsync` cannot substitute — after a full
     //      drain its cursor is exhausted and there is no public rewind.
     //      So on a windowed open there is nothing to re-extract WITH, and
@@ -392,7 +391,8 @@ export async function parseIfcWithConway(
       // frame — silently mis-framed geometry, worse than a refusal; and
       // `getFlatMesh` is per-entity and would need an ID enumeration this
       // loader does not have. conway#657 routes the first and third through
-      // `streamAllMeshes` so they refuse properly after the pin bump.
+      // `streamAllMeshes`, and this pin carries that fix, so they now refuse
+      // properly instead of silently mis-framing.
       //
       // No onMeshBatch here: extraction is already complete, so a
       // preview would just double the geometry conversion right before
