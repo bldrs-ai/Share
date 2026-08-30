@@ -20,6 +20,19 @@
  * it (`BLDRS_GLB_BATCHED_SCHEMA_VERSION` below) — deliberately, since that
  * is the slot most users actually read. Nothing extra to do here; the note
  * exists so the coupling is visible from where the bump gets written.
+ * 0.17.0 — retires artifacts baked by pre-1.1585 engines, releasing the
+ *         #641-epic geometry + shading train (conway#666/#668/#674/#676:
+ *         wrong-sheet inverse-solve recovery, ribbon-sweep chain side,
+ *         analytic vertex normals + normals in the GLB, v-monotone
+ *         decomposition). Geometry AND shading normals are baked into the
+ *         artifact and nothing in the cache key identifies the engine, so
+ *         without this bump a returning user's cache hit bypasses conway
+ *         entirely and keeps serving the damaged faces and mis-grouped
+ *         seam normals these releases fix — cache-miss users see the new
+ *         output, cache-hit users never do. Same failure shape and same
+ *         remedy as 0.15.0/0.16.0; found by review on the release PR
+ *         (Share#1797). Older 0.16.0 artifacts read as miss; next miss
+ *         rewrites with the new engine's output.
  * 0.16.0 — retires artifacts baked in the old coordination frame. conway
  *         1.501.1426 (bldrs-ai/conway#501, issue conway#87) stopped anchoring
  *         `COORDINATE_TO_ORIGIN` on whichever element a file happens to
@@ -161,7 +174,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.16.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.17.0'
 
 
 /**
