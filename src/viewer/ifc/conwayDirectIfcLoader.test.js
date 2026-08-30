@@ -471,6 +471,46 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         // point that would throw.
         expect(result.recapture()).toHaveLength(20)
         expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
+        // Counter fidelity is not a streaming-path-only concern: the log
+        // must report real meshes on the retained branch too, where
+        // `captured.length` would happen to agree and so hide a regression
+        // in the counter itself.
+        const pumpLine = infoSpy.mock.calls
+          .map(([line]) => line)
+          .find((line) => typeof line === 'string' && line.includes('demand pump:'))
+        expect(pumpLine).toContain('meshes=20')
+        expect(pumpLine).toContain('retained=yes')
+      })
+
+      it('surfaces the engine refusal when a DEFERRED windowed model pumps nothing', async () => {
+        // Pins CURRENT behaviour, which is a pre-existing defect this
+        // change neither introduces nor fixes.
+        //
+        // `pumpedMeshes === 0` does not imply conway fell back to a classic
+        // open: a genuinely deferred model with nothing to extract (a
+        // properties-only IFC, or one whose every product failed geometry)
+        // exits the pump loop the same way, because it breaks on
+        // `remaining === 0 && extracted === 0` whatever the reason. The
+        // sentinel's one-shot `StreamAllMeshes` then takes conway's
+        // DEFERRED branch, which drains through the synchronous
+        // `ExtractGeometryBatch` and refuses a windowed source.
+        //
+        // The sentinel it replaced (`captured.length === 0`) selected the
+        // same models and called the same method, so this is byte-equivalent
+        // to main. Pinned red-to-green for whoever fixes it engine-side.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeWindowedDemandAPI(0)
+        ifcAPI.StreamAllMeshes = jest.fn(() => {
+          throw new Error(
+            'ExtractGeometryBatch is synchronous and cannot page a windowed source')
+        })
+        const file = new Blob([new Uint8Array([1, 2, 3, 4])])
+        await expect(parseIfcWithConway(file, ifcAPI, undefined, undefined, jest.fn()))
+          .rejects.toThrow(/cannot page a windowed source/)
+        // It really did reach the sentinel rather than failing earlier.
+        expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('demand pump produced no batches'))
       })
 
       it('drops the stream when a windowed open falls back to a buffered one', async () => {

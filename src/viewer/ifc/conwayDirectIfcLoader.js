@@ -364,11 +364,34 @@ export async function parseIfcWithConway(
       //
       // Retention is unconditional here regardless of `retainCaptured`:
       // this branch means the streaming delivery produced nothing, so
-      // `captured` is once again the only delivery. The model is also
-      // non-deferred by construction, so `StreamAllMeshes` takes conway's
-      // classic walk over live natives rather than the deferred drain —
-      // which is why it works on a windowed source where `recapture` below
-      // could not.
+      // `captured` is once again the only delivery.
+      //
+      // Where that leaves `StreamAllMeshes`, stated precisely because the
+      // obvious shorthand is wrong. When conway really did fall back to a
+      // classic open, the model is non-deferred and this takes conway's
+      // classic scene walk over live natives — which works on a windowed
+      // source where `recapture` below could not, because it never touches
+      // the deferred drain. But `pumpedMeshes === 0` does NOT imply
+      // non-deferred: the pump loop exits on `remaining === 0 &&
+      // extracted === 0` whatever the reason, so a genuinely DEFERRED model
+      // with nothing to extract (a properties-only IFC, or one whose every
+      // product failed geometry) lands here too. On a windowed source that
+      // model's `StreamAllMeshes` takes the deferred branch and throws
+      // "cannot page a windowed source" out of the load. That is a
+      // PRE-EXISTING defect, not one this change introduces — the sentinel
+      // it replaced (`captured.length === 0`) selected exactly the same
+      // models and called exactly the same method — and it is tracked
+      // separately rather than fixed here.
+      //
+      // Nor is there a whole-model route around it. The three entry points
+      // that do NOT throw on a windowed deferred model are all worse:
+      // `loadAllGeometry` and `streamAllMeshesWithTypes` have no deferred
+      // branch at all and seed coordination from `model[5]`, which a
+      // deferred open never writes, so every instance lands in an identity
+      // frame — silently mis-framed geometry, worse than a refusal; and
+      // `getFlatMesh` is per-entity and would need an ID enumeration this
+      // loader does not have. conway#657 routes the first and third through
+      // `streamAllMeshes` so they refuse properly after the pin bump.
       //
       // No onMeshBatch here: extraction is already complete, so a
       // preview would just double the geometry conversion right before
@@ -445,6 +468,30 @@ export async function parseIfcWithConway(
  * were dropped it re-extracts at the moment of failure instead, which is
  * the whole point of dropping: 475 MB is not worth holding against a
  * fallback that almost never runs.
+ *
+ * **What comes back is equivalent, not identical**, and both differences
+ * matter to a reader comparing it against the pump's own output:
+ *
+ *   1. **Grouping.** On a deferred model the pinned `StreamAllMeshes`
+ *      serves per-entity FULL FlatMeshes out of conway's `meshMap`, not the
+ *      per-batch DELTA FlatMeshes the pump delivered. Same placement set,
+ *      different bundling. Benign for both readers here — the merged and
+ *      batched builds iterate placements and do not care how they arrive —
+ *      but a future consumer that keyed on batch identity would.
+ *   2. **Completeness under a budget.** `GEOMETRY_BUDGET_MB` is set on this
+ *      path, and once conway has evicted anything, its whole-model serve
+ *      filters out placements whose natives were freed. So on a model big
+ *      enough to evict, this returns a strict SUBSET of what was pumped.
+ *
+ * That second one is an improvement over what it replaces, not a new loss.
+ * Before this change the degraded builds ran over the RETAINED deltas,
+ * which still name evicted geometry, and the pinned `getGeometry` clones
+ * without guarding (`geometryObject.clone()` on a freed native) — so an
+ * evicted model took an embind abort out of the load, the shape Sentry
+ * SHARE-1NK records. The filtered re-extraction renders a partial model
+ * instead. The residual is honest: retention is kept on the windowed path,
+ * so that abort stays reachable there until conway grows an async
+ * whole-model re-read.
  *
  * Memoised because the two degraded builds are consecutive
  * (`buildBatchedConwayModel` then `buildConwayIfcModel`), and a second
