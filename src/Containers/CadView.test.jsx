@@ -45,8 +45,29 @@ jest.mock('../search/SearchIndex')
 // wit-three-shape fake the rest of the CadView assertions expect).
 // Scoped to this test file because production unit tests for
 // `buildConwayIfcModel` need the real implementation.
+// `recapture` is part of the parse's return contract, not an optional
+// extra: since conway#638 the streaming path keeps no copy of the mesh
+// stream, so it — not `captured` — is what the degraded end-of-load builds
+// read. A double that omits it makes `ShareIfcLoader#parse` throw
+// "recapture is not a function" on the fallback path.
+//
+// ASYNC, matching the real seam (conway#660): `recapture()` returns a
+// Promise on every path, because a windowed re-extraction pages bytes off
+// the byte store and cannot be synchronous. The sync form passed only
+// because `await` normalises a plain array.
+//
+// Stated precisely, because the obvious stronger claim is false: making
+// this double async does NOT give this file a dropped-`await` detector.
+// Measured — with the `await` removed from the merged degraded build, this
+// whole file stays green either way, because the `buildConwayIfcModel`
+// double below ignores its argument entirely and hands back the harness
+// singleton. What guards that call site is
+// `ShareIfcLoader.degraded.test.js`, whose builder doubles assert on the
+// meshes they receive. This double is here to stop a fixture from
+// contradicting the contract it stands in for, not to catch a regression.
 jest.mock('../viewer/ifc/conwayDirectIfcLoader', () => ({
-  parseIfcWithConway: () => ({modelID: 0, captured: []}),
+  // eslint-disable-next-line require-await
+  parseIfcWithConway: () => ({modelID: 0, captured: [], recapture: async () => []}),
   decorateConwayDirectIfcModel: () => {},
 }))
 jest.mock('../viewer/ifc/buildConwayIfcModel', () => ({

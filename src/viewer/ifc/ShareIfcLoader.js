@@ -55,15 +55,23 @@ import debug, {DEBUG, WARN, isLogEnabled} from '../../utils/debug'
  *
  * @param {object} ifcAPI Conway IfcAPI bound to the model
  * @param {number} modelID
- * @param {Array} captured FlatMeshes captured during the parse
+ * @param {Function} getCaptured async thunk returning the parse's whole
+ *   FlatMesh stream. A thunk rather than the array because on the streaming
+ *   path (conway#638) producing it costs a whole-model re-extraction, and
+ *   that must not be paid by the loads this gate turns away; async because
+ *   on a windowed source that re-extraction pages the window through
+ *   conway#660's `StreamAllMeshesAsync` (see `makeRecapture`).
  * @param {boolean} [force] log at info level regardless of verbosity
+ * @return {Promise<void>} resolves once the probe has logged or been gated
+ *   away — awaited by the caller only to keep the load log's line order
+ *   deterministic, not because anything depends on the result
  */
-function logInstancedModelStats(ifcAPI, modelID, captured, force = false) {
+async function logInstancedModelStats(ifcAPI, modelID, getCaptured, force = false) {
   if (!force && !isLogEnabled(DEBUG)) {
     return
   }
   try {
-    const {stats} = flatMeshToInstancedModel(captured, ifcAPI, modelID)
+    const {stats} = flatMeshToInstancedModel(await getCaptured(), ifcAPI, modelID)
     const reduction = stats.vertexReductionRatio.toFixed(2)
     const line =
       `[instancedMeshes] modelID=${modelID} — ` +
@@ -90,6 +98,9 @@ function logInstancedModelStats(ifcAPI, modelID, captured, force = false) {
  * @typedef {object} ConwayIfcAPI Conway-compatible IfcAPI handle.
  * @property {Function} OpenModel Open an IFC model from a Uint8Array.
  * @property {Function} StreamAllMeshes Stream FlatMeshes for a modelID.
+ * @property {Function} [StreamAllMeshesAsync] conway#660: the async twin,
+ *   and the only whole-model ask a windowed deferred model can answer.
+ *   Absent on pins predating it — feature-detect, never assume.
  * @property {Function} GetCoordinationMatrix Get the coord matrix.
  * @property {Function} getStatistics Per-load load statistics.
  * @property {Function} getConwayVersion Conway engine version string.
@@ -411,7 +422,21 @@ export default class ShareIfcLoader {
         }
       }
 
-      const {modelID, captured} =
+      // `recapture()`, not `captured`, is what the degraded builds below
+      // read. On the streaming path the parse keeps no copy of the FlatMesh
+      // stream — `onMeshBatch` above already assembled each batch into the
+      // durable model — so the fallbacks re-extract at the moment of
+      // failure rather than the parse holding 475 MB against the chance of
+      // one (conway#638). It is the identity where the stream was retained,
+      // which after conway#660 is only "no onMeshBatch" plus a windowed open
+      // on an engine pin without `StreamAllMeshesAsync`.
+      //
+      // ALWAYS AWAIT IT. The accessor returns a Promise on every path
+      // (`makeRecapture` explains why it is uniform rather than a union):
+      // on a windowed source the re-extraction pages the byte window, so it
+      // cannot be synchronous, and a missed `await` would feed a Promise to
+      // a builder that iterates placements — an empty model, silently.
+      const {modelID, recapture} =
         await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh)
 
       session.beginAssembly()
@@ -422,7 +447,7 @@ export default class ShareIfcLoader {
       // Slice B1: the incrementally assembled batches only need
       // decoration — the group already on screen becomes the durable
       // model. Fallback on any error: remove the partial group and run
-      // the end-of-load builds below from `captured` as before.
+      // the end-of-load builds below off `recapture()` as before.
       if (builder !== null && builder.hasContent()) {
         try {
           const incremental = builder.finalize()
@@ -445,7 +470,7 @@ export default class ShareIfcLoader {
       // path on any construction error so the flag can never break a load.
       if (ifcModel === undefined && isFeatureEnabled('batchedMesh')) {
         try {
-          const batched = buildBatchedConwayModel(captured, ifcAPI, modelID, {scene})
+          const batched = buildBatchedConwayModel(await recapture(), ifcAPI, modelID, {scene})
           ifcModel = batched.model
           buildStats = batched.stats
         } catch (e) {
@@ -453,7 +478,7 @@ export default class ShareIfcLoader {
         }
       }
       if (ifcModel === undefined) {
-        const merged = buildConwayIfcModel(captured, ifcAPI, modelID)
+        const merged = buildConwayIfcModel(await recapture(), ifcAPI, modelID)
         ifcModel = merged.mesh
         buildStats = merged.stats
         decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
@@ -555,15 +580,27 @@ export default class ShareIfcLoader {
       // Toggle via `?feature=ifcItemsMapParity`. See
       // design/new/viewer-replacement.md §3b.ii for the per-vertex-vs-
       // per-instance story this check exposes.
+      //
+      // Both this and the instancing analysis below read the WHOLE mesh
+      // stream, which the streaming path no longer retains — so they go
+      // through `recapture()`, and on a dropped stream that is a real extra
+      // whole-model read. Deliberate: they are opt-in diagnostics, the cost
+      // lands only on the session that asked for one, and the alternative
+      // (reading the empty array) would report zeros that look like a
+      // finding. Note that on a live model this second read is exactly the
+      // conway-side double-count `IfcItemsMap.js` documents, so treat a
+      // parity diff taken this way with that caveat.
       if (isFeatureEnabled('ifcItemsMapParity')) {
-        runIfcItemsMapParityCheck(ifcAPI, ifcModel, captured)
+        runIfcItemsMapParityCheck(ifcAPI, ifcModel, await recapture())
       }
       // Instanced-rendering analysis: groups the captured stream by shared
       // `geometryExpressID` and reports the GPU-instancing draw-call +
       // vertex-memory delta. Logged under verbose normally; forced to info
       // level when `?feature=batchedMesh` is on so the eval shows the
-      // numbers alongside what just rendered as a BatchedMesh.
-      logInstancedModelStats(ifcAPI, modelID, captured, isFeatureEnabled('batchedMesh'))
+      // numbers alongside what just rendered as a BatchedMesh. Passed as a
+      // thunk so the recapture happens only if the gate inside actually
+      // opens.
+      await logInstancedModelStats(ifcAPI, modelID, recapture, isFeatureEnabled('batchedMesh'))
       // Always-on integration-boundary log. `conwayDirect.spec.ts`
       // (and the deploy-preview smoke checks) gate on `[conwayDirect]
       // parsed modelID=…` firing — it's the single observable signal

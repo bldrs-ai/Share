@@ -74,41 +74,218 @@ const COINCIDENCE_QUANT = 1e4
 const MAT4_LENGTH = 16
 
 
+/** Int32 words that make up a placement's identity: 2 ids + 16 matrix + 4 colour. */
+const COINCIDENCE_WORDS = 22
+
 /**
- * Stable identity key for a placement: parent product + geometry + its
- * (quantized) world transform + colour. Two placements with the same key are
- * the SAME geometry drawn the SAME way at the SAME spot — a coincident
- * duplicate that renders as z-fighting (two coplanar `DoubleSide` surfaces
- * fighting per pixel, the winner flipping as the camera moves). Conway's
- * rel-aggregates re-extraction pass replaces a cut part's geometry under its
- * existing `geometryExpressID` but *appends* a second placement instead of
- * replacing the first, so georeferenced aggregate models (e.g. romana/DOWA)
- * emit hundreds of these. De-duplicating on this key drops the redundant draw;
- * the proper fix is in the conway pass, this is the belt-and-suspenders guard.
+ * Scratch for one placement's identity words, reused across every call —
+ * the dedupe runs once per placement (562k times on a large model), so it
+ * must not allocate. Single-threaded and consumed before `add` returns, so
+ * one module-level buffer is safe.
+ */
+const coincidenceScratch = new Int32Array(COINCIDENCE_WORDS)
+
+/**
+ * Fingerprint seeds/multipliers. Three independently seeded FNV-1a-style
+ * streams over the same words; combining two of them gives the 53-bit
+ * secondary fingerprint (see CoincidenceSet).
+ */
+const FP_SEED_A = 0x811c9dc5
+const FP_SEED_B = 0x9e3779b9
+const FP_SEED_C = 0x7feb352d
+const FP_MUL_A = 0x01000193
+const FP_MUL_B = 0xcc9e2d51
+const FP_MUL_C = 0x1b873593
+
+/** Width of each hash stream. */
+const HASH_BITS = 32
+
+/** Rotate-left applied after each word so word *order* changes the hash. */
+const FP_ROTATE = 13
+const FP_ROTATE_BACK = HASH_BITS - FP_ROTATE
+
+/** Bits of hash C packed under hash B to make the 53-bit secondary. 32 + 21 = 53. */
+const FP_LOW_BITS = 21
+const FP_LOW_SHIFT = HASH_BITS - FP_LOW_BITS
+const FP_B_SCALE = 2 ** FP_LOW_BITS
+
+/** Murmur3's published fmix32 avalanche schedule (shift, multiply, shift, …). */
+const FMIX_SHIFT_A = 16
+const FMIX_MUL_A = 0x85ebca6b
+const FMIX_SHIFT_B = 13
+const FMIX_MUL_B = 0xc2b2ae35
+
+
+/**
+ * Murmur3's 32-bit finalizer: avalanches the accumulator so neighbouring
+ * inputs (adjacent express ids, matrices differing in one quantized unit)
+ * land far apart in the output.
+ *
+ * @param {number} h 32-bit accumulator
+ * @return {number} unsigned 32-bit
+ */
+function fmix32(h) {
+  let x = h
+  x ^= x >>> FMIX_SHIFT_A
+  x = Math.imul(x, FMIX_MUL_A)
+  x ^= x >>> FMIX_SHIFT_B
+  x = Math.imul(x, FMIX_MUL_B)
+  x ^= x >>> FMIX_SHIFT_A
+  return x >>> 0
+}
+
+
+/**
+ * One hash stream over the identity words.
+ *
+ * @param {Int32Array} words
+ * @param {number} seed
+ * @param {number} mul odd 32-bit multiplier
+ * @return {number} unsigned 32-bit
+ */
+function hashWords(words, seed, mul) {
+  let h = seed
+  for (let i = 0; i < COINCIDENCE_WORDS; i++) {
+    h = Math.imul(h ^ words[i], mul)
+    h = (h << FP_ROTATE) | (h >>> FP_ROTATE_BACK)
+  }
+  return fmix32(h ^ COINCIDENCE_WORDS)
+}
+
+
+/**
+ * A placement's identity as 22 int32 words: parent product + geometry +
+ * (quantized) world transform + colour, written into the shared scratch.
+ *
+ * `| 0` collapses -0 and +0 to the same word so a signed-zero component
+ * can't split a duplicate — the same collapse the old string key relied on.
+ * (The `Int32Array` store would coerce identically; the explicit `| 0` keeps
+ * that requirement visible where it is depended on rather than implicit in
+ * the buffer's type.)
+ * It also folds a missing `parentExpressId` to 0, which is harmless: the
+ * geometry, transform and colour still discriminate, and a placement with no
+ * parent id has no parent identity to tell it apart by.
+ *
+ * @param {number} parentExpressId
+ * @param {number} geometryExpressId
+ * @param {Array<number>} matrix 16-element flatTransformation
+ * @param {?{x: number, y: number, z: number, w: number}} color
+ * @return {Int32Array} `coincidenceScratch`, valid until the next call
+ */
+function coincidenceWords(parentExpressId, geometryExpressId, matrix, color) {
+  const words = coincidenceScratch
+  words[0] = parentExpressId | 0
+  words[1] = geometryExpressId | 0
+  for (let i = 0; i < MAT4_LENGTH; i++) {
+    words[2 + i] = Math.round(matrix[i] * COINCIDENCE_QUANT) | 0
+  }
+  const c = color ?? DEFAULT_COLOR
+  words[18] = Math.round(c.x * COINCIDENCE_QUANT) | 0
+  words[19] = Math.round(c.y * COINCIDENCE_QUANT) | 0
+  words[20] = Math.round(c.z * COINCIDENCE_QUANT) | 0
+  words[21] = Math.round(c.w * COINCIDENCE_QUANT) | 0
+  return words
+}
+
+
+/**
+ * The set of placements already emitted, keyed on placement identity: parent
+ * product + geometry + its (quantized) world transform + colour. Two
+ * placements with the same identity are the SAME geometry drawn the SAME way
+ * at the SAME spot — a coincident duplicate that renders as z-fighting (two
+ * coplanar `DoubleSide` surfaces fighting per pixel, the winner flipping as
+ * the camera moves). Conway's rel-aggregates re-extraction pass replaces a cut
+ * part's geometry under its existing `geometryExpressID` but *appends* a
+ * second placement instead of replacing the first, so georeferenced aggregate
+ * models (e.g. romana/DOWA) emit hundreds of these. Dropping the repeat kills
+ * the redundant draw; the proper fix is in the conway pass, this is the
+ * belt-and-suspenders guard.
  *
  * Colour is part of the identity so a genuinely distinct draw of the same
  * shape at the same spot in a different colour (e.g. an opaque solid plus a
  * glass overlay) is kept — only an EXACT duplicate is dropped.
  *
- * @param {number} parentExpressId
- * @param {number} geometryExpressId
- * @param {Array<number>} matrix 16-element flatTransformation
- * @param {{x: number, y: number, z: number, w: number}} color
- * @return {string}
+ * **Why a fingerprint and not a string key** (conway#636): the identity used
+ * to be a `:`-joined string built with seventeen successive `key += …`. On a
+ * 562,351-placement model that measured **739 bytes per entry / 396.65 MB**
+ * for ~96 B of content — the construction intermediates, not the content,
+ * were the cost, and they survived forced full collections. Here each entry
+ * is two numbers in a `Map` and the hashing allocates nothing at all, which
+ * is tens of bytes per entry instead of 739.
+ *
+ * **Why that is safe.** A collision here silently deletes real geometry, so
+ * 32 bits (a birthday collision is near-certain at 562k entries) is not
+ * enough. Each placement gets **85 bits**: a 32-bit primary hash as the `Map`
+ * key, and a 53-bit secondary (a second 32-bit hash scaled by 2^21 plus the
+ * top 21 bits of a third — 53 bits is the exact-integer ceiling for a JS
+ * number) as the value. Entries sharing a primary chain into an array and are
+ * separated by the secondary, so only a full 85-bit match dedupes. The
+ * birthday bound at n = 562,351 is n²/2 / 2^85 ≈ **4e-15** per load — many
+ * orders of magnitude below the chance of the machine getting the arithmetic
+ * wrong. The three streams are independently seeded with distinct odd
+ * multipliers and separately avalanched, which is the standard double-hashing
+ * construction; they are not *provably* independent, but nothing in the input
+ * (adjacent express ids, matrices differing by one quantized unit) correlates
+ * them.
  */
-export function coincidenceKey(parentExpressId, geometryExpressId, matrix, color) {
-  // `| 0` collapses -0 and +0 to the same token so a signed-zero component
-  // can't split a duplicate.
-  let key = `${parentExpressId}:${geometryExpressId}`
-  for (let i = 0; i < MAT4_LENGTH; i++) {
-    key += `:${Math.round(matrix[i] * COINCIDENCE_QUANT) | 0}`
+export class CoincidenceSet {
+  /** Starts empty; one instance lives for the duration of one model load. */
+  constructor() {
+    // primary hash → secondary fingerprint, or an array of them when
+    // distinct placements collide on the primary (~37 expected pairs at 562k).
+    this.byPrimary_ = new Map()
+    /** Distinct placements held. */
+    this.size = 0
   }
-  const c = color ?? DEFAULT_COLOR
-  key += `:${Math.round(c.x * COINCIDENCE_QUANT) | 0}` +
-    `:${Math.round(c.y * COINCIDENCE_QUANT) | 0}` +
-    `:${Math.round(c.z * COINCIDENCE_QUANT) | 0}` +
-    `:${Math.round(c.w * COINCIDENCE_QUANT) | 0}`
-  return key
+
+
+  /**
+   * Record a placement, reporting whether it is new.
+   *
+   * @param {number} parentExpressId
+   * @param {number} geometryExpressId
+   * @param {Array<number>} matrix 16-element flatTransformation
+   * @param {?{x: number, y: number, z: number, w: number}} color
+   * @return {boolean} true when newly added, false when an exact duplicate
+   *   of a placement already recorded (the caller should drop it)
+   */
+  add(parentExpressId, geometryExpressId, matrix, color) {
+    const words = coincidenceWords(parentExpressId, geometryExpressId, matrix, color)
+    const primary = hashWords(words, FP_SEED_A, FP_MUL_A)
+    const secondary =
+      (hashWords(words, FP_SEED_B, FP_MUL_B) * FP_B_SCALE) +
+      (hashWords(words, FP_SEED_C, FP_MUL_C) >>> FP_LOW_SHIFT)
+    const existing = this.byPrimary_.get(primary)
+    if (existing === undefined) {
+      this.byPrimary_.set(primary, secondary)
+      this.size++
+      return true
+    }
+    if (typeof existing === 'number') {
+      if (existing === secondary) {
+        return false
+      }
+      this.byPrimary_.set(primary, [existing, secondary])
+      this.size++
+      return true
+    }
+    if (existing.includes(secondary)) {
+      return false
+    }
+    existing.push(secondary)
+    this.size++
+    return true
+  }
+
+
+  /**
+   * Drop every entry. The guard is load-time only — no consumer reads it —
+   * so the builder releases it once the model is assembled (conway#636).
+   */
+  clear() {
+    this.byPrimary_.clear()
+    this.size = 0
+  }
 }
 
 
@@ -236,7 +413,8 @@ export function localGeometry(rawVerts, rawIndices, vertCount) {
 function collectGroups(flatMeshes, api, modelID) {
   const groups = new Map()
   const bad = new Set() // geomExpressIDs that resolved to no usable geometry
-  const seen = new Set() // coincidenceKeys already placed (drop exact overlaps)
+  // Placement identities already emitted — drops exact overlaps (see CoincidenceSet).
+  const seen = new CoincidenceSet()
   const totals = {
     placements: 0, transparentPlacements: 0, vertexCount: 0, indexCount: 0,
     skippedFlatMeshes: 0, skippedPlacedGeometries: 0, skippedCoincidentPlacements: 0,
@@ -306,13 +484,11 @@ function collectGroups(flatMeshes, api, modelID) {
       }
       const color = placed.color ?? DEFAULT_COLOR
       // Drop an exact coincident duplicate (same part + geometry + transform +
-      // colour): it would z-fight the one already placed. See coincidenceKey.
-      const dedupKey = coincidenceKey(parentExpressId, geomExpressID, placed.flatTransformation, color)
-      if (seen.has(dedupKey)) {
+      // colour): it would z-fight the one already placed. See CoincidenceSet.
+      if (!seen.add(parentExpressId, geomExpressID, placed.flatTransformation, color)) {
         totals.skippedCoincidentPlacements++
         return
       }
-      seen.add(dedupKey)
       if (totals.coordOffset === undefined) {
         totals.coordOffset = coordinationOffsetFor(placed.flatTransformation)
       }

@@ -1,12 +1,13 @@
 import {BatchedMesh, Box3, DoubleSide, Group, Matrix4, Vector4} from 'three'
+import debug, {WARN} from '../../utils/debug'
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
 import {
+  CoincidenceSet,
   DEFAULT_COLOR,
   INDICES_PER_TRIANGLE,
   OPAQUE_ALPHA,
   VERT_STRIDE,
-  coincidenceKey,
   coordinationOffsetFor,
   localGeometry,
 } from './flatMeshToBatchedModel'
@@ -21,6 +22,11 @@ const INITIAL_INSTANCES = 1024
 const INITIAL_VERTICES = 1 << 18
 const INITIAL_INDICES = 1 << 19
 const GROWTH = 2
+// Console cap for per-record skip warnings (see warnBadRecord_): a model
+// with many budget-evicted geometries (conway#535) shouldn't flood the
+// console one line per id -- the load report's skipped* counts already
+// carry the full total (Sentry SHARE-1NK).
+const MAX_BAD_RECORD_WARNINGS = 5
 /* eslint-enable no-magic-numbers */
 
 
@@ -72,10 +78,22 @@ export class IncrementalBatchedBuilder {
     // idByBatch: Map(batchState → geometryId)} — geometry fetched from
     // Conway exactly once per model.
     this.geometryCache = new Map()
+    // Permanently unusable shapes: conway handed back nothing, or handed
+    // back a degenerate buffer (zero-size, or a vertex size that isn't a
+    // whole number of VERT_STRIDE verts). Those are properties of the
+    // SHAPE, so no later batch can do better — never retried.
     this.badGeometry = new Set()
-    // coincidenceKeys already appended, across all batches — drops exact
-    // duplicate placements that would z-fight (see coincidenceKey).
-    this.seenPlacements = new Set()
+    // Ids whose Conway-boundary fetch THREW during the batch currently
+    // being appended (GEOMETRY_BUDGET eviction, see resolveGeometry_'s
+    // catch). Unlike badGeometry this is transient: cleared at the top of
+    // every appendBatch so the next batch retries.
+    this.failedThisBatch = new Set()
+    // Running count backing warnBadRecord_'s console cap.
+    this.badRecordWarnings = 0
+    // Placement identities already appended, across all batches — drops
+    // exact duplicate placements that would z-fight (see CoincidenceSet).
+    // Load-time only: `finalize` releases it (conway#636).
+    this.seenPlacements = new CoincidenceSet()
     // Origin-recenter frame for georeferenced models (see
     // coordinationOffsetFor). `offset` is `undefined` until the first
     // placement decides it; then `[x,y,z]` (subtracted from every
@@ -112,20 +130,66 @@ export class IncrementalBatchedBuilder {
    * on per-record problems — mirrors the one-shot builder's skip
    * accounting.
    *
+   * Both loop bodies below are guarded individually rather than once
+   * around the whole method: conway's GEOMETRY_BUDGET eviction
+   * (conwayDirectIfcLoader.js, conway#535) can free a native asset
+   * between delivery and our reading it, and embind then throws
+   * "Cannot pass deleted object as a pointer of type IfcGeometry" from
+   * whichever wrapper touches it next — a FlatMesh's own accessors, or
+   * one of its PlacedGeometry entries inside appendPlacement_. Letting
+   * either throw escape this method would abort the whole batch (up to
+   * 64 products) instead of the one poisoned record, which is exactly
+   * the Sentry SHARE-1NK regression: don't reintroduce it here.
+   *
    * @param {object|Array} flatMeshes delta FlatMesh source
    */
   appendBatch(flatMeshes) {
+    // Eviction state is a property of THIS pump call: whatever the budget
+    // freed before it stays freed for its whole duration, and conway
+    // re-extracts an evicted shape only when a later product maps it. So
+    // a boundary throw suppresses further fetches of that id within this
+    // batch (they would fail identically) and no further — see
+    // resolveGeometry_.
+    this.failedThisBatch.clear()
     forEachVectorItem(flatMeshes, (flatMesh) => {
-      const parentExpressId = flatMesh?.expressID
-      const placedVec = flatMesh?.geometries
-      if (parentExpressId === undefined || !placedVec) {
+      try {
+        const parentExpressId = flatMesh?.expressID
+        const placedVec = flatMesh?.geometries
+        if (parentExpressId === undefined || !placedVec) {
+          this.totals.skippedFlatMeshes++
+          return
+        }
+        forEachVectorItem(placedVec, (placed) => {
+          try {
+            this.appendPlacement_(parentExpressId, placed)
+          } catch (e) {
+            this.totals.skippedPlacedGeometries++
+            this.warnBadRecord_('appendPlacement_ failed; skipping placement:', e)
+          }
+        })
+      } catch (e) {
         this.totals.skippedFlatMeshes++
-        return
+        this.warnBadRecord_('FlatMesh read failed; skipping:', e)
       }
-      forEachVectorItem(placedVec, (placed) => {
-        this.appendPlacement_(parentExpressId, placed)
-      })
     })
+  }
+
+
+  /**
+   * Log one per-record skip, deduped/capped so a model with many bad
+   * records (e.g. every geometry evicted past the budget) doesn't flood
+   * the console — see MAX_BAD_RECORD_WARNINGS. The load report's
+   * skipped* totals (finalize()) carry the full count regardless of how
+   * many lines actually printed.
+   *
+   * @param {string} message
+   * @param {Error} e underlying error, logged so a Sentry load report
+   *   still shows why geometry was skipped.
+   */
+  warnBadRecord_(message, e) {
+    if (this.badRecordWarnings++ < MAX_BAD_RECORD_WARNINGS) {
+      debug(WARN).warn(`IncrementalBatchedBuilder: ${message}`, e)
+    }
   }
 
 
@@ -178,6 +242,10 @@ export class IncrementalBatchedBuilder {
         parents.add(parent)
       }
     }
+    // The duplicate guard is load-time only and is at its maximum right here,
+    // at the end of the load — nothing reads it afterwards, so release it
+    // rather than retaining it for the life of the model (conway#636).
+    this.seenPlacements.clear()
     return {
       batches,
       stats: {
@@ -199,6 +267,20 @@ export class IncrementalBatchedBuilder {
   /**
    * Resolve (or reject) one placement and append its instance.
    *
+   * ORDERING IS LOAD-BEARING (codex P2 on Share#1798). Every read that
+   * crosses the Conway boundary — the PlacedGeometry's own accessors and
+   * the GetGeometry/GetVertexArray/GetIndexArray calls behind
+   * resolveGeometry_ — is staged into locals BEFORE the first mutation,
+   * because any of them can throw embind's "Cannot pass deleted object"
+   * when the geometry budget evicts the native asset (see appendBatch).
+   * A throw between `addInstance` and the pick-table pushes would leave
+   * the mesh holding an instance that `cursor` and the tables never
+   * recorded, so every later instance id maps to the wrong row of
+   * selection metadata — and appendBatch's per-placement guard would
+   * cheerfully keep appending into the now-corrupt builder. Once staging
+   * is done the rest is three.js writes into preallocated buffers and
+   * JS array pushes, which don't throw in practice.
+   *
    * @param {number} parentExpressId
    * @param {object} placed Conway PlacedGeometry
    */
@@ -208,20 +290,34 @@ export class IncrementalBatchedBuilder {
       this.totals.skippedPlacedGeometries++
       return
     }
+    const color = placed.color ?? DEFAULT_COLOR
+    // One staged read of the transform serves both the dedup key and the
+    // instance matrix: Matrix4.fromArray copies element-wise, so
+    // `matrix.elements` is value-identical to the source array (and the
+    // recenter offset is only subtracted from it further down, after the
+    // key is taken — matching the one-shot builder, which keys on the raw
+    // placement).
+    const matrix = this.scratchMatrix.fromArray(placed.flatTransformation)
+    const occurrencePath = placed.occurrencePath ?? null
     const entry = this.resolveGeometry_(geomExpressID)
     if (entry === null) {
       this.totals.skippedPlacedGeometries++
       return
     }
-    const color = placed.color ?? DEFAULT_COLOR
     // Drop an exact coincident duplicate (same part + geometry + transform +
-    // colour): it would z-fight the one already appended. See coincidenceKey.
-    const dedupKey = coincidenceKey(parentExpressId, geomExpressID, placed.flatTransformation, color)
-    if (this.seenPlacements.has(dedupKey)) {
+    // colour): it would z-fight the one already appended. See CoincidenceSet.
+    //
+    // The combined test-and-set runs on the STAGED matrix elements, after
+    // every Conway-boundary read and the geometry fetch above, so a
+    // boundary throw can never mark an identity as seen (codex P2 on
+    // Share#1798). Only the three.js tail below — writes into preallocated
+    // buffers and JS array pushes, which don't throw in practice — follows
+    // the mark; CoincidenceSet has no remove, so that residual is accepted
+    // rather than guarded with rollback machinery.
+    if (!this.seenPlacements.add(parentExpressId, geomExpressID, matrix.elements, color)) {
       this.totals.skippedCoincidentPlacements++
       return
     }
-    this.seenPlacements.add(dedupKey)
     const isTransparent = color.w < OPAQUE_ALPHA
     const state = this.ensureBatch_(isTransparent)
     this.ensureCapacity_(state, entry)
@@ -232,14 +328,13 @@ export class IncrementalBatchedBuilder {
       entry.idByBatch.set(state, geometryId)
     }
     const batchId = state.mesh.addInstance(geometryId)
-    const matrix = this.scratchMatrix.fromArray(placed.flatTransformation)
-    // Decide the model-wide origin-recenter offset from the first placement,
-    // then subtract it from every instance so a georeferenced model renders at
-    // the origin (float32-precise) instead of at ~1e7 m. See
-    // coordinationOffsetFor. Stamped on the root for consumers that need to
-    // map a rendered point back to true world coordinates.
+    // Decide the model-wide origin-recenter offset from the first placement
+    // that actually appends, then subtract it from every instance so a
+    // georeferenced model renders at the origin (float32-precise) instead of
+    // at ~1e7 m. See coordinationOffsetFor. Stamped on the root for consumers
+    // that need to map a rendered point back to true world coordinates.
     if (this.coordination.offset === undefined) {
-      this.coordination.offset = coordinationOffsetFor(placed.flatTransformation)
+      this.coordination.offset = coordinationOffsetFor(matrix.elements)
     }
     if (this.coordination.offset !== null) {
       this.root.userData.coordinationOffset = this.coordination.offset
@@ -254,7 +349,7 @@ export class IncrementalBatchedBuilder {
     // Per-occurrence identity (STEP): NAUO path + solid geometry id, so
     // the batched consumers can narrow selection / hide to one occurrence.
     state.instanceGeometryIds.push(geomExpressID)
-    state.instanceOccurrencePaths.push(placed.occurrencePath ?? null)
+    state.instanceOccurrencePaths.push(occurrencePath)
     state.instanceGeometry.push(entry.geometry)
     state.instanceColors.push(color)
     state.cursor++
@@ -285,28 +380,58 @@ export class IncrementalBatchedBuilder {
     if (cached !== undefined) {
       return cached
     }
-    if (this.badGeometry.has(geomExpressID)) {
+    if (this.badGeometry.has(geomExpressID) || this.failedThisBatch.has(geomExpressID)) {
       return null
     }
-    // eslint-disable-next-line new-cap
-    const geom = this.api.GetGeometry(this.modelID, geomExpressID)
-    if (!geom) {
-      this.badGeometry.add(geomExpressID)
+    let geom
+    let indexSize
+    let vertCount
+    let rawVerts
+    let rawIndices
+    try {
+      // eslint-disable-next-line new-cap
+      geom = this.api.GetGeometry(this.modelID, geomExpressID)
+      if (!geom) {
+        this.badGeometry.add(geomExpressID)
+        return null
+      }
+      // eslint-disable-next-line new-cap
+      indexSize = geom.GetIndexDataSize()
+      // eslint-disable-next-line new-cap
+      const vertSize = geom.GetVertexDataSize()
+      if (indexSize === 0 || vertSize === 0 || vertSize % VERT_STRIDE !== 0) {
+        this.badGeometry.add(geomExpressID)
+        return null
+      }
+      vertCount = (vertSize / VERT_STRIDE) | 0
+      // eslint-disable-next-line new-cap
+      rawVerts = this.api.GetVertexArray(geom.GetVertexData(), vertCount * VERT_STRIDE)
+      // eslint-disable-next-line new-cap
+      rawIndices = this.api.GetIndexArray(geom.GetIndexData(), indexSize)
+    } catch (e) {
+      // conway's GEOMETRY_BUDGET_MB (conwayDirectIfcLoader.js) evicts the
+      // least-recently-used native geometry at each pump batch (conway#535).
+      // If eviction lands between the demand pump delivering this id and
+      // our copying it out here, embind throws "Cannot pass deleted object
+      // as a pointer of type IfcGeometry" from whichever of the calls
+      // above touches the freed wrapper. Degrade to one skipped placement
+      // — never let it escape and take the whole batch with it
+      // (Sentry SHARE-1NK).
+      //
+      // This failure is TRANSIENT, unlike the degenerate-shape branches
+      // above, so it must NOT go in badGeometry: conway's contract is
+      // that an evicted shape is gone from GetGeometry only until
+      // something re-extracts it, which happens when a later product maps
+      // it — a retry in a LATER batch can therefore succeed and recover
+      // every placement that reuses the shape. Blacklisting it
+      // permanently would drop them all. Scope the suppression to this
+      // batch instead (cleared in appendBatch): within one pump call the
+      // eviction state can't change, so re-fetching here is a guaranteed
+      // second failure and only costs another boundary throw.
+      this.failedThisBatch.add(geomExpressID)
+      this.warnBadRecord_(`geometry ${geomExpressID} fetch failed; skipping:`, e)
       return null
     }
-    // eslint-disable-next-line new-cap
-    const indexSize = geom.GetIndexDataSize()
-    // eslint-disable-next-line new-cap
-    const vertSize = geom.GetVertexDataSize()
-    if (indexSize === 0 || vertSize === 0 || vertSize % VERT_STRIDE !== 0) {
-      this.badGeometry.add(geomExpressID)
-      return null
-    }
-    const vertCount = (vertSize / VERT_STRIDE) | 0
-    // eslint-disable-next-line new-cap
-    const rawVerts = this.api.GetVertexArray(geom.GetVertexData(), vertCount * VERT_STRIDE)
-    // eslint-disable-next-line new-cap
-    const rawIndices = this.api.GetIndexArray(geom.GetIndexData(), indexSize)
     const geometry = localGeometry(rawVerts, rawIndices, vertCount)
     geometry.computeBoundingBox()
     const entry = {
