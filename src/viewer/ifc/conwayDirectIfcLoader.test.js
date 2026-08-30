@@ -193,9 +193,11 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         // The residency budget rides on the deferred path only, and is what
         // keeps the wasm high-water bounded (PSB: 1284 MB -> 298 MB).
         expect(settings.GEOMETRY_BUDGET_MB).toBe(64)
-        // 150 products in batches of 64 → 3 extraction rounds; all
-        // meshes accumulate AND stream incrementally.
-        expect(result.captured).toHaveLength(150)
+        // 150 products in batches of 64 → 3 extraction rounds, streamed
+        // incrementally. Nothing accumulates: `onMeshBatch` took delivery,
+        // so retaining a second reference to the same FlatMeshes is the
+        // 475 MB conway#638 exists to stop.
+        expect(result.captured).toHaveLength(0)
         expect(batches).toEqual([64, 64, 22])
         // The one-shot capture path is not used on this branch.
         expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
@@ -257,11 +259,17 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         expect(flag.isActive).toBe(true)
       })
 
-      it('serves the one-shot capture when the pump no-ops (STEP / classic fallback)', async () => {
-        // The deferred columnar open is IFC-only: STEP input falls back
-        // internally to a classic fully-extracted open whose pump returns
-        // {0,0} immediately. The loader must serve StreamAllMeshes then,
-        // not an empty scene.
+      it('serves the one-shot capture when the pump no-ops (internal classic fallback)', async () => {
+        // Conway falls back internally to a classic fully-extracted open on
+        // any streamed-parse failure, and its pump then returns {0,0}
+        // immediately. The loader must serve StreamAllMeshes then, not an
+        // empty scene.
+        //
+        // This is NOT the STEP case it was once written as: conway routes
+        // AP214/AP203/AP242 with DEFER_GEOMETRY through
+        // `IfcApiProxyAP214.createDeferred`
+        // (`ifc_api_model_passthrough_factory.ts`), pinned engine-side by
+        // `ap214_streamed_open.test.ts`, so STEP pumps like IFC does.
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(10)
         ifcAPI.ExtractGeometryBatch = jest.fn(() => ({extracted: 0, remaining: 0}))
@@ -331,6 +339,288 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         const [data] = ifcAPI.OpenModelStreamed.mock.calls[0]
         expect(data).toBeInstanceOf(Uint8Array)
         expect(result.captured).toHaveLength(10)
+      })
+    })
+
+    // conway#638: the pumped FlatMesh stream is one of three pointer spines
+    // over a 475 MB graph (conway holds `meshMap` and `vectorFlatMesh`; this
+    // is Share's). Dropping it on the streaming path is only safe if the
+    // counters that read the ARRAY keep working and the degraded end-of-load
+    // readers can get the stream back — these pin both.
+    describe('streaming-consumer retention (conway#638)', () => {
+      beforeEach(() => mockIsFeatureEnabled.mockReset())
+      afterAll(() => mockIsFeatureEnabled.mockReset())
+
+      /**
+       * @param {number} products total products the fake engine holds
+       * @return {object} IfcAPI stub with the deferred pump surface
+       */
+      function makeDemandAPI(products) {
+        let cursor = 0
+        return {
+          wasmModule: {},
+          OpenModelStreamed: jest.fn(() => Promise.resolve(5)),
+          OpenModelAsync: jest.fn(() => Promise.resolve(8)),
+          OpenModel: jest.fn(() => 9),
+          StreamAllMeshes: jest.fn(),
+          ExtractGeometryBatch: jest.fn((modelID, batchSize, cb) => {
+            const take = Math.min(batchSize, products - cursor)
+            for (let i = 0; i < take; i++) {
+              cb({expressID: 1000 + cursor + i, geometries: {size: () => 1}})
+            }
+            cursor += take
+            return {extracted: take, remaining: products - cursor}
+          }),
+        }
+      }
+
+      /**
+       * A windowed (store-backed) twin of the demand API: `OpenModelStream`
+       * succeeds, which is the shape a GitHub/OPFS-backed load takes because
+       * `Loader.js` hands `parse` the File itself rather than its bytes.
+       *
+       * @param {number} products total products the fake engine holds
+       * @return {object} IfcAPI stub whose deferred open is windowed
+       */
+      function makeWindowedDemandAPI(products) {
+        const ifcAPI = makeDemandAPI(products)
+        ifcAPI.OpenModelStream = jest.fn(() => Promise.resolve(3))
+        ifcAPI.ExtractGeometryBatchAsync = jest.fn((modelID, batchSize, cb) =>
+          // eslint-disable-next-line new-cap
+          Promise.resolve(ifcAPI.ExtractGeometryBatch(modelID, batchSize, cb)))
+        return ifcAPI
+      }
+
+      it('declares STREAMING_CONSUMER on the deferred open', async () => {
+        // Inert on the pinned engine (an unknown setting is dropped); after
+        // the pin bumps past conway#657 it is what stops conway retaining
+        // the other two spines. Share must send it either way — the two
+        // halves land independently.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
+        expect(settings.STREAMING_CONSUMER).toBe(true)
+      })
+
+      it('does not declare STREAMING_CONSUMER on the classic open', async () => {
+        // A classic open has no pump and no accumulation to suppress, and
+        // sending the flag there would claim an ownership contract that
+        // nothing on this path honours.
+        mockIsFeatureEnabled.mockImplementation(() => false)
+        const ifcAPI = makeDemandAPI(10)
+        await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
+        expect(settings.STREAMING_CONSUMER).toBeUndefined()
+      })
+
+      it('counts every pumped mesh in the boundary log while retaining none', async () => {
+        // The permanent `[conwayDirect] demand pump:` line (Share#1744) is
+        // the only signal distinguishing a streaming load from a
+        // blank-screen-then-pop one, and it used to report `captured.length`
+        // — which is now 0. It has to report the meshes actually delivered.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(150)
+        const result = await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn())
+        expect(result.captured).toHaveLength(0)
+        const pumpLine = infoSpy.mock.calls
+          .map(([line]) => line)
+          .find((line) => typeof line === 'string' && line.includes('demand pump:'))
+        expect(pumpLine).toContain('meshes=150')
+        expect(pumpLine).toContain('batches=3')
+        expect(pumpLine).toContain('retained=no')
+      })
+
+      it('retains the stream when nothing else takes delivery', async () => {
+        // No `onMeshBatch` means `captured` IS the delivery, not a copy of
+        // it — dropping here would hand the caller an empty model.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(150)
+        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        expect(result.captured).toHaveLength(150)
+        expect(result.recapture()).toHaveLength(150)
+        // Retained means whole: no re-extraction is needed or performed.
+        expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
+        const pumpLine = infoSpy.mock.calls
+          .map(([line]) => line)
+          .find((line) => typeof line === 'string' && line.includes('demand pump:'))
+        expect(pumpLine).toContain('retained=yes')
+      })
+
+      it('retains the stream on a WINDOWED open, where re-extraction throws', async () => {
+        // Verified against the pinned engine
+        // (compiled/src/compat/web-ifc/ifc_api_proxy_ifc.js:1482):
+        // `streamAllMeshes` on a deferred model drains through the
+        // SYNCHRONOUS `ExtractGeometryBatch`, which refuses a windowed
+        // source outright. conway#657 does not change that — its re-walk
+        // hangs off the same drain — so there is nothing to re-extract with
+        // here and the contents must be kept.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeWindowedDemandAPI(20)
+        ifcAPI.StreamAllMeshes = jest.fn(() => {
+          throw new Error(
+            'ExtractGeometryBatch is synchronous and cannot page a windowed source')
+        })
+        const file = new Blob([new Uint8Array([1, 2, 3, 4])])
+        const result = await parseIfcWithConway(
+          file, ifcAPI, undefined, undefined, jest.fn())
+        expect(ifcAPI.OpenModelStream).toHaveBeenCalledTimes(1)
+        expect(result.captured).toHaveLength(20)
+        // The degraded reader is served without ever touching the entry
+        // point that would throw.
+        expect(result.recapture()).toHaveLength(20)
+        expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
+        // Counter fidelity is not a streaming-path-only concern: the log
+        // must report real meshes on the retained branch too, where
+        // `captured.length` would happen to agree and so hide a regression
+        // in the counter itself.
+        const pumpLine = infoSpy.mock.calls
+          .map(([line]) => line)
+          .find((line) => typeof line === 'string' && line.includes('demand pump:'))
+        expect(pumpLine).toContain('meshes=20')
+        expect(pumpLine).toContain('retained=yes')
+      })
+
+      it('surfaces the engine refusal when a DEFERRED windowed model pumps nothing', async () => {
+        // Pins CURRENT behaviour, which is a pre-existing defect this
+        // change neither introduces nor fixes.
+        //
+        // `pumpedMeshes === 0` does not imply conway fell back to a classic
+        // open: a genuinely deferred model with nothing to extract (a
+        // properties-only IFC, or one whose every product failed geometry)
+        // exits the pump loop the same way, because it breaks on
+        // `remaining === 0 && extracted === 0` whatever the reason. The
+        // sentinel's one-shot `StreamAllMeshes` then takes conway's
+        // DEFERRED branch, which drains through the synchronous
+        // `ExtractGeometryBatch` and refuses a windowed source.
+        //
+        // The sentinel it replaced (`captured.length === 0`) selected the
+        // same models and called the same method, so this is byte-equivalent
+        // to main. Pinned red-to-green for whoever fixes it engine-side.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeWindowedDemandAPI(0)
+        ifcAPI.StreamAllMeshes = jest.fn(() => {
+          throw new Error(
+            'ExtractGeometryBatch is synchronous and cannot page a windowed source')
+        })
+        const file = new Blob([new Uint8Array([1, 2, 3, 4])])
+        await expect(parseIfcWithConway(file, ifcAPI, undefined, undefined, jest.fn()))
+          .rejects.toThrow(/cannot page a windowed source/)
+        // It really did reach the sentinel rather than failing earlier.
+        expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('demand pump produced no batches'))
+      })
+
+      it('drops the stream when a windowed open falls back to a buffered one', async () => {
+        // conway#510: an `OpenModelStream` that returns -1 (STEP, failed
+        // sniff) re-opens buffered. The model is then resident, so
+        // re-extraction works again and the retention must lift with it —
+        // otherwise the fallback silently keeps 475 MB alive.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeWindowedDemandAPI(20)
+        ifcAPI.OpenModelStream = jest.fn(() => Promise.resolve(-1))
+        const file = new Blob([new Uint8Array([1, 2, 3, 4])])
+        const result = await parseIfcWithConway(
+          file, ifcAPI, undefined, undefined, jest.fn())
+        expect(ifcAPI.OpenModelStreamed).toHaveBeenCalledTimes(1)
+        expect(result.captured).toHaveLength(0)
+      })
+
+      it('re-extracts on demand for a degraded end-of-load build', async () => {
+        // The replacement for retention: the whole stream comes back at the
+        // moment of failure instead of being held for a fallback that
+        // almost never runs.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(150)
+        ifcAPI.StreamAllMeshes = jest.fn((modelID, cb) => {
+          for (let i = 0; i < 150; i++) {
+            cb({expressID: 1000 + i, geometries: {size: () => 1}})
+          }
+        })
+        const result = await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn())
+        // Not paid unless a degraded reader actually asks.
+        expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
+        const recaptured = result.recapture()
+        expect(recaptured).toHaveLength(150)
+        expect(recaptured[0].expressID).toBe(1000)
+        expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
+        expect(ifcAPI.StreamAllMeshes.mock.calls[0][0]).toBe(5)
+      })
+
+      it('re-extracts at most once across the two consecutive degraded builds', async () => {
+        // `buildBatchedConwayModel` then `buildConwayIfcModel` both ask. A
+        // second `StreamAllMeshes` on a live model re-pushes into conway's
+        // still-populated cache and doubles every triangle count — the
+        // defect IfcItemsMap.js documents from the consumer side — so the
+        // accessor has to memoise.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        ifcAPI.StreamAllMeshes = jest.fn((modelID, cb) => {
+          cb({expressID: 7, geometries: {size: () => 1}})
+        })
+        const result = await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn())
+        const first = result.recapture()
+        const second = result.recapture()
+        expect(second).toBe(first)
+        expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
+      })
+
+      it('serves the empty-pump sentinel off the counter, not the array', async () => {
+        // The sentinel used to be `captured.length === 0`, which on the
+        // streaming path is now ALSO true after a perfectly healthy pump.
+        // Reading the counter instead is what keeps a 150-mesh streaming
+        // load from being mistaken for a no-op pump and re-extracted whole.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(150)
+        await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn())
+        expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
+        expect(warnSpy).not.toHaveBeenCalledWith(
+          expect.stringContaining('demand pump produced no batches'))
+      })
+
+      it('still recovers a genuinely empty pump, with an onMeshBatch present', async () => {
+        // The blank-screen case the sentinel exists for: conway fell back
+        // internally to a classic non-deferred open, so the pump is a no-op
+        // and `StreamAllMeshes` — a classic walk over live natives, which
+        // works even on a windowed source — is the only delivery. This must
+        // keep filling `captured` regardless of the retention decision.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        ifcAPI.ExtractGeometryBatch = jest.fn(() => ({extracted: 0, remaining: 0}))
+        ifcAPI.StreamAllMeshes = jest.fn((modelID, cb) => {
+          for (let i = 0; i < 5; i++) {
+            cb({expressID: 2000 + i, geometries: {size: () => 1}})
+          }
+        })
+        const onMeshBatch = jest.fn()
+        const result = await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, onMeshBatch)
+        expect(result.captured).toHaveLength(5)
+        expect(result.recapture()).toHaveLength(5)
+        expect(onMeshBatch).not.toHaveBeenCalled()
+        // One walk, not two: `recapture` must not re-drive the engine on a
+        // path where `captured` is already whole.
+        expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
+        const pumpLine = infoSpy.mock.calls
+          .map(([line]) => line)
+          .find((line) => typeof line === 'string' && line.includes('demand pump:'))
+        expect(pumpLine).toContain('meshes=0')
+      })
+
+      it('recapture is the identity on the classic non-deferred path', async () => {
+        mockIsFeatureEnabled.mockImplementation(() => false)
+        const ifcAPI = makeDemandAPI(10)
+        ifcAPI.StreamAllMeshes = jest.fn((modelID, cb) => {
+          cb({expressID: 11, geometries: {size: () => 1}})
+        })
+        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        expect(result.recapture()).toBe(result.captured)
+        expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
       })
     })
 

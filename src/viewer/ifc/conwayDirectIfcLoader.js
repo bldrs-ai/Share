@@ -15,9 +15,13 @@
 // `ifcManager` too.
 //
 // Surface:
-//   - `parseIfcWithConway(buffer, ifcAPI, settings)` → `{modelID, captured}`
+//   - `parseIfcWithConway(buffer, ifcAPI, settings)` →
+//     `{modelID, captured, recapture}`
 //     OpenModel + StreamAllMeshes; one async-shaped sync call (the
 //     wrap is for symmetry with future move-to-worker paths).
+//     `captured` is the retained FlatMesh stream and is EMPTY on the
+//     streaming path (see `parseIfcWithConway`'s retention note);
+//     `recapture()` is the whole-model accessor degraded readers use.
 //   - `decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, opts)`
 //     Post-build decoration: BVH, IfcInstanceMap, capability flips,
 //     subset method, property + spatial method closures. Runs on a
@@ -88,15 +92,17 @@ import {instanceMapFromGeometry} from './IfcInstanceMap'
  * @param {Function} [onMeshBatch] demand/tiled slice A: receives
  *   `(flatMeshes, modelID)` for each extracted batch as it lands (only
  *   on the `demandGeometry` deferred path) so callers can render
- *   progressively;
- *   `captured` still accumulates everything for one-shot consumers.
+ *   progressively. Passing it makes the caller the OWNER of the stream:
+ *   `captured` then stays empty and degraded readers must go through
+ *   `recapture()` — see the retention note in the body (conway#638).
  * @param {Function} [onPreviewMesh] demand/tiled slice A2: receives
  *   conway PreviewMeshPayloads WHILE THE PARSE RUNS (self-contained
  *   copied geometry, preview quality — openings/materials can be
  *   missing; replaced wholesale by the durable batches). Only on the
  *   `demandGeometry` deferred path with engines that support
  *   ON_PREVIEW_MESH; silently ignored otherwise.
- * @return {Promise<{modelID: number, captured: Array}>}
+ * @return {Promise<{modelID: number, captured: Array,
+ *   recapture: Function}>}
  */
 export async function parseIfcWithConway(
   buffer, ifcAPI, settings = undefined, onProgress = undefined, onMeshBatch = undefined, onPreviewMesh = undefined) {
@@ -138,8 +144,9 @@ export async function parseIfcWithConway(
   }
   // Demand/tiled rendering slice A (`demandGeometry` flag, #1613):
   // deferred open + batch pump. The open returns in parse time; meshes
-  // then stream in file-order batches through `onMeshBatch` (and
-  // accumulate into `captured` for the classic one-shot consumers),
+  // then stream in file-order batches through `onMeshBatch` (accumulating
+  // into `captured` only where nothing else takes delivery — see the
+  // retention note below),
   // yielding to the event loop between batches so the scene can render
   // progressively. Feature-detected; engines without the pump fall
   // through to the classic selection below.
@@ -153,6 +160,21 @@ export async function parseIfcWithConway(
       ...openSettings,
       DEFER_GEOMETRY: true,
       GEOMETRY_BUDGET_MB: GEOMETRY_BUDGET_MB,
+      // conway#638 / conway#657: declare that THIS loader owns delivery of
+      // the pumped stream, so conway keeps no reference to it. A deferred
+      // open builds each PlacedGeometry once and files that same object
+      // into three pointer spines — conway's per-entity `meshMap`, its
+      // `vectorFlatMesh`, and whatever the embedder keeps — and dropping
+      // fewer than all three frees only the ~4.4 MB of one spine's
+      // pointers, because the other holders keep the 475 MB graph alive.
+      // This is the Share half of that; conway's is the flag's other end.
+      //
+      // Ignored as an unknown key by the pinned engine (verified: no
+      // `STREAMING_CONSUMER` in node_modules/@bldrs-ai/conway), so it is
+      // inert until the pin bumps past conway#657 and then activates the
+      // no-retention contract with no further change here. Ordering
+      // against that bump therefore does not matter.
+      STREAMING_CONSUMER: true,
     }
     if (onPreviewMesh) {
       // Slice A2 (parse-time preview channel): conway emits preview
@@ -163,10 +185,20 @@ export async function parseIfcWithConway(
     }
     let modelID
     let openData = data
+    // Did the open land on a WINDOWED source — bytes paged on demand out of
+    // an OPFS/Blob store — rather than a resident buffer? Load-bearing for
+    // the retention decision below, and knowable only here: conway exposes
+    // `sourceIsExternal` on the proxy but not through the `IfcApi` shim
+    // Share holds, and Share's `OpenModelStream(store, …)` is the only way
+    // this loader produces a windowed model. Nothing later flips it — the
+    // one call that would (`spillModelSource`) runs from the GLB writer's
+    // `finally`, long after `parse` has returned.
+    let windowedSource = false
     if (store !== null) {
       // eslint-disable-next-line new-cap
       modelID = await ifcAPI.OpenModelStream(store, deferSettings)
-      if (typeof modelID !== 'number' || modelID < 0) {
+      windowedSource = typeof modelID === 'number' && modelID >= 0
+      if (!windowedSource) {
         // IFC-only store path: STEP / failed sniff falls back to a
         // buffered streamed open (conway#510 contract).
         openData = await bytesFromSource(buffer)
@@ -181,6 +213,41 @@ export async function parseIfcWithConway(
       throw new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
     }
     const captured = []
+    // Retention decision (conway#638). `captured` used to accumulate every
+    // pumped FlatMesh unconditionally, and on the streaming path that array
+    // is dead weight: `onMeshBatch` has already assembled each batch into
+    // the durable BatchedMesh by the time the next one lands, and the only
+    // remaining readers are ShareIfcLoader's DEGRADED end-of-load builds.
+    // Holding one of the three pointer spines over a 475 MB graph against
+    // the chance of a fallback is what this stops.
+    //
+    // Two states must keep the contents, and both are genuine:
+    //
+    //   1. No `onMeshBatch` — then `captured` IS the delivery, not a copy
+    //      of it. Nothing else ever sees the stream.
+    //   2. A WINDOWED deferred source. The replacement for retention is
+    //      re-extraction at the moment of failure (`recapture` below), and
+    //      re-extraction is `StreamAllMeshes`, which on a deferred model
+    //      drains through the SYNCHRONOUS `ExtractGeometryBatch` — and that
+    //      throws outright on a windowed source ("ExtractGeometryBatch is
+    //      synchronous and cannot page a windowed source", pinned engine
+    //      `compiled/src/compat/web-ifc/ifc_api_proxy_ifc.js:1509`, reached
+    //      from `streamAllMeshes`' deferred drain loop at `:2632`).
+    //      conway#657 does
+    //      not change that: its re-walk hangs off the same drain, and there
+    //      is no async whole-model entry point on either version.
+    //      `ExtractGeometryBatchAsync` cannot substitute — after a full
+    //      drain its cursor is exhausted and there is no public rewind.
+    //      So on a windowed open there is nothing to re-extract WITH, and
+    //      dropping here would turn a rare degraded build into a blank
+    //      screen. Retention stays until conway grows an async re-read.
+    //
+    // Note the asymmetry that leaves: a GitHub/OPFS-backed load takes the
+    // windowed open by default (`Loader.js` hands `parse` the File itself),
+    // so today this frees the stream on buffered opens only. The flag above
+    // is still declared on both, which is correct — declaring it changes
+    // what CONWAY retains, and `captured` is Share's own spine.
+    const retainCaptured = onMeshBatch === undefined || windowedSource
     // Batch-pump accounting for the load log. Whether the pump actually
     // produced anything is the difference between a model that streams
     // onto the screen and one that shows nothing until the end-of-load
@@ -193,6 +260,11 @@ export async function parseIfcWithConway(
     // extractIFCGeometryData open). elapsedMs omitted: the reporter
     // stamps wall-clock so we don't fight Conway's parse-relative clock.
     let pumpedBatches = 0
+    // Counted rather than derived from `captured.length`, which is 0 on the
+    // streaming path. This is the number the permanent boundary log reports
+    // and the number the empty-pump sentinel tests, so it has to track the
+    // meshes the pump actually delivered whether or not they were kept.
+    let pumpedMeshes = 0
     let geometryTotal
     let geometryDone = 0
     const reportGeometry = (completed, total) => {
@@ -237,11 +309,19 @@ export async function parseIfcWithConway(
         reportGeometry(geometryDone, geometryTotal)
       }
       if (batch.length > 0) {
-        captured.push(...batch)
+        if (retainCaptured) {
+          captured.push(...batch)
+        }
+        pumpedMeshes += batch.length
         pumpedBatches++
         if (onMeshBatch) {
           onMeshBatch(batch, modelID)
         }
+        // `batch` itself goes out of scope on the next iteration, so on the
+        // streaming path the last reference to this batch's FlatMeshes is
+        // whatever `onMeshBatch` chose to keep — which for the incremental
+        // builder is nothing (it copies every payload at delivery, the
+        // Share#1640 invariant).
       }
       if (remaining === 0 && extracted === 0) {
         break
@@ -258,9 +338,10 @@ export async function parseIfcWithConway(
     // eslint-disable-next-line no-console
     console.info(
       `[conwayDirect] demand pump: batches=${pumpedBatches} ` +
-      `meshes=${captured.length} onMeshBatch=${onMeshBatch ? 'yes' : 'no'} ` +
-      `onPreviewMesh=${onPreviewMesh ? 'yes' : 'no'}`)
-    if (captured.length === 0) {
+      `meshes=${pumpedMeshes} onMeshBatch=${onMeshBatch ? 'yes' : 'no'} ` +
+      `onPreviewMesh=${onPreviewMesh ? 'yes' : 'no'} ` +
+      `retained=${retainCaptured ? 'yes' : 'no'}`)
+    if (pumpedMeshes === 0) {
       // Nothing pumped: conway fell back to a classic fully-extracted
       // open internally, so StreamAllMeshes below captures the whole
       // model in one go and NOTHING renders until the end-of-load build.
@@ -269,11 +350,50 @@ export async function parseIfcWithConway(
       console.warn(
         '[conwayDirect] demand pump produced no batches; ' +
         'falling back to one-shot StreamAllMeshes — no progressive render')
-      // The deferred columnar open is IFC-only: for STEP input (and any
-      // streamed-parse failure) conway falls back internally to a
-      // classic, fully-extracted open where the batch pump is a no-op —
-      // the model is fine, it just has nothing to pump. Serve the
-      // one-shot capture instead of returning an empty scene.
+      // The pump is a no-op whenever conway did not actually open the model
+      // deferred — it returns `{extracted: 0, remaining: 0}` on a
+      // fully-extracted model — which happens on any streamed-parse failure
+      // that fell back internally to a classic open. The model is fine, it
+      // just has nothing to pump. Serve the one-shot capture instead of
+      // returning an empty scene.
+      //
+      // NOT a STEP-vs-IFC split, though it used to be described as one:
+      // conway routes AP214/AP203/AP242 with DEFER_GEOMETRY through
+      // `IfcApiProxyAP214.createDeferred`
+      // (`ifc_api_model_passthrough_factory.ts`), pinned engine-side by
+      // `ap214_streamed_open.test.ts`, so STEP pumps like IFC does.
+      //
+      // Retention is unconditional here regardless of `retainCaptured`:
+      // this branch means the streaming delivery produced nothing, so
+      // `captured` is once again the only delivery.
+      //
+      // Where that leaves `StreamAllMeshes`, stated precisely because the
+      // obvious shorthand is wrong. When conway really did fall back to a
+      // classic open, the model is non-deferred and this takes conway's
+      // classic scene walk over live natives — which works on a windowed
+      // source where `recapture` below could not, because it never touches
+      // the deferred drain. But `pumpedMeshes === 0` does NOT imply
+      // non-deferred: the pump loop exits on `remaining === 0 &&
+      // extracted === 0` whatever the reason, so a genuinely DEFERRED model
+      // with nothing to extract (a properties-only IFC, or one whose every
+      // product failed geometry) lands here too. On a windowed source that
+      // model's `StreamAllMeshes` takes the deferred branch and throws
+      // "cannot page a windowed source" out of the load. That is a
+      // PRE-EXISTING defect, not one this change introduces — the sentinel
+      // it replaced (`captured.length === 0`) selected exactly the same
+      // models and called exactly the same method — and it is tracked
+      // separately rather than fixed here.
+      //
+      // Nor is there a whole-model route around it. The three entry points
+      // that do NOT throw on a windowed deferred model are all worse:
+      // `loadAllGeometry` and `streamAllMeshesWithTypes` have no deferred
+      // branch at all and seed coordination from `model[5]`, which a
+      // deferred open never writes, so every instance lands in an identity
+      // frame — silently mis-framed geometry, worse than a refusal; and
+      // `getFlatMesh` is per-entity and would need an ID enumeration this
+      // loader does not have. conway#657 routes the first and third through
+      // `streamAllMeshes` so they refuse properly after the pin bump.
+      //
       // No onMeshBatch here: extraction is already complete, so a
       // preview would just double the geometry conversion right before
       // the final build renders the same thing.
@@ -281,8 +401,13 @@ export async function parseIfcWithConway(
       ifcAPI.StreamAllMeshes(modelID, (flatMesh) => {
         captured.push(flatMesh)
       })
+      return {modelID, captured, recapture: () => captured}
     }
-    return {modelID, captured}
+    return {
+      modelID,
+      captured,
+      recapture: makeRecapture(ifcAPI, modelID, captured, retainCaptured),
+    }
   }
 
   // Open-path selection, most preferred first:
@@ -327,7 +452,94 @@ export async function parseIfcWithConway(
   ifcAPI.StreamAllMeshes(modelID, (flatMesh) => {
     captured.push(flatMesh)
   })
-  return {modelID, captured}
+  // The classic path never streams, so `captured` is always whole and
+  // `recapture` is the identity — the return shape stays uniform so
+  // callers never branch on which open path ran.
+  return {modelID, captured, recapture: () => captured}
+}
+
+
+/**
+ * Build the whole-model accessor for ShareIfcLoader's DEGRADED end-of-load
+ * builds — the readers that fire when the incremental assembly could not
+ * produce a model (`builder === null`, `!builder.hasContent()`, or
+ * `finalize()`/`assembleBatchedModel` throwing).
+ *
+ * When the pump's contents were retained this is the identity. When they
+ * were dropped it re-extracts at the moment of failure instead, which is
+ * the whole point of dropping: 475 MB is not worth holding against a
+ * fallback that almost never runs.
+ *
+ * **What comes back is equivalent, not identical**, and both differences
+ * matter to a reader comparing it against the pump's own output:
+ *
+ *   1. **Grouping.** On a deferred model the pinned `StreamAllMeshes`
+ *      serves per-entity FULL FlatMeshes out of conway's `meshMap`, not the
+ *      per-batch DELTA FlatMeshes the pump delivered. Same placement set,
+ *      different bundling. Benign for both readers here — the merged and
+ *      batched builds iterate placements and do not care how they arrive —
+ *      but a future consumer that keyed on batch identity would.
+ *   2. **Completeness under a budget.** `GEOMETRY_BUDGET_MB` is set on this
+ *      path, and once conway has evicted anything, its whole-model serve
+ *      filters out placements whose natives were freed. So on a model big
+ *      enough to evict, this returns a strict SUBSET of what was pumped.
+ *
+ * That second one costs nothing that was not already gone, and the reason
+ * is worth pinning down because it changed with the engine. On the RETAINED
+ * deltas an evicted placement still names freed geometry, and conway#654's
+ * `getGeometry` now probes `isNativeDeleted` and degrades to a dummy
+ * IfcGeometry rather than aborting inside embind as it used to (the Sentry
+ * SHARE-1NK shape). `flatMeshToBufferGeometry` then skips that dummy for
+ * zero vertex/index size and counts it in `skippedPlacedGeometries`. So on
+ * this pin BOTH routes render the same model — the geometry is gone either
+ * way, because the native was freed.
+ *
+ * What the filtered re-extraction buys is therefore accounting, not pixels:
+ * conway drops the placement before delivery and emits ONE aggregate
+ * warning naming the instance and entity counts, where the retained route
+ * logs a `[GetGeometry]` error per evicted placement and surfaces the loss
+ * only as a `skippedPlacedGeometries` bump. Worth having, and small — do
+ * not sell it as crash avoidance. The engine fixed the crash.
+ *
+ * Memoised because the two degraded builds are consecutive
+ * (`buildBatchedConwayModel` then `buildConwayIfcModel`), and a second
+ * `StreamAllMeshes` on a live model re-pushes into conway's still-populated
+ * cache and doubles every triangle count — the defect
+ * `IfcItemsMap.js` §"Why this is a separate entry point" documents from the
+ * consumer side.
+ *
+ * Deliberately does NOT swallow a throw. Re-extraction is only wired up
+ * where it is known to work (see `retainCaptured`), so a throw here is a
+ * broken assumption, not an expected state; letting it reach
+ * `ShareIfcLoader.parse`'s handler surfaces a real error to the user
+ * instead of rendering an empty scene and calling it a load.
+ *
+ * @param {object} ifcAPI Conway IfcAPI bound to the model
+ * @param {number} modelID
+ * @param {Array} captured the retained stream (empty when dropped)
+ * @param {boolean} retained whether `captured` holds the whole stream
+ * @return {Function} `() => Array` of the whole model's FlatMeshes
+ */
+function makeRecapture(ifcAPI, modelID, captured, retained) {
+  let recaptured = null
+  return () => {
+    if (retained) {
+      return captured
+    }
+    if (recaptured === null) {
+      const meshes = []
+      // eslint-disable-next-line new-cap
+      ifcAPI.StreamAllMeshes(modelID, (flatMesh) => {
+        meshes.push(flatMesh)
+      })
+      // eslint-disable-next-line no-console
+      console.info(
+        `[conwayDirect] recaptured ${meshes.length} mesh(es) for a degraded ` +
+        'end-of-load build')
+      recaptured = meshes
+    }
+    return recaptured
+  }
 }
 
 
@@ -357,9 +569,12 @@ export async function parseIfcWithConway(
  * `onMeshBatch`) finishes copying it out — conway's GEOMETRY_BUDGET eviction
  * raced the very copy this comment used to treat as instantaneous, and
  * embind then throws "Cannot pass deleted object as a pointer of type
- * IfcGeometry" reading the freed wrapper (Sentry SHARE-1NK). Conway is
- * being fixed to keep call-N's delivered assets resident until call N+1
- * starts, closing that window; independently, `IncrementalBatchedBuilder`
+ * IfcGeometry" reading the freed wrapper (Sentry SHARE-1NK). That fix has
+ * since LANDED — conway#654 moved eviction to the head of the pump call, so
+ * call N's delivered assets stay resident until call N+1 begins, and
+ * `getGeometry` now probes `isNativeDeleted` and returns a dummy geometry
+ * instead of aborting. The window is closed on this pin (1.1575.649);
+ * independently, `IncrementalBatchedBuilder`
  * now degrades a boundary throw to one skipped placement (counted, logged)
  * rather than letting it escape and drop the whole batch, so the invariant
  * failing on some future engine version costs one part, not sixty-four.
