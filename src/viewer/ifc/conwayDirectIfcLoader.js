@@ -368,17 +368,23 @@ export async function parseIfcWithConway(
     // indistinguishable without this line (Share#1744). console.info,
     // not debug() — debug() no-ops unless the level is raised.
     //
-    // `wholeModelAsk` reports which regime the engine put this load in
-    // (conway#660): `async` means the windowed drop is live, `sync` that the
-    // pin predates the async ask. It is how a production PSB trace says
-    // which side of the pin bump it measured without reading the version.
+    // `asyncAsk` reports the ENGINE's capability, not the entry point this
+    // load would drive (conway#660): `yes` means the pin carries
+    // `StreamAllMeshesAsync`, which is what makes the windowed drop
+    // possible. It is deliberately not "which ask ran" — nothing has run
+    // yet at this point, and on a BUFFERED open `asyncAsk=yes` still drives
+    // the sync ask, because the async one is wired only where the sync one
+    // cannot serve. The entry point actually driven is named by the
+    // `recaptured N mesh(es) via …` line, and only a degraded build emits
+    // one. Read together they say which side of a pin bump a production
+    // trace measured, without anyone reading a version string.
     // eslint-disable-next-line no-console
     console.info(
       `[conwayDirect] demand pump: batches=${pumpedBatches} ` +
       `meshes=${pumpedMeshes} onMeshBatch=${onMeshBatch ? 'yes' : 'no'} ` +
       `onPreviewMesh=${onPreviewMesh ? 'yes' : 'no'} ` +
       `windowed=${windowedSource ? 'yes' : 'no'} ` +
-      `wholeModelAsk=${hasAsyncWholeModelAsk ? 'async' : 'sync'} ` +
+      `asyncAsk=${hasAsyncWholeModelAsk ? 'yes' : 'no'} ` +
       `retained=${retainCaptured ? 'yes' : 'no'}`)
     if (pumpedMeshes === 0) {
       // Nothing pumped: conway fell back to a classic fully-extracted

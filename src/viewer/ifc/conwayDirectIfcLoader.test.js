@@ -487,7 +487,7 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         // The regime is reported, so a production trace says which side of
         // the pin bump it measured without anyone reading a version string.
         expect(pumpLine).toContain('windowed=yes')
-        expect(pumpLine).toContain('wholeModelAsk=sync')
+        expect(pumpLine).toContain('asyncAsk=no')
       })
 
       it('surfaces the engine refusal when a DEFERRED windowed model pumps nothing', async () => {
@@ -694,7 +694,7 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
           const pumpLine = pumpLineFrom(infoSpy)
           expect(pumpLine).toContain('meshes=20')
           expect(pumpLine).toContain('windowed=yes')
-          expect(pumpLine).toContain('wholeModelAsk=async')
+          expect(pumpLine).toContain('asyncAsk=yes')
           expect(pumpLine).toContain('retained=no')
           // Still not paid unless a degraded reader actually asks — the ask
           // is a full drain plus a full scene walk.
@@ -757,6 +757,11 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
           const pumpLine = pumpLineFrom(infoSpy)
           expect(pumpLine).toContain('windowed=no')
           expect(pumpLine).toContain('retained=no')
+          // The token is the ENGINE's capability, not the entry point this
+          // load drives: `yes` here beside a sync `StreamAllMeshes` below is
+          // the intended reading, and the `recaptured … via …` line is what
+          // names the ask that actually ran.
+          expect(pumpLine).toContain('asyncAsk=yes')
           expect(await result.recapture()).toHaveLength(1)
           expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
           expect(ifcAPI.StreamAllMeshesAsync).not.toHaveBeenCalled()
