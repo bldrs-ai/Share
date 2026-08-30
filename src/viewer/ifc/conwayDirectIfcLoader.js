@@ -231,8 +231,9 @@ export async function parseIfcWithConway(
     //      drains through the SYNCHRONOUS `ExtractGeometryBatch` — and that
     //      throws outright on a windowed source ("ExtractGeometryBatch is
     //      synchronous and cannot page a windowed source", pinned engine
-    //      `compiled/src/compat/web-ifc/ifc_api_proxy_ifc.js:1482`, reached
-    //      from `streamAllMeshes`' deferred drain loop). conway#657 does
+    //      `compiled/src/compat/web-ifc/ifc_api_proxy_ifc.js:1509`, reached
+    //      from `streamAllMeshes`' deferred drain loop at `:2632`).
+    //      conway#657 does
     //      not change that: its re-walk hangs off the same drain, and there
     //      is no async whole-model entry point on either version.
     //      `ExtractGeometryBatchAsync` cannot substitute — after a full
@@ -483,15 +484,22 @@ export async function parseIfcWithConway(
  *      filters out placements whose natives were freed. So on a model big
  *      enough to evict, this returns a strict SUBSET of what was pumped.
  *
- * That second one is an improvement over what it replaces, not a new loss.
- * Before this change the degraded builds ran over the RETAINED deltas,
- * which still name evicted geometry, and the pinned `getGeometry` clones
- * without guarding (`geometryObject.clone()` on a freed native) — so an
- * evicted model took an embind abort out of the load, the shape Sentry
- * SHARE-1NK records. The filtered re-extraction renders a partial model
- * instead. The residual is honest: retention is kept on the windowed path,
- * so that abort stays reachable there until conway grows an async
- * whole-model re-read.
+ * That second one costs nothing that was not already gone, and the reason
+ * is worth pinning down because it changed with the engine. On the RETAINED
+ * deltas an evicted placement still names freed geometry, and conway#654's
+ * `getGeometry` now probes `isNativeDeleted` and degrades to a dummy
+ * IfcGeometry rather than aborting inside embind as it used to (the Sentry
+ * SHARE-1NK shape). `flatMeshToBufferGeometry` then skips that dummy for
+ * zero vertex/index size and counts it in `skippedPlacedGeometries`. So on
+ * this pin BOTH routes render the same model — the geometry is gone either
+ * way, because the native was freed.
+ *
+ * What the filtered re-extraction buys is therefore accounting, not pixels:
+ * conway drops the placement before delivery and emits ONE aggregate
+ * warning naming the instance and entity counts, where the retained route
+ * logs a `[GetGeometry]` error per evicted placement and surfaces the loss
+ * only as a `skippedPlacedGeometries` bump. Worth having, and small — do
+ * not sell it as crash avoidance. The engine fixed the crash.
  *
  * Memoised because the two degraded builds are consecutive
  * (`buildBatchedConwayModel` then `buildConwayIfcModel`), and a second
@@ -561,9 +569,12 @@ function makeRecapture(ifcAPI, modelID, captured, retained) {
  * `onMeshBatch`) finishes copying it out — conway's GEOMETRY_BUDGET eviction
  * raced the very copy this comment used to treat as instantaneous, and
  * embind then throws "Cannot pass deleted object as a pointer of type
- * IfcGeometry" reading the freed wrapper (Sentry SHARE-1NK). Conway is
- * being fixed to keep call-N's delivered assets resident until call N+1
- * starts, closing that window; independently, `IncrementalBatchedBuilder`
+ * IfcGeometry" reading the freed wrapper (Sentry SHARE-1NK). That fix has
+ * since LANDED — conway#654 moved eviction to the head of the pump call, so
+ * call N's delivered assets stay resident until call N+1 begins, and
+ * `getGeometry` now probes `isNativeDeleted` and returns a dummy geometry
+ * instead of aborting. The window is closed on this pin (1.1575.649);
+ * independently, `IncrementalBatchedBuilder`
  * now degrades a boundary throw to one skipped placement (counted, logged)
  * rather than letting it escape and drop the whole batch, so the invariant
  * failing on some future engine version costs one part, not sixty-four.
