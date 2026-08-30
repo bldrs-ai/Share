@@ -145,7 +145,14 @@ describe('viewer/ifc/ShareIfcLoader degraded end-of-load builds (conway#638)', (
     // does. Without that the loader's `builder` would stay null for every
     // case, and the three degraded paths this file separates would collapse
     // into one.
-    recapture = jest.fn(() => PUMPED)
+    // ASYNC on purpose, matching the real seam (conway#660): on a windowed
+    // source the re-extraction pages the byte window through
+    // `StreamAllMeshesAsync`, so `recapture()` returns a Promise on every
+    // path. A sync stub here would let a call site that dropped its `await`
+    // pass — the builders would receive an array either way — which is
+    // exactly the regression this file exists to catch.
+    // eslint-disable-next-line require-await
+    recapture = jest.fn(async () => PUMPED)
     parseIfcWithConway.mockImplementation(
       // eslint-disable-next-line require-await
       async (buffer, api, settings, onProgress, onMeshBatch) => {
@@ -271,6 +278,46 @@ describe('viewer/ifc/ShareIfcLoader degraded end-of-load builds (conway#638)', (
     expect(buildBatchedConwayModel).not.toHaveBeenCalled()
   })
 
+  it('fails the load loudly when the whole-model ask rejects', async () => {
+    // conway#660/#672: on a windowed source `recapture()` drives
+    // `StreamAllMeshesAsync`, which THROWS rather than serving an empty
+    // model when a `GEOMETRY_BUDGET_MB` eviction freed everything the
+    // re-walk needs. That rejection has to end the load, not be absorbed
+    // into a blank scene reported as success — the failure mode that costs
+    // a user their file.
+    //
+    // The chain is worth naming because only half of it propagates. The
+    // FIRST degraded `await recapture()` sits inside the batchedMesh
+    // branch's try/catch, so a rejection there is swallowed into
+    // fall-through (correctly — that branch's contract is "never break a
+    // load"); it is the SECOND, unguarded await feeding the merged build
+    // that carries the failure out. This runs with `batchedMesh` off, which
+    // is the shipped default, so it exercises that unguarded await
+    // directly.
+    //
+    // "Loudly" is `ShareIfcLoader#parse`'s documented error contract, not a
+    // rejection: it catches, stashes `ifcLastError`, calls `onError` and
+    // returns null (re-throwing only on OOM, so `Loader.js#readModel` can
+    // show the tailored message). What must never happen is a model
+    // reaching the scene.
+    IncrementalBatchedBuilder.mockImplementation(() => {
+      throw new Error('builder construction failed')
+    })
+    const evicted = new Error(
+      'StreamAllMeshesAsync: this model was opened with STREAMING_CONSUMER, ' +
+      'and the re-walk resolved none of the model')
+    recapture.mockRejectedValue(evicted)
+    const onError = jest.fn()
+    const model = await loader.parse(new ArrayBuffer(4), jest.fn(), onError)
+    expect(model).toBeNull()
+    expect(onError).toHaveBeenCalledWith(evicted)
+    expect(loader.ifcLastError).toBe(evicted)
+    // The load is over, and nothing was added to the scene — no partial or
+    // empty model presented as a successful one.
+    expect(ifc.addIfcModel).not.toHaveBeenCalled()
+    expect(buildConwayIfcModel).not.toHaveBeenCalled()
+  })
+
   it('serves both fallbacks off the accessor when they run in sequence', async () => {
     // `buildBatchedConwayModel` throwing falls through to
     // `buildConwayIfcModel`, so both degraded builds run in one load. Each
@@ -290,9 +337,13 @@ describe('viewer/ifc/ShareIfcLoader degraded end-of-load builds (conway#638)', (
     expect(buildBatchedConwayModel.mock.calls[0][0]).toEqual(PUMPED)
     expect(buildConwayIfcModel.mock.calls[0][0]).toEqual(PUMPED)
     // Every array handed out is the one object the accessor memoises, so
-    // the two builds cannot be reading different re-extractions.
+    // the two builds cannot be reading different re-extractions. Each
+    // recorded result is the accessor's Promise, so resolve before
+    // comparing — `toBe` on the Promises themselves would pass on the
+    // memoised seam and equally on a broken one that re-drove the engine
+    // and happened to return the same array.
     for (const result of recapture.mock.results) {
-      expect(result.value).toBe(PUMPED)
+      expect(await result.value).toBe(PUMPED)
     }
   })
 })
