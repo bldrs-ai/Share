@@ -145,7 +145,14 @@ describe('viewer/ifc/ShareIfcLoader degraded end-of-load builds (conway#638)', (
     // does. Without that the loader's `builder` would stay null for every
     // case, and the three degraded paths this file separates would collapse
     // into one.
-    recapture = jest.fn(() => PUMPED)
+    // ASYNC on purpose, matching the real seam (conway#660): on a windowed
+    // source the re-extraction pages the byte window through
+    // `StreamAllMeshesAsync`, so `recapture()` returns a Promise on every
+    // path. A sync stub here would let a call site that dropped its `await`
+    // pass — the builders would receive an array either way — which is
+    // exactly the regression this file exists to catch.
+    // eslint-disable-next-line require-await
+    recapture = jest.fn(async () => PUMPED)
     parseIfcWithConway.mockImplementation(
       // eslint-disable-next-line require-await
       async (buffer, api, settings, onProgress, onMeshBatch) => {
@@ -290,9 +297,13 @@ describe('viewer/ifc/ShareIfcLoader degraded end-of-load builds (conway#638)', (
     expect(buildBatchedConwayModel.mock.calls[0][0]).toEqual(PUMPED)
     expect(buildConwayIfcModel.mock.calls[0][0]).toEqual(PUMPED)
     // Every array handed out is the one object the accessor memoises, so
-    // the two builds cannot be reading different re-extractions.
+    // the two builds cannot be reading different re-extractions. Each
+    // recorded result is the accessor's Promise, so resolve before
+    // comparing — `toBe` on the Promises themselves would pass on the
+    // memoised seam and equally on a broken one that re-drove the engine
+    // and happened to return the same array.
     for (const result of recapture.mock.results) {
-      expect(result.value).toBe(PUMPED)
+      expect(await result.value).toBe(PUMPED)
     }
   })
 })
