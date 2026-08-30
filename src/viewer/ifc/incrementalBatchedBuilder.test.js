@@ -22,11 +22,24 @@ function unitTriangleVerts() {
 
 /**
  * @param {object} byGeomExpressId geomExpressID → {vertexData, indexData}
- * @return {object} mock Conway IfcAPI
+ * @param {object} [opts]
+ * @param {Set<number>} [opts.deletedGeomIds] ids whose GetGeometry call
+ *   throws the embind "deleted object" error, simulating a conway#535
+ *   budget eviction that lands between delivery and our reading it. The
+ *   set is read per call, so a test can delete from it to model conway
+ *   re-extracting the shape for a later product.
+ * @return {object} mock Conway IfcAPI. `GetGeometry` is a jest.fn so
+ *   tests can assert which ids were fetched, and how often.
  */
-function makeApi(byGeomExpressId) {
+function makeApi(byGeomExpressId, opts = {}) {
+  const deletedGeomIds = opts.deletedGeomIds ?? new Set()
   return {
-    GetGeometry(_modelID, geomExpressID) {
+    GetGeometry: jest.fn((_modelID, geomExpressID) => {
+      if (deletedGeomIds.has(geomExpressID)) {
+        // Matches the real embind wording (Sentry SHARE-1NK) so a
+        // message-sniffing fallback would also see the right shape.
+        throw new Error('Cannot pass deleted object as a pointer of type IfcGeometry')
+      }
       const g = byGeomExpressId[geomExpressID]
       if (!g) {
         return null
@@ -37,7 +50,7 @@ function makeApi(byGeomExpressId) {
         GetVertexDataSize: () => g.vertexData.length,
         GetIndexDataSize: () => g.indexData.length,
       }
-    },
+    }),
     GetVertexArray(ptr) {
       return byGeomExpressId[ptr].vertexData
     },
@@ -62,6 +75,16 @@ function flatMesh(expressID, placements) {
       color,
     })),
   }
+}
+
+
+/**
+ * @param {object} api mock from makeApi
+ * @param {number} geomExpressID
+ * @return {number} how many times GetGeometry was called for that id
+ */
+function callsFor(api, geomExpressID) {
+  return api.GetGeometry.mock.calls.filter(([, id]) => id === geomExpressID).length
 }
 
 
@@ -286,5 +309,155 @@ describe('IncrementalBatchedBuilder', () => {
     const {stats} = builder.finalize()
     expect(stats.skippedPlacedGeometries).toBe(1)
     expect(builder.hasContent()).toBe(true)
+  })
+
+  it('skips one budget-evicted geometry without dropping the rest of the batch (SHARE-1NK)', () => {
+    // conway's GEOMETRY_BUDGET_MB eviction (conwayDirectIfcLoader.js,
+    // conway#535) can free geometry 777's native asset between the demand
+    // pump delivering it and this call reading it, so GetGeometry throws
+    // embind's "Cannot pass deleted object..." for that one id while 999
+    // and 888 are unaffected. Before the fix this propagated out of
+    // resolveGeometry_, appendBatch caught it at the batch level (or, pre
+    // Sentry SHARE-1NK, ShareIfcLoader.js dropped the whole up-to-64-product
+    // batch into the preview fallback) -- either way the healthy placements
+    // in the SAME batch were lost too. They must survive now.
+    const api = makeApi(shapes, {deletedGeomIds: new Set([777])})
+    const builder = new IncrementalBatchedBuilder(api, 0)
+
+    expect(() => builder.appendBatch([
+      flatMesh(1, [{geomExpressID: 999, color: OPAQUE}]),
+      flatMesh(2, [{geomExpressID: 777, color: OPAQUE}]),
+      flatMesh(3, [{geomExpressID: 888, color: OPAQUE}]),
+    ])).not.toThrow()
+
+    // Still evicted in the next batch, so it fails again and is skipped
+    // again -- but it IS re-fetched (see the retry test below for why the
+    // suppression stops at the batch boundary).
+    expect(() => builder.appendBatch([
+      flatMesh(4, [{geomExpressID: 777, color: OPAQUE}]),
+    ])).not.toThrow()
+
+    const {stats} = builder.finalize()
+    expect(stats.instanceCount).toBe(2) // 999 and 888 only
+    expect(stats.skippedPlacedGeometries).toBe(2) // 777, once per batch it appeared in
+    expect(callsFor(api, 777)).toBe(2) // once per batch, not once per placement
+  })
+
+  it('retries a transiently evicted geometry in the next batch, but not within the batch', () => {
+    // A budget eviction is TRANSIENT: conway re-extracts the shape when a
+    // later product maps it, so the id must not be blacklisted permanently
+    // (codex P1 on Share#1798) -- every later placement reusing that shape
+    // would be dropped for the rest of the load. Within ONE pump batch the
+    // eviction state can't change, so a second placement of the same id
+    // must not pay for another guaranteed-fail boundary call.
+    const evicted = new Set([777])
+    const api = makeApi({...shapes, 777: shapes[999]}, {deletedGeomIds: evicted})
+    const builder = new IncrementalBatchedBuilder(api, 0)
+
+    builder.appendBatch([
+      flatMesh(1, [{geomExpressID: 777, color: OPAQUE}]),
+      flatMesh(2, [{geomExpressID: 777, color: OPAQUE}]), // same batch, same eviction
+    ])
+    expect(callsFor(api, 777)).toBe(1)
+
+    // Conway re-extracted it for a later product: the retry now succeeds.
+    evicted.delete(777)
+    builder.appendBatch([flatMesh(3, [{geomExpressID: 777, color: OPAQUE}])])
+    expect(callsFor(api, 777)).toBe(2)
+
+    const {stats, batches} = builder.finalize()
+    expect(stats.instanceCount).toBe(1) // the recovered placement
+    expect(stats.skippedPlacedGeometries).toBe(2) // both batch-1 placements
+    expect(Array.from(batches[0].instanceParents)).toEqual([3])
+  })
+
+  it('never re-fetches a degenerate geometry, in this batch or any later one', () => {
+    // The contrast case to the retry above: a zero-size shape is a property
+    // of the SHAPE, not of eviction timing, so no later batch can do better
+    // and badGeometry keeps it permanently.
+    const degenerate = {vertexData: unitTriangleVerts(), indexData: new Uint32Array([])}
+    const api = makeApi({...shapes, 666: degenerate})
+    const builder = new IncrementalBatchedBuilder(api, 0)
+
+    builder.appendBatch([
+      flatMesh(1, [{geomExpressID: 666, color: OPAQUE}]),
+      flatMesh(2, [{geomExpressID: 666, color: OPAQUE}]),
+    ])
+    builder.appendBatch([flatMesh(3, [{geomExpressID: 666, color: OPAQUE}])])
+
+    expect(callsFor(api, 666)).toBe(1)
+    const {stats} = builder.finalize()
+    expect(stats.instanceCount).toBe(0)
+    expect(stats.skippedPlacedGeometries).toBe(3)
+  })
+
+  it('skips a placement whose boundary read throws mid-append, keeping the tables aligned', () => {
+    // Every Conway-boundary read is staged before the first mutation (codex
+    // P2 on Share#1798). If `occurrencePath` threw AFTER addInstance, the
+    // mesh would carry an instance that `cursor` and the pick tables never
+    // recorded, and every later instance id would map to the wrong row of
+    // selection metadata -- silently, since appendBatch keeps going.
+    const api = makeApi(shapes)
+    const builder = new IncrementalBatchedBuilder(api, 0)
+    const poisoned = {
+      geometryExpressID: 999,
+      flatTransformation: IDENTITY_MAT,
+      color: OPAQUE,
+      get occurrencePath() {
+        throw new Error('Cannot pass deleted object as a pointer of type PlacedGeometry')
+      },
+    }
+    const moved = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 7, 0, 0, 1]
+
+    expect(() => builder.appendBatch([
+      {expressID: 1, geometries: [poisoned]},
+      {expressID: 2, geometries: [
+        {geometryExpressID: 999, flatTransformation: moved, color: OPAQUE},
+      ]},
+      flatMesh(3, [{geomExpressID: 888, color: OPAQUE}]),
+    ])).not.toThrow()
+
+    const {stats, batches} = builder.finalize()
+    expect(stats.skippedPlacedGeometries).toBe(1)
+    expect(stats.instanceCount).toBe(2) // the two healthy placements after it
+    expect(batches).toHaveLength(1)
+    const batch = batches[0]
+    // No untracked instance: the mesh, the cursor and every pick table agree.
+    expect(batch.mesh.instanceCount).toBe(stats.instanceCount)
+    expect(builder.opaque.cursor).toBe(stats.instanceCount)
+    for (const table of [batch.instanceParents, batch.instanceOccurrenceIds,
+      batch.instanceGeometryIds, batch.instanceGeometry, batch.instanceColors]) {
+      expect(table).toHaveLength(stats.instanceCount)
+    }
+    // ...and row i really describes instance i: parent 2's translated
+    // transform sits at batchId 0, where instanceParents says it is.
+    expect(Array.from(batch.instanceParents)).toEqual([2, 3])
+    const m = new Matrix4()
+    batch.mesh.getMatrixAt(0, m)
+    expect(m.elements[12]).toBeCloseTo(7)
+  })
+
+  it('skips one unreadable FlatMesh without dropping the rest of the batch', () => {
+    // The same conway eviction can free a FlatMesh's own wrapper, not just
+    // the geometry it points to -- reading `.expressID` off a deleted
+    // vector element throws the same way. appendBatch must count and skip
+    // that ONE FlatMesh and still append the healthy ones around it.
+    const poisoned = {
+      get expressID() {
+        throw new Error('Cannot pass deleted object as a pointer of type FlatMesh')
+      },
+      geometries: [],
+    }
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+
+    expect(() => builder.appendBatch([
+      flatMesh(1, [{geomExpressID: 999, color: OPAQUE}]),
+      poisoned,
+      flatMesh(3, [{geomExpressID: 888, color: OPAQUE}]),
+    ])).not.toThrow()
+
+    const {stats} = builder.finalize()
+    expect(stats.instanceCount).toBe(2) // 999 and 888
+    expect(stats.skippedFlatMeshes).toBe(1)
   })
 })

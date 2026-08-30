@@ -349,9 +349,23 @@ export async function parseIfcWithConway(
  *
  * Safe here for one specific reason: eviction frees an asset from
  * GetGeometry until something re-extracts it, and this loader copies every
- * payload at delivery (the bldrs-ai/Share#1640 invariant). A change that
- * made it hold geometry IDs and fetch them later would break quietly, so
- * that invariant is now load-bearing rather than merely true.
+ * payload at delivery (the bldrs-ai/Share#1640 invariant) — but "at
+ * delivery" means between pump calls, in `onMeshBatch` below, after
+ * `ExtractGeometryBatchAsync` returns and before the next pump call runs.
+ * A batch delivered late in that window can still be evicted before
+ * `IncrementalBatchedBuilder.appendBatch` (called synchronously from
+ * `onMeshBatch`) finishes copying it out — conway's GEOMETRY_BUDGET eviction
+ * raced the very copy this comment used to treat as instantaneous, and
+ * embind then throws "Cannot pass deleted object as a pointer of type
+ * IfcGeometry" reading the freed wrapper (Sentry SHARE-1NK). Conway is
+ * being fixed to keep call-N's delivered assets resident until call N+1
+ * starts, closing that window; independently, `IncrementalBatchedBuilder`
+ * now degrades a boundary throw to one skipped placement (counted, logged)
+ * rather than letting it escape and drop the whole batch, so the invariant
+ * failing on some future engine version costs one part, not sixty-four.
+ * A change that made this loader hold geometry IDs and fetch them later
+ * would still break quietly, so the copy-at-delivery invariant remains
+ * load-bearing rather than merely true.
  *
  * Ignored by engines predating conway#535 — unknown settings are dropped —
  * so ordering against the conway bump does not matter.
