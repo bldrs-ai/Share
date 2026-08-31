@@ -22,8 +22,10 @@ export const STORE_DETECT_PREFIX_BYTES = 65_536
 // the missing tail is "not in the index" (Arty STYLED_ITEM #36800 →
 // MANIFOLD_SOLID_BREP #1031384). The footer is required by ISO-10303-21;
 // its absence on a file that still has the magic is the truncated case.
-const PART21_MAGIC = 'ISO-10303-21'
-const PART21_END = 'END-ISO-10303-21'
+const PART21_MAGIC = asciiBytes('ISO-10303-21')
+// The footer keyword without its required `;` is still truncated — a
+// crash can land after the letters and before the terminator.
+const PART21_END = asciiBytes('END-ISO-10303-21;')
 const PART21_HEAD_SNIFF_BYTES = 64
 const PART21_TAIL_SNIFF_BYTES = 256
 
@@ -45,11 +47,11 @@ export function looksLikeTruncatedPart21(bytes) {
     return false
   }
   const headLen = Math.min(PART21_HEAD_SNIFF_BYTES, u8.byteLength)
-  if (!latin1(u8, 0, headLen).includes(PART21_MAGIC)) {
+  if (!containsBytes(u8, 0, headLen, PART21_MAGIC)) {
     return false
   }
   const tailStart = Math.max(0, u8.byteLength - PART21_TAIL_SNIFF_BYTES)
-  return !latin1(u8, tailStart, u8.byteLength).includes(PART21_END)
+  return !containsBytes(u8, tailStart, u8.byteLength, PART21_END)
 }
 
 
@@ -79,29 +81,52 @@ export async function looksLikeTruncatedPart21Blob(blob) {
     blob.slice(tailStart, blob.size).arrayBuffer(),
   ])
   const head = new Uint8Array(headBuf)
-  if (!latin1(head, 0, head.byteLength).includes(PART21_MAGIC)) {
+  if (!containsBytes(head, 0, head.byteLength, PART21_MAGIC)) {
     return false
   }
   const tail = new Uint8Array(tailBuf)
-  return !latin1(tail, 0, tail.byteLength).includes(PART21_END)
+  return !containsBytes(tail, 0, tail.byteLength, PART21_END)
 }
 
 
 /**
- * Decode a byte range as ISO-8859-1. Part-21 keywords are ASCII; we
- * must not UTF-8-decode a sniff that might cut a multi-byte sequence.
+ * ASCII needle as a Uint8Array. Keywords are 7-bit; TextEncoder would
+ * also work, but a hand table keeps this module free of encoder quirks
+ * in the sniff path.
  *
- * @param {Uint8Array} u8
- * @param {number} start
- * @param {number} end exclusive
- * @return {string}
+ * @param {string} s
+ * @return {Uint8Array}
  */
-function latin1(u8, start, end) {
-  let out = ''
-  for (let i = start; i < end; i++) {
-    out += String.fromCharCode(u8[i])
+function asciiBytes(s) {
+  const out = new Uint8Array(s.length)
+  for (let i = 0; i < s.length; i++) {
+    out[i] = s.charCodeAt(i)
   }
   return out
+}
+
+
+/**
+ * True when `needle` occurs in `haystack[start, end)`.
+ *
+ * @param {Uint8Array} haystack
+ * @param {number} start
+ * @param {number} end exclusive
+ * @param {Uint8Array} needle
+ * @return {boolean}
+ */
+function containsBytes(haystack, start, end, needle) {
+  const last = end - needle.byteLength
+  outer:
+  for (let i = start; i <= last; i++) {
+    for (let j = 0; j < needle.byteLength; j++) {
+      if (haystack[i + j] !== needle[j]) {
+        continue outer
+      }
+    }
+    return true
+  }
+  return false
 }
 
 

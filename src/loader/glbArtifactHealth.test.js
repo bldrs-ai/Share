@@ -1,7 +1,8 @@
-import {packGlbChunks} from './glbContainer'
+import {packGlbChunks, viewGlbContainerChunks} from './glbContainer'
 import {serializeGlb} from './injectGlbExtensions'
 import {
   cachedGlbHasRenderableGeometry,
+  glbChunksHaveRenderableGeometry,
   sceneHasRenderableGeometry,
 } from './glbArtifactHealth'
 
@@ -73,6 +74,17 @@ describe('glbArtifactHealth', () => {
 
     it('returns false for bytes that are not a Bldrs container', () => {
       expect(cachedGlbHasRenderableGeometry(new Uint8Array([1, 2, 3]))).toBe(false)
+    })
+
+    it('inspects inner GLBs as views over the packed buffer, not copies', () => {
+      const packed = packedFromJson({
+        asset: {version: '2.0'},
+        meshes: [{primitives: [{attributes: {POSITION: 0}}]}],
+      })
+      const {chunks} = viewGlbContainerChunks(packed)
+      expect(chunks).toHaveLength(1)
+      expect(chunks[0].buffer).toBe(packed.buffer)
+      expect(glbChunksHaveRenderableGeometry(chunks)).toBe(true)
     })
   })
 })

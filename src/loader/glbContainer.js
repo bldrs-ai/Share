@@ -137,13 +137,16 @@ export function packGlbChunks(chunks, mode = null) {
 
 
 /**
- * Unpack a container into its constituent GLB chunks plus the recorded
- * compression mode. v1 containers (no mode byte) return mode=null.
+ * Layout of a packed container: inner GLB chunks as **views** over
+ * `buffer`, not copies. The cache-hit health check must not allocate
+ * another artifact-sized buffer (a hundreds-of-MB CAD HIT already holds
+ * `file.arrayBuffer()`); `unpackGlbContainer` copies for the actual
+ * parse path, where the caller needs independent chunk buffers.
  *
  * @param {ArrayBuffer|Uint8Array} buffer
- * @return {{chunks: ArrayBuffer[], mode: GlbCompressionMode, version: number}}
+ * @return {{chunks: Uint8Array[], mode: GlbCompressionMode, version: number}}
  */
-export function unpackGlbContainer(buffer) {
+export function viewGlbContainerChunks(buffer) {
   if (!isBldrsGlbContainer(buffer)) {
     throw new Error('unpackGlbContainer: missing BLDR magic')
   }
@@ -172,10 +175,28 @@ export function unpackGlbContainer(buffer) {
     if (offset + len > view.byteLength) {
       throw new Error(`unpackGlbContainer: truncated chunk ${i} (need ${len}B)`)
     }
-    const ab = new ArrayBuffer(len)
-    new Uint8Array(ab).set(view.subarray(offset, offset + len))
-    out.push(ab)
+    out.push(view.subarray(offset, offset + len))
     offset += len
   }
   return {chunks: out, mode, version}
+}
+
+
+/**
+ * Unpack a container into its constituent GLB chunks plus the recorded
+ * compression mode. v1 containers (no mode byte) return mode=null.
+ * Chunks are copies, so the packed buffer can be released after unpack.
+ *
+ * @param {ArrayBuffer|Uint8Array} buffer
+ * @return {{chunks: ArrayBuffer[], mode: GlbCompressionMode, version: number}}
+ */
+export function unpackGlbContainer(buffer) {
+  const {chunks, mode, version} = viewGlbContainerChunks(buffer)
+  const copies = []
+  for (const view of chunks) {
+    const ab = new ArrayBuffer(view.byteLength)
+    new Uint8Array(ab).set(view)
+    copies.push(ab)
+  }
+  return {chunks: copies, mode, version}
 }

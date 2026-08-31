@@ -42,10 +42,10 @@ import {BldrsElementPropertiesReader} from './bldrsElementProperties'
 import {BldrsFaceIdsReader} from './bldrsFaceIds'
 import {BldrsSpatialTreeReader} from './bldrsSpatialTree'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
-import {cachedGlbHasRenderableGeometry} from './glbArtifactHealth'
+import {glbChunksHaveRenderableGeometry} from './glbArtifactHealth'
 import {glbCacheKey} from './glbCacheKey'
 import {activeArtifactSpec, isGlbBatchedActive} from './glbCompress'
-import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
+import {isBldrsGlbContainer, unpackGlbContainer, viewGlbContainerChunks} from './glbContainer'
 import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import glbToThree from './glb'
@@ -2087,7 +2087,10 @@ async function tryLoadCachedGlb(cacheKeyArgs) {
       glbInfo('reader: found OPFS file but it is not a Bldrs container; treating as miss')
       return null
     }
-    const peek = unpackGlbContainer(bytes)
+    // Views, not copies: `bytes` is already the whole artifact in
+    // memory. unpackGlbContainer would allocate a second full-size
+    // buffer just to read the mode byte and JSON mesh list.
+    const peek = viewGlbContainerChunks(bytes)
     if (peek.mode !== requestedMode) {
       glbInfo(
         `reader: cached artifact mode mismatch (cached=${peek.mode || 'none'}, ` +
@@ -2097,7 +2100,7 @@ async function tryLoadCachedGlb(cacheKeyArgs) {
     // Empty artifacts are a poisoned HIT: the writer used to cache a
     // 0-mesh scene after a failed extract, and every later load skipped
     // the source parse. Evict so this load (and the next) re-parse.
-    if (!cachedGlbHasRenderableGeometry(bytes)) {
+    if (!glbChunksHaveRenderableGeometry(peek.chunks)) {
       glbInfo('reader: cached artifact has no geometry; evicting and treating as miss')
       try {
         await deleteFileFromOPFS(

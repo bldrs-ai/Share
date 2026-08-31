@@ -4,7 +4,7 @@
 // caches whatever is on screen — including a 0-mesh scene. The next load
 // is a cache HIT of that empty file, so the user never re-parses. Refuse
 // those artifacts on write and evict them on read (Loader#tryLoadCachedGlb).
-import {unpackGlbContainer} from './glbContainer'
+import {viewGlbContainerChunks} from './glbContainer'
 import {parseGlb} from './injectGlbExtensions'
 
 
@@ -39,28 +39,49 @@ export function sceneHasRenderableGeometry(model) {
 
 
 /**
- * True when a packed Bldrs GLB container's JSON names at least one
- * primitive with a POSITION attribute. Chunks that fail to parse count
- * as empty — unreadable is the same failure mode as 0 meshes, and the
- * reader evicts either way.
+ * True when already-viewed inner GLB chunks name at least one primitive
+ * with a POSITION attribute. Callers that have walked the container
+ * (Loader#tryLoadCachedGlb) must pass those views so this does not
+ * unpack — and copy — the artifact a second time.
  *
- * @param {ArrayBuffer|Uint8Array} bytes Packed container (or a thrown
- *   unpack will be treated as empty)
+ * Unreadable chunks count as empty: same failure mode as 0 meshes, and
+ * the reader evicts either way.
+ *
+ * @param {Array<Uint8Array|ArrayBuffer>} chunks Inner GLB views or copies
  * @return {boolean}
  */
-export function cachedGlbHasRenderableGeometry(bytes) {
+export function glbChunksHaveRenderableGeometry(chunks) {
+  if (!Array.isArray(chunks) || chunks.length === 0) {
+    return false
+  }
   try {
-    const {chunks} = unpackGlbContainer(bytes)
-    if (!Array.isArray(chunks) || chunks.length === 0) {
-      return false
-    }
     for (const chunk of chunks) {
-      const {json} = parseGlb(new Uint8Array(chunk))
+      const view = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk)
+      const {json} = parseGlb(view)
       if (glbJsonHasPositionedPrimitive(json)) {
         return true
       }
     }
     return false
+  } catch {
+    return false
+  }
+}
+
+
+/**
+ * Packed-container convenience for tests. Walks via views — no
+ * payload copies. Production lookup should prefer
+ * {@link glbChunksHaveRenderableGeometry} on a walk it already did
+ * for the mode check.
+ *
+ * @param {ArrayBuffer|Uint8Array} bytes Packed Bldrs container
+ * @return {boolean}
+ */
+export function cachedGlbHasRenderableGeometry(bytes) {
+  try {
+    const {chunks} = viewGlbContainerChunks(bytes)
+    return glbChunksHaveRenderableGeometry(chunks)
   } catch {
     return false
   }

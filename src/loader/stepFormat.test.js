@@ -174,10 +174,15 @@ describe('isConwayIfcFormat', () => {
 
     it('flags a part-21 prefix that never reached the footer', () => {
       // The Arty OPFS-poison case: magic is present, DATA starts, the
-      // tail solids (and END-ISO-10303-21) never landed on disk.
+      // tail solids (and END-ISO-10303-21;) never landed on disk.
       expect(looksLikeTruncatedPart21(bytes(
         `${MAGIC}FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\nENDSEC;\nDATA;\n` +
         `#36800=STYLED_ITEM('NAME_480',(#37527),#1031384);\n`))).toBe(true)
+    })
+
+    it('treats a footer keyword without its required semicolon as truncated', () => {
+      expect(looksLikeTruncatedPart21(bytes(
+        `${MAGIC}FILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21\n`))).toBe(true)
     })
 
     it('ignores non-part-21 bytes, including empty', () => {
