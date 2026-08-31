@@ -1,6 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {BufferGeometry} from 'three'
-import {disableDebug, INFO, setDebugLevel} from '../../utils/debug'
+import {disableDebug, WARN, setDebugLevel} from '../../utils/debug'
 import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 
 
@@ -173,10 +173,11 @@ describe('viewer/ifc/flatMeshToBufferGeometry', () => {
   it('logs the recenter once per load, and never for a near-origin model (Share#1632)', () => {
     // The retrospective (Share#1632, root cause conway#680) found the
     // recenter used to fire completely silently -- this pins the fix.
-    // Tests run with the debug util disabled (setupTests.js); raise it just
-    // for this assertion so the log actually reaches console.
-    setDebugLevel(INFO)
-    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+    // Tests run with the debug util disabled (setupTests.js's disableDebug),
+    // so the level has to be raised here even though WARN is the production
+    // default; OFF suppresses everything.
+    setDebugLevel(WARN)
+    const logSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const api = wireGeomFetch(makeApi({
         999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
@@ -207,7 +208,10 @@ describe('viewer/ifc/flatMeshToBufferGeometry', () => {
       flatMeshToBufferGeometry(
         [{expressID: 100, geometries: {size: () => 1, get: () => ({geometryExpressID: 999, flatTransformation: translation(7, 2, -3)})}}],
         nearApi, 0)
-      expect(logSpy).not.toHaveBeenCalled()
+      // Filtered rather than asserting the whole channel is silent: WARN is
+      // shared with the builders' own skip diagnostics, so a bare
+      // not.toHaveBeenCalled() would fail for reasons unrelated to this log.
+      expect(logSpy.mock.calls.filter(([msg]) => /georeferenced model/.test(msg))).toHaveLength(0)
     } finally {
       logSpy.mockRestore()
       disableDebug()

@@ -6,7 +6,7 @@ import {
   Matrix4,
   Vector4,
 } from 'three'
-import debug, {INFO} from '../../utils/debug'
+import debug, {WARN} from '../../utils/debug'
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
 
@@ -346,13 +346,22 @@ export function coordinationOffsetFor(flatTransformation) {
  * this logs once per load too. `coordinationOffsetFor` itself stays pure and
  * unlogged, in case a future caller ever needs to probe it per-placement.
  *
+ * WARN, not INFO, and that is the whole point rather than a severity
+ * judgement: `debug()` prints only when the requested level is at or above
+ * `DEBUG_LEVEL`, which defaults to WARN and is never lowered at runtime, so
+ * an INFO line is a no-op in production and would have left exactly the
+ * silence Share#1632 was about. The same builders already carry their skip
+ * diagnostics on this channel (`IncrementalBatchedBuilder`'s append failure,
+ * ShareIfcLoader's fallbacks). Console hygiene holds because this fires at
+ * most once per load and only for a georeferenced model.
+ *
  * @param {Array<number>} flatTransformation 16-element column-major matrix
  * @return {?Array<number>} same as `coordinationOffsetFor`
  */
 export function decideCoordinationOffset(flatTransformation) {
   const offset = coordinationOffsetFor(flatTransformation)
   if (offset !== null) {
-    debug(INFO).log(`georeferenced model: recentering by [${offset.join(', ')}] m (see Share#1632)`)
+    debug(WARN).warn(`georeferenced model: recentering by [${offset.join(', ')}] m (see Share#1632)`)
   }
   return offset
 }
