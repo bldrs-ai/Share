@@ -50,15 +50,21 @@ export function occurrencePathsEqual(a, b) {
  * occurrence path — its child count decides whether the scene resolution
  * needs the descendant prefix scan (assembly) or the exact-key lookup (leaf).
  *
- * A product node wins over an ephemeral solid node carrying the same path.
- * Since conway#628 an individually addressable body ends its path with its
- * own express id, so its path is strictly deeper than its part's and the two
- * can't collide — but a pre-#628 cache artifact still holds solid nodes whose
- * path IS the part's, and there the product node is the answer (their identity
- * was the (path, solid expressID) pair, so a path-only lookup can't name one
- * body). The ephemeral fallback is what makes a #628 body reachable: with the
- * body's own segment on the path, this lookup lands ON the solid node and the
- * scene pick / permalink resolve it as the selection.
+ * The ephemeral fallback is what makes a conway#628 body reachable: a body
+ * ends its path with its own express id, so this lookup lands ON the solid
+ * node and the scene pick / permalink resolve it as the selection.
+ *
+ * A product node still wins over an ephemeral solid node carrying the *same*
+ * path — the pre-#628 shape, where a body's identity was the (path, solid
+ * expressID) pair and a path-only lookup therefore couldn't name one body.
+ * No shipped producer feeds that shape to this code today: the engine no
+ * longer emits it, and a cache artifact written by one that did is
+ * unreachable because `BLDRS_GLB_SCHEMA_VERSION` is part of the artifact
+ * FILENAME (`glbCacheKey.glbArtifactPath`), so an old artifact is never
+ * opened, only missed. The preference is kept as defence against
+ * engine/schema lockstep drift — a tree from *any* GLB reaches
+ * `newGltfLoader`'s extension readers, cache lookup or not (`Loader.js`) —
+ * and it costs one branch.
  *
  * @param {object|null|undefined} rootNode spatial-structure root element
  * @param {Array<number>|null|undefined} path NAUO express ids, root→leaf
@@ -167,10 +173,14 @@ export function resolvePickedOccurrenceNode({
  *
  * The conditional tail is the conway#628 seam: a body addressable in its own
  * right carries its express id as the path's last segment, so appending it
- * again would mint `/1020254/367733/367733` and the resolver would read the
- * repeat as an anonymous piece under the body. A pre-#628 solid (which shares
- * its part's path) still needs the extra segment — that pairing is the only
- * thing that tells "the part" from "one body inside it" there.
+ * again would mint `/1020254/367733/367733`. That URL is not fatal — the
+ * inverse resolver reads the repeat through the conway#387 anonymous-piece
+ * branch and still lands the selection on the body — but it registers a
+ * transient row for a piece that already has a tree node, so keep the URL a
+ * body's canonical one. The extra segment is still required wherever a piece
+ * shares its owner's path: an anonymous piece (which has no node at all), and
+ * a pre-#628 solid, where the (path, expressID) pairing is the only thing
+ * that tells "the part" from "one body inside it".
  * `resolveElementPathOccurrence` is the inverse.
  *
  * @param {number} rootExpressID the tree root's express id (paths omit it)

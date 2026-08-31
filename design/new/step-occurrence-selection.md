@@ -103,9 +103,15 @@ hands over a key that the existing machinery could already carry):
 - `findNodeByOccurrencePath` no longer *skips* ephemeral solid nodes; it
   prefers a product node and falls back to a solid one. That fallback is what
   makes a body reachable at all — with its own segment on the path, a pick's
-  trimmed path lands ON the solid node. The product preference is what keeps a
-  pre-#628 cache artifact working, where solids share their part's path and a
-  path-only lookup must not name one body.
+  trimmed path lands ON the solid node. The product preference covers the
+  pre-#628 shape, where solids share their part's path and a path-only lookup
+  must not name one body. Nothing shipped feeds that shape to this code today
+  — the engine no longer emits it, and an artifact written by one that did is
+  never opened, because the schema version is part of the artifact *filename*
+  (`glbArtifactPath`), so a stale artifact reads as a miss rather than as old
+  data. Treat the preference as defence against engine/schema lockstep drift
+  (the extension readers run on every GLB load, not only on cache lookups),
+  not as a live compatibility path.
 - `resolvePickedOccurrenceNode` (extracted from `canvasDoubleClickHandler`'s
   funnel, so it can be tested) promotes the selection to the solid node when
   the path names one. Without it a BLSN pick still degraded to the
@@ -114,8 +120,13 @@ hands over a key that the existing machinery could already carry):
 - `occurrenceElementPathIds` / `resolveElementPathOccurrence` are the
   permalink pair. The solid's express id is appended below the occurrence path
   **only when the path doesn't already end with it**; appending
-  unconditionally would mint `/1020254/367733/367733`, which reads back as an
-  anonymous piece *under* the body and resolves to nothing.
+  unconditionally would mint `/1020254/367733/367733`. That doubled URL is
+  degraded rather than dead — the resolver reads the repeat through the
+  conway#387 anonymous-piece branch, so the selection still lands on the body,
+  at the cost of registering a transient "piece" row for something that
+  already has a tree node. The pair keeps a body's URL canonical; the extra
+  segment stays required for pieces that genuinely share their owner's path
+  (an anonymous piece, and a pre-#628 solid).
 - **GLB schema bumped `0.17.0 → 0.18.0`.** Path composition is baked into the
   artifact on both sides (`BLDRS_face_ids.occurrencePaths` and the
   `BLDRS_spatial_tree` node paths), so a 0.17.0 cache hit would keep serving

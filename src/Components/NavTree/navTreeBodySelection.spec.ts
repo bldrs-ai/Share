@@ -151,9 +151,11 @@ describeMobileAndDesktop('NavTree STEP per-body selection', () => {
     expect(selection.selectedElements).toEqual([`${selection.solidExpressId}`])
 
     // The permalink addresses the body directly: [root, ...occurrencePath],
-    // where the path's last segment IS the body. The bug this guards is a
-    // repeated trailing segment (/root/body/body), which reads back as an
-    // anonymous piece under the body and resolves to nothing.
+    // where the path's last segment IS the body. What this guards is a
+    // repeated trailing segment (/root/body/body) — the selection would still
+    // resolve (through the conway#387 anonymous-piece branch) but the URL
+    // would not be the body's canonical one, and reading it registers a
+    // transient row for a piece that already has a tree node.
     const selectedPath = new URL(page.url()).pathname
     const elementPath = selectedPath.split('.step')[1]
     expect(elementPath).toMatch(/^\/\d+\/\d+$/)

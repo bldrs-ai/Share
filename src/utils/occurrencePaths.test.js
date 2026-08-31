@@ -81,10 +81,12 @@ describe('utils/occurrencePaths', () => {
     })
 
     it('prefers the product over an ephemeral solid sharing its path (pre-conway#628)', () => {
-      // A pre-#628 engine / cache artifact keys a body as the (path, solid
-      // expressID) pair, so its solids share the part's occurrence path and a
-      // path-only lookup cannot name one body — it must return the product
-      // node, whichever order the DFS happens to pop them in.
+      // The pre-#628 shape, kept as a defensive invariant rather than a live
+      // compatibility path (no shipped producer reaches this code — see the
+      // function's docstring): a body keyed as the (path, solid expressID)
+      // pair shares the part's occurrence path, so a path-only lookup cannot
+      // name one body and must return the product node, whichever order the
+      // DFS happens to pop them in.
       const solidA = {expressID: 250, occurrencePath: [10], ephemeral: true, children: []}
       const part = {expressID: 10, occurrencePath: [10], children: [solidA]}
       const solidTree = {expressID: 1, occurrencePath: [], children: [part]}
@@ -230,8 +232,10 @@ describe('utils/occurrencePaths', () => {
 
     it('round-trips a conway#628 body without repeating its segment', () => {
       // The body's express id is already the path's last segment; appending it
-      // again would mint /1020254/367733/367733, which reads back as an
-      // anonymous piece UNDER the body and resolves to nothing.
+      // again would mint /1020254/367733/367733, which reads back through the
+      // conway#387 anonymous-piece branch — the selection still lands on the
+      // body, but a transient "piece" row gets registered for something that
+      // already has a tree node. The canonical URL has no repeat.
       const tree = makeNoNauoMultibodyTree()
       const ids = occurrenceElementPathIds(ROOT_ID, [367733], 367733)
       expect(ids).toEqual([ROOT_ID, 367733])

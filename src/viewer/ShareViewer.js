@@ -1090,10 +1090,11 @@ export class ShareViewer {
    *   needs the prefix scan).
    * @param {number|null} [opts.geometryExpressId] When set, keep only
    *   instances whose `PlacedGeometry.geometryExpressID` matches — the join
-   *   for the NavTree's ephemeral solid nodes. Load-bearing wherever a body
-   *   shares its part's occurrence path: a pre-conway#628 engine or cache
-   *   artifact, and an anonymous piece with no node of its own. Redundant
-   *   (but harmless) for a #628 body, whose path ends with this same id.
+   *   for the NavTree's ephemeral solid nodes. Load-bearing wherever a piece
+   *   shares its part's occurrence path — today that is an anonymous piece
+   *   with no node of its own (conway#387), and it was every solid of a
+   *   multibody part before conway#628. Redundant (but harmless) for a #628
+   *   body, whose path ends with this same id.
    *   Null (the default) keeps every instance at/under the path.
    * @return {number[]} synthetic instance ids (empty when none)
    */

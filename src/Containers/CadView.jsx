@@ -1037,10 +1037,11 @@ export default function CadView({
    * @param {number} solidExpressId Express id of the selected ephemeral solid
    *   (a multibody STEP part's named body), or null when the selection is a
    *   whole product/occurrence. Since conway#628 it is also the last segment
-   *   of `occurrencePath`; carried separately because it's what tells "the
-   *   part" from "one body inside it" — NavTree row highlight, per-solid hide
-   *   and the permalink all read it, and pre-#628 caches key a body as the
-   *   (path, solid expressID) pair with no body segment on the path.
+   *   of `occurrencePath` for a body with a tree node; carried separately
+   *   because it's what tells "the part" from "one piece inside it" wherever
+   *   the two share a path — an anonymous piece (conway#387) has no node and
+   *   no segment of its own — and because NavTree row highlight, per-solid
+   *   hide and the permalink all read it.
    * @param {Array} anchorIds The ids the user actually picked, when the
    *   caller expanded them into descendants for the scene highlight
    *   (`elementSelection` does). Null (the default) means every result is
@@ -1215,10 +1216,10 @@ export default function CadView({
         state.selectedElements.includes(`${targetId}`) ||
         viewer.getSelectedIds().includes(targetId)
       // Occurrence identity is the path — plus the solid id when the URL
-      // addresses one body of a multibody part, since a pre-conway#628 solid
-      // shares its part's path and path equality alone would treat "the part"
-      // and "one body inside it" as the same selection, skipping the
-      // re-select.
+      // addresses one piece of a multibody part. For a piece that shares its
+      // part's path (an anonymous conway#387 piece, a pre-conway#628 solid)
+      // path equality alone would treat "the part" and "one piece inside it"
+      // as the same selection and skip the re-select.
       const alreadySelected = (occurrencePath && state.selectedOccurrencePath) ?
         (occurrencePathsEqual(occurrencePath, state.selectedOccurrencePath) &&
           state.selectedSolidExpressId === solidExpressId) :
