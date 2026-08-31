@@ -89,7 +89,7 @@ contract change and not a bug fix:
   and has no tree node. This is the Arty_Z7 "trailing non-NAUO segment"
   extension described above, which therefore largely disappears for solids —
   but `trimToTreeOccurrencePath`'s prefix fallback stays, because suppressed
-  anonymous dumps and pre-0.18.0 cache artifacts still produce paths the tree
+  anonymous dumps and pre-0.19.0 cache artifacts still produce paths the tree
   doesn't have.
 - The ephemeral solid layer is **on by default** and uncapped for named sets.
   Suppression is all-or-nothing: a partially emitted layer would leave the
@@ -127,12 +127,16 @@ hands over a key that the existing machinery could already carry):
   already has a tree node. The pair keeps a body's URL canonical; the extra
   segment stays required for pieces that genuinely share their owner's path
   (an anonymous piece, and a pre-#628 solid).
-- **GLB schema bumped `0.17.0 → 0.18.0`.** Path composition is baked into the
+- **GLB schema bumped `0.18.0 → 0.19.0`.** Path composition is baked into the
   artifact on both sides (`BLDRS_face_ids.occurrencePaths` and the
-  `BLDRS_spatial_tree` node paths), so a 0.17.0 cache hit would keep serving
-  pre-#628 paths — bodies sharing one path again, and no body nodes in the
-  tree — to post-#628 resolution code. Cache-hit users would never see the
-  fix; same shape and same remedy as the 0.15.0/0.16.0/0.17.0 engine bumps.
+  `BLDRS_spatial_tree` node paths), so a hit on an artifact baked by a
+  pre-#628 engine would keep serving those paths — bodies sharing one path
+  again, and no body nodes in the tree — to post-#628 resolution code.
+  Cache-hit users would never see the fix; same shape and same remedy as the
+  0.15.0/0.16.0/0.17.0/0.18.0 engine bumps. Its own number rather than a
+  merge into 0.18.0: that bump shipped to main on conway 1.1592.684, which
+  predates #628, so 0.18.0 artifacts already exist holding the old path
+  shape.
 
 Everything else took the new paths unchanged, which is the point of keying on
 the path in the first place: `IfcInstanceMap`'s occurrence tables and the
