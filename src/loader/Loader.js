@@ -42,10 +42,13 @@ import {BldrsElementPropertiesReader} from './bldrsElementProperties'
 import {BldrsFaceIdsReader} from './bldrsFaceIds'
 import {BldrsSpatialTreeReader} from './bldrsSpatialTree'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
-import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
-import glbToThree from './glb'
+import {cachedGlbHasRenderableGeometry} from './glbArtifactHealth'
 import {glbCacheKey} from './glbCacheKey'
 import {activeArtifactSpec, isGlbBatchedActive} from './glbCompress'
+import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
+import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
+import {glbInfo, glbVerbose, glbWarn} from './glbLog'
+import glbToThree from './glb'
 import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
 import {
   APPLIED_COORDINATION_KEY,
@@ -54,10 +57,8 @@ import {
   validCoordinationOffset,
 } from '../viewer/ifc/appliedCoordination'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
-import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
-import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import {spillModelSource} from './opfsSourceByteStore'
-import {STORE_DETECT_PREFIX_BYTES, isConwayIfcFormat} from './stepFormat'
+import {STORE_DETECT_PREFIX_BYTES, isConwayIfcFormat, looksLikeTruncatedPart21Blob} from './stepFormat'
 import {
   externalCacheKey,
   gitHubCacheKey,
@@ -376,6 +377,25 @@ export async function load(
                   const sharePath = navigateBaseOnModelPath(owner, repo, branch, `/${filePath}`)
                   updateRecentFileLastModified(sharePath, lastModifiedGithub)
                 })
+            }
+            // GitHub HIT keys off remote sha + OPFS existence, not local
+            // completeness. A truncated part-21 prefix under the right sha
+            // is served forever and Conway reports every tail ref as
+            // "not in the index". Same eviction shape as the LFS-pointer
+            // guard: GitHub only, because a re-fetch can repair it.
+            if (file && await looksLikeTruncatedPart21Blob(file)) {
+              debug().warn(
+                'Loader#load: OPFS source is truncated part-21; evicting and re-fetching')
+              try {
+                await deleteFileFromOPFS(filePath, shaHash, owner, repo, branch)
+              } catch (evictError) {
+                debug().warn('Loader#load: could not evict truncated source:', evictError)
+              }
+              setOpfsFile(null)
+              reportSourceInfo(
+                'Source: OPFS entry was truncated — evicted, re-fetching from network')
+              file = null
+              glbExportContext = null
             }
           }
         } else {
@@ -2072,6 +2092,19 @@ async function tryLoadCachedGlb(cacheKeyArgs) {
       glbInfo(
         `reader: cached artifact mode mismatch (cached=${peek.mode || 'none'}, ` +
         `requested=${requestedMode || 'none'}); treating as miss`)
+      return null
+    }
+    // Empty artifacts are a poisoned HIT: the writer used to cache a
+    // 0-mesh scene after a failed extract, and every later load skipped
+    // the source parse. Evict so this load (and the next) re-parse.
+    if (!cachedGlbHasRenderableGeometry(bytes)) {
+      glbInfo('reader: cached artifact has no geometry; evicting and treating as miss')
+      try {
+        await deleteFileFromOPFS(
+          key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)
+      } catch (evictError) {
+        glbInfo('reader: could not evict empty artifact:', evictError)
+      }
       return null
     }
     return file

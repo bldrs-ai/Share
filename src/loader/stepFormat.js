@@ -14,6 +14,96 @@ import debug from '../utils/debug'
  */
 export const STORE_DETECT_PREFIX_BYTES = 65_536
 
+// Completeness sniff for a part-21 source already in OPFS. GitHub cache
+// HIT keys off the remote blob sha plus file existence, not local
+// completeness: a write killed after truncate(0) (OPFS.worker.js
+// writeFileToHandle) leaves a prefix under the correct sha, Conway
+// finalizes that prefix as a complete index, and every forward ref into
+// the missing tail is "not in the index" (Arty STYLED_ITEM #36800 →
+// MANIFOLD_SOLID_BREP #1031384). The footer is required by ISO-10303-21;
+// its absence on a file that still has the magic is the truncated case.
+const PART21_MAGIC = 'ISO-10303-21'
+const PART21_END = 'END-ISO-10303-21'
+const PART21_HEAD_SNIFF_BYTES = 64
+const PART21_TAIL_SNIFF_BYTES = 256
+
+
+/**
+ * True when `bytes` look like a part-21 file (IFC or STEP) whose DATA
+ * section was cut off before `END-ISO-10303-21`. Non-part-21 inputs
+ * (GLB, empty, random) return false — this is not a format detector.
+ *
+ * @param {ArrayBuffer|Uint8Array|null|undefined} bytes
+ * @return {boolean}
+ */
+export function looksLikeTruncatedPart21(bytes) {
+  if (bytes === null || bytes === undefined) {
+    return false
+  }
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+  if (u8.byteLength === 0) {
+    return false
+  }
+  const headLen = Math.min(PART21_HEAD_SNIFF_BYTES, u8.byteLength)
+  if (!latin1(u8, 0, headLen).includes(PART21_MAGIC)) {
+    return false
+  }
+  const tailStart = Math.max(0, u8.byteLength - PART21_TAIL_SNIFF_BYTES)
+  return !latin1(u8, tailStart, u8.byteLength).includes(PART21_END)
+}
+
+
+/**
+ * Blob/File twin of {@link looksLikeTruncatedPart21}: sniffs only the
+ * first and last few hundred bytes so a 50MB OPFS hit does not have to
+ * be buffered to decide.
+ *
+ * A 0-byte File is always unusable as a model source (the truncate(0)
+ * then crash case) and is reported truncated regardless of magic.
+ *
+ * @param {Blob|null|undefined} blob
+ * @return {Promise<boolean>}
+ */
+export async function looksLikeTruncatedPart21Blob(blob) {
+  if (blob === null || blob === undefined ||
+      typeof blob.size !== 'number' || typeof blob.slice !== 'function') {
+    return false
+  }
+  if (blob.size === 0) {
+    return true
+  }
+  const headLen = Math.min(PART21_HEAD_SNIFF_BYTES, blob.size)
+  const tailStart = Math.max(0, blob.size - PART21_TAIL_SNIFF_BYTES)
+  const [headBuf, tailBuf] = await Promise.all([
+    blob.slice(0, headLen).arrayBuffer(),
+    blob.slice(tailStart, blob.size).arrayBuffer(),
+  ])
+  const head = new Uint8Array(headBuf)
+  if (!latin1(head, 0, head.byteLength).includes(PART21_MAGIC)) {
+    return false
+  }
+  const tail = new Uint8Array(tailBuf)
+  return !latin1(tail, 0, tail.byteLength).includes(PART21_END)
+}
+
+
+/**
+ * Decode a byte range as ISO-8859-1. Part-21 keywords are ASCII; we
+ * must not UTF-8-decode a sniff that might cut a multi-byte sequence.
+ *
+ * @param {Uint8Array} u8
+ * @param {number} start
+ * @param {number} end exclusive
+ * @return {string}
+ */
+function latin1(u8, start, end) {
+  let out = ''
+  for (let i = start; i < end; i++) {
+    out += String.fromCharCode(u8[i])
+  }
+  return out
+}
+
 
 /**
  * True when conway's `IfcApiModelPassthroughFactory.fromStore` will accept

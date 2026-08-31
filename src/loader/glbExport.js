@@ -65,6 +65,7 @@ import {
   buildInstanceTablesExtensionData,
 } from './bldrsInstanceTables'
 import {exportBatchedModelAsInstancedGlb} from './glbBatchedExport'
+import {sceneHasRenderableGeometry} from './glbArtifactHealth'
 import {packGlbChunks} from './glbContainer'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import {injectAndPackInWorker} from './GlbWriterService'
@@ -233,6 +234,15 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       `writer: ${kindLabel} source, key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
       `${filePath} sha=${cacheKeyArgs.sourceHash} requestedCompression=${requestedMode || 'none'}`)
     glbVerbose('writer: cacheKeyArgs =', cacheKeyArgs)
+
+    // A failed extract can still return COMPLETE with 0 meshes on screen.
+    // Caching that artifact turns the next load into a HIT of an empty
+    // scene, so the user never re-parses. Refuse here; the reader also
+    // evicts any empty artifact that already landed (tryLoadCachedGlb).
+    if (!sceneHasRenderableGeometry(model)) {
+      glbInfo('writer: skipped (no renderable geometry — refusing to cache an empty artifact)')
+      return false
+    }
 
     // Batched-NATIVE layout (S9, `glbBatched`, default-on): keep the batch
     // structure via EXT_mesh_gpu_instancing + per-instance tables instead
