@@ -109,9 +109,13 @@ function colorKey(color) {
  *     GetVertexArray(ptr, size) → Float32Array (interleaved p+n)
  *     GetIndexArray(ptr, size) → Uint32Array
  * @param {number} modelID
+ * @param {{coordination: ({recenterLogged: (boolean|undefined)}|undefined)}} [opts]
+ *   `coordination` is the loader's per-LOAD object, shared with every other
+ *   builder one load runs so the recenter is reported once; see
+ *   decideCoordinationOffset.
  * @return {AssembledModel}
  */
-export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
+export function flatMeshToBufferGeometry(flatMeshes, api, modelID, opts = {}) {
   // Pass 1: collect entries with sizes + colour. No reading of vertex/
   // index data yet (that's pass 2). We need the totals to size typed
   // arrays exactly, and the colour to bin entries before emission.
@@ -172,7 +176,7 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
   // on rotate. Decide one offset from the first (valid) placement and fold it
   // into every baked translation below. Null (near-origin) → no-op.
   const coordOffset = placedGeometryCount > 0 ?
-    decideCoordinationOffset(entries[0].placed.flatTransformation) : null
+    decideCoordinationOffset(entries[0].placed.flatTransformation, opts.coordination) : null
   const offX = coordOffset ? coordOffset[0] : 0
   const offY = coordOffset ? coordOffset[1] : 0
   const offZ = coordOffset ? coordOffset[2] : 0

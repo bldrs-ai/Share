@@ -335,7 +335,7 @@ export class IncrementalBatchedBuilder {
     // Share#1632). Stamped on the root for consumers that need to map a
     // rendered point back to true world coordinates.
     if (this.coordination.offset === undefined) {
-      this.coordination.offset = decideCoordinationOffset(matrix.elements)
+      this.coordination.offset = decideCoordinationOffset(matrix.elements, this.coordination)
     }
     if (this.coordination.offset !== null) {
       this.root.userData.coordinationOffset = this.coordination.offset

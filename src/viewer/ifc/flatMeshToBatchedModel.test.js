@@ -1,7 +1,9 @@
 /* eslint-disable no-magic-numbers */
 import {BatchedMesh, Matrix4} from 'three'
-import {disableDebug, WARN, setDebugLevel} from '../../utils/debug'
+import {clearConwayDirectLogs, getConwayDirectLogs}
+  from '../../../tools/jest/conwayDirectLogCapture'
 import {CoincidenceSet, DEFAULT_COLOR, flatMeshToBatchedModel} from './flatMeshToBatchedModel'
+import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 
 
 /** Identity 4x4 in three.js column-major flat form. */
@@ -59,6 +61,19 @@ function unitTriApi() {
   return makeApi({999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])}})
 }
 
+
+/**
+ * The recenter diagnostics captured on the `[conwayDirect]` channel so far.
+ * Filtered rather than taking the whole buffer: the channel also carries the
+ * pipeline's parse-boundary lines.
+ *
+ * @return {Array<string>} message texts, in emission order
+ */
+function recenterLogs() {
+  return getConwayDirectLogs()
+    .filter(({text}) => /georeferenced model/.test(text))
+    .map(({text}) => text)
+}
 
 describe('viewer/ifc/flatMeshToBatchedModel', () => {
   it('builds one opaque batch: one geometry per shape, one instance per placement', () => {
@@ -219,44 +234,66 @@ describe('viewer/ifc/flatMeshToBatchedModel', () => {
   it('logs the recenter once per load, and never for a near-origin model (Share#1632)', () => {
     // The retrospective (Share#1632, root cause conway#680) found the
     // recenter used to fire completely silently -- this pins the fix.
-    // Tests run with the debug util disabled (setupTests.js's disableDebug),
-    // so the level has to be raised here even though WARN is the production
-    // default; OFF suppresses everything.
-    setDebugLevel(WARN)
-    const logSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      // Two DISTINCT far placements (different translation) so both survive
-      // the coincident-duplicate guard and the offset-decided-once guard is
-      // the only thing standing between one log line and two.
-      const flatMeshes = [{
-        expressID: 100,
-        geometries: [
-          {geometryExpressID: 999, flatTransformation:
-            [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2000000, 5, -8000000, 1], color: OPAQUE},
-          {geometryExpressID: 999, flatTransformation:
-            [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2000010, 5, -8000020, 1], color: OPAQUE},
-        ],
-      }]
-      flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0)
-      const georefLogs = logSpy.mock.calls.filter(([msg]) => /georeferenced model/.test(msg))
-      expect(georefLogs).toHaveLength(1)
-      expect(georefLogs[0][0]).toEqual(
-        'georeferenced model: recentering by [2000000, 5, -8000000] m (see Share#1632)')
+    // The line goes out on the [conwayDirect] channel, whose capturing sink
+    // setupTests.js installs and clears before every test — so this asserts a
+    // buffer instead of mutating the global console.
+    // Two DISTINCT far placements (different translation) so both survive
+    // the coincident-duplicate guard and the offset-decided-once guard is
+    // the only thing standing between one log line and two.
+    const flatMeshes = [{
+      expressID: 100,
+      geometries: [
+        {geometryExpressID: 999, flatTransformation:
+          [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2000000, 5, -8000000, 1], color: OPAQUE},
+        {geometryExpressID: 999, flatTransformation:
+          [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2000010, 5, -8000020, 1], color: OPAQUE},
+      ],
+    }]
+    flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0)
+    expect(recenterLogs()).toEqual(
+      ['georeferenced model: recentering by [2000000, 5, -8000000] m (see Share#1632)'])
 
-      logSpy.mockClear()
-      const near = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 12, 3, -45, 1]
-      flatMeshToBatchedModel(
-        [{expressID: 100, geometries: [{geometryExpressID: 999, flatTransformation: near, color: OPAQUE}]}],
-        unitTriApi(), 0)
-      // Filtered rather than asserting the whole channel is silent: WARN is
-      // shared with the builders' own skip diagnostics, so a bare
-      // not.toHaveBeenCalled() would fail for reasons unrelated to this log.
-      expect(logSpy.mock.calls.filter(([msg]) => /georeferenced model/.test(msg))).toHaveLength(0)
-    } finally {
-      logSpy.mockRestore()
-      disableDebug()
-    }
+    clearConwayDirectLogs()
+    const near = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 12, 3, -45, 1]
+    flatMeshToBatchedModel(
+      [{expressID: 100, geometries: [{geometryExpressID: 999, flatTransformation: near, color: OPAQUE}]}],
+      unitTriApi(), 0)
+    expect(recenterLogs()).toHaveLength(0)
   })
+
+  it('logs the recenter once per LOAD, not once per builder (Share#1632)', () => {
+    // ShareIfcLoader's cascade runs more than one builder for a single model:
+    // the incremental path falls back to flatMeshToBufferGeometry per batch,
+    // and incremental -> batched -> merged at end of load. Each builder
+    // decides the offset once, so a per-builder latch alone reports the same
+    // recenter two or three times for one load. `coordination` -- the object
+    // the loader already shares between the durable builder and the preview --
+    // is what carries the latch across them.
+    const coordination = {offset: undefined}
+    const far = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2000000, 5, -8000000, 1]
+    const asArray = [{
+      expressID: 100,
+      geometries: [{geometryExpressID: 999, flatTransformation: far, color: OPAQUE}],
+    }]
+    const asVector = [{
+      expressID: 100,
+      geometries: {size: () => 1, get: () => ({geometryExpressID: 999, flatTransformation: far})},
+    }]
+
+    flatMeshToBatchedModel(asArray, unitTriApi(), 0, {coordination})
+    flatMeshToBufferGeometry(asVector, unitTriApi(), 0, {coordination})
+
+    expect(recenterLogs()).toEqual(
+      ['georeferenced model: recentering by [2000000, 5, -8000000] m (see Share#1632)'])
+
+    // Both builders still recentre -- only the log is deduped, never the
+    // decision, so nothing renders anywhere new.
+    const {batches} = flatMeshToBatchedModel(asArray, unitTriApi(), 0, {coordination})
+    const m = new Matrix4()
+    batches[0].mesh.getMatrixAt(0, m)
+    expect(m.elements[12]).toBeCloseTo(0)
+  })
+
 
   it('skips FlatMeshes without an expressID', () => {
     const flatMeshes = [

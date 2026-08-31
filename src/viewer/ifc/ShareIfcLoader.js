@@ -414,7 +414,8 @@ export default class ShareIfcLoader {
         } catch (e) {
           debug(WARN).warn('incremental batch append failed; preview fallback:', e)
           try {
-            const assembled = flatMeshToBufferGeometry(batch, ifcAPI, batchModelID)
+            const assembled =
+              flatMeshToBufferGeometry(batch, ifcAPI, batchModelID, {coordination})
             session.addPreviewMesh(new Mesh(assembled.geometry, assembled.materials))
           } catch (previewError) {
             debug(WARN).warn('demand preview batch skipped:', previewError)
@@ -470,7 +471,8 @@ export default class ShareIfcLoader {
       // path on any construction error so the flag can never break a load.
       if (ifcModel === undefined && isFeatureEnabled('batchedMesh')) {
         try {
-          const batched = buildBatchedConwayModel(await recapture(), ifcAPI, modelID, {scene})
+          const batched =
+            buildBatchedConwayModel(await recapture(), ifcAPI, modelID, {scene, coordination})
           ifcModel = batched.model
           buildStats = batched.stats
         } catch (e) {
@@ -478,7 +480,8 @@ export default class ShareIfcLoader {
         }
       }
       if (ifcModel === undefined) {
-        const merged = buildConwayIfcModel(await recapture(), ifcAPI, modelID)
+        const merged =
+          buildConwayIfcModel(await recapture(), ifcAPI, modelID, {coordination})
         ifcModel = merged.mesh
         buildStats = merged.stats
         decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})

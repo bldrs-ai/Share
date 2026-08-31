@@ -1,6 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import {BufferGeometry} from 'three'
-import {disableDebug, WARN, setDebugLevel} from '../../utils/debug'
+import {clearConwayDirectLogs, getConwayDirectLogs}
+  from '../../../tools/jest/conwayDirectLogCapture'
 import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 
 
@@ -110,6 +111,19 @@ function translation(tx, ty, tz) {
 }
 
 
+/**
+ * The recenter diagnostics captured on the `[conwayDirect]` channel so far.
+ * Filtered rather than taking the whole buffer: the channel also carries the
+ * pipeline's parse-boundary lines.
+ *
+ * @return {Array<string>} message texts, in emission order
+ */
+function recenterLogs() {
+  return getConwayDirectLogs()
+    .filter(({text}) => /georeferenced model/.test(text))
+    .map(({text}) => text)
+}
+
 describe('viewer/ifc/flatMeshToBufferGeometry', () => {
   it('assembles one PlacedGeometry → one triangle in the merged buffer', () => {
     const api = wireGeomFetch(makeApi({
@@ -173,49 +187,37 @@ describe('viewer/ifc/flatMeshToBufferGeometry', () => {
   it('logs the recenter once per load, and never for a near-origin model (Share#1632)', () => {
     // The retrospective (Share#1632, root cause conway#680) found the
     // recenter used to fire completely silently -- this pins the fix.
-    // Tests run with the debug util disabled (setupTests.js's disableDebug),
-    // so the level has to be raised here even though WARN is the production
-    // default; OFF suppresses everything.
-    setDebugLevel(WARN)
-    const logSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const api = wireGeomFetch(makeApi({
-        999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
-      }))
-      const flatMeshes = [{
-        expressID: 100,
-        geometries: {
-          size: () => 2,
-          // Two placements: the offset (and its log) is decided once, from
-          // the first, not once per placement in the load.
-          get: (i) => ({
-            geometryExpressID: 999,
-            flatTransformation: i === 0 ?
-              translation(2000000, 5, -8000000) : translation(2000010, 5, -8000020),
-          }),
-        },
-      }]
-      flatMeshToBufferGeometry(flatMeshes, api, 0)
-      const georefLogs = logSpy.mock.calls.filter(([msg]) => /georeferenced model/.test(msg))
-      expect(georefLogs).toHaveLength(1)
-      expect(georefLogs[0][0]).toEqual(
-        'georeferenced model: recentering by [2000000, 5, -8000000] m (see Share#1632)')
+    // The line goes out on the [conwayDirect] channel, whose capturing sink
+    // setupTests.js installs and clears before every test — so this asserts a
+    // buffer instead of mutating the global console.
+    const api = wireGeomFetch(makeApi({
+      999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+    }))
+    const flatMeshes = [{
+      expressID: 100,
+      geometries: {
+        size: () => 2,
+        // Two placements: the offset (and its log) is decided once, from
+        // the first, not once per placement in the load.
+        get: (i) => ({
+          geometryExpressID: 999,
+          flatTransformation: i === 0 ?
+            translation(2000000, 5, -8000000) : translation(2000010, 5, -8000020),
+        }),
+      },
+    }]
+    flatMeshToBufferGeometry(flatMeshes, api, 0)
+    expect(recenterLogs()).toEqual(
+      ['georeferenced model: recentering by [2000000, 5, -8000000] m (see Share#1632)'])
 
-      logSpy.mockClear()
-      const nearApi = wireGeomFetch(makeApi({
-        999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
-      }))
-      flatMeshToBufferGeometry(
-        [{expressID: 100, geometries: {size: () => 1, get: () => ({geometryExpressID: 999, flatTransformation: translation(7, 2, -3)})}}],
-        nearApi, 0)
-      // Filtered rather than asserting the whole channel is silent: WARN is
-      // shared with the builders' own skip diagnostics, so a bare
-      // not.toHaveBeenCalled() would fail for reasons unrelated to this log.
-      expect(logSpy.mock.calls.filter(([msg]) => /georeferenced model/.test(msg))).toHaveLength(0)
-    } finally {
-      logSpy.mockRestore()
-      disableDebug()
-    }
+    clearConwayDirectLogs()
+    const nearApi = wireGeomFetch(makeApi({
+      999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+    }))
+    flatMeshToBufferGeometry(
+      [{expressID: 100, geometries: {size: () => 1, get: () => ({geometryExpressID: 999, flatTransformation: translation(7, 2, -3)})}}],
+      nearApi, 0)
+    expect(recenterLogs()).toHaveLength(0)
   })
 
   it('carries each PlacedGeometry.occurrencePath onto its range (STEP)', () => {

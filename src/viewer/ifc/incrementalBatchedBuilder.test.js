@@ -1,6 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import {BatchedMesh, Matrix4} from 'three'
-import {disableDebug, WARN, setDebugLevel} from '../../utils/debug'
+import {clearConwayDirectLogs, getConwayDirectLogs}
+  from '../../../tools/jest/conwayDirectLogCapture'
 import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 import {payloadToPreviewMesh} from './parsePreviewMesh'
@@ -88,6 +89,19 @@ function callsFor(api, geomExpressID) {
   return api.GetGeometry.mock.calls.filter(([, id]) => id === geomExpressID).length
 }
 
+
+/**
+ * The recenter diagnostics captured on the `[conwayDirect]` channel so far.
+ * Filtered rather than taking the whole buffer: the channel also carries the
+ * pipeline's parse-boundary lines.
+ *
+ * @return {Array<string>} message texts, in emission order
+ */
+function recenterLogs() {
+  return getConwayDirectLogs()
+    .filter(({text}) => /georeferenced model/.test(text))
+    .map(({text}) => text)
+}
 
 describe('IncrementalBatchedBuilder', () => {
   const shapes = {
@@ -231,39 +245,27 @@ describe('IncrementalBatchedBuilder', () => {
   it('logs the recenter once across batches, and never for a near-origin model (Share#1632)', () => {
     // The retrospective (Share#1632, root cause conway#680) found the
     // recenter used to fire completely silently -- this pins the fix.
-    // Tests run with the debug util disabled (setupTests.js's disableDebug),
-    // so the level has to be raised here even though WARN is the production
-    // default; OFF suppresses everything.
-    setDebugLevel(WARN)
-    const logSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const far = (tx, ty, tz) => ({
-        expressID: 1,
-        geometries: [{geometryExpressID: 999, flatTransformation:
-          [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tx, ty, tz, 1], color: OPAQUE}],
-      })
-      const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
-      builder.appendBatch([far(2000000, 5, -8000000)]) // decides + logs the offset
-      builder.appendBatch([far(2000010, 5, -8000020)]) // later batch: no second log
-      builder.finalize()
+    // The line goes out on the [conwayDirect] channel, whose capturing sink
+    // setupTests.js installs and clears before every test — so this asserts a
+    // buffer instead of mutating the global console.
+    const far = (tx, ty, tz) => ({
+      expressID: 1,
+      geometries: [{geometryExpressID: 999, flatTransformation:
+        [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tx, ty, tz, 1], color: OPAQUE}],
+    })
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([far(2000000, 5, -8000000)]) // decides + logs the offset
+    builder.appendBatch([far(2000010, 5, -8000020)]) // later batch: no second log
+    builder.finalize()
 
-      const georefLogs = logSpy.mock.calls.filter(([msg]) => /georeferenced model/.test(msg))
-      expect(georefLogs).toHaveLength(1)
-      expect(georefLogs[0][0]).toEqual(
-        'georeferenced model: recentering by [2000000, 5, -8000000] m (see Share#1632)')
+    expect(recenterLogs()).toEqual(
+      ['georeferenced model: recentering by [2000000, 5, -8000000] m (see Share#1632)'])
 
-      logSpy.mockClear()
-      const nearBuilder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
-      nearBuilder.appendBatch([flatMesh(1, [{geomExpressID: 999, color: OPAQUE}])])
-      nearBuilder.finalize()
-      // Filtered rather than asserting the whole channel is silent: WARN is
-      // shared with the builders' own skip diagnostics, so a bare
-      // not.toHaveBeenCalled() would fail for reasons unrelated to this log.
-      expect(logSpy.mock.calls.filter(([msg]) => /georeferenced model/.test(msg))).toHaveLength(0)
-    } finally {
-      logSpy.mockRestore()
-      disableDebug()
-    }
+    clearConwayDirectLogs()
+    const nearBuilder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    nearBuilder.appendBatch([flatMesh(1, [{geomExpressID: 999, color: OPAQUE}])])
+    nearBuilder.finalize()
+    expect(recenterLogs()).toHaveLength(0)
   })
 
   it('leaves a near-origin model untouched (no offset stamped)', () => {
