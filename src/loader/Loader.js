@@ -47,6 +47,12 @@ import glbToThree from './glb'
 import {glbCacheKey} from './glbCacheKey'
 import {activeArtifactSpec, isGlbBatchedActive} from './glbCompress'
 import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
+import {
+  APPLIED_COORDINATION_KEY,
+  COORDINATION_OFFSET_KEY,
+  validAppliedCoordination,
+  validCoordinationOffset,
+} from '../viewer/ifc/appliedCoordination'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
@@ -1423,6 +1429,46 @@ export function convertToShareModel(model, viewer, {fileName = null} = {}) {
   }
 
   recursiveDecorate(model)
+
+  // Cache-hit coordination hydration. The writer stamps both halves of the
+  // render-frame mapping — the engine's applied frame and Share's backstop
+  // offset — into `scenes[0].extras`, and GLTFLoader auto-copies scene extras
+  // onto `scene.userData`, so a cache-hit model arrives with them already at
+  // the same `userData` keys a fresh conway parse stamps — one surface across both paths, which is the whole
+  // point of Share#1633 item 1. Nothing has to be MOVED here; what has to
+  // happen is validation. Like the cached title just below, this value came
+  // out of a GLB file, and a GLB file is an untrusted boundary in the
+  // originator-share design: a hand-edited artifact could carry any JSON
+  // under these keys, and unlike a bad title a bad frame is not visible — it
+  // would quietly produce NaN world coordinates in every consumer that
+  // inverts it, and a bad offset a model correctly placed somewhere else. Re-validate and drop rather than keep something unusable, so
+  // "absent" (which consumers already handle, for pre-conway#702 engines)
+  // is the only failure mode they ever see.
+  //
+  // Runs after the batched-native hydration in `Loader#load`, which merges
+  // the GLTF scene's userData onto the model it swaps in — so this one check
+  // covers the merged cache-hit model and the hydrated batched one alike.
+  //
+  // BOTH halves of the mapping are restored, not just the engine frame: on
+  // the degraded path where Share's backstop fired, the offset is baked into
+  // the cached geometry, so dropping it here would leave a model whose
+  // documented inverse reconstructs coordinates displaced by exactly that
+  // offset.
+  for (const [key, validate] of [
+    [APPLIED_COORDINATION_KEY, validAppliedCoordination],
+    [COORDINATION_OFFSET_KEY, validCoordinationOffset],
+  ]) {
+    if (!model.userData || !(key in model.userData)) {
+      continue
+    }
+    const value = validate(model.userData[key])
+    if (value === null) {
+      glbInfo(`reader: cached ${key} is not usable; dropping it`)
+      delete model.userData[key]
+    } else {
+      model.userData[key] = value
+    }
+  }
 
   // Override for root
   debug().log('Overriding project root name')

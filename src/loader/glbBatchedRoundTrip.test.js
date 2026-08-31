@@ -92,9 +92,12 @@ function liveBatchedModel() {
  * parse with a real GLTFLoader carrying the reader plugin.
  *
  * @param {object} model live batched model
+ * @param {object} [sceneExtras] the `scenes[0].extras` map the writer stamps
+ *   in the same inject pass (title, applied coordination frame). Null for the
+ *   table-only cases, which is what the writer passes when neither exists.
  * @return {Promise<object>} the hydrated model (or null)
  */
-async function roundTrip(model) {
+async function roundTrip(model, sceneExtras = null) {
   const written = await exportBatchedModelAsInstancedGlb(model)
   expect(written).not.toBeNull()
 
@@ -102,7 +105,7 @@ async function roundTrip(model) {
     name: BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
     data: buildInstanceTablesExtensionData(written.tableNodes),
     compress: true,
-  }], null, null)
+  }], sceneExtras, null)
 
   const loader = new GLTFLoader()
   loader.register((parser) => new BldrsInstanceTablesReader(parser))
@@ -154,6 +157,71 @@ describe('batched-native GLB round-trip (writer -> GLTFLoader -> hydrate)', () =
     expect(byParent.get(20)).not.toEqual(byParent.get(11))
     expect(byParent.get(11)).toEqual(live.instanceColors[0])
     expect(byParent.get(20)).toEqual(live.instanceColors[2])
+  })
+
+  it('carries BOTH halves of the render-frame mapping across the artifact (Share#1633 item 1)', async () => {
+    // The batched-native writer's half of the frame round-trip (the merged
+    // writer's is in `glbExport.test.js`). This is the path that made the
+    // claim worth testing: `exportBatchedModelAsInstancedGlb` builds a fresh
+    // gltf-transform Document and never looks at `model.userData`, so a stamp
+    // left on the model reaches the artifact on NO path — the frame has to
+    // travel as scene extras, and this asserts it arrives all the way at the
+    // hydrated model, where a consumer reads it.
+    //
+    // Nothing between here and there is stubbed: real injection, real
+    // GLTFLoader (whose auto-promotion of `scenes[0].extras` onto
+    // `scene.userData` is the mechanism under test), real hydration (whose
+    // userData merge is the other half).
+    /* eslint-disable no-magic-numbers */
+    const frame = [
+      0.001, 0, 0, 0,
+      0, 0, -0.001, 0,
+      0, 0.001, 0, 0,
+      -2600, 450, 1200, 1,
+    ]
+    const offset = [2600000, 450, -1200000]
+    /* eslint-enable no-magic-numbers */
+
+    const hydrated = await roundTrip(
+      liveBatchedModel(), {appliedCoordination: frame, coordinationOffset: offset})
+
+    expect(hydrated).not.toBeNull()
+    // Same keys a fresh conway parse stamps — one surface, both paths.
+    expect(hydrated.userData.appliedCoordination).toEqual(frame)
+    // BOTH halves of `rendered = (A * world) - coordinationOffset`. The
+    // degraded path bakes the offset into the geometry in this very
+    // artifact, so a hit that restored only the frame would reconstruct
+    // coordinates displaced by exactly it.
+    expect(hydrated.userData.coordinationOffset).toEqual(offset)
+  })
+
+  it('leaves no frame on the model when the writer stamped none', async () => {
+    // Pre-conway#702 engines and non-IFC sources: absence must stay absence,
+    // never an empty or zeroed frame that a consumer would invert.
+    const hydrated = await roundTrip(liveBatchedModel())
+
+    expect(hydrated).not.toBeNull()
+    expect(hydrated.userData.appliedCoordination).toBeUndefined()
+    expect(hydrated.userData.coordinationOffset).toBeUndefined()
+  })
+
+  it('carries the frame alone on a healthy load (backstop never fired)', async () => {
+    // The normal case since the conway#680 fix chain — the two keys are
+    // independent, so a model with no backstop offset still gets its frame.
+    /* eslint-disable no-magic-numbers */
+    const frame = [
+      0.001, 0, 0, 0,
+      0, 0, -0.001, 0,
+      0, 0.001, 0, 0,
+      -2600, 450, 1200, 1,
+    ]
+    /* eslint-enable no-magic-numbers */
+
+    const hydrated = await roundTrip(liveBatchedModel(), {appliedCoordination: frame})
+
+    expect(hydrated).not.toBeNull()
+    expect(hydrated.userData.appliedCoordination).toEqual(frame)
+    expect(hydrated.userData.coordinationOffset).toBeUndefined()
   })
 
   it('round-trips instance transforms', async () => {

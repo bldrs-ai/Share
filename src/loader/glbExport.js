@@ -41,6 +41,12 @@ import {
   BLDRS_SPATIAL_TREE_EXTENSION_NAME,
   captureBldrsSpatialTree,
 } from './bldrsSpatialTree'
+import {
+  APPLIED_COORDINATION_KEY,
+  COORDINATION_OFFSET_KEY,
+  validAppliedCoordination,
+  validCoordinationOffset,
+} from '../viewer/ifc/appliedCoordination'
 import {eachBatch} from '../viewer/ifc/batchedModel'
 import {
   batchedModelOccurrenceTables,
@@ -285,6 +291,28 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // the raw bytes. Non-IFC sources (drag-dropped OBJ etc.)
     // generally have no `.name`; the inject step no-ops on nullish.
     const titleForExtras = (typeof model?.name === 'string' && model.name) ? model.name : null
+    // The engine's applied coordination frame, carried across the cache
+    // round-trip beside the title (see ../viewer/ifc/appliedCoordination for
+    // the contract). It rides in `scenes[0].extras`, NOT in the model's own
+    // userData, and that is what makes it survive: BOTH writers below drop
+    // userData — the batched-native writer builds a fresh gltf-transform
+    // Document, and the merged bake (`batchedModelToMergedMesh`) copies only
+    // matrix + name — so a stamp left to `GLTFExporter`'s userData
+    // serialisation would reach the artifact on neither path. The inject pass
+    // runs downstream of both, on the packed bytes, so one capture here
+    // covers every layout. Validated rather than passed through: a frame that
+    // reads back wrong is worse than none, and the cache is the boundary
+    // where a bad one would persist across sessions.
+    const appliedCoordinationForExtras =
+      validAppliedCoordination(model?.userData?.[APPLIED_COORDINATION_KEY])
+    // Share's own backstop offset travels WITH the frame, never without it.
+    // On the degraded path where the backstop fired, the offset is already
+    // baked into the geometry being exported here — so an artifact carrying
+    // only the frame reads back displaced by exactly the offset the
+    // documented inverse would then fail to add back. Half a composition is
+    // worse than none: it is wrong rather than absent, and silently so.
+    const coordinationOffsetForExtras =
+      validCoordinationOffset(model?.userData?.[COORDINATION_OFFSET_KEY])
     // Yield to the event loop between major phases so hover-pick /
     // camera-controls can interleave with the writer. Each `yieldToBrowser`
     // is a single macrotask boundary; the cost is one event-loop turn,
@@ -494,9 +522,24 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // sandbox — show the model name instead of GLTFExporter's
     // 'AuxScene' placeholder. Null when no title is available so
     // `injectGlbExtensions` no-ops both scene mutations.
-    const sceneExtrasForInject = titleForExtras ?
-      {[BLDRS_TITLE_EXTRAS_KEY]: titleForExtras} :
-      null
+    // Built by accumulation rather than a ternary per key: the extras map is
+    // now shared by two independent callers, and `injectGlbExtensions` treats
+    // a null map and an empty map differently (the null case is its
+    // pass-through). Stay null when NEITHER key is available so a titleless,
+    // frameless model still short-circuits the parse/serialize as before.
+    const sceneExtrasCandidates = {
+      [BLDRS_TITLE_EXTRAS_KEY]: titleForExtras,
+      [APPLIED_COORDINATION_KEY]: appliedCoordinationForExtras,
+      [COORDINATION_OFFSET_KEY]: coordinationOffsetForExtras,
+    }
+    const sceneExtrasPairs =
+      Object.entries(sceneExtrasCandidates).filter(([, v]) => v !== null && v !== undefined)
+    // Stay null when NO key is available, so a titleless, frameless model
+    // still short-circuits the parse/serialize as before —
+    // `injectGlbExtensions` treats a null map and an empty one differently
+    // (the null case is its pass-through).
+    const sceneExtrasForInject =
+      sceneExtrasPairs.length > 0 ? Object.fromEntries(sceneExtrasPairs) : null
     let packed
     let extStats
     try {

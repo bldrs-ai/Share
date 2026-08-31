@@ -18,10 +18,11 @@
 // attached to it. Now we own the loader so we hold direct refs.
 
 import {Mesh} from 'three'
+import {APPLIED_COORDINATION_KEY, validAppliedCoordination} from './appliedCoordination'
 import {assembleBatchedModel, buildBatchedConwayModel} from './buildBatchedConwayModel'
 import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
-import {conwayDirectError, conwayDirectInfo} from './conwayDirectLog'
+import {conwayDirectError, conwayDirectInfo, conwayDirectWarn} from './conwayDirectLog'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
 import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
@@ -103,6 +104,10 @@ async function logInstancedModelStats(ifcAPI, modelID, getCaptured, force = fals
  *   and the only whole-model ask a windowed deferred model can answer.
  *   Absent on pins predating it — feature-detect, never assume.
  * @property {Function} GetCoordinationMatrix Get the coord matrix.
+ * @property {Function} [GetAppliedCoordinationMatrix] conway#702: the frame
+ *   the engine ACTUALLY composed into the placements it emitted. Absent on
+ *   pins predating it and on stock web-ifc — feature-detect, never assume
+ *   (conway's own doc comment says so).
  * @property {Function} getStatistics Per-load load statistics.
  * @property {Function} getConwayVersion Conway engine version string.
  * @property {object} properties Conway properties namespace.
@@ -246,6 +251,72 @@ export function clearAabbImposters(ring, session) {
   // The replace key map holds a strong ref to every accepted plate —
   // clearing the list alone would keep the whole ring alive past teardown.
   ring.byExpressID.clear()
+}
+
+
+/**
+ * Stamp the engine's applied coordination frame onto the model root as
+ * `userData[APPLIED_COORDINATION_KEY]`, and hand it back.
+ *
+ * **The contract itself — what `A` is, how it inverts, how it composes with
+ * `userData.coordinationOffset`, and the two clauses consumers get wrong —
+ * lives in `./appliedCoordination`.** Read that module before changing
+ * anything here. What is specific to this call site, and so documented here,
+ * is only WHEN the frame may be read.
+ *
+ * ## Why the read happens at load completion
+ *
+ * conway's timing contract: a deferred open that adopted its parse-time
+ * preview channel's frame reports that adopted frame from the moment the
+ * model opens, and the durable walk — the authority — revalidates it against
+ * its own first geometry, so **the value can change exactly once**, at the
+ * first durable batch, if the adoption is rejected. Read any earlier (at open,
+ * or from inside `onMeshBatch`) and the stamp could be the rejected frame.
+ * By the time `parse` reaches this call every durable batch has landed, so the
+ * value is final for the life of the model.
+ *
+ * It is also the one point every conway load path converges on — incremental,
+ * `?feature=batchedMesh`, and the merged fallback all produce this same
+ * `ifcModel` — so a single call covers them all.
+ *
+ * Best-effort throughout: a missing method, a malformed reply or a throw
+ * leaves the model unstamped rather than discarding a successful parse.
+ *
+ * @param {object} ifcModel the assembled model root (`ifcModel.userData` is
+ *   created if the object does not already have one — mocked three.js Mesh
+ *   stand-ins in unit tests do not)
+ * @param {ConwayIfcAPI} ifcAPI
+ * @param {number} modelID
+ * @return {?Array<number>} the stamped column-major mat4, or null when the
+ *   engine could not answer
+ */
+export function stampAppliedCoordination(ifcModel, ifcAPI, modelID) {
+  if (typeof ifcAPI?.GetAppliedCoordinationMatrix !== 'function') {
+    return null
+  }
+  try {
+    // eslint-disable-next-line new-cap
+    const applied = ifcAPI.GetAppliedCoordinationMatrix(modelID)
+    const frame = validAppliedCoordination(applied)
+    if (frame === null) {
+      // On the `[conwayDirect]` channel, not `debug()`: this is a designed
+      // diagnostic for this pipeline, and warn is the level the load report
+      // tees (see `decideCoordinationOffset`'s note on the same channel).
+      // Share#1632's lesson was that silent coordination behaviour is what
+      // costs the days — an engine answering with a non-frame is exactly that
+      // class of problem and must not pass unremarked.
+      conwayDirectWarn(
+        `appliedCoordination: engine returned a non-mat4 frame ` +
+        `(length=${applied?.length}); model left unstamped`)
+      return null
+    }
+    ifcModel.userData = ifcModel.userData ?? {}
+    ifcModel.userData[APPLIED_COORDINATION_KEY] = frame
+    return frame
+  } catch (e) {
+    conwayDirectWarn(`appliedCoordination stamp skipped: ${e}`)
+    return null
+  }
 }
 
 
@@ -500,10 +571,24 @@ export default class ShareIfcLoader {
       clearAabbImposters(aabbRing, session)
       session.finish()
 
+      // The engine frame, stamped once for every conway load path (incremental
+      // / batchedMesh / merged all converge on this `ifcModel`) and before the
+      // model is installed, so nothing can observe a model without it. Read
+      // here and not earlier: the value is only final once the durable walk
+      // has run — see stampAppliedCoordination for the timing contract, the
+      // inverse, and how it composes with `userData.coordinationOffset`.
+      stampAppliedCoordination(ifcModel, ifcAPI, modelID)
+
       ifc.addIfcModel(ifcModel)
 
       // eslint-disable-next-line new-cap
       const matrixArr = await ifcAPI.GetCoordinationMatrix(modelID)
+      // NOT the engine's applied frame — conway keeps this CLASSIC web-ifc
+      // surface at identity precisely because consumers stamp it onto the
+      // model transform, and a non-identity value would apply the recentre a
+      // second time on top of placements that already carry it. The applied
+      // frame is `userData.appliedCoordination`, stamped above.
+      //
       // Apply the coordination matrix to the model directly. Wit-three's
       // `setupCoordinationMatrix` set this on the model + told the
       // IFCParser to re-apply on every subsequent mesh; with Conway-
