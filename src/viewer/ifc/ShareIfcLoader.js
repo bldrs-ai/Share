@@ -30,6 +30,7 @@ import {isOutOfMemoryError, markIfOutOfMemory} from '../../utils/oom'
 import {hasParams} from '../../utils/location'
 import {HASH_PREFIX_CAMERA} from '../../Components/Camera/hashState'
 import {isFeatureEnabled} from '../../FeatureFlags'
+import {reportGeometryStats} from '../../loader/loadProgress'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ProgressiveLoadSession from '../ProgressiveLoadSession'
 import ShareIfcManager from './ShareIfcManager'
@@ -421,7 +422,8 @@ export default class ShareIfcLoader {
         } catch (e) {
           debug(WARN).warn('incremental batch append failed; preview fallback:', e)
           try {
-            const assembled = flatMeshToBufferGeometry(batch, ifcAPI, batchModelID)
+            const assembled =
+              flatMeshToBufferGeometry(batch, ifcAPI, batchModelID, {coordination})
             session.addPreviewMesh(new Mesh(assembled.geometry, assembled.materials))
           } catch (previewError) {
             debug(WARN).warn('demand preview batch skipped:', previewError)
@@ -477,7 +479,8 @@ export default class ShareIfcLoader {
       // path on any construction error so the flag can never break a load.
       if (ifcModel === undefined && isFeatureEnabled('batchedMesh')) {
         try {
-          const batched = buildBatchedConwayModel(await recapture(), ifcAPI, modelID, {scene})
+          const batched =
+            buildBatchedConwayModel(await recapture(), ifcAPI, modelID, {scene, coordination})
           ifcModel = batched.model
           buildStats = batched.stats
         } catch (e) {
@@ -485,7 +488,8 @@ export default class ShareIfcLoader {
         }
       }
       if (ifcModel === undefined) {
-        const merged = buildConwayIfcModel(await recapture(), ifcAPI, modelID)
+        const merged =
+          buildConwayIfcModel(await recapture(), ifcAPI, modelID, {coordination})
         ifcModel = merged.mesh
         buildStats = merged.stats
         decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
@@ -567,6 +571,14 @@ export default class ShareIfcLoader {
         if (buildStats) {
           parts.push(`vertices=${buildStats.vertexCount ?? buildStats.totalVerts ?? '?'}`)
           parts.push(`triangles=${buildStats.triangleCount ?? buildStats.totalTriangles ?? '?'}`)
+          // Same two numbers, structured, for the Sentry diagnostics event's
+          // severity: a build that emitted nothing is a model the user
+          // cannot see, whatever the warning counts say (ops#27 T0 —
+          // loadProgress#classifyLoadOutcome).
+          reportGeometryStats({
+            vertexCount: buildStats.vertexCount ?? buildStats.totalVerts,
+            triangleCount: buildStats.triangleCount ?? buildStats.totalTriangles,
+          })
         }
         if (typeof ifcAPI.GetLinearScalingFactor === 'function') {
           // eslint-disable-next-line new-cap

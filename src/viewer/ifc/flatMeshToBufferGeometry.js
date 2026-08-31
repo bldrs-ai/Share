@@ -6,7 +6,7 @@ import {
   Matrix4,
 } from 'three'
 import {makeSurfaceColor, makeSurfaceMaterial} from '../lookMaterial'
-import {coordinationOffsetFor} from './flatMeshToBatchedModel'
+import {decideCoordinationOffset} from './flatMeshToBatchedModel'
 
 
 /**
@@ -109,9 +109,13 @@ function colorKey(color) {
  *     GetVertexArray(ptr, size) → Float32Array (interleaved p+n)
  *     GetIndexArray(ptr, size) → Uint32Array
  * @param {number} modelID
+ * @param {{coordination: ({recenterLogged: (boolean|undefined)}|undefined)}} [opts]
+ *   `coordination` is the loader's per-LOAD object, shared with every other
+ *   builder one load runs so the recenter is reported once; see
+ *   decideCoordinationOffset.
  * @return {AssembledModel}
  */
-export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
+export function flatMeshToBufferGeometry(flatMeshes, api, modelID, opts = {}) {
   // Pass 1: collect entries with sizes + colour. No reading of vertex/
   // index data yet (that's pass 2). We need the totals to size typed
   // arrays exactly, and the colour to bin entries before emission.
@@ -166,13 +170,13 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
     }
   }
   const placedGeometryCount = entries.length
-  // Origin-recenter a georeferenced model (see coordinationOffsetFor): this
+  // Origin-recenter a georeferenced model (see decideCoordinationOffset): this
   // merged path bakes each vertex into world space on the CPU, so a raw
   // ~1e7 m placement would store ~1 m-quantized float32 positions and jitter
   // on rotate. Decide one offset from the first (valid) placement and fold it
   // into every baked translation below. Null (near-origin) → no-op.
   const coordOffset = placedGeometryCount > 0 ?
-    coordinationOffsetFor(entries[0].placed.flatTransformation) : null
+    decideCoordinationOffset(entries[0].placed.flatTransformation, opts.coordination) : null
   const offX = coordOffset ? coordOffset[0] : 0
   const offY = coordOffset ? coordOffset[1] : 0
   const offZ = coordOffset ? coordOffset[2] : 0

@@ -50,6 +50,24 @@ export function conwayDirectInfo(...args) {
 
 
 /**
+ * Per-load anomaly (console.warn by default).
+ *
+ * WARN rather than info is load-bearing for the one caller so far
+ * (`decideCoordinationOffset`'s georeferenced-recenter line): the load
+ * report's console tee in `loadProgress.js#installConsoleTee` captures
+ * `console.warn` and `console.error` only — its own report lines go through
+ * `console.info`, so info is deliberately not teed. Emitting at warn is what
+ * puts the line in the snackbar expando and the copyable "i" report, which
+ * is where a triager looking at a jittering model will actually find it.
+ *
+ * @param {...*} args
+ */
+export function conwayDirectWarn(...args) {
+  channel.emit('warn', args)
+}
+
+
+/**
  * Error-path diagnostic (console.error by default).
  *
  * @param {...*} args

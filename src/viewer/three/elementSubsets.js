@@ -3,6 +3,7 @@ import {
   BufferGeometry,
   Mesh,
 } from 'three'
+import {makeTriangleMaterialIndexer, resolveSubsetMaterial} from './subsetMaterialGroups'
 
 
 /**
@@ -112,7 +113,15 @@ export function buildSubsetMesh(sourceMesh, idSet, opts = {}) {
   // → `createSubset` from shared arrays).
   const ArrayCtor = srcIndexArr.constructor
   const dstIndexArr = new ArrayCtor(matchCount * 3)
+  // Per-kept-triangle source material index, in destination order —
+  // what lets resolveSubsetMaterial rebuild `groups[]` so a subset
+  // spanning several color bins keeps all of their materials instead
+  // of collapsing to `material[0]` (Share#1806). Null when the source
+  // is single-material (no groups to preserve).
+  const materialIndexOf = makeTriangleMaterialIndexer(srcGeom)
+  const dstMaterialIndices = materialIndexOf ? new Int32Array(matchCount) : null
   let w = 0
+  let dstTri = 0
   for (let t = 0; t < triCount; t++) {
     const base = t * 3
     const a = srcIndexArr[base]
@@ -128,6 +137,13 @@ export function buildSubsetMesh(sourceMesh, idSet, opts = {}) {
     dstIndexArr[w++] = a
     dstIndexArr[w++] = b
     dstIndexArr[w++] = c
+    if (dstMaterialIndices) {
+      // This walk is in ascending source-triangle order, so the
+      // indexer's cursor never rewinds and destination runs stay
+      // coalesced one-per-bin.
+      dstMaterialIndices[dstTri] = materialIndexOf(t)
+    }
+    dstTri++
   }
   const dstGeom = new BufferGeometry()
   // Share vertex attributes — same underlying typed arrays. No copy.
@@ -135,21 +151,17 @@ export function buildSubsetMesh(sourceMesh, idSet, opts = {}) {
     dstGeom.setAttribute(name, srcGeom.attributes[name])
   }
   dstGeom.setIndex(new BufferAttribute(dstIndexArr, 1))
-  let subsetMaterial = material ?? sourceMesh.material
   // Three.js's `WebGLRenderer.projectObject` (r184 three.module.js
   // around line 17842) skips Meshes when `material` is an array but
   // `geometry.groups.length === 0` — the group-walk in the renderer
   // pushes nothing to the render list. Conway-direct models always
   // carry `material: Array(N)` (one per color bin), so a subset with
-  // shared array material + no groups is invisible. Same shape, same
-  // fix here as in IfcInstanceMap#buildSubsetMesh.
-  if (Array.isArray(subsetMaterial)) {
-    if (subsetMaterial.length === 1) {
-      subsetMaterial = subsetMaterial[0]
-    } else if (subsetMaterial.length > 1) {
-      dstGeom.addGroup(0, dstIndexArr.length, 0)
-    }
-  }
+  // shared array material + no groups is invisible. resolveSubsetMaterial
+  // unwraps Array(1) and rebuilds per-bin groups for Array(N>1); see
+  // ./subsetMaterialGroups.js. Same shape, same call in
+  // IfcInstanceMap#buildSubsetMesh.
+  const subsetMaterial = resolveSubsetMaterial(
+    dstGeom, material ?? sourceMesh.material, dstMaterialIndices)
   const subsetMesh = new Mesh(dstGeom, subsetMaterial)
   // Local transform mirrors source's local transform. World
   // transform alignment is the caller's responsibility (parent the
@@ -407,12 +419,9 @@ export function buildInstanceMapSubsetMesh(sourceMesh, parentIdSet, opts = {}) {
   // Conway-direct models each child Mesh is single-material (one
   // material per PlacedGeometry.color bin — GLTFExporter split by
   // material group on write). For cache-miss the source carries an
-  // array material + `geometry.groups[]`; three.js renders our subset
-  // with `material[0]` because subset geometries are built without
-  // groups[]. Visually approximate but functional — the "isolation
-  // shows monochrome on cache-miss" small regression is documented
-  // in §3b.iii. Cache-hit (the steady-state) renders with correct
-  // per-PlacedGeometry colors.
+  // array material + `geometry.groups[]`, and the subset builder now
+  // rebuilds matching groups over the kept triangles (Share#1806), so
+  // both shapes render with correct per-PlacedGeometry colors.
   const subset = sourceMesh.instanceMap.createSubsetMeshByParent(parentIdSet, {
     material: opts.material,
     defaultMaterial: sourceMesh.material,

@@ -59,6 +59,40 @@ function makeTwoElementMesh() {
 }
 
 
+/**
+ * Two-color-bin source, the shape `flatMeshToBufferGeometry` produces:
+ * triangles emitted in bin order, one `geometry.groups[]` entry per bin,
+ * positionally paired with one entry in the mesh's `material` array.
+ *
+ *   tri 0 → element 10 ┐ bin 0 (material[0])
+ *   tri 1 → element 11 ┘
+ *   tri 2 → element 20 ┐ bin 1 (material[1])
+ *   tri 3 → element 21 ┘
+ *
+ * @return {Mesh}
+ */
+function makeTwoBinMesh() {
+  const geom = new BufferGeometry()
+  const vertsPerTri = 3
+  const triCount = 4
+  geom.setAttribute(
+    'position',
+    new BufferAttribute(new Float32Array(triCount * vertsPerTri * 3), 3),
+  )
+  geom.setAttribute('expressID', new BufferAttribute(
+    new Int32Array([10, 10, 10, 11, 11, 11, 20, 20, 20, 21, 21, 21]), 1,
+  ))
+  geom.setIndex(new BufferAttribute(
+    new Uint32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]), 1,
+  ))
+  // Bin 0 = tris 0-1 (indices 0-5), bin 1 = tris 2-3 (indices 6-11).
+  geom.addGroup(0, 6, 0)
+  geom.addGroup(6, 6, 1)
+  const materials = [new MeshBasicMaterial(), new MeshBasicMaterial()]
+  return new Mesh(geom, materials)
+}
+
+
 describe('viewer/three/elementSubsets', () => {
   describe('buildSubsetMesh', () => {
     it('keeps only triangles whose vertices all match the id set', () => {
@@ -161,6 +195,53 @@ describe('viewer/three/elementSubsets', () => {
       const override = new MeshBasicMaterial()
       const customSubset = buildSubsetMesh(src, new Set([10]), {material: override})
       expect(customSubset.material).toBe(override)
+    })
+
+    it('preserves every color bin\'s material when the subset spans bins', () => {
+      // Share#1806: the old code collapsed a multi-material subset to a
+      // single group pointing at material[0], so an isolated element
+      // rendered monochrome — grey whenever bin 0 is the DEFAULT_COLOR
+      // bin. The subset must carry one group per bin it spans.
+      const src = makeTwoBinMesh()
+      const subset = buildSubsetMesh(src, new Set([10, 11, 20, 21]))
+      expect(subset.material).toBe(src.material)
+      expect(subset.geometry.groups).toEqual([
+        {start: 0, count: 6, materialIndex: 0},
+        {start: 6, count: 6, materialIndex: 1},
+      ])
+    })
+
+    it('renders a single-bin subset with that bin\'s material, not material[0]', () => {
+      // The regression that made isolated parts grey: a subset entirely
+      // inside bin 1 was drawn with material[0].
+      const src = makeTwoBinMesh()
+      const subset = buildSubsetMesh(src, new Set([20, 21]))
+      expect(subset.material).toBe(src.material)
+      expect(subset.geometry.groups).toEqual([
+        {start: 0, count: 6, materialIndex: 1},
+      ])
+    })
+
+    it('coalesces adjacent same-bin triangles into one group', () => {
+      // Two triangles from bin 0 plus one from bin 1 → two groups, not
+      // three. Emitting a group per triangle would be correct but would
+      // cost a draw call per triangle on real models.
+      const src = makeTwoBinMesh()
+      const subset = buildSubsetMesh(src, new Set([10, 11, 21]))
+      expect(subset.geometry.groups).toEqual([
+        {start: 0, count: 6, materialIndex: 0},
+        {start: 6, count: 3, materialIndex: 1},
+      ])
+    })
+
+    it('an explicit single-material override still wins over the bin walk', () => {
+      const src = makeTwoBinMesh()
+      const override = new MeshBasicMaterial()
+      const subset = buildSubsetMesh(src, new Set([10, 20]), {material: override})
+      expect(subset.material).toBe(override)
+      // A scalar material needs no groups — the renderer takes its
+      // `material.visible` branch.
+      expect(subset.geometry.groups).toEqual([])
     })
 
     it('supports a custom attribute name for non-IFC formats', () => {
@@ -443,6 +524,37 @@ describe('viewer/three/elementSubsets', () => {
       // No override → falls back to source.
       const subset2 = buildInstanceMapSubsetMesh(src, new Set([100]))
       expect(subset2.material).toBe(src.material)
+    })
+
+    it('preserves per-color-bin materials across the instance-map path', () => {
+      // Cache-miss Conway-direct shape: one Mesh, array material, one
+      // geometry group per color bin. Parent 100's two instances span
+      // tris 0-3, which straddles the bin boundary at tri 3 — the subset
+      // must come out with both bins' materials (Share#1806).
+      const src = makeInstanceMappedMesh()
+      // Bin 0 = tris 0-2 (indices 0-8), bin 1 = tris 3-5 (indices 9-17).
+      src.geometry.addGroup(0, 9, 0)
+      src.geometry.addGroup(9, 9, 1)
+      const materials = [new MeshBasicMaterial(), new MeshBasicMaterial()]
+      src.material = materials
+      const subset = buildInstanceMapSubsetMesh(src, new Set([100]))
+      expect(subset.material).toBe(materials)
+      expect(subset.geometry.groups).toEqual([
+        {start: 0, count: 9, materialIndex: 0},
+        {start: 9, count: 3, materialIndex: 1},
+      ])
+    })
+
+    it('a subset inside one bin uses that bin\'s material, not material[0]', () => {
+      const src = makeInstanceMappedMesh()
+      src.geometry.addGroup(0, 9, 0)
+      src.geometry.addGroup(9, 9, 1)
+      src.material = [new MeshBasicMaterial(), new MeshBasicMaterial()]
+      // Parent 200 is instance 2 → tris 4-5, wholly inside bin 1.
+      const subset = buildInstanceMapSubsetMesh(src, new Set([200]))
+      expect(subset.geometry.groups).toEqual([
+        {start: 0, count: 6, materialIndex: 1},
+      ])
     })
 
     it('the subset is raycast-active (not invisible)', () => {

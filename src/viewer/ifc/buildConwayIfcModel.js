@@ -46,7 +46,8 @@ import {instanceMapFromOrderedPlacedRanges} from './IfcInstanceMap'
  *   skippedPlacedGeometries.
  */
 export function buildConwayIfcModel(capturedFlatMeshes, api, modelID, opts = {}) {
-  const assembled = flatMeshToBufferGeometry(capturedFlatMeshes, api, modelID)
+  const assembled =
+    flatMeshToBufferGeometry(capturedFlatMeshes, api, modelID, {coordination: opts.coordination})
   const instanceMap = instanceMapFromOrderedPlacedRanges(
     assembled.ranges, {geometry: assembled.geometry})
   // Multi-material rendering by default — one MeshLambertMaterial per

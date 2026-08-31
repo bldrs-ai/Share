@@ -54,7 +54,8 @@ import {occurrencePathKey} from '../../utils/occurrencePaths'
  * @return {object} `{model, stats}` — `model` is a BatchedMesh or a Group of them.
  */
 export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opts = {}) {
-  const {batches, stats} = flatMeshToBatchedModel(capturedFlatMeshes, ifcAPI, modelID)
+  const {batches, stats} =
+    flatMeshToBatchedModel(capturedFlatMeshes, ifcAPI, modelID, {coordination: opts.coordination})
   return {model: assembleBatchedModel(batches, ifcAPI, modelID, opts), stats}
 }
 
