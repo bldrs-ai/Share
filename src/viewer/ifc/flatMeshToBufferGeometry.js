@@ -346,7 +346,7 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID, opts = {}) {
     //
     // Only SHARE's backstop half of that mapping — the engine's own frame is
     // reported separately as `userData.appliedCoordination`, and the two
-    // compose. See `ShareIfcLoader#stampAppliedCoordination` for the contract.
+    // compose. See `./appliedCoordination` for the contract.
     coordinationOffset: coordOffset,
   }
 }

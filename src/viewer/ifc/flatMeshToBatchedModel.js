@@ -375,7 +375,7 @@ export const LARGE_COORD_THRESHOLD = 1e4
  * (conway-geom#202 -> conway#685, pinned by Share#1816) is essentially never.
  * The engine's frame is reported separately as
  * `userData.appliedCoordination`, and the composition of the two is written
- * once, on `ShareIfcLoader#stampAppliedCoordination`.
+ * once, in `./appliedCoordination`.
  *
  * @param {Array<number>} flatTransformation 16-element column-major matrix
  * @return {?Array<number>} `[x, y, z]` to subtract, or null

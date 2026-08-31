@@ -52,6 +52,7 @@ jest.mock('./injectGlbExtensions', () => {
 
 import {BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
 import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb, exportThreeModelAsGlb} from './glbExport'
+import {APPLIED_COORDINATION_KEY} from '../viewer/ifc/appliedCoordination'
 import {parseGlb, serializeGlb} from './injectGlbExtensions'
 import {gitHubCacheKey} from './sourceCacheKey'
 import {flatMeshToBatchedModel} from '../viewer/ifc/flatMeshToBatchedModel'
@@ -598,6 +599,130 @@ describe('loader/glbExport', () => {
       // title into scenes[0].name — the field generic viewers show.
       expect(json.scenes[0].name).toBe('Momentum')
       expect(injectResult.stats.addedSceneName).toBe(1)
+    })
+  })
+
+  describe('exportAndCacheGlb — applied coordination frame (Share#1633 item 1)', () => {
+    // The MERGED writer path (this file mocks `isGlbBatchedActive` false).
+    // The batched-native writer's half of the same round-trip is in
+    // `glbBatchedRoundTrip.test.js`, against a real GLTFLoader.
+    //
+    // Why the frame must ride in scene extras at all: both writers DROP
+    // `model.userData` — the merged bake (`batchedModelToMergedMesh`) copies
+    // only matrix + name, so `GLTFExporter` serialises an empty userData —
+    // which is exactly how a stamped model could reach the cache unstamped
+    // and come back out that way on every subsequent load.
+    const cacheKeyArgs = gitHubCacheKey({
+      owner: 'bldrs-ai',
+      repo: 'share',
+      branch: 'main',
+      filePath: 'sub/dir/index.ifc',
+      shaHash: 'abc123',
+    })
+    const ctx = {kindLabel: 'github', cacheKeyArgs}
+    // scale(mm) * NormalizeMat(Z-up -> Y-up) * translate(-anchor), the shape
+    // conway derives — distinctive enough that a dropped or reordered stamp
+    // cannot pass the assertions below.
+    /* eslint-disable no-magic-numbers */
+    const FRAME = [
+      0.001, 0, 0, 0,
+      0, 0, -0.001, 0,
+      0, 0.001, 0, 0,
+      -2600, 450, 1200, 1,
+    ]
+    /* eslint-enable no-magic-numbers */
+
+    /**
+     * @param {object} userData
+     * @return {object} a model stub shaped for the writer's tail
+     */
+    function modelWith(userData) {
+      return {name: 'Momentum', userData}
+    }
+
+    it('passes the stamped frame to injectGlbExtensions via sceneExtras', async () => {
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({
+        model: modelWith({[APPLIED_COORDINATION_KEY]: FRAME}), ...ctx,
+      })
+      expect(ok).toBe(true)
+
+      const [, , sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      // Alongside the title, in the SAME inject pass — one parse/serialize.
+      expect(sceneExtrasArg).toEqual({
+        [BLDRS_TITLE_EXTRAS_KEY]: 'Momentum',
+        [APPLIED_COORDINATION_KEY]: FRAME,
+      })
+    })
+
+    it('omits the key when the model carries no frame', async () => {
+      // Pre-conway#702 engines, and every non-IFC source. The title must
+      // still go out on its own, so the two keys are independent.
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({model: modelWith({}), ...ctx})
+      expect(ok).toBe(true)
+
+      const [, , sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      expect(sceneExtrasArg).toEqual({[BLDRS_TITLE_EXTRAS_KEY]: 'Momentum'})
+    })
+
+    it('stamps the frame even when the model has no title', async () => {
+      // The two keys are gathered independently, so a titleless model (a
+      // drag-dropped IFC with no project name) must still get its frame —
+      // the shape a single `titleForExtras ? … : null` ternary would drop.
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({
+        model: {userData: {[APPLIED_COORDINATION_KEY]: FRAME}}, ...ctx,
+      })
+      expect(ok).toBe(true)
+
+      const [, , sceneExtrasArg, sceneNameArg] = mockInjectGlbExtensions.mock.calls[0]
+      expect(sceneExtrasArg).toEqual({[APPLIED_COORDINATION_KEY]: FRAME})
+      expect(sceneNameArg).toBeNull()
+    })
+
+    it('refuses to cache a malformed frame', async () => {
+      // Validated at the write, not just at the read: an artifact persists
+      // across sessions, so a frame that would read back as NaN must never
+      // reach one. 16 elements, so length alone would have let it through.
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+      const bad = [...FRAME]
+      bad[5] = null
+
+      const ok = await exportAndCacheGlb({
+        model: modelWith({[APPLIED_COORDINATION_KEY]: bad}), ...ctx,
+      })
+      expect(ok).toBe(true)
+
+      const [, , sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      expect(sceneExtrasArg).toEqual({[BLDRS_TITLE_EXTRAS_KEY]: 'Momentum'})
+    })
+
+    it('end-to-end: the frame round-trips into scenes[0].extras', async () => {
+      // REAL injectGlbExtensions, as in the title's end-to-end above: the
+      // spy default would swallow sceneExtras and hide a writer bug.
+      const actual = jest.requireActual('./injectGlbExtensions')
+      mockInjectGlbExtensions.mockImplementation(actual.injectGlbExtensions)
+
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({
+        model: modelWith({[APPLIED_COORDINATION_KEY]: FRAME}), ...ctx,
+      })
+      expect(ok).toBe(true)
+
+      const injectResult = mockInjectGlbExtensions.mock.results[0].value
+      const {json} = parseGlb(injectResult.bytes)
+      expect(json.scenes[0].extras[APPLIED_COORDINATION_KEY]).toEqual(FRAME)
+      expect(injectResult.stats.addedSceneExtras).toBe(2)
     })
   })
 })

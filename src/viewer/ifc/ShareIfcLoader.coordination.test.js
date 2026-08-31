@@ -341,6 +341,21 @@ describe('viewer/ifc/ShareIfcLoader engine coordination stamp (Share#1634)', () 
       .toEqual([])
   })
 
+  it('refuses a right-length frame of non-finite numbers', async () => {
+    // Length alone would pass this: `Matrix4#fromArray` reads all 16 slots
+    // whatever they hold, so a NaN-bearing reply becomes a matrix whose
+    // inverse is NaN everywhere — an answer that looks real. Shared shape
+    // rules live in `./appliedCoordination`; this pins that the ENGINE
+    // boundary actually applies them.
+    const bad = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, NaN, 0, 1]
+    const model = await parseWith(makeIfcAPI(bad))
+
+    expect(model.tag).toBe('incremental')
+    expect(model.userData.appliedCoordination).toBeUndefined()
+    expect(getConwayDirectLogs().filter(({text}) => /appliedCoordination/.test(text)))
+      .toHaveLength(1)
+  })
+
   it('refuses a malformed frame rather than stamping it', async () => {
     // A short array would silently become a garbage `Matrix4` in every
     // consumer (`fromArray` reads 16 slots regardless), so the reply is

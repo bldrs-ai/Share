@@ -47,6 +47,10 @@ import glbToThree from './glb'
 import {glbCacheKey} from './glbCacheKey'
 import {activeArtifactSpec, isGlbBatchedActive} from './glbCompress'
 import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
+import {
+  APPLIED_COORDINATION_KEY,
+  validAppliedCoordination,
+} from '../viewer/ifc/appliedCoordination'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
@@ -1423,6 +1427,34 @@ export function convertToShareModel(model, viewer, {fileName = null} = {}) {
   }
 
   recursiveDecorate(model)
+
+  // Cache-hit coordination-frame hydration. The writer stamps the engine's
+  // applied frame into `scenes[0].extras[APPLIED_COORDINATION_KEY]` and
+  // GLTFLoader auto-copies scene extras onto `scene.userData`, so a cache-hit
+  // model arrives with the frame already at the same `userData` key a fresh
+  // conway parse stamps — one surface across both paths, which is the whole
+  // point of Share#1633 item 1. Nothing has to be MOVED here; what has to
+  // happen is validation. Like the cached title just below, this value came
+  // out of a GLB file, and a GLB file is an untrusted boundary in the
+  // originator-share design: a hand-edited artifact could carry any JSON
+  // under this key, and unlike a bad title a bad frame is not visible — it
+  // would quietly produce NaN world coordinates in every consumer that
+  // inverts it. Re-validate and drop rather than keep something unusable, so
+  // "absent" (which consumers already handle, for pre-conway#702 engines)
+  // is the only failure mode they ever see.
+  //
+  // Runs after the batched-native hydration in `Loader#load`, which merges
+  // the GLTF scene's userData onto the model it swaps in — so this one check
+  // covers the merged cache-hit model and the hydrated batched one alike.
+  if (model.userData && APPLIED_COORDINATION_KEY in model.userData) {
+    const frame = validAppliedCoordination(model.userData[APPLIED_COORDINATION_KEY])
+    if (frame === null) {
+      glbInfo('reader: cached appliedCoordination is not a usable mat4; dropping it')
+      delete model.userData[APPLIED_COORDINATION_KEY]
+    } else {
+      model.userData[APPLIED_COORDINATION_KEY] = frame
+    }
+  }
 
   // Override for root
   debug().log('Overriding project root name')

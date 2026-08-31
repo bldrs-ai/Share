@@ -558,7 +558,7 @@ export class IncrementalBatchedBuilder {
     // never fires — the engine recentres first, and its frame
     // is stamped alongside as `userData.appliedCoordination`. The two compose
     // as `rendered = (A * world) - coordinationOffset`; the whole contract is
-    // written once, on `ShareIfcLoader#stampAppliedCoordination`.
+    // written once, in `./appliedCoordination`.
     if (this.coordination.offset === undefined) {
       this.coordination.offset = decideCoordinationOffset(matrix.elements, this.coordination)
     }

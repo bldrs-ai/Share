@@ -20,6 +20,22 @@
  * it (`BLDRS_GLB_BATCHED_SCHEMA_VERSION` below) — deliberately, since that
  * is the slot most users actually read. Nothing extra to do here; the note
  * exists so the coupling is visible from where the bump gets written.
+ * 0.21.0 — retires artifacts baked before the engine's applied coordination
+ *         frame was carried across the cache. The writer now stamps
+ *         `scenes[0].extras.appliedCoordination` — conway#702's
+ *         `GetAppliedCoordinationMatrix`, the frame the engine composed into
+ *         every placement it emitted — beside the existing `bldrsTitle`, and
+ *         GLTFLoader auto-promotes it onto `scene.userData` so a cache hit
+ *         presents the same surface as a fresh parse (Share#1633 item 1,
+ *         Share#1634). Additive to the format, so this bump is not about
+ *         readability: 0.20.0 artifacts parse fine, they just carry NO frame,
+ *         and a georeferenced model that reads one back would silently keep
+ *         the very gap this closes — no way for a consumer to map a rendered
+ *         point back to authored coordinates, on exactly the models that need
+ *         it. Same reasoning as 0.10.0, which bumped for adding
+ *         `scenes[0].name` alongside an already-working title. Retiring them
+ *         costs one re-parse each and makes the frame's presence a property
+ *         of the schema rather than of when a user last loaded the model.
  * 0.20.0 — retires artifacts baked without type-inherited materials
  *         (conway#704, issue test-models-private#61 — the follow-up to
  *         0.18.0's colour fixes): a product with no direct
@@ -230,7 +246,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.20.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.21.0'
 
 
 /**
