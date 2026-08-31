@@ -15,6 +15,7 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  Color,
   Group,
   Mesh,
   MeshBasicMaterial,
@@ -916,6 +917,500 @@ describe('viewer/three/IfcIsolator', () => {
       iso._rebuildSelectionVisualFromStore()
       expect(iso.viewer.setSelection).toHaveBeenCalledWith(0, [100], false)
       expect(iso.viewer.setInstanceSelection).not.toHaveBeenCalled()
+    })
+  })
+
+
+  // ----------------------------------------------------------------
+  // Batched render path (Share#1806). The default Conway-direct model is
+  // a `THREE.BatchedMesh`: hide / isolate mask per-instance visibility in
+  // place instead of re-baking a subset Mesh, because a baked Mesh gets
+  // the batch's shared colourless material and cannot read the batch's
+  // per-instance colour texture (the reported "isolated parts turn light
+  // grey"). These tests assert the visibility *and* the colours, so they
+  // go red against the subset behaviour.
+  // ----------------------------------------------------------------
+  describe('batched path — in-place isolation via setVisibleAt', () => {
+    let flatMeshToBatchedModel
+    let attachBatchedSubsets
+    let ResidencyController
+    let applyBatchedSelection
+    let applyBatchedInstanceSelection
+    beforeAll(() => {
+      flatMeshToBatchedModel = require('../ifc/flatMeshToBatchedModel').flatMeshToBatchedModel
+      attachBatchedSubsets = require('../ifc/batchedSubset').attachBatchedSubsets
+      ResidencyController = require('../residency/ResidencyController').ResidencyController
+      applyBatchedSelection = require('../ifc/batchedHighlight').applyBatchedSelection
+      applyBatchedInstanceSelection = require('../ifc/batchedHighlight').applyBatchedInstanceSelection
+    })
+
+    /** Identity 4x4, three.js column-major flat form. */
+    const IDENTITY_MAT = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+    const RED = {x: 1, y: 0, z: 0, w: 1}
+    const GREEN = {x: 0, y: 1, z: 0, w: 1}
+    const BLUE = {x: 0, y: 0, z: 1, w: 1}
+
+    /**
+     * @param {number} x translation in X (keeps placements distinct so the
+     *   builder's coincident-placement dedupe doesn't collapse them)
+     * @return {Array<number>} column-major translation matrix
+     */
+    function translateX(x) {
+      const m = [...IDENTITY_MAT]
+      m[12] = x
+      return m
+    }
+
+    /** @return {object} mock Conway IfcAPI serving one unit triangle at id 999. */
+    function unitTriApi() {
+      const verts = new Float32Array([
+        0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 1,
+        0, 1, 0, 0, 0, 1,
+      ])
+      const indices = new Uint32Array([0, 1, 2])
+      return {
+        GetGeometry: (_modelID, id) => (id === 999 ? {
+          GetVertexData: () => id,
+          GetIndexData: () => id,
+          GetVertexDataSize: () => verts.length,
+          GetIndexDataSize: () => indices.length,
+        } : null),
+        GetVertexArray: () => verts,
+        GetIndexArray: () => indices,
+      }
+    }
+
+    /**
+     * One decorated opaque BatchedMesh with four instances in emission order
+     * (which is also their occurrence id):
+     *
+     *   0: product 100, RED    1: product 100, RED
+     *   2: product 200, GREEN  3: product 300, BLUE
+     *
+     * Product 100 is placed twice so the per-occurrence hide has a reused
+     * part to narrow onto. `attachBatchedSubsets` is attached exactly as
+     * production does — so the pre-fix subset path would actually run here
+     * and these tests fail on behaviour, not on a missing method.
+     *
+     * @return {object} a THREE.BatchedMesh carrying the pick tables
+     */
+    function makeBatchedModel() {
+      const geom = (color) => [{geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color}]
+      const at = (x, color) => [{geometryExpressID: 999, flatTransformation: translateX(x), color}]
+      const flatMeshes = [
+        {expressID: 100, geometries: geom(RED)},
+        {expressID: 100, geometries: at(10, RED)},
+        {expressID: 200, geometries: at(20, GREEN)},
+        {expressID: 300, geometries: at(30, BLUE)},
+      ]
+      const {batches} = flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0)
+      expect(batches.length).toBe(1) // all opaque → one batch
+      const batch = batches[0]
+      const mesh = batch.mesh
+      mesh.instanceParents = batch.instanceParents
+      mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
+      mesh.instanceGeometry = batch.instanceGeometry
+      mesh.instanceColors = batch.instanceColors
+      attachBatchedSubsets(mesh, null, {})
+      return mesh
+    }
+
+    /**
+     * @return {{scene: Group, pickable: Array, iso: IfcIsolator, mesh: object}}
+     */
+    function setupBatchedIsolator() {
+      const scene = new Group()
+      const pickable = []
+      const iso = makeIsolator({scene, pickable})
+      const mesh = makeBatchedModel()
+      scene.add(mesh)
+      pickable.push(mesh)
+      iso.ifcModel = mesh
+      iso.visualElementsIds = [100, 200, 300]
+      iso.spatialStructure = {}
+      return {scene, pickable, iso, mesh}
+    }
+
+    /**
+     * @param {object} mesh BatchedMesh
+     * @return {Array<boolean>} per-instance visibility, batchId order
+     */
+    function visibility(mesh) {
+      const out = []
+      for (let batchId = 0; batchId < mesh.instanceParents.length; batchId++) {
+        out.push(mesh.getVisibleAt(batchId))
+      }
+      return out
+    }
+
+    /**
+     * @param {object} mesh BatchedMesh
+     * @param {number} batchId
+     * @return {Color} the instance colour currently in the batch's colour texture
+     */
+    function colorAt(mesh, batchId) {
+      return mesh.getColorAt(batchId, new Color())
+    }
+
+    it('isolates in place: only the isolated product stays visible, model stays in scene', () => {
+      const {scene, pickable, iso, mesh} = setupBatchedIsolator()
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+
+      iso.isolateSelectedElements()
+
+      // Pre-fix this detached the model and added a baked subset Mesh.
+      expect(scene.children).toContain(mesh)
+      expect(pickable).toEqual([mesh])
+      expect(iso.isolationSubset).toBeNull()
+      expect(visibility(mesh)).toEqual([true, true, false, false])
+    })
+
+    it('outlines the batch meshes themselves — there is no subset to point at', () => {
+      const {iso, mesh} = setupBatchedIsolator()
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+
+      iso.isolateSelectedElements()
+
+      // Pinning the argument matters because of what it costs: an OutlineEffect
+      // whose selection holds a `THREE.BatchedMesh` compiles its mask pass
+      // (postprocessing's DepthComparisonMaterial) with three's USE_BATCHING
+      // define, and that shader ships without the batching chunks —
+      // `'batchingMatrix' : undeclared identifier`, no outline at all, and a
+      // per-frame `useProgram: program not valid`. `outlineBatching.js` patches
+      // the material so this selection is drawable; if the batches ever stop
+      // being what is selected here, that patch is dead weight, and if this
+      // starts selecting batches somewhere the patch doesn't reach, the outline
+      // silently disappears again.
+      expect(iso.isolationOutlineEffect.setSelection).toHaveBeenCalledWith([mesh])
+      expect(iso.isolationSubset).toBeNull()
+    })
+
+    it('renders the isolated part from the coloured batch, not a grey subset (#1806)', () => {
+      const {scene, iso, mesh} = setupBatchedIsolator()
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+
+      iso.isolateSelectedElements()
+
+      // What is on screen IS the batch — nothing else was added to the scene.
+      // (Pre-fix a re-baked subset Mesh took its place, wearing the batch's
+      // shared colourless material: the reported light grey. Asserting the
+      // colour alone would still pass then, since the detached batch keeps its
+      // colour texture — so the rendered-object assertion carries the claim.)
+      expect(scene.children).toEqual([mesh])
+      expect(mesh.getVisibleAt(0)).toBe(true)
+      // The surviving instances still carry their own colour — the whole point
+      // of masking rather than re-baking onto the batch's shared material.
+      const isolated = colorAt(mesh, 0)
+      expect(isolated.r).toBeCloseTo(1)
+      expect(isolated.g).toBeCloseTo(0)
+      expect(isolated.b).toBeCloseTo(0)
+      // Masked-out instances keep theirs too, so un-isolating needs no repaint.
+      const masked = colorAt(mesh, 2)
+      expect(masked.g).toBeCloseTo(1)
+      const stillMasked = colorAt(mesh, 3)
+      expect(stillMasked.b).toBeCloseTo(1)
+    })
+
+    it('un-isolate restores full visibility and drops the mask (round trip)', () => {
+      const {scene, pickable, iso, mesh} = setupBatchedIsolator()
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+
+      iso.isolateSelectedElements()
+      // Midpoint: the isolate actually took effect (without this the round-trip
+      // assertion below would pass against a no-op isolate).
+      expect(visibility(mesh)).toEqual([true, true, false, false])
+
+      iso.resetTempIsolation()
+
+      expect(visibility(mesh)).toEqual([true, true, true, true])
+      expect(mesh.userData.isolationMask).toBeUndefined()
+      // No duplicate model in the scene / pick registry from the restore.
+      expect(scene.children.filter((c) => c === mesh).length).toBe(1)
+      expect(pickable).toEqual([mesh])
+      expect(colorAt(mesh, 2).g).toBeCloseTo(1)
+    })
+
+    it('composes isolation with a product-type hide (both filters must pass)', () => {
+      const {iso, mesh} = setupBatchedIsolator()
+      // Hide 300 first, the way hideElementsById would.
+      iso.hiddenIds = [300]
+      iso.initHideOperationsSubset(iso.visualElementsIds.filter((e) => e !== 300))
+      expect(visibility(mesh)).toEqual([true, true, true, false])
+
+      // Isolate 100 + 300: 300 is isolated but still hidden, so it stays masked.
+      iso.viewer.getSelectedIds = jest.fn(() => [100, 300])
+      iso.isolateSelectedElements()
+      expect(visibility(mesh)).toEqual([true, true, false, false])
+
+      // Un-isolating returns to the hide-only state, not to everything-visible.
+      iso.resetTempIsolation()
+      expect(visibility(mesh)).toEqual([true, true, true, false])
+    })
+
+    it('hides a single occurrence of a reused part, leaving its sibling visible', () => {
+      const {iso, mesh} = setupBatchedIsolator()
+      // Occurrence id 1 is product 100's second placement (node 6 = its NAUO id).
+      iso.hideOccurrence(6, [1])
+      expect(visibility(mesh)).toEqual([true, false, true, true])
+
+      iso.unHideOccurrence(6)
+      expect(visibility(mesh)).toEqual([true, true, true, true])
+      expect(mesh.userData.isolationMask).toBeUndefined()
+    })
+
+    it('unHideAllElements clears a product hide in place', () => {
+      const {scene, pickable, iso, mesh} = setupBatchedIsolator()
+      iso.hiddenIds = [200]
+      iso.initHideOperationsSubset(iso.visualElementsIds.filter((e) => e !== 200))
+      expect(visibility(mesh)).toEqual([true, true, false, true])
+
+      iso.unHideAllElements()
+      expect(visibility(mesh)).toEqual([true, true, true, true])
+      expect(scene.children.filter((c) => c === mesh).length).toBe(1)
+      expect(pickable).toEqual([mesh])
+    })
+
+    it('isolates the ids passed straight to initTemporaryIsolationSubset (BotChat)', () => {
+      // BotChat calls this method directly, without entering isolation mode —
+      // so the batched filter has to read `includedIds`, not `isolatedIds`.
+      const {iso, mesh} = setupBatchedIsolator()
+      iso.initTemporaryIsolationSubset([200])
+      expect(iso.tempIsolationModeOn).toBe(false)
+      expect(visibility(mesh)).toEqual([false, false, true, false])
+    })
+
+    it('dispose releases the mask so the model is left as residency had it', () => {
+      const {iso, mesh} = setupBatchedIsolator()
+      mesh.setVisibleAt(3, false) // a residency eviction
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+      iso.isolateSelectedElements()
+
+      iso.dispose()
+
+      expect(mesh.userData.isolationMask).toBeUndefined()
+      expect(visibility(mesh)).toEqual([true, true, true, false])
+    })
+
+    it('preserves residency\'s eviction across an isolate / un-isolate round trip', () => {
+      // Residency (ResidencyController) owns the same setVisibleAt bit. Its
+      // intent must survive isolation rather than being blanket-restored —
+      // hence the mask's `base` snapshot + setVisibleAt interception.
+      const {iso, mesh} = setupBatchedIsolator()
+      const residency = new ResidencyController(mesh)
+      expect(residency.instanceCount).toBe(4)
+      // Evict everything, then bring half back: instance 0 (nearest the camera
+      // proxy) is not what matters — only that SOME instances are evicted.
+      residency.setTarget(0)
+      expect(visibility(mesh)).toEqual([false, false, false, false])
+
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+      iso.isolateSelectedElements()
+      // Isolation can't resurrect what residency evicted.
+      expect(visibility(mesh)).toEqual([false, false, false, false])
+
+      // Residency re-admits everything WHILE isolated: isolation still wins for
+      // the parts it masks, but the intent is recorded.
+      residency.setTarget(1)
+      expect(visibility(mesh)).toEqual([true, true, false, false])
+
+      iso.resetTempIsolation()
+      expect(visibility(mesh)).toEqual([true, true, true, true])
+    })
+
+    it('restores residency\'s exact visibility on un-isolate, not everything-visible', () => {
+      const {iso, mesh} = setupBatchedIsolator()
+      // Simulate an eviction of instance 3 — setVisibleAt is residency's only
+      // write surface, so this is exactly what the controller does.
+      mesh.setVisibleAt(3, false)
+
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+      iso.isolateSelectedElements()
+      expect(visibility(mesh)).toEqual([true, true, false, false])
+
+      iso.resetTempIsolation()
+      // Instance 3 stays evicted: the mask replayed residency's snapshot.
+      expect(visibility(mesh)).toEqual([true, true, true, false])
+      expect(mesh.userData.isolationMask).toBeUndefined()
+    })
+
+
+    // ------------------------------------------------------------------
+    // Selection paint vs. isolation (Share#1806). On this path the selection
+    // highlight is not an overlay Mesh but cyan written onto the live
+    // instances (`applyBatchedSelection` → `setColorAt`). Every user-reachable
+    // isolate goes through `isolateSelectedElements`, which isolates *the
+    // selection* — so the isolated part is exactly the part wearing cyan, and
+    // without an explicit clear "isolating a part preserves its colour" fails
+    // on its own default flow. `_clearSelectionVisualOnly` is the seam: it was
+    // a no-op for batched models (it only knew the highlighter + Conway
+    // subsets), so hide was blind to this too.
+    // ------------------------------------------------------------------
+
+    /** Cyan `batchedHighlight` paints selection with (its DEFAULT_HIGHLIGHT). */
+    const SELECTION_CYAN = {r: 0, g: 0.8, b: 1}
+
+    /**
+     * Assert one instance's live colour in the batch's colour texture — what
+     * the GPU actually draws, as opposed to `instanceColors`, the JS side-array
+     * of ORIGINAL colours that `setColorAt` never writes (so comparing that
+     * across an isolate can't fail: it is byte-identical either way).
+     *
+     * @param {object} mesh BatchedMesh
+     * @param {number} batchId
+     * @param {object} rgb expected `{r,g,b}` 0..1
+     */
+    function expectColorAt(mesh, batchId, rgb) {
+      const c = colorAt(mesh, batchId)
+      expect([c.r, c.g, c.b].map((v) => Math.round(v * 100) / 100))
+        .toEqual([rgb.r, rgb.g, rgb.b].map((v) => Math.round(v * 100) / 100))
+    }
+
+    /**
+     * Point the mock viewer's selection entry points at the real batched
+     * highlight, as `ShareViewer#setSelection` / `#setInstanceSelection` do on
+     * this path. The restore assertions need it: un-isolate rebuilds the visual
+     * by calling back through the viewer, so a bare `jest.fn()` would record
+     * the call and repaint nothing.
+     *
+     * @param {IfcIsolator} iso
+     * @param {object} mesh BatchedMesh
+     */
+    function wireBatchedSelection(iso, mesh) {
+      iso.viewer.setSelection = jest.fn(
+        (_modelID, ids) => applyBatchedSelection(mesh, ids, SELECTION_CYAN))
+      iso.viewer.setInstanceSelection = jest.fn(
+        (_modelID, ids) => applyBatchedInstanceSelection(mesh, ids, SELECTION_CYAN))
+    }
+
+    /**
+     * Seed the mocked store for one test and restore the module-singleton
+     * mock afterwards (it is shared across this file's suites).
+     *
+     * @param {object} state extra store fields to serve
+     * @param {Function} body the test body
+     */
+    function withStoreState(state, body) {
+      const useStore = require('../../store/useStore').default
+      const orig = useStore.getState.getMockImplementation()
+      useStore.getState.mockImplementation(() => ({elementTypesMap: [], ...state}))
+      try {
+        body()
+      } finally {
+        useStore.getState.mockImplementation(orig)
+      }
+    }
+
+    it('isolate clears the selection paint, so the isolated part shows its own colour (#1806)', () => {
+      const {iso, mesh} = setupBatchedIsolator()
+      // Select product 100 the way ShareViewer does on this path.
+      applyBatchedSelection(mesh, [100], SELECTION_CYAN)
+      // Midpoint — the paint really is on both of 100's occurrences, so the
+      // assertions after the isolate have something to go red against.
+      expectColorAt(mesh, 0, SELECTION_CYAN)
+      expectColorAt(mesh, 1, SELECTION_CYAN)
+
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+      iso.isolateSelectedElements()
+
+      // Both occurrences of the reused product are back to their own red.
+      expectColorAt(mesh, 0, {r: 1, g: 0, b: 0})
+      expectColorAt(mesh, 1, {r: 1, g: 0, b: 0})
+      // The isolate itself still happened (a clear that also broke isolation
+      // would otherwise satisfy the colour assertions).
+      expect(visibility(mesh)).toEqual([true, true, false, false])
+    })
+
+    it('isolate drops only the paint — the logical selection is untouched', () => {
+      const useStore = require('../../store/useStore').default
+      useStore.setState.mockClear()
+      const {iso, mesh} = setupBatchedIsolator()
+      applyBatchedSelection(mesh, [100], SELECTION_CYAN)
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+      // The viewer's own selection cache — read by later picks and by the
+      // permalink — must survive the clear as well.
+      iso.viewer._selectedExpressIds = [100]
+
+      iso.isolateSelectedElements()
+
+      const setStateCalls = useStore.setState.mock.calls.map((c) => c[0])
+      // Isolation state was published (so the scan below isn't over nothing).
+      expect(setStateCalls.some((c) => c && 'isTempIsolationModeOn' in c)).toBe(true)
+      // …and nothing wrote the store-side selection. CadView's
+      // `[selectedElements, selectedInstanceIds]` effect therefore doesn't
+      // re-run and can't repaint over the clear.
+      const selectionWrite = setStateCalls.find(
+        (c) => c && ('selectedElements' in c || 'selectedInstanceIds' in c))
+      expect(selectionWrite).toBeUndefined()
+      expect(iso.viewer._selectedExpressIds).toEqual([100])
+    })
+
+    it('un-isolate repaints the selection cyan from the preserved store state', () => {
+      withStoreState({selectedElements: ['100'], selectedInstanceIds: []}, () => {
+        const {iso, mesh} = setupBatchedIsolator()
+        wireBatchedSelection(iso, mesh)
+        applyBatchedSelection(mesh, [100], SELECTION_CYAN)
+        iso.viewer.getSelectedIds = jest.fn(() => [100])
+
+        iso.isolateSelectedElements()
+        expectColorAt(mesh, 0, {r: 1, g: 0, b: 0}) // midpoint: cleared
+
+        iso.resetTempIsolation()
+
+        // Every occurrence of the selected product is cyan again.
+        expectColorAt(mesh, 0, SELECTION_CYAN)
+        expectColorAt(mesh, 1, SELECTION_CYAN)
+        // Unselected parts were never touched by any of it.
+        expectColorAt(mesh, 2, {r: 0, g: 1, b: 0})
+      })
+    })
+
+    it('un-isolate restores a per-occurrence selection to that occurrence only', () => {
+      // `selectedInstanceIds` narrowing (`applyBatchedInstanceSelection`) is a
+      // second repaint on top of the parent-level one; the rebuild has to run
+      // both or a per-occurrence pick comes back highlighting all six
+      // occurrences of the part.
+      withStoreState({selectedElements: ['100'], selectedInstanceIds: [1]}, () => {
+        const {iso, mesh} = setupBatchedIsolator()
+        wireBatchedSelection(iso, mesh)
+        applyBatchedSelection(mesh, [100], SELECTION_CYAN)
+        applyBatchedInstanceSelection(mesh, [1], SELECTION_CYAN)
+        iso.viewer.getSelectedIds = jest.fn(() => [100])
+
+        iso.isolateSelectedElements()
+        expectColorAt(mesh, 1, {r: 1, g: 0, b: 0}) // midpoint: cleared
+
+        iso.resetTempIsolation()
+
+        expectColorAt(mesh, 1, SELECTION_CYAN)
+        expectColorAt(mesh, 0, {r: 1, g: 0, b: 0}) // sibling occurrence stays red
+      })
+    })
+
+    it('a selection made while isolated still paints cyan', () => {
+      // The clear is one-shot at isolate time, not a suppression: clicking a
+      // part while isolated must still give the normal selection feedback.
+      const {iso, mesh} = setupBatchedIsolator()
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+      iso.isolateSelectedElements()
+      expectColorAt(mesh, 0, {r: 1, g: 0, b: 0})
+
+      applyBatchedSelection(mesh, [100], SELECTION_CYAN)
+
+      expectColorAt(mesh, 0, SELECTION_CYAN)
+    })
+
+    it('hide clears the selection paint too (same seam)', () => {
+      const {iso, mesh} = setupBatchedIsolator()
+      applyBatchedSelection(mesh, [200], SELECTION_CYAN)
+      expectColorAt(mesh, 2, SELECTION_CYAN)
+
+      iso.viewer.getSelectedIds = jest.fn(() => [200])
+      iso.hideSelectedElements()
+
+      // Green again — and masked out, so the hide itself ran.
+      expectColorAt(mesh, 2, {r: 0, g: 1, b: 0})
+      expect(mesh.getVisibleAt(2)).toBe(false)
     })
   })
 

@@ -20,7 +20,7 @@
  * it (`BLDRS_GLB_BATCHED_SCHEMA_VERSION` below) — deliberately, since that
  * is the slot most users actually read. Nothing extra to do here; the note
  * exists so the coupling is visible from where the bump gets written.
- * 0.18.0 — retires artifacts whose STEP occurrence paths mean something
+ * 0.19.0 — retires artifacts whose STEP occurrence paths mean something
  *         different from what the app now reads. conway#628
  *         (test-models-private#98) changed the path's own composition, not
  *         just its contents: an individually addressable body now ends its
@@ -29,20 +29,41 @@
  *         `shape_representation_relationship` id is no longer a segment at
  *         all. Both tables travel baked into the artifact — `occurrencePaths`
  *         on `BLDRS_face_ids`, and the node paths in `BLDRS_spatial_tree` —
- *         so a 0.17.0 cache hit serves pre-#628 paths to post-#628 resolution
- *         code: a multibody part's bodies again share one path (every body of
- *         BLSN_007 selecting the whole boat, the bug this fixes), and NEMA's
- *         relationship-suffixed `[14107, 6611]` still matches no tree node.
- *         The same release also turns the ephemeral solid layer on by default
- *         and drops its 256-per-product cap, so a cached tree simply lacks
- *         the body nodes a fresh parse now emits. Cache-hit users would never
- *         see any of the fix — the same "cache-hit users see it, cache-miss
- *         users don't" shape as 0.15.0/0.16.0/0.17.0, and the same remedy.
- *         Older 0.17.0 artifacts read as miss; next miss rewrites with the
- *         new paths and solid nodes. IFC artifacts carry no occurrence data
- *         and are unaffected, but the key is format-blind so they rewrite
- *         too. See design/new/step-occurrence-selection.md §"Identity below
- *         the product".
+ *         so a hit on an artifact baked by a pre-#628 engine serves those
+ *         paths to post-#628 resolution code: a multibody part's bodies again
+ *         share one path (every body of BLSN_007 selecting the whole boat,
+ *         the bug this fixes), and NEMA's relationship-suffixed
+ *         `[14107, 6611]` still matches no tree node. The same release also
+ *         turns the ephemeral solid layer on by default and drops its
+ *         256-per-product cap, so a cached tree simply lacks the body nodes a
+ *         fresh parse now emits. Cache-hit users would never see any of the
+ *         fix — the same "cache-hit users see it, cache-miss users don't"
+ *         shape as 0.15.0/0.16.0/0.17.0/0.18.0, and the same remedy.
+ *         This is a SEPARATE bump from 0.18.0 rather than a merge into it:
+ *         0.18.0 shipped to main on conway 1.1592.684, which predates #628,
+ *         so 0.18.0 artifacts already written (deploy previews, anyone on
+ *         main) hold the old path shape. Sharing the number would hand those
+ *         to this code as a hit. Older 0.18.0 artifacts read as miss; next
+ *         miss rewrites with the new paths and solid nodes. IFC artifacts
+ *         carry no occurrence data and are unaffected, but the key is
+ *         format-blind so they rewrite too. See
+ *         design/new/step-occurrence-selection.md §"Identity below the
+ *         product".
+ * 0.18.0 — retires artifacts baked with pre-1.1592 engine colours
+ *         (conway#684, issue test-models-private#61): legacyColor — the
+ *         field the streaming path bakes into per-instance source colours
+ *         — was never populated for models styled only with
+ *         IfcSurfaceStyleShading, so every placement arrived as the
+ *         0.8-grey default and got auto-coloured; material-association
+ *         styles on mapped items were dropped entirely. Colours are baked
+ *         into the artifact (per-instance source colours in
+ *         `BLDRS_instance_tables` on the batched slot, per-material bins
+ *         on the merged slot) and nothing in the cache key identifies the
+ *         engine, so without this bump a returning user's cache hit keeps
+ *         serving the all-grey model indefinitely while cache-miss users
+ *         see the authored palette. Same failure shape and remedy as
+ *         0.17.0/0.16.0/0.15.0; found by review on the bump PR
+ *         (Share#1817).
  * 0.17.0 — retires artifacts baked by pre-1.1585 engines, releasing the
  *         #641-epic geometry + shading train (conway#666/#668/#674/#676:
  *         wrong-sheet inverse-solve recovery, ribbon-sweep chain side,
@@ -197,7 +218,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.18.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.19.0'
 
 
 /**
