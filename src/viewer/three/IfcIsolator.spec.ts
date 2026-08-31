@@ -1,7 +1,8 @@
 /* eslint-disable no-magic-numbers */
 import {Page, expect, test} from '@playwright/test'
+import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
+import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
-import {waitForModelReady} from '../../tests/e2e/models'
 
 
 const {beforeEach, describe} = test
@@ -135,15 +136,47 @@ describe('viewer/three/IfcIsolator: isolate/hide combinations (Conway-direct)', 
 
     const after = await readIsolatorState(page)
     expect(after.tempIsolationModeOn).toBe(true)
-    expect(after.ifcModelInScene).toBe(false)
-    expect(after.ifcModelInPickable).toBe(false)
-    // Isolation subsets in scene + pickable — the H-bug regression
-    // gate. Pre-fix, these would be detached subtree children of
-    // the removed Group and `inScene` would be false.
-    expect(after.isolationSubsetMeshes.length).toBeGreaterThan(0)
-    for (const m of after.isolationSubsetMeshes) {
-      expect(m.inScene).toBe(true)
-      expect(m.inPickable).toBe(true)
+
+    // Which architecture isolate uses is a property of the loaded model, not
+    // of this test: a batched model (BatchedMesh + `instanceParents`) masks
+    // per-instance visibility in place (Share#1806), anything else detaches
+    // the model and re-bakes a subset Mesh. Assert whichever one is live —
+    // both claims are equally strong, they just describe different mechanisms.
+    const batch = await readBatchedSnapshot(page)
+    if (batch.isBatched) {
+      // In-place masking: the model itself is what's still being drawn and
+      // picked against, and no subset Mesh was baked to stand in for it.
+      expect(after.ifcModelInScene).toBe(true)
+      expect(after.ifcModelInPickable).toBe(true)
+      expect(after.isolationSubsetMeshes.length).toBe(0)
+      // The mask has to be doing the actual isolating: a non-empty *strict*
+      // subset of instances visible (an isolate that hid nothing, or hid
+      // everything, fails here), and every one of them owned by the isolated
+      // product.
+      const visibleIds = batch.visible.flatMap((v, i) => (v ? [i] : []))
+      expect(visibleIds.length).toBeGreaterThan(0)
+      expect(visibleIds.length).toBeLessThan(batch.visible.length)
+      const isolatedParents = new Set(batch.isolatedIds)
+      expect(isolatedParents.size).toBeGreaterThan(0)
+      const strays = visibleIds.filter((i) => !isolatedParents.has(batch.parents[i]))
+      expect(strays).toEqual([])
+      // Round trip: leaving isolation releases the mask, so every instance the
+      // model started with is drawable again.
+      await page.keyboard.press('KeyI')
+      await expect
+        .poll(async () => (await readBatchedSnapshot(page)).visible.filter((v) => v).length)
+        .toBe(batch.visible.length)
+    } else {
+      expect(after.ifcModelInScene).toBe(false)
+      expect(after.ifcModelInPickable).toBe(false)
+      // Isolation subsets in scene + pickable — the H-bug regression
+      // gate. Pre-fix, these would be detached subtree children of
+      // the removed Group and `inScene` would be false.
+      expect(after.isolationSubsetMeshes.length).toBeGreaterThan(0)
+      for (const m of after.isolationSubsetMeshes) {
+        expect(m.inScene).toBe(true)
+        expect(m.inPickable).toBe(true)
+      }
     }
   })
 
@@ -178,11 +211,34 @@ describe('viewer/three/IfcIsolator: isolate/hide combinations (Conway-direct)', 
     const state = await readIsolatorState(page)
     expect(state.tempIsolationModeOn).toBe(false)
     expect(state.hiddenIdsCount).toBeGreaterThan(0)
-    expect(state.ifcModelInScene).toBe(false)
-    expect(state.unhiddenSubsetMeshes.length).toBeGreaterThan(0)
-    for (const m of state.unhiddenSubsetMeshes) {
-      expect(m.inScene).toBe(true)
-      expect(m.inPickable).toBe(true)
+
+    // Same two architectures as the isolate test above — hide masks in place
+    // on a batched model, and re-bakes an "everything except the hidden ids"
+    // subset otherwise.
+    const batch = await readBatchedSnapshot(page)
+    if (batch.isBatched) {
+      expect(state.ifcModelInScene).toBe(true)
+      expect(state.ifcModelInPickable).toBe(true)
+      expect(state.unhiddenSubsetMeshes.length).toBe(0)
+      // Hide is isolate's inverse, and the mask must show it: the hidden
+      // product's instances all go dark, and the rest of the model — a
+      // non-empty remainder — keeps drawing.
+      const hiddenParents = new Set(batch.hiddenIds)
+      expect(hiddenParents.size).toBeGreaterThan(0)
+      const hiddenInstances = batch.parents.flatMap((p, i) => (hiddenParents.has(p) ? [i] : []))
+      expect(hiddenInstances.length).toBeGreaterThan(0)
+      const stillVisible = hiddenInstances.filter((i) => batch.visible[i])
+      expect(stillVisible).toEqual([])
+      const visibleCount = batch.visible.filter((v) => v).length
+      expect(visibleCount).toBeGreaterThan(0)
+      expect(visibleCount).toBe(batch.visible.length - hiddenInstances.length)
+    } else {
+      expect(state.ifcModelInScene).toBe(false)
+      expect(state.unhiddenSubsetMeshes.length).toBeGreaterThan(0)
+      for (const m of state.unhiddenSubsetMeshes) {
+        expect(m.inScene).toBe(true)
+        expect(m.inPickable).toBe(true)
+      }
     }
   })
 
@@ -234,5 +290,289 @@ describe('viewer/three/IfcIsolator: isolate/hide combinations (Conway-direct)', 
 
     const state = await readIsolatorState(page)
     expect(state.revealedSubsetMeshes.length).toBe(0)
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// Batched render path (Share#1806): "Parts lose color when isolated".
+//
+// The suite above covers the merged Conway-direct path, where isolation swaps
+// the model for a re-baked subset Mesh. On the default STEP path the model is
+// a `THREE.BatchedMesh` whose per-part colour lives in the batch's per-instance
+// colour texture — a re-baked subset can't read that texture and inherited the
+// batch's shared colourless material, so every isolated part rendered light
+// grey. Isolation there now masks per-instance visibility in place
+// (`setVisibleAt`), which is what these tests assert against the real scene:
+// the batch is still the object being drawn, the instance colour table is
+// untouched, and only the isolated product's instances remain visible.
+// ---------------------------------------------------------------------------
+
+// The model from the issue report. Its own presentation data colours 2 of its
+// 5 parts, which is precisely the case that turned grey.
+const AS1_PATH = '/share/v/gh/bldrs-ai/test-models/main/step/nist/as1-oc-214.stp'
+// STEP parse + BREP tessellation is heavier than the IFC smoke models
+// (matching colorMode.spec.ts / displayPermalink.spec.ts).
+const STEP_TEST_TIMEOUT_MS = 90_000
+
+
+interface BatchedSnapshot {
+  /** Did we find any decorated `BatchedMesh` at all — i.e. is this the batched path? */
+  isBatched: boolean
+  /** Per-instance visibility, batchId order, across every batch. */
+  visible: boolean[]
+  /** Per-instance owning product expressID (`instanceParents`), same order. */
+  parents: number[]
+  /** Per-instance source colour (`instanceColors`), same order. */
+  colors: number[][]
+  /**
+   * Per-instance colour as it is CURRENTLY in the batch's colour texture —
+   * what the GPU draws. Distinct from `colors`: that is a JS side-array of
+   * originals which `setColorAt` never writes, so it is identical whether or
+   * not a selection / highlight is painted. Only this one can see the paint.
+   */
+  live: number[][]
+  /** Is the loaded model itself still a child of the scene? */
+  modelInScene: boolean
+  /** Isolation subset meshes — must stay 0 on the batched path. */
+  isolationSubsetCount: number
+  tempIsolationModeOn: boolean
+  /** The isolator's current isolate / hide sets, for cross-checking the mask. */
+  isolatedIds: number[]
+  hiddenIds: number[]
+}
+
+
+/**
+ * Snapshot the live batched model: what the renderer draws (per-instance
+ * visibility, the parent product of each instance, and the colour table it
+ * draws from) plus the isolator's slots and its isolate / hide sets.
+ *
+ * `isBatched` is false when the loaded model carries no decorated
+ * `BatchedMesh` — the first describe block above uses that to pick which
+ * architecture its assertions should demand (masked in place vs. re-baked
+ * subset), since which one a given model gets is a property of the load, not
+ * of the test.
+ *
+ * @param page playwright page
+ * @return snapshot of the batched scene state
+ */
+function readBatchedSnapshot(page: Page): Promise<BatchedSnapshot> {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = window as any
+    const state = w.store?.getState?.()
+    const model = state?.model
+    const iso = state?.viewer?.isolator
+    if (!model || !iso) {
+      throw new Error('readBatchedSnapshot: no model/isolator on window — is the page in test mode?')
+    }
+    // Same "mesh-or-Group" walk as `eachBatch` (src/viewer/ifc/batchedModel.js),
+    // which is what the isolator itself uses to decide the path — the batches
+    // can sit anywhere under the model root, not just as direct children.
+    const meshes: any[] = []
+    const visit = (obj: any) => {
+      if (!obj) {
+        return
+      }
+      if (obj.isBatchedMesh && obj.instanceParents) {
+        meshes.push(obj)
+      }
+      (obj.children ?? []).forEach(visit)
+    }
+    visit(model)
+    const visible: boolean[] = []
+    const parents: number[] = []
+    const colors: number[][] = []
+    const live: number[][] = []
+    // `getColorAt` writes into any target exposing three's `Color` reader
+    // surface — duck-typed here so the spec needs no THREE import in page
+    // scope. `fromArray` is the branch taken once a colour texture exists;
+    // `setRGB` is three's white default for a batch that has none.
+    const target = {
+      r: 1, g: 1, b: 1,
+      setRGB(r: number, g: number, b: number) {
+        this.r = r
+        this.g = g
+        this.b = b
+        return this
+      },
+      fromArray(arr: ArrayLike<number>, offset: number) {
+        this.r = arr[offset]
+        this.g = arr[offset + 1]
+        this.b = arr[offset + 2]
+        return this
+      },
+    }
+    const ROUND = 1000
+    for (const mesh of meshes) {
+      const count = mesh.instanceParents?.length ?? 0
+      for (let index = 0; index < count; index++) {
+        visible.push(mesh.getVisibleAt(index))
+        parents.push(mesh.instanceParents[index])
+        const c = mesh.instanceColors?.[index]
+        colors.push(c ? [c.x, c.y, c.z, c.w] : [])
+        mesh.getColorAt(index, target)
+        live.push([target.r, target.g, target.b].map((v) => Math.round(v * ROUND) / ROUND))
+      }
+    }
+    const subset = iso.isolationSubset
+    return {
+      isBatched: meshes.length > 0,
+      visible,
+      parents,
+      colors,
+      live,
+      modelInScene: iso.context.getScene().children.includes(model),
+      isolationSubsetCount: subset ? (Array.isArray(subset) ? subset.length : 1) : 0,
+      tempIsolationModeOn: iso.tempIsolationModeOn,
+      isolatedIds: [...(iso.isolatedIds ?? [])],
+      hiddenIds: [...(iso.hiddenIds ?? [])],
+    }
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
+ * @param page playwright page
+ * @return number of selected elements in the store
+ */
+function selectedCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any
+    return (w.store?.getState?.().selectedElements ?? []).length
+  })
+}
+
+
+/**
+ * Which instances are currently painted something other than their own colour
+ * — i.e. wearing the selection / preselection highlight. Compares the live
+ * colour texture against a baseline snapshot taken before anything was
+ * selected, so it needs no hardcoded cyan (the selection material's colour is
+ * theme-driven).
+ *
+ * @param snapshot the snapshot to inspect
+ * @param baseline a snapshot taken with nothing selected
+ * @return batchIds whose live colour has moved off the baseline
+ */
+function paintedInstances(snapshot: BatchedSnapshot, baseline: BatchedSnapshot): number[] {
+  return snapshot.live.flatMap((rgb, index) =>
+    (JSON.stringify(rgb) === JSON.stringify(baseline.live[index]) ? [] : [index]))
+}
+
+
+describeMobileAndDesktop('viewer/three/IfcIsolator: isolate on the batched STEP path', () => {
+  test('isolates in place, keeping the coloured batch on screen (#1806)', async ({page}) => {
+    test.setTimeout(STEP_TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    // Isolation points the OutlineEffect at the `BatchedMesh`es themselves.
+    // three compiles the effect's mask material (postprocessing's
+    // DepthComparisonMaterial) with USE_BATCHING for a BatchedMesh, and that
+    // shader ships without the batching chunks, so without the patch in
+    // `outlineBatching.js` the mask program fails to link: one
+    // `'batchingMatrix' : undeclared identifier` and then `useProgram:
+    // program not valid` every frame — 89 of these were logged in the run
+    // that established this, against 0 with the patch — while the isolation
+    // outline silently renders nothing at all.
+    const outlineShaderErrors: string[] = []
+    page.on('console', (msg) => {
+      if (/Shader Error|batchingMatrix|useProgram: program not valid/.test(msg.text())) {
+        outlineShaderErrors.push(msg.text())
+      }
+    })
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+
+    const {navigateAndWaitForModel} = await setupVirtualPathIntercept(page, AS1_PATH, '')
+    await navigateAndWaitForModel()
+    await waitForModelReady(page)
+
+    const before = await readBatchedSnapshot(page)
+    expect(before.visible.length).toBeGreaterThan(1)
+    expect(before.visible.every((v) => v)).toBe(true)
+
+    // Pick a part in the scene: the model is fit-to-frame and centred, so a
+    // centre double-click lands on geometry (same premise as
+    // SynchronizedView.spec.ts's scene-pick test).
+    await page.locator('canvas').first().dblclick()
+    await expect.poll(() => selectedCount(page)).toBeGreaterThan(0)
+    // Selection on this path is painted onto the live instances
+    // (`applyBatchedSelection` -> `setColorAt`), so wait for the paint to
+    // actually land before snapshotting it.
+    await expect
+      .poll(async () => paintedInstances(await readBatchedSnapshot(page), before).length)
+      .toBeGreaterThan(0)
+    const selected = await readBatchedSnapshot(page)
+    const painted = paintedInstances(selected, before)
+
+    // Focus the canvas so `shortcutKeys.js`'s window handler doesn't
+    // early-return, then isolate.
+    await page.locator('canvas').first().focus()
+    await page.keyboard.press('KeyI')
+
+    await expect
+      .poll(async () => (await readBatchedSnapshot(page)).visible.filter((v) => v).length)
+      .toBeLessThan(before.visible.length)
+    const isolated = await readBatchedSnapshot(page)
+    expect(isolated.tempIsolationModeOn).toBe(true)
+    // Something is still on screen — an isolate that hides everything would
+    // also satisfy the "fewer visible" poll above.
+    expect(isolated.visible.filter((v) => v).length).toBeGreaterThan(0)
+    // The load-bearing claim: what the scene draws is still the batch, with no
+    // re-baked subset standing in for it. That is what keeps the per-instance
+    // colours below on screen — detached, they'd still be in the table but the
+    // grey subset would be what renders.
+    expect(isolated.modelInScene).toBe(true)
+    expect(isolated.isolationSubsetCount).toBe(0)
+    // The #1806 claim itself, read off the colour texture the GPU samples:
+    // every instance still drawn shows the colour it had before anything was
+    // selected. Isolate targets the selection, so the isolated instances are
+    // exactly the ones selection had painted cyan (`painted`, non-empty by the
+    // poll above) — leaving that paint on is what made an isolated part read
+    // as cyan rather than as itself.
+    //
+    // Note this cannot be asserted on `colors` (`mesh.instanceColors`): that
+    // is a JS side-array of ORIGINALS which `setColorAt` never writes, so it
+    // is byte-identical with the paint on, with it off, and on the pre-fix
+    // build that shipped the bug.
+    for (const index of painted) {
+      expect(isolated.live[index]).toEqual(before.live[index])
+    }
+    const visiblePainted = painted.filter((index) => isolated.visible[index])
+    expect(visiblePainted.length).toBeGreaterThan(0)
+    expect(outlineShaderErrors).toEqual([])
+
+    // Un-isolate: everything comes back, and so does the selection paint —
+    // on exactly the instances that wore it before the isolate.
+    await page.keyboard.press('KeyI')
+    await expect
+      .poll(async () => (await readBatchedSnapshot(page)).visible.every((v) => v))
+      .toBe(true)
+    await expect
+      .poll(async () => paintedInstances(await readBatchedSnapshot(page), before))
+      .toEqual(painted)
+    const restored = await readBatchedSnapshot(page)
+    expect(restored.tempIsolationModeOn).toBe(false)
+    expect(restored.modelInScene).toBe(true)
+    for (const index of painted) {
+      expect(restored.live[index]).toEqual(selected.live[index])
+    }
+
+    // Selecting WHILE isolated must still paint: the clear is a one-shot at
+    // isolate time, not a suppression of selection feedback.
+    await page.keyboard.press('KeyI')
+    await expect
+      .poll(async () => (await readBatchedSnapshot(page)).tempIsolationModeOn)
+      .toBe(true)
+    await page.locator('canvas').first().dblclick()
+    await expect
+      .poll(async () => {
+        const snapshot = await readBatchedSnapshot(page)
+        return paintedInstances(snapshot, before).filter((index) => snapshot.visible[index]).length
+      })
+      .toBeGreaterThan(0)
   })
 })

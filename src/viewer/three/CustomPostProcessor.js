@@ -10,6 +10,7 @@ import {
 } from 'postprocessing'
 import {WebGLRenderer, Scene, Camera, UnsignedShortType} from 'three'
 import {isFeatureEnabled} from '../../FeatureFlags'
+import {patchOutlineForBatchedMeshes} from './outlineBatching'
 
 
 // SSAO defaults (§6e). Screen-space ambient occlusion darkens crevices /
@@ -213,6 +214,10 @@ export default class CustomPostProcessor {
    */
   createOutlineEffect(effectOpts) {
     const outlineEffect = new OutlineEffect(this._scene, this._camera, effectOpts)
+    // Every outline effect gets the batching patch, not just the isolator's:
+    // any selection that can contain a `THREE.BatchedMesh` hits the same
+    // uncompilable mask shader. See outlineBatching.js for the failure mode.
+    patchOutlineForBatchedMeshes(outlineEffect)
     const selectionOutlinePass = new EffectPass(this._camera, outlineEffect)
     this._composer.addPass(selectionOutlinePass)
     return outlineEffect
