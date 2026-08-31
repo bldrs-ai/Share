@@ -1,8 +1,9 @@
 /* eslint-disable no-magic-numbers */
-import {BatchedMesh, Matrix4} from 'three'
+import {BatchedMesh, BufferGeometry, Matrix4} from 'three'
 import {clearConwayDirectLogs, getConwayDirectLogs}
   from '../../../tools/jest/conwayDirectLogCapture'
-import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
+import {IncrementalBatchedBuilder, PRESIZE_FROM_GEOMETRIES, probeSpreadLimit}
+  from './incrementalBatchedBuilder'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 import {payloadToPreviewMesh} from './parsePreviewMesh'
 
@@ -476,6 +477,424 @@ describe('IncrementalBatchedBuilder', () => {
     const m = new Matrix4()
     batch.mesh.getMatrixAt(0, m)
     expect(m.elements[12]).toBeCloseTo(7)
+  })
+
+  // ---------------------------------------------------------------------
+  // Batch capacity (Share#1809). three r0.184's `setGeometrySize` spreads
+  // one argument per active geometry into `Math.max(...)`
+  // (three/src/objects/BatchedMesh.js:1329 and :1339), so past V8's
+  // argument limit -- ~125k entries -- every growth call throws and the
+  // batch can never be resized again. These pin both halves of the fix:
+  // the builder must stop needing growth before it gets there, and a
+  // growth that does throw must not leave its bookkeeping ahead of three's.
+  // ---------------------------------------------------------------------
+
+  /**
+   * @param {number} n how many shapes to make
+   * @return {object} `n` distinct single-triangle shapes, ids 1000..
+   */
+  function triangleShapes(n) {
+    const out = {}
+    for (let i = 0; i < n; i++) {
+      out[1000 + i] = {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])}
+    }
+    return out
+  }
+
+  /**
+   * Make a batch's `setGeometrySize` throw exactly the way three's does
+   * once the mesh holds more than `limit` geometries: `validRanges` is
+   * `[...this._geometryInfo].filter(info => info.active)`, and every entry
+   * this builder adds stays active, so its length is what gets spread.
+   *
+   * @param {object} state builder batch state
+   * @param {number} limit geometries the stand-in `Math.max(...)` survives
+   */
+  function capGeometrySize(state, limit) {
+    const {mesh} = state
+    const real = mesh.setGeometrySize.bind(mesh)
+    mesh.setGeometrySize = (vertices, indices) => {
+      if (mesh._geometryInfo.length > limit) {
+        throw new RangeError('Maximum call stack size exceeded')
+      }
+      return real(vertices, indices)
+    }
+  }
+
+  it('presizes past the growth ceiling so a large batch never needs another resize', () => {
+    // The sp-946MB.ifc failure in miniature: growth stops working once the
+    // batch holds more than SPREAD_LIMIT geometries, so the only way to
+    // finish the model is to have reserved for it while growth still
+    // worked. Ten shapes arrive one product at a time with the pump
+    // reporting its progress; the projection fires at the second geometry
+    // and must cover all ten. Without it the doubling walks into the
+    // ceiling and the tail of the model is silently dropped.
+    const SPREAD_LIMIT = 3
+    const shapeCount = 10
+    const all = triangleShapes(shapeCount)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 3,
+      initialIndices: 3,
+      presizeFromGeometries: 2,
+    })
+
+    for (let i = 0; i < shapeCount; i++) {
+      builder.setPumpProgress(i + 1, shapeCount)
+      builder.appendBatch([flatMesh(i + 1, [{geomExpressID: 1000 + i, color: OPAQUE}])])
+      if (i === 0) {
+        capGeometrySize(builder.opaque, SPREAD_LIMIT)
+      }
+    }
+
+    // One reservation carried the whole model: nothing was skipped, and
+    // the capacity that survived the ceiling is the projected one -- 63 =
+    // ceil(6 vertices needed / (1/9 of the model seen since this batch
+    // opened) * 1.15 headroom), covering all 30 -- not the 6 that doubling
+    // would have reached before the ceiling shut it out.
+    expect(builder.opaque.maxVertices).toBe(63)
+    const {stats} = builder.finalize()
+    expect(stats.instanceCount).toBe(shapeCount)
+    expect(stats.skippedPlacedGeometries).toBe(0)
+    expect(stats.vertexCount).toBe(shapeCount * 3)
+  })
+
+  it('widens the reservation when the geometry count crosses, not when the reserve runs out', () => {
+    // codex round 2, P1 on Share#1809. The widening used to live inside
+    // the capacity-exhaustion guard, so crossing the threshold did nothing
+    // until the CURRENT reservation ran out -- and an ample 1.15 reserve
+    // can postpone that past the spread ceiling, where setGeometrySize
+    // throws and the widening arrives one throw too late. The crossing
+    // itself has to be the trigger, while resizing still works.
+    //
+    // This batch has room to spare: 60 vertices reserved, 9 needed. Only
+    // the crossing can make it resize here.
+    const all = triangleShapes(3)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 60,
+      initialIndices: 60,
+      presizeFromGeometries: 2,
+      lastChanceGeometries: 3,
+    })
+
+    // Pump totals chosen so the presize crossing at the second geometry
+    // sees too little of the model to project from (1/999, under
+    // PRESIZE_MIN_FRACTION) and reserves nothing -- isolating the
+    // last-chance crossing as the only thing that can resize here.
+    builder.setPumpProgress(1, 1000)
+    builder.appendBatch([flatMesh(1, [{geomExpressID: 1000, color: OPAQUE}])])
+    builder.setPumpProgress(2, 1000)
+    builder.appendBatch([flatMesh(2, [{geomExpressID: 1001, color: OPAQUE}])])
+    expect(builder.opaque.maxVertices).toBe(60)
+
+    builder.setPumpProgress(21, 1000)
+    builder.appendBatch([flatMesh(3, [{geomExpressID: 1002, color: OPAQUE}])])
+
+    // The third geometry took the count to the threshold. 675 =
+    // ceil(9 needed / (20/999 seen since this batch opened) * 1.5
+    // last-chance headroom) -- reserved proactively, with 51 of the old 60
+    // still unused.
+    expect(builder.opaque.geometryCount).toBe(3)
+    expect(builder.opaque.usedVertices).toBe(9)
+    expect(builder.opaque.maxVertices).toBe(675)
+    expect(builder.opaque.maxIndices).toBe(675)
+    expect(builder.opaque.lastChanceReserved).toBe(true)
+  })
+
+  it('forces a projected reservation when the presize count crosses', () => {
+    // codex round 4 on Share#1809: the presize threshold has to be a
+    // crossing of its own, not just a modifier on a resize that was
+    // happening anyway. On an engine with a tight spread limit -- JSC caps
+    // argument spreads near 65k -- a model of single-triangle geometries
+    // first runs out of its 262,144-vertex initial reservation at 87,382
+    // geometries, so the first natural resize is already past the ceiling
+    // and nothing would ever be projected.
+    //
+    // 60 vertices reserved against 9 needed: only the crossing can resize.
+    const all = triangleShapes(3)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 60,
+      initialIndices: 60,
+      presizeFromGeometries: 3,
+    })
+    for (let i = 0; i < 3; i++) {
+      builder.setPumpProgress(i + 1, 30)
+      builder.appendBatch([flatMesh(i + 1, [{geomExpressID: 1000 + i, color: OPAQUE}])])
+    }
+
+    // 151 = ceil(9 needed / (2/29 seen since this batch opened) * 1.15).
+    expect(builder.opaque.usedVertices).toBe(9)
+    expect(builder.opaque.maxVertices).toBe(151)
+    expect(builder.opaque.maxIndices).toBe(151)
+    expect(builder.opaque.presizeReserved).toBe(true)
+  })
+
+  it('derives both thresholds from the engine\'s own spread limit', () => {
+    // The limit is a property of the engine and of stack depth, not of
+    // three, so hard-coding V8's leaves the mechanism inert elsewhere. A
+    // roomy engine keeps the tuned caps; a tight one is pulled below its
+    // ceiling rather than past it.
+    const jsc = new IncrementalBatchedBuilder(makeApi({}), 0, {spreadLimit: 65536})
+    expect(jsc.presizeFromGeometries).toBe(39321) // floor(65536 * 0.6)
+    expect(jsc.lastChanceGeometries).toBe(55705) // floor(65536 * 0.85)
+    // ...and both stay under the ceiling that would have thrown.
+    expect(jsc.lastChanceGeometries).toBeLessThan(65536)
+
+    const v8 = new IncrementalBatchedBuilder(makeApi({}), 0, {spreadLimit: 125278})
+    expect(v8.presizeFromGeometries).toBe(PRESIZE_FROM_GEOMETRIES) // capped at 50,000
+    expect(v8.lastChanceGeometries).toBe(106486) // floor(125278 * 0.85), under the 110,000 cap
+  })
+
+  it('probes the running engine for a spread limit its thresholds fit under', () => {
+    // The one test that exercises the real Math.max rather than an
+    // injected number. It deliberately does NOT re-spread at the probed
+    // limit itself: that boundary moves with stack depth (measured 125,263
+    // at the probe's own depth, 122,851 with 200 extra frames), so
+    // asserting on it exactly is a flaky test, and the safety factors
+    // exist precisely because the resize happens from a different stack
+    // than the probe. What must hold is that the thresholds DERIVED from
+    // it are spreadable, with their margin intact.
+    const limit = probeSpreadLimit()
+    expect(Number.isInteger(limit)).toBe(true)
+    expect(limit).toBeGreaterThan(PRESIZE_FROM_GEOMETRIES)
+
+    const derived = new IncrementalBatchedBuilder(makeApi({}), 0)
+    expect(() => Math.max(...new Array(derived.presizeFromGeometries))).not.toThrow()
+    expect(() => Math.max(...new Array(derived.lastChanceGeometries))).not.toThrow()
+    // Memoised, so a load pays for the search once.
+    expect(probeSpreadLimit()).toBe(limit)
+  })
+
+  it('keeps widening on the exhaustion path once the batch is past the threshold', () => {
+    // Belt and braces to the proactive trigger above: a batch that has
+    // already spent its last-chance reservation and later runs out anyway
+    // must still size that resize with LAST_CHANCE_HEADROOM (1.5) rather
+    // than falling back to PRESIZE_HEADROOM (1.15) -- it is still past the
+    // point where a further resize can be relied on.
+    const all = triangleShapes(4)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 3,
+      initialIndices: 3,
+      presizeFromGeometries: 2,
+      lastChanceGeometries: 3,
+    })
+    for (let i = 0; i < 3; i++) {
+      builder.setPumpProgress(i + 1, 10)
+      builder.appendBatch([flatMesh(i + 1, [{geomExpressID: 1000 + i, color: OPAQUE}])])
+    }
+    expect(builder.opaque.lastChanceReserved).toBe(true)
+    expect(builder.opaque.maxVertices).toBe(63)
+
+    // Consume nearly all of it, then add a fourth geometry: 65 needed
+    // against 63 reserved, and both crossings are already spent, so this
+    // resize is driven by exhaustion alone. 147 = ceil(65 * 1.5 / (6/9));
+    // the 1.15 headroom would have left the doubling in charge at 126.
+    builder.opaque.usedVertices = 62
+    builder.opaque.usedIndices = 62
+    builder.setPumpProgress(7, 10)
+    builder.appendBatch([flatMesh(4, [{geomExpressID: 1003, color: OPAQUE}])])
+
+    expect(builder.opaque.maxVertices).toBe(147)
+    expect(builder.opaque.maxIndices).toBe(147)
+  })
+
+  it('lets a coincident duplicate mutate no capacity at an instance boundary', () => {
+    // codex round 2, P2 on Share#1809. Probing the duplicate set only
+    // after ensureCapacity_ meant a duplicate arriving with
+    // cursor === maxInstances doubled the instance buffers to make room
+    // for an instance that is never added. finalize's trim reclaims only
+    // geometry, so that doubling is retained for the life of the model --
+    // and an allocation failure there would turn a harmless duplicate into
+    // a failed placement.
+    const all = triangleShapes(1)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialInstances: 2,
+    })
+    const placement = [{geomExpressID: 1000, color: OPAQUE}]
+    builder.appendBatch([flatMesh(1, placement), flatMesh(2, placement)])
+    // Exactly full: the next placement to reach ensureCapacity_ doubles.
+    expect(builder.opaque.cursor).toBe(2)
+    expect(builder.opaque.maxInstances).toBe(2)
+
+    // ...and this one must not reach it. Same parent, geometry, transform
+    // and colour as the first, so it adds nothing.
+    builder.appendBatch([flatMesh(1, placement)])
+
+    expect(builder.opaque.maxInstances).toBe(2)
+    const {stats} = builder.finalize()
+    expect(stats.instanceCount).toBe(2)
+    expect(stats.skippedCoincidentPlacements).toBe(1)
+  })
+
+  it('retries a placement whose resize threw, instead of calling it a duplicate', () => {
+    // codex P2 on Share#1809. `seenPlacements` is a combined test-and-set
+    // with no remove, so marking a placement before securing its capacity
+    // records an identity for something that never landed: a later
+    // emission of the SAME placement is then dropped as a duplicate of
+    // nothing and counted as a coincident skip rather than appended.
+    //
+    // No path re-emits one today -- conway's pump promises each placed
+    // instance exactly once, and the degraded builds construct a fresh
+    // builder -- so this pins the invariant rather than a live bug, by
+    // re-appending the failed placement directly.
+    const all = triangleShapes(2)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 3,
+      initialIndices: 3,
+    })
+    builder.appendBatch([flatMesh(1, [{geomExpressID: 1000, color: OPAQUE}])])
+
+    const {mesh} = builder.opaque
+    const realSetGeometrySize = mesh.setGeometrySize.bind(mesh)
+    mesh.setGeometrySize = () => {
+      throw new RangeError('Maximum call stack size exceeded')
+    }
+    const retried = flatMesh(2, [{geomExpressID: 1001, color: OPAQUE}])
+    builder.appendBatch([retried])
+    expect(builder.opaque.cursor).toBe(1)
+
+    // Capacity is available again and the identical placement comes back.
+    // It must be appended, not classified as coincident with the instance
+    // that was never created.
+    mesh.setGeometrySize = realSetGeometrySize
+    builder.appendBatch([retried])
+
+    const {stats, batches} = builder.finalize()
+    expect(stats.instanceCount).toBe(2)
+    expect(stats.skippedCoincidentPlacements).toBe(0)
+    expect(stats.skippedPlacedGeometries).toBe(1)
+    expect(Array.from(batches[0].instanceParents)).toEqual([1, 2])
+  })
+
+  it('leaves capacity bookkeeping equal to three\'s when a resize throws', () => {
+    // The second half of Share#1809: `ensureCapacity_` used to raise
+    // maxVertices/maxIndices BEFORE calling setGeometrySize and never roll
+    // back, so after a throw Share believed in space three had never
+    // allocated. Every later placement then took the "no growth needed"
+    // branch straight into addGeometry's "Reserved space request exceeds
+    // the maximum buffer size" -- for the rest of the load.
+    const all = triangleShapes(3)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 3,
+      initialIndices: 3,
+    })
+    builder.appendBatch([flatMesh(1, [{geomExpressID: 1000, color: OPAQUE}])])
+
+    const {mesh} = builder.opaque
+    const realSetGeometrySize = mesh.setGeometrySize.bind(mesh)
+    mesh.setGeometrySize = () => {
+      throw new RangeError('Maximum call stack size exceeded')
+    }
+    builder.appendBatch([flatMesh(2, [{geomExpressID: 1001, color: OPAQUE}])])
+
+    // three refused to grow, so Share must still be describing the buffer
+    // three actually has: 3 vertices, 3 indices, one geometry in it.
+    expect(builder.opaque.maxVertices).toBe(3)
+    expect(builder.opaque.maxIndices).toBe(3)
+    expect(builder.opaque.usedVertices).toBe(3)
+    expect(builder.opaque.cursor).toBe(1)
+
+    // ...and because the two agree, the next placement is still routed
+    // through growth rather than into a buffer that cannot hold it. With
+    // the bookkeeping left inflated this second shape needs 6 vertices,
+    // reads 6 as available, skips the resize and dies inside addGeometry.
+    mesh.setGeometrySize = realSetGeometrySize
+    builder.appendBatch([flatMesh(3, [{geomExpressID: 1002, color: OPAQUE}])])
+
+    const {stats} = builder.finalize()
+    expect(stats.instanceCount).toBe(2)
+    expect(stats.skippedPlacedGeometries).toBe(1)
+  })
+
+  it('returns reserved-but-unused batch space at finalize', () => {
+    // Byte-lever 2 of the conway#679 attribution report: 92.5 MB of the
+    // 231 MB model's settled heap was batch capacity nothing ever used.
+    // Here the three shapes need 9 vertices and the doubling reserved 12.
+    const all = triangleShapes(3)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 3,
+      initialIndices: 3,
+    })
+    builder.appendBatch([
+      flatMesh(1, [{geomExpressID: 1000, color: OPAQUE}]),
+      flatMesh(2, [{geomExpressID: 1001, color: OPAQUE}]),
+      flatMesh(3, [{geomExpressID: 1002, color: OPAQUE}]),
+    ])
+    expect(builder.opaque.maxVertices).toBe(12)
+
+    const {batches, stats} = builder.finalize()
+    expect(builder.opaque.maxVertices).toBe(9)
+    // The buffer really shrank -- not just the number describing it.
+    expect(batches[0].mesh.geometry.attributes.position.count).toBe(9)
+    // ...and the model survived the copy intact.
+    expect(stats.instanceCount).toBe(3)
+    expect(stats.vertexCount).toBe(9)
+    expect(Array.from(batches[0].instanceParents)).toEqual([1, 2, 3])
+  })
+
+  it('keeps the model when the finalize trim throws before touching the mesh', () => {
+    // The BENIGN half of the trim's failure handling: `capGeometrySize`
+    // throws from where three's own shrink checks do, before
+    // `oldGeometry.dispose()`, so the mesh is untouched. A batch past the
+    // spread limit cannot be resized in either direction, and a model that
+    // assembled correctly must not be lost to an optimisation on the way
+    // out -- it keeps its slack instead. The destructive half is the next
+    // test.
+    const all = triangleShapes(3)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 3,
+      initialIndices: 3,
+    })
+    builder.appendBatch([
+      flatMesh(1, [{geomExpressID: 1000, color: OPAQUE}]),
+      flatMesh(2, [{geomExpressID: 1001, color: OPAQUE}]),
+      flatMesh(3, [{geomExpressID: 1002, color: OPAQUE}]),
+    ])
+    capGeometrySize(builder.opaque, 0)
+
+    const {batches, stats} = builder.finalize()
+    expect(stats.instanceCount).toBe(3)
+    expect(batches[0].mesh.geometry.attributes.position.count).toBe(12)
+    expect(builder.opaque.maxVertices).toBe(12)
+  })
+
+  it('fails the assembly when a trim allocation destroys the batch', () => {
+    // codex round 3 on Share#1809, and the other half of the test above.
+    // three's `setGeometrySize` is only non-destructive up to its shrink
+    // checks. Past those (BatchedMesh.js:1350-1365) it disposes the old
+    // geometry, overwrites _maxVertexCount/_maxIndexCount, assigns a fresh
+    // BufferGeometry, and only THEN allocates the new typed arrays in
+    // `_initializeGeometry` -- so an allocation failure, which is the
+    // plausible one at the trim's capacity + used peak on a large model,
+    // leaves a gutted mesh. Swallowing that would hand back a hollow
+    // BatchedMesh and report a successful load.
+    //
+    // The stub reproduces that ordering rather than the error: dispose,
+    // replace the geometry, then throw.
+    const all = triangleShapes(3)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 3,
+      initialIndices: 3,
+    })
+    builder.appendBatch([
+      flatMesh(1, [{geomExpressID: 1000, color: OPAQUE}]),
+      flatMesh(2, [{geomExpressID: 1001, color: OPAQUE}]),
+      flatMesh(3, [{geomExpressID: 1002, color: OPAQUE}]),
+    ])
+    // Slack to trim: 12 reserved, 9 used.
+    expect(builder.opaque.maxVertices).toBe(12)
+
+    const {mesh} = builder.opaque
+    mesh.setGeometrySize = () => {
+      mesh.geometry.dispose()
+      mesh.geometry = new BufferGeometry()
+      mesh._geometryInitialized = false
+      throw new RangeError('Array buffer allocation failed')
+    }
+
+    // finalize must NOT report success: ShareIfcLoader's catch around it
+    // removes the partial group and rebuilds the whole model from
+    // `recapture()`, which is the correct outcome for a destroyed batch.
+    expect(() => builder.finalize()).toThrow(/allocation failed/)
   })
 
   it('skips one unreadable FlatMesh without dropping the rest of the batch', () => {

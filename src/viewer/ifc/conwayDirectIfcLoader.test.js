@@ -203,6 +203,27 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
       })
 
+      it('hands each batch the pump product progress alongside it', async () => {
+        // The incremental BatchedMesh builder sizes its buffers from how
+        // far through the model the pump is (Share#1809): past ~125k
+        // geometries three's setGeometrySize can no longer resize a batch,
+        // so the builder has to reserve for the whole model while it still
+        // can, and this is the only place the whole-model size exists.
+        // Counted in extracted PRODUCTS, the same unit the geometry
+        // progress stage reports, not in delivered FlatMeshes.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(150)
+        const progress = []
+        await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined,
+          (batch, modelID, pumped) => progress.push(pumped))
+        expect(progress).toEqual([
+          {done: 64, total: 150},
+          {done: 128, total: 150},
+          {done: 150, total: 150},
+        ])
+      })
+
       it('reports a Geometry progress stage across the demand pump', async () => {
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(150)

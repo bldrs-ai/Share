@@ -157,7 +157,7 @@ describe('viewer/ifc/ShareIfcLoader degraded end-of-load builds (conway#638)', (
       // eslint-disable-next-line require-await
       async (buffer, api, settings, onProgress, onMeshBatch) => {
         if (onMeshBatch) {
-          onMeshBatch(PUMPED, 4)
+          onMeshBatch(PUMPED, 4, {done: PUMPED.length, total: PUMPED.length})
         }
         return {modelID: 4, captured: [], recapture}
       })
@@ -220,6 +220,7 @@ describe('viewer/ifc/ShareIfcLoader degraded end-of-load builds (conway#638)', (
     IncrementalBatchedBuilder.mockImplementation(() => ({
       root: {parent: null},
       appendBatch: jest.fn(),
+      setPumpProgress: jest.fn(),
       hasContent: () => false,
       finalize: jest.fn(),
     }))
@@ -236,6 +237,7 @@ describe('viewer/ifc/ShareIfcLoader degraded end-of-load builds (conway#638)', (
     IncrementalBatchedBuilder.mockImplementation(() => ({
       root: {parent: null},
       appendBatch: jest.fn(),
+      setPumpProgress: jest.fn(),
       hasContent: () => true,
       finalize: () => {
         throw new Error('finalize failed')
@@ -268,6 +270,7 @@ describe('viewer/ifc/ShareIfcLoader degraded end-of-load builds (conway#638)', (
     IncrementalBatchedBuilder.mockImplementation(() => ({
       root: {parent: null},
       appendBatch: jest.fn(),
+      setPumpProgress: jest.fn(),
       hasContent: () => true,
       finalize: () => ({batches: [], stats: BUILD_STATS}),
     }))
@@ -276,6 +279,28 @@ describe('viewer/ifc/ShareIfcLoader degraded end-of-load builds (conway#638)', (
     expect(recapture).not.toHaveBeenCalled()
     expect(buildConwayIfcModel).not.toHaveBeenCalled()
     expect(buildBatchedConwayModel).not.toHaveBeenCalled()
+  })
+
+  it('gives the builder the pump progress before the batch it sizes from', async () => {
+    // Share#1809: the builder reserves its BatchedMesh buffers for the
+    // WHOLE model once a batch grows past the point where three can still
+    // resize it, and the pump's product progress is the only place that
+    // whole-model size exists. Arriving after `appendBatch` would be too
+    // late — the batch that crosses the threshold is sized during the very
+    // append it accompanies.
+    const setPumpProgress = jest.fn()
+    const appendBatch = jest.fn()
+    IncrementalBatchedBuilder.mockImplementation(() => ({
+      root: {parent: null},
+      appendBatch,
+      setPumpProgress,
+      hasContent: () => true,
+      finalize: () => ({batches: [], stats: BUILD_STATS}),
+    }))
+    await parseOnce()
+    expect(setPumpProgress).toHaveBeenCalledWith(PUMPED.length, PUMPED.length)
+    expect(setPumpProgress.mock.invocationCallOrder[0])
+      .toBeLessThan(appendBatch.mock.invocationCallOrder[0])
   })
 
   it('fails the load loudly when the whole-model ask rejects', async () => {

@@ -22,6 +22,123 @@ const INITIAL_INSTANCES = 1024
 const INITIAL_VERTICES = 1 << 18
 const INITIAL_INDICES = 1 << 19
 const GROWTH = 2
+// Upper bound for the spread probe below. Nothing is gained by knowing an
+// engine tolerates more than this: the thresholds derived from it are
+// already clamped by their own constants at that point.
+const SPREAD_PROBE_CEILING = 200000
+// Ceiling on the geometry count from which a batch stops doubling blindly
+// and is sized for the whole model instead (see projectCapacity_), and on
+// the count past which it is treated as having ONE resize left. Both are
+// clamped down to a fraction of the ENGINE's measured spread limit; these
+// are the caps that apply when the engine is roomy.
+export const PRESIZE_FROM_GEOMETRIES = 50000
+export const LAST_CHANCE_GEOMETRIES = 110000
+// Fractions of the probed spread limit the two thresholds sit at.
+//
+// The presize crossing has to happen early enough that a batch reaches it
+// before its FIRST natural resize, or the mechanism never runs at all: a
+// model of single-triangle geometries fills the initial 262,144-vertex
+// reservation at 87,382 geometries, which is above JavaScriptCore's spread
+// limit, so on Safari the first resize is already the one that throws
+// (codex round 4 on Share#1809). 0.6 puts it comfortably below any
+// engine's ceiling; 0.85 leaves the last-chance reservation as late as is
+// safe, so it projects from the largest sample it can get.
+//
+// Both also have to absorb the fact that the probe runs from a different
+// stack depth than three's resize will. Measured on this V8: the limit
+// falls from 125,263 at the probe's own depth to 122,851 with 200 extra
+// frames beneath it — 1.9%. A 15% margin covers that with room to spare;
+// sitting ON the probed number would not.
+const PRESIZE_SPREAD_SAFETY = 0.6
+const LAST_CHANCE_SPREAD_SAFETY = 0.85
+// Over-provision the projected whole-model requirement by this much. The
+// projection is re-run at every later growth, so this only has to cover
+// the error of the LAST projection made before the ceiling above; measured
+// over-shoot on sp-946MB was already +11% at the first trigger point, so
+// this is margin on top of a conservative estimator, not the estimator.
+const PRESIZE_HEADROOM = 1.15
+// Pump progress below which the projection is not trusted: dividing a
+// handful of dense products by a near-zero fraction reserves gigabytes.
+const PRESIZE_MIN_FRACTION = 0.02
+// Headroom the last-chance reservation uses in place of PRESIZE_HEADROOM.
+//
+// The projection is linear in products, which is only conservative when
+// early products are at least as geometry-dense as late ones. A model that
+// front-loads reuse and back-loads novel or denser shapes breaks that and
+// the projection under-reserves (codex P1 on Share#1809). Below the
+// threshold a later resize corrects it; past the threshold there is no
+// later resize, so the estimate has to absorb the error instead. Read it
+// as the tolerance it is: the remaining products may be up to 50% denser
+// per product than everything seen so far.
+const LAST_CHANCE_HEADROOM = 1.5
+// Floor for the last-chance reservation as a multiple of what the batch
+// needs right now, applied when there is no usable pump progress to
+// project from. Unreachable in production — `onMeshBatch` only fires on
+// the deferred pump path, which always reports totals — so this is what
+// keeps the branch total rather than a second estimator.
+const LAST_CHANCE_GROWTH = 2
+
+
+// Memoised result of probeSpreadLimit().
+let spreadLimitCache = null
+
+
+/**
+ * Largest argument count this engine's `Math.max(...)` survives.
+ *
+ * three r0.184's `BatchedMesh.setGeometrySize` spreads one argument per
+ * ACTIVE geometry into `Math.max( ...validRanges.map( … ) )`
+ * (node_modules/three/src/objects/BatchedMesh.js:1329 and :1339), so once a
+ * batch holds more geometries than the engine's argument limit, EVERY
+ * resize of it throws and the batch can never grow again. Everything this
+ * module does about that — when to stop doubling and project, when to take
+ * the last reservation — has to sit below this number.
+ *
+ * Probed rather than hard-coded because it is a property of the engine and
+ * of stack depth at the call site, not of three: measured at 125,279 on the
+ * V8 that root-caused Share#1809, while JavaScriptCore caps argument
+ * spreads near 65k and SpiderMonkey allows more. A constant encodes one
+ * engine, and the wrong one is not a smaller margin but no mechanism at
+ * all — a model of single-triangle geometries needs its first resize at
+ * 87,382 geometries, so on Safari a 110,000 threshold is never reached
+ * before the throw (codex round 4 on Share#1809).
+ *
+ * Binary search over hole-y arrays: `new Array(n)` allocates no elements
+ * and the spread reads holes as `undefined`, so each probe costs the spread
+ * itself and nothing else. ~18 iterations, memoised, and deliberately
+ * called from the builder's constructor rather than at import time so a
+ * module load never pays for it.
+ *
+ * @return {number} the largest n for which `Math.max(...new Array(n))`
+ *   does not throw, capped at SPREAD_PROBE_CEILING
+ */
+export function probeSpreadLimit() {
+  if (spreadLimitCache !== null) {
+    return spreadLimitCache
+  }
+  const survives = (n) => {
+    try {
+      Math.max(...new Array(n))
+      return true
+    } catch {
+      // RangeError on every engine that has a limit; catching broadly
+      // because the class of the throw is not part of any contract.
+      return false
+    }
+  }
+  let low = 1
+  let high = SPREAD_PROBE_CEILING
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2)
+    if (survives(mid)) {
+      low = mid
+    } else {
+      high = mid - 1
+    }
+  }
+  spreadLimitCache = low
+  return spreadLimitCache
+}
 // Console cap for per-record skip warnings (see warnBadRecord_): a model
 // with many budget-evicted geometries (conway#535) shouldn't flood the
 // console one line per id -- the load report's skipped* counts already
@@ -65,6 +182,16 @@ export class IncrementalBatchedBuilder {
    * @param {number} [opts.initialInstances] test hook: initial capacity.
    * @param {number} [opts.initialVertices] test hook: initial capacity.
    * @param {number} [opts.initialIndices] test hook: initial capacity.
+   * @param {number} [opts.presizeFromGeometries] test hook: geometry count
+   *   at which projectCapacity_ takes over from doubling. Lowering it is
+   *   the only way to exercise the projection without building a batch of
+   *   PRESIZE_FROM_GEOMETRIES real geometries.
+   * @param {number} [opts.lastChanceGeometries] test hook: geometry count
+   *   at which a resize is treated as the last one this batch will get.
+   * @param {number} [opts.spreadLimit] test hook: stand in for
+   *   probeSpreadLimit(), so the thresholds derived from a JavaScriptCore-
+   *   or V8-sized ceiling can be pinned without running on that engine.
+   *   Ignored for whichever of the two thresholds is given explicitly.
    */
   constructor(api, modelID, opts = {}) {
     this.api = api
@@ -73,6 +200,17 @@ export class IncrementalBatchedBuilder {
     this.initialInstances = opts.initialInstances ?? INITIAL_INSTANCES
     this.initialVertices = opts.initialVertices ?? INITIAL_VERTICES
     this.initialIndices = opts.initialIndices ?? INITIAL_INDICES
+    // Both thresholds are the smaller of their own cap and a fraction of
+    // what this engine's `Math.max(...)` spread actually tolerates, so a
+    // roomy engine keeps the tuned numbers (V8 here: 50,000 and 106,486)
+    // and a tight one is pulled below its ceiling instead of past it
+    // (JavaScriptCore at ~65,536: 39,321 and 55,705). See
+    // probeSpreadLimit.
+    const spreadLimit = opts.spreadLimit ?? probeSpreadLimit()
+    this.presizeFromGeometries = opts.presizeFromGeometries ?? Math.min(
+      PRESIZE_FROM_GEOMETRIES, Math.floor(spreadLimit * PRESIZE_SPREAD_SAFETY))
+    this.lastChanceGeometries = opts.lastChanceGeometries ?? Math.min(
+      LAST_CHANCE_GEOMETRIES, Math.floor(spreadLimit * LAST_CHANCE_SPREAD_SAFETY))
     this.root = new Group()
     // geometryExpressID → {geometry, vertCount, indexCount, box,
     // idByBatch: Map(batchState → geometryId)} — geometry fetched from
@@ -90,6 +228,12 @@ export class IncrementalBatchedBuilder {
     this.failedThisBatch = new Set()
     // Running count backing warnBadRecord_'s console cap.
     this.badRecordWarnings = 0
+    // Demand-pump product progress, the only whole-model quantity a
+    // streaming builder can see (setPumpProgress). Zeroes mean "no pump
+    // told us" — every one-shot and unit-test caller — and disable the
+    // capacity projection, leaving the 2x doubling in charge.
+    this.pumpDone = 0
+    this.pumpTotal = 0
     // Placement identities already appended, across all batches — drops
     // exact duplicate placements that would z-fight (see CoincidenceSet).
     // Load-time only: `finalize` releases it (conway#636).
@@ -122,6 +266,32 @@ export class IncrementalBatchedBuilder {
   /** @return {boolean} True once any instance has been appended. */
   hasContent() {
     return this.totals.placements > 0
+  }
+
+
+  /**
+   * Record how far the demand pump has got through the model's products,
+   * in the pump's own units (`geometryDone` / `geometryTotal` from
+   * `conwayDirectIfcLoader`'s loop — products extracted, not FlatMeshes
+   * delivered, which is a smaller number because not every product yields
+   * geometry). This is the only signal that lets a builder assembling one
+   * batch at a time size the batch for the WHOLE model instead of
+   * doubling into it; see projectCapacity_ for what it is used for and
+   * Share#1809 for why doubling into it is not survivable at scale.
+   *
+   * Called per batch rather than passed to the constructor because the
+   * total is not known until the first `ExtractGeometryBatch` returns —
+   * which is the same call that produces the first batch.
+   *
+   * @param {number} done products the pump has extracted so far
+   * @param {number} total products the pump reported in the model
+   */
+  setPumpProgress(done, total) {
+    if (!Number.isFinite(done) || !Number.isFinite(total) || total <= 0) {
+      return
+    }
+    this.pumpDone = done
+    this.pumpTotal = total
   }
 
 
@@ -215,6 +385,9 @@ export class IncrementalBatchedBuilder {
           state.instanceOccurrencePaths.slice() : null
       state.mesh.instanceGeometry = state.instanceGeometry.slice()
       state.mesh.instanceColors = state.instanceColors.slice()
+      // The mesh has stopped growing, so its exact requirement is finally
+      // known: release the reserved space nothing used (Share#1809).
+      this.trimCapacity_(state)
       // The mesh has stopped growing, so a bounding volume is finally
       // meaningful. Compute it and hand culling back — see ensureBatch_
       // for why it had to be off while streaming. assembleBatchedModel
@@ -307,25 +480,56 @@ export class IncrementalBatchedBuilder {
     // Drop an exact coincident duplicate (same part + geometry + transform +
     // colour): it would z-fight the one already appended. See CoincidenceSet.
     //
-    // The combined test-and-set runs on the STAGED matrix elements, after
-    // every Conway-boundary read and the geometry fetch above, so a
-    // boundary throw can never mark an identity as seen (codex P2 on
-    // Share#1798). Only the three.js tail below — writes into preallocated
-    // buffers and JS array pushes, which don't throw in practice — follows
-    // the mark; CoincidenceSet has no remove, so that residual is accepted
-    // rather than guarded with rollback machinery.
-    if (!this.seenPlacements.add(parentExpressId, geomExpressID, matrix.elements, color)) {
+    // PROBE, CAPACITY, THEN COMMIT — the three-step is load-bearing at both
+    // ends, and both ends are codex findings on Share#1809.
+    //
+    // Probing FIRST, before `ensureBatch_`/`ensureCapacity_`, keeps a
+    // duplicate from mutating anything: a duplicate arriving at
+    // `cursor === maxInstances` would otherwise double the instance
+    // buffers to make room for an instance that is never added, and
+    // `finalize`'s trim only reclaims geometry, so that doubling is
+    // retained for the life of the model. It also keeps an allocation
+    // failure from turning a harmless duplicate into a failed placement.
+    //
+    // Committing LAST, only once capacity is secured, keeps the reverse
+    // from happening: `ensureCapacity_` is the one call left here that can
+    // throw — that is the whole subject of Share#1809 — and a placement
+    // marked seen but never appended would make a later re-emission a
+    // duplicate of something that does not exist, counted as a coincident
+    // skip instead of retried.
+    //
+    // How reachable that is depends on which source you believe, so assume
+    // the worse one. Conway's DELTA CONTRACT (`ifc_api.d.ts`) promises
+    // "each placed instance is emitted exactly once across all calls",
+    // which would make it unreachable; but this file's own
+    // "drops an exact coincident duplicate that arrives in a later delta
+    // batch" test says the pump re-emits identical placements via
+    // rel-aggregates re-extraction, and the whole cross-batch
+    // CoincidenceSet exists because of that. If the test is right, this is
+    // a live path, not a hypothetical one. (Either way the degraded
+    // end-of-load builds are not it: they construct a FRESH builder from
+    // `recapture()` and never see this `seenPlacements`.)
+    //
+    // The split exists so both can hold at once without hashing twice: the
+    // probe runs on the STAGED matrix elements, after every Conway-boundary
+    // read and the geometry fetch above, so a boundary throw still cannot
+    // mark an identity as seen (codex P2 on Share#1798).
+    const placementToken =
+      this.seenPlacements.probe(parentExpressId, geomExpressID, matrix.elements, color)
+    if (placementToken === null) {
       this.totals.skippedCoincidentPlacements++
       return
     }
     const isTransparent = color.w < OPAQUE_ALPHA
     const state = this.ensureBatch_(isTransparent)
     this.ensureCapacity_(state, entry)
+    this.seenPlacements.commit(placementToken)
 
     let geometryId = entry.idByBatch.get(state)
     if (geometryId === undefined) {
       geometryId = state.mesh.addGeometry(entry.geometry)
       entry.idByBatch.set(state, geometryId)
+      state.geometryCount++
     }
     const batchId = state.mesh.addInstance(geometryId)
     // Decide the model-wide origin-recenter offset from the first placement
@@ -502,6 +706,24 @@ export class IncrementalBatchedBuilder {
       maxIndices: this.initialIndices,
       usedVertices: 0,
       usedIndices: 0,
+      // Unique geometries added to THIS mesh. Tracked here rather than
+      // read off three's `_geometryInfo` because it is the same number
+      // (nothing ever deletes a geometry from these batches, so every
+      // entry stays active) without reaching into a private field — and it
+      // is what decides whether setGeometrySize can still be called, see
+      // PRESIZE_FROM_GEOMETRIES.
+      geometryCount: 0,
+      // Whether the one-shot reservations at presizeFromGeometries and
+      // lastChanceGeometries have been made (see ensureCapacity_). Without
+      // these the crossings would re-trigger on every geometry past their
+      // thresholds, one full buffer copy each.
+      presizeReserved: false,
+      lastChanceReserved: false,
+      // Pump progress when this batch was created. The projection measures
+      // from here, not from zero: the transparent batch's first placement
+      // lands a third of the way through sp-946MB, and charging it for
+      // that whole prefix would over-reserve it by ~1.4x.
+      startDone: this.pumpDone,
       instanceParents: [],
       instanceOccurrenceIds: [],
       instanceGeometryIds: [],
@@ -516,34 +738,260 @@ export class IncrementalBatchedBuilder {
 
 
   /**
-   * Grow the batch in place (2x amortized) so the next instance — and,
-   * when the geometry is new to this batch, its vertex/index ranges —
-   * fit. three's setInstanceCount/setGeometrySize copy the underlying
-   * buffers; growth doubles so total copy work stays linear.
+   * Grow the batch in place so the next instance — and, when the geometry
+   * is new to this batch, its vertex/index ranges — fit. three's
+   * setInstanceCount/setGeometrySize copy the underlying buffers; growth
+   * doubles so total copy work stays linear, except once the batch is
+   * large enough to be sized for the whole model (projectCapacity_).
+   *
+   * BOOKKEEPING TRAILS THE three.js CALL, NEVER LEADS IT (Share#1809).
+   * `setGeometrySize` can throw — on three's own spread limit
+   * (PRESIZE_FROM_GEOMETRIES) and on an allocation failure — and it throws
+   * from its shrink checks, BEFORE it has touched the mesh, so three's
+   * real capacity is unchanged when it does. Raising
+   * `state.maxVertices`/`maxIndices` first, as this did until Share#1809,
+   * left Share believing in space three had never allocated: every later
+   * placement then took the "no growth needed" branch straight into
+   * `addGeometry`'s "Reserved space request exceeds the maximum buffer
+   * size", for the rest of the load, and `usedVertices` kept climbing for
+   * geometry that never landed. With warnBadRecord_ capped at 5 lines the
+   * only surviving signal was a count: 298,305 of 496,280 placements
+   * dropped on sp-946MB.ifc. Committing the numbers after the call returns
+   * keeps Share and three agreeing — a throw skips the one placement that
+   * could not fit, and every later placement that DOES fit still lands.
    *
    * @param {object} state batch state
    * @param {object} entry geometry cache entry
    */
   ensureCapacity_(state, entry) {
     if (state.cursor + 1 > state.maxInstances) {
-      state.maxInstances = Math.max(state.maxInstances * GROWTH, state.cursor + 1)
-      state.mesh.setInstanceCount(state.maxInstances)
+      const nextInstances = Math.max(state.maxInstances * GROWTH, state.cursor + 1)
+      state.mesh.setInstanceCount(nextInstances)
+      state.maxInstances = nextInstances
     }
     if (entry.idByBatch.has(state)) {
       return
     }
     const needVertices = state.usedVertices + entry.vertCount
     const needIndices = state.usedIndices + entry.indexCount
-    if (needVertices > state.maxVertices || needIndices > state.maxIndices) {
-      while (state.maxVertices < needVertices) {
-        state.maxVertices *= GROWTH
+    // Past the early return above, this geometry is NEW to the batch, so
+    // the count it is about to reach is the one that matters here.
+    const lastChance = state.geometryCount + 1 >= this.lastChanceGeometries
+    // THREE things call for a resize, and only the first is obvious.
+    //
+    // Running out of room is the obvious one. The other two are threshold
+    // crossings, and both exist because resizing is a privilege this batch
+    // loses partway through the load — so a reservation that matters has to
+    // be made while it still works, not when the batch happens to run out.
+    //
+    // `crossing` is the last-chance one: past lastChanceGeometries this is
+    // in expectation the final resize, so it is taken with the widened
+    // headroom. Hanging it off exhaustion — as this did until codex's
+    // second round — hands the widening to whichever later placement runs
+    // the reserve out, which an ample 1.15 projection can postpone past
+    // the ceiling.
+    //
+    // `presizeCrossing` is the earlier one, and without it the whole
+    // mechanism can be skipped on a tight engine: a model of
+    // single-triangle geometries first exhausts its 262,144-vertex initial
+    // reservation at 87,382 geometries, above JavaScriptCore's spread
+    // limit, so there the FIRST natural resize is already the one that
+    // throws and no projection is ever made (codex round 4). Crossing
+    // presizeFromGeometries therefore forces a projected resize on its own,
+    // whether or not the batch is short of room.
+    //
+    // Both are one-shot; the latches stop them becoming a resize per
+    // geometry for the rest of the load.
+    const exhausted = needVertices > state.maxVertices || needIndices > state.maxIndices
+    const crossing = lastChance && !state.lastChanceReserved
+    const presizeCrossing = !state.presizeReserved &&
+      state.geometryCount + 1 >= this.presizeFromGeometries
+    if (exhausted || crossing || presizeCrossing) {
+      let nextVertices = state.maxVertices
+      let nextIndices = state.maxIndices
+      while (nextVertices < needVertices) {
+        nextVertices *= GROWTH
       }
-      while (state.maxIndices < needIndices) {
-        state.maxIndices *= GROWTH
+      while (nextIndices < needIndices) {
+        nextIndices *= GROWTH
       }
-      state.mesh.setGeometrySize(state.maxVertices, state.maxIndices)
+      const projected = this.projectCapacity_(state, needVertices, needIndices, lastChance)
+      if (projected !== null) {
+        nextVertices = Math.max(nextVertices, projected.vertices)
+        nextIndices = Math.max(nextIndices, projected.indices)
+      }
+      // A crossing whose widened reservation asks for no more than the
+      // batch already holds must not pay a full buffer copy for nothing.
+      if (nextVertices > state.maxVertices || nextIndices > state.maxIndices) {
+        state.mesh.setGeometrySize(nextVertices, nextIndices)
+        state.maxVertices = nextVertices
+        state.maxIndices = nextIndices
+      }
+      // Spent whether or not they changed the size — the question "has
+      // this batch taken its reservation" is about the crossing, not about
+      // whether the crossing needed more room.
+      if (crossing) {
+        state.lastChanceReserved = true
+      }
+      if (presizeCrossing) {
+        state.presizeReserved = true
+      }
     }
     state.usedVertices = needVertices
     state.usedIndices = needIndices
+  }
+
+
+  /**
+   * Project this batch's whole-model vertex/index requirement from the
+   * demand pump's product progress, so a batch that is about to run out of
+   * growths reserves once for the rest of the load instead of doubling
+   * into a call that will throw (see PRESIZE_FROM_GEOMETRIES).
+   *
+   * The estimator is linear in products. It TENDS to land above the true
+   * total, because geometry is deduplicated by `geometryExpressID` and so
+   * products seen early contribute proportionally more new vertices than
+   * products seen late — measured on sp-946MB.ifc at +11% over the true
+   * requirement at the first trigger point and +12% at the last one before
+   * three's ceiling. It is NOT a bound, and one model's overshoot does not
+   * establish one for other product orderings: a file that front-loads
+   * reuse and back-loads novel or denser shapes under-reserves here (codex
+   * P1 on Share#1809). That is survivable while resizes still work — the
+   * projection is re-run at every growth and corrects itself — which is
+   * why LAST_CHANCE_GEOMETRIES exists to widen it at the point where they
+   * stop working. Past that point the ceiling is steered around, not
+   * removed: an under-reservation still degrades, but degrades HONESTLY,
+   * because ensureCapacity_ leaves Share and three agreeing and the
+   * placements that cannot fit are counted. Removing the ceiling means not
+   * putting 125k geometries in one BatchedMesh.
+   *
+   * Returns null — leaving the doubling in charge — whenever the estimate
+   * would be guesswork: no pump progress (every one-shot and unit-test
+   * caller), a batch still small enough that doubling can safely correct
+   * itself later, or too little of the model seen to divide by.
+   *
+   * @param {object} state batch state
+   * @param {number} needVertices vertices this batch needs including the
+   *   geometry being added
+   * @param {number} needIndices indices this batch needs, likewise
+   * @param {boolean} lastChance treat this as the last resize the batch
+   *   will complete: widen the headroom, and stand in for the projection
+   *   entirely when there is no pump progress to project from. Decided by
+   *   the caller because it is the same predicate that decides whether to
+   *   resize at all on a threshold crossing.
+   * @return {?{vertices: number, indices: number}} projected capacity, or
+   *   null when unprojectable
+   */
+  projectCapacity_(state, needVertices, needIndices, lastChance) {
+    let scale = 0
+    // `+ 1` for the same reason the caller's predicates use it: this runs
+    // only when a new geometry is being added, so the count that decides is
+    // the one it is about to reach. Without it the presize CROSSING would
+    // arrive one geometry before this guard opened and reserve nothing.
+    if (this.pumpTotal > 0 && state.geometryCount + 1 >= this.presizeFromGeometries) {
+      const total = this.pumpTotal - state.startDone
+      const fraction = total > 0 ?
+        Math.min((this.pumpDone - state.startDone) / total, 1) : 0
+      if (fraction >= PRESIZE_MIN_FRACTION) {
+        scale = (lastChance ? LAST_CHANCE_HEADROOM : PRESIZE_HEADROOM) / fraction
+      }
+    }
+    if (lastChance) {
+      scale = Math.max(scale, LAST_CHANCE_GROWTH)
+    }
+    // Below 1 means "no usable estimate" (no pump, too small a sample, too
+    // little of the model seen); the caller's doubling stays in charge.
+    if (scale <= 1) {
+      return null
+    }
+    return {
+      vertices: Math.ceil(needVertices * scale),
+      indices: Math.ceil(needIndices * scale),
+    }
+  }
+
+
+  /**
+   * Hand back a finished batch's reserved-but-unused vertex/index space.
+   *
+   * A streaming builder cannot know the exact requirement until the last
+   * placement lands, so both sizing policies above deliberately reserve
+   * too much: the projection by PRESIZE_HEADROOM, and a batch too small to
+   * project by whatever power of two first clears its need. That slack is
+   * retained for the life of the model — measured at 92.5 MB on
+   * sp-231MB.ifc, byte-lever 2 of the conway#679 attribution report. Once
+   * `finalize` runs the model has stopped growing and the exact figure is
+   * known, so give the rest back.
+   *
+   * `usedVertices`/`usedIndices` are exactly three's own high-water marks:
+   * `addGeometry` packs each geometry's reservation contiguously from 0
+   * and nothing here ever removes one, so the sum of what was added IS
+   * `max(vertexStart + reservedVertexCount)`, which is the figure
+   * setGeometrySize checks a shrink against.
+   *
+   * The cost is deliberate: one reallocation and copy of the batch
+   * buffers, so a steady-state saving is bought with a transient peak of
+   * capacity + used at the end of the load, after the parse-time
+   * transients have been released.
+   *
+   * BEST-EFFORT, BUT ONLY WHERE THE MESH SURVIVES (codex round 3 on
+   * Share#1809). `setGeometrySize` has two failure regions and they are
+   * not equivalent:
+   *
+   *   1. The shrink checks at the top — including the `Math.max(...)`
+   *      spread that PRESIZE_FROM_GEOMETRIES exists for. These run before
+   *      anything is mutated, so a batch past the spread limit throws with
+   *      its mesh untouched. Swallow it: that batch keeps its slack rather
+   *      than losing its geometry to a size optimisation.
+   *   2. Everything after `oldGeometry.dispose()`
+   *      (`node_modules/three/src/objects/BatchedMesh.js:1350` onwards):
+   *      three disposes the old geometry, overwrites `_maxVertexCount` and
+   *      `_maxIndexCount`, replaces `this.geometry` with a fresh
+   *      `BufferGeometry`, and only THEN allocates the new typed arrays
+   *      inside `_initializeGeometry`. An allocation failure there — the
+   *      plausible one, since the trim's own peak is capacity + used on
+   *      exactly the largest models — leaves a gutted mesh: disposed
+   *      buffers, empty geometry, `_geometryInitialized` false. Swallowing
+   *      THAT reports a destroyed model as a successful load.
+   *
+   * So the catch classifies by observable effect rather than by error
+   * type: if the geometry object is the same one and its arrays are the
+   * same length, nothing was mutated and the throw was benign. Otherwise
+   * the batch is gone and the throw is re-raised, which fails `finalize`
+   * and drops ShareIfcLoader into the degraded end-of-load rebuild from
+   * `recapture()` — a complete model, re-extracted. A rare trim-OOM
+   * landing in the fallback that exists for exactly this is the honest
+   * outcome; silently returning a hollow BatchedMesh is not.
+   *
+   * @param {object} state batch state
+   */
+  trimCapacity_(state) {
+    if (state.usedVertices >= state.maxVertices && state.usedIndices >= state.maxIndices) {
+      return
+    }
+    // Captured for the classification below, before three can replace any
+    // of it. Lengths as well as identity: `_initializeGeometry` assigns a
+    // new geometry before it allocates, so a failure part-way through can
+    // leave an object that exists but has nothing in it.
+    const geometryBefore = state.mesh.geometry
+    const positionsBefore = geometryBefore?.attributes?.position?.array?.length ?? 0
+    const indicesBefore = geometryBefore?.index?.array?.length ?? 0
+    try {
+      state.mesh.setGeometrySize(state.usedVertices, state.usedIndices)
+      state.maxVertices = state.usedVertices
+      state.maxIndices = state.usedIndices
+    } catch (e) {
+      const geometryAfter = state.mesh.geometry
+      const intact = geometryAfter === geometryBefore &&
+        (geometryAfter?.attributes?.position?.array?.length ?? 0) === positionsBefore &&
+        (geometryAfter?.index?.array?.length ?? 0) === indicesBefore
+      if (!intact) {
+        debug(WARN).warn(
+          'IncrementalBatchedBuilder: batch capacity trim destroyed the mesh; ' +
+          'failing the incremental assembly so the load rebuilds completely:', e)
+        throw e
+      }
+      debug(WARN).warn('IncrementalBatchedBuilder: batch capacity trim skipped:', e)
+    }
   }
 }

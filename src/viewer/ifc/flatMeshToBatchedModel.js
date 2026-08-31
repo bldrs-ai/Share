@@ -251,6 +251,39 @@ export class CoincidenceSet {
    *   of a placement already recorded (the caller should drop it)
    */
   add(parentExpressId, geometryExpressId, matrix, color) {
+    const token = this.probe(parentExpressId, geometryExpressId, matrix, color)
+    if (token === null) {
+      return false
+    }
+    this.commit(token)
+    return true
+  }
+
+
+  /**
+   * Fingerprint a placement and report whether it is new, WITHOUT
+   * recording it.
+   *
+   * Split out of `add` so a caller that has fallible work to do BETWEEN
+   * the test and the set can order it correctly without hashing twice.
+   * The incremental builder is that caller: it must reject a duplicate
+   * before touching BatchedMesh capacity (growing the instance buffers for
+   * a placement that adds nothing permanently retains the doubling, since
+   * `finalize` trims only geometry) and must not record the identity until
+   * the capacity is secured (a placement marked seen but never appended
+   * would make a later re-emission a duplicate of nothing). Both are codex
+   * findings on Share#1809; hashing is 3 passes over ~20 words per
+   * placement and a large model has half a million of them, so paying it
+   * twice to get that ordering is not an option.
+   *
+   * @param {number} parentExpressId
+   * @param {number} geometryExpressId
+   * @param {Array<number>} matrix 16-element flatTransformation
+   * @param {?{x: number, y: number, z: number, w: number}} color
+   * @return {?{primary: number, secondary: number}} a token to hand to
+   *   `commit`, or null when this placement is already recorded
+   */
+  probe(parentExpressId, geometryExpressId, matrix, color) {
     const words = coincidenceWords(parentExpressId, geometryExpressId, matrix, color)
     const primary = hashWords(words, FP_SEED_A, FP_MUL_A)
     const secondary =
@@ -258,24 +291,46 @@ export class CoincidenceSet {
       (hashWords(words, FP_SEED_C, FP_MUL_C) >>> FP_LOW_SHIFT)
     const existing = this.byPrimary_.get(primary)
     if (existing === undefined) {
+      return {primary, secondary}
+    }
+    if (typeof existing === 'number') {
+      return existing === secondary ? null : {primary, secondary}
+    }
+    return existing.includes(secondary) ? null : {primary, secondary}
+  }
+
+
+  /**
+   * Record a placement `probe` reported as new.
+   *
+   * Re-reads the bucket rather than trusting the token's view of it, so
+   * committing an identity that arrived by some other route in between is
+   * a no-op instead of a double count — the token carries the expensive
+   * part (the fingerprints), not a claim about the set's contents.
+   *
+   * @param {{primary: number, secondary: number}} token from `probe`
+   */
+  commit(token) {
+    const {primary, secondary} = token
+    const existing = this.byPrimary_.get(primary)
+    if (existing === undefined) {
       this.byPrimary_.set(primary, secondary)
       this.size++
-      return true
+      return
     }
     if (typeof existing === 'number') {
       if (existing === secondary) {
-        return false
+        return
       }
       this.byPrimary_.set(primary, [existing, secondary])
       this.size++
-      return true
+      return
     }
     if (existing.includes(secondary)) {
-      return false
+      return
     }
     existing.push(secondary)
     this.size++
-    return true
   }
 
 

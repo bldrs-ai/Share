@@ -402,7 +402,7 @@ export default class ShareIfcLoader {
       // there is no monolithic end-of-load build and no swap. Falls
       // back to the render-only preview mesh (and the end-of-load
       // builds below) on any builder failure.
-      const onMeshBatch = !usePreview ? undefined : (batch, batchModelID) => {
+      const onMeshBatch = !usePreview ? undefined : (batch, batchModelID, progress) => {
         try {
           if (builder === null) {
             builder = new IncrementalBatchedBuilder(ifcAPI, batchModelID, {
@@ -411,6 +411,13 @@ export default class ShareIfcLoader {
             })
             scene.add(builder.root)
           }
+          // Before appendBatch: the builder sizes its BatchedMesh buffers
+          // from how far through the model the pump is, and the batch
+          // about to be appended is the one that may trigger that sizing
+          // (Share#1809). Fed unguarded — `setPumpProgress` ignores
+          // anything non-finite, which is what a pre-total first batch or
+          // an engine without the pump hands over.
+          builder.setPumpProgress(progress?.done, progress?.total)
           builder.appendBatch(batch)
         } catch (e) {
           debug(WARN).warn('incremental batch append failed; preview fallback:', e)
