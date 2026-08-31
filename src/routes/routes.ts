@@ -5,6 +5,18 @@ import processGoogleUrl, {GoogleResult, processGoogleFileId} from './google'
 
 
 /**
+ * What the user is told when a route names no file Share can open — an
+ * unrecognized extension, or a path with no filename at all. Lives here
+ * rather than at the catch in Share.jsx because this module owns the rule
+ * being violated (`splitAroundExtension`'s FilenameParseError), and its
+ * own message names the internal extension regex.
+ */
+export const UNSUPPORTED_FILE_ALERT =
+  'This link does not point to a model file Share can open. ' +
+  'Check the file path, and that its type is one of the supported model formats.'
+
+
+/**
  * Converts routes to route results with extracted attributes.
  *
  * e.g.:
@@ -24,6 +36,9 @@ import processGoogleUrl, {GoogleResult, processGoogleFileId} from './google'
  * @param pathPrefix e.g. /share/v/p or /share/v/new or /share/v/gh or /share/v/u
  * @param routeParams e.g. from ReactRouter useParams
  * @return RouteResult or null
+ * @throws FilenameParseError when the path names no supported model file.
+ *   Callers must handle it — see Share.jsx, which turns it into
+ *   UNSUPPORTED_FILE_ALERT rather than letting it reach the ErrorBoundary.
  */
 export function handleRoute(pathPrefix: string, routeParams: RouteParams): RouteResult | null {
   debug().log('Share#handleRoute: is a remote GitHub file:', pathPrefix, routeParams)

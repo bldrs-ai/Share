@@ -30,6 +30,7 @@ import {isOutOfMemoryError, markIfOutOfMemory} from '../../utils/oom'
 import {hasParams} from '../../utils/location'
 import {HASH_PREFIX_CAMERA} from '../../Components/Camera/hashState'
 import {isFeatureEnabled} from '../../FeatureFlags'
+import {reportGeometryStats} from '../../loader/loadProgress'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ProgressiveLoadSession from '../ProgressiveLoadSession'
 import ShareIfcManager from './ShareIfcManager'
@@ -560,6 +561,14 @@ export default class ShareIfcLoader {
         if (buildStats) {
           parts.push(`vertices=${buildStats.vertexCount ?? buildStats.totalVerts ?? '?'}`)
           parts.push(`triangles=${buildStats.triangleCount ?? buildStats.totalTriangles ?? '?'}`)
+          // Same two numbers, structured, for the Sentry diagnostics event's
+          // severity: a build that emitted nothing is a model the user
+          // cannot see, whatever the warning counts say (ops#27 T0 —
+          // loadProgress#classifyLoadOutcome).
+          reportGeometryStats({
+            vertexCount: buildStats.vertexCount ?? buildStats.totalVerts,
+            triangleCount: buildStats.triangleCount ?? buildStats.totalTriangles,
+          })
         }
         if (typeof ifcAPI.GetLinearScalingFactor === 'function') {
           // eslint-disable-next-line new-cap
