@@ -15,6 +15,7 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  Color,
   Group,
   Mesh,
   MeshBasicMaterial,
@@ -854,6 +855,297 @@ describe('viewer/three/IfcIsolator', () => {
       iso._rebuildSelectionVisualFromStore()
       expect(iso.viewer.setSelection).toHaveBeenCalledWith(0, [100], false)
       expect(iso.viewer.setInstanceSelection).not.toHaveBeenCalled()
+    })
+  })
+
+
+  // ----------------------------------------------------------------
+  // Batched render path (Share#1806). The default Conway-direct model is
+  // a `THREE.BatchedMesh`: hide / isolate mask per-instance visibility in
+  // place instead of re-baking a subset Mesh, because a baked Mesh gets
+  // the batch's shared colourless material and cannot read the batch's
+  // per-instance colour texture (the reported "isolated parts turn light
+  // grey"). These tests assert the visibility *and* the colours, so they
+  // go red against the subset behaviour.
+  // ----------------------------------------------------------------
+  describe('batched path — in-place isolation via setVisibleAt', () => {
+    let flatMeshToBatchedModel
+    let attachBatchedSubsets
+    let ResidencyController
+    beforeAll(() => {
+      flatMeshToBatchedModel = require('../ifc/flatMeshToBatchedModel').flatMeshToBatchedModel
+      attachBatchedSubsets = require('../ifc/batchedSubset').attachBatchedSubsets
+      ResidencyController = require('../residency/ResidencyController').ResidencyController
+    })
+
+    /** Identity 4x4, three.js column-major flat form. */
+    const IDENTITY_MAT = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+    const RED = {x: 1, y: 0, z: 0, w: 1}
+    const GREEN = {x: 0, y: 1, z: 0, w: 1}
+    const BLUE = {x: 0, y: 0, z: 1, w: 1}
+
+    /**
+     * @param {number} x translation in X (keeps placements distinct so the
+     *   builder's coincident-placement dedupe doesn't collapse them)
+     * @return {Array<number>} column-major translation matrix
+     */
+    function translateX(x) {
+      const m = [...IDENTITY_MAT]
+      m[12] = x
+      return m
+    }
+
+    /** @return {object} mock Conway IfcAPI serving one unit triangle at id 999. */
+    function unitTriApi() {
+      const verts = new Float32Array([
+        0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 1,
+        0, 1, 0, 0, 0, 1,
+      ])
+      const indices = new Uint32Array([0, 1, 2])
+      return {
+        GetGeometry: (_modelID, id) => (id === 999 ? {
+          GetVertexData: () => id,
+          GetIndexData: () => id,
+          GetVertexDataSize: () => verts.length,
+          GetIndexDataSize: () => indices.length,
+        } : null),
+        GetVertexArray: () => verts,
+        GetIndexArray: () => indices,
+      }
+    }
+
+    /**
+     * One decorated opaque BatchedMesh with four instances in emission order
+     * (which is also their occurrence id):
+     *
+     *   0: product 100, RED    1: product 100, RED
+     *   2: product 200, GREEN  3: product 300, BLUE
+     *
+     * Product 100 is placed twice so the per-occurrence hide has a reused
+     * part to narrow onto. `attachBatchedSubsets` is attached exactly as
+     * production does — so the pre-fix subset path would actually run here
+     * and these tests fail on behaviour, not on a missing method.
+     *
+     * @return {object} a THREE.BatchedMesh carrying the pick tables
+     */
+    function makeBatchedModel() {
+      const geom = (color) => [{geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color}]
+      const at = (x, color) => [{geometryExpressID: 999, flatTransformation: translateX(x), color}]
+      const flatMeshes = [
+        {expressID: 100, geometries: geom(RED)},
+        {expressID: 100, geometries: at(10, RED)},
+        {expressID: 200, geometries: at(20, GREEN)},
+        {expressID: 300, geometries: at(30, BLUE)},
+      ]
+      const {batches} = flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0)
+      expect(batches.length).toBe(1) // all opaque → one batch
+      const batch = batches[0]
+      const mesh = batch.mesh
+      mesh.instanceParents = batch.instanceParents
+      mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
+      mesh.instanceGeometry = batch.instanceGeometry
+      mesh.instanceColors = batch.instanceColors
+      attachBatchedSubsets(mesh, null, {})
+      return mesh
+    }
+
+    /**
+     * @return {{scene: Group, pickable: Array, iso: IfcIsolator, mesh: object}}
+     */
+    function setupBatchedIsolator() {
+      const scene = new Group()
+      const pickable = []
+      const iso = makeIsolator({scene, pickable})
+      const mesh = makeBatchedModel()
+      scene.add(mesh)
+      pickable.push(mesh)
+      iso.ifcModel = mesh
+      iso.visualElementsIds = [100, 200, 300]
+      iso.spatialStructure = {}
+      return {scene, pickable, iso, mesh}
+    }
+
+    /**
+     * @param {object} mesh BatchedMesh
+     * @return {Array<boolean>} per-instance visibility, batchId order
+     */
+    function visibility(mesh) {
+      const out = []
+      for (let batchId = 0; batchId < mesh.instanceParents.length; batchId++) {
+        out.push(mesh.getVisibleAt(batchId))
+      }
+      return out
+    }
+
+    /**
+     * @param {object} mesh BatchedMesh
+     * @param {number} batchId
+     * @return {Color} the instance colour currently in the batch's colour texture
+     */
+    function colorAt(mesh, batchId) {
+      return mesh.getColorAt(batchId, new Color())
+    }
+
+    it('isolates in place: only the isolated product stays visible, model stays in scene', () => {
+      const {scene, pickable, iso, mesh} = setupBatchedIsolator()
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+
+      iso.isolateSelectedElements()
+
+      // Pre-fix this detached the model and added a baked subset Mesh.
+      expect(scene.children).toContain(mesh)
+      expect(pickable).toEqual([mesh])
+      expect(iso.isolationSubset).toBeNull()
+      expect(visibility(mesh)).toEqual([true, true, false, false])
+    })
+
+    it('renders the isolated part from the coloured batch, not a grey subset (#1806)', () => {
+      const {scene, iso, mesh} = setupBatchedIsolator()
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+
+      iso.isolateSelectedElements()
+
+      // What is on screen IS the batch — nothing else was added to the scene.
+      // (Pre-fix a re-baked subset Mesh took its place, wearing the batch's
+      // shared colourless material: the reported light grey. Asserting the
+      // colour alone would still pass then, since the detached batch keeps its
+      // colour texture — so the rendered-object assertion carries the claim.)
+      expect(scene.children).toEqual([mesh])
+      expect(mesh.getVisibleAt(0)).toBe(true)
+      // The surviving instances still carry their own colour — the whole point
+      // of masking rather than re-baking onto the batch's shared material.
+      const isolated = colorAt(mesh, 0)
+      expect(isolated.r).toBeCloseTo(1)
+      expect(isolated.g).toBeCloseTo(0)
+      expect(isolated.b).toBeCloseTo(0)
+      // Masked-out instances keep theirs too, so un-isolating needs no repaint.
+      const masked = colorAt(mesh, 2)
+      expect(masked.g).toBeCloseTo(1)
+      const stillMasked = colorAt(mesh, 3)
+      expect(stillMasked.b).toBeCloseTo(1)
+    })
+
+    it('un-isolate restores full visibility and drops the mask (round trip)', () => {
+      const {scene, pickable, iso, mesh} = setupBatchedIsolator()
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+
+      iso.isolateSelectedElements()
+      // Midpoint: the isolate actually took effect (without this the round-trip
+      // assertion below would pass against a no-op isolate).
+      expect(visibility(mesh)).toEqual([true, true, false, false])
+
+      iso.resetTempIsolation()
+
+      expect(visibility(mesh)).toEqual([true, true, true, true])
+      expect(mesh.userData.isolationMask).toBeUndefined()
+      // No duplicate model in the scene / pick registry from the restore.
+      expect(scene.children.filter((c) => c === mesh).length).toBe(1)
+      expect(pickable).toEqual([mesh])
+      expect(colorAt(mesh, 2).g).toBeCloseTo(1)
+    })
+
+    it('composes isolation with a product-type hide (both filters must pass)', () => {
+      const {iso, mesh} = setupBatchedIsolator()
+      // Hide 300 first, the way hideElementsById would.
+      iso.hiddenIds = [300]
+      iso.initHideOperationsSubset(iso.visualElementsIds.filter((e) => e !== 300))
+      expect(visibility(mesh)).toEqual([true, true, true, false])
+
+      // Isolate 100 + 300: 300 is isolated but still hidden, so it stays masked.
+      iso.viewer.getSelectedIds = jest.fn(() => [100, 300])
+      iso.isolateSelectedElements()
+      expect(visibility(mesh)).toEqual([true, true, false, false])
+
+      // Un-isolating returns to the hide-only state, not to everything-visible.
+      iso.resetTempIsolation()
+      expect(visibility(mesh)).toEqual([true, true, true, false])
+    })
+
+    it('hides a single occurrence of a reused part, leaving its sibling visible', () => {
+      const {iso, mesh} = setupBatchedIsolator()
+      // Occurrence id 1 is product 100's second placement (node 6 = its NAUO id).
+      iso.hideOccurrence(6, [1])
+      expect(visibility(mesh)).toEqual([true, false, true, true])
+
+      iso.unHideOccurrence(6)
+      expect(visibility(mesh)).toEqual([true, true, true, true])
+      expect(mesh.userData.isolationMask).toBeUndefined()
+    })
+
+    it('unHideAllElements clears a product hide in place', () => {
+      const {scene, pickable, iso, mesh} = setupBatchedIsolator()
+      iso.hiddenIds = [200]
+      iso.initHideOperationsSubset(iso.visualElementsIds.filter((e) => e !== 200))
+      expect(visibility(mesh)).toEqual([true, true, false, true])
+
+      iso.unHideAllElements()
+      expect(visibility(mesh)).toEqual([true, true, true, true])
+      expect(scene.children.filter((c) => c === mesh).length).toBe(1)
+      expect(pickable).toEqual([mesh])
+    })
+
+    it('isolates the ids passed straight to initTemporaryIsolationSubset (BotChat)', () => {
+      // BotChat calls this method directly, without entering isolation mode —
+      // so the batched filter has to read `includedIds`, not `isolatedIds`.
+      const {iso, mesh} = setupBatchedIsolator()
+      iso.initTemporaryIsolationSubset([200])
+      expect(iso.tempIsolationModeOn).toBe(false)
+      expect(visibility(mesh)).toEqual([false, false, true, false])
+    })
+
+    it('dispose releases the mask so the model is left as residency had it', () => {
+      const {iso, mesh} = setupBatchedIsolator()
+      mesh.setVisibleAt(3, false) // a residency eviction
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+      iso.isolateSelectedElements()
+
+      iso.dispose()
+
+      expect(mesh.userData.isolationMask).toBeUndefined()
+      expect(visibility(mesh)).toEqual([true, true, true, false])
+    })
+
+    it('preserves residency\'s eviction across an isolate / un-isolate round trip', () => {
+      // Residency (ResidencyController) owns the same setVisibleAt bit. Its
+      // intent must survive isolation rather than being blanket-restored —
+      // hence the mask's `base` snapshot + setVisibleAt interception.
+      const {iso, mesh} = setupBatchedIsolator()
+      const residency = new ResidencyController(mesh)
+      expect(residency.instanceCount).toBe(4)
+      // Evict everything, then bring half back: instance 0 (nearest the camera
+      // proxy) is not what matters — only that SOME instances are evicted.
+      residency.setTarget(0)
+      expect(visibility(mesh)).toEqual([false, false, false, false])
+
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+      iso.isolateSelectedElements()
+      // Isolation can't resurrect what residency evicted.
+      expect(visibility(mesh)).toEqual([false, false, false, false])
+
+      // Residency re-admits everything WHILE isolated: isolation still wins for
+      // the parts it masks, but the intent is recorded.
+      residency.setTarget(1)
+      expect(visibility(mesh)).toEqual([true, true, false, false])
+
+      iso.resetTempIsolation()
+      expect(visibility(mesh)).toEqual([true, true, true, true])
+    })
+
+    it('restores residency\'s exact visibility on un-isolate, not everything-visible', () => {
+      const {iso, mesh} = setupBatchedIsolator()
+      // Simulate an eviction of instance 3 — setVisibleAt is residency's only
+      // write surface, so this is exactly what the controller does.
+      mesh.setVisibleAt(3, false)
+
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+      iso.isolateSelectedElements()
+      expect(visibility(mesh)).toEqual([true, true, false, false])
+
+      iso.resetTempIsolation()
+      // Instance 3 stays evicted: the mask replayed residency's snapshot.
+      expect(visibility(mesh)).toEqual([true, true, true, false])
+      expect(mesh.userData.isolationMask).toBeUndefined()
     })
   })
 

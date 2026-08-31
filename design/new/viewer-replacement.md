@@ -329,11 +329,22 @@ Visual quality follows model shape:
   child's single material → per-PlacedGeometry colors render
   correctly. Outline + translucent x-ray fill both work.
 - **Cache-miss Conway-direct** (first load only — single Mesh with
-  array material + `geometry.groups[]`). The subset inherits the
-  array material without groups, so three renders all subset
-  triangles with `material[0]`. Small visual regression in isolation
-  mode on first load, corrects on reload (cache hit). Acceptable
-  for an admittedly rare workflow.
+  array material + `geometry.groups[]`). The subset keeps the array
+  material and rebuilds matching `groups[]` over the triangles it
+  kept, so per-PlacedGeometry colors render correctly here too.
+  Until Share#1806 this path added a single whole-buffer group
+  pointing at `material[0]`, which drew every isolated element in
+  bin 0's color — grey whenever bin 0 is the DEFAULT_COLOR bin, the
+  "parts lose color when isolated" report. Both subset builders now
+  map each kept triangle back to the source group it came from and
+  emit coalesced destination groups
+  (`src/viewer/three/subsetMaterialGroups.js`, shared by
+  `elementSubsets.buildSubsetMesh` and `IfcInstanceMap`'s
+  `buildSubsetMesh`). The whole-buffer group survives only as a
+  fallback for sources carrying no `groups[]` at all, or for an
+  array `material` override whose length can't hold the source's bin
+  indices — visible-but-monochrome still beats the renderer skipping
+  the mesh.
 
 Pickability:
 
@@ -376,10 +387,10 @@ the per-vertex `expressID` attribute across child Meshes.
   Mesh per IFC product (per `FlatMesh.expressID`) — would make
   hide trivially `mesh.visible = false`, drop the entire
   subset-construction surface for the simple case, and remove
-  the multi-material monochrome regression in `buildSubsetMesh`'s
-  `Array(N>1)` fallback. The cost is N draw calls instead of M
-  binned ones; on Snowdon (~6k products) that's noticeable but
-  recoverable with InstancedMesh batching for the
+  the `groups[]`-rebuild pass that `buildSubsetMesh`
+  now runs in its `Array(N>1)` branch (Share#1806). The cost is
+  N draw calls instead of M binned ones; on Snowdon (~6k products)
+  that's noticeable but recoverable with InstancedMesh batching for the
   `IfcMappedItem`-heavy portion and per-product Mesh for the
   rest. See §3b.iv — now an active effort.
 

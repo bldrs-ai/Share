@@ -4,6 +4,7 @@ import {
   Mesh,
 } from 'three'
 import {occurrencePathKey} from '../../utils/occurrencePaths'
+import {makeTriangleMaterialIndexer, resolveSubsetMaterial} from '../three/subsetMaterialGroups'
 
 
 /**
@@ -370,20 +371,41 @@ function buildSubsetMesh(sourceGeometry, ids, lookupTriangles, opts) {
   if (total === 0) {
     return null
   }
-  const ArrayCtor = srcIndexArr.constructor
-  const dstIndexArr = new ArrayCtor(total * 3)
-  let w = 0
+  // Gather the kept triangles first, then sort ascending before
+  // copying. Ordering is not a rendering requirement in itself, but it
+  // is what keeps the per-material `groups[]` below coalesced: the
+  // source emits triangles in color-bin order (see
+  // flatMeshToBufferGeometry.js), so ascending source order means one
+  // destination run per bin. Copying in id order instead would emit a
+  // run per instance — thousands of one-instance groups on a model
+  // whose parents interleave bins.
+  const triangles = new Uint32Array(total)
+  let n = 0
   for (const id of ids) {
     const list = lookupTriangles(id)
     if (!list) {
       continue
     }
     for (let i = 0; i < list.length; i++) {
-      const t = list[i]
-      const base = t * 3
-      dstIndexArr[w++] = srcIndexArr[base]
-      dstIndexArr[w++] = srcIndexArr[base + 1]
-      dstIndexArr[w++] = srcIndexArr[base + 2]
+      triangles[n++] = list[i]
+    }
+  }
+  triangles.sort()
+  const ArrayCtor = srcIndexArr.constructor
+  const dstIndexArr = new ArrayCtor(total * 3)
+  // Per-kept-triangle source material index, in destination order —
+  // see resolveSubsetMaterial below. Null for a single-material source.
+  const materialIndexOf = makeTriangleMaterialIndexer(sourceGeometry)
+  const dstMaterialIndices = materialIndexOf ? new Int32Array(total) : null
+  let w = 0
+  for (let i = 0; i < n; i++) {
+    const t = triangles[i]
+    const base = t * 3
+    dstIndexArr[w++] = srcIndexArr[base]
+    dstIndexArr[w++] = srcIndexArr[base + 1]
+    dstIndexArr[w++] = srcIndexArr[base + 2]
+    if (dstMaterialIndices) {
+      dstMaterialIndices[i] = materialIndexOf(t)
     }
   }
   const dstGeom = new BufferGeometry()
@@ -391,34 +413,20 @@ function buildSubsetMesh(sourceGeometry, ids, lookupTriangles, opts) {
     dstGeom.setAttribute(name, sourceGeometry.attributes[name])
   }
   dstGeom.setIndex(new BufferAttribute(dstIndexArr, 1))
-  let subsetMaterial = opts.material ?? opts.defaultMaterial ?? null
   // Three.js's WebGLRenderer `projectObject` (three.module.js around
   // line 17842 in r184) iterates `geometry.groups` when the material
   // is an array — and pushes NOTHING to the render list if `groups`
   // is empty. So a subset with `material: Array(N)` + no groups gets
   // silently skipped. Conway-direct's assembler always emits `material`
   // as an array (one entry per PlacedGeometry.color bin); even a
-  // single-color model gets `Array(1)`. Two options here, both keep
-  // the subset rendering:
-  //  - If the array has a single material, unwrap to scalar — the
-  //    renderer takes the `else if (material.visible)` branch and
-  //    pushes once. This is the cache-hit Conway-direct path for
-  //    monochrome models (the index.ifc test case that surfaced the
-  //    bug).
-  //  - If the array has multiple materials, add a single `group`
-  //    spanning the full index buffer, pointing at `material[0]`.
-  //    Subset renders monochrome (lose per-color fidelity for the
-  //    visible elements) but at least it's *visible*. The proper fix
-  //    is to walk the source's `geometry.groups` and emit a sub-group
-  //    per material the subset's triangles span; that's a separate
-  //    pass and tracked as a TODO in §3b.iii.
-  if (Array.isArray(subsetMaterial)) {
-    if (subsetMaterial.length === 1) {
-      subsetMaterial = subsetMaterial[0]
-    } else if (subsetMaterial.length > 1) {
-      dstGeom.addGroup(0, dstIndexArr.length, 0)
-    }
-  }
+  // single-color model gets `Array(1)`. resolveSubsetMaterial handles
+  // both shapes: unwrap Array(1) to a scalar so the renderer takes its
+  // `else if (material.visible)` branch, and for Array(N>1) emit one
+  // destination group per coalesced run of same-bin triangles so the
+  // subset keeps its per-color materials rather than collapsing to
+  // `material[0]` (Share#1806). See ../three/subsetMaterialGroups.js.
+  const subsetMaterial = resolveSubsetMaterial(
+    dstGeom, opts.material ?? opts.defaultMaterial ?? null, dstMaterialIndices)
   const mesh = new Mesh(dstGeom, subsetMaterial)
   if (opts.raycastInvisible !== false) {
     mesh.raycast = () => {/* see IfcItemsMap.createSubsetMesh */}

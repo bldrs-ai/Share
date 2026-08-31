@@ -1,5 +1,6 @@
 import {ShareViewer} from '../ShareViewer'
 import {unsortedArraysAreEqual, arrayRemove} from '../../utils/arrays'
+import {eachBatch, isBatchedModel} from '../ifc/batchedModel'
 import {MeshLambertMaterial, DoubleSide, Mesh} from 'three'
 import useStore from '../../store/useStore'
 import {BlendFunction} from 'postprocessing'
@@ -18,6 +19,20 @@ import ThreeContext from './ThreeContext'
  * `_removeSubsetFromScene` / `_subsetMeshes` helpers normalise both
  * shapes so the public methods don't branch. See
  * design/new/viewer-replacement.md §3b.iii.
+ *
+ * **Batched path is different: no subset is built at all.** When the model
+ * is a `THREE.BatchedMesh` (or a Group of them — the opaque/transparent
+ * split), hide and isolate run *in place* by flipping per-instance
+ * visibility with `BatchedMesh.setVisibleAt` (`_applyBatchedVisibility`).
+ * Re-baking a subset Mesh there was Share#1806: the baked Mesh gets the
+ * batch's shared colourless `makeSurfaceMaterial` and cannot read the
+ * batch's per-instance colour texture, so every isolated part rendered
+ * light grey. Masking visibility keeps the real geometry, materials,
+ * per-instance colours (`setColorAt` / `instanceColors` / the auto-colour
+ * palette) and picking intact by construction, and the model never leaves
+ * the scene or `pickableModels`. `batchedSubset.js` is still used on this
+ * path for the reveal-hidden ghost overlay (which *wants* a flat cyan
+ * material), and by the other backends for everything.
  */
 export default class IfcIsolator {
   subsetCustomId = 'Bldrs::Share::Isolator'
@@ -335,8 +350,14 @@ export default class IfcIsolator {
    * @param {boolean} removeModel Whether to remove the model
    */
   initHideOperationsSubset(includedIds, removeModel = true) {
+    const batched = this._isBatchedModel()
     if (removeModel) {
-      this._removeSubsetFromScene(this.ifcModel)
+      // The batched path masks visibility on the model itself, so it must stay
+      // in the scene (and in `pickableModels`) — detaching it would leave an
+      // empty viewport.
+      if (!batched) {
+        this._removeSubsetFromScene(this.ifcModel)
+      }
       this.viewer.selector?.clearSelection()
       this.viewer.selector?.clearPreselection()
     }
@@ -352,6 +373,15 @@ export default class IfcIsolator {
     // the pool here so the subset is what the user actually sees.
     if (typeof this.viewer._clearPreselectionForAllModels === 'function') {
       this.viewer._clearPreselectionForAllModels()
+    }
+    if (batched) {
+      // `includedIds` is redundant here: every caller passes
+      // `visualElementsIds − hiddenIds`, and the per-occurrence subtraction is
+      // `_hiddenInstanceIdSet()` — both of which `_applyBatchedVisibility`
+      // re-derives from the same state, along with the isolation filter that
+      // a `createSubset` call could not express.
+      this._applyBatchedVisibility()
+      return
     }
     this.unhiddenSubset = this.ifcModel.createSubset({
       modelID: 0,
@@ -385,6 +415,177 @@ export default class IfcIsolator {
       }
     }
     return set
+  }
+
+
+  /**
+   * True when the loaded model renders through the `THREE.BatchedMesh` path
+   * (`buildBatchedConwayModel` / `instancedGlbToBatchedModel`) — i.e. hide and
+   * isolate mask per-instance visibility in place instead of re-baking a
+   * subset Mesh. Discriminated by the `instanceParents` pick table, the same
+   * signal `batchedHighlight` uses.
+   *
+   * @return {boolean}
+   * @private
+   */
+  _isBatchedModel() {
+    return isBatchedModel(this.ifcModel)
+  }
+
+
+  /**
+   * Put the source model back on screen after hide / isolate ended.
+   *
+   * On the subset paths that means re-attaching the model the hide/isolate
+   * detached. On the batched path the model never left the scene — re-adding
+   * it would push a duplicate onto `pickableModels` — so this instead
+   * re-derives the visibility mask, which drops it entirely once nothing is
+   * hidden or isolated. Callers must clear `hiddenIds` / `hiddenOccurrences` /
+   * `isolatedIds` first.
+   *
+   * @private
+   */
+  _restoreModelToScene() {
+    if (this._isBatchedModel()) {
+      this._applyBatchedVisibility()
+      return
+    }
+    this._addSubsetToScene(this.ifcModel)
+  }
+
+
+  /**
+   * Re-derive and apply per-instance visibility for every batch of a batched
+   * model. A batchId is visible iff it passes **both** filters:
+   *
+   *   - isolation — not isolating, or its parent product is in `isolatedIds`;
+   *   - hide — its parent isn't in `hiddenIds` and its occurrence id isn't in
+   *     `_hiddenInstanceIdSet()` (the STEP per-occurrence hides).
+   *
+   * With nothing hidden and nothing isolated the mask is released and the
+   * batch returns to whatever visibility its other owner (residency) had set.
+   *
+   * Ownership handshake with `ResidencyController`. Residency
+   * (`src/viewer/residency/ResidencyController.js`) also drives `setVisibleAt`
+   * — it evicts instances for the residency slider / LOD, and it tracks its own
+   * `instance.visible` belief. Two owners of one bit needs an arbiter, so while
+   * a mask is installed the isolator wraps the batch's `setVisibleAt`
+   * (`_ensureBatchedMask`): residency's writes land in the mask's `base` array
+   * (its *intent*, preserved) and reach the GPU only when the isolator's
+   * `allow` bit also permits it. Isolation therefore wins for parts it hides,
+   * residency wins for parts it evicts, and `_releaseBatchedMask` replays
+   * `base` on the way out — so un-isolating restores exactly what residency
+   * had set, not a blanket "everything visible".
+   *
+   * @param {object} [opts]
+   * @param {Array<number>} [opts.isolatedIds] isolate this set instead of the
+   *   isolator's own `isolatedIds` / `tempIsolationModeOn` state — for the
+   *   direct `initTemporaryIsolationSubset` callers that never enter isolation
+   *   mode (BotChat).
+   * @private
+   */
+  _applyBatchedVisibility(opts = {}) {
+    const hiddenParents = new Set(this.hiddenIds)
+    const hiddenInstances = this._hiddenInstanceIdSet()
+    const explicitIsolation = Array.isArray(opts.isolatedIds)
+    const isolating = explicitIsolation || this.tempIsolationModeOn
+    const isolatedParents = isolating ?
+      new Set(explicitIsolation ? opts.isolatedIds : this.isolatedIds) : null
+    const masking = isolating || hiddenParents.size > 0 || hiddenInstances.size > 0
+    eachBatch(this.ifcModel, (mesh) => {
+      if (!mesh.instanceParents || typeof mesh.setVisibleAt !== 'function') {
+        return
+      }
+      if (!masking) {
+        this._releaseBatchedMask(mesh)
+        return
+      }
+      const mask = this._ensureBatchedMask(mesh)
+      const parents = mesh.instanceParents
+      const occurrenceIds = mesh.instanceOccurrenceIds
+      for (let batchId = 0; batchId < parents.length; batchId++) {
+        const parent = parents[batchId]
+        const allowed =
+          (!isolating || isolatedParents.has(parent)) &&
+          !hiddenParents.has(parent) &&
+          !(occurrenceIds && hiddenInstances.has(occurrenceIds[batchId]))
+        mask.allow[batchId] = allowed ? 1 : 0
+        // Bypass the wrapper: this is the isolator's own write, and it must not
+        // be mistaken for residency intent (which would overwrite `base`).
+        mask.nativeSetVisibleAt.call(mesh, batchId, allowed && mask.base[batchId] === 1)
+      }
+      // three's own `setVisibleAt` sets this; poke it too since we went around
+      // it, so `BatchedMesh.onBeforeRender` rebuilds its multi-draw ranges and
+      // the change repaints on the next frame (cf. shadingMode.js).
+      mesh._visibilityChanged = true
+    })
+  }
+
+
+  /**
+   * Install (or fetch) this batch's isolation mask: a snapshot of the
+   * pre-isolation per-instance visibility (`base`), the isolator's per-instance
+   * verdict (`allow`), and a `setVisibleAt` wrapper that keeps the two owners
+   * from clobbering each other. See `_applyBatchedVisibility` for the handshake.
+   *
+   * State lives under `mesh.userData` (repo convention, cf.
+   * `userData.batchedHighlight`) so it survives an isolator re-creation over
+   * the same model.
+   *
+   * @param {object} mesh a decorated BatchedMesh
+   * @return {object} `{base, allow, nativeSetVisibleAt, hadOwnSetVisibleAt}`
+   * @private
+   */
+  _ensureBatchedMask(mesh) {
+    const existing = mesh.userData.isolationMask
+    if (existing) {
+      return existing
+    }
+    const count = mesh.instanceParents.length
+    const base = new Uint8Array(count)
+    for (let batchId = 0; batchId < count; batchId++) {
+      base[batchId] = mesh.getVisibleAt(batchId) ? 1 : 0
+    }
+    const nativeSetVisibleAt = mesh.setVisibleAt
+    const mask = {
+      base,
+      allow: new Uint8Array(count).fill(1),
+      nativeSetVisibleAt,
+      // Normally the prototype method; remembered so release restores the mesh
+      // to the exact shape it had rather than leaving a stray own property.
+      hadOwnSetVisibleAt: Object.prototype.hasOwnProperty.call(mesh, 'setVisibleAt'),
+    }
+    mesh.userData.isolationMask = mask
+    mesh.setVisibleAt = function maskedSetVisibleAt(batchId, visible) {
+      mask.base[batchId] = visible ? 1 : 0
+      return nativeSetVisibleAt.call(this, batchId, visible && mask.allow[batchId] === 1)
+    }
+    return mask
+  }
+
+
+  /**
+   * Remove this batch's isolation mask and replay the snapshotted visibility,
+   * handing the bit back to residency exactly as it left it.
+   *
+   * @param {object} mesh a decorated BatchedMesh
+   * @private
+   */
+  _releaseBatchedMask(mesh) {
+    const mask = mesh.userData?.isolationMask
+    if (!mask) {
+      return
+    }
+    delete mesh.userData.isolationMask
+    if (mask.hadOwnSetVisibleAt) {
+      mesh.setVisibleAt = mask.nativeSetVisibleAt
+    } else {
+      delete mesh.setVisibleAt
+    }
+    for (let batchId = 0; batchId < mask.base.length; batchId++) {
+      mask.nativeSetVisibleAt.call(mesh, batchId, mask.base[batchId] === 1)
+    }
+    mesh._visibilityChanged = true
   }
 
 
@@ -483,13 +684,31 @@ export default class IfcIsolator {
    * @param {Array} includedIds element ids included in the subset
    */
   initTemporaryIsolationSubset(includedIds) {
-    this._removeSubsetFromScene(this.ifcModel)
+    const batched = this._isBatchedModel()
+    if (!batched) {
+      this._removeSubsetFromScene(this.ifcModel)
+    }
     // Same hover-pool cleanup reasoning as in `initHideOperationsSubset`.
     // For isolate this matters less visually (the pool's last-hovered
     // element typically IS the isolated one, so it's redundant rather
     // than wrong), but keeping the two paths symmetric avoids drift.
     if (typeof this.viewer._clearPreselectionForAllModels === 'function') {
       this.viewer._clearPreselectionForAllModels()
+    }
+    if (batched) {
+      // Isolate in place (Share#1806) — see the class doc. `includedIds` is
+      // passed explicitly rather than read off `isolatedIds`, because
+      // `BotChat` calls this method directly without entering isolation mode
+      // (no `tempIsolationModeOn` / `isolatedIds`) — reading the fields would
+      // make a bot-driven isolate a no-op.
+      this._applyBatchedVisibility({isolatedIds: includedIds})
+      // No subset Mesh exists to outline. Point the effect at the batch meshes
+      // themselves: only the isolated instances are visible on them now, so the
+      // outline pass's mask traces exactly the isolated geometry.
+      const batches = []
+      eachBatch(this.ifcModel, (mesh) => batches.push(mesh))
+      this.isolationOutlineEffect.setSelection(batches)
+      return
     }
     this.isolationSubset = this.ifcModel.createSubset({
       modelID: 0,
@@ -716,9 +935,12 @@ export default class IfcIsolator {
     }
     this._removeSubsetFromScene(this.unhiddenSubset)
     this.unhiddenSubset = null
-    this._addSubsetToScene(this.ifcModel)
+    // Clear the hidden state BEFORE restoring: `_restoreModelToScene` re-derives
+    // the batched visibility mask from it, so restoring first would re-apply the
+    // hides it is meant to drop. Order is irrelevant on the subset paths.
     this.hiddenIds = []
     this.hiddenOccurrences.clear()
+    this._restoreModelToScene()
     useStore.setState({hiddenElements: {}})
     // Rebuild the cyan selection visual from the preserved store
     // state. `hideSelectedElements` cleared the visual but kept the
@@ -869,7 +1091,7 @@ export default class IfcIsolator {
       const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes( el ))
       this.initHideOperationsSubset(toBeShown, false)
     } else {
-      this._addSubsetToScene(this.ifcModel)
+      this._restoreModelToScene()
     }
     this.isolationOutlineEffect.setSelection([])
     // Rebuild the cyan selection visual. Covers the hide-then-
@@ -880,6 +1102,17 @@ export default class IfcIsolator {
     // was never cleared, `_setConwaySelectionFromModel` inside
     // setSelection clears + rebuilds at the same position).
     this._rebuildSelectionVisualFromStore()
+  }
+
+  /**
+   * Release every batched visibility mask this isolator installed, handing the
+   * `setVisibleAt` bit back to residency. Called by `ShareViewer#dispose` (via
+   * optional chaining) when the viewer or its model goes away, so a model that
+   * is unloaded while isolated doesn't keep a wrapped `setVisibleAt` — and a
+   * model kept across the teardown comes back with residency's visibility.
+   */
+  dispose() {
+    eachBatch(this.ifcModel, (mesh) => this._releaseBatchedMask(mesh))
   }
 
   /**

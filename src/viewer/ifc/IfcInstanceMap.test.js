@@ -33,6 +33,25 @@ function makeSixTriangleGeometry() {
 }
 
 
+/**
+ * Six-triangle geometry split into two color bins, the shape
+ * `flatMeshToBufferGeometry` produces: triangles emitted in bin order,
+ * one `geometry.groups[]` entry per bin, positionally paired with one
+ * entry in the mesh's `material` array.
+ *
+ *   bin 0 (material[0]) → tris 0-2 (index range 0-8)
+ *   bin 1 (material[1]) → tris 3-5 (index range 9-17)
+ *
+ * @return {BufferGeometry}
+ */
+function makeTwoBinGeometry() {
+  const geom = makeSixTriangleGeometry()
+  geom.addGroup(0, 9, 0)
+  geom.addGroup(9, 9, 1)
+  return geom
+}
+
+
 describe('viewer/ifc/IfcInstanceMap', () => {
   describe('instanceMapFromOrderedPlacedRanges', () => {
     it('builds positionally from a per-PlacedGeometry range stream', () => {
@@ -276,13 +295,14 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       expect(Array.isArray(subset.material)).toBe(false)
     })
 
-    it('adds a group spanning the index buffer when material is multi-element Array', () => {
-      // Multi-material case (e.g., Snowdon with N color bins). Keep
-      // the array material reference so call-sites that rely on it
-      // (highlighting fallbacks, downstream subset construction)
-      // still see Array(N), but add a group so the renderer iterates
-      // at least once and pushes the subset onto the render list.
-      // Per-material per-triangle correctness is a TODO §3b.iii.
+    it('adds a group spanning the index buffer when the source has no groups', () => {
+      // Multi-element material array over a source geometry that
+      // carries no `groups[]` — there is nothing to attribute the
+      // triangles to, so fall back to one whole-buffer group. Keeps
+      // the array material reference (call-sites that rely on it —
+      // highlighting fallbacks, downstream subset construction — still
+      // see Array(N)) and keeps the renderer from skipping the mesh.
+      // The per-bin walk is covered by the tests below.
       const geom = makeSixTriangleGeometry()
       const map = instanceMapFromOrderedPlacedRanges([
         {parentExpressId: 100, triangleCount: 1},
@@ -297,6 +317,84 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       expect(groups[0].start).toBe(0)
       expect(groups[0].count).toBe(subset.geometry.getIndex().count)
       expect(groups[0].materialIndex).toBe(0)
+    })
+
+    it('preserves a per-color-bin group walk across a multi-bin subset', () => {
+      // Share#1806: the whole-buffer `addGroup(0, len, 0)` stop-gap drew
+      // every subset triangle with material[0] — monochrome, and grey
+      // whenever bin 0 is the DEFAULT_COLOR bin. The subset must carry
+      // one group per source bin it spans, indexing the same material
+      // array the source geometry's groups were binned into.
+      const geom = makeTwoBinGeometry()
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 3}, // inst 0 → bin 0
+        {parentExpressId: 200, triangleCount: 3}, // inst 1 → bin 1
+      ], {geometry: geom})
+      const materials = [new MeshBasicMaterial(), new MeshBasicMaterial()]
+      const subset = map.createSubsetMeshByInstance([0, 1],
+        {defaultMaterial: materials})
+      expect(subset.material).toBe(materials)
+      expect(subset.geometry.groups).toEqual([
+        {start: 0, count: 9, materialIndex: 0},
+        {start: 9, count: 9, materialIndex: 1},
+      ])
+    })
+
+    it('renders a single-bin subset with that bin\'s material, not material[0]', () => {
+      const geom = makeTwoBinGeometry()
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 3},
+        {parentExpressId: 200, triangleCount: 3},
+      ], {geometry: geom})
+      const materials = [new MeshBasicMaterial(), new MeshBasicMaterial()]
+      const subset = map.createSubsetMeshByInstance([1],
+        {defaultMaterial: materials})
+      expect(subset.geometry.groups).toEqual([
+        {start: 0, count: 9, materialIndex: 1},
+      ])
+    })
+
+    it('sorts out-of-order instance ids so groups stay coalesced', () => {
+      // Instance ids arrive in whatever order the caller collected them
+      // (createSubsetMeshByParent walks a Map). Copying in that order
+      // would emit a group per instance; the builder sorts by source
+      // triangle first so runs collapse to one group per bin.
+      const geom = makeTwoBinGeometry()
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1}, // inst 0 → bin 0, tri 0
+        {parentExpressId: 200, triangleCount: 3}, // inst 1 → tris 1-3
+        {parentExpressId: 300, triangleCount: 1}, // inst 2 → bin 1, tri 4
+      ], {geometry: geom})
+      const materials = [new MeshBasicMaterial(), new MeshBasicMaterial()]
+      const subset = map.createSubsetMeshByInstance([2, 0, 1],
+        {defaultMaterial: materials})
+      // Tris 0-2 are bin 0, tris 3-4 are bin 1 — two groups regardless
+      // of the id order they were requested in.
+      expect(subset.geometry.groups).toEqual([
+        {start: 0, count: 9, materialIndex: 0},
+        {start: 9, count: 6, materialIndex: 1},
+      ])
+    })
+
+    it('falls back to a whole-buffer group when the material array cannot hold the bin indices', () => {
+      // An array `material` override that is not the source's own bin
+      // array: the group material indices only mean something against
+      // the array they were binned into, so an out-of-range index means
+      // "these indices are not for this array". Visible-but-monochrome
+      // beats the renderer skipping the mesh entirely.
+      const geom = makeSixTriangleGeometry()
+      geom.addGroup(0, 6, 0)
+      geom.addGroup(6, 6, 1)
+      geom.addGroup(12, 6, 2)
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 6},
+      ], {geometry: geom})
+      const shortArray = [new MeshBasicMaterial(), new MeshBasicMaterial()]
+      const subset = map.createSubsetMeshByInstance([0],
+        {defaultMaterial: shortArray})
+      expect(subset.geometry.groups).toEqual([
+        {start: 0, count: 18, materialIndex: 0},
+      ])
     })
   })
 

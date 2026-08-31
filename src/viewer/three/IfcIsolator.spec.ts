@@ -1,7 +1,8 @@
 /* eslint-disable no-magic-numbers */
 import {Page, expect, test} from '@playwright/test'
+import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
+import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
-import {waitForModelReady} from '../../tests/e2e/models'
 
 
 const {beforeEach, describe} = test
@@ -234,5 +235,157 @@ describe('viewer/three/IfcIsolator: isolate/hide combinations (Conway-direct)', 
 
     const state = await readIsolatorState(page)
     expect(state.revealedSubsetMeshes.length).toBe(0)
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// Batched render path (Share#1806): "Parts lose color when isolated".
+//
+// The suite above covers the merged Conway-direct path, where isolation swaps
+// the model for a re-baked subset Mesh. On the default STEP path the model is
+// a `THREE.BatchedMesh` whose per-part colour lives in the batch's per-instance
+// colour texture — a re-baked subset can't read that texture and inherited the
+// batch's shared colourless material, so every isolated part rendered light
+// grey. Isolation there now masks per-instance visibility in place
+// (`setVisibleAt`), which is what these tests assert against the real scene:
+// the batch is still the object being drawn, the instance colour table is
+// untouched, and only the isolated product's instances remain visible.
+// ---------------------------------------------------------------------------
+
+// The model from the issue report. Its own presentation data colours 2 of its
+// 5 parts, which is precisely the case that turned grey.
+const AS1_PATH = '/share/v/gh/bldrs-ai/test-models/main/step/nist/as1-oc-214.stp'
+// STEP parse + BREP tessellation is heavier than the IFC smoke models
+// (matching colorMode.spec.ts / displayPermalink.spec.ts).
+const STEP_TEST_TIMEOUT_MS = 90_000
+
+
+interface BatchedSnapshot {
+  /** Per-instance visibility, batchId order, across every batch. */
+  visible: boolean[]
+  /** Per-instance source colour (`instanceColors`), same order. */
+  colors: number[][]
+  /** Is the loaded model itself still a child of the scene? */
+  modelInScene: boolean
+  /** Isolation subset meshes — must stay 0 on the batched path. */
+  isolationSubsetCount: number
+  tempIsolationModeOn: boolean
+}
+
+
+/**
+ * Snapshot the live batched model: what the renderer draws (per-instance
+ * visibility + the colour table it draws from) plus the isolator's slots.
+ *
+ * @param page playwright page
+ * @return snapshot of the batched scene state
+ */
+function readBatchedSnapshot(page: Page): Promise<BatchedSnapshot> {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = window as any
+    const state = w.store?.getState?.()
+    const model = state?.model
+    const iso = state?.viewer?.isolator
+    if (!model || !iso) {
+      throw new Error('readBatchedSnapshot: no model/isolator on window — is the page in test mode?')
+    }
+    const meshes: any[] = []
+    if (model.isBatchedMesh) {
+      meshes.push(model)
+    }
+    (model.children ?? []).forEach((child: any) => {
+      if (child?.isBatchedMesh) {
+        meshes.push(child)
+      }
+    })
+    const visible: boolean[] = []
+    const colors: number[][] = []
+    for (const mesh of meshes) {
+      const count = mesh.instanceParents?.length ?? 0
+      for (let index = 0; index < count; index++) {
+        visible.push(mesh.getVisibleAt(index))
+        const c = mesh.instanceColors?.[index]
+        colors.push(c ? [c.x, c.y, c.z, c.w] : [])
+      }
+    }
+    const subset = iso.isolationSubset
+    return {
+      visible,
+      colors,
+      modelInScene: iso.context.getScene().children.includes(model),
+      isolationSubsetCount: subset ? (Array.isArray(subset) ? subset.length : 1) : 0,
+      tempIsolationModeOn: iso.tempIsolationModeOn,
+    }
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
+ * @param page playwright page
+ * @return number of selected elements in the store
+ */
+function selectedCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any
+    return (w.store?.getState?.().selectedElements ?? []).length
+  })
+}
+
+
+describeMobileAndDesktop('viewer/three/IfcIsolator: isolate on the batched STEP path', () => {
+  test('isolates in place, keeping the coloured batch on screen (#1806)', async ({page}) => {
+    test.setTimeout(STEP_TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+
+    const {navigateAndWaitForModel} = await setupVirtualPathIntercept(page, AS1_PATH, '')
+    await navigateAndWaitForModel()
+    await waitForModelReady(page)
+
+    const before = await readBatchedSnapshot(page)
+    expect(before.visible.length).toBeGreaterThan(1)
+    expect(before.visible.every((v) => v)).toBe(true)
+
+    // Pick a part in the scene: the model is fit-to-frame and centred, so a
+    // centre double-click lands on geometry (same premise as
+    // SynchronizedView.spec.ts's scene-pick test).
+    await page.locator('canvas').first().dblclick()
+    await expect.poll(() => selectedCount(page)).toBeGreaterThan(0)
+
+    // Focus the canvas so `shortcutKeys.js`'s window handler doesn't
+    // early-return, then isolate.
+    await page.locator('canvas').first().focus()
+    await page.keyboard.press('KeyI')
+
+    await expect
+      .poll(async () => (await readBatchedSnapshot(page)).visible.filter((v) => v).length)
+      .toBeLessThan(before.visible.length)
+    const isolated = await readBatchedSnapshot(page)
+    expect(isolated.tempIsolationModeOn).toBe(true)
+    // Something is still on screen — an isolate that hides everything would
+    // also satisfy the "fewer visible" poll above.
+    expect(isolated.visible.filter((v) => v).length).toBeGreaterThan(0)
+    // The load-bearing claim: what the scene draws is still the batch, with no
+    // re-baked subset standing in for it. That is what keeps the per-instance
+    // colours below on screen — detached, they'd still be in the table but the
+    // grey subset would be what renders.
+    expect(isolated.modelInScene).toBe(true)
+    expect(isolated.isolationSubsetCount).toBe(0)
+    expect(isolated.colors).toEqual(before.colors)
+
+    // Un-isolate: everything comes back, still with its own colours.
+    await page.keyboard.press('KeyI')
+    await expect
+      .poll(async () => (await readBatchedSnapshot(page)).visible.every((v) => v))
+      .toBe(true)
+    const restored = await readBatchedSnapshot(page)
+    expect(restored.tempIsolationModeOn).toBe(false)
+    expect(restored.modelInScene).toBe(true)
+    expect(restored.colors).toEqual(before.colors)
   })
 })
