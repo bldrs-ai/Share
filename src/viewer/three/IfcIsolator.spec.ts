@@ -420,6 +420,21 @@ describeMobileAndDesktop('viewer/three/IfcIsolator: isolate on the batched STEP 
   test('isolates in place, keeping the coloured batch on screen (#1806)', async ({page}) => {
     test.setTimeout(STEP_TEST_TIMEOUT_MS)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    // Isolation points the OutlineEffect at the `BatchedMesh`es themselves.
+    // three compiles the effect's mask material (postprocessing's
+    // DepthComparisonMaterial) with USE_BATCHING for a BatchedMesh, and that
+    // shader ships without the batching chunks, so without the patch in
+    // `outlineBatching.js` the mask program fails to link: one
+    // `'batchingMatrix' : undeclared identifier` and then `useProgram:
+    // program not valid` every frame — 89 of these were logged in the run
+    // that established this, against 0 with the patch — while the isolation
+    // outline silently renders nothing at all.
+    const outlineShaderErrors: string[] = []
+    page.on('console', (msg) => {
+      if (/Shader Error|batchingMatrix|useProgram: program not valid/.test(msg.text())) {
+        outlineShaderErrors.push(msg.text())
+      }
+    })
     await homepageSetup(page)
     await setIsReturningUser(page.context())
 
@@ -457,6 +472,7 @@ describeMobileAndDesktop('viewer/three/IfcIsolator: isolate on the batched STEP 
     expect(isolated.modelInScene).toBe(true)
     expect(isolated.isolationSubsetCount).toBe(0)
     expect(isolated.colors).toEqual(before.colors)
+    expect(outlineShaderErrors).toEqual([])
 
     // Un-isolate: everything comes back, still with its own colours.
     await page.keyboard.press('KeyI')

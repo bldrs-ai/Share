@@ -261,6 +261,40 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       expect(map.createSubsetMeshByInstance([])).toBeNull()
     })
 
+    it('throws rather than drawing a zero-filled tail when the two passes disagree', () => {
+      const geom = makeSixTriangleGeometry()
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 2},
+        {parentExpressId: 200, triangleCount: 2},
+      ], {geometry: geom})
+      // `buildSubsetMesh` sizes its triangle array from a first pass over
+      // `ids` and fills it from a second. A single-pass iterable is the
+      // cheapest way to make the two disagree: the generator is exhausted by
+      // the sizing pass, so the fill pass writes nothing and every slot keeps
+      // its zero fill — which is triangle 0, real geometry, silently drawn in
+      // place of the requested instance. Today's callers all pass arrays or
+      // Sets; this pins the guard for the one that doesn't.
+      const singlePassIds = (function* gen() {
+        yield 0
+        yield 1
+      })()
+      expect(() => map.createSubsetMeshByInstance(singlePassIds))
+        .toThrow(/counted 4 triangles, copied 0/)
+    })
+
+    it('accepts an id list that is consistent across both passes', () => {
+      // The guard's negative control: the same ids as an array must not throw
+      // — otherwise the test above would pass against a builder that rejects
+      // everything.
+      const geom = makeSixTriangleGeometry()
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 2},
+        {parentExpressId: 200, triangleCount: 2},
+      ], {geometry: geom})
+      const subset = map.createSubsetMeshByInstance([0, 1])
+      expect(subset.geometry.getIndex().count).toBe(12)
+    })
+
     it('honours a material override; defaults raycast-invisible', () => {
       const geom = makeSixTriangleGeometry()
       const map = instanceMapFromOrderedPlacedRanges([

@@ -1000,6 +1000,26 @@ describe('viewer/three/IfcIsolator', () => {
       expect(visibility(mesh)).toEqual([true, true, false, false])
     })
 
+    it('outlines the batch meshes themselves — there is no subset to point at', () => {
+      const {iso, mesh} = setupBatchedIsolator()
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+
+      iso.isolateSelectedElements()
+
+      // Pinning the argument matters because of what it costs: an OutlineEffect
+      // whose selection holds a `THREE.BatchedMesh` compiles its mask pass
+      // (postprocessing's DepthComparisonMaterial) with three's USE_BATCHING
+      // define, and that shader ships without the batching chunks —
+      // `'batchingMatrix' : undeclared identifier`, no outline at all, and a
+      // per-frame `useProgram: program not valid`. `outlineBatching.js` patches
+      // the material so this selection is drawable; if the batches ever stop
+      // being what is selected here, that patch is dead weight, and if this
+      // starts selecting batches somewhere the patch doesn't reach, the outline
+      // silently disappears again.
+      expect(iso.isolationOutlineEffect.setSelection).toHaveBeenCalledWith([mesh])
+      expect(iso.isolationSubset).toBeNull()
+    })
+
     it('renders the isolated part from the coloured batch, not a grey subset (#1806)', () => {
       const {scene, iso, mesh} = setupBatchedIsolator()
       iso.viewer.getSelectedIds = jest.fn(() => [100])

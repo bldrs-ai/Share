@@ -3,6 +3,7 @@ import {
   BufferGeometry,
   Mesh,
 } from 'three'
+import {assert} from '../../utils/assert'
 import {occurrencePathKey} from '../../utils/occurrencePaths'
 import {makeTriangleMaterialIndexer, resolveSubsetMaterial} from '../three/subsetMaterialGroups'
 
@@ -390,6 +391,16 @@ function buildSubsetMesh(sourceGeometry, ids, lookupTriangles, opts) {
       triangles[n++] = list[i]
     }
   }
+  // `total` was sized from a first pass over the same `ids` / `lookupTriangles`
+  // pair, so a second pass that yields fewer triangles leaves the tail of
+  // `triangles` at its zero fill — and triangle 0 is a real triangle, so the
+  // subset would silently render stray geometry from wherever the source
+  // happens to start. Fails loudly instead. Cheap: once per subset, not per
+  // triangle. Today's callers are consistent across the two passes; this
+  // guards a future one that isn't — a single-pass iterable (a generator) for
+  // `ids`, or a `lookupTriangles` whose list depends on call order.
+  assert(n === total,
+    `IfcInstanceMap.buildSubsetMesh: counted ${total} triangles, copied ${n}`)
   triangles.sort()
   const ArrayCtor = srcIndexArr.constructor
   const dstIndexArr = new ArrayCtor(total * 3)

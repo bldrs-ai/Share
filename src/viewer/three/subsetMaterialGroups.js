@@ -46,8 +46,13 @@ const INDICES_PER_TRIANGLE = 3
  * `group.start` / `group.count` are in *index-buffer* units, so a group
  * covers triangles `[start / 3, (start + count) / 3)`. The returned
  * function keeps a cursor and is O(1) amortised for monotonically
- * non-decreasing queries (the copy-loop access pattern); it stays
- * correct — just slower — for out-of-order ones by rewinding.
+ * non-decreasing queries (the copy-loop access pattern), gaps between
+ * groups included; a backward query costs one step per range it walks
+ * back over, so out-of-order callers stay correct, just slower.
+ *
+ * Source groups are neither required to be sorted nor to be disjoint.
+ * Where two groups overlap, the one with the lower `start` wins — the
+ * cursor stops at the first range whose `endTri` is past `t`.
  *
  * @param {object} srcGeom source BufferGeometry
  * @return {?function(number): number} triangle index → material index,
@@ -73,8 +78,15 @@ export function makeTriangleMaterialIndexer(srcGeom) {
     .sort((a, b) => a.startTri - b.startTri)
   let cursor = 0
   return (t) => {
-    if (cursor >= ranges.length || t < ranges[cursor].startTri) {
-      cursor = 0
+    // Rewind one range at a time rather than resetting to 0. A reset would
+    // also fire for *forward* queries that land in a gap between groups
+    // (`t` past `ranges[cursor - 1].endTri` but before `ranges[cursor]`
+    // starts), making every triangle in the gap re-walk the whole prefix —
+    // O(ranges) per triangle on the copy loop's hot path. Stepping back only
+    // while the query is genuinely behind the previous range's end keeps the
+    // amortised O(1) the doc comment above claims, for gaps included.
+    while (cursor > 0 && t < ranges[cursor - 1].endTri) {
+      cursor--
     }
     while (cursor < ranges.length && t >= ranges[cursor].endTri) {
       cursor++
