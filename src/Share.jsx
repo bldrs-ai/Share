@@ -10,7 +10,8 @@ import useStore from './store/useStore'
 import debug from './utils/debug'
 import {pageTitleForModel} from './utils/modelDisplayName'
 import {navToDefault} from './utils/navigate'
-import {handleRoute} from './routes/routes'
+import {FilenameParseError} from './Filetype'
+import {UNSUPPORTED_FILE_ALERT, handleRoute} from './routes/routes'
 
 
 /**
@@ -33,6 +34,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const setIsShareEnabled = useStore((state) => state.setIsShareEnabled)
   const setIsNotesEnabled = useStore((state) => state.setIsNotesEnabled)
   const setRepository = useStore((state) => state.setRepository)
+  const setAlert = useStore((state) => state.setAlert)
   const widgetApiRef = useRef(null)
 
   // Hydrate persisted Connections & Sources from localStorage
@@ -55,13 +57,38 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
    * path, so no other useEffect is triggered.
    */
   useEffect(() => {
-    /** A demux to help forward to the index file, load a new model or do nothing. */
+    /**
+     * A demux to help forward to the index file, load a new model or do nothing.
+     *
+     * @return {boolean} False when the route was unusable and has already been
+     *   handled (alert + fallback), so the rest of the effect must stop rather
+     *   than configure a repository out of the params that just failed to parse.
+     */
     const onChangeUrlParams = (() => {
       debug().log('pathPrefix: ', pathPrefix)
-      const mp = handleRoute(pathPrefix, routeParams)
+      let mp
+      try {
+        mp = handleRoute(pathPrefix, routeParams)
+      } catch (e) {
+        // Route parsing throws FilenameParseError for any path that doesn't
+        // name a file Share can open — an unrecognized extension
+        // ('Jetenginestep.st'), or a bare directory path. Thrown from inside
+        // this effect it reached the ErrorBoundary and took the whole app
+        // down for what is really a bad link (SHARE-1H4). Say so and fall
+        // back to the home model, which is what an unusable route already
+        // did. The raw message names the internal extension regex, so it is
+        // deliberately not what the user is shown.
+        if (!(e instanceof FilenameParseError)) {
+          throw e
+        }
+        debug().warn('Share#onChangeUrlParams: unsupported model path: ', e)
+        setAlert(UNSUPPORTED_FILE_ALERT)
+        navToDefault(navigate, appPrefix)
+        return false
+      }
       if (mp === null) {
         navToDefault(navigate, appPrefix)
-        return
+        return true
       }
       if (modelPath === null ||
           (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
@@ -70,8 +97,16 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         setModelPath(mp)
         debug().log('Share#onChangeUrlParams: new model path: ', mp)
       }
+      return true
     })
-    onChangeUrlParams()
+    // An unusable route (mp === null) still falls through to the repository
+    // block below — that is pre-existing behaviour for an empty path, which
+    // still carries usable :org/:repo. A *failed parse* does not: its params
+    // are the ones that just threw, so configuring a repository from them
+    // would flash setRepository(badOrg, badRepo) on the way to the fallback.
+    if (!onChangeUrlParams()) {
+      return
+    }
 
     // TODO(pablo): currently expect these to both be defined.
     const {org, repo} = routeParams
@@ -105,7 +140,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsNotesEnabled(false)
     }
   }, [appPrefix, installPrefix, modelPath, model, navigate, pathPrefix,
-    setIsVersionsEnabled, setIsShareEnabled, setIsNotesEnabled,
+    setAlert, setIsVersionsEnabled, setIsShareEnabled, setIsNotesEnabled,
     setModelPath, setRepository, routeParams])
 
   useEffect(() => {

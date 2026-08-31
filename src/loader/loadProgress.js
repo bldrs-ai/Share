@@ -2,6 +2,7 @@ import {addBreadcrumb, captureMessage, setContext, setTag} from '@sentry/react'
 import {SENTRY_CID_TAG, getOpenCidForSentry} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
+import {normalizeMessageDigits} from '../utils/messageGrouping'
 // Named import so esbuild can prune the rest of the JSON (same trick as
 // index/sentry.js) — we only need `version` for the report preamble.
 import {version as shareVersion} from '../../package.json'
@@ -139,6 +140,17 @@ class LoadProgressReporter {
     // "Parsing model geometry: -1.6s" negative-duration line).
     this.engineElapsedBase = null
     this.ended = false
+    // Model-header fields the Sentry diagnostics tags are built from, kept
+    // structured as they arrive (recordModelInfo) rather than re-parsed out
+    // of the formatted model line. See captureDiagnostics for why they need
+    // to be tags rather than context.
+    this.schema = undefined
+    this.originatingSystem = undefined
+    this.preprocessorVersion = undefined
+    // Geometry the load actually produced, when the loader reports it
+    // (reportGeometryStats) — the load-outcome signal classifyLoadOutcome
+    // reads. Undefined means "not reported", which is not the same as zero.
+    this.geometryStats = undefined
     // Distinct console warning/error text → occurrence count, captured via
     // the console tee below and appended after the Total line (issue #301
     // preview feedback #4). Includes conway's engine warnings/errors, which
@@ -298,11 +310,61 @@ class LoadProgressReporter {
   /**
    * Remember machine-readable values that also appear in the model line.
    *
+   * Called more than once per load on the engine formats — Loader stamps a
+   * filename-derived line before the parse, and conway's ON_MODEL_INFO
+   * replaces it once the STEP header parses — so each field is only
+   * overwritten by a later non-empty value, letting the engine's richer
+   * `IFC4` win over the extension-derived `IFC` without a blank header
+   * erasing what we already had.
+   *
    * @param {object} info model metadata
    */
   recordModelInfo(info) {
     if (Number.isFinite(info?.byteLength)) {
       this.fileSize = info.byteLength
+    }
+    if (typeof info?.schema === 'string' && info.schema !== '') {
+      this.schema = info.schema
+    }
+    // Latched per field rather than as one resolved "tool" value, so a later
+    // header naming only a preprocessor can't downgrade an originatingSystem
+    // an earlier one already gave us. The preference between them is applied
+    // once, at tag time (authoringTool).
+    if (typeof info?.originatingSystem === 'string' && info.originatingSystem !== '') {
+      this.originatingSystem = info.originatingSystem
+    }
+    if (typeof info?.preprocessorVersion === 'string' && info.preprocessorVersion !== '') {
+      this.preprocessorVersion = info.preprocessorVersion
+    }
+  }
+
+  /**
+   * The `authoring_tool` tag value: the authoring system matched against the
+   * known-exporter allowlist, falling back to the preprocessor when the
+   * authoring system named nothing recognizable — the same preference order
+   * formatModelLine uses for the model line's tool segment, applied to
+   * whichever header string the allowlist can actually place.
+   *
+   * The fallback is only safe because of the allowlist: an unmatched
+   * preprocessor string yields no tag at all, so reaching for it can add a
+   * family but never leak one header's free text in place of another's.
+   *
+   * @return {string|undefined} undefined when neither header named a family
+   *   the allowlist knows
+   */
+  authoringTool() {
+    return knownAuthoringTool(this.originatingSystem) ??
+      knownAuthoringTool(this.preprocessorVersion)
+  }
+
+  /**
+   * Record what the loader built, for classifyLoadOutcome.
+   *
+   * @param {object} stats {vertexCount, triangleCount}; either may be absent
+   */
+  recordGeometryStats(stats) {
+    if (stats) {
+      this.geometryStats = {...this.geometryStats, ...stats}
     }
   }
 
@@ -468,6 +530,12 @@ class LoadProgressReporter {
   captureDiagnostics({errorCount, warningCount, contentId, contentType}) {
     const summary = this.diagnosticsSummary()
     const tags = {}
+    // Severity is the load's outcome, not its noise level (ops#27 T0): a
+    // model the user is looking at is a regular bug however many warnings it
+    // took to get there, and only a load that produced nothing to look at is
+    // a major one. This is why errorCount no longer decides the level.
+    const loadOutcome = classifyLoadOutcome(this.geometryStats)
+    tags.load_outcome = loadOutcome
     // Also set on the global scope at init by index/ga.js. Re-read here
     // because this reads later: a first-ever visitor's id only resolves
     // once gtag/js loads, which can land after bootstrap but before this
@@ -482,8 +550,41 @@ class LoadProgressReporter {
     if (contentType) {
       tags.content_type = String(contentType).slice(0, MAX_TAG_CHARS)
     }
+    // Which model this was, as tags rather than as report text. Sentry's
+    // server-side scrubber rewrites some event bodies to "[Filtered]", and
+    // when it does, the authoring tool and schema — the first two questions
+    // asked of any load diagnostic — go with it. Tags survive that, so the
+    // few fields worth searching on get their own.
+    //
+    // Nothing identifying belongs here: tool, schema, extension and a
+    // rounded size only. No path, no filename, no URL — content_id above is
+    // where a model's identity already lives, and it is the field the
+    // scrubber is aimed at. The tool is the one field built from
+    // exporter-written free text, so it goes through an allowlist rather
+    // than a filter — see knownAuthoringTool.
+    const authoringTool = this.authoringTool()
+    if (authoringTool !== undefined) {
+      tags.authoring_tool = authoringTool.slice(0, MAX_TAG_CHARS)
+    }
+    if (this.schema !== undefined) {
+      tags.model_schema = this.schema.slice(0, MAX_TAG_CHARS)
+    }
+    // CadView populates content_type as `loadedModel.type || 'undefined'`, so
+    // the literal string is what an unknown type looks like by the time it
+    // reaches here — tag nothing rather than tag that.
+    const declaredType = contentType === undefined || contentType === null ?
+      '' : String(contentType).toLowerCase()
+    const format = extensionOf(this.fallbackName) ??
+      (declaredType !== '' && declaredType !== 'undefined' ?
+        declaredType.slice(0, MAX_TAG_CHARS) : undefined)
+    if (format !== undefined) {
+      tags.model_format = format
+    }
+    if (Number.isFinite(this.fileSize)) {
+      tags.model_size_mb = Math.round(this.fileSize / BYTES_PER_MB)
+    }
     captureMessage(diagnosticsTitle(summary.topText), {
-      level: errorCount > 0 ? 'error' : 'warning',
+      level: loadOutcome === 'unusable' ? 'error' : 'warning',
       tags,
       contexts: {
         loadDiagnostics: {
@@ -629,29 +730,167 @@ function ellipsize(text) {
  * and titles the event — it has no exception to fingerprint, so the
  * message text *is* the grouping key.
  *
- * Numbers collapse to `#` because engine diagnostics are per-entity
- * ("Error processing representation #1234"): the raw text would open a
- * fresh Sentry issue for every entity of every model, which is the
- * per-line flood captureLoadDiagnostics exists to avoid. Normalized,
- * each family of warning gets one issue. An entity marker the message
- * already spelled `#` is swallowed by the same pass rather than
- * doubling up into `##`.
- *
- * The pass is deliberately indiscriminate: it also collapses digits
- * inside identifiers, so "IFC4" titles as "IFC#" and "Revit 2024" as
- * "Revit #". That costs nothing for grouping — the schema and authoring
- * tool are already on the event's `load` context and the report — and
- * keeping them would reopen the per-value split this exists to close.
+ * Numbers collapse to `#` (normalizeMessageDigits, shared with the alert
+ * fingerprint) because engine diagnostics are per-entity ("Error processing
+ * representation #1234"): the raw text would open a fresh Sentry issue for
+ * every entity of every model, which is the per-line flood
+ * captureLoadDiagnostics exists to avoid. Normalized, each family of warning
+ * gets one issue.
  *
  * @param {string} topText most frequent diagnostic, '' when the console
  *   tee captured nothing (the counts can come from the engine instead)
  * @return {string}
  */
 function diagnosticsTitle(topText) {
-  const normalized = ellipsize(topText.replace(/#?\d+/g, '#')).trim()
+  const normalized = ellipsize(normalizeMessageDigits(topText)).trim()
   return normalized === '' ?
     'Load completed with diagnostics' :
     `Load diagnostics: ${normalized}`
+}
+
+
+/**
+ * How bad this load was for the person who asked for it (ops#27 T0), which
+ * is what the diagnostics event's severity reports:
+ *
+ * - `displayed` — geometry reached the scene, so the model is on screen.
+ *   A regular bug, however noisy the load was.
+ * - `unusable` — the load ran to completion and built nothing. Whatever the
+ *   diagnostics say, the user is looking at an empty viewer. Major.
+ *
+ * Ambiguity resolves to `displayed`, deliberately. Most formats report no
+ * geometry counts at all (only the conway engine path calls
+ * reportGeometryStats), and treating "didn't say" as "produced nothing"
+ * would raise every warning in the project to major — the inverse of what
+ * this split is for.
+ *
+ * @param {object} [geometry] {vertexCount, triangleCount} as reported by the
+ *   loader; undefined when the loader reported nothing
+ * @return {string} 'displayed' | 'unusable'
+ */
+export function classifyLoadOutcome(geometry) {
+  const counted = [geometry?.vertexCount, geometry?.triangleCount].filter(Number.isFinite)
+  if (counted.length === 0) {
+    return 'displayed'
+  }
+  return counted.some((count) => count > 0) ? 'displayed' : 'unusable'
+}
+
+
+/**
+ * Lowercase extension of a bare filename, for the `model_format` tag.
+ *
+ * Takes the extension and nothing else: these tags exist because the report
+ * body can be scrubbed away, so they have to stay unimpeachably free of
+ * anything that identifies a file or a user. The length/charset bound also
+ * keeps a dotted name with no real extension ("Model.v2 final") from
+ * tagging junk.
+ *
+ * @param {string} [basename] a filename with no path (the reporter's
+ *   fallbackName)
+ * @return {string|undefined}
+ */
+function extensionOf(basename) {
+  const match = /\.([a-z0-9]{1,8})$/i.exec(basename ?? '')
+  return match ? match[1].toLowerCase() : undefined
+}
+
+
+/**
+ * Exporter families the `authoring_tool` tag is allowed to name, most
+ * specific first — an AutoCAD Civil 3D header must land on Civil 3D, and a
+ * Bonsai one on Bonsai rather than plain Blender.
+ *
+ * Seeded from the families seen in triage. Adding one is the intended way to
+ * extend the tag; nothing else widens it.
+ *
+ * A false match leaks nothing — the tag carries this table's own canonical
+ * name, never a span of the header — but it does mislabel the load, so the
+ * short and dictionary-word names carry their own context. Four needed it:
+ * `fusion` is a word boundary away from confusion/diffusion/profusion, while
+ * `rhino`, `inventor` and `nx` are whole words in ordinary text ('White Rhino
+ * Tower', 'Inventor: John Smith', 'NX-200'), so those three match only beside
+ * a vendor name or an immediately following numeric version. That still
+ * admits the bare headers seen in the wild ('Rhino 8', 'NX 12.0.2.9') because
+ * a version does follow them. Check any new short name against real prose
+ * with the regex engine before adding it — `\b` alone is not enough for a
+ * name that is also an English word.
+ */
+const AUTHORING_TOOL_FAMILIES = [
+  {name: 'Autodesk Revit', pattern: /revit/i},
+  {name: 'Autodesk Civil 3D', pattern: /civil\s*3d/i},
+  {name: 'Autodesk Navisworks', pattern: /navisworks/i},
+  {name: 'Autodesk Inventor', pattern: /\bautodesk\s+inventor\b|\binventor(?=\s+\d)/i},
+  {name: 'Autodesk Fusion', pattern: /\bfusion\b/i},
+  {name: 'Autodesk AutoCAD', pattern: /autocad/i},
+  {name: 'Graphisoft ArchiCAD', pattern: /archicad|graphisoft/i},
+  {name: 'Tekla Structures', pattern: /tekla/i},
+  {name: 'Trimble Nova', pattern: /trimble\s*nova/i},
+  {name: 'Trimble SketchUp', pattern: /sketchup/i},
+  {name: 'Dassault SOLIDWORKS', pattern: /solidworks/i},
+  {name: 'Dassault CATIA', pattern: /catia/i},
+  {name: 'PTC Creo', pattern: /creo|pro\/engineer/i},
+  {name: 'Siemens NX', pattern: /\bsiemens\s+nx\b|\bunigraphics\b|\bnx(?=\s+\d)/i},
+  {name: 'KiCad', pattern: /kicad/i},
+  {name: 'IfcOpenShell', pattern: /ifcopenshell/i},
+  {name: 'Bonsai/BlenderBIM', pattern: /blenderbim|bonsai/i},
+  {name: 'Blender', pattern: /blender/i},
+  {name: 'DigiPara Liftdesigner', pattern: /liftdesigner|digipara/i},
+  {name: 'FreeCAD', pattern: /freecad/i},
+  {name: 'Rhino', pattern: /\brhinoceros\b|\bmcneel\b|\brhino(?=\s+\d)/i},
+  {name: 'Nemetschek Allplan', pattern: /allplan/i},
+  {name: 'Vectorworks', pattern: /vectorworks/i},
+  {name: 'Bentley MicroStation', pattern: /microstation|bentley/i},
+]
+
+
+/**
+ * Place a raw header string in a known exporter family, for the
+ * `authoring_tool` tag: the family's canonical name, plus the version token
+ * that immediately follows the matched name when that token is purely
+ * numeric.
+ *
+ * **Allowlist, not sanitization.** This tag exists precisely to survive
+ * Sentry's server-side scrubber, so it cannot be built by removing the bad
+ * parts of exporter-written free text — there is no bounded set of bad parts.
+ * A STEP/IFC FILE_NAME header's originating_system is whatever the exporter
+ * chose to write, and in the wild that has included install paths (an OS
+ * username), machine names and contact addresses, none of which a
+ * separator-based filter catches ('Revit exported by jane@example.com' has no
+ * path separator in it at all). So nothing reaches the tag unless the
+ * allowlist recognizes it, and what reaches it is this module's own canonical
+ * string rather than any span of the input.
+ *
+ * The version is the one exception, and it is bounded to digits and dots for
+ * the same reason: 'Autodesk Revit 2024 (ENU)' tags as 'Autodesk Revit 2024',
+ * while 'Revit exported by jane@example.com' finds no numeric token after the
+ * name and tags as plain 'Autodesk Revit'.
+ *
+ * Unmatched input yields no tag at all. The raw string is not lost — it stays
+ * in the report body on the event's context, which is the field the scrubber
+ * is entitled to rewrite. Bounding the tag to a known set also bounds its
+ * cardinality, which is what makes it worth grouping by.
+ *
+ * @param {string} [value] a header string, or undefined when none was given
+ * @return {string|undefined} canonical family name (with numeric version when
+ *   the header supplied one), or undefined when nothing matched
+ */
+function knownAuthoringTool(value) {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  for (const family of AUTHORING_TOOL_FAMILIES) {
+    const match = family.pattern.exec(value)
+    if (match === null) {
+      continue
+    }
+    // Only the token directly after the matched name, and only when it is
+    // digits and dots — anything else is arbitrary text and stays out.
+    const [nextToken] = value.slice(match.index + match[0].length).trim().split(/\s+/)
+    const version = /^\d+(?:\.\d+)*$/.test(nextToken ?? '') ? ` ${nextToken}` : ''
+    return `${family.name}${version}`
+  }
+  return undefined
 }
 
 
@@ -691,6 +930,24 @@ export function reportModelInfo(info) {
   if (activeReporter && !activeReporter.ended) {
     activeReporter.recordModelInfo(info)
     activeReporter.addReportLine(activeReporter.log.setModelInfo(info))
+  }
+}
+
+
+/**
+ * Report what the loader actually built, as the structured twin of the
+ * `vertices=… triangles=…` segment setLoadSummary puts on the Total line.
+ * Structured because it is a decision input, not display text: it is the
+ * only signal that separates a noisy load whose model still rendered from
+ * one that finished with an empty scene (classifyLoadOutcome).
+ *
+ * Safe no-op with no active load.
+ *
+ * @param {object} stats {vertexCount, triangleCount}
+ */
+export function reportGeometryStats(stats) {
+  if (activeReporter && !activeReporter.ended) {
+    activeReporter.recordGeometryStats(stats)
   }
 }
 
