@@ -94,10 +94,18 @@ export function cachedGlbHasRenderableGeometry(bytes) {
  */
 function glbJsonHasPositionedPrimitive(json) {
   const meshes = json?.meshes
-  if (!Array.isArray(meshes) || meshes.length === 0) {
+  const accessors = json?.accessors
+  if (!Array.isArray(meshes) || meshes.length === 0 || !Array.isArray(accessors)) {
     return false
   }
   return meshes.some((mesh) =>
     Array.isArray(mesh?.primitives) &&
-    mesh.primitives.some((p) => p?.attributes?.POSITION !== undefined))
+    mesh.primitives.some((p) => {
+      const pos = p?.attributes?.POSITION
+      if (typeof pos !== 'number' || pos < 0) {
+        return false
+      }
+      const count = accessors[pos]?.count
+      return typeof count === 'number' && count > 0
+    }))
 }

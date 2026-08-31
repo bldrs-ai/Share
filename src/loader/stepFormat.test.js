@@ -185,6 +185,12 @@ describe('isConwayIfcFormat', () => {
         `${MAGIC}FILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21\n`))).toBe(true)
     })
 
+    it('does not treat a footer string in DATA as a complete file', () => {
+      expect(looksLikeTruncatedPart21(bytes(
+        `${MAGIC}FILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n` +
+        `#1=IFCLABEL('END-ISO-10303-21; still more');\n`))).toBe(true)
+    })
+
     it('ignores non-part-21 bytes, including empty', () => {
       expect(looksLikeTruncatedPart21(new Uint8Array(0))).toBe(false)
       expect(looksLikeTruncatedPart21(NOT_TEXT)).toBe(false)

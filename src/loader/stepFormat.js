@@ -32,8 +32,10 @@ const PART21_TAIL_SNIFF_BYTES = 256
 
 /**
  * True when `bytes` look like a part-21 file (IFC or STEP) whose DATA
- * section was cut off before `END-ISO-10303-21`. Non-part-21 inputs
- * (GLB, empty, random) return false — this is not a format detector.
+ * section was cut off before a trailing `END-ISO-10303-21;`. The marker
+ * must be the last non-whitespace record, not a substring in DATA.
+ * Non-part-21 inputs (GLB, empty, random) return false — this is not a
+ * format detector.
  *
  * @param {ArrayBuffer|Uint8Array|null|undefined} bytes
  * @return {boolean}
@@ -51,7 +53,7 @@ export function looksLikeTruncatedPart21(bytes) {
     return false
   }
   const tailStart = Math.max(0, u8.byteLength - PART21_TAIL_SNIFF_BYTES)
-  return !containsBytes(u8, tailStart, u8.byteLength, PART21_END)
+  return !endsWithBytesIgnoringTrailingWs(u8, tailStart, u8.byteLength, PART21_END)
 }
 
 
@@ -85,7 +87,7 @@ export async function looksLikeTruncatedPart21Blob(blob) {
     return false
   }
   const tail = new Uint8Array(tailBuf)
-  return !containsBytes(tail, 0, tail.byteLength, PART21_END)
+  return !endsWithBytesIgnoringTrailingWs(tail, 0, tail.byteLength, PART21_END)
 }
 
 
@@ -127,6 +129,46 @@ function containsBytes(haystack, start, end, needle) {
     return true
   }
   return false
+}
+
+
+const WS_SP = 0x20
+const WS_HT = 0x09
+const WS_LF = 0x0a
+const WS_CR = 0x0d
+
+
+/**
+ * True when `haystack[start, end)`, ignoring trailing SP/HT/LF/CR, ends
+ * with `needle`. A DATA string or comment in the tail window that merely
+ * contains the footer must not count as a complete file.
+ *
+ * @param {Uint8Array} haystack
+ * @param {number} start
+ * @param {number} end exclusive
+ * @param {Uint8Array} needle
+ * @return {boolean}
+ */
+function endsWithBytesIgnoringTrailingWs(haystack, start, end, needle) {
+  let i = end - 1
+  while (i >= start) {
+    const c = haystack[i]
+    if (c !== WS_SP && c !== WS_HT && c !== WS_LF && c !== WS_CR) {
+      break
+    }
+    i--
+  }
+  const needleEnd = i + 1
+  const needleStart = needleEnd - needle.byteLength
+  if (needleStart < start) {
+    return false
+  }
+  for (let j = 0; j < needle.byteLength; j++) {
+    if (haystack[needleStart + j] !== needle[j]) {
+      return false
+    }
+  }
+  return true
 }
 
 

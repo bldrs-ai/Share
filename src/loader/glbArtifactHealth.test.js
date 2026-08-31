@@ -64,9 +64,19 @@ describe('glbArtifactHealth', () => {
       expect(cachedGlbHasRenderableGeometry(packed)).toBe(false)
     })
 
-    it('returns true when a primitive names POSITION', () => {
+    it('returns false when POSITION points at a zero-count accessor', () => {
       const packed = packedFromJson({
         asset: {version: '2.0'},
+        accessors: [{count: 0}],
+        meshes: [{primitives: [{attributes: {POSITION: 0}}]}],
+      })
+      expect(cachedGlbHasRenderableGeometry(packed)).toBe(false)
+    })
+
+    it('returns true when POSITION points at an accessor with vertices', () => {
+      const packed = packedFromJson({
+        asset: {version: '2.0'},
+        accessors: [{count: 3}],
         meshes: [{primitives: [{attributes: {POSITION: 0}}]}],
       })
       expect(cachedGlbHasRenderableGeometry(packed)).toBe(true)
@@ -79,6 +89,7 @@ describe('glbArtifactHealth', () => {
     it('inspects inner GLBs as views over the packed buffer, not copies', () => {
       const packed = packedFromJson({
         asset: {version: '2.0'},
+        accessors: [{count: 3}],
         meshes: [{primitives: [{attributes: {POSITION: 0}}]}],
       })
       const {chunks} = viewGlbContainerChunks(packed)
