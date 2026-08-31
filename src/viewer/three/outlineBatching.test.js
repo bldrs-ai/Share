@@ -1,4 +1,4 @@
-import {OutlineEffect} from 'postprocessing'
+import {OutlineEffect, OverrideMaterialManager} from 'postprocessing'
 import {PerspectiveCamera, Scene} from 'three'
 import {injectBatchingChunks, patchOutlineForBatchedMeshes} from './outlineBatching'
 
@@ -62,11 +62,25 @@ describe('viewer/three/outlineBatching', () => {
         .toContain('#include <batching_vertex>')
     })
 
-    it('rebuilds the override-material clones, which are what get drawn', () => {
-      // OverrideMaterialManager clones the material into side / flat-shading
-      // variants up front and binds a clone — never the original — at draw
-      // time. Mutating only the original would leave the shader error exactly
-      // where it was, with a patched material to point at as proof it worked.
+    it('leaves the patched original as what the default path binds', () => {
+      // The premise the module comment rests on: `OverrideMaterialManager
+      // .render` assigns `this.material` — the very object patched in place —
+      // and only reaches for its clones when the static workaround flag is
+      // on, which postprocessing ships off. If an upgrade flips that default,
+      // the clones become load-bearing and this assertion says so.
+      expect(OverrideMaterialManager.workaroundEnabled).toBe(false)
+      const effect = makeEffect()
+      patchOutlineForBatchedMeshes(effect)
+      expect(effect.maskPass.overrideMaterialManager.material.vertexShader)
+        .toContain('#include <batching_vertex>')
+    })
+
+    it('rebuilds the clones the workaroundEnabled path would bind', () => {
+      // These clones are dormant in this codebase — `render()` binds
+      // `this.material` unless the static `OverrideMaterialManager
+      // .workaroundEnabled` is on, and nothing turns it on. Pinning them
+      // patched is what makes the reassignment in the module defensible as
+      // defense-in-depth rather than cargo cult.
       const effect = makeEffect()
       patchOutlineForBatchedMeshes(effect)
       const manager = effect.maskPass.overrideMaterialManager

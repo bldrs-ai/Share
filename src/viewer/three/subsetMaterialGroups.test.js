@@ -115,8 +115,43 @@ describe('viewer/three/subsetMaterialGroups', () => {
       const indexer = makeTriangleMaterialIndexer(
         geomWithGroups([[0, 6, 1], [3, 9, 2]]))
       expect([0, 5].map(indexer)).toEqual([1, 1])
-      // Past the first group's end the second one takes over.
+      // Past the first group's end the clipped remainder of the second takes
+      // over — the overlap [3, 6) belongs to the lower-start group.
       expect([6, 8].map(indexer)).toEqual([2, 2])
+    })
+
+    it('drops a group wholly covered by an earlier, wider one', () => {
+      // Normalisation clips against the highest end seen so far, not the
+      // previous range's end, so a nested group vanishes instead of
+      // reappearing as a hole punched in its container.
+      const indexer = makeTriangleMaterialIndexer(
+        geomWithGroups([[0, 20, 0], [5, 6, 1], [10, 15, 2]]))
+      expect([0, 5, 12, 19].map(indexer)).toEqual([0, 0, 0, 0])
+      expect(indexer(20)).toBe(UNKNOWN_MATERIAL_INDEX)
+    })
+
+    it('resolves an overlapped triangle after a backward query', () => {
+      // Regression: with the overlaps left in the range list, the one-step
+      // rewind stopped as soon as it cleared the narrow inner range [5, 6)
+      // and never walked back to [0, 20), which still covers triangle 7 —
+      // so a query behind the cursor returned the gap sentinel for a
+      // triangle that is plainly inside a group.
+      const indexer = makeTriangleMaterialIndexer(
+        geomWithGroups([[0, 20, 0], [5, 6, 1], [10, 15, 2]]))
+      // Drive the cursor past everything first.
+      expect(indexer(25)).toBe(UNKNOWN_MATERIAL_INDEX)
+      expect(indexer(7)).toBe(0)
+      // And the rewound cursor still answers forward queries.
+      expect(indexer(19)).toBe(0)
+    })
+
+    it('breaks a start tie by array order', () => {
+      // Equal starts have no "lower start" to prefer; the sort is stable, so
+      // the group that came first in `groups` keeps the overlap.
+      const indexer = makeTriangleMaterialIndexer(
+        geomWithGroups([[0, 4, 8], [0, 6, 9]]))
+      expect([0, 3].map(indexer)).toEqual([8, 8])
+      expect([4, 5].map(indexer)).toEqual([9, 9])
     })
 
     it('handles start / count that are not whole triangles', () => {
@@ -139,11 +174,14 @@ describe('viewer/three/subsetMaterialGroups', () => {
 
 
       /**
-       * Wrap the source `groups` so that every indexed read of the internal
-       * `ranges` array the indexer builds from it is counted. The indexer does
-       * `groups.map(...).sort(...)` once and then indexes the result on every
-       * query, so proxying what `map` returns counts exactly the per-query
-       * walk — which is what the "O(1) amortised" claim is about.
+       * Wrap the source `groups` so that every read of a range boundary the
+       * indexer's cursor walk performs is counted. The indexer builds its
+       * internal range objects with one `groups.map(...)` and then reads
+       * `startTri` / `endTri` off them on every query, so proxying the mapped
+       * objects counts exactly the per-query walk — which is what the
+       * "O(1) amortised" claim is about. (Counting index reads of the array
+       * instead would miss it: normalisation copies the surviving ranges into
+       * an array of its own.)
        *
        * @return {{srcGeom: object, reads: {count: number}}}
        */
@@ -160,14 +198,14 @@ describe('viewer/three/subsetMaterialGroups', () => {
         const srcGeom = {
           groups: {
             length: groups.length,
-            map: (fn) => new Proxy(groups.map(fn), {
+            map: (fn) => groups.map(fn).map((range) => new Proxy(range, {
               get(target, prop, receiver) {
-                if (typeof prop === 'string' && /^\d+$/.test(prop)) {
+                if (prop === 'startTri' || prop === 'endTri') {
                   reads.count++
                 }
                 return Reflect.get(target, prop, receiver)
               },
-            }),
+            })),
           },
         }
         return {srcGeom, reads}

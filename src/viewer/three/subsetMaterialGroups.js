@@ -48,11 +48,19 @@ const INDICES_PER_TRIANGLE = 3
  * function keeps a cursor and is O(1) amortised for monotonically
  * non-decreasing queries (the copy-loop access pattern), gaps between
  * groups included; a backward query costs one step per range it walks
- * back over, so out-of-order callers stay correct, just slower.
+ * back over, so out-of-order callers stay correct, just slower — that
+ * holds for every query order, not only the copy loop's.
  *
  * Source groups are neither required to be sorted nor to be disjoint.
- * Where two groups overlap, the one with the lower `start` wins — the
- * cursor stops at the first range whose `endTri` is past `t`.
+ * They are normalised at construction time — sorted by start, then each
+ * range clipped to begin no earlier than the highest end seen so far,
+ * dropping any range that clipping empties. So where ranges overlap the
+ * one with the lower start wins (ties broken by array order), and the
+ * ranges the cursor walks are disjoint and ascending, which is what
+ * makes the one-step rewind below correct rather than merely usually
+ * correct: with overlaps left in place, a rewind that cleared a narrow
+ * inner range would stop there instead of walking back to the wider
+ * range that still covers `t`.
  *
  * @param {object} srcGeom source BufferGeometry
  * @return {?function(number): number} triangle index → material index,
@@ -66,16 +74,33 @@ export function makeTriangleMaterialIndexer(srcGeom) {
   }
   // Copy before sorting: `geometry.groups` is the live array three.js
   // renders from, and the assembler's emission order is load-bearing
-  // elsewhere. Sorting is defensive — the assembler already emits in
-  // ascending order — but a GLB round-trip or a hand-built geometry
-  // need not.
-  const ranges = groups
+  // elsewhere. Sorting and the clipping below are defensive — the
+  // assembler already emits ascending, disjoint groups — but a GLB
+  // round-trip or a hand-built geometry need not.
+  const sorted = groups
     .map((g) => ({
       startTri: g.start / INDICES_PER_TRIANGLE,
       endTri: (g.start + g.count) / INDICES_PER_TRIANGLE,
       materialIndex: g.materialIndex ?? 0,
     }))
     .sort((a, b) => a.startTri - b.startTri)
+  // Clip to disjoint, mutating the copies `map` just made. `coveredTo` is
+  // the highest end reached so far rather than the previous range's end, so
+  // a narrow range nested inside a wider earlier one is dropped outright
+  // instead of resuming after it. O(n), once per subset build, over at most
+  // a few dozen colour bins.
+  const ranges = []
+  let coveredTo = -Infinity
+  for (const range of sorted) {
+    if (coveredTo >= range.endTri) {
+      continue
+    }
+    if (coveredTo > range.startTri) {
+      range.startTri = coveredTo
+    }
+    ranges.push(range)
+    coveredTo = range.endTri
+  }
   let cursor = 0
   return (t) => {
     // Rewind one range at a time rather than resetting to 0. A reset would
@@ -84,7 +109,10 @@ export function makeTriangleMaterialIndexer(srcGeom) {
     // starts), making every triangle in the gap re-walk the whole prefix —
     // O(ranges) per triangle on the copy loop's hot path. Stepping back only
     // while the query is genuinely behind the previous range's end keeps the
-    // amortised O(1) the doc comment above claims, for gaps included.
+    // amortised O(1) the doc comment above claims, for gaps included. The
+    // ranges are disjoint and ascending after normalisation, so stopping at
+    // the first range whose end is at or before `t` cannot skip past a range
+    // that still covers it.
     while (cursor > 0 && t < ranges[cursor - 1].endTri) {
       cursor--
     }

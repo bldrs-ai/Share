@@ -391,14 +391,20 @@ function buildSubsetMesh(sourceGeometry, ids, lookupTriangles, opts) {
       triangles[n++] = list[i]
     }
   }
-  // `total` was sized from a first pass over the same `ids` / `lookupTriangles`
-  // pair, so a second pass that yields fewer triangles leaves the tail of
-  // `triangles` at its zero fill — and triangle 0 is a real triangle, so the
-  // subset would silently render stray geometry from wherever the source
-  // happens to start. Fails loudly instead. Cheap: once per subset, not per
-  // triangle. Today's callers are consistent across the two passes; this
-  // guards a future one that isn't — a single-pass iterable (a generator) for
-  // `ids`, or a `lookupTriangles` whose list depends on call order.
+  // A programmer-error invariant, NOT model validation: `total` was sized from
+  // a first pass over the same `ids` / `lookupTriangles` pair, so the two
+  // passes can only disagree if a caller made them non-deterministic — a
+  // single-pass iterable (a generator) for `ids`, or a `lookupTriangles` whose
+  // list depends on call order. No model, however malformed, reaches here:
+  // both inputs are already-materialised structures the caller built before
+  // the first pass. So `assert` is meant to throw in production too — it is
+  // unreachable for any well-formed caller, and the alternative is silent
+  // corruption. A short second pass leaves the tail of `triangles` at its zero
+  // fill, and triangle 0 is a real triangle, so the subset would render stray
+  // geometry from wherever the source happens to start; a long one drops the
+  // overflow, since out-of-range typed-array writes are silently ignored.
+  // Don't soften this to a warn-and-continue. Cheap: once per subset, not per
+  // triangle.
   assert(n === total,
     `IfcInstanceMap.buildSubsetMesh: counted ${total} triangles, copied ${n}`)
   triangles.sort()

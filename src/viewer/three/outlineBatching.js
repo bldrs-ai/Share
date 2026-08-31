@@ -73,11 +73,19 @@ export function injectBatchingChunks(vertexShader) {
  * Patch an OutlineEffect's mask-pass material so a BatchedMesh in its
  * selection outlines instead of failing to compile. See the module comment.
  *
- * Reassigning `maskPass.overrideMaterial` is load-bearing, not redundant:
- * postprocessing's `OverrideMaterialManager` clones the material into six
- * side/flat-shading variants at construction time, so mutating the original
- * in place would leave every clone — the ones actually bound at draw time —
- * on the unpatched source. The setter calls `setMaterial`, which re-clones.
+ * Mutating `material.vertexShader` in place is what actually fixes the draw:
+ * `OverrideMaterialManager.render` (postprocessing 6.39.1) assigns
+ * `scene.overrideMaterial = this.material` — this same object — in its
+ * default path. Its other path, the one that binds the six cached
+ * side/flat-shading clones instead, runs only when the module-level static
+ * `OverrideMaterialManager.workaroundEnabled` is true; it defaults to false
+ * and nothing in postprocessing or in Share sets it.
+ *
+ * The `maskPass.overrideMaterial` reassignment is kept anyway, as cheap
+ * defense-in-depth: the setter routes to `setMaterial`, which re-clones the
+ * variants off the now-patched source, so the clones can't be stale if
+ * anything ever flips `workaroundEnabled` on. It costs six clones once, at
+ * patch time.
  *
  * @param {object} outlineEffect a postprocessing `OutlineEffect`
  * @return {boolean} whether the material was patched
