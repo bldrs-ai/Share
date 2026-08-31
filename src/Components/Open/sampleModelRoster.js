@@ -45,11 +45,11 @@
 export const SAMPLE_MODELS = [
   {
     name: 'Momentum',
-    path: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-14.466,6.885,26.851,-4.707,0.121,0.769',
+    path: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:4.57678,2.36798,1.32588,11.9655,1.08092,-10.533',
   },
   {
     name: 'Seestrasse',
-    path: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
+    path: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:88.8037,34.956,16.3714,15.477,6.70636,-20.8285',
   },
   {
     name: 'Gear',
@@ -66,7 +66,7 @@ export const SAMPLE_MODELS = [
   {
     name: 'Robot_hand',
     path: '/share/v/gh/bldrs-ai/test-models/main/step/pollen-robotics/AmazingHand/' +
-      'Right_Hand.step#c:-0.105,-0.189,-0.345,0.009,-0.049,-0.091',
+      'Right_Hand.step#c:-0.115965,-0.122326,-0.260421,-0.0107203,-0.049158,-0.0316643',
   },
   {
     name: 'Caffeine',

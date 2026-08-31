@@ -281,8 +281,11 @@ async function main() {
 
   await waitForServer(opts.port)
 
+  // CI pins Chromium at this path; locally Playwright's installed
+  // browser is the one that matches the playwright package.
+  const ciChromium = '/opt/pw-browsers/chromium'
   const browser = await chromium.launch({
-    executablePath: '/opt/pw-browsers/chromium',
+    ...(existsSync(ciChromium) ? {executablePath: ciChromium} : {}),
     args: ['--use-angle=swiftshader'],
   })
   const failures = []
