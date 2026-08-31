@@ -325,6 +325,13 @@ interface BatchedSnapshot {
   parents: number[]
   /** Per-instance source colour (`instanceColors`), same order. */
   colors: number[][]
+  /**
+   * Per-instance colour as it is CURRENTLY in the batch's colour texture —
+   * what the GPU draws. Distinct from `colors`: that is a JS side-array of
+   * originals which `setColorAt` never writes, so it is identical whether or
+   * not a selection / highlight is painted. Only this one can see the paint.
+   */
+  live: number[][]
   /** Is the loaded model itself still a child of the scene? */
   modelInScene: boolean
   /** Isolation subset meshes — must stay 0 on the batched path. */
@@ -377,6 +384,27 @@ function readBatchedSnapshot(page: Page): Promise<BatchedSnapshot> {
     const visible: boolean[] = []
     const parents: number[] = []
     const colors: number[][] = []
+    const live: number[][] = []
+    // `getColorAt` writes into any target exposing three's `Color` reader
+    // surface — duck-typed here so the spec needs no THREE import in page
+    // scope. `fromArray` is the branch taken once a colour texture exists;
+    // `setRGB` is three's white default for a batch that has none.
+    const target = {
+      r: 1, g: 1, b: 1,
+      setRGB(r: number, g: number, b: number) {
+        this.r = r
+        this.g = g
+        this.b = b
+        return this
+      },
+      fromArray(arr: ArrayLike<number>, offset: number) {
+        this.r = arr[offset]
+        this.g = arr[offset + 1]
+        this.b = arr[offset + 2]
+        return this
+      },
+    }
+    const ROUND = 1000
     for (const mesh of meshes) {
       const count = mesh.instanceParents?.length ?? 0
       for (let index = 0; index < count; index++) {
@@ -384,6 +412,8 @@ function readBatchedSnapshot(page: Page): Promise<BatchedSnapshot> {
         parents.push(mesh.instanceParents[index])
         const c = mesh.instanceColors?.[index]
         colors.push(c ? [c.x, c.y, c.z, c.w] : [])
+        mesh.getColorAt(index, target)
+        live.push([target.r, target.g, target.b].map((v) => Math.round(v * ROUND) / ROUND))
       }
     }
     const subset = iso.isolationSubset
@@ -392,6 +422,7 @@ function readBatchedSnapshot(page: Page): Promise<BatchedSnapshot> {
       visible,
       parents,
       colors,
+      live,
       modelInScene: iso.context.getScene().children.includes(model),
       isolationSubsetCount: subset ? (Array.isArray(subset) ? subset.length : 1) : 0,
       tempIsolationModeOn: iso.tempIsolationModeOn,
@@ -413,6 +444,23 @@ function selectedCount(page: Page): Promise<number> {
     const w = window as any
     return (w.store?.getState?.().selectedElements ?? []).length
   })
+}
+
+
+/**
+ * Which instances are currently painted something other than their own colour
+ * — i.e. wearing the selection / preselection highlight. Compares the live
+ * colour texture against a baseline snapshot taken before anything was
+ * selected, so it needs no hardcoded cyan (the selection material's colour is
+ * theme-driven).
+ *
+ * @param snapshot the snapshot to inspect
+ * @param baseline a snapshot taken with nothing selected
+ * @return batchIds whose live colour has moved off the baseline
+ */
+function paintedInstances(snapshot: BatchedSnapshot, baseline: BatchedSnapshot): number[] {
+  return snapshot.live.flatMap((rgb, index) =>
+    (JSON.stringify(rgb) === JSON.stringify(baseline.live[index]) ? [] : [index]))
 }
 
 
@@ -451,6 +499,14 @@ describeMobileAndDesktop('viewer/three/IfcIsolator: isolate on the batched STEP 
     // SynchronizedView.spec.ts's scene-pick test).
     await page.locator('canvas').first().dblclick()
     await expect.poll(() => selectedCount(page)).toBeGreaterThan(0)
+    // Selection on this path is painted onto the live instances
+    // (`applyBatchedSelection` -> `setColorAt`), so wait for the paint to
+    // actually land before snapshotting it.
+    await expect
+      .poll(async () => paintedInstances(await readBatchedSnapshot(page), before).length)
+      .toBeGreaterThan(0)
+    const selected = await readBatchedSnapshot(page)
+    const painted = paintedInstances(selected, before)
 
     // Focus the canvas so `shortcutKeys.js`'s window handler doesn't
     // early-return, then isolate.
@@ -471,17 +527,52 @@ describeMobileAndDesktop('viewer/three/IfcIsolator: isolate on the batched STEP 
     // grey subset would be what renders.
     expect(isolated.modelInScene).toBe(true)
     expect(isolated.isolationSubsetCount).toBe(0)
-    expect(isolated.colors).toEqual(before.colors)
+    // The #1806 claim itself, read off the colour texture the GPU samples:
+    // every instance still drawn shows the colour it had before anything was
+    // selected. Isolate targets the selection, so the isolated instances are
+    // exactly the ones selection had painted cyan (`painted`, non-empty by the
+    // poll above) — leaving that paint on is what made an isolated part read
+    // as cyan rather than as itself.
+    //
+    // Note this cannot be asserted on `colors` (`mesh.instanceColors`): that
+    // is a JS side-array of ORIGINALS which `setColorAt` never writes, so it
+    // is byte-identical with the paint on, with it off, and on the pre-fix
+    // build that shipped the bug.
+    for (const index of painted) {
+      expect(isolated.live[index]).toEqual(before.live[index])
+    }
+    const visiblePainted = painted.filter((index) => isolated.visible[index])
+    expect(visiblePainted.length).toBeGreaterThan(0)
     expect(outlineShaderErrors).toEqual([])
 
-    // Un-isolate: everything comes back, still with its own colours.
+    // Un-isolate: everything comes back, and so does the selection paint —
+    // on exactly the instances that wore it before the isolate.
     await page.keyboard.press('KeyI')
     await expect
       .poll(async () => (await readBatchedSnapshot(page)).visible.every((v) => v))
       .toBe(true)
+    await expect
+      .poll(async () => paintedInstances(await readBatchedSnapshot(page), before))
+      .toEqual(painted)
     const restored = await readBatchedSnapshot(page)
     expect(restored.tempIsolationModeOn).toBe(false)
     expect(restored.modelInScene).toBe(true)
-    expect(restored.colors).toEqual(before.colors)
+    for (const index of painted) {
+      expect(restored.live[index]).toEqual(selected.live[index])
+    }
+
+    // Selecting WHILE isolated must still paint: the clear is a one-shot at
+    // isolate time, not a suppression of selection feedback.
+    await page.keyboard.press('KeyI')
+    await expect
+      .poll(async () => (await readBatchedSnapshot(page)).tempIsolationModeOn)
+      .toBe(true)
+    await page.locator('canvas').first().dblclick()
+    await expect
+      .poll(async () => {
+        const snapshot = await readBatchedSnapshot(page)
+        return paintedInstances(snapshot, before).filter((index) => snapshot.visible[index]).length
+      })
+      .toBeGreaterThan(0)
   })
 })

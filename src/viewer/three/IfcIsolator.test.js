@@ -872,10 +872,14 @@ describe('viewer/three/IfcIsolator', () => {
     let flatMeshToBatchedModel
     let attachBatchedSubsets
     let ResidencyController
+    let applyBatchedSelection
+    let applyBatchedInstanceSelection
     beforeAll(() => {
       flatMeshToBatchedModel = require('../ifc/flatMeshToBatchedModel').flatMeshToBatchedModel
       attachBatchedSubsets = require('../ifc/batchedSubset').attachBatchedSubsets
       ResidencyController = require('../residency/ResidencyController').ResidencyController
+      applyBatchedSelection = require('../ifc/batchedHighlight').applyBatchedSelection
+      applyBatchedInstanceSelection = require('../ifc/batchedHighlight').applyBatchedInstanceSelection
     })
 
     /** Identity 4x4, three.js column-major flat form. */
@@ -1166,6 +1170,185 @@ describe('viewer/three/IfcIsolator', () => {
       // Instance 3 stays evicted: the mask replayed residency's snapshot.
       expect(visibility(mesh)).toEqual([true, true, true, false])
       expect(mesh.userData.isolationMask).toBeUndefined()
+    })
+
+
+    // ------------------------------------------------------------------
+    // Selection paint vs. isolation (Share#1806). On this path the selection
+    // highlight is not an overlay Mesh but cyan written onto the live
+    // instances (`applyBatchedSelection` → `setColorAt`). Every user-reachable
+    // isolate goes through `isolateSelectedElements`, which isolates *the
+    // selection* — so the isolated part is exactly the part wearing cyan, and
+    // without an explicit clear "isolating a part preserves its colour" fails
+    // on its own default flow. `_clearSelectionVisualOnly` is the seam: it was
+    // a no-op for batched models (it only knew the highlighter + Conway
+    // subsets), so hide was blind to this too.
+    // ------------------------------------------------------------------
+
+    /** Cyan `batchedHighlight` paints selection with (its DEFAULT_HIGHLIGHT). */
+    const SELECTION_CYAN = {r: 0, g: 0.8, b: 1}
+
+    /**
+     * Assert one instance's live colour in the batch's colour texture — what
+     * the GPU actually draws, as opposed to `instanceColors`, the JS side-array
+     * of ORIGINAL colours that `setColorAt` never writes (so comparing that
+     * across an isolate can't fail: it is byte-identical either way).
+     *
+     * @param {object} mesh BatchedMesh
+     * @param {number} batchId
+     * @param {object} rgb expected `{r,g,b}` 0..1
+     */
+    function expectColorAt(mesh, batchId, rgb) {
+      const c = colorAt(mesh, batchId)
+      expect([c.r, c.g, c.b].map((v) => Math.round(v * 100) / 100))
+        .toEqual([rgb.r, rgb.g, rgb.b].map((v) => Math.round(v * 100) / 100))
+    }
+
+    /**
+     * Point the mock viewer's selection entry points at the real batched
+     * highlight, as `ShareViewer#setSelection` / `#setInstanceSelection` do on
+     * this path. The restore assertions need it: un-isolate rebuilds the visual
+     * by calling back through the viewer, so a bare `jest.fn()` would record
+     * the call and repaint nothing.
+     *
+     * @param {IfcIsolator} iso
+     * @param {object} mesh BatchedMesh
+     */
+    function wireBatchedSelection(iso, mesh) {
+      iso.viewer.setSelection = jest.fn(
+        (_modelID, ids) => applyBatchedSelection(mesh, ids, SELECTION_CYAN))
+      iso.viewer.setInstanceSelection = jest.fn(
+        (_modelID, ids) => applyBatchedInstanceSelection(mesh, ids, SELECTION_CYAN))
+    }
+
+    /**
+     * Seed the mocked store for one test and restore the module-singleton
+     * mock afterwards (it is shared across this file's suites).
+     *
+     * @param {object} state extra store fields to serve
+     * @param {Function} body the test body
+     */
+    function withStoreState(state, body) {
+      const useStore = require('../../store/useStore').default
+      const orig = useStore.getState.getMockImplementation()
+      useStore.getState.mockImplementation(() => ({elementTypesMap: [], ...state}))
+      try {
+        body()
+      } finally {
+        useStore.getState.mockImplementation(orig)
+      }
+    }
+
+    it('isolate clears the selection paint, so the isolated part shows its own colour (#1806)', () => {
+      const {iso, mesh} = setupBatchedIsolator()
+      // Select product 100 the way ShareViewer does on this path.
+      applyBatchedSelection(mesh, [100], SELECTION_CYAN)
+      // Midpoint — the paint really is on both of 100's occurrences, so the
+      // assertions after the isolate have something to go red against.
+      expectColorAt(mesh, 0, SELECTION_CYAN)
+      expectColorAt(mesh, 1, SELECTION_CYAN)
+
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+      iso.isolateSelectedElements()
+
+      // Both occurrences of the reused product are back to their own red.
+      expectColorAt(mesh, 0, {r: 1, g: 0, b: 0})
+      expectColorAt(mesh, 1, {r: 1, g: 0, b: 0})
+      // The isolate itself still happened (a clear that also broke isolation
+      // would otherwise satisfy the colour assertions).
+      expect(visibility(mesh)).toEqual([true, true, false, false])
+    })
+
+    it('isolate drops only the paint — the logical selection is untouched', () => {
+      const useStore = require('../../store/useStore').default
+      useStore.setState.mockClear()
+      const {iso, mesh} = setupBatchedIsolator()
+      applyBatchedSelection(mesh, [100], SELECTION_CYAN)
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+      // The viewer's own selection cache — read by later picks and by the
+      // permalink — must survive the clear as well.
+      iso.viewer._selectedExpressIds = [100]
+
+      iso.isolateSelectedElements()
+
+      const setStateCalls = useStore.setState.mock.calls.map((c) => c[0])
+      // Isolation state was published (so the scan below isn't over nothing).
+      expect(setStateCalls.some((c) => c && 'isTempIsolationModeOn' in c)).toBe(true)
+      // …and nothing wrote the store-side selection. CadView's
+      // `[selectedElements, selectedInstanceIds]` effect therefore doesn't
+      // re-run and can't repaint over the clear.
+      const selectionWrite = setStateCalls.find(
+        (c) => c && ('selectedElements' in c || 'selectedInstanceIds' in c))
+      expect(selectionWrite).toBeUndefined()
+      expect(iso.viewer._selectedExpressIds).toEqual([100])
+    })
+
+    it('un-isolate repaints the selection cyan from the preserved store state', () => {
+      withStoreState({selectedElements: ['100'], selectedInstanceIds: []}, () => {
+        const {iso, mesh} = setupBatchedIsolator()
+        wireBatchedSelection(iso, mesh)
+        applyBatchedSelection(mesh, [100], SELECTION_CYAN)
+        iso.viewer.getSelectedIds = jest.fn(() => [100])
+
+        iso.isolateSelectedElements()
+        expectColorAt(mesh, 0, {r: 1, g: 0, b: 0}) // midpoint: cleared
+
+        iso.resetTempIsolation()
+
+        // Every occurrence of the selected product is cyan again.
+        expectColorAt(mesh, 0, SELECTION_CYAN)
+        expectColorAt(mesh, 1, SELECTION_CYAN)
+        // Unselected parts were never touched by any of it.
+        expectColorAt(mesh, 2, {r: 0, g: 1, b: 0})
+      })
+    })
+
+    it('un-isolate restores a per-occurrence selection to that occurrence only', () => {
+      // `selectedInstanceIds` narrowing (`applyBatchedInstanceSelection`) is a
+      // second repaint on top of the parent-level one; the rebuild has to run
+      // both or a per-occurrence pick comes back highlighting all six
+      // occurrences of the part.
+      withStoreState({selectedElements: ['100'], selectedInstanceIds: [1]}, () => {
+        const {iso, mesh} = setupBatchedIsolator()
+        wireBatchedSelection(iso, mesh)
+        applyBatchedSelection(mesh, [100], SELECTION_CYAN)
+        applyBatchedInstanceSelection(mesh, [1], SELECTION_CYAN)
+        iso.viewer.getSelectedIds = jest.fn(() => [100])
+
+        iso.isolateSelectedElements()
+        expectColorAt(mesh, 1, {r: 1, g: 0, b: 0}) // midpoint: cleared
+
+        iso.resetTempIsolation()
+
+        expectColorAt(mesh, 1, SELECTION_CYAN)
+        expectColorAt(mesh, 0, {r: 1, g: 0, b: 0}) // sibling occurrence stays red
+      })
+    })
+
+    it('a selection made while isolated still paints cyan', () => {
+      // The clear is one-shot at isolate time, not a suppression: clicking a
+      // part while isolated must still give the normal selection feedback.
+      const {iso, mesh} = setupBatchedIsolator()
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+      iso.isolateSelectedElements()
+      expectColorAt(mesh, 0, {r: 1, g: 0, b: 0})
+
+      applyBatchedSelection(mesh, [100], SELECTION_CYAN)
+
+      expectColorAt(mesh, 0, SELECTION_CYAN)
+    })
+
+    it('hide clears the selection paint too (same seam)', () => {
+      const {iso, mesh} = setupBatchedIsolator()
+      applyBatchedSelection(mesh, [200], SELECTION_CYAN)
+      expectColorAt(mesh, 2, SELECTION_CYAN)
+
+      iso.viewer.getSelectedIds = jest.fn(() => [200])
+      iso.hideSelectedElements()
+
+      // Green again — and masked out, so the hide itself ran.
+      expectColorAt(mesh, 2, {r: 0, g: 1, b: 0})
+      expect(mesh.getVisibleAt(2)).toBe(false)
     })
   })
 

@@ -1,5 +1,6 @@
 import {ShareViewer} from '../ShareViewer'
 import {unsortedArraysAreEqual, arrayRemove} from '../../utils/arrays'
+import {clearBatchedSelection} from '../ifc/batchedHighlight'
 import {eachBatch, isBatchedModel} from '../ifc/batchedModel'
 import {MeshLambertMaterial, DoubleSide, Mesh} from 'three'
 import useStore from '../../store/useStore'
@@ -701,6 +702,15 @@ export default class IfcIsolator {
       // `BotChat` calls this method directly without entering isolation mode
       // (no `tempIsolationModeOn` / `isolatedIds`) — reading the fields would
       // make a bot-driven isolate a no-op.
+      // Drop the selection paint before masking. Isolate normally targets the
+      // *selection*, so the isolated instances are exactly the ones
+      // `applyBatchedSelection` painted cyan — leaving that on would show the
+      // user a cyan part rather than the part's own colour, which is the whole
+      // of Share#1806. Logical selection is untouched (store-side
+      // `selectedElements` / `selectedInstanceIds`), and `resetTempIsolation`
+      // repaints from it via `_rebuildSelectionVisualFromStore`, so a click
+      // made while isolated still highlights normally.
+      this._clearSelectionVisualOnly()
       this._applyBatchedVisibility({isolatedIds: includedIds})
       // No subset Mesh exists to outline. Point the effect at the batch meshes
       // themselves: only the isolated instances are visible on them now, so the
@@ -791,15 +801,18 @@ export default class IfcIsolator {
 
 
   /**
-   * Clear the Conway-direct selection visual (cyan outline + fill
-   * subsets + OutlineEffect selection set) WITHOUT touching the
-   * store-side `selectedElements` / `selectedInstanceIds` or the
-   * viewer's `_selectedExpressIds` cache.
+   * Clear the selection visual (cyan outline + fill subsets +
+   * OutlineEffect selection set on the subset paths; the in-place
+   * `setColorAt` selection paint on the batched path) WITHOUT
+   * touching the store-side `selectedElements` /
+   * `selectedInstanceIds` or the viewer's `_selectedExpressIds`
+   * cache.
    *
-   * Used by hide-paths that preserve selection state for H-toggle
-   * semantics but still want the cyan to disappear so the hide reads
-   * cleanly. The counterpart `_rebuildSelectionVisualFromStore`
-   * resyncs the visual from the (preserved) store state on unhide.
+   * Used by hide- and isolate-paths that preserve selection state for
+   * H- / I-toggle semantics but still want the cyan to disappear so
+   * the operation reads cleanly. The counterpart
+   * `_rebuildSelectionVisualFromStore` resyncs the visual from the
+   * (preserved) store state on unhide / un-isolate.
    *
    * @private
    */
@@ -809,6 +822,14 @@ export default class IfcIsolator {
     }
     if (typeof this.viewer._clearConwaySelectionSubsets === 'function') {
       this.viewer._clearConwaySelectionSubsets()
+    }
+    // Batched path: there is no subset to remove — the selection was painted
+    // onto the live instances (`applyBatchedSelection` → `setColorAt`), so the
+    // only way to take it off is to repaint them from `instanceColors`. Without
+    // this the two calls above are no-ops here and the cyan survives (Share#1806:
+    // an isolated part stayed selection-cyan instead of showing its own colour).
+    if (this._isBatchedModel()) {
+      clearBatchedSelection(this.ifcModel)
     }
   }
 
