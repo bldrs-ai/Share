@@ -32,7 +32,11 @@ import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
  *   - A scene double-click likewise has nothing to hit, so the pick →
  *     NavTree/Properties direction is unit-tested
  *     (`occurrencePaths.test.js` "selects the picked body of a no-NAUO
- *     multibody model") rather than driven through the canvas here.
+ *     multibody model") rather than driven through the canvas here. Same for
+ *     hover, which is a separate path (`Containers/viewer.js` mousemove →
+ *     `ShareViewer#highlightIfcItem`): with nothing under the cursor there is
+ *     no preselection to assert, so it is pinned in `ShareViewer.test.js`
+ *     ("batched hover").
  *
  * Node identity is read through the `data-node-label` / `data-is-selected`
  * hooks on `NavTreeNode`, as in the sibling `navTreeOccurrenceSelection` /

@@ -236,6 +236,26 @@ export function applyBatchedPreselection(model, expressIds, color = DEFAULT_HIGH
 
 
 /**
+ * Narrow the transient preselection (hover) highlight to specific occurrences
+ * (global emission-order occurrence ids off `instanceOccurrenceIds`) — the
+ * hover counterpart of {@link applyBatchedInstanceSelection}.
+ *
+ * Required, not a refinement, wherever one product owns many separately
+ * pickable bodies: the parent-keyed form above paints every instance sharing
+ * the hovered instance's `instanceParents` entry, and a no-NAUO multibody
+ * STEP file has exactly one such parent for the whole model — hovering any
+ * body of BLSN_007 (test-models-private#98) turned the entire hull cyan.
+ *
+ * @param {object} model BatchedMesh or Group
+ * @param {Array<number>|Set<number>} occurrenceIds global occurrence ids
+ * @param {object} [color] `{r,g,b}` 0..1; defaults to cyan
+ */
+export function applyBatchedInstancePreselection(model, occurrenceIds, color = DEFAULT_HIGHLIGHT) {
+  setLayer(model, occurrenceIds, color, 'pre', true)
+}
+
+
+/**
  * Clear the transient preselection highlight.
  *
  * @param {object} model BatchedMesh or Group

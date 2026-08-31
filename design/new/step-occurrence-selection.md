@@ -127,6 +127,23 @@ hands over a key that the existing machinery could already carry):
   already has a tree node. The pair keeps a body's URL canonical; the extra
   segment stays required for pieces that genuinely share their owner's path
   (an anonymous piece, and a pre-#628 solid).
+- **Hover is a separate path from the click funnel**, and had the same bug
+  one layer down. `Containers/viewer.js`'s mousemove (throttled to 30fps)
+  calls `ShareViewer#highlightIfcItem`, whose batched-render branch resolved
+  the hit to its *parent product* (`getPickedItemId` →
+  `instanceParents[batchId]`) and recoloured every instance under it — one
+  product for the whole of BLSN_007, so hovering anything turned the entire
+  hull cyan while the click highlight beneath it was already correct. It now
+  resolves the hovered instance's global occurrence id straight off the hit's
+  `batchId` and paints through `applyBatchedInstancePreselection`, the hover
+  twin of the selection narrowing. Two things this costs nothing: the lookup
+  is a typed-array index plus a memoised `Map` (no traversal per mouse-move),
+  and the repaint only runs when the hovered *instance* changes — which is
+  also why the per-frame dedup key had to stop being the product id, since
+  every body of a no-NAUO product shares one. The merged/cache-hit render
+  path was already per-instance (`_setConwayPreselectionFromHit` builds its
+  subset from the hovered triangle's instance), and models with no occurrence
+  table still hover at product level, which is the right granularity there.
 - **GLB schema bumped `0.18.0 → 0.19.0`.** Path composition is baked into the
   artifact on both sides (`BLDRS_face_ids.occurrencePaths` and the
   `BLDRS_spatial_tree` node paths), so a hit on an artifact baked by a
