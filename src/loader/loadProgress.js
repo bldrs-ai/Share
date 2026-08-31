@@ -803,13 +803,25 @@ function extensionOf(basename) {
  *
  * Seeded from the families seen in triage. Adding one is the intended way to
  * extend the tag; nothing else widens it.
+ *
+ * A false match leaks nothing — the tag carries this table's own canonical
+ * name, never a span of the header — but it does mislabel the load, so the
+ * short and dictionary-word names carry their own context. Four needed it:
+ * `fusion` is a word boundary away from confusion/diffusion/profusion, while
+ * `rhino`, `inventor` and `nx` are whole words in ordinary text ('White Rhino
+ * Tower', 'Inventor: John Smith', 'NX-200'), so those three match only beside
+ * a vendor name or an immediately following numeric version. That still
+ * admits the bare headers seen in the wild ('Rhino 8', 'NX 12.0.2.9') because
+ * a version does follow them. Check any new short name against real prose
+ * with the regex engine before adding it — `\b` alone is not enough for a
+ * name that is also an English word.
  */
 const AUTHORING_TOOL_FAMILIES = [
   {name: 'Autodesk Revit', pattern: /revit/i},
   {name: 'Autodesk Civil 3D', pattern: /civil\s*3d/i},
   {name: 'Autodesk Navisworks', pattern: /navisworks/i},
-  {name: 'Autodesk Inventor', pattern: /inventor/i},
-  {name: 'Autodesk Fusion', pattern: /fusion/i},
+  {name: 'Autodesk Inventor', pattern: /\bautodesk\s+inventor\b|\binventor(?=\s+\d)/i},
+  {name: 'Autodesk Fusion', pattern: /\bfusion\b/i},
   {name: 'Autodesk AutoCAD', pattern: /autocad/i},
   {name: 'Graphisoft ArchiCAD', pattern: /archicad|graphisoft/i},
   {name: 'Tekla Structures', pattern: /tekla/i},
@@ -818,14 +830,14 @@ const AUTHORING_TOOL_FAMILIES = [
   {name: 'Dassault SOLIDWORKS', pattern: /solidworks/i},
   {name: 'Dassault CATIA', pattern: /catia/i},
   {name: 'PTC Creo', pattern: /creo|pro\/engineer/i},
-  {name: 'Siemens NX', pattern: /siemens\s*nx|unigraphics|\bnx\b/i},
+  {name: 'Siemens NX', pattern: /\bsiemens\s+nx\b|\bunigraphics\b|\bnx(?=\s+\d)/i},
   {name: 'KiCad', pattern: /kicad/i},
   {name: 'IfcOpenShell', pattern: /ifcopenshell/i},
   {name: 'Bonsai/BlenderBIM', pattern: /blenderbim|bonsai/i},
   {name: 'Blender', pattern: /blender/i},
   {name: 'DigiPara Liftdesigner', pattern: /liftdesigner|digipara/i},
   {name: 'FreeCAD', pattern: /freecad/i},
-  {name: 'Rhino', pattern: /rhino/i},
+  {name: 'Rhino', pattern: /\brhinoceros\b|\bmcneel\b|\brhino(?=\s+\d)/i},
   {name: 'Nemetschek Allplan', pattern: /allplan/i},
   {name: 'Vectorworks', pattern: /vectorworks/i},
   {name: 'Bentley MicroStation', pattern: /microstation|bentley/i},

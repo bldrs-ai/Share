@@ -669,6 +669,38 @@ describe('loadProgress', () => {
             .toBe('Tekla Structures')
         })
 
+        /*
+         * Round-3 review: four family names are short enough, or ordinary
+         * enough as English, to match prose an exporter happened to write.
+         * Nothing leaks either way — the tag carries the table's canonical
+         * name, never a span of the header — but a mislabelled tool is a
+         * mislabelled tool. These are the reviewer's exact examples.
+         */
+        it.each([
+          ['a word that merely contains a family name', 'confusion in the model geometry'],
+          ['diffusion', 'There was diffusion between the profusion of parts'],
+          ['Rhino as an ordinary noun', 'White Rhino Tower model'],
+          ['Inventor as a role', 'Inventor: John Smith, authored 2019'],
+          ['NX as a part code', 'Complex NX-200 model code'],
+          ['NX as a project name', 'Project NX designation'],
+        ])('does not mistake %s for a family', (_label, originatingSystem) => {
+          expect(tagsForHeader({originatingSystem})).not.toHaveProperty('authoring_tool')
+        })
+
+        // The same four, spelled the way a real header spells them. The bare
+        // 'Rhino 8' / 'NX 12.0.2.9' forms are admitted by the version that
+        // follows the name, which is exactly what the prose above lacks.
+        it.each([
+          ['Autodesk Fusion 360', 'Autodesk Fusion 360'],
+          ['Rhino 8', 'Rhino 8'],
+          ['Rhinoceros 7.4', 'Rhino 7.4'],
+          ['Autodesk Inventor 2024', 'Autodesk Inventor 2024'],
+          ['Siemens NX 2306', 'Siemens NX 2306'],
+          ['NX 12.0.2.9', 'Siemens NX 12.0.2.9'],
+        ])('still places the real header %s', (originatingSystem, expected) => {
+          expect(tagsForHeader({originatingSystem}).authoring_tool).toBe(expected)
+        })
+
         // The table is ordered most-specific-first, which is the only thing
         // keeping these two off the more generic family that also matches.
         it('prefers the more specific family when a header names both', () => {
