@@ -1,5 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {BufferGeometry} from 'three'
+import {disableDebug, INFO, setDebugLevel} from '../../utils/debug'
 import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 
 
@@ -167,6 +168,50 @@ describe('viewer/ifc/flatMeshToBufferGeometry', () => {
     const {geometry, coordinationOffset} = flatMeshToBufferGeometry(flatMeshes, api, 0)
     expect(coordinationOffset).toBeNull()
     expect(geometry.getAttribute('position').getX(0)).toBeCloseTo(7)
+  })
+
+  it('logs the recenter once per load, and never for a near-origin model (Share#1632)', () => {
+    // The retrospective (Share#1632, root cause conway#680) found the
+    // recenter used to fire completely silently -- this pins the fix.
+    // Tests run with the debug util disabled (setupTests.js); raise it just
+    // for this assertion so the log actually reaches console.
+    setDebugLevel(INFO)
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const api = wireGeomFetch(makeApi({
+        999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+      }))
+      const flatMeshes = [{
+        expressID: 100,
+        geometries: {
+          size: () => 2,
+          // Two placements: the offset (and its log) is decided once, from
+          // the first, not once per placement in the load.
+          get: (i) => ({
+            geometryExpressID: 999,
+            flatTransformation: i === 0 ?
+              translation(2000000, 5, -8000000) : translation(2000010, 5, -8000020),
+          }),
+        },
+      }]
+      flatMeshToBufferGeometry(flatMeshes, api, 0)
+      const georefLogs = logSpy.mock.calls.filter(([msg]) => /georeferenced model/.test(msg))
+      expect(georefLogs).toHaveLength(1)
+      expect(georefLogs[0][0]).toEqual(
+        'georeferenced model: recentering by [2000000, 5, -8000000] m (see Share#1632)')
+
+      logSpy.mockClear()
+      const nearApi = wireGeomFetch(makeApi({
+        999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+      }))
+      flatMeshToBufferGeometry(
+        [{expressID: 100, geometries: {size: () => 1, get: () => ({geometryExpressID: 999, flatTransformation: translation(7, 2, -3)})}}],
+        nearApi, 0)
+      expect(logSpy).not.toHaveBeenCalled()
+    } finally {
+      logSpy.mockRestore()
+      disableDebug()
+    }
   })
 
   it('carries each PlacedGeometry.occurrencePath onto its range (STEP)', () => {

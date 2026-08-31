@@ -6,6 +6,7 @@ import {
   Matrix4,
   Vector4,
 } from 'three'
+import debug, {INFO} from '../../utils/debug'
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
 
@@ -330,6 +331,34 @@ export function coordinationOffsetFor(flatTransformation) {
 
 
 /**
+ * `coordinationOffsetFor` plus the one-time load-log line the Share#1632
+ * retrospective asked for: the recenter used to fire completely silently,
+ * including on the broken-engine stream (conway#680) whose vertex buffers
+ * ALSO carried the offset, which baked the model ~2.9e6 m off-origin with
+ * nothing in the log to explain it. Route the decision through here instead
+ * of calling `coordinationOffsetFor` directly so a georeferenced model always
+ * leaves a trace.
+ *
+ * Every caller below decides the offset from `undefined` exactly once per
+ * load (`IncrementalBatchedBuilder#appendPlacement_`'s
+ * `this.coordination.offset`, `collectGroups`'s `totals.coordOffset`,
+ * `flatMeshToBufferGeometry`'s single top-level call on `entries[0]`) — so
+ * this logs once per load too. `coordinationOffsetFor` itself stays pure and
+ * unlogged, in case a future caller ever needs to probe it per-placement.
+ *
+ * @param {Array<number>} flatTransformation 16-element column-major matrix
+ * @return {?Array<number>} same as `coordinationOffsetFor`
+ */
+export function decideCoordinationOffset(flatTransformation) {
+  const offset = coordinationOffsetFor(flatTransformation)
+  if (offset !== null) {
+    debug(INFO).log(`georeferenced model: recentering by [${offset.join(', ')}] m (see Share#1632)`)
+  }
+  return offset
+}
+
+
+/**
  * @typedef {object} BatchHandle
  * @property {BatchedMesh} mesh the batch (one geometry per unique shape it
  *   uses, one instance per placement).
@@ -490,7 +519,7 @@ function collectGroups(flatMeshes, api, modelID) {
         return
       }
       if (totals.coordOffset === undefined) {
-        totals.coordOffset = coordinationOffsetFor(placed.flatTransformation)
+        totals.coordOffset = decideCoordinationOffset(placed.flatTransformation)
       }
       group.placements.push({
         matrix: placed.flatTransformation,

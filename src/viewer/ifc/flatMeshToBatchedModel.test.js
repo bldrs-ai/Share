@@ -1,5 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {BatchedMesh, Matrix4} from 'three'
+import {disableDebug, INFO, setDebugLevel} from '../../utils/debug'
 import {CoincidenceSet, DEFAULT_COLOR, flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 
 
@@ -213,6 +214,44 @@ describe('viewer/ifc/flatMeshToBatchedModel', () => {
     batches[0].mesh.getMatrixAt(0, m)
     expect(m.elements[12]).toBeCloseTo(12)
     expect(m.elements[14]).toBeCloseTo(-45)
+  })
+
+  it('logs the recenter once per load, and never for a near-origin model (Share#1632)', () => {
+    // The retrospective (Share#1632, root cause conway#680) found the
+    // recenter used to fire completely silently -- this pins the fix.
+    // Tests run with the debug util disabled (setupTests.js); raise it just
+    // for this assertion so the log actually reaches console.
+    setDebugLevel(INFO)
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      // Two DISTINCT far placements (different translation) so both survive
+      // the coincident-duplicate guard and the offset-decided-once guard is
+      // the only thing standing between one log line and two.
+      const flatMeshes = [{
+        expressID: 100,
+        geometries: [
+          {geometryExpressID: 999, flatTransformation:
+            [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2000000, 5, -8000000, 1], color: OPAQUE},
+          {geometryExpressID: 999, flatTransformation:
+            [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2000010, 5, -8000020, 1], color: OPAQUE},
+        ],
+      }]
+      flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0)
+      const georefLogs = logSpy.mock.calls.filter(([msg]) => /georeferenced model/.test(msg))
+      expect(georefLogs).toHaveLength(1)
+      expect(georefLogs[0][0]).toEqual(
+        'georeferenced model: recentering by [2000000, 5, -8000000] m (see Share#1632)')
+
+      logSpy.mockClear()
+      const near = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 12, 3, -45, 1]
+      flatMeshToBatchedModel(
+        [{expressID: 100, geometries: [{geometryExpressID: 999, flatTransformation: near, color: OPAQUE}]}],
+        unitTriApi(), 0)
+      expect(logSpy).not.toHaveBeenCalled()
+    } finally {
+      logSpy.mockRestore()
+      disableDebug()
+    }
   })
 
   it('skips FlatMeshes without an expressID', () => {

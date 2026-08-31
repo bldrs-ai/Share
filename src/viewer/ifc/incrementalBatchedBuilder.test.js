@@ -1,5 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {BatchedMesh, Matrix4} from 'three'
+import {disableDebug, INFO, setDebugLevel} from '../../utils/debug'
 import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 import {payloadToPreviewMesh} from './parsePreviewMesh'
@@ -225,6 +226,40 @@ describe('IncrementalBatchedBuilder', () => {
     batches[0].mesh.getMatrixAt(1, m) // second instance recentered by the same offset
     expect(m.elements[12]).toBeCloseTo(10)
     expect(m.elements[14]).toBeCloseTo(-20)
+  })
+
+  it('logs the recenter once across batches, and never for a near-origin model (Share#1632)', () => {
+    // The retrospective (Share#1632, root cause conway#680) found the
+    // recenter used to fire completely silently -- this pins the fix.
+    // Tests run with the debug util disabled (setupTests.js); raise it just
+    // for this assertion so the log actually reaches console.
+    setDebugLevel(INFO)
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const far = (tx, ty, tz) => ({
+        expressID: 1,
+        geometries: [{geometryExpressID: 999, flatTransformation:
+          [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tx, ty, tz, 1], color: OPAQUE}],
+      })
+      const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+      builder.appendBatch([far(2000000, 5, -8000000)]) // decides + logs the offset
+      builder.appendBatch([far(2000010, 5, -8000020)]) // later batch: no second log
+      builder.finalize()
+
+      const georefLogs = logSpy.mock.calls.filter(([msg]) => /georeferenced model/.test(msg))
+      expect(georefLogs).toHaveLength(1)
+      expect(georefLogs[0][0]).toEqual(
+        'georeferenced model: recentering by [2000000, 5, -8000000] m (see Share#1632)')
+
+      logSpy.mockClear()
+      const nearBuilder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+      nearBuilder.appendBatch([flatMesh(1, [{geomExpressID: 999, color: OPAQUE}])])
+      nearBuilder.finalize()
+      expect(logSpy).not.toHaveBeenCalled()
+    } finally {
+      logSpy.mockRestore()
+      disableDebug()
+    }
   })
 
   it('leaves a near-origin model untouched (no offset stamped)', () => {

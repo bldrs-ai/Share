@@ -8,7 +8,7 @@ import {
   INDICES_PER_TRIANGLE,
   OPAQUE_ALPHA,
   VERT_STRIDE,
-  coordinationOffsetFor,
+  decideCoordinationOffset,
   localGeometry,
 } from './flatMeshToBatchedModel'
 
@@ -331,10 +331,11 @@ export class IncrementalBatchedBuilder {
     // Decide the model-wide origin-recenter offset from the first placement
     // that actually appends, then subtract it from every instance so a
     // georeferenced model renders at the origin (float32-precise) instead of
-    // at ~1e7 m. See coordinationOffsetFor. Stamped on the root for consumers
-    // that need to map a rendered point back to true world coordinates.
+    // at ~1e7 m. See decideCoordinationOffset (also logs the decision once,
+    // Share#1632). Stamped on the root for consumers that need to map a
+    // rendered point back to true world coordinates.
     if (this.coordination.offset === undefined) {
-      this.coordination.offset = coordinationOffsetFor(matrix.elements)
+      this.coordination.offset = decideCoordinationOffset(matrix.elements)
     }
     if (this.coordination.offset !== null) {
       this.root.userData.coordinationOffset = this.coordination.offset
