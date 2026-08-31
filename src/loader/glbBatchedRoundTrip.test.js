@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import {BufferAttribute, BufferGeometry, Matrix4} from 'three'
+import {BatchedMesh, BufferAttribute, BufferGeometry, Matrix4} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
 import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
@@ -57,32 +57,33 @@ function triangleGeometry() {
  * @return {object} model double
  */
 function liveBatchedModel() {
-  const shared = triangleGeometry()
-  const other = triangleGeometry()
+  // A REAL BatchedMesh: since Share#1810 the writer reads each shape back out
+  // of the batch buffers rather than from a retained per-instance table, so
+  // the geometry has to actually be in the batch.
+  const mesh = new BatchedMesh(3, 6, 6)
+  const sharedId = mesh.addGeometry(triangleGeometry())
+  const otherId = mesh.addGeometry(triangleGeometry())
   const matrices = [
     new Matrix4().makeTranslation(1, 0, 0),
     new Matrix4().makeTranslation(2, 0, 0),
     new Matrix4().makeTranslation(0, 3, 0),
   ]
-  return {
-    isBatchedMesh: true,
-    instanceGeometry: [shared, shared, other],
-    instanceParents: [11, 12, 20],
-    instanceOccurrenceIds: [0, 1, 2],
-    instanceGeometryIds: [500, 500, 600],
-    instanceOccurrencePaths: [[3, 7], [3, 8], [4]],
-    instanceSourceColors: [{...GREY}, {...GREY}, {...GREY}],
-    // What the live scene shows after the palette ran — must NOT be what
-    // gets baked.
-    instanceColors: [
-      {x: 0.306, y: 0.475, z: 0.655, w: 1},
-      {x: 0.306, y: 0.475, z: 0.655, w: 1},
-      {x: 0.949, y: 0.557, z: 0.169, w: 1},
-    ],
-    getMatrixAt(i, m) {
-      m.copy(matrices[i])
-    },
+  for (const [i, geometryId] of [sharedId, sharedId, otherId].entries()) {
+    mesh.setMatrixAt(mesh.addInstance(geometryId), matrices[i])
   }
+  mesh.instanceParents = [11, 12, 20]
+  mesh.instanceOccurrenceIds = [0, 1, 2]
+  mesh.instanceGeometryIds = [500, 500, 600]
+  mesh.instanceOccurrencePaths = [[3, 7], [3, 8], [4]]
+  mesh.instanceSourceColors = [{...GREY}, {...GREY}, {...GREY}]
+  // What the live scene shows after the palette ran — must NOT be what
+  // gets baked.
+  mesh.instanceColors = [
+    {x: 0.306, y: 0.475, z: 0.655, w: 1},
+    {x: 0.306, y: 0.475, z: 0.655, w: 1},
+    {x: 0.949, y: 0.557, z: 0.169, w: 1},
+  ]
+  return mesh
 }
 
 

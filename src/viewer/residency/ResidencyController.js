@@ -1,4 +1,8 @@
-import {Matrix4, Vector3} from 'three'
+import {Matrix4, Sphere, Vector3} from 'three'
+import {
+  hasBatchedGeometry,
+  instanceGeometryRangeAt,
+} from '../ifc/batchedInstanceGeometry'
 
 
 /** Guard against division by zero when the eye sits on an instance. */
@@ -28,9 +32,14 @@ export const ResidencyMetric = Object.freeze({
  * true tile release when the pool integration lands (slice C).
  *
  * The controller walks the model for BatchedMesh children carrying the
- * batched pick tables (`instanceParents`, `instanceGeometry`) and
- * precomputes per-instance centers/radii/amortized-bytes once; metric
- * evaluation is a flat array pass, cheap enough to run per slider tick.
+ * batched pick tables (`instanceParents`) and precomputes per-instance
+ * centers/radii/amortized-bytes once; metric evaluation is a flat array
+ * pass, cheap enough to run per slider tick.
+ *
+ * Per-shape bounds and vertex counts come from the batch itself
+ * (`getBoundingSphereAt` / `getGeometryRangeAt`), not from a retained table
+ * of the source geometries — Share#1810 dropped that table, and this
+ * precompute never needed the vertex data, only two numbers per shape.
  */
 export class ResidencyController {
   /**
@@ -58,33 +67,46 @@ export class ResidencyController {
       }
     })
     const BYTES_PER_VERTEX = 32
+    const scratchRange = {}
+    const scratchSphere = new Sphere()
     for (const mesh of meshes) {
-      const geometries = mesh.instanceGeometry
-      if (!geometries || typeof mesh.setVisibleAt !== 'function') {
+      if (!hasBatchedGeometry(mesh) || typeof mesh.setVisibleAt !== 'function' ||
+          typeof mesh.getBoundingSphereAt !== 'function') {
         continue
       }
-      // Amortize each geometry's bytes over its instance count so a
-      // heavily shared shape is cheap per instance.
+      // `instanceParents` sizes the walk now that there is no per-instance
+      // geometry table to iterate; it is the same length by construction
+      // (both builders push one entry per appended instance).
+      const instanceCount = mesh.instanceParents?.length ?? 0
+      // Amortize each shape's bytes over its instance count so a heavily
+      // shared shape is cheap per instance. Keyed by the batch's own
+      // geometry id, which is what "the same shape" means within one mesh —
+      // exactly the grouping the retained geometry objects gave by
+      // reference identity.
       const geometryUses = new Map()
-      for (const geometry of geometries) {
-        geometryUses.set(geometry, (geometryUses.get(geometry) ?? 0) + 1)
-      }
-      for (let index = 0; index < geometries.length; index++) {
-        const geometry = geometries[index]
-        if (!geometry) {
+      for (let index = 0; index < instanceCount; index++) {
+        const range = instanceGeometryRangeAt(mesh, index, scratchRange)
+        if (range === null) {
           continue
         }
-        if (!geometry.boundingSphere) {
-          geometry.computeBoundingSphere()
+        geometryUses.set(range.geometryId, (geometryUses.get(range.geometryId) ?? 0) + 1)
+      }
+      for (let index = 0; index < instanceCount; index++) {
+        const range = instanceGeometryRangeAt(mesh, index, scratchRange)
+        // three computes (and caches on the batch) a per-geometry sphere
+        // over the shape's own index range. It is the source geometry's
+        // sphere for every shape whose vertices are all referenced — which
+        // is every shape Conway emits; a shape with orphan vertices gets
+        // the tighter, more correct sphere here rather than the source's.
+        if (range === null || !mesh.getBoundingSphereAt(range.geometryId, scratchSphere)) {
+          continue
         }
-        const sphere = geometry.boundingSphere
         mesh.getMatrixAt(index, scratchMatrix)
-        const center = new Vector3().copy(sphere.center).applyMatrix4(scratchMatrix)
+        const center = new Vector3().copy(scratchSphere.center).applyMatrix4(scratchMatrix)
         const scale = new Vector3().setFromMatrixScale(scratchMatrix)
-        const radius = sphere.radius * Math.max(scale.x, scale.y, scale.z)
-        const vertexCount = geometry.getAttribute('position')?.count ?? 0
-        const bytes =
-          (vertexCount * BYTES_PER_VERTEX) / (geometryUses.get(geometry) ?? 1)
+        const radius = scratchSphere.radius * Math.max(scale.x, scale.y, scale.z)
+        const bytes = (range.vertexCount * BYTES_PER_VERTEX) /
+          (geometryUses.get(range.geometryId) ?? 1)
         this.instances.push({
           mesh, index, center, radius, bytes,
           expressID: mesh.instanceParents?.[index],

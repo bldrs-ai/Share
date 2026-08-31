@@ -441,7 +441,11 @@ export function decideCoordinationOffset(flatTransformation, loadState = undefin
 /**
  * @typedef {object} BatchHandle
  * @property {BatchedMesh} mesh the batch (one geometry per unique shape it
- *   uses, one instance per placement).
+ *   uses, one instance per placement). It is also the ONLY copy of the
+ *   shape data: a consumer that needs one instance's local geometry back
+ *   reads it out of these buffers (`batchedInstanceGeometry`) rather than
+ *   from a retained per-instance table, which cost 171.5 MB on a 231 MB
+ *   model (Share#1810).
  * @property {import('three').Material} material the batch material.
  * @property {boolean} transparent whether this is the blended batch.
  * @property {Uint32Array} instanceParents `batchId → parent IFC product
@@ -457,10 +461,6 @@ export function decideCoordinationOffset(flatTransformation, loadState = undefin
  *   `PlacedGeometry.occurrencePath`. Null (whole table) for IFC / engines
  *   that don't emit paths, so nothing downstream pays; per-entry null when
  *   a single placement has no path.
- * @property {Array<BufferGeometry>} instanceGeometry `batchId → the shared
- *   local-space shape geometry` this instance was added from. Retained so
- *   `batchedSubset` can re-bake a selection/isolation subset (the packed
- *   batch buffers aren't conveniently re-readable per instance).
  * @property {Array<object>} instanceColors `batchId → original `{x,y,z,w}`
  *   RGBA`. Retained so `batchedHighlight` can recolor a selected instance
  *   via `setColorAt` and restore the exact original afterwards (alpha
@@ -676,7 +676,6 @@ function buildBatch(groups, transparent, coordOffset) {
   const instanceGeometryIds = new Uint32Array(instanceCount)
   const instanceOccurrencePaths = new Array(instanceCount)
   let hasOccurrencePaths = false
-  const instanceGeometry = new Array(instanceCount)
   const instanceColors = new Array(instanceCount)
   const matrix = new Matrix4()
   const rgba = new Vector4()
@@ -704,13 +703,12 @@ function buildBatch(groups, transparent, coordOffset) {
       if (placement.occurrencePath) {
         hasOccurrencePaths = true
       }
-      instanceGeometry[batchId] = group.geometry
       instanceColors[batchId] = placement.color
     }
   }
   return {
     mesh, material, transparent,
-    instanceParents, instanceOccurrenceIds, instanceGeometry, instanceColors,
+    instanceParents, instanceOccurrenceIds, instanceColors,
     instanceGeometryIds,
     // Null (not an all-null array) for IFC so consumers can cheaply skip
     // occurrence lookups — mirrors the merged path's IfcInstanceMap.

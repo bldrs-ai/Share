@@ -74,7 +74,6 @@ function batchedModel(flatMeshes) {
   for (const batch of batches) {
     batch.mesh.instanceParents = batch.instanceParents
     batch.mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
-    batch.mesh.instanceGeometry = batch.instanceGeometry
     batch.mesh.instanceColors = batch.instanceColors
     // STEP per-occurrence side tables, wired exactly as buildBatchedConwayModel
     // does — the source batchedModelOccurrenceTables re-keys for the cache.

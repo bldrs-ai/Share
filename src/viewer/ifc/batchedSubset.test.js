@@ -75,7 +75,6 @@ function decoratedBatch() {
   const batch = batches[0]
   batch.mesh.instanceParents = batch.instanceParents
   batch.mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
-  batch.mesh.instanceGeometry = batch.instanceGeometry
   return batch.mesh
 }
 

@@ -128,7 +128,6 @@ function buildPartition(pairs, transparent) {
   const instanceOccurrenceIds = new Uint32Array(instanceCount)
   const instanceGeometryIds = new Uint32Array(instanceCount)
   const instanceOccurrencePaths = new Array(instanceCount)
-  const instanceGeometry = new Array(instanceCount)
   const instanceColors = new Array(instanceCount)
   let hasOccurrencePaths = false
   let hasGeometryIds = false
@@ -159,7 +158,6 @@ function buildPartition(pairs, transparent) {
       if (Array.isArray(path)) {
         hasOccurrencePaths = true
       }
-      instanceGeometry[batchId] = node.geometry
       // Fresh objects per instance: these become the live `instanceColors`
       // AND (via decorateBatchMeshes' snapshot) the source table — sharing
       // one object per node would let a later per-instance write alias.
@@ -169,7 +167,7 @@ function buildPartition(pairs, transparent) {
 
   return {
     mesh, material, transparent,
-    instanceParents, instanceOccurrenceIds, instanceGeometry, instanceColors,
+    instanceParents, instanceOccurrenceIds, instanceColors,
     // Null (not zero-filled) when the artifact carried none, so the palette
     // keys fall back to parents exactly as on a table-less live build.
     instanceGeometryIds: hasGeometryIds ? instanceGeometryIds : null,

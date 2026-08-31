@@ -785,7 +785,11 @@ Three settled conclusions:
   - *Isolate / hide (`src/viewer/ifc/batchedSubset.js`).* `IfcIsolator`
     drives the batched model unchanged through a `createSubset` /
     `removeSubset` surface that re-bakes the kept instances (`getMatrixAt` +
-    the retained `instanceGeometry`) into world-aligned subset Meshes
+    the shape read back out of the batch's own buffers,
+    `src/viewer/ifc/batchedInstanceGeometry.js` — the retained
+    `instanceGeometry` table it used to bake from was a full duplicate of the
+    batch, 171.5 MB on a 231 MB model, dropped in Share#1810) into
+    world-aligned subset Meshes
     carrying a synthetic per-vertex `expressID` (so the isolated subset
     stays pickable). `visualElementsIds` is unioned from `instanceParents`.
   - *BVH picking.* `three-mesh-bvh` accelerated raycast validated on

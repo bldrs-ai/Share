@@ -468,7 +468,7 @@ describe('IncrementalBatchedBuilder', () => {
     expect(batch.mesh.instanceCount).toBe(stats.instanceCount)
     expect(builder.opaque.cursor).toBe(stats.instanceCount)
     for (const table of [batch.instanceParents, batch.instanceOccurrenceIds,
-      batch.instanceGeometryIds, batch.instanceGeometry, batch.instanceColors]) {
+      batch.instanceGeometryIds, batch.instanceColors]) {
       expect(table).toHaveLength(stats.instanceCount)
     }
     // ...and row i really describes instance i: parent 2's translated

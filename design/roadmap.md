@@ -287,7 +287,7 @@ multi-worker; etc.*
   narrowing on the batched path; `EXT_mesh_gpu_instancing` batched-native GLB cache
   (§3b.v) so the round-trip stays instanced and the artifact shrinks.
 - Open: **residency backends** — the B2 slider is gated on the batched path
-  (`isBatchedMesh` + `instanceGeometry`), so it's invisible for GLB, OBJ and
+  (`isBatchedMesh` + readable batch buffers), so it's invisible for GLB, OBJ and
   friends. Extract a backend interface and add a scene-graph backend
   (`Object3D.visible`) plus a merged backend (index compaction over
   `IfcInstanceMap`'s per-instance triangle ranges) so the cached GLB re-load of

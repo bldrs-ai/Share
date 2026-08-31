@@ -6,6 +6,7 @@ import {
   Mesh,
   Vector3,
 } from 'three'
+import {hasBatchedGeometry, makeInstanceGeometryReader} from './batchedInstanceGeometry'
 import {eachBatch} from './batchedModel'
 
 
@@ -24,6 +25,12 @@ import {eachBatch} from './batchedModel'
  * (`getMatrixAt`) into a fresh world-aligned `BufferGeometry` — the same
  * end product (a plain `Mesh` the OutlineEffect / picker understands) by a
  * different route.
+ *
+ * That local geometry is read back out of the batch's own buffers
+ * (`batchedInstanceGeometry`) rather than from a retained per-instance
+ * table of the source geometries: the batch already holds every byte, and
+ * keeping the second copy alive for the occasional isolate cost 171.5 MB on
+ * a 231 MB model (Share#1810).
  *
  * The reconstructed geometry also carries a synthetic per-vertex
  * `expressID` attribute (every vertex of instance *i* tagged with its
@@ -58,8 +65,7 @@ const VEC3 = 3
  * Returns `null` when the mesh isn't a decorated BatchedMesh or no
  * instance matches — callers treat null as "nothing to highlight here".
  *
- * @param {object} mesh a THREE.BatchedMesh carrying `instanceParents` +
- *   `instanceGeometry`
+ * @param {object} mesh a THREE.BatchedMesh carrying `instanceParents`
  * @param {Set<number>} idSet parent IFC product expressIDs to keep
  * @param {object} [opts]
  * @param {object} [opts.material] subset material (defaults to the batch's)
@@ -71,11 +77,16 @@ const VEC3 = 3
  * @return {Mesh|null}
  */
 export function buildBatchedSubsetMesh(mesh, idSet, opts = {}) {
-  if (!mesh || !mesh.isBatchedMesh || !mesh.instanceParents || !mesh.instanceGeometry) {
+  if (!mesh || !mesh.instanceParents || !hasBatchedGeometry(mesh)) {
     return null
   }
   const parents = mesh.instanceParents
-  const geometries = mesh.instanceGeometry
+  // Source geometry comes back out of the batch's own buffers, ONE copy per
+  // selected shape, and is released with this reader when the bake returns —
+  // the model no longer carries a second copy for the rest of its life
+  // (Share#1810). Reading each selected instance twice (sizing pass, then
+  // bake) is why the reader memoises rather than rebuilding per call.
+  const geometryAt = makeInstanceGeometryReader()
   const occurrenceIds = mesh.instanceOccurrenceIds
   const exclude = (opts.excludeInstances && opts.excludeInstances.size > 0 && occurrenceIds) ?
     opts.excludeInstances : null
@@ -90,7 +101,7 @@ export function buildBatchedSubsetMesh(mesh, idSet, opts = {}) {
     if (exclude !== null && exclude.has(occurrenceIds[batchId])) {
       continue
     }
-    const geom = geometries[batchId]
+    const geom = geometryAt(mesh, batchId)
     const pos = geom?.attributes?.position
     const idx = geom?.index
     if (!pos || !idx) {
@@ -118,7 +129,7 @@ export function buildBatchedSubsetMesh(mesh, idSet, opts = {}) {
   let iOff = 0
 
   for (const batchId of selected) {
-    const geom = geometries[batchId]
+    const geom = geometryAt(mesh, batchId)
     const pos = geom.attributes.position
     const nrm = geom.attributes.normal
     const idx = geom.index
