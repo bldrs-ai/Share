@@ -20,14 +20,18 @@
  * it (`BLDRS_GLB_BATCHED_SCHEMA_VERSION` below) — deliberately, since that
  * is the slot most users actually read. Nothing extra to do here; the note
  * exists so the coupling is visible from where the bump gets written.
- * 0.21.0 — retires artifacts baked before the engine's applied coordination
- *         frame was carried across the cache. The writer now stamps
- *         `scenes[0].extras.appliedCoordination` — conway#702's
+ * 0.21.0 — retires artifacts baked before the render-frame mapping was
+ *         carried across the cache. The writer now stamps BOTH halves into
+ *         `scenes[0].extras` beside the existing `bldrsTitle`:
+ *         `appliedCoordination` (conway#702's
  *         `GetAppliedCoordinationMatrix`, the frame the engine composed into
- *         every placement it emitted — beside the existing `bldrsTitle`, and
- *         GLTFLoader auto-promotes it onto `scene.userData` so a cache hit
- *         presents the same surface as a fresh parse (Share#1633 item 1,
- *         Share#1634). Additive to the format, so this bump is not about
+ *         every placement it emitted) and `coordinationOffset` (Share's own
+ *         backstop recentre, which the degraded path bakes into the exported
+ *         geometry). GLTFLoader auto-promotes both onto `scene.userData`, so
+ *         a cache hit presents the same surface as a fresh parse (Share#1633
+ *         item 1, Share#1634). They travel together by necessity: an artifact
+ *         carrying only the frame reads back displaced by exactly the offset
+ *         its documented inverse then fails to add. Additive to the format, so this bump is not about
  *         readability: 0.20.0 artifacts parse fine, they just carry NO frame,
  *         and a georeferenced model that reads one back would silently keep
  *         the very gap this closes — no way for a consumer to map a rendered

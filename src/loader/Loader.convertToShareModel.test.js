@@ -8,7 +8,10 @@
 import {BufferAttribute, BufferGeometry, Mesh, Scene} from 'three'
 import {__sanitizeCachedTitleForTest, convertToShareModel} from './Loader'
 import {encodeElementProperties, makeElementPropertiesPayload} from './bldrsElementProperties'
-import {APPLIED_COORDINATION_KEY} from '../viewer/ifc/appliedCoordination'
+import {
+  APPLIED_COORDINATION_KEY,
+  COORDINATION_OFFSET_KEY,
+} from '../viewer/ifc/appliedCoordination'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
 import {attachElementSubsets} from '../viewer/three/elementSubsets'
 
@@ -765,5 +768,82 @@ describe('Loader/convertToShareModel — cached coordination frame (Share#1633 i
     const mesh = new Mesh(new BufferGeometry())
     convertToShareModel(mesh, makeViewerStub(), {fileName: 'index.ifc'})
     expect(APPLIED_COORDINATION_KEY in mesh.userData).toBe(false)
+  })
+})
+
+
+describe('Loader/convertToShareModel — cached backstop offset (Share#1633 item 1)', () => {
+  // The other half of `rendered = (A * world) - coordinationOffset`. On the
+  // degraded path where Share's backstop fired, the offset is baked into the
+  // cached geometry, so a hit that dropped it would leave a model whose
+  // documented inverse reconstructs coordinates displaced by exactly it —
+  // wrong rather than absent, and invisible.
+  const OFFSET = [2600000, 450, -1200000]
+
+  /**
+   * @param {*} value what the cache handed back under the offset key
+   * @return {Mesh} the model after conversion
+   */
+  function convertWithOffset(value) {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData[COORDINATION_OFFSET_KEY] = value
+    convertToShareModel(mesh, makeViewerStub(), {fileName: 'index.ifc'})
+    return mesh
+  }
+
+  it('keeps a well-formed cached offset at the same key a fresh parse uses', () => {
+    const mesh = convertWithOffset([...OFFSET])
+    expect(mesh.userData[COORDINATION_OFFSET_KEY]).toEqual(OFFSET)
+  })
+
+  it('restores both halves together', () => {
+    const frame = [
+      0.001, 0, 0, 0,
+      0, 0, -0.001, 0,
+      0, 0.001, 0, 0,
+      -2600, 450, 1200, 1,
+    ]
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData[APPLIED_COORDINATION_KEY] = [...frame]
+    mesh.userData[COORDINATION_OFFSET_KEY] = [...OFFSET]
+    convertToShareModel(mesh, makeViewerStub(), {fileName: 'index.ifc'})
+
+    expect(mesh.userData[APPLIED_COORDINATION_KEY]).toEqual(frame)
+    expect(mesh.userData[COORDINATION_OFFSET_KEY]).toEqual(OFFSET)
+  })
+
+  it('drops a cached offset carrying non-finite numbers', () => {
+    const mesh = convertWithOffset([1, null, 3])
+    expect(COORDINATION_OFFSET_KEY in mesh.userData).toBe(false)
+  })
+
+  it('drops a cached offset of the wrong length', () => {
+    const mesh = convertWithOffset([1, 2])
+    expect(COORDINATION_OFFSET_KEY in mesh.userData).toBe(false)
+  })
+
+  it('dropping one half leaves the other intact', () => {
+    // A bad offset must not cost the frame, and vice versa — they are
+    // validated independently so a single corrupt key degrades to the state
+    // consumers already handle rather than losing the whole mapping.
+    const frame = [
+      0.001, 0, 0, 0,
+      0, 0, -0.001, 0,
+      0, 0.001, 0, 0,
+      -2600, 450, 1200, 1,
+    ]
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData[APPLIED_COORDINATION_KEY] = [...frame]
+    mesh.userData[COORDINATION_OFFSET_KEY] = 'not an offset'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: 'index.ifc'})
+
+    expect(mesh.userData[APPLIED_COORDINATION_KEY]).toEqual(frame)
+    expect(COORDINATION_OFFSET_KEY in mesh.userData).toBe(false)
+  })
+
+  it('leaves a model with no cached offset untouched', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    convertToShareModel(mesh, makeViewerStub(), {fileName: 'index.ifc'})
+    expect(COORDINATION_OFFSET_KEY in mesh.userData).toBe(false)
   })
 })

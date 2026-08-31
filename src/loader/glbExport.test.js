@@ -52,7 +52,10 @@ jest.mock('./injectGlbExtensions', () => {
 
 import {BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
 import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb, exportThreeModelAsGlb} from './glbExport'
-import {APPLIED_COORDINATION_KEY} from '../viewer/ifc/appliedCoordination'
+import {
+  APPLIED_COORDINATION_KEY,
+  COORDINATION_OFFSET_KEY,
+} from '../viewer/ifc/appliedCoordination'
 import {parseGlb, serializeGlb} from './injectGlbExtensions'
 import {gitHubCacheKey} from './sourceCacheKey'
 import {flatMeshToBatchedModel} from '../viewer/ifc/flatMeshToBatchedModel'
@@ -723,6 +726,95 @@ describe('loader/glbExport', () => {
       const {json} = parseGlb(injectResult.bytes)
       expect(json.scenes[0].extras[APPLIED_COORDINATION_KEY]).toEqual(FRAME)
       expect(injectResult.stats.addedSceneExtras).toBe(2)
+    })
+
+    // Share's backstop offset is the OTHER half of the documented mapping
+    // (`rendered = (A * world) - coordinationOffset`). On the degraded path
+    // where the backstop fired, the offset is baked into the geometry being
+    // exported — so persisting only the frame yields a cache hit whose
+    // documented inverse reconstructs coordinates displaced by exactly it.
+    // Half a composition is wrong rather than absent, and silently so.
+    /* eslint-disable no-magic-numbers */
+    const OFFSET = [2600000, 450, -1200000]
+    /* eslint-enable no-magic-numbers */
+
+    it('carries the backstop offset alongside the frame', async () => {
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({
+        model: modelWith({
+          [APPLIED_COORDINATION_KEY]: FRAME,
+          [COORDINATION_OFFSET_KEY]: OFFSET,
+        }),
+        ...ctx,
+      })
+      expect(ok).toBe(true)
+
+      const [, , sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      expect(sceneExtrasArg).toEqual({
+        [BLDRS_TITLE_EXTRAS_KEY]: 'Momentum',
+        [APPLIED_COORDINATION_KEY]: FRAME,
+        [COORDINATION_OFFSET_KEY]: OFFSET,
+      })
+    })
+
+    it('omits the offset key on a healthy load (backstop never fired)', async () => {
+      // The normal case since the conway#680 fix chain: absence must stay
+      // absence, so consumers read it as `[0, 0, 0]` rather than finding a
+      // zeroed key they cannot distinguish from a real one.
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({
+        model: modelWith({[APPLIED_COORDINATION_KEY]: FRAME}), ...ctx,
+      })
+      expect(ok).toBe(true)
+
+      const [, , sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      expect(COORDINATION_OFFSET_KEY in sceneExtrasArg).toBe(false)
+    })
+
+    it('refuses to cache a malformed offset', async () => {
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({
+        model: modelWith({
+          [APPLIED_COORDINATION_KEY]: FRAME,
+          [COORDINATION_OFFSET_KEY]: [1, NaN, 3],
+        }),
+        ...ctx,
+      })
+      expect(ok).toBe(true)
+
+      const [, , sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      expect(COORDINATION_OFFSET_KEY in sceneExtrasArg).toBe(false)
+      // The frame still goes out — one bad key must not cost the other.
+      expect(sceneExtrasArg[APPLIED_COORDINATION_KEY]).toEqual(FRAME)
+    })
+
+    it('end-to-end: both halves round-trip into scenes[0].extras', async () => {
+      const actual = jest.requireActual('./injectGlbExtensions')
+      mockInjectGlbExtensions.mockImplementation(actual.injectGlbExtensions)
+
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({
+        model: modelWith({
+          [APPLIED_COORDINATION_KEY]: FRAME,
+          [COORDINATION_OFFSET_KEY]: OFFSET,
+        }),
+        ...ctx,
+      })
+      expect(ok).toBe(true)
+
+      const injectResult = mockInjectGlbExtensions.mock.results[0].value
+      const {json} = parseGlb(injectResult.bytes)
+      expect(json.scenes[0].extras[APPLIED_COORDINATION_KEY]).toEqual(FRAME)
+      expect(json.scenes[0].extras[COORDINATION_OFFSET_KEY]).toEqual(OFFSET)
+      expect(injectResult.stats.addedSceneExtras).toBe(3)
     })
   })
 })

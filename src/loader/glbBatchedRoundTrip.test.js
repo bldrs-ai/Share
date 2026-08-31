@@ -159,7 +159,7 @@ describe('batched-native GLB round-trip (writer -> GLTFLoader -> hydrate)', () =
     expect(byParent.get(20)).toEqual(live.instanceColors[2])
   })
 
-  it('carries the applied coordination frame across the artifact (Share#1633 item 1)', async () => {
+  it('carries BOTH halves of the render-frame mapping across the artifact (Share#1633 item 1)', async () => {
     // The batched-native writer's half of the frame round-trip (the merged
     // writer's is in `glbExport.test.js`). This is the path that made the
     // claim worth testing: `exportBatchedModelAsInstancedGlb` builds a fresh
@@ -179,13 +179,20 @@ describe('batched-native GLB round-trip (writer -> GLTFLoader -> hydrate)', () =
       0, 0.001, 0, 0,
       -2600, 450, 1200, 1,
     ]
+    const offset = [2600000, 450, -1200000]
     /* eslint-enable no-magic-numbers */
 
-    const hydrated = await roundTrip(liveBatchedModel(), {appliedCoordination: frame})
+    const hydrated = await roundTrip(
+      liveBatchedModel(), {appliedCoordination: frame, coordinationOffset: offset})
 
     expect(hydrated).not.toBeNull()
-    // Same key a fresh conway parse stamps — one surface, both paths.
+    // Same keys a fresh conway parse stamps — one surface, both paths.
     expect(hydrated.userData.appliedCoordination).toEqual(frame)
+    // BOTH halves of `rendered = (A * world) - coordinationOffset`. The
+    // degraded path bakes the offset into the geometry in this very
+    // artifact, so a hit that restored only the frame would reconstruct
+    // coordinates displaced by exactly it.
+    expect(hydrated.userData.coordinationOffset).toEqual(offset)
   })
 
   it('leaves no frame on the model when the writer stamped none', async () => {
@@ -195,6 +202,26 @@ describe('batched-native GLB round-trip (writer -> GLTFLoader -> hydrate)', () =
 
     expect(hydrated).not.toBeNull()
     expect(hydrated.userData.appliedCoordination).toBeUndefined()
+    expect(hydrated.userData.coordinationOffset).toBeUndefined()
+  })
+
+  it('carries the frame alone on a healthy load (backstop never fired)', async () => {
+    // The normal case since the conway#680 fix chain — the two keys are
+    // independent, so a model with no backstop offset still gets its frame.
+    /* eslint-disable no-magic-numbers */
+    const frame = [
+      0.001, 0, 0, 0,
+      0, 0, -0.001, 0,
+      0, 0.001, 0, 0,
+      -2600, 450, 1200, 1,
+    ]
+    /* eslint-enable no-magic-numbers */
+
+    const hydrated = await roundTrip(liveBatchedModel(), {appliedCoordination: frame})
+
+    expect(hydrated).not.toBeNull()
+    expect(hydrated.userData.appliedCoordination).toEqual(frame)
+    expect(hydrated.userData.coordinationOffset).toBeUndefined()
   })
 
   it('round-trips instance transforms', async () => {

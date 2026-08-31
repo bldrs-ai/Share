@@ -42,6 +42,25 @@
 // with `coordinationOffset` read as `[0, 0, 0]` when absent. On a healthy
 // load that degenerates to conway's own `world = inverse(A) * rendered`.
 //
+// BOTH halves cross the GLB cache, and they have to travel together. The
+// offset is baked into the exported geometry, so an artifact carrying only
+// `A` reads back as a model whose rendered points are displaced by exactly
+// the offset the inverse above then fails to add — the composition is only
+// correct if a cache hit restores everything a fresh parse stamped. That is
+// why both keys ride the same capture and are dropped, on read, by the same
+// rules.
+//
+// SCOPE: persistence covers what was STAMPED. `coordinationOffset` is
+// stamped only by `IncrementalBatchedBuilder`; the `?feature=batchedMesh`
+// and merged fallback builders DECIDE and APPLY an offset without ever
+// putting it on `userData` (`collectGroups`'s `totals.coordOffset`,
+// `flatMeshToBufferGeometry`'s return — the shared per-load `coordination`
+// object carries only the log latch, not the value). On those paths a
+// backstop offset is applied but unreported, so there is nothing here to
+// cache — you cannot persist what was never stamped. That apply-but-don't-
+// stamp gap predates this module and is #1633 item 2's follow-up; nothing
+// here widens or narrows it.
+//
 // ## The engine's contract, verbatim from conway's doc comment
 //
 // (`compat/web-ifc/ifc_api.ts#GetAppliedCoordinationMatrix` — read it before
@@ -119,6 +138,45 @@ export const MAT4_LENGTH = 16
  * carries no `bldrs` prefix.
  */
 export const APPLIED_COORDINATION_KEY = 'appliedCoordination'
+
+
+/** A recentre offset is `[x, y, z]`. */
+export const OFFSET_LENGTH = 3
+
+
+/**
+ * The key SHARE's own backstop recentre lives under, on `Object3D.userData`
+ * after a fresh parse and inside `scenes[0].extras` in a GLB cache artifact.
+ *
+ * Un-prefixed for the same reason as `APPLIED_COORDINATION_KEY`, and it must
+ * keep the name `IncrementalBatchedBuilder` already stamps — this constant
+ * names an EXISTING surface rather than introducing one, so renaming it here
+ * would silently orphan the builder's stamp.
+ */
+export const COORDINATION_OFFSET_KEY = 'coordinationOffset'
+
+
+/**
+ * The value as a usable backstop offset, or null when it is not one.
+ *
+ * Same three boundaries and the same reasoning as
+ * {@link validAppliedCoordination} — with the difference that a bad offset
+ * is subtracted rather than inverted, so it corrupts by translation instead
+ * of by `NaN`. Refused all the same: a model displaced by a garbage vector
+ * looks like a correctly placed model somewhere else.
+ *
+ * @param {*} value candidate offset
+ * @return {?Array<number>} a fresh `[x, y, z]`, or null
+ */
+export function validCoordinationOffset(value) {
+  if (!Array.isArray(value) || value.length !== OFFSET_LENGTH) {
+    return null
+  }
+  if (!value.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+    return null
+  }
+  return Array.from(value)
+}
 
 
 /**

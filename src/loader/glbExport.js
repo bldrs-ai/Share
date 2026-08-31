@@ -43,7 +43,9 @@ import {
 } from './bldrsSpatialTree'
 import {
   APPLIED_COORDINATION_KEY,
+  COORDINATION_OFFSET_KEY,
   validAppliedCoordination,
+  validCoordinationOffset,
 } from '../viewer/ifc/appliedCoordination'
 import {eachBatch} from '../viewer/ifc/batchedModel'
 import {
@@ -303,6 +305,14 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // where a bad one would persist across sessions.
     const appliedCoordinationForExtras =
       validAppliedCoordination(model?.userData?.[APPLIED_COORDINATION_KEY])
+    // Share's own backstop offset travels WITH the frame, never without it.
+    // On the degraded path where the backstop fired, the offset is already
+    // baked into the geometry being exported here — so an artifact carrying
+    // only the frame reads back displaced by exactly the offset the
+    // documented inverse would then fail to add back. Half a composition is
+    // worse than none: it is wrong rather than absent, and silently so.
+    const coordinationOffsetForExtras =
+      validCoordinationOffset(model?.userData?.[COORDINATION_OFFSET_KEY])
     // Yield to the event loop between major phases so hover-pick /
     // camera-controls can interleave with the writer. Each `yieldToBrowser`
     // is a single macrotask boundary; the cost is one event-loop turn,
@@ -517,12 +527,19 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // a null map and an empty map differently (the null case is its
     // pass-through). Stay null when NEITHER key is available so a titleless,
     // frameless model still short-circuits the parse/serialize as before.
-    const sceneExtrasForInject = (titleForExtras || appliedCoordinationForExtras) ? {
-      ...(titleForExtras ? {[BLDRS_TITLE_EXTRAS_KEY]: titleForExtras} : {}),
-      ...(appliedCoordinationForExtras ?
-        {[APPLIED_COORDINATION_KEY]: appliedCoordinationForExtras} :
-        {}),
-    } : null
+    const sceneExtrasCandidates = {
+      [BLDRS_TITLE_EXTRAS_KEY]: titleForExtras,
+      [APPLIED_COORDINATION_KEY]: appliedCoordinationForExtras,
+      [COORDINATION_OFFSET_KEY]: coordinationOffsetForExtras,
+    }
+    const sceneExtrasPairs =
+      Object.entries(sceneExtrasCandidates).filter(([, v]) => v !== null && v !== undefined)
+    // Stay null when NO key is available, so a titleless, frameless model
+    // still short-circuits the parse/serialize as before —
+    // `injectGlbExtensions` treats a null map and an empty one differently
+    // (the null case is its pass-through).
+    const sceneExtrasForInject =
+      sceneExtrasPairs.length > 0 ? Object.fromEntries(sceneExtrasPairs) : null
     let packed
     let extStats
     try {
