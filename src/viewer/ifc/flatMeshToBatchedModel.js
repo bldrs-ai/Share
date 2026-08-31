@@ -6,6 +6,7 @@ import {
   Matrix4,
   Vector4,
 } from 'three'
+import {conwayDirectWarn} from './conwayDirectLog'
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
 
@@ -330,6 +331,59 @@ export function coordinationOffsetFor(flatTransformation) {
 
 
 /**
+ * `coordinationOffsetFor` plus the one-time load-log line the Share#1632
+ * retrospective asked for: the recenter used to fire completely silently,
+ * including on the broken-engine stream (conway#680) whose vertex buffers
+ * ALSO carried the offset, which baked the model ~2.9e6 m off-origin with
+ * nothing in the log to explain it. Route the decision through here instead
+ * of calling `coordinationOffsetFor` directly so a georeferenced model always
+ * leaves a trace.
+ *
+ * Each builder decides the offset from `undefined` exactly once
+ * (`IncrementalBatchedBuilder#appendPlacement_`'s `this.coordination.offset`,
+ * `collectGroups`'s `totals.coordOffset`, `flatMeshToBufferGeometry`'s single
+ * top-level call on `entries[0]`), but ONE LOAD CAN RUN SEVERAL BUILDERS:
+ * ShareIfcLoader falls back incremental → `flatMeshToBufferGeometry` per
+ * batch, and incremental → batched → merged at end of load, so a
+ * per-builder latch alone would log the same recenter two or three times for
+ * a single model. `loadState` is the per-load object that closes that gap —
+ * ShareIfcLoader's `coordination`, already shared between the durable builder
+ * and the preview, threaded into the fallback calls as well. Omitting it
+ * keeps the old per-call behavior, which is what unit callers want.
+ *
+ * The state carries the log latch only; each builder still decides its own
+ * offset value as before, so this changes what is *printed*, never where
+ * anything renders.
+ *
+ * `coordinationOffsetFor` itself stays pure and unlogged, in case a future
+ * caller ever needs to probe it per-placement.
+ *
+ * The line goes out on the `[conwayDirect]` channel rather than `debug()`:
+ * this is a designed diagnostic for that pipeline (STYLE.md §console hygiene,
+ * PLAYBOOK.md §"Keep the test console clean"), so it belongs on the
+ * subsystem's swappable sink like the parse-boundary lines beside it — which
+ * also lets tests assert it from a buffer instead of mutating the global
+ * console. `conwayDirectWarn` explains why the level is warn: only warn and
+ * error are teed into the load report.
+ *
+ * @param {Array<number>} flatTransformation 16-element column-major matrix
+ * @param {{recenterLogged: (boolean|undefined)}} [loadState] per-LOAD state,
+ *   shared across every builder one load runs; omit for a bare decision.
+ * @return {?Array<number>} same as `coordinationOffsetFor`
+ */
+export function decideCoordinationOffset(flatTransformation, loadState = undefined) {
+  const offset = coordinationOffsetFor(flatTransformation)
+  if (offset !== null && !loadState?.recenterLogged) {
+    conwayDirectWarn(`georeferenced model: recentering by [${offset.join(', ')}] m (see Share#1632)`)
+    if (loadState !== undefined) {
+      loadState.recenterLogged = true
+    }
+  }
+  return offset
+}
+
+
+/**
  * @typedef {object} BatchHandle
  * @property {BatchedMesh} mesh the batch (one geometry per unique shape it
  *   uses, one instance per placement).
@@ -408,9 +462,11 @@ export function localGeometry(rawVerts, rawIndices, vertCount) {
  * @param {object|Array} flatMeshes FlatMesh source
  * @param {object} api Conway-compatible IfcAPI
  * @param {number} modelID
+ * @param {{recenterLogged: (boolean|undefined)}} [loadState] per-LOAD state
+ *   threaded from ShareIfcLoader; see decideCoordinationOffset.
  * @return {{groups: Map, totals: object}}
  */
-function collectGroups(flatMeshes, api, modelID) {
+function collectGroups(flatMeshes, api, modelID, loadState = undefined) {
   const groups = new Map()
   const bad = new Set() // geomExpressIDs that resolved to no usable geometry
   // Placement identities already emitted — drops exact overlaps (see CoincidenceSet).
@@ -490,7 +546,7 @@ function collectGroups(flatMeshes, api, modelID) {
         return
       }
       if (totals.coordOffset === undefined) {
-        totals.coordOffset = coordinationOffsetFor(placed.flatTransformation)
+        totals.coordOffset = decideCoordinationOffset(placed.flatTransformation, loadState)
       }
       group.placements.push({
         matrix: placed.flatTransformation,
@@ -615,10 +671,14 @@ function buildBatch(groups, transparent, coordOffset) {
  * @param {object} api Conway-compatible IfcAPI. Needs `GetGeometry`,
  *   `GetVertexArray`, `GetIndexArray`.
  * @param {number} modelID
+ * @param {{coordination: ({recenterLogged: (boolean|undefined)}|undefined)}} [opts]
+ *   `coordination` is the loader's per-LOAD object, shared with every other
+ *   builder one load runs so the recenter is reported once; see
+ *   decideCoordinationOffset.
  * @return {BatchedModel}
  */
-export function flatMeshToBatchedModel(flatMeshes, api, modelID) {
-  const {groups, totals} = collectGroups(flatMeshes, api, modelID)
+export function flatMeshToBatchedModel(flatMeshes, api, modelID, opts = {}) {
+  const {groups, totals} = collectGroups(flatMeshes, api, modelID, opts.coordination)
   const coordOffset = totals.coordOffset ?? null
 
   const batches = [
