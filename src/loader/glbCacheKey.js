@@ -20,6 +20,18 @@
  * it (`BLDRS_GLB_BATCHED_SCHEMA_VERSION` below) — deliberately, since that
  * is the slot most users actually read. Nothing extra to do here; the note
  * exists so the coupling is visible from where the bump gets written.
+ * 0.20.0 — retires artifacts baked without type-inherited materials
+ *         (conway#704, issue test-models-private#61 — the follow-up to
+ *         0.18.0's colour fixes): a product with no direct
+ *         IfcRelAssociatesMaterial now inherits its type object's
+ *         association through IfcRelDefinesByType (occurrence still wins),
+ *         so doors/windows/fixtures whose material hangs off IfcDoorType /
+ *         IfcWindowType gain their authored colours. Colours are baked into
+ *         the artifact and nothing in the cache key identifies the engine,
+ *         so without this bump a returning user's cache hit keeps the
+ *         default-grey typed elements indefinitely while cache-miss users
+ *         see them coloured. Same failure shape and remedy as
+ *         0.18.0/0.17.0/0.16.0/0.15.0.
  * 0.19.0 — retires artifacts whose STEP occurrence paths mean something
  *         different from what the app now reads. conway#628
  *         (test-models-private#98) changed the path's own composition, not
@@ -218,7 +230,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.19.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.20.0'
 
 
 /**
