@@ -22,6 +22,31 @@ const INITIAL_INSTANCES = 1024
 const INITIAL_VERTICES = 1 << 18
 const INITIAL_INDICES = 1 << 19
 const GROWTH = 2
+// Geometry count from which a batch stops doubling blindly and is sized
+// for the whole model instead (see projectCapacity_).
+//
+// three r0.184's `BatchedMesh.setGeometrySize` spreads one argument per
+// ACTIVE geometry into `Math.max( ...validRanges.map( … ) )`
+// (node_modules/three/src/objects/BatchedMesh.js:1329 and :1339), so the
+// call throws `RangeError: Maximum call stack size exceeded` once a batch
+// holds more geometries than V8's argument limit. That limit is
+// stack-depth dependent, so it is a soft ceiling rather than a constant to
+// sit on: measured at 125,279 entries on the box that root-caused this
+// (Share#1809), reached by sp-946MB.ifc at roughly a quarter of its load.
+// Past it a batch can never grow again, so the last growth that still
+// works has to be the one that covers the rest of the model. Triggering at
+// well under half the measured limit leaves room for a shallower stack and
+// still gives the projection a sample of tens of thousands of geometries.
+export const PRESIZE_FROM_GEOMETRIES = 50000
+// Over-provision the projected whole-model requirement by this much. The
+// projection is re-run at every later growth, so this only has to cover
+// the error of the LAST projection made before the ceiling above; measured
+// over-shoot on sp-946MB was already +11% at the first trigger point, so
+// this is margin on top of a conservative estimator, not the estimator.
+const PRESIZE_HEADROOM = 1.15
+// Pump progress below which the projection is not trusted: dividing a
+// handful of dense products by a near-zero fraction reserves gigabytes.
+const PRESIZE_MIN_FRACTION = 0.02
 // Console cap for per-record skip warnings (see warnBadRecord_): a model
 // with many budget-evicted geometries (conway#535) shouldn't flood the
 // console one line per id -- the load report's skipped* counts already
@@ -65,6 +90,10 @@ export class IncrementalBatchedBuilder {
    * @param {number} [opts.initialInstances] test hook: initial capacity.
    * @param {number} [opts.initialVertices] test hook: initial capacity.
    * @param {number} [opts.initialIndices] test hook: initial capacity.
+   * @param {number} [opts.presizeFromGeometries] test hook: geometry count
+   *   at which projectCapacity_ takes over from doubling. Lowering it is
+   *   the only way to exercise the projection without building a batch of
+   *   PRESIZE_FROM_GEOMETRIES real geometries.
    */
   constructor(api, modelID, opts = {}) {
     this.api = api
@@ -73,6 +102,7 @@ export class IncrementalBatchedBuilder {
     this.initialInstances = opts.initialInstances ?? INITIAL_INSTANCES
     this.initialVertices = opts.initialVertices ?? INITIAL_VERTICES
     this.initialIndices = opts.initialIndices ?? INITIAL_INDICES
+    this.presizeFromGeometries = opts.presizeFromGeometries ?? PRESIZE_FROM_GEOMETRIES
     this.root = new Group()
     // geometryExpressID → {geometry, vertCount, indexCount, box,
     // idByBatch: Map(batchState → geometryId)} — geometry fetched from
@@ -90,6 +120,12 @@ export class IncrementalBatchedBuilder {
     this.failedThisBatch = new Set()
     // Running count backing warnBadRecord_'s console cap.
     this.badRecordWarnings = 0
+    // Demand-pump product progress, the only whole-model quantity a
+    // streaming builder can see (setPumpProgress). Zeroes mean "no pump
+    // told us" — every one-shot and unit-test caller — and disable the
+    // capacity projection, leaving the 2x doubling in charge.
+    this.pumpDone = 0
+    this.pumpTotal = 0
     // Placement identities already appended, across all batches — drops
     // exact duplicate placements that would z-fight (see CoincidenceSet).
     // Load-time only: `finalize` releases it (conway#636).
@@ -122,6 +158,32 @@ export class IncrementalBatchedBuilder {
   /** @return {boolean} True once any instance has been appended. */
   hasContent() {
     return this.totals.placements > 0
+  }
+
+
+  /**
+   * Record how far the demand pump has got through the model's products,
+   * in the pump's own units (`geometryDone` / `geometryTotal` from
+   * `conwayDirectIfcLoader`'s loop — products extracted, not FlatMeshes
+   * delivered, which is a smaller number because not every product yields
+   * geometry). This is the only signal that lets a builder assembling one
+   * batch at a time size the batch for the WHOLE model instead of
+   * doubling into it; see projectCapacity_ for what it is used for and
+   * Share#1809 for why doubling into it is not survivable at scale.
+   *
+   * Called per batch rather than passed to the constructor because the
+   * total is not known until the first `ExtractGeometryBatch` returns —
+   * which is the same call that produces the first batch.
+   *
+   * @param {number} done products the pump has extracted so far
+   * @param {number} total products the pump reported in the model
+   */
+  setPumpProgress(done, total) {
+    if (!Number.isFinite(done) || !Number.isFinite(total) || total <= 0) {
+      return
+    }
+    this.pumpDone = done
+    this.pumpTotal = total
   }
 
 
@@ -215,6 +277,9 @@ export class IncrementalBatchedBuilder {
           state.instanceOccurrencePaths.slice() : null
       state.mesh.instanceGeometry = state.instanceGeometry.slice()
       state.mesh.instanceColors = state.instanceColors.slice()
+      // The mesh has stopped growing, so its exact requirement is finally
+      // known: release the reserved space nothing used (Share#1809).
+      this.trimCapacity_(state)
       // The mesh has stopped growing, so a bounding volume is finally
       // meaningful. Compute it and hand culling back — see ensureBatch_
       // for why it had to be off while streaming. assembleBatchedModel
@@ -326,6 +391,7 @@ export class IncrementalBatchedBuilder {
     if (geometryId === undefined) {
       geometryId = state.mesh.addGeometry(entry.geometry)
       entry.idByBatch.set(state, geometryId)
+      state.geometryCount++
     }
     const batchId = state.mesh.addInstance(geometryId)
     // Decide the model-wide origin-recenter offset from the first placement
@@ -501,6 +567,18 @@ export class IncrementalBatchedBuilder {
       maxIndices: this.initialIndices,
       usedVertices: 0,
       usedIndices: 0,
+      // Unique geometries added to THIS mesh. Tracked here rather than
+      // read off three's `_geometryInfo` because it is the same number
+      // (nothing ever deletes a geometry from these batches, so every
+      // entry stays active) without reaching into a private field — and it
+      // is what decides whether setGeometrySize can still be called, see
+      // PRESIZE_FROM_GEOMETRIES.
+      geometryCount: 0,
+      // Pump progress when this batch was created. The projection measures
+      // from here, not from zero: the transparent batch's first placement
+      // lands a third of the way through sp-946MB, and charging it for
+      // that whole prefix would over-reserve it by ~1.4x.
+      startDone: this.pumpDone,
       instanceParents: [],
       instanceOccurrenceIds: [],
       instanceGeometryIds: [],
@@ -515,18 +593,36 @@ export class IncrementalBatchedBuilder {
 
 
   /**
-   * Grow the batch in place (2x amortized) so the next instance — and,
-   * when the geometry is new to this batch, its vertex/index ranges —
-   * fit. three's setInstanceCount/setGeometrySize copy the underlying
-   * buffers; growth doubles so total copy work stays linear.
+   * Grow the batch in place so the next instance — and, when the geometry
+   * is new to this batch, its vertex/index ranges — fit. three's
+   * setInstanceCount/setGeometrySize copy the underlying buffers; growth
+   * doubles so total copy work stays linear, except once the batch is
+   * large enough to be sized for the whole model (projectCapacity_).
+   *
+   * BOOKKEEPING TRAILS THE three.js CALL, NEVER LEADS IT (Share#1809).
+   * `setGeometrySize` can throw — on three's own spread limit
+   * (PRESIZE_FROM_GEOMETRIES) and on an allocation failure — and it throws
+   * from its shrink checks, BEFORE it has touched the mesh, so three's
+   * real capacity is unchanged when it does. Raising
+   * `state.maxVertices`/`maxIndices` first, as this did until Share#1809,
+   * left Share believing in space three had never allocated: every later
+   * placement then took the "no growth needed" branch straight into
+   * `addGeometry`'s "Reserved space request exceeds the maximum buffer
+   * size", for the rest of the load, and `usedVertices` kept climbing for
+   * geometry that never landed. With warnBadRecord_ capped at 5 lines the
+   * only surviving signal was a count: 298,305 of 496,280 placements
+   * dropped on sp-946MB.ifc. Committing the numbers after the call returns
+   * keeps Share and three agreeing — a throw skips the one placement that
+   * could not fit, and every later placement that DOES fit still lands.
    *
    * @param {object} state batch state
    * @param {object} entry geometry cache entry
    */
   ensureCapacity_(state, entry) {
     if (state.cursor + 1 > state.maxInstances) {
-      state.maxInstances = Math.max(state.maxInstances * GROWTH, state.cursor + 1)
-      state.mesh.setInstanceCount(state.maxInstances)
+      const nextInstances = Math.max(state.maxInstances * GROWTH, state.cursor + 1)
+      state.mesh.setInstanceCount(nextInstances)
+      state.maxInstances = nextInstances
     }
     if (entry.idByBatch.has(state)) {
       return
@@ -534,15 +630,111 @@ export class IncrementalBatchedBuilder {
     const needVertices = state.usedVertices + entry.vertCount
     const needIndices = state.usedIndices + entry.indexCount
     if (needVertices > state.maxVertices || needIndices > state.maxIndices) {
-      while (state.maxVertices < needVertices) {
-        state.maxVertices *= GROWTH
+      let nextVertices = state.maxVertices
+      let nextIndices = state.maxIndices
+      while (nextVertices < needVertices) {
+        nextVertices *= GROWTH
       }
-      while (state.maxIndices < needIndices) {
-        state.maxIndices *= GROWTH
+      while (nextIndices < needIndices) {
+        nextIndices *= GROWTH
       }
-      state.mesh.setGeometrySize(state.maxVertices, state.maxIndices)
+      const projected = this.projectCapacity_(state, needVertices, needIndices)
+      if (projected !== null) {
+        nextVertices = Math.max(nextVertices, projected.vertices)
+        nextIndices = Math.max(nextIndices, projected.indices)
+      }
+      state.mesh.setGeometrySize(nextVertices, nextIndices)
+      state.maxVertices = nextVertices
+      state.maxIndices = nextIndices
     }
     state.usedVertices = needVertices
     state.usedIndices = needIndices
+  }
+
+
+  /**
+   * Project this batch's whole-model vertex/index requirement from the
+   * demand pump's product progress, so a batch that is about to run out of
+   * growths reserves once for the rest of the load instead of doubling
+   * into a call that will throw (see PRESIZE_FROM_GEOMETRIES).
+   *
+   * The estimator is linear in products, which is conservative in the
+   * right direction: geometry is deduplicated by `geometryExpressID`, so
+   * products seen early contribute proportionally MORE new vertices than
+   * products seen late, and the projection therefore lands above the true
+   * total. Measured on sp-946MB.ifc: +11% at the first trigger point,
+   * +12% at the last one before three's ceiling.
+   *
+   * Returns null — leaving the doubling in charge — whenever the estimate
+   * would be guesswork: no pump progress (every one-shot and unit-test
+   * caller), a batch still small enough that doubling can safely correct
+   * itself later, or too little of the model seen to divide by.
+   *
+   * @param {object} state batch state
+   * @param {number} needVertices vertices this batch needs including the
+   *   geometry being added
+   * @param {number} needIndices indices this batch needs, likewise
+   * @return {?{vertices: number, indices: number}} projected capacity, or
+   *   null when unprojectable
+   */
+  projectCapacity_(state, needVertices, needIndices) {
+    if (this.pumpTotal <= 0 || state.geometryCount < this.presizeFromGeometries) {
+      return null
+    }
+    const total = this.pumpTotal - state.startDone
+    if (total <= 0) {
+      return null
+    }
+    const fraction = Math.min((this.pumpDone - state.startDone) / total, 1)
+    if (fraction < PRESIZE_MIN_FRACTION) {
+      return null
+    }
+    const scale = PRESIZE_HEADROOM / fraction
+    return {
+      vertices: Math.ceil(needVertices * scale),
+      indices: Math.ceil(needIndices * scale),
+    }
+  }
+
+
+  /**
+   * Hand back a finished batch's reserved-but-unused vertex/index space.
+   *
+   * A streaming builder cannot know the exact requirement until the last
+   * placement lands, so both sizing policies above deliberately reserve
+   * too much: the projection by PRESIZE_HEADROOM, and a batch too small to
+   * project by whatever power of two first clears its need. That slack is
+   * retained for the life of the model — measured at 92.5 MB on
+   * sp-231MB.ifc, byte-lever 2 of the conway#679 attribution report. Once
+   * `finalize` runs the model has stopped growing and the exact figure is
+   * known, so give the rest back.
+   *
+   * `usedVertices`/`usedIndices` are exactly three's own high-water marks:
+   * `addGeometry` packs each geometry's reservation contiguously from 0
+   * and nothing here ever removes one, so the sum of what was added IS
+   * `max(vertexStart + reservedVertexCount)`, which is the figure
+   * setGeometrySize checks a shrink against.
+   *
+   * Cost and failure mode, both deliberate. The trim is one reallocation
+   * and copy of the batch buffers, so a steady-state saving is bought with
+   * a transient peak of capacity + used at the end of the load, after the
+   * parse-time transients have been released. And on a batch past three's
+   * spread limit it throws exactly like a growth would — and, like a
+   * growth, before it has touched the mesh — so it is best-effort: those
+   * batches keep their slack rather than losing their geometry to it.
+   *
+   * @param {object} state batch state
+   */
+  trimCapacity_(state) {
+    if (state.usedVertices >= state.maxVertices && state.usedIndices >= state.maxIndices) {
+      return
+    }
+    try {
+      state.mesh.setGeometrySize(state.usedVertices, state.usedIndices)
+      state.maxVertices = state.usedVertices
+      state.maxIndices = state.usedIndices
+    } catch (e) {
+      debug(WARN).warn('IncrementalBatchedBuilder: batch capacity trim skipped:', e)
+    }
   }
 }

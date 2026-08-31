@@ -92,7 +92,8 @@ import {instanceMapFromGeometry} from './IfcInstanceMap'
  *   the parse — a conway `Loadersettings.ON_PROGRESS` extension (#301);
  *   silently ignored by engines that predate it (real web-ifc, old pins).
  * @param {Function} [onMeshBatch] demand/tiled slice A: receives
- *   `(flatMeshes, modelID)` for each extracted batch as it lands (only
+ *   `(flatMeshes, modelID, {done, total})` — the batch, its model, and
+ *   the pump's product progress — for each extracted batch as it lands (only
  *   on the `demandGeometry` deferred path) so callers can render
  *   progressively. Passing it makes the caller the OWNER of the stream:
  *   `captured` then stays empty and degraded readers must go through
@@ -347,7 +348,15 @@ export async function parseIfcWithConway(
         pumpedMeshes += batch.length
         pumpedBatches++
         if (onMeshBatch) {
-          onMeshBatch(batch, modelID)
+          // `progress` is the same product counter `reportGeometry` above
+          // publishes, handed to the consumer because it is the only
+          // whole-model size a batch-at-a-time assembler can see: the
+          // incremental BatchedMesh builder sizes its buffers from it
+          // instead of doubling into them, which past ~125k geometries is
+          // not survivable (Share#1809). `total` is undefined until the
+          // first pump call has returned, which is also the first call
+          // that can produce a batch, so in practice it is always set here.
+          onMeshBatch(batch, modelID, {done: geometryDone, total: geometryTotal})
         }
         // `batch` itself goes out of scope on the next iteration, so on the
         // streaming path the last reference to this batch's FlatMeshes is

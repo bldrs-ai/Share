@@ -1,6 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {BatchedMesh, Matrix4} from 'three'
-import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
+import {IncrementalBatchedBuilder, PRESIZE_FROM_GEOMETRIES} from './incrementalBatchedBuilder'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 import {payloadToPreviewMesh} from './parsePreviewMesh'
 
@@ -435,6 +435,185 @@ describe('IncrementalBatchedBuilder', () => {
     const m = new Matrix4()
     batch.mesh.getMatrixAt(0, m)
     expect(m.elements[12]).toBeCloseTo(7)
+  })
+
+  // ---------------------------------------------------------------------
+  // Batch capacity (Share#1809). three r0.184's `setGeometrySize` spreads
+  // one argument per active geometry into `Math.max(...)`
+  // (three/src/objects/BatchedMesh.js:1329 and :1339), so past V8's
+  // argument limit -- ~125k entries -- every growth call throws and the
+  // batch can never be resized again. These pin both halves of the fix:
+  // the builder must stop needing growth before it gets there, and a
+  // growth that does throw must not leave its bookkeeping ahead of three's.
+  // ---------------------------------------------------------------------
+
+  /**
+   * @param {number} n how many shapes to make
+   * @return {object} `n` distinct single-triangle shapes, ids 1000..
+   */
+  function triangleShapes(n) {
+    const out = {}
+    for (let i = 0; i < n; i++) {
+      out[1000 + i] = {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])}
+    }
+    return out
+  }
+
+  /**
+   * Make a batch's `setGeometrySize` throw exactly the way three's does
+   * once the mesh holds more than `limit` geometries: `validRanges` is
+   * `[...this._geometryInfo].filter(info => info.active)`, and every entry
+   * this builder adds stays active, so its length is what gets spread.
+   *
+   * @param {object} state builder batch state
+   * @param {number} limit geometries the stand-in `Math.max(...)` survives
+   */
+  function capGeometrySize(state, limit) {
+    const {mesh} = state
+    const real = mesh.setGeometrySize.bind(mesh)
+    mesh.setGeometrySize = (vertices, indices) => {
+      if (mesh._geometryInfo.length > limit) {
+        throw new RangeError('Maximum call stack size exceeded')
+      }
+      return real(vertices, indices)
+    }
+  }
+
+  it('presizes past the growth ceiling so a large batch never needs another resize', () => {
+    // The sp-946MB.ifc failure in miniature: growth stops working once the
+    // batch holds more than SPREAD_LIMIT geometries, so the only way to
+    // finish the model is to have reserved for it while growth still
+    // worked. Ten shapes arrive one product at a time with the pump
+    // reporting its progress; the projection fires at the second geometry
+    // and must cover all ten. Without it the doubling walks into the
+    // ceiling and the tail of the model is silently dropped.
+    const SPREAD_LIMIT = 3
+    const shapeCount = 10
+    const all = triangleShapes(shapeCount)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 3,
+      initialIndices: 3,
+      presizeFromGeometries: 2,
+    })
+
+    for (let i = 0; i < shapeCount; i++) {
+      builder.setPumpProgress(i + 1, shapeCount)
+      builder.appendBatch([flatMesh(i + 1, [{geomExpressID: 1000 + i, color: OPAQUE}])])
+      if (i === 0) {
+        capGeometrySize(builder.opaque, SPREAD_LIMIT)
+      }
+    }
+
+    // One reservation carried the whole model: nothing was skipped, and
+    // the capacity that survived the ceiling is the projected one -- 47 =
+    // ceil(9 vertices needed / (2/9 of the model seen since this batch
+    // opened) * 1.15 headroom), covering all 30 -- not the 12 that
+    // doubling would have reached before the ceiling shut it out.
+    expect(builder.opaque.maxVertices).toBe(47)
+    const {stats} = builder.finalize()
+    expect(stats.instanceCount).toBe(shapeCount)
+    expect(stats.skippedPlacedGeometries).toBe(0)
+    expect(stats.vertexCount).toBe(shapeCount * 3)
+  })
+
+  it('leaves capacity bookkeeping equal to three\'s when a resize throws', () => {
+    // The second half of Share#1809: `ensureCapacity_` used to raise
+    // maxVertices/maxIndices BEFORE calling setGeometrySize and never roll
+    // back, so after a throw Share believed in space three had never
+    // allocated. Every later placement then took the "no growth needed"
+    // branch straight into addGeometry's "Reserved space request exceeds
+    // the maximum buffer size" -- for the rest of the load.
+    const all = triangleShapes(3)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 3,
+      initialIndices: 3,
+    })
+    builder.appendBatch([flatMesh(1, [{geomExpressID: 1000, color: OPAQUE}])])
+
+    const {mesh} = builder.opaque
+    const realSetGeometrySize = mesh.setGeometrySize.bind(mesh)
+    mesh.setGeometrySize = () => {
+      throw new RangeError('Maximum call stack size exceeded')
+    }
+    builder.appendBatch([flatMesh(2, [{geomExpressID: 1001, color: OPAQUE}])])
+
+    // three refused to grow, so Share must still be describing the buffer
+    // three actually has: 3 vertices, 3 indices, one geometry in it.
+    expect(builder.opaque.maxVertices).toBe(3)
+    expect(builder.opaque.maxIndices).toBe(3)
+    expect(builder.opaque.usedVertices).toBe(3)
+    expect(builder.opaque.cursor).toBe(1)
+
+    // ...and because the two agree, the next placement is still routed
+    // through growth rather than into a buffer that cannot hold it. With
+    // the bookkeeping left inflated this second shape needs 6 vertices,
+    // reads 6 as available, skips the resize and dies inside addGeometry.
+    mesh.setGeometrySize = realSetGeometrySize
+    builder.appendBatch([flatMesh(3, [{geomExpressID: 1002, color: OPAQUE}])])
+
+    const {stats} = builder.finalize()
+    expect(stats.instanceCount).toBe(2)
+    expect(stats.skippedPlacedGeometries).toBe(1)
+  })
+
+  it('returns reserved-but-unused batch space at finalize', () => {
+    // Byte-lever 2 of the conway#679 attribution report: 92.5 MB of the
+    // 231 MB model's settled heap was batch capacity nothing ever used.
+    // Here the three shapes need 9 vertices and the doubling reserved 12.
+    const all = triangleShapes(3)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 3,
+      initialIndices: 3,
+    })
+    builder.appendBatch([
+      flatMesh(1, [{geomExpressID: 1000, color: OPAQUE}]),
+      flatMesh(2, [{geomExpressID: 1001, color: OPAQUE}]),
+      flatMesh(3, [{geomExpressID: 1002, color: OPAQUE}]),
+    ])
+    expect(builder.opaque.maxVertices).toBe(12)
+
+    const {batches, stats} = builder.finalize()
+    expect(builder.opaque.maxVertices).toBe(9)
+    // The buffer really shrank -- not just the number describing it.
+    expect(batches[0].mesh.geometry.attributes.position.count).toBe(9)
+    // ...and the model survived the copy intact.
+    expect(stats.instanceCount).toBe(3)
+    expect(stats.vertexCount).toBe(9)
+    expect(Array.from(batches[0].instanceParents)).toEqual([1, 2, 3])
+  })
+
+  it('keeps the model when the finalize trim is the call that throws', () => {
+    // A batch past three's spread limit cannot be resized in either
+    // direction, so the trim has to be best-effort: a model that assembled
+    // correctly must not be lost to an optimisation on the way out.
+    const all = triangleShapes(3)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 3,
+      initialIndices: 3,
+    })
+    builder.appendBatch([
+      flatMesh(1, [{geomExpressID: 1000, color: OPAQUE}]),
+      flatMesh(2, [{geomExpressID: 1001, color: OPAQUE}]),
+      flatMesh(3, [{geomExpressID: 1002, color: OPAQUE}]),
+    ])
+    capGeometrySize(builder.opaque, 0)
+
+    const {batches, stats} = builder.finalize()
+    expect(stats.instanceCount).toBe(3)
+    expect(batches[0].mesh.geometry.attributes.position.count).toBe(12)
+    expect(builder.opaque.maxVertices).toBe(12)
+  })
+
+  it('keeps growth working at the geometry count the presize takes over from', () => {
+    // PRESIZE_FROM_GEOMETRIES only buys anything if `setGeometrySize` still
+    // WORKS when the batch reaches it -- the whole point is to make the
+    // last surviving resize the one that covers the rest of the model. The
+    // limit is V8's argument cap on the `Math.max(...)` spread inside
+    // three's setGeometrySize, it is stack-depth dependent rather than a
+    // documented constant (measured at 125,279 entries when Share#1809 was
+    // root-caused), so this asserts the margin on the engine actually
+    // running rather than pinning the number.
+    expect(() => Math.max(...new Array(PRESIZE_FROM_GEOMETRIES).fill(0))).not.toThrow()
   })
 
   it('skips one unreadable FlatMesh without dropping the rest of the batch', () => {
