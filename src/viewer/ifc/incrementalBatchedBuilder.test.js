@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import {BatchedMesh, Matrix4} from 'three'
+import {BatchedMesh, BufferGeometry, Matrix4} from 'three'
 import {clearConwayDirectLogs, getConwayDirectLogs}
   from '../../../tools/jest/conwayDirectLogCapture'
 import {IncrementalBatchedBuilder, PRESIZE_FROM_GEOMETRIES} from './incrementalBatchedBuilder'
@@ -757,10 +757,14 @@ describe('IncrementalBatchedBuilder', () => {
     expect(Array.from(batches[0].instanceParents)).toEqual([1, 2, 3])
   })
 
-  it('keeps the model when the finalize trim is the call that throws', () => {
-    // A batch past three's spread limit cannot be resized in either
-    // direction, so the trim has to be best-effort: a model that assembled
-    // correctly must not be lost to an optimisation on the way out.
+  it('keeps the model when the finalize trim throws before touching the mesh', () => {
+    // The BENIGN half of the trim's failure handling: `capGeometrySize`
+    // throws from where three's own shrink checks do, before
+    // `oldGeometry.dispose()`, so the mesh is untouched. A batch past the
+    // spread limit cannot be resized in either direction, and a model that
+    // assembled correctly must not be lost to an optimisation on the way
+    // out -- it keeps its slack instead. The destructive half is the next
+    // test.
     const all = triangleShapes(3)
     const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
       initialVertices: 3,
@@ -777,6 +781,46 @@ describe('IncrementalBatchedBuilder', () => {
     expect(stats.instanceCount).toBe(3)
     expect(batches[0].mesh.geometry.attributes.position.count).toBe(12)
     expect(builder.opaque.maxVertices).toBe(12)
+  })
+
+  it('fails the assembly when a trim allocation destroys the batch', () => {
+    // codex round 3 on Share#1809, and the other half of the test above.
+    // three's `setGeometrySize` is only non-destructive up to its shrink
+    // checks. Past those (BatchedMesh.js:1350-1365) it disposes the old
+    // geometry, overwrites _maxVertexCount/_maxIndexCount, assigns a fresh
+    // BufferGeometry, and only THEN allocates the new typed arrays in
+    // `_initializeGeometry` -- so an allocation failure, which is the
+    // plausible one at the trim's capacity + used peak on a large model,
+    // leaves a gutted mesh. Swallowing that would hand back a hollow
+    // BatchedMesh and report a successful load.
+    //
+    // The stub reproduces that ordering rather than the error: dispose,
+    // replace the geometry, then throw.
+    const all = triangleShapes(3)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 3,
+      initialIndices: 3,
+    })
+    builder.appendBatch([
+      flatMesh(1, [{geomExpressID: 1000, color: OPAQUE}]),
+      flatMesh(2, [{geomExpressID: 1001, color: OPAQUE}]),
+      flatMesh(3, [{geomExpressID: 1002, color: OPAQUE}]),
+    ])
+    // Slack to trim: 12 reserved, 9 used.
+    expect(builder.opaque.maxVertices).toBe(12)
+
+    const {mesh} = builder.opaque
+    mesh.setGeometrySize = () => {
+      mesh.geometry.dispose()
+      mesh.geometry = new BufferGeometry()
+      mesh._geometryInitialized = false
+      throw new RangeError('Array buffer allocation failed')
+    }
+
+    // finalize must NOT report success: ShareIfcLoader's catch around it
+    // removes the partial group and rebuilds the whole model from
+    // `recapture()`, which is the correct outcome for a destroyed batch.
+    expect(() => builder.finalize()).toThrow(/allocation failed/)
   })
 
   it('keeps growth working at the geometry count the presize takes over from', () => {

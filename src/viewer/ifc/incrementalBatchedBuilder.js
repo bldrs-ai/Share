@@ -419,11 +419,19 @@ export class IncrementalBatchedBuilder {
     // throw — that is the whole subject of Share#1809 — and a placement
     // marked seen but never appended would make a later re-emission a
     // duplicate of something that does not exist, counted as a coincident
-    // skip instead of retried. Nothing re-emits one today (conway's pump
-    // promises "each placed instance is emitted exactly once across all
-    // calls", and the degraded end-of-load builds construct a FRESH
-    // builder from `recapture()`), so that half is an invariant kept
-    // honest rather than a live bug fixed.
+    // skip instead of retried.
+    //
+    // How reachable that is depends on which source you believe, so assume
+    // the worse one. Conway's DELTA CONTRACT (`ifc_api.d.ts`) promises
+    // "each placed instance is emitted exactly once across all calls",
+    // which would make it unreachable; but this file's own
+    // "drops an exact coincident duplicate that arrives in a later delta
+    // batch" test says the pump re-emits identical placements via
+    // rel-aggregates re-extraction, and the whole cross-batch
+    // CoincidenceSet exists because of that. If the test is right, this is
+    // a live path, not a hypothetical one. (Either way the degraded
+    // end-of-load builds are not it: they construct a FRESH builder from
+    // `recapture()` and never see this `seenPlacements`.)
     //
     // The split exists so both can hold at once without hashing twice: the
     // probe runs on the STAGED matrix elements, after every Conway-boundary
@@ -821,13 +829,39 @@ export class IncrementalBatchedBuilder {
    * `max(vertexStart + reservedVertexCount)`, which is the figure
    * setGeometrySize checks a shrink against.
    *
-   * Cost and failure mode, both deliberate. The trim is one reallocation
-   * and copy of the batch buffers, so a steady-state saving is bought with
-   * a transient peak of capacity + used at the end of the load, after the
-   * parse-time transients have been released. And on a batch past three's
-   * spread limit it throws exactly like a growth would — and, like a
-   * growth, before it has touched the mesh — so it is best-effort: those
-   * batches keep their slack rather than losing their geometry to it.
+   * The cost is deliberate: one reallocation and copy of the batch
+   * buffers, so a steady-state saving is bought with a transient peak of
+   * capacity + used at the end of the load, after the parse-time
+   * transients have been released.
+   *
+   * BEST-EFFORT, BUT ONLY WHERE THE MESH SURVIVES (codex round 3 on
+   * Share#1809). `setGeometrySize` has two failure regions and they are
+   * not equivalent:
+   *
+   *   1. The shrink checks at the top — including the `Math.max(...)`
+   *      spread that PRESIZE_FROM_GEOMETRIES exists for. These run before
+   *      anything is mutated, so a batch past the spread limit throws with
+   *      its mesh untouched. Swallow it: that batch keeps its slack rather
+   *      than losing its geometry to a size optimisation.
+   *   2. Everything after `oldGeometry.dispose()`
+   *      (`node_modules/three/src/objects/BatchedMesh.js:1350` onwards):
+   *      three disposes the old geometry, overwrites `_maxVertexCount` and
+   *      `_maxIndexCount`, replaces `this.geometry` with a fresh
+   *      `BufferGeometry`, and only THEN allocates the new typed arrays
+   *      inside `_initializeGeometry`. An allocation failure there — the
+   *      plausible one, since the trim's own peak is capacity + used on
+   *      exactly the largest models — leaves a gutted mesh: disposed
+   *      buffers, empty geometry, `_geometryInitialized` false. Swallowing
+   *      THAT reports a destroyed model as a successful load.
+   *
+   * So the catch classifies by observable effect rather than by error
+   * type: if the geometry object is the same one and its arrays are the
+   * same length, nothing was mutated and the throw was benign. Otherwise
+   * the batch is gone and the throw is re-raised, which fails `finalize`
+   * and drops ShareIfcLoader into the degraded end-of-load rebuild from
+   * `recapture()` — a complete model, re-extracted. A rare trim-OOM
+   * landing in the fallback that exists for exactly this is the honest
+   * outcome; silently returning a hollow BatchedMesh is not.
    *
    * @param {object} state batch state
    */
@@ -835,11 +869,28 @@ export class IncrementalBatchedBuilder {
     if (state.usedVertices >= state.maxVertices && state.usedIndices >= state.maxIndices) {
       return
     }
+    // Captured for the classification below, before three can replace any
+    // of it. Lengths as well as identity: `_initializeGeometry` assigns a
+    // new geometry before it allocates, so a failure part-way through can
+    // leave an object that exists but has nothing in it.
+    const geometryBefore = state.mesh.geometry
+    const positionsBefore = geometryBefore?.attributes?.position?.array?.length ?? 0
+    const indicesBefore = geometryBefore?.index?.array?.length ?? 0
     try {
       state.mesh.setGeometrySize(state.usedVertices, state.usedIndices)
       state.maxVertices = state.usedVertices
       state.maxIndices = state.usedIndices
     } catch (e) {
+      const geometryAfter = state.mesh.geometry
+      const intact = geometryAfter === geometryBefore &&
+        (geometryAfter?.attributes?.position?.array?.length ?? 0) === positionsBefore &&
+        (geometryAfter?.index?.array?.length ?? 0) === indicesBefore
+      if (!intact) {
+        debug(WARN).warn(
+          'IncrementalBatchedBuilder: batch capacity trim destroyed the mesh; ' +
+          'failing the incremental assembly so the load rebuilds completely:', e)
+        throw e
+      }
       debug(WARN).warn('IncrementalBatchedBuilder: batch capacity trim skipped:', e)
     }
   }
