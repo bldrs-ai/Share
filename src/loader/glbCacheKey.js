@@ -20,6 +20,21 @@
  * it (`BLDRS_GLB_BATCHED_SCHEMA_VERSION` below) — deliberately, since that
  * is the slot most users actually read. Nothing extra to do here; the note
  * exists so the coupling is visible from where the bump gets written.
+ * 0.18.0 — retires artifacts baked with pre-1.1592 engine colours
+ *         (conway#684, issue test-models-private#61): legacyColor — the
+ *         field the streaming path bakes into per-instance source colours
+ *         — was never populated for models styled only with
+ *         IfcSurfaceStyleShading, so every placement arrived as the
+ *         0.8-grey default and got auto-coloured; material-association
+ *         styles on mapped items were dropped entirely. Colours are baked
+ *         into the artifact (per-instance source colours in
+ *         `BLDRS_instance_tables` on the batched slot, per-material bins
+ *         on the merged slot) and nothing in the cache key identifies the
+ *         engine, so without this bump a returning user's cache hit keeps
+ *         serving the all-grey model indefinitely while cache-miss users
+ *         see the authored palette. Same failure shape and remedy as
+ *         0.17.0/0.16.0/0.15.0; found by review on the bump PR
+ *         (Share#1817).
  * 0.17.0 — retires artifacts baked by pre-1.1585 engines, releasing the
  *         #641-epic geometry + shading train (conway#666/#668/#674/#676:
  *         wrong-sheet inverse-solve recovery, ribbon-sweep chain side,
@@ -174,7 +189,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.17.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.18.0'
 
 
 /**
