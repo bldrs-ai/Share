@@ -42,10 +42,12 @@ import {navWith} from '../utils/navigate'
 import {addProperties} from '../utils/objects'
 import {labelForGeometryId} from '../utils/geometryLabels'
 import {
-  findNodeByOccurrencePath,
+  occurrenceElementPathIds,
   occurrencePathKey,
   occurrencePathKeySetForTree,
   occurrencePathsEqual,
+  resolveElementPathOccurrence,
+  resolvePickedOccurrenceNode,
   trimToTreeOccurrencePath,
 } from '../utils/occurrencePaths'
 import {isOutOfMemoryError} from '../utils/oom'
@@ -886,12 +888,12 @@ export default function CadView({
    * once from `onModel`, before that render's `rootElement` is set.
    *
    * Ephemeral solid resolution: when the tree surfaces the picked body as a
-   * `type:'solid'` child of the node at this path (Conway's multibody solid
-   * layer), select THAT node — its express id is the picked instance's
-   * `PlacedGeometry.geometryExpressID` — so the NavTree highlights the one
-   * body, not the whole part. Falls back to the part-level selection when
-   * the tree has no matching solid (single-solid parts, suppressed
-   * anonymous dumps, old caches).
+   * `type:'solid'` node — since conway#628 the trimmed path lands on it
+   * directly (a body's path ends with its own express id), before that as a
+   * child of the node at this path — select THAT node, so the NavTree
+   * highlights the one body, not the whole part. `resolvePickedOccurrenceNode`
+   * owns those cases; it falls back to the part-level selection when the tree
+   * has no matching solid (single-solid parts, suppressed anonymous dumps).
    *
    * @param {object} pick
    * @param {number} pick.parentExpressId the geometry-owner product id
@@ -911,28 +913,15 @@ export default function CadView({
     const occurrencePath = rawPath ?
       trimToTreeOccurrencePath(rawPath, occurrencePathKeySetForTree(rootEltForPick)) :
       null
-    let targetId = parentExpressId
-    let solidExpressId = null
-    if (occurrencePath) {
-      const pathNode = pickedGeometryId !== null ?
-        findNodeByOccurrencePath(rootEltForPick, occurrencePath) : null
-      const solidNode = pathNode?.children?.find?.(
-        (child) => child.ephemeral === true && child.expressID === pickedGeometryId)
-      if (solidNode) {
-        targetId = solidNode.expressID
-        solidExpressId = solidNode.expressID
-      } else if (pickedGeometryId !== null && pathNode &&
-          occurrenceInstanceIds(occurrencePath, false).length > 1) {
-        // Anonymous piece of a multi-piece part (conway#387): no tree
-        // node exists, but (path, geometry id) is a complete identity —
-        // select it as a solid and materialize a transient NavTree row
-        // so highlight/scroll/eye/permalink all work. The >1-instance
-        // guard keeps single-solid parts (as1's nut, the NEMA screws)
-        // on the part-level selection, where the part node IS the piece.
-        targetId = pickedGeometryId
-        solidExpressId = pickedGeometryId
-        materializeTransientNode(occurrencePath, pickedGeometryId)
-      }
+    const {targetId, solidExpressId, transientGeometryId} = resolvePickedOccurrenceNode({
+      rootNode: rootEltForPick,
+      occurrencePath,
+      pickedGeometryId,
+      parentExpressId,
+      instanceCountAtPath: (path) => occurrenceInstanceIds(path, false).length,
+    })
+    if (transientGeometryId !== null) {
+      materializeTransientNode(occurrencePath, transientGeometryId)
     }
     selectItemsInScene([targetId], true, instanceIds, occurrencePath, solidExpressId)
   }
@@ -1047,9 +1036,11 @@ export default function CadView({
    *   null (the default) clears it for IFC and non-occurrence sources.
    * @param {number} solidExpressId Express id of the selected ephemeral solid
    *   (a multibody STEP part's named body), or null when the selection is a
-   *   whole product/occurrence. Solid nodes share their parent's occurrence
-   *   path, so this is what tells "the part" from "one body inside it" —
-   *   NavTree row highlight, per-solid hide and the permalink all read it.
+   *   whole product/occurrence. Since conway#628 it is also the last segment
+   *   of `occurrencePath`; carried separately because it's what tells "the
+   *   part" from "one body inside it" — NavTree row highlight, per-solid hide
+   *   and the permalink all read it, and pre-#628 caches key a body as the
+   *   (path, solid expressID) pair with no body segment on the path.
    * @param {Array} anchorIds The ids the user actually picked, when the
    *   caller expanded them into descendants for the scene highlight
    *   (`elementSelection` does). Null (the default) means every result is
@@ -1105,12 +1096,11 @@ export default function CadView({
           occurrencePath && occurrencePath.length > 0 && rootElt &&
           occurrencePathKeySetForTree(rootElt)?.has(occurrencePathKey(occurrencePath)))
         // A selected solid appends its own express id below the occurrence
-        // path — solids aren't path-addressable on their own (they share the
-        // parent part's path), so the URL identity is [root, ...path, solid].
-        // `selectElementBasedOnFilepath` resolves it back symmetrically.
+        // path when the path doesn't already carry it — see
+        // `occurrenceElementPathIds`, whose inverse
+        // `selectElementBasedOnFilepath` applies on load.
         const pathIds = isTreeOccurrencePath ?
-          [rootElt.expressID, ...occurrencePath,
-            ...(solidExpressId !== null ? [solidExpressId] : [])] :
+          occurrenceElementPathIds(rootElt.expressID, occurrencePath, solidExpressId) :
           getParentPathIdsForElement(elementsById, parseInt(firstId))
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const enabledFeatures = searchParams.get('feature')
@@ -1177,11 +1167,11 @@ export default function CadView({
       // a reused sub-assembly (under-determined in the tree) and never equals
       // the product_definition_shape id that owns the geometry (unreachable
       // in the scene). See design/new/step-occurrence-selection.md.
-      // `findNodeByOccurrencePath` is the single tree-membership gate (a
-      // non-null node ⟺ the tree knows the path) and its node supplies
-      // `hasChildren` for the scene resolution below. Null for IFC (nodes
-      // carry no occurrence paths) and for element paths the tree doesn't
-      // know — those keep the plain scalar-id selection.
+      // `resolveElementPathOccurrence` is the single tree-membership gate (a
+      // non-null occurrence path ⟺ the tree knows these ids) and its node
+      // supplies `hasChildren` for the scene resolution below. Null for IFC
+      // (nodes carry no occurrence paths) and for element paths the tree
+      // doesn't know — those keep the plain scalar-id selection.
       //
       // The first segment must be the root id: every app-written element
       // path starts at the root (both the occurrence branch and
@@ -1192,37 +1182,16 @@ export default function CadView({
       const eltPathIds = parts.slice(1).map((part) => parseInt(part))
       const startsAtRoot =
         state.rootElement && parseInt(parts[0]) === state.rootElement.expressID
-      let node = startsAtRoot ?
-        findNodeByOccurrencePath(state.rootElement, eltPathIds) : null
-      let occurrencePath = node ? eltPathIds : null
-      // Ephemeral solid permalink: the writer appends the solid's express id
-      // below its parent part's occurrence path ([root, ...path, solid]), so
-      // when the full segment list isn't a tree path, try the prefix as the
-      // path and the trailing id as one of that node's `type:'solid'`
-      // children. Mirrors the write in selectItemsInScene.
-      let solidExpressId = null
-      if (!node && startsAtRoot && eltPathIds.length >= 2) {
-        const parentPathIds = eltPathIds.slice(0, -1)
-        const parentNode = findNodeByOccurrencePath(state.rootElement, parentPathIds)
-        const solidNode = parentNode?.children?.find?.(
-          (child) => child.ephemeral === true && child.expressID === targetId)
-        if (solidNode) {
-          node = parentNode
-          occurrencePath = parentPathIds
-          solidExpressId = targetId
-        } else if (parentNode &&
-            occurrenceInstanceIds(parentPathIds, false, targetId).length > 0) {
-          // Anonymous-geometry permalink (conway#387): the trailing id names
-          // no tree node, but the instance map holds geometry with that id
-          // under the parent path — the piece exists, it just has no in-file
-          // identity beyond its express id. Select it as a solid and
-          // materialize its transient row so the tree shows what the URL
-          // addressed.
-          node = parentNode
-          occurrencePath = parentPathIds
-          solidExpressId = targetId
-          materializeTransientNode(parentPathIds, targetId)
-        }
+      const {node, occurrencePath, solidExpressId, transientGeometryId} = startsAtRoot ?
+        resolveElementPathOccurrence({
+          rootNode: state.rootElement,
+          eltPathIds,
+          hasGeometryAtPath: (path, geometryExpressId) =>
+            occurrenceInstanceIds(path, false, geometryExpressId).length > 0,
+        }) :
+        {node: null, occurrencePath: null, solidExpressId: null, transientGeometryId: null}
+      if (transientGeometryId !== null) {
+        materializeTransientNode(occurrencePath, transientGeometryId)
       }
       // Skip re-selecting when this element is already the active
       // selection. We consult the store (selectItemsInScene updates it
@@ -1246,9 +1215,10 @@ export default function CadView({
         state.selectedElements.includes(`${targetId}`) ||
         viewer.getSelectedIds().includes(targetId)
       // Occurrence identity is the path — plus the solid id when the URL
-      // addresses one body of a multibody part: solid and parent share the
-      // path, so path equality alone would treat "the part" and "one body
-      // inside it" as the same selection and skip the re-select.
+      // addresses one body of a multibody part, since a pre-conway#628 solid
+      // shares its part's path and path equality alone would treat "the part"
+      // and "one body inside it" as the same selection, skipping the
+      // re-select.
       const alreadySelected = (occurrencePath && state.selectedOccurrencePath) ?
         (occurrencePathsEqual(occurrencePath, state.selectedOccurrencePath) &&
           state.selectedSolidExpressId === solidExpressId) :
@@ -1568,9 +1538,11 @@ export default function CadView({
                 // toggles/accumulates against the current selection (multi-select);
                 // the per-occurrence scene highlight is single-selection only, so
                 // shift keeps its legacy type-level accumulate behavior.
-                // An ephemeral solid node shares its parent part's occurrence
-                // path; its own express id (= PlacedGeometry.geometryExpressID)
-                // narrows the resolution to the one clicked body.
+                // An ephemeral solid node's own express id
+                // (= PlacedGeometry.geometryExpressID) narrows the resolution
+                // to the one clicked body — necessary for a pre-conway#628
+                // solid, which shares its part's path, and harmless for a
+                // #628 body, whose path already names it alone.
                 const solidExpressId = isEphemeralSolid ? parseInt(expressIdOrIds, 10) : null
                 const instanceIds =
                   occurrenceInstanceIds(occurrencePath, hasChildren, solidExpressId)

@@ -664,4 +664,32 @@ describe('viewer/ShareViewer getInstanceIdsForOccurrencePath', () => {
     expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(ifcViewer, 0, [10, 20]))
       .toEqual([])
   })
+
+  it('resolves one body of a no-NAUO multibody model to its own instance (conway#628)', () => {
+    // BLSN_007 in miniature (test-models-private#98): ONE product, no NAUOs,
+    // named bodies whose occurrence path is just their own express id. Every
+    // instance shares the product_definition_shape as parent, so the path is
+    // the only thing that tells the bodies apart — before conway#628 they all
+    // shared one path and a NavTree click highlighted the whole hull.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 1020254, triangleCount: 1,
+        occurrencePath: [367733], geometryExpressId: 367733},
+      {parentExpressId: 1020254, triangleCount: 1,
+        occurrencePath: [367891], geometryExpressId: 367891},
+      {parentExpressId: 1020254, triangleCount: 1,
+        occurrencePath: [368002], geometryExpressId: 368002},
+    ])
+    const viewer = makeResolverViewer(mesh)
+    const forBody = (bodyId) => ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [bodyId], {includeDescendants: false, geometryExpressId: bodyId})
+    // The NavTree solid-leaf click funnel: exact key + geometry-id filter.
+    expect(forBody(367733)).toEqual([0])
+    expect(forBody(367891)).toEqual([1])
+    expect(forBody(368002)).toEqual([2])
+    // The hide funnel takes the same path without the leaf fast path
+    // (includeDescendants defaults true); a body has no descendants, so the
+    // prefix scan must still yield exactly the one instance.
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [367891], {geometryExpressId: 367891})).toEqual([1])
+  })
 })

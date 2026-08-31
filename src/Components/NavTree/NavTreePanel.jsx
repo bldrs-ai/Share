@@ -120,10 +120,11 @@ export default function NavTreePanel({
     // STEP: a scene pick reports the geometry's owner id
     // (product_definition_shape), which never equals a tree node's id (its NAUO
     // express id) — the shared occurrence path is the only reliable join, so
-    // prefer it. A multibody part's ephemeral solid rows share the part's
-    // path, so within the path match the solid id decides: a solid selection
+    // prefer it. Within a path match the solid id decides: a solid selection
     // scrolls to its own row, a part selection to the (non-ephemeral) part
-    // row. Falls back to expressID for IFC and when no occurrence is set.
+    // row. That tie-break is what a pre-conway#628 solid row needs (it shares
+    // its part's path) and what a transient anonymous-piece row still needs
+    // today. Falls back to expressID for IFC and when no occurrence is set.
     if (selectedOccurrencePathKey !== null) {
       index = visibleNodes.findIndex(
         ({node}) => Array.isArray(node.occurrencePath) &&
@@ -324,17 +325,19 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, transientT
       mapped.occurrencePath = node.occurrencePath
     }
     // Preserve the ephemeral-solid marker (a multibody part's named body).
-    // Solid rows share the parent part's occurrence path, so `isSelected`,
-    // the scroll effect, and the click funnel all need this to tell "the
-    // part" from "one body inside it". Absent for products and IFC.
+    // `isSelected`, the scroll effect, and the click funnel need it to tell
+    // "the part" from "one body inside it" — decisive for a pre-conway#628
+    // solid row and a transient piece row, which carry their part's own path.
+    // Absent for products and IFC.
     if (node.ephemeral === true) {
       mapped.ephemeral = true
     }
     // Anonymous-geometry affordances (conway#387). Both are session-only
     // and reconstructed on the fly — nothing here persists to the cache.
-    // Ephemeral solid rows share their parent part's occurrence path, so
-    // without the `ephemeral` guard every solid of a multibody part would
-    // re-inject the same transient rows the part already carries.
+    // The `ephemeral` guard keeps the injection at the part: a transient row
+    // carries its part's path, so without it every such row (and every
+    // pre-conway#628 solid row, which also shares that path) would re-inject
+    // the same rows the part already carries.
     if (Array.isArray(node.occurrencePath) && node.occurrencePath.length > 0 &&
         node.ephemeral !== true) {
       const pathKey = occurrencePathKey(node.occurrencePath)
@@ -465,10 +468,11 @@ const RenderRow = ({index, style, data}) => {
   // only the clicked/picked node, not every reuse. Falls back to expressID for
   // IFC and when no occurrence is selected (selectedOccurrencePathKey is null).
   if (selectedOccurrencePathKey !== null && Array.isArray(node.occurrencePath)) {
-    // A multibody part's ephemeral solid rows share the part's occurrence
-    // path, so the path match alone would light up the part AND all its
-    // bodies at once. The solid id splits them: a solid selection highlights
-    // only its own row; a part selection only the (non-ephemeral) part row.
+    // Rows that share their part's occurrence path — a pre-conway#628 solid
+    // row, a transient anonymous-piece row — would otherwise light up
+    // together with the part on a path match alone. The solid id splits them:
+    // a solid selection highlights only its own row; a part selection only
+    // the (non-ephemeral) part row.
     const pathMatches = occurrencePathKey(node.occurrencePath) === selectedOccurrencePathKey
     isSelected = pathMatches && (selectedSolidExpressId !== null ?
       (node.ephemeral === true && node.expressID === selectedSolidExpressId) :

@@ -1,0 +1,58 @@
+ISO-10303-21;
+HEADER;
+/* Reduction of the BLSN_007 hull export (Rhino 7 / ST-DEVELOPER, 281 MB,
+ * test-models-private#98): ONE product with no NEXT_ASSEMBLY_USAGE_OCCURRENCE
+ * and no CONTEXT_DEPENDENT_SHAPE_REPRESENTATION anywhere, all of its bodies
+ * named individually inside one child representation, and the relationships
+ * binding that child written in BOTH argument orders.
+ *
+ * #500 is the (product rep, detail rep) order every other fixture here uses.
+ * #701/#702/#703 are the same kind of relation written the other way round --
+ * the shape that made the whole model 308 walk roots and placed every body
+ * once per root, all of them sharing two occurrence paths. Three inverted
+ * edges is enough: it takes only one to make the SDR-bound representation a
+ * child, and the third proves the multiplier is the count of them. */
+FILE_DESCRIPTION ('AP214 inverted-SRR multibody / occurrence-identity test fixture','2;1');
+FILE_NAME('ap214-inverted-srr-multibody','2026-01-01T00:00:00',('test'),('bldrs'),'','','');
+FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));
+ENDSEC;
+DATA;
+#1 = APPLICATION_PROTOCOL_DEFINITION('international standard','automotive_design',2010,#2);
+#2 = APPLICATION_CONTEXT('mechanical design');
+#10 = CARTESIAN_POINT('',(0.,0.,0.));
+#11 = CARTESIAN_POINT('',(1.,0.,0.));
+#20 = DIRECTION('',(0.,0.,1.));
+#21 = DIRECTION('',(1.,0.,0.));
+#30 = AXIS2_PLACEMENT_3D('',#10,#20,#21);
+#100 = ( GEOMETRIC_REPRESENTATION_CONTEXT(3) GLOBAL_UNCERTAINTY_ASSIGNED_CONTEXT((#104)) GLOBAL_UNIT_ASSIGNED_CONTEXT((#101,#102,#103)) REPRESENTATION_CONTEXT('Context','3D') );
+#101 = ( LENGTH_UNIT() NAMED_UNIT(*) SI_UNIT(.MILLI.,.METRE.) );
+#102 = ( NAMED_UNIT(*) PLANE_ANGLE_UNIT() SI_UNIT($,.RADIAN.) );
+#103 = ( NAMED_UNIT(*) SI_UNIT($,.STERADIAN.) SOLID_ANGLE_UNIT() );
+#104 = UNCERTAINTY_MEASURE_WITH_UNIT(LENGTH_MEASURE(1.E-07),#101,'','');
+#201 = PRODUCT_CONTEXT('',#2,'mechanical');
+#202 = PRODUCT_DEFINITION_CONTEXT('part definition',#2,'design');
+#210 = PRODUCT('Document','Document','',(#201));
+#211 = PRODUCT_DEFINITION_FORMATION('','',#210);
+#212 = PRODUCT_DEFINITION('design','',#211,#202);
+#300 = SHAPE_REPRESENTATION('Document',(#30),#100);
+#301 = PRODUCT_DEFINITION_SHAPE('','',#212);
+#302 = SHAPE_DEFINITION_REPRESENTATION(#301,#300);
+#400 = ADVANCED_BREP_SHAPE_REPRESENTATION('brep_rep_0',(#401,#402,#403),#100);
+#401 = MANIFOLD_SOLID_BREP('brep_0',#411);
+#402 = MANIFOLD_SOLID_BREP('brep_1',#412);
+#403 = MANIFOLD_SOLID_BREP('Hauptkoerper',#413);
+#411 = CLOSED_SHELL('',());
+#412 = CLOSED_SHELL('',());
+#413 = CLOSED_SHELL('',());
+#500 = SHAPE_REPRESENTATION_RELATIONSHIP('','',#300,#400);
+#601 = GEOMETRICALLY_BOUNDED_WIREFRAME_SHAPE_REPRESENTATION('wireframe_rep_0',(#611),#100);
+#602 = GEOMETRICALLY_BOUNDED_WIREFRAME_SHAPE_REPRESENTATION('wireframe_rep_1',(#612),#100);
+#603 = GEOMETRICALLY_BOUNDED_WIREFRAME_SHAPE_REPRESENTATION('wireframe_rep_2',(#613),#100);
+#611 = GEOMETRIC_CURVE_SET('curves_0',(#11));
+#612 = GEOMETRIC_CURVE_SET('curves_1',(#11));
+#613 = GEOMETRIC_CURVE_SET('curves_2',(#11));
+#701 = SHAPE_REPRESENTATION_RELATIONSHIP('','',#601,#300);
+#702 = SHAPE_REPRESENTATION_RELATIONSHIP('','',#602,#300);
+#703 = SHAPE_REPRESENTATION_RELATIONSHIP('','',#603,#300);
+ENDSEC;
+END-ISO-10303-21;

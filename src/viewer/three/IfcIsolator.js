@@ -523,11 +523,11 @@ export default class IfcIsolator {
     const occurrencePath = useStore.getState().selectedOccurrencePath
     if (Array.isArray(occurrencePath) && occurrencePath.length > 0 &&
         typeof this.viewer.getInstanceIdsForOccurrencePath === 'function') {
-      // A selected ephemeral solid (a multibody part's named body) shares the
-      // part's occurrence path; keying the hide by the solid's own id (and
-      // filtering the instances by it) hides just that body, and keeps its
-      // hidden-state separate from the whole part's so the eyes toggle
-      // independently.
+      // Key the hide by the selected solid's own id (and filter the instances
+      // by it) so just that body disappears and its hidden-state stays
+      // separate from the whole part's — required where a body shares its
+      // part's occurrence path (pre-conway#628 solids, anonymous pieces), and
+      // the same id a #628 body's path ends with anyway.
       const solidExpressId = useStore.getState().selectedSolidExpressId
       const nodeId = solidExpressId ?? occurrencePath[occurrencePath.length - 1]
       if (this.hiddenOccurrences.has(nodeId)) {
