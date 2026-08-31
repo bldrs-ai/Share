@@ -2,7 +2,8 @@
 import {BatchedMesh, BufferGeometry, Matrix4} from 'three'
 import {clearConwayDirectLogs, getConwayDirectLogs}
   from '../../../tools/jest/conwayDirectLogCapture'
-import {IncrementalBatchedBuilder, PRESIZE_FROM_GEOMETRIES} from './incrementalBatchedBuilder'
+import {IncrementalBatchedBuilder, PRESIZE_FROM_GEOMETRIES, probeSpreadLimit}
+  from './incrementalBatchedBuilder'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 import {payloadToPreviewMesh} from './parsePreviewMesh'
 
@@ -546,11 +547,11 @@ describe('IncrementalBatchedBuilder', () => {
     }
 
     // One reservation carried the whole model: nothing was skipped, and
-    // the capacity that survived the ceiling is the projected one -- 47 =
-    // ceil(9 vertices needed / (2/9 of the model seen since this batch
-    // opened) * 1.15 headroom), covering all 30 -- not the 12 that
-    // doubling would have reached before the ceiling shut it out.
-    expect(builder.opaque.maxVertices).toBe(47)
+    // the capacity that survived the ceiling is the projected one -- 63 =
+    // ceil(6 vertices needed / (1/9 of the model seen since this batch
+    // opened) * 1.15 headroom), covering all 30 -- not the 6 that doubling
+    // would have reached before the ceiling shut it out.
+    expect(builder.opaque.maxVertices).toBe(63)
     const {stats} = builder.finalize()
     expect(stats.instanceCount).toBe(shapeCount)
     expect(stats.skippedPlacedGeometries).toBe(0)
@@ -575,19 +576,92 @@ describe('IncrementalBatchedBuilder', () => {
       lastChanceGeometries: 3,
     })
 
+    // Pump totals chosen so the presize crossing at the second geometry
+    // sees too little of the model to project from (1/999, under
+    // PRESIZE_MIN_FRACTION) and reserves nothing -- isolating the
+    // last-chance crossing as the only thing that can resize here.
+    builder.setPumpProgress(1, 1000)
+    builder.appendBatch([flatMesh(1, [{geomExpressID: 1000, color: OPAQUE}])])
+    builder.setPumpProgress(2, 1000)
+    builder.appendBatch([flatMesh(2, [{geomExpressID: 1001, color: OPAQUE}])])
+    expect(builder.opaque.maxVertices).toBe(60)
+
+    builder.setPumpProgress(21, 1000)
+    builder.appendBatch([flatMesh(3, [{geomExpressID: 1002, color: OPAQUE}])])
+
+    // The third geometry took the count to the threshold. 675 =
+    // ceil(9 needed / (20/999 seen since this batch opened) * 1.5
+    // last-chance headroom) -- reserved proactively, with 51 of the old 60
+    // still unused.
+    expect(builder.opaque.geometryCount).toBe(3)
+    expect(builder.opaque.usedVertices).toBe(9)
+    expect(builder.opaque.maxVertices).toBe(675)
+    expect(builder.opaque.maxIndices).toBe(675)
+    expect(builder.opaque.lastChanceReserved).toBe(true)
+  })
+
+  it('forces a projected reservation when the presize count crosses', () => {
+    // codex round 4 on Share#1809: the presize threshold has to be a
+    // crossing of its own, not just a modifier on a resize that was
+    // happening anyway. On an engine with a tight spread limit -- JSC caps
+    // argument spreads near 65k -- a model of single-triangle geometries
+    // first runs out of its 262,144-vertex initial reservation at 87,382
+    // geometries, so the first natural resize is already past the ceiling
+    // and nothing would ever be projected.
+    //
+    // 60 vertices reserved against 9 needed: only the crossing can resize.
+    const all = triangleShapes(3)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 60,
+      initialIndices: 60,
+      presizeFromGeometries: 3,
+    })
     for (let i = 0; i < 3; i++) {
-      builder.setPumpProgress(i + 1, 20)
+      builder.setPumpProgress(i + 1, 30)
       builder.appendBatch([flatMesh(i + 1, [{geomExpressID: 1000 + i, color: OPAQUE}])])
     }
 
-    // The third geometry took the count to the threshold. 129 =
-    // ceil(9 needed / (2/19 seen since this batch opened) * 1.5 last-chance
-    // headroom) -- reserved proactively, with 51 of the old 60 still unused.
-    expect(builder.opaque.geometryCount).toBe(3)
+    // 151 = ceil(9 needed / (2/29 seen since this batch opened) * 1.15).
     expect(builder.opaque.usedVertices).toBe(9)
-    expect(builder.opaque.maxVertices).toBe(129)
-    expect(builder.opaque.maxIndices).toBe(129)
-    expect(builder.opaque.lastChanceReserved).toBe(true)
+    expect(builder.opaque.maxVertices).toBe(151)
+    expect(builder.opaque.maxIndices).toBe(151)
+    expect(builder.opaque.presizeReserved).toBe(true)
+  })
+
+  it('derives both thresholds from the engine\'s own spread limit', () => {
+    // The limit is a property of the engine and of stack depth, not of
+    // three, so hard-coding V8's leaves the mechanism inert elsewhere. A
+    // roomy engine keeps the tuned caps; a tight one is pulled below its
+    // ceiling rather than past it.
+    const jsc = new IncrementalBatchedBuilder(makeApi({}), 0, {spreadLimit: 65536})
+    expect(jsc.presizeFromGeometries).toBe(39321) // floor(65536 * 0.6)
+    expect(jsc.lastChanceGeometries).toBe(55705) // floor(65536 * 0.85)
+    // ...and both stay under the ceiling that would have thrown.
+    expect(jsc.lastChanceGeometries).toBeLessThan(65536)
+
+    const v8 = new IncrementalBatchedBuilder(makeApi({}), 0, {spreadLimit: 125278})
+    expect(v8.presizeFromGeometries).toBe(PRESIZE_FROM_GEOMETRIES) // capped at 50,000
+    expect(v8.lastChanceGeometries).toBe(106486) // floor(125278 * 0.85), under the 110,000 cap
+  })
+
+  it('probes the running engine for a spread limit its thresholds fit under', () => {
+    // The one test that exercises the real Math.max rather than an
+    // injected number. It deliberately does NOT re-spread at the probed
+    // limit itself: that boundary moves with stack depth (measured 125,263
+    // at the probe's own depth, 122,851 with 200 extra frames), so
+    // asserting on it exactly is a flaky test, and the safety factors
+    // exist precisely because the resize happens from a different stack
+    // than the probe. What must hold is that the thresholds DERIVED from
+    // it are spreadable, with their margin intact.
+    const limit = probeSpreadLimit()
+    expect(Number.isInteger(limit)).toBe(true)
+    expect(limit).toBeGreaterThan(PRESIZE_FROM_GEOMETRIES)
+
+    const derived = new IncrementalBatchedBuilder(makeApi({}), 0)
+    expect(() => Math.max(...new Array(derived.presizeFromGeometries))).not.toThrow()
+    expect(() => Math.max(...new Array(derived.lastChanceGeometries))).not.toThrow()
+    // Memoised, so a load pays for the search once.
+    expect(probeSpreadLimit()).toBe(limit)
   })
 
   it('keeps widening on the exhaustion path once the batch is past the threshold', () => {
@@ -608,19 +682,19 @@ describe('IncrementalBatchedBuilder', () => {
       builder.appendBatch([flatMesh(i + 1, [{geomExpressID: 1000 + i, color: OPAQUE}])])
     }
     expect(builder.opaque.lastChanceReserved).toBe(true)
-    expect(builder.opaque.maxVertices).toBe(61)
+    expect(builder.opaque.maxVertices).toBe(63)
 
-    // Consume nearly all of it, then add a fourth geometry: 63 needed
-    // against 61 reserved, so this resize is driven by exhaustion, not by
-    // a crossing. 142 = ceil(63 * 1.5 / (6/9)); the 1.15 headroom would
-    // have left the doubling in charge at 122.
-    builder.opaque.usedVertices = 60
-    builder.opaque.usedIndices = 60
+    // Consume nearly all of it, then add a fourth geometry: 65 needed
+    // against 63 reserved, and both crossings are already spent, so this
+    // resize is driven by exhaustion alone. 147 = ceil(65 * 1.5 / (6/9));
+    // the 1.15 headroom would have left the doubling in charge at 126.
+    builder.opaque.usedVertices = 62
+    builder.opaque.usedIndices = 62
     builder.setPumpProgress(7, 10)
     builder.appendBatch([flatMesh(4, [{geomExpressID: 1003, color: OPAQUE}])])
 
-    expect(builder.opaque.maxVertices).toBe(142)
-    expect(builder.opaque.maxIndices).toBe(142)
+    expect(builder.opaque.maxVertices).toBe(147)
+    expect(builder.opaque.maxIndices).toBe(147)
   })
 
   it('lets a coincident duplicate mutate no capacity at an instance boundary', () => {
@@ -821,18 +895,6 @@ describe('IncrementalBatchedBuilder', () => {
     // removes the partial group and rebuilds the whole model from
     // `recapture()`, which is the correct outcome for a destroyed batch.
     expect(() => builder.finalize()).toThrow(/allocation failed/)
-  })
-
-  it('keeps growth working at the geometry count the presize takes over from', () => {
-    // PRESIZE_FROM_GEOMETRIES only buys anything if `setGeometrySize` still
-    // WORKS when the batch reaches it -- the whole point is to make the
-    // last surviving resize the one that covers the rest of the model. The
-    // limit is V8's argument cap on the `Math.max(...)` spread inside
-    // three's setGeometrySize, it is stack-depth dependent rather than a
-    // documented constant (measured at 125,279 entries when Share#1809 was
-    // root-caused), so this asserts the margin on the engine actually
-    // running rather than pinning the number.
-    expect(() => Math.max(...new Array(PRESIZE_FROM_GEOMETRIES).fill(0))).not.toThrow()
   })
 
   it('skips one unreadable FlatMesh without dropping the rest of the batch', () => {

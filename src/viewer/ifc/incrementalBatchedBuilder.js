@@ -22,22 +22,35 @@ const INITIAL_INSTANCES = 1024
 const INITIAL_VERTICES = 1 << 18
 const INITIAL_INDICES = 1 << 19
 const GROWTH = 2
-// Geometry count from which a batch stops doubling blindly and is sized
-// for the whole model instead (see projectCapacity_).
-//
-// three r0.184's `BatchedMesh.setGeometrySize` spreads one argument per
-// ACTIVE geometry into `Math.max( ...validRanges.map( … ) )`
-// (node_modules/three/src/objects/BatchedMesh.js:1329 and :1339), so the
-// call throws `RangeError: Maximum call stack size exceeded` once a batch
-// holds more geometries than V8's argument limit. That limit is
-// stack-depth dependent, so it is a soft ceiling rather than a constant to
-// sit on: measured at 125,279 entries on the box that root-caused this
-// (Share#1809), reached by sp-946MB.ifc at roughly a quarter of its load.
-// Past it a batch can never grow again, so the last growth that still
-// works has to be the one that covers the rest of the model. Triggering at
-// well under half the measured limit leaves room for a shallower stack and
-// still gives the projection a sample of tens of thousands of geometries.
+// Upper bound for the spread probe below. Nothing is gained by knowing an
+// engine tolerates more than this: the thresholds derived from it are
+// already clamped by their own constants at that point.
+const SPREAD_PROBE_CEILING = 200000
+// Ceiling on the geometry count from which a batch stops doubling blindly
+// and is sized for the whole model instead (see projectCapacity_), and on
+// the count past which it is treated as having ONE resize left. Both are
+// clamped down to a fraction of the ENGINE's measured spread limit; these
+// are the caps that apply when the engine is roomy.
 export const PRESIZE_FROM_GEOMETRIES = 50000
+export const LAST_CHANCE_GEOMETRIES = 110000
+// Fractions of the probed spread limit the two thresholds sit at.
+//
+// The presize crossing has to happen early enough that a batch reaches it
+// before its FIRST natural resize, or the mechanism never runs at all: a
+// model of single-triangle geometries fills the initial 262,144-vertex
+// reservation at 87,382 geometries, which is above JavaScriptCore's spread
+// limit, so on Safari the first resize is already the one that throws
+// (codex round 4 on Share#1809). 0.6 puts it comfortably below any
+// engine's ceiling; 0.85 leaves the last-chance reservation as late as is
+// safe, so it projects from the largest sample it can get.
+//
+// Both also have to absorb the fact that the probe runs from a different
+// stack depth than three's resize will. Measured on this V8: the limit
+// falls from 125,263 at the probe's own depth to 122,851 with 200 extra
+// frames beneath it — 1.9%. A 15% margin covers that with room to spare;
+// sitting ON the probed number would not.
+const PRESIZE_SPREAD_SAFETY = 0.6
+const LAST_CHANCE_SPREAD_SAFETY = 0.85
 // Over-provision the projected whole-model requirement by this much. The
 // projection is re-run at every later growth, so this only has to cover
 // the error of the LAST projection made before the ceiling above; measured
@@ -47,17 +60,6 @@ const PRESIZE_HEADROOM = 1.15
 // Pump progress below which the projection is not trusted: dividing a
 // handful of dense products by a near-zero fraction reserves gigabytes.
 const PRESIZE_MIN_FRACTION = 0.02
-// Active-geometry count past which a batch is treated as having ONE resize
-// left, and reserves accordingly (see projectCapacity_).
-//
-// Deliberately well under the 125,279 measured above, because that number
-// is V8's argument cap on three's `Math.max(...)` spread and is therefore
-// stack-depth dependent: the same batch resized from a deeper call stack
-// fails earlier. 110,000 keeps ~12% of margin against a measurement taken
-// on one stack on one box, which is the right side to be wrong on — the
-// cost of triggering early is a slightly larger reservation, the cost of
-// triggering late is the reservation never happening at all.
-const LAST_CHANCE_GEOMETRIES = 110000
 // Headroom the last-chance reservation uses in place of PRESIZE_HEADROOM.
 //
 // The projection is linear in products, which is only conservative when
@@ -75,6 +77,68 @@ const LAST_CHANCE_HEADROOM = 1.5
 // the deferred pump path, which always reports totals — so this is what
 // keeps the branch total rather than a second estimator.
 const LAST_CHANCE_GROWTH = 2
+
+
+// Memoised result of probeSpreadLimit().
+let spreadLimitCache = null
+
+
+/**
+ * Largest argument count this engine's `Math.max(...)` survives.
+ *
+ * three r0.184's `BatchedMesh.setGeometrySize` spreads one argument per
+ * ACTIVE geometry into `Math.max( ...validRanges.map( … ) )`
+ * (node_modules/three/src/objects/BatchedMesh.js:1329 and :1339), so once a
+ * batch holds more geometries than the engine's argument limit, EVERY
+ * resize of it throws and the batch can never grow again. Everything this
+ * module does about that — when to stop doubling and project, when to take
+ * the last reservation — has to sit below this number.
+ *
+ * Probed rather than hard-coded because it is a property of the engine and
+ * of stack depth at the call site, not of three: measured at 125,279 on the
+ * V8 that root-caused Share#1809, while JavaScriptCore caps argument
+ * spreads near 65k and SpiderMonkey allows more. A constant encodes one
+ * engine, and the wrong one is not a smaller margin but no mechanism at
+ * all — a model of single-triangle geometries needs its first resize at
+ * 87,382 geometries, so on Safari a 110,000 threshold is never reached
+ * before the throw (codex round 4 on Share#1809).
+ *
+ * Binary search over hole-y arrays: `new Array(n)` allocates no elements
+ * and the spread reads holes as `undefined`, so each probe costs the spread
+ * itself and nothing else. ~18 iterations, memoised, and deliberately
+ * called from the builder's constructor rather than at import time so a
+ * module load never pays for it.
+ *
+ * @return {number} the largest n for which `Math.max(...new Array(n))`
+ *   does not throw, capped at SPREAD_PROBE_CEILING
+ */
+export function probeSpreadLimit() {
+  if (spreadLimitCache !== null) {
+    return spreadLimitCache
+  }
+  const survives = (n) => {
+    try {
+      Math.max(...new Array(n))
+      return true
+    } catch {
+      // RangeError on every engine that has a limit; catching broadly
+      // because the class of the throw is not part of any contract.
+      return false
+    }
+  }
+  let low = 1
+  let high = SPREAD_PROBE_CEILING
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2)
+    if (survives(mid)) {
+      low = mid
+    } else {
+      high = mid - 1
+    }
+  }
+  spreadLimitCache = low
+  return spreadLimitCache
+}
 // Console cap for per-record skip warnings (see warnBadRecord_): a model
 // with many budget-evicted geometries (conway#535) shouldn't flood the
 // console one line per id -- the load report's skipped* counts already
@@ -124,6 +188,10 @@ export class IncrementalBatchedBuilder {
    *   PRESIZE_FROM_GEOMETRIES real geometries.
    * @param {number} [opts.lastChanceGeometries] test hook: geometry count
    *   at which a resize is treated as the last one this batch will get.
+   * @param {number} [opts.spreadLimit] test hook: stand in for
+   *   probeSpreadLimit(), so the thresholds derived from a JavaScriptCore-
+   *   or V8-sized ceiling can be pinned without running on that engine.
+   *   Ignored for whichever of the two thresholds is given explicitly.
    */
   constructor(api, modelID, opts = {}) {
     this.api = api
@@ -132,8 +200,17 @@ export class IncrementalBatchedBuilder {
     this.initialInstances = opts.initialInstances ?? INITIAL_INSTANCES
     this.initialVertices = opts.initialVertices ?? INITIAL_VERTICES
     this.initialIndices = opts.initialIndices ?? INITIAL_INDICES
-    this.presizeFromGeometries = opts.presizeFromGeometries ?? PRESIZE_FROM_GEOMETRIES
-    this.lastChanceGeometries = opts.lastChanceGeometries ?? LAST_CHANCE_GEOMETRIES
+    // Both thresholds are the smaller of their own cap and a fraction of
+    // what this engine's `Math.max(...)` spread actually tolerates, so a
+    // roomy engine keeps the tuned numbers (V8 here: 50,000 and 106,486)
+    // and a tight one is pulled below its ceiling instead of past it
+    // (JavaScriptCore at ~65,536: 39,321 and 55,705). See
+    // probeSpreadLimit.
+    const spreadLimit = opts.spreadLimit ?? probeSpreadLimit()
+    this.presizeFromGeometries = opts.presizeFromGeometries ?? Math.min(
+      PRESIZE_FROM_GEOMETRIES, Math.floor(spreadLimit * PRESIZE_SPREAD_SAFETY))
+    this.lastChanceGeometries = opts.lastChanceGeometries ?? Math.min(
+      LAST_CHANCE_GEOMETRIES, Math.floor(spreadLimit * LAST_CHANCE_SPREAD_SAFETY))
     this.root = new Group()
     // geometryExpressID → {geometry, vertCount, indexCount, box,
     // idByBatch: Map(batchState → geometryId)} — geometry fetched from
@@ -636,10 +713,11 @@ export class IncrementalBatchedBuilder {
       // is what decides whether setGeometrySize can still be called, see
       // PRESIZE_FROM_GEOMETRIES.
       geometryCount: 0,
-      // Whether the one-shot widened reservation at LAST_CHANCE_GEOMETRIES
-      // has been made (see ensureCapacity_). Without it the crossing would
-      // re-trigger on every geometry past the threshold, one full buffer
-      // copy each.
+      // Whether the one-shot reservations at presizeFromGeometries and
+      // lastChanceGeometries have been made (see ensureCapacity_). Without
+      // these the crossings would re-trigger on every geometry past their
+      // thresholds, one full buffer copy each.
+      presizeReserved: false,
       lastChanceReserved: false,
       // Pump progress when this batch was created. The projection measures
       // from here, not from zero: the transparent batch's first placement
@@ -699,21 +777,36 @@ export class IncrementalBatchedBuilder {
     // Past the early return above, this geometry is NEW to the batch, so
     // the count it is about to reach is the one that matters here.
     const lastChance = state.geometryCount + 1 >= this.lastChanceGeometries
-    // Two things call for a resize, and the second is not obvious.
+    // THREE things call for a resize, and only the first is obvious.
     //
-    // Running out of room is the obvious one. The other is this geometry
-    // taking the batch across LAST_CHANCE_GEOMETRIES: resizing stops being
-    // reliable past that point, so the widened reservation has to be made
-    // HERE, on the crossing, while it still works. Waiting for the batch to
-    // run out — as this did until codex's second round on Share#1809 — hands
-    // the widening to whichever later placement happens to exhaust the
-    // reserve, and an ample 1.15 projection can postpone that well beyond
-    // the spread ceiling, at which point `setGeometrySize` throws and the
-    // widening arrives exactly one throw too late. One shot, so
-    // `lastChanceReserved` stops it becoming a resize per geometry.
+    // Running out of room is the obvious one. The other two are threshold
+    // crossings, and both exist because resizing is a privilege this batch
+    // loses partway through the load — so a reservation that matters has to
+    // be made while it still works, not when the batch happens to run out.
+    //
+    // `crossing` is the last-chance one: past lastChanceGeometries this is
+    // in expectation the final resize, so it is taken with the widened
+    // headroom. Hanging it off exhaustion — as this did until codex's
+    // second round — hands the widening to whichever later placement runs
+    // the reserve out, which an ample 1.15 projection can postpone past
+    // the ceiling.
+    //
+    // `presizeCrossing` is the earlier one, and without it the whole
+    // mechanism can be skipped on a tight engine: a model of
+    // single-triangle geometries first exhausts its 262,144-vertex initial
+    // reservation at 87,382 geometries, above JavaScriptCore's spread
+    // limit, so there the FIRST natural resize is already the one that
+    // throws and no projection is ever made (codex round 4). Crossing
+    // presizeFromGeometries therefore forces a projected resize on its own,
+    // whether or not the batch is short of room.
+    //
+    // Both are one-shot; the latches stop them becoming a resize per
+    // geometry for the rest of the load.
     const exhausted = needVertices > state.maxVertices || needIndices > state.maxIndices
     const crossing = lastChance && !state.lastChanceReserved
-    if (exhausted || crossing) {
+    const presizeCrossing = !state.presizeReserved &&
+      state.geometryCount + 1 >= this.presizeFromGeometries
+    if (exhausted || crossing || presizeCrossing) {
       let nextVertices = state.maxVertices
       let nextIndices = state.maxIndices
       while (nextVertices < needVertices) {
@@ -734,11 +827,14 @@ export class IncrementalBatchedBuilder {
         state.maxVertices = nextVertices
         state.maxIndices = nextIndices
       }
-      // Spent whether or not it changed the size — the question "has this
-      // batch taken its last-chance reservation" is about the crossing,
-      // not about whether the crossing needed more room.
+      // Spent whether or not they changed the size — the question "has
+      // this batch taken its reservation" is about the crossing, not about
+      // whether the crossing needed more room.
       if (crossing) {
         state.lastChanceReserved = true
+      }
+      if (presizeCrossing) {
+        state.presizeReserved = true
       }
     }
     state.usedVertices = needVertices
@@ -788,7 +884,11 @@ export class IncrementalBatchedBuilder {
    */
   projectCapacity_(state, needVertices, needIndices, lastChance) {
     let scale = 0
-    if (this.pumpTotal > 0 && state.geometryCount >= this.presizeFromGeometries) {
+    // `+ 1` for the same reason the caller's predicates use it: this runs
+    // only when a new geometry is being added, so the count that decides is
+    // the one it is about to reach. Without it the presize CROSSING would
+    // arrive one geometry before this guard opened and reserve nothing.
+    if (this.pumpTotal > 0 && state.geometryCount + 1 >= this.presizeFromGeometries) {
       const total = this.pumpTotal - state.startDone
       const fraction = total > 0 ?
         Math.min((this.pumpDone - state.startDone) / total, 1) : 0
