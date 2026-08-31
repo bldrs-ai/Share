@@ -537,7 +537,7 @@ describe('loadProgress', () => {
         captureLoadDiagnostics({warningCount: 1, contentType: 'ifc'})
 
         const {tags} = diagnosticsCall()[1]
-        expect(tags.authoring_tool).toBe('Autodesk Revit 2024 (ENU)')
+        expect(tags.authoring_tool).toBe('Autodesk Revit 2024')
         expect(tags.model_schema).toBe('IFC4')
         expect(tags.model_format).toBe('ifc')
         expect(tags.model_size_mb).toBe(sizeMb)
@@ -571,19 +571,22 @@ describe('loadProgress', () => {
         warnSpy.mockRestore()
       })
 
+      // Schema is the header string that still reaches a tag verbatim; the
+      // tool no longer can (knownAuthoringTool emits this module's own short
+      // canonical name), so truncation is asserted where it stays reachable.
       it('truncates tag values at Sentry limit and omits what the header never said', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
         const overlongChars = 300
         const maxTagChars = 200
         beginLoadProgress({fileInfo: 'noext'})
-        reportModelInfo({fileName: 'noext', originatingSystem: 'T'.repeat(overlongChars)})
+        reportModelInfo({fileName: 'noext', schema: 'S'.repeat(overlongChars)})
         console.warn('No basis found for brep!')
         endLoadProgress()
         captureLoadDiagnostics({warningCount: 1})
 
         const {tags} = diagnosticsCall()[1]
-        expect(tags.authoring_tool).toHaveLength(maxTagChars)
-        expect(tags).not.toHaveProperty('model_schema')
+        expect(tags.model_schema).toHaveLength(maxTagChars)
+        expect(tags).not.toHaveProperty('authoring_tool')
         expect(tags).not.toHaveProperty('model_size_mb')
         // No extension to read, and no contentType passed to fall back on.
         expect(tags).not.toHaveProperty('model_format')
@@ -602,37 +605,90 @@ describe('loadProgress', () => {
       })
 
       /*
-       * The tag exists to bypass Sentry's scrubber, so it has to police its
-       * own content: an exporter-written originating_system sometimes carries
-       * the exporter's install path, which on Windows names a user.
+       * The tag exists to bypass Sentry's scrubber, so it cannot be built by
+       * removing the bad parts of exporter-written free text — there is no
+       * bounded set of bad parts. Only an allowlisted family reaches it, as
+       * this module's own canonical string.
        */
-      it('strips path-like tokens from the authoring tool', () => {
-        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'Tower.ifc'})
-        reportModelInfo({
-          fileName: 'Tower.ifc',
-          originatingSystem: 'Revit Exporter C:\\Users\\jsmith\\rvt2ifc.exe',
+      describe('authoring_tool allowlist', () => {
+        /**
+         * @param {object} info the model-header fields under test
+         * @return {object} the tags of the resulting diagnostics event
+         */
+        function tagsForHeader(info) {
+          // diagnosticsCall() reads the first matching capture, so cases that
+          // exercise several headers have to start from a clean mock.
+          captureMessage.mockClear()
+          const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+          beginLoadProgress({fileInfo: 'Tower.ifc'})
+          reportModelInfo({fileName: 'Tower.ifc', ...info})
+          console.warn('No basis found for brep!')
+          endLoadProgress()
+          captureLoadDiagnostics({warningCount: 1})
+          warnSpy.mockRestore()
+          return diagnosticsCall()[1].tags
+        }
+
+        it('names a known family canonically, with its numeric version', () => {
+          expect(tagsForHeader({originatingSystem: 'Autodesk Revit 2024 (ENU)'}).authoring_tool)
+            .toBe('Autodesk Revit 2024')
         })
-        console.warn('No basis found for brep!')
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: 1})
 
-        const {tags} = diagnosticsCall()[1]
-        expect(tags.authoring_tool).toBe('Revit Exporter')
-        expect(tags.authoring_tool).not.toContain('jsmith')
-        warnSpy.mockRestore()
-      })
+        it('canonicalizes a family however the header spelled it', () => {
+          expect(tagsForHeader({originatingSystem: 'ARCHICAD-64'}).authoring_tool)
+            .toBe('Graphisoft ArchiCAD')
+        })
 
-      it('omits the authoring tool entirely when it is nothing but a path', () => {
-        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'Tower.ifc'})
-        reportModelInfo({fileName: 'Tower.ifc', originatingSystem: '/home/jsmith/exporters/ifc'})
-        console.warn('No basis found for brep!')
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: 1})
+        // The exact shape Codex raised on PR #1815: identifying free text with
+        // no path separator anywhere in it.
+        it('never lets free text through, even when it names a family', () => {
+          const {authoring_tool: tool} = tagsForHeader({
+            originatingSystem: 'Revit exported by jane@example.com',
+          })
+          expect(tool).toBe('Autodesk Revit')
+          expect(tool).not.toContain('jane')
+          expect(tool).not.toContain('@')
+        })
 
-        expect(diagnosticsCall()[1].tags).not.toHaveProperty('authoring_tool')
-        warnSpy.mockRestore()
+        it('omits the tag entirely for a header that names no known family', () => {
+          // A real Revit preprocessor_version — it names the exporter build,
+          // not the application, so the allowlist places nothing.
+          expect(tagsForHeader({
+            originatingSystem: '20190108_1515(x64) - Exporter 19.3.0.0 - Alternative Benutzeroberflache',
+          })).not.toHaveProperty('authoring_tool')
+          expect(tagsForHeader({originatingSystem: '/home/jsmith/exporters/ifc'}))
+            .not.toHaveProperty('authoring_tool')
+        })
+
+        it('takes a version token only when it is purely numeric', () => {
+          expect(tagsForHeader({originatingSystem: 'KiCad 8.0'}).authoring_tool).toBe('KiCad 8.0')
+          // 'Structures' follows the matched name, so there is no version to
+          // take — the canonical family name stands alone rather than
+          // carrying a word out of the header.
+          expect(tagsForHeader({originatingSystem: 'Tekla Structures 21.0'}).authoring_tool)
+            .toBe('Tekla Structures')
+        })
+
+        // The table is ordered most-specific-first, which is the only thing
+        // keeping these two off the more generic family that also matches.
+        it('prefers the more specific family when a header names both', () => {
+          expect(tagsForHeader({originatingSystem: 'Autodesk AutoCAD Civil 3D 2023'}).authoring_tool)
+            .toBe('Autodesk Civil 3D 2023')
+          expect(tagsForHeader({originatingSystem: 'Bonsai 0.8 (Blender)'}).authoring_tool)
+            .toBe('Bonsai/BlenderBIM 0.8')
+        })
+
+        /*
+         * Safe only because of the allowlist: an unmatched preprocessor
+         * yields no tag at all, so reaching for it can add a family but never
+         * substitute one header's free text for another's.
+         */
+        it('falls back to the preprocessor when the authoring system matches nothing', () => {
+          expect(tagsForHeader({
+            originatingSystem: '20190108_1515(x64) - Exporter 19.3.0.0',
+            preprocessorVersion: 'Autodesk Revit 2022 (ENU)',
+          }).authoring_tool).toBe('Autodesk Revit 2022')
+        })
       })
 
       /*
@@ -644,12 +700,12 @@ describe('loadProgress', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
         beginLoadProgress({fileInfo: 'Tower.ifc'})
         reportModelInfo({fileName: 'Tower.ifc', originatingSystem: 'Autodesk Revit 2024 (ENU)'})
-        reportLoadProgress({modelInfo: {fileName: 'Tower.ifc', preprocessorVersion: 'IFC4 exporter'}})
+        reportLoadProgress({modelInfo: {fileName: 'Tower.ifc', preprocessorVersion: 'KiCad 8.0'}})
         console.warn('No basis found for brep!')
         endLoadProgress()
         captureLoadDiagnostics({warningCount: 1})
 
-        expect(diagnosticsCall()[1].tags.authoring_tool).toBe('Autodesk Revit 2024 (ENU)')
+        expect(diagnosticsCall()[1].tags.authoring_tool).toBe('Autodesk Revit 2024')
         warnSpy.mockRestore()
       })
 

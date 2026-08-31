@@ -339,16 +339,22 @@ class LoadProgressReporter {
   }
 
   /**
-   * The `authoring_tool` tag value: the authoring system, or the preprocessor
-   * when that is all any header named — the same preference order
-   * formatModelLine uses for the model line's tool segment — with path-like
-   * tokens removed (see withoutPathTokens).
+   * The `authoring_tool` tag value: the authoring system matched against the
+   * known-exporter allowlist, falling back to the preprocessor when the
+   * authoring system named nothing recognizable — the same preference order
+   * formatModelLine uses for the model line's tool segment, applied to
+   * whichever header string the allowlist can actually place.
    *
-   * @return {string|undefined} undefined when no header named a tool, or when
-   *   sanitizing left nothing
+   * The fallback is only safe because of the allowlist: an unmatched
+   * preprocessor string yields no tag at all, so reaching for it can add a
+   * family but never leak one header's free text in place of another's.
+   *
+   * @return {string|undefined} undefined when neither header named a family
+   *   the allowlist knows
    */
   authoringTool() {
-    return withoutPathTokens(this.originatingSystem ?? this.preprocessorVersion)
+    return knownAuthoringTool(this.originatingSystem) ??
+      knownAuthoringTool(this.preprocessorVersion)
   }
 
   /**
@@ -553,7 +559,9 @@ class LoadProgressReporter {
     // Nothing identifying belongs here: tool, schema, extension and a
     // rounded size only. No path, no filename, no URL — content_id above is
     // where a model's identity already lives, and it is the field the
-    // scrubber is aimed at.
+    // scrubber is aimed at. The tool is the one field built from
+    // exporter-written free text, so it goes through an allowlist rather
+    // than a filter — see knownAuthoringTool.
     const authoringTool = this.authoringTool()
     if (authoringTool !== undefined) {
       tags.authoring_tool = authoringTool.slice(0, MAX_TAG_CHARS)
@@ -789,27 +797,88 @@ function extensionOf(basename) {
 
 
 /**
- * Drop whitespace-separated tokens containing a path separator, for the
- * `authoring_tool` tag.
+ * Exporter families the `authoring_tool` tag is allowed to name, most
+ * specific first — an AutoCAD Civil 3D header must land on Civil 3D, and a
+ * Bonsai one on Bonsai rather than plain Blender.
  *
- * That tag exists precisely to bypass Sentry's server-side scrubber, so it
- * has to police its own content. A STEP/IFC FILE_NAME header's
- * originating_system is exporter-written free text and sometimes carries the
- * exporter's install or output path — which on Windows means an OS username
- * ('C:\\Users\\jsmith\\...'). The tool name itself never contains a slash, so
- * dropping those tokens keeps the useful half and takes the identifying half
- * out of the event entirely.
+ * Seeded from the families seen in triage. Adding one is the intended way to
+ * extend the tag; nothing else widens it.
+ */
+const AUTHORING_TOOL_FAMILIES = [
+  {name: 'Autodesk Revit', pattern: /revit/i},
+  {name: 'Autodesk Civil 3D', pattern: /civil\s*3d/i},
+  {name: 'Autodesk Navisworks', pattern: /navisworks/i},
+  {name: 'Autodesk Inventor', pattern: /inventor/i},
+  {name: 'Autodesk Fusion', pattern: /fusion/i},
+  {name: 'Autodesk AutoCAD', pattern: /autocad/i},
+  {name: 'Graphisoft ArchiCAD', pattern: /archicad|graphisoft/i},
+  {name: 'Tekla Structures', pattern: /tekla/i},
+  {name: 'Trimble Nova', pattern: /trimble\s*nova/i},
+  {name: 'Trimble SketchUp', pattern: /sketchup/i},
+  {name: 'Dassault SOLIDWORKS', pattern: /solidworks/i},
+  {name: 'Dassault CATIA', pattern: /catia/i},
+  {name: 'PTC Creo', pattern: /creo|pro\/engineer/i},
+  {name: 'Siemens NX', pattern: /siemens\s*nx|unigraphics|\bnx\b/i},
+  {name: 'KiCad', pattern: /kicad/i},
+  {name: 'IfcOpenShell', pattern: /ifcopenshell/i},
+  {name: 'Bonsai/BlenderBIM', pattern: /blenderbim|bonsai/i},
+  {name: 'Blender', pattern: /blender/i},
+  {name: 'DigiPara Liftdesigner', pattern: /liftdesigner|digipara/i},
+  {name: 'FreeCAD', pattern: /freecad/i},
+  {name: 'Rhino', pattern: /rhino/i},
+  {name: 'Nemetschek Allplan', pattern: /allplan/i},
+  {name: 'Vectorworks', pattern: /vectorworks/i},
+  {name: 'Bentley MicroStation', pattern: /microstation|bentley/i},
+]
+
+
+/**
+ * Place a raw header string in a known exporter family, for the
+ * `authoring_tool` tag: the family's canonical name, plus the version token
+ * that immediately follows the matched name when that token is purely
+ * numeric.
+ *
+ * **Allowlist, not sanitization.** This tag exists precisely to survive
+ * Sentry's server-side scrubber, so it cannot be built by removing the bad
+ * parts of exporter-written free text — there is no bounded set of bad parts.
+ * A STEP/IFC FILE_NAME header's originating_system is whatever the exporter
+ * chose to write, and in the wild that has included install paths (an OS
+ * username), machine names and contact addresses, none of which a
+ * separator-based filter catches ('Revit exported by jane@example.com' has no
+ * path separator in it at all). So nothing reaches the tag unless the
+ * allowlist recognizes it, and what reaches it is this module's own canonical
+ * string rather than any span of the input.
+ *
+ * The version is the one exception, and it is bounded to digits and dots for
+ * the same reason: 'Autodesk Revit 2024 (ENU)' tags as 'Autodesk Revit 2024',
+ * while 'Revit exported by jane@example.com' finds no numeric token after the
+ * name and tags as plain 'Autodesk Revit'.
+ *
+ * Unmatched input yields no tag at all. The raw string is not lost — it stays
+ * in the report body on the event's context, which is the field the scrubber
+ * is entitled to rewrite. Bounding the tag to a known set also bounds its
+ * cardinality, which is what makes it worth grouping by.
  *
  * @param {string} [value] a header string, or undefined when none was given
- * @return {string|undefined} undefined when there was no value, or when every
- *   token was path-like
+ * @return {string|undefined} canonical family name (with numeric version when
+ *   the header supplied one), or undefined when nothing matched
  */
-function withoutPathTokens(value) {
+function knownAuthoringTool(value) {
   if (typeof value !== 'string') {
     return undefined
   }
-  const kept = value.split(/\s+/).filter((token) => token !== '' && !/[/\\]/.test(token))
-  return kept.length === 0 ? undefined : kept.join(' ')
+  for (const family of AUTHORING_TOOL_FAMILIES) {
+    const match = family.pattern.exec(value)
+    if (match === null) {
+      continue
+    }
+    // Only the token directly after the matched name, and only when it is
+    // digits and dots — anything else is arbitrary text and stays out.
+    const [nextToken] = value.slice(match.index + match[0].length).trim().split(/\s+/)
+    const version = /^\d+(?:\.\d+)*$/.test(nextToken ?? '') ? ` ${nextToken}` : ''
+    return `${family.name}${version}`
+  }
+  return undefined
 }
 
 
