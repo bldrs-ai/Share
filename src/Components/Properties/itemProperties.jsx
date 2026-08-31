@@ -244,6 +244,14 @@ export async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
         const refId = stoi(p.value)
         if (model.getItemProperties) {
           const ifcElt = await model.getItemProperties(refId)
+          // A reference the model can't resolve yields undefined, and the
+          // row callbacks all dereference `.Name.value` — that TypeError
+          // took down the whole Properties panel rather than costing one
+          // row (SHARE-1P3). Skip the entry and keep building the table.
+          if (ifcElt === undefined || ifcElt === null) {
+            debug().warn(`unpackHelper: unresolved property reference #${refId}`)
+            continue
+          }
           ifcToRowCb(ifcElt, rows)
         } else {
           debug().warn('model has no getProperties method: ', model)
@@ -276,6 +284,13 @@ export async function hasProperties(model, hasPropertiesArr, serial) {
     throw new Error('hasPropertiesArr should be array')
   }
   return await unpackHelper(model, hasPropertiesArr, serial, (dObj, rows) => {
+    // A pset entry that resolved to something without a Name is not a row we
+    // can label — and reading through the missing Name is what crashed the
+    // panel (SHARE-1P3). Drop this one property, not the whole table.
+    if (dObj?.Name?.value === undefined) {
+      debug().warn('hasProperties: skipping property with no Name: ', dObj)
+      return
+    }
     const name = decodeIFCString(dObj.Name.value)
     const value = (dObj.NominalValue === undefined || dObj.NominalValue === null) ?
       '<error>' :

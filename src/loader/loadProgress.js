@@ -2,6 +2,7 @@ import {addBreadcrumb, captureMessage, setContext, setTag} from '@sentry/react'
 import {SENTRY_CID_TAG, getOpenCidForSentry} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
+import {normalizeMessageDigits} from '../utils/messageGrouping'
 // Named import so esbuild can prune the rest of the JSON (same trick as
 // index/sentry.js) — we only need `version` for the report preamble.
 import {version as shareVersion} from '../../package.json'
@@ -139,6 +140,16 @@ class LoadProgressReporter {
     // "Parsing model geometry: -1.6s" negative-duration line).
     this.engineElapsedBase = null
     this.ended = false
+    // Model-header fields the Sentry diagnostics tags are built from, kept
+    // structured as they arrive (recordModelInfo) rather than re-parsed out
+    // of the formatted model line. See captureDiagnostics for why they need
+    // to be tags rather than context.
+    this.schema = undefined
+    this.authoringTool = undefined
+    // Geometry the load actually produced, when the loader reports it
+    // (reportGeometryStats) — the load-outcome signal classifyLoadOutcome
+    // reads. Undefined means "not reported", which is not the same as zero.
+    this.geometryStats = undefined
     // Distinct console warning/error text → occurrence count, captured via
     // the console tee below and appended after the Total line (issue #301
     // preview feedback #4). Includes conway's engine warnings/errors, which
@@ -298,11 +309,40 @@ class LoadProgressReporter {
   /**
    * Remember machine-readable values that also appear in the model line.
    *
+   * Called more than once per load on the engine formats — Loader stamps a
+   * filename-derived line before the parse, and conway's ON_MODEL_INFO
+   * replaces it once the STEP header parses — so each field is only
+   * overwritten by a later non-empty value, letting the engine's richer
+   * `IFC4` win over the extension-derived `IFC` without a blank header
+   * erasing what we already had.
+   *
    * @param {object} info model metadata
    */
   recordModelInfo(info) {
     if (Number.isFinite(info?.byteLength)) {
       this.fileSize = info.byteLength
+    }
+    if (typeof info?.schema === 'string' && info.schema !== '') {
+      this.schema = info.schema
+    }
+    // Same preference order formatModelLine uses for the model line's tool
+    // segment: the authoring system, or the preprocessor when that's all the
+    // header names.
+    const tool = [info?.originatingSystem, info?.preprocessorVersion]
+      .find((candidate) => typeof candidate === 'string' && candidate !== '')
+    if (tool !== undefined) {
+      this.authoringTool = tool
+    }
+  }
+
+  /**
+   * Record what the loader built, for classifyLoadOutcome.
+   *
+   * @param {object} stats {vertexCount, triangleCount}; either may be absent
+   */
+  recordGeometryStats(stats) {
+    if (stats) {
+      this.geometryStats = {...this.geometryStats, ...stats}
     }
   }
 
@@ -468,6 +508,12 @@ class LoadProgressReporter {
   captureDiagnostics({errorCount, warningCount, contentId, contentType}) {
     const summary = this.diagnosticsSummary()
     const tags = {}
+    // Severity is the load's outcome, not its noise level (ops#27 T0): a
+    // model the user is looking at is a regular bug however many warnings it
+    // took to get there, and only a load that produced nothing to look at is
+    // a major one. This is why errorCount no longer decides the level.
+    const loadOutcome = classifyLoadOutcome(this.geometryStats)
+    tags.load_outcome = loadOutcome
     // Also set on the global scope at init by index/ga.js. Re-read here
     // because this reads later: a first-ever visitor's id only resolves
     // once gtag/js loads, which can land after bootstrap but before this
@@ -482,8 +528,32 @@ class LoadProgressReporter {
     if (contentType) {
       tags.content_type = String(contentType).slice(0, MAX_TAG_CHARS)
     }
+    // Which model this was, as tags rather than as report text. Sentry's
+    // server-side scrubber rewrites some event bodies to "[Filtered]", and
+    // when it does, the authoring tool and schema — the first two questions
+    // asked of any load diagnostic — go with it. Tags survive that, so the
+    // few fields worth searching on get their own.
+    //
+    // Nothing identifying belongs here: tool, schema, extension and a
+    // rounded size only. No path, no filename, no URL — content_id above is
+    // where a model's identity already lives, and it is the field the
+    // scrubber is aimed at.
+    if (this.authoringTool !== undefined) {
+      tags.authoring_tool = this.authoringTool.slice(0, MAX_TAG_CHARS)
+    }
+    if (this.schema !== undefined) {
+      tags.model_schema = this.schema.slice(0, MAX_TAG_CHARS)
+    }
+    const format = extensionOf(this.fallbackName) ??
+      (contentType ? String(contentType).toLowerCase().slice(0, MAX_TAG_CHARS) : undefined)
+    if (format !== undefined) {
+      tags.model_format = format
+    }
+    if (Number.isFinite(this.fileSize)) {
+      tags.model_size_mb = Math.round(this.fileSize / BYTES_PER_MB)
+    }
     captureMessage(diagnosticsTitle(summary.topText), {
-      level: errorCount > 0 ? 'error' : 'warning',
+      level: loadOutcome === 'unusable' ? 'error' : 'warning',
       tags,
       contexts: {
         loadDiagnostics: {
@@ -629,29 +699,69 @@ function ellipsize(text) {
  * and titles the event — it has no exception to fingerprint, so the
  * message text *is* the grouping key.
  *
- * Numbers collapse to `#` because engine diagnostics are per-entity
- * ("Error processing representation #1234"): the raw text would open a
- * fresh Sentry issue for every entity of every model, which is the
- * per-line flood captureLoadDiagnostics exists to avoid. Normalized,
- * each family of warning gets one issue. An entity marker the message
- * already spelled `#` is swallowed by the same pass rather than
- * doubling up into `##`.
- *
- * The pass is deliberately indiscriminate: it also collapses digits
- * inside identifiers, so "IFC4" titles as "IFC#" and "Revit 2024" as
- * "Revit #". That costs nothing for grouping — the schema and authoring
- * tool are already on the event's `load` context and the report — and
- * keeping them would reopen the per-value split this exists to close.
+ * Numbers collapse to `#` (normalizeMessageDigits, shared with the alert
+ * fingerprint) because engine diagnostics are per-entity ("Error processing
+ * representation #1234"): the raw text would open a fresh Sentry issue for
+ * every entity of every model, which is the per-line flood
+ * captureLoadDiagnostics exists to avoid. Normalized, each family of warning
+ * gets one issue.
  *
  * @param {string} topText most frequent diagnostic, '' when the console
  *   tee captured nothing (the counts can come from the engine instead)
  * @return {string}
  */
 function diagnosticsTitle(topText) {
-  const normalized = ellipsize(topText.replace(/#?\d+/g, '#')).trim()
+  const normalized = ellipsize(normalizeMessageDigits(topText)).trim()
   return normalized === '' ?
     'Load completed with diagnostics' :
     `Load diagnostics: ${normalized}`
+}
+
+
+/**
+ * How bad this load was for the person who asked for it (ops#27 T0), which
+ * is what the diagnostics event's severity reports:
+ *
+ * - `displayed` — geometry reached the scene, so the model is on screen.
+ *   A regular bug, however noisy the load was.
+ * - `unusable` — the load ran to completion and built nothing. Whatever the
+ *   diagnostics say, the user is looking at an empty viewer. Major.
+ *
+ * Ambiguity resolves to `displayed`, deliberately. Most formats report no
+ * geometry counts at all (only the conway engine path calls
+ * reportGeometryStats), and treating "didn't say" as "produced nothing"
+ * would raise every warning in the project to major — the inverse of what
+ * this split is for.
+ *
+ * @param {object} [geometry] {vertexCount, triangleCount} as reported by the
+ *   loader; undefined when the loader reported nothing
+ * @return {string} 'displayed' | 'unusable'
+ */
+export function classifyLoadOutcome(geometry) {
+  const counted = [geometry?.vertexCount, geometry?.triangleCount].filter(Number.isFinite)
+  if (counted.length === 0) {
+    return 'displayed'
+  }
+  return counted.some((count) => count > 0) ? 'displayed' : 'unusable'
+}
+
+
+/**
+ * Lowercase extension of a bare filename, for the `model_format` tag.
+ *
+ * Takes the extension and nothing else: these tags exist because the report
+ * body can be scrubbed away, so they have to stay unimpeachably free of
+ * anything that identifies a file or a user. The length/charset bound also
+ * keeps a dotted name with no real extension ("Model.v2 final") from
+ * tagging junk.
+ *
+ * @param {string} [basename] a filename with no path (the reporter's
+ *   fallbackName)
+ * @return {string|undefined}
+ */
+function extensionOf(basename) {
+  const match = /\.([a-z0-9]{1,8})$/i.exec(basename ?? '')
+  return match ? match[1].toLowerCase() : undefined
 }
 
 
@@ -691,6 +801,24 @@ export function reportModelInfo(info) {
   if (activeReporter && !activeReporter.ended) {
     activeReporter.recordModelInfo(info)
     activeReporter.addReportLine(activeReporter.log.setModelInfo(info))
+  }
+}
+
+
+/**
+ * Report what the loader actually built, as the structured twin of the
+ * `vertices=… triangles=…` segment setLoadSummary puts on the Total line.
+ * Structured because it is a decision input, not display text: it is the
+ * only signal that separates a noisy load whose model still rendered from
+ * one that finished with an empty scene (classifyLoadOutcome).
+ *
+ * Safe no-op with no active load.
+ *
+ * @param {object} stats {vertexCount, triangleCount}
+ */
+export function reportGeometryStats(stats) {
+  if (activeReporter && !activeReporter.ended) {
+    activeReporter.recordGeometryStats(stats)
   }
 }
 

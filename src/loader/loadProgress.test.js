@@ -14,12 +14,14 @@ import {
   attachLoadFailureContext,
   beginLoadProgress,
   captureLoadDiagnostics,
+  classifyLoadOutcome,
   endLoadProgress,
   getCompletedLoadStats,
   isModelInfoProgress,
   isStructuredProgress,
   reportEngineVersion,
   reportFramingExclusion,
+  reportGeometryStats,
   reportLoadProgress,
   reportModelInfo,
   reportSourceInfo,
@@ -57,6 +59,27 @@ describe('loadProgress', () => {
       expect(isStructuredProgress({loaded: 1024})).toBe(false)
       expect(isModelInfoProgress({modelInfo: {fileName: 'a.ifc'}})).toBe(true)
       expect(isModelInfoProgress({phase: 'geometry', completed: 1})).toBe(false)
+    })
+  })
+
+  describe('classifyLoadOutcome', () => {
+    it('is displayed whenever anything was built', () => {
+      expect(classifyLoadOutcome({vertexCount: 8, triangleCount: 4})).toBe('displayed')
+      // One count present and non-zero is enough — a point cloud has no
+      // triangles and is still on screen.
+      expect(classifyLoadOutcome({vertexCount: 8})).toBe('displayed')
+      expect(classifyLoadOutcome({vertexCount: 8, triangleCount: 0})).toBe('displayed')
+    })
+
+    it('is unusable only when every reported count is zero', () => {
+      expect(classifyLoadOutcome({vertexCount: 0, triangleCount: 0})).toBe('unusable')
+      expect(classifyLoadOutcome({triangleCount: 0})).toBe('unusable')
+    })
+
+    it('defaults to displayed when the loader reported nothing usable', () => {
+      expect(classifyLoadOutcome(undefined)).toBe('displayed')
+      expect(classifyLoadOutcome({})).toBe('displayed')
+      expect(classifyLoadOutcome({vertexCount: undefined, triangleCount: null})).toBe('displayed')
     })
   })
 
@@ -447,15 +470,135 @@ describe('loadProgress', () => {
         warnSpy.mockRestore()
       })
 
-      it('raises the level to error when the load reported errors', () => {
+      /*
+       * Severity is the load's outcome, not its noise level (ops#27 T0).
+       * These three cases are the whole policy: geometry reached the scene
+       * → regular however loud the errors were; nothing was built → major;
+       * the loader said nothing about geometry → regular, because most
+       * formats never report counts and calling those major would raise
+       * the entire project to major.
+       */
+      it('keeps regular severity when errors came with a model that displays', () => {
         const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
         beginLoadProgress({fileInfo: 'index.stp'})
         console.error('CDT Exception (hemisphere: 0)')
+        reportGeometryStats({vertexCount: 120_000, triangleCount: 40_000})
+        endLoadProgress()
+        captureLoadDiagnostics({errorCount: 1})
+
+        expect(diagnosticsCall()[1].level).toBe('warning')
+        expect(diagnosticsCall()[1].tags.load_outcome).toBe('displayed')
+        errorSpy.mockRestore()
+      })
+
+      it('raises severity to error when the load built no geometry at all', () => {
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'index.stp'})
+        console.error('CDT Exception (hemisphere: 0)')
+        reportGeometryStats({vertexCount: 0, triangleCount: 0})
         endLoadProgress()
         captureLoadDiagnostics({errorCount: 1})
 
         expect(diagnosticsCall()[1].level).toBe('error')
+        expect(diagnosticsCall()[1].tags.load_outcome).toBe('unusable')
         errorSpy.mockRestore()
+      })
+
+      it('defaults to regular severity when no loader reported geometry', () => {
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'ISS_stationary.glb'})
+        console.error('missing texture')
+        endLoadProgress()
+        captureLoadDiagnostics({errorCount: 1})
+
+        expect(diagnosticsCall()[1].level).toBe('warning')
+        expect(diagnosticsCall()[1].tags.load_outcome).toBe('displayed')
+        errorSpy.mockRestore()
+      })
+
+      /*
+       * The tags exist because Sentry's server-side scrubber can rewrite the
+       * report body to "[Filtered]", taking the authoring tool and schema —
+       * the first two questions asked of any load diagnostic — with it.
+       */
+      it('tags the authoring tool, schema, format and rounded size', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        const sizeBytes = 14_365_000
+        const sizeMb = 14
+        beginLoadProgress({fileInfo: 'https://example.test/models/Tower.ifc'})
+        reportModelInfo({
+          fileName: 'Tower.ifc',
+          schema: 'IFC4',
+          byteLength: sizeBytes,
+          originatingSystem: 'Autodesk Revit 2024 (ENU)',
+        })
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1, contentType: 'ifc'})
+
+        const {tags} = diagnosticsCall()[1]
+        expect(tags.authoring_tool).toBe('Autodesk Revit 2024 (ENU)')
+        expect(tags.model_schema).toBe('IFC4')
+        expect(tags.model_format).toBe('ifc')
+        expect(tags.model_size_mb).toBe(sizeMb)
+        // Nothing that names the file or where it came from.
+        expect(Object.values(tags).join(' ')).not.toContain('example.test')
+        expect(Object.values(tags).join(' ')).not.toContain('Tower')
+        warnSpy.mockRestore()
+      })
+
+      it('prefers the parsed header over the extension-derived schema', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'Arty_Z7_PCB.stp'})
+        // What Loader stamps from the filename before the parse...
+        reportModelInfo({fileName: 'Arty_Z7_PCB.stp', schema: 'STP', byteLength: 1_000_000})
+        // ...then what conway's ON_MODEL_INFO reports once the header parses.
+        reportLoadProgress({modelInfo: {
+          fileName: 'Arty_Z7_PCB.stp',
+          schema: 'AP242',
+          preprocessorVersion: 'KiCad 8.0',
+        }})
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+
+        const {tags} = diagnosticsCall()[1]
+        expect(tags.model_schema).toBe('AP242')
+        // The header named no authoring system, so the preprocessor stands in
+        // — the same preference order the model line uses.
+        expect(tags.authoring_tool).toBe('KiCad 8.0')
+        expect(tags.model_format).toBe('stp')
+        warnSpy.mockRestore()
+      })
+
+      it('truncates tag values at Sentry limit and omits what the header never said', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        const overlongChars = 300
+        const maxTagChars = 200
+        beginLoadProgress({fileInfo: 'noext'})
+        reportModelInfo({fileName: 'noext', originatingSystem: 'T'.repeat(overlongChars)})
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+
+        const {tags} = diagnosticsCall()[1]
+        expect(tags.authoring_tool).toHaveLength(maxTagChars)
+        expect(tags).not.toHaveProperty('model_schema')
+        expect(tags).not.toHaveProperty('model_size_mb')
+        // No extension to read, and no contentType passed to fall back on.
+        expect(tags).not.toHaveProperty('model_format')
+        warnSpy.mockRestore()
+      })
+
+      it('falls back to the content type when the name carries no extension', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'gdrive:1sWR7x4BZ'})
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1, contentType: 'IFC'})
+
+        expect(diagnosticsCall()[1].tags.model_format).toBe('ifc')
+        warnSpy.mockRestore()
       })
 
       it('stays silent when the load reported no errors or warnings', () => {
