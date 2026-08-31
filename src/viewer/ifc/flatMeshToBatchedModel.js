@@ -369,6 +369,14 @@ export const LARGE_COORD_THRESHOLD = 1e4
  * metres so the offset is exactly float-representable and stable across the
  * incremental demand batches (every batch subtracts the same value).
  *
+ * SHARE's BACKSTOP, not the whole story. It reads a placement the engine has
+ * already composed its own coordination frame into, so it only fires when the
+ * engine declined to recentre — which since the conway#680 fix chain landed
+ * (conway-geom#202 -> conway#685, pinned by Share#1816) is essentially never.
+ * The engine's frame is reported separately as
+ * `userData.appliedCoordination`, and the composition of the two is written
+ * once, on `ShareIfcLoader#stampAppliedCoordination`.
+ *
  * @param {Array<number>} flatTransformation 16-element column-major matrix
  * @return {?Array<number>} `[x, y, z]` to subtract, or null
  */

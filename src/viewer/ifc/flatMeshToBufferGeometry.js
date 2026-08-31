@@ -343,6 +343,10 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID, opts = {}) {
     // `[x,y,z]` origin offset already folded into the baked vertices for a
     // georeferenced model (null for near-origin), so a rendered point maps
     // back to true world coordinates.
+    //
+    // Only SHARE's backstop half of that mapping — the engine's own frame is
+    // reported separately as `userData.appliedCoordination`, and the two
+    // compose. See `ShareIfcLoader#stampAppliedCoordination` for the contract.
     coordinationOffset: coordOffset,
   }
 }

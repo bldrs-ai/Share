@@ -21,7 +21,7 @@ import {Mesh} from 'three'
 import {assembleBatchedModel, buildBatchedConwayModel} from './buildBatchedConwayModel'
 import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
-import {conwayDirectError, conwayDirectInfo} from './conwayDirectLog'
+import {conwayDirectError, conwayDirectInfo, conwayDirectWarn} from './conwayDirectLog'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
 import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
@@ -103,6 +103,10 @@ async function logInstancedModelStats(ifcAPI, modelID, getCaptured, force = fals
  *   and the only whole-model ask a windowed deferred model can answer.
  *   Absent on pins predating it — feature-detect, never assume.
  * @property {Function} GetCoordinationMatrix Get the coord matrix.
+ * @property {Function} [GetAppliedCoordinationMatrix] conway#702: the frame
+ *   the engine ACTUALLY composed into the placements it emitted. Absent on
+ *   pins predating it and on stock web-ifc — feature-detect, never assume
+ *   (conway's own doc comment says so).
  * @property {Function} getStatistics Per-load load statistics.
  * @property {Function} getConwayVersion Conway engine version string.
  * @property {object} properties Conway properties namespace.
@@ -246,6 +250,148 @@ export function clearAabbImposters(ring, session) {
   // The replace key map holds a strong ref to every accepted plate —
   // clearing the list alone would keep the whole ring alive past teardown.
   ring.byExpressID.clear()
+}
+
+
+/**
+ * A column-major mat4 has exactly this many elements. Anything else coming
+ * back from the engine is a malformed reply, not a frame — see
+ * `stampAppliedCoordination`.
+ */
+const MAT4_LENGTH = 16
+
+
+/**
+ * Stamp the engine's applied coordination frame onto the model root as
+ * `userData.appliedCoordination`, and hand it back.
+ *
+ * ## The one reported offset surface (Share#1633 item 1, Share#1634)
+ *
+ * Two frames can sit between a file's authored coordinates and what the GPU
+ * draws, and until this stamp Share reported only the second — which since
+ * the conway#680 fix chain landed (conway#685, pinned by Share#1816)
+ * essentially never fires, leaving a georeferenced model with no world-frame
+ * handle at all:
+ *
+ *  1. **`userData.appliedCoordination`** — `A`, the frame CONWAY composed
+ *     into every `flatTransformation` it emitted, from
+ *     `GetAppliedCoordinationMatrix` (conway#702). This is the normal case:
+ *     the engine does the georeferenced recentre itself, so this is where a
+ *     Swiss LV95 model's offset actually lives — the ~2.6e6 m scale
+ *     Share#1816 measured on Ecobau.
+ *  2. **`userData.coordinationOffset`** — `[x, y, z]`, SHARE's own backstop
+ *     recentre, stamped by `IncrementalBatchedBuilder` only when a placement
+ *     still arrives beyond `LARGE_COORD_THRESHOLD` *after* the engine has had
+ *     its turn (`decideCoordinationOffset`, Share#1632). Semantics unchanged
+ *     by this stamp, and absent on a healthy load.
+ *
+ * **TOTAL render-frame mapping is the composition** — Share's offset applied
+ * outside the engine's frame, because the backstop subtracts from placements
+ * the engine had already composed under `A`:
+ *
+ * ```
+ *   rendered = (A * world) - coordinationOffset
+ *   world    = inverse(A) * (rendered + coordinationOffset)
+ * ```
+ *
+ * with `coordinationOffset` read as `[0, 0, 0]` when absent. On a healthy
+ * load that degenerates to conway's own `world = inverse(A) * rendered`.
+ *
+ * ## The engine's contract, verbatim from conway's doc comment
+ *
+ * (`compat/web-ifc/ifc_api.ts#GetAppliedCoordinationMatrix` — read it before
+ * changing anything here; only the fenced blocks are quoted.)
+ *
+ * > Every `flatTransformation` the model emits was composed as
+ * > ```
+ * >   flatTransformation = A * placement [ * translate(geomCentre) ]
+ * > ```
+ * > So for any vertex `v` a consumer uploads and renders,
+ * > ```
+ * >   rendered = flatTransformation * v = A * world
+ * >   world    = inverse(A) * rendered            <- the inverse you want
+ * > ```
+ * > `A` carries all three factors the recentre composed, in this order:
+ * > ```
+ * >   A = scale(linearScalingFactor) * NormalizeMat * translate(-anchor)
+ * > ```
+ *
+ * `world` is the point in the model's AUTHORED world space — the file's own
+ * coordinates, in the file's units, Z-up. Inverting `A` is the whole of it:
+ * it undoes the unit scale and the Z-up→Y-up change of basis as well as the
+ * offset, so nothing else about the model is needed.
+ *
+ * Two clauses of that contract are easy to get wrong, and both are quoted
+ * here because a consumer of this stamp will hit them:
+ *
+ *  - `A` is identity ONLY when nothing was composed AND nothing was supplied
+ *    (an open without COORDINATE_TO_ORIGIN, a suppressed shard, a model that
+ *    emitted no geometry). Identity never means "ask again later".
+ *  - A near-origin model under COORDINATE_TO_ORIGIN returns a frame whose
+ *    TRANSLATION is exactly zero — no recentre was needed — but whose
+ *    rotation and scale are still live. **Do not shortcut on "no offset
+ *    applied"; invert the matrix.** That is why the stamp is unconditional
+ *    rather than elided when the translation is zero.
+ *
+ * ## Why the read happens here, at load completion
+ *
+ * conway's timing contract: a deferred open that adopted its parse-time
+ * preview channel's frame reports that adopted frame from the moment the
+ * model opens, and the durable walk — the authority — revalidates it against
+ * its own first geometry, so **the value can change exactly once**, at the
+ * first durable batch, if the adoption is rejected. Read any earlier (at open,
+ * or from inside `onMeshBatch`) and the stamp could be the rejected frame.
+ * By the time `parse` reaches this call every durable batch has landed, so the
+ * value is final for the life of the model.
+ *
+ * ## Why a plain Array
+ *
+ * `Array.from` of conway's reply: JS numbers are float64, so this is the
+ * float64 mat4 the contract asks for, it matches conway's own `Array<number>`
+ * return type, and — unlike a `Float64Array` — it survives the GLB cache's
+ * `userData` → glTF `extras` round-trip, which `GLTFExporter` performs by
+ * JSON-serialising `userData` (a typed array would come back as
+ * `{"0": …, "1": …}`). The copy also means a future engine handing back a
+ * live view cannot alias into the model.
+ *
+ * Best-effort throughout: a missing method, a malformed reply or a throw
+ * leaves the model unstamped rather than discarding a successful parse.
+ *
+ * @param {object} ifcModel the assembled model root (`ifcModel.userData` is
+ *   created if the object does not already have one — mocked three.js Mesh
+ *   stand-ins in unit tests do not)
+ * @param {ConwayIfcAPI} ifcAPI
+ * @param {number} modelID
+ * @return {?Array<number>} the stamped column-major mat4, or null when the
+ *   engine could not answer
+ */
+export function stampAppliedCoordination(ifcModel, ifcAPI, modelID) {
+  if (typeof ifcAPI?.GetAppliedCoordinationMatrix !== 'function') {
+    return null
+  }
+  try {
+    // eslint-disable-next-line new-cap
+    const applied = ifcAPI.GetAppliedCoordinationMatrix(modelID)
+    if (!Array.isArray(applied) || applied.length !== MAT4_LENGTH) {
+      // On the `[conwayDirect]` channel, not `debug()`: this is a designed
+      // diagnostic for this pipeline, and warn is the level the load report
+      // tees (see `decideCoordinationOffset`'s note on the same channel).
+      // Share#1632's lesson was that silent coordination behaviour is what
+      // costs the days — an engine answering with a non-frame is exactly that
+      // class of problem and must not pass unremarked.
+      conwayDirectWarn(
+        `appliedCoordination: engine returned a non-mat4 frame ` +
+        `(length=${applied?.length}); model left unstamped`)
+      return null
+    }
+    const frame = Array.from(applied)
+    ifcModel.userData = ifcModel.userData ?? {}
+    ifcModel.userData.appliedCoordination = frame
+    return frame
+  } catch (e) {
+    conwayDirectWarn(`appliedCoordination stamp skipped: ${e}`)
+    return null
+  }
 }
 
 
@@ -500,10 +646,24 @@ export default class ShareIfcLoader {
       clearAabbImposters(aabbRing, session)
       session.finish()
 
+      // The engine frame, stamped once for every conway load path (incremental
+      // / batchedMesh / merged all converge on this `ifcModel`) and before the
+      // model is installed, so nothing can observe a model without it. Read
+      // here and not earlier: the value is only final once the durable walk
+      // has run — see stampAppliedCoordination for the timing contract, the
+      // inverse, and how it composes with `userData.coordinationOffset`.
+      stampAppliedCoordination(ifcModel, ifcAPI, modelID)
+
       ifc.addIfcModel(ifcModel)
 
       // eslint-disable-next-line new-cap
       const matrixArr = await ifcAPI.GetCoordinationMatrix(modelID)
+      // NOT the engine's applied frame — conway keeps this CLASSIC web-ifc
+      // surface at identity precisely because consumers stamp it onto the
+      // model transform, and a non-identity value would apply the recentre a
+      // second time on top of placements that already carry it. The applied
+      // frame is `userData.appliedCoordination`, stamped above.
+      //
       // Apply the coordination matrix to the model directly. Wit-three's
       // `setupCoordinationMatrix` set this on the model + told the
       // IFCParser to re-apply on every subsequent mesh; with Conway-

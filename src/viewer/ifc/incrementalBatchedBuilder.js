@@ -552,6 +552,13 @@ export class IncrementalBatchedBuilder {
     // at ~1e7 m. See decideCoordinationOffset (also logs the decision once,
     // Share#1632). Stamped on the root for consumers that need to map a
     // rendered point back to true world coordinates.
+    //
+    // This is only SHARE's backstop half of that mapping, and since the
+    // conway#680 fix chain (conway#685, pinned by Share#1816) it essentially
+    // never fires — the engine recentres first, and its frame
+    // is stamped alongside as `userData.appliedCoordination`. The two compose
+    // as `rendered = (A * world) - coordinationOffset`; the whole contract is
+    // written once, on `ShareIfcLoader#stampAppliedCoordination`.
     if (this.coordination.offset === undefined) {
       this.coordination.offset = decideCoordinationOffset(matrix.elements, this.coordination)
     }
