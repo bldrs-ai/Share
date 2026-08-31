@@ -1010,7 +1010,6 @@ describe('viewer/three/IfcIsolator', () => {
       const mesh = batch.mesh
       mesh.instanceParents = batch.instanceParents
       mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
-      mesh.instanceGeometry = batch.instanceGeometry
       mesh.instanceColors = batch.instanceColors
       attachBatchedSubsets(mesh, null, {})
       return mesh

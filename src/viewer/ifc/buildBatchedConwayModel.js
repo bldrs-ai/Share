@@ -137,12 +137,13 @@ export function decorateBatchMeshes(batches) {
   }
 
   // Each batch carries its own pick tables; CadView reads them off the
-  // raycast-hit child (`intersection.object`). `instanceGeometry` feeds
-  // `batchedSubset` (selection / preselection / isolation re-baking).
+  // raycast-hit child (`intersection.object`). The shape data is NOT among
+  // them — `batchedSubset` re-bakes isolation subsets from the batch's own
+  // buffers (`batchedInstanceGeometry`), so nothing here pins a second copy
+  // of the model's geometry for the life of the model (Share#1810).
   for (const batch of batches) {
     batch.mesh.instanceParents = batch.instanceParents
     batch.mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
-    batch.mesh.instanceGeometry = batch.instanceGeometry
     batch.mesh.instanceColors = batch.instanceColors
     // The pre-override color table (see the snapshot above). `?? null` keeps
     // older BatchHandle shapes (tests, external callers) working — consumers

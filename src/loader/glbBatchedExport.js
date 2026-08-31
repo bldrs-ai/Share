@@ -1,4 +1,8 @@
 import {Color, Matrix4, Quaternion, Vector3} from 'three'
+import {
+  hasBatchedGeometry,
+  makeInstanceGeometryReader,
+} from '../viewer/ifc/batchedInstanceGeometry'
 import {eachBatch} from '../viewer/ifc/batchedModel'
 import {glbVerbose} from './glbLog'
 
@@ -74,8 +78,15 @@ function decomposeStrict(matrix) {
 function collectInstanceGroups(model) {
   const groups = new Map()
   let failed = false
+  // Geometry is read back out of the batch buffers instead of from a
+  // retained per-instance table (Share#1810). ONE reader for the whole
+  // model, because the dedup this writer exists for — one accessor set per
+  // unique shape, `accessorsFor` keyed by geometry identity — needs a
+  // shape used by both batches to come back as the same object, which is
+  // what the retained table used to guarantee.
+  const geometryAt = makeInstanceGeometryReader()
   eachBatch(model, (mesh) => {
-    if (failed || !mesh.instanceParents || !mesh.instanceGeometry ||
+    if (failed || !mesh.instanceParents || !hasBatchedGeometry(mesh) ||
         typeof mesh.getMatrixAt !== 'function') {
       return
     }
@@ -89,7 +100,7 @@ function collectInstanceGroups(model) {
     }
     const scratch = new Matrix4()
     for (let batchId = 0; batchId < mesh.instanceParents.length; batchId++) {
-      const geometry = mesh.instanceGeometry[batchId]
+      const geometry = geometryAt(mesh, batchId)
       const color = colors[batchId]
       if (!geometry || !color) {
         failed = true

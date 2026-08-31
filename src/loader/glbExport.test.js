@@ -93,7 +93,6 @@ function buildDecoratedBatchedMesh() {
   const batch = batches[0]
   batch.mesh.instanceParents = batch.instanceParents
   batch.mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
-  batch.mesh.instanceGeometry = batch.instanceGeometry
   batch.mesh.instanceColors = batch.instanceColors
   return batch.mesh
 }
@@ -149,7 +148,6 @@ function buildDecoratedBatchedMeshWithOccurrences() {
   const batch = batches[0]
   batch.mesh.instanceParents = batch.instanceParents
   batch.mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
-  batch.mesh.instanceGeometry = batch.instanceGeometry
   batch.mesh.instanceColors = batch.instanceColors
   batch.mesh.instanceGeometryIds = batch.instanceGeometryIds ?? null
   batch.mesh.instanceOccurrencePaths = batch.instanceOccurrencePaths ?? null

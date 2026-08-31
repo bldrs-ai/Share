@@ -35,9 +35,9 @@ const grey = () => ({x: DEFAULT_COLOR.x, y: DEFAULT_COLOR.y, z: DEFAULT_COLOR.z,
 
 /**
  * Batched-model double carrying the tables the color section reads. No
- * `instanceGeometry` / `setVisibleAt`, so `ResidencyController` finds nothing
- * to evict and the residency section stays hidden — which is exactly the case
- * that proves the color section gates independently.
+ * batch-geometry surface / `setVisibleAt`, so `ResidencyController` finds
+ * nothing to evict and the residency section stays hidden — which is exactly
+ * the case that proves the color section gates independently.
  *
  * @param {Array<object>} sourceColors the file's own colors
  * @return {object} model double
@@ -65,10 +65,21 @@ function colorOnlyModel(sourceColors = [grey(), grey(), grey()]) {
  */
 function residencyModel() {
   const model = colorOnlyModel()
-  model.instanceGeometry = [1, 2, 3].map((radius) => ({
-    boundingSphere: new Sphere(new Vector3(), radius),
-    getAttribute: () => ({count: radius * 100}),
-  }))
+  const radii = [1, 2, 3]
+  // The batch surface `ResidencyController` reads since Share#1810: one
+  // geometry per instance, sized and bounded through three's own per-geometry
+  // accessors instead of a retained `instanceGeometry` table.
+  model.geometry = {attributes: {position: {}}, index: {}}
+  model.getGeometryIdAt = (index) => index
+  model.getGeometryRangeAt = (geometryId, target = {}) => {
+    target.vertexStart = 0
+    target.vertexCount = radii[geometryId] * 100
+    target.indexStart = 0
+    target.indexCount = radii[geometryId] * 100
+    return target
+  }
+  model.getBoundingSphereAt = (geometryId, target) =>
+    target.copy(new Sphere(new Vector3(), radii[geometryId]))
   model.getMatrixAt = (index, matrix) => matrix.identity()
   model.setVisibleAt = jest.fn()
   return model

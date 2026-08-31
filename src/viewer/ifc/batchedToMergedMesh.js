@@ -7,6 +7,7 @@ import {
   Mesh,
   Vector3,
 } from 'three'
+import {hasBatchedGeometry, makeInstanceGeometryReader} from './batchedInstanceGeometry'
 import {eachBatch} from './batchedModel'
 import {makeSurfaceColor, makeSurfaceMaterial} from '../lookMaterial'
 
@@ -83,17 +84,23 @@ function colorKey(color) {
 function collectInstanceEntries(model) {
   const entries = []
   const scratch = new Matrix4()
+  // One shared reader for the whole model, so a shape used by both the
+  // opaque and the transparent batch is rebuilt once — the identity the
+  // retained `instanceGeometry` table used to provide (Share#1810). It is
+  // scoped to this collection pass and released with it; the entries it
+  // hands out are held only until `batchedModelToMergedMesh` has copied
+  // them into the merged slab.
+  const geometryAt = makeInstanceGeometryReader()
   eachBatch(model, (mesh) => {
     // Only a decorated batch (carrying the side tables) is convertible; a
     // bare BatchedMesh has no source ids to bake in. Skip it — the caller
     // treats an empty entry list as "nothing to export".
-    if (!mesh.instanceParents || !mesh.instanceGeometry ||
+    if (!mesh.instanceParents || !hasBatchedGeometry(mesh) ||
         typeof mesh.getMatrixAt !== 'function') {
       return
     }
     const parents = mesh.instanceParents
     const occurrences = mesh.instanceOccurrenceIds
-    const geometries = mesh.instanceGeometry
     // KNOWN-LOSSY (view-140): this bakes the *displayed* colors, which for a
     // colorless auto-colored model (productPalette) are the palette, not the
     // file's grey. So a cache-hit GLB carries the palette and the source is
@@ -105,7 +112,7 @@ function collectInstanceEntries(model) {
     // control apply directly — rather than a throwaway merged-mesh recolor.
     const colors = mesh.instanceColors
     for (let batchId = 0; batchId < parents.length; batchId++) {
-      const geom = geometries[batchId]
+      const geom = geometryAt(mesh, batchId)
       const pos = geom?.attributes?.position
       const idx = geom?.index
       if (!pos || !idx) {

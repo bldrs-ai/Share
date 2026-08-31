@@ -210,7 +210,8 @@ group, not a separate story.
 
 ## 5. Residency for every format (ask 4)
 
-`ResidencyController` requires `isBatchedMesh` + `instanceGeometry` +
+`ResidencyController` requires `isBatchedMesh` + readable batch buffers
+(`getGeometryRangeAt` / `getBoundingSphereAt`, see `batchedInstanceGeometry`) +
 `setVisibleAt`, so it renders nothing outside `?feature=batchedMesh` IFC/STEP.
 `ResidencyControl` self-gates on `instanceCount > 0`, which is the right shape
 — it just needs more ways to count.

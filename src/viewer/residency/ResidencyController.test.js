@@ -10,13 +10,13 @@ import {ResidencyController, ResidencyMetric} from './ResidencyController'
 function makeModel(placements) {
   const mesh = new BatchedMesh(placements.length, 8 * 36 * placements.length, 36 * placements.length)
   mesh.instanceParents = new Uint32Array(placements.map((p) => p.expressID))
-  mesh.instanceGeometry = []
+  // No per-instance geometry table: the controller reads each shape's
+  // bounds and vertex count off the batch itself (Share#1810).
   for (const placement of placements) {
     const geometry = new BoxGeometry(placement.size, placement.size, placement.size)
     const geometryId = mesh.addGeometry(geometry)
     const instanceId = mesh.addInstance(geometryId)
     mesh.setMatrixAt(instanceId, new Matrix4().makeTranslation(placement.x, 0, 0))
-    mesh.instanceGeometry.push(geometry)
   }
   const group = new Group()
   group.add(mesh)

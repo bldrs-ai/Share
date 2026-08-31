@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import {BufferAttribute, BufferGeometry, Matrix4} from 'three'
+import {BatchedMesh, BufferAttribute, BufferGeometry, Matrix4} from 'three'
 import {exportBatchedModelAsInstancedGlb} from './glbBatchedExport'
 import {parseGlb} from './injectGlbExtensions'
 
@@ -21,40 +21,39 @@ function triangleGeometry() {
 
 
 /**
- * Decorated-BatchedMesh double in the `assembleBatchedModel` table shape,
- * with real geometries and matrices so the export exercises the actual
- * serialization path.
+ * A decorated batch as `assembleBatchedModel` leaves it: a REAL
+ * `THREE.BatchedMesh` holding the geometry (the writer reads its shapes back
+ * out of the batch buffers since Share#1810, so a plain object double would
+ * exercise nothing) plus the per-instance side tables.
  *
- * @param {object} [overrides]
- * @return {object} mesh double
+ * Two instances of one part and one of another — the dedup case the
+ * EXT_mesh_gpu_instancing layout exists for.
+ *
+ * @param {object} [overrides] own properties to stamp over the mesh
+ * @return {BatchedMesh}
  */
 function batchedDouble(overrides = {}) {
-  const shared = triangleGeometry()
-  const other = triangleGeometry()
+  const mesh = new BatchedMesh(3, 6, 6)
+  const sharedId = mesh.addGeometry(triangleGeometry())
+  const otherId = mesh.addGeometry(triangleGeometry())
   const matrices = [
     new Matrix4().makeTranslation(1, 0, 0),
     new Matrix4().makeTranslation(2, 0, 0),
     new Matrix4().makeTranslation(0, 3, 0),
   ]
-  return {
-    isBatchedMesh: true,
-    // Two instances of one part (shared geometry), one of another — the
-    // dedup case the layout exists for.
-    instanceGeometry: [shared, shared, other],
-    instanceParents: [11, 12, 20],
-    instanceOccurrenceIds: [0, 1, 2],
-    instanceGeometryIds: [500, 500, 600],
-    instanceOccurrencePaths: [[3, 7], [3, 8], [4]],
-    instanceSourceColors: [
-      {x: 0.8, y: 0.8, z: 0.8, w: 1},
-      {x: 0.8, y: 0.8, z: 0.8, w: 1},
-      {x: 0.8, y: 0.8, z: 0.8, w: 1},
-    ],
-    getMatrixAt(i, m) {
-      m.copy(matrices[i])
-    },
-    ...overrides,
+  for (const [i, geometryId] of [sharedId, sharedId, otherId].entries()) {
+    mesh.setMatrixAt(mesh.addInstance(geometryId), matrices[i])
   }
+  mesh.instanceParents = [11, 12, 20]
+  mesh.instanceOccurrenceIds = [0, 1, 2]
+  mesh.instanceGeometryIds = [500, 500, 600]
+  mesh.instanceOccurrencePaths = [[3, 7], [3, 8], [4]]
+  mesh.instanceSourceColors = [
+    {x: 0.8, y: 0.8, z: 0.8, w: 1},
+    {x: 0.8, y: 0.8, z: 0.8, w: 1},
+    {x: 0.8, y: 0.8, z: 0.8, w: 1},
+  ]
+  return Object.assign(mesh, overrides)
 }
 
 
@@ -142,12 +141,18 @@ describe('loader/glbBatchedExport', () => {
     expect(await exportBatchedModelAsInstancedGlb(double)).toBeNull()
   })
 
-  it('declines a geometry missing normals or index', async () => {
+  it('declines a batch whose geometry has no normals or index', async () => {
+    // An un-indexed, normal-less batch: `hasBatchedGeometry` refuses to read
+    // shapes out of it at all, so the writer declines rather than emitting a
+    // primitive with no NORMAL/indices.
     const bare = new BufferGeometry()
     bare.setAttribute('position', new BufferAttribute(new Float32Array([0, 0, 0]), 3))
-    const double = batchedDouble()
-    double.instanceGeometry = [bare, bare, bare]
-    expect(await exportBatchedModelAsInstancedGlb(double)).toBeNull()
+    const mesh = new BatchedMesh(1, 3, 0)
+    mesh.setMatrixAt(mesh.addInstance(mesh.addGeometry(bare)), new Matrix4())
+    mesh.instanceParents = [11]
+    mesh.instanceOccurrenceIds = [0]
+    mesh.instanceSourceColors = [{x: 0.8, y: 0.8, z: 0.8, w: 1}]
+    expect(await exportBatchedModelAsInstancedGlb(mesh)).toBeNull()
   })
 
   it('declines an undecorated model', async () => {

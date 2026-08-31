@@ -159,7 +159,10 @@ const MAX_BAD_RECORD_WARNINGS = 5
  * `THREE.BatchedMesh` (created lazily, grown in place with 2x
  * amortization), and accumulates the per-instance pick tables the
  * batched consumers read (`instanceParents`, `instanceOccurrenceIds`,
- * `instanceGeometry`, `instanceColors`).
+ * `instanceGeometryIds`, `instanceColors`). The SOURCE geometries are not
+ * among them: the batch buffers already hold every byte, and the consumers
+ * that need a shape back read it out of them (`batchedInstanceGeometry`),
+ * so nothing here outlives `finalize` (Share#1810).
  *
  * `root` is a stable `Group` — install it in the scene on the first
  * batch and geometry simply appears as it extracts. `finalize`
@@ -383,7 +386,6 @@ export class IncrementalBatchedBuilder {
       state.mesh.instanceOccurrencePaths =
         state.instanceOccurrencePaths.some((p) => p !== null) ?
           state.instanceOccurrencePaths.slice() : null
-      state.mesh.instanceGeometry = state.instanceGeometry.slice()
       state.mesh.instanceColors = state.instanceColors.slice()
       // The mesh has stopped growing, so its exact requirement is finally
       // known: release the reserved space nothing used (Share#1809).
@@ -405,7 +407,6 @@ export class IncrementalBatchedBuilder {
         instanceOccurrenceIds: state.mesh.instanceOccurrenceIds,
         instanceGeometryIds: state.mesh.instanceGeometryIds,
         instanceOccurrencePaths: state.mesh.instanceOccurrencePaths,
-        instanceGeometry: state.mesh.instanceGeometry,
         instanceColors: state.mesh.instanceColors,
       })
     }
@@ -419,10 +420,23 @@ export class IncrementalBatchedBuilder {
     // at the end of the load — nothing reads it afterwards, so release it
     // rather than retaining it for the life of the model (conway#636).
     this.seenPlacements.clear()
+    // Same for the source geometries. `addGeometry` copied each one into the
+    // batch buffers and kept no reference, so past this point the cache is
+    // the ONLY owner of a full duplicate of the model's geometry — 171.5 MB
+    // on sp-231MB.ifc, byte-lever 1 of the conway#679 attribution. Dropping
+    // `mesh.instanceGeometry` alone would not have freed a byte of it
+    // (Share#1810): the cache is reachable from `ShareIfcLoader.parse`'s
+    // closure for as long as conway's proxy holds the open `settings`
+    // object, so the release has to happen here, where the builder knows it
+    // is done. Nothing re-enters the builder after finalize — the degraded
+    // end-of-load rebuilds construct a fresh one from `recapture()`. Read
+    // the count the load report wants BEFORE emptying it.
+    const uniqueGeometryCount = this.geometryCache.size
+    this.geometryCache.clear()
     return {
       batches,
       stats: {
-        uniqueGeometryCount: this.geometryCache.size,
+        uniqueGeometryCount,
         instanceCount: this.totals.placements,
         vertexCount: this.totals.vertexCount,
         triangleCount: (this.totals.indexCount / INDICES_PER_TRIANGLE) | 0,
@@ -555,7 +569,6 @@ export class IncrementalBatchedBuilder {
     // the batched consumers can narrow selection / hide to one occurrence.
     state.instanceGeometryIds.push(geomExpressID)
     state.instanceOccurrencePaths.push(occurrencePath)
-    state.instanceGeometry.push(entry.geometry)
     state.instanceColors.push(color)
     state.cursor++
     this.occurrenceId++
@@ -728,7 +741,6 @@ export class IncrementalBatchedBuilder {
       instanceOccurrenceIds: [],
       instanceGeometryIds: [],
       instanceOccurrencePaths: [],
-      instanceGeometry: [],
       instanceColors: [],
     }
     this[key] = state
