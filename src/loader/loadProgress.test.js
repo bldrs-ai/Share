@@ -601,6 +601,71 @@ describe('loadProgress', () => {
         warnSpy.mockRestore()
       })
 
+      /*
+       * The tag exists to bypass Sentry's scrubber, so it has to police its
+       * own content: an exporter-written originating_system sometimes carries
+       * the exporter's install path, which on Windows names a user.
+       */
+      it('strips path-like tokens from the authoring tool', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'Tower.ifc'})
+        reportModelInfo({
+          fileName: 'Tower.ifc',
+          originatingSystem: 'Revit Exporter C:\\Users\\jsmith\\rvt2ifc.exe',
+        })
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+
+        const {tags} = diagnosticsCall()[1]
+        expect(tags.authoring_tool).toBe('Revit Exporter')
+        expect(tags.authoring_tool).not.toContain('jsmith')
+        warnSpy.mockRestore()
+      })
+
+      it('omits the authoring tool entirely when it is nothing but a path', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'Tower.ifc'})
+        reportModelInfo({fileName: 'Tower.ifc', originatingSystem: '/home/jsmith/exporters/ifc'})
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+
+        expect(diagnosticsCall()[1].tags).not.toHaveProperty('authoring_tool')
+        warnSpy.mockRestore()
+      })
+
+      /*
+       * The two header fields are latched separately, so a later header that
+       * names only a preprocessor cannot downgrade an authoring system an
+       * earlier one already supplied.
+       */
+      it('keeps the richer authoring system when a later header names only a preprocessor', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'Tower.ifc'})
+        reportModelInfo({fileName: 'Tower.ifc', originatingSystem: 'Autodesk Revit 2024 (ENU)'})
+        reportLoadProgress({modelInfo: {fileName: 'Tower.ifc', preprocessorVersion: 'IFC4 exporter'}})
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+
+        expect(diagnosticsCall()[1].tags.authoring_tool).toBe('Autodesk Revit 2024 (ENU)')
+        warnSpy.mockRestore()
+      })
+
+      // CadView sends content_type as `loadedModel.type || 'undefined'`, so
+      // the literal string is what an unknown type looks like here.
+      it('omits model_format rather than tagging the literal "undefined"', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'gdrive:1sWR7x4BZ'})
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1, contentType: 'undefined'})
+
+        expect(diagnosticsCall()[1].tags).not.toHaveProperty('model_format')
+        warnSpy.mockRestore()
+      })
+
       it('stays silent when the load reported no errors or warnings', () => {
         beginLoadProgress({fileInfo: 'index.ifc'})
         reportLoadProgress({phase: 'geometry', completed: 1, total: 1, elapsedMs: 5})

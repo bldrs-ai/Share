@@ -30,7 +30,7 @@ export function trackAlert(message, error = null) {
     // family instead, normalized (see normalizeMessageDigits) so a
     // per-upload byte size can't split one family into an issue per file.
     Sentry.captureException(stackError, {
-      fingerprint: ['alert', normalizeMessageDigits(String(message))],
+      fingerprint: ['alert', alertFingerprintKey(String(message))],
     })
   }
 
@@ -38,4 +38,33 @@ export function trackAlert(message, error = null) {
   gtagEvent('alert', {
     message: message,
   })
+}
+
+
+/**
+ * The grouping key for a synthesized alert: the shared digit collapse, plus
+ * an alert-only collapse of whatever a message put in parentheses.
+ *
+ * Digits alone are not enough here. `dragAndDrop`'s unknown-upload alert is
+ * `File upload of unknown type: type(${file.type}) size(${file.size})`, and
+ * `file.type` is a browser-supplied MIME string — `application/octet-stream`,
+ * `model/gltf-binary`, `''` — so collapsing only the size still mints a fresh
+ * Sentry issue per MIME, which is the same explosion SHARE-1EA is about.
+ *
+ * The parenthesized collapse stays local to the alert fingerprint and is
+ * deliberately NOT folded into normalizeMessageDigits: engine diagnostics
+ * title themselves through that same helper, and there a parenthesized tail
+ * ("(revolution unwrap)", "(hemisphere: #)") is the part that names the
+ * failure — collapsing it would merge unrelated engine bugs.
+ *
+ * It is safe for the alert population because parentheses appear in exactly
+ * two of the messages that reach this branch (the unknown-upload alert, and
+ * the stale-cache alert's "(Profile menu → Clear Local Cache)"), and both
+ * stay distinct on the surrounding text alone.
+ *
+ * @param {string} message
+ * @return {string}
+ */
+function alertFingerprintKey(message) {
+  return normalizeMessageDigits(message).replace(/\([^)]*\)/g, '(#)')
 }

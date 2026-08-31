@@ -1,7 +1,7 @@
 import React from 'react'
 import {render, screen} from '@testing-library/react'
 import {MockModel} from '../../utils/IfcMock.test'
-import {hasProperties} from './itemProperties'
+import {hasProperties, quantities} from './itemProperties'
 
 
 const REF_TYPE = 5
@@ -70,5 +70,54 @@ describe('hasProperties', () => {
     const model = new MockModel({})
     await expect(hasProperties(model, [{type: 1, value: 'not a ref'}], 0))
       .rejects.toThrow('Array contains non-reference type')
+  })
+})
+
+
+/**
+ * `quantities` is unpackHelper's other consumer and dereferences `.Name.value`
+ * exactly as `hasProperties` did, so it carries the same SHARE-1P3 crash
+ * shape and needs the same guard.
+ */
+describe('quantities', () => {
+  it('renders every quantity of a well-formed set', async () => {
+    const model = new MockModel({
+      1: {Name: {value: 'GrossArea'}, AreaValue: {value: '84.2'}},
+      2: {Name: {value: 'Height'}, LengthValue: {value: '3.1'}},
+    })
+    renderRow(await quantities(model, [
+      {type: REF_TYPE, value: 1},
+      {type: REF_TYPE, value: 2},
+    ], 0))
+
+    expect(screen.getByText('GrossArea')).toBeInTheDocument()
+    expect(screen.getByText('84.2')).toBeInTheDocument()
+    expect(screen.getByText('Height')).toBeInTheDocument()
+  })
+
+  it('skips a quantity that carries no Name and keeps the rest', async () => {
+    const model = new MockModel({
+      1: {AreaValue: {value: 'orphan'}},
+      2: {Name: {value: 'GrossArea'}, AreaValue: {value: '84.2'}},
+    })
+    renderRow(await quantities(model, [
+      {type: REF_TYPE, value: 1},
+      {type: REF_TYPE, value: 2},
+    ], 0))
+
+    expect(screen.getByText('GrossArea')).toBeInTheDocument()
+    expect(screen.queryByText('orphan')).not.toBeInTheDocument()
+  })
+
+  it('skips a reference the model cannot resolve and keeps the rest', async () => {
+    const model = new MockModel({
+      1: {Name: {value: 'GrossArea'}, AreaValue: {value: '84.2'}},
+    })
+    renderRow(await quantities(model, [
+      {type: REF_TYPE, value: 9},
+      {type: REF_TYPE, value: 1},
+    ], 0))
+
+    expect(screen.getByText('GrossArea')).toBeInTheDocument()
   })
 })

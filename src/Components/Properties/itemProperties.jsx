@@ -206,6 +206,14 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
  */
 export async function quantities(model, quantitiesObj, serial) {
   return await unpackHelper(model, quantitiesObj, serial, (ifcElt, rows) => {
+    // Same shape, same guard as hasProperties below: a resolved quantity with
+    // no Name is a row we can't label, and reading through the missing Name
+    // is what crashed the panel (SHARE-1P3). Drop the one quantity, not the
+    // whole table.
+    if (ifcElt?.Name?.value === undefined) {
+      debug().warn('quantities: skipping quantity with no Name: ', ifcElt)
+      return
+    }
     const name = decodeIFCString(ifcElt.Name.value)
     let val = 'value'
     for (const key in ifcElt) {

@@ -145,7 +145,8 @@ class LoadProgressReporter {
     // of the formatted model line. See captureDiagnostics for why they need
     // to be tags rather than context.
     this.schema = undefined
-    this.authoringTool = undefined
+    this.originatingSystem = undefined
+    this.preprocessorVersion = undefined
     // Geometry the load actually produced, when the loader reports it
     // (reportGeometryStats) — the load-outcome signal classifyLoadOutcome
     // reads. Undefined means "not reported", which is not the same as zero.
@@ -325,14 +326,29 @@ class LoadProgressReporter {
     if (typeof info?.schema === 'string' && info.schema !== '') {
       this.schema = info.schema
     }
-    // Same preference order formatModelLine uses for the model line's tool
-    // segment: the authoring system, or the preprocessor when that's all the
-    // header names.
-    const tool = [info?.originatingSystem, info?.preprocessorVersion]
-      .find((candidate) => typeof candidate === 'string' && candidate !== '')
-    if (tool !== undefined) {
-      this.authoringTool = tool
+    // Latched per field rather than as one resolved "tool" value, so a later
+    // header naming only a preprocessor can't downgrade an originatingSystem
+    // an earlier one already gave us. The preference between them is applied
+    // once, at tag time (authoringTool).
+    if (typeof info?.originatingSystem === 'string' && info.originatingSystem !== '') {
+      this.originatingSystem = info.originatingSystem
     }
+    if (typeof info?.preprocessorVersion === 'string' && info.preprocessorVersion !== '') {
+      this.preprocessorVersion = info.preprocessorVersion
+    }
+  }
+
+  /**
+   * The `authoring_tool` tag value: the authoring system, or the preprocessor
+   * when that is all any header named — the same preference order
+   * formatModelLine uses for the model line's tool segment — with path-like
+   * tokens removed (see withoutPathTokens).
+   *
+   * @return {string|undefined} undefined when no header named a tool, or when
+   *   sanitizing left nothing
+   */
+  authoringTool() {
+    return withoutPathTokens(this.originatingSystem ?? this.preprocessorVersion)
   }
 
   /**
@@ -538,14 +554,21 @@ class LoadProgressReporter {
     // rounded size only. No path, no filename, no URL — content_id above is
     // where a model's identity already lives, and it is the field the
     // scrubber is aimed at.
-    if (this.authoringTool !== undefined) {
-      tags.authoring_tool = this.authoringTool.slice(0, MAX_TAG_CHARS)
+    const authoringTool = this.authoringTool()
+    if (authoringTool !== undefined) {
+      tags.authoring_tool = authoringTool.slice(0, MAX_TAG_CHARS)
     }
     if (this.schema !== undefined) {
       tags.model_schema = this.schema.slice(0, MAX_TAG_CHARS)
     }
+    // CadView populates content_type as `loadedModel.type || 'undefined'`, so
+    // the literal string is what an unknown type looks like by the time it
+    // reaches here — tag nothing rather than tag that.
+    const declaredType = contentType === undefined || contentType === null ?
+      '' : String(contentType).toLowerCase()
     const format = extensionOf(this.fallbackName) ??
-      (contentType ? String(contentType).toLowerCase().slice(0, MAX_TAG_CHARS) : undefined)
+      (declaredType !== '' && declaredType !== 'undefined' ?
+        declaredType.slice(0, MAX_TAG_CHARS) : undefined)
     if (format !== undefined) {
       tags.model_format = format
     }
@@ -762,6 +785,31 @@ export function classifyLoadOutcome(geometry) {
 function extensionOf(basename) {
   const match = /\.([a-z0-9]{1,8})$/i.exec(basename ?? '')
   return match ? match[1].toLowerCase() : undefined
+}
+
+
+/**
+ * Drop whitespace-separated tokens containing a path separator, for the
+ * `authoring_tool` tag.
+ *
+ * That tag exists precisely to bypass Sentry's server-side scrubber, so it
+ * has to police its own content. A STEP/IFC FILE_NAME header's
+ * originating_system is exporter-written free text and sometimes carries the
+ * exporter's install or output path — which on Windows means an OS username
+ * ('C:\\Users\\jsmith\\...'). The tool name itself never contains a slash, so
+ * dropping those tokens keeps the useful half and takes the identifying half
+ * out of the event entirely.
+ *
+ * @param {string} [value] a header string, or undefined when none was given
+ * @return {string|undefined} undefined when there was no value, or when every
+ *   token was path-like
+ */
+function withoutPathTokens(value) {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const kept = value.split(/\s+/).filter((token) => token !== '' && !/[/\\]/.test(token))
+  return kept.length === 0 ? undefined : kept.join(' ')
 }
 
 

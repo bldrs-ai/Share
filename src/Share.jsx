@@ -57,7 +57,13 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
    * path, so no other useEffect is triggered.
    */
   useEffect(() => {
-    /** A demux to help forward to the index file, load a new model or do nothing. */
+    /**
+     * A demux to help forward to the index file, load a new model or do nothing.
+     *
+     * @return {boolean} False when the route was unusable and has already been
+     *   handled (alert + fallback), so the rest of the effect must stop rather
+     *   than configure a repository out of the params that just failed to parse.
+     */
     const onChangeUrlParams = (() => {
       debug().log('pathPrefix: ', pathPrefix)
       let mp
@@ -78,11 +84,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         debug().warn('Share#onChangeUrlParams: unsupported model path: ', e)
         setAlert(UNSUPPORTED_FILE_ALERT)
         navToDefault(navigate, appPrefix)
-        return
+        return false
       }
       if (mp === null) {
         navToDefault(navigate, appPrefix)
-        return
+        return true
       }
       if (modelPath === null ||
           (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
@@ -91,8 +97,16 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         setModelPath(mp)
         debug().log('Share#onChangeUrlParams: new model path: ', mp)
       }
+      return true
     })
-    onChangeUrlParams()
+    // An unusable route (mp === null) still falls through to the repository
+    // block below — that is pre-existing behaviour for an empty path, which
+    // still carries usable :org/:repo. A *failed parse* does not: its params
+    // are the ones that just threw, so configuring a repository from them
+    // would flash setRepository(badOrg, badRepo) on the way to the fallback.
+    if (!onChangeUrlParams()) {
+      return
+    }
 
     // TODO(pablo): currently expect these to both be defined.
     const {org, repo} = routeParams

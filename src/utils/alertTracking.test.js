@@ -26,13 +26,36 @@ describe('trackAlert', () => {
     expect(secondContext.fingerprint).toEqual(['alert', 'Could not read full model structure.'])
   })
 
-  it('groups one alert family across its per-upload numbers', () => {
-    trackAlert('File upload of unknown type: type() size(180384)')
-    trackAlert('File upload of unknown type: type() size(12345)')
+  /**
+   * `file.type` is a browser-supplied MIME string, so collapsing only the
+   * size still minted one Sentry issue per MIME — the same explosion
+   * SHARE-1EA is about, one level down.
+   */
+  it('groups one alert family across its per-upload MIME types and sizes', () => {
+    trackAlert('File upload of unknown type: type(application/octet-stream) size(180384)')
+    trackAlert('File upload of unknown type: type(model/gltf-binary) size(12345)')
+    trackAlert('File upload of unknown type: type() size(7)')
 
     const fingerprints = Sentry.captureException.mock.calls.map(([, ctx]) => ctx.fingerprint)
-    expect(fingerprints[0]).toEqual(['alert', 'File upload of unknown type: type() size(#)'])
-    expect(fingerprints[0]).toEqual(fingerprints[1])
+    expect(fingerprints[0]).toEqual(['alert', 'File upload of unknown type: type(#) size(#)'])
+    expect(fingerprints[1]).toEqual(fingerprints[0])
+    expect(fingerprints[2]).toEqual(fingerprints[0])
+  })
+
+  /**
+   * The parenthesized collapse must not over-merge. These are the only two
+   * messages reaching this branch that contain parentheses at all, plus a
+   * paren-free neighbour — all three have to stay separate issues.
+   */
+  it('keeps genuinely distinct alert families distinct', () => {
+    trackAlert('File upload of unknown type: type(application/octet-stream) size(180384)')
+    trackAlert('This model was cached in an older format that this version of Share ' +
+      'no longer reads, so element properties are unavailable. ' +
+      'Clear the local cache (Profile menu → Clear Local Cache) and reload the model to rebuild it.')
+    trackAlert('File upload initiated but found no data')
+
+    const keys = Sentry.captureException.mock.calls.map(([, ctx]) => ctx.fingerprint[1])
+    expect(new Set(keys).size).toBe(keys.length)
   })
 
   it('still captures the message as the exception, with its stack', () => {

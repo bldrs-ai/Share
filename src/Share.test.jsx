@@ -70,7 +70,7 @@ describe('Share with an unsupported model path', () => {
   // point, so the store write can't re-render a live subscriber outside
   // act() (PLAYBOOK.md §"Keep the test console clean").
   beforeEach(() => {
-    useStore.setState({alert: null})
+    useStore.setState({alert: null, repository: null})
   })
 
   it('alerts rather than crashing on an unrecognized extension', () => {
@@ -83,5 +83,16 @@ describe('Share with an unsupported model path', () => {
   it('alerts rather than crashing on a bare directory path', () => {
     renderGithubRoute('models/parts')
     expect(useStore.getState().alert).toBe(UNSUPPORTED_FILE_ALERT)
+  })
+
+  /**
+   * The effect must stop on the handled-error path, not fall through to the
+   * repository block — those are the very params that just failed to parse,
+   * so configuring a repository from them flashes a bogus org/repo on the way
+   * to the fallback.
+   */
+  it('does not configure a repository from the params that failed to parse', () => {
+    renderGithubRoute('Jetenginestep.st')
+    expect(useStore.getState().repository).toBe(null)
   })
 })
