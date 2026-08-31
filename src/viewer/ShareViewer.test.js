@@ -30,8 +30,9 @@ jest.mock('three', () => jest.requireActual('three'))
 // before `./ShareViewer` resolves those deps. The hoisted
 // `jest.mock('three', requireActual)` above still wins for three.
 import '../../__mocks__/shareViewerTestHarness'
-import {BufferAttribute, BufferGeometry, Group, Mesh, Scene} from 'three'
+import {BufferAttribute, BufferGeometry, Color, Group, Mesh, Scene} from 'three'
 import {ShareViewer} from './ShareViewer'
+import {flatMeshToBatchedModel} from './ifc/flatMeshToBatchedModel'
 import {instanceMapFromGeometry, instanceMapFromOrderedPlacedRanges} from './ifc/IfcInstanceMap'
 import Selector from './three/Selector'
 import ThreeContext from './three/ThreeContext'
@@ -663,5 +664,157 @@ describe('viewer/ShareViewer getInstanceIdsForOccurrencePath', () => {
     const ifcViewer = makeResolverViewer(ifcMesh)
     expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(ifcViewer, 0, [10, 20]))
       .toEqual([])
+  })
+
+  it('resolves one body of a no-NAUO multibody model to its own instance (conway#628)', () => {
+    // BLSN_007 in miniature (test-models-private#98): ONE product, no NAUOs,
+    // named bodies whose occurrence path is just their own express id. Every
+    // instance shares the product_definition_shape as parent, so the path is
+    // the only thing that tells the bodies apart — before conway#628 they all
+    // shared one path and a NavTree click highlighted the whole hull.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 1020254, triangleCount: 1,
+        occurrencePath: [367733], geometryExpressId: 367733},
+      {parentExpressId: 1020254, triangleCount: 1,
+        occurrencePath: [367891], geometryExpressId: 367891},
+      {parentExpressId: 1020254, triangleCount: 1,
+        occurrencePath: [368002], geometryExpressId: 368002},
+    ])
+    const viewer = makeResolverViewer(mesh)
+    const forBody = (bodyId) => ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [bodyId], {includeDescendants: false, geometryExpressId: bodyId})
+    // The NavTree solid-leaf click funnel: exact key + geometry-id filter.
+    expect(forBody(367733)).toEqual([0])
+    expect(forBody(367891)).toEqual([1])
+    expect(forBody(368002)).toEqual([2])
+    // The hide funnel takes the same path without the leaf fast path
+    // (includeDescendants defaults true); a body has no descendants, so the
+    // prefix scan must still yield exactly the one instance.
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [367891], {geometryExpressId: 367891})).toEqual([1])
+  })
+})
+
+
+describe('viewer/ShareViewer highlightIfcItem — batched hover', () => {
+  const IDENTITY_MAT = [
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
+  ]
+  const GREY = {x: 0.8, y: 0.8, z: 0.8, w: 1}
+  const HOVER = {r: 1, g: 0, b: 0}
+
+  /** @return {object} conway api stub with one unit-triangle shape at id 999 */
+  function unitTriApi() {
+    const vertexData = new Float32Array([
+      0, 0, 0, 0, 0, 1,
+      1, 0, 0, 0, 0, 1,
+      0, 1, 0, 0, 0, 1,
+    ])
+    const indexData = new Uint32Array([0, 1, 2])
+    return {
+      GetGeometry: (_m, id) => (id === 999 ? {
+        GetVertexData: () => id,
+        GetIndexData: () => id,
+        GetVertexDataSize: () => vertexData.length,
+        GetIndexDataSize: () => indexData.length,
+      } : null),
+      GetVertexArray: () => vertexData,
+      GetIndexArray: () => indexData,
+    }
+  }
+
+  /**
+   * A live batched model in the BLSN_007 shape (test-models-private#98): ONE
+   * product owning three separately pickable bodies. Distinct translations,
+   * since coincident placements of one geometry are deduplicated.
+   *
+   * @return {object} BatchedMesh with the pick + highlight tables wired
+   */
+  function noNauoMultibodyModel() {
+    const geometries = [0, 1, 2].map((i) => {
+      const flatTransformation = IDENTITY_MAT.slice()
+      flatTransformation[12] = i * 2
+      return {geometryExpressID: 999, flatTransformation, color: GREY}
+    })
+    const {batches} = flatMeshToBatchedModel(
+      [{expressID: 1020254, geometries}], unitTriApi(), 0)
+    const mesh = batches[0].mesh
+    mesh.instanceParents = batches[0].instanceParents
+    mesh.instanceColors = batches[0].instanceColors
+    mesh.instanceOccurrenceIds = batches[0].instanceOccurrenceIds
+    mesh.capabilities = {expressIdPicking: true, batchedPicking: true}
+    return mesh
+  }
+
+  /**
+   * @param {object} model the batched model to serve as the scene's only model
+   * @param {object|null} hit the raycast result castRayIfc should return
+   * @return {object} ShareViewer with just the surfaces highlightIfcItem reads
+   */
+  function makeHoverViewer(model, hit) {
+    const viewer = new ShareViewer()
+    viewer.context._legacy.castRayIfc = jest.fn(() => hit)
+    viewer.IFC.context = {items: {ifcModels: [model]}}
+    viewer.isolator = {canBePickedInScene: () => true}
+    viewer.selector = {
+      getPreselectionMaterial: () => ({color: HOVER}),
+      togglePreselectionVisibility: jest.fn(),
+    }
+    return viewer
+  }
+
+  /**
+   * @param {object} mesh BatchedMesh
+   * @return {Array<boolean>} per batchId, whether it carries the hover colour
+   */
+  function hoverPainted(mesh) {
+    return [0, 1, 2].map((batchId) => {
+      const c = mesh.getColorAt(batchId, new Color())
+      return c.r > 0.5 && c.g < 0.5
+    })
+  }
+
+  it('paints only the hovered body, not every body of the shared parent', async () => {
+    // The reported bug: hovering any part of BLSN_007 turned the WHOLE model
+    // cyan. Its 2,268 bodies share one product_definition_shape, and the hover
+    // branch resolved the hit to that parent id
+    // (`getPickedItemId` → `instanceParents[batchId]`) and painted every
+    // instance under it. The click funnel was already per-instance; hover is a
+    // separate path (`viewer.js` mousemove → highlightIfcItem).
+    const model = noNauoMultibodyModel()
+    // Premise: one parent for all three bodies — otherwise this proves nothing.
+    expect(new Set(model.instanceParents).size).toBe(1)
+
+    const viewer = makeHoverViewer(model, {object: model, batchId: 1, faceIndex: 0})
+    await ShareViewer.prototype.highlightIfcItem.call(viewer)
+    expect(hoverPainted(model)).toEqual([false, true, false])
+  })
+
+  it('follows the cursor between bodies of one product', async () => {
+    // The per-frame hover dedup used to key on the resolved product id. Every
+    // body here resolves to the SAME product, so an id-keyed dedup would treat
+    // moving between them as "unchanged" and strand the highlight on the first.
+    const model = noNauoMultibodyModel()
+    const hit = {object: model, batchId: 0, faceIndex: 0}
+    const viewer = makeHoverViewer(model, hit)
+    await ShareViewer.prototype.highlightIfcItem.call(viewer)
+    expect(hoverPainted(model)).toEqual([true, false, false])
+
+    hit.batchId = 2
+    await ShareViewer.prototype.highlightIfcItem.call(viewer)
+    expect(hoverPainted(model)).toEqual([false, false, true])
+  })
+
+  it('degrades to product-level hover when the batch carries no occurrence ids', async () => {
+    // IFC and older cached batched artifacts have no `instanceOccurrenceIds`;
+    // there, every instance of the hovered product IS the right granularity.
+    const model = noNauoMultibodyModel()
+    delete model.instanceOccurrenceIds
+    const viewer = makeHoverViewer(model, {object: model, batchId: 1, faceIndex: 0})
+    await ShareViewer.prototype.highlightIfcItem.call(viewer)
+    expect(hoverPainted(model)).toEqual([true, true, true])
   })
 })

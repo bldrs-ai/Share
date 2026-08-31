@@ -50,10 +50,21 @@ export function occurrencePathsEqual(a, b) {
  * occurrence path — its child count decides whether the scene resolution
  * needs the descendant prefix scan (assembly) or the exact-key lookup (leaf).
  *
- * Ephemeral solid nodes are skipped: a multibody part's solids share the
- * part's occurrence path (they are not occurrences themselves — their
- * identity is (path, solid expressID)), so a path-only lookup must land on
- * the product node, never one of its bodies.
+ * The ephemeral fallback is what makes a conway#628 body reachable: a body
+ * ends its path with its own express id, so this lookup lands ON the solid
+ * node and the scene pick / permalink resolve it as the selection.
+ *
+ * A product node still wins over an ephemeral solid node carrying the *same*
+ * path — the pre-#628 shape, where a body's identity was the (path, solid
+ * expressID) pair and a path-only lookup therefore couldn't name one body.
+ * No shipped producer feeds that shape to this code today: the engine no
+ * longer emits it, and a cache artifact written by one that did is
+ * unreachable because `BLDRS_GLB_SCHEMA_VERSION` is part of the artifact
+ * FILENAME (`glbCacheKey.glbArtifactPath`), so an old artifact is never
+ * opened, only missed. The preference is kept as defence against
+ * engine/schema lockstep drift — a tree from *any* GLB reaches
+ * `newGltfLoader`'s extension readers, cache lookup or not (`Loader.js`) —
+ * and it costs one branch.
  *
  * @param {object|null|undefined} rootNode spatial-structure root element
  * @param {Array<number>|null|undefined} path NAUO express ids, root→leaf
@@ -65,11 +76,14 @@ export function findNodeByOccurrencePath(rootNode, path) {
   }
   const target = occurrencePathKey(path)
   const stack = [rootNode]
+  let ephemeralMatch = null
   while (stack.length > 0) {
     const node = stack.pop()
-    if (node.ephemeral !== true &&
-        Array.isArray(node.occurrencePath) && occurrencePathKey(node.occurrencePath) === target) {
-      return node
+    if (Array.isArray(node.occurrencePath) && occurrencePathKey(node.occurrencePath) === target) {
+      if (node.ephemeral !== true) {
+        return node
+      }
+      ephemeralMatch = ephemeralMatch ?? node
     }
     if (Array.isArray(node.children)) {
       for (const child of node.children) {
@@ -79,7 +93,178 @@ export function findNodeByOccurrencePath(rootNode, path) {
       }
     }
   }
-  return null
+  return ephemeralMatch
+}
+
+
+/**
+ * Resolve a scene pick to the tree identity Share selects: which express id
+ * becomes the selection, and whether it names one body (solid) of a part
+ * rather than the part itself. Pure — the caller supplies the tree, the
+ * pick's (trimmed) occurrence path and its `PlacedGeometry.geometryExpressID`,
+ * plus a probe for how many instances sit at a path.
+ *
+ * Three shapes, in the order they're tried:
+ *
+ * 1. **The path names the body** (conway#628). An individually addressable
+ *    body ends its occurrence path with its own express id, so the trimmed
+ *    path lands directly on the `type:'solid'` node — nothing to search. This
+ *    is the whole no-NAUO multibody case (BLSN_007: one product, 2,268 named
+ *    bodies), where the part-level fallback would select the boat.
+ * 2. **The path names the part, a solid child matches the geometry id.**
+ *    Pre-#628 engines and cache artifacts key a body as the (path, solid
+ *    expressID) pair, so the body is found among the node's children.
+ * 3. **Anonymous piece of a multi-piece part** (conway#387): no tree node
+ *    exists, but (path, geometry id) is a complete identity — select it as a
+ *    solid and let the caller materialize a transient NavTree row. The
+ *    >1-instance guard keeps single-solid parts (as1's nut, the NEMA screws)
+ *    on the part-level selection, where the part node IS the piece.
+ *
+ * @param {object} args
+ * @param {object|null|undefined} args.rootNode spatial-structure root element
+ * @param {Array<number>} args.occurrencePath tree-trimmed occurrence path
+ * @param {number|null} args.pickedGeometryId the instance's own geometry
+ *   (solid) express id, null when the engine/cache carries none
+ * @param {number} args.parentExpressId the geometry-owner product id, the
+ *   fallback selection when the pick resolves to no body
+ * @param {Function} args.instanceCountAtPath `(path) => number` instances
+ *   placed exactly at a path (no descendants); only case 3 calls it
+ * @return {object} `{targetId, solidExpressId, transientGeometryId}` — a
+ *   non-null `transientGeometryId` asks the caller to materialize a transient
+ *   NavTree row for that piece
+ */
+export function resolvePickedOccurrenceNode({
+  rootNode, occurrencePath, pickedGeometryId, parentExpressId, instanceCountAtPath,
+}) {
+  const partLevel = {targetId: parentExpressId, solidExpressId: null, transientGeometryId: null}
+  if (!Array.isArray(occurrencePath) || occurrencePath.length === 0) {
+    return partLevel
+  }
+  const pathNode = findNodeByOccurrencePath(rootNode, occurrencePath)
+  if (!pathNode) {
+    return partLevel
+  }
+  if (pathNode.ephemeral === true) {
+    return {targetId: pathNode.expressID, solidExpressId: pathNode.expressID, transientGeometryId: null}
+  }
+  if (pickedGeometryId === null) {
+    return partLevel
+  }
+  const solidNode = pathNode.children?.find?.(
+    (child) => child.ephemeral === true && child.expressID === pickedGeometryId)
+  if (solidNode) {
+    return {targetId: solidNode.expressID, solidExpressId: solidNode.expressID, transientGeometryId: null}
+  }
+  if (instanceCountAtPath(occurrencePath) > 1) {
+    return {
+      targetId: pickedGeometryId,
+      solidExpressId: pickedGeometryId,
+      transientGeometryId: pickedGeometryId,
+    }
+  }
+  return partLevel
+}
+
+
+/**
+ * The element-path ids a permalink encodes for one occurrence selection —
+ * `[rootExpressID, ...occurrencePath]`, plus the solid's express id when the
+ * path doesn't already end with it.
+ *
+ * The conditional tail is the conway#628 seam: a body addressable in its own
+ * right carries its express id as the path's last segment, so appending it
+ * again would mint `/1020254/367733/367733`. That URL is not fatal — the
+ * inverse resolver reads the repeat through the conway#387 anonymous-piece
+ * branch and still lands the selection on the body — but it registers a
+ * transient row for a piece that already has a tree node, so keep the URL a
+ * body's canonical one. The extra segment is still required wherever a piece
+ * shares its owner's path: an anonymous piece (which has no node at all), and
+ * a pre-#628 solid, where the (path, expressID) pairing is the only thing
+ * that tells "the part" from "one body inside it".
+ * `resolveElementPathOccurrence` is the inverse.
+ *
+ * @param {number} rootExpressID the tree root's express id (paths omit it)
+ * @param {Array<number>} occurrencePath NAUO express ids, root→leaf
+ * @param {number|null} [solidExpressId] selected solid (body), if any
+ * @return {Array<number>} element-path ids below the model file
+ */
+export function occurrenceElementPathIds(rootExpressID, occurrencePath, solidExpressId = null) {
+  const ids = [rootExpressID, ...occurrencePath]
+  if (solidExpressId !== null && ids[ids.length - 1] !== solidExpressId) {
+    ids.push(solidExpressId)
+  }
+  return ids
+}
+
+
+/**
+ * Resolve a permalink's element-path ids (below the root) back to the
+ * occurrence selection that wrote them — the inverse of
+ * `occurrenceElementPathIds`. Pure; the caller supplies the tree and a probe
+ * for whether a geometry piece exists under a path.
+ *
+ * Returns `occurrencePath: null` when the tree doesn't know these ids at all
+ * (IFC, a hand-trimmed URL, a pre-occurrence permalink), which is the
+ * caller's signal to keep the legacy scalar-id selection.
+ *
+ * @param {object} args
+ * @param {object|null|undefined} args.rootNode spatial-structure root element
+ * @param {Array<number>} args.eltPathIds element-path ids below the root
+ * @param {Function} args.hasGeometryAtPath `(path, geometryExpressId) =>
+ *   boolean`, true when the instance map holds that piece under that path
+ * @return {object} `{node, occurrencePath, solidExpressId,
+ *   transientGeometryId}` — all null when the path resolves to nothing
+ */
+export function resolveElementPathOccurrence({rootNode, eltPathIds, hasGeometryAtPath}) {
+  const none = {node: null, occurrencePath: null, solidExpressId: null, transientGeometryId: null}
+  if (!Array.isArray(eltPathIds) || eltPathIds.length === 0) {
+    return none
+  }
+  const node = findNodeByOccurrencePath(rootNode, eltPathIds)
+  if (node) {
+    // A conway#628 body IS the path's last segment, so the node found here can
+    // be the solid itself; its express id is what narrows the scene highlight
+    // and keys the per-body hide.
+    return {
+      node,
+      occurrencePath: eltPathIds,
+      solidExpressId: node.ephemeral === true ? node.expressID : null,
+      transientGeometryId: null,
+    }
+  }
+  // Pre-#628 solid / anonymous piece: the writer appended the piece's express
+  // id below its parent part's occurrence path, so try the prefix as the path
+  // and the trailing id as a body under it.
+  const minSegmentsForSolid = 2
+  if (eltPathIds.length < minSegmentsForSolid) {
+    return none
+  }
+  const parentPathIds = eltPathIds.slice(0, -1)
+  const targetId = eltPathIds[eltPathIds.length - 1]
+  const parentNode = findNodeByOccurrencePath(rootNode, parentPathIds)
+  if (!parentNode) {
+    return none
+  }
+  const solidNode = parentNode.children?.find?.(
+    (child) => child.ephemeral === true && child.expressID === targetId)
+  if (solidNode) {
+    return {
+      node: parentNode, occurrencePath: parentPathIds,
+      solidExpressId: targetId, transientGeometryId: null,
+    }
+  }
+  if (hasGeometryAtPath(parentPathIds, targetId)) {
+    // Anonymous-geometry permalink (conway#387): the trailing id names no tree
+    // node, but the instance map holds geometry with that id under the parent
+    // path — the piece exists, it just has no in-file identity beyond its
+    // express id. The transient row makes the tree show what the URL
+    // addressed.
+    return {
+      node: parentNode, occurrencePath: parentPathIds,
+      solidExpressId: targetId, transientGeometryId: targetId,
+    }
+  }
+  return none
 }
 
 

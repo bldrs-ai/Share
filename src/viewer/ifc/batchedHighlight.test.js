@@ -1,6 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import {Color, Group} from 'three'
 import {
+  applyBatchedInstancePreselection,
   applyBatchedPreselection,
   applyBatchedSelection,
   clearBatchedPreselection,
@@ -89,6 +90,31 @@ function batchIdFor(mesh, expressId) {
 }
 
 
+/**
+ * The no-NAUO multibody shape (BLSN_007, test-models-private#98): ONE
+ * product owning several separately pickable bodies, each its own placement.
+ * Distinct translations because coincident placements of one geometry are
+ * deduplicated by `collectGroups`.
+ *
+ * @param {number} [bodyCount]
+ * @return {object} a THREE.BatchedMesh with parent + occurrence tables wired
+ */
+function noNauoMultibodyBatch(bodyCount = 3) {
+  const geometries = []
+  for (let i = 0; i < bodyCount; i++) {
+    const transform = IDENTITY_MAT.slice()
+    transform[12] = i * 2 // distinct placement, else deduped as coincident
+    geometries.push({geometryExpressID: 999, flatTransformation: transform, color: GREY})
+  }
+  const {batches} = flatMeshToBatchedModel([{expressID: 1020254, geometries}], unitTriApi(), 0)
+  const batch = batches[0]
+  batch.mesh.instanceParents = batch.instanceParents
+  batch.mesh.instanceColors = batch.instanceColors
+  batch.mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
+  return batch.mesh
+}
+
+
 describe('viewer/ifc/batchedHighlight', () => {
   it('recolors only the selected product, leaving others original', () => {
     const mesh = decoratedBatch()
@@ -129,6 +155,35 @@ describe('viewer/ifc/batchedHighlight', () => {
     const after = colorAt(mesh, batchIdFor(mesh, 100))
     expect(after.r).toBeCloseTo(0)
     expect(after.b).toBeCloseTo(1)
+  })
+
+  it('preselects ONE body of a no-NAUO multibody product, not the whole parent', () => {
+    // The BLSN_007 hover bug: every body of that file shares one
+    // product_definition_shape, so the parent-keyed hover below paints the
+    // entire model. The occurrence-keyed form paints only the hovered body.
+    const mesh = noNauoMultibodyBatch()
+    // Premise check — without a single shared parent this test proves nothing.
+    expect(new Set(mesh.instanceParents).size).toBe(1)
+    expect(mesh.instanceOccurrenceIds.length).toBe(3)
+    const isPreselected = (batchId) => colorAt(mesh, batchId).r > 0.5 &&
+      colorAt(mesh, batchId).g < 0.5
+
+    applyBatchedInstancePreselection(mesh, [mesh.instanceOccurrenceIds[1]], PRESELECT)
+    expect([0, 1, 2].map(isPreselected)).toEqual([false, true, false])
+
+    // Contrast, and the pre-fix behaviour: keyed by the shared parent, all
+    // three light up. This is what the user saw as "the whole model is cyan".
+    applyBatchedPreselection(mesh, [mesh.instanceParents[1]], PRESELECT)
+    expect([0, 1, 2].map(isPreselected)).toEqual([true, true, true])
+
+    // Moving the hover to another body releases the previous one — the case a
+    // parent-keyed dedup would swallow, since all three share that parent.
+    applyBatchedInstancePreselection(mesh, [mesh.instanceOccurrenceIds[2]], PRESELECT)
+    expect([0, 1, 2].map(isPreselected)).toEqual([false, false, true])
+
+    clearBatchedPreselection(mesh)
+    expect([0, 1, 2].map(isPreselected)).toEqual([false, false, false])
+    expect(colorAt(mesh, 2).r).toBeCloseTo(GREY.x)
   })
 
   it('isBatchedModel detects a BatchedMesh and a Group of them', () => {

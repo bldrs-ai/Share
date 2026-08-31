@@ -125,6 +125,13 @@ describe('NavTreePanel/getVisibleNodes — transient anonymous-geometry rows (co
   const PART_NAUO = 14107
   const FACE_ID = 4462
   const SOLID_ID = 250
+  // The conway#628 no-NAUO multibody shape (BLSN_007): one product, bodies
+  // whose occurrence path is their own express id, at the real fixture's width.
+  const PRODUCT_ID = 1020254
+  const BODY_A_ID = 367733
+  const BODY_B_ID = 367891
+  const FIRST_BODY_ID = 400000
+  const BLSN_BODY_COUNT = 2268
 
   /**
    * A STEP part node with an occurrence path, in the shape the spatial
@@ -210,6 +217,48 @@ describe('NavTreePanel/getVisibleNodes — transient anonymous-geometry rows (co
     const solidRows = visible.map(({node: n}) => n)
       .filter((n) => n.ephemeral === true && n.transient !== true)
     expect(solidRows.every((n) => n.hasChildren === false)).toBe(true)
+  })
+
+  it('renders conway#628 body nodes as ordinary rows, each on its own path', () => {
+    // The no-NAUO multibody shape (BLSN_007, test-models-private#98): the
+    // bodies arrive as real tree children whose occurrence path ends with
+    // their own express id. They must render with their file names and keep
+    // those distinct paths — that path is what the row highlight, the scroll
+    // and the per-body hide all key on. The transient-row injection is gated
+    // on `!ephemeral`, so a body must not sprout synthetic children either.
+    const bodies = [BODY_A_ID, BODY_B_ID].map((id, index) => ({
+      ...node(id, `brep_${index + 1}`),
+      type: 'solid',
+      occurrencePath: [id],
+      ephemeral: true,
+    }))
+    const root = {...node(PRODUCT_ID, 'Document', bodies), occurrencePath: []}
+    const transient = {[BODY_A_ID]: [{expressID: FACE_ID, label: 'Face #4462'}]}
+    const visible = getVisibleNodes(root, [`${PRODUCT_ID}`], true, model, transient)
+    expect(visible.map(({node: n}) => n.label)).toEqual(['Document', 'brep_1', 'brep_2'])
+    const rows = visible.map(({node: n}) => n)
+    expect(rows[1].occurrencePath).toEqual([BODY_A_ID])
+    expect(rows[2].occurrencePath).toEqual([BODY_B_ID])
+    expect(rows[1].ephemeral).toBe(true)
+    expect(rows[1].hasChildren).toBe(false)
+    expect(rows.some((n) => n.transient === true)).toBe(false)
+  })
+
+  it('flattens a 2,268-body product without special-casing (virtualized rows)', () => {
+    // BLSN_007's real width. getVisibleNodes builds the whole flat list; only
+    // `VariableSizeList` decides what renders, so the cost here is one map +
+    // one push per node. This pins that nothing walks the sibling set
+    // quadratically — the transient/"more" injection runs per node and reads
+    // `transientTreeNodes` by path key, not by scanning siblings.
+    const bodies = []
+    for (let i = 0; i < BLSN_BODY_COUNT; i++) {
+      const id = FIRST_BODY_ID + i
+      bodies.push({...node(id, `brep_${i}`), type: 'solid', occurrencePath: [id], ephemeral: true})
+    }
+    const root = {...node(PRODUCT_ID, 'Document', bodies), occurrencePath: []}
+    const visible = getVisibleNodes(root, [`${PRODUCT_ID}`], true, model, {})
+    expect(visible.length).toBe(BLSN_BODY_COUNT + 1)
+    expect(visible[visible.length - 1].node.label).toBe(`brep_${BLSN_BODY_COUNT - 1}`)
   })
 
   it('leaves IFC nodes (no occurrence path) untouched', () => {

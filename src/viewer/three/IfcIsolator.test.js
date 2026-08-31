@@ -652,6 +652,68 @@ describe('viewer/three/IfcIsolator', () => {
       expect(useStore.setState).toHaveBeenLastCalledWith({hiddenElements: {}})
     })
 
+    it('hideSelectedElements hides one body of a no-NAUO multibody product (conway#628)', () => {
+      // BLSN_007 (test-models-private#98): one product, no NAUOs, named bodies
+      // whose occurrence path is their own express id. Every body shares the
+      // product_definition_shape (100 here), so the product-type hide below
+      // would vanish the whole hull; the H key must take the occurrence branch
+      // and remove just the selected body's instance.
+      const scene = new Group()
+      const pickable = []
+      const iso = makeIsolator({scene, pickable})
+      const child = makeChildMesh([
+        {parentExpressId: 100, triangleCount: 1,
+          occurrencePath: [367733], geometryExpressId: 367733},
+        {parentExpressId: 100, triangleCount: 1,
+          occurrencePath: [367891], geometryExpressId: 367891},
+        {parentExpressId: 100, triangleCount: 1,
+          occurrencePath: [368002], geometryExpressId: 368002},
+      ])
+      const model = new Group()
+      model.add(child)
+      attachInstanceMapSubsets(model, null)
+      scene.add(model)
+      pickable.push(model)
+      iso.ifcModel = model
+      iso.visualElementsIds = [100]
+      iso.spatialStructure = {}
+      // Resolve through the mesh's own occurrence tables, the same join
+      // ShareViewer.getInstanceIdsForOccurrencePath makes (unit-tested against
+      // this shape in ShareViewer.test.js).
+      // Plain Array, matching the real resolver's return — hideOccurrence's
+      // guard is `Array.isArray`, which a Uint32Array does not satisfy.
+      iso.viewer.getInstanceIdsForOccurrencePath = (modelID, path, {geometryExpressId} = {}) =>
+        Array.from(child.instanceMap.getInstanceIdsByOccurrencePath(path) ?? []).filter(
+          (instanceId) => geometryExpressId === undefined || geometryExpressId === null ||
+            child.instanceMap.getGeometryExpressIdByInstance(instanceId) === geometryExpressId)
+
+      const useStore = require('../../store/useStore').default
+      const origGetState = useStore.getState.getMockImplementation()
+      useStore.getState.mockReturnValue({
+        elementTypesMap: [],
+        selectedElements: [],
+        selectedInstanceIds: [],
+        selectedOccurrencePath: [367891],
+        selectedSolidExpressId: 367891,
+      })
+      try {
+        iso.hideSelectedElements()
+        // Keyed by the body's own express id so its NavTree eye toggles alone.
+        expect(iso.hiddenOccurrences.has(367891)).toBe(true)
+        expect(iso.hiddenOccurrences.get(367891)).toEqual([1])
+        // Two of the three bodies remain — hiding by the shared parent id
+        // would have left zero.
+        expect(countTriangles(iso, iso.unhiddenSubset)).toBe(2)
+
+        // Second H press unhides it: the full model comes back.
+        iso.hideSelectedElements()
+        expect(iso.hiddenOccurrences.has(367891)).toBe(false)
+        expect(scene.children).toContain(model)
+      } finally {
+        useStore.getState.mockImplementation(origGetState)
+      }
+    })
+
     it('product-type and per-occurrence hides compose without clobbering each other', () => {
       // Regression for the review cluster: the pre-existing product-type hide
       // paths replaced hiddenElements from hiddenIds only, wiping occurrence eye

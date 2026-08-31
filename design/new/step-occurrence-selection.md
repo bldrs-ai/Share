@@ -66,6 +66,110 @@ upstream in Conway's `makeThunk` occurrence stamping; the Share-side fixes above
 keep working either way since a NAUO-only geometry path is just the zero-
 extension case.
 
+### Identity below the product (conway#628)
+
+`BLSN_007.stp` (test-models-private#98) is the case the occurrence path alone
+could not express: a 281 MB Rhino 7 / ST-DEVELOPER hull export that is **one
+product, zero NAUOs, zero CDSRs and 2,268 individually named bodies**. Every
+body shares the one product's (empty) occurrence path *and* its
+`product_definition_shape`, so both join keys collapse — Share showed a
+one-node tree in which every click selected the whole boat.
+
+Conway's fix changes what an occurrence path is **made of**, so read it as a
+contract change and not a bug fix:
+
+- An individually addressable body **ends its occurrence path with its own
+  express id**, on the `PlacedGeometry` and on the spatial-tree node alike.
+  So a body's path is `[...nauoChain, bodyExpressID]` (the NEMA motor:
+  `[14107, 14045]`), a no-NAUO body's is just `[bodyExpressID]`, and a
+  single-solid part keeps a NAUO-only path (`[14108]` — the product node *is*
+  the body, so there is nothing to disambiguate).
+- **A plain `shape_representation_relationship` id is no longer a segment.**
+  It binds a part to its own detail representation; it is not an occurrence
+  and has no tree node. This is the Arty_Z7 "trailing non-NAUO segment"
+  extension described above, which therefore largely disappears for solids —
+  but `trimToTreeOccurrencePath`'s prefix fallback stays, because suppressed
+  anonymous dumps and pre-0.19.0 cache artifacts still produce paths the tree
+  doesn't have.
+- The ephemeral solid layer is **on by default** and uncapped for named sets.
+  Suppression is all-or-nothing: a partially emitted layer would leave the
+  dropped bodies stamped with paths that resolve to no node. The >32-unnamed
+  anonymous-dump gate still applies, and there the geometry stamps no body
+  segment either, so paths collapse to the product node coherently.
+
+**What that changed in Share** (the consumer side is small — the engine now
+hands over a key that the existing machinery could already carry):
+
+- `findNodeByOccurrencePath` no longer *skips* ephemeral solid nodes; it
+  prefers a product node and falls back to a solid one. That fallback is what
+  makes a body reachable at all — with its own segment on the path, a pick's
+  trimmed path lands ON the solid node. The product preference covers the
+  pre-#628 shape, where solids share their part's path and a path-only lookup
+  must not name one body. Nothing shipped feeds that shape to this code today
+  — the engine no longer emits it, and an artifact written by one that did is
+  never opened, because the schema version is part of the artifact *filename*
+  (`glbArtifactPath`), so a stale artifact reads as a miss rather than as old
+  data. Treat the preference as defence against engine/schema lockstep drift
+  (the extension readers run on every GLB load, not only on cache lookups),
+  not as a live compatibility path.
+- `resolvePickedOccurrenceNode` (extracted from `canvasDoubleClickHandler`'s
+  funnel, so it can be tested) promotes the selection to the solid node when
+  the path names one. Without it a BLSN pick still degraded to the
+  `product_definition_shape` — the tree resolved, the *selection* didn't, and
+  Properties showed 'Document' for every body.
+- `occurrenceElementPathIds` / `resolveElementPathOccurrence` are the
+  permalink pair. The solid's express id is appended below the occurrence path
+  **only when the path doesn't already end with it**; appending
+  unconditionally would mint `/1020254/367733/367733`. That doubled URL is
+  degraded rather than dead — the resolver reads the repeat through the
+  conway#387 anonymous-piece branch, so the selection still lands on the body,
+  at the cost of registering a transient "piece" row for something that
+  already has a tree node. The pair keeps a body's URL canonical; the extra
+  segment stays required for pieces that genuinely share their owner's path
+  (an anonymous piece, and a pre-#628 solid).
+- **Hover is a separate path from the click funnel**, and had the same bug
+  one layer down. `Containers/viewer.js`'s mousemove (throttled to 30fps)
+  calls `ShareViewer#highlightIfcItem`, whose batched-render branch resolved
+  the hit to its *parent product* (`getPickedItemId` →
+  `instanceParents[batchId]`) and recoloured every instance under it — one
+  product for the whole of BLSN_007, so hovering anything turned the entire
+  hull cyan while the click highlight beneath it was already correct. It now
+  resolves the hovered instance's global occurrence id straight off the hit's
+  `batchId` and paints through `applyBatchedInstancePreselection`, the hover
+  twin of the selection narrowing. Two things this costs nothing: the lookup
+  is a typed-array index plus a memoised `Map` (no traversal per mouse-move),
+  and the repaint only runs when the hovered *instance* changes — which is
+  also why the per-frame dedup key had to stop being the product id, since
+  every body of a no-NAUO product shares one. The merged/cache-hit render
+  path was already per-instance (`_setConwayPreselectionFromHit` builds its
+  subset from the hovered triangle's instance), and models with no occurrence
+  table still hover at product level, which is the right granularity there.
+- **GLB schema bumped `0.18.0 → 0.19.0`.** Path composition is baked into the
+  artifact on both sides (`BLDRS_face_ids.occurrencePaths` and the
+  `BLDRS_spatial_tree` node paths), so a hit on an artifact baked by a
+  pre-#628 engine would keep serving those paths — bodies sharing one path
+  again, and no body nodes in the tree — to post-#628 resolution code.
+  Cache-hit users would never see the fix; same shape and same remedy as the
+  0.15.0/0.16.0/0.17.0/0.18.0 engine bumps. Its own number rather than a
+  merge into 0.18.0: that bump shipped to main on conway 1.1592.684, which
+  predates #628, so 0.18.0 artifacts already exist holding the old path
+  shape.
+
+Everything else took the new paths unchanged, which is the point of keying on
+the path in the first place: `IfcInstanceMap`'s occurrence tables and the
+batched builder's path tables carry them verbatim,
+`getInstanceIdsForOccurrencePath` resolves a body's exact key (its
+`geometryExpressId` filter is now redundant for a body but still needed for
+anonymous pieces and pre-#628 solids), the NavTree renders the solid nodes as
+ordinary rows and matches `isSelected`/scroll on (path, solid id), and the
+per-occurrence hide keys on the body's own express id either way.
+
+**Scale.** A 2,268-body product is a 2,269-node tree and a 2,269-row flatten;
+`VariableSizeList` renders only the visible window, and `getVisibleNodes` is
+one map + one push per node, so the panel does not hang. It is still a single
+flat sibling list with no grouping or search-within-node affordance — the
+usability limit, not a performance one.
+
 ### The id-space mismatch (why scalar `expressID` can't join the two sides)
 
 The two surfaces speak **different express-id spaces** for STEP:
@@ -216,19 +320,29 @@ order; BVH permutes only the index buffer, not the numbering).
    (the store is keyed by node id); child-leaf eyes still read "shown." Toggling
    the assembly eye is the way to reveal them again. Making descendant eyes
    follow would need per-node hidden-state derived from the occurrence prefix.
-4. **Root-level parts.** A placement directly under the product root has an empty
-   occurrence path (no NAUO), which `getOccurrencePathByInstance` normalizes to
-   `null` — an empty path can't disambiguate anything. So a scene pick of a
-   *root-level* part can't reconcile to its NavTree node (the pick reports the
-   PDS id, which never equals the node's id), and it silently degrades to
-   type-level. Harmless when the file has one root assembly (the common case);
-   only bites files with several distinct parts placed directly at the root. A
-   real fix needs a PDS→product-definition→node reverse map, out of scope here.
+4. **Root-level parts** — mostly closed by conway#628, see §"Identity below
+   the product". A *body* placed directly under the product root now carries
+   `[bodyExpressID]`, so the no-NAUO multibody file (BLSN_007) reconciles
+   exactly. What remains is the sliver the body segment can't reach: a
+   root-level product whose single solid makes it its own body, where the path
+   is legitimately empty and `getOccurrencePathByInstance` still normalizes it
+   to `null`. Harmless with one root assembly (the common case); a file with
+   several distinct single-solid products at the root still degrades to
+   type-level there, and a real fix still needs a PDS→product-definition→node
+   reverse map.
 5. **`?feature=batchedMesh`.** The BatchedMesh render path builds no
    `IfcInstanceMap`, so per-occurrence (and all per-instance) selection no-ops
    under that flag — a documented gap in `buildBatchedConwayModel`, not a
    regression (NAUO≠PDS meant a STEP node click highlighted nothing there
    before this work either).
+6. **No eye on a body row.** `IfcIsolator.canBeHidden` answers from
+   `visualElementsIds` (per-vertex expressIDs, i.e. the PDS) and the
+   parent→children map, so a `type:'solid'` leaf is in neither and
+   `NavTreeNode` renders no hide icon for it. The hide itself works — `H` on a
+   selected body takes `hideSelectedElements`' occurrence branch and removes
+   just that body — so this is a missing affordance, not a broken one. It
+   predates conway#628 (the NEMA motor's bodies had it too) but is far more
+   visible on a model whose rows are *all* bodies.
 
 Each step degrades gracefully to today's type-level behavior when no occurrence
 path is present (IFC, single-occurrence parts). NavTree **shift-click** on an

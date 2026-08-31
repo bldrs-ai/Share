@@ -38,6 +38,7 @@ import {occurrencePathKey} from '../utils/occurrencePaths'
 import {modelHasCapability} from './ShareModel'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {
+  applyBatchedInstancePreselection,
   applyBatchedInstanceSelection,
   applyBatchedPreselection,
   applyBatchedSelection,
@@ -1090,10 +1091,12 @@ export class ShareViewer {
    *   needs the prefix scan).
    * @param {number|null} [opts.geometryExpressId] When set, keep only
    *   instances whose `PlacedGeometry.geometryExpressID` matches — the join
-   *   for the NavTree's ephemeral solid nodes: a multibody part's solids all
-   *   share the part's occurrence path, and the solid's own express id is
-   *   what narrows the selection to the one clicked body. Null (the default)
-   *   keeps every instance at/under the path.
+   *   for the NavTree's ephemeral solid nodes. Load-bearing wherever a piece
+   *   shares its part's occurrence path — today that is an anonymous piece
+   *   with no node of its own (conway#387), and it was every solid of a
+   *   multibody part before conway#628. Redundant (but harmless) for a #628
+   *   body, whose path ends with this same id.
+   *   Null (the default) keeps every instance at/under the path.
    * @return {number[]} synthetic instance ids (empty when none)
    */
   getInstanceIdsForOccurrencePath(
@@ -1563,16 +1566,34 @@ export class ShareViewer {
       // a click would select.
       this._setConwayPreselectionFromHit(found.object, found.faceIndex)
     } else if (modelHasCapability(model, 'batchedPicking')) {
-      // BatchedMesh render path: recolor the hovered product's instances in
-      // place (setColorAt). Coexists with — and paints over — the selection
-      // recolor; cleared on cursor-leave by `_clearPreselectionForAllModels`.
-      // Dedup on the resolved id: `highlightIfcItem` fires per animation frame
-      // while the cursor rests, and a repaint re-uploads the colours texture —
-      // skip when the hovered product hasn't changed.
-      if (id !== this._lastBatchedPreselectId) {
-        this._lastBatchedPreselectId = id
+      // BatchedMesh render path: recolor in place (setColorAt). Coexists with
+      // — and paints over — the selection recolor; cleared on cursor-leave by
+      // `_clearPreselectionForAllModels`.
+      //
+      // Prefer the hovered INSTANCE (its global occurrence id, straight off
+      // the hit's batchId — the same table the click funnel reads) over its
+      // parent product. Parent-level hover paints every instance sharing that
+      // `instanceParents` entry, which for a no-NAUO multibody STEP is the
+      // whole model: hovering one body of BLSN_007 turned the entire hull
+      // cyan (test-models-private#98). Falls back to the parent for models
+      // whose batches carry no occurrence table (IFC, older cached batched
+      // artifacts), where product-level hover is the correct granularity.
+      //
+      // Dedup: `highlightIfcItem` fires per animation frame while the cursor
+      // rests and a repaint re-uploads the colours texture, so skip when the
+      // hovered thing hasn't changed. The key must be the instance whenever
+      // we highlight per instance — every body of a no-NAUO product shares
+      // one parent id, so a parent-keyed dedup would pin the highlight to
+      // whichever body was hovered first.
+      const hovered = this._batchedHoverTarget(found)
+      if (hovered.key !== this._lastBatchedPreselectKey) {
+        this._lastBatchedPreselectKey = hovered.key
         const preMat = this.selector.getPreselectionMaterial()
-        applyBatchedPreselection(model, [id], preMat?.color)
+        if (hovered.occurrenceId !== null) {
+          applyBatchedInstancePreselection(model, [hovered.occurrenceId], preMat?.color)
+        } else {
+          applyBatchedPreselection(model, [id], preMat?.color)
+        }
       }
     } else if (modelHasCapability(model, 'ifcSubsets')) {
       // Real-IFC path: web-ifc-three's preselection.pick handles
@@ -1603,6 +1624,35 @@ export class ShareViewer {
 
 
   /**
+   * Resolve a BatchedMesh raycast hit to what the hover highlight should
+   * paint: the instance's global occurrence id when its batch carries the
+   * table, else null (parent-level hover). `key` is the dedup key for the
+   * per-frame hover throttle — namespaced by mode so the two id spaces
+   * (occurrence ids and parent express ids) can't alias each other.
+   *
+   * O(1) per mouse-move: one typed-array index, no traversal. Deliberately
+   * reads the hit's own `batchId` rather than re-deriving it, since
+   * `getPickedItemId` already proved it in range on this same hit.
+   *
+   * @param {object} found raycaster hit (`object`, `batchId`)
+   * @return {object} `{occurrenceId, key}` — occurrenceId null when unknown
+   * @private
+   */
+  _batchedHoverTarget(found) {
+    const mesh = found?.object
+    const batchId = found?.batchId
+    if (!mesh?.isBatchedMesh || batchId === undefined || batchId < 0) {
+      return {occurrenceId: null, key: undefined}
+    }
+    const occurrenceId = mesh.instanceOccurrenceIds?.[batchId]
+    if (occurrenceId === undefined) {
+      return {occurrenceId: null, key: `p:${mesh.instanceParents?.[batchId]}`}
+    }
+    return {occurrenceId, key: `o:${occurrenceId}`}
+  }
+
+
+  /**
    * Drop any per-model preselection subset when the cursor leaves
    * all geometry. Mirrors what `selector.togglePreselectionVisibility(false)`
    * does for the real-IFC path — preselection is hover-only and
@@ -1627,8 +1677,8 @@ export class ShareViewer {
     // logic stays in one place instead of being split between
     // ShareViewer (Conway) and each model's `removeSubset` (legacy).
     this._clearConwayPreselectionSubsets()
-    // Reset the batched hover-dedup so re-entering the same product repaints.
-    this._lastBatchedPreselectId = undefined
+    // Reset the batched hover-dedup so re-entering the same instance repaints.
+    this._lastBatchedPreselectKey = undefined
     const models = this.IFC?.context?.items?.ifcModels
     if (!Array.isArray(models)) {
       return
