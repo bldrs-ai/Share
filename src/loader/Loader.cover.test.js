@@ -557,6 +557,25 @@ describe('load() error/edge paths with OPFS enabled', () => {
   })
 
 
+  it('does not evict a GitHub OBJ whose header mentions ISO-10303-21', async () => {
+    const obj = new MockFile('# exported from ISO-10303-21 STEP\nv 0 0 0\n')
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'https://raw.githubusercontent.com/owner/repo/main/model.obj',
+      'abc123sha',
+      true,
+      false,
+    ])
+    doesFileExistInOPFS.mockResolvedValue(true)
+    downloadModel.mockResolvedValue(obj)
+
+    await load('https://github.com/owner/repo/blob/main/model.obj',
+      viewer, onProgress, true, setOpfsFile, '')
+
+    expect(deleteFileFromOPFS).not.toHaveBeenCalled()
+    expect(axios.get).not.toHaveBeenCalled()
+  })
+
+
   it('still throws when an uploaded file fails in OPFS (no fallback URL)', async () => {
     // Uploaded files only exist in OPFS — there's no remote URL to fall
     // back to. The resilience fix MUST re-throw rather than try axios

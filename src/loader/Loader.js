@@ -383,7 +383,12 @@ export async function load(
             // is served forever and Conway reports every tail ref as
             // "not in the index". Same eviction shape as the LFS-pointer
             // guard: GitHub only, because a re-fetch can repair it.
-            if (file && await looksLikeTruncatedPart21Blob(file)) {
+            // Footer sniff is IFC/STEP only — an OBJ whose first comment
+            // mentions ISO-10303-21 is a valid cache entry, not truncated
+            // part-21. 0-byte files of any type are always unusable.
+            const truncatedPart21 = PART21_LOADER_TYPES.has(loader.type) &&
+              await looksLikeTruncatedPart21Blob(file)
+            if (file && (file.size === 0 || truncatedPart21)) {
               debug().warn(
                 'Loader#load: OPFS source is truncated part-21; evicting and re-fetching')
               try {
