@@ -47,6 +47,34 @@ const PRESIZE_HEADROOM = 1.15
 // Pump progress below which the projection is not trusted: dividing a
 // handful of dense products by a near-zero fraction reserves gigabytes.
 const PRESIZE_MIN_FRACTION = 0.02
+// Active-geometry count past which a batch is treated as having ONE resize
+// left, and reserves accordingly (see projectCapacity_).
+//
+// Deliberately well under the 125,279 measured above, because that number
+// is V8's argument cap on three's `Math.max(...)` spread and is therefore
+// stack-depth dependent: the same batch resized from a deeper call stack
+// fails earlier. 110,000 keeps ~12% of margin against a measurement taken
+// on one stack on one box, which is the right side to be wrong on — the
+// cost of triggering early is a slightly larger reservation, the cost of
+// triggering late is the reservation never happening at all.
+const LAST_CHANCE_GEOMETRIES = 110000
+// Headroom the last-chance reservation uses in place of PRESIZE_HEADROOM.
+//
+// The projection is linear in products, which is only conservative when
+// early products are at least as geometry-dense as late ones. A model that
+// front-loads reuse and back-loads novel or denser shapes breaks that and
+// the projection under-reserves (codex P1 on Share#1809). Below the
+// threshold a later resize corrects it; past the threshold there is no
+// later resize, so the estimate has to absorb the error instead. Read it
+// as the tolerance it is: the remaining products may be up to 50% denser
+// per product than everything seen so far.
+const LAST_CHANCE_HEADROOM = 1.5
+// Floor for the last-chance reservation as a multiple of what the batch
+// needs right now, applied when there is no usable pump progress to
+// project from. Unreachable in production — `onMeshBatch` only fires on
+// the deferred pump path, which always reports totals — so this is what
+// keeps the branch total rather than a second estimator.
+const LAST_CHANCE_GROWTH = 2
 // Console cap for per-record skip warnings (see warnBadRecord_): a model
 // with many budget-evicted geometries (conway#535) shouldn't flood the
 // console one line per id -- the load report's skipped* counts already
@@ -94,6 +122,8 @@ export class IncrementalBatchedBuilder {
    *   at which projectCapacity_ takes over from doubling. Lowering it is
    *   the only way to exercise the projection without building a batch of
    *   PRESIZE_FROM_GEOMETRIES real geometries.
+   * @param {number} [opts.lastChanceGeometries] test hook: geometry count
+   *   at which a resize is treated as the last one this batch will get.
    */
   constructor(api, modelID, opts = {}) {
     this.api = api
@@ -103,6 +133,7 @@ export class IncrementalBatchedBuilder {
     this.initialVertices = opts.initialVertices ?? INITIAL_VERTICES
     this.initialIndices = opts.initialIndices ?? INITIAL_INDICES
     this.presizeFromGeometries = opts.presizeFromGeometries ?? PRESIZE_FROM_GEOMETRIES
+    this.lastChanceGeometries = opts.lastChanceGeometries ?? LAST_CHANCE_GEOMETRIES
     this.root = new Group()
     // geometryExpressID → {geometry, vertCount, indexCount, box,
     // idByBatch: Map(batchState → geometryId)} — geometry fetched from
@@ -369,23 +400,41 @@ export class IncrementalBatchedBuilder {
       this.totals.skippedPlacedGeometries++
       return
     }
+    const isTransparent = color.w < OPAQUE_ALPHA
+    const state = this.ensureBatch_(isTransparent)
+    // Capacity BEFORE the duplicate marker, not after (codex P2 on
+    // Share#1809). `ensureCapacity_` is the one call left here that can
+    // throw — that is the whole subject of Share#1809 — and CoincidenceSet
+    // is a combined test-and-set with no remove, so marking first would
+    // record an identity for a placement that never landed. A later
+    // emission of that same placement would then be dropped as a duplicate
+    // of something that does not exist, and counted as a coincident skip
+    // rather than retried.
+    //
+    // Nothing today re-emits one: conway's pump contract is "each placed
+    // instance is emitted exactly once across all calls"
+    // (`ifc_api.d.ts`'s DELTA CONTRACT), and every degraded end-of-load
+    // build in ShareIfcLoader constructs a FRESH builder from
+    // `recapture()` rather than reusing this one's `seenPlacements`. So
+    // the ordering is an invariant kept honest, not a live bug fixed —
+    // but it costs nothing and the alternative is a guard that depends on
+    // an engine contract staying the way it is.
+    this.ensureCapacity_(state, entry)
+
     // Drop an exact coincident duplicate (same part + geometry + transform +
     // colour): it would z-fight the one already appended. See CoincidenceSet.
     //
     // The combined test-and-set runs on the STAGED matrix elements, after
     // every Conway-boundary read and the geometry fetch above, so a
     // boundary throw can never mark an identity as seen (codex P2 on
-    // Share#1798). Only the three.js tail below — writes into preallocated
-    // buffers and JS array pushes, which don't throw in practice — follows
-    // the mark; CoincidenceSet has no remove, so that residual is accepted
-    // rather than guarded with rollback machinery.
+    // Share#1798). What follows the mark is now only the three.js tail —
+    // `addGeometry` into space `ensureCapacity_` has already secured,
+    // `addInstance`, writes into preallocated buffers and JS array pushes
+    // — none of which throw once capacity is in hand.
     if (!this.seenPlacements.add(parentExpressId, geomExpressID, matrix.elements, color)) {
       this.totals.skippedCoincidentPlacements++
       return
     }
-    const isTransparent = color.w < OPAQUE_ALPHA
-    const state = this.ensureBatch_(isTransparent)
-    this.ensureCapacity_(state, entry)
 
     let geometryId = entry.idByBatch.get(state)
     if (geometryId === undefined) {
@@ -659,12 +708,22 @@ export class IncrementalBatchedBuilder {
    * growths reserves once for the rest of the load instead of doubling
    * into a call that will throw (see PRESIZE_FROM_GEOMETRIES).
    *
-   * The estimator is linear in products, which is conservative in the
-   * right direction: geometry is deduplicated by `geometryExpressID`, so
-   * products seen early contribute proportionally MORE new vertices than
-   * products seen late, and the projection therefore lands above the true
-   * total. Measured on sp-946MB.ifc: +11% at the first trigger point,
-   * +12% at the last one before three's ceiling.
+   * The estimator is linear in products. It TENDS to land above the true
+   * total, because geometry is deduplicated by `geometryExpressID` and so
+   * products seen early contribute proportionally more new vertices than
+   * products seen late — measured on sp-946MB.ifc at +11% over the true
+   * requirement at the first trigger point and +12% at the last one before
+   * three's ceiling. It is NOT a bound, and one model's overshoot does not
+   * establish one for other product orderings: a file that front-loads
+   * reuse and back-loads novel or denser shapes under-reserves here (codex
+   * P1 on Share#1809). That is survivable while resizes still work — the
+   * projection is re-run at every growth and corrects itself — which is
+   * why LAST_CHANCE_GEOMETRIES exists to widen it at the point where they
+   * stop working. Past that point the ceiling is steered around, not
+   * removed: an under-reservation still degrades, but degrades HONESTLY,
+   * because ensureCapacity_ leaves Share and three agreeing and the
+   * placements that cannot fit are counted. Removing the ceiling means not
+   * putting 125k geometries in one BatchedMesh.
    *
    * Returns null — leaving the doubling in charge — whenever the estimate
    * would be guesswork: no pump progress (every one-shot and unit-test
@@ -679,18 +738,28 @@ export class IncrementalBatchedBuilder {
    *   null when unprojectable
    */
   projectCapacity_(state, needVertices, needIndices) {
-    if (this.pumpTotal <= 0 || state.geometryCount < this.presizeFromGeometries) {
+    // Is this, in expectation, the last resize this batch will complete?
+    // Decided first: it changes the headroom below, and it stands in for
+    // the projection entirely when there is no pump progress to project
+    // from.
+    const lastChance = state.geometryCount >= this.lastChanceGeometries
+    let scale = 0
+    if (this.pumpTotal > 0 && state.geometryCount >= this.presizeFromGeometries) {
+      const total = this.pumpTotal - state.startDone
+      const fraction = total > 0 ?
+        Math.min((this.pumpDone - state.startDone) / total, 1) : 0
+      if (fraction >= PRESIZE_MIN_FRACTION) {
+        scale = (lastChance ? LAST_CHANCE_HEADROOM : PRESIZE_HEADROOM) / fraction
+      }
+    }
+    if (lastChance) {
+      scale = Math.max(scale, LAST_CHANCE_GROWTH)
+    }
+    // Below 1 means "no usable estimate" (no pump, too small a sample, too
+    // little of the model seen); the caller's doubling stays in charge.
+    if (scale <= 1) {
       return null
     }
-    const total = this.pumpTotal - state.startDone
-    if (total <= 0) {
-      return null
-    }
-    const fraction = Math.min((this.pumpDone - state.startDone) / total, 1)
-    if (fraction < PRESIZE_MIN_FRACTION) {
-      return null
-    }
-    const scale = PRESIZE_HEADROOM / fraction
     return {
       vertices: Math.ceil(needVertices * scale),
       indices: Math.ceil(needIndices * scale),
