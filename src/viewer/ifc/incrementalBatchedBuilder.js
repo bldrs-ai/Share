@@ -400,41 +400,45 @@ export class IncrementalBatchedBuilder {
       this.totals.skippedPlacedGeometries++
       return
     }
-    const isTransparent = color.w < OPAQUE_ALPHA
-    const state = this.ensureBatch_(isTransparent)
-    // Capacity BEFORE the duplicate marker, not after (codex P2 on
-    // Share#1809). `ensureCapacity_` is the one call left here that can
-    // throw — that is the whole subject of Share#1809 — and CoincidenceSet
-    // is a combined test-and-set with no remove, so marking first would
-    // record an identity for a placement that never landed. A later
-    // emission of that same placement would then be dropped as a duplicate
-    // of something that does not exist, and counted as a coincident skip
-    // rather than retried.
-    //
-    // Nothing today re-emits one: conway's pump contract is "each placed
-    // instance is emitted exactly once across all calls"
-    // (`ifc_api.d.ts`'s DELTA CONTRACT), and every degraded end-of-load
-    // build in ShareIfcLoader constructs a FRESH builder from
-    // `recapture()` rather than reusing this one's `seenPlacements`. So
-    // the ordering is an invariant kept honest, not a live bug fixed —
-    // but it costs nothing and the alternative is a guard that depends on
-    // an engine contract staying the way it is.
-    this.ensureCapacity_(state, entry)
-
     // Drop an exact coincident duplicate (same part + geometry + transform +
     // colour): it would z-fight the one already appended. See CoincidenceSet.
     //
-    // The combined test-and-set runs on the STAGED matrix elements, after
-    // every Conway-boundary read and the geometry fetch above, so a
-    // boundary throw can never mark an identity as seen (codex P2 on
-    // Share#1798). What follows the mark is now only the three.js tail —
-    // `addGeometry` into space `ensureCapacity_` has already secured,
-    // `addInstance`, writes into preallocated buffers and JS array pushes
-    // — none of which throw once capacity is in hand.
-    if (!this.seenPlacements.add(parentExpressId, geomExpressID, matrix.elements, color)) {
+    // PROBE, CAPACITY, THEN COMMIT — the three-step is load-bearing at both
+    // ends, and both ends are codex findings on Share#1809.
+    //
+    // Probing FIRST, before `ensureBatch_`/`ensureCapacity_`, keeps a
+    // duplicate from mutating anything: a duplicate arriving at
+    // `cursor === maxInstances` would otherwise double the instance
+    // buffers to make room for an instance that is never added, and
+    // `finalize`'s trim only reclaims geometry, so that doubling is
+    // retained for the life of the model. It also keeps an allocation
+    // failure from turning a harmless duplicate into a failed placement.
+    //
+    // Committing LAST, only once capacity is secured, keeps the reverse
+    // from happening: `ensureCapacity_` is the one call left here that can
+    // throw — that is the whole subject of Share#1809 — and a placement
+    // marked seen but never appended would make a later re-emission a
+    // duplicate of something that does not exist, counted as a coincident
+    // skip instead of retried. Nothing re-emits one today (conway's pump
+    // promises "each placed instance is emitted exactly once across all
+    // calls", and the degraded end-of-load builds construct a FRESH
+    // builder from `recapture()`), so that half is an invariant kept
+    // honest rather than a live bug fixed.
+    //
+    // The split exists so both can hold at once without hashing twice: the
+    // probe runs on the STAGED matrix elements, after every Conway-boundary
+    // read and the geometry fetch above, so a boundary throw still cannot
+    // mark an identity as seen (codex P2 on Share#1798).
+    const placementToken =
+      this.seenPlacements.probe(parentExpressId, geomExpressID, matrix.elements, color)
+    if (placementToken === null) {
       this.totals.skippedCoincidentPlacements++
       return
     }
+    const isTransparent = color.w < OPAQUE_ALPHA
+    const state = this.ensureBatch_(isTransparent)
+    this.ensureCapacity_(state, entry)
+    this.seenPlacements.commit(placementToken)
 
     let geometryId = entry.idByBatch.get(state)
     if (geometryId === undefined) {
@@ -624,6 +628,11 @@ export class IncrementalBatchedBuilder {
       // is what decides whether setGeometrySize can still be called, see
       // PRESIZE_FROM_GEOMETRIES.
       geometryCount: 0,
+      // Whether the one-shot widened reservation at LAST_CHANCE_GEOMETRIES
+      // has been made (see ensureCapacity_). Without it the crossing would
+      // re-trigger on every geometry past the threshold, one full buffer
+      // copy each.
+      lastChanceReserved: false,
       // Pump progress when this batch was created. The projection measures
       // from here, not from zero: the transparent batch's first placement
       // lands a third of the way through sp-946MB, and charging it for
@@ -679,7 +688,24 @@ export class IncrementalBatchedBuilder {
     }
     const needVertices = state.usedVertices + entry.vertCount
     const needIndices = state.usedIndices + entry.indexCount
-    if (needVertices > state.maxVertices || needIndices > state.maxIndices) {
+    // Past the early return above, this geometry is NEW to the batch, so
+    // the count it is about to reach is the one that matters here.
+    const lastChance = state.geometryCount + 1 >= this.lastChanceGeometries
+    // Two things call for a resize, and the second is not obvious.
+    //
+    // Running out of room is the obvious one. The other is this geometry
+    // taking the batch across LAST_CHANCE_GEOMETRIES: resizing stops being
+    // reliable past that point, so the widened reservation has to be made
+    // HERE, on the crossing, while it still works. Waiting for the batch to
+    // run out — as this did until codex's second round on Share#1809 — hands
+    // the widening to whichever later placement happens to exhaust the
+    // reserve, and an ample 1.15 projection can postpone that well beyond
+    // the spread ceiling, at which point `setGeometrySize` throws and the
+    // widening arrives exactly one throw too late. One shot, so
+    // `lastChanceReserved` stops it becoming a resize per geometry.
+    const exhausted = needVertices > state.maxVertices || needIndices > state.maxIndices
+    const crossing = lastChance && !state.lastChanceReserved
+    if (exhausted || crossing) {
       let nextVertices = state.maxVertices
       let nextIndices = state.maxIndices
       while (nextVertices < needVertices) {
@@ -688,14 +714,24 @@ export class IncrementalBatchedBuilder {
       while (nextIndices < needIndices) {
         nextIndices *= GROWTH
       }
-      const projected = this.projectCapacity_(state, needVertices, needIndices)
+      const projected = this.projectCapacity_(state, needVertices, needIndices, lastChance)
       if (projected !== null) {
         nextVertices = Math.max(nextVertices, projected.vertices)
         nextIndices = Math.max(nextIndices, projected.indices)
       }
-      state.mesh.setGeometrySize(nextVertices, nextIndices)
-      state.maxVertices = nextVertices
-      state.maxIndices = nextIndices
+      // A crossing whose widened reservation asks for no more than the
+      // batch already holds must not pay a full buffer copy for nothing.
+      if (nextVertices > state.maxVertices || nextIndices > state.maxIndices) {
+        state.mesh.setGeometrySize(nextVertices, nextIndices)
+        state.maxVertices = nextVertices
+        state.maxIndices = nextIndices
+      }
+      // Spent whether or not it changed the size — the question "has this
+      // batch taken its last-chance reservation" is about the crossing,
+      // not about whether the crossing needed more room.
+      if (crossing) {
+        state.lastChanceReserved = true
+      }
     }
     state.usedVertices = needVertices
     state.usedIndices = needIndices
@@ -734,15 +770,15 @@ export class IncrementalBatchedBuilder {
    * @param {number} needVertices vertices this batch needs including the
    *   geometry being added
    * @param {number} needIndices indices this batch needs, likewise
+   * @param {boolean} lastChance treat this as the last resize the batch
+   *   will complete: widen the headroom, and stand in for the projection
+   *   entirely when there is no pump progress to project from. Decided by
+   *   the caller because it is the same predicate that decides whether to
+   *   resize at all on a threshold crossing.
    * @return {?{vertices: number, indices: number}} projected capacity, or
    *   null when unprojectable
    */
-  projectCapacity_(state, needVertices, needIndices) {
-    // Is this, in expectation, the last resize this batch will complete?
-    // Decided first: it changes the headroom below, and it stands in for
-    // the projection entirely when there is no pump progress to project
-    // from.
-    const lastChance = state.geometryCount >= this.lastChanceGeometries
+  projectCapacity_(state, needVertices, needIndices, lastChance) {
     let scale = 0
     if (this.pumpTotal > 0 && state.geometryCount >= this.presizeFromGeometries) {
       const total = this.pumpTotal - state.startDone

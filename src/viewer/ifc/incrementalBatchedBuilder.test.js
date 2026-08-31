@@ -557,14 +557,45 @@ describe('IncrementalBatchedBuilder', () => {
     expect(stats.vertexCount).toBe(shapeCount * 3)
   })
 
-  it('widens the reservation once the batch has one resize left', () => {
-    // codex P1 on Share#1809: the linear projection tends to overshoot but
-    // does not bound a model whose late products carry denser or more
-    // novel geometry than its early ones. While resizes still work that
-    // self-corrects at the next growth; past LAST_CHANCE_GEOMETRIES there
-    // is no next growth, so the reservation widens from PRESIZE_HEADROOM
-    // (1.15) to LAST_CHANCE_HEADROOM (1.5) -- "the rest of the model may
-    // be up to 50% denser per product than everything so far".
+  it('widens the reservation when the geometry count crosses, not when the reserve runs out', () => {
+    // codex round 2, P1 on Share#1809. The widening used to live inside
+    // the capacity-exhaustion guard, so crossing the threshold did nothing
+    // until the CURRENT reservation ran out -- and an ample 1.15 reserve
+    // can postpone that past the spread ceiling, where setGeometrySize
+    // throws and the widening arrives one throw too late. The crossing
+    // itself has to be the trigger, while resizing still works.
+    //
+    // This batch has room to spare: 60 vertices reserved, 9 needed. Only
+    // the crossing can make it resize here.
+    const all = triangleShapes(3)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialVertices: 60,
+      initialIndices: 60,
+      presizeFromGeometries: 2,
+      lastChanceGeometries: 3,
+    })
+
+    for (let i = 0; i < 3; i++) {
+      builder.setPumpProgress(i + 1, 20)
+      builder.appendBatch([flatMesh(i + 1, [{geomExpressID: 1000 + i, color: OPAQUE}])])
+    }
+
+    // The third geometry took the count to the threshold. 129 =
+    // ceil(9 needed / (2/19 seen since this batch opened) * 1.5 last-chance
+    // headroom) -- reserved proactively, with 51 of the old 60 still unused.
+    expect(builder.opaque.geometryCount).toBe(3)
+    expect(builder.opaque.usedVertices).toBe(9)
+    expect(builder.opaque.maxVertices).toBe(129)
+    expect(builder.opaque.maxIndices).toBe(129)
+    expect(builder.opaque.lastChanceReserved).toBe(true)
+  })
+
+  it('keeps widening on the exhaustion path once the batch is past the threshold', () => {
+    // Belt and braces to the proactive trigger above: a batch that has
+    // already spent its last-chance reservation and later runs out anyway
+    // must still size that resize with LAST_CHANCE_HEADROOM (1.5) rather
+    // than falling back to PRESIZE_HEADROOM (1.15) -- it is still past the
+    // point where a further resize can be relied on.
     const all = triangleShapes(4)
     const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
       initialVertices: 3,
@@ -572,27 +603,52 @@ describe('IncrementalBatchedBuilder', () => {
       presizeFromGeometries: 2,
       lastChanceGeometries: 3,
     })
-
-    // Three products in, 2 geometries held: projected, not yet last-chance.
-    // 47 = ceil(9 needed / (2/9 seen since this batch opened) * 1.15).
     for (let i = 0; i < 3; i++) {
       builder.setPumpProgress(i + 1, 10)
       builder.appendBatch([flatMesh(i + 1, [{geomExpressID: 1000 + i, color: OPAQUE}])])
     }
-    expect(builder.opaque.geometryCount).toBe(3)
-    expect(builder.opaque.maxVertices).toBe(47)
+    expect(builder.opaque.lastChanceReserved).toBe(true)
+    expect(builder.opaque.maxVertices).toBe(61)
 
-    // Force one more resize with the batch now at the threshold. Need is
-    // 48 vertices, seen is 6/9, so the projection alone would ask for
-    // ceil(48 * 1.15 / (6/9)) = 83; the last-chance headroom asks for
-    // ceil(48 * 1.5 / (6/9)) = 108.
-    builder.opaque.usedVertices = 45
-    builder.opaque.usedIndices = 45
+    // Consume nearly all of it, then add a fourth geometry: 63 needed
+    // against 61 reserved, so this resize is driven by exhaustion, not by
+    // a crossing. 142 = ceil(63 * 1.5 / (6/9)); the 1.15 headroom would
+    // have left the doubling in charge at 122.
+    builder.opaque.usedVertices = 60
+    builder.opaque.usedIndices = 60
     builder.setPumpProgress(7, 10)
     builder.appendBatch([flatMesh(4, [{geomExpressID: 1003, color: OPAQUE}])])
 
-    expect(builder.opaque.maxVertices).toBe(108)
-    expect(builder.opaque.maxIndices).toBe(108)
+    expect(builder.opaque.maxVertices).toBe(142)
+    expect(builder.opaque.maxIndices).toBe(142)
+  })
+
+  it('lets a coincident duplicate mutate no capacity at an instance boundary', () => {
+    // codex round 2, P2 on Share#1809. Probing the duplicate set only
+    // after ensureCapacity_ meant a duplicate arriving with
+    // cursor === maxInstances doubled the instance buffers to make room
+    // for an instance that is never added. finalize's trim reclaims only
+    // geometry, so that doubling is retained for the life of the model --
+    // and an allocation failure there would turn a harmless duplicate into
+    // a failed placement.
+    const all = triangleShapes(1)
+    const builder = new IncrementalBatchedBuilder(makeApi(all), 0, {
+      initialInstances: 2,
+    })
+    const placement = [{geomExpressID: 1000, color: OPAQUE}]
+    builder.appendBatch([flatMesh(1, placement), flatMesh(2, placement)])
+    // Exactly full: the next placement to reach ensureCapacity_ doubles.
+    expect(builder.opaque.cursor).toBe(2)
+    expect(builder.opaque.maxInstances).toBe(2)
+
+    // ...and this one must not reach it. Same parent, geometry, transform
+    // and colour as the first, so it adds nothing.
+    builder.appendBatch([flatMesh(1, placement)])
+
+    expect(builder.opaque.maxInstances).toBe(2)
+    const {stats} = builder.finalize()
+    expect(stats.instanceCount).toBe(2)
+    expect(stats.skippedCoincidentPlacements).toBe(1)
   })
 
   it('retries a placement whose resize threw, instead of calling it a duplicate', () => {
