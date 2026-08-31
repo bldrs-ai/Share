@@ -136,15 +136,47 @@ describe('viewer/three/IfcIsolator: isolate/hide combinations (Conway-direct)', 
 
     const after = await readIsolatorState(page)
     expect(after.tempIsolationModeOn).toBe(true)
-    expect(after.ifcModelInScene).toBe(false)
-    expect(after.ifcModelInPickable).toBe(false)
-    // Isolation subsets in scene + pickable — the H-bug regression
-    // gate. Pre-fix, these would be detached subtree children of
-    // the removed Group and `inScene` would be false.
-    expect(after.isolationSubsetMeshes.length).toBeGreaterThan(0)
-    for (const m of after.isolationSubsetMeshes) {
-      expect(m.inScene).toBe(true)
-      expect(m.inPickable).toBe(true)
+
+    // Which architecture isolate uses is a property of the loaded model, not
+    // of this test: a batched model (BatchedMesh + `instanceParents`) masks
+    // per-instance visibility in place (Share#1806), anything else detaches
+    // the model and re-bakes a subset Mesh. Assert whichever one is live —
+    // both claims are equally strong, they just describe different mechanisms.
+    const batch = await readBatchedSnapshot(page)
+    if (batch.isBatched) {
+      // In-place masking: the model itself is what's still being drawn and
+      // picked against, and no subset Mesh was baked to stand in for it.
+      expect(after.ifcModelInScene).toBe(true)
+      expect(after.ifcModelInPickable).toBe(true)
+      expect(after.isolationSubsetMeshes.length).toBe(0)
+      // The mask has to be doing the actual isolating: a non-empty *strict*
+      // subset of instances visible (an isolate that hid nothing, or hid
+      // everything, fails here), and every one of them owned by the isolated
+      // product.
+      const visibleIds = batch.visible.flatMap((v, i) => (v ? [i] : []))
+      expect(visibleIds.length).toBeGreaterThan(0)
+      expect(visibleIds.length).toBeLessThan(batch.visible.length)
+      const isolatedParents = new Set(batch.isolatedIds)
+      expect(isolatedParents.size).toBeGreaterThan(0)
+      const strays = visibleIds.filter((i) => !isolatedParents.has(batch.parents[i]))
+      expect(strays).toEqual([])
+      // Round trip: leaving isolation releases the mask, so every instance the
+      // model started with is drawable again.
+      await page.keyboard.press('KeyI')
+      await expect
+        .poll(async () => (await readBatchedSnapshot(page)).visible.filter((v) => v).length)
+        .toBe(batch.visible.length)
+    } else {
+      expect(after.ifcModelInScene).toBe(false)
+      expect(after.ifcModelInPickable).toBe(false)
+      // Isolation subsets in scene + pickable — the H-bug regression
+      // gate. Pre-fix, these would be detached subtree children of
+      // the removed Group and `inScene` would be false.
+      expect(after.isolationSubsetMeshes.length).toBeGreaterThan(0)
+      for (const m of after.isolationSubsetMeshes) {
+        expect(m.inScene).toBe(true)
+        expect(m.inPickable).toBe(true)
+      }
     }
   })
 
@@ -179,11 +211,34 @@ describe('viewer/three/IfcIsolator: isolate/hide combinations (Conway-direct)', 
     const state = await readIsolatorState(page)
     expect(state.tempIsolationModeOn).toBe(false)
     expect(state.hiddenIdsCount).toBeGreaterThan(0)
-    expect(state.ifcModelInScene).toBe(false)
-    expect(state.unhiddenSubsetMeshes.length).toBeGreaterThan(0)
-    for (const m of state.unhiddenSubsetMeshes) {
-      expect(m.inScene).toBe(true)
-      expect(m.inPickable).toBe(true)
+
+    // Same two architectures as the isolate test above — hide masks in place
+    // on a batched model, and re-bakes an "everything except the hidden ids"
+    // subset otherwise.
+    const batch = await readBatchedSnapshot(page)
+    if (batch.isBatched) {
+      expect(state.ifcModelInScene).toBe(true)
+      expect(state.ifcModelInPickable).toBe(true)
+      expect(state.unhiddenSubsetMeshes.length).toBe(0)
+      // Hide is isolate's inverse, and the mask must show it: the hidden
+      // product's instances all go dark, and the rest of the model — a
+      // non-empty remainder — keeps drawing.
+      const hiddenParents = new Set(batch.hiddenIds)
+      expect(hiddenParents.size).toBeGreaterThan(0)
+      const hiddenInstances = batch.parents.flatMap((p, i) => (hiddenParents.has(p) ? [i] : []))
+      expect(hiddenInstances.length).toBeGreaterThan(0)
+      const stillVisible = hiddenInstances.filter((i) => batch.visible[i])
+      expect(stillVisible).toEqual([])
+      const visibleCount = batch.visible.filter((v) => v).length
+      expect(visibleCount).toBeGreaterThan(0)
+      expect(visibleCount).toBe(batch.visible.length - hiddenInstances.length)
+    } else {
+      expect(state.ifcModelInScene).toBe(false)
+      expect(state.unhiddenSubsetMeshes.length).toBeGreaterThan(0)
+      for (const m of state.unhiddenSubsetMeshes) {
+        expect(m.inScene).toBe(true)
+        expect(m.inPickable).toBe(true)
+      }
     }
   })
 
@@ -262,8 +317,12 @@ const STEP_TEST_TIMEOUT_MS = 90_000
 
 
 interface BatchedSnapshot {
+  /** Did we find any decorated `BatchedMesh` at all — i.e. is this the batched path? */
+  isBatched: boolean
   /** Per-instance visibility, batchId order, across every batch. */
   visible: boolean[]
+  /** Per-instance owning product expressID (`instanceParents`), same order. */
+  parents: number[]
   /** Per-instance source colour (`instanceColors`), same order. */
   colors: number[][]
   /** Is the loaded model itself still a child of the scene? */
@@ -271,12 +330,22 @@ interface BatchedSnapshot {
   /** Isolation subset meshes — must stay 0 on the batched path. */
   isolationSubsetCount: number
   tempIsolationModeOn: boolean
+  /** The isolator's current isolate / hide sets, for cross-checking the mask. */
+  isolatedIds: number[]
+  hiddenIds: number[]
 }
 
 
 /**
  * Snapshot the live batched model: what the renderer draws (per-instance
- * visibility + the colour table it draws from) plus the isolator's slots.
+ * visibility, the parent product of each instance, and the colour table it
+ * draws from) plus the isolator's slots and its isolate / hide sets.
+ *
+ * `isBatched` is false when the loaded model carries no decorated
+ * `BatchedMesh` — the first describe block above uses that to pick which
+ * architecture its assertions should demand (masked in place vs. re-baked
+ * subset), since which one a given model gets is a property of the load, not
+ * of the test.
  *
  * @param page playwright page
  * @return snapshot of the batched scene state
@@ -291,32 +360,43 @@ function readBatchedSnapshot(page: Page): Promise<BatchedSnapshot> {
     if (!model || !iso) {
       throw new Error('readBatchedSnapshot: no model/isolator on window — is the page in test mode?')
     }
+    // Same "mesh-or-Group" walk as `eachBatch` (src/viewer/ifc/batchedModel.js),
+    // which is what the isolator itself uses to decide the path — the batches
+    // can sit anywhere under the model root, not just as direct children.
     const meshes: any[] = []
-    if (model.isBatchedMesh) {
-      meshes.push(model)
-    }
-    (model.children ?? []).forEach((child: any) => {
-      if (child?.isBatchedMesh) {
-        meshes.push(child)
+    const visit = (obj: any) => {
+      if (!obj) {
+        return
       }
-    })
+      if (obj.isBatchedMesh && obj.instanceParents) {
+        meshes.push(obj)
+      }
+      (obj.children ?? []).forEach(visit)
+    }
+    visit(model)
     const visible: boolean[] = []
+    const parents: number[] = []
     const colors: number[][] = []
     for (const mesh of meshes) {
       const count = mesh.instanceParents?.length ?? 0
       for (let index = 0; index < count; index++) {
         visible.push(mesh.getVisibleAt(index))
+        parents.push(mesh.instanceParents[index])
         const c = mesh.instanceColors?.[index]
         colors.push(c ? [c.x, c.y, c.z, c.w] : [])
       }
     }
     const subset = iso.isolationSubset
     return {
+      isBatched: meshes.length > 0,
       visible,
+      parents,
       colors,
       modelInScene: iso.context.getScene().children.includes(model),
       isolationSubsetCount: subset ? (Array.isArray(subset) ? subset.length : 1) : 0,
       tempIsolationModeOn: iso.tempIsolationModeOn,
+      isolatedIds: [...(iso.isolatedIds ?? [])],
+      hiddenIds: [...(iso.hiddenIds ?? [])],
     }
     /* eslint-enable @typescript-eslint/no-explicit-any */
   })
