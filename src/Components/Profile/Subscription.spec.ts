@@ -67,7 +67,7 @@ describe('Profile 100: subscription menu items', () => {
 
   describe('Authenticated Pro customer', () => {
     beforeEach(async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
+      await returningUserVisitsHomepageWaitForModel(page)
 
       // Mock Stripe Portal response
       await page.route('https://stripe.portal.msw/mockportal/session/*', async (route) => {
@@ -98,7 +98,7 @@ describe('Profile 100: subscription menu items', () => {
 
   describe('Authenticated Free customer', () => {
     beforeEach(async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
+      await returningUserVisitsHomepageWaitForModel(page)
     })
 
     test('shows "Upgrade to Pro" and hides "Manage Subscription"', async ({page}) => {

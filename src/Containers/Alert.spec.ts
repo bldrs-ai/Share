@@ -58,7 +58,7 @@ describe('Alert and Snackbar', () => {
   describe('AlertDialog', () => {
     beforeEach(async ({page}) => {
       await homepageSetup(page)
-      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
+      await returningUserVisitsHomepageWaitForModel(page)
     })
 
     test('AlertDialog appears when alert is set with string error', async ({page}) => {
@@ -110,7 +110,7 @@ describe('Alert and Snackbar', () => {
   describe('Snackbar', () => {
     beforeEach(async ({page}) => {
       await homepageSetup(page)
-      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
+      await returningUserVisitsHomepageWaitForModel(page)
     })
 
     test('Snackbar appears when snackMessage is set as string', async ({page}) => {
@@ -159,7 +159,7 @@ describe('Alert and Snackbar', () => {
   describe('Alert and Snackbar interaction', () => {
     beforeEach(async ({page}) => {
       await homepageSetup(page)
-      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
+      await returningUserVisitsHomepageWaitForModel(page)
     })
 
     test('Both AlertDialog and Snackbar can be shown simultaneously', async ({page}) => {

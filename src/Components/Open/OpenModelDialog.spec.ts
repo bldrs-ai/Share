@@ -25,7 +25,7 @@ describe('Open 100: Open model dialog', () => {
 
   describe('First time user visits homepage not logged in', () => {
     beforeEach(async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
+      await returningUserVisitsHomepageWaitForModel(page)
       await page.getByTestId('control-button-open').click()
     })
 
@@ -74,7 +74,7 @@ describe('Open 100: Open model dialog', () => {
     }
 
     test('dropped file is shown in Local tab recent list', async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
+      await returningUserVisitsHomepageWaitForModel(page)
       await page.evaluate(seedRecent, STORAGE_ID)
 
       // Open dialog and verify the filename appears in the Local tab recent list
@@ -84,7 +84,7 @@ describe('Open 100: Open model dialog', () => {
     })
 
     test('opening a recent navigates to its OPFS storage id, not its display name', async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
+      await returningUserVisitsHomepageWaitForModel(page)
       await page.evaluate(seedRecent, STORAGE_ID)
 
       await page.getByTestId('control-button-open').click()
@@ -99,7 +99,7 @@ describe('Open 100: Open model dialog', () => {
 
   describe('Returning user visits homepage logged in', () => {
     beforeEach(async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
+      await returningUserVisitsHomepageWaitForModel(page)
       await setupVirtualPathIntercept(
         page,
         '/share/v/gh/cypresstester/test-repo/main/window.ifc',

@@ -27,7 +27,7 @@ describe('Notes: List operations', () => {
 
   describe('Access notes list', () => {
     beforeEach(async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
+      await returningUserVisitsHomepageWaitForModel(page)
     })
 
     describe('Open Notes', () => {
@@ -58,7 +58,7 @@ describe('Notes: List operations', () => {
 
   describe('Select a note', () => {
     beforeEach(async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
+      await returningUserVisitsHomepageWaitForModel(page)
     })
 
     describe('Open Notes > first note', () => {
