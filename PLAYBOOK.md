@@ -184,11 +184,14 @@ handed workers 2–N a different port than the server — `ERR_CONNECTION_REFUSE
 If you still see that, the ancestor lookup failed (the config prints a
 warning) and you can fall back to `--workers=1`.
 
-**CI:** RAM-bound. The 8 GB runner starves above 2 Chromiums (wasm heap +
-WebGL per worker), so each shard runs `--workers=2`. The suite is split
-`--shard=1/2` and `--shard=2/2` to get 4-way parallelism without putting
-4 heaps on one machine. The required check is still `playwright-run` (an
-aggregator over the shards).
+**CI:** Share is public, so `ubuntu-24.04` is 4 vCPU / 16 GB and free.
+Each shard still runs `--workers=2` (the density that stayed green on
+the old 8 GB larger runner; packing 4 SwiftShader Chromiums onto 4
+cores contends). The suite is split `--shard=1/4` … `4/4` so eight
+Chromiums run across four free machines. The required check is still
+`playwright-run` (an aggregator over the shards). The paid
+`ubuntu-24.04-4vcpu-8gb-150gbssd` larger runner is not used here —
+larger runners are billed even on public repos.
 
 **Load measurement** (`loadTiming.spec.ts`) still wants `--workers=1` so
 the numbers aren't contended — that's isolation, not the port bug. See

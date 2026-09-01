@@ -30,8 +30,8 @@ export default defineConfig({
 
   retries: isCI ? 1 : 0,
 
-  // Local default. CI overrides to `--workers=2 --shard=N/2` because the
-  // 8 GB runner starves above two Chromiums; see test-flows.yml.
+  // Local default. CI overrides to `--workers=2 --shard=N/4` on free
+  // ubuntu-24.04 (16 GB); see test-flows.yml.
   workers: 4,
 
   // Reporter to use
