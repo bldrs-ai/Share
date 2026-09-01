@@ -76,10 +76,17 @@ export default defineConfig({
   ],
 
   // Run your local dev server before starting the tests.
+  //
+  // Playwright's webServer cwd defaults to this config's directory
+  // (`tools/`), not the repo root. Serve-only cds into `docs/` so
+  // `npx http-server` uses the built artifact as the site root (PORT
+  // comes from env below). The full-build path still goes through yarn,
+  // which walks up to the repo package.json.
   webServer: {
     command: serveOnly ?
-      `npx http-server docs -c-1 -p ${port}` :
+      'npx http-server' :
       `yarn test-flows-build-and-serve ${port}`,
+    cwd: serveOnly ? '../docs' : undefined,
     url,
     env: {
       SHARE_CONFIG: 'playwright',

@@ -75,8 +75,8 @@ jobs:
   # shard as `yarn test-flows-build` left it (no map-stripping, no
   # rewrite). Shards skip `yarn install` of the Share tree: they npm
   # install `@playwright/test@1.56.1` plus `http-server` (browsers
-  # already in the image) and serve `docs/` with `npx http-server`,
-  # same as `yarn test-flows-serve`. Specs import the runner plus
+  # already in the image) and run `npx http-server` inside `docs/`.
+  # Specs import the runner plus
   # dep-free constant modules (Notes/component.js, Search/component.ts,
   # utils/constants.js).
   #
