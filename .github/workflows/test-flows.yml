@@ -72,10 +72,11 @@ jobs:
   # workers = 8 Chromiums.
   #
   # The SPA is built once (`playwright-build`) and downloaded by each
-  # shard. Specs import app modules (e.g. Share.spec → Search/component),
-  # so shards still `yarn install`; that stays the per-shard floor.
-  # Sharing docs/ is the one tree the suite ran against, and avoids
-  # four `yarn clean && build` in parallel.
+  # shard. Shards skip `yarn install` of the Share tree: they only npm
+  # install `@playwright/test@1.56.1` (browsers already in the image).
+  # Specs import that plus dep-free constant modules (Notes/component.js,
+  # Search/component.ts, utils/constants.js). Sharing docs/ is the one
+  # tree the suite ran against.
   #
   # Screenshots stay on the Playwright noble container (chromium 1194),
   # not the host image. 14 GB disk vs the old 150 GB is the thing to
@@ -153,24 +154,15 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     name: playwright-shard ${{ matrix.shard }}/4
-    # Headroom on a quarter of the suite plus yarn install. The margin is
-    # for the degraded case — a failure drags a 30 s timeout plus a retry.
+    # Headroom on a quarter of the suite plus a tiny Playwright npm
+    # install. The margin is for the degraded case — a failure drags a
+    # 30 s timeout plus a retry.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: 'yarn'
-          cache-dependency-path: 'yarn.lock'
-
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-
-      # Use exact lock file to ensure reproducible install and cached node_modules
-      # since we're hashing on yarn.lock anyways
-      - run: yarn install --frozen-lockfile --prefer-offline
 
       - uses: actions/download-artifact@v4
         with:
@@ -180,7 +172,14 @@ jobs:
       - name: Check docs artifact
         run: test -f docs/index.html
 
-      # Useful diagnostic
+      # Specs import @playwright/test and a handful of dep-free constant
+      # modules (Notes/component.js, Search/component.ts, …). The image
+      # already has browsers for 1.56.1; this is just the test runner.
+      # PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD is set on the image. Do not
+      # `yarn install` the Share tree — that was ~50s per shard.
+      - name: Install Playwright test runner
+        run: npm install --no-save --no-package-lock @playwright/test@1.56.1
+
       - name: Playwright Info
         run: npx playwright --version
 
@@ -188,7 +187,7 @@ jobs:
       # density that stayed green when RAM was the limit. Do not bump this
       # without re-measuring: four SwiftShader heaps on four cores contend.
       - name: Run Playwright tests
-        run: yarn test-flows --reporter=github,list,html --workers=2 --shard=${{ matrix.shard }}/4
+        run: npx playwright test --config=tools/playwright.config.js --reporter=github,list,html --workers=2 --shard=${{ matrix.shard }}/4
 
       # Always upload the HTML report (handy to debug failures)
       - name: Upload Playwright HTML report
