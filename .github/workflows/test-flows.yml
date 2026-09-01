@@ -72,11 +72,13 @@ jobs:
   # workers = 8 Chromiums.
   #
   # The SPA is built once (`playwright-build`) and downloaded by each
-  # shard. Shards skip `yarn install` of the Share tree: they only npm
-  # install `@playwright/test@1.56.1` (browsers already in the image).
-  # Specs import that plus dep-free constant modules (Notes/component.js,
-  # Search/component.ts, utils/constants.js). Sharing docs/ is the one
-  # tree the suite ran against.
+  # shard as `yarn test-flows-build` left it (no map-stripping, no
+  # rewrite). Shards skip `yarn install` of the Share tree: they npm
+  # install `@playwright/test@1.56.1` plus `http-server` (browsers
+  # already in the image) and serve `docs/` with `npx http-server`,
+  # same as `yarn test-flows-serve`. Specs import the runner plus
+  # dep-free constant modules (Notes/component.js, Search/component.ts,
+  # utils/constants.js).
   #
   # Screenshots stay on the Playwright noble container (chromium 1194),
   # not the host image. 14 GB disk vs the old 150 GB is the thing to
@@ -109,11 +111,6 @@ jobs:
 
       - name: Build Playwright SPA
         run: yarn test-flows-build
-
-      # Maps are 40 MB+ and no spec loads them. Dropping them keeps the
-      # artifact small so four shards download it quickly.
-      - name: Drop source maps from the artifact
-        run: find docs -name '*.map' -delete
 
       - uses: actions/upload-artifact@v4
         with:
@@ -182,7 +179,7 @@ jobs:
         run: |
           mkdir -p .pw-runner
           echo '{"private":true}' > .pw-runner/package.json
-          npm install --prefix .pw-runner @playwright/test@1.56.1
+          npm install --prefix .pw-runner @playwright/test@1.56.1 http-server
           ln -s .pw-runner/node_modules node_modules
 
       - name: Playwright Info

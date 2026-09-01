@@ -189,9 +189,10 @@ Each shard still runs `--workers=2` (the density that stayed green on
 the old 8 GB larger runner; packing 4 SwiftShader Chromiums onto 4
 cores contends). The suite is split `--shard=1/4` … `4/4` so eight
 Chromiums run across four free machines. One `playwright-build` job
-produces `docs/`; shards set `PLAYWRIGHT_SERVE_ONLY=true`, install only
-`@playwright/test@1.56.1`, and serve docs with
-`tools/playwright/serveDocs.mjs` (no Share `yarn install`). The required
+produces `docs/` as `yarn test-flows-build` left it; shards set
+`PLAYWRIGHT_SERVE_ONLY=true`, install `@playwright/test@1.56.1` plus
+`http-server`, and serve that tree with `npx http-server` (same as
+`yarn test-flows-serve`, no Share `yarn install`). The required
 check is still `playwright-run` (an aggregator over the shards). The paid
 `ubuntu-24.04-4vcpu-8gb-150gbssd` larger runner is not used here —
 larger runners are billed even on public repos.

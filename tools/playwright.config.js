@@ -78,7 +78,7 @@ export default defineConfig({
   // Run your local dev server before starting the tests.
   webServer: {
     command: serveOnly ?
-      `node tools/playwright/serveDocs.mjs docs ${port}` :
+      `npx http-server docs -c-1 -p ${port}` :
       `yarn test-flows-build-and-serve ${port}`,
     url,
     env: {
