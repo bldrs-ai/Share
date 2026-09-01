@@ -20,7 +20,7 @@ describe('View 100: About Dialog', () => {
 
   describe('First time user visits homepage', () => {
     beforeEach('First time user visits homepage', async ({page}) => {
-      await visitHomepageWaitForModel(page)
+      await visitHomepageWaitForModel(page, {pauseRenderer: true})
     })
     test('about dialog is displayed', async ({page}) => {
       // Check that the about dialog is visible
@@ -34,7 +34,7 @@ describe('View 100: About Dialog', () => {
 
   describe('Returning user visits homepage', () => {
     beforeEach('First time user visits homepage', async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page)
+      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
     })
     test('about dialog is not displayed', async ({page}) => {
       // Check that the about dialog does not exist

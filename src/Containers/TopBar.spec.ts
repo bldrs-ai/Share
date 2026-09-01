@@ -26,7 +26,7 @@ describeMobileAndDesktop('TopBar (?feature=workspace)', () => {
   })
 
   test('flag gates the bar, and the breadcrumb names the model', async ({page}) => {
-    await visitHomepageWaitForModel(page)
+    await visitHomepageWaitForModel(page, {pauseRenderer: true})
     await expect(page.getByTestId('TopBar')).toHaveCount(0)
 
     await visitWithWorkspace(page)
@@ -52,7 +52,7 @@ describeMobileAndDesktop('TopBar (?feature=workspace)', () => {
     // model — the crumb reads model / element, with the element name
     // rather than its expressID.
     await page.goto(`${HOME_MODEL}/89/112/139/154/396${WORKSPACE_FLAG}`, {waitUntil: 'domcontentloaded'})
-    await waitForModel(page)
+    await waitForModel(page, {pauseRenderer: true})
 
     await expect(page.getByTestId('topbar-breadcrumb-element')).toHaveText('Together')
     await expect(page.getByTestId('topbar-breadcrumb-model')).not.toHaveText('396')
@@ -79,7 +79,7 @@ describeMobileAndDesktop('TopBar (?feature=workspace)', () => {
   // reappeared at the new crumb and then vanished.
   test('moving the anchor mid-search keeps the field open', async ({page}) => {
     await page.goto(`${HOME_MODEL}/89/112/139/154/396${WORKSPACE_FLAG}`, {waitUntil: 'domcontentloaded'})
-    await waitForModel(page)
+    await waitForModel(page, {pauseRenderer: true})
     // The element crumb resolves asynchronously; without it there is no
     // separator to swap and nothing to move the anchor from.
     await expect(page.getByTestId('topbar-breadcrumb-element')).toBeVisible()

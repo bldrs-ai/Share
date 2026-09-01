@@ -26,7 +26,7 @@ describe('Comment: CRUD operations', () => {
 
   describe('Comments on a note', () => {
     beforeEach(async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page)
+      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
     })
 
     describe('Open Notes > first note', () => {

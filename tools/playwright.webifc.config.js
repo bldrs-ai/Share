@@ -58,6 +58,7 @@ export default defineConfig({
     env: {
       SHARE_CONFIG: 'playwright',
       PORT: `${port}`,
+      SKIP_MARKETING: 'true',
     },
     reuseExistingServer: !isCI,
   },

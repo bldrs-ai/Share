@@ -36,7 +36,7 @@ describe('AppsSideDrawer', () => {
 
   describe('Returning user visits homepage', () => {
     beforeEach(async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page)
+      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
     })
 
     test('Apps button should be present', async ({page}) => {

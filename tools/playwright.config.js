@@ -28,8 +28,10 @@ export default defineConfig({
   // Run all tests in parallel.
   fullyParallel: true,
 
-  retries: 1,
+  retries: isCI ? 1 : 0,
 
+  // Local default. CI overrides to `--workers=2 --shard=N/2` because the
+  // 8 GB runner starves above two Chromiums; see test-flows.yml.
   workers: 4,
 
   // Reporter to use
@@ -75,10 +77,13 @@ export default defineConfig({
     env: {
       SHARE_CONFIG: 'playwright',
       PORT: port,
+      // No flow spec loads /pricing or /blog; they assert hrefs to bldrs.ai.
+      // Skipping the Next.js install+export saves ~1 min per webServer boot.
+      SKIP_MARKETING: 'true',
     },
-    // 3 min — webServer.command does the SPA build + marketing build
-    // (Next.js install + static export) before npx http-server boots, and
-    // a cold cache in CI pushes us past Playwright's 60s default.
+    // 3 min — webServer.command does the SPA build (and used to do the
+    // marketing overlay too) before npx http-server boots, and a cold
+    // cache in CI pushes us past Playwright's 60s default.
     timeout: 180_000,
     // Don't try to use existing server on GHA.  Locally will lazy start with command
     // above if none is running.

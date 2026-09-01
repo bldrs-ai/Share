@@ -18,7 +18,7 @@ describe('OnboardingOverlay', () => {
   describe('First time user visits homepage', () => {
     beforeEach(async ({page}) => {
       await homepageSetup(page)
-      await visitHomepageWaitForModel(page)
+      await visitHomepageWaitForModel(page, {pauseRenderer: true})
     })
 
     test('About dialog is displayed first, then OnboardingOverlay after closing - Screen', async ({page}) => {

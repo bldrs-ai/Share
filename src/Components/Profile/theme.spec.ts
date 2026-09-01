@@ -15,7 +15,7 @@ describe('Profile 100: Theme', () => {
   describe('Returning user visits homepage', () => {
     beforeEach(async ({page}) => {
       await homepageSetup(page)
-      await returningUserVisitsHomepageWaitForModel(page)
+      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
     })
 
     describe('Select ProfileControl', () => {

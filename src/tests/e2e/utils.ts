@@ -207,24 +207,63 @@ export async function returningUserVisitsHomepage(page: Page) {
 
 
 /**
+ * Options for {@link visitHomepageWaitForModel} /
+ * {@link returningUserVisitsHomepageWaitForModel}.
+ *
+ * A bare string is still accepted as `search` so existing
+ * `visitHomepageWaitForModel(page, '?feature=quotas')` call sites keep
+ * working.
+ */
+export type VisitHomepageOptions = {
+  /** Query string appended to the model URL, e.g. `?feature=quotas`. */
+  search?: string
+  /**
+   * Freeze the WebGL loop after the model is ready. Safe for dialog/panel
+   * tests; wrong for anything that screenshots the scene, moves the camera,
+   * or asserts on highlighting. See {@link pauseViewerRendering}.
+   */
+  pauseRenderer?: boolean
+}
+
+
+/**
+ * Normalize the historical `search: string` second arg and the options
+ * object into one shape.
+ *
+ * @param searchOrOpts Query string, or {@link VisitHomepageOptions}
+ * @return Normalized options
+ */
+function asVisitOptions(searchOrOpts: string | VisitHomepageOptions = ''): VisitHomepageOptions {
+  return typeof searchOrOpts === 'string' ? {search: searchOrOpts} : searchOrOpts
+}
+
+
+/**
  * Same as returningUserVisitsHomepage, but wait for model too
  *
- * @param search Optional query string (e.g. '?feature=quotas') appended to the
- *   model URL so the SPA boots with feature flags active.
+ * @param page Playwright page
+ * @param searchOrOpts Query string (e.g. '?feature=quotas') or options
  */
-export async function returningUserVisitsHomepageWaitForModel(page: Page, search = '') {
+export async function returningUserVisitsHomepageWaitForModel(
+  page: Page,
+  searchOrOpts: string | VisitHomepageOptions = '',
+) {
   await setIsReturningUser(page.context())
-  await visitHomepageWaitForModel(page, search)
+  await visitHomepageWaitForModel(page, searchOrOpts)
 }
 
 
 /**
  * Assumes other setup, then visit homepage and wait for model
  *
- * @param search Optional query string (e.g. '?feature=quotas') appended to the
- *   model URL so the SPA boots with feature flags active.
+ * @param page Playwright page
+ * @param searchOrOpts Query string (e.g. '?feature=quotas') or options
  */
-export async function visitHomepageWaitForModel(page: Page, search = '') {
+export async function visitHomepageWaitForModel(
+  page: Page,
+  searchOrOpts: string | VisitHomepageOptions = '',
+) {
+  const {search = '', pauseRenderer = false} = asVisitOptions(searchOrOpts)
   await Promise.all([
     // await page.waitForURL('/index.ifc', {timeout: 10_000}), // ensure the bounce happened
     page.waitForResponse(async (response: Response) => {
@@ -243,6 +282,9 @@ export async function visitHomepageWaitForModel(page: Page, search = '') {
   // to the fake-suffix test hosts (api.github.com.pw etc.) miss MSW
   // and fail real DNS resolution.
   await waitForServiceWorker(page)
+  if (pauseRenderer) {
+    await pauseViewerRendering(page)
+  }
 }
 
 
@@ -266,8 +308,10 @@ export async function waitForServiceWorker(page: Page) {
  * Waits for a 3D model to load and become visible within the viewer.
  *
  * @param page - Playwright page object
+ * @param options.pauseRenderer Freeze the WebGL loop once ready. See
+ *   {@link pauseViewerRendering}.
  */
-export async function waitForModel(page: Page) {
+export async function waitForModel(page: Page, options: {pauseRenderer?: boolean} = {}) {
   // Wait for viewer container and canvas
   const viewerContainer = page.locator('#viewer-container')
   await expect(viewerContainer).toBeVisible()
@@ -279,6 +323,9 @@ export async function waitForModel(page: Page) {
   const dropzone = page.getByTestId('cadview-dropzone')
   await expect(dropzone).toHaveAttribute('data-model-ready', 'true', {timeout: 30_000})
   await dismissLoadGrace(page)
+  if (options.pauseRenderer) {
+    await pauseViewerRendering(page)
+  }
 }
 
 

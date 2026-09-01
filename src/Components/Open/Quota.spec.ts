@@ -102,7 +102,7 @@ describe('Quota: usage limit enforcement', () => {
 
   describe('Pro user', () => {
     beforeEach(async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page, '?feature=quotas')
+      await returningUserVisitsHomepageWaitForModel(page, {search: '?feature=quotas', pauseRenderer: true})
       await auth0Login(page)
     })
 

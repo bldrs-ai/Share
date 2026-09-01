@@ -10,12 +10,22 @@ export const HOME_MODEL = '/share/v/p/index.ifc'
  * Land on a model route with the workspace shell on — the state a user
  * is in when they first reach for the ProjectsDrawer.
  *
+ * Pauses the viewer after the model is ready: every current caller
+ * (ProjectsDrawer, TopBar) drives the shell, not the canvas, and the
+ * SwiftShader render loop otherwise pins every click. Pass
+ * `{pauseRenderer: false}` if a new caller needs the scene.
+ *
  * @param page Playwright page object
  * @param path Model route, defaults to the home model
+ * @param options.pauseRenderer Freeze the WebGL loop once ready (default true)
  */
-export async function visitWithWorkspace(page: Page, path: string = HOME_MODEL) {
+export async function visitWithWorkspace(
+  page: Page,
+  path: string = HOME_MODEL,
+  {pauseRenderer = true}: {pauseRenderer?: boolean} = {},
+) {
   await page.goto(`${path}${WORKSPACE_FLAG}`, {waitUntil: 'domcontentloaded'})
-  await waitForModel(page)
+  await waitForModel(page, {pauseRenderer})
   await expect(page.getByTestId('ProjectsDrawer')).toBeVisible()
 }
 

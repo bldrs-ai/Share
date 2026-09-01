@@ -34,8 +34,10 @@ BLDRS_MEASURE_ITERATIONS=5 yarn test-flows src/viewer/loadTiming.spec.ts \
   --workers=1 -g "\[desktop\].*cross-check"
 ```
 
-`--workers=1` is not optional locally — see PLAYBOOK.md §"Playwright locally
-needs `--workers=1`".
+`--workers=1` is not optional for a measurement: the suite otherwise
+runs under 4-way contention and the numbers are garbage (see "Records
+written by CI" below). The PLAYBOOK workers note is about the port
+derivation, not this.
 
 Everything is env-driven so the same spec scales to a machine that *has* a
 big corpus model, with no code change:

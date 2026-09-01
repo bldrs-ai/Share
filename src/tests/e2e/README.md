@@ -31,7 +31,10 @@ specs. Keep it that way.
   own `expect` along, and every `toEqual` in that suite then dies with
   `TypeError: this.customTesters is not iterable`.
 - `utils.ts` — `homepageSetup`, returning-user/auth setup, snackbar/grace
-  dismissal, and the rest of the page-bootstrap helpers.
+  dismissal, `pauseViewerRendering` (freeze the WebGL loop after the model
+  is ready — pass `{pauseRenderer: true}` to `visitHomepageWaitForModel` /
+  `waitForModel` for dialog/panel specs), and the rest of the page-bootstrap
+  helpers.
 - `homepage.ts`, `workspace.ts` — page-object-ish helpers for those areas.
 
 ## Put specs next to their subject, not here

@@ -101,7 +101,10 @@ What still needs you:
 
 The marketing build is chained into the root SPA build, not a sibling
 process. `yarn build` runs `build-share` → `build-marketing`
-(`tools/marketing/build.js`), which:
+(`tools/marketing/build.js`). Playwright's webServer sets
+`SKIP_MARKETING=true` so that script exits before the Next.js
+install+export — no flow spec loads marketing routes. Production
+builds still overlay. The script:
 
 1. `yarn install --frozen-lockfile` inside `marketing/`.
 2. `yarn build` inside `marketing/` → `marketing/out/`.

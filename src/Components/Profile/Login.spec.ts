@@ -16,7 +16,7 @@ describe('Profile 100: Login', () => {
   beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setupAuthenticationIntercepts(page)
-    await returningUserVisitsHomepageWaitForModel(page)
+    await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
   })
 
   test('Login dialog shows GitHub and Google options - Screen', async ({page}) => {

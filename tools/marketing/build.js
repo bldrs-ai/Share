@@ -1,8 +1,9 @@
 // Build the marketing site and overlay its static export onto docs/.
 //
-// Chained from `build-share` so every SPA build (yarn build, yarn serve,
-// test-flows-build, Netlify deploys) produces the same merged tree. One
-// pipeline, no drift between dev and prod.
+// Chained from `build-share` so production/dev SPA builds (yarn build,
+// yarn serve, Netlify) produce the same merged tree. Playwright sets
+// SKIP_MARKETING=true and bails out below — no flow spec loads /pricing
+// or /blog (they assert hrefs to bldrs.ai, not the local overlay).
 //
 // Marketing routes (/about/, /pricing/, /blog/, /sitemap.xml, ...) land in
 // their own subdirectories inside docs/. The marketing build deliberately
@@ -20,6 +21,13 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..')
 const MARKETING = path.join(REPO_ROOT, 'marketing')
 const MARKETING_OUT = path.join(MARKETING, 'out')
 const DOCS = path.join(REPO_ROOT, 'docs')
+
+
+if (process.env.SKIP_MARKETING === 'true') {
+  // eslint-disable-next-line no-console
+  console.log('marketing: skipped (SKIP_MARKETING=true)')
+  process.exit(0)
+}
 
 
 /**

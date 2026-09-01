@@ -41,8 +41,9 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   (5) Update the PR description to match what the change became, merge,
   then close or narrow its issues (partly-addressed → a comment saying
   what's left, not a close).
-  **What the gate covers:** `build` (main.yml) and both `test-flows`
-  jobs are skipped on drafts. **Netlify deploy previews still run** —
+  **What the gate covers:** `build` (main.yml) and the `test-flows` jobs
+  (`playwright-run` — the required aggregator over two shards — and
+  `playwright-webifc-run`) are skipped on drafts. **Netlify deploy previews still run** —
   they come from Netlify's GitHub integration, not Actions — so a draft
   normally has a preview URL to click through. (`tools/netlify/ignore-build.sh`
   skips the deploy when every changed file matches `.md` / `design/` /

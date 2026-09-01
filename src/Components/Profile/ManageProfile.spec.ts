@@ -37,7 +37,7 @@ describe('ManageProfile modal', () => {
   describe('When only GitHub is linked', () => {
     beforeEach(async ({page}) => {
       // user with GitHub identity only
-      await returningUserVisitsHomepageWaitForModel(page)
+      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
     })
 
     test('shows "Authorize" for Google', async ({page}) => {
@@ -54,7 +54,7 @@ describe('ManageProfile modal', () => {
   describe.skip('When only Google is linked', () => {
     beforeEach(async ({page}) => {
       // user with Google identity only
-      await returningUserVisitsHomepageWaitForModel(page)
+      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
     })
 
     test('shows "Authorize" for Github', async ({page}) => {
@@ -70,7 +70,7 @@ describe('ManageProfile modal', () => {
 
   describe('Links accounts after Authorize is clicked', () => {
     beforeEach(async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page)
+      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
     })
 
     test('refreshes tokens and marks Google as Connected', async ({page}) => {
@@ -87,7 +87,7 @@ describe('ManageProfile modal', () => {
 
   describe('Modal Close button', () => {
     beforeEach(async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page)
+      await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
     })
 
     test('hides the dialog when Close clicked', async ({page}) => {

@@ -80,7 +80,7 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
   })
 
   test('flag gates the drawer, and the shell owns the only logo', async ({page}) => {
-    await visitHomepageWaitForModel(page)
+    await visitHomepageWaitForModel(page, {pauseRenderer: true})
     await expect(page.getByTestId('ProjectsDrawer')).toHaveCount(0)
     await expect(page.getByTestId('control-button-about')).toBeVisible()
 
