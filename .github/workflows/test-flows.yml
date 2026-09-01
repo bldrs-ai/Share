@@ -175,10 +175,15 @@ jobs:
       # Specs import @playwright/test and a handful of dep-free constant
       # modules (Notes/component.js, Search/component.ts, …). The image
       # already has browsers for 1.56.1; this is just the test runner.
-      # PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD is set on the image. Do not
-      # `yarn install` the Share tree — that was ~50s per shard.
+      # Install into a throwaway prefix — `npm install` at the repo root
+      # still reads package.json and dies on ts-jest/babel-jest peers.
+      # PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD is set on the image.
       - name: Install Playwright test runner
-        run: npm install --no-save --no-package-lock @playwright/test@1.56.1
+        run: |
+          mkdir -p .pw-runner
+          echo '{"private":true}' > .pw-runner/package.json
+          npm install --prefix .pw-runner @playwright/test@1.56.1
+          ln -s .pw-runner/node_modules node_modules
 
       - name: Playwright Info
         run: npx playwright --version
