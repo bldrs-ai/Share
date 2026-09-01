@@ -69,8 +69,13 @@ jobs:
   # SwiftShader Chromiums on four cores; more shards at 2 workers use
   # more machines instead, which is the cheaper way to cut wall clock
   # because these specs are not timing-sensitive. Four shards × 2
-  # workers = 8 Chromiums. Serial suite ~34 m => ~4 m of tests plus
-  # ~3 m install/build per shard.
+  # workers = 8 Chromiums.
+  #
+  # The SPA is built once (`playwright-build`) and downloaded by each
+  # shard. Specs import app modules (e.g. Share.spec → Search/component),
+  # so shards still `yarn install`; that stays the per-shard floor.
+  # Sharing docs/ is the one tree the suite ran against, and avoids
+  # four `yarn clean && build` in parallel.
   #
   # Screenshots stay on the Playwright noble container (chromium 1194),
   # not the host image. 14 GB disk vs the old 150 GB is the thing to
@@ -80,6 +85,42 @@ jobs:
   # jobs would rename it to `playwright-run (1)` / `(2)` and the required
   # check would never report, so the shards live here and a tiny
   # aggregator below keeps that name.
+  playwright-build:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SKIP_MARKETING: 'true'
+      SHARE_CONFIG: playwright
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'yarn'
+          cache-dependency-path: 'yarn.lock'
+
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Build Playwright SPA
+        run: yarn test-flows-build
+
+      # Maps are 40 MB+ and no spec loads them. Dropping them keeps the
+      # artifact small so four shards download it quickly.
+      - name: Drop source maps from the artifact
+        run: find docs -name '*.map' -delete
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playwright-docs
+          path: docs
+          retention-days: 1
+          if-no-files-found: error
+
   playwright-shard:
     # Draft PRs don't run flows. This is still the longest thing CI does
     # per PR; the draft gate keeps rework pushes from stacking shard sets
@@ -100,6 +141,7 @@ jobs:
     # coercion would make CI on main hinge on a documented-but-obscure corner
     # of the expression language. The clause states the intent instead.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    needs: playwright-build
     runs-on: ubuntu-24.04
     # Image must match @playwright/test in package.json (Playwright caches
     # by version + matches browser APIs). The -noble (Ubuntu 24.04) variant
@@ -111,9 +153,8 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     name: playwright-shard ${{ matrix.shard }}/4
-    # Headroom on a quarter of the suite: tests should land around 4–5 m
-    # plus ~3 m install/build. The margin is for the degraded case — a
-    # failure drags a 30 s timeout plus a retry behind it.
+    # Headroom on a quarter of the suite plus yarn install. The margin is
+    # for the degraded case — a failure drags a 30 s timeout plus a retry.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -130,6 +171,14 @@ jobs:
       # Use exact lock file to ensure reproducible install and cached node_modules
       # since we're hashing on yarn.lock anyways
       - run: yarn install --frozen-lockfile --prefer-offline
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: playwright-docs
+          path: docs
+
+      - name: Check docs artifact
+        run: test -f docs/index.html
 
       # Useful diagnostic
       - name: Playwright Info
@@ -167,6 +216,7 @@ jobs:
       GITHUB_BASE_URL: https://git.bldrs.dev.pw/p/gh
       GITHUB_BASE_URL_UNAUTHENTICATED: https://api.github.com.pw
       MSW_IS_ENABLED: true
+      PLAYWRIGHT_SERVE_ONLY: 'true'
 
   # Required check name. Must stay `playwright-run` — branch protection
   # matches on it. Tiny, not a large runner: it only AND-reduces the shards.
