@@ -325,6 +325,18 @@ describe('loader/glbExport', () => {
       expect(mockWriteGlbBytesToOPFS).not.toHaveBeenCalled()
     })
 
+    it('skips a traversed scene with no vertices so an empty artifact cannot poison the cache', async () => {
+      const model = {
+        traverse: (fn) => {
+          fn({isMesh: true, geometry: {attributes: {position: {count: 0}}}})
+        },
+      }
+      const ok = await exportAndCacheGlb({model, ...ctx})
+      expect(ok).toBe(false)
+      expect(mockExporterParse).not.toHaveBeenCalled()
+      expect(mockWriteGlbBytesToOPFS).not.toHaveBeenCalled()
+    })
+
     it('skips a Group whose only BatchedMesh child has no convertible instances', async () => {
       const model = {
         traverse: (fn) => {

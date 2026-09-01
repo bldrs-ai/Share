@@ -26,7 +26,7 @@ import {dereferenceAndProxyDownloadContents} from './urls'
 
 
 const EPOCH_MS = 1663842627000
-const MOCK_BLOB_AB = new ArrayBuffer(0)
+const MOCK_BLOB_AB = new ArrayBuffer(8)
 
 
 /**
@@ -116,7 +116,7 @@ describe('Loader GitHub lastModifiedGithub integration', () => {
 
     // Fake blob that returns empty array buffer for model parsing
     const mockFile = Object.assign(
-      new Blob([''], {type: 'application/octet-stream'}),
+      new Blob(['not-part-21'], {type: 'application/octet-stream'}),
       {arrayBuffer: jest.fn().mockResolvedValue(MOCK_BLOB_AB)},
     )
 
@@ -161,7 +161,7 @@ describe('Loader GitHub lastModifiedGithub integration', () => {
       (_url, _sha, _fp, _token, _owner, _repo, _branch, _setFile, _onProgress, _onLastModifiedGithub) =>
         Promise.resolve(
           Object.assign(
-            new Blob([''], {type: 'application/octet-stream'}),
+            new Blob(['not-part-21'], {type: 'application/octet-stream'}),
             {arrayBuffer: jest.fn().mockResolvedValue(MOCK_BLOB_AB)},
           ),
         ),

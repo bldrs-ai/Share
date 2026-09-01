@@ -7,7 +7,13 @@
 
 import axios from 'axios'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
-import {downloadToOPFS, downloadModel, getModelFromOPFS} from '../OPFS/utils'
+import {
+  deleteFileFromOPFS,
+  doesFileExistInOPFS,
+  downloadToOPFS,
+  downloadModel,
+  getModelFromOPFS,
+} from '../OPFS/utils'
 import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import {constructUploadedBlobPath, load, NotFoundError} from './Loader'
 import {dereferenceAndProxyDownloadContents} from './urls'
@@ -23,6 +29,8 @@ jest.mock('../OPFS/utils', () => ({
   downloadModel: jest.fn(),
   doesFileExistInOPFS: jest.fn(),
   writeBase64Model: jest.fn(),
+  deleteFileFromOPFS: jest.fn(),
+  readModelByPathFromOPFS: jest.fn(),
 }))
 
 // Mock urls.js so we can force specific dereference results (and avoid
@@ -428,6 +436,8 @@ describe('load() error/edge paths with OPFS enabled', () => {
     dereferenceAndProxyDownloadContents.mockReset()
     downloadToOPFS.mockReset()
     downloadModel.mockReset()
+    deleteFileFromOPFS.mockReset()
+    doesFileExistInOPFS.mockReset()
 
     viewer = makeViewerStub()
     onProgress = jest.fn()
@@ -516,6 +526,53 @@ describe('load() error/edge paths with OPFS enabled', () => {
     expect(downloadModel).toHaveBeenCalledTimes(1)
     expect(axios.get).toHaveBeenCalledTimes(1)
     expect(axios.get.mock.calls[0][0]).toBe('https://raw.example.com/owner/repo/main/model.ifc')
+  })
+
+
+  it('evicts a truncated GitHub part-21 OPFS hit and re-fetches', async () => {
+    // GitHub cache HIT keys off remote sha + OPFS existence. A prefix
+    // written under that sha (truncate(0) then crash) is otherwise served
+    // forever; Conway then reports every tail ref as "not in the index".
+    const truncated = new MockFile(
+      'ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'AUTOMOTIVE_DESIGN\'));\nENDSEC;\nDATA;\n#1=X();\n')
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'https://raw.githubusercontent.com/owner/repo/main/Arty_Z7.stp',
+      'abc123sha',
+      true,
+      false,
+    ])
+    doesFileExistInOPFS.mockResolvedValue(true)
+    downloadModel.mockResolvedValue(truncated)
+    axios.get.mockResolvedValue({data: new ArrayBuffer(64)})
+
+    await expect(
+      load('https://github.com/owner/repo/blob/main/Arty_Z7.stp',
+        viewer, onProgress, true, setOpfsFile, ''),
+    ).rejects.toThrow()
+
+    expect(deleteFileFromOPFS).toHaveBeenCalledTimes(1)
+    expect(axios.get).toHaveBeenCalledTimes(1)
+    expect(axios.get.mock.calls[0][0]).toBe(
+      'https://raw.githubusercontent.com/owner/repo/main/Arty_Z7.stp')
+  })
+
+
+  it('does not evict a GitHub OBJ whose header mentions ISO-10303-21', async () => {
+    const obj = new MockFile('# exported from ISO-10303-21 STEP\nv 0 0 0\n')
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'https://raw.githubusercontent.com/owner/repo/main/model.obj',
+      'abc123sha',
+      true,
+      false,
+    ])
+    doesFileExistInOPFS.mockResolvedValue(true)
+    downloadModel.mockResolvedValue(obj)
+
+    await load('https://github.com/owner/repo/blob/main/model.obj',
+      viewer, onProgress, true, setOpfsFile, '')
+
+    expect(deleteFileFromOPFS).not.toHaveBeenCalled()
+    expect(axios.get).not.toHaveBeenCalled()
   })
 
 

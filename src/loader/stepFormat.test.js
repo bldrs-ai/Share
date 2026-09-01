@@ -1,4 +1,4 @@
-import {isConwayIfcFormat} from './stepFormat'
+import {isConwayIfcFormat, looksLikeTruncatedPart21, looksLikeTruncatedPart21Blob} from './stepFormat'
 
 
 const bytes = (text) => new TextEncoder().encode(text)
@@ -162,6 +162,48 @@ describe('isConwayIfcFormat', () => {
     it('ignores an entity whose name merely ends in FILE_SCHEMA', () => {
       expect(isConwayIfcFormat(part21(
         `FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\nNOT_FILE_SCHEMA(('IFC4'));`))).toBe(false)
+    })
+  })
+
+
+  describe('looksLikeTruncatedPart21', () => {
+    it('accepts a complete IFC or STEP file', () => {
+      expect(looksLikeTruncatedPart21(part21(`FILE_SCHEMA(('IFC4'));`))).toBe(false)
+      expect(looksLikeTruncatedPart21(part21(`FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));`))).toBe(false)
+    })
+
+    it('flags a part-21 prefix that never reached the footer', () => {
+      // The Arty OPFS-poison case: magic is present, DATA starts, the
+      // tail solids (and END-ISO-10303-21;) never landed on disk.
+      expect(looksLikeTruncatedPart21(bytes(
+        `${MAGIC}FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\nENDSEC;\nDATA;\n` +
+        `#36800=STYLED_ITEM('NAME_480',(#37527),#1031384);\n`))).toBe(true)
+    })
+
+    it('treats a footer keyword without its required semicolon as truncated', () => {
+      expect(looksLikeTruncatedPart21(bytes(
+        `${MAGIC}FILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21\n`))).toBe(true)
+    })
+
+    it('does not treat a footer string in DATA as a complete file', () => {
+      expect(looksLikeTruncatedPart21(bytes(
+        `${MAGIC}FILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n` +
+        `#1=IFCLABEL('END-ISO-10303-21; still more');\n`))).toBe(true)
+    })
+
+    it('ignores non-part-21 bytes, including empty', () => {
+      expect(looksLikeTruncatedPart21(new Uint8Array(0))).toBe(false)
+      expect(looksLikeTruncatedPart21(NOT_TEXT)).toBe(false)
+      expect(looksLikeTruncatedPart21(null)).toBe(false)
+    })
+
+    it('the Blob helper flags a 0-byte file as truncated', async () => {
+      expect(await looksLikeTruncatedPart21Blob(new Blob([]))).toBe(true)
+    })
+
+    it('the Blob helper agrees with the byte helper on a complete file', async () => {
+      const complete = part21(`FILE_SCHEMA(('IFC4'));`)
+      expect(await looksLikeTruncatedPart21Blob(new Blob([complete]))).toBe(false)
     })
   })
 })

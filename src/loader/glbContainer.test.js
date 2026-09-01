@@ -3,10 +3,23 @@ import {
   isBldrsGlbContainer,
   packGlbChunks,
   unpackGlbContainer,
+  viewGlbContainerChunks,
 } from './glbContainer'
 
 
 describe('loader/glbContainer', () => {
+  it('viewGlbContainerChunks yields subarray views, not payload copies', () => {
+    const chunk = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 1, 2, 3])
+    const packed = packGlbChunks([chunk])
+    const {chunks, mode, version} = viewGlbContainerChunks(packed)
+    expect(version).toBe(2)
+    expect(mode).toBeNull()
+    expect(chunks).toHaveLength(1)
+    expect(chunks[0].buffer).toBe(packed.buffer)
+    expect(Array.from(chunks[0])).toEqual(Array.from(chunk))
+  })
+
+
   it('round-trips a single chunk', () => {
     const chunk = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 1, 2, 3]) // "glTF" + payload
     const packed = packGlbChunks([chunk])
