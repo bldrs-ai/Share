@@ -31,6 +31,14 @@ describe('net/github/utils', () => {
       expect(actual.ref).toEqual('main')
       expect(actual.path).toEqual('haus.ifc')
     })
+
+    it('throws an error if a match has no named capture groups', () => {
+      const execSpy = jest.spyOn(RegExp.prototype, 'exec')
+      execSpy.mockReturnValueOnce([''])
+      expect(() => parseGitHubRepositoryUrl('https://github.com/org/repo/blob/main/file.ifc'))
+        .toThrowError('GitHub repository URL does not expose named groups')
+      execSpy.mockRestore()
+    })
   })
 
 

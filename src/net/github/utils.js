@@ -27,9 +27,12 @@ export const parseGitHubRepositoryUrl = (githubUrl) => {
   if (host !== 'github.com' && host !== 'raw.githubusercontent.com') {
     throw new Error('Not a valid GitHub repository URL')
   }
-  const match = url.pathname.match(`^/${pathParts.join('/')}$`)
-  if (match === null) {
+  const match = re.exec(url.pathname)
+  if (!match) {
     throw new Error('Could not match GitHub repository URL')
+  }
+  if (!match.groups) {
+    throw new Error('GitHub repository URL does not expose named groups')
   }
   const {groups: {org, repo, branch, file}} = match
   return {
