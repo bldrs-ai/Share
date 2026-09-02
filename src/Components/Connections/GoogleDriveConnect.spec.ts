@@ -55,8 +55,11 @@ describe('Google Drive connection', () => {
     await page.addInitScript({path: GOOGLE_APIS_FAKE_PATH})
     await homepageSetup(page)
     await setupAuthenticationIntercepts(page, {connection: 'google'})
-    await returningUserVisitsHomepageWaitForModel(page)
-    await page.goto('/share/v/p/index.ifc', {waitUntil: 'domcontentloaded'})
+    // returningUserVisitsHomepageWaitForModel already lands on
+    // /share/v/p/index.ifc with the model ready. A second goto used to
+    // start another IFC+wasm load underneath every click (same trap as
+    // Github.spec.ts / #1759). These tests never look at the canvas.
+    await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
     // Satisfy the Auth0 primary-auth gate on ConnectProviderButton.
     await auth0Login(page, 'google')
     await openSourcesTab(page)

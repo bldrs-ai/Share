@@ -24,7 +24,7 @@ describe('Share', () => {
   let controlButtonVersions: Locator
   beforeEach('Homepage loads successfully', async ({page}) => {
     await homepageSetup(page)
-    await returningUserVisitsHomepageWaitForModel(page)
+    await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
     controlButtonAbout = page.getByTestId('control-button-about')
     controlButtonCutPlane = page.getByTestId('control-button-cut-plane')
     controlButtonHelp = page.getByTestId('control-button-help')

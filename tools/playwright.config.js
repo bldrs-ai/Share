@@ -4,11 +4,16 @@ import {runGetPortPlease} from './utils'
 
 const ciPort = 9081
 const isCI = process.env.CI === 'true'
+// CI shards download a prebuilt `docs/` and only serve. Local `yarn test-flows`
+// still builds. See test-flows.yml playwright-build.
+const serveOnly = process.env.PLAYWRIGHT_SERVE_ONLY === 'true'
 // In CI we use a fixed port.  Locally, there may be multiple instances of this
 // process, so it's desired but not assured.
 const port = isCI ? ciPort : runGetPortPlease(ciPort)
 const url = `http://localhost:${port}`
-console.warn('Using test server:', url)
+console.warn('Using test server:', url, serveOnly ? '(serve-only)' : '')
+const serveOnlyTimeoutMs = 30_000
+const fullBuildTimeoutMs = 180_000
 
 export default defineConfig({
   // Look for test files in the "src" directory, relative to this configuration file.
@@ -28,8 +33,10 @@ export default defineConfig({
   // Run all tests in parallel.
   fullyParallel: true,
 
-  retries: 1,
+  retries: isCI ? 1 : 0,
 
+  // Local default. CI overrides to `--workers=2 --shard=N/4` on free
+  // ubuntu-24.04 (16 GB); see test-flows.yml.
   workers: 4,
 
   // Reporter to use
@@ -69,20 +76,31 @@ export default defineConfig({
   ],
 
   // Run your local dev server before starting the tests.
+  //
+  // Playwright's webServer cwd defaults to this config's directory
+  // (`tools/`), not the repo root. Serve-only cds into `docs/` so
+  // `npx http-server` uses the built artifact as the site root (PORT
+  // comes from env below). The full-build path still goes through yarn,
+  // which walks up to the repo package.json.
   webServer: {
-    command: `yarn test-flows-build-and-serve ${port}`,
+    command: serveOnly ?
+      'npx http-server' :
+      `yarn test-flows-build-and-serve ${port}`,
+    cwd: serveOnly ? '../docs' : undefined,
     url,
     env: {
       SHARE_CONFIG: 'playwright',
       PORT: port,
+      // No flow spec loads /pricing or /blog; they assert hrefs to bldrs.ai.
+      // Skipping the Next.js install+export saves ~1 min on a full build.
+      SKIP_MARKETING: 'true',
     },
-    // 3 min — webServer.command does the SPA build + marketing build
-    // (Next.js install + static export) before npx http-server boots, and
-    // a cold cache in CI pushes us past Playwright's 60s default.
-    timeout: 180_000,
-    // Don't try to use existing server on GHA.  Locally will lazy start with command
-    // above if none is running.
-    reuseExistingServer: true, // !isCI,
+    // Serve-only is http-server on an existing tree. A full build still
+    // needs headroom for a cold yarn/esbuild on a local first run.
+    timeout: serveOnly ? serveOnlyTimeoutMs : fullBuildTimeoutMs,
+    // Locally reuse a server already on this port. In CI, serve-only
+    // shards have no server yet — Playwright starts http-server.
+    reuseExistingServer: !isCI,
   },
 
   expect: {

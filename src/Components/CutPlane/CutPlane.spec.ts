@@ -1,5 +1,5 @@
 import {Locator, Page, expect, test} from '@playwright/test'
-import {waitForModelReady} from 'src/tests/e2e/models'
+import {waitForModelReady} from '../../tests/e2e/models'
 import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,

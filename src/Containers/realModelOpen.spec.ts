@@ -62,7 +62,7 @@ describeMobileAndDesktop('real_model_open GA event', () => {
   })
 
   test('does not fire for the homepage demo model', async ({page}) => {
-    await visitHomepageWaitForModel(page)
+    await visitHomepageWaitForModel(page, {pauseRenderer: true})
     // Guard against a vacuous pass: the inline gtag bootstrap must have
     // run, or the absence below would only prove gtag was missing.
     const hasGtag = await page.evaluate(() =>

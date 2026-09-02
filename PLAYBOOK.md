@@ -48,6 +48,9 @@ substitution explicit (and visible to the user) rather than letting
 **Build config**: Playwright tests use `SHARE_CONFIG=playwright` (`tools/esbuild/vars.playwright.js`).
 Key differences from production: `MSW_IS_ENABLED=true`, `NODE_ENV=development`. `OPFS_IS_ENABLED` is
 **on**, as in production — it was off until #1779, so treat any older note saying otherwise as stale.
+The webServer also sets `SKIP_MARKETING=true`, so the Next.js marketing overlay is not built —
+no flow spec loads `/pricing` or `/blog` (they assert `href`s to bldrs.ai). `yarn build` / Netlify
+still chain marketing.
 
 **SPA routing**: The static file server (`http-server docs`) has no SPA fallback. Missing paths return
 a 404 which serves `docs/404.html`, which redirects to `/?/the/path`. `docs/index.html` then uses
@@ -170,24 +173,33 @@ production code produces — not a "nicer" variant. The routes layer strips lead
 accidentally passes tests that would fail with the real `filepath: 'model.ifc'`, masking bugs.
 
 
-## Playwright locally needs `--workers=1`
+## Playwright workers
 
-`tools/playwright.config.js` computes the dev-server port at import time:
+`tools/playwright.config.js` derives the local webServer port from the
+playwright ancestor PID (`tools/get-port-please.js`), so every worker
+points at the same server. Local default is 4 workers.
 
-```js
-const port = isCI ? ciPort : runGetPortPlease(ciPort)
-```
+An older scheme probed for a free port on every worker import, which
+handed workers 2–N a different port than the server — `ERR_CONNECTION_REFUSED`.
+If you still see that, the ancestor lookup failed (the config prints a
+warning) and you can fall back to `--workers=1`.
 
-Each Playwright worker re-imports the config, so each calls
-`runGetPortPlease` independently and lands on a different random port.
-The webServer started on the FIRST port; workers 2-N point at non-listening
-ports → `net::ERR_CONNECTION_REFUSED`. Tests look "broken" when they're not.
+**CI:** Share is public, so `ubuntu-24.04` is 4 vCPU / 16 GB and free.
+Each shard still runs `--workers=2` (the density that stayed green on
+the old 8 GB larger runner; packing 4 SwiftShader Chromiums onto 4
+cores contends). The suite is split `--shard=1/4` … `4/4` so eight
+Chromiums run across four free machines. One `playwright-build` job
+produces `docs/` as `yarn test-flows-build` left it; shards set
+`PLAYWRIGHT_SERVE_ONLY=true`, install `@playwright/test@1.56.1` plus
+`http-server`, and run `npx http-server` inside `docs/` (no Share
+`yarn install`). The required
+check is still `playwright-run` (an aggregator over the shards). The paid
+`ubuntu-24.04-4vcpu-8gb-150gbssd` larger runner is not used here —
+larger runners are billed even on public repos.
 
-- **Local:** `yarn test-flows --workers=1 [spec]`.
-- **CI:** works fine with parallelism — `isCI` short-circuits to fixed
-  port `9081`, all workers point there.
-
-Pre-existing quirk; flag as a separate cleanup if it bothers you.
+**Load measurement** (`loadTiming.spec.ts`) still wants `--workers=1` so
+the numbers aren't contended — that's isolation, not the port bug. See
+[design/new/browser-load-measurement.md](design/new/browser-load-measurement.md).
 
 
 ## Netlify's Lighthouse Best Practices score is flaky — check, don't assume

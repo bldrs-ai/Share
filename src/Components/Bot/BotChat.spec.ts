@@ -15,11 +15,11 @@ describe('BotChat', () => {
   })
 
   test('feature flag toggles BotChat visibility', async ({page}) => {
-    await returningUserVisitsHomepageWaitForModel(page)
+    await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
     await expect(page.getByTestId('control-button-ai-assistant')).toHaveCount(0)
 
     await page.goto('/share/v/p/index.ifc?feature=bot', {waitUntil: 'domcontentloaded'})
-    await waitForModel(page)
+    await waitForModel(page, {pauseRenderer: true})
 
     await expect(page.getByTestId('control-button-ai-assistant')).toBeVisible()
     await expect(page.getByTestId('BotChat')).not.toBeVisible()
@@ -29,7 +29,7 @@ describe('BotChat', () => {
   test.skip('sends a message and captures the assistant response', async ({page}) => {
     await setIsReturningUser(page.context())
     await page.goto('/share/v/p/index.ifc?feature=bot', {waitUntil: 'domcontentloaded'})
-    await waitForModel(page)
+    await waitForModel(page, {pauseRenderer: true})
 
     // Open assistant
     await page.getByTestId('control-button-ai-assistant').click()
@@ -46,7 +46,7 @@ describe('BotChat', () => {
   test('settings panel is avaialble and API key can be saved', async ({page}) => {
     await setIsReturningUser(page.context())
     await page.goto('/share/v/p/index.ifc?feature=bot', {waitUntil: 'domcontentloaded'})
-    await waitForModel(page)
+    await waitForModel(page, {pauseRenderer: true})
 
     // Open assistant
     await page.getByTestId('control-button-ai-assistant').click()

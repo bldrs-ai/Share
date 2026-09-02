@@ -32,11 +32,11 @@ on:
       - 'notes/**'
   workflow_dispatch:
 
-# The draft gate defers this workflow's cost; this bounds it. These are the two
-# longest jobs in the repo (35m and 25m ceilings, ~12m for a healthy
-# playwright-run), so without cancellation three quick pushes to one ready PR
-# leave six of them running against a 4-job cap -- the exact starvation the
-# draft gate exists to prevent, just relocated from drafts to rework pushes.
+# The draft gate defers this workflow's cost; this bounds it. Flows run on
+# free standard runners (public repo: 4 vCPU / 16 GB), not the paid 8 GB
+# larger-runner pool, so they no longer compete for that 4-job cap. Cancel
+# still matters: three quick pushes to one ready PR would otherwise leave
+# a pile of 11-minute shard sets running for commits nobody will merge.
 #
 # Grouped per ref, so PRs never cancel each other (refs/pull/<n>/merge is
 # unique per PR). Cancel-always, matching main.yml: superseded runs die rather
@@ -55,14 +55,77 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  playwright-run:
-    # Draft PRs don't run flows. This is the most expensive thing CI does per
-    # PR (~12m on a large runner, two jobs' worth), and with several PRs in
-    # flight the draft pushes alone can saturate the 4-job concurrency cap and
-    # starve the PRs that are actually ready. Netlify deploy previews are NOT
+  # Conway-engine flows, sharded across free standard runners.
+  #
+  # Share is public, so `ubuntu-24.04` is 4 vCPU / 16 GB / free-unlimited
+  # (docs: standard GitHub-hosted runners for public repositories). The
+  # paid `ubuntu-24.04-4vcpu-8gb-150gbssd` larger runner was 8 GB, and RAM
+  # — not vCPU — was the ceiling: 6 workers => 53 failed, 3 => 4 failed,
+  # 2 => green (starvation reads as click / `#viewer-container` timeouts).
+  # Larger runners are billed even on public repos; standard ones are not.
+  #
+  # Keep 2 workers per box (the density that stayed green on 8 GB, now
+  # with 2× the RAM). Packing 4 workers onto 4 vCPU would put four
+  # SwiftShader Chromiums on four cores; more shards at 2 workers use
+  # more machines instead, which is the cheaper way to cut wall clock
+  # because these specs are not timing-sensitive. Four shards × 2
+  # workers = 8 Chromiums.
+  #
+  # The SPA is built once (`playwright-build`) and downloaded by each
+  # shard as `yarn test-flows-build` left it (no map-stripping, no
+  # rewrite). Shards skip `yarn install` of the Share tree: they npm
+  # install `@playwright/test@1.56.1` plus `http-server` (browsers
+  # already in the image) and run `npx http-server` inside `docs/`.
+  # Specs import the runner plus
+  # dep-free constant modules (Notes/component.js, Search/component.ts,
+  # utils/constants.js).
+  #
+  # Screenshots stay on the Playwright noble container (chromium 1194),
+  # not the host image. 14 GB disk vs the old 150 GB is the thing to
+  # watch if a shard dies in yarn install; browsers come with the image.
+  #
+  # Branch protection requires the check name `playwright-run`. Matrix
+  # jobs would rename it to `playwright-run (1)` / `(2)` and the required
+  # check would never report, so the shards live here and a tiny
+  # aggregator below keeps that name.
+  playwright-build:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SKIP_MARKETING: 'true'
+      SHARE_CONFIG: playwright
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'yarn'
+          cache-dependency-path: 'yarn.lock'
+
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Build Playwright SPA
+        run: yarn test-flows-build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playwright-docs
+          path: docs
+          retention-days: 1
+          if-no-files-found: error
+
+  playwright-shard:
+    # Draft PRs don't run flows. This is still the longest thing CI does
+    # per PR; the draft gate keeps rework pushes from stacking shard sets
+    # for commits that will be rewritten. Netlify deploy previews are NOT
     # affected — they come from Netlify's own GitHub integration, not from
-    # Actions — so a draft still gets a preview URL to click through by hand.
-    # See AGENTS.md "PR lifecycle".
+    # Actions — so a draft still gets a preview URL to click through by
+    # hand. See AGENTS.md "PR lifecycle".
     #
     # A job-level `if` (rather than a workflow-level trigger filter) is what
     # keeps this compatible with required status checks: a skipped-by-if job
@@ -76,60 +139,64 @@ jobs:
     # coercion would make CI on main hinge on a documented-but-obscure corner
     # of the expression language. The clause states the intent instead.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04-4vcpu-8gb-150gbssd
+    needs: playwright-build
+    runs-on: ubuntu-24.04
     # Image must match @playwright/test in package.json (Playwright caches
     # by version + matches browser APIs). The -noble (Ubuntu 24.04) variant
     # is chosen so screenshot baselines regenerated in the dev/sandbox env
     # (also noble + chromium 1194) match CI's renders pixel-for-pixel.
     container: mcr.microsoft.com/playwright:v1.56.1-noble
-    # Headroom, not a fitted bound: a clean run at the worker count below
-    # measured 11.7m on this runner. The margin is for the degraded case --
-    # a starved run burns far longer than a healthy one because each failure
-    # drags a 30s timeout plus a retry behind it (the 3-worker run with 4
-    # failures took 12.8m, and main's 53-failure run took 14.4m).
-    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    name: playwright-shard ${{ matrix.shard }}/4
+    # Headroom on a quarter of the suite plus a tiny Playwright npm
+    # install. The margin is for the degraded case — a failure drags a
+    # 30 s timeout plus a retry.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: 'yarn'
-          cache-dependency-path: 'yarn.lock'
-
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-            
-      # Use exact lock file to ensure reproducible install and cached node_modules
-      # since we're hashing on yarn.lock anyways
-      - run: yarn install --frozen-lockfile --prefer-offline
 
-      # Useful diagnostic
+      - uses: actions/download-artifact@v4
+        with:
+          name: playwright-docs
+          path: docs
+
+      - name: Check docs artifact
+        run: test -f docs/index.html
+
+      # Specs import @playwright/test and a handful of dep-free constant
+      # modules (Notes/component.js, Search/component.ts, …). The image
+      # already has browsers for 1.56.1; this is just the test runner.
+      # Install into a throwaway prefix — `npm install` at the repo root
+      # still reads package.json and dies on ts-jest/babel-jest peers.
+      # PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD is set on the image.
+      - name: Install Playwright test runner
+        run: |
+          mkdir -p .pw-runner
+          echo '{"private":true}' > .pw-runner/package.json
+          npm install --prefix .pw-runner @playwright/test@1.56.1 http-server
+          ln -s .pw-runner/node_modules node_modules
+
       - name: Playwright Info
         run: npx playwright --version
 
-      # Worker count is tied to `runs-on` above, and overrides the local
-      # default in tools/playwright.config.js. Update it whenever the runner
-      # changes size.
-      #
-      # RAM is the binding constraint here, not vCPU: this runner has 8GB
-      # against the previous runner's 32GB, and every worker holds a whole
-      # Chromium rendering a WebGL scene with the conway wasm heap resident.
-      # Starvation shows up as click/visibility timeouts and as
-      # `#viewer-container` never mounting at all — not as honest assertion
-      # failures — so it reads like flake. Measured on this runner:
-      # 6 workers => 53 failed / 81 passed (the state main landed in at
-      # 6df8de7), 3 workers => 4 failed / 134 passed, 2 workers => green in
-      # 11.7m. 2 also matches Playwright's own default heuristic of vCPU/2.
+      # 2 workers on 4 vCPU matches Playwright's vCPU/2 heuristic and the
+      # density that stayed green when RAM was the limit. Do not bump this
+      # without re-measuring: four SwiftShader heaps on four cores contend.
       - name: Run Playwright tests
-        run: yarn test-flows --reporter=github,list,html --workers=2
+        run: npx playwright test --config=tools/playwright.config.js --reporter=github,list,html --workers=2 --shard=${{ matrix.shard }}/4
 
       # Always upload the HTML report (handy to debug failures)
       - name: Upload Playwright HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: playwright-report
           retention-days: 7
           if-no-files-found: warn
@@ -139,7 +206,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-traces
+          name: playwright-traces-${{ matrix.shard }}
           path: test-results
           retention-days: 7
           if-no-files-found: warn
@@ -150,10 +217,28 @@ jobs:
       GITHUB_BASE_URL: https://git.bldrs.dev.pw/p/gh
       GITHUB_BASE_URL_UNAUTHENTICATED: https://api.github.com.pw
       MSW_IS_ENABLED: true
+      PLAYWRIGHT_SERVE_ONLY: 'true'
+
+  # Required check name. Must stay `playwright-run` — branch protection
+  # matches on it. Tiny, not a large runner: it only AND-reduces the shards.
+  playwright-run:
+    name: playwright-run
+    needs: playwright-shard
+    # always() so a failed shard still produces this check (red, not missing).
+    # The draft clause matches the shards, so a draft skips this too and the
+    # required check is the skipped-by-if conclusion, not a hang.
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: All shards passed
+        run: |
+          echo "playwright-shard result: ${{ needs.playwright-shard.result }}"
+          test "${{ needs.playwright-shard.result }}" = "success"
 
   # web-ifc ENGINE smoke: builds with USE_WEBIFC_SHIM=false (real web-ifc,
   # not the Conway shim) and serves it cross-origin isolated, then loads
-  # index.ifc in the browser. Separate job from playwright-run because it
+  # index.ifc in the browser. Separate job from the Conway shards because it
   # needs a different build + an isolated static server. web-ifc is pinned
   # to its single-threaded engine (0.0.35's MT build is unshippable as
   # packaged — see webIfcSingleThreadPlugin in tools/esbuild/plugins.js);
@@ -161,11 +246,11 @@ jobs:
   # console so any isolated-runtime failure is legible without a local
   # browser (see design/new/viewer-replacement.md §5f).
   playwright-webifc-run:
-    # Draft-gated for the same reason as playwright-run above.
+    # Draft-gated for the same reason as playwright-shard above.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04-4vcpu-8gb-150gbssd
+    runs-on: ubuntu-24.04
     container: mcr.microsoft.com/playwright:v1.56.1-noble
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
