@@ -21,6 +21,7 @@ import createUIEnabledSlice from './UIEnabledSlice'
 import createUISlice from './UISlice'
 import createVersionsSlice from './VersionsSlice'
 import createWorkspaceSlice from './WorkspaceSlice'
+import createViewCubeSlice from './ViewCubeSlice'
 
 
 const useStore = create((set, get) => ({
@@ -46,6 +47,7 @@ const useStore = create((set, get) => ({
   ...createUISlice(set, get),
   ...createVersionsSlice(set, get),
   ...createWorkspaceSlice(set, get),
+  ...createViewCubeSlice(set, get),
 }))
 
 // Expose the store on `window` for console-based debugging of user-
