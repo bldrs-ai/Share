@@ -242,37 +242,46 @@ describe('exportHistory', () => {
       expect(getFileHandle).not.toHaveBeenCalled()
     })
 
-    it('keeps a local row the claim is too old to know about', async () => {
-      // The claim is a snapshot of a JWT and can lag the mirror: the row the
-      // user just exported is in OPFS before any refreshed token carries it.
-      // Server-wins must not mean older-wins, or reopening the Export tab
-      // drops the export that was made from it (#1834).
-      const justExported = {
-        id: 'local-3', key: KEY, title: 'index.ifc', format: 'glb', bytes: 4096,
-        exportedAt: '2026-02-01T00:00:00.000Z',
+    it('keeps a pending row the server never took, however the clocks compare', async () => {
+      // The row a `record-export` failed on (offline, 5xx). It is stamped by
+      // the BROWSER and the claim's rows by the server, so on a machine whose
+      // clock trails the server this row reads as older than everything in
+      // the claim — and the wall-clock rule that shipped in #1834 dropped it
+      // on the next open, defeating the offline fallback it exists to be
+      // (#1840). Its state, not its stamp, is what keeps it.
+      const pending = {
+        id: 'local-pending', key: KEY, title: 'index.ifc', format: 'glb', bytes: 4096,
+        exportedAt: '2020-01-01T00:00:00.000Z',
+        recorded: false,
         cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER, options: {},
       }
-      await saveExports(SUB, [justExported, serverRow, otherServerRow])
+      await saveExports(SUB, [pending, serverRow, otherServerRow])
 
       const {exports} = await hydrateExports(SUB, [serverRow, otherServerRow])
 
-      expect(exports.map((e) => e.id)).toEqual(['local-3', 'server-1', 'server-2'])
-      // …and it keeps what makes it re-downloadable.
-      expect(exports[0]).toMatchObject({cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER})
+      expect(exports.map((e) => e.id)).toEqual(['local-pending', 'server-1', 'server-2'])
+      // …and it keeps what makes it re-downloadable, and its pending state,
+      // since the next merge has to reach the same conclusion.
+      expect(exports[0]).toMatchObject({
+        recorded: false, cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER,
+      })
       expect(JSON.parse(storedFor(SUB)).exports).toHaveLength(3)
     })
 
-    it('still drops a local row the server saw and did not keep', async () => {
-      // The other direction: an id-bearing row OLDER than the claim's newest
-      // entry is one the server had a chance to persist and didn't (a failed
-      // write, or pruned past the cap). Resurrecting it every time the tab
-      // opens is the bug this fix must not introduce.
-      const refused = {
-        id: 'local-refused', key: KEY, title: 'index.ifc', format: 'glb', bytes: 4096,
+    it('still drops a recorded row the server saw and did not keep', async () => {
+      // The other direction: a row the server acknowledged (so the mirror
+      // holds the server's own copy, with no `recorded` flag on it) and that
+      // the claim no longer lists is one the cap pruned. Resurrecting it
+      // every time the tab opens is the bug this fix must not introduce —
+      // and it stays dropped whether its stamp reads older or newer than the
+      // claim's, which is the whole point of #1840.
+      const pruned = {
+        id: 'local-pruned', key: KEY, title: 'index.ifc', format: 'glb', bytes: 4096,
         exportedAt: '2025-06-01T00:00:00.000Z',
         cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER, options: {},
       }
-      await saveExports(SUB, [serverRow, refused, otherServerRow])
+      const prunedButNewer = {...pruned, id: 'local-pruned-newer', exportedAt: '2026-06-01T00:00:00.000Z'}
+      await saveExports(SUB, [prunedButNewer, serverRow, pruned, otherServerRow])
 
       const {exports} = await hydrateExports(SUB, [serverRow, otherServerRow])
 
@@ -494,6 +503,57 @@ describe('exportHistory', () => {
       expect(stored[1]).toEqual(otherDeviceRow)
       // The JWT carries app_metadata, so other readers need the new one.
       expect(refreshToken).toHaveBeenCalled()
+    })
+
+    it('marks the optimistic row pending, and the server\'s echo clears it', async () => {
+      // The flag hydration reads (#1840). It has to be written by the same
+      // call that knows the outcome, and it has to be GONE on the mirrored
+      // row — a row still marked pending after the server took it would be
+      // re-kept above every later merge for as long as it lives.
+      let sentId
+      global.fetch.mockImplementation((url, init) => {
+        sentId = JSON.parse(init.body).id
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({exports: [
+            {id: sentId, key: KEY, title: 'index.ifc', format: 'glb', bytes: 2048,
+              exportedAt: '2026-01-01T00:00:00.000Z'},
+          ]}),
+        })
+      })
+      const seen = []
+      const unsubscribe = subscribeToExports(SUB, ({exports}) => seen.push(exports[0]))
+
+      await recordExport(anEntry(), SUB, jest.fn().mockResolvedValue('token'))
+      unsubscribe()
+
+      expect(seen[0].recorded).toBe(false)
+      expect((await loadExports(SUB)).exports[0].recorded).toBeUndefined()
+    })
+
+    it('carries an earlier pending row through the next successful record', async () => {
+      // The mirror replaces the local list with the server's, so without the
+      // pending pass the first export that DOES reach the server silently
+      // takes the offline one with it — the same loss #1840 reports at
+      // hydration, one layer down.
+      global.fetch.mockRejectedValueOnce(new Error('offline'))
+      const {exports: afterFailure} = await recordExport(
+        anEntry({title: 'offline.ifc'}), SUB, jest.fn().mockResolvedValue('token'))
+      const pendingId = afterFailure[0].id
+
+      global.fetch.mockImplementation((url, init) => Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({exports: [
+          {id: JSON.parse(init.body).id, key: KEY, title: 'index.ifc', format: 'glb',
+            bytes: 2048, exportedAt: '2026-01-01T00:00:00.000Z'},
+        ]}),
+      }))
+      const {exports} = await recordExport(anEntry(), SUB, jest.fn().mockResolvedValue('token'))
+
+      expect(exports.map((e) => e.id)).toContain(pendingId)
+      expect(exports.find((e) => e.id === pendingId)).toMatchObject({recorded: false, title: 'offline.ifc'})
     })
 
     it('keeps the local row and reports the status when the server refuses', async () => {

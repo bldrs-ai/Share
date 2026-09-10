@@ -39,6 +39,12 @@ import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
  * rows wholesale — one-to-one, by the row id this client mints and the
  * server echoes (`withLocalArtifactFields`).
  *
+ * A fourth local-only field, `recorded`, is bookkeeping rather than payload:
+ * `false` on the optimistic row until the server hands the row back, absent
+ * on every row that came FROM a server list. It is what a merge uses to tell
+ * "the server never got this" from "the server dropped this" without
+ * comparing a browser clock to a server one (`unrecordedLocalRows`, #1840).
+ *
  * Design: design/new/glb-export-premium.md §4.5.
  */
 
@@ -288,16 +294,20 @@ export function withLocalArtifactFields(serverExports, localExports) {
  *
  * SERVER-WINS IS NOT "OLDER WINS", though, and that is the one case this
  * function has to correct for. The claim is a snapshot of a JWT, so it can be
- * older than the mirror it is merged over — a row recorded seconds ago is in
- * OPFS before the refreshed token carrying it has been decoded, and a token
- * that was never refreshed at all (the record's refresh failed, the user is
- * offline) is older still. Merging that claim as authoritative dropped the
- * just-made export from "My Exports" until the next page load (#1834). So a
- * local row the claim does not have, which is NEWER than every row the claim
- * does have, survives the merge on top. Bounded deliberately: an id-bearing
- * local row older than the claim's newest entry is one the server saw and
- * chose not to keep (a failed write, or pruned past the cap), and resurrecting
- * that is the bug in the other direction.
+ * older than the mirror it is merged over, and a row whose `record-export`
+ * never landed (offline, 5xx) is in that mirror and in no claim at all.
+ * Merging the claim as authoritative dropped those rows (#1834). So the
+ * PENDING rows — `recorded: false`, see `unrecordedLocalRows` — survive the
+ * merge on top. Bounded deliberately: a RECORDED local row the claim lacks is
+ * one the server saw and chose not to keep (pruned past the cap), and
+ * resurrecting that on every open is the bug in the other direction.
+ *
+ * The bound costs one case, knowingly (#1840): a row recorded seconds ago
+ * against a claim whose refresh failed also reads as "pruned" and drops from
+ * the mirror until the next page load reads a fresh token. That is a display
+ * lag on a row the server HAS — `useExport` applies the refreshed claim after
+ * every record precisely so it is rare (#1834) — and it is the price of never
+ * ordering a browser-stamped time against a server-stamped one.
  *
  * @param {?string} sub Auth0 subject of the signed-in user
  * @param {?Array<object>} serverExports `appMetadata.exports`, newest first
@@ -308,48 +318,62 @@ export async function hydrateExports(sub, serverExports) {
   if (!sub || !Array.isArray(serverExports) || serverExports.length === 0) {
     return local
   }
-  const merged = [
-    ...localRowsNewerThanClaim(serverExports, local.exports),
-    ...withLocalArtifactFields(serverExports, local.exports),
-  ].slice(0, EXPORTS_CAP)
+  const merged = withPendingLocalRows(serverExports, local.exports)
   await saveExports(sub, merged)
   return {exports: merged}
 }
 
 
 /**
- * The local rows a claim is simply too old to know about: they carry a
- * client-minted id the claim has no row for, and they were recorded after
- * every row the claim does carry. Newest first, as the mirror stores them.
+ * The server's rows, authoritative, with this browser's pending rows kept on
+ * top and its browser-only fields re-attached. The one merge both the record
+ * response and the claim hydration apply, so "what happens to a row the
+ * server list doesn't have" has a single answer.
  *
- * Id-bearing only, so this can never double-count: `withLocalArtifactFields`
- * pairs a local row by id, falling back to key + format for LEGACY rows
- * alone, so a row with an id the server list lacks is a row that merge did
- * not consume.
- *
- * @param {Array<object>} serverExports newest first, from the claim
+ * @param {Array<object>} serverExports newest first, from the server
  * @param {Array<object>} localExports newest first, from OPFS
- * @return {Array<object>} the local rows to keep above the merged list
+ * @return {Array<object>} the merged list, newest first, capped
  */
-function localRowsNewerThanClaim(serverExports, localExports) {
-  const serverIds = new Set(serverExports.map((entry) => entry.id).filter(Boolean))
-  const newestServerAt = Math.max(...serverExports.map((entry) => timeOf(entry)))
-  return localExports.filter((entry) =>
-    entry.id && !serverIds.has(entry.id) && timeOf(entry) > newestServerAt)
+function withPendingLocalRows(serverExports, localExports) {
+  return [
+    ...unrecordedLocalRows(serverExports, localExports),
+    ...withLocalArtifactFields(serverExports, localExports),
+  ].slice(0, EXPORTS_CAP)
 }
 
 
 /**
- * `exportedAt` as a comparable number. An unparseable or missing stamp reads
- * as 0 — the oldest possible row — so a malformed local row is never mistaken
- * for one newer than the claim.
+ * The local rows the server has never acknowledged: `recorded: false` (set by
+ * `recordExport` and cleared only by the server echoing the row back) and
+ * absent from the list being merged in. Newest first, as the mirror stores
+ * them.
  *
- * @param {object} entry an export row
- * @return {number} epoch millis, or 0
+ * STATE, NOT WALL CLOCK. Through #1834 this asked whether the row was
+ * timestamped after every row of the claim — but a local row's `exportedAt`
+ * is stamped by the browser and the claim's by the server, so on a machine
+ * whose clock trails the server a pending row read as older than the claim
+ * and was dropped on the next open, which is exactly the offline fallback it
+ * exists to provide (#1840). Two clocks order nothing; the row's own state
+ * does.
+ *
+ * A pending row therefore stays pending indefinitely — nothing re-POSTs it —
+ * which is correct as far as the user is concerned (they have the file) and
+ * is why this is bounded to rows the mirror itself minted.
+ *
+ * Id-bearing only, so this can never double-count: `withLocalArtifactFields`
+ * pairs a local row by id, falling back to key + format for LEGACY rows
+ * alone, so a row with an id the server list lacks is a row that merge did
+ * not consume. Legacy rows predate `recorded` and read as acknowledged, which
+ * is what they are — they came back from a server list.
+ *
+ * @param {Array<object>} serverExports newest first, from the server
+ * @param {Array<object>} localExports newest first, from OPFS
+ * @return {Array<object>} the local rows to keep above the merged list
  */
-function timeOf(entry) {
-  const parsed = Date.parse(entry?.exportedAt)
-  return Number.isNaN(parsed) ? 0 : parsed
+function unrecordedLocalRows(serverExports, localExports) {
+  const serverIds = new Set(serverExports.map((entry) => entry.id).filter(Boolean))
+  return localExports.filter((entry) =>
+    entry.id && entry.recorded === false && !serverIds.has(entry.id))
 }
 
 
@@ -394,6 +418,12 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
     format,
     bytes,
     exportedAt: new Date().toISOString(),
+    // Pending until the server echoes this id back. The flag, not the
+    // browser's clock, is what keeps the row through a merge with a server
+    // list that doesn't have it (`unrecordedLocalRows`, #1840). Rows that
+    // come back FROM a server list carry no `recorded` field at all, which
+    // is how "acknowledged" reads — see the response merge below.
+    recorded: false,
     cacheKeyArgs: cacheKeyArgs || null,
     schemaVer: schemaVer || null,
     options: options || null,
@@ -443,7 +473,12 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
     return {recorded: false, status: response.status, exports: optimistic}
   }
 
-  const mirrored = withLocalArtifactFields(data.exports, optimistic)
+  // The same merge the claim hydration runs: the server's rows win and pick
+  // up this browser's fields (so THIS row loses its `recorded: false` by
+  // being replaced with the server's copy of itself), while any earlier row
+  // the server still hasn't acknowledged rides along instead of being wiped
+  // by the first export that does succeed.
+  const mirrored = withPendingLocalRows(data.exports, optimistic)
   await saveExports(sub, mirrored)
   if (refreshToken) {
     try {

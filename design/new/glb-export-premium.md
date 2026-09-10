@@ -392,11 +392,21 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   merge is the one `recordExport` applies to a record response (server list
   wins, browser-only fields re-attached by row id), and an absent or
   empty claim list is a no-op rather than a wipe. Server-wins is not
-  older-wins, though: a claim is a JWT snapshot and can lag the mirror, so a
-  local row carrying an id the claim lacks AND newer than every row it does
-  carry survives the merge on top. Bounded there deliberately — an id-bearing
-  local row older than the claim's newest entry is one the server saw and did
-  not keep, and resurrecting it on every open is the opposite bug. Hydrated rows the server
+  older-wins, though: a claim is a JWT snapshot and can lag the mirror, and a
+  row whose `record-export` never landed is in no claim at all. What survives
+  the merge on top is decided by STATE, not by wall clock (#1840): the
+  optimistic row carries `recorded: false` until the server hands it back
+  (rows that come from a server list carry no such field), and every
+  unrecorded row is kept however its stamp compares. Comparing the two — the
+  local stamp is the browser's, the claim's the server's — dropped exactly the
+  offline rows the fallback exists for on any machine whose clock trails.
+  Bounded as before: a RECORDED local row the claim lacks is one the server
+  pruned, and resurrecting it on every open is the opposite bug. That bound
+  costs the case where a successful record's JWT refresh also failed — the row
+  reads as pruned and waits for the next page load — which is why `useExport`
+  applies the refreshed claim. Nothing re-POSTs a pending row; it stays
+  pending, and the same merge runs on the record response so a later
+  successful export doesn't wipe it. Hydrated rows the server
   alone knows about offer regeneration, as before.
 - **Analytics:** `gtagEvent('export_model', {format, bytes_bucket,
   source_kind})` on success — `source_kind` is the loader's categorical kind
