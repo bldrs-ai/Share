@@ -354,9 +354,13 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   adapter folds in, so the LOCAL row additionally carries `cacheKeyArgs` +
   `schemaVer` — never sent to the server, re-attached BY ROW ID when the
   server's list is mirrored over the local one (key + format survives only
-  as the one-to-one fallback for legacy rows that predate the client id;
-  matching on it alone gave every export of one model the newest row's cache
-  key and options). "Download again" therefore
+  as the one-to-one fallback for legacy rows that predate the client id —
+  an id-bearing local row the server lacks is one it never accepted, and
+  is never paired with a later export of the same model; matching on key
+  alone gave every export of one model the newest row's cache key and
+  options). The shared in-flight flag is held until the record settles, not
+  just until the download fires, since it exists to serialise the mirror's
+  read-modify-write. "Download again" therefore
   needs both halves: those fields AND the artifact still on disk. A row
   synced from another device has neither and always offers regeneration.
   `useExport().run(format, options, source)` gained the third argument so

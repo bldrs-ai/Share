@@ -239,13 +239,20 @@ export function withLocalArtifactFields(serverExports, localExports) {
   })
 
   // A second pass, so an id match always wins over a key match for the same
-  // local row whichever order the two server rows arrive in.
+  // local row whichever order the two server rows arrive in. Only LEGACY
+  // local rows — written before the client minted ids — take part here: an
+  // id-bearing local row that found no id match is one the server never
+  // accepted (write failed, or pruned past the cap), and pairing it by key
+  // with some LATER export of the same model would hand that export the
+  // old row's cacheKeyArgs and options — the wrong revision, or metadata
+  // the newer file never carried (#1837 round 3).
   serverExports.forEach((entry, i) => {
     if (matches[i]) {
       return
     }
     const local = candidates.find((candidate) =>
-      !claimed.has(candidate) && candidate.key === entry.key && candidate.format === entry.format)
+      !candidate.id && !claimed.has(candidate) &&
+      candidate.key === entry.key && candidate.format === entry.format)
     if (local) {
       claimed.add(local)
       matches[i] = local

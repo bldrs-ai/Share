@@ -104,12 +104,15 @@ export default function useExport() {
 
       triggerDownload(blob, filename)
       setSnackMessage({text: `Exported ${filename} (${formatBytes(blob.size)})`, autoDismiss: true})
-      // Deliberately NOT awaited: the file is already in the user's
-      // Downloads, so the snackbar must not wait on OPFS, Auth0 and a
-      // Netlify round trip — and a failure in any of them must not turn a
-      // completed export into an error. `recordExport` writes its local row
-      // first and never rejects; see exportHistory.js.
-      recordExport(
+      // Awaited AFTER the snackbar, so the success message never waits on
+      // OPFS, Auth0 and a Netlify round trip — but before the in-flight
+      // flag clears in `finally`, because that flag exists to serialise the
+      // history mirror's read-modify-write: releasing it while this record
+      // was still pending let a second export race it and lose a row
+      // (#1837 round 3). A failure here must not turn a completed export
+      // into an error; `recordExport` writes its local row first and never
+      // rejects (exportHistory.js), and the catch below is belt and braces.
+      await recordExport(
         {
           // The share path, the same key shape record-load counts loads
           // under. The cache-key fields beside it stay in this browser

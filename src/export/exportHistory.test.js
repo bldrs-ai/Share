@@ -211,11 +211,15 @@ describe('exportHistory', () => {
 
     it('keeps the local artifact fields, so a hydrated row can still re-download', async () => {
       await recordExport(anEntry(), SUB)
+      // The server echoes the id the client minted, so the account's history
+      // carries this browser's row under the same id (round-3 fix: key+format
+      // no longer pairs an id-bearing local row, only a legacy id-less one).
+      const [{id: localId}] = (await loadExports(SUB)).exports
 
-      const {exports} = await hydrateExports(SUB, [serverRow])
+      const {exports} = await hydrateExports(SUB, [{...serverRow, id: localId}])
 
       expect(exports[0]).toMatchObject({
-        id: 'server-1',
+        id: localId,
         cacheKeyArgs: CACHE_KEY_ARGS,
         schemaVer: SCHEMA_VER,
         options: {stripBldrsMetadata: true},
@@ -294,8 +298,8 @@ describe('exportHistory', () => {
       // own, so nothing matches by id. Pairing is then positional within the
       // key+format group — newest server row with newest local row — rather
       // than the same local row being reused for both.
-      const newer = aLocalRow('local-newer', {stripBldrsMetadata: true})
-      const older = aLocalRow('local-older', {stripBldrsMetadata: false})
+      const newer = {...aLocalRow('local-newer', {stripBldrsMetadata: true}), id: undefined}
+      const older = {...aLocalRow('local-older', {stripBldrsMetadata: false}), id: undefined}
       const serverRows = [
         {id: 'srv-1', key: KEY, title: null, format: 'glb', bytes: NEWER_BYTES,
           exportedAt: '2026-01-02T00:00:01.000Z'},
@@ -307,6 +311,23 @@ describe('exportHistory', () => {
 
       expect(merged[0].options).toEqual({stripBldrsMetadata: true})
       expect(merged[1].options).toEqual({stripBldrsMetadata: false})
+    })
+
+    it('never pairs an id-bearing local row the server lacks with a later export of the same model', () => {
+      // The local row's server write failed (or the cap pruned it), and the
+      // user then exported the same model again from another browser. The
+      // id pass finds nothing for either side; the key fallback must NOT
+      // step in, or the new export inherits the old row's cacheKeyArgs and
+      // options — a wrong revision, or metadata that file never carried.
+      const orphan = aLocalRow('local-orphan', {stripBldrsMetadata: true})
+      const later = {
+        id: 'srv-later', key: KEY, title: null, format: 'glb', bytes: NEWER_BYTES,
+        exportedAt: '2026-02-01T00:00:00.000Z',
+      }
+
+      const merged = withLocalArtifactFields([later], [orphan])
+
+      expect(merged[0]).toEqual(later)
     })
 
     it('invents no artifact fields for a server row this browser never wrote', () => {
@@ -406,20 +427,28 @@ describe('exportHistory', () => {
         id: 'elsewhere', key: '/share/v/p/other.ifc', title: null, format: 'glb',
         bytes: 1, exportedAt: '2025-01-01T00:00:00.000Z',
       }
-      global.fetch.mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({exports: [serverRow, otherDeviceRow]}),
+      // The real function echoes the client-minted id (record-export.js), and
+      // that echo is what pairs the server row with this browser's artifact
+      // fields — key+format no longer does (round 3).
+      let sentId
+      global.fetch.mockImplementation((url, init) => {
+        sentId = JSON.parse(init.body).id
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({exports: [{...serverRow, id: sentId}, otherDeviceRow]}),
+        })
       })
       const refreshToken = jest.fn().mockResolvedValue('fresh')
 
       const result = await recordExport(anEntry(), SUB, jest.fn().mockResolvedValue('token'), refreshToken)
 
       expect(result.recorded).toBe(true)
+      expect(sentId).toMatch(/^[0-9a-f-]{36}$/)
       const stored = (await loadExports(SUB)).exports
       expect(stored).toHaveLength(2)
       expect(stored[0]).toMatchObject({
-        id: 'server-id',
+        id: sentId,
         cacheKeyArgs: CACHE_KEY_ARGS,
         schemaVer: SCHEMA_VER,
         options: {stripBldrsMetadata: true},

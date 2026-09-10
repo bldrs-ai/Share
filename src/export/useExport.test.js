@@ -184,6 +184,31 @@ describe('useExport', () => {
     expect(useStore.getState().isExportInFlight).toBe(false)
   })
 
+  it('holds the shared flag until the history record settles', async () => {
+    // The flag serialises the mirror's read-modify-write, so it has to
+    // outlive the download: released at download time, a second export
+    // could race the first one's pending record and lose a row.
+    let settleRecord
+    recordExport.mockReturnValue(new Promise((resolve) => {
+      settleRecord = () => resolve({recorded: true, status: 200, exports: []})
+    }))
+    const {result} = renderHook(() => useExport())
+
+    let running
+    await act(() => {
+      running = result.current.run('glb', {})
+    })
+    // Download done (the snackbar fired), record still pending.
+    expect(useStore.getState().snackMessage?.text).toMatch(/^Exported /)
+    expect(useStore.getState().isExportInFlight).toBe(true)
+
+    await act(async () => {
+      settleRecord()
+      await running
+    })
+    expect(useStore.getState().isExportInFlight).toBe(false)
+  })
+
   it('clears the shared flag when the export fails', async () => {
     // Otherwise one failure disables every export control in the tab until
     // the page is reloaded.
