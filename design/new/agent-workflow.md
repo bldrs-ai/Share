@@ -98,6 +98,17 @@ request, dispatch a **sub-agent review** and treat that as the round
 rather than waiting. A late codex finding still counts — fold it in
 when it arrives, even if a sub-agent round has already run.
 
+**Quota.** The same fallback applies when codex is *unavailable*
+rather than slow — the `@codex review` request is answered with a
+quota / rate-limit / usage-cap message, or the automatic review never
+attaches because the allowance is spent. Run the review with our own
+sub-agents for the rest of that round and any further rounds the PR
+needs, under the same hazard-pointing rule below and the same cap.
+Note in the PR thread that the round was agent-reviewed and why, so a
+reader later knows which reviewer signed off. Don't wait for the
+quota to reset; a PR blocked on a reviewer we can replace is just
+blocked.
+
 **A substituting reviewer needs to be pointed at the hazards.** A
 generic "review this diff" comes back clean on exactly the changes
 that most need scrutiny, because the risky part of a good fix is
@@ -112,7 +123,11 @@ the load-bearing claim has not reviewed it.
 findings are still arriving after ~3, or the review turns into a long
 back-and-forth, pause it and escalate to the coordinator — that
 pattern usually means the change needs a design decision, not more
-review turns.
+review turns. The cap is a default, not a ceiling: an exceptional
+finding on round 3 — a security hole, a data-loss path, a claim the
+diff can't actually support — earns the extra round it takes to close,
+and the coordinator says so in the thread rather than letting the
+round count decide.
 
 One caution from experience: codex has reversed itself on an
 identical commit more than once, clean on one pass and not on the
