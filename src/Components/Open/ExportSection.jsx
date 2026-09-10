@@ -54,7 +54,13 @@ export default function ExportSection() {
 
   const isPro = getTier(appMetadata, isAuthenticated) === TIERS.PAID
   // The loader publishes this once the artifact is actually in OPFS — on a
-  // cache miss when the writer finishes, on a cache hit right away.
+  // cache miss when the writer finishes, on a cache hit right away. Formats
+  // that produce no artifact at all — a `.bld` assembly (its children each
+  // have one, the assembly itself does not), a directly-loaded `.glb` — never
+  // publish, so the button stays disabled and reads "Preparing GLB…"
+  // indefinitely there. Telling those two states apart needs the loader to
+  // say whether an artifact is even expected; until it does, disabled is the
+  // correct behaviour and only the label overstates it (#1833).
   const isArtifactReady = Boolean(glbArtifact)
 
   let label = 'Download GLB'

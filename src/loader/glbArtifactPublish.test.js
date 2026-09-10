@@ -1,5 +1,6 @@
 import useStore from '../store/useStore'
 import {
+  NESTED_LOAD_GENERATION,
   beginGlbArtifactLoad,
   currentGlbArtifactGeneration,
   publishGlbArtifact,
@@ -60,6 +61,38 @@ describe('glbArtifactPublish', () => {
 
     expect(publishGlbArtifact(ARTIFACT_A, loadA)).toBe(false)
     expect(useStore.getState().glbArtifact).toBeNull()
+  })
+
+  it('refuses a nested load\'s publish, leaving the outer load\'s artifact alone', () => {
+    // `BLDLoader.parse` loads each object of a .bld assembly through its own
+    // `load()`. Those loads have a cache artifact each; the assembly on
+    // screen has none, and the last child to finish must not become what
+    // "Download GLB" hands out (glbArtifactPublish.js module note).
+    const outer = beginGlbArtifactLoad()
+    publishGlbArtifact(ARTIFACT_A, outer)
+
+    expect(publishGlbArtifact(ARTIFACT_B, NESTED_LOAD_GENERATION)).toBe(false)
+    expect(useStore.getState().glbArtifact).toBe(ARTIFACT_A)
+  })
+
+  it('refuses a nested publish even when no load is current', () => {
+    // The BLD case itself: the outer load published nothing (a .bld is not
+    // an IFC), so an accepted child publish would fill an empty slot rather
+    // than overwrite a full one — the same wrong download, harder to notice.
+    beginGlbArtifactLoad()
+
+    expect(publishGlbArtifact(ARTIFACT_A, NESTED_LOAD_GENERATION)).toBe(false)
+    expect(useStore.getState().glbArtifact).toBeNull()
+  })
+
+  it('never collides with a real generation, however many loads have run', () => {
+    // The sentinel is only safe because it can't be handed out as a
+    // generation; a counter that could reach it would make nested publishes
+    // start landing after N loads.
+    for (let i = 0; i < 5; i++) {
+      expect(beginGlbArtifactLoad()).not.toBe(NESTED_LOAD_GENERATION)
+    }
+    expect(currentGlbArtifactGeneration()).not.toBe(NESTED_LOAD_GENERATION)
   })
 
   it('hands out a new generation per load', () => {

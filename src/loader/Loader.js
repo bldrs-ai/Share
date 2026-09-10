@@ -43,7 +43,7 @@ import {BldrsFaceIdsReader} from './bldrsFaceIds'
 import {BldrsSpatialTreeReader} from './bldrsSpatialTree'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {glbChunksHaveRenderableGeometry} from './glbArtifactHealth'
-import {beginGlbArtifactLoad, publishGlbArtifact} from './glbArtifactPublish'
+import {NESTED_LOAD_GENERATION, beginGlbArtifactLoad, publishGlbArtifact} from './glbArtifactPublish'
 import {glbCacheKey} from './glbCacheKey'
 import {activeArtifactSpec, isGlbBatchedActive} from './glbCompress'
 import {isBldrsGlbContainer, unpackGlbContainer, viewGlbContainerChunks} from './glbContainer'
@@ -197,6 +197,12 @@ function probeLfsBytes(data) {
  * @param {boolean} isOpfsAvailable
  * @param {Function} setOpfsFile
  * @param {string} accessToken
+ * @param {object} [options]
+ * @param {boolean} [options.isNestedLoad] True for the recursive `load()`
+ *   `BLDLoader.parse` runs per referenced object of a `.bld` assembly. Such a
+ *   load renders INTO another load's model, so it owns no page-level state:
+ *   it takes no artifact generation and publishes no artifact
+ *   (glbArtifactPublish.js).
  * @return {object} The model or undefined
  */
 export async function load(
@@ -206,6 +212,7 @@ export async function load(
   isOpfsAvailable,
   setOpfsFile,
   accessToken = '',
+  {isNestedLoad = false} = {},
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
   // HACK: pathArg can be a URL or a string
@@ -219,7 +226,15 @@ export async function load(
   // from; the writer or the cache reader sets it again for THIS load, under
   // the generation taken here — the previous load's writer may still be
   // running and must not republish over us (glbArtifactPublish.js).
-  const artifactGeneration = beginGlbArtifactLoad()
+  //
+  // A nested load does neither: it must not clear the slot its PARENT load
+  // owns, and its own artifact (one object of a .bld assembly) is not the
+  // model the Export section offers. The sentinel generation it publishes
+  // under is never accepted, so both halves of the cache stay warm for the
+  // child while the page-level slot is left to the outer load.
+  const artifactGeneration = isNestedLoad ?
+    NESTED_LOAD_GENERATION :
+    beginGlbArtifactLoad()
 
   // TODO(pablo): we should pass in the routeResult instead of the path
   // Test for uploaded first

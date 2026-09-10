@@ -23,10 +23,28 @@ import {glbInfo} from './glbLog'
  * So each `load()` takes a generation at its start and both producers publish
  * only under theirs. Monotonic counter rather than the source key: two loads
  * of the SAME model are still distinct loads, and a counter can't collide.
+ *
+ * NESTED loads are the third case, and they are not a race: `BLDLoader.parse`
+ * calls `load()` once per object a `.bld` assembly references, so a two-object
+ * scene runs three loads whose artifacts are not interchangeable — only the
+ * outer one is "the model on screen", and it has no artifact of its own (a
+ * .bld is not an IFC). A child that took its own generation would clear the
+ * slot mid-load and then publish ITS file, so Download GLB on the assembly
+ * handed the user whichever object happened to load last. Children therefore
+ * run under `NESTED_LOAD_GENERATION`, which no publish is ever accepted for.
  */
 
 
 let generation = 0
+
+
+/**
+ * The generation a nested load (a `.bld` child; see the module note) passes
+ * to its producers. Never equal to a live generation — those start at 1 and
+ * only ever increase — and rejected explicitly below, so a child's writer or
+ * cache reader can't publish over the page-level slot.
+ */
+export const NESTED_LOAD_GENERATION = -1
 
 
 /**
@@ -56,12 +74,16 @@ export function currentGlbArtifactGeneration() {
 /**
  * Publish an artifact descriptor, unless a newer load has since begun.
  *
- * @param {object} artifact `{cacheKeyArgs, schemaVer, writtenAt}`
+ * @param {object} artifact `{cacheKeyArgs, schemaVer, writtenAt, kindLabel}`
  * @param {number} forGeneration The value `beginGlbArtifactLoad` returned to
  *   the load that produced this artifact
  * @return {boolean} whether the slot was set
  */
 export function publishGlbArtifact(artifact, forGeneration) {
+  if (forGeneration === NESTED_LOAD_GENERATION) {
+    glbInfo('artifact: not publishing (nested load has no page-level artifact)')
+    return false
+  }
   if (forGeneration !== generation) {
     glbInfo(
       `artifact: not publishing (load generation ${forGeneration} superseded by ${generation})`)
