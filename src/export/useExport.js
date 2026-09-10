@@ -1,6 +1,7 @@
 import {useCallback, useState} from 'react'
 import {captureException} from '@sentry/react'
 import {useAuth0} from '../Auth0/Auth0Proxy'
+import {appMetadataFromToken} from '../Auth0/appMetadata'
 import {glbCacheKey} from '../loader/glbCacheKey'
 import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
@@ -55,6 +56,7 @@ const SIZE_DECIMALS = 1
  */
 export default function useExport() {
   const glbArtifact = useStore((state) => state.glbArtifact)
+  const setAppMetadata = useStore((state) => state.setAppMetadata)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const {getAccessTokenSilently, user} = useAuth0()
   // In the STORE, not in this hook: `ExportSection` and `ExportsList` each
@@ -63,6 +65,27 @@ export default function useExport() {
   const isExporting = useStore((state) => state.isExportInFlight)
   const setIsExporting = useStore((state) => state.setIsExportInFlight)
   const [error, setError] = useState(null)
+
+  // Force-refresh the JWT and APPLY what comes back. `useQuota` fires the
+  // same refresh after a server-side quota decision and throws the token
+  // away, which is enough there because the badge it feeds is already
+  // authoritative. Here it is not: `record-export` has just appended a row
+  // to Auth0 `app_metadata.exports`, and the refresh only updates Auth0's
+  // token cache — `store.appMetadata` keeps the PRE-export claim until the
+  // page reloads. Reopening the Export tab then hydrates the mirror from
+  // that stale list and the export the user just made disappears from
+  // "My Exports" (#1834). Decoded through the same claim `BaseRoutes` reads
+  // (Auth0/appMetadata.js); a token that carries no claim leaves the store
+  // alone rather than clearing it.
+  const refreshAppMetadata = useCallback(async () => {
+    const token = await getAccessTokenSilently(
+      {...TOKEN_PARAMS, cacheMode: 'off', useRefreshTokens: true})
+    const appData = appMetadataFromToken(token)
+    if (appData) {
+      setAppMetadata(appData)
+    }
+    return token
+  }, [getAccessTokenSilently, setAppMetadata])
 
   const run = useCallback(async (formatId, options = {}, source = null) => {
     const format = getExportFormat(formatId)
@@ -133,7 +156,7 @@ export default function useExport() {
         },
         user?.sub,
         () => getAccessTokenSilently(TOKEN_PARAMS),
-        () => getAccessTokenSilently({...TOKEN_PARAMS, cacheMode: 'off', useRefreshTokens: true}),
+        refreshAppMetadata,
       ).then((recordResult) => {
         if (recordResult.status === HTTP_AUTHORIZATION_REQUIRED || recordResult.status === HTTP_FORBIDDEN) {
           // `pro-module` already said yes to this user moments ago, so a
@@ -144,19 +167,25 @@ export default function useExport() {
       gtagEvent('export_model', {
         format: format.id,
         bytes_bucket: bytesBucket(stats?.outputBytes ?? blob.size),
-        source_kind: cacheKeyArgs.ns1,
+        // The loader's categorical kind, carried on the artifact slot. NOT
+        // `cacheKeyArgs.ns1`, which reads like the same thing and is a repo
+        // OWNER for GitHub models — a login, in a GA dimension — and the
+        // constant 'BldrsLocalStorage' for every other adapter, so it leaked
+        // and told us nothing at once (#1834). A "Download again" row carries
+        // no kind (the history row predates this field, and the server row
+        // never had it), which is what 'unknown' means here.
+        source_kind: artifact.kindLabel || 'unknown',
       })
       return {filename, stats}
     } catch (e) {
       setError(e)
       if (e instanceof ProModuleDeniedError) {
         // The server is the authority and it said no, so the badge that let
-        // this click through is stale. Force-refresh the JWT the way
-        // useQuota does after a server-side quota decision, so every
-        // app_metadata reader (BaseRoutes, the Profile menu) catches up.
+        // this click through is stale. Refresh the JWT and apply its claims,
+        // so every app_metadata reader (the tier check above, the Profile
+        // menu) agrees with the server on the next render.
         setSnackMessage({text: 'Export requires a Pro subscription', autoDismiss: true})
-        getAccessTokenSilently({...TOKEN_PARAMS, cacheMode: 'off', useRefreshTokens: true})
-          .catch((refreshError) => captureException(refreshError))
+        refreshAppMetadata().catch((refreshError) => captureException(refreshError))
       } else {
         captureException(e)
         setSnackMessage({text: 'Export failed', autoDismiss: true})
@@ -165,7 +194,7 @@ export default function useExport() {
     } finally {
       setIsExporting(false)
     }
-  }, [glbArtifact, getAccessTokenSilently, setIsExporting, setSnackMessage, user?.sub])
+  }, [glbArtifact, getAccessTokenSilently, refreshAppMetadata, setIsExporting, setSnackMessage, user?.sub])
 
   return {run, isExporting, error}
 }

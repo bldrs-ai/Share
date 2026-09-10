@@ -370,7 +370,7 @@ export async function load(
               `reader: cache lookup github key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
             `${cacheKeyArgs.sourcePath} sha=${cacheKeyArgs.sourceHash}`)
             glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
-            const glbFile = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration)
+            const glbFile = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel)
             if (glbFile) {
               glbInfo(
                 `reader: github cache HIT (${glbFile.size}B); swapping to GLB loader for: ${filePath}`)
@@ -508,7 +508,7 @@ export async function load(
               `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
             `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
             glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
-            const glbFile = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration)
+            const glbFile = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel)
             if (glbFile) {
               glbInfo(
                 `reader: ${kindLabel} cache HIT (${glbFile.size}B); swapping to GLB loader`)
@@ -2089,9 +2089,12 @@ export class NotFoundError extends Error {
  *   ({ns1, ns2, ns3, sourcePath, sourceHash}).
  * @param {number} artifactGeneration The calling load's artifact generation;
  *   an OPFS read can outlive its load, so the publish below is guarded on it.
+ * @param {string} kindLabel Source kind of the model this artifact came from
+ *   ('github' | 'local' | 'upload' | 'external'), carried onto the published
+ *   slot as the analytics dimension — see the publish below.
  * @return {Promise<File|null>}
  */
-async function tryLoadCachedGlb(cacheKeyArgs, artifactGeneration) {
+async function tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel) {
   try {
     // Schema version varies with the active flag state — compression mode
     // AND the batched-native layout flag — so a flag-off reader never picks
@@ -2156,6 +2159,14 @@ async function tryLoadCachedGlb(cacheKeyArgs, artifactGeneration) {
       cacheKeyArgs,
       schemaVer,
       writtenAt: file.lastModified || Date.now(),
+      // The CATEGORICAL source kind, which is what `export_model` reports as
+      // `source_kind`. The cache key's `ns1` beside it looks like the same
+      // thing and is not: for GitHub it is the repo owner (a login, in an
+      // analytics event) and for every other adapter the constant
+      // 'BldrsLocalStorage', so it is leaky and uninformative at once
+      // (#1834). Published from here as well as from the writer, because a
+      // cache-hit load never runs a writer.
+      kindLabel,
     }, artifactGeneration)
     return file
   } catch (e) {

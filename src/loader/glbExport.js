@@ -611,7 +611,9 @@ export async function exportAndCacheGlb({
     // design/new/glb-export-premium.md §1.2. Guarded on the load generation:
     // this writer is fire-and-forget and idle-scheduled, so by now the user
     // may be looking at a different model (glbArtifactPublish.js).
-    publishGlbArtifact({cacheKeyArgs, schemaVer, writtenAt: Date.now()}, artifactGeneration)
+    // `kindLabel` rides along as the export's analytics dimension; see the
+    // note on the reader's publish in Loader.js#tryLoadCachedGlb.
+    publishGlbArtifact({cacheKeyArgs, schemaVer, writtenAt: Date.now(), kindLabel}, artifactGeneration)
     glbInfo(
       `writer: wrote ${packed.byteLength}B (1 chunk${mode ? `, ${mode}-compressed` : ''}) ` +
       `to ${key.owner}/${key.repo}/${key.branch}/${key.originalFilePath} in ${Date.now() - startMs}ms`)

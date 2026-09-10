@@ -76,7 +76,16 @@ model would otherwise let model A's writer republish over model B's cleared
 slot, and "Download GLB" on B hands out A. `src/loader/glbArtifactPublish.js`
 guards it: `load()` takes a monotonic generation at its start, passes it to
 both producers, and `publishGlbArtifact` drops a publish whose generation is
-no longer current.
+no longer current. A NESTED load — the recursive `load()` `BLDLoader.parse`
+runs per object of a `.bld` assembly — takes no generation at all and
+publishes nothing (`isNestedLoad` → `NESTED_LOAD_GENERATION`): its cache still
+warms per object, but the assembly on screen has no artifact of its own, and
+without this each child cleared the slot and then published its own file, so
+Download GLB on a two-object scene handed out whichever object loaded last
+(#1833). A `.bld` therefore ends with `glbArtifact === null` and the Export
+button disabled — its "Preparing GLB…" label overstates a wait that will
+never end, which telling "no artifact yet" from "no artifact ever" would
+fix.
 
 Reading it back is `readModelByPathFromOPFS(key.originalFilePath,
 key.commitHash, key.owner, key.repo, key.branch)` — the reader's own call.
@@ -330,8 +339,12 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   There is no migration off the old root `exports.json` — the feature is
   flag-gated and unreleased, and a signed-in user's rows come back through
   the `app_metadata` hydration below.
-  The JWT is force-refreshed after a successful record so
-  `app_metadata` readers see it. As shipped, the local row is written FIRST
+  The JWT is force-refreshed after a successful record AND the claims it
+  comes back with are applied to `store.appMetadata` (`useExport` decodes it
+  through `Auth0/appMetadata.js`, the same claim `BaseRoutes` reads) — the
+  refresh alone only updates Auth0's token cache, so the store kept the
+  pre-export list and the hydration below then dropped the row that had just
+  been recorded. As shipped, the local row is written FIRST
   and the server's response then replaces the list — the file is already in
   the user's Downloads when `recordExport` runs, so a 401/403/5xx/offline
   keeps the optimistic row and reports `{recorded: false}` rather than
@@ -378,10 +391,18 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   shows an empty list although the account's rows exist server-side. The
   merge is the one `recordExport` applies to a record response (server list
   wins, browser-only fields re-attached by row id), and an absent or
-  empty claim list is a no-op rather than a wipe. Hydrated rows the server
+  empty claim list is a no-op rather than a wipe. Server-wins is not
+  older-wins, though: a claim is a JWT snapshot and can lag the mirror, so a
+  local row carrying an id the claim lacks AND newer than every row it does
+  carry survives the merge on top. Bounded there deliberately — an id-bearing
+  local row older than the claim's newest entry is one the server saw and did
+  not keep, and resurrecting it on every open is the opposite bug. Hydrated rows the server
   alone knows about offer regeneration, as before.
 - **Analytics:** `gtagEvent('export_model', {format, bytes_bucket,
-  source_kind})` on success and `gtagEvent('export_gated', {reason})` on a
+  source_kind})` on success — `source_kind` is the loader's categorical kind
+  (`github` / `local` / `upload` / `external`), carried on the `glbArtifact`
+  slot by both producers, NOT the cache key's `ns1` (the repo owner on
+  GitHub, a constant everywhere else) and `gtagEvent('export_gated', {reason})` on a
   login/upgrade redirect — the funnel signal for the pricing page.
 
 ### 4.6 Hardening summary

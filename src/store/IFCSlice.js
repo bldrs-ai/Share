@@ -61,8 +61,14 @@ export default function createIFCSlice(set, get) {
     setIsCacheWriteInFlight: (inFlight) => set(() => ({isCacheWriteInFlight: inFlight})),
 
     // Where the current model's cached GLB artifact sits in OPFS:
-    // `{cacheKeyArgs, schemaVer, writtenAt}`, or null when this load has
-    // none yet. The ONLY hand-off from the loader to the export UI — the
+    // `{cacheKeyArgs, schemaVer, writtenAt, kindLabel}`, or null when this
+    // load has none yet. `kindLabel` is the loader's categorical source kind
+    // ('github' | 'local' | 'upload' | 'external'), carried here because it
+    // is the only place the export UI can learn it — and the cache key's
+    // `ns1` is NOT a stand-in for it (it is the repo owner on GitHub and a
+    // constant everywhere else).
+    //
+    // The ONLY hand-off from the loader to the export UI — the
     // cache key is computed inside `Loader.js#load` from the source kind and
     // was never published anywhere, so without this slot nothing outside the
     // loader can find the file (`loadedFileInfo` names the SOURCE, not the
@@ -75,7 +81,9 @@ export default function createIFCSlice(set, get) {
     // Cleared at the top of every `load()` so the Export section can never
     // offer the previous model's file — and both producers can outlive their
     // load, so they publish through `loader/glbArtifactPublish.js`, which
-    // drops a write from a load a newer one has superseded.
+    // drops a write from a load a newer one has superseded, and every write
+    // from a NESTED load (a .bld assembly's children, which have no
+    // page-level artifact of their own).
     // See design/new/glb-export-premium.md §1.2.
     glbArtifact: null,
     setGlbArtifact: (artifact) => set(() => ({glbArtifact: artifact})),

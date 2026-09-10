@@ -333,6 +333,11 @@ describe('loader/glbExport', () => {
       expect(artifact.cacheKeyArgs).toEqual(cacheKeyArgs)
       expect(artifact.schemaVer).toBe(BLDRS_GLB_SCHEMA_VERSION)
       expect(artifact.writtenAt).toBeGreaterThan(0)
+      // The source kind travels with the artifact because the export event
+      // reports it (`source_kind`); the cache key's `ns1` beside it is the
+      // repo owner here, not a kind (#1834).
+      expect(artifact.kindLabel).toBe('github')
+      expect(artifact.kindLabel).not.toBe(artifact.cacheKeyArgs.ns1)
       // Same key the OPFS write used, which is the whole point of publishing
       // it rather than re-deriving it in the UI.
       expect(glbCacheKey({...artifact.cacheKeyArgs, schemaVer: artifact.schemaVer}).originalFilePath)

@@ -286,6 +286,19 @@ export function withLocalArtifactFields(serverExports, localExports) {
  * (offline, 403) drops out here exactly as it already does the next time
  * `recordExport` mirrors a response.
  *
+ * SERVER-WINS IS NOT "OLDER WINS", though, and that is the one case this
+ * function has to correct for. The claim is a snapshot of a JWT, so it can be
+ * older than the mirror it is merged over — a row recorded seconds ago is in
+ * OPFS before the refreshed token carrying it has been decoded, and a token
+ * that was never refreshed at all (the record's refresh failed, the user is
+ * offline) is older still. Merging that claim as authoritative dropped the
+ * just-made export from "My Exports" until the next page load (#1834). So a
+ * local row the claim does not have, which is NEWER than every row the claim
+ * does have, survives the merge on top. Bounded deliberately: an id-bearing
+ * local row older than the claim's newest entry is one the server saw and
+ * chose not to keep (a failed write, or pruned past the cap), and resurrecting
+ * that is the bug in the other direction.
+ *
  * @param {?string} sub Auth0 subject of the signed-in user
  * @param {?Array<object>} serverExports `appMetadata.exports`, newest first
  * @return {Promise<{exports: Array<object>}>} the list now in OPFS
@@ -295,9 +308,48 @@ export async function hydrateExports(sub, serverExports) {
   if (!sub || !Array.isArray(serverExports) || serverExports.length === 0) {
     return local
   }
-  const merged = withLocalArtifactFields(serverExports, local.exports).slice(0, EXPORTS_CAP)
+  const merged = [
+    ...localRowsNewerThanClaim(serverExports, local.exports),
+    ...withLocalArtifactFields(serverExports, local.exports),
+  ].slice(0, EXPORTS_CAP)
   await saveExports(sub, merged)
   return {exports: merged}
+}
+
+
+/**
+ * The local rows a claim is simply too old to know about: they carry a
+ * client-minted id the claim has no row for, and they were recorded after
+ * every row the claim does carry. Newest first, as the mirror stores them.
+ *
+ * Id-bearing only, so this can never double-count: `withLocalArtifactFields`
+ * pairs a local row by id, falling back to key + format for LEGACY rows
+ * alone, so a row with an id the server list lacks is a row that merge did
+ * not consume.
+ *
+ * @param {Array<object>} serverExports newest first, from the claim
+ * @param {Array<object>} localExports newest first, from OPFS
+ * @return {Array<object>} the local rows to keep above the merged list
+ */
+function localRowsNewerThanClaim(serverExports, localExports) {
+  const serverIds = new Set(serverExports.map((entry) => entry.id).filter(Boolean))
+  const newestServerAt = Math.max(...serverExports.map((entry) => timeOf(entry)))
+  return localExports.filter((entry) =>
+    entry.id && !serverIds.has(entry.id) && timeOf(entry) > newestServerAt)
+}
+
+
+/**
+ * `exportedAt` as a comparable number. An unparseable or missing stamp reads
+ * as 0 — the oldest possible row — so a malformed local row is never mistaken
+ * for one newer than the claim.
+ *
+ * @param {object} entry an export row
+ * @return {number} epoch millis, or 0
+ */
+function timeOf(entry) {
+  const parsed = Date.parse(entry?.exportedAt)
+  return Number.isNaN(parsed) ? 0 : parsed
 }
 
 

@@ -241,6 +241,43 @@ describe('exportHistory', () => {
       expect(await hydrateExports(null, [serverRow])).toEqual({exports: []})
       expect(getFileHandle).not.toHaveBeenCalled()
     })
+
+    it('keeps a local row the claim is too old to know about', async () => {
+      // The claim is a snapshot of a JWT and can lag the mirror: the row the
+      // user just exported is in OPFS before any refreshed token carries it.
+      // Server-wins must not mean older-wins, or reopening the Export tab
+      // drops the export that was made from it (#1834).
+      const justExported = {
+        id: 'local-3', key: KEY, title: 'index.ifc', format: 'glb', bytes: 4096,
+        exportedAt: '2026-02-01T00:00:00.000Z',
+        cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER, options: {},
+      }
+      await saveExports(SUB, [justExported, serverRow, otherServerRow])
+
+      const {exports} = await hydrateExports(SUB, [serverRow, otherServerRow])
+
+      expect(exports.map((e) => e.id)).toEqual(['local-3', 'server-1', 'server-2'])
+      // …and it keeps what makes it re-downloadable.
+      expect(exports[0]).toMatchObject({cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER})
+      expect(JSON.parse(storedFor(SUB)).exports).toHaveLength(3)
+    })
+
+    it('still drops a local row the server saw and did not keep', async () => {
+      // The other direction: an id-bearing row OLDER than the claim's newest
+      // entry is one the server had a chance to persist and didn't (a failed
+      // write, or pruned past the cap). Resurrecting it every time the tab
+      // opens is the bug this fix must not introduce.
+      const refused = {
+        id: 'local-refused', key: KEY, title: 'index.ifc', format: 'glb', bytes: 4096,
+        exportedAt: '2025-06-01T00:00:00.000Z',
+        cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER, options: {},
+      }
+      await saveExports(SUB, [serverRow, refused, otherServerRow])
+
+      const {exports} = await hydrateExports(SUB, [serverRow, otherServerRow])
+
+      expect(exports.map((e) => e.id)).toEqual(['server-1', 'server-2'])
+    })
   })
 
   describe('withLocalArtifactFields', () => {

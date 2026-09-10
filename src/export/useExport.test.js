@@ -34,11 +34,28 @@ const CACHE_KEY_ARGS = {
   sourceHash: 'sha123',
 }
 const SCHEMA_VER = '0.21.0-batched'
+const KIND_LABEL = 'github'
 const ARTIFACT_BYTES = new Uint8Array([1, 2, 3, 4])
 const EXPORTED = {
   blob: new Blob([new Uint8Array(2048)], {type: 'model/gltf-binary'}),
   filename: 'box.glb',
   stats: {inputBytes: 4096, outputBytes: 2048, strippedExtensions: []},
+}
+
+
+/**
+ * An unsigned JWT carrying the `app_metadata` claim, the way Auth0's Action
+ * stamps it. Nothing here verifies a signature; `jwtDecode` only reads the
+ * payload.
+ *
+ * @param {object} appMetadata the claim's value
+ * @return {string} header.payload.signature
+ */
+function jwtWithAppMetadata(appMetadata) {
+  const base64url = (obj) => Buffer.from(JSON.stringify(obj), 'utf8').toString('base64')
+    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+  return `${base64url({alg: 'RS256', typ: 'JWT'})}.` +
+    `${base64url({'https://bldrs.ai/app_metadata': appMetadata})}.signature`
 }
 
 
@@ -56,7 +73,9 @@ describe('useExport', () => {
     readModelByPathFromOPFS.mockResolvedValue({
       arrayBuffer: () => Promise.resolve(ARTIFACT_BYTES.buffer),
     })
-    useStore.getState().setGlbArtifact({cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER, writtenAt: 1})
+    useStore.getState().setGlbArtifact(
+      {cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER, writtenAt: 1, kindLabel: KIND_LABEL})
+    useStore.getState().setAppMetadata(null)
     useStore.getState().setSnackMessage(null)
     useStore.getState().setIsExportInFlight(false)
   })
@@ -86,8 +105,35 @@ describe('useExport', () => {
     expect(gtagEvent).toHaveBeenCalledWith('export_model', {
       format: 'glb',
       bytes_bucket: '<1MB',
-      source_kind: 'gh-bldrs-ai',
+      source_kind: KIND_LABEL,
     })
+  })
+
+  it('reports the source KIND, never the cache key\'s first namespace', async () => {
+    // `cacheKeyArgs.ns1` is the repo OWNER for a GitHub model — a login, in a
+    // GA event — and the constant 'BldrsLocalStorage' for every other source,
+    // so it was both leaky and uninformative (#1834).
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {})
+    })
+
+    const [, params] = gtagEvent.mock.calls[0]
+    expect(params.source_kind).toBe('github')
+    expect(Object.values(params)).not.toContain(CACHE_KEY_ARGS.ns1)
+  })
+
+  it('says so, rather than guessing, when the artifact carries no kind', async () => {
+    // A "Download again" hands `run` a history row, which has no kind on it.
+    useStore.getState().setGlbArtifact({cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER, writtenAt: 1})
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {})
+    })
+
+    expect(gtagEvent.mock.calls[0][1].source_kind).toBe('unknown')
   })
 
   it('records the export in history, with the artifact fields "Download again" needs', async () => {
@@ -126,6 +172,48 @@ describe('useExport', () => {
     })
 
     expect(recordExport.mock.calls[0][0].options).toEqual({stripBldrsMetadata: true})
+  })
+
+  it('applies the claims of the token it force-refreshes after recording', async () => {
+    // `record-export` has just appended a row to Auth0 app_metadata; the
+    // refresh exists so every reader catches up. Discarding the token left
+    // `store.appMetadata` on the PRE-export list, and reopening the Export
+    // tab hydrated the mirror from it — dropping the export the user had
+    // just made until a reload (#1834).
+    const refreshedExports = [{id: 'server-1', key: '/share/v/p/index.ifc', format: 'glb', bytes: 2048}]
+    getAccessTokenSilently.mockImplementation((params) => Promise.resolve(params?.cacheMode === 'off' ?
+      jwtWithAppMetadata({subscriptionStatus: 'sharePro', exports: refreshedExports}) :
+      'cached-token'))
+    // The real `recordExport` calls this after a successful server write.
+    recordExport.mockImplementation(async (_entry, _sub, _getToken, refreshToken) => {
+      await refreshToken()
+      return {recorded: true, status: 200, exports: []}
+    })
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {})
+    })
+
+    expect(useStore.getState().appMetadata).toEqual(
+      {subscriptionStatus: 'sharePro', exports: refreshedExports})
+  })
+
+  it('leaves app_metadata alone when the refreshed token carries no claim', async () => {
+    // The mock Auth0 provider's tokens carry none, and tests inject metadata
+    // directly — clearing the store on a claimless token would undo that.
+    useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+    recordExport.mockImplementation(async (_entry, _sub, _getToken, refreshToken) => {
+      await refreshToken()
+      return {recorded: true, status: 200, exports: []}
+    })
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {})
+    })
+
+    expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'sharePro'})
   })
 
   it('still reports success when recording the export fails', async () => {
