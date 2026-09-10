@@ -153,17 +153,22 @@ and never touches OPFS, localStorage or the HTTP cache.
 src/export/
   proModuleLoader.js     host: loadProModule(name, getToken) → module namespace (blob import), memoised per page
   exportRegistry.js      host: EXPORT_FORMATS matrix (id, label, ext, mime, moduleName, status)
-  ExportSection.jsx      host: the UI inside ShareDialog (button, gating, progress, options)
   exportHistory.js       host: OPFS mirror `exports.json` + subscribeToExports (S3)
-  ExportsDialog.jsx      host: "My Exports" list (S3)
   useExport.js           host: hook: locate artifact → load module → run → download → record
   pro/
     glbExport.entry.js   PRO MODULE entry (built separately; never bundled into index.js)
     glbExport.js         the export itself: container unpack, optional strip, Blob
+src/Components/                    (as built: the components live with their menus,
+  Share/ExportSection.jsx           not with the export lib)
+                         host: the UI inside ShareDialog (button, gating, progress, options)
+  Profile/ExportsDialog.jsx
+                         host: "My Exports" list (S3), opened from the Profile menu
 netlify/functions/
   pro-module.js          GET ?name=<id> — Auth0 bearer + Pro check → JS bytes, no-store
   record-export.js       POST {key, format, title, bytes} → app_metadata.exports (S3)
   _pro-modules/          BUILD OUTPUT (gitignored): glbExport.js
+  _tests/                jest suites for the two functions (§4.2: a top-level
+                         .js here would deploy AS a function)
 ```
 
 The host bundle must never import anything under `src/export/pro/`. An
