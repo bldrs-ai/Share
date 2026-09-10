@@ -3,13 +3,21 @@
 // container exactly as `glbExport.js` (the writer) would, then exported.
 // Nothing here is mocked — the whole point of the module is what comes out
 // the other end, byte for byte.
+import {artifactSizesFromFile} from '../../loader/glbArtifactSize'
 import {packGlbChunks} from '../../loader/glbContainer'
 import {parseGlb, serializeGlb} from '../../loader/injectGlbExtensions'
 import {exportArtifact, exportFilename, format} from './glbExport'
 
 
 /* eslint-disable no-magic-numbers */
-const BIN = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])
+// The BIN chunk as the writer lays it out: the geometry a standard accessor
+// reads, then one Bldrs payload's gzipped bytes in a view of its own — the
+// pair the strip has to tell apart.
+const GEOMETRY_BYTES = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])
+const METADATA_BYTES = new Uint8Array(12).fill(0x55)
+const BIN = new Uint8Array(GEOMETRY_BYTES.byteLength + METADATA_BYTES.byteLength)
+BIN.set(GEOMETRY_BYTES, 0)
+BIN.set(METADATA_BYTES, GEOMETRY_BYTES.byteLength)
 const GLTF_MAGIC = 'glTF'
 const ALIGNMENT = 4
 
@@ -26,15 +34,19 @@ function glbJson() {
     asset: {version: '2.0', generator: 'bldrs-test'},
     extensionsUsed: ['BLDRS_spatial_tree', 'BLDRS_element_properties', 'EXT_mesh_gpu_instancing'],
     extensions: {
-      BLDRS_spatial_tree: {bufferView: 0},
-      BLDRS_element_properties: {bufferView: 0},
+      BLDRS_spatial_tree: {compressed: true, bufferView: 1},
+      BLDRS_element_properties: {compressed: true, bufferView: 1},
     },
     scene: 0,
     scenes: [{nodes: [0], extras: {bldrsTitle: 'Momentum'}, extensions: {BLDRS_view_states: {}}}],
     nodes: [{mesh: 0, extensions: {BLDRS_instance_tables: {}, EXT_mesh_gpu_instancing: {attributes: {}}}}],
-    meshes: [{primitives: [{attributes: {}, extensions: {BLDRS_face_ids: {bufferView: 0}}}]}],
+    meshes: [{primitives: [{attributes: {POSITION: 0}, extensions: {BLDRS_face_ids: {bufferView: 1}}}]}],
+    accessors: [{bufferView: 0, componentType: 5121, count: 8, type: 'SCALAR'}],
     buffers: [{byteLength: BIN.byteLength}],
-    bufferViews: [{buffer: 0, byteOffset: 0, byteLength: BIN.byteLength}],
+    bufferViews: [
+      {buffer: 0, byteOffset: 0, byteLength: GEOMETRY_BYTES.byteLength},
+      {buffer: 0, byteOffset: GEOMETRY_BYTES.byteLength, byteLength: METADATA_BYTES.byteLength},
+    ],
   }
 }
 
@@ -88,11 +100,14 @@ describe('pro/glbExport', () => {
       expect(magic(out)).toBe(GLTF_MAGIC)
       expect(out).toEqual(glb)
       expect(blob.type).toBe('model/gltf-binary')
-      expect(stats).toEqual({
-        inputBytes: container.byteLength,
-        outputBytes: glb.byteLength,
-        strippedExtensions: [],
-      })
+      expect(stats.inputBytes).toBe(container.byteLength)
+      expect(stats.outputBytes).toBe(glb.byteLength)
+      expect(stats.strippedExtensions).toEqual([])
+      // Both sizes are reported whichever way the toggle went, so the run
+      // that KEPT the metadata still says what it was carrying.
+      expect(stats.withMetadataBytes).toBe(glb.byteLength)
+      expect(stats.withoutMetadataBytes).toBeLessThan(glb.byteLength)
+      expect(stats.metadataBytes).toBe(glb.byteLength - stats.withoutMetadataBytes)
     })
 
     it('accepts the artifact as an ArrayBuffer too', async () => {
@@ -142,9 +157,62 @@ describe('pro/glbExport', () => {
       const {json, bin} = await exportStripped()
 
       expect(json.asset.version).toBe('2.0')
-      expect(json.meshes[0].primitives[0].attributes).toEqual({})
+      expect(json.meshes[0].primitives[0].attributes).toEqual({POSITION: 0})
       expect(json.scenes[0].extras).toEqual({bldrsTitle: 'Momentum'})
-      expect(bin).toEqual(BIN)
+      // The geometry's bytes, and only those: the metadata payload's view
+      // left with the extension that owned it, and the survivor was moved
+      // to the front of a compacted BIN chunk.
+      expect(bin).toEqual(GEOMETRY_BYTES)
+    })
+
+    it('drops the bufferViews only the metadata referenced, bytes and all', async () => {
+      // Through v0.1 the JSON entries went and their payloads stayed, so the
+      // toggle barely moved the file size (#1841).
+      const {json, bin, stats} = await exportStripped()
+
+      expect(json.bufferViews).toEqual([
+        {buffer: 0, byteOffset: 0, byteLength: GEOMETRY_BYTES.byteLength},
+      ])
+      expect(json.buffers[0].byteLength).toBe(GEOMETRY_BYTES.byteLength)
+      expect(json.accessors[0].bufferView).toBe(0)
+      expect(bin.byteLength).toBe(GEOMETRY_BYTES.byteLength)
+      expect(stats.withMetadataBytes - stats.withoutMetadataBytes)
+        .toBeGreaterThanOrEqual(METADATA_BYTES.byteLength)
+    })
+
+    it('keeps a view the geometry shares with a Bldrs extension', async () => {
+      // `BLDRS_face_ids` reading the same block as a geometry accessor is
+      // the case where "drop what the metadata referenced" would take the
+      // model with it — a corrupt export, not a smaller one.
+      const shared = glbJson()
+      shared.meshes[0].primitives[0].extensions.BLDRS_face_ids = {bufferView: 0}
+      const {container} = cachedArtifact(shared)
+
+      const {blob} = exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
+      const {json, bin} = parseGlb(await blobBytes(blob))
+
+      expect(json.bufferViews).toHaveLength(1)
+      expect(json.accessors[0].bufferView).toBe(0)
+      expect(bin).toEqual(GEOMETRY_BYTES)
+    })
+
+    it('writes exactly the size the panel promised before the click', async () => {
+      // The Export tab shows both figures from the artifact's HEADER, without
+      // the pro module and without reading the BIN chunk
+      // (`loader/glbArtifactSize.js`). They are the same computation, and
+      // this is where that stops being a claim: estimate against real output.
+      const {container} = cachedArtifact()
+      const sizes = await artifactSizesFromFile(new Blob([container]))
+
+      const kept = exportArtifact({bytes: container, options: {}})
+      const stripped = exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
+
+      expect(sizes.withMetadata).toBe(kept.blob.size)
+      expect(sizes.withoutMetadata).toBe(stripped.blob.size)
+      expect(sizes.metadataBytes).toBe(kept.blob.size - stripped.blob.size)
+      // …and the same numbers reach the snackbar through `stats`.
+      expect(stripped.stats.withoutMetadataBytes).toBe(sizes.withoutMetadata)
+      expect(kept.stats.withoutMetadataBytes).toBe(sizes.withoutMetadata)
     })
 
     it('repacks a valid GLB — magic, 4-byte chunk padding, honest total length', async () => {

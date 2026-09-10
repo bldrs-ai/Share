@@ -35,7 +35,10 @@ const MAGIC_R = 0x52
 const VERSION = 2
 const HEADER_V1_BYTES = 12
 const HEADER_V2_BYTES = 16
-const CHUNK_HEADER_BYTES = 4
+// The per-chunk length prefix that precedes every chunk's bytes. Exported
+// because a reader that only wants to LOCATE chunk 0 (rather than copy it)
+// needs it to compute the offset — see `glbArtifactSize.js`.
+export const CONTAINER_CHUNK_HEADER_BYTES = 4
 
 
 /** @typedef {'draco'|'meshopt'|null} GlbCompressionMode */
@@ -113,7 +116,7 @@ export function packGlbChunks(chunks, mode = null) {
   }
   let payloadLen = 0
   for (const c of chunks) {
-    payloadLen += CHUNK_HEADER_BYTES + c.byteLength
+    payloadLen += CONTAINER_CHUNK_HEADER_BYTES + c.byteLength
   }
   const out = new Uint8Array(HEADER_V2_BYTES + payloadLen)
   const dv = new DataView(out.buffer)
@@ -128,11 +131,43 @@ export function packGlbChunks(chunks, mode = null) {
   let offset = HEADER_V2_BYTES
   for (const c of chunks) {
     dv.setUint32(offset, c.byteLength, true)
-    offset += CHUNK_HEADER_BYTES
+    offset += CONTAINER_CHUNK_HEADER_BYTES
     out.set(c, offset)
     offset += c.byteLength
   }
   return out
+}
+
+
+/**
+ * Read a container's fixed-size header, and nothing after it.
+ *
+ * The chunk records are left alone, so this works on a PREFIX of the file:
+ * `glbArtifactSize.js` sizes an OPFS artifact from a few dozen sliced bytes
+ * rather than reading a hundreds-of-MB CAD model back into memory to learn
+ * how big it is. `headerBytes` is where the first chunk record starts.
+ *
+ * @param {ArrayBuffer|Uint8Array} buffer at least the first 16 bytes
+ * @return {{version: number, chunkCount: number, mode: GlbCompressionMode, headerBytes: number}}
+ */
+export function readGlbContainerHeader(buffer) {
+  if (!isBldrsGlbContainer(buffer)) {
+    throw new Error('readGlbContainerHeader: missing BLDR magic')
+  }
+  const view = ArrayBuffer.isView(buffer) ? buffer : new Uint8Array(buffer)
+  const dv = new DataView(view.buffer, view.byteOffset, view.byteLength)
+  const version = dv.getUint32(4, true)
+  const chunkCount = dv.getUint32(8, true)
+  if (version === 1) {
+    return {version, chunkCount, mode: null, headerBytes: HEADER_V1_BYTES}
+  }
+  if (version !== VERSION) {
+    throw new Error(`readGlbContainerHeader: unsupported version ${version}`)
+  }
+  if (view.byteLength < HEADER_V2_BYTES) {
+    throw new Error(`readGlbContainerHeader: truncated v2 header (${view.byteLength}B)`)
+  }
+  return {version, chunkCount, mode: byteToMode(view[12]), headerBytes: HEADER_V2_BYTES}
 }
 
 
@@ -147,31 +182,17 @@ export function packGlbChunks(chunks, mode = null) {
  * @return {{chunks: Uint8Array[], mode: GlbCompressionMode, version: number}}
  */
 export function viewGlbContainerChunks(buffer) {
-  if (!isBldrsGlbContainer(buffer)) {
-    throw new Error('unpackGlbContainer: missing BLDR magic')
-  }
+  const {version, chunkCount: count, mode, headerBytes} = readGlbContainerHeader(buffer)
   const view = ArrayBuffer.isView(buffer) ? buffer : new Uint8Array(buffer)
   const dv = new DataView(view.buffer, view.byteOffset, view.byteLength)
-  const version = dv.getUint32(4, true)
-  const count = dv.getUint32(8, true)
-  let mode = null
-  let headerLen
-  if (version === 1) {
-    headerLen = HEADER_V1_BYTES
-  } else if (version === 2) {
-    headerLen = HEADER_V2_BYTES
-    mode = byteToMode(view[12])
-  } else {
-    throw new Error(`unpackGlbContainer: unsupported version ${version}`)
-  }
   const out = []
-  let offset = headerLen
+  let offset = headerBytes
   for (let i = 0; i < count; i++) {
-    if (offset + CHUNK_HEADER_BYTES > view.byteLength) {
+    if (offset + CONTAINER_CHUNK_HEADER_BYTES > view.byteLength) {
       throw new Error(`unpackGlbContainer: truncated chunk header at ${i}`)
     }
     const len = dv.getUint32(offset, true)
-    offset += CHUNK_HEADER_BYTES
+    offset += CONTAINER_CHUNK_HEADER_BYTES
     if (offset + len > view.byteLength) {
       throw new Error(`unpackGlbContainer: truncated chunk ${i} (need ${len}B)`)
     }

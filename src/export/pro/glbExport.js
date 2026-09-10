@@ -1,3 +1,4 @@
+import {estimateStrippedGlbSize, stripBldrsJson} from '../../loader/glbArtifactSize'
 import {unpackGlbContainer} from '../../loader/glbContainer'
 import {parseGlb, serializeGlb} from '../../loader/injectGlbExtensions'
 
@@ -17,20 +18,21 @@ import {parseGlb, serializeGlb} from '../../loader/injectGlbExtensions'
  * instance beside the host's. Shared plain-JS source is fine and is why
  * `parseGlb`/`serializeGlb` are reused rather than reimplemented.
  *
+ * The strip's JSON half lives in `loader/glbArtifactSize.js` for the same
+ * reason with an extra twist: the host shows the user what the stripped file
+ * will weigh BEFORE this module is ever fetched, and the only way the figure
+ * and the file agree is for both to be the same computation (#1841).
+ *
  * Design: design/new/glb-export-premium.md §4.3.
  */
 
 
 export const format = {id: 'glb', ext: 'glb', mime: 'model/gltf-binary'}
 
-// Every Bldrs-private glTF extension shares this prefix
-// (BLDRS_spatial_tree, BLDRS_element_properties, BLDRS_face_ids,
-// BLDRS_instance_tables). Ratified Khronos extensions —
-// EXT_mesh_gpu_instancing above all, which the batched-native layout's
-// geometry depends on — are NEVER touched.
-const BLDRS_EXTENSION_PREFIX = 'BLDRS_'
-
 const DEFAULT_BASENAME = 'model'
+// Byte offset of the JSON chunk's length field in a GLB: past the 12-byte
+// file header.
+const JSON_CHUNK_LENGTH_OFFSET = 12
 // Anything outside this set becomes '_': the string ends up in a
 // `<a download>` attribute and then in the user's filesystem, so path
 // separators and control characters have no business in it.
@@ -52,7 +54,10 @@ const UNSAFE_FILENAME_CHARS = /[^A-Za-z0-9._-]+/g
  *   travel with the model otherwise)
  * @param {string} [args.options.title] Model title, preferred for the filename
  * @param {string} [args.options.sourceBasename] Source filename, the fallback
- * @return {{blob: Blob, filename: string, stats: object}}
+ * @return {{blob: Blob, filename: string, stats: object}} `stats` carries
+ *   both sizes of THIS run — `withMetadataBytes` / `withoutMetadataBytes` /
+ *   `metadataBytes` — so the caller can report what the toggle was worth.
+ *   The two it did not produce are null when the file could not be measured.
  */
 export function exportArtifact({bytes, options = {}}) {
   const container = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
@@ -69,52 +74,99 @@ export function exportArtifact({bytes, options = {}}) {
   }
 
   let glbBytes = new Uint8Array(chunks[0])
+  const withMetadataBytes = glbBytes.byteLength
   let strippedExtensions = []
+  let withoutMetadataBytes = null
   if (options.stripBldrsMetadata) {
-    const {json, bin} = parseGlb(glbBytes)
-    strippedExtensions = stripBldrsExtensions(json)
-    // The stripped extensions' payloads were gzipped bufferViews; those
-    // views are now orphaned but still in the BIN chunk. Leaving them is
-    // valid glTF and keeps this a pure JSON edit — v0.1 accepts the size
-    // cost and reports it (design/new/glb-export-premium.md §4.3).
-    glbBytes = serializeGlb(json, bin)
+    const stripped = stripArtifact(glbBytes)
+    glbBytes = stripped.bytes
+    strippedExtensions = stripped.strippedExtensions
+    withoutMetadataBytes = glbBytes.byteLength
+  } else {
+    withoutMetadataBytes = strippedSizeOf(glbBytes)
   }
 
   return {
     blob: new Blob([glbBytes], {type: format.mime}),
     filename: exportFilename(options),
-    stats: {inputBytes, outputBytes: glbBytes.byteLength, strippedExtensions},
+    stats: {
+      inputBytes,
+      outputBytes: glbBytes.byteLength,
+      strippedExtensions,
+      withMetadataBytes,
+      withoutMetadataBytes,
+      metadataBytes: withoutMetadataBytes === null ? null : withMetadataBytes - withoutMetadataBytes,
+    },
   }
 }
 
 
 /**
- * Remove every `BLDRS_*` entry from a glTF JSON chunk, in place.
+ * Drop every `BLDRS_*` extension AND the bufferViews only they referenced.
  *
- * @param {object} json Parsed glTF JSON
- * @return {Array<string>} the extension names removed, sorted, deduped
+ * The payloads are gzipped bufferViews, and through v0.1 the JSON entries
+ * went while their bytes stayed — valid glTF, but it made the toggle almost
+ * free of charge in the only currency the user cares about (#1841). Now the
+ * BIN chunk is rebuilt from the surviving views, which `stripBldrsJson` has
+ * already re-indexed and re-laid at 4-byte boundaries.
+ *
+ * A GLB with no Bldrs data in it at all is returned untouched rather than
+ * re-serialised: there is nothing to remove, and rewriting the user's file
+ * to the byte-for-byte same content is a risk taken for no gain.
+ *
+ * @param {Uint8Array} glbBytes One standalone GLB (the container's chunk 0)
+ * @return {{bytes: Uint8Array, strippedExtensions: Array<string>}}
  */
-export function stripBldrsExtensions(json) {
-  const stripped = new Set()
-
-  stripExtensionsOf(json, stripped)
-  for (const collection of [json.nodes, json.meshes, json.scenes]) {
-    for (const entry of collection || []) {
-      stripExtensionsOf(entry, stripped)
-      for (const primitive of entry.primitives || []) {
-        stripExtensionsOf(primitive, stripped)
-      }
-    }
+function stripArtifact(glbBytes) {
+  const {json, bin} = parseGlb(glbBytes)
+  const {strippedExtensions, binPlan, binByteLength, isChanged} = stripBldrsJson(json)
+  if (!isChanged) {
+    return {bytes: glbBytes, strippedExtensions}
   }
+  return {bytes: serializeGlb(json, repackBin(bin, binPlan, binByteLength)), strippedExtensions}
+}
 
-  if (Array.isArray(json.extensionsUsed)) {
-    json.extensionsUsed = json.extensionsUsed.filter((name) => !isBldrsExtension(name))
-    if (json.extensionsUsed.length === 0) {
-      delete json.extensionsUsed
-    }
+
+/**
+ * Copy the surviving bufferViews into a compacted BIN chunk, following the
+ * layout `stripBldrsJson` already wrote into the JSON.
+ *
+ * @param {Uint8Array|null} bin The original BIN chunk
+ * @param {Array<{fromOffset: number, byteLength: number, toOffset: number}>} binPlan
+ * @param {number} binByteLength Length of the compacted chunk
+ * @return {Uint8Array|null} null when nothing binary survives
+ */
+function repackBin(bin, binPlan, binByteLength) {
+  if (!bin || binByteLength === 0) {
+    return null
   }
+  const out = new Uint8Array(binByteLength)
+  for (const {fromOffset, byteLength, toOffset} of binPlan) {
+    out.set(bin.subarray(fromOffset, fromOffset + byteLength), toOffset)
+  }
+  return out
+}
 
-  return [...stripped].sort()
+
+/**
+ * What this GLB WOULD weigh stripped — for the run that is keeping the
+ * metadata, so `stats` reports both sides either way.
+ *
+ * Costs one `JSON.parse` of the JSON chunk (the BIN chunk is never touched)
+ * and is best-effort: a GLB we cannot measure is still a GLB we can hand
+ * over, so a failure here reports "unknown" rather than failing the export.
+ *
+ * @param {Uint8Array} glbBytes
+ * @return {?number}
+ */
+function strippedSizeOf(glbBytes) {
+  try {
+    const {json} = parseGlb(glbBytes)
+    const dv = new DataView(glbBytes.buffer, glbBytes.byteOffset, glbBytes.byteLength)
+    return estimateStrippedGlbSize(json, json?.buffers?.[0]?.byteLength ?? 0, dv.getUint32(JSON_CHUNK_LENGTH_OFFSET, true))
+  } catch {
+    return null
+  }
 }
 
 
@@ -133,40 +185,6 @@ export function exportFilename({title, sourceBasename} = {}) {
   // starts with a dot is a hidden file on every unix the download lands on.
   const safe = raw.trim().replace(UNSAFE_FILENAME_CHARS, '_').replace(/^[._]+|[._]+$/g, '')
   return `${safe || DEFAULT_BASENAME}.${format.ext}`
-}
-
-
-/**
- * @param {string} name
- * @return {boolean} true for a Bldrs-private extension name
- */
-function isBldrsExtension(name) {
-  return typeof name === 'string' && name.startsWith(BLDRS_EXTENSION_PREFIX)
-}
-
-
-/**
- * Drop `BLDRS_*` keys from one extension holder, in place. An emptied
- * `extensions` object is removed outright — glTF allows `{}` but a viewer
- * showing "1 extension" for nothing is a worse artifact than one showing none.
- *
- * @param {object} holder Any glTF object that may carry `extensions`
- * @param {Set<string>} stripped Accumulator of removed names
- */
-function stripExtensionsOf(holder, stripped) {
-  const extensions = holder?.extensions
-  if (!extensions || typeof extensions !== 'object') {
-    return
-  }
-  for (const name of Object.keys(extensions)) {
-    if (isBldrsExtension(name)) {
-      delete extensions[name]
-      stripped.add(name)
-    }
-  }
-  if (Object.keys(extensions).length === 0) {
-    delete holder.extensions
-  }
 }
 
 
