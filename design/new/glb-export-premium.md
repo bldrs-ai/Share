@@ -70,6 +70,14 @@ every new load — the single hand-off from the loader to the export UI. A
 cache-hit load (no writer runs) sets the same slot from the reader
 (`tryLoadCachedGlb`), since the artifact it just read is the export.
 
+Both producers can outlive their load — the writer is idle-scheduled and
+fire-and-forget, the reader awaits OPFS — so an SPA navigation to a second
+model would otherwise let model A's writer republish over model B's cleared
+slot, and "Download GLB" on B hands out A. `src/loader/glbArtifactPublish.js`
+guards it: `load()` takes a monotonic generation at its start, passes it to
+both producers, and `publishGlbArtifact` drops a publish whose generation is
+no longer current.
+
 Reading it back is `readModelByPathFromOPFS(key.originalFilePath,
 key.commitHash, key.owner, key.repo, key.branch)` — the reader's own call.
 
@@ -270,10 +278,20 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   well under). Returns `{exports}`. Same read-modify-write caveat as
   `record-load` (last-write-wins; loss direction is a missing history row,
   never a wrong gate).
-- **Client:** `src/export/exportHistory.js` keeps `exports.json` at the
-  OPFS root (raw `navigator.storage.getDirectory()`, no worker dependency —
-  the quota lib's pattern) as the instant-display mirror and the offline
-  fallback; the JWT is force-refreshed after a successful record so
+- **Client:** `src/export/exportHistory.js` keeps one mirror file per
+  account, `exports.<encodeURIComponent(sub)>.json`, at the OPFS root (raw
+  `navigator.storage.getDirectory()`, no worker dependency — the quota lib's
+  pattern) as the instant-display mirror and the offline fallback. Per
+  account because OPFS is partitioned by ORIGIN: a single `exports.json`
+  would show the next Auth0 account on that browser the previous user's
+  titles and share paths, and hand it their `cacheKeyArgs` — i.e. their
+  cached artifacts — through "Download again". Every entry point
+  (`loadExports` / `saveExports` / `subscribeToExports` / `recordExport` /
+  `hydrateExports`) takes the sub; no sub reads empty and writes nothing.
+  There is no migration off the old root `exports.json` — the feature is
+  flag-gated and unreleased, and a signed-in user's rows come back through
+  the `app_metadata` hydration below.
+  The JWT is force-refreshed after a successful record so
   `app_metadata` readers see it. As shipped, the local row is written FIRST
   and the server's response then replaces the list — the file is already in
   the user's Downloads when `recordExport` runs, so a 401/403/5xx/offline
@@ -298,6 +316,21 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   synced from another device has neither and always offers regeneration.
   `useExport().run(format, options, source)` gained the third argument so
   the dialog can export a model that isn't the one on screen.
+
+  The local row also carries the `options` that export RAN with (the third
+  browser-only field, re-attached by the same mirror), and "Download again"
+  replays them. Without that the re-download silently uses the defaults, so
+  a user who exported with the metadata stripped gets a bigger file carrying
+  every `BLDRS_*` payload back — under a row whose size says otherwise.
+
+  Opening the dialog also **hydrates the mirror from `app_metadata.exports`**
+  (`hydrateExports`), read off `store.appMetadata` — the claim `BaseRoutes`
+  decodes. A new device, a new browser profile or a cleared cache otherwise
+  shows an empty list although the account's rows exist server-side. The
+  merge is the one `recordExport` applies to a record response (server list
+  wins, browser-only fields re-attached by key + format), and an absent or
+  empty claim list is a no-op rather than a wipe. Hydrated rows the server
+  alone knows about offer regeneration, as before.
 - **Analytics:** `gtagEvent('export_model', {format, bytes_bucket,
   source_kind})` on success and `gtagEvent('export_gated', {reason})` on a
   login/upgrade redirect — the funnel signal for the pricing page.

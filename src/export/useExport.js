@@ -50,7 +50,7 @@ const SIZE_DECIMALS = 1
 export default function useExport() {
   const glbArtifact = useStore((state) => state.glbArtifact)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-  const {getAccessTokenSilently} = useAuth0()
+  const {getAccessTokenSilently, user} = useAuth0()
   const [isExporting, setIsExporting] = useState(false)
   const [error, setError] = useState(null)
 
@@ -112,7 +112,13 @@ export default function useExport() {
           title: basename(cacheKeyArgs.sourcePath),
           cacheKeyArgs,
           schemaVer,
+          // The options this run USED, so "Download again" reproduces this
+          // file. Without them a row exported with the metadata stripped
+          // re-downloads with every BLDRS_* payload back in it — a bigger,
+          // more sensitive file than the size beside the row claims.
+          options,
         },
+        user?.sub,
         () => getAccessTokenSilently(TOKEN_PARAMS),
         () => getAccessTokenSilently({...TOKEN_PARAMS, cacheMode: 'off', useRefreshTokens: true}),
       ).then((recordResult) => {
@@ -146,7 +152,7 @@ export default function useExport() {
     } finally {
       setIsExporting(false)
     }
-  }, [glbArtifact, getAccessTokenSilently, setSnackMessage])
+  }, [glbArtifact, getAccessTokenSilently, setSnackMessage, user?.sub])
 
   return {run, isExporting, error}
 }

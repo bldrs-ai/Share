@@ -105,10 +105,26 @@ describe('useExport', () => {
         title: 'box.ifc',
         cacheKeyArgs: CACHE_KEY_ARGS,
         schemaVer: SCHEMA_VER,
+        options: {},
       },
+      // The mirror is per-account (exportHistory.js): OPFS is shared by every
+      // Auth0 account on this browser, so the sub is what addresses the file.
+      'github|1234567',
       expect.any(Function),
       expect.any(Function),
     )
+  })
+
+  it('records the options the export ran with, so a re-download reproduces the file', async () => {
+    // Otherwise "Download again" falls back to the defaults and hands back a
+    // file with every BLDRS_* payload the user stripped (§4.5).
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {stripBldrsMetadata: true})
+    })
+
+    expect(recordExport.mock.calls[0][0].options).toEqual({stripBldrsMetadata: true})
   })
 
   it('still reports success when recording the export fails', async () => {

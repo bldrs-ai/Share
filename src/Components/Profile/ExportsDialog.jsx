@@ -3,11 +3,13 @@ import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import {Box, Button, Chip, Link, Stack, Typography} from '@mui/material'
 import {useNavigate} from 'react-router-dom'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {glbCacheKey} from '../../loader/glbCacheKey'
 import {doesFileExistInOPFS} from '../../OPFS/utils'
 import {getExportFormat} from '../../export/exportRegistry'
-import {loadExports, subscribeToExports} from '../../export/exportHistory'
+import {hydrateExports, loadExports, subscribeToExports} from '../../export/exportHistory'
 import useExport, {formatBytes} from '../../export/useExport'
+import useStore from '../../store/useStore'
 import {navigateToModel} from '../../utils/navigate'
 import Dialog from '../Dialog'
 import {FileDownloadOutlined as FileDownloadIcon} from '@mui/icons-material'
@@ -27,7 +29,14 @@ dayjs.extend(relativeTime)
  * from the server, so it paints instantly and still works offline; the mirror
  * is refreshed from `record-export`'s response after every export, and this
  * dialog subscribes so an export made while it is open appears without a
- * reopen.
+ * reopen. The mirror is per-account, so everything here is addressed by the
+ * signed-in `sub` and a signed-out dialog is empty by construction.
+ *
+ * A mirror that has never seen this account is not the same as an account
+ * with no history: on a new device, or after the local cache was cleared, the
+ * rows live on in Auth0 `app_metadata.exports` (the claim `BaseRoutes.jsx`
+ * decodes into `store.appMetadata`). Opening the dialog hydrates the mirror
+ * from that list — see `hydrateExports`.
  *
  * "Download again" is only offered for a row that carries `cacheKeyArgs` +
  * `schemaVer` AND whose artifact is still on disk. Both halves are needed:
@@ -48,6 +57,9 @@ export default function ExportsDialog({isDialogDisplayed, setIsDialogDisplayed})
   const [entries, setEntries] = useState([])
   const [redownloadableIds, setRedownloadableIds] = useState([])
 
+  const appMetadata = useStore((state) => state.appMetadata)
+  const {user} = useAuth0()
+  const sub = user?.sub || null
   const {isExporting, run} = useExport()
   const navigate = useNavigate()
 
@@ -59,12 +71,12 @@ export default function ExportsDialog({isDialogDisplayed, setIsDialogDisplayed})
       return undefined
     }
     let isCancelled = false
-    loadExports().then(({exports}) => {
+    loadExports(sub).then(({exports}) => {
       if (!isCancelled) {
         setEntries(exports)
       }
     })
-    const unsubscribe = subscribeToExports(({exports}) => {
+    const unsubscribe = subscribeToExports(sub, ({exports}) => {
       if (!isCancelled) {
         setEntries(exports)
       }
@@ -73,7 +85,26 @@ export default function ExportsDialog({isDialogDisplayed, setIsDialogDisplayed})
       isCancelled = true
       unsubscribe()
     }
-  }, [isDialogDisplayed])
+  }, [isDialogDisplayed, sub])
+
+  // Catch-up from the account's server-side history, which the local mirror
+  // may know nothing about (new device, cleared cache). Runs alongside the
+  // read above rather than in place of it: OPFS answers immediately and this
+  // lands whenever it lands, publishing through the same subscription.
+  useEffect(() => {
+    if (!isDialogDisplayed || !sub) {
+      return undefined
+    }
+    let isCancelled = false
+    hydrateExports(sub, appMetadata?.exports).then(({exports}) => {
+      if (!isCancelled) {
+        setEntries(exports)
+      }
+    })
+    return () => {
+      isCancelled = true
+    }
+  }, [isDialogDisplayed, sub, appMetadata])
 
   useEffect(() => {
     if (!isDialogDisplayed) {
@@ -97,8 +128,10 @@ export default function ExportsDialog({isDialogDisplayed, setIsDialogDisplayed})
 
   const onDownloadAgain = useCallback((entry) => {
     // The recorded artifact, not whatever model is on screen — this dialog
-    // is reachable from anywhere.
-    run(entry.format, {}, {
+    // is reachable from anywhere. And the options that export RAN with, so
+    // this hands back the same file: re-running a stripped export with the
+    // defaults would produce a bigger one carrying every BLDRS_* payload.
+    run(entry.format, entry.options || {}, {
       cacheKeyArgs: entry.cacheKeyArgs,
       schemaVer: entry.schemaVer,
       key: entry.key,

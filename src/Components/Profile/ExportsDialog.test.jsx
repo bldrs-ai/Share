@@ -1,22 +1,30 @@
 import React from 'react'
-import {act, render, screen, waitFor} from '@testing-library/react'
+import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {doesFileExistInOPFS} from '../../OPFS/utils'
 import {RouteThemeCtx} from '../../Share.fixture'
-import {loadExports} from '../../export/exportHistory'
+import {mockedUseAuth0, mockedUserLoggedIn} from '../../__mocks__/authentication'
+import {hydrateExports, loadExports} from '../../export/exportHistory'
+import useStore from '../../store/useStore'
 import ExportsDialog from './ExportsDialog'
 
 
 jest.mock('../../OPFS/utils', () => ({doesFileExistInOPFS: jest.fn()}))
 jest.mock('../../export/exportHistory', () => ({
+  hydrateExports: jest.fn(),
   loadExports: jest.fn(),
   subscribeToExports: jest.fn(() => () => {}),
 }))
 // The hook has its own suite; the dialog only needs `run` to exist.
+const mockRun = jest.fn()
 jest.mock('../../export/useExport', () => ({
   __esModule: true,
-  default: () => ({run: jest.fn(), isExporting: false, error: null}),
+  default: () => ({run: mockRun, isExporting: false, error: null}),
   formatBytes: (bytes) => `${bytes} B`,
 }))
+
+
+// The sub of `mockedUserLoggedIn`, which addresses this account's mirror.
+const SUB = 'github|1234567'
 
 
 const CACHE_KEY_ARGS = {
@@ -42,6 +50,7 @@ function aRow(overrides = {}) {
     exportedAt: new Date().toISOString(),
     cacheKeyArgs: CACHE_KEY_ARGS,
     schemaVer: '0.21.0-batched',
+    options: {stripBldrsMetadata: true},
     ...overrides,
   }
 }
@@ -72,6 +81,15 @@ describe('ExportsDialog', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     doesFileExistInOPFS.mockResolvedValue(true)
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    // Default: nothing to hydrate from, so each test's `loadExports` is what
+    // the list shows. The hydration tests below override it.
+    hydrateExports.mockImplementation((_sub, _serverExports) => loadExports())
+    useStore.getState().setAppMetadata({})
+  })
+
+  afterAll(() => {
+    useStore.getState().setAppMetadata({})
   })
 
   it('explains the feature when nothing has been exported', async () => {
@@ -134,5 +152,47 @@ describe('ExportsDialog', () => {
     await renderDialog(false)
 
     expect(loadExports).not.toHaveBeenCalled()
+  })
+
+  it('reads the signed-in account\'s mirror, not a shared one', async () => {
+    // OPFS is per-origin, so the sub is the only thing separating one Auth0
+    // account's history from the next one's on this browser (§4.5).
+    loadExports.mockResolvedValue({exports: []})
+
+    await renderDialog()
+
+    expect(loadExports).toHaveBeenCalledWith(SUB)
+  })
+
+  it('re-downloads with the options that export ran with', async () => {
+    // A row exported with the metadata stripped must come back stripped —
+    // re-running with `{}` would hand back a different, larger file.
+    loadExports.mockResolvedValue({exports: [aRow()]})
+
+    await renderDialog()
+
+    fireEvent.click(await screen.findByTestId('exports-download-again'))
+    expect(mockRun).toHaveBeenCalledWith(
+      'glb',
+      {stripBldrsMetadata: true},
+      expect.objectContaining({cacheKeyArgs: CACHE_KEY_ARGS, key: '/share/v/p/index.ifc'}),
+    )
+  })
+
+  it('hydrates the empty mirror from the account\'s server history', async () => {
+    // A new device (or a cleared cache) has no local rows at all, but the
+    // account's history rode in on the JWT claim BaseRoutes decoded.
+    const serverRows = [
+      aRow({id: 'server-1', cacheKeyArgs: null, schemaVer: null, options: null}),
+      aRow({id: 'server-2', key: '/share/v/p/other.ifc', cacheKeyArgs: null, schemaVer: null, options: null}),
+    ]
+    loadExports.mockResolvedValue({exports: []})
+    useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro', exports: serverRows})
+    hydrateExports.mockResolvedValue({exports: serverRows})
+
+    await renderDialog()
+
+    await waitFor(() => expect(screen.getAllByTestId('exports-row')).toHaveLength(2))
+    expect(hydrateExports).toHaveBeenCalledWith(SUB, serverRows)
   })
 })
