@@ -2,10 +2,12 @@ import {useCallback, useState} from 'react'
 import {captureException} from '@sentry/react'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {glbCacheKey} from '../loader/glbCacheKey'
+import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
 import {gtagEvent} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {triggerDownload} from './download'
+import {recordExport} from './exportHistory'
 import {getExportFormat} from './exportRegistry'
 import {ProModuleDeniedError, loadProModule} from './proModuleLoader'
 
@@ -35,6 +37,12 @@ const SIZE_DECIMALS = 1
  * also keeps the server's denial rate meaningful (§4.6: a 403 spike means a
  * stale client badge or a probe, not idle UI).
  *
+ * `run(formatId, options, source)` normally exports the CURRENTLY loaded
+ * model, from the `glbArtifact` slot the loader publishes. `source` overrides
+ * that with an artifact identified elsewhere — "Download again" in
+ * `ExportsDialog`, which holds the `{cacheKeyArgs, schemaVer}` of a model that
+ * may not be the one on screen (§4.5).
+ *
  * Design: design/new/glb-export-premium.md §4.4.
  *
  * @return {{run: Function, isExporting: boolean, error: ?Error}}
@@ -46,12 +54,13 @@ export default function useExport() {
   const [isExporting, setIsExporting] = useState(false)
   const [error, setError] = useState(null)
 
-  const run = useCallback(async (formatId, options = {}) => {
+  const run = useCallback(async (formatId, options = {}, source = null) => {
     const format = getExportFormat(formatId)
     if (!format || format.status !== 'shipped') {
       throw new Error(`useExport: no shipped export format "${formatId}"`)
     }
-    if (!glbArtifact) {
+    const artifact = source || glbArtifact
+    if (!artifact) {
       // The button is disabled in this state; reaching here means the
       // artifact went away between render and click.
       setSnackMessage({text: 'The model is still being prepared for export', autoDismiss: true})
@@ -61,7 +70,7 @@ export default function useExport() {
     setIsExporting(true)
     setError(null)
     try {
-      const {cacheKeyArgs, schemaVer} = glbArtifact
+      const {cacheKeyArgs, schemaVer} = artifact
       const key = glbCacheKey({...cacheKeyArgs, schemaVer})
       const file = await readModelByPathFromOPFS(
         key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)
@@ -85,6 +94,34 @@ export default function useExport() {
 
       triggerDownload(blob, filename)
       setSnackMessage({text: `Exported ${filename} (${formatBytes(blob.size)})`, autoDismiss: true})
+      // Deliberately NOT awaited: the file is already in the user's
+      // Downloads, so the snackbar must not wait on OPFS, Auth0 and a
+      // Netlify round trip — and a failure in any of them must not turn a
+      // completed export into an error. `recordExport` writes its local row
+      // first and never rejects; see exportHistory.js.
+      recordExport(
+        {
+          // The share path, the same key shape record-load counts loads
+          // under. The cache-key fields beside it stay in this browser
+          // (exportHistory.js) — they are what "Download again" needs and
+          // what the server has no use for. A re-download carries the key of
+          // the model it recorded, which is not necessarily the one on screen.
+          key: source?.key || window.location.pathname,
+          format: format.id,
+          bytes: blob.size,
+          title: basename(cacheKeyArgs.sourcePath),
+          cacheKeyArgs,
+          schemaVer,
+        },
+        () => getAccessTokenSilently(TOKEN_PARAMS),
+        () => getAccessTokenSilently({...TOKEN_PARAMS, cacheMode: 'off', useRefreshTokens: true}),
+      ).then((recordResult) => {
+        if (recordResult.status === HTTP_AUTHORIZATION_REQUIRED || recordResult.status === HTTP_FORBIDDEN) {
+          // `pro-module` already said yes to this user moments ago, so a
+          // denial HERE means the two gates disagree — worth seeing.
+          captureException(new Error(`record-export refused the export (${recordResult.status})`))
+        }
+      }).catch((recordError) => captureException(recordError))
       gtagEvent('export_model', {
         format: format.id,
         bytes_bucket: bytesBucket(stats?.outputBytes ?? blob.size),

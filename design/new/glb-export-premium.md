@@ -269,14 +269,30 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   OPFS root (raw `navigator.storage.getDirectory()`, no worker dependency —
   the quota lib's pattern) as the instant-display mirror and the offline
   fallback; the JWT is force-refreshed after a successful record so
-  `app_metadata` readers see it.
+  `app_metadata` readers see it. As shipped, the local row is written FIRST
+  and the server's response then replaces the list — the file is already in
+  the user's Downloads when `recordExport` runs, so a 401/403/5xx/offline
+  keeps the optimistic row and reports `{recorded: false}` rather than
+  losing the entry. The recorded `key` is the share path
+  (`window.location.pathname`), matching what `record-load` counts.
 - **UI:** `ExportsDialog.jsx`, opened from a new **"My Exports"** item in the
-  Profile menu (signed-in only). Rows: title, format chip, size, relative
+  Profile menu (signed-in only, and behind the same `export` flag as the
+  Share-dialog section). Rows: title, format chip, size, relative
   date, source path (click → navigate to the model). A "Download again"
   action re-runs the export **if** the artifact is still in OPFS
   (`doesFileExistInOPFS` on the recorded key + current schema); otherwise
   the row says "open the model to regenerate". Empty state explains the
   feature and links to the Share dialog.
+
+  One thing the sketch above missed: the server row can't produce that OPFS
+  key. A share path has no `sourceHash`, which every `sourceCacheKey.js`
+  adapter folds in, so the LOCAL row additionally carries `cacheKeyArgs` +
+  `schemaVer` — never sent to the server, re-attached by key when the
+  server's list is mirrored over the local one. "Download again" therefore
+  needs both halves: those fields AND the artifact still on disk. A row
+  synced from another device has neither and always offers regeneration.
+  `useExport().run(format, options, source)` gained the third argument so
+  the dialog can export a model that isn't the one on screen.
 - **Analytics:** `gtagEvent('export_model', {format, bytes_bucket,
   source_kind})` on success and `gtagEvent('export_gated', {reason})` on a
   login/upgrade redirect — the funnel signal for the pricing page.

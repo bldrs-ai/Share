@@ -4,6 +4,7 @@ import {readModelByPathFromOPFS} from '../OPFS/utils'
 import {gtagEvent} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {triggerDownload} from './download'
+import {recordExport} from './exportHistory'
 import {ProModuleDeniedError, loadProModule} from './proModuleLoader'
 import useExport, {bytesBucket, formatBytes} from './useExport'
 
@@ -11,6 +12,10 @@ import useExport, {bytesBucket, formatBytes} from './useExport'
 jest.mock('../OPFS/utils', () => ({readModelByPathFromOPFS: jest.fn()}))
 jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
 jest.mock('./download', () => ({triggerDownload: jest.fn()}))
+// The history lib has its own suite (exportHistory.test.js); here it stands
+// in for "the export was recorded", and mocking it keeps this suite off OPFS
+// and off the network.
+jest.mock('./exportHistory', () => ({recordExport: jest.fn()}))
 // The loader itself is covered by proModuleLoader.test.js; here it stands in
 // for "the server said yes / the server said no". The error CLASS stays real
 // so the hook's `instanceof` branch is the one under test.
@@ -45,6 +50,7 @@ describe('useExport', () => {
     jest.clearAllMocks()
     getAccessTokenSilently = jest.fn().mockResolvedValue('test-token')
     mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently})
+    recordExport.mockResolvedValue({recorded: true, status: 200, exports: []})
     exportArtifact = jest.fn().mockReturnValue(EXPORTED)
     loadProModule.mockResolvedValue({exportArtifact})
     readModelByPathFromOPFS.mockResolvedValue({
@@ -81,6 +87,44 @@ describe('useExport', () => {
       bytes_bucket: '<1MB',
       source_kind: 'gh-bldrs-ai',
     })
+  })
+
+  it('records the export in history, with the artifact fields "Download again" needs', async () => {
+    window.history.pushState({}, '', '/share/v/p/index.ifc')
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {})
+    })
+
+    expect(recordExport).toHaveBeenCalledWith(
+      {
+        key: '/share/v/p/index.ifc',
+        format: 'glb',
+        bytes: EXPORTED.blob.size,
+        title: 'box.ifc',
+        cacheKeyArgs: CACHE_KEY_ARGS,
+        schemaVer: SCHEMA_VER,
+      },
+      expect.any(Function),
+      expect.any(Function),
+    )
+  })
+
+  it('still reports success when recording the export fails', async () => {
+    // The file is in the user's Downloads either way; a history write that
+    // couldn't happen must not read as a failed export.
+    recordExport.mockRejectedValue(new Error('history unavailable'))
+    const {result} = renderHook(() => useExport())
+
+    let returned
+    await act(async () => {
+      returned = await result.current.run('glb', {})
+    })
+
+    expect(returned).toEqual({filename: 'box.glb', stats: EXPORTED.stats})
+    expect(useStore.getState().snackMessage.text).toMatch(/^Exported box.glb/)
+    expect(result.current.error).toBeNull()
   })
 
   it('passes the caller\'s strip option through to the module', async () => {
@@ -129,6 +173,7 @@ describe('useExport', () => {
     expect(getAccessTokenSilently).toHaveBeenCalledWith(
       expect.objectContaining({cacheMode: 'off', useRefreshTokens: true}))
     expect(triggerDownload).not.toHaveBeenCalled()
+    expect(recordExport).not.toHaveBeenCalled()
     expect(gtagEvent).not.toHaveBeenCalled()
     expect(result.current.error).toBeInstanceOf(ProModuleDeniedError)
   })

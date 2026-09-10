@@ -5,7 +5,7 @@
 
 import axios from 'axios'
 import * as Sentry from '@sentry/serverless'
-import {getUserAppMetadata, verifyAuth0Bearer} from './auth0.js'
+import {getUserAppMetadata, patchUserAppMetadata, verifyAuth0Bearer} from './auth0.js'
 
 
 /* eslint-disable no-magic-numbers */
@@ -178,5 +178,19 @@ describe('getUserAppMetadata', () => {
     axios.get.mockResolvedValue({data: {}})
 
     expect(await getUserAppMetadata('google-oauth2|2')).toEqual({})
+  })
+
+  it('patches only the keys it is given, so sibling app_metadata survives', async () => {
+    // Auth0 merges app_metadata one top-level key at a time. Sending a whole
+    // object assembled by a caller would silently drop `usageQuota` /
+    // `subscriptionStatus`, which other writers own.
+    axios.patch.mockResolvedValue({data: {}})
+
+    await patchUserAppMetadata('google-oauth2|3', {exports: [{id: 'a'}]})
+
+    const [url, body, config] = axios.patch.mock.calls[0]
+    expect(url).toContain('/api/v2/users/google-oauth2%7C3')
+    expect(body).toEqual({app_metadata: {exports: [{id: 'a'}]}})
+    expect(config.headers.Authorization).toBe('Bearer mgmt-token')
   })
 })

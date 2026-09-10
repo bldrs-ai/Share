@@ -195,3 +195,36 @@ export async function getUserAppMetadata(sub) {
   )
   return (resp.data && resp.data.app_metadata) || {}
 }
+
+
+/**
+ * Merge keys into a user's `app_metadata` through the Management API.
+ *
+ * Auth0's PATCH is a SHALLOW merge over `app_metadata`'s top-level keys, so
+ * a patch of `{exports: [...]}` rewrites that one key and leaves
+ * `usageQuota` / `subscriptionStatus` / `stripeCustomerId` exactly as they
+ * were. `record-load.js` relies on the same property when it writes
+ * `usageQuota` — nothing here may send a whole `app_metadata` object built
+ * client-side, which would drop every key it didn't know about.
+ *
+ * Read-modify-write is last-write-wins: two concurrent patches of the SAME
+ * key can lose one side's addition. Callers must keep the loss direction
+ * harmless (a missing history row, never a wrong entitlement).
+ *
+ * @param {string} sub Auth0 user_id, e.g. 'google-oauth2|123…'
+ * @param {object} patch Top-level `app_metadata` keys to write
+ * @return {Promise<void>}
+ */
+export async function patchUserAppMetadata(sub, patch) {
+  const mgmtToken = await getManagementApiToken()
+  await axios.patch(
+    `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(sub)}`,
+    {app_metadata: patch},
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${mgmtToken}`,
+      },
+    },
+  )
+}
