@@ -98,6 +98,13 @@ function loadTheme(mode, setMode, themeChangeListeners, originalMode) {
     palette: activePalette,
     zIndex: {
       modal: 2000,
+      // Above `modal`, unlike MUI's default order (modal 1300 < snackbar
+      // 1400 — but we raise modal to 2000 and left snackbar behind, so it
+      // rendered UNDER every dialog and its backdrop; on mobile, where the
+      // dialog fills the viewport, the export/save status message was
+      // simply invisible, #1838). Status messages are feedback ABOUT what
+      // the open dialog just did, so they have to outrank it.
+      snackbar: 2100,
     },
     toggleColorMode: () => {
       setMode((prevMode) => {

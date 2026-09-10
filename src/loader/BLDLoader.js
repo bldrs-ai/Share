@@ -43,8 +43,14 @@ export default class BLDLoader {
       // TODO(pablo): error handling
       const subUrlStr = subUrl.toString()
       debug().log('subUrlStr', subUrlStr, 'should be from these:', objRef.href, basePath)
+      // A NESTED load: this object renders into the assembly the caller is
+      // loading, so it must not touch the page-level `glbArtifact` slot —
+      // neither clearing it (which the generation bump at the top of `load`
+      // does) nor publishing its own file, or "Download GLB" on a two-object
+      // .bld hands the user whichever object finished last
+      // (loader/glbArtifactPublish.js).
       // eslint-disable-next-line no-empty-function
-      const subModel = await load(subUrlStr, this.viewer, () => {}, () => {}, () => {})
+      const subModel = await load(subUrlStr, this.viewer, () => {}, () => {}, () => {}, '', {isNestedLoad: true})
       debug().log('adding submodel:', subModel)
       root.add(subModel)
 

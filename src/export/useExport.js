@@ -1,0 +1,254 @@
+import {useCallback, useState} from 'react'
+import {captureException} from '@sentry/react'
+import {useAuth0} from '../Auth0/Auth0Proxy'
+import {appMetadataFromToken} from '../Auth0/appMetadata'
+import {glbCacheKey} from '../loader/glbCacheKey'
+import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
+import {readModelByPathFromOPFS} from '../OPFS/utils'
+import {gtagEvent} from '../privacy/analytics'
+import useStore from '../store/useStore'
+import {triggerDownload} from './download'
+import {recordExport} from './exportHistory'
+import {getExportFormat} from './exportRegistry'
+import {ProModuleDeniedError, loadProModule} from './proModuleLoader'
+
+
+// The Auth0 audience/scope every token call site in the app uses; kept
+// identical here so the export shares the same cached token rather than
+// forcing a second, differently-scoped one (see ProfileControl, useQuota).
+const TOKEN_PARAMS = {
+  authorizationParams: {
+    audience: 'https://api.github.com/',
+    scope: 'openid profile email offline_access',
+  },
+}
+
+const BYTES_PER_KB = 1024
+const BYTES_PER_MB = BYTES_PER_KB * BYTES_PER_KB
+const MB_PER_GB = BYTES_PER_KB
+const SIZE_DECIMALS = 1
+
+
+/**
+ * Run an export end to end: locate the cached artifact, load the premium
+ * module that knows the format, convert, download.
+ *
+ * The steps are ordered so nothing premium is fetched speculatively — the
+ * module request only happens once there are real bytes to hand it, which
+ * also keeps the server's denial rate meaningful (§4.6: a 403 spike means a
+ * stale client badge or a probe, not idle UI).
+ *
+ * `isExporting` is shared across every caller in the tab (it lives in
+ * `store/UISlice.js`), because the two components that export — the Download
+ * GLB button and each "Download again" row — must disable each other: two
+ * concurrent runs would race the history mirror's read-modify-write and hand
+ * the user two downloads for one click each (§4.4).
+ *
+ * `run(formatId, options, source)` normally exports the CURRENTLY loaded
+ * model, from the `glbArtifact` slot the loader publishes. `source` overrides
+ * that with an artifact identified elsewhere — "Download again" in
+ * `ExportsList`, which holds the `{cacheKeyArgs, schemaVer}` of a model that
+ * may not be the one on screen (§4.5).
+ *
+ * Design: design/new/glb-export-premium.md §4.4.
+ *
+ * @return {{run: Function, isExporting: boolean, error: ?Error}}
+ */
+export default function useExport() {
+  const glbArtifact = useStore((state) => state.glbArtifact)
+  const setAppMetadata = useStore((state) => state.setAppMetadata)
+  const setSnackMessage = useStore((state) => state.setSnackMessage)
+  const {getAccessTokenSilently, user} = useAuth0()
+  // In the STORE, not in this hook: `ExportSection` and `ExportsList` each
+  // call `useExport`, so per-instance state let one of them start an export
+  // while the other's was still running (#1834).
+  const isExporting = useStore((state) => state.isExportInFlight)
+  const setIsExporting = useStore((state) => state.setIsExportInFlight)
+  const [error, setError] = useState(null)
+
+  // Force-refresh the JWT and APPLY what comes back. `useQuota` fires the
+  // same refresh after a server-side quota decision and throws the token
+  // away, which is enough there because the badge it feeds is already
+  // authoritative. Here it is not: `record-export` has just appended a row
+  // to Auth0 `app_metadata.exports`, and the refresh only updates Auth0's
+  // token cache — `store.appMetadata` keeps the PRE-export claim until the
+  // page reloads. Reopening the Export tab then hydrates the mirror from
+  // that stale list and the export the user just made disappears from
+  // "My Exports" (#1834). Decoded through the same claim `BaseRoutes` reads
+  // (Auth0/appMetadata.js); a token that carries no claim leaves the store
+  // alone rather than clearing it.
+  const refreshAppMetadata = useCallback(async () => {
+    const token = await getAccessTokenSilently(
+      {...TOKEN_PARAMS, cacheMode: 'off', useRefreshTokens: true})
+    const appData = appMetadataFromToken(token)
+    if (appData) {
+      setAppMetadata(appData)
+    }
+    return token
+  }, [getAccessTokenSilently, setAppMetadata])
+
+  const run = useCallback(async (formatId, options = {}, source = null) => {
+    const format = getExportFormat(formatId)
+    if (!format || format.status !== 'shipped') {
+      throw new Error(`useExport: no shipped export format "${formatId}"`)
+    }
+    const artifact = source || glbArtifact
+    if (!artifact) {
+      // The button is disabled in this state; reaching here means the
+      // artifact went away between render and click.
+      setSnackMessage({text: 'The model is still being prepared for export', autoDismiss: true})
+      return null
+    }
+
+    setIsExporting(true)
+    setError(null)
+    try {
+      const {cacheKeyArgs, schemaVer} = artifact
+      const key = glbCacheKey({...cacheKeyArgs, schemaVer})
+      const file = await readModelByPathFromOPFS(
+        key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)
+      if (!file) {
+        // The artifact was evicted (Clear Local Cache, storage pressure)
+        // since the loader published it. Reopening the model rewrites it.
+        setSnackMessage({text: 'Export unavailable — reload the model and try again', autoDismiss: true})
+        return null
+      }
+
+      const proModule = await loadProModule(format.moduleName, () => getAccessTokenSilently(TOKEN_PARAMS))
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      const {blob, filename, stats} = await proModule.exportArtifact({
+        bytes,
+        // The store's `model.name` is a composed DISPLAY label ("Scene
+        // (index.glb)") rather than a filename, so the artifact's own source
+        // path is what the download is named after. The module still honours
+        // an explicit `title` for callers that have a real one.
+        options: {sourceBasename: basename(cacheKeyArgs.sourcePath), ...options},
+      })
+
+      triggerDownload(blob, filename)
+      setSnackMessage({text: `Exported ${filename} (${formatBytes(blob.size)})`, autoDismiss: true})
+      // Awaited AFTER the snackbar, so the success message never waits on
+      // OPFS, Auth0 and a Netlify round trip — but before the in-flight
+      // flag clears in `finally`, because that flag exists to serialise the
+      // history mirror's read-modify-write: releasing it while this record
+      // was still pending let a second export race it and lose a row
+      // (#1837 round 3). A failure here must not turn a completed export
+      // into an error; `recordExport` writes its local row first and never
+      // rejects (exportHistory.js), and the catch below is belt and braces.
+      await recordExport(
+        {
+          // The share path, the same key shape record-load counts loads
+          // under. The cache-key fields beside it stay in this browser
+          // (exportHistory.js) — they are what "Download again" needs and
+          // what the server has no use for. A re-download carries the key of
+          // the model it recorded, which is not necessarily the one on screen.
+          key: source?.key || window.location.pathname,
+          format: format.id,
+          bytes: blob.size,
+          title: basename(cacheKeyArgs.sourcePath),
+          cacheKeyArgs,
+          schemaVer,
+          // The options this run USED, so "Download again" reproduces this
+          // file. Without them a row exported with the metadata stripped
+          // re-downloads with every BLDRS_* payload back in it — a bigger,
+          // more sensitive file than the size beside the row claims.
+          options,
+        },
+        user?.sub,
+        () => getAccessTokenSilently(TOKEN_PARAMS),
+        refreshAppMetadata,
+      ).then((recordResult) => {
+        if (recordResult.status === HTTP_AUTHORIZATION_REQUIRED || recordResult.status === HTTP_FORBIDDEN) {
+          // `pro-module` already said yes to this user moments ago, so a
+          // denial HERE means the two gates disagree — worth seeing.
+          captureException(new Error(`record-export refused the export (${recordResult.status})`))
+        }
+      }).catch((recordError) => captureException(recordError))
+      gtagEvent('export_model', {
+        format: format.id,
+        bytes_bucket: bytesBucket(stats?.outputBytes ?? blob.size),
+        // The loader's categorical kind, carried on the artifact slot. NOT
+        // `cacheKeyArgs.ns1`, which reads like the same thing and is a repo
+        // OWNER for GitHub models — a login, in a GA dimension — and the
+        // constant 'BldrsLocalStorage' for every other adapter, so it leaked
+        // and told us nothing at once (#1834). A "Download again" row carries
+        // no kind (the history row predates this field, and the server row
+        // never had it), which is what 'unknown' means here.
+        source_kind: artifact.kindLabel || 'unknown',
+      })
+      return {filename, stats}
+    } catch (e) {
+      setError(e)
+      if (e instanceof ProModuleDeniedError) {
+        // The server is the authority and it said no, so the badge that let
+        // this click through is stale. Refresh the JWT and apply its claims,
+        // so every app_metadata reader (the tier check above, the Profile
+        // menu) agrees with the server on the next render.
+        setSnackMessage({text: 'Export requires a Pro subscription', autoDismiss: true})
+        refreshAppMetadata().catch((refreshError) => captureException(refreshError))
+      } else {
+        captureException(e)
+        setSnackMessage({text: 'Export failed', autoDismiss: true})
+      }
+      return null
+    } finally {
+      setIsExporting(false)
+    }
+  }, [glbArtifact, getAccessTokenSilently, refreshAppMetadata, setIsExporting, setSnackMessage, user?.sub])
+
+  return {run, isExporting, error}
+}
+
+
+/**
+ * @param {string} path e.g. 'ifc/misc/box.ifc'
+ * @return {string} e.g. 'box.ifc'
+ */
+function basename(path) {
+  return String(path || '').split('/').pop()
+}
+
+
+/**
+ * Human size for the success snackbar. KB below a megabyte, so a small
+ * model doesn't report "0.0 MB".
+ *
+ * @param {number} bytes
+ * @return {string} e.g. '12.4 MB'
+ */
+export function formatBytes(bytes) {
+  const kb = bytes / BYTES_PER_KB
+  if (kb < BYTES_PER_KB) {
+    return `${kb.toFixed(SIZE_DECIMALS)} KB`
+  }
+  const mb = bytes / BYTES_PER_MB
+  return mb >= MB_PER_GB ?
+    `${(mb / MB_PER_GB).toFixed(SIZE_DECIMALS)} GB` :
+    `${mb.toFixed(SIZE_DECIMALS)} MB`
+}
+
+
+/**
+ * Coarse size bucket for analytics. Buckets, not the raw size, because the
+ * funnel question is "do big models export" — and a byte count on a
+ * per-export event is closer to identifying a specific model than we want
+ * in GA.
+ *
+ * @param {number} bytes
+ * @return {string} one of '<1MB', '1-10MB', '10-100MB', '>100MB'
+ */
+export function bytesBucket(bytes) {
+  const mb = bytes / BYTES_PER_MB
+  const TEN_MB = 10
+  const HUNDRED_MB = 100
+  if (mb < 1) {
+    return '<1MB'
+  }
+  if (mb < TEN_MB) {
+    return '1-10MB'
+  }
+  if (mb < HUNDRED_MB) {
+    return '10-100MB'
+  }
+  return '>100MB'
+}

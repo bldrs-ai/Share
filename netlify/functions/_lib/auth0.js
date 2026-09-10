@@ -132,3 +132,99 @@ export async function verifyAuth0Bearer(event) {
     }
   }
 }
+
+
+// Module-scope Management-API token cache — survives across warm Lambda
+// invocations, which is the whole point: a cold client-credentials round
+// trip per request would double the latency of every gated call.
+let cachedMgmtToken = null
+let cachedMgmtTokenExpiresAt = 0
+const MGMT_TOKEN_REFRESH_SAFETY_SEC = 60
+const MILLIS_PER_SECOND = 1000
+
+
+/**
+ * Fetch (or reuse) an Auth0 Management API token via Client Credentials.
+ *
+ * Mirrors `record-load.js`'s private copy, which stays where it is: that
+ * function is CommonJS (`require`/`exports.handler`) and this module is ESM,
+ * so sharing would mean an interop wrapper for no behavioural gain. Keep the
+ * two in lock-step if the token flow changes.
+ *
+ * @return {Promise<string>} Management API access token
+ */
+export async function getManagementApiToken() {
+  const now = Date.now()
+  if (cachedMgmtToken && now < cachedMgmtTokenExpiresAt) {
+    return cachedMgmtToken
+  }
+  const resp = await axios.post(
+    `https://${process.env.AUTH0_DOMAIN}/oauth/token`,
+    {
+      client_id: process.env.AUTH0_CLIENT_ID,
+      client_secret: process.env.AUTH0_CLIENT_SECRET,
+      audience: `https://${process.env.AUTH0_DOMAIN}/api/v2/`,
+      grant_type: 'client_credentials',
+    },
+    {headers: {'Content-Type': 'application/json'}},
+  )
+  cachedMgmtToken = resp.data.access_token
+  const expiresInSec = Number(resp.data.expires_in) || 0
+  cachedMgmtTokenExpiresAt = now + ((expiresInSec - MGMT_TOKEN_REFRESH_SAFETY_SEC) * MILLIS_PER_SECOND)
+  return cachedMgmtToken
+}
+
+
+/**
+ * Read a user's `app_metadata` through the Management API.
+ *
+ * The Management API — never the caller's JWT — is the authority for any
+ * entitlement decision: the client's own copy of `app_metadata` is whatever
+ * was minted into its token, which can be minutes (or a cancelled
+ * subscription) stale. Same rule `record-load.js` follows for quotas and
+ * `create-portal-session.js` for Stripe identity (#1489).
+ *
+ * @param {string} sub Auth0 user_id, e.g. 'google-oauth2|123…'
+ * @return {Promise<object>} app_metadata, `{}` when the user has none
+ */
+export async function getUserAppMetadata(sub) {
+  const mgmtToken = await getManagementApiToken()
+  const resp = await axios.get(
+    `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(sub)}`,
+    {headers: {Authorization: `Bearer ${mgmtToken}`}},
+  )
+  return (resp.data && resp.data.app_metadata) || {}
+}
+
+
+/**
+ * Merge keys into a user's `app_metadata` through the Management API.
+ *
+ * Auth0's PATCH is a SHALLOW merge over `app_metadata`'s top-level keys, so
+ * a patch of `{exports: [...]}` rewrites that one key and leaves
+ * `usageQuota` / `subscriptionStatus` / `stripeCustomerId` exactly as they
+ * were. `record-load.js` relies on the same property when it writes
+ * `usageQuota` — nothing here may send a whole `app_metadata` object built
+ * client-side, which would drop every key it didn't know about.
+ *
+ * Read-modify-write is last-write-wins: two concurrent patches of the SAME
+ * key can lose one side's addition. Callers must keep the loss direction
+ * harmless (a missing history row, never a wrong entitlement).
+ *
+ * @param {string} sub Auth0 user_id, e.g. 'google-oauth2|123…'
+ * @param {object} patch Top-level `app_metadata` keys to write
+ * @return {Promise<void>}
+ */
+export async function patchUserAppMetadata(sub, patch) {
+  const mgmtToken = await getManagementApiToken()
+  await axios.patch(
+    `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(sub)}`,
+    {app_metadata: patch},
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${mgmtToken}`,
+      },
+    },
+  )
+}

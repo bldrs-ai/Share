@@ -28,6 +28,13 @@ describe('store/UISlice', () => {
       expect(state.isShareVisible).toBe(false)
     })
 
+    it('starts with isExportInFlight=false', () => {
+      // Default-off, and shared by every `useExport` caller in the tab: it
+      // is what keeps Download GLB and each "Download again" from running
+      // two exports at once (src/export/useExport.js).
+      expect(makeStore().getState().isExportInFlight).toBe(false)
+    })
+
     it('starts with help tooltips and save dialog hidden', () => {
       const state = makeStore().getState()
       expect(state.isHelpTooltipsVisible).toBe(false)
@@ -84,6 +91,14 @@ describe('store/UISlice', () => {
       const alert = {severity: 'error', message: 'boom'}
       store.getState().setAlert(alert)
       expect(store.getState().alert).toBe(alert)
+    })
+
+    it('setIsExportInFlight toggles the shared export flag', () => {
+      const store = makeStore()
+      store.getState().setIsExportInFlight(true)
+      expect(store.getState().isExportInFlight).toBe(true)
+      store.getState().setIsExportInFlight(false)
+      expect(store.getState().isExportInFlight).toBe(false)
     })
 
     it('setSnackMessage stores the snack message', () => {

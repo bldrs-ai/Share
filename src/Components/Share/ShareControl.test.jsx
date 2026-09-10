@@ -12,10 +12,13 @@ import {DEFAULT_COLOR} from '../../viewer/ifc/flatMeshToBatchedModel'
 describe('ShareControl', () => {
   let controlButton
   let findByTestId
+  let queryByTestId
   describe('no cutplanes active', () => {
     beforeEach(async () => {
-      const {findByTestId: fbti} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+      const {findByTestId: fbti, queryByTestId: qbti} = render(
+        <ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
       findByTestId = fbti
+      queryByTestId = qbti
       controlButton = await findByTestId('control-button-share')
     })
 
@@ -29,6 +32,14 @@ describe('ShareControl', () => {
         expect(await findByTestId('textfield-link')).toBeInTheDocument()
         expect(await findByTestId('toggle-camera')).toBeInTheDocument()
         await(waitFor(() => expect(document.title).toBe('Share Model')))
+      })
+
+      it('Has no Export section — export lives in the Save dialog', async () => {
+        // Moved to Save → Export (#1838). Pinned here because the section
+        // was in this dialog for two stages, and a stray re-add would give
+        // the same flow two entry points with two histories.
+        expect(await findByTestId('textfield-link')).toBeInTheDocument()
+        expect(queryByTestId('export-section')).toBeNull()
       })
     })
   })

@@ -34,6 +34,13 @@ describe('store/IFCSlice', () => {
       expect(makeStore().getState().isCacheWriteInFlight).toBe(false)
     })
 
+    it('starts with glbArtifact=null', () => {
+      // Null is "this load has produced no exportable artifact", which is
+      // what keeps the Share dialog's Export button disabled before any
+      // model is open.
+      expect(makeStore().getState().glbArtifact).toBeNull()
+    })
+
     it('starts with an empty elementTypesMap', () => {
       expect(makeStore().getState().elementTypesMap).toEqual([])
     })
@@ -81,6 +88,22 @@ describe('store/IFCSlice', () => {
       expect(store.getState().isCacheWriteInFlight).toBe(true)
       store.getState().setIsCacheWriteInFlight(false)
       expect(store.getState().isCacheWriteInFlight).toBe(false)
+    })
+
+    it('setGlbArtifact stores and clears the artifact descriptor', () => {
+      const store = makeStore()
+      const artifact = {
+        cacheKeyArgs: {ns1: 'gh-bldrs-ai', ns2: 'share', ns3: 'main', sourcePath: 'a.ifc', sourceHash: 'sha'},
+        schemaVer: '0.21.0-batched',
+        writtenAt: 1,
+      }
+      store.getState().setGlbArtifact(artifact)
+      expect(store.getState().glbArtifact).toBe(artifact)
+      // Clearing matters as much as setting: `Loader#load` nulls this at the
+      // top of every load so the Export section can't offer the previous
+      // model's file.
+      store.getState().setGlbArtifact(null)
+      expect(store.getState().glbArtifact).toBeNull()
     })
 
     it('setElementTypesMap replaces the array', () => {

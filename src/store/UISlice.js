@@ -25,6 +25,17 @@ export default function createUISlice(set, get) {
     isAboutVisible: aboutIsVisibleInitially(),
     setIsAboutVisible: (is) => set(() => ({isAboutVisible: is})),
 
+    // True while an export is running (`src/export/useExport.js`). Shared
+    // state rather than the hook's own, because two components call
+    // `useExport` in the same tab — `Open/ExportSection.jsx`'s Download GLB
+    // and every "Download again" in `Open/ExportsList.jsx` — and per-hook
+    // state left each of them enabled while the other one ran: two exports
+    // in flight at once, racing each other's read-modify-write of the
+    // history mirror. Same shape as `IFCSlice.js`'s isCacheWriteInFlight.
+    // See design/new/glb-export-premium.md §4.4.
+    isExportInFlight: false,
+    setIsExportInFlight: (inFlight) => set(() => ({isExportInFlight: inFlight})),
+
     isHelpVisible: helpIsVisibleInitially(),
     setIsHelpVisible: (is) => set(() => ({isHelpVisible: is})),
 

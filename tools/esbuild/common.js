@@ -27,7 +27,19 @@ export default {
   // Allow BigInt through: the conway 3D engine already requires a modern,
   // cross-origin-isolated browser (SharedArrayBuffer + threads) well beyond
   // any pre-BigInt browser, so this narrows nothing that could run it anyway.
-  supported: {bigint: true},
+  // `dynamic-import`: the target list above includes firefox62, which
+  // predates dynamic import, so esbuild lowers every `import(expr)` it
+  // cannot resolve statically into `Promise.resolve().then(() =>
+  // __require(expr))` — and that shim THROWS at runtime ("Dynamic require
+  // ... is not supported"). The pro-module loader
+  // (`src/export/importModuleFromUrl.js`) imports a runtime-built `blob:`
+  // URL, which is un-analyzable by construction, so it needs the real
+  // syntax preserved. Same reasoning as bigint above: every browser that
+  // can run this app (SharedArrayBuffer + OPFS + wasm threads) has
+  // supported dynamic import for years, so declaring it narrows nothing
+  // that could run today. Literal `import('pkg')` calls are unaffected —
+  // the bundler still inlines those into this bundle.
+  supported: {'bigint': true, 'dynamic-import': true},
   bundle: true,
   loader: {
     '.css': 'css',

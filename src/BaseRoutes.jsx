@@ -4,6 +4,7 @@ import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import {Button, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, ThemeProvider} from '@mui/material'
 import * as Sentry from '@sentry/react'
 import {useAuth0} from './Auth0/Auth0Proxy'
+import {APP_METADATA_CLAIM} from './Auth0/appMetadata'
 import PopupAuth from './Components/Auth/PopupAuth'
 import PopupCallback from './Components/Auth/PopupCallback'
 import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
@@ -80,7 +81,7 @@ export default function BaseRoutes({testElt = null}) {
     }
 
     const decodedToken = jwtDecode(token)
-    const appData = decodedToken['https://bldrs.ai/app_metadata']
+    const appData = decodedToken[APP_METADATA_CLAIM]
 
     // Reauth-modal short circuits: show the modal and stop — leave
     // identity/token state as it was.
