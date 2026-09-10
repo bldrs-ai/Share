@@ -22,11 +22,25 @@ jest.mock('../../net/github/Branches', () => ({
 // Default the feature flag to off so existing tests see no behavioural
 // change. The B4 sub-suite below opts in per-case.
 jest.mock('../../hooks/useExistInFeature', () => jest.fn().mockReturnValue(false))
+// The Export tab is gated on `export`; each test below states the position
+// it means rather than riding the shipped default.
+const mockIsFeatureEnabled = jest.fn()
+jest.mock('../../FeatureFlags', () => ({
+  isFeatureEnabled: (name) => mockIsFeatureEnabled(name),
+}))
+// ExportsList reaches OPFS and Auth0-backed history; the Export tab tests
+// here are about the tab, not the list's own suite (ExportsList.test.jsx).
+jest.mock('../../export/exportHistory', () => ({
+  hydrateExports: jest.fn().mockResolvedValue({exports: []}),
+  loadExports: jest.fn().mockResolvedValue({exports: []}),
+  subscribeToExports: jest.fn(() => () => {}),
+}))
 
 
 describe('SaveModelControl', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockIsFeatureEnabled.mockReturnValue(false)
     getBranches.mockResolvedValue([{name: 'main'}, {name: 'dev'}])
     getOrganizations.mockResolvedValue(MOCK_ORGANIZATIONS.data)
     // Reset store state
@@ -38,25 +52,33 @@ describe('SaveModelControl', () => {
     })
   })
 
-  it('Renders a login message if the user is not logged in', async () => {
+  it('Gates the toolbar button when the user is not logged in', async () => {
+    // The whole point of the gated look (#1838): the button is visible and
+    // the click still lands — a DOM-disabled button would swallow it and the
+    // user would learn nothing. The dialog stays shut, because a signed-out
+    // user has nowhere to save.
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
-    const {getByTestId, getByText, getByRole} = render(<SaveModelControlFixture/>)
-    const saveControlButton = getByTestId('control-button-save')
-    fireEvent.click(saveControlButton)
+    const {getByTestId, queryByRole} = render(<SaveModelControlFixture/>)
 
-    const dialog = await waitFor(() => getByRole('dialog'))
-    expect(dialog).toBeVisible()
+    const gate = getByTestId('gated-save')
+    expect(gate).toHaveAttribute('aria-disabled', 'true')
+    expect(getByTestId('control-button-save')).not.toBeDisabled()
 
-    const loginTextMatcher = (content, node) => {
-      const hasText = (_node) => _node.textContent.includes('log in to Share with your GitHub credentials')
-      const nodeHasText = hasText(node)
-      const childrenDontHaveText = Array.from(node.children).every(
-        (child) => !hasText(child),
-      )
-      return nodeHasText && childrenDontHaveText
-    }
-    const loginText = getByText(loginTextMatcher)
-    expect(loginText).toBeInTheDocument()
+    fireEvent.click(gate)
+
+    const help = await waitFor(() => getByTestId('gated-help'))
+    expect(help).toHaveTextContent('Log in to one of your connectors to save models')
+    expect(queryByRole('dialog')).toBeNull()
+  })
+
+  it('Sends the signed-out user to the login dialog from the gate', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    const {getByTestId} = render(<SaveModelControlFixture/>)
+
+    fireEvent.click(getByTestId('gated-save'))
+    fireEvent.click(await waitFor(() => getByTestId('gated-help-action')))
+
+    expect(useStore.getState().isLoginVisible).toBe(true)
   })
 
   it('Renders branch selector after selecting a repository', async () => {
@@ -115,6 +137,59 @@ describe('SaveModelControl', () => {
     })
     expect(getOrganizations).toHaveBeenCalled()
   })
+
+  // The Export tab (#1838). The Save tab is today's content; Export hosts
+  // ExportSection + the My Exports list, and neither exists with the flag off.
+  describe('Export tab', () => {
+    /**
+     * Open the Save dialog on a signed-in user with a file to save.
+     *
+     * @return {object} Render result from @testing-library/react.
+     */
+    function renderOpenDialog() {
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+      const {result} = renderHook(() => useStore((state) => state))
+      act(() => {
+        result.current.setIsSaveModelVisible(true)
+        result.current.setAccessToken('foo')
+        result.current.setOpfsFile(new File(['x'], 'm.ifc', {type: 'application/octet-stream'}))
+      })
+      return render(<SaveModelControlFixture/>)
+    }
+
+    it('has no tabs at all while the `export` flag is off', async () => {
+      // Flag-off must be byte-identical to the pre-#1838 dialog: no tab bar,
+      // no Export tab, and the Save action button still in the footer.
+      const {findByTestId, queryByTestId} = renderOpenDialog()
+
+      expect(await findByTestId('button-dialog-main-action')).toBeInTheDocument()
+      expect(queryByTestId('tabs-save-export')).toBeNull()
+      expect(queryByTestId('export-section')).toBeNull()
+    })
+
+    it('switches to Export, which hosts the section and the list', async () => {
+      mockIsFeatureEnabled.mockReturnValue(true)
+      const {findByTestId, getByTestId, queryByTestId} = renderOpenDialog()
+
+      // Save is the default tab.
+      expect(await findByTestId('tabs-save-export')).toBeInTheDocument()
+      expect(queryByTestId('export-section')).toBeNull()
+
+      await act(async () => {
+        fireEvent.click(getByTestId('tab-export'))
+        // Yield inside act() so ExportsList's mount effects (the history
+        // read, then the OPFS probe) settle before the assertions below.
+        await Promise.resolve()
+      })
+
+      expect(await findByTestId('export-section')).toBeInTheDocument()
+      expect(await findByTestId('exports-list')).toBeInTheDocument()
+      // The dialog's footer action belongs to Save; on Export the actions are
+      // the tab's own buttons.
+      expect(queryByTestId('button-dialog-main-action')).toBeNull()
+    })
+  })
+
 
   // PR2 / B4: githubAsSource feature surface — saving-as footer, multi-
   // account picker, disabled-state CTA. All gated on the feature flag so

@@ -5,7 +5,7 @@ import {RouteThemeCtx} from '../../Share.fixture'
 import {mockedUseAuth0, mockedUserLoggedIn} from '../../__mocks__/authentication'
 import {hydrateExports, loadExports} from '../../export/exportHistory'
 import useStore from '../../store/useStore'
-import ExportsDialog from './ExportsDialog'
+import ExportsList from './ExportsList'
 
 
 jest.mock('../../OPFS/utils', () => ({doesFileExistInOPFS: jest.fn()}))
@@ -62,14 +62,11 @@ function aRow(overrides = {}) {
  * Rendering bare leaves their `setState`s outside act(), which is noise in
  * the console rather than a failure (PLAYBOOK §"Keep the test console clean").
  *
- * @param {boolean} [isDialogDisplayed]
  * @return {Promise<void>}
  */
-async function renderDialog(isDialogDisplayed = true) {
+async function renderList() {
   await act(async () => {
-    render(
-      <ExportsDialog isDialogDisplayed={isDialogDisplayed} setIsDialogDisplayed={() => {}}/>,
-      {wrapper: RouteThemeCtx})
+    render(<ExportsList/>, {wrapper: RouteThemeCtx})
     // Yield inside act() so the effects' promise chains run here rather
     // than after the caller's first assertion.
     await Promise.resolve()
@@ -77,7 +74,7 @@ async function renderDialog(isDialogDisplayed = true) {
 }
 
 
-describe('ExportsDialog', () => {
+describe('ExportsList', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     doesFileExistInOPFS.mockResolvedValue(true)
@@ -95,7 +92,7 @@ describe('ExportsDialog', () => {
   it('explains the feature when nothing has been exported', async () => {
     loadExports.mockResolvedValue({exports: []})
 
-    await renderDialog()
+    await renderList()
 
     expect(await screen.findByTestId('exports-empty')).toBeInTheDocument()
     expect(screen.queryByTestId('exports-row')).not.toBeInTheDocument()
@@ -104,7 +101,7 @@ describe('ExportsDialog', () => {
   it('lists an export with its format, size and source path', async () => {
     loadExports.mockResolvedValue({exports: [aRow()]})
 
-    await renderDialog()
+    await renderList()
 
     const row = await screen.findByTestId('exports-row')
     expect(row).toHaveTextContent('index.ifc')
@@ -117,7 +114,7 @@ describe('ExportsDialog', () => {
   it('falls back to the share path\'s basename when a row has no title', async () => {
     loadExports.mockResolvedValue({exports: [aRow({title: null, key: '/share/v/p/nested/model.step'})]})
 
-    await renderDialog()
+    await renderList()
 
     expect(await screen.findByTestId('exports-row')).toHaveTextContent('model.step')
   })
@@ -127,7 +124,7 @@ describe('ExportsDialog', () => {
     loadExports.mockResolvedValue({exports: [aRow()]})
     doesFileExistInOPFS.mockResolvedValue(false)
 
-    await renderDialog()
+    await renderList()
 
     await screen.findByTestId('exports-row')
     await waitFor(() => expect(screen.getByText(/Open the model to regenerate/)).toBeInTheDocument())
@@ -139,19 +136,11 @@ describe('ExportsDialog', () => {
     // there is no cache key to look up and OPFS is never even consulted.
     loadExports.mockResolvedValue({exports: [aRow({cacheKeyArgs: null, schemaVer: null})]})
 
-    await renderDialog()
+    await renderList()
 
     await screen.findByTestId('exports-row')
     await waitFor(() => expect(screen.getByText(/Open the model to regenerate/)).toBeInTheDocument())
     expect(doesFileExistInOPFS).not.toHaveBeenCalled()
-  })
-
-  it('reads nothing while closed', async () => {
-    loadExports.mockResolvedValue({exports: [aRow()]})
-
-    await renderDialog(false)
-
-    expect(loadExports).not.toHaveBeenCalled()
   })
 
   it('reads the signed-in account\'s mirror, not a shared one', async () => {
@@ -159,7 +148,7 @@ describe('ExportsDialog', () => {
     // account's history from the next one's on this browser (§4.5).
     loadExports.mockResolvedValue({exports: []})
 
-    await renderDialog()
+    await renderList()
 
     expect(loadExports).toHaveBeenCalledWith(SUB)
   })
@@ -169,7 +158,7 @@ describe('ExportsDialog', () => {
     // re-running with `{}` would hand back a different, larger file.
     loadExports.mockResolvedValue({exports: [aRow()]})
 
-    await renderDialog()
+    await renderList()
 
     fireEvent.click(await screen.findByTestId('exports-download-again'))
     expect(mockRun).toHaveBeenCalledWith(
@@ -190,7 +179,7 @@ describe('ExportsDialog', () => {
     useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro', exports: serverRows})
     hydrateExports.mockResolvedValue({exports: serverRows})
 
-    await renderDialog()
+    await renderList()
 
     await waitFor(() => expect(screen.getAllByTestId('exports-row')).toHaveLength(2))
     expect(hydrateExports).toHaveBeenCalledWith(SUB, serverRows)

@@ -34,10 +34,10 @@ describe('ShareControl', () => {
         await(waitFor(() => expect(document.title).toBe('Share Model')))
       })
 
-      it('Hides the Export section while the `export` flag is off', async () => {
-        // The flag's default is off (FeatureFlags.js), and this pins that
-        // the dialog reads it: shipping the section on by default would put
-        // an unfinished paid flow in front of every user.
+      it('Has no Export section — export lives in the Save dialog', async () => {
+        // Moved to Save → Export (#1838). Pinned here because the section
+        // was in this dialog for two stages, and a stray re-add would give
+        // the same flow two entry points with two histories.
         expect(await findByTestId('textfield-link')).toBeInTheDocument()
         expect(queryByTestId('export-section')).toBeNull()
       })

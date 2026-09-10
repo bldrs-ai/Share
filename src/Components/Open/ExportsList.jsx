@@ -11,8 +11,6 @@ import {hydrateExports, loadExports, subscribeToExports} from '../../export/expo
 import useExport, {formatBytes} from '../../export/useExport'
 import useStore from '../../store/useStore'
 import {navigateToModel} from '../../utils/navigate'
-import Dialog from '../Dialog'
-import {FileDownloadOutlined as FileDownloadIcon} from '@mui/icons-material'
 
 
 // dayjs ships `fromNow` as an opt-in plugin; without this every relative
@@ -25,17 +23,23 @@ dayjs.extend(relativeTime)
  * "My Exports": what this user has exported, newest first, with a
  * re-download for the ones whose artifact is still in this browser's cache.
  *
+ * A plain list, not a dialog — it renders inside the Save dialog's Export
+ * tab, under `ExportSection` (#1838). Mounting IS the "open" signal: the tab
+ * unmounts it when the user switches back to Save and the dialog unmounts it
+ * when closed, so the subscription below is alive exactly while the list is
+ * on screen.
+ *
  * The list is read from the OPFS mirror (`src/export/exportHistory.js`), not
  * from the server, so it paints instantly and still works offline; the mirror
  * is refreshed from `record-export`'s response after every export, and this
- * dialog subscribes so an export made while it is open appears without a
+ * list subscribes so an export made while it is open appears without a
  * reopen. The mirror is per-account, so everything here is addressed by the
- * signed-in `sub` and a signed-out dialog is empty by construction.
+ * signed-in `sub` and a signed-out list is empty by construction.
  *
  * A mirror that has never seen this account is not the same as an account
  * with no history: on a new device, or after the local cache was cleared, the
  * rows live on in Auth0 `app_metadata.exports` (the claim `BaseRoutes.jsx`
- * decodes into `store.appMetadata`). Opening the dialog hydrates the mirror
+ * decodes into `store.appMetadata`). Mounting the list hydrates the mirror
  * from that list — see `hydrateExports`.
  *
  * "Download again" is only offered for a row that carries `cacheKeyArgs` +
@@ -49,11 +53,11 @@ dayjs.extend(relativeTime)
  *
  * Design: design/new/glb-export-premium.md §4.5.
  *
- * @property {boolean} isDialogDisplayed Whether the dialog is open
- * @property {Function} setIsDialogDisplayed Open/close setter
+ * @property {Function} [onNavigate] Called before navigating away from the
+ *   model on screen, so a host dialog can close itself
  * @return {ReactElement}
  */
-export default function ExportsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+export default function ExportsList({onNavigate}) {
   const [entries, setEntries] = useState([])
   const [redownloadableIds, setRedownloadableIds] = useState([])
 
@@ -63,13 +67,7 @@ export default function ExportsDialog({isDialogDisplayed, setIsDialogDisplayed})
   const {isExporting, run} = useExport()
   const navigate = useNavigate()
 
-  // Only mirror state while the dialog is open: an unopened dialog that
-  // subscribed would keep setting state behind a closed UI, which is the
-  // shape that fills consumers' tests with act() warnings.
   useEffect(() => {
-    if (!isDialogDisplayed) {
-      return undefined
-    }
     let isCancelled = false
     loadExports(sub).then(({exports}) => {
       if (!isCancelled) {
@@ -85,14 +83,14 @@ export default function ExportsDialog({isDialogDisplayed, setIsDialogDisplayed})
       isCancelled = true
       unsubscribe()
     }
-  }, [isDialogDisplayed, sub])
+  }, [sub])
 
   // Catch-up from the account's server-side history, which the local mirror
   // may know nothing about (new device, cleared cache). Runs alongside the
   // read above rather than in place of it: OPFS answers immediately and this
   // lands whenever it lands, publishing through the same subscription.
   useEffect(() => {
-    if (!isDialogDisplayed || !sub) {
+    if (!sub) {
       return undefined
     }
     let isCancelled = false
@@ -104,12 +102,9 @@ export default function ExportsDialog({isDialogDisplayed, setIsDialogDisplayed})
     return () => {
       isCancelled = true
     }
-  }, [isDialogDisplayed, sub, appMetadata])
+  }, [sub, appMetadata])
 
   useEffect(() => {
-    if (!isDialogDisplayed) {
-      return undefined
-    }
     let isCancelled = false
     findRedownloadableIds(entries).then((ids) => {
       if (!isCancelled) {
@@ -119,12 +114,14 @@ export default function ExportsDialog({isDialogDisplayed, setIsDialogDisplayed})
     return () => {
       isCancelled = true
     }
-  }, [entries, isDialogDisplayed])
+  }, [entries])
 
   const onOpenModel = useCallback((key) => {
-    setIsDialogDisplayed(false)
+    if (onNavigate) {
+      onNavigate()
+    }
     navigateToModel(key, navigate)
-  }, [navigate, setIsDialogDisplayed])
+  }, [navigate, onNavigate])
 
   const onDownloadAgain = useCallback((entry) => {
     // The recorded artifact, not whatever model is on screen — this dialog
@@ -139,34 +136,28 @@ export default function ExportsDialog({isDialogDisplayed, setIsDialogDisplayed})
   }, [run])
 
   return (
-    <Dialog
-      headerIcon={<FileDownloadIcon/>}
-      headerText='My Exports'
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
-    >
-      <Stack spacing={1} data-testid='exports-dialog'>
-        {entries.length === 0 ?
-          <Stack spacing={1} data-testid='exports-empty'>
-            <Typography variant='body2'>
-              Models you download are listed here — what you exported, when, and how big.
-            </Typography>
-            <Typography variant='body2' color='text.secondary'>
-              Start an export from the Export section of the Share dialog.
-            </Typography>
-          </Stack> :
-          entries.map((entry) => (
-            <ExportRow
-              key={entry.id}
-              entry={entry}
-              isRedownloadable={redownloadableIds.includes(entry.id)}
-              isExporting={isExporting}
-              onOpenModel={onOpenModel}
-              onDownloadAgain={onDownloadAgain}
-            />
-          ))}
-      </Stack>
-    </Dialog>
+    <Stack spacing={1} data-testid='exports-list' sx={{mt: 2}}>
+      <Typography variant='overline'>My Exports</Typography>
+      {entries.length === 0 ?
+        <Stack spacing={1} data-testid='exports-empty'>
+          <Typography variant='body2'>
+            Models you download are listed here — what you exported, when, and how big.
+          </Typography>
+          <Typography variant='body2' color='text.secondary'>
+            Start an export with the Download GLB button above.
+          </Typography>
+        </Stack> :
+        entries.map((entry) => (
+          <ExportRow
+            key={entry.id}
+            entry={entry}
+            isRedownloadable={redownloadableIds.includes(entry.id)}
+            isExporting={isExporting}
+            onOpenModel={onOpenModel}
+            onDownloadAgain={onDownloadAgain}
+          />
+        ))}
+    </Stack>
   )
 }
 

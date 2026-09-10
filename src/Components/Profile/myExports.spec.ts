@@ -4,7 +4,7 @@ import {
   EXPORT_TEST_TIMEOUT_MS,
   GLTF_MAGIC,
   loadModelAndWaitForArtifact,
-  openShareDialog,
+  openExportTab,
   routeProModule,
   setSubscriptionTier,
 } from '../../tests/e2e/export'
@@ -19,13 +19,14 @@ import {
 
 
 /**
- * "My Exports" in the Profile menu (share-140 S3, #1834).
+ * "My Exports" in the Save dialog's Export tab (share-140 S2b, #1838; it was
+ * a Profile-menu dialog through S3/#1834).
  *
  * What only an E2E can show here: that the history a user sees is the one
  * the export actually wrote. The row comes back through the whole chain —
  * `useExport` → `exportHistory.recordExport` → the `record-export` MSW gate
  * (which reads the tier off the store exactly as the real function reads
- * `app_metadata`) → the `exports.json` mirror in OPFS → the dialog. And
+ * `app_metadata`) → the `exports.json` mirror in OPFS → the list. And
  * "Download again" then re-runs the premium module against the artifact the
  * FIRST export left in the cache, with no model reload in between, which is
  * the claim the local-only `cacheKeyArgs` exist to support.
@@ -35,14 +36,14 @@ import {
 
 
 /**
- * Open the Profile menu and pick "My Exports".
+ * Open the export history, which lives under the Download GLB button on the
+ * Save dialog's Export tab.
  *
  * @param page Playwright page
  */
 async function openMyExports(page: Page) {
-  await page.getByTestId('control-button-profile').click()
-  await page.getByTestId('my-exports').click()
-  await expect(page.getByTestId('exports-dialog')).toBeVisible()
+  await openExportTab(page)
+  await expect(page.getByTestId('exports-list')).toBeVisible()
 }
 
 
@@ -75,13 +76,14 @@ describeMobileAndDesktop('Share 140: My Exports', () => {
     await loadModelAndWaitForArtifact(page)
     await signInAsPro(page)
 
-    await openShareDialog(page)
+    await openExportTab(page)
     const firstDownload = page.waitForEvent('download')
     await page.getByTestId('export-glb-button').click()
     await firstDownload
-    await page.getByTestId('button-close-dialog-share').click()
 
-    await openMyExports(page)
+    // Same tab, no reopen: the list subscribes to the mirror, so the row the
+    // export just wrote appears under the button that wrote it.
+    await expect(page.getByTestId('exports-list')).toBeVisible()
     const rows = page.getByTestId('exports-row')
     await expect(rows).toHaveCount(1)
     // The title the hook records is the model's own source filename, and the

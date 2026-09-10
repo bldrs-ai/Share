@@ -1,6 +1,5 @@
 import React, {ReactElement} from 'react'
 import {Stack} from '@mui/material'
-import {useAuth0} from '../Auth0/Auth0Proxy'
 import NavTreeControl from '../Components/NavTree/NavTreeControl'
 import OpenModelControl from '../Components/Open/OpenModelControl'
 import SaveModelControl from '../Components/Open/SaveModelControl'
@@ -27,14 +26,15 @@ export default function ControlsGroup() {
   // this over-canvas toggle would be a second entry point to the same
   // query state.
   const isWorkspaceEnabled = useExistInFeature('workspace')
-  const {isAuthenticated} = useAuth0()
   return (
     <Stack>
       <Stack direction='row'>
         {isOpenEnabled &&
          <>
            <OpenModelControl/>
-           {isAuthenticated && <SaveModelControl/>}
+           {/* Save is shown signed-out too, in the gated look — it explains
+               what unlocks it rather than vanishing (#1838). */}
+           <SaveModelControl/>
          </>}
         {isSearchEnabled && !isWorkspaceEnabled && <SearchControl/>}
         {isSearchEnabled && !isWorkspaceEnabled &&

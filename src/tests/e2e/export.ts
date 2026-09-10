@@ -31,6 +31,10 @@ export const EXPORT_TEST_TIMEOUT_MS = 120_000
 
 const CACHE_TIMEOUT_MS = 60_000
 
+const SNACKBAR_SELECTOR = '[data-testid="snackbar"]'
+// Centre of a box.
+const HALF = 2
+
 
 type AppMetadata = {
   userEmail: string
@@ -83,11 +87,80 @@ export async function loadModelAndWaitForArtifact(page: Page) {
 
 
 /**
+ * Open the Save dialog's Export tab, where the export UI lives as of #1838.
+ * Only reachable signed in — the toolbar Save button is gated otherwise.
+ *
  * @param page Playwright page
  */
-export async function openShareDialog(page: Page) {
-  await page.getByTestId('control-button-share').click()
+export async function openExportTab(page: Page) {
+  await page.getByTestId('control-button-save').click()
+  await page.getByTestId('tab-export').click()
   await expect(page.getByTestId('export-section')).toBeVisible()
+}
+
+
+/**
+ * Clear the post-load "Loaded <model>" snackbar so a later assertion is
+ * about the EXPORT's status message and not the load's. The load view owns
+ * the snackbar while it is up (AlertDialogAndSnackbar.jsx), and OK ends it
+ * with no animation.
+ *
+ * @param page Playwright page
+ */
+export async function dismissLoadSnackbar(page: Page) {
+  const ok = page.getByTestId('LoadStatusOk')
+  if (await ok.isVisible()) {
+    await ok.click()
+  }
+  await expect(page.getByTestId('snackbar')).toBeHidden()
+}
+
+
+/**
+ * Click a gated control (`GatedAction`, #1838).
+ *
+ * `force` is required, and is not papering over a flaky click: Playwright's
+ * actionability check treats `aria-disabled='true'` on a role=button as
+ * disabled and waits for it to become "enabled", which never happens — the
+ * whole point of the pattern is a control that LOOKS disabled and still takes
+ * the click. Force skips that wait; the click itself is a real one, and what
+ * the test then asserts is that the help opened, which only happens if the
+ * handler ran.
+ *
+ * @param page Playwright page
+ * @param testId the gate's testid, e.g. 'gated-save'
+ */
+export async function clickGate(page: Page, testId: string) {
+  await expect(page.getByTestId(testId)).toHaveAttribute('aria-disabled', 'true')
+  await page.getByTestId(testId).click({force: true})
+}
+
+
+/**
+ * Assert the status message is not merely present but actually on top: the
+ * point at its centre must hit-test inside the snackbar. `toBeVisible` alone
+ * passes for a snackbar that renders UNDER an open dialog and its backdrop,
+ * which is exactly the bug #1838 fixed (`zIndex.snackbar` above `modal`) —
+ * on mobile the dialog covers the whole band.
+ *
+ * @param page Playwright page
+ */
+export async function expectSnackbarOnTop(page: Page) {
+  const content = page.locator(`${SNACKBAR_SELECTOR} .MuiSnackbarContent-root`)
+  await expect(content).toBeVisible()
+  const box = await content.boundingBox()
+  if (box === null) {
+    throw new Error('The snackbar content has no layout box')
+  }
+  const isOnTop = await page.evaluate(({x, y, selector}) => {
+    const hit = document.elementFromPoint(x, y)
+    return Boolean(hit && hit.closest(selector))
+  }, {
+    x: box.x + (box.width / HALF),
+    y: box.y + (box.height / HALF),
+    selector: SNACKBAR_SELECTOR,
+  })
+  expect(isOnTop).toBe(true)
 }
 
 

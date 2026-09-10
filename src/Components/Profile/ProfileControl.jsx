@@ -16,7 +16,6 @@ import {assertDefinedBoolean} from '../../utils/assert'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {LOOKS, DEFAULT_LOOK} from '../../viewer/looks'
 import {TooltipIconButton} from '../Buttons'
-import ExportsDialog from './ExportsDialog'
 import LoginDialog from './LoginDialog'
 import ManageProfile from './ManageProfile'
 import {goToSubscription} from './subscriptionNav'
@@ -35,7 +34,6 @@ import {
   FlareOutlined as FlareOutlinedIcon,
   PaymentOutlined,
   CleaningServicesOutlined as CleaningServicesOutlinedIcon,
-  FileDownloadOutlined as FileDownloadOutlinedIcon,
 } from '@mui/icons-material'
 import {clearOPFSCache} from '../../OPFS/utils'
 import {reloadAfterCacheClear} from '../../utils/navigate'
@@ -55,9 +53,6 @@ export default function ProfileControl() {
   // The §6e Neutral/Flat render toggle only appears when the whole look system
   // is enabled (`?feature=look`); off, there's no look to switch.
   const isLookEnabled = isFeatureEnabled('look')
-  // "My Exports" rides the same flag as the Export section in ShareDialog —
-  // with export off there is nothing that can put a row in the list.
-  const isExportEnabled = isFeatureEnabled('export')
 
   const {
     getAccessTokenSilently,
@@ -73,7 +68,6 @@ export default function ProfileControl() {
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
   const [renderMode, setRenderModeState] = useState(getRenderMode() ?? DEFAULT_LOOK)
   const [isManageProfileOpen, setIsManageProfileOpen] = useState(false)
-  const [isExportsDialogOpen, setIsExportsDialogOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState(null)
   const isMenuVisible = Boolean(anchorEl)
   const userEmail = appMetadata?.userEmail || ''
@@ -112,11 +106,6 @@ export default function ProfileControl() {
   }, [getAccessTokenSilently, setAccessToken])
 
   const onCloseMenu = () => setAnchorEl(null)
-
-  const onMyExportsClick = () => {
-    setIsExportsDialogOpen(true)
-    onCloseMenu()
-  }
 
 
   /**
@@ -217,13 +206,6 @@ export default function ProfileControl() {
           <MenuItem onClick={onManageProfileClick} data-testid='manage-profile'>
             <AccountCircleOutlined/>
             <Typography>Manage Profile</Typography>
-          </MenuItem>
-        )}
-
-        {isAuthenticated && isExportEnabled && (
-          <MenuItem onClick={onMyExportsClick} data-testid='my-exports'>
-            <FileDownloadOutlinedIcon/>
-            <Typography>My Exports</Typography>
           </MenuItem>
         )}
 
@@ -346,14 +328,6 @@ export default function ProfileControl() {
           <Typography>Clear Local Cache</Typography>
         </MenuItem>
       </Menu>
-
-      {/* Outside the Menu, unlike ManageProfile above: opening this closes
-          the menu, and MUI unmounts a closed Popover's children — a dialog
-          rendered in there would go with it. */}
-      <ExportsDialog
-        isDialogDisplayed={isExportsDialogOpen}
-        setIsDialogDisplayed={(isDisplayed) => setIsExportsDialogOpen(isDisplayed)}
-      />
 
       <LoginDialog
         isDialogDisplayed={isLoginVisible}

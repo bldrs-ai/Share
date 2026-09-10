@@ -6,6 +6,7 @@ import useExport from '../../export/useExport'
 import {gtagEvent} from '../../privacy/analytics'
 import {TIERS, getTier} from '../../quota/quota'
 import useStore from '../../store/useStore'
+import GatedAction from '../GatedAction'
 import Toggle from '../Toggle'
 import {useMock} from '../Profile/ProfileControl'
 import {goToSubscription} from '../Profile/subscriptionNav'
@@ -16,19 +17,22 @@ import {
 
 
 /**
- * "Export" section of the Share dialog: download the current model as a
- * standalone `.glb`, sold as a Pro feature.
+ * "Export" section of the Save dialog's Export tab: download the current
+ * model as a standalone `.glb`, sold as a Pro feature.
  *
- * It lives in the Share dialog because that dialog is already "what leaves
- * this browser", and a toolbar button would cost chrome on mobile.
+ * It sits beside Save because both are "get this model out of here", and the
+ * user who wants a file reaches for the same control either way (#1838;
+ * before that it lived in the Share dialog).
  *
- * Three gated states resolve in this order (design/new/glb-export-premium.md
- * §4.4): no artifact yet beats everything (there is nothing to download);
- * then anonymous → the login dialog; then free → the subscription flow; then
- * Pro → the export itself. The tier check here is `getTier`, the same
- * mapping the server uses, but it decides only what is RENDERED — the
- * `pro-module` function re-checks the subscription on every request and is
- * the authority.
+ * The states resolve in this order (design/new/glb-export-premium.md §4.4):
+ * no artifact yet beats everything (there is nothing to download); then
+ * anonymous → log in; then free → upgrade; then Pro → the export itself. The
+ * two non-Pro states render the button in the GATED look — visible, dimmed,
+ * and clickable into help that says what unlocks it — rather than as a live
+ * button that silently does something else. The tier check here is `getTier`,
+ * the same mapping the server uses, but it decides only what is RENDERED —
+ * the `pro-module` function re-checks the subscription on every request and
+ * is the authority.
  *
  * @return {ReactElement}
  */
@@ -58,23 +62,62 @@ export default function ExportSection() {
   }
 
   const onExportClick = async () => {
-    if (!isAuthenticated) {
-      gtagEvent('export_gated', {reason: 'anonymous'})
-      setIsLoginVisible(true)
-      return
-    }
-    if (!isPro) {
-      gtagEvent('export_gated', {reason: 'free'})
-      await goToSubscription({
-        stripeCustomerId: appMetadata?.stripeCustomerId || null,
-        userEmail: appMetadata?.userEmail || '',
-        isDay: theme.palette.mode === 'light',
-        getAccessTokenSilently,
-        useMock,
-      })
-      return
-    }
     await run('glb', {stripBldrsMetadata: !isMetadataIncluded})
+  }
+
+  const onUpgradeClick = async () => {
+    await goToSubscription({
+      stripeCustomerId: appMetadata?.stripeCustomerId || null,
+      userEmail: appMetadata?.userEmail || '',
+      isDay: theme.palette.mode === 'light',
+      getAccessTokenSilently,
+      useMock,
+    })
+  }
+
+  const exportButton = (
+    <Button
+      variant='contained'
+      size='small'
+      onClick={onExportClick}
+      disabled={!isArtifactReady || isExporting}
+      startIcon={isAuthenticated && isPro ? <FileDownloadIcon/> : <LockIcon/>}
+      data-testid='export-glb-button'
+    >
+      {label}
+    </Button>
+  )
+
+  // The signed-out branch is defensive: the Save dialog this section lives in
+  // only opens for a signed-in user (an anonymous Save click gets its own
+  // gate). Kept so the section stays correct wherever it is mounted.
+  let gatedButton = exportButton
+  if (!isAuthenticated) {
+    gatedButton = (
+      <GatedAction
+        slug='export-anonymous'
+        title='Log in to export'
+        body={MSG_LOGIN_TO_EXPORT}
+        actionLabel='Log in'
+        onAction={() => setIsLoginVisible(true)}
+        onOpen={() => gtagEvent('export_gated', {reason: 'anonymous'})}
+      >
+        {exportButton}
+      </GatedAction>
+    )
+  } else if (!isPro) {
+    gatedButton = (
+      <GatedAction
+        slug='export-pro'
+        title='Pro feature'
+        body={MSG_EXPORT_NEEDS_PRO}
+        actionLabel='Upgrade to Pro'
+        onAction={onUpgradeClick}
+        onOpen={() => gtagEvent('export_gated', {reason: 'free'})}
+      >
+        {exportButton}
+      </GatedAction>
+    )
   }
 
   return (
@@ -89,16 +132,7 @@ export default function ExportSection() {
         flexWrap='wrap'
         gap={1}
       >
-        <Button
-          variant='contained'
-          size='small'
-          onClick={onExportClick}
-          disabled={!isArtifactReady || isExporting}
-          startIcon={isAuthenticated && isPro ? <FileDownloadIcon/> : <LockIcon/>}
-          data-testid='export-glb-button'
-        >
-          {label}
-        </Button>
+        {gatedButton}
         {isAuthenticated && !isPro &&
          <Chip label='Pro' size='small' color='primary' data-testid='export-pro-chip'/>}
       </Stack>
@@ -116,3 +150,7 @@ export default function ExportSection() {
     </Stack>
   )
 }
+
+
+const MSG_EXPORT_NEEDS_PRO = 'Exporting a GLB needs a Pro subscription'
+const MSG_LOGIN_TO_EXPORT = 'Log in to export this model as a GLB'

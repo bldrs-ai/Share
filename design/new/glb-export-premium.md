@@ -167,10 +167,10 @@ src/export/
     glbExport.entry.js   PRO MODULE entry (built separately; never bundled into index.js)
     glbExport.js         the export itself: container unpack, optional strip, Blob
 src/Components/                    (as built: the components live with their menus,
-  Share/ExportSection.jsx           not with the export lib)
-                         host: the UI inside ShareDialog (button, gating, progress, options)
-  Profile/ExportsDialog.jsx
-                         host: "My Exports" list (S3), opened from the Profile menu
+  Open/ExportSection.jsx            not with the export lib)
+                         host: the UI on the Save dialog's Export tab (button, gating, options)
+  Open/ExportsList.jsx   host: "My Exports" list (S3), inline under the button (S2b)
+  GatedAction.jsx        host: the shared "looks disabled, explains itself" wrapper (S2b)
 netlify/functions/
   pro-module.js          GET ?name=<id> — Auth0 bearer + Pro check → JS bytes, no-store
   record-export.js       POST {key, format, title, bytes} → app_metadata.exports (S3)
@@ -244,23 +244,62 @@ onward sharing).
 
 ### 4.4 UI
 
-Lives in the existing **Share dialog** (`src/Components/Share/ShareDialog.jsx`),
-as an "Export" section under the link controls — the dialog is already "what
-leaves this browser", and adding a toolbar button would cost chrome on
-mobile. Behind feature flag `export` (default off, `?feature=export`).
+Lives in the **Save dialog** (`src/Components/Open/SaveModelControl.jsx`), on
+an **Export** tab beside Save — one place for "get this model out of here",
+reached from the toolbar control the user already associates with producing a
+file. (S2/S3 put it in the Share dialog and the Profile menu; smoke feedback
+on #1837's preview moved it, #1838.) The tab bar is `Components/Tabs.jsx`, the
+Open dialog's pattern, and it only exists behind feature flag `export`
+(default off, `?feature=export`) — with the flag off the Save dialog has no
+tabs and is exactly what it was.
 
-States, resolved in this order:
+The Export tab hosts `Open/ExportSection.jsx` (Download GLB + the metadata
+toggle) and, under it, `Open/ExportsList.jsx` (§4.5). The dialog's footer
+action button belongs to the Save tab only: the Export tab's actions are its
+own buttons.
+
+**Gated actions.** An action the user can't take *yet* is not hidden. It
+renders in its normal place in a disabled LOOK, stays clickable, and the
+click opens help saying what unlocks it, with the unlocking action as a
+button. `Components/GatedAction.jsx` is the one implementation: `aria-disabled`
+plus dimming on a focusable wrapper that owns the click, `pointer-events:
+none` over the child, and NO DOM `disabled` attribute — a truly disabled
+button swallows the click, and the help would never open. Test ids:
+`gated-<slug>` on the wrapper, `gated-help` on the popover,
+`gated-help-action` on its button.
+
+| Action | Unlocked by | Help | Unlocking action |
+|---|---|---|---|
+| **Save** (toolbar, signed out) | signing in to a connector (GitHub today; Drive per identity-decoupling) | "Log in to one of your connectors to save models" | Log in → `LoginDialog` |
+| **GLB export** (Save → Export, signed in, free) | Pro subscription | "Exporting a GLB needs a Pro subscription" | Upgrade to Pro → `Profile/subscriptionNav.js` |
+| **GLB export** (signed out — defensive; the dialog only opens signed in) | logging in | "Log in to export this model as a GLB" | Log in → `LoginDialog` |
+| **Private sharing** (Share dialog, `sharing` flag) | Pro subscription | "Private links need a Pro subscription" | Upgrade to Pro |
+
+The private-sharing row is the pattern's third instance and lands with the
+sharing epic's visibility control — there is no such control in
+`ShareDialog.jsx` yet.
+
+The Download GLB button's own states, resolved in this order:
 
 | State | Button | Click |
 |---|---|---|
 | no model / no artifact yet (`glbArtifact` null, writer in flight) | disabled, "Preparing GLB…" | — |
-| not signed in | "Download GLB" + lock | opens `LoginDialog` (`setIsLoginVisible(true)`) |
-| signed in, not Pro | "Download GLB" + `Pro` chip | `ProfileControl`'s subscription navigation (extracted to `Profile/subscriptionNav.js` so both call sites share it) |
+| not signed in | gated look + lock | help → log in |
+| signed in, not Pro | gated look + lock + `Pro` chip | help → subscription flow |
 | Pro | "Download GLB" | `useExport().run('glb')` → progress → browser download → snackbar "Exported <name> (<size>)" |
 | module load 401/403 | error snackbar "Export requires a Pro subscription" + re-check tier | server said no; the client badge was stale — force-refresh the JWT like `useQuota` does |
 
 The Pro check on the client uses `getTier(appMetadata, isAuthenticated) ===
 TIERS.PAID` **for the UI only**; the function is the authority.
+`gtagEvent('export_gated', {reason})` fires when the help OPENS, which is the
+moment the user met the gate.
+
+Those status snackbars have to be readable while the dialog that started them
+is still open, so `theme/Theme.jsx` puts `zIndex.snackbar` (2100) above
+`modal` (2000) — MUI's defaults have the opposite order once `modal` is
+raised — and `Components/Dialog.jsx` gives the paper a bottom inset and a
+`maxHeight` on mobile, sized for the collapsed snackbar band, so a tall
+dialog scrolls inside itself instead of sharing pixels with the message.
 
 Download mechanics: `URL.createObjectURL(blob)` → `<a download>` click →
 revoke. Safari ≤ 16 ignores `download` on blob URLs in some configurations
@@ -298,14 +337,17 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   keeps the optimistic row and reports `{recorded: false}` rather than
   losing the entry. The recorded `key` is the share path
   (`window.location.pathname`), matching what `record-load` counts.
-- **UI:** `ExportsDialog.jsx`, opened from a new **"My Exports"** item in the
-  Profile menu (signed-in only, and behind the same `export` flag as the
-  Share-dialog section). Rows: title, format chip, size, relative
+- **UI:** `Open/ExportsList.jsx`, rendered inline under the Download GLB
+  button on the Save dialog's **Export** tab (§4.4) — signed-in only, and
+  behind the same `export` flag. It is a plain list, not a dialog: mounting
+  IS the "open" signal, so the mirror subscription lives exactly as long as
+  the list is on screen, and an export made while the tab is open appears
+  under the button that made it. Rows: title, format chip, size, relative
   date, source path (click → navigate to the model). A "Download again"
   action re-runs the export **if** the artifact is still in OPFS
   (`doesFileExistInOPFS` on the recorded key + current schema); otherwise
   the row says "open the model to regenerate". Empty state explains the
-  feature and links to the Share dialog.
+  feature and points at the Download GLB button above it.
 
   One thing the sketch above missed: the server row can't produce that OPFS
   key. A share path has no `sourceHash`, which every `sourceCacheKey.js`
@@ -323,7 +365,7 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   a user who exported with the metadata stripped gets a bigger file carrying
   every `BLDRS_*` payload back — under a row whose size says otherwise.
 
-  Opening the dialog also **hydrates the mirror from `app_metadata.exports`**
+  Mounting the list also **hydrates the mirror from `app_metadata.exports`**
   (`hydrateExports`), read off `store.appMetadata` — the claim `BaseRoutes`
   decodes. A new device, a new browser profile or a cleared cache otherwise
   shows an empty list although the account's rows exist server-side. The
@@ -363,6 +405,7 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
 | S1 | Pro-module pipeline | `proModuleLoader.js`, `pro-module.js` function, `proModuleBuilds()` in build.js, `netlify.toml` `included_files`, dev/playwright copy, MSW handler, eslint import fence, `_lib/auth0.js#getAppMetadata(sub)` factored from `record-load` | jest: loader (blob import mocked), function handler (401/403/200/no-store); tools jest: build emits to `_pro-modules` and not `docs/` in prod |
 | S2 | GLB export | `glbArtifact` store slot (writer + reader set, load clears), `pro/glbExport.entry.js`, `useExport`, `ExportSection` in ShareDialog, `export` flag, `subscriptionNav.js` extraction | jest: container→GLB, strip option; **E2E desktop+mobile** (`describeMobileAndDesktop`): Pro user opens a fixture, waits for the writer, clicks Download GLB, asserts a `.glb` download whose bytes start with `glTF`; gated states for anonymous and free |
 | S3 | Export tracking | `record-export.js`, `exportHistory.js`, `ExportsDialog.jsx`, Profile menu item, analytics events | jest: history lib (prune/cap/OPFS-unavailable), function handler; **E2E desktop+mobile**: after an export the dialog lists it; "Download again" on a cached artifact |
+| S2b | Placement + gated actions (#1838) | Export tab in the Save dialog (`ExportSection` + `ExportsList` moved to `Open/`), Save always visible, `GatedAction.jsx`, `zIndex.snackbar` + mobile dialog inset | jest: gated click still fires, tab hides the Save action, flag-off dialog has no tabs; **E2E desktop+mobile**: signed-out Save shows the help, free Export shows the Pro help, the export snackbar is visible and uncovered over the open dialog |
 | S4 | Rollout | This doc folded back to shipped reality, `quotas.md`-style status block, wiki entry, flag flip, roadmap row `share-140` | smoke checklist §8 run on the deploy preview with a real Pro account |
 | S5 | Further formats (spec only) | §6 matrix → one issue per format when scheduled | — |
 
@@ -459,11 +502,11 @@ Chrome — with a real Auth0 account in each of the three tiers:
    sets `glbArtifact`); export again → same bytes.
 5. Toggle "Include Bldrs metadata" off → the file is smaller and its JSON
    chunk has no `BLDRS_` strings (`strings file.glb | grep BLDRS_`).
-6. Profile → My Exports lists the exports with sizes and dates; "Download
-   again" works on the cached one; Clear Local Cache → the row says the
-   model must be reopened.
+6. Save → Export lists the exports below the button, with sizes and dates;
+   "Download again" works on the cached one; Clear Local Cache → the row
+   says the model must be reopened.
 7. Safari specifically: the download is a file, not an inline tab (§4.4
    fallback); OPFS is available (Safari ≥ 17 for `createWritable`).
-8. Mobile: the Share dialog's Export section fits without horizontal
-   scroll at 390 px; the download lands in Files (iOS) / Downloads
-   (Android).
+8. Mobile: the Save dialog's Export tab fits without horizontal scroll at
+   390 px, the "Exported …" snackbar is readable over the open dialog, and
+   the download lands in Files (iOS) / Downloads (Android).

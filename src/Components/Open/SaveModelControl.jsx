@@ -19,24 +19,35 @@ import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
 import {navigateBaseOnModelPath} from '../../utils/location'
 import {navigateToModel} from '../../utils/navigate'
-import {ControlButton} from '../Buttons'
+import {isFeatureEnabled} from '../../FeatureFlags'
+import {ControlButton, TooltipIconButton} from '../Buttons'
 import Dialog from '../Dialog'
+import GatedAction from '../GatedAction'
+import Tabs from '../Tabs'
 import useExistInFeature from '../../hooks/useExistInFeature'
+import ExportSection from './ExportSection'
+import ExportsList from './ExportsList'
 import PleaseLogin from './PleaseLogin'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
 
 
 /**
- * Displays model save dialog
+ * Displays model save dialog.
+ *
+ * Visible to everyone, signed in or not (#1838): a signed-out user gets the
+ * button in the gated look, and clicking it says what unlocks it instead of
+ * opening a dialog they can't use. Hiding it taught nobody that Share can
+ * save at all.
  *
  * @return {ReactElement}
  */
 export default function SaveModelControl() {
   const isSaveModelVisible = useStore((state) => state.isSaveModelVisible)
   const setIsSaveModelVisible = useStore((state) => state.setIsSaveModelVisible)
+  const setIsLoginVisible = useStore((state) => state.setIsLoginVisible)
 
-  const {user} = useAuth0()
+  const {isAuthenticated, user} = useAuth0()
   const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
   const [orgNamesArr, setOrgNamesArray] = useState([''])
@@ -57,6 +68,32 @@ export default function SaveModelControl() {
     }
   }, [isSaveModelVisible, accessToken, user])
 
+
+  if (!isAuthenticated) {
+    return (
+      <GatedAction
+        slug='save'
+        title={MSG_SAVE}
+        body={MSG_SAVE_NEEDS_LOGIN}
+        actionLabel='Log in'
+        onAction={() => setIsLoginVisible(true)}
+      >
+        {/* The real toolbar button, dimmed and inert — same icon in the same
+            slot, so the toolbar doesn't reflow when the user signs in.
+            GatedAction owns the click; this handler never runs. */}
+        <TooltipIconButton
+          title={MSG_SAVE}
+          onClick={() => setIsSaveModelVisible(true)}
+          icon={<SaveOutlinedIcon className='icon-share'/>}
+          placement='bottom'
+          variant='control'
+          color='success'
+          size='small'
+          dataTestId='control-button-save'
+        />
+      </GatedAction>
+    )
+  }
 
   return (
     <ControlButton
@@ -105,6 +142,11 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   const [currentPath, setCurrentPath] = useState('')
   const accessToken = useStore((state) => state.accessToken)
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
+  // Export rides the same `export` flag as everything else in §4.4: with it
+  // off this dialog has no tabs at all and looks exactly as it did before.
+  const isExportEnabled = isFeatureEnabled('export')
+  const [currentTab, setCurrentTab] = useState(0)
+  const isExportTab = isExportEnabled && currentTab === TAB_EXPORT
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
 
@@ -306,155 +348,172 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
       headerText={MSG_SAVE}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      actionTitle={MSG_SAVE_MODEL}
+      // The Export tab's actions are its own buttons (Download GLB,
+      // Download again); a "Save model" footer there would act on the tab
+      // the user isn't looking at.
+      actionTitle={isExportTab ? undefined : MSG_SAVE_MODEL}
       actionCb={saveFile}
       actionDisabled={cannotSave}
     >
-      <Stack
-        spacing={1}
-        direction='column'
-        justifyContent='center'
-        alignItems='center'
-      >
-        {!isAuthenticated ? (
-          <PleaseLogin/>
-        ) : isSaveDisabled ? (
-          <Stack
-            spacing={2}
-            sx={{width: '100%', alignItems: 'center', py: 2}}
-            data-testid='save-needs-github-connection'
-          >
-            <Typography variant='body2' color='text.secondary' sx={{textAlign: 'center'}}>
-              Connect GitHub in Sources to save.
-            </Typography>
-          </Stack>
-        ) : (
-          file instanceof File && (
-            <Stack>
-              <Typography variant='overline' sx={{marginBottom: '6px'}}>{MSG_PROJECTS}</Typography>
-              <Selector
-                label={MSG_ORGANIZATION}
-                list={orgNamesArrWithAt}
-                selected={selectedOrgName}
-                setSelected={selectOrg}
-                data-testid='saveOrganization'
-              />
-              <Selector
-                label={MSG_REPOSITORY}
-                list={repoNamesArr}
-                selected={selectedRepoName}
-                setSelected={selectRepo}
-                data-testid='saveRepository'
-              />
-              <SelectorSeparator
-                label={MSG_BRANCH}
-                list={branchesArr}
-                selected={selectedBranchName}
-                setSelected={selectBranch}
-                data-testid='saveBranch'
-              />
-              {requestCreateBranch && (
-                <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
-                  <TextField
-                    label={MSG_ENTER_BRANCH_NAME}
-                    variant='outlined'
-                    size='small'
-                    onChange={(e) => setCreateBranchName(e.target.value)}
-                    data-testid='CreateBranchId'
-                    sx={{flexGrow: 1}}
-                    onKeyDown={(e) => {
-                      e.stopPropagation()
-                    }}
-                  />
-                  <IconButton
-                    onClick={() => setRequestCreateBranch(false)}
-                    size='small'
-                  >
-                    <ClearIcon className='icon-share'/>
-                  </IconButton>
-                </div>
-              )}
-              <SelectorSeparator
-                label={currentPath === '' ? MSG_FOLDER : `${MSG_FOLDER}: ${currentPath}`}
-                list={foldersArr}
-                selected={selectedFolderName}
-                setSelected={selectFolder}
-                data-testid='saveFolder'
-              />
-              {requestCreateFolder && (
-                <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
-                  <TextField
-                    label={MSG_ENTER_FOLDER_NAME}
-                    variant='outlined'
-                    size='small'
-                    onChange={(e) => setCreateFolderName(e.target.value)}
-                    data-testid='CreateFolderId'
-                    sx={{flexGrow: 1}}
-                    onKeyDown={(e) => {
-                      e.stopPropagation()
-                    }}
-                  />
-                  <IconButton
-                    onClick={() => setRequestCreateFolder(false)}
-                    size='small'
-                  >
-                    <ClearIcon className='icon-share'/>
-                  </IconButton>
-                </div>
-              )}
-              <TextField
-                label={MSG_ENTER_FILE_NAME}
-                variant='outlined'
-                size='small'
-                onChange={(e) => setSelectedFileName(e.target.value)}
-                onKeyDown={(e) => e.stopPropagation()}
-                sx={{marginBottom: '.5em'}}
-                data-testid='CreateFileId'
-              />
-              {/*
-                Multi-account picker — only shown when 2+ github connections
-                exist on the new flow. With one connection there's nothing
-                to pick; the footer below still surfaces the username.
-              */}
-              {isGithubAsSourceOn && githubConnections.length > 1 && (
-                <Tooltip title={MSG_PICK_GITHUB_ACCOUNT_HELP} placement='top'>
-                  <TextField
-                    select
-                    label={MSG_GITHUB_ACCOUNT}
-                    variant='outlined'
-                    size='small'
-                    value={selectedGithubConnectionId}
-                    onChange={(e) => setSelectedGithubConnectionId(e.target.value)}
-                    sx={{marginBottom: '.5em'}}
-                    data-testid='SaveGithubAccount'
-                  >
-                    {githubConnections.map((c) => (
-                      <MenuItem key={c.id} value={c.id}>
-                        {c.meta?.login ? `@${c.meta.login}` : c.label}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Tooltip>
-              )}
-              {/*
-                "Saving as @{login}" footer — anchors commit attribution in
-                the user's mental model. Hidden until the new flow is on
-                AND a connection is selected so legacy users see no change.
-              */}
-              {isGithubAsSourceOn && githubLogin && (
-                <Box
-                  sx={{mt: 1, opacity: 0.7}}
-                  data-testid='save-saving-as-footer'
-                >
-                  <Typography variant='caption' color='text.secondary'>
-                    Saving as @{githubLogin}
-                  </Typography>
-                </Box>
-              )}
+      {isExportEnabled &&
+       <Tabs
+         tabLabels={TAB_LABELS}
+         currentTab={currentTab}
+         actionCb={(value) => setCurrentTab(value)}
+       />}
+      {isExportTab ?
+        <Stack spacing={1} data-testid='save-dialog-export-tab'>
+          <ExportSection/>
+          <ExportsList onNavigate={() => setIsDialogDisplayed(false)}/>
+        </Stack> :
+        <Stack
+          spacing={1}
+          direction='column'
+          justifyContent='center'
+          alignItems='center'
+        >
+          {/* Signed-out no longer reaches this dialog — the toolbar button
+              is gated instead (#1838) — but the branch stays as the backstop
+              for a session that expires with the dialog open. */}
+          {!isAuthenticated ? (
+            <PleaseLogin/>
+          ) : isSaveDisabled ? (
+            <Stack
+              spacing={2}
+              sx={{width: '100%', alignItems: 'center', py: 2}}
+              data-testid='save-needs-github-connection'
+            >
+              <Typography variant='body2' color='text.secondary' sx={{textAlign: 'center'}}>
+                Connect GitHub in Sources to save.
+              </Typography>
             </Stack>
-          )
-        )}
-      </Stack>
+          ) : (
+            file instanceof File && (
+              <Stack>
+                <Typography variant='overline' sx={{marginBottom: '6px'}}>{MSG_PROJECTS}</Typography>
+                <Selector
+                  label={MSG_ORGANIZATION}
+                  list={orgNamesArrWithAt}
+                  selected={selectedOrgName}
+                  setSelected={selectOrg}
+                  data-testid='saveOrganization'
+                />
+                <Selector
+                  label={MSG_REPOSITORY}
+                  list={repoNamesArr}
+                  selected={selectedRepoName}
+                  setSelected={selectRepo}
+                  data-testid='saveRepository'
+                />
+                <SelectorSeparator
+                  label={MSG_BRANCH}
+                  list={branchesArr}
+                  selected={selectedBranchName}
+                  setSelected={selectBranch}
+                  data-testid='saveBranch'
+                />
+                {requestCreateBranch && (
+                  <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
+                    <TextField
+                      label={MSG_ENTER_BRANCH_NAME}
+                      variant='outlined'
+                      size='small'
+                      onChange={(e) => setCreateBranchName(e.target.value)}
+                      data-testid='CreateBranchId'
+                      sx={{flexGrow: 1}}
+                      onKeyDown={(e) => {
+                        e.stopPropagation()
+                      }}
+                    />
+                    <IconButton
+                      onClick={() => setRequestCreateBranch(false)}
+                      size='small'
+                    >
+                      <ClearIcon className='icon-share'/>
+                    </IconButton>
+                  </div>
+                )}
+                <SelectorSeparator
+                  label={currentPath === '' ? MSG_FOLDER : `${MSG_FOLDER}: ${currentPath}`}
+                  list={foldersArr}
+                  selected={selectedFolderName}
+                  setSelected={selectFolder}
+                  data-testid='saveFolder'
+                />
+                {requestCreateFolder && (
+                  <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
+                    <TextField
+                      label={MSG_ENTER_FOLDER_NAME}
+                      variant='outlined'
+                      size='small'
+                      onChange={(e) => setCreateFolderName(e.target.value)}
+                      data-testid='CreateFolderId'
+                      sx={{flexGrow: 1}}
+                      onKeyDown={(e) => {
+                        e.stopPropagation()
+                      }}
+                    />
+                    <IconButton
+                      onClick={() => setRequestCreateFolder(false)}
+                      size='small'
+                    >
+                      <ClearIcon className='icon-share'/>
+                    </IconButton>
+                  </div>
+                )}
+                <TextField
+                  label={MSG_ENTER_FILE_NAME}
+                  variant='outlined'
+                  size='small'
+                  onChange={(e) => setSelectedFileName(e.target.value)}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  sx={{marginBottom: '.5em'}}
+                  data-testid='CreateFileId'
+                />
+                {/*
+                  Multi-account picker — only shown when 2+ github connections
+                  exist on the new flow. With one connection there's nothing
+                  to pick; the footer below still surfaces the username.
+                */}
+                {isGithubAsSourceOn && githubConnections.length > 1 && (
+                  <Tooltip title={MSG_PICK_GITHUB_ACCOUNT_HELP} placement='top'>
+                    <TextField
+                      select
+                      label={MSG_GITHUB_ACCOUNT}
+                      variant='outlined'
+                      size='small'
+                      value={selectedGithubConnectionId}
+                      onChange={(e) => setSelectedGithubConnectionId(e.target.value)}
+                      sx={{marginBottom: '.5em'}}
+                      data-testid='SaveGithubAccount'
+                    >
+                      {githubConnections.map((c) => (
+                        <MenuItem key={c.id} value={c.id}>
+                          {c.meta?.login ? `@${c.meta.login}` : c.label}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Tooltip>
+                )}
+                {/*
+                  "Saving as @{login}" footer — anchors commit attribution in
+                  the user's mental model. Hidden until the new flow is on
+                  AND a connection is selected so legacy users see no change.
+                */}
+                {isGithubAsSourceOn && githubLogin && (
+                  <Box
+                    sx={{mt: 1, opacity: 0.7}}
+                    data-testid='save-saving-as-footer'
+                  >
+                    <Typography variant='caption' color='text.secondary'>
+                      Saving as @{githubLogin}
+                    </Typography>
+                  </Box>
+                )}
+              </Stack>
+            )
+          )}
+        </Stack>}
     </Dialog>
   )
 }
@@ -590,5 +649,10 @@ const MSG_PICK_GITHUB_ACCOUNT_HELP = 'Pick which connected GitHub account this c
 const MSG_PROJECTS = 'Projects'
 const MSG_SAVE = 'Save'
 const MSG_SAVE_MODEL = 'Save model'
+// GitHub is the only connector that can take a save today; Drive follows
+// with identity-decoupling, and this text covers both.
+const MSG_SAVE_NEEDS_LOGIN = 'Log in to one of your connectors to save models'
 const MSG_SAVE_SUCCESS = 'Model saved successfully!'
 const MSG_REPOSITORY = 'Repository'
+const TAB_LABELS = ['Save', 'Export']
+const TAB_EXPORT = 1

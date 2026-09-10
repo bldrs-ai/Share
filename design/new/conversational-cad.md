@@ -67,7 +67,8 @@ project → models (files) → conversations   (convos come in Epic 3)
 - "New project" button; projects expand/collapse; models listed under each.
 - Opening happens here: `OpenModelControl` leaves `ControlsGroup.jsx` (W3);
   adding a model to a project routes through the existing tabbed Open dialog
-  (local / GitHub / Drive). `SaveModelControl` stays where it is, auth-gated.
+  (local / GitHub / Drive). `SaveModelControl` stays where it is (always
+  visible; gated per glb-export-premium.md §4.4).
 - NavTree + Versions controls stay in place for this epic (they move in
   Epic 2).
 - Collapse toggle next to "New project" (W1 marker in the top bar).

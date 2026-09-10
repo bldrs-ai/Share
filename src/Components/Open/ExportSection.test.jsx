@@ -70,6 +70,8 @@ describe('ExportSection', () => {
     expect(button).toBeEnabled()
     expect(button).toHaveTextContent('Download GLB')
     expect(queryByTestId('export-pro-chip')).toBeNull()
+    // A Pro user gets the real button, not a gate around it.
+    expect(queryByTestId('gated-export-pro')).toBeNull()
   })
 
   it('runs the export for a Pro user, carrying the metadata toggle', async () => {
@@ -89,38 +91,48 @@ describe('ExportSection', () => {
     expect(mockRun).toHaveBeenLastCalledWith('glb', {stripBldrsMetadata: true})
   })
 
-  it('opens the login dialog for an anonymous user instead of exporting', async () => {
+  it('offers an anonymous user the login gate instead of exporting', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
     await setStore(ARTIFACT, null)
     const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
-    fireEvent.click(getByTestId('export-glb-button'))
+    fireEvent.click(getByTestId('gated-export-anonymous'))
+    expect(gtagEvent).toHaveBeenCalledWith('export_gated', {reason: 'anonymous'})
+    fireEvent.click(getByTestId('gated-help-action'))
 
     expect(useStore.getState().isLoginVisible).toBe(true)
     expect(mockRun).not.toHaveBeenCalled()
-    expect(gtagEvent).toHaveBeenCalledWith('export_gated', {reason: 'anonymous'})
   })
 
-  it('sends a signed-in free user to the subscription flow, with a Pro chip', async () => {
+  it('offers a signed-in free user the Pro gate, with a Pro chip', async () => {
     await setStore(ARTIFACT, {subscriptionStatus: 'free', stripeCustomerId: null, userEmail: 'a@b.c'})
     const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
     expect(getByTestId('export-pro-chip')).toBeInTheDocument()
-    fireEvent.click(getByTestId('export-glb-button'))
+    // The gated look is not the DOM `disabled` attribute: the click has to
+    // reach the wrapper, or the help never opens (#1838).
+    const gate = getByTestId('gated-export-pro')
+    expect(gate).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(gate)
 
+    expect(getByTestId('gated-help')).toHaveTextContent('Pro subscription')
+    expect(gtagEvent).toHaveBeenCalledWith('export_gated', {reason: 'free'})
+
+    fireEvent.click(getByTestId('gated-help-action'))
     expect(goToSubscription).toHaveBeenCalledWith(
       expect.objectContaining({stripeCustomerId: null, userEmail: 'a@b.c'}))
     expect(mockRun).not.toHaveBeenCalled()
-    expect(gtagEvent).toHaveBeenCalledWith('export_gated', {reason: 'free'})
   })
 
   it('treats shareProPendingReauth as not-Pro, following getTier', async () => {
     // getTier is the entitlement authority and the `pro-module` function
     // mirrors it, so the UI must not offer an export the server will 403.
     await setStore(ARTIFACT, {subscriptionStatus: 'shareProPendingReauth'})
-    const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+    const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
-    fireEvent.click(getByTestId('export-glb-button'))
+    expect(queryByTestId('gated-export-pro')).toBeInTheDocument()
+    fireEvent.click(getByTestId('gated-export-pro'))
+    fireEvent.click(getByTestId('gated-help-action'))
 
     expect(mockRun).not.toHaveBeenCalled()
     expect(goToSubscription).toHaveBeenCalled()

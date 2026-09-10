@@ -4,8 +4,11 @@ import {
   EXPORT_TEST_TIMEOUT_MS,
   GLTF_MAGIC,
   PRO_MODULE_PATTERN,
+  clickGate,
+  dismissLoadSnackbar,
+  expectSnackbarOnTop,
   loadModelAndWaitForArtifact,
-  openShareDialog,
+  openExportTab,
   routeProModule,
   setSubscriptionTier,
   watchProModuleRequests,
@@ -21,7 +24,8 @@ import {
 
 
 /**
- * "Download GLB" in the Share dialog (share-140 S2, #1833).
+ * "Download GLB" in the Save dialog's Export tab (share-140 S2b, #1838;
+ * it lived in the Share dialog through S2/#1833).
  *
  * The acceptance test for the whole epic's user-facing claim: a Pro user
  * gets a valid standalone `.glb` out of the artifact Share already cached,
@@ -39,6 +43,10 @@ import {
  * The setup — flags, the fixture, the artifact wait, and how the premium
  * module reaches the page — is shared with `Profile/myExports.spec.ts` in
  * `src/tests/e2e/export.ts`.
+ *
+ * The gated states are here too, because what they must NOT do is only
+ * observable in a browser: a DOM-disabled button eats the click, so the help
+ * that explains the gate never opens (#1838).
  */
 describeMobileAndDesktop('Share 140: Download GLB', () => {
   test.beforeEach(async ({page}) => {
@@ -62,7 +70,10 @@ describeMobileAndDesktop('Share 140: Download GLB', () => {
     await setSubscriptionTier(page, 'sharePro')
     await auth0Login(page)
 
-    await openShareDialog(page)
+    await openExportTab(page)
+    // The load's own "Loaded index.ifc" line owns the snackbar until it is
+    // dismissed; clearing it makes the assertion below about the EXPORT.
+    await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
     await expect(exportButton).toHaveText('Download GLB')
@@ -82,28 +93,37 @@ describeMobileAndDesktop('Share 140: Download GLB', () => {
     // The export really did go through the gated delivery path rather than
     // through anything already in the page bundle.
     expect(proModuleRequests.length).toBeGreaterThan(0)
+
+    // The dialog is still open — the export doesn't close it — so this is
+    // the layering case that was broken: the "Exported …" message has to be
+    // readable over the dialog, on mobile especially, where the dialog fills
+    // the viewport.
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await expect(page.getByTestId('snackbar')).toContainText('Exported')
+    await expectSnackbarOnTop(page)
   })
 
-  test('an anonymous user is asked to log in instead', async ({page}) => {
+  test('a signed-out user is told what unlocks Save, and gets no dialog', async ({page}) => {
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
+
+    await loadModelAndWaitForArtifact(page)
+
+    // Visible for everyone now, in the gated look.
+    await expect(page.getByTestId('gated-save')).toBeVisible()
+    await clickGate(page, 'gated-save')
+
+    await expect(page.getByTestId('gated-help')).toContainText('Log in to one of your connectors')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+
+    // And the gate's own action is the way forward.
+    await page.getByTestId('gated-help-action').click()
+    await expect(page.getByTestId('login-with-github')).toBeVisible()
+  })
+
+  test('a signed-in free user is offered the Pro gate, then upgrade', async ({page}) => {
     test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
     // Nothing premium may be requested for a user we already know isn't
     // entitled — the server would refuse, and the UI shouldn't ask.
-    const proModuleRequests = watchProModuleRequests(page)
-    await page.route(PRO_MODULE_PATTERN, async (route) => {
-      await route.fulfill({status: 401, body: 'denied'})
-    })
-
-    await loadModelAndWaitForArtifact(page)
-    await openShareDialog(page)
-
-    await page.getByTestId('export-glb-button').click()
-
-    await expect(page.getByTestId('login-with-github')).toBeVisible()
-    expect(proModuleRequests).toEqual([])
-  })
-
-  test('a signed-in free user is routed to upgrade', async ({page}) => {
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
     const proModuleRequests = watchProModuleRequests(page)
     await page.route(PRO_MODULE_PATTERN, async (route) => {
       await route.fulfill({status: 403, body: 'denied'})
@@ -113,11 +133,14 @@ describeMobileAndDesktop('Share 140: Download GLB', () => {
     await setSubscriptionTier(page, 'free')
     await auth0Login(page)
 
-    await openShareDialog(page)
+    await openExportTab(page)
     // The chip is the affordance that says why the button won't export.
     await expect(page.getByTestId('export-pro-chip')).toBeVisible()
 
-    await page.getByTestId('export-glb-button').click()
+    await clickGate(page, 'gated-export-pro')
+    await expect(page.getByTestId('gated-help')).toContainText('Pro subscription')
+
+    await page.getByTestId('gated-help-action').click()
 
     // `/subscribe/` is an MSW stub in this build and ProfileControl's
     // `useMock` path writes it into the document rather than navigating,
