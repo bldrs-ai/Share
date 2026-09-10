@@ -64,6 +64,8 @@ export default function ExportsList({onNavigate}) {
   const appMetadata = useStore((state) => state.appMetadata)
   const {user} = useAuth0()
   const sub = user?.sub || null
+  // Tab-wide (store/UISlice.js): every row's action and the Download GLB
+  // button above share it, so only one export runs at a time (#1834).
   const {isExporting, run} = useExport()
   const navigate = useNavigate()
 

@@ -352,8 +352,11 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   One thing the sketch above missed: the server row can't produce that OPFS
   key. A share path has no `sourceHash`, which every `sourceCacheKey.js`
   adapter folds in, so the LOCAL row additionally carries `cacheKeyArgs` +
-  `schemaVer` — never sent to the server, re-attached by key when the
-  server's list is mirrored over the local one. "Download again" therefore
+  `schemaVer` — never sent to the server, re-attached BY ROW ID when the
+  server's list is mirrored over the local one (key + format survives only
+  as the one-to-one fallback for legacy rows that predate the client id;
+  matching on it alone gave every export of one model the newest row's cache
+  key and options). "Download again" therefore
   needs both halves: those fields AND the artifact still on disk. A row
   synced from another device has neither and always offers regeneration.
   `useExport().run(format, options, source)` gained the third argument so
@@ -370,7 +373,7 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   decodes. A new device, a new browser profile or a cleared cache otherwise
   shows an empty list although the account's rows exist server-side. The
   merge is the one `recordExport` applies to a record response (server list
-  wins, browser-only fields re-attached by key + format), and an absent or
+  wins, browser-only fields re-attached by row id), and an absent or
   empty claim list is a no-op rather than a wipe. Hydrated rows the server
   alone knows about offer regeneration, as before.
 - **Analytics:** `gtagEvent('export_model', {format, bytes_bucket,

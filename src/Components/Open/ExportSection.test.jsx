@@ -8,12 +8,23 @@ import {goToSubscription} from '../Profile/subscriptionNav'
 import ExportSection from './ExportSection'
 
 
+// `mock`-prefixed so the jest.mock factory below may close over it.
+const mockUseStore = useStore
+
+
 jest.mock('../../privacy/analytics', () => ({gtagEvent: jest.fn()}))
 jest.mock('../Profile/subscriptionNav', () => ({goToSubscription: jest.fn()}))
 const mockRun = jest.fn()
+// A stand-in for the hook's `run` only: `isExporting` still comes from the
+// store slot the real hook reads (`isExportInFlight`), so the disabled state
+// asserted below is this component's own reaction to a tab-wide export.
 jest.mock('../../export/useExport', () => ({
   __esModule: true,
-  default: () => ({run: mockRun, isExporting: false, error: null}),
+  default: () => ({
+    run: mockRun,
+    isExporting: mockUseStore((state) => state.isExportInFlight),
+    error: null,
+  }),
 }))
 
 
@@ -27,14 +38,16 @@ const ARTIFACT = {
 /**
  * @param {?object} artifact What the loader published for this load
  * @param {?object} appMetadata Auth0 app_metadata, i.e. the tier
+ * @param {boolean} [isExportInFlight] Whether an export is running in this tab
  * @return {Promise<void>}
  */
-async function setStore(artifact, appMetadata) {
+async function setStore(artifact, appMetadata, isExportInFlight = false) {
   const {result} = renderHook(() => useStore((state) => state))
   await act(() => {
     result.current.setGlbArtifact(artifact)
     result.current.setAppMetadata(appMetadata)
     result.current.setIsLoginVisible(false)
+    result.current.setIsExportInFlight(isExportInFlight)
   })
 }
 
@@ -72,6 +85,19 @@ describe('ExportSection', () => {
     expect(queryByTestId('export-pro-chip')).toBeNull()
     // A Pro user gets the real button, not a gate around it.
     expect(queryByTestId('gated-export-pro')).toBeNull()
+  })
+
+  it('is disabled while ANY export in the tab is running', async () => {
+    // The in-flight flag is shared (store/UISlice.js): a "Download again"
+    // running in the list below this section must disable this button too,
+    // or the user gets two exports racing each other's write of the history
+    // mirror (#1834).
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'}, true)
+    const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+    const button = getByTestId('export-glb-button')
+    expect(button).toBeDisabled()
+    expect(button).toHaveTextContent('Exporting…')
   })
 
   it('runs the export for a Pro user, carrying the metadata toggle', async () => {

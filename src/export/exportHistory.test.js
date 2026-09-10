@@ -1,4 +1,11 @@
-import {hydrateExports, loadExports, recordExport, saveExports, subscribeToExports} from './exportHistory'
+import {
+  hydrateExports,
+  loadExports,
+  recordExport,
+  saveExports,
+  subscribeToExports,
+  withLocalArtifactFields,
+} from './exportHistory'
 
 
 const SUB = 'github|1234567'
@@ -13,6 +20,9 @@ const CACHE_KEY_ARGS = {
 }
 const SCHEMA_VER = '0.21.0-batched'
 const EXPORTS_CAP = 100
+
+// The shape `record-export.js` validates a client-supplied id against.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 
 /**
@@ -229,6 +239,89 @@ describe('exportHistory', () => {
     })
   })
 
+  describe('withLocalArtifactFields', () => {
+    // Two different sizes, so a row that picked up the wrong twin's fields
+    // is visible in the assertion.
+    const NEWER_BYTES = 2048
+    const OLDER_BYTES = 4096
+
+    /**
+     * @param {string} id Row id, shared with the server row it belongs to
+     * @param {object} options The options that export ran with
+     * @return {object} a local mirror row for KEY as a GLB
+     */
+    function aLocalRow(id, options) {
+      return {
+        id,
+        key: KEY,
+        title: 'index.ifc',
+        format: 'glb',
+        bytes: 2048,
+        exportedAt: '2026-01-02T00:00:00.000Z',
+        cacheKeyArgs: {...CACHE_KEY_ARGS, sourceHash: `sha-${id}`},
+        schemaVer: SCHEMA_VER,
+        options,
+      }
+    }
+
+    it('gives each server row the fields of the local row it IS, not of the newest one', () => {
+      // The same model exported twice, with the metadata toggle flipped in
+      // between. Matching on key + format alone hands BOTH server rows the
+      // newer local row's options and cache key, so "Download again" on the
+      // older row produces a file that is not the one its size describes
+      // (#1834).
+      const newer = aLocalRow('id-newer', {stripBldrsMetadata: true})
+      const older = aLocalRow('id-older', {stripBldrsMetadata: false})
+      const serverRows = [
+        {id: 'id-newer', key: KEY, title: 'index.ifc', format: 'glb', bytes: NEWER_BYTES,
+          exportedAt: '2026-01-02T00:00:01.000Z'},
+        {id: 'id-older', key: KEY, title: 'index.ifc', format: 'glb', bytes: OLDER_BYTES,
+          exportedAt: '2026-01-01T00:00:01.000Z'},
+      ]
+
+      const merged = withLocalArtifactFields(serverRows, [newer, older])
+
+      expect(merged[0].options).toEqual({stripBldrsMetadata: true})
+      expect(merged[0].cacheKeyArgs.sourceHash).toBe('sha-id-newer')
+      expect(merged[1].options).toEqual({stripBldrsMetadata: false})
+      expect(merged[1].cacheKeyArgs.sourceHash).toBe('sha-id-older')
+      // The server's own fields are authoritative and untouched.
+      expect(merged[1].bytes).toBe(OLDER_BYTES)
+    })
+
+    it('falls back to key and format for legacy rows, and consumes each once', () => {
+      // Rows recorded before the client sent an id: the server minted its
+      // own, so nothing matches by id. Pairing is then positional within the
+      // key+format group — newest server row with newest local row — rather
+      // than the same local row being reused for both.
+      const newer = aLocalRow('local-newer', {stripBldrsMetadata: true})
+      const older = aLocalRow('local-older', {stripBldrsMetadata: false})
+      const serverRows = [
+        {id: 'srv-1', key: KEY, title: null, format: 'glb', bytes: NEWER_BYTES,
+          exportedAt: '2026-01-02T00:00:01.000Z'},
+        {id: 'srv-2', key: KEY, title: null, format: 'glb', bytes: OLDER_BYTES,
+          exportedAt: '2026-01-01T00:00:01.000Z'},
+      ]
+
+      const merged = withLocalArtifactFields(serverRows, [newer, older])
+
+      expect(merged[0].options).toEqual({stripBldrsMetadata: true})
+      expect(merged[1].options).toEqual({stripBldrsMetadata: false})
+    })
+
+    it('invents no artifact fields for a server row this browser never wrote', () => {
+      const local = aLocalRow('id-1', {stripBldrsMetadata: true})
+      const elsewhere = {
+        id: 'id-elsewhere', key: '/share/v/p/other.ifc', title: null,
+        format: 'glb', bytes: 1, exportedAt: '2025-01-01T00:00:00.000Z',
+      }
+
+      const merged = withLocalArtifactFields([elsewhere], [local])
+
+      expect(merged[0]).toEqual(elsewhere)
+    })
+  })
+
   describe('recordExport', () => {
     it('writes the row locally before the server has answered', async () => {
       // The download is already in the user's Downloads folder by the time
@@ -257,10 +350,38 @@ describe('exportHistory', () => {
     it('never sends the local-only artifact fields to the server', async () => {
       global.fetch.mockResolvedValue({ok: true, status: 200, json: () => Promise.resolve({exports: []})})
 
+      // The optimistic write is the first notification, and its row is the
+      // one whose id has to travel.
+      let optimisticId = null
+      const unsubscribe = subscribeToExports(SUB, ({exports}) => {
+        optimisticId = optimisticId ?? exports[0].id
+      })
+
       await recordExport(anEntry(), SUB, jest.fn().mockResolvedValue('token'))
+      unsubscribe()
 
       const body = JSON.parse(global.fetch.mock.calls[0][1].body)
-      expect(body).toEqual({key: KEY, format: 'glb', bytes: 2048, title: 'index.ifc'})
+      // The id DOES go up — it is what the server echoes so the merge can
+      // pair the two rows one-to-one — and it is the id already on the
+      // optimistic local row, not a second one minted for the wire.
+      expect(body).toEqual({id: optimisticId, key: KEY, format: 'glb', bytes: 2048, title: 'index.ifc'})
+      expect(optimisticId).toMatch(UUID_PATTERN)
+    })
+
+    it('mints a row id the server will accept, even with no crypto.randomUUID', async () => {
+      // `record-export.js` 400s an id that isn't a well-formed v4 UUID, so
+      // the fallback path (jsdom, or a browser on a non-secure origin) has
+      // to produce one too — otherwise the whole record is lost, not just
+      // the id.
+      const realCrypto = global.crypto
+      Object.defineProperty(global, 'crypto', {value: {}, configurable: true})
+      try {
+        const {exports} = await recordExport(anEntry(), SUB)
+
+        expect(exports[0].id).toMatch(UUID_PATTERN)
+      } finally {
+        Object.defineProperty(global, 'crypto', {value: realCrypto, configurable: true})
+      }
     })
 
     it('keeps the options the export ran with on the local row', async () => {

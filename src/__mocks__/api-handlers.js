@@ -115,6 +115,9 @@ const PRO_MODULE_NAMES_MOCK = ['glbExport']
 // Kept in lock-step with `netlify/functions/record-export.js`'s EXPORTS_CAP.
 const EXPORTS_CAP_MOCK = 100
 
+// Kept in lock-step with `record-export.js`'s UUID_PATTERN.
+const UUID_PATTERN_MOCK = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 /**
  * Handlers for Netlify functions
  *
@@ -257,12 +260,22 @@ function netlifyHandlers() {
       }
 
       const body = await request.json().catch(() => ({}))
-      const {key, format, bytes, title} = body || {}
+      const {id, key, format, bytes, title} = body || {}
       if (typeof key !== 'string' || key.length === 0 ||
           typeof format !== 'string' || format.length === 0 ||
           !Number.isInteger(bytes) || bytes < 0) {
         return new Response(
           JSON.stringify({error: 'invalid_request'}),
+          {status: HTTP_BAD_REQUEST, headers: {'Content-Type': 'application/json'}},
+        )
+      }
+      // Same id contract as the function: a well-formed client id is echoed
+      // on the stored row (that shared id is what the client's mirror merge
+      // matches on), a malformed one is a 400, and an absent one is minted
+      // here.
+      if (id !== undefined && id !== null && (typeof id !== 'string' || !UUID_PATTERN_MOCK.test(id))) {
+        return new Response(
+          JSON.stringify({error: 'invalid_id'}),
           {status: HTTP_BAD_REQUEST, headers: {'Content-Type': 'application/json'}},
         )
       }
@@ -283,7 +296,7 @@ function netlifyHandlers() {
       const existing = (typeof window !== 'undefined' && window.__mockExports) || []
       const newExports = [
         {
-          id: `mock-export-${existing.length}-${Date.now()}`,
+          id: id || `mock-export-${existing.length}-${Date.now()}`,
           key,
           title: title || null,
           format,

@@ -8,17 +8,27 @@ import useStore from '../../store/useStore'
 import ExportsList from './ExportsList'
 
 
+// `mock`-prefixed so the jest.mock factory below may close over it.
+const mockUseStore = useStore
+
+
 jest.mock('../../OPFS/utils', () => ({doesFileExistInOPFS: jest.fn()}))
 jest.mock('../../export/exportHistory', () => ({
   hydrateExports: jest.fn(),
   loadExports: jest.fn(),
   subscribeToExports: jest.fn(() => () => {}),
 }))
-// The hook has its own suite; the dialog only needs `run` to exist.
+// The hook has its own suite; the list only needs `run` to exist. The
+// in-flight flag still comes from the store slot the real hook reads
+// (`isExportInFlight`), so the disabled state below is the list's own.
 const mockRun = jest.fn()
 jest.mock('../../export/useExport', () => ({
   __esModule: true,
-  default: () => ({run: mockRun, isExporting: false, error: null}),
+  default: () => ({
+    run: mockRun,
+    isExporting: mockUseStore((state) => state.isExportInFlight),
+    error: null,
+  }),
   formatBytes: (bytes) => `${bytes} B`,
 }))
 
@@ -83,10 +93,12 @@ describe('ExportsList', () => {
     // the list shows. The hydration tests below override it.
     hydrateExports.mockImplementation((_sub, _serverExports) => loadExports())
     useStore.getState().setAppMetadata({})
+    useStore.getState().setIsExportInFlight(false)
   })
 
   afterAll(() => {
     useStore.getState().setAppMetadata({})
+    useStore.getState().setIsExportInFlight(false)
   })
 
   it('explains the feature when nothing has been exported', async () => {
@@ -166,6 +178,19 @@ describe('ExportsList', () => {
       {stripBldrsMetadata: true},
       expect.objectContaining({cacheKeyArgs: CACHE_KEY_ARGS, key: '/share/v/p/index.ifc'}),
     )
+  })
+
+  it('disables "Download again" while ANY export in the tab is running', async () => {
+    // The in-flight flag is shared (store/UISlice.js) rather than each
+    // `useExport` instance's own: an export started by the Download GLB
+    // button above must not leave these rows clickable, or two exports race
+    // each other's write of the history mirror (#1834).
+    loadExports.mockResolvedValue({exports: [aRow()]})
+    useStore.getState().setIsExportInFlight(true)
+
+    await renderList()
+
+    expect(await screen.findByTestId('exports-download-again')).toBeDisabled()
   })
 
   it('hydrates the empty mirror from the account\'s server history', async () => {

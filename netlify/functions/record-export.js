@@ -5,11 +5,20 @@
  *
  *   POST /.netlify/functions/record-export
  *   Headers: Authorization: Bearer <Auth0 access token>
- *   Body:    {key, format, bytes, title?}
+ *   Body:    {key, format, bytes, title?, id?}
  *            key    — share path of the model, e.g. /share/v/gh/o/r/main/x.ifc
  *            format — export format id from src/export/exportRegistry.js
  *            bytes  — size of the downloaded file
  *            title  — display label; falls back to the key's basename in the UI
+ *            id     — the row id the client already wrote into its own mirror.
+ *                     Echoed back on the stored row so the client can match
+ *                     the two one-to-one (src/export/exportHistory.js
+ *                     #withLocalArtifactFields); a body with no id gets one
+ *                     minted here, as every request did before #1834. It is
+ *                     an opaque LABEL, never an authorization input, so the
+ *                     only check is its shape — but a malformed one is a
+ *                     client bug worth a 400 rather than a silently
+ *                     different id than the client believes it wrote.
  *
  * Flow: validate the body → `verifyAuth0Bearer` (401) → Management API
  * `app_metadata` (NOT the caller's JWT claim, which is as stale as the token
@@ -64,6 +73,12 @@ const EXPORTS_CAP = 100
 // name, short enough that a hostile client cannot fill app_metadata with it.
 const TITLE_MAX_LENGTH = 200
 
+// Exactly what `crypto.randomUUID` emits, which is also what the client's
+// no-webcrypto fallback shapes itself into (exportHistory.js#newLocalId).
+// Bounding the id's shape bounds its size, so a client cannot grow
+// app_metadata through this field either.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 
 /**
  * @param {number} statusCode
@@ -110,7 +125,7 @@ function parseBody(event) {
   } catch {
     return {error: 'invalid_json'}
   }
-  const {key, format, title, bytes} = body || {}
+  const {id, key, format, title, bytes} = body || {}
   if (typeof key !== 'string' || key.length === 0) {
     return {error: 'missing_key'}
   }
@@ -124,7 +139,10 @@ function parseBody(event) {
       (typeof title !== 'string' || title.length > TITLE_MAX_LENGTH)) {
     return {error: 'invalid_title'}
   }
-  return {entry: {key, format, title: title || null, bytes}}
+  if (id !== undefined && id !== null && (typeof id !== 'string' || !UUID_PATTERN.test(id))) {
+    return {error: 'invalid_id'}
+  }
+  return {entry: {id: id || null, key, format, title: title || null, bytes}}
 }
 
 
@@ -175,7 +193,9 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   // unit tests, where that identifier is the module's own binding.
   const updatedExports = [
     {
-      id: randomUUID(),
+      // The client's id when it sent one, so its optimistic row and this one
+      // are the same row on both sides of the mirror.
+      id: parsed.entry.id || randomUUID(),
       key: parsed.entry.key,
       title: parsed.entry.title,
       format: parsed.entry.format,

@@ -102,6 +102,32 @@ describe('record-export function', () => {
     expect(Date.parse(exports[0].exportedAt)).not.toBeNaN()
   })
 
+  it('records the client\'s row id, so the browser can pair its mirror row with this one', async () => {
+    // The client writes an optimistic row before this call and matches the
+    // response back onto it by id (src/export/exportHistory.js
+    // #withLocalArtifactFields). A server-minted id would leave two rows for
+    // the same export that can only be matched by key + format — which
+    // collapses when one model is exported twice (#1834).
+    mockAuth0({subscriptionStatus: 'sharePro'})
+    const clientId = '5f6b1d7e-1a2b-4c3d-9e4f-0a1b2c3d4e5f'
+
+    const res = await handler(getEvent({id: clientId}))
+
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.body).exports[0].id).toBe(clientId)
+    expect(patchedAppMetadata().exports[0].id).toBe(clientId)
+  })
+
+  it('mints an id for a body that carries none, as every request did before', async () => {
+    mockAuth0({subscriptionStatus: 'sharePro'})
+
+    const res = await handler(getEvent())
+
+    const [row] = JSON.parse(res.body).exports
+    expect(row.id).toEqual(expect.any(String))
+    expect(row.id.length).toBeGreaterThan(0)
+  })
+
   it('patches ONLY app_metadata.exports, leaving quota and subscription alone', async () => {
     mockAuth0({
       subscriptionStatus: 'sharePro',
@@ -192,6 +218,13 @@ describe('record-export function', () => {
     ['a missing byte count', {bytes: undefined}, 'invalid_bytes'],
     ['an over-long title', {title: 'x'.repeat(201)}, 'invalid_title'],
     ['a non-string title', {title: 42}, 'invalid_title'],
+    // The id is an opaque label, never an authorization input, so only its
+    // SHAPE is checked — but a client that sends a malformed one has a bug,
+    // and silently storing a different id than it wrote locally would leave
+    // its mirror unable to match this row for good.
+    ['a malformed row id', {id: 'not-a-uuid'}, 'invalid_id'],
+    ['a non-string row id', {id: 42}, 'invalid_id'],
+    ['a row id with a wrong version nibble', {id: '5f6b1d7e-1a2b-1c3d-9e4f-0a1b2c3d4e5f'}, 'invalid_id'],
   ])('400s %s', async (_name, bodyOverrides, error) => {
     mockAuth0({subscriptionStatus: 'sharePro'})
 

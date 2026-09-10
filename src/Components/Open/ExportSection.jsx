@@ -46,6 +46,9 @@ export default function ExportSection() {
   const [isMetadataIncluded, setIsMetadataIncluded] = useState(true)
 
   const {getAccessTokenSilently, isAuthenticated} = useAuth0()
+  // `isExporting` is tab-wide, not this button's own (store/UISlice.js): a
+  // "Download again" running in the list below must disable this button too,
+  // or the user gets two exports racing each other's history write (#1834).
   const {isExporting, run} = useExport()
   const theme = useTheme()
 

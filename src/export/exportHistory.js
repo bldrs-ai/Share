@@ -35,7 +35,9 @@ import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
  * re-download would silently fall back to the defaults and produce a
  * DIFFERENT file from the one the row's size describes (a user who stripped
  * `BLDRS_*` metadata would get it back). They are also the reason a mirror
- * re-attaches local fields by key rather than replacing rows wholesale.
+ * re-attaches local fields ONTO the server's rows instead of replacing those
+ * rows wholesale — one-to-one, by the row id this client mints and the
+ * server echoes (`withLocalArtifactFields`).
  *
  * Design: design/new/glb-export-premium.md §4.5.
  */
@@ -48,7 +50,11 @@ const RECORD_EXPORT_ENDPOINT = '/.netlify/functions/record-export'
 const EXPORTS_CAP = 100
 
 const RADIX_HEX = 16
-const ID_RANDOM_CHARS = 12
+
+// A v4 UUID with the random nibbles left as `x` and the variant nibble as
+// `y`; `newLocalId` fills them in when `crypto.randomUUID` isn't there.
+const UUID_V4_TEMPLATE = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+const UUID_VARIANT_DIGITS = ['8', '9', 'a', 'b']
 
 /** Subscribers notified after every saveExports write, each with its sub */
 const listeners = new Set()
@@ -159,15 +165,28 @@ export async function saveExports(sub, exportEntries) {
 
 
 /**
- * @return {string} a unique-enough local row id
+ * A row id, generated HERE rather than on the server, and sent with the POST
+ * so `record-export.js` echoes it back on the row it writes. That shared id
+ * is what lets the mirror re-attach this browser's fields to the RIGHT
+ * server row (`withLocalArtifactFields`); matching on key + format alone
+ * collapses two exports of the same model (#1834).
+ *
+ * Shaped as a v4 UUID even on the fallback path, because the server
+ * validates the shape and 400s anything else — and an id it rejected would
+ * cost the user the history row, not just the id.
+ *
+ * @return {string} e.g. '5f6b1d7e-1a2b-4c3d-9e4f-0a1b2c3d4e5f'
  */
 function newLocalId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
   }
   // jsdom builds without webcrypto, and any browser on a non-secure origin.
-  // Ids are only ever compared to each other within one list.
-  return `${Date.now().toString(RADIX_HEX)}-${Math.random().toString(RADIX_HEX).slice(2, ID_RANDOM_CHARS)}`
+  // Math.random is enough: the id labels a row inside one account's list and
+  // is never a secret or a capability.
+  return UUID_V4_TEMPLATE.replace(/[xy]/g, (placeholder) => (placeholder === 'x' ?
+    Math.floor(Math.random() * RADIX_HEX).toString(RADIX_HEX) :
+    UUID_VARIANT_DIGITS[Math.floor(Math.random() * UUID_VARIANT_DIGITS.length)]))
 }
 
 
@@ -179,24 +198,62 @@ function newLocalId() {
  * the third says how that file was produced), so a naive mirror would
  * disable "Download again" on every row the moment the server answered — or,
  * worse, keep the button and re-export with the default options.
- * Matching is by share path and format, and takes the newest local row for
- * that pair: the same model re-exported later has the same key, and its
- * artifact is the one still on disk.
+ *
+ * MATCHING IS ONE-TO-ONE, BY ROW ID: the id is minted by `recordExport` and
+ * echoed by the server (§4.5), so each server row picks up the fields of the
+ * local row it actually IS. Matching on key + format instead — as this did
+ * through #1834 — gives EVERY server row for a model+format the newest local
+ * row's fields, so a user who exported one model twice with different
+ * "Include Bldrs metadata" settings sees the newer options (and cache key)
+ * on the older row, and "Download again" there produces a file that is not
+ * the one the row's size describes.
+ *
+ * Key + format survives as the fallback for LEGACY rows — written before the
+ * client sent an id, so the server minted its own — and is consumed
+ * one-to-one as well, newest with newest, rather than reused. That fallback
+ * deliberately ignores `exportedAt`: the server stamps its own, milliseconds
+ * after the local row's, so the two never compare equal.
  *
  * @param {Array<object>} serverExports newest first, from record-export
  * @param {Array<object>} localExports newest first, from OPFS
  * @return {Array<object>} server rows carrying local artifact fields
  */
 export function withLocalArtifactFields(serverExports, localExports) {
-  const byKey = new Map()
-  for (const entry of localExports) {
-    const mapKey = `${entry.key}\u0000${entry.format}`
-    if (!byKey.has(mapKey) && entry.cacheKeyArgs) {
-      byKey.set(mapKey, entry)
+  // Only rows that carry the local fields are worth matching at all.
+  const candidates = localExports.filter((entry) => entry.cacheKeyArgs)
+  const byId = new Map()
+  for (const entry of candidates) {
+    if (entry.id && !byId.has(entry.id)) {
+      byId.set(entry.id, entry)
     }
   }
-  return serverExports.map((entry) => {
-    const local = byKey.get(`${entry.key}\u0000${entry.format}`)
+
+  const claimed = new Set()
+  const matches = serverExports.map((entry) => {
+    const local = entry.id ? byId.get(entry.id) : undefined
+    if (local && !claimed.has(local)) {
+      claimed.add(local)
+      return local
+    }
+    return null
+  })
+
+  // A second pass, so an id match always wins over a key match for the same
+  // local row whichever order the two server rows arrive in.
+  serverExports.forEach((entry, i) => {
+    if (matches[i]) {
+      return
+    }
+    const local = candidates.find((candidate) =>
+      !claimed.has(candidate) && candidate.key === entry.key && candidate.format === entry.format)
+    if (local) {
+      claimed.add(local)
+      matches[i] = local
+    }
+  })
+
+  return serverExports.map((entry, i) => {
+    const local = matches[i]
     return local ?
       {...entry, cacheKeyArgs: local.cacheKeyArgs, schemaVer: local.schemaVer, options: local.options || null} :
       entry
@@ -299,8 +356,11 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      // Only the four public fields. cacheKeyArgs/schemaVer/options stay local.
-      body: JSON.stringify({key, format, bytes, title: title || null}),
+      // Only the public fields. cacheKeyArgs/schemaVer/options stay local.
+      // The id goes UP so that it comes back down on the server's row: it is
+      // what `withLocalArtifactFields` matches on, and without it two
+      // exports of one model and format are indistinguishable in the merge.
+      body: JSON.stringify({id: local.id, key, format, bytes, title: title || null}),
     })
   } catch {
     // Offline, Auth0 unreachable, function down: the optimistic row stands.

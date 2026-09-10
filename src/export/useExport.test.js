@@ -58,6 +58,7 @@ describe('useExport', () => {
     })
     useStore.getState().setGlbArtifact({cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER, writtenAt: 1})
     useStore.getState().setSnackMessage(null)
+    useStore.getState().setIsExportInFlight(false)
   })
 
   afterAll(() => {
@@ -153,24 +154,47 @@ describe('useExport', () => {
     expect(exportArtifact.mock.calls[0][0].options.stripBldrsMetadata).toBe(true)
   })
 
-  it('reports the export as in flight while it runs', async () => {
+  it('reports the export as in flight while it runs, through the SHARED store flag', async () => {
+    // In the store rather than in the hook, because `ExportSection` and
+    // `ExportsList` each hold their own instance of this hook: per-instance
+    // state left "Download again" live while Download GLB was running, and
+    // the two exports then raced each other's history write (#1834).
     let release
     loadProModule.mockReturnValue(new Promise((resolve) => {
       release = () => resolve({exportArtifact})
     }))
     const {result} = renderHook(() => useExport())
+    const other = renderHook(() => useExport())
 
     let running
     await act(() => {
       running = result.current.run('glb', {})
     })
     expect(result.current.isExporting).toBe(true)
+    expect(useStore.getState().isExportInFlight).toBe(true)
+    // The second caller sees it too — that is the whole point.
+    expect(other.result.current.isExporting).toBe(true)
 
     await act(async () => {
       release()
       await running
     })
     expect(result.current.isExporting).toBe(false)
+    expect(other.result.current.isExporting).toBe(false)
+    expect(useStore.getState().isExportInFlight).toBe(false)
+  })
+
+  it('clears the shared flag when the export fails', async () => {
+    // Otherwise one failure disables every export control in the tab until
+    // the page is reloaded.
+    loadProModule.mockRejectedValue(new ProModuleDeniedError(403, 'denied'))
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {})
+    })
+
+    expect(useStore.getState().isExportInFlight).toBe(false)
   })
 
   it('surfaces a denial as an upgrade prompt and force-refreshes the JWT', async () => {

@@ -37,6 +37,12 @@ const SIZE_DECIMALS = 1
  * also keeps the server's denial rate meaningful (§4.6: a 403 spike means a
  * stale client badge or a probe, not idle UI).
  *
+ * `isExporting` is shared across every caller in the tab (it lives in
+ * `store/UISlice.js`), because the two components that export — the Download
+ * GLB button and each "Download again" row — must disable each other: two
+ * concurrent runs would race the history mirror's read-modify-write and hand
+ * the user two downloads for one click each (§4.4).
+ *
  * `run(formatId, options, source)` normally exports the CURRENTLY loaded
  * model, from the `glbArtifact` slot the loader publishes. `source` overrides
  * that with an artifact identified elsewhere — "Download again" in
@@ -51,7 +57,11 @@ export default function useExport() {
   const glbArtifact = useStore((state) => state.glbArtifact)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const {getAccessTokenSilently, user} = useAuth0()
-  const [isExporting, setIsExporting] = useState(false)
+  // In the STORE, not in this hook: `ExportSection` and `ExportsList` each
+  // call `useExport`, so per-instance state let one of them start an export
+  // while the other's was still running (#1834).
+  const isExporting = useStore((state) => state.isExportInFlight)
+  const setIsExporting = useStore((state) => state.setIsExportInFlight)
   const [error, setError] = useState(null)
 
   const run = useCallback(async (formatId, options = {}, source = null) => {
@@ -152,7 +162,7 @@ export default function useExport() {
     } finally {
       setIsExporting(false)
     }
-  }, [glbArtifact, getAccessTokenSilently, setSnackMessage, user?.sub])
+  }, [glbArtifact, getAccessTokenSilently, setIsExporting, setSnackMessage, user?.sub])
 
   return {run, isExporting, error}
 }
