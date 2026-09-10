@@ -51,6 +51,15 @@
   functions = "netlify/functions"
   framework = "#custom"
 
+# The `pro-module` function serves premium JS built OUTSIDE `docs/` (so no
+# public copy exists) from `netlify/functions/_pro-modules/`, which is a
+# BUILD OUTPUT and gitignored. Netlify's bundler only ships files a function
+# statically imports, and this one reads its payload from disk at request
+# time, so the directory has to be declared here or the deployed function
+# 404s every module. See design/new/glb-export-premium.md §4.2.
+[functions."pro-module"]
+  included_files = ["netlify/functions/_pro-modules/*.js"]
+
 # COOP same-origin-allow-popups lets Google Identity Services deliver OAuth
 # tokens via postMessage without nulling window.opener in the cross-origin
 # popup. COEP is intentionally omitted (docs.google.com/picker sends

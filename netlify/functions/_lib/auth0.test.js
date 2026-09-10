@@ -5,7 +5,7 @@
 
 import axios from 'axios'
 import * as Sentry from '@sentry/serverless'
-import {verifyAuth0Bearer} from './auth0.js'
+import {getUserAppMetadata, verifyAuth0Bearer} from './auth0.js'
 
 
 /* eslint-disable no-magic-numbers */
@@ -144,5 +144,39 @@ describe('verifyAuth0Bearer', () => {
     const result = await verifyAuth0Bearer({headers: {authorization: 'Bearer good-token'}})
 
     expect(result.response.statusCode).toBe(401)
+  })
+})
+
+
+describe('getUserAppMetadata', () => {
+  const ORIGINAL_AUTH0_DOMAIN = process.env.AUTH0_DOMAIN
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    process.env.AUTH0_DOMAIN = 'bldrs.us.auth0.com.test'
+    axios.post.mockResolvedValue({data: {access_token: 'mgmt-token', expires_in: 86400}})
+  })
+
+  afterAll(() => {
+    process.env.AUTH0_DOMAIN = ORIGINAL_AUTH0_DOMAIN
+  })
+
+  it('reads app_metadata through the Management API, not from any client claim', async () => {
+    axios.get.mockResolvedValue({data: {app_metadata: {subscriptionStatus: 'sharePro'}}})
+
+    const appMetadata = await getUserAppMetadata('google-oauth2|1')
+
+    expect(appMetadata).toEqual({subscriptionStatus: 'sharePro'})
+    const [url, config] = axios.get.mock.calls[0]
+    expect(url).toContain('/api/v2/users/google-oauth2%7C1')
+    expect(config.headers.Authorization).toBe('Bearer mgmt-token')
+  })
+
+  it('returns an empty object for a user with no app_metadata', async () => {
+    // The caller compares a field on the result, so `undefined` here would
+    // throw instead of denying — a fail-open shape.
+    axios.get.mockResolvedValue({data: {}})
+
+    expect(await getUserAppMetadata('google-oauth2|2')).toEqual({})
   })
 })
