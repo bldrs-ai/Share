@@ -71,6 +71,25 @@ describe('SaveModelControl', () => {
     expect(queryByRole('dialog')).toBeNull()
   })
 
+  it('Keeps the gated toolbar button off the tab order, and inert if activated', async () => {
+    // `TooltipIconButton` has to FORWARD tabIndex for this — it renders a
+    // MUI ToggleButton and passes only the props it names — or a keyboard
+    // user tabs onto the Save button behind the gate and Enter opens the
+    // save dialog they cannot use (#1838).
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    const {getByTestId, queryByRole} = render(<SaveModelControlFixture/>)
+
+    const button = getByTestId('control-button-save')
+    expect(button).toHaveAttribute('tabindex', '-1')
+
+    // Enter on a focused button IS a click dispatched on it, which never
+    // goes through hit-testing and so ignores `pointer-events: none`.
+    fireEvent.click(button)
+
+    expect(await waitFor(() => getByTestId('gated-help'))).toBeInTheDocument()
+    expect(queryByRole('dialog')).toBeNull()
+  })
+
   it('Sends the signed-out user to the login dialog from the gate', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
     const {getByTestId} = render(<SaveModelControlFixture/>)

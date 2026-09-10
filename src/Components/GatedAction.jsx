@@ -1,4 +1,4 @@
-import React, {ReactElement, useRef, useState} from 'react'
+import React, {ReactElement, cloneElement, isValidElement, useRef, useState} from 'react'
 import {Box, Button, Popover, Stack, Typography} from '@mui/material'
 import {assertDefined} from '../utils/assert'
 
@@ -14,11 +14,22 @@ import {assertDefined} from '../utils/assert'
  * shape: a real `disabled` plus a hover tooltip, which says nothing at all
  * on touch). So: `aria-disabled` on a focusable wrapper that owns the click,
  * and `pointer-events: none` over the child so its own handler can't fire
- * and no half-enabled hover state shows through. The child stays in the DOM
- * unchanged, so the gated control is pixel-for-pixel the real one, dimmed.
+ * and no half-enabled hover state shows through. The child renders as the
+ * control it always was, so the gated version is pixel-for-pixel the real
+ * one, dimmed.
  *
- * Keyboard: the wrapper is the tab stop that matters (Enter/Space open the
- * help). The child button behind it remains focusable but inert.
+ * Keyboard: the wrapper is the ONLY tab stop, and Enter/Space on it open the
+ * help. `pointer-events: none` is a mouse-only defence — a keyboard user who
+ * could Tab onto the control behind it and press Enter would have the
+ * BROWSER dispatch a click straight to the child, running the very handler
+ * the gate exists to hold back (a free user's Export would start an export
+ * and collect a server denial while the help opened; a signed-out Save would
+ * open the dialog). So the child is cloned with `tabIndex: -1`, which takes
+ * it out of the tab order, and with the gate's own click handler, so any
+ * click that does reach it — keyboard activation, a programmatic one —
+ * opens the help instead. It is deliberately NOT `aria-hidden`: the wrapper
+ * is a `role=button` whose accessible name comes from the child's label, and
+ * hiding the child would leave a nameless button (#1838).
  *
  * @property {string} slug Identifies this gate, e.g. 'save' → `gated-save`
  * @property {string} title Help heading, e.g. 'Log in to save'
@@ -54,6 +65,23 @@ export default function GatedAction({slug, title, body, actionLabel, onAction, c
     onAction()
   }
 
+  // A click that landed on the child rather than on the wrapper: keyboard
+  // activation of a focused button, or a programmatic `.click()`. Stopping
+  // it here keeps the wrapper's own handler from opening the help a second
+  // time (and firing `onOpen` twice, which the funnel counts).
+  const onChildClick = (event) => {
+    event.stopPropagation()
+    openHelp()
+  }
+
+  // The child stays exactly the control it was — same element, same look —
+  // minus its keyboard reachability and its own click handler; see the
+  // Keyboard note above. Non-element children (a bare string) can't be
+  // cloned and have no handler to hold back either.
+  const gatedChild = isValidElement(children) ?
+    cloneElement(children, {tabIndex: -1, onClick: onChildClick}) :
+    children
+
   return (
     <>
       <Box
@@ -83,7 +111,7 @@ export default function GatedAction({slug, title, body, actionLabel, onAction, c
           },
         }}
       >
-        {children}
+        {gatedChild}
       </Box>
       <Popover
         open={isHelpOpen}
