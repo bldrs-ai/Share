@@ -35,7 +35,20 @@ describe('proModules', () => {
     // defines.js's switch falls through to prod for undefined and for any
     // unrecognised value, so the dev copy must be opt-IN by name rather than
     // "anything that isn't the string prod".
-    expect(proModuleTargets({shareConfig: undefined, names})[0].devCopyFile).toBeNull()
+    //
+    // "Unset" has to be the real environment, not `shareConfig: undefined`:
+    // a JS default parameter treats an explicit undefined as absent and
+    // reads `process.env.SHARE_CONFIG` — which CI's build job sets to `dev`,
+    // so that spelling passed locally and failed on the runner (#1837).
+    const saved = process.env.SHARE_CONFIG
+    delete process.env.SHARE_CONFIG
+    try {
+      expect(proModuleTargets({names})[0].devCopyFile).toBeNull()
+    } finally {
+      if (saved !== undefined) {
+        process.env.SHARE_CONFIG = saved
+      }
+    }
     expect(proModuleTargets({shareConfig: 'cypress', names})[0].devCopyFile).toBeNull()
   })
 
