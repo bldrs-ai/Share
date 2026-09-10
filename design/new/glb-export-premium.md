@@ -252,7 +252,16 @@ half: it classifies every `bufferView` reference in the document by whether
 only a `BLDRS_*` extension reaches it (a view a geometry accessor shares
 stays), compacts the survivors at 4-byte boundaries, re-indexes every
 surviving reference and updates `buffers[0].byteLength`; the pro module then
-copies the survivors into a fresh BIN chunk. It lives in `loader/` because
+copies the survivors into a fresh BIN chunk. A compressed artifact's geometry
+is carried the same way, with one wrinkle: under `?feature=glbMeshopt` a
+bufferView's own `buffer`/`byteOffset` address the *decoded* bytes on
+`EXT_meshopt_compression`'s fallback buffer (`buffers[1]`, no URI, no bytes in
+the file) and the BIN-resident bytes are the compressed range the extension
+names, so it is that range which is preserved, re-laid at 4-byte boundaries
+and re-offset — treating a `buffer !== 0` view as external emitted an empty
+BIN chunk and a file no loader could open (#1841). DRACO needs no special case:
+`KHR_draco_mesh_compression.bufferView` is an ordinary view the generic walk
+already sees. It lives in `loader/` because
 the panel predicts the stripped size from the artifact's header with the very
 same function (§4.4) — one computation, so the figure and the file agree
 exactly. A GLB with no Bldrs data in it is handed over untouched rather than

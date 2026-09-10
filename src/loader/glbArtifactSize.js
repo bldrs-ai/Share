@@ -32,6 +32,10 @@ import {CONTAINER_CHUNK_HEADER_BYTES, readGlbContainerHeader} from './glbContain
 // batched-native layout's geometry depends on — are never touched.
 export const BLDRS_EXTENSION_PREFIX = 'BLDRS_'
 
+// The one extension whose bufferViews do NOT hold their own bytes: see
+// `meshoptCompressedRange`.
+const MESHOPT_EXTENSION = 'EXT_meshopt_compression'
+
 const GLB_MAGIC = 0x46546C67 // "glTF" LE
 const GLB_HEADER_BYTES = 12
 const GLB_CHUNK_HEADER_BYTES = 8
@@ -331,7 +335,9 @@ function stripExtensionsOf(holder, stripped) {
  * so the compacted buffer also reclaims any gap the original had between
  * views. A view on a buffer other than the GLB's own BIN chunk (an external
  * `uri` buffer — not something our writer emits) addresses bytes nobody is
- * rewriting, so it keeps its offset and takes no space here.
+ * rewriting, so it keeps its offset and takes no space here — UNLESS it is
+ * a Meshopt view, whose BIN-resident range is its extension's rather than
+ * its own (`meshoptCompressedRange`).
  *
  * @param {object} json Parsed glTF JSON, with the BLDRS entries already gone
  * @param {Set<number>} dropIndices bufferViews to remove
@@ -358,13 +364,20 @@ function dropBufferViews(json, dropIndices) {
     const view = views[i]
     remap.set(i, kept.length)
     kept.push(view)
-    if ((view.buffer ?? 0) !== 0) {
+    // Whichever object owns this view's bytes in the BIN chunk is the one
+    // whose `byteOffset` moves: normally the view itself, but for a Meshopt
+    // view its extension (the view's own `buffer`/`byteOffset`/`byteLength`
+    // describe DECODED bytes on the fallback buffer, which the file does not
+    // carry). Everything else — an external `uri` buffer — addresses bytes
+    // nobody here is rewriting and consumes no BIN space.
+    const range = meshoptCompressedRange(view) ?? ((view.buffer ?? 0) === 0 ? view : null)
+    if (range === null) {
       continue
     }
-    const fromOffset = view.byteOffset ?? 0
-    const byteLength = view.byteLength ?? 0
+    const fromOffset = range.byteOffset ?? 0
+    const byteLength = range.byteLength ?? 0
     binPlan.push({fromOffset, byteLength, toOffset: nextOffset})
-    view.byteOffset = nextOffset
+    range.byteOffset = nextOffset
     dataEnd = nextOffset + byteLength
     nextOffset += pad4(byteLength)
   }
@@ -392,6 +405,41 @@ function dropBufferViews(json, dropIndices) {
     delete json.buffers
   }
   return {droppedBufferViews, binPlan, binByteLength: dataEnd}
+}
+
+
+/**
+ * The BIN-chunk range an `EXT_meshopt_compression` bufferView owns, or null
+ * for every other view.
+ *
+ * Meshopt inverts the usual arrangement, and getting this wrong emits a GLB
+ * that no loader can open (#1841). A compressed view's own
+ * `buffer`/`byteOffset`/`byteLength` describe the DECODED bytes, on the
+ * extension's fallback buffer — `buffers[1]`, declared with no URI and no
+ * bytes anywhere in the file, so `buffer !== 0` here does NOT mean "external,
+ * nothing to copy". The bytes that really are in the BIN chunk are the
+ * compressed ones the extension names, `{buffer: 0, byteOffset, byteLength}`,
+ * and since `extensionsRequired` lists Meshopt a reader cannot fall back to
+ * the decoded view when they go missing. So this range is what gets copied
+ * and re-offset; the view's decoded fields and `buffers[1]` stay as they were.
+ *
+ * Verified against `@gltf-transform/extensions` v4.3.0 — the encoder
+ * `glbCompress.js` runs for `?feature=glbMeshopt` — by
+ * `export/pro/glbExport.meshopt.test.js`, which encodes with that same
+ * library rather than trusting this description.
+ *
+ * @param {object} view A bufferView entry
+ * @return {?object} the extension object to re-offset, or null
+ */
+function meshoptCompressedRange(view) {
+  const meshopt = view?.extensions?.[MESHOPT_EXTENSION]
+  if (!meshopt || typeof meshopt !== 'object' || !Number.isInteger(meshopt.byteLength)) {
+    return null
+  }
+  // The extension names its own buffer, and only buffer 0 is the BIN chunk
+  // this function is re-laying. A compressed range anywhere else is bytes
+  // nobody here is rewriting, exactly as for a plain view.
+  return (meshopt.buffer ?? 0) === 0 ? meshopt : null
 }
 
 
