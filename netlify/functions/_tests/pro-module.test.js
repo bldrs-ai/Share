@@ -2,16 +2,24 @@
  * Tests for the pro-module Netlify Function — the server-side gate that
  * decides who receives premium export code (design/new/glb-export-premium.md
  * §4.6). The UI's tier check is cosmetic; THIS is the thing being tested.
+ *
+ * Why this file is in `_tests/` rather than beside its subject: Netlify's
+ * function bundler treats EVERY top-level `.js` under `netlify/functions/`
+ * as a function entry point, so a `pro-module.test.js` there would be
+ * deployed as a junk endpoint and would drag jest-only imports into the
+ * deploy bundle. Subdirectories with no same-named main file are skipped
+ * (which is why `_lib/` is safe), so tests live in one. Jest still finds
+ * this file: its roots include `<rootDir>/netlify`.
  */
 
 import axios from 'axios'
-import fs from 'node:fs/promises'
-import {handler} from './pro-module.js'
+import fs from 'fs/promises'
+import {handler} from '../pro-module.js'
 
 
 /* eslint-disable no-magic-numbers */
 jest.mock('axios')
-jest.mock('node:fs/promises', () => ({readFile: jest.fn()}))
+jest.mock('fs/promises', () => ({readFile: jest.fn()}))
 jest.mock('@sentry/serverless', () => ({
   AWSLambda: {
     init: jest.fn(),

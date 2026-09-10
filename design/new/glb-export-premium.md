@@ -190,6 +190,22 @@ is `dev` or `playwright` (never `prod`). The MSW handler for
 like `record-load`'s mock does, then proxies to that copy; Playwright specs
 `page.route` the same path and `fulfill({path: 'netlify/functions/_pro-modules/glbExport.js'})`.
 
+Two conventions the deploy bundler imposes on anything added under
+`netlify/functions/`, both learned by breaking the deploy preview and
+neither visible to `yarn build` or to jest:
+
+- **No `node:`-prefixed builtin imports** (`node:fs/promises`, `node:path`,
+  `node:crypto`, …). No pre-existing function used one; write `fs/promises`.
+  Same reason `import.meta.url` is avoided for locating `_pro-modules/` —
+  `process.env.LAMBDA_TASK_ROOT`, falling back to `process.cwd()`, is what
+  the deployed lambda and `netlify dev` both understand.
+- **Tests go in `netlify/functions/_tests/`**, not beside their subject.
+  Every top-level `.js` in the functions directory is bundled AS a function,
+  so a `foo.test.js` there deploys as a junk endpoint and pulls jest-only
+  imports into the bundle. Subdirectories without a same-named main file are
+  ignored, which is why `_lib/` is safe; jest finds `_tests/` either way
+  (`roots` includes `<rootDir>/netlify`).
+
 ### 4.3 The GLB export (pro module)
 
 `glbExport.entry.js` exports:

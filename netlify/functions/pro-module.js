@@ -24,9 +24,8 @@
  * Design: design/new/glb-export-premium.md §3 (option C), §4.2, §4.6.
  */
 
-import fs from 'node:fs/promises'
-import * as path from 'node:path'
-import {fileURLToPath} from 'node:url'
+import fs from 'fs/promises'
+import * as path from 'path'
 import * as Sentry from '@sentry/serverless'
 import {getUserAppMetadata, verifyAuth0Bearer} from './_lib/auth0.js'
 
@@ -56,26 +55,28 @@ const PRO_MODULE_NAMES = new Set(['glbExport'])
 const PRO_SUBSCRIPTION_STATUS = 'sharePro'
 
 const PRO_MODULES_DIR_NAME = '_pro-modules'
-const functionDir = path.dirname(fileURLToPath(import.meta.url))
 
 
 /**
  * Read a pro module's built bytes.
  *
  * Two candidate roots because the layout differs between environments and
- * neither is worth guessing wrong: `netlify dev` / `netlify-cli` run the
- * function from its source directory (sibling `_pro-modules/`), while a
- * deployed lambda gets `included_files` copied under the task root with
- * their repo-relative path preserved, and `process.cwd()` IS that root.
+ * neither is worth guessing wrong: a deployed lambda gets `included_files`
+ * copied under LAMBDA_TASK_ROOT with their repo-relative path preserved,
+ * while `netlify dev` / `netlify-cli` set no such variable and run with the
+ * repo root as `process.cwd()`.
+ *
+ * Deliberately NOT `import.meta.url`: no other function in this directory
+ * uses `import.meta`, so how the deploy bundler treats it here is one more
+ * unknown in a path that has to work on the first try.
  *
  * @param {string} name An id already validated against PRO_MODULE_NAMES
  * @return {Promise<string|null>} module source, or null when not built
  */
 async function readProModuleSource(name) {
-  const candidates = [
-    path.join(functionDir, PRO_MODULES_DIR_NAME, `${name}.js`),
-    path.resolve(process.cwd(), 'netlify', 'functions', PRO_MODULES_DIR_NAME, `${name}.js`),
-  ]
+  const roots = [process.env.LAMBDA_TASK_ROOT, process.cwd()].filter(Boolean)
+  const candidates = roots.map(
+    (root) => path.resolve(root, 'netlify', 'functions', PRO_MODULES_DIR_NAME, `${name}.js`))
   for (const candidate of candidates) {
     try {
       return await fs.readFile(candidate, 'utf8')
