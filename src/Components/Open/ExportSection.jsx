@@ -1,8 +1,9 @@
-import React, {ReactElement, useState} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import {Box, Button, Chip, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import useExport from '../../export/useExport'
+import {artifactSizes} from '../../export/artifactSizes'
+import useExport, {formatBytes} from '../../export/useExport'
 import {gtagEvent} from '../../privacy/analytics'
 import {TIERS, getTier} from '../../quota/quota'
 import useStore from '../../store/useStore'
@@ -34,6 +35,12 @@ import {
  * the `pro-module` function re-checks the subscription on every request and
  * is the authority.
  *
+ * Between the toggle and the button sits what the toggle costs: the download
+ * size for the state it is in, and how much of that is Bldrs metadata. Both
+ * figures are exact — same computation as the strip itself (#1841,
+ * `loader/glbArtifactSize.js`) — so the number here is the number the
+ * snackbar reports once the file has landed.
+ *
  * @return {ReactElement}
  */
 export default function ExportSection() {
@@ -51,6 +58,26 @@ export default function ExportSection() {
   // or the user gets two exports racing each other's history write (#1834).
   const {isExporting, run} = useExport()
   const theme = useTheme()
+  // Both download sizes, read from the artifact's header when the tab opens
+  // (`export/artifactSizes.js`) — null while that read is in flight and for
+  // an artifact whose sizes can't be read, in which case the line is simply
+  // absent. A placeholder that flashes a number and then corrects itself is
+  // worse than no number: this one is a promise about the file the next
+  // click produces.
+  const [sizes, setSizes] = useState(null)
+
+  useEffect(() => {
+    let isStale = false
+    setSizes(null)
+    artifactSizes(glbArtifact).then((read) => {
+      if (!isStale) {
+        setSizes(read)
+      }
+    })
+    return () => {
+      isStale = true
+    }
+  }, [glbArtifact])
 
   const isPro = getTier(appMetadata, isAuthenticated) === TIERS.PAID
   // The loader publishes this once the artifact is actually in OPFS — on a
@@ -69,6 +96,15 @@ export default function ExportSection() {
   } else if (!isArtifactReady) {
     label = 'Preparing GLB…'
   }
+
+  // What the button will hand over, for the toggle as it stands. The
+  // snackbar reports `blob.size` after the download and must agree with it —
+  // `loader/glbArtifactSize.js` is the same computation the strip runs, so
+  // it does, exactly (#1841).
+  const downloadBytes = sizes && (isMetadataIncluded ? sizes.withMetadata : sizes.withoutMetadata)
+  const metadataCaption = sizes && sizes.metadataBytes > 0 ?
+    `${formatBytes(sizes.metadataBytes)} of Bldrs metadata ${isMetadataIncluded ? 'included' : 'removed'}` :
+    null
 
   const onExportClick = async () => {
     await run('glb', {stripBldrsMetadata: !isMetadataIncluded})
@@ -154,6 +190,27 @@ export default function ExportSection() {
           data-testid='export-include-metadata'
         />
       </Stack>
+      {/* The size the toggle above just chose, above the action it applies
+          to. Its `data-bytes` is the raw count the label rounds, so a test
+          can compare it with the downloaded file byte for byte rather than
+          through "12.4 MB". */}
+      {downloadBytes !== null &&
+       <Stack
+         direction='row'
+         justifyContent='space-between'
+         alignItems='center'
+         gap={1}
+         sx={{mt: '1em'}}
+       >
+         <Box>
+           <Typography variant='body2'>Download size</Typography>
+           {metadataCaption &&
+            <Typography variant='caption' color='text.secondary'>{metadataCaption}</Typography>}
+         </Box>
+         <Typography variant='body2' data-testid='export-size' data-bytes={downloadBytes}>
+           {formatBytes(downloadBytes)}
+         </Typography>
+       </Stack>}
       {/* The action goes LAST, after everything that configures it, and
           centred — the Pro chip for free users rides beside it (#1838).
           `mt: '1em'` is this row's own gap from what configures it, matching

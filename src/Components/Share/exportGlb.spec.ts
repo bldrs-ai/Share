@@ -1,5 +1,5 @@
 import {readFile} from 'node:fs/promises'
-import {expect, test} from '@playwright/test'
+import {Locator, expect, test} from '@playwright/test'
 import {
   EXPORT_TEST_TIMEOUT_MS,
   GLTF_MAGIC,
@@ -22,6 +22,17 @@ import {
   setIsReturningUser,
   setupAuthenticationIntercepts,
 } from '../../tests/e2e/utils'
+
+
+/**
+ * The raw byte count behind the panel's rounded size label.
+ *
+ * @param sizeLine the `export-size` locator
+ * @return the figure the label rounds
+ */
+async function sizeBytes(sizeLine: Locator): Promise<number> {
+  return Number(await sizeLine.getAttribute('data-bytes'))
+}
 
 
 /**
@@ -77,6 +88,27 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
     await expect(exportButton).toHaveText('Export GLB')
+
+    // What the file will weigh, before anything is downloaded (#1841). The
+    // figure is read from the artifact's header; `data-bytes` carries the
+    // raw count the label rounds, so the comparison with the saved file
+    // below is exact rather than "both say 1.2 MB".
+    const sizeLine = page.getByTestId('export-size')
+    await expect(sizeLine).toBeVisible()
+    const withMetadataBytes = await sizeBytes(sizeLine)
+    const withMetadataLabel = (await sizeLine.textContent())?.trim()
+    expect(withMetadataBytes).toBeGreaterThan(0)
+
+    // Turning the metadata off has to move the number, which is the half of
+    // this feature that was missing: through v0.1 the strip dropped the JSON
+    // entries and left their payloads in the BIN chunk.
+    const metadataToggle = page.getByTestId('export-include-metadata').locator('input')
+    await metadataToggle.click()
+    await expect(sizeLine).not.toHaveAttribute('data-bytes', String(withMetadataBytes))
+    const strippedBytes = await sizeBytes(sizeLine)
+    expect(strippedBytes).toBeLessThan(withMetadataBytes)
+    await metadataToggle.click()
+    await expect(sizeLine).toHaveAttribute('data-bytes', String(withMetadataBytes))
     // The action is the LAST thing in the panel and centred, with the Pro
     // chip riding beside it for a free user (#1838). On the mobile
     // projection that row is the dialog's widest, so this is where a
@@ -95,7 +127,8 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // Bldrs container (which starts with "BLDR" and no third-party viewer
     // can read).
     expect(bytes.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
-    expect(bytes.byteLength).toBeGreaterThan(0)
+    // The size the panel promised is the size that landed in Downloads.
+    expect(bytes.byteLength).toBe(withMetadataBytes)
     // The export really did go through the gated delivery path rather than
     // through anything already in the page bundle.
     expect(proModuleRequests.length).toBeGreaterThan(0)
@@ -106,7 +139,24 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // the viewport.
     await expect(page.getByRole('dialog')).toBeVisible()
     await expect(page.getByTestId('snackbar')).toContainText('Exported')
+    // …and it reports the same figure the panel showed before the click:
+    // `blob.size` there, the header estimate here, one computation
+    // (`loader/glbArtifactSize.js`).
+    await expect(page.getByTestId('snackbar')).toContainText(`(${withMetadataLabel})`)
     await expectSnackbarOnTop(page)
+
+    // Now the other toggle state, end to end: the stripped file really is
+    // the smaller size the panel quoted, which is only true once the strip
+    // drops the metadata's bufferViews and their bytes (#1841).
+    await metadataToggle.click()
+    await expect(sizeLine).toHaveAttribute('data-bytes', String(strippedBytes))
+    const strippedDownloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    const strippedDownload = await strippedDownloadPromise
+    const strippedFile = await readFile(await strippedDownload.path())
+
+    expect(strippedFile.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+    expect(strippedFile.byteLength).toBe(strippedBytes)
   })
 
   test('a signed-out user is told what unlocks Save, and gets no dialog', async ({page}) => {

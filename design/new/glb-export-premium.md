@@ -239,13 +239,25 @@ export async function exportArtifact({bytes, options}) → {blob, filename, stat
 
 Steps: `isBldrsGlbContainer` → `unpackGlbContainer` → take chunk 0 → if
 `options.stripBldrsMetadata`, parse the JSON chunk and drop every `BLDRS_*`
-entry from `extensions`, `extensionsUsed` and node/mesh `extensions`, plus the
-`bufferViews` they referenced **only if** nothing else references them (the
-extension payloads are gzip'd bufferViews; leaving an orphan view is valid
-glTF and simpler — v0.1 leaves them, notes the size cost in `stats`) → repack
-JSON+BIN with 4-byte padding → `Blob`. The batched-native layout's
-`EXT_mesh_gpu_instancing` is a ratified Khronos extension and stays.
-Filename: `<title or source basename>.glb`.
+entry from `extensions`, `extensionsUsed` and node/mesh/primitive/scene
+`extensions`, plus the `bufferViews` they referenced **only if** nothing else
+references them → repack JSON+BIN with 4-byte padding → `Blob`. The
+batched-native layout's `EXT_mesh_gpu_instancing` is a ratified Khronos
+extension and stays. Filename: `<title or source basename>.glb`.
+
+The payload views really do go (#1841 — through v0.1 the JSON entries went
+and their gzipped bytes stayed, which made the toggle nearly free in the only
+currency the user sees). `loader/glbArtifactSize.js#stripBldrsJson` owns that
+half: it classifies every `bufferView` reference in the document by whether
+only a `BLDRS_*` extension reaches it (a view a geometry accessor shares
+stays), compacts the survivors at 4-byte boundaries, re-indexes every
+surviving reference and updates `buffers[0].byteLength`; the pro module then
+copies the survivors into a fresh BIN chunk. It lives in `loader/` because
+the panel predicts the stripped size from the artifact's header with the very
+same function (§4.4) — one computation, so the figure and the file agree
+exactly. A GLB with no Bldrs data in it is handed over untouched rather than
+re-serialised. `stats` reports `withMetadataBytes` / `withoutMetadataBytes` /
+`metadataBytes` for the run either way.
 
 Options surfaced in the UI (v0.1): *Include Bldrs metadata (properties,
 spatial tree)* — default **on** (it's their model; the toggle exists for
@@ -274,9 +286,18 @@ the same look as the Open dialog's "Connect GitHub" button — after a grey,
 all-caps button on the #1837 preview read as disabled when it wasn't
 (#1838).
 
-The Export tab hosts `Open/ExportSection.jsx` — the metadata toggle, then
-**Export GLB last and centred**, with the Pro chip for a free user riding
-beside it. The panel carries no "Exports" heading of its own; the tab is
+The Export tab hosts `Open/ExportSection.jsx` — the metadata toggle, then the
+**download size** for the state that toggle is in, then **Export GLB last and
+centred**, with the Pro chip for a free user riding beside it. The size line
+("Download size … 12.4 MB", captioned "3.1 MB of Bldrs metadata
+included/removed") is computed when the tab opens, from a `File.slice` of the
+artifact's header — `loader/glbArtifactSize.js#artifactSizesFromFile` reads
+the container's chunk length for the with-metadata figure and strips the
+parsed JSON chunk for the other, never touching the BIN chunk, so a
+400 MB model costs a header read rather than a stall (#1841). Both figures are
+exact: the same strip the export runs. Sizes are cached per published
+artifact and absent while unknown — no placeholder that flashes a number and
+then corrects itself. The panel carries no "Exports" heading of its own; the tab is
 already labelled Export. The dialog's footer action button belongs to the
 GitHub tab only: the Export tab's actions are its own buttons.
 `Open/ExportsList.jsx` (§4.5) is **not mounted here for now** — the owner
