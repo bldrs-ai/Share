@@ -63,7 +63,7 @@ export default function ExportSection() {
   // correct behaviour and only the label overstates it (#1833).
   const isArtifactReady = Boolean(glbArtifact)
 
-  let label = 'Download GLB'
+  let label = 'Export GLB'
   if (isExporting) {
     label = 'Exporting…'
   } else if (!isArtifactReady) {
@@ -87,10 +87,12 @@ export default function ExportSection() {
   const exportButton = (
     <Button
       variant='contained'
+      color='accent'
       size='small'
       onClick={onExportClick}
       disabled={!isArtifactReady || isExporting}
       startIcon={isAuthenticated && isPro ? <FileDownloadIcon/> : <LockIcon/>}
+      sx={{textTransform: 'none'}}
       data-testid='export-glb-button'
     >
       {label}
@@ -131,9 +133,16 @@ export default function ExportSection() {
 
   // No section heading: the tab this renders in is already labelled Export,
   // and the panel repeating it was the only thing between the tab bar and
-  // the first control (#1838).
+  // the first control (#1838). No top margin of its own either — the 1em
+  // gap down from the tab bar is the panel wrapper's (SaveModelControl.jsx
+  // `TAB_PANEL_SX`), shared with the GitHub tab so both read as the same
+  // gutter.
   return (
-    <Stack spacing={1} data-testid='export-section' sx={{mt: 1}}>
+    // No `spacing` here: the only gap this Stack needs — content down to the
+    // action row — is the action row's own `mt: '1em'` below, so there's one
+    // source of truth for it rather than a Stack spacing and an `mt` adding
+    // up to something other than 1em.
+    <Stack data-testid='export-section'>
       <Stack direction='row' justifyContent='space-between' alignItems='center' gap={1}>
         <Box>
           <Typography variant='body2'>Include Bldrs metadata</Typography>
@@ -145,19 +154,20 @@ export default function ExportSection() {
           data-testid='export-include-metadata'
         />
       </Stack>
-      {/* The action goes LAST, after everything that configures it, and to
-          the right — where `Dialog.jsx`'s own `DialogActions` button sits, so
-          the Export tab's action reads as the same kind of thing as Save's
-          even though it is the tab's own button (#1838). Wraps rather than
+      {/* The action goes LAST, after everything that configures it, and
+          centred — the Pro chip for free users rides beside it (#1838).
+          `mt: '1em'` is this row's own gap from what configures it, matching
+          the GitHub tab's gap down to its action button. Wraps rather than
           overflowing: at 390px the button and the Pro chip together are wider
           than the dialog's content column. */}
       <Stack
         direction='row'
-        justifyContent='flex-end'
+        justifyContent='center'
         alignItems='center'
         flexWrap='wrap'
         gap={1}
-        sx={{pt: 1}}
+        sx={{mt: '1em'}}
+        data-testid='export-action-row'
       >
         {isAuthenticated && !isPro &&
          <Chip label='Pro' size='small' color='primary' data-testid='export-pro-chip'/>}

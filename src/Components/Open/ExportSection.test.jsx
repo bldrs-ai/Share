@@ -81,10 +81,27 @@ describe('ExportSection', () => {
 
     const button = getByTestId('export-glb-button')
     expect(button).toBeEnabled()
-    expect(button).toHaveTextContent('Download GLB')
+    expect(button).toHaveTextContent('Export GLB')
     expect(queryByTestId('export-pro-chip')).toBeNull()
     // A Pro user gets the real button, not a gate around it.
     expect(queryByTestId('gated-export-pro')).toBeNull()
+  })
+
+  it('renders the button in the theme accent colour, sentence case, centred', async () => {
+    // Product-owner feedback on #1837's deploy preview (#1838): a grey,
+    // all-caps, right-aligned button read as disabled and looked stranded.
+    // Pin the enabled-state colour (a disabled contained button renders grey
+    // regardless of `color`, so this only means something for a Pro user
+    // with a ready artifact), the textTransform override, and the row's
+    // justify-content.
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+    const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+    const button = getByTestId('export-glb-button')
+    expect(button).toBeEnabled()
+    expect(button).toHaveClass('MuiButton-colorAccent')
+    expect(getComputedStyle(button).textTransform).toBe('none')
+    expect(getByTestId('export-action-row')).toHaveStyle({justifyContent: 'center'})
   })
 
   it('is disabled while ANY export in the tab is running', async () => {

@@ -174,7 +174,7 @@ describe('SaveModelControl', () => {
       const {findByTestId, queryByTestId} = renderOpenDialog()
 
       expect(await findByTestId('button-dialog-main-action')).toBeInTheDocument()
-      expect(queryByTestId('tabs-save-export')).toBeNull()
+      expect(queryByTestId('tabs-github-export')).toBeNull()
       expect(queryByTestId('export-section')).toBeNull()
     })
 
@@ -182,8 +182,11 @@ describe('SaveModelControl', () => {
       mockIsFeatureEnabled.mockReturnValue(true)
       const {findByTestId, getByTestId, queryByTestId} = renderOpenDialog()
 
-      // Save is the default tab.
-      expect(await findByTestId('tabs-save-export')).toBeInTheDocument()
+      // GitHub is the default tab (#1838: renamed from "Save", which read as
+      // a verb duplicating the dialog's own header).
+      expect(await findByTestId('tabs-github-export')).toBeInTheDocument()
+      expect(getByTestId('tab-github')).toHaveTextContent('GitHub')
+      expect(queryByTestId('tab-save')).toBeNull()
       expect(queryByTestId('export-section')).toBeNull()
 
       await act(async () => {
@@ -195,9 +198,32 @@ describe('SaveModelControl', () => {
       // "My Exports" came back off this panel (#1838). `ExportsList.jsx` and
       // the history it reads both stay; nothing mounts them.
       expect(queryByTestId('exports-list')).toBeNull()
-      // The dialog's footer action belongs to Save; on Export the actions are
-      // the tab's own buttons.
+      // The dialog's footer action belongs to GitHub; on Export the actions
+      // are the tab's own buttons.
       expect(queryByTestId('button-dialog-main-action')).toBeNull()
+    })
+
+    it('drops the "Projects" overline the GitHub tab used to show', async () => {
+      // Product-owner feedback on #1837's deploy preview (#1838): the
+      // overline duplicated what the tab label already said.
+      mockIsFeatureEnabled.mockReturnValue(true)
+      const {findByTestId, queryByText} = renderOpenDialog()
+
+      expect(await findByTestId('tabs-github-export')).toBeInTheDocument()
+      expect(queryByText('Projects')).toBeNull()
+    })
+
+    it('renders the Save model action button in the theme accent colour, sentence case', async () => {
+      // A grey, all-caps button read as disabled on the #1837 deploy preview
+      // even when it wasn't (#1838) — pin both halves of the fix: the MUI
+      // "accent" colour class and the textTransform override that stops the
+      // browser from re-capitalising the sentence-case label.
+      const {findByTestId} = renderOpenDialog()
+
+      const button = await findByTestId('button-dialog-main-action')
+      expect(button).toHaveTextContent('Save model')
+      expect(button).toHaveClass('MuiButton-colorAccent')
+      expect(getComputedStyle(button).textTransform).toBe('none')
     })
   })
 

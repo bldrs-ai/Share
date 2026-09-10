@@ -172,9 +172,10 @@ export async function expectSnackbarOnTop(page: Page) {
 /**
  * Assert nothing in the page (the open dialog included) is wider than the
  * viewport. Worth an assertion on the mobile projection specifically: the
- * Export tab's action row is right-aligned and holds the widest pair of
- * controls in the dialog, so an action that stopped wrapping would push the
- * document sideways at 390px rather than fail any testid lookup (#1838).
+ * Export tab's action row (centred, the button plus a Pro chip for a free
+ * user) holds the widest pair of controls in the dialog, so an action that
+ * stopped wrapping would push the document sideways at 390px rather than
+ * fail any testid lookup (#1838).
  *
  * @param page Playwright page
  */

@@ -182,7 +182,7 @@ describe('ExportsList', () => {
 
   it('disables "Download again" while ANY export in the tab is running', async () => {
     // The in-flight flag is shared (store/UISlice.js) rather than each
-    // `useExport` instance's own: an export started by the Download GLB
+    // `useExport` instance's own: an export started by the Export GLB
     // button above must not leave these rows clickable, or two exports race
     // each other's write of the history mirror (#1834).
     loadExports.mockResolvedValue({exports: [aRow()]})

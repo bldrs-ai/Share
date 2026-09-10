@@ -29,6 +29,13 @@ const DIALOG_MARGIN = '2em'
  * @property {string|ReactElement} [actionTitle] Title for the action button, or Component
  * @property {Function} [actionCb] Callback for action button
  * @property {boolean} [actionDisabled] If true, the action button is disabled and won't fire actionCb
+ * @property {object} [actionButtonProps] Extra props spread onto the action Button after its
+ *   defaults (e.g. `{color: 'accent', sx: {textTransform: 'none'}}`), for a caller that wants the
+ *   button in the theme's active colour instead of every other dialog's default. Leaving it unset
+ *   keeps that default, so other dialogs are unaffected.
+ * @property {object} [contentSx] Extra `sx` merged onto DialogContent, for a caller that needs to
+ *   retune its own gap to a custom action row without changing the default `pb: 2` every other
+ *   dialog gets.
  * @return {ReactElement}
  */
 export default function Dialog({
@@ -40,6 +47,8 @@ export default function Dialog({
   actionTitle,
   actionCb,
   actionDisabled = false,
+  actionButtonProps,
+  contentSx,
   ...props
 }) {
   assertDefined(headerText, isDialogDisplayed, setIsDialogDisplayed, children)
@@ -92,7 +101,7 @@ export default function Dialog({
       </DialogTitle>
       <Typography variant='h2' className='dialog-header-text' sx={{margin: isMobile ? '0 0 1em 0' : '1em 0'}}>{headerText}</Typography>
       <CloseButton onCloseClick={onCloseClick} data-testid={`button-close-dialog-${dataTestIdSuffix}`}/>
-      <DialogContent sx={{pb: 2}}>{children}</DialogContent>
+      <DialogContent sx={{pb: 2, ...contentSx}}>{children}</DialogContent>
       {actionTitle === undefined ? null :
         <DialogActions>
           {typeof actionTitle === 'string' ?
@@ -102,6 +111,7 @@ export default function Dialog({
               disabled={actionDisabled}
               aria-label='action-button'
               data-testid='button-dialog-main-action'
+              {...actionButtonProps}
             >
               {actionTitle}
             </Button> :

@@ -73,7 +73,7 @@ cache-hit load (no writer runs) sets the same slot from the reader
 Both producers can outlive their load — the writer is idle-scheduled and
 fire-and-forget, the reader awaits OPFS — so an SPA navigation to a second
 model would otherwise let model A's writer republish over model B's cleared
-slot, and "Download GLB" on B hands out A. `src/loader/glbArtifactPublish.js`
+slot, and "Export GLB" on B hands out A. `src/loader/glbArtifactPublish.js`
 guards it: `load()` takes a monotonic generation at its start, passes it to
 both producers, and `publishGlbArtifact` drops a publish whose generation is
 no longer current. A NESTED load — the recursive `load()` `BLDLoader.parse`
@@ -81,7 +81,7 @@ runs per object of a `.bld` assembly — takes no generation at all and
 publishes nothing (`isNestedLoad` → `NESTED_LOAD_GENERATION`): its cache still
 warms per object, but the assembly on screen has no artifact of its own, and
 without this each child cleared the slot and then published its own file, so
-Download GLB on a two-object scene handed out whichever object loaded last
+Export GLB on a two-object scene handed out whichever object loaded last
 (#1833). A `.bld` therefore ends with `glbArtifact === null` and the Export
 button disabled — its "Preparing GLB…" label overstates a wait that will
 never end, which telling "no artifact yet" from "no artifact ever" would
@@ -254,22 +254,34 @@ onward sharing).
 ### 4.4 UI
 
 Lives in the **Save dialog** (`src/Components/Open/SaveModelControl.jsx`), on
-an **Export** tab beside Save — one place for "get this model out of here",
-reached from the toolbar control the user already associates with producing a
-file. (S2/S3 put it in the Share dialog and the Profile menu; smoke feedback
-on #1837's preview moved it, #1838.) The tab bar is `Components/Tabs.jsx`, the
-Open dialog's pattern, and it only exists behind feature flag `export`
+an **Export** tab beside a tab labelled **GitHub** — one place for "get this
+model out of here", reached from the toolbar control the user already
+associates with producing a file. (S2/S3 put it in the Share dialog and the
+Profile menu; smoke feedback on #1837's preview moved it, #1838.) The dialog
+keeps its "Save" title; only the tab is named GitHub, since "Save" as a tab
+label duplicated that title and said nothing about where the save goes
+(further #1837 preview feedback, #1838). The tab bar is `Components/Tabs.jsx`,
+the Open dialog's pattern, and it only exists behind feature flag `export`
 (default off, `?feature=export`) — with the flag off the Save dialog has no
 tabs and is exactly what it was.
 
+Both panels share one gutter system: 1em between the tab bar's bottom border
+and the panel's own content (`SaveModelControl.jsx`'s `TAB_PANEL_SX`, applied
+to both panel wrappers), and 1em between that content and the panel's action
+button. Both action buttons render **accent-coloured and in sentence
+case** — `variant='contained' color='accent' sx={{textTransform: 'none'}}`,
+the same look as the Open dialog's "Connect GitHub" button — after a grey,
+all-caps button on the #1837 preview read as disabled when it wasn't
+(#1838).
+
 The Export tab hosts `Open/ExportSection.jsx` — the metadata toggle, then
-**Download GLB last**, right-aligned like `Dialog.jsx`'s own `DialogActions`
-button, so the action follows what configures it. The panel carries no
-"Exports" heading of its own; the tab is already labelled Export. The dialog's
-footer action button belongs to the Save tab only: the Export tab's actions
-are its own buttons. `Open/ExportsList.jsx` (§4.5) is **not mounted here for
-now** — the owner took "My Exports" back off the panel after the #1837 preview
-(#1838); the component and the recording pipeline behind it stay.
+**Export GLB last and centred**, with the Pro chip for a free user riding
+beside it. The panel carries no "Exports" heading of its own; the tab is
+already labelled Export. The dialog's footer action button belongs to the
+GitHub tab only: the Export tab's actions are its own buttons.
+`Open/ExportsList.jsx` (§4.5) is **not mounted here for now** — the owner
+took "My Exports" back off the panel after the #1837 preview (#1838); the
+component and the recording pipeline behind it stay.
 
 **Gated actions.** An action the user can't take *yet* is not hidden. It
 renders in its normal place in a disabled LOOK, stays clickable, and the
@@ -292,14 +304,14 @@ The private-sharing row is the pattern's third instance and lands with the
 sharing epic's visibility control — there is no such control in
 `ShareDialog.jsx` yet.
 
-The Download GLB button's own states, resolved in this order:
+The Export GLB button's own states, resolved in this order:
 
 | State | Button | Click |
 |---|---|---|
 | no model / no artifact yet (`glbArtifact` null, writer in flight) | disabled, "Preparing GLB…" | — |
 | not signed in | gated look + lock | help → log in |
 | signed in, not Pro | gated look + lock + `Pro` chip | help → subscription flow |
-| Pro | "Download GLB" | `useExport().run('glb')` → progress → browser download → snackbar "Exported <name> (<size>)" |
+| Pro | "Export GLB" | `useExport().run('glb')` → progress → browser download → snackbar "Exported <name> (<size>)" |
 | module load 401/403 | error snackbar "Export requires a Pro subscription" + re-check tier | server said no; the client badge was stale — force-refresh the JWT like `useQuota` does |
 
 The Pro check on the client uses `getTier(appMetadata, isAuthenticated) ===
@@ -355,7 +367,7 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   losing the entry. The recorded `key` is the share path
   (`window.location.pathname`), matching what `record-load` counts.
 - **UI (dormant):** `Open/ExportsList.jsx` — written to render inline under
-  the Download GLB button on the Save dialog's **Export** tab (§4.4), and
+  the Export GLB button on the Save dialog's **Export** tab (§4.4), and
   currently mounted nowhere (§4.4): the design below stands and the rows keep
   being recorded, but nothing displays them until the list comes back. Its
   jest suite stays; its E2E (`Profile/myExports.spec.ts`) went, since a spec
@@ -368,7 +380,7 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   action re-runs the export **if** the artifact is still in OPFS
   (`doesFileExistInOPFS` on the recorded key + current schema); otherwise
   the row says "open the model to regenerate". Empty state explains the
-  feature and points at the Download GLB button above it.
+  feature and points at the Export GLB button above it.
 
   One thing the sketch above missed: the server row can't produce that OPFS
   key. A share path has no `sourceHash`, which every `sourceCacheKey.js`

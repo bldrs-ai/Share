@@ -152,7 +152,7 @@ export default function ExportsList({onNavigate}) {
             Models you download are listed here — what you exported, when, and how big.
           </Typography>
           <Typography variant='body2' color='text.secondary'>
-            Start an export with the Download GLB button above.
+            Start an export with the Export GLB button above.
           </Typography>
         </Stack> :
         entries.map((entry) => (

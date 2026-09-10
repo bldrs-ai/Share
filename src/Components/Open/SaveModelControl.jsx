@@ -347,12 +347,23 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
       headerText={MSG_SAVE}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      // The Export tab's actions are its own buttons (Download GLB,
-      // Download again); a "Save model" footer there would act on the tab
-      // the user isn't looking at.
+      // The Export tab's actions are its own buttons (Export GLB, Download
+      // again); a "Save model" footer there would act on the tab the user
+      // isn't looking at.
       actionTitle={isExportTab ? undefined : MSG_SAVE_MODEL}
       actionCb={saveFile}
       actionDisabled={cannotSave}
+      // Blue/accent + sentence case, like the Open dialog's "Connect GitHub"
+      // button — a grey, all-caps action read as disabled even when it
+      // wasn't (product-owner feedback on #1837's deploy preview, #1838).
+      actionButtonProps={{color: 'accent', sx: {textTransform: 'none'}}}
+      // Only the GitHub tab's action lives in DialogActions: with its
+      // DialogContent padding zeroed, the visible gap down to that button is
+      // exactly DialogActions' own 1em top padding (theme/Components.js). On
+      // the Export tab there's no DialogActions button to gap to — that
+      // panel's own action row sets its own 1em via `mt` — so the default
+      // DialogContent padding is left alone there.
+      contentSx={isExportTab ? undefined : {pb: 0}}
     >
       {isExportEnabled &&
        <Tabs
@@ -366,7 +377,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
         // panel is the export itself and nothing else. The component and its
         // recording pipeline stay — see design/new/glb-export-premium.md
         // §4.5, which is dormant rather than dropped.
-        <Stack spacing={1} data-testid='save-dialog-export-tab'>
+        <Stack spacing={1} data-testid='save-dialog-export-tab' sx={TAB_PANEL_SX}>
           <ExportSection/>
         </Stack> :
         <Stack
@@ -374,6 +385,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
           direction='column'
           justifyContent='center'
           alignItems='center'
+          sx={TAB_PANEL_SX}
         >
           {/* Signed-out no longer reaches this dialog — the toolbar button
               is gated instead (#1838) — but the branch stays as the backstop
@@ -393,7 +405,6 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
           ) : (
             file instanceof File && (
               <Stack>
-                <Typography variant='overline' sx={{marginBottom: '6px'}}>{MSG_PROJECTS}</Typography>
                 <Selector
                   label={MSG_ORGANIZATION}
                   list={orgNamesArrWithAt}
@@ -649,7 +660,6 @@ const MSG_FOLDER = 'Folder'
 const MSG_GITHUB_ACCOUNT = 'GitHub account'
 const MSG_ORGANIZATION = 'Organization'
 const MSG_PICK_GITHUB_ACCOUNT_HELP = 'Pick which connected GitHub account this commit is attributed to'
-const MSG_PROJECTS = 'Projects'
 const MSG_SAVE = 'Save'
 const MSG_SAVE_MODEL = 'Save model'
 // GitHub is the only connector that can take a save today; Drive follows
@@ -657,5 +667,13 @@ const MSG_SAVE_MODEL = 'Save model'
 const MSG_SAVE_NEEDS_LOGIN = 'Log in to one of your connectors to save models'
 const MSG_SAVE_SUCCESS = 'Model saved successfully!'
 const MSG_REPOSITORY = 'Repository'
-const TAB_LABELS = ['Save', 'Export']
+// The dialog keeps its "Save" title (MSG_SAVE) — only the tab is renamed:
+// "Save" read as a verb/overline duplicating the header, where "GitHub"
+// says what the tab actually contains (product-owner feedback on #1837's
+// deploy preview, #1838).
+const TAB_LABELS = ['GitHub', 'Export']
 const TAB_EXPORT = 1
+// 1em between the tabs' bottom border and each panel's own content — the
+// same value both tabs use so the two panels read as one gutter system
+// rather than two dialogs that happen to share a shell.
+const TAB_PANEL_SX = {pt: '1em'}

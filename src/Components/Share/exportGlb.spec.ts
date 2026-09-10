@@ -25,7 +25,7 @@ import {
 
 
 /**
- * "Download GLB" in the Save dialog's Export tab (share-140 S2b, #1838;
+ * "Export GLB" in the Save dialog's Export tab (share-140 S2b, #1838;
  * it lived in the Share dialog through S2/#1833).
  *
  * The acceptance test for the whole epic's user-facing claim: a Pro user
@@ -48,7 +48,7 @@ import {
  * observable in a browser: a DOM-disabled button eats the click, so the help
  * that explains the gate never opens (#1838).
  */
-describeMobileAndDesktop('Share 140: Download GLB', () => {
+describeMobileAndDesktop('Share 140: Export GLB', () => {
   test.beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setupAuthenticationIntercepts(page)
@@ -76,11 +76,12 @@ describeMobileAndDesktop('Share 140: Download GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
-    await expect(exportButton).toHaveText('Download GLB')
-    // The action is the LAST thing in the panel and is right-aligned, like
-    // the dialog's own footer button (#1838). On the mobile projection that
-    // row is the dialog's widest, so this is where the placement would show
-    // up as a sideways scroll rather than as a missing element.
+    await expect(exportButton).toHaveText('Export GLB')
+    // The action is the LAST thing in the panel and centred, with the Pro
+    // chip riding beside it for a free user (#1838). On the mobile
+    // projection that row is the dialog's widest, so this is where a
+    // regression would show up as a sideways scroll rather than as a
+    // missing element.
     await expectNoHorizontalScroll(page)
 
     const downloadPromise = page.waitForEvent('download')
