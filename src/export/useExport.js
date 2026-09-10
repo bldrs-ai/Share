@@ -40,7 +40,7 @@ const SIZE_DECIMALS = 1
  * `run(formatId, options, source)` normally exports the CURRENTLY loaded
  * model, from the `glbArtifact` slot the loader publishes. `source` overrides
  * that with an artifact identified elsewhere — "Download again" in
- * `ExportsDialog`, which holds the `{cacheKeyArgs, schemaVer}` of a model that
+ * `ExportsList`, which holds the `{cacheKeyArgs, schemaVer}` of a model that
  * may not be the one on screen (§4.5).
  *
  * Design: design/new/glb-export-premium.md §4.4.
