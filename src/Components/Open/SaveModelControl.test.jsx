@@ -28,14 +28,6 @@ const mockIsFeatureEnabled = jest.fn()
 jest.mock('../../FeatureFlags', () => ({
   isFeatureEnabled: (name) => mockIsFeatureEnabled(name),
 }))
-// ExportsList reaches OPFS and Auth0-backed history; the Export tab tests
-// here are about the tab, not the list's own suite (ExportsList.test.jsx).
-jest.mock('../../export/exportHistory', () => ({
-  hydrateExports: jest.fn().mockResolvedValue({exports: []}),
-  loadExports: jest.fn().mockResolvedValue({exports: []}),
-  subscribeToExports: jest.fn(() => () => {}),
-}))
-
 
 describe('SaveModelControl', () => {
   beforeEach(() => {
@@ -158,7 +150,7 @@ describe('SaveModelControl', () => {
   })
 
   // The Export tab (#1838). The Save tab is today's content; Export hosts
-  // ExportSection + the My Exports list, and neither exists with the flag off.
+  // ExportSection, and neither exists with the flag off.
   describe('Export tab', () => {
     /**
      * Open the Save dialog on a signed-in user with a file to save.
@@ -186,7 +178,7 @@ describe('SaveModelControl', () => {
       expect(queryByTestId('export-section')).toBeNull()
     })
 
-    it('switches to Export, which hosts the section and the list', async () => {
+    it('switches to Export, which hosts the section and no history list', async () => {
       mockIsFeatureEnabled.mockReturnValue(true)
       const {findByTestId, getByTestId, queryByTestId} = renderOpenDialog()
 
@@ -196,13 +188,13 @@ describe('SaveModelControl', () => {
 
       await act(async () => {
         fireEvent.click(getByTestId('tab-export'))
-        // Yield inside act() so ExportsList's mount effects (the history
-        // read, then the OPFS probe) settle before the assertions below.
         await Promise.resolve()
       })
 
       expect(await findByTestId('export-section')).toBeInTheDocument()
-      expect(await findByTestId('exports-list')).toBeInTheDocument()
+      // "My Exports" came back off this panel (#1838). `ExportsList.jsx` and
+      // the history it reads both stay; nothing mounts them.
+      expect(queryByTestId('exports-list')).toBeNull()
       // The dialog's footer action belongs to Save; on Export the actions are
       // the tab's own buttons.
       expect(queryByTestId('button-dialog-main-action')).toBeNull()

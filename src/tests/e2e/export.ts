@@ -4,10 +4,15 @@ import {waitForModelReady} from './models'
 
 
 /**
- * Shared setup for the share-140 export specs (`Share/exportGlb.spec.ts`,
- * `Profile/myExports.spec.ts`): getting a Pro user in front of a model whose
- * GLB artifact is actually on disk, and getting the premium module into the
- * page.
+ * Shared setup for the share-140 export specs: getting a Pro user in front of
+ * a model whose GLB artifact is actually on disk, and getting the premium
+ * module into the page.
+ *
+ * `Share/exportGlb.spec.ts` is the only caller today. It was written for two
+ * — `Profile/myExports.spec.ts` went with the export history when the list
+ * came off the Export tab (#1838), since an E2E for UI that nothing mounts
+ * has no subject — and everything here is still shared setup rather than that
+ * one spec's private helpers, so it stays put for the list's return (§4.5).
  *
  * Design: design/new/glb-export-premium.md §4.4, §4.5.
  */
@@ -161,6 +166,24 @@ export async function expectSnackbarOnTop(page: Page) {
     selector: SNACKBAR_SELECTOR,
   })
   expect(isOnTop).toBe(true)
+}
+
+
+/**
+ * Assert nothing in the page (the open dialog included) is wider than the
+ * viewport. Worth an assertion on the mobile projection specifically: the
+ * Export tab's action row is right-aligned and holds the widest pair of
+ * controls in the dialog, so an action that stopped wrapping would push the
+ * document sideways at 390px rather than fail any testid lookup (#1838).
+ *
+ * @param page Playwright page
+ */
+export async function expectNoHorizontalScroll(page: Page) {
+  const overflow = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }))
+  expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth)
 }
 
 

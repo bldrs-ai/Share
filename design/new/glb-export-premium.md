@@ -262,10 +262,14 @@ Open dialog's pattern, and it only exists behind feature flag `export`
 (default off, `?feature=export`) — with the flag off the Save dialog has no
 tabs and is exactly what it was.
 
-The Export tab hosts `Open/ExportSection.jsx` (Download GLB + the metadata
-toggle) and, under it, `Open/ExportsList.jsx` (§4.5). The dialog's footer
-action button belongs to the Save tab only: the Export tab's actions are its
-own buttons.
+The Export tab hosts `Open/ExportSection.jsx` — the metadata toggle, then
+**Download GLB last**, right-aligned like `Dialog.jsx`'s own `DialogActions`
+button, so the action follows what configures it. The panel carries no
+"Exports" heading of its own; the tab is already labelled Export. The dialog's
+footer action button belongs to the Save tab only: the Export tab's actions
+are its own buttons. `Open/ExportsList.jsx` (§4.5) is **not mounted here for
+now** — the owner took "My Exports" back off the panel after the #1837 preview
+(#1838); the component and the recording pipeline behind it stay.
 
 **Gated actions.** An action the user can't take *yet* is not hidden. It
 renders in its normal place in a disabled LOOK, stays clickable, and the
@@ -350,13 +354,17 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   keeps the optimistic row and reports `{recorded: false}` rather than
   losing the entry. The recorded `key` is the share path
   (`window.location.pathname`), matching what `record-load` counts.
-- **UI:** `Open/ExportsList.jsx`, rendered inline under the Download GLB
-  button on the Save dialog's **Export** tab (§4.4) — signed-in only, and
-  behind the same `export` flag. It is a plain list, not a dialog: mounting
-  IS the "open" signal, so the mirror subscription lives exactly as long as
-  the list is on screen, and an export made while the tab is open appears
-  under the button that made it. Rows: title, format chip, size, relative
-  date, source path (click → navigate to the model). A "Download again"
+- **UI (dormant):** `Open/ExportsList.jsx` — written to render inline under
+  the Download GLB button on the Save dialog's **Export** tab (§4.4), and
+  currently mounted nowhere (§4.4): the design below stands and the rows keep
+  being recorded, but nothing displays them until the list comes back. Its
+  jest suite stays; its E2E (`Profile/myExports.spec.ts`) went, since a spec
+  for UI that nothing mounts has no subject.
+  Signed-in only, and behind the same `export` flag. It is a plain list, not
+  a dialog: mounting IS the "open" signal, so the mirror subscription lives
+  exactly as long as the list is on screen, and an export made while the tab
+  is open appears under the button that made it. Rows: title, format chip,
+  size, relative date, source path (click → navigate to the model). A "Download again"
   action re-runs the export **if** the artifact is still in OPFS
   (`doesFileExistInOPFS` on the recorded key + current schema); otherwise
   the row says "open the model to regenerate". Empty state explains the

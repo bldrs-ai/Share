@@ -129,22 +129,11 @@ export default function ExportSection() {
     )
   }
 
+  // No section heading: the tab this renders in is already labelled Export,
+  // and the panel repeating it was the only thing between the tab bar and
+  // the first control (#1838).
   return (
     <Stack spacing={1} data-testid='export-section' sx={{mt: 1}}>
-      <Typography variant='overline'>Export</Typography>
-      <Stack
-        direction='row'
-        justifyContent='space-between'
-        alignItems='center'
-        // Wraps rather than overflowing: at 390px the button and the Pro
-        // chip together are wider than the dialog's content column.
-        flexWrap='wrap'
-        gap={1}
-      >
-        {gatedButton}
-        {isAuthenticated && !isPro &&
-         <Chip label='Pro' size='small' color='primary' data-testid='export-pro-chip'/>}
-      </Stack>
       <Stack direction='row' justifyContent='space-between' alignItems='center' gap={1}>
         <Box>
           <Typography variant='body2'>Include Bldrs metadata</Typography>
@@ -155,6 +144,24 @@ export default function ExportSection() {
           checked={isMetadataIncluded}
           data-testid='export-include-metadata'
         />
+      </Stack>
+      {/* The action goes LAST, after everything that configures it, and to
+          the right — where `Dialog.jsx`'s own `DialogActions` button sits, so
+          the Export tab's action reads as the same kind of thing as Save's
+          even though it is the tab's own button (#1838). Wraps rather than
+          overflowing: at 390px the button and the Pro chip together are wider
+          than the dialog's content column. */}
+      <Stack
+        direction='row'
+        justifyContent='flex-end'
+        alignItems='center'
+        flexWrap='wrap'
+        gap={1}
+        sx={{pt: 1}}
+      >
+        {isAuthenticated && !isPro &&
+         <Chip label='Pro' size='small' color='primary' data-testid='export-pro-chip'/>}
+        {gatedButton}
       </Stack>
     </Stack>
   )

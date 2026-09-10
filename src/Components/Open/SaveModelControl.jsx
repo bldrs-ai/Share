@@ -26,7 +26,6 @@ import GatedAction from '../GatedAction'
 import Tabs from '../Tabs'
 import useExistInFeature from '../../hooks/useExistInFeature'
 import ExportSection from './ExportSection'
-import ExportsList from './ExportsList'
 import PleaseLogin from './PleaseLogin'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
@@ -362,9 +361,13 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
          actionCb={(value) => setCurrentTab(value)}
        />}
       {isExportTab ?
+        // The export history ("My Exports", `ExportsList.jsx`) is NOT
+        // mounted here: the owner pulled it from the tab for now, so the
+        // panel is the export itself and nothing else. The component and its
+        // recording pipeline stay — see design/new/glb-export-premium.md
+        // §4.5, which is dormant rather than dropped.
         <Stack spacing={1} data-testid='save-dialog-export-tab'>
           <ExportSection/>
-          <ExportsList onNavigate={() => setIsDialogDisplayed(false)}/>
         </Stack> :
         <Stack
           spacing={1}

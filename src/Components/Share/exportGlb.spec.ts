@@ -6,6 +6,7 @@ import {
   PRO_MODULE_PATTERN,
   clickGate,
   dismissLoadSnackbar,
+  expectNoHorizontalScroll,
   expectSnackbarOnTop,
   loadModelAndWaitForArtifact,
   openExportTab,
@@ -41,8 +42,7 @@ import {
  * page.
  *
  * The setup — flags, the fixture, the artifact wait, and how the premium
- * module reaches the page — is shared with `Profile/myExports.spec.ts` in
- * `src/tests/e2e/export.ts`.
+ * module reaches the page — lives in `src/tests/e2e/export.ts`.
  *
  * The gated states are here too, because what they must NOT do is only
  * observable in a browser: a DOM-disabled button eats the click, so the help
@@ -77,6 +77,11 @@ describeMobileAndDesktop('Share 140: Download GLB', () => {
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
     await expect(exportButton).toHaveText('Download GLB')
+    // The action is the LAST thing in the panel and is right-aligned, like
+    // the dialog's own footer button (#1838). On the mobile projection that
+    // row is the dialog's widest, so this is where the placement would show
+    // up as a sideways scroll rather than as a missing element.
+    await expectNoHorizontalScroll(page)
 
     const downloadPromise = page.waitForEvent('download')
     await exportButton.click()

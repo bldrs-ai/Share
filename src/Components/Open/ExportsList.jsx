@@ -23,11 +23,17 @@ dayjs.extend(relativeTime)
  * "My Exports": what this user has exported, newest first, with a
  * re-download for the ones whose artifact is still in this browser's cache.
  *
- * A plain list, not a dialog — it renders inside the Save dialog's Export
- * tab, under `ExportSection` (#1838). Mounting IS the "open" signal: the tab
- * unmounts it when the user switches back to Save and the dialog unmounts it
- * when closed, so the subscription below is alive exactly while the list is
- * on screen.
+ * NOT MOUNTED ANYWHERE TODAY. It rendered inside the Save dialog's Export
+ * tab, under `ExportSection`, until the owner took the history back off that
+ * panel (#1838) — kept, with its own suite, because the recording pipeline it
+ * reads (`recordExport`, the OPFS mirror, the claim hydration) is still live
+ * and still writing the rows this would show. Design: §4.5, dormant rather
+ * than dropped.
+ *
+ * A plain list, not a dialog. Mounting IS the "open" signal: a host tab
+ * unmounts it when the user switches away and the dialog unmounts it when
+ * closed, so the subscription below is alive exactly while the list is on
+ * screen.
  *
  * The list is read from the OPFS mirror (`src/export/exportHistory.js`), not
  * from the server, so it paints instantly and still works offline; the mirror
