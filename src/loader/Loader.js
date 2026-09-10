@@ -212,6 +212,12 @@ export async function load(
     path = path.toString()
   }
 
+  // Whatever the previous model left behind is not this model's artifact.
+  // Cleared before anything can fail or return early, so the Export section
+  // can never offer a download of the model the user just navigated away
+  // from; the writer or the cache reader sets it again for THIS load.
+  useStore.getState().setGlbArtifact(null)
+
   // TODO(pablo): we should pass in the routeResult instead of the path
   // Test for uploaded first
   // Maybe use path.startsWith('/share/v/new')
@@ -2115,6 +2121,17 @@ async function tryLoadCachedGlb(cacheKeyArgs) {
       }
       return null
     }
+    // A HIT is an export just as much as a fresh write is: the file that
+    // just passed every check IS what the Export section hands the user, and
+    // no writer will run on this load to publish it. Set only here, past the
+    // container/mode/geometry checks, so the slot never points at an
+    // artifact this same function is about to treat as a miss.
+    // Design: design/new/glb-export-premium.md §1.2.
+    useStore.getState().setGlbArtifact({
+      cacheKeyArgs,
+      schemaVer,
+      writtenAt: file.lastModified || Date.now(),
+    })
     return file
   } catch (e) {
     glbInfo('reader: lookup failed, falling back to source path:', e)

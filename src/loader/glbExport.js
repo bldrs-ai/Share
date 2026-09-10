@@ -26,6 +26,7 @@
 // once the BLDRS_* extension story makes a custom writer worthwhile.
 import {GLTFExporter} from 'three/examples/jsm/exporters/GLTFExporter.js'
 import {writeGlbBytesToOPFS} from '../OPFS/utils'
+import useStore from '../store/useStore'
 import {yieldToBrowser} from '../utils/scheduling'
 import {
   BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME,
@@ -588,6 +589,14 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})
     await writeGlbBytesToOPFS(
       packed, key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)
+    // Publish the artifact to the store, the same way `Loader.js` publishes
+    // `isCacheWriteInFlight` around this call. Strictly AFTER the write
+    // resolves: the export UI reads this slot as "there is a file at this
+    // key", and offering a download of a half-written OPFS entry is the one
+    // failure mode worth ordering against. The reader half sets the same
+    // slot on a cache hit (Loader.js#tryLoadCachedGlb) — see
+    // design/new/glb-export-premium.md §1.2.
+    useStore.getState().setGlbArtifact({cacheKeyArgs, schemaVer, writtenAt: Date.now()})
     glbInfo(
       `writer: wrote ${packed.byteLength}B (1 chunk${mode ? `, ${mode}-compressed` : ''}) ` +
       `to ${key.owner}/${key.repo}/${key.branch}/${key.originalFilePath} in ${Date.now() - startMs}ms`)

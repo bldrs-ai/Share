@@ -11,8 +11,10 @@ import {HASH_PREFIX_DISPLAY, writeModelDisplayHash} from '../Residency/displayHa
 import {resolvedAppearance} from '../../viewer/display/DisplayController'
 import {removeHashParams} from '../../utils/location'
 import {gtagEvent} from '../../privacy/analytics'
+import {isFeatureEnabled} from '../../FeatureFlags'
 import Dialog from '../Dialog'
 import Toggle from '../Toggle'
+import ExportSection from './ExportSection'
 import {
   ShareOutlined as ShareIcon,
   ContentCopy as ContentCopyIcon,
@@ -245,6 +247,11 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             />
           </Stack>
         </Stack>
+        {/* Under the link controls: the dialog is "what leaves this
+            browser", and a download is the heaviest thing that can
+            (design/new/glb-export-premium.md §4.4). Off by default —
+            `?feature=export`. */}
+        {isFeatureEnabled('export') && <ExportSection/>}
       </Stack>
     </Dialog>
   )

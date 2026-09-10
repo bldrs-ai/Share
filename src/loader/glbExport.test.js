@@ -50,7 +50,8 @@ jest.mock('./injectGlbExtensions', () => {
   }
 })
 
-import {BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
+import {BLDRS_GLB_SCHEMA_VERSION, glbCacheKey} from './glbCacheKey'
+import useStore from '../store/useStore'
 import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb, exportThreeModelAsGlb} from './glbExport'
 import {
   APPLIED_COORDINATION_KEY,
@@ -316,6 +317,34 @@ describe('loader/glbExport', () => {
       expect(owner).toBe('bldrs-ai')
       expect(repo).toBe('share')
       expect(branch).toBe('main')
+    })
+
+    it('publishes the artifact to the store so the export UI can find the file', async () => {
+      // The cache key is computed here and nowhere else; without this
+      // hand-off the Share dialog's Export section has no way to name the
+      // OPFS file (design/new/glb-export-premium.md §1.2).
+      useStore.getState().setGlbArtifact(null)
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(fakeGlbBytes.buffer))
+
+      await exportAndCacheGlb({model: {fake: 'model'}, ...ctx})
+
+      const artifact = useStore.getState().glbArtifact
+      expect(artifact.cacheKeyArgs).toEqual(cacheKeyArgs)
+      expect(artifact.schemaVer).toBe(BLDRS_GLB_SCHEMA_VERSION)
+      expect(artifact.writtenAt).toBeGreaterThan(0)
+      // Same key the OPFS write used, which is the whole point of publishing
+      // it rather than re-deriving it in the UI.
+      expect(glbCacheKey({...artifact.cacheKeyArgs, schemaVer: artifact.schemaVer}).originalFilePath)
+        .toBe(mockWriteGlbBytesToOPFS.mock.calls[0][1])
+    })
+
+    it('publishes nothing when the writer skipped, so no download is offered', async () => {
+      useStore.getState().setGlbArtifact(null)
+
+      const ok = await exportAndCacheGlb({model: {isBatchedMesh: true}, ...ctx})
+
+      expect(ok).toBe(false)
+      expect(useStore.getState().glbArtifact).toBeNull()
     })
 
     it('skips an undecorated BatchedMesh (no source tables → nothing to bake)', async () => {

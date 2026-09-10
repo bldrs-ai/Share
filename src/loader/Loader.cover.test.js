@@ -15,6 +15,7 @@ import {
   getModelFromOPFS,
 } from '../OPFS/utils'
 import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
+import useStore from '../store/useStore'
 import {constructUploadedBlobPath, load, NotFoundError} from './Loader'
 import {dereferenceAndProxyDownloadContents} from './urls'
 
@@ -442,6 +443,32 @@ describe('load() error/edge paths with OPFS enabled', () => {
     viewer = makeViewerStub()
     onProgress = jest.fn()
     setOpfsFile = jest.fn()
+  })
+
+
+  it('clears the previous load\'s glbArtifact before anything can fail', async () => {
+    // The Export section reads this slot to find the OPFS file to download.
+    // A load that fails (or that never produces an artifact) must not leave
+    // the PREVIOUS model's artifact behind, or the dialog offers a download
+    // of a model the user has navigated away from
+    // (design/new/glb-export-premium.md §1.2).
+    useStore.getState().setGlbArtifact({
+      cacheKeyArgs: {ns1: 'gh-old', ns2: 'repo', ns3: 'main', sourcePath: 'old.ifc', sourceHash: 'sha'},
+      schemaVer: '0.0.0',
+      writtenAt: 1,
+    })
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'http:// bad.ifc',
+      '',
+      false,
+      false,
+    ])
+
+    await expect(
+      load('http:// bad.ifc', viewer, onProgress, true, setOpfsFile, ''),
+    ).rejects.toThrow()
+
+    expect(useStore.getState().glbArtifact).toBeNull()
   })
 
 

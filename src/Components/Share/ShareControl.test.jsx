@@ -12,10 +12,13 @@ import {DEFAULT_COLOR} from '../../viewer/ifc/flatMeshToBatchedModel'
 describe('ShareControl', () => {
   let controlButton
   let findByTestId
+  let queryByTestId
   describe('no cutplanes active', () => {
     beforeEach(async () => {
-      const {findByTestId: fbti} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+      const {findByTestId: fbti, queryByTestId: qbti} = render(
+        <ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
       findByTestId = fbti
+      queryByTestId = qbti
       controlButton = await findByTestId('control-button-share')
     })
 
@@ -29,6 +32,14 @@ describe('ShareControl', () => {
         expect(await findByTestId('textfield-link')).toBeInTheDocument()
         expect(await findByTestId('toggle-camera')).toBeInTheDocument()
         await(waitFor(() => expect(document.title).toBe('Share Model')))
+      })
+
+      it('Hides the Export section while the `export` flag is off', async () => {
+        // The flag's default is off (FeatureFlags.js), and this pins that
+        // the dialog reads it: shipping the section on by default would put
+        // an unfinished paid flow in front of every user.
+        expect(await findByTestId('textfield-link')).toBeInTheDocument()
+        expect(queryByTestId('export-section')).toBeNull()
       })
     })
   })

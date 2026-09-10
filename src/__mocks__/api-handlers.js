@@ -238,6 +238,11 @@ function netlifyHandlers() {
       )
     }),
 
+    // The dev copy the handler below proxies to. Declared so the built
+    // module reaches the page as a plain static file instead of being
+    // reported as an unhandled request.
+    http.get('/__pro_dev__/*', () => passthrough()),
+
     // Pro-module delivery (design/new/glb-export-premium.md §4.2). Neither
     // dev nor Playwright runs a real Netlify function, so this mock IS the
     // gate in those builds: same 401/403 shape as `pro-module.js`, tier read

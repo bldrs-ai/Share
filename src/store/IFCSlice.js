@@ -60,6 +60,24 @@ export default function createIFCSlice(set, get) {
     isCacheWriteInFlight: false,
     setIsCacheWriteInFlight: (inFlight) => set(() => ({isCacheWriteInFlight: inFlight})),
 
+    // Where the current model's cached GLB artifact sits in OPFS:
+    // `{cacheKeyArgs, schemaVer, writtenAt}`, or null when this load has
+    // none yet. The ONLY hand-off from the loader to the export UI — the
+    // cache key is computed inside `Loader.js#load` from the source kind and
+    // was never published anywhere, so without this slot nothing outside the
+    // loader can find the file (`loadedFileInfo` names the SOURCE, not the
+    // artifact).
+    //
+    // Set by both halves of the cache, because either can be the load that
+    // produced the exportable file: the writer after `writeGlbBytesToOPFS`
+    // resolves (cache miss), and `tryLoadCachedGlb` on a hit — where no
+    // writer runs at all, yet the artifact it just read IS the export.
+    // Cleared at the top of every `load()` so the Export section can never
+    // offer the previous model's file.
+    // See design/new/glb-export-premium.md §1.2.
+    glbArtifact: null,
+    setGlbArtifact: (artifact) => set(() => ({glbArtifact: artifact})),
+
     elementTypesMap: [],
     setElementTypesMap: (map) => set(() => ({elementTypesMap: map})),
 
