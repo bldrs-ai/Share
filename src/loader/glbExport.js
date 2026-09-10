@@ -26,7 +26,6 @@
 // once the BLDRS_* extension story makes a custom writer worthwhile.
 import {GLTFExporter} from 'three/examples/jsm/exporters/GLTFExporter.js'
 import {writeGlbBytesToOPFS} from '../OPFS/utils'
-import useStore from '../store/useStore'
 import {yieldToBrowser} from '../utils/scheduling'
 import {
   BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME,
@@ -68,6 +67,7 @@ import {
 import {exportBatchedModelAsInstancedGlb} from './glbBatchedExport'
 import {sceneHasRenderableGeometry} from './glbArtifactHealth'
 import {packGlbChunks} from './glbContainer'
+import {currentGlbArtifactGeneration, publishGlbArtifact} from './glbArtifactPublish'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import {injectAndPackInWorker} from './GlbWriterService'
 import {injectGlbExtensions, parseGlb} from './injectGlbExtensions'
@@ -214,9 +214,22 @@ function modelHasBatchedMesh(model) {
  *   `properties.*` call, which reaches here as "no tree, no
  *   properties" and cached an artifact with neither (#1776). Falls
  *   back to `model.modelID` for call sites that predate the argument.
+ * @param {number} [args.artifactGeneration] The `glbArtifactPublish.js`
+ *   generation of the load that scheduled this writer, which is what the
+ *   final `publishGlbArtifact` is checked against. Defaults to whatever is
+ *   current when the writer STARTS, which is right only for a caller outside
+ *   `Loader.js#load` (tests, a one-off re-export); a real load must pass the
+ *   value it took at its start, since the writer routinely outlives it.
  * @return {Promise<boolean>}
  */
-export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcManager = null, modelID = null}) {
+export async function exportAndCacheGlb({
+  model,
+  kindLabel,
+  cacheKeyArgs,
+  ifcManager = null,
+  modelID = null,
+  artifactGeneration = currentGlbArtifactGeneration(),
+}) {
   const startMs = Date.now()
   try {
     // BatchedMesh render path (`?feature=batchedMesh`): `GLTFExporter` can't
@@ -595,8 +608,10 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // key", and offering a download of a half-written OPFS entry is the one
     // failure mode worth ordering against. The reader half sets the same
     // slot on a cache hit (Loader.js#tryLoadCachedGlb) — see
-    // design/new/glb-export-premium.md §1.2.
-    useStore.getState().setGlbArtifact({cacheKeyArgs, schemaVer, writtenAt: Date.now()})
+    // design/new/glb-export-premium.md §1.2. Guarded on the load generation:
+    // this writer is fire-and-forget and idle-scheduled, so by now the user
+    // may be looking at a different model (glbArtifactPublish.js).
+    publishGlbArtifact({cacheKeyArgs, schemaVer, writtenAt: Date.now()}, artifactGeneration)
     glbInfo(
       `writer: wrote ${packed.byteLength}B (1 chunk${mode ? `, ${mode}-compressed` : ''}) ` +
       `to ${key.owner}/${key.repo}/${key.branch}/${key.originalFilePath} in ${Date.now() - startMs}ms`)

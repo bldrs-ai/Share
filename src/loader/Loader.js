@@ -43,6 +43,7 @@ import {BldrsFaceIdsReader} from './bldrsFaceIds'
 import {BldrsSpatialTreeReader} from './bldrsSpatialTree'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {glbChunksHaveRenderableGeometry} from './glbArtifactHealth'
+import {beginGlbArtifactLoad, publishGlbArtifact} from './glbArtifactPublish'
 import {glbCacheKey} from './glbCacheKey'
 import {activeArtifactSpec, isGlbBatchedActive} from './glbCompress'
 import {isBldrsGlbContainer, unpackGlbContainer, viewGlbContainerChunks} from './glbContainer'
@@ -215,8 +216,10 @@ export async function load(
   // Whatever the previous model left behind is not this model's artifact.
   // Cleared before anything can fail or return early, so the Export section
   // can never offer a download of the model the user just navigated away
-  // from; the writer or the cache reader sets it again for THIS load.
-  useStore.getState().setGlbArtifact(null)
+  // from; the writer or the cache reader sets it again for THIS load, under
+  // the generation taken here — the previous load's writer may still be
+  // running and must not republish over us (glbArtifactPublish.js).
+  const artifactGeneration = beginGlbArtifactLoad()
 
   // TODO(pablo): we should pass in the routeResult instead of the path
   // Test for uploaded first
@@ -352,7 +355,7 @@ export async function load(
               `reader: cache lookup github key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
             `${cacheKeyArgs.sourcePath} sha=${cacheKeyArgs.sourceHash}`)
             glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
-            const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
+            const glbFile = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration)
             if (glbFile) {
               glbInfo(
                 `reader: github cache HIT (${glbFile.size}B); swapping to GLB loader for: ${filePath}`)
@@ -490,7 +493,7 @@ export async function load(
               `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
             `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
             glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
-            const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
+            const glbFile = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration)
             if (glbFile) {
               glbInfo(
                 `reader: ${kindLabel} cache HIT (${glbFile.size}B); swapping to GLB loader`)
@@ -835,6 +838,10 @@ export async function load(
         cacheKeyArgs: glbExportContext.cacheKeyArgs,
         ifcManager: viewer?.IFC?.loader?.ifcManager ?? null,
         modelID: engineModelID,
+        // Captured at the top of THIS load, not read when the writer finally
+        // runs: by then the user may have navigated to another model, whose
+        // own load owns the slot (glbArtifactPublish.js).
+        artifactGeneration,
       }).finally(() => {
         useStore.getState().setIsCacheWriteInFlight(false)
         // The writer's property/tree captures were the LAST load-time
@@ -2065,9 +2072,11 @@ export class NotFoundError extends Error {
  *
  * @param {object} cacheKeyArgs Output of a sourceCacheKey adapter
  *   ({ns1, ns2, ns3, sourcePath, sourceHash}).
+ * @param {number} artifactGeneration The calling load's artifact generation;
+ *   an OPFS read can outlive its load, so the publish below is guarded on it.
  * @return {Promise<File|null>}
  */
-async function tryLoadCachedGlb(cacheKeyArgs) {
+async function tryLoadCachedGlb(cacheKeyArgs, artifactGeneration) {
   try {
     // Schema version varies with the active flag state — compression mode
     // AND the batched-native layout flag — so a flag-off reader never picks
@@ -2125,13 +2134,14 @@ async function tryLoadCachedGlb(cacheKeyArgs) {
     // just passed every check IS what the Export section hands the user, and
     // no writer will run on this load to publish it. Set only here, past the
     // container/mode/geometry checks, so the slot never points at an
-    // artifact this same function is about to treat as a miss.
+    // artifact this same function is about to treat as a miss, and only for
+    // the load that is still current (glbArtifactPublish.js).
     // Design: design/new/glb-export-premium.md §1.2.
-    useStore.getState().setGlbArtifact({
+    publishGlbArtifact({
       cacheKeyArgs,
       schemaVer,
       writtenAt: file.lastModified || Date.now(),
-    })
+    }, artifactGeneration)
     return file
   } catch (e) {
     glbInfo('reader: lookup failed, falling back to source path:', e)

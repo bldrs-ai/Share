@@ -52,6 +52,7 @@ jest.mock('./injectGlbExtensions', () => {
 
 import {BLDRS_GLB_SCHEMA_VERSION, glbCacheKey} from './glbCacheKey'
 import useStore from '../store/useStore'
+import {beginGlbArtifactLoad, publishGlbArtifact} from './glbArtifactPublish'
 import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb, exportThreeModelAsGlb} from './glbExport'
 import {
   APPLIED_COORDINATION_KEY,
@@ -336,6 +337,39 @@ describe('loader/glbExport', () => {
       // it rather than re-deriving it in the UI.
       expect(glbCacheKey({...artifact.cacheKeyArgs, schemaVer: artifact.schemaVer}).originalFilePath)
         .toBe(mockWriteGlbBytesToOPFS.mock.calls[0][1])
+    })
+
+    it('does not publish once the user has navigated to another model', async () => {
+      // The writer is fire-and-forget and idle-scheduled, so an SPA
+      // navigation routinely starts model B's load while model A's writer is
+      // still going. A's late publish would leave "Download GLB" on B handing
+      // out A's file — and if B never writes an artifact, permanently
+      // (glbArtifactPublish.js).
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(fakeGlbBytes.buffer))
+      // Hold the OPFS write open so the navigation below lands INSIDE the
+      // writer, where the race actually is: the publish comes right after
+      // this resolves.
+      let finishWrite
+      const writeStarted = new Promise((started) => {
+        mockWriteGlbBytesToOPFS.mockImplementation(() => {
+          started()
+          return new Promise((resolve) => {
+            finishWrite = resolve
+          })
+        })
+      })
+
+      const loadA = beginGlbArtifactLoad()
+      const writing = exportAndCacheGlb({model: {fake: 'model'}, ...ctx, artifactGeneration: loadA})
+      await writeStarted
+      // …the user navigates, and model B's load takes the slot.
+      const loadB = beginGlbArtifactLoad()
+      const artifactB = {cacheKeyArgs: {...cacheKeyArgs, sourcePath: 'other.ifc'}, schemaVer: '0.0.0', writtenAt: 2}
+      publishGlbArtifact(artifactB, loadB)
+
+      finishWrite(true)
+      expect(await writing).toBe(true)
+      expect(useStore.getState().glbArtifact).toBe(artifactB)
     })
 
     it('publishes nothing when the writer skipped, so no download is offered', async () => {

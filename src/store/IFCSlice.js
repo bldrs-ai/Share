@@ -73,7 +73,9 @@ export default function createIFCSlice(set, get) {
     // resolves (cache miss), and `tryLoadCachedGlb` on a hit — where no
     // writer runs at all, yet the artifact it just read IS the export.
     // Cleared at the top of every `load()` so the Export section can never
-    // offer the previous model's file.
+    // offer the previous model's file — and both producers can outlive their
+    // load, so they publish through `loader/glbArtifactPublish.js`, which
+    // drops a write from a load a newer one has superseded.
     // See design/new/glb-export-premium.md §1.2.
     glbArtifact: null,
     setGlbArtifact: (artifact) => set(() => ({glbArtifact: artifact})),
