@@ -1,13 +1,8 @@
 /* eslint-disable no-magic-numbers */
-import {BatchedMesh, BufferAttribute, BufferGeometry, Matrix4} from 'three'
+import {Matrix4} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
-import {
-  BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
-  BldrsInstanceTablesReader,
-  buildInstanceTablesExtensionData,
-} from './bldrsInstanceTables'
-import {exportBatchedModelAsInstancedGlb} from './glbBatchedExport'
-import {injectGlbExtensions} from './injectGlbExtensions'
+import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
+import {batchedArtifactBytes, liveBatchedModel} from './glbArtifact.fixture'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {isDefaultColor} from '../viewer/ifc/productPalette'
 
@@ -30,66 +25,16 @@ import {isDefaultColor} from '../viewer/ifc/productPalette'
  * Covers risk check 2 (round-trip parity) and 3 (re-derive determinism);
  * check 1 (schema-slot gating) is pinned in glbCompress.test.js, and check
  * 4 (third-party appearance) in glbBatchedExport.test.js.
- */
-
-
-const GREY = {x: 0.8, y: 0.8, z: 0.8, w: 1}
-
-
-/** @return {BufferGeometry} one-triangle indexed geometry */
-function triangleGeometry() {
-  const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new BufferAttribute(
-    new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3))
-  geometry.setAttribute('normal', new BufferAttribute(
-    new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]), 3))
-  geometry.setIndex(new BufferAttribute(new Uint32Array([0, 1, 2]), 1))
-  return geometry
-}
-
-
-/**
- * A decorated batched model as `assembleBatchedModel` leaves it: a shared
- * part instanced twice plus a second part, colorless (palette-eligible),
- * already palette-painted in `instanceColors` with the grey preserved in
- * `instanceSourceColors`.
  *
- * @return {object} model double
+ * The model and the artifact bytes come from `glbArtifact.fixture.js`,
+ * shared with `Loader.userOpenedArtifact.test.js` (which drives the same
+ * bytes through `load()`).
  */
-function liveBatchedModel() {
-  // A REAL BatchedMesh: since Share#1810 the writer reads each shape back out
-  // of the batch buffers rather than from a retained per-instance table, so
-  // the geometry has to actually be in the batch.
-  const mesh = new BatchedMesh(3, 6, 6)
-  const sharedId = mesh.addGeometry(triangleGeometry())
-  const otherId = mesh.addGeometry(triangleGeometry())
-  const matrices = [
-    new Matrix4().makeTranslation(1, 0, 0),
-    new Matrix4().makeTranslation(2, 0, 0),
-    new Matrix4().makeTranslation(0, 3, 0),
-  ]
-  for (const [i, geometryId] of [sharedId, sharedId, otherId].entries()) {
-    mesh.setMatrixAt(mesh.addInstance(geometryId), matrices[i])
-  }
-  mesh.instanceParents = [11, 12, 20]
-  mesh.instanceOccurrenceIds = [0, 1, 2]
-  mesh.instanceGeometryIds = [500, 500, 600]
-  mesh.instanceOccurrencePaths = [[3, 7], [3, 8], [4]]
-  mesh.instanceSourceColors = [{...GREY}, {...GREY}, {...GREY}]
-  // What the live scene shows after the palette ran — must NOT be what
-  // gets baked.
-  mesh.instanceColors = [
-    {x: 0.306, y: 0.475, z: 0.655, w: 1},
-    {x: 0.306, y: 0.475, z: 0.655, w: 1},
-    {x: 0.949, y: 0.557, z: 0.169, w: 1},
-  ]
-  return mesh
-}
 
 
 /**
- * Serialize + inject the tables the way `exportAndCacheGlb` does, then
- * parse with a real GLTFLoader carrying the reader plugin.
+ * Build the artifact, then parse it with a real GLTFLoader carrying the
+ * reader plugin.
  *
  * @param {object} model live batched model
  * @param {object} [sceneExtras] the `scenes[0].extras` map the writer stamps
@@ -98,14 +43,7 @@ function liveBatchedModel() {
  * @return {Promise<object>} the hydrated model (or null)
  */
 async function roundTrip(model, sceneExtras = null) {
-  const written = await exportBatchedModelAsInstancedGlb(model)
-  expect(written).not.toBeNull()
-
-  const {bytes} = injectGlbExtensions(written.bytes, [{
-    name: BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
-    data: buildInstanceTablesExtensionData(written.tableNodes),
-    compress: true,
-  }], sceneExtras, null)
+  const bytes = await batchedArtifactBytes(model, {sceneExtras})
 
   const loader = new GLTFLoader()
   loader.register((parser) => new BldrsInstanceTablesReader(parser))
