@@ -29,6 +29,7 @@ import {
   activeGlbCompressionMode,
   activeSchemaVersion,
   compressGlb,
+  glbCompressionModeFromExtensions,
   schemaVersionFor,
 } from './glbCompress'
 
@@ -87,6 +88,39 @@ describe('loader/glbCompress', () => {
       expect(activeSchemaVersion()).toBe(BLDRS_GLB_SCHEMA_VERSION)
       mockIsFeatureEnabled.mockImplementation((n) => n === 'glbMeshopt')
       expect(activeSchemaVersion()).toBe(`${BLDRS_GLB_SCHEMA_VERSION}-meshopt`)
+    })
+  })
+
+  // #1847: the per-vertex-id trust decision has to be answerable from the
+  // FILE, because the arrival path that gets it wrong — a downloaded export
+  // reopened in Share — has no container header to answer it from.
+  describe('glbCompressionModeFromExtensions', () => {
+    it('names the codec a compressed file declares', () => {
+      expect(glbCompressionModeFromExtensions(['KHR_draco_mesh_compression'])).toBe('draco')
+      expect(glbCompressionModeFromExtensions(['EXT_meshopt_compression'])).toBe('meshopt')
+    })
+
+    it('is null for an uncompressed file, whatever else it declares', () => {
+      expect(glbCompressionModeFromExtensions([])).toBeNull()
+      // The batched-native artifact's own required extension must not be
+      // mistaken for a codec — every default export declares it.
+      expect(glbCompressionModeFromExtensions(
+        ['EXT_mesh_gpu_instancing', 'BLDRS_instance_tables'])).toBeNull()
+    })
+
+    it('is null when the file declares no extensions at all', () => {
+      // `extensionsUsed` is optional in glTF, so the absent case is the
+      // common one and must not throw on the way to "trusted".
+      expect(glbCompressionModeFromExtensions(undefined)).toBeNull()
+      expect(glbCompressionModeFromExtensions(null)).toBeNull()
+    })
+
+    it('reports draco for a file carrying both codecs', () => {
+      // Valid glTF that nothing in Share writes. Either answer would gate
+      // the per-vertex fallback identically; pinned so it stays an answer
+      // rather than becoming an array or a throw.
+      expect(glbCompressionModeFromExtensions(
+        ['EXT_meshopt_compression', 'KHR_draco_mesh_compression'])).toBe('draco')
     })
   })
 

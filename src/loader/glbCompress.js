@@ -86,6 +86,50 @@ export function activeSchemaVersion() {
 }
 
 
+// What each codec calls itself in a glTF's `extensionsUsed`. The mirror of
+// `export/glbCompression.js#CODEC_EXTENSION`, which the export side uses to
+// pick decoders; duplicated rather than shared because `src/export` depends
+// on `src/loader` and not the other way round.
+const CODEC_EXTENSION_NAME = {
+  draco: 'KHR_draco_mesh_compression',
+  meshopt: 'EXT_meshopt_compression',
+}
+
+
+/**
+ * Which codec a glTF file declares it was compressed with — read from the
+ * FILE rather than from the Bldrs container header that wraps it.
+ *
+ * The header is only present on a cache artifact. The very same GLB reaches
+ * the reader with no header at all when the user opens an export they
+ * downloaded from the Export tab: that file is the container's chunk 0, a
+ * bare standalone GLB (`Loader#readModel`). Deriving trust in the per-vertex
+ * `_EXPRESSID` / `_INSTANCEID` attributes from the header therefore read
+ * "uncompressed" for a file the user had just compressed with DRACO or
+ * Meshopt, and `restoreCacheHitPicking` built `IfcInstanceMap`s from ids the
+ * codec may have scrambled (#1847). `extensionsUsed` travels with the bytes,
+ * so it answers the question for both arrival paths.
+ *
+ * A file declaring BOTH codecs (valid glTF; nothing in Share writes one)
+ * reports `draco`, matching `activeGlbCompressionMode`'s precedence. Only
+ * the fact that SOME codec ran matters to the caller.
+ *
+ * @param {*} extensionsUsed A glTF's root `extensionsUsed` array
+ * @return {GlbCompressionMode} the codec the file declares, or null
+ */
+export function glbCompressionModeFromExtensions(extensionsUsed) {
+  if (!Array.isArray(extensionsUsed)) {
+    return null
+  }
+  for (const [mode, extensionName] of Object.entries(CODEC_EXTENSION_NAME)) {
+    if (extensionsUsed.includes(extensionName)) {
+      return mode
+    }
+  }
+  return null
+}
+
+
 /**
  * Whether the batched-native artifact layout is active
  * (`glbBatched`, default-on — see FeatureFlags + glbCacheKey for the design),

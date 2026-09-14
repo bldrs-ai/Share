@@ -45,7 +45,7 @@ import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {glbChunksHaveRenderableGeometry} from './glbArtifactHealth'
 import {NESTED_LOAD_GENERATION, beginGlbArtifactLoad, publishGlbArtifact} from './glbArtifactPublish'
 import {glbCacheKey} from './glbCacheKey'
-import {activeArtifactSpec, isGlbBatchedActive} from './glbCompress'
+import {activeArtifactSpec, glbCompressionModeFromExtensions, isGlbBatchedActive} from './glbCompress'
 import {isBldrsGlbContainer, unpackGlbContainer, viewGlbContainerChunks} from './glbContainer'
 import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
@@ -1068,10 +1068,15 @@ export function restoreCacheHitPicking(model, isGlbArtifact) {
     // Per-vertex IDs are only trustworthy on uncompressed artifacts.
     // DRACO quantises integer attributes and Meshopt welds shared
     // vertices — both silently corrupt _EXPRESSID / _INSTANCEID. We
-    // gate the legacy fallback on `bldrsCompressionMode == null`
-    // (set by parseBldrsGlbContainer above). When face_ids exists
-    // and fails its sanity check on a compressed artifact, we'd
-    // rather drop picking on that mesh than return wrong selections.
+    // gate the legacy fallback on `bldrsCompressionMode == null`.
+    // Both arrival paths set it: `parseBldrsGlbContainer` from the
+    // container header, `stampGlbCompressionMode` from the bare GLB's
+    // own `extensionsUsed` — the latter because a user-opened export
+    // has no container to carry a header, and used to read as
+    // uncompressed however the user had compressed it (#1847). When
+    // face_ids exists and fails its sanity check on a compressed
+    // artifact, we'd rather drop picking on that mesh than return
+    // wrong selections.
     const compressionMode = model.userData?.bldrsCompressionMode ?? null
     const perVertexTrusted = compressionMode === null
     let meshIndex = 0
@@ -1869,7 +1874,7 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
     if (isBldrsGlbContainer(modelData)) {
       model = await parseBldrsGlbContainer(loader, modelData)
     } else {
-      model = await new Promise((resolve, reject) => {
+      const gltf = await new Promise((resolve, reject) => {
         try {
           loader.parse(modelData, './', (m) => {
             resolve(m)
@@ -1880,6 +1885,8 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
           reject(new Error(`Unhandled error in parse ${e}`))
         }
       })
+      stampGlbCompressionMode(gltf)
+      model = gltf
     }
   } else if (isLoaderAsync) {
     debug().log(`async loader(->) parsing data:`, loader, modelData)
@@ -2352,14 +2359,11 @@ async function parseBldrsGlbContainer(loader, containerBytes) {
     `reader: unpacked Bldrs container v${version} — ${chunks.length} GLB chunk(s), ` +
     `mode=${mode || 'none'}`)
   const merged = new Group()
-  // Stash the compression mode on the merged userData so downstream
-  // decoration (`convertToShareModel`) can decide whether per-vertex
-  // `_EXPRESSID` / `_INSTANCEID` is trustworthy. DRACO quantises
-  // integer attributes (16-bit ceiling) and Meshopt welds shared
-  // vertices — both silently corrupt per-vertex IDs. The face_ids
-  // path bypasses both, but the legacy per-vertex fallback must NOT
-  // run on compressed artifacts.
-  merged.userData.bldrsCompressionMode = mode || null
+  // What each chunk's own glTF says it was compressed with, OR-ed across the
+  // chunks. Belt to the header's braces: the header records what the WRITER
+  // applied, the extension list records what the FILE needs, and it is the
+  // file that the per-vertex-id trust decision is really about (#1847).
+  let chunkCodecMode = null
   for (let i = 0; i < chunks.length; i++) {
     const chunkAb = chunks[i]
     const gltf = await new Promise((resolve, reject) => {
@@ -2381,6 +2385,7 @@ async function parseBldrsGlbContainer(loader, containerBytes) {
     if (gltf.scene?.userData) {
       Object.assign(merged.userData, gltf.scene.userData)
     }
+    chunkCodecMode = chunkCodecMode || glbCompressionModeFromExtensions(gltf.parser?.json?.extensionsUsed)
     if (gltf.scenes && gltf.scenes.length > 0) {
       for (const s of gltf.scenes) {
         merged.add(s)
@@ -2389,7 +2394,43 @@ async function parseBldrsGlbContainer(loader, containerBytes) {
       merged.add(gltf.scene)
     }
   }
+  // Stash the compression mode on the merged userData so downstream
+  // decoration (`convertToShareModel`) can decide whether per-vertex
+  // `_EXPRESSID` / `_INSTANCEID` is trustworthy. DRACO quantises
+  // integer attributes (16-bit ceiling) and Meshopt welds shared
+  // vertices — both silently corrupt per-vertex IDs. The face_ids
+  // path bypasses both, but the legacy per-vertex fallback must NOT
+  // run on compressed artifacts.
+  //
+  // Written AFTER the chunk loop, because the `Object.assign` above bubbles
+  // each chunk scene's userData onto this same object and would otherwise be
+  // free to clobber it.
+  merged.userData.bldrsCompressionMode = mode || chunkCodecMode
   return {scenes: [merged]}
+}
+
+
+/**
+ * Record the codec a freshly-parsed bare GLB declares, on every scene it
+ * produced, so `restoreCacheHitPicking` can see it exactly as it sees a
+ * container's header-derived mode.
+ *
+ * This is the arrival path a downloaded export takes — no container, so no
+ * header, so no mode, so per-vertex ids read as trustworthy on a file the
+ * user compressed themselves (#1847). `glbToThree` hands the caller
+ * `scenes[0]`, but stamping all of them keeps the two in step should that
+ * ever pick a different one.
+ *
+ * @param {object} gltf The GLTFLoader parse result
+ */
+function stampGlbCompressionMode(gltf) {
+  const mode = glbCompressionModeFromExtensions(gltf?.parser?.json?.extensionsUsed)
+  if (mode === null) {
+    return
+  }
+  for (const scene of gltf.scenes || []) {
+    scene.userData.bldrsCompressionMode = mode
+  }
 }
 
 
