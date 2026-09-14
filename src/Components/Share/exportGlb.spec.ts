@@ -8,9 +8,11 @@ import {
   dismissLoadSnackbar,
   expectNoHorizontalScroll,
   expectSnackbarOnTop,
+  glbJsonChunk,
   loadModelAndWaitForArtifact,
   openExportTab,
   routeProModule,
+  selectCompression,
   setSubscriptionTier,
   watchProModuleRequests,
 } from '../../tests/e2e/export'
@@ -59,6 +61,22 @@ async function sizeBytes(sizeLine: Locator): Promise<number> {
  * observable in a browser: a DOM-disabled button eats the click, so the help
  * that explains the gate never opens (#1838).
  */
+// The two codecs the Export tab offers, and what each does to THIS fixture.
+// `index.ifc` is the Bldrs logo — about 12 KB of geometry — and Meshopt's
+// per-bufferView extension entries, its fallback buffer and the
+// `KHR_mesh_quantization` it brings with it cost more than that much geometry
+// saves, so it legitimately grows the file here. The ratio claim belongs to a
+// model big enough for a codec to win and is pinned in
+// `export/glbCompression.test.js`; what is asserted here for both is the part
+// only a browser can show — that the encoder really runs, that the file
+// declares its extension, and that the download weighs exactly what the panel
+// promised.
+const COMPRESSION_CODECS = [
+  {mode: 'meshopt', extension: 'EXT_meshopt_compression', isSmallerOnThisFixture: false},
+  {mode: 'draco', extension: 'KHR_draco_mesh_compression', isSmallerOnThisFixture: true},
+]
+
+
 describeMobileAndDesktop('Share 140: Export GLB', () => {
   test.beforeEach(async ({page}) => {
     await homepageSetup(page)
@@ -157,6 +175,88 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
 
     expect(strippedFile.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
     expect(strippedFile.byteLength).toBe(strippedBytes)
+  })
+
+  test('a Pro user downloads a Meshopt and a Draco compressed .glb', async ({page}) => {
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+
+    // Uncompressed is the default, and the baseline each codec is read
+    // against.
+    const sizeLine = page.getByTestId('export-size')
+    await expect(sizeLine).toBeVisible()
+    await expect(page.getByTestId('export-compression-none')).toHaveAttribute('aria-pressed', 'true')
+    const uncompressedBytes = await sizeBytes(sizeLine)
+    expect(uncompressedBytes).toBeGreaterThan(0)
+    const metadataToggle = page.getByTestId('export-include-metadata').locator('input')
+    const uncompressedMetadataBytes = await metadataDelta(page, uncompressedBytes)
+
+    for (const codec of COMPRESSION_CODECS) {
+      // The encoders are real wasm and only exist in a browser: the unit
+      // suite runs them under jsdom with the wasm handed over as bytes, which
+      // cannot tell us that the DRACO script tag loads from the page's own
+      // `/static/js/draco/` or that Meshopt's module resolves in the bundle.
+      const compressedBytes = await selectCompression(page, codec.mode)
+      expect(compressedBytes, `${codec.mode} should re-encode the file`).not.toBe(uncompressedBytes)
+      if (codec.isSmallerOnThisFixture) {
+        expect(compressedBytes, `${codec.mode} should shrink the download`).toBeLessThan(uncompressedBytes)
+      }
+      // One encode serves both states of the metadata toggle — the payloads
+      // pass through untouched and are re-added by arithmetic (#1842) — so
+      // what the toggle is worth cannot move with the codec.
+      expect(await metadataDelta(page, compressedBytes)).toBe(uncompressedMetadataBytes)
+      // Three toggle buttons plus their label are the widest control row in
+      // the dialog, and on the mobile projection that is where a layout
+      // regression shows up as a sideways scroll (#1838).
+      await expectNoHorizontalScroll(page)
+
+      const downloadPromise = page.waitForEvent('download')
+      await exportButton.click()
+      const file = await readFile(await (await downloadPromise).path())
+
+      expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+      // The figure on the line is the file: the panel encoded once, cached
+      // the bytes, and the export handed over those very bytes (#1842).
+      expect(file.byteLength, `${codec.mode} download should weigh what the panel said`)
+        .toBe(compressedBytes)
+      const json = glbJsonChunk(file)
+      expect(json.extensionsUsed).toContain(codec.extension)
+      expect(json.extensionsRequired).toContain(codec.extension)
+      // …and the Bldrs metadata is still in there, which is the half
+      // `@gltf-transform` drops unless it is detached and re-attached around
+      // the transform.
+      expect(json.extensionsUsed?.some((name) => name.startsWith('BLDRS_'))).toBe(true)
+    }
+    // Back to None, and the panel is exactly where it started — the cached
+    // uncompressed figure, not a third encode.
+    expect(await selectCompression(page, 'none')).toBe(uncompressedBytes)
+
+    /**
+     * What "Include Bldrs metadata" is worth right now: toggle it off, read
+     * the line, toggle it back.
+     *
+     * @param target Playwright page
+     * @param withMetadataBytes the figure the line carries with it on
+     * @return the difference the toggle makes
+     */
+    async function metadataDelta(target: typeof page, withMetadataBytes: number): Promise<number> {
+      await metadataToggle.click()
+      await expect(sizeLine).not.toHaveAttribute('data-bytes', String(withMetadataBytes))
+      const stripped = await sizeBytes(sizeLine)
+      await metadataToggle.click()
+      await expect(sizeLine).toHaveAttribute('data-bytes', String(withMetadataBytes))
+      return withMetadataBytes - stripped
+    }
   })
 
   test('a signed-out user is told what unlocks Save, and gets no dialog', async ({page}) => {

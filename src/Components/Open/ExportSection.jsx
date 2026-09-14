@@ -1,8 +1,13 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import {Box, Button, Chip, Stack, Typography} from '@mui/material'
+import {Box, Button, Chip, Stack, ToggleButton, ToggleButtonGroup, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {artifactSizes} from '../../export/artifactSizes'
+import {
+  COMPRESSION_LABELS,
+  COMPRESSION_MODES,
+  COMPRESSION_NONE,
+} from '../../export/glbCompression'
 import useExport, {formatBytes} from '../../export/useExport'
 import {gtagEvent} from '../../privacy/analytics'
 import {TIERS, getTier} from '../../quota/quota'
@@ -35,11 +40,18 @@ import {
  * the `pro-module` function re-checks the subscription on every request and
  * is the authority.
  *
- * Between the toggle and the button sits what the toggle costs: the download
- * size for the state it is in, and how much of that is Bldrs metadata. Both
- * figures are exact — same computation as the strip itself (#1841,
- * `loader/glbArtifactSize.js`) — so the number here is the number the
- * snackbar reports once the file has landed.
+ * Between the controls and the button sits what they cost: the download size
+ * for the state they are in, and how much of that is Bldrs metadata. Both
+ * figures are exact — the uncompressed ones are the same computation as the
+ * strip itself (#1841, `loader/glbArtifactSize.js`), and a compressed one IS
+ * the compressed file, measured (#1842) — so the number here is the number
+ * the snackbar reports once the file has landed.
+ *
+ * Every label block is left-aligned against the theme, which centres a
+ * Dialog's whole paper (`theme/Components.js`, `MuiDialog.paper.textAlign`):
+ * centring made each two-line block float its shorter line under its longer
+ * one, so "Download size" sat off-centre above its own caption (#1842). The
+ * action row below stays centred, deliberately.
  *
  * @return {ReactElement}
  */
@@ -51,6 +63,10 @@ export default function ExportSection() {
   // Default ON: it's the user's own model, so the properties and spatial
   // tree ride along unless they're passing the file to someone else.
   const [isMetadataIncluded, setIsMetadataIncluded] = useState(true)
+  // Default NONE: an uncompressed GLB opens in every viewer, while the other
+  // two need the matching decoder registered in whatever the user opens it
+  // with. Compression is the informed choice, so it is the opt-in one.
+  const [compression, setCompression] = useState(COMPRESSION_NONE)
 
   const {getAccessTokenSilently, isAuthenticated} = useAuth0()
   // `isExporting` is tab-wide, not this button's own (store/UISlice.js): a
@@ -65,19 +81,27 @@ export default function ExportSection() {
   // worse than no number: this one is a promise about the file the next
   // click produces.
   const [sizes, setSizes] = useState(null)
+  // Whether a read is still in flight, as opposed to having come back with
+  // nothing. Uncompressed the two are indistinguishable to the user — a
+  // header read is a few milliseconds — but a compression run is seconds on a
+  // real model, and a size line that simply vanishes for that long reads as a
+  // broken panel rather than as work in progress.
+  const [isEstimating, setIsEstimating] = useState(false)
 
   useEffect(() => {
     let isStale = false
     setSizes(null)
-    artifactSizes(glbArtifact).then((read) => {
+    setIsEstimating(true)
+    artifactSizes(glbArtifact, compression).then((read) => {
       if (!isStale) {
         setSizes(read)
+        setIsEstimating(false)
       }
     })
     return () => {
       isStale = true
     }
-  }, [glbArtifact])
+  }, [glbArtifact, compression])
 
   const isPro = getTier(appMetadata, isAuthenticated) === TIERS.PAID
   // The loader publishes this once the artifact is actually in OPFS — on a
@@ -105,9 +129,14 @@ export default function ExportSection() {
   const metadataCaption = sizes && sizes.metadataBytes > 0 ?
     `${formatBytes(sizes.metadataBytes)} of Bldrs metadata ${isMetadataIncluded ? 'included' : 'removed'}` :
     null
+  // The compressed estimate is the compressed file, so it only exists once
+  // the encoder has run. Say so while it does, rather than showing a stale
+  // figure from the previous choice: the line's promise is about the NEXT
+  // click, and for the seconds this takes it has nothing to promise.
+  const isPendingEstimate = isEstimating && compression !== COMPRESSION_NONE
 
   const onExportClick = async () => {
-    await run('glb', {stripBldrsMetadata: !isMetadataIncluded})
+    await run('glb', {stripBldrsMetadata: !isMetadataIncluded, compression})
   }
 
   const onUpgradeClick = async () => {
@@ -178,7 +207,7 @@ export default function ExportSection() {
     // action row — is the action row's own `mt: '1em'` below, so there's one
     // source of truth for it rather than a Stack spacing and an `mt` adding
     // up to something other than 1em.
-    <Stack data-testid='export-section'>
+    <Stack data-testid='export-section' sx={{textAlign: 'left'}}>
       <Stack direction='row' justifyContent='space-between' alignItems='center' gap={1}>
         <Box>
           <Typography variant='body2'>Include Bldrs metadata</Typography>
@@ -190,11 +219,54 @@ export default function ExportSection() {
           data-testid='export-include-metadata'
         />
       </Stack>
-      {/* The size the toggle above just chose, above the action it applies
+      {/* An exclusive three-way choice rather than two more switches: the
+          codecs are alternatives, not independent options, and a group makes
+          that unmistakable. `flexWrap` because at 390px the label and three
+          buttons together are wider than the dialog's content column, and the
+          Export tab must not push the document sideways (#1838). */}
+      <Stack
+        direction='row'
+        justifyContent='space-between'
+        alignItems='center'
+        flexWrap='wrap'
+        gap={1}
+        sx={{mt: '1em'}}
+      >
+        <Box>
+          <Typography variant='body2'>Compression</Typography>
+          <Typography variant='caption' color='text.secondary'>needs a matching decoder</Typography>
+        </Box>
+        <ToggleButtonGroup
+          value={compression}
+          exclusive
+          size='small'
+          onChange={(event, value) => {
+            // Null is the group reporting "the selected button was clicked
+            // again"; an exclusive group with no selection has no meaning
+            // here, so that click is a no-op rather than a fourth state.
+            if (value !== null) {
+              setCompression(value)
+            }
+          }}
+          data-testid='export-compression'
+        >
+          {COMPRESSION_MODES.map((mode) => (
+            <ToggleButton
+              key={mode}
+              value={mode}
+              sx={{textTransform: 'none'}}
+              data-testid={`export-compression-${mode}`}
+            >
+              {COMPRESSION_LABELS[mode]}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+      </Stack>
+      {/* The size the controls above just chose, above the action it applies
           to. Its `data-bytes` is the raw count the label rounds, so a test
           can compare it with the downloaded file byte for byte rather than
           through "12.4 MB". */}
-      {downloadBytes !== null &&
+      {(downloadBytes !== null || isPendingEstimate) &&
        <Stack
          direction='row'
          justifyContent='space-between'
@@ -207,9 +279,13 @@ export default function ExportSection() {
            {metadataCaption &&
             <Typography variant='caption' color='text.secondary'>{metadataCaption}</Typography>}
          </Box>
-         <Typography variant='body2' data-testid='export-size' data-bytes={downloadBytes}>
-           {formatBytes(downloadBytes)}
-         </Typography>
+         {isPendingEstimate ?
+           <Typography variant='body2' color='text.secondary' data-testid='export-size-pending'>
+             Estimating…
+           </Typography> :
+           <Typography variant='body2' data-testid='export-size' data-bytes={downloadBytes}>
+             {formatBytes(downloadBytes)}
+           </Typography>}
        </Stack>}
       {/* The action goes LAST, after everything that configures it, and
           centred — the Pro chip for free users rides beside it (#1838).
@@ -223,7 +299,7 @@ export default function ExportSection() {
         alignItems='center'
         flexWrap='wrap'
         gap={1}
-        sx={{mt: '1em'}}
+        sx={{mt: '1em', textAlign: 'center'}}
         data-testid='export-action-row'
       >
         {isAuthenticated && !isPro &&

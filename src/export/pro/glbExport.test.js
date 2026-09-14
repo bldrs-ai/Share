@@ -229,7 +229,7 @@ describe('pro/glbExport', () => {
       // risks changing the user's file for no reason.
       const {container, glb} = cachedArtifact()
 
-      const {blob, stats} = exportArtifact({bytes: container, options: {}})
+      const {blob, stats} = await exportArtifact({bytes: container, options: {}})
       const out = await blobBytes(blob)
 
       expect(magic(out)).toBe(GLTF_MAGIC)
@@ -249,7 +249,8 @@ describe('pro/glbExport', () => {
       const {container, glb} = cachedArtifact()
       const asArrayBuffer = container.slice().buffer
 
-      const out = await blobBytes(exportArtifact({bytes: asArrayBuffer, options: {}}).blob)
+      const {blob} = await exportArtifact({bytes: asArrayBuffer, options: {}})
+      const out = await blobBytes(blob)
 
       expect(out).toEqual(glb)
     })
@@ -261,7 +262,7 @@ describe('pro/glbExport', () => {
      */
     async function exportStripped() {
       const {container} = cachedArtifact()
-      const {blob, stats} = exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
+      const {blob, stats} = await exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
       const bytes = await blobBytes(blob)
       const {json, bin} = parseGlb(bytes)
       return {json, bin, stats, bytes}
@@ -323,7 +324,7 @@ describe('pro/glbExport', () => {
       shared.meshes[0].primitives[0].extensions.BLDRS_face_ids = {bufferView: 0}
       const {container} = cachedArtifact(shared)
 
-      const {blob} = exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
+      const {blob} = await exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
       const {json, bin} = parseGlb(await blobBytes(blob))
 
       expect(json.bufferViews).toHaveLength(1)
@@ -339,8 +340,8 @@ describe('pro/glbExport', () => {
       const {container} = cachedArtifact()
       const sizes = await artifactSizesFromFile(new Blob([container]))
 
-      const kept = exportArtifact({bytes: container, options: {}})
-      const stripped = exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
+      const kept = await exportArtifact({bytes: container, options: {}})
+      const stripped = await exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
 
       expect(sizes.withMetadata).toBe(kept.blob.size)
       expect(sizes.withoutMetadata).toBe(stripped.blob.size)
@@ -366,11 +367,57 @@ describe('pro/glbExport', () => {
 
     it('reports the size it saved', async () => {
       const {container} = cachedArtifact()
-      const kept = exportArtifact({bytes: container, options: {}})
+      const kept = await exportArtifact({bytes: container, options: {}})
       const {stats} = await exportStripped()
 
       expect(stats.outputBytes).toBeLessThan(kept.stats.outputBytes)
       expect(stats.inputBytes).toBe(container.byteLength)
+    })
+  })
+
+  describe('with a host compression hook', () => {
+    // The codecs and their wasm live in the host bundle, so the host
+    // compresses — but the download is still only reachable through this
+    // module, and what it hands over has to be the hook's bytes rather than
+    // its own strip of the same file (#1842).
+    const COMPRESSED = new Uint8Array(48).fill(0xcc)
+
+    it('hands over the hook\'s bytes and reports its sizes', async () => {
+      const {container, glb} = cachedArtifact()
+      const compress = jest.fn().mockResolvedValue({
+        bytes: COMPRESSED,
+        withMetadataBytes: 120,
+        withoutMetadataBytes: 48,
+        strippedExtensions: ['BLDRS_spatial_tree'],
+      })
+
+      const {blob, stats} = await exportArtifact(
+        {bytes: container, options: {stripBldrsMetadata: true}, compress})
+
+      expect(compress).toHaveBeenCalledWith(glb, {stripBldrsMetadata: true})
+      expect(await blobBytes(blob)).toEqual(COMPRESSED)
+      expect(stats.outputBytes).toBe(COMPRESSED.byteLength)
+      expect(stats.withMetadataBytes).toBe(120)
+      expect(stats.withoutMetadataBytes).toBe(48)
+      expect(stats.metadataBytes).toBe(72)
+      expect(stats.strippedExtensions).toEqual(['BLDRS_spatial_tree'])
+    })
+
+    it('does not run its own strip when the host already handled it', async () => {
+      // Stripping the hook's output a second time would be stripping an
+      // already-compressed file whose bufferViews the codec rewrote.
+      const {container} = cachedArtifact()
+      const compress = jest.fn().mockResolvedValue({
+        bytes: COMPRESSED,
+        withMetadataBytes: 120,
+        withoutMetadataBytes: 48,
+        strippedExtensions: [],
+      })
+
+      const {blob} = await exportArtifact(
+        {bytes: container, options: {stripBldrsMetadata: true}, compress})
+
+      expect(await blobBytes(blob)).toEqual(COMPRESSED)
     })
   })
 
@@ -380,7 +427,7 @@ describe('pro/glbExport', () => {
      */
     async function exportStrippedMeshopt() {
       const {container} = cachedArtifact(meshoptGlbJson(), meshoptBin())
-      const {blob} = exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
+      const {blob} = await exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
       const bytes = await blobBytes(blob)
       return {...parseGlb(bytes), bytes, container}
     }
@@ -458,7 +505,7 @@ describe('pro/glbExport', () => {
       // between this view and being dropped as unreferenced.
       const {container} = cachedArtifact(dracoGlbJson(), dracoBin())
 
-      const {blob} = exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
+      const {blob} = await exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
       const {json, bin} = parseGlb(await blobBytes(blob))
 
       expect(bin).toEqual(DRACO_BYTES)
@@ -495,16 +542,16 @@ describe('pro/glbExport', () => {
   })
 
   describe('refuses what it cannot honestly export', () => {
-    it('rejects a non-container', () => {
-      expect(() => exportArtifact({bytes: new Uint8Array([1, 2, 3, 4]), options: {}}))
-        .toThrow(/BLDR/)
+    it('rejects a non-container', async () => {
+      await expect(exportArtifact({bytes: new Uint8Array([1, 2, 3, 4]), options: {}}))
+        .rejects.toThrow(/BLDR/)
     })
 
-    it('rejects a multi-chunk container rather than exporting a fraction of it', () => {
+    it('rejects a multi-chunk container rather than exporting a fraction of it', async () => {
       const {glb} = cachedArtifact()
       const twoChunks = packGlbChunks([glb, glb])
 
-      expect(() => exportArtifact({bytes: twoChunks, options: {}})).toThrow(/expected 1 chunk/)
+      await expect(exportArtifact({bytes: twoChunks, options: {}})).rejects.toThrow(/expected 1 chunk/)
     })
   })
 })

@@ -164,7 +164,7 @@ describe('pro/glbExport against the real Meshopt writer', () => {
     const expectedRanges = compressedRanges(before, binBefore)
     const expectedDecoded = await decodeAll(before, binBefore)
 
-    const {blob} = exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
+    const {blob} = await exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
     const bytes = new Uint8Array(await blob.arrayBuffer())
     const {json, bin} = parseGlb(bytes)
 
@@ -185,7 +185,7 @@ describe('pro/glbExport against the real Meshopt writer', () => {
 
   it('weighs what the panel said it would', async () => {
     const sizes = await artifactSizesFromFile(new Blob([container]))
-    const {blob} = exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
+    const {blob} = await exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
 
     expect(sizes.withMetadata).toBe(sourceGlb.byteLength)
     expect(sizes.withoutMetadata).toBe(blob.size)

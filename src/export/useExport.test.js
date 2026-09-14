@@ -3,6 +3,7 @@ import {mockedUseAuth0, mockedUserLoggedIn} from '../__mocks__/authentication'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
 import {gtagEvent} from '../privacy/analytics'
 import useStore from '../store/useStore'
+import {compressedExport} from './artifactSizes'
 import {triggerDownload} from './download'
 import {recordExport} from './exportHistory'
 import {ProModuleDeniedError, loadProModule} from './proModuleLoader'
@@ -10,6 +11,10 @@ import useExport, {bytesBucket, formatBytes} from './useExport'
 
 
 jest.mock('../OPFS/utils', () => ({readModelByPathFromOPFS: jest.fn()}))
+// The per-(artifact, codec) cache has its own suite (artifactSizes.test.js);
+// here it stands in for "the panel already compressed this", which is the
+// state the hook is written against.
+jest.mock('./artifactSizes', () => ({compressedExport: jest.fn()}))
 jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
 jest.mock('./download', () => ({triggerDownload: jest.fn()}))
 // The history lib has its own suite (exportHistory.test.js); here it stands
@@ -99,6 +104,9 @@ describe('useExport', () => {
     expect(exportArtifact).toHaveBeenCalledWith({
       bytes: ARTIFACT_BYTES,
       options: {sourceBasename: 'box.ifc', stripBldrsMetadata: false},
+      // No codec chosen, so nothing for the host to run and the module's own
+      // pass-through is the export (#1842).
+      compress: null,
     })
     expect(triggerDownload).toHaveBeenCalledWith(EXPORTED.blob, 'box.glb')
     expect(useStore.getState().snackMessage).toEqual({text: 'Exported box.glb (2.0 KB)', autoDismiss: true})
@@ -107,6 +115,73 @@ describe('useExport', () => {
       bytes_bucket: '<1MB',
       source_kind: KIND_LABEL,
     })
+  })
+
+  it('hands the pro module the very bytes the size line quoted', async () => {
+    // The codecs live in the host bundle, so the host compresses — but only
+    // the pro module can turn bytes into a download, and the bytes it gets
+    // are the cached ones the panel measured, not a second encode that is
+    // merely supposed to match (#1842).
+    const compressed = {
+      withMetadata: new Uint8Array(900),
+      withoutMetadata: new Uint8Array(400),
+      strippedExtensions: ['BLDRS_spatial_tree'],
+      mode: 'meshopt',
+    }
+    compressedExport.mockResolvedValue(compressed)
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {stripBldrsMetadata: true, compression: 'meshopt'})
+    })
+
+    const {compress} = exportArtifact.mock.calls[0][0]
+    const forDownload = await compress(ARTIFACT_BYTES, {stripBldrsMetadata: true})
+
+    expect(compressedExport).toHaveBeenCalledWith(
+      expect.objectContaining({schemaVer: SCHEMA_VER}), 'meshopt', ARTIFACT_BYTES)
+    expect(forDownload.bytes).toBe(compressed.withoutMetadata)
+    expect(forDownload.withMetadataBytes).toBe(900)
+    expect(forDownload.withoutMetadataBytes).toBe(400)
+    // …and the choice is recorded, so "Download again" reproduces this file
+    // rather than an uncompressed one at the size the row claims.
+    expect(recordExport).toHaveBeenCalledWith(
+      expect.objectContaining({options: {stripBldrsMetadata: true, compression: 'meshopt'}}),
+      expect.anything(), expect.any(Function), expect.any(Function))
+  })
+
+  it('keeps the with-metadata side when the toggle is on', async () => {
+    const compressed = {
+      withMetadata: new Uint8Array(900),
+      withoutMetadata: new Uint8Array(400),
+      strippedExtensions: [],
+      mode: 'draco',
+    }
+    compressedExport.mockResolvedValue(compressed)
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {stripBldrsMetadata: false, compression: 'draco'})
+    })
+
+    const {compress} = exportArtifact.mock.calls[0][0]
+    expect((await compress(ARTIFACT_BYTES, {stripBldrsMetadata: false})).bytes)
+      .toBe(compressed.withMetadata)
+  })
+
+  it('fails the export rather than downloading an uncompressed file as a compressed one', async () => {
+    // A null cache entry means the encode failed. Handing over the input
+    // instead would save a file whose name and reported size say Draco and
+    // whose contents do not.
+    compressedExport.mockResolvedValue(null)
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {compression: 'draco'})
+    })
+
+    const {compress} = exportArtifact.mock.calls[0][0]
+    await expect(compress(ARTIFACT_BYTES, {stripBldrsMetadata: false})).rejects.toThrow(/draco/)
   })
 
   it('reports the source KIND, never the cache key\'s first namespace', async () => {

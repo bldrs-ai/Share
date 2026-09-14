@@ -268,9 +268,47 @@ exactly. A GLB with no Bldrs data in it is handed over untouched rather than
 re-serialised. `stats` reports `withMetadataBytes` / `withoutMetadataBytes` /
 `metadataBytes` for the run either way.
 
-Options surfaced in the UI (v0.1): *Include Bldrs metadata (properties,
-spatial tree)* — default **on** (it's their model; the toggle exists for
-onward sharing).
+**Compression** (#1842) is the second option, and the pro module does not run
+it: the codecs and their wasm live in the host bundle, so `exportArtifact`
+takes a `compress` hook and the host's `export/glbCompression.js` supplies the
+bytes. The download is still reachable only through the module, which is what
+the gate is for.
+
+That module compresses the way the cache writer does — `KHR_draco_mesh_compression`
+or `EXT_meshopt_compression`, the same `meshoptimizer/encoder` and the same
+script-injected DRACO encoder (`loader/glbCompress.js#loadDracoEncoder`, now
+exported for it) — with two differences that come from compressing an artifact
+rather than freshly-exported geometry:
+
+- The `BLDRS_*` payloads are already in the file, and `@gltf-transform` drops
+  every extension its IO has not registered. So they are lifted out before the
+  transform and injected back after it (`injectGlbExtensions`, the same
+  on-disk shape the writer wrote), or "Include Bldrs metadata" would silently
+  mean nothing under compression. The IO registers `ALL_EXTENSIONS` rather than
+  just the codec's own, because the batched-native artifact's geometry IS
+  `EXT_mesh_gpu_instancing` and an unregistered extension is a de-instanced
+  model.
+- `@gltf-transform/functions`' `draco()` / `meshopt()` wrappers are not used.
+  Both bundle passes that reorder geometry (`meshopt()` runs `reorder()`,
+  `draco()` runs `weld()` and defaults to `edgebreaker`) and `BLDRS_face_ids`
+  indexes identity BY triangle position, so a reordered file picks the wrong
+  element on re-import. The two extensions are driven directly, with DRACO
+  switched to `sequential` whenever the document carries per-triangle or
+  per-vertex identity. It also keeps the path off a package jest does not
+  transform, so the unit suite runs the real encoders.
+
+One encode serves both metadata states: the transform's own output IS the
+without-metadata file (the payloads it dropped are exactly what the toggle
+removes), and the with-metadata file is that plus the saved payloads injected
+back — arithmetic beside the encode, since the costly stringify+gzip is
+already done. A codec that cannot take the geometry reports mode `none` and
+returns the input rather than failing an export the user can still have.
+
+Options surfaced in the UI: *Include Bldrs metadata (properties, spatial
+tree)* — default **on** (it's their model; the toggle exists for onward
+sharing) — and *Compression: None / Meshopt / Draco* — default **None** (the
+file opens everywhere; the other two need the matching decoder registered in
+whatever the user opens it with).
 
 ### 4.4 UI
 
@@ -296,15 +334,39 @@ all-caps button on the #1837 preview read as disabled when it wasn't
 (#1838).
 
 The Export tab hosts `Open/ExportSection.jsx` — the metadata toggle, then the
-**download size** for the state that toggle is in, then **Export GLB last and
-centred**, with the Pro chip for a free user riding beside it. The size line
-("Download size … 12.4 MB", captioned "3.1 MB of Bldrs metadata
-included/removed") is computed when the tab opens, from a `File.slice` of the
-artifact's header — `loader/glbArtifactSize.js#artifactSizesFromFile` reads
-the container's chunk length for the with-metadata figure and strips the
-parsed JSON chunk for the other, never touching the BIN chunk, so a
-400 MB model costs a header read rather than a stall (#1841). Both figures are
-exact: the same strip the export runs. Sizes are cached per published
+**Compression** choice, then the **download size** for the state those two are
+in, then **Export GLB last and centred**, with the Pro chip for a free user
+riding beside it. Compression is an exclusive `ToggleButtonGroup` (None /
+Meshopt / Draco) because the codecs are alternatives, not independent options;
+the row wraps, since at 390px its label and three buttons are wider than the
+dialog's content column.
+
+Every label block in the section is **left-aligned** (#1842). The theme centres
+a Dialog's whole paper (`theme/Components.js`, `MuiDialog.paper.textAlign`),
+which made each two-line block float its shorter line under its longer one —
+"Download size" sat off-centre above its own caption. The fix is
+`textAlign: 'left'` on this section's own Stack, not a theme-wide change; the
+action row below re-asserts `center`.
+
+The size line ("Download size … 12.4 MB", captioned "3.1 MB of Bldrs metadata
+included/removed") follows both controls. Uncompressed, it is computed when
+the tab opens, from a `File.slice` of the artifact's header —
+`loader/glbArtifactSize.js#artifactSizesFromFile` reads the container's chunk
+length for the with-metadata figure and strips the parsed JSON chunk for the
+other, never touching the BIN chunk, so a 400 MB model costs a header read
+rather than a stall (#1841). Both figures are exact: the same strip the export
+runs.
+
+**Compressed, the estimate is the compressed file.** The size of a Draco or
+Meshopt file is a property of the encoder, not of the input, so there is no
+honest shortcut: picking a codec reads the whole artifact, encodes it once,
+and reports the byte lengths of the two files that came out. The line reads
+*Estimating…* while that runs — a stale figure from the previous choice is a
+promise about a file the next click would not produce — and the bytes are
+cached per (artifact, codec) in `export/artifactSizes.js`, so the export that
+follows hands over the very bytes whose length the user just read rather than
+re-encoding and hoping the two agree. A click fast enough to beat the estimate
+shares its in-flight run. Sizes are otherwise cached per published
 artifact and absent while unknown — no placeholder that flashes a number and
 then corrects itself. The panel carries no "Exports" heading of its own; the tab is
 already labelled Export. The dialog's footer action button belongs to the
@@ -543,7 +605,7 @@ through `BLDRS_*` extensions.
 | Properties / psets | ✔ `BLDRS_element_properties` | ✔ | ✘ | ✘ | ✘ | ◐ customData (size!) | ◐ metadata | ✔ |
 | Units + coordination frame | ✔ `scenes[0].extras` (metres) | ✔ | ✘ (unitless) | ✘ | ✘ | ✔ `metersPerUnit`, root xform | ✔ (units attr) | ✔ |
 | Cut planes / hidden elements (view state) | ◐ `BLDRS_view_states` (designed, not written) | ◐ | ✘ | ✘ | ✘ | ◐ variants | ✘ | ✘ |
-| Compression | ✔ Draco / Meshopt (flags) | ✔ | ✘ | ✘ (binary only) | ◐ binary | ◐ (USDZ is a zip) | ✔ (zip) | ✘ |
+| Compression | ✔ Draco / Meshopt, chosen per export | ✔ | ✘ | ✘ (binary only) | ◐ binary | ◐ (USDZ is a zip) | ✔ (zip) | ✘ |
 | Source | artifact | artifact | scene | scene | scene | scene (or server) | scene | — (needs Conway write support) |
 | Effort | done in S2 | small (unpack GLB → JSON + bin) | small | small | small | medium (USDZExporter is texture-centric; instancing + metadata need work); server route if fidelity matters | medium | large — out of scope |
 
@@ -590,6 +652,13 @@ Chrome — with a real Auth0 account in each of the three tiers:
    sets `glbArtifact`); export again → same bytes.
 5. Toggle "Include Bldrs metadata" off → the file is smaller and its JSON
    chunk has no `BLDRS_` strings (`strings file.glb | grep BLDRS_`).
+5b. Compression → Meshopt, then Draco: the line says *Estimating…*, then
+   settles smaller; the download weighs exactly what it said; the file opens
+   in <https://gltf-viewer.donmccurdy.com/> and still carries `BLDRS_` with
+   the metadata toggle on. DRACO specifically, because it is the one that
+   fetches a `<script>` and a sibling `.wasm` from `/static/js/draco/` at
+   click time — a blocked or mis-served asset is a per-browser failure the
+   others never see.
 6. Save → Export lists the exports below the button, with sizes and dates;
    "Download again" works on the cached one; Clear Local Cache → the row
    says the model must be reopened.

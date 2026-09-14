@@ -2,11 +2,20 @@ import {captureException} from '@sentry/react'
 import {packGlbChunks} from '../loader/glbContainer'
 import {serializeGlb} from '../loader/injectGlbExtensions'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
-import {artifactSizes} from './artifactSizes'
+import {artifactSizes, compressedExport} from './artifactSizes'
+import {compressExportGlb} from './glbCompression'
 
 
 jest.mock('../OPFS/utils', () => ({readModelByPathFromOPFS: jest.fn()}))
 jest.mock('@sentry/react', () => ({captureException: jest.fn()}))
+// The codecs have their own suite against the real encoders
+// (glbCompression.test.js); here the module stands in for "an encode
+// happened", so this suite stays off two wasm builds and can assert on how
+// often it is asked to run.
+jest.mock('./glbCompression', () => ({
+  ...jest.requireActual('./glbCompression'),
+  compressExportGlb: jest.fn(),
+}))
 
 
 /* eslint-disable no-magic-numbers */
@@ -108,5 +117,75 @@ describe('artifactSizes', () => {
 
     expect(await artifactSizes({...ARTIFACT})).toBeNull()
     expect(captureException).toHaveBeenCalledTimes(1)
+  })
+
+  describe('with a codec chosen', () => {
+    const COMPRESSED = {
+      withMetadata: new Uint8Array(300),
+      withoutMetadata: new Uint8Array(120),
+      strippedExtensions: ['BLDRS_spatial_tree'],
+      mode: 'meshopt',
+    }
+
+    beforeEach(() => {
+      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+      compressExportGlb.mockResolvedValue(COMPRESSED)
+    })
+
+    it('measures the compressed file rather than estimating it', async () => {
+      // There is no honest shortcut: the size of a Meshopt or Draco file is a
+      // property of the encoder. Both figures are byte lengths of bytes that
+      // exist (#1842).
+      const sizes = await artifactSizes({...ARTIFACT}, 'meshopt')
+
+      expect(sizes).toEqual({withMetadata: 300, withoutMetadata: 120, metadataBytes: 180})
+      expect(compressExportGlb).toHaveBeenCalledWith(expect.any(Uint8Array), 'meshopt')
+    })
+
+    it('encodes once per artifact and codec, and the export gets those bytes', async () => {
+      // The whole reason the number on the size line is the number that lands
+      // in Downloads: the panel's estimate and the export's payload are one
+      // cache entry, not two computations that are supposed to agree.
+      const artifact = {...ARTIFACT}
+
+      const quoted = await artifactSizes(artifact, 'meshopt')
+      const forDownload = await compressedExport(artifact, 'meshopt')
+
+      expect(forDownload).toBe(COMPRESSED)
+      expect(compressExportGlb).toHaveBeenCalledTimes(1)
+      // The figure on the line is the length of the bytes the export gets —
+      // one entry read twice, not two computations that are supposed to agree.
+      expect(quoted.withMetadata).toBe(forDownload.withMetadata.byteLength)
+      expect(quoted.withoutMetadata).toBe(forDownload.withoutMetadata.byteLength)
+    })
+
+    it('encodes again for a different codec', async () => {
+      const artifact = {...ARTIFACT}
+
+      await artifactSizes(artifact, 'meshopt')
+      await artifactSizes(artifact, 'draco')
+
+      expect(compressExportGlb).toHaveBeenCalledTimes(2)
+      expect(compressExportGlb).toHaveBeenLastCalledWith(expect.any(Uint8Array), 'draco')
+    })
+
+    it('uses the bytes the caller already has rather than re-reading OPFS', async () => {
+      // The export has just read the artifact to hand it to the pro module;
+      // reading a hundreds-of-MB file a second time to compress it would be
+      // the panel's cost paid twice.
+      const glb = new Uint8Array([1, 2, 3, 4])
+
+      await compressedExport({...ARTIFACT}, 'draco', glb)
+
+      expect(readModelByPathFromOPFS).not.toHaveBeenCalled()
+      expect(compressExportGlb).toHaveBeenCalledWith(glb, 'draco')
+    })
+
+    it('reports a failed encode and shows no size', async () => {
+      compressExportGlb.mockRejectedValue(new Error('encoder unavailable'))
+
+      expect(await artifactSizes({...ARTIFACT}, 'draco')).toBeNull()
+      expect(captureException).toHaveBeenCalledTimes(1)
+    })
   })
 })

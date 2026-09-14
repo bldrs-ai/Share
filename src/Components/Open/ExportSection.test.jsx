@@ -43,6 +43,11 @@ const BYTES_PER_MB = 1024 * 1024
 const WITH_METADATA_BYTES = 13 * BYTES_PER_MB
 const WITHOUT_METADATA_BYTES = 9 * BYTES_PER_MB
 const METADATA_BYTES = WITH_METADATA_BYTES - WITHOUT_METADATA_BYTES
+
+// What the compressed estimate comes back with: smaller than the
+// uncompressed pair above, because that is the entire promise of the control.
+const MESHOPT_WITH_METADATA_BYTES = 7 * BYTES_PER_MB
+const MESHOPT_WITHOUT_METADATA_BYTES = 3 * BYTES_PER_MB
 /* eslint-enable no-magic-numbers */
 
 const ARTIFACT = {
@@ -74,6 +79,9 @@ async function setStore(artifact, appMetadata, isExportInFlight = false) {
  * order: no artifact beats every tier, then anonymous, then free, then Pro.
  */
 describe('ExportSection', () => {
+  /** Settles the pending compressed estimate, from inside the test's `act`. */
+  let resolveMeshoptSizes
+
   beforeEach(() => {
     jest.clearAllMocks()
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
@@ -151,12 +159,96 @@ describe('ExportSection', () => {
     expect(toggle.checked).toBe(true)
 
     fireEvent.click(getByTestId('export-glb-button'))
-    expect(mockRun).toHaveBeenCalledWith('glb', {stripBldrsMetadata: false})
+    expect(mockRun).toHaveBeenCalledWith('glb', {stripBldrsMetadata: false, compression: 'none'})
 
     // Off means "strip", which is the option the pro module acts on.
     fireEvent.click(toggle)
     fireEvent.click(getByTestId('export-glb-button'))
-    expect(mockRun).toHaveBeenLastCalledWith('glb', {stripBldrsMetadata: true})
+    expect(mockRun).toHaveBeenLastCalledWith('glb', {stripBldrsMetadata: true, compression: 'none'})
+  })
+
+  it('offers the three compression choices, None selected', async () => {
+    // Exclusive, and defaulting to the file that opens everywhere: Meshopt
+    // and Draco both need the matching decoder registered in whatever the
+    // user opens the download with (#1842).
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+    const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+    expect(getByTestId('export-compression-none')).toHaveAttribute('aria-pressed', 'true')
+    expect(getByTestId('export-compression-meshopt')).toHaveAttribute('aria-pressed', 'false')
+    expect(getByTestId('export-compression-draco')).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('carries the compression choice into the export', async () => {
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+    const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+    fireEvent.click(getByTestId('export-compression-draco'))
+    fireEvent.click(getByTestId('export-glb-button'))
+
+    expect(mockRun).toHaveBeenLastCalledWith('glb', {stripBldrsMetadata: false, compression: 'draco'})
+  })
+
+  it('re-estimates when the compression choice changes, saying so while it runs', async () => {
+    // A compressed estimate IS the compressed file, so it costs an encode —
+    // seconds on a real model. The line has to say the number is coming
+    // rather than showing the previous codec's figure, which is a promise
+    // about a file the next click would not produce (#1842).
+    artifactSizes.mockImplementation((artifact, mode) => (mode === 'none' ?
+      Promise.resolve({
+        withMetadata: WITH_METADATA_BYTES,
+        withoutMetadata: WITHOUT_METADATA_BYTES,
+        metadataBytes: METADATA_BYTES,
+      }) :
+      new Promise((resolve) => {
+        resolveMeshoptSizes = resolve
+      })))
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+    const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+    await act(async () => {})
+
+    expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(WITH_METADATA_BYTES))
+
+    fireEvent.click(getByTestId('export-compression-meshopt'))
+
+    expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'meshopt')
+    expect(queryByTestId('export-size')).toBeNull()
+    expect(getByTestId('export-size-pending')).toHaveTextContent('Estimating…')
+
+    await act(async () => {
+      resolveMeshoptSizes({
+        withMetadata: MESHOPT_WITH_METADATA_BYTES,
+        withoutMetadata: MESHOPT_WITHOUT_METADATA_BYTES,
+        metadataBytes: MESHOPT_WITH_METADATA_BYTES - MESHOPT_WITHOUT_METADATA_BYTES,
+      })
+      // Let the `.then` that settles the state run inside this `act`.
+      await Promise.resolve()
+    })
+
+    expect(queryByTestId('export-size-pending')).toBeNull()
+    const size = getByTestId('export-size')
+    expect(size).toHaveTextContent('7.0 MB')
+    expect(size).toHaveAttribute('data-bytes', String(MESHOPT_WITH_METADATA_BYTES))
+    // And the metadata toggle still moves it, off the compressed pair.
+    fireEvent.click(getByTestId('export-include-metadata').querySelector('input'))
+    expect(getByTestId('export-size'))
+      .toHaveAttribute('data-bytes', String(MESHOPT_WITHOUT_METADATA_BYTES))
+  })
+
+  it('left-justifies its label blocks, and only the action row stays centred', async () => {
+    // The theme centres a Dialog's whole paper (theme/Components.js,
+    // `MuiDialog.paper.textAlign`), which made each two-line block float its
+    // shorter line under its longer one — "Download size" sat off-centre
+    // above its own caption (#1842). The fix is local to this section, not a
+    // theme-wide change.
+    artifactSizes.mockResolvedValue(
+      {withMetadata: WITH_METADATA_BYTES, withoutMetadata: WITHOUT_METADATA_BYTES, metadataBytes: METADATA_BYTES})
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+    const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+    await act(async () => {})
+
+    expect(getByTestId('export-section')).toHaveStyle({textAlign: 'left'})
+    expect(getByTestId('export-action-row')).toHaveStyle({textAlign: 'center'})
   })
 
   it('shows what the download will weigh, and follows the toggle', async () => {

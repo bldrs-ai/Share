@@ -7,9 +7,11 @@ import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
 import {gtagEvent} from '../privacy/analytics'
 import useStore from '../store/useStore'
+import {compressedExport} from './artifactSizes'
 import {triggerDownload} from './download'
 import {recordExport} from './exportHistory'
 import {getExportFormat} from './exportRegistry'
+import {COMPRESSION_NONE, isCompressionMode} from './glbCompression'
 import {ProModuleDeniedError, loadProModule} from './proModuleLoader'
 
 
@@ -123,6 +125,7 @@ export default function useExport() {
         // path is what the download is named after. The module still honours
         // an explicit `title` for callers that have a real one.
         options: {sourceBasename: basename(cacheKeyArgs.sourcePath), ...options},
+        compress: compressHookFor(artifact, options),
       })
 
       triggerDownload(blob, filename)
@@ -197,6 +200,40 @@ export default function useExport() {
   }, [glbArtifact, getAccessTokenSilently, refreshAppMetadata, setIsExporting, setSnackMessage, user?.sub])
 
   return {run, isExporting, error}
+}
+
+
+/**
+ * The compression hook the pro module calls, or null when the user chose
+ * "None" (and there is then nothing for the host to do).
+ *
+ * It resolves through `artifactSizes.js`'s per-(artifact, codec) cache, which
+ * the size line has almost always filled already — picking a codec runs the
+ * encode, and the click that follows finds the very bytes whose length the
+ * user just read. A click fast enough to beat the estimate shares its
+ * in-flight run rather than starting a second one.
+ *
+ * @param {object} artifact The store's `glbArtifact` slot, or a history row's
+ * @param {object} options The run's options, carrying `compression`
+ * @return {?Function} `(glbBytes, {stripBldrsMetadata}) => Promise<object>`
+ */
+function compressHookFor(artifact, options) {
+  const mode = options.compression
+  if (!isCompressionMode(mode) || mode === COMPRESSION_NONE) {
+    return null
+  }
+  return async (glbBytes, {stripBldrsMetadata}) => {
+    const compressed = await compressedExport(artifact, mode, glbBytes)
+    if (!compressed) {
+      throw new Error(`useExport: ${mode} compression produced nothing`)
+    }
+    return {
+      bytes: stripBldrsMetadata ? compressed.withoutMetadata : compressed.withMetadata,
+      withMetadataBytes: compressed.withMetadata.byteLength,
+      withoutMetadataBytes: compressed.withoutMetadata.byteLength,
+      strippedExtensions: compressed.strippedExtensions,
+    }
+  }
 }
 
 

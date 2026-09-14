@@ -42,24 +42,27 @@ const UNSAFE_FILENAME_CHARS = /[^A-Za-z0-9._-]+/g
 /**
  * Turn a cached Bldrs container into a downloadable `.glb`.
  *
- * Synchronous today, and deliberately not declared `async` (the repo lints
- * for `require-await`); the registry contract is that callers `await` the
- * result, so a later format is free to be genuinely asynchronous.
- *
  * @param {object} args
  * @param {Uint8Array|ArrayBuffer} args.bytes The OPFS artifact's bytes
  * @param {object} [args.options]
  * @param {boolean} [args.options.stripBldrsMetadata] Drop every `BLDRS_*`
  *   extension before handing the file over (for onward sharing — the psets
  *   travel with the model otherwise)
+ * @param {string} [args.options.compression] Which codec the host applied,
+ *   carried for the export-history row; `args.compress` is what does it
  * @param {string} [args.options.title] Model title, preferred for the filename
  * @param {string} [args.options.sourceBasename] Source filename, the fallback
- * @return {{blob: Blob, filename: string, stats: object}} `stats` carries
- *   both sizes of THIS run — `withMetadataBytes` / `withoutMetadataBytes` /
- *   `metadataBytes` — so the caller can report what the toggle was worth.
- *   The two it did not produce are null when the file could not be measured.
+ * @param {?Function} [args.compress] Host hook: given this GLB and the
+ *   metadata choice, returns `{bytes, withMetadataBytes, withoutMetadataBytes,
+ *   strippedExtensions}` for the chosen codec. Absent (the default) means no
+ *   compression, and the strip below is the only rewrite.
+ * @return {Promise<{blob: Blob, filename: string, stats: object}>} `stats`
+ *   carries both sizes of THIS run — `withMetadataBytes` /
+ *   `withoutMetadataBytes` / `metadataBytes` — so the caller can report what
+ *   the toggle was worth. The two it did not produce are null when the file
+ *   could not be measured.
  */
-export function exportArtifact({bytes, options = {}}) {
+export async function exportArtifact({bytes, options = {}, compress = null}) {
   const container = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
   const inputBytes = container.byteLength
   const {chunks} = unpackGlbContainer(container)
@@ -74,10 +77,22 @@ export function exportArtifact({bytes, options = {}}) {
   }
 
   let glbBytes = new Uint8Array(chunks[0])
-  const withMetadataBytes = glbBytes.byteLength
+  let withMetadataBytes = glbBytes.byteLength
   let strippedExtensions = []
   let withoutMetadataBytes = null
-  if (options.stripBldrsMetadata) {
+  if (compress) {
+    // The codecs (and their wasm) live in the host bundle, so compression is
+    // the host's to run — but the DOWNLOAD is still only reachable through
+    // this module, which is the whole point of the gate. The hook hands back
+    // both sides of the metadata toggle from one encode, already computed for
+    // the size line the user read before clicking, so the figure and the file
+    // are the same bytes rather than two agreeing calculations (§4.4).
+    const compressed = await compress(glbBytes, {stripBldrsMetadata: Boolean(options.stripBldrsMetadata)})
+    glbBytes = compressed.bytes instanceof Uint8Array ? compressed.bytes : new Uint8Array(compressed.bytes)
+    withMetadataBytes = compressed.withMetadataBytes
+    withoutMetadataBytes = compressed.withoutMetadataBytes
+    strippedExtensions = options.stripBldrsMetadata ? compressed.strippedExtensions : []
+  } else if (options.stripBldrsMetadata) {
     const stripped = stripArtifact(glbBytes)
     glbBytes = stripped.bytes
     strippedExtensions = stripped.strippedExtensions

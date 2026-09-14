@@ -35,6 +35,15 @@ export const GLTF_MAGIC = 'glTF'
 export const EXPORT_TEST_TIMEOUT_MS = 120_000
 
 const CACHE_TIMEOUT_MS = 60_000
+// Compressing the fixture is milliseconds of encoding behind a wasm module
+// that has to be fetched and instantiated first — DRACO's arrives as a
+// script tag and a sibling `.wasm` (`loader/glbCompress.js`).
+const COMPRESS_TIMEOUT_MS = 60_000
+
+// Byte offset of the JSON chunk's length field in a GLB: past the 12-byte
+// file header. The 8 bytes after it are the chunk's own header.
+const GLB_JSON_LENGTH_OFFSET = 12
+const GLB_CHUNK_HEADER_BYTES = 8
 
 const SNACKBAR_SELECTOR = '[data-testid="snackbar"]'
 // Centre of a box.
@@ -185,6 +194,42 @@ export async function expectNoHorizontalScroll(page: Page) {
     clientWidth: document.documentElement.clientWidth,
   }))
   expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth)
+}
+
+
+/**
+ * Pick a compression codec and wait for the size line to settle on the new
+ * figure.
+ *
+ * A compressed estimate IS the compressed file, so selecting one runs the
+ * encoder and the line reads "Estimating…" until it lands (#1842) — there is
+ * nothing to compare against until `export-size` is back.
+ *
+ * @param page Playwright page
+ * @param mode 'none' | 'meshopt' | 'draco'
+ * @return the byte count the settled line carries
+ */
+export async function selectCompression(page: Page, mode: string): Promise<number> {
+  await page.getByTestId(`export-compression-${mode}`).click()
+  await expect(page.getByTestId(`export-compression-${mode}`)).toHaveAttribute('aria-pressed', 'true')
+  const sizeLine = page.getByTestId('export-size')
+  await expect(sizeLine).toBeVisible({timeout: COMPRESS_TIMEOUT_MS})
+  return Number(await sizeLine.getAttribute('data-bytes'))
+}
+
+
+/**
+ * The glTF JSON chunk of a downloaded `.glb`, so a spec can read what the
+ * file says about itself — which extensions it uses, above all.
+ *
+ * @param bytes the saved file
+ * @return the parsed JSON chunk
+ */
+export function glbJsonChunk(bytes: Buffer): {extensionsUsed?: string[]; extensionsRequired?: string[]} {
+  const jsonByteLength = bytes.readUInt32LE(GLB_JSON_LENGTH_OFFSET)
+  const start = GLB_JSON_LENGTH_OFFSET + GLB_CHUNK_HEADER_BYTES
+  // The chunk is space-padded to 4 bytes, which `JSON.parse` need not accept.
+  return JSON.parse(bytes.subarray(start, start + jsonByteLength).toString('utf8').replace(/\s+$/, ''))
 }
 
 

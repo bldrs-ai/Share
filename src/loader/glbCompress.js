@@ -317,9 +317,15 @@ function hasPerVertexIfcIds(glbBytes) {
  * Cached at module scope so subsequent compressions reuse the same
  * factory. Resolves with the instantiated encoder Module.
  *
+ * Exported for `export/glbCompression.js`, which drives the DRACO
+ * extension directly rather than through `compressGlb` (it has to detach
+ * the `BLDRS_*` payloads around the transform) but must reach the encoder
+ * the same way, so a session that compresses on both paths injects and
+ * instantiates the wasm once.
+ *
  * @return {Promise<object>} the instantiated encoder Module
  */
-function loadDracoEncoder() {
+export function loadDracoEncoder() {
   if (dracoEncoderPromise) {
     return dracoEncoderPromise
   }
