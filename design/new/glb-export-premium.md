@@ -459,12 +459,12 @@ The Export tab hosts `Open/ExportSection.jsx` — the metadata toggle, then the
 size** for the state those three are in, then **Export GLB last and centred**,
 with the Pro chip for a free user riding beside it. That order is the order
 the choices compound in — what goes in the file, what shape it is in, how it
-is squeezed — and it is the order `export/artifactSizes.js` runs them in. Compression is a dropdown (`Select`: None / Meshopt /
-Draco) because the codecs are alternatives, not independent options — it
-began as a `ToggleButtonGroup`, whose three side-by-side buttons were the
-widest control in the dialog and read as a run-on word under the theme's
-toggle styling (owner feedback on #1842). The menu items carry the per-mode
-test ids.
+is squeezed — and it is the order `export/artifactSizes.js` runs them in.
+Compression is a dropdown (`Select`: None / Meshopt / Draco) because the
+codecs are alternatives, not independent options — it began as a
+`ToggleButtonGroup`, whose three side-by-side buttons were the widest control
+in the dialog and read as a run-on word under the theme's toggle styling
+(owner feedback on #1842). The menu items carry the per-mode test ids.
 
 Every label block in the section is **left-aligned** (#1842). The theme centres
 a Dialog's whole paper (`theme/Components.js`, `MuiDialog.paper.textAlign`),
@@ -490,9 +490,10 @@ estimate cache in `export/artifactSizes.js` is keyed
 `` `${portable ? 'portable' : 'native'}|${mode}` `` for that reason: portable
 and native are different FILES at the same codec, and a shared cell would
 quote one and download the other. `useExport.js#compressHookFor` supplies the
-hook whenever `portable || codec` rather than for a codec alone, and does the
-metadata strip itself for the portable-without-codec case, since the pro
-module runs no strip of its own once a hook is in play.
+hook whenever `portable || codec` rather than for a codec alone, and
+`artifactSizes.js#runRewrite` behind it does the metadata strip for the
+portable-without-codec case, since the pro module runs no strip of its own
+once a hook is in play.
 
 **Compressed, the estimate is the compressed file.** The size of a Draco or
 Meshopt file is a property of the encoder, not of the input, so there is no

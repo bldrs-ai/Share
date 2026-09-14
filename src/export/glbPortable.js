@@ -51,7 +51,7 @@ import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
   parseInstanceTablesExtensionData,
 } from '../loader/bldrsInstanceTables'
-import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from '../loader/bldrsSpatialTree'
+import {BLDRS_SPATIAL_TREE_EXTENSION_NAME, validateDecodedTree} from '../loader/bldrsSpatialTree'
 import {dropBufferViews, referencedBufferViews} from '../loader/glbArtifactSize'
 import {parseGlb, repackGlbBin, serializeGlb} from '../loader/injectGlbExtensions'
 
@@ -113,35 +113,28 @@ export function isPortableRewritable(json) {
  * same content is a risk taken for no gain.
  *
  * @param {Uint8Array} glbBytes One standalone GLB (the artifact's chunk 0)
- * @param {object} [payloads] The already-decoded `BLDRS_*` payloads, when the
- *   caller has them. `{spatialTree, instanceTables}`; either may be null. Omit
- *   and they are read out of the file.
  * @return {{bytes: Uint8Array, isChanged: boolean, stats: object}} `stats` is
- *   `{elementNodes, instanceNodes, unassignedInstances, jsonBytesBefore,
- *   jsonBytesAfter}` — the JSON figures are what makes the per-instance
- *   overhead measurable rather than asserted
+ *   `{elementNodes, instanceNodes, unassignedInstances}`, plus
+ *   `{droppedAccessors, droppedBufferViews}` when the rewrite ran
  */
-export function rewriteGlbPortable(glbBytes, payloads = null) {
+export function rewriteGlbPortable(glbBytes) {
   const {json, bin} = parseGlb(glbBytes)
-  const jsonBytesBefore = jsonChunkLength(json)
   if (!isPortableRewritable(json)) {
     return {
       bytes: glbBytes,
       isChanged: false,
-      stats: {
-        elementNodes: 0,
-        instanceNodes: 0,
-        unassignedInstances: 0,
-        jsonBytesBefore,
-        jsonBytesAfter: jsonBytesBefore,
-      },
+      stats: {elementNodes: 0, instanceNodes: 0, unassignedInstances: 0},
     }
   }
 
-  const tables = payloads?.instanceTables ??
+  const tables =
     readJsonPayload(json, bin, BLDRS_INSTANCE_TABLES_EXTENSION_NAME, parseInstanceTablesExtensionData)
-  const spatialTree = payloads?.spatialTree ??
-    readJsonPayload(json, bin, BLDRS_SPATIAL_TREE_EXTENSION_NAME, (raw) => raw)
+  // The reader's own validator, not a pass-through: a tree from a future or
+  // foreign schema names nothing this file's instances join to, and letting
+  // it through would emit a hierarchy of nodes with garbage names beside an
+  // `Unassigned` root holding every actual placement.
+  const spatialTree =
+    readJsonPayload(json, bin, BLDRS_SPATIAL_TREE_EXTENSION_NAME, validateDecodedTree)
 
   const instances = collectInstances(json, bin, tables)
   const {nodes, roots, stats} = buildPortableNodes(instances, spatialTree)
@@ -168,8 +161,6 @@ export function rewriteGlbPortable(glbBytes, payloads = null) {
       ...stats,
       droppedAccessors,
       droppedBufferViews: orphans.size,
-      jsonBytesBefore,
-      jsonBytesAfter: jsonChunkLength(json),
     },
   }
 }
@@ -242,6 +233,10 @@ function collectInstances(json, bin, tables) {
  * spurious extra level under every leaf. Anything else keeps the element node
  * transform-free and gives each placement its own child, because a TRS on a
  * node with children would move the children too.
+ *
+ * The walk below is unguarded, and can be: the tree is `JSON.parse` output
+ * from the file's own payload, so it cannot cycle, and its depth is whatever
+ * `bldrsSpatialTree.js#serializeNode` let through `MAX_TREE_DEPTH` at capture.
  *
  * @param {Array<object>} instances From `collectInstances`
  * @param {?object} spatialTree The `BLDRS_spatial_tree` payload's root node
@@ -386,30 +381,50 @@ function pushNode(nodes, node) {
  * is `BLDRS_element_properties`, whose whole design is to inflate lazily per
  * block rather than open the entire pset closure.
  *
+ * Every name here comes out of `reifyName`, including the fallback — nothing
+ * is re-derived. `hasAuthoredName` answers only WHICH of its branches ran,
+ * because the returned string does not say: an unnamed `IfcWall` and one
+ * authored "Wall" both reify to "Wall", and only the second should keep that
+ * name unadorned. **The result overrides that answer when it is blank.**
+ * `reifyName` tests the RAW value for truth and trims afterwards, so an
+ * element whose only name is whitespace takes the authored branch and then
+ * reifies to `''` — several authoring tools emit a single-space
+ * `IfcBuildingStorey.LongName`, and trusting the branch there would name the
+ * node `" #4213"` instead of `Storey #4213`.
+ *
  * @param {object} treeNode A `BLDRS_spatial_tree` node
  * @return {string}
  */
 function nodeNameOf(treeNode) {
   const name = reifyName(IFC_TYPE_IDENTITY, treeNode)
-  return hasAuthoredName(treeNode) ? name : `${name} #${treeNode.expressID}`
+  if (hasAuthoredName(treeNode) && name.trim() !== '') {
+    return name
+  }
+  // `reifyName` on a name-less copy: the type fallback, which is the branch
+  // it would NOT have taken for an element that has a name it cannot use.
+  return `${reifyName(IFC_TYPE_IDENTITY, {type: treeNode.type})} #${treeNode.expressID}`
 }
 
 
 /**
- * Whether `reifyName` will return an authored name for this node rather than
- * its type fallback. Mirrors that function's branch structure exactly,
- * including its quirk that a present-but-empty `LongName` short-circuits
- * `Name` — the NavTree shows the type fallback in that case, and so must this.
+ * Whether `reifyName` takes its authored-name branch for this node: the RAW
+ * value's truthiness, with `LongName` short-circuiting a `Name` beside it
+ * even when its own value is empty (`@bldrs-ai/ifclib/src/Ifc.js`) — the
+ * NavTree shows the type fallback in that case, and so must this.
+ *
+ * Deliberately does NOT trim. Trimming here is what made this predicate
+ * disagree with `reifyName` about a whitespace-only name; whether the branch
+ * produced anything USABLE is the caller's check, on the result.
  *
  * @param {object} treeNode
  * @return {boolean}
  */
 function hasAuthoredName(treeNode) {
   if (treeNode.LongName) {
-    return Boolean(treeNode.LongName.value && treeNode.LongName.value.trim())
+    return Boolean(treeNode.LongName.value)
   }
   if (treeNode.Name) {
-    return Boolean(treeNode.Name.value && treeNode.Name.value.trim())
+    return Boolean(treeNode.Name.value)
   }
   return false
 }
@@ -455,8 +470,13 @@ function removeInstancingAccessors(json) {
   }
   // Every accessor reference outside the instancing extension. The glTF 2.0
   // core schema has exactly these sites; the artifact only ever uses the
-  // first two, and the rest are here so a file that grew a skin or an
-  // animation is not silently corrupted.
+  // first two, and the rest make the ACCESSOR re-indexing total at no cost.
+  // The node-index half of the same problem is deliberately uncovered —
+  // `json.nodes` is replaced wholesale below, which would leave
+  // `skins[].joints` and `animations[].channels[].target.node` pointing at
+  // the wrong nodes. Neither can occur: this writer emits no skin and no
+  // animation, and `isPortableRewritable` refuses a file with a node it did
+  // not write.
   const kept = new Set()
   const keep = (index) => Number.isInteger(index) && kept.add(index)
   for (const mesh of json.meshes || []) {
@@ -677,13 +697,4 @@ function isDefaultTransform(values, identity) {
  */
 function roundFloats(values) {
   return values.map((value) => Number(value.toPrecision(TRS_SIGNIFICANT_DIGITS)))
-}
-
-
-/**
- * @param {object} json
- * @return {number} the length of the JSON chunk this document serialises to
- */
-function jsonChunkLength(json) {
-  return new TextEncoder().encode(JSON.stringify(json)).byteLength
 }

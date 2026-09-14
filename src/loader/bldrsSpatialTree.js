@@ -128,10 +128,14 @@ function serializeNode(node, depth = 0) {
  * the input tree on pass, `null` on fail (caller treats null as
  * "extension not usable; degrade to empty NavTree").
  *
+ * Exported for the export side: `export/glbPortable.js` decodes the same
+ * payload off raw bytes rather than through this reader, and has to reject
+ * exactly what the reader rejects or the two disagree about the same file.
+ *
  * @param {*} tree decoded extension payload
  * @return {object|null}
  */
-function validateDecodedTree(tree) {
+export function validateDecodedTree(tree) {
   if (tree === null || tree === undefined || typeof tree !== 'object') {
     return null
   }

@@ -72,6 +72,23 @@ const IFC_TREE = {
 }
 const IFC_TREE_NODE_COUNT = 5
 
+// The naming edge `reifyName` gets to first: it tests the RAW value for truth
+// and trims AFTERWARDS, so a whitespace-only name takes the authored branch
+// and then reifies to ''. Several authoring tools emit a single-space
+// `IfcBuildingStorey.LongName`. Node 20 pins the other half — a
+// present-but-empty `LongName` short-circuits the `Name` beside it, which is
+// `reifyName`'s own behaviour and must survive here too.
+const BLANK_NAME_TREE = {
+  expressID: 1,
+  type: 'IFCPROJECT',
+  Name: {value: 'Bldrs'},
+  children: [
+    {expressID: 11, type: 'IFCWALL', Name: {value: 'Real Name'}, LongName: {value: '   '}, children: []},
+    {expressID: 12, type: 'IFCWALL', Name: {value: '  '}, children: []},
+    {expressID: 20, type: 'IFCSLAB', Name: {value: 'Real Name'}, LongName: {value: ''}, children: []},
+  ],
+}
+
 // The STEP twin: one part type reused at two occurrences, which is exactly the
 // case `parents` alone cannot tell apart — both copies of the shared geometry
 // are parent 11 in `liveBatchedModel`, and only `occurrencePath` separates
@@ -345,6 +362,24 @@ describe('export/glbPortable', () => {
       expect(nodeNamed(json, 'Wall #12')).toBeTruthy()
     })
 
+    it('falls back to the type when the authored name is only whitespace', async () => {
+      // `reifyName` returns '' for these, not the type — it tests the raw
+      // value for truth and trims afterwards. Naming the node off the branch
+      // rather than off the result gives it a leading space and no type at
+      // all (" #11"), which is neither what the NavTree shows nor a name.
+      const blankNamed = await artifactWithTree({tree: BLANK_NAME_TREE, mutateModel: asIfcModel})
+
+      const blank = parseGlb(rewriteGlbPortable(blankNamed).bytes).json
+
+      expect(nodeNamed(blank, 'Wall #11')).toBeTruthy()
+      expect(nodeNamed(blank, 'Wall #12')).toBeTruthy()
+      // The empty-LongName quirk: it short-circuits the Name beside it, so
+      // this one takes the type fallback too rather than reading 'Real Name'.
+      expect(nodeNamed(blank, 'Slab #20')).toBeTruthy()
+      expect(blank.nodes.map((node) => node.name).filter((name) => name !== name.trim()))
+        .toEqual([])
+    })
+
     it('nests them to mirror the spatial tree', () => {
       const project = nodeNamed(json, 'Bldrs')
       const storey = nodeNamed(json, 'Level 1')
@@ -461,6 +496,28 @@ describe('export/glbPortable', () => {
       // …and it is a scene root, not buried under the project it does not
       // belong to.
       expect(json.scenes[0].nodes).toContain(json.nodes.indexOf(unassigned))
+    })
+
+    it('degrades a tree the reader would reject rather than naming from it', async () => {
+      // The same validator the reader applies (`bldrsSpatialTree.js#
+      // validateDecodedTree`), so the two agree about the same file: a tree
+      // from a future or foreign schema — string expressIDs here — names
+      // nothing this file's instances join to, and letting it through emits
+      // a hierarchy of garbage-named nodes beside an `Unassigned` root
+      // holding every actual placement.
+      const source = await artifactWithTree({
+        tree: {expressID: 'IFCPROJECT-1', type: 'IFCPROJECT', Name: {value: 'Bldrs'}, children: []},
+        mutateModel: asIfcModel,
+      })
+
+      const result = rewriteGlbPortable(source)
+      const {json} = parseGlb(result.bytes)
+
+      expect(result.stats.elementNodes).toBe(0)
+      expect(json.nodes.some((node) => node.name === 'Bldrs')).toBe(false)
+      // Still an export, with every placement in it.
+      expect(result.stats.unassignedInstances).toBe(3)
+      expect(meshBearingNodes(json)).toHaveLength(3)
     })
 
     it('still produces a portable file when the tree is missing entirely', async () => {
