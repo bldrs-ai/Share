@@ -57,26 +57,39 @@ const PRO_SUBSCRIPTION_STATUS = 'sharePro'
 const PRO_MODULES_DIR_NAME = '_pro-modules'
 
 
+// Where `included_files` land inside the deployed bundle, relative to the
+// task root — and the two bundlers disagree, which is why both spellings
+// are tried. esbuild (netlify.toml) strips the functions directory, so
+// `netlify/functions/_pro-modules/x.js` ships as `_pro-modules/x.js`; nft
+// keeps the repo-relative path. Both verified by unzipping local
+// `zip-it-and-ship-it netlify/functions` builds. The repo-relative spelling
+// is also what `netlify dev` sees, running with the repo root as `cwd`.
+const PRO_MODULES_RELATIVE_PATHS = [
+  [PRO_MODULES_DIR_NAME],
+  ['netlify', 'functions', PRO_MODULES_DIR_NAME],
+]
+
+
 /**
  * Read a pro module's built bytes.
  *
- * Two candidate roots because the layout differs between environments and
+ * Candidate roots because the layout differs between environments and
  * neither is worth guessing wrong: a deployed lambda gets `included_files`
- * copied under LAMBDA_TASK_ROOT with their repo-relative path preserved,
- * while `netlify dev` / `netlify-cli` set no such variable and run with the
- * repo root as `process.cwd()`.
+ * under LAMBDA_TASK_ROOT (see `PRO_MODULES_RELATIVE_PATHS`), while
+ * `netlify dev` / `netlify-cli` set no such variable and run with the repo
+ * root as `process.cwd()`.
  *
- * Deliberately NOT `import.meta.url`: no other function in this directory
- * uses `import.meta`, so how the deploy bundler treats it here is one more
- * unknown in a path that has to work on the first try.
+ * Deliberately NOT `import.meta.url`: the function is bundled to a single
+ * CommonJS file (netlify.toml, `node_bundler = "esbuild"`), where
+ * `import.meta.url` is undefined.
  *
  * @param {string} name An id already validated against PRO_MODULE_NAMES
  * @return {Promise<string|null>} module source, or null when not built
  */
 async function readProModuleSource(name) {
   const roots = [process.env.LAMBDA_TASK_ROOT, process.cwd()].filter(Boolean)
-  const candidates = roots.map(
-    (root) => path.resolve(root, 'netlify', 'functions', PRO_MODULES_DIR_NAME, `${name}.js`))
+  const candidates = roots.flatMap((root) => PRO_MODULES_RELATIVE_PATHS.map(
+    (relative) => path.resolve(root, ...relative, `${name}.js`)))
   for (const candidate of candidates) {
     try {
       return await fs.readFile(candidate, 'utf8')

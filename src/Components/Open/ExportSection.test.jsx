@@ -1,5 +1,5 @@
 import React from 'react'
-import {act, fireEvent, render, renderHook} from '@testing-library/react'
+import {act, fireEvent, render, renderHook, screen, within} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
 import {artifactSizes} from '../../export/artifactSizes'
@@ -78,6 +78,20 @@ async function setStore(artifact, appMetadata, isExportInFlight = false) {
  * The four states of design/new/glb-export-premium.md §4.4, which resolve in
  * order: no artifact beats every tier, then anonymous, then free, then Pro.
  */
+/**
+ * Pick a codec from the Compression dropdown the way a user does: open the
+ * menu (MUI's Select opens on mousedown, in a portal off `document.body`,
+ * which is why `screen` rather than the render's container) and click the
+ * item.
+ *
+ * @param {string} mode 'none' | 'meshopt' | 'draco'
+ */
+function chooseCompression(mode) {
+  fireEvent.mouseDown(within(screen.getByTestId('export-compression')).getByRole('combobox'))
+  fireEvent.click(screen.getByTestId(`export-compression-${mode}`))
+}
+
+
 describe('ExportSection', () => {
   /** Settles the pending compressed estimate, from inside the test's `act`. */
   let resolveMeshoptSizes
@@ -174,16 +188,14 @@ describe('ExportSection', () => {
     await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
     const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
-    expect(getByTestId('export-compression-none')).toHaveAttribute('aria-pressed', 'true')
-    expect(getByTestId('export-compression-meshopt')).toHaveAttribute('aria-pressed', 'false')
-    expect(getByTestId('export-compression-draco')).toHaveAttribute('aria-pressed', 'false')
+    expect(getByTestId('export-compression')).toHaveTextContent('None')
   })
 
   it('carries the compression choice into the export', async () => {
     await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
     const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
-    fireEvent.click(getByTestId('export-compression-draco'))
+    chooseCompression('draco')
     fireEvent.click(getByTestId('export-glb-button'))
 
     expect(mockRun).toHaveBeenLastCalledWith('glb', {stripBldrsMetadata: false, compression: 'draco'})
@@ -209,7 +221,7 @@ describe('ExportSection', () => {
 
     expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(WITH_METADATA_BYTES))
 
-    fireEvent.click(getByTestId('export-compression-meshopt'))
+    chooseCompression('meshopt')
 
     expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'meshopt')
     expect(queryByTestId('export-size')).toBeNull()
@@ -252,14 +264,14 @@ describe('ExportSection', () => {
 
     expect(queryByTestId('export-compression-fallback')).toBeNull()
 
-    fireEvent.click(getByTestId('export-compression-draco'))
+    chooseCompression('draco')
     await act(async () => {})
 
     expect(getByTestId('export-compression-fallback'))
       .toHaveTextContent('Draco isn\'t available in this browser — the file is uncompressed')
     expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(WITH_METADATA_BYTES))
 
-    fireEvent.click(getByTestId('export-compression-none'))
+    chooseCompression('none')
     await act(async () => {})
 
     expect(queryByTestId('export-compression-fallback')).toBeNull()
@@ -273,10 +285,10 @@ describe('ExportSection', () => {
       compression: mode,
     }))
     await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
-    const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+    const {queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
     await act(async () => {})
 
-    fireEvent.click(getByTestId('export-compression-draco'))
+    chooseCompression('draco')
     await act(async () => {})
 
     expect(queryByTestId('export-compression-fallback')).toBeNull()

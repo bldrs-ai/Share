@@ -210,11 +210,23 @@ export async function expectNoHorizontalScroll(page: Page) {
  * @return the byte count the settled line carries
  */
 export async function selectCompression(page: Page, mode: string): Promise<number> {
+  // A dropdown (owner feedback on #1842): open it, pick the item, and read
+  // the choice back off the closed control.
+  await page.getByTestId('export-compression').click()
   await page.getByTestId(`export-compression-${mode}`).click()
-  await expect(page.getByTestId(`export-compression-${mode}`)).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByTestId('export-compression')).toContainText(compressionLabel(mode))
   const sizeLine = page.getByTestId('export-size')
   await expect(sizeLine).toBeVisible({timeout: COMPRESS_TIMEOUT_MS})
   return Number(await sizeLine.getAttribute('data-bytes'))
+}
+
+
+/**
+ * @param mode 'none' | 'meshopt' | 'draco'
+ * @return what the dropdown calls it — `glbCompression.js`'s COMPRESSION_LABELS
+ */
+function compressionLabel(mode: string): string {
+  return mode.charAt(0).toUpperCase() + mode.slice(1)
 }
 
 

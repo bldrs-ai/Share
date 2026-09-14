@@ -79,6 +79,7 @@ describe('pro-module function', () => {
     process.env.AUTH0_DOMAIN = 'bldrs.us.auth0.com.test'
     process.env.AUTH0_CLIENT_ID = 'test-mgmt-client'
     process.env.AUTH0_CLIENT_SECRET = 'test-mgmt-secret'
+    delete process.env.LAMBDA_TASK_ROOT
     fs.readFile.mockResolvedValue(MODULE_SOURCE)
   })
 
@@ -98,6 +99,25 @@ describe('pro-module function', () => {
     // unentitled request could then be served from.
     expect(res.headers['Cache-Control']).toBe('private, no-store')
     expect(res.headers['X-Content-Type-Options']).toBe('nosniff')
+  })
+
+  it('reads the module from where the esbuild bundle puts included files on the lambda', async () => {
+    // `included_files` ship at `<task root>/_pro-modules/<name>.js` under
+    // `node_bundler = "esbuild"` (netlify.toml) — the functions directory is
+    // stripped — while nft keeps the repo-relative path. The first candidate
+    // the function tries must be the deployed one, or every request on the
+    // lambda is a 404 `module_not_built` (#1837 deploy preview).
+    mockAuth0({subscriptionStatus: 'sharePro'})
+    process.env.LAMBDA_TASK_ROOT = '/var/task'
+    fs.readFile.mockImplementation((candidate) => (candidate === '/var/task/_pro-modules/glbExport.js' ?
+      Promise.resolve(MODULE_SOURCE) :
+      Promise.reject(new Error('ENOENT'))))
+
+    const res = await handler(getEvent())
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toBe(MODULE_SOURCE)
+    expect(fs.readFile.mock.calls[0][0]).toBe('/var/task/_pro-modules/glbExport.js')
   })
 
   it('403s a signed-in user without a subscription', async () => {

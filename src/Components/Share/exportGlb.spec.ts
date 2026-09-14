@@ -195,7 +195,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // against.
     const sizeLine = page.getByTestId('export-size')
     await expect(sizeLine).toBeVisible()
-    await expect(page.getByTestId('export-compression-none')).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByTestId('export-compression')).toContainText('None')
     const uncompressedBytes = await sizeBytes(sizeLine)
     expect(uncompressedBytes).toBeGreaterThan(0)
     const metadataToggle = page.getByTestId('export-include-metadata').locator('input')

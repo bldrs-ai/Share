@@ -1,5 +1,5 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import {Box, Button, Chip, Stack, ToggleButton, ToggleButtonGroup, Typography} from '@mui/material'
+import {Box, Button, Chip, MenuItem, Select, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {artifactSizes} from '../../export/artifactSizes'
@@ -243,31 +243,24 @@ export default function ExportSection() {
           <Typography variant='body2'>Compression</Typography>
           <Typography variant='caption' color='text.secondary'>needs a matching decoder</Typography>
         </Box>
-        <ToggleButtonGroup
+        {/* A dropdown, not a toggle group: three side-by-side buttons were
+            the widest control in the dialog and read as a run-on word at
+            the theme's toggle styling (owner feedback on #1842). The
+            menu items carry the per-mode test ids. */}
+        <Select
           value={compression}
-          exclusive
           size='small'
-          onChange={(event, value) => {
-            // Null is the group reporting "the selected button was clicked
-            // again"; an exclusive group with no selection has no meaning
-            // here, so that click is a no-op rather than a fourth state.
-            if (value !== null) {
-              setCompression(value)
-            }
-          }}
+          onChange={(event) => setCompression(event.target.value)}
+          inputProps={{'aria-label': 'Compression'}}
+          sx={{minWidth: '8em', textAlign: 'left'}}
           data-testid='export-compression'
         >
           {COMPRESSION_MODES.map((mode) => (
-            <ToggleButton
-              key={mode}
-              value={mode}
-              sx={{textTransform: 'none'}}
-              data-testid={`export-compression-${mode}`}
-            >
+            <MenuItem key={mode} value={mode} data-testid={`export-compression-${mode}`}>
               {COMPRESSION_LABELS[mode]}
-            </ToggleButton>
+            </MenuItem>
           ))}
-        </ToggleButtonGroup>
+        </Select>
       </Stack>
       {/* The size the controls above just chose, above the action it applies
           to. Its `data-bytes` is the raw count the label rounds, so a test

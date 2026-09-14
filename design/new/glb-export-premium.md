@@ -200,7 +200,17 @@ builds: one `esbuild.build` per entry under `src/export/pro/*.entry.js`,
 (no source leak), `outfile: netlify/functions/_pro-modules/<name>.js`.
 `netlify.toml` declares `[functions."pro-module"] included_files =
 ["netlify/functions/_pro-modules/*.js"]` so the bundler ships the files with
-the function. The pro entry may import shared *source* (`glbContainer.js`,
+the function — at `<task root>/_pro-modules/<name>.js`, the functions
+directory stripped, under the esbuild bundler the function is configured
+with (`node_bundler = "esbuild"`; nft keeps the repo-relative path, and the
+function tries both). esbuild rather than Netlify's default nft because nft
+transpiles an ESM function to CommonJS and then ships only what it traced
+from the ESM import graph: `import axios` becomes `require('axios')`, which
+resolves to `dist/node/axios.cjs`, which is not in the zip, and the function
+crashes on cold start — the deploy preview's 502 (#1837 smoke), reproduced
+locally with `zip-it-and-ship-it netlify/functions <out>` and a `require()`
+of the zipped handler. The same applies to `record-export`; a tools test pins
+both. The pro entry may import shared *source* (`glbContainer.js`,
 `glbLog.js`); it must not import `three` or React — anything heavy is
 injected by the host at call time (§6.1), which is also what keeps the
 single-three-instance invariant.
@@ -359,10 +369,12 @@ all-caps button on the #1837 preview read as disabled when it wasn't
 The Export tab hosts `Open/ExportSection.jsx` — the metadata toggle, then the
 **Compression** choice, then the **download size** for the state those two are
 in, then **Export GLB last and centred**, with the Pro chip for a free user
-riding beside it. Compression is an exclusive `ToggleButtonGroup` (None /
-Meshopt / Draco) because the codecs are alternatives, not independent options;
-the row wraps, since at 390px its label and three buttons are wider than the
-dialog's content column.
+riding beside it. Compression is a dropdown (`Select`: None / Meshopt /
+Draco) because the codecs are alternatives, not independent options — it
+began as a `ToggleButtonGroup`, whose three side-by-side buttons were the
+widest control in the dialog and read as a run-on word under the theme's
+toggle styling (owner feedback on #1842). The menu items carry the per-mode
+test ids.
 
 Every label block in the section is **left-aligned** (#1842). The theme centres
 a Dialog's whole paper (`theme/Components.js`, `MuiDialog.paper.textAlign`),
