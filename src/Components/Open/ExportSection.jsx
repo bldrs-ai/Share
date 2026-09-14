@@ -86,7 +86,14 @@ export default function ExportSection() {
   // absent. A placeholder that flashes a number and then corrects itself is
   // worse than no number: this one is a promise about the file the next
   // click produces.
-  const [sizes, setSizes] = useState(null)
+  //
+  // Held together with the selection the figures were computed FOR, rather
+  // than as the figures alone, because the two get out of step by one render:
+  // the click that changes a control re-renders with the new selection before
+  // the effect below has even re-run, so for that render the OLD figures are
+  // on screen under the NEW controls. `displayedEstimateKey` publishes the
+  // distinction.
+  const [estimate, setEstimate] = useState(null)
   // Whether a read is still in flight, as opposed to having come back with
   // nothing. Uncompressed the two are indistinguishable to the user — a
   // header read is a few milliseconds — but a compression run is seconds on a
@@ -96,11 +103,11 @@ export default function ExportSection() {
 
   useEffect(() => {
     let isStale = false
-    setSizes(null)
+    setEstimate(null)
     setIsEstimating(true)
     artifactSizes(glbArtifact, compression, isPortable).then((read) => {
       if (!isStale) {
-        setSizes(read)
+        setEstimate({compression, isPortable, sizes: read})
         setIsEstimating(false)
       }
     })
@@ -108,6 +115,8 @@ export default function ExportSection() {
       isStale = true
     }
   }, [glbArtifact, compression, isPortable])
+
+  const sizes = estimate?.sizes ?? null
 
   const isPro = getTier(appMetadata, isAuthenticated) === TIERS.PAID
   // The loader publishes this once the artifact is actually in OPFS — on a
@@ -132,6 +141,20 @@ export default function ExportSection() {
   // `loader/glbArtifactSize.js` is the same computation the strip runs, so
   // it does, exactly (#1841).
   const downloadBytes = sizes && (isMetadataIncluded ? sizes.withMetadata : sizes.withoutMetadata)
+  // Which selection the figure beside it is FOR. Two selections can produce
+  // the SAME byte count — a codec whose encoder failed falls back to the file
+  // as it is (#1842), and Portable is a documented pass-through on a
+  // merged-layout artifact (`export/glbPortable.js`) — so the count alone
+  // cannot say whether the line has caught up with the controls, and a test
+  // that waits for it to change waits forever. This can. The codec/portable
+  // half comes from the ESTIMATE, so it lags the controls exactly as the
+  // figure does; the metadata half is live, because that toggle picks between
+  // two figures one estimate already produced (it is deliberately not in the
+  // effect's deps above). Read by `tests/e2e/exportEstimate.ts`, which is the
+  // other end of this contract.
+  const displayedEstimateKey = estimate &&
+        `${estimate.isPortable ? 'portable' : 'native'}|${estimate.compression}` +
+        `|${isMetadataIncluded ? 'meta' : 'nometa'}`
   const metadataCaption = sizes && sizes.metadataBytes > 0 ?
     `${formatBytes(sizes.metadataBytes)} of Bldrs metadata ${isMetadataIncluded ? 'included' : 'removed'}` :
     null
@@ -328,7 +351,12 @@ export default function ExportSection() {
            <Typography variant='body2' color='text.secondary' data-testid='export-size-pending'>
              Estimating…
            </Typography> :
-           <Typography variant='body2' data-testid='export-size' data-bytes={downloadBytes}>
+           <Typography
+             variant='body2'
+             data-testid='export-size'
+             data-bytes={downloadBytes}
+             data-estimate-key={displayedEstimateKey}
+           >
              {formatBytes(downloadBytes)}
            </Typography>}
        </Stack>}

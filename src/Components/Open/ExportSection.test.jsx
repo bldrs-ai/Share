@@ -306,6 +306,55 @@ describe('ExportSection', () => {
       .toHaveAttribute('data-bytes', String(MESHOPT_WITHOUT_METADATA_BYTES))
   })
 
+  it('says which selection the figure on the line is for', async () => {
+    // The size line lags the controls by one estimate: the click that changes
+    // the codec re-renders the OLD figure under the NEW dropdown value, so a
+    // test reading the line right after the click can compare a codec against
+    // itself — a red run, not a hypothesis (`tests/e2e/exportEstimate.ts`).
+    // `data-estimate-key` is what lets it tell the two apart, and the byte
+    // count cannot stand in for it: the Draco estimate settled here weighs
+    // exactly what None did, which is what an unavailable encoder produces
+    // (#1842) and what a Portable pass-through produces (#1843).
+    artifactSizes.mockImplementation((artifact, mode, isPortable) => (mode === 'none' && !isPortable ?
+      Promise.resolve({
+        withMetadata: WITH_METADATA_BYTES,
+        withoutMetadata: WITHOUT_METADATA_BYTES,
+        metadataBytes: METADATA_BYTES,
+      }) :
+      new Promise((resolve) => {
+        resolveMeshoptSizes = resolve
+      })))
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+    const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+    await act(async () => {})
+
+    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|none|meta')
+
+    chooseCompression('draco')
+    await act(async () => {
+      // The same figures the uncompressed read produced: the fallback hands
+      // back the input file.
+      resolveMeshoptSizes({
+        withMetadata: WITH_METADATA_BYTES,
+        withoutMetadata: WITHOUT_METADATA_BYTES,
+        metadataBytes: METADATA_BYTES,
+        compression: 'none',
+      })
+      await Promise.resolve()
+    })
+
+    expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(WITH_METADATA_BYTES))
+    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|draco|meta')
+
+    // The metadata half moves without a re-estimate — one run produced both
+    // figures — so it has to be part of the key or the key would name two
+    // different figures.
+    fireEvent.click(getByTestId('export-include-metadata').querySelector('input'))
+
+    expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(WITHOUT_METADATA_BYTES))
+    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|draco|nometa')
+  })
+
   it('names the fallback when the chosen codec is not available here', async () => {
     // The estimate is honest either way — it measured the uncompressed file
     // the download will also produce — but a pressed Draco button beside an

@@ -5,6 +5,7 @@ import {
   GLTF_MAGIC,
   PRO_MODULE_PATTERN,
   clickGate,
+  disableDracoEncoder,
   dismissLoadSnackbar,
   expectNoHorizontalScroll,
   expectSnackbarOnTop,
@@ -15,6 +16,7 @@ import {
   routeProModule,
   selectCompression,
   setSubscriptionTier,
+  toggleMetadata,
   togglePortable,
   watchProModuleRequests,
 } from '../../tests/e2e/export'
@@ -166,13 +168,9 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // Turning the metadata off has to move the number, which is the half of
     // this feature that was missing: through v0.1 the strip dropped the JSON
     // entries and left their payloads in the BIN chunk.
-    const metadataToggle = page.getByTestId('export-include-metadata').locator('input')
-    await metadataToggle.click()
-    await expect(sizeLine).not.toHaveAttribute('data-bytes', String(withMetadataBytes))
-    const strippedBytes = await sizeBytes(sizeLine)
+    const strippedBytes = await toggleMetadata(page)
     expect(strippedBytes).toBeLessThan(withMetadataBytes)
-    await metadataToggle.click()
-    await expect(sizeLine).toHaveAttribute('data-bytes', String(withMetadataBytes))
+    expect(await toggleMetadata(page)).toBe(withMetadataBytes)
     // The action is the LAST thing in the panel and centred, with the Pro
     // chip riding beside it for a free user (#1838). On the mobile
     // projection that row is the dialog's widest, so this is where a
@@ -212,8 +210,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // Now the other toggle state, end to end: the stripped file really is
     // the smaller size the panel quoted, which is only true once the strip
     // drops the metadata's bufferViews and their bytes (#1841).
-    await metadataToggle.click()
-    await expect(sizeLine).toHaveAttribute('data-bytes', String(strippedBytes))
+    expect(await toggleMetadata(page)).toBe(strippedBytes)
     const strippedDownloadPromise = page.waitForEvent('download')
     await exportButton.click()
     const strippedDownload = await strippedDownloadPromise
@@ -244,8 +241,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(page.getByTestId('export-compression')).toContainText('None')
     const uncompressedBytes = await sizeBytes(sizeLine)
     expect(uncompressedBytes).toBeGreaterThan(0)
-    const metadataToggle = page.getByTestId('export-include-metadata').locator('input')
-    const uncompressedMetadataBytes = await metadataDelta(page, uncompressedBytes)
+    const uncompressedMetadataBytes = await metadataDelta(uncompressedBytes)
 
     for (const codec of COMPRESSION_CODECS) {
       // The encoders are real wasm and only exist in a browser: the unit
@@ -260,7 +256,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       // One encode serves both states of the metadata toggle — the payloads
       // pass through untouched and are re-added by arithmetic (#1842) — so
       // what the toggle is worth cannot move with the codec.
-      expect(await metadataDelta(page, compressedBytes)).toBe(uncompressedMetadataBytes)
+      expect(await metadataDelta(compressedBytes)).toBe(uncompressedMetadataBytes)
       // Three toggle buttons plus their label are the widest control row in
       // the dialog, and on the mobile projection that is where a layout
       // regression shows up as a sideways scroll (#1838).
@@ -291,18 +287,65 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
      * What "Include Bldrs metadata" is worth right now: toggle it off, read
      * the line, toggle it back.
      *
-     * @param target Playwright page
      * @param withMetadataBytes the figure the line carries with it on
      * @return the difference the toggle makes
      */
-    async function metadataDelta(target: typeof page, withMetadataBytes: number): Promise<number> {
-      await metadataToggle.click()
-      await expect(sizeLine).not.toHaveAttribute('data-bytes', String(withMetadataBytes))
-      const stripped = await sizeBytes(sizeLine)
-      await metadataToggle.click()
-      await expect(sizeLine).toHaveAttribute('data-bytes', String(withMetadataBytes))
+    async function metadataDelta(withMetadataBytes: number): Promise<number> {
+      const stripped = await toggleMetadata(page)
+      expect(await toggleMetadata(page)).toBe(withMetadataBytes)
       return withMetadataBytes - stripped
     }
+  })
+
+  test('a codec with no encoder in the browser falls back, and says so', async ({page}) => {
+    // #1842's fallback, end to end: with no encoder in the browser the
+    // estimate and the download are the file exactly as it was, at exactly
+    // the size "None" quoted. Only a browser shows that — the encoder is a
+    // script tag and a wasm module, and the jest suite reaches the same
+    // branch with a stubbed global.
+    //
+    // That equality is also the case the harness itself used to hang on: a
+    // wait keyed on "the figure changed" waits for a change that never comes
+    // (`tests/e2e/exportEstimate.ts`), which is why the wait is keyed on the
+    // SELECTION the figure describes instead.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await routeProModule(page)
+    // Before the load, not before the click: the stand-in has to be in the
+    // page by the time the page's own scripts are.
+    await disableDracoEncoder(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+
+    const sizeLine = page.getByTestId('export-size')
+    await expect(sizeLine).toBeVisible()
+    const uncompressedBytes = await sizeBytes(sizeLine)
+    expect(uncompressedBytes).toBeGreaterThan(0)
+
+    const fallbackBytes = await selectCompression(page, 'draco')
+    expect(fallbackBytes, 'the fallback file is the input file').toBe(uncompressedBytes)
+    // "Draco" chosen beside an uncompressed figure reads as a Draco figure,
+    // so the panel names what the file actually is.
+    await expect(page.getByTestId('export-compression-fallback'))
+      .toContainText('Draco isn\'t available in this browser')
+
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    const file = await readFile(await (await downloadPromise).path())
+
+    expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+    // The panel's promise holds on the fallback path too…
+    expect(file.byteLength).toBe(fallbackBytes)
+    // …and the file really is the uncompressed one: nothing declares a Draco
+    // decoder that the file's geometry would then need and not have.
+    expect(glbJsonChunk(file).extensionsRequired ?? []).not.toContain('KHR_draco_mesh_compression')
   })
 
   test('a compressed export opens back in Share', async ({page}) => {
@@ -473,7 +516,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(sizeLine).toBeVisible()
     const nativeBytes = await sizeBytes(sizeLine)
 
-    const portableBytes = await togglePortable(page, nativeBytes)
+    const portableBytes = await togglePortable(page)
     await expect(portableToggle).toBeChecked()
     expect(portableBytes).toBeGreaterThan(0)
     // One node per placement plus its name and TRS is JSON the batched shape
