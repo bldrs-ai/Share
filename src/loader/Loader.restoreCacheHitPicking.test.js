@@ -19,7 +19,7 @@
 // this pin can't pass vacuously).
 import {BatchedMesh, BufferAttribute, BufferGeometry, Mesh, MeshLambertMaterial} from 'three'
 import {computeBatchedBoundsTree, computeBoundsTree} from 'three-mesh-bvh'
-import {restoreCacheHitPicking} from './Loader'
+import {isBldrsGlbArtifact, restoreCacheHitPicking} from './Loader'
 
 
 const TRI_COUNT = 64
@@ -209,5 +209,59 @@ describe('Loader/restoreCacheHitPicking — no redundant merged BVH on batched h
     restoreCacheHitPicking(mesh, true)
 
     expect(geometry.boundsTree).toBeDefined()
+  })
+})
+
+
+// The predicate that replaced `cameFromGlbCache` at both of `load()`'s
+// artifact-keyed gates (#1844). What it has to get right is the three shapes
+// our own writer emits versus everything else — a wrong `true` on a
+// third-party GLB would run a hydration and a BVH build over geometry that
+// has no identity to restore, and a wrong `false` is the bug this replaced.
+describe('Loader/isBldrsGlbArtifact', () => {
+  /**
+   * @param {object} [attrs] extra per-vertex attributes to attach
+   * @return {Mesh} a one-mesh model
+   */
+  function meshModel(attrs = {}) {
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+    for (const [name, attr] of Object.entries(attrs)) {
+      geometry.setAttribute(name, attr)
+    }
+    return new Mesh(geometry)
+  }
+
+  it('recognises the batched-native instance tables', () => {
+    const model = meshModel()
+    model.userData.bldrsInstanceTables = [{count: 1}]
+    expect(isBldrsGlbArtifact(model)).toBe(true)
+  })
+
+  it('recognises the merged layout\'s per-triangle face_ids payload', () => {
+    const model = meshModel()
+    model.userData.bldrsFaceIds = {perPrimitive: []}
+    expect(isBldrsGlbArtifact(model)).toBe(true)
+  })
+
+  it('recognises per-vertex element ids', () => {
+    expect(isBldrsGlbArtifact(meshModel({
+      expressID: new BufferAttribute(new Uint32Array([7, 7, 7]), 1),
+    }))).toBe(true)
+  })
+
+  it('does not mistake the synthetic single-element placeholder for identity', () => {
+    // `convertToShareModel` stamps an `Int8Array(1)` expressID on every mesh
+    // that has none, and it runs BEFORE the picking restore — so a `>= 1`
+    // test here would call every GLB in the world a Bldrs artifact.
+    expect(isBldrsGlbArtifact(meshModel({
+      expressID: new BufferAttribute(new Int8Array([3]), 1),
+    }))).toBe(false)
+  })
+
+  it('rejects a plain GLB and anything that is not a model', () => {
+    expect(isBldrsGlbArtifact(meshModel())).toBe(false)
+    expect(isBldrsGlbArtifact(null)).toBe(false)
+    expect(isBldrsGlbArtifact({userData: {bldrsInstanceTables: []}})).toBe(false)
   })
 })

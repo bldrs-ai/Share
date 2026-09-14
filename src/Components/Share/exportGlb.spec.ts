@@ -1,5 +1,5 @@
 import {readFile} from 'node:fs/promises'
-import {Locator, expect, test} from '@playwright/test'
+import {Locator, Page, expect, test} from '@playwright/test'
 import {
   EXPORT_TEST_TIMEOUT_MS,
   GLTF_MAGIC,
@@ -76,6 +76,49 @@ const COMPRESSION_CODECS = [
   {mode: 'meshopt', extension: 'EXT_meshopt_compression', isSmallerOnThisFixture: false},
   {mode: 'draco', extension: 'KHR_draco_mesh_compression', isSmallerOnThisFixture: true},
 ]
+
+
+// `index.ifc`'s spatial chain, one child per level, and the leaf label its
+// building elements share — the same shape `Containers/indexStepLogo.spec.ts`
+// walks for the STEP twin of this model.
+const SPATIAL_CHAIN = ['Bldrs', 'Build', 'Every', 'Thing']
+const LEAF_LABEL = 'Together'
+
+
+/**
+ * How many scene-side highlights the current selection produced.
+ *
+ * The highlight has no DOM of its own, so this reads the exposed store
+ * (`window.store` under the playwright build, `window.useStore` otherwise) for
+ * whichever render path is live: the batched model paints in place and records
+ * the painted instances in `userData.batchedHighlight.selSet`, while the
+ * merged path builds selection subsets on the viewer.
+ *
+ * @param page Playwright page
+ * @return the number of highlighted instances plus selection subsets
+ */
+async function sceneHighlightCount(page: Page): Promise<number> {
+  return await page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = window as any
+    const state = (w.store ?? w.useStore)?.getState?.()
+    const viewer = state?.viewer
+    const model = viewer?.IFC?.context?.items?.ifcModels?.[0]
+    let batched = 0
+    const walk = (obj: any) => {
+      if (obj.isBatchedMesh) {
+        batched += obj.userData?.batchedHighlight?.selSet?.size ?? 0
+      }
+    }
+    if (model?.isBatchedMesh) {
+      walk(model)
+    } else {
+      model?.traverse?.(walk)
+    }
+    return batched + (viewer?._conwaySelectionSubsets?.length ?? 0)
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
 
 
 describeMobileAndDesktop('Share 140: Export GLB', () => {
@@ -314,6 +357,87 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       await waitForModelReady(page)
       await dismissLoadSnackbar(page)
     }
+  })
+
+  test('an exported .glb reopens as a pickable model, not just geometry', async ({page}) => {
+    // #1844: the export IS the batched-native cache artifact, and reopening it
+    // rendered the model and even drew the NavTree — the `BLDRS_*` reader
+    // plugins park their payloads on `userData` whatever the source — while
+    // hover, click and NavTree→scene selection all did nothing. The hydration
+    // that rebuilds the decorated BatchedMesh, and the picking restore after
+    // it, were gated on `cameFromGlbCache`: on where the BYTES came from, not
+    // on what the FILE is. So the one thing this test has to do that
+    // "a compressed export opens back in Share" does not is go on to USE the
+    // reopened model.
+    //
+    // Uncompressed on purpose. The codecs are the sibling test's subject, and
+    // per-vertex ids do not survive them — a compressed artifact's picking
+    // rides on `BLDRS_face_ids` instead, which is a different claim.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+    await expect(page.getByTestId('export-compression')).toContainText('None')
+
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    // Saved under its own name: Playwright's download temp file has no
+    // extension, and the local-file loader needs one to know what it is.
+    const savedPath = test.info().outputPath('index-reopened.glb')
+    await (await downloadPromise).saveAs(savedPath)
+    await page.keyboard.press('Escape')
+
+    await page.getByTestId('control-button-open').click()
+    // The dialog opens on whichever tab it last showed (Google, for a
+    // signed-in user); Browse lives on Local.
+    await page.getByRole('tab', {name: 'Local'}).click()
+    const chooser = page.waitForEvent('filechooser')
+    await page.getByTestId('button_open_file').click()
+    await (await chooser).setFiles(savedPath)
+
+    await expect(page).toHaveURL(/\/share\/v\/new\/.+\.glb/, {timeout: EXPORT_TEST_TIMEOUT_MS})
+    await expect(page.getByTestId('LoadStatusOk')).toBeVisible({timeout: EXPORT_TEST_TIMEOUT_MS})
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+
+    await page.getByTestId('control-button-navigation').click()
+    await expect(page.getByTestId('NavTreePanel')).toBeVisible()
+    const node = (label: string) => page.locator(`[data-node-label="${label}"]`)
+
+    // The spatial chain `BLDRS_spatial_tree` carries over from the IFC:
+    // project → site → building → storey, one child each, then the leaves.
+    // Their presence is the half that already worked before the fix, and it
+    // is what makes the selection assertions below about PICKING rather than
+    // about the tree having rendered at all.
+    for (const name of SPATIAL_CHAIN) {
+      await expect(node(name)).toHaveCount(1)
+      await node(name).getByTestId('NavTreeNodeToggle').click()
+    }
+    await expect(node(LEAF_LABEL).first()).toBeVisible()
+
+    await node(LEAF_LABEL).first().getByTestId('NavTreeNodeLabel').click()
+
+    // The row highlights, and only that row.
+    await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
+    await expect(page.locator('[data-is-selected="true"]')).toHaveCount(1)
+    // The URL addresses the element, so the selection is shareable.
+    await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.glb(\/\d+)+/)
+    // And the SCENE carries the highlight. This is the assertion the bug
+    // failed: the tree row lit up, the URL grew its element path, and the
+    // model showed nothing, because the hydration that owns the instance
+    // tables never ran. The highlight has no DOM, so it is read off the
+    // exposed store the way `Containers/sceneHighlightPermalink.spec.ts`
+    // reads it — batched selection sets for the hydrated artifact, merged
+    // selection subsets for anything that fell back.
+    expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
   })
 
   test('a signed-out user is told what unlocks Save, and gets no dialog', async ({page}) => {

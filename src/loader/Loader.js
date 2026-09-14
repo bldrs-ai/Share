@@ -705,6 +705,13 @@ export async function load(
   // diverge again (an IFC whose windowed open throws and falls back).
   const engineModelID = typeof model.modelID === 'number' ? model.modelID : 0
 
+  // Did GLTFLoader parse this model? Both a cache-hit artifact (swapped in
+  // above) and a `.glb`/`.gltf` the user opened land here, and neither has
+  // been through the live parse's own decoration — which is what the two
+  // artifact-keyed gates below need to know, and what `cameFromGlbCache`
+  // cannot tell them (#1844).
+  const isGlbParse = loader.type === 'glb' || loader.type === 'gltf'
+
   // Batched-native artifact hydration (view-140 S9, `glbBatched`, default-on):
   // GLTFLoader parsed the EXT_mesh_gpu_instancing nodes to InstancedMeshes
   // and the tables plugin stashed BLDRS_instance_tables on userData —
@@ -714,7 +721,15 @@ export async function load(
   // renders correctly (three draws the instancing natively) — degraded to
   // table-less, never wrong. Runs before convertToShareModel so the
   // hydrated model is what every downstream decoration sees.
-  if (cameFromGlbCache && isGlbBatchedActive() && model?.userData?.bldrsInstanceTables) {
+  //
+  // Keyed on the ARTIFACT, not on where its bytes came from: the Export tab
+  // hands the user this very file, and reopening it took the plain-GLB path
+  // — the BLDRS_* reader plugins still parked their payloads on userData (so
+  // the NavTree appeared) while the hydration never ran, leaving a model with
+  // no instance tables to pick against (#1844). `bldrsInstanceTables` can
+  // only be set by `BldrsInstanceTablesReader`, so this cannot fire on a
+  // live IFC parse.
+  if (isGlbBatchedActive() && model?.userData?.bldrsInstanceTables) {
     const hydrateScene =
       typeof viewer?.context?.getScene === 'function' ? viewer.context.getScene() : null
     const hydrated = hydrateBatchedModelFromInstancedGlb(model, {scene: hydrateScene})
@@ -811,7 +826,15 @@ export async function load(
   // BLDRS_face_ids / per-vertex ids, then the (order-preserving) BVH
   // build. Extracted for direct unit testing of the triangle-order
   // alignment invariant; see restoreCacheHitPicking below.
-  restoreCacheHitPicking(model, cameFromGlbCache)
+  //
+  // The BVH half is artifact-keyed for the same reason as the hydration
+  // above (#1844) — a downloaded artifact reopened through the Open dialog
+  // is the same file the cache would have served, and without a BVH its
+  // hover raycast is `Mesh.prototype.raycast`'s O(triangles) brute force.
+  // `isGlbParse` is what keeps a live IFC parse out: its meshes carry
+  // per-vertex expressID too, and `decorateConwayDirectIfcModel` has
+  // already built their BVHs.
+  restoreCacheHitPicking(model, isGlbParse && isBldrsGlbArtifact(model))
 
   // Fire-and-forget: serialize the rendered model to GLB and stash in
   // OPFS so the next load of the same source can skip the IFC parse.
@@ -898,7 +921,53 @@ export async function load(
 
 
 /**
- * Restore picking state for a cache-hit GLB model: rebuild per-mesh
+ * True when a GLTFLoader-parsed model carries the element identity this
+ * build's own GLB writer bakes in — i.e. it IS a Bldrs artifact rather than
+ * a third-party GLB. Any one of three signatures is enough:
+ *
+ *   1. `BLDRS_instance_tables` — the batched-native artifact (view-140 S9).
+ *   2. `BLDRS_face_ids` — the merged artifact's per-triangle id payload.
+ *   3. per-vertex `expressID` — the merged artifact's legacy fallback,
+ *      renamed back from glTF's `_EXPRESSID` by `convertToShareModel`.
+ *
+ * The distinction it draws is ARTIFACT versus SOURCE, which is the whole of
+ * #1844: the same bytes reach `load()` two ways — as an OPFS cache hit, and
+ * as a file the user downloaded from the Export tab and reopened — so gating
+ * the hydration on `cameFromGlbCache` gave the second path a model that
+ * renders but cannot be picked. Fail-soft is by construction: a GLB matching
+ * none of the three signatures reads as "not an artifact" and stays plain,
+ * and a payload whose schema version the reader plugin REJECTED
+ * (`bldrsInstanceTables.js`, `bldrsFaceIds.js`) is simply absent from
+ * userData — so an artifact from an older Share build degrades to plain
+ * rather than throwing.
+ *
+ * `count > 1` on the attribute, not `>= 1`, for the same reason
+ * `inferModelCapabilities` uses it: `convertToShareModel` stamps a synthetic
+ * single-element `Int8Array(1)` expressID on models that have none, and that
+ * placeholder must not read as real per-vertex ids.
+ *
+ * @param {object} model the converted Share model (Mesh, Group or BatchedMesh)
+ * @return {boolean}
+ */
+export function isBldrsGlbArtifact(model) {
+  if (!model || typeof model.traverse !== 'function') {
+    return false
+  }
+  if (model.userData?.bldrsInstanceTables || model.userData?.bldrsFaceIds) {
+    return true
+  }
+  let hasPerVertexElementIds = false
+  model.traverse((obj) => {
+    if (obj.isMesh && obj.geometry?.attributes?.expressID?.count > 1) {
+      hasPerVertexElementIds = true
+    }
+  })
+  return hasPerVertexElementIds
+}
+
+
+/**
+ * Restore picking state for a Bldrs GLB artifact: rebuild per-mesh
  * `IfcInstanceMap`s from `BLDRS_face_ids` (or per-vertex ids), reattach
  * the persisted STEP occurrence/geometry tables, then build the BVHs.
  * Extracted from `load()` so the triangle-order alignment between the
@@ -906,11 +975,15 @@ export async function load(
  * the BVH build MUST NOT permute `geometry.index` (see the indirect note
  * inside), or every triangle-keyed lookup after it silently scrambles.
  *
+ * Named for the cache hit it was written for; since #1844 it serves any
+ * artifact that reaches a GLTFLoader parse, the user-opened export included.
+ *
  * @param {object} model the converted Share model (Mesh or Group)
- * @param {boolean} cameFromGlbCache true when the model was hydrated from
- *   the OPFS GLB cache (gates the BVH build; live parses build their own)
+ * @param {boolean} isGlbArtifact true when the model came off a GLTFLoader
+ *   parse of a Bldrs artifact (gates the BVH build; live parses build their
+ *   own in `decorateConwayDirectIfcModel`) — see `isBldrsGlbArtifact`
  */
-export function restoreCacheHitPicking(model, cameFromGlbCache) {
+export function restoreCacheHitPicking(model, isGlbArtifact) {
   // Restore per-mesh `IfcInstanceMap` on cache-hit Conway-direct
   // models. The GLB write captured per-vertex `instanceID` alongside
   // `expressID`; `inferModelCapabilities` flipped `instancePicking`
@@ -1111,10 +1184,11 @@ export function restoreCacheHitPicking(model, cameFromGlbCache) {
   // `acceleratedRaycast`). Cache-hit GLB meshes inherit the patched
   // prototype but need their own `boundsTree` built per geometry.
   //
-  // Gated on `cameFromGlbCache` so live IFC parses (which build
-  // their own BVH in `decorateConwayDirectIfcModel`) don't double-
-  // build.
-  if (cameFromGlbCache) {
+  // Gated on `isGlbArtifact` so live IFC parses (which build their own
+  // BVH in `decorateConwayDirectIfcModel`) don't double-build. That used
+  // to read `cameFromGlbCache`, which also excluded the identical artifact
+  // arriving as a user-opened download (#1844).
+  if (isGlbArtifact) {
     const bvhStartMs = Date.now()
     let bvhBuilt = 0
     let bvhTris = 0
