@@ -118,6 +118,34 @@ describe('proModuleLoader', () => {
 
     expect(error).toBeInstanceOf(Error)
     expect(error).not.toBeInstanceOf(ProModuleDeniedError)
+    // A non-JSON body — Netlify's own failure page, say — is carried as its
+    // first line, so "crashed" and "timed out" reach Sentry too.
+    expect(error.message).toBe('Pro module "glbExport" failed to load (500: boom)')
+  })
+
+  it('folds the function\'s own diagnosis into the error', async () => {
+    // What #1837's smoke handed Sentry was the status alone, and a 502 is
+    // the same number whether the function named a Management API step or
+    // never ran. The function's body says which (pro-module.js), and this is
+    // where it becomes the message the capture carries.
+    const HTTP_BAD_GATEWAY = 502
+    fetchMock.mockResolvedValue(response(HTTP_BAD_GATEWAY, JSON.stringify({
+      error: 'app_metadata_lookup_failed', step: 'mgmt_config', upstreamStatus: null, missing: ['AUTH0_CLIENT_SECRET'],
+    })))
+
+    const error = await loadProModule('glbExport', getAccessToken).catch((e) => e)
+
+    expect(error.message).toBe(
+      'Pro module "glbExport" failed to load (502: app_metadata_lookup_failed at mgmt_config, unset AUTH0_CLIENT_SECRET)')
+  })
+
+  it('carries the server\'s reason on a denial as well', async () => {
+    fetchMock.mockResolvedValue(response(HTTP_FORBIDDEN, JSON.stringify({error: 'subscription_required'})))
+
+    const error = await loadProModule('glbExport', getAccessToken).catch((e) => e)
+
+    expect(error).toBeInstanceOf(ProModuleDeniedError)
+    expect(error.message).toBe('Pro module "glbExport" denied (403: subscription_required)')
   })
 
   it('omits the Authorization header when there is no token getter', async () => {

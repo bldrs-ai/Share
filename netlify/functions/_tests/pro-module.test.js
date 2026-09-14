@@ -14,6 +14,7 @@
 
 import axios from 'axios'
 import fs from 'fs/promises'
+import {resetManagementApiTokenCache} from '../_lib/auth0.js'
 import {handler} from '../pro-module.js'
 
 
@@ -66,16 +67,23 @@ function mockAuth0(appMetadata) {
 
 
 describe('pro-module function', () => {
-  const ORIGINAL_AUTH0_DOMAIN = process.env.AUTH0_DOMAIN
+  const ORIGINAL_ENV = {
+    AUTH0_DOMAIN: process.env.AUTH0_DOMAIN,
+    AUTH0_CLIENT_ID: process.env.AUTH0_CLIENT_ID,
+    AUTH0_CLIENT_SECRET: process.env.AUTH0_CLIENT_SECRET,
+  }
 
   beforeEach(() => {
     jest.clearAllMocks()
+    resetManagementApiTokenCache()
     process.env.AUTH0_DOMAIN = 'bldrs.us.auth0.com.test'
+    process.env.AUTH0_CLIENT_ID = 'test-mgmt-client'
+    process.env.AUTH0_CLIENT_SECRET = 'test-mgmt-secret'
     fs.readFile.mockResolvedValue(MODULE_SOURCE)
   })
 
   afterAll(() => {
-    process.env.AUTH0_DOMAIN = ORIGINAL_AUTH0_DOMAIN
+    Object.assign(process.env, ORIGINAL_ENV)
   })
 
   it('serves the module to a Pro subscriber, uncacheable and typed as JS', async () => {
@@ -159,18 +167,47 @@ describe('pro-module function', () => {
     expect(JSON.parse(res.body).error).toBe('module_not_built')
   })
 
-  it('502s when the Management API lookup fails, rather than serving', async () => {
+  it('502s when the Management API lookup fails, rather than serving — and says which step', async () => {
     // Fail open would mean handing the module to anyone the moment Auth0
-    // hiccups; this is the direction the failure must take.
+    // hiccups; this is the direction the failure must take. The body names
+    // the step and the upstream status: from the browser, a bare 502 is the
+    // same whether the function answered it or never ran (#1837 smoke).
     axios.get.mockImplementation((url) => (url.includes('/userinfo') ?
       Promise.resolve({data: {sub: SUB}}) :
-      Promise.reject(new Error('mgmt down'))))
+      Promise.reject(Object.assign(new Error('mgmt down'), {response: {status: 503}}))))
     axios.post.mockResolvedValue({data: {access_token: 'mgmt-token', expires_in: 86400}})
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
 
     const res = await handler(getEvent())
 
     expect(res.statusCode).toBe(502)
+    expect(JSON.parse(res.body)).toEqual(
+      {error: 'app_metadata_lookup_failed', step: 'user_lookup', upstreamStatus: 503, missing: []})
     expect(fs.readFile).not.toHaveBeenCalled()
+    // The function log is the one channel every deploy context has; the
+    // same step must land there.
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('failed at user_lookup (upstream 503)'))
+    consoleError.mockRestore()
+  })
+
+  it('502s naming the unset credential when the deploy context has none', async () => {
+    // The likeliest shape of a preview-only failure: AUTH0_DOMAIN set (so the
+    // bearer is checked) but the Management API client credentials scoped to
+    // production. Named, not guessed at, and no grant is even attempted.
+    delete process.env.AUTH0_CLIENT_SECRET
+    axios.get.mockResolvedValue({data: {sub: SUB}})
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    const res = await handler(getEvent())
+
+    expect(res.statusCode).toBe(502)
+    expect(JSON.parse(res.body)).toEqual(
+      {error: 'app_metadata_lookup_failed', step: 'mgmt_config', upstreamStatus: null, missing: ['AUTH0_CLIENT_SECRET']})
+    expect(axios.post).not.toHaveBeenCalled()
+    expect(fs.readFile).not.toHaveBeenCalled()
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('AUTH0_CLIENT_SECRET unset'))
+    expect(consoleError.mock.calls.flat().join('\n')).not.toContain('test-mgmt-secret')
+    consoleError.mockRestore()
   })
 
   it('serves without a subscription check in unconfigured dev (AUTH0_DOMAIN unset)', async () => {

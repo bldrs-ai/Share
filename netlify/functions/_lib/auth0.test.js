@@ -5,7 +5,14 @@
 
 import axios from 'axios'
 import * as Sentry from '@sentry/serverless'
-import {getUserAppMetadata, patchUserAppMetadata, verifyAuth0Bearer} from './auth0.js'
+import {
+  ManagementApiError,
+  getUserAppMetadata,
+  managementApiFailureDetail,
+  patchUserAppMetadata,
+  resetManagementApiTokenCache,
+  verifyAuth0Bearer,
+} from './auth0.js'
 
 
 /* eslint-disable no-magic-numbers */
@@ -149,16 +156,80 @@ describe('verifyAuth0Bearer', () => {
 
 
 describe('getUserAppMetadata', () => {
-  const ORIGINAL_AUTH0_DOMAIN = process.env.AUTH0_DOMAIN
+  const ORIGINAL_ENV = {
+    AUTH0_DOMAIN: process.env.AUTH0_DOMAIN,
+    AUTH0_CLIENT_ID: process.env.AUTH0_CLIENT_ID,
+    AUTH0_CLIENT_SECRET: process.env.AUTH0_CLIENT_SECRET,
+  }
 
   beforeEach(() => {
     jest.clearAllMocks()
+    resetManagementApiTokenCache()
     process.env.AUTH0_DOMAIN = 'bldrs.us.auth0.com.test'
+    process.env.AUTH0_CLIENT_ID = 'test-mgmt-client'
+    process.env.AUTH0_CLIENT_SECRET = 'test-mgmt-secret'
     axios.post.mockResolvedValue({data: {access_token: 'mgmt-token', expires_in: 86400}})
   })
 
   afterAll(() => {
-    process.env.AUTH0_DOMAIN = ORIGINAL_AUTH0_DOMAIN
+    Object.assign(process.env, ORIGINAL_ENV)
+  })
+
+  it('names the unset credential before any request is made', async () => {
+    // A Netlify deploy context without the client credentials is the first
+    // thing a 502 on a preview has to rule in or out (#1837 smoke). It is
+    // reported by NAME — the value never leaves the function — and without
+    // a round trip that could only fail less specifically.
+    delete process.env.AUTH0_CLIENT_SECRET
+
+    const error = await getUserAppMetadata('google-oauth2|1').catch((e) => e)
+
+    expect(error).toBeInstanceOf(ManagementApiError)
+    expect(error.step).toBe('mgmt_config')
+    expect(error.missing).toEqual(['AUTH0_CLIENT_SECRET'])
+    expect(error.message).toContain('AUTH0_CLIENT_SECRET')
+    expect(error.message).not.toContain('test-mgmt-secret')
+    expect(axios.post).not.toHaveBeenCalled()
+    expect(axios.get).not.toHaveBeenCalled()
+  })
+
+  it('reports the token step and what Auth0 answered when the grant is refused', async () => {
+    axios.post.mockRejectedValue(Object.assign(new Error('Request failed with status code 401'), {response: {status: 401}}))
+
+    const error = await getUserAppMetadata('google-oauth2|1').catch((e) => e)
+
+    expect(error).toBeInstanceOf(ManagementApiError)
+    expect(error.step).toBe('mgmt_token')
+    expect(error.upstreamStatus).toBe(401)
+    expect(axios.get).not.toHaveBeenCalled()
+  })
+
+  it('reports the lookup step when the user read fails after a good token', async () => {
+    axios.get.mockRejectedValue(Object.assign(new Error('Request failed with status code 429'), {response: {status: 429}}))
+
+    const error = await getUserAppMetadata('google-oauth2|1').catch((e) => e)
+
+    expect(error.step).toBe('user_lookup')
+    expect(error.upstreamStatus).toBe(429)
+  })
+
+  it('reports the patch step when the write fails', async () => {
+    axios.patch.mockRejectedValue(new Error('socket hang up'))
+
+    const error = await patchUserAppMetadata('google-oauth2|3', {exports: []}).catch((e) => e)
+
+    expect(error.step).toBe('user_patch')
+    // No HTTP response at all — a network failure — is reported as such
+    // rather than as some status.
+    expect(error.upstreamStatus).toBeNull()
+  })
+
+  it('projects only the diagnostic fields, from any error', () => {
+    expect(managementApiFailureDetail(new ManagementApiError('mgmt_config', {missing: ['AUTH0_CLIENT_ID']})))
+      .toEqual({step: 'mgmt_config', upstreamStatus: null, missing: ['AUTH0_CLIENT_ID']})
+    // An error that isn't ours still yields a well-formed body.
+    expect(managementApiFailureDetail(new Error('boom')))
+      .toEqual({step: 'unknown', upstreamStatus: null, missing: []})
   })
 
   it('reads app_metadata through the Management API, not from any client claim', async () => {

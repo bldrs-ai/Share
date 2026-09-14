@@ -15,6 +15,7 @@
  */
 
 import axios from 'axios'
+import {resetManagementApiTokenCache} from '../_lib/auth0.js'
 import {handler} from '../record-export.js'
 
 
@@ -78,15 +79,22 @@ function patchedAppMetadata() {
 
 
 describe('record-export function', () => {
-  const ORIGINAL_AUTH0_DOMAIN = process.env.AUTH0_DOMAIN
+  const ORIGINAL_ENV = {
+    AUTH0_DOMAIN: process.env.AUTH0_DOMAIN,
+    AUTH0_CLIENT_ID: process.env.AUTH0_CLIENT_ID,
+    AUTH0_CLIENT_SECRET: process.env.AUTH0_CLIENT_SECRET,
+  }
 
   beforeEach(() => {
     jest.clearAllMocks()
+    resetManagementApiTokenCache()
     process.env.AUTH0_DOMAIN = 'bldrs.us.auth0.com.test'
+    process.env.AUTH0_CLIENT_ID = 'test-mgmt-client'
+    process.env.AUTH0_CLIENT_SECRET = 'test-mgmt-secret'
   })
 
   afterAll(() => {
-    process.env.AUTH0_DOMAIN = ORIGINAL_AUTH0_DOMAIN
+    Object.assign(process.env, ORIGINAL_ENV)
   })
 
   it('records an export for a Pro subscriber and returns the new history', async () => {
@@ -260,22 +268,28 @@ describe('record-export function', () => {
       return Promise.reject(new Error('mgmt down'))
     })
     axios.post.mockResolvedValue({data: {access_token: 'mgmt-token', expires_in: 86400}})
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
 
     const res = await handler(getEvent())
 
     expect(res.statusCode).toBe(502)
-    expect(JSON.parse(res.body).error).toBe('app_metadata_lookup_failed')
+    expect(JSON.parse(res.body)).toMatchObject({error: 'app_metadata_lookup_failed', step: 'user_lookup'})
     expect(axios.patch).not.toHaveBeenCalled()
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('lookup failed at user_lookup'))
+    consoleError.mockRestore()
   })
 
-  it('502s when the PATCH fails', async () => {
+  it('502s when the PATCH fails, naming the step', async () => {
     mockAuth0({subscriptionStatus: 'sharePro'})
-    axios.patch.mockRejectedValue(new Error('mgmt write failed'))
+    axios.patch.mockRejectedValue(Object.assign(new Error('mgmt write failed'), {response: {status: 500}}))
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
 
     const res = await handler(getEvent())
 
     expect(res.statusCode).toBe(502)
-    expect(JSON.parse(res.body).error).toBe('record_export_failed')
+    expect(JSON.parse(res.body)).toMatchObject({error: 'record_export_failed', step: 'user_patch', upstreamStatus: 500})
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('history write failed at user_patch (upstream 500)'))
+    consoleError.mockRestore()
   })
 
   it('returns an empty history without persisting in unconfigured dev (AUTH0_DOMAIN unset)', async () => {

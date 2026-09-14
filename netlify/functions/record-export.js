@@ -45,7 +45,12 @@
 
 import {randomUUID} from 'crypto'
 import * as Sentry from '@sentry/serverless'
-import {getUserAppMetadata, patchUserAppMetadata, verifyAuth0Bearer} from './_lib/auth0.js'
+import {
+  getUserAppMetadata,
+  managementApiFailureDetail,
+  patchUserAppMetadata,
+  verifyAuth0Bearer,
+} from './_lib/auth0.js'
 
 
 Sentry.AWSLambda.init({
@@ -83,13 +88,16 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0
 /**
  * @param {number} statusCode
  * @param {string} error
+ * @param {object} [detail] Extra fields beside `error` — a 502 names the
+ *   Management API step that failed (`managementApiFailureDetail`), as
+ *   `pro-module.js` does
  * @return {object} Netlify Functions response
  */
-function errorResponse(statusCode, error) {
+function errorResponse(statusCode, error, detail = {}) {
   return {
     statusCode,
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({error}),
+    body: JSON.stringify({error, ...detail}),
   }
 }
 
@@ -173,8 +181,13 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   try {
     appMetadata = await getUserAppMetadata(auth.sub)
   } catch (err) {
-    Sentry.captureException(err)
-    return errorResponse(HTTP_BAD_GATEWAY, 'app_metadata_lookup_failed')
+    const detail = managementApiFailureDetail(err)
+    Sentry.captureException(err, {tags: {step: detail.step}})
+    // The function log is the channel every deploy context has; see the
+    // same line in pro-module.js.
+    console.error(`record-export: app_metadata lookup failed at ${detail.step}` +
+      ` (upstream ${detail.upstreamStatus ?? 'n/a'}): ${err.message}`)
+    return errorResponse(HTTP_BAD_GATEWAY, 'app_metadata_lookup_failed', detail)
   }
 
   if (appMetadata.subscriptionStatus !== PRO_SUBSCRIPTION_STATUS) {
@@ -208,8 +221,11 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   try {
     await patchUserAppMetadata(auth.sub, {exports: updatedExports})
   } catch (err) {
-    Sentry.captureException(err)
-    return errorResponse(HTTP_BAD_GATEWAY, 'record_export_failed')
+    const detail = managementApiFailureDetail(err)
+    Sentry.captureException(err, {tags: {step: detail.step}})
+    console.error(`record-export: history write failed at ${detail.step}` +
+      ` (upstream ${detail.upstreamStatus ?? 'n/a'}): ${err.message}`)
+    return errorResponse(HTTP_BAD_GATEWAY, 'record_export_failed', detail)
   }
 
   return jsonResponse(HTTP_OK, {exports: updatedExports})

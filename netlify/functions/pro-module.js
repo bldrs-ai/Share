@@ -27,7 +27,7 @@
 import fs from 'fs/promises'
 import * as path from 'path'
 import * as Sentry from '@sentry/serverless'
-import {getUserAppMetadata, verifyAuth0Bearer} from './_lib/auth0.js'
+import {getUserAppMetadata, managementApiFailureDetail, verifyAuth0Bearer} from './_lib/auth0.js'
 
 
 Sentry.AWSLambda.init({
@@ -91,13 +91,16 @@ async function readProModuleSource(name) {
 /**
  * @param {number} statusCode
  * @param {string} error
+ * @param {object} [detail] Extra fields beside `error` — a 502 says which
+ *   step failed (`managementApiFailureDetail`), so the browser can tell the
+ *   function's own answer from a function that never ran
  * @return {object} Netlify Functions response
  */
-function errorResponse(statusCode, error) {
+function errorResponse(statusCode, error, detail = {}) {
   return {
     statusCode,
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({error}),
+    body: JSON.stringify({error, ...detail}),
   }
 }
 
@@ -126,8 +129,14 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
     try {
       appMetadata = await getUserAppMetadata(auth.sub)
     } catch (err) {
-      Sentry.captureException(err)
-      return errorResponse(HTTP_BAD_GATEWAY, 'app_metadata_lookup_failed')
+      const detail = managementApiFailureDetail(err)
+      Sentry.captureException(err, {tags: {step: detail.step}})
+      // Netlify's function log is the one channel every deploy context has
+      // — Sentry only exists where SENTRY_DSN is set — so the step goes
+      // there too. Names of unset env vars only; never their values.
+      console.error(`pro-module: app_metadata lookup failed at ${detail.step}` +
+        ` (upstream ${detail.upstreamStatus ?? 'n/a'}): ${err.message}`)
+      return errorResponse(HTTP_BAD_GATEWAY, 'app_metadata_lookup_failed', detail)
     }
     if (appMetadata.subscriptionStatus !== PRO_SUBSCRIPTION_STATUS) {
       // Denials are the signal that matters here: a spike means either a
