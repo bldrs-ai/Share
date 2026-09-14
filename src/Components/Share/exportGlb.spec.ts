@@ -11,9 +11,11 @@ import {
   glbJsonChunk,
   loadModelAndWaitForArtifact,
   openExportTab,
+  reopenLocalGlb,
   routeProModule,
   selectCompression,
   setSubscriptionTier,
+  togglePortable,
   watchProModuleRequests,
 } from '../../tests/e2e/export'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
@@ -437,6 +439,102 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // reads it — batched selection sets for the hydrated artifact, merged
     // selection subsets for anything that fell back.
     expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
+  })
+
+  test('a Pro user downloads a portable .glb that names its elements', async ({page}) => {
+    // #1843: the default export IS the batched-native cache artifact, and its
+    // `EXT_mesh_gpu_instancing` is `extensionsRequired` — so 3dviewer.net
+    // refuses the file outright, and the three.js editor shows a flat list of
+    // `mesh_N` where Share shows the named IFC hierarchy. Portable rewrites it
+    // into a plain scene graph: one named node per element, nested, each
+    // placement a child referencing the shared mesh.
+    //
+    // What only a browser can show, and the jest suite cannot: that the toggle
+    // is wired to the estimate and to the export through the same cache, so
+    // the figure on the line is the file that lands in Downloads.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+
+    // Off by default: the batched-native shape is the smaller file and the one
+    // Share itself reads best.
+    const portableToggle = page.getByTestId('export-portable').locator('input')
+    await expect(portableToggle).not.toBeChecked()
+    const sizeLine = page.getByTestId('export-size')
+    await expect(sizeLine).toBeVisible()
+    const nativeBytes = await sizeBytes(sizeLine)
+
+    const portableBytes = await togglePortable(page, nativeBytes)
+    await expect(portableToggle).toBeChecked()
+    expect(portableBytes).toBeGreaterThan(0)
+    // One node per placement plus its name and TRS is JSON the batched shape
+    // does not carry, and no codec compresses the JSON chunk. On `index.ifc`
+    // that is a handful of elements; on a 100k-instance model it is ~100 B per
+    // instance net of the TRS accessors the rewrite reclaims, which is why the
+    // control is opt-in.
+    expect(portableBytes).not.toBe(nativeBytes)
+    // A third control row in the dialog is where a mobile layout regression
+    // would show up as a sideways scroll rather than a missing element (#1838).
+    await expectNoHorizontalScroll(page)
+
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    // Saved under its own name: Playwright's download temp file has no
+    // extension, and the local-file loader needs one to know what it is.
+    const savedPath = test.info().outputPath('index-portable.glb')
+    const download = await downloadPromise
+    await download.saveAs(savedPath)
+    const file = await readFile(savedPath)
+
+    expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+    // The figure on the line is the file: the panel rewrote once, cached the
+    // bytes, and the export handed over those very bytes (§4.4).
+    expect(file.byteLength).toBe(portableBytes)
+
+    const json = glbJsonChunk(file)
+    // The refusal, gone — from BOTH arrays. `extensionsRequired` is the one
+    // that made 3dviewer.net reject the file rather than degrade.
+    expect(json.extensionsUsed ?? []).not.toContain('EXT_mesh_gpu_instancing')
+    expect(json.extensionsRequired ?? []).not.toContain('EXT_mesh_gpu_instancing')
+    // …and the names the three.js editor showed as `mesh_N` are the nav tree's.
+    // Read off the FILE, not off a three parse: `GLTFLoader` runs every node
+    // name through `PropertyBinding.sanitizeNodeName`, which turns spaces into
+    // underscores — three's mangling, not the file's.
+    const nodeNames = (json.nodes ?? []).map((node) => node.name)
+    for (const name of SPATIAL_CHAIN) {
+      expect(nodeNames, `portable export should name ${name}`).toContain(name)
+    }
+    expect(nodeNames).toContain(LEAF_LABEL)
+    // Every element node is a real node, and the placements carry the meshes.
+    expect((json.nodes ?? []).filter((node) => Number.isInteger(node.mesh)).length).toBeGreaterThan(0)
+
+    // Back into Share. The nav tree survives — it hydrates from
+    // `BLDRS_spatial_tree`, which is indifferent to the node graph. Picking
+    // does NOT: the batched hydration joins on `isInstancedMesh` and a
+    // portable file has plain Meshes, so it fails soft to a plain GLB (#1849).
+    // That is what this asserts: loads, renders, navigates.
+    await page.keyboard.press('Escape')
+    await reopenLocalGlb(page, savedPath)
+    await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+
+    await page.getByTestId('control-button-navigation').click()
+    await expect(page.getByTestId('NavTreePanel')).toBeVisible()
+    for (const name of SPATIAL_CHAIN) {
+      await expect(page.locator(`[data-node-label="${name}"]`)).toHaveCount(1)
+      await page.locator(`[data-node-label="${name}"]`).getByTestId('NavTreeNodeToggle').click()
+    }
+    await expect(page.locator(`[data-node-label="${LEAF_LABEL}"]`).first()).toBeVisible()
   })
 
   test('a signed-out user is told what unlocks Save, and gets no dialog', async ({page}) => {

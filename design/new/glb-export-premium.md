@@ -341,19 +341,95 @@ Two cases the first cut got wrong (#1837 codex round 6):
   is not the target, or the write would run both encoders over the same
   primitives.
 
+**Portable** (#1843) is the third option, and like compression it is a host
+rewrite the pro module only calls: `export/glbPortable.js#rewriteGlbPortable`.
+
+The default export IS the batched-native artifact (§1.1) — one glTF mesh per
+unique geometry × source colour, every placement carried by
+`EXT_mesh_gpu_instancing`, and the element names in `BLDRS_spatial_tree`
+rather than in glTF nodes. That is the right shape for Share's reader and the
+wrong one for everyone else: the writer marks the extension
+`setRequired(true)`, so **3dviewer.net refuses the file outright** rather than
+degrading, and the three.js editor shows a flat list of `mesh_N` where Share
+shows Bldrs › Build › Every › Thing (the #1837 smoke).
+
+The rewrite expands it into a plain scene graph: one node per spatial-tree
+element, named by `reifyName` — the NavTree's own rule, so the two agree,
+which means **`LongName` beats `Name`** — falling back to the prettified type
+plus the expressID (`Wall #12`; there is no `GlobalId` to use, since
+`BLDRS_spatial_tree` does not carry one and the only copy lives in
+`BLDRS_element_properties`, whose whole design is to inflate lazily per
+block). Each placement becomes a child node with the instance's TRS,
+referencing the **shared** mesh — glTF nodes may share a mesh, so only JSON is
+duplicated and the geometry bufferViews are copied byte for byte. An element
+with one placement and no children carries the mesh and the transform itself,
+so a leaf is one node and not two. Instances join to tree nodes on
+`parents[j]`, refined by `occurrencePaths[j]` for STEP (not `occurrenceIds`,
+which is a global emission-order index); anything unmatched lands under one
+synthetic `Unassigned` root rather than out of the scene.
+
+Three things it must also do, each of which was got wrong or nearly so:
+
+- **Clear the name from `extensionsRequired` as well as `extensionsUsed`.** The
+  required list is the one that makes a viewer refuse rather than degrade.
+- **Reclaim the orphaned TRS accessors.** Three float accessors per node
+  become unreferenced, 40 B per instance — 4 MB on a 100k-instance model — and
+  nothing downstream prunes them: `@gltf-transform` keeps an orphaned
+  bufferView and the strip only looks at `BLDRS_*` references. The rewrite
+  removes the accessors, re-indexes what survives, and reuses
+  `glbArtifactSize.js#dropBufferViews` so there is one compaction and not two.
+- **Stamp `extras: {bldrsTableNode, bldrsInstance}` on every mesh-bearing
+  node.** It is the only way back from a plain Mesh to its row in
+  `BLDRS_instance_tables`; without it a portable file is permanently
+  un-hydratable by Share.
+
+Raw glTF JSON, not a `@gltf-transform` Document: that library drops every
+extension its IO has not registered, so a Document round trip would re-pay the
+detach/re-inject dance above and re-serialise the whole BIN, and raw JSON is
+what makes "the geometry is byte-identical" provable per accessor.
+
+**Order: portable → codec → strip** (`export/artifactSizes.js` owns it).
+Portable must precede the strip, which removes the very payloads it reads, and
+any codec: under Meshopt a bufferView addresses decoded bytes on a fallback
+buffer the file does not carry, and under Draco the TRS floats are not floats.
+
+**What it costs, measured.** On a synthetic 100k-instance artifact (200 unique
+geometries, one element per instance in the spatial tree): the JSON chunk goes
+from 210 KB to 14.2 MB — **~140 B per instance** — against 4.0 MB of TRS
+accessors reclaimed from BIN, so **~100 B per instance net**. Neither codec
+compresses the JSON chunk, so that cost is the same at every compression
+setting. On a model whose geometry dominates it is a rounding error; on a
+geometry-light, instance-heavy model it can multiply the file (the synthetic
+one goes 5.4 MB → 15.4 MB, because 200 triangles is all the geometry there
+is). Meshopt on that same synthetic pair makes the point sharply: it takes the
+native file 5.4 MB → 2.5 MB and the portable one 15.4 MB → 15.5 MB — very
+slightly *larger*, since the codec cannot touch the JSON chunk and adds a
+per-bufferView extension entry to it. That is why the toggle is **off by
+default** and captioned as a choice rather than a recommendation. The rewrite
+itself is ~1.6 s for 100k instances.
+
+**Round trip back into Share, plainly:** the nav tree and Properties survive
+(they hydrate from the root `BLDRS_*` entries and are indifferent to the node
+graph); **picking does not.**
+`instancedGlbToBatchedModel.js#joinNodesToTables` joins on
+`obj.isInstancedMesh`, and a portable file has plain Meshes by construction,
+so the hydration fails soft to a plain — and, on a colourless model, grey —
+GLB. The stamped `extras` are what makes fixing that possible; it is #1849.
+
 Options surfaced in the UI: *Include Bldrs metadata (properties, spatial
 tree)* — default **on** (it's their model; the toggle exists for onward
-sharing) — and *Compression: None / Meshopt / Draco* — default **None** (the
+sharing) — *Portable* — default **off** (see the measured cost above) — and
+*Compression: None / Meshopt / Draco* — default **None** (the
 file opens everywhere; the other two need the matching decoder registered in
 whatever the user opens it with). Share itself is one of those viewers:
 `Loader.js#newGltfLoader` carries both decoders unconditionally (they were
 gated on the cache writer's `glbDraco` / `glbMeshopt` flags, so a compressed
 export failed to open in Share — the #1837 smoke), and the export E2E opens
-each compressed download back through the Open dialog. Two smoke findings on
-the round trip are tracked separately: element picking on a re-opened Bldrs
-GLB (#1844 — the hydration gates key off the cache, not the file) and a
-portable, de-instanced export with named nodes for viewers without
-`EXT_mesh_gpu_instancing` (#1843).
+each compressed download back through the Open dialog. Both smoke findings on
+the round trip are now addressed: element picking on a re-opened Bldrs GLB
+(#1844 — the hydration gates keyed off the cache, not the file) and the
+portable, de-instanced export above (#1843), whose own round trip leaves
+picking to #1849.
 
 ### 4.4 UI
 
@@ -379,9 +455,11 @@ all-caps button on the #1837 preview read as disabled when it wasn't
 (#1838).
 
 The Export tab hosts `Open/ExportSection.jsx` — the metadata toggle, then the
-**Compression** choice, then the **download size** for the state those two are
-in, then **Export GLB last and centred**, with the Pro chip for a free user
-riding beside it. Compression is a dropdown (`Select`: None / Meshopt /
+**Portable** toggle, then the **Compression** choice, then the **download
+size** for the state those three are in, then **Export GLB last and centred**,
+with the Pro chip for a free user riding beside it. That order is the order
+the choices compound in — what goes in the file, what shape it is in, how it
+is squeezed — and it is the order `export/artifactSizes.js` runs them in. Compression is a dropdown (`Select`: None / Meshopt /
 Draco) because the codecs are alternatives, not independent options — it
 began as a `ToggleButtonGroup`, whose three side-by-side buttons were the
 widest control in the dialog and read as a run-on word under the theme's
@@ -403,6 +481,18 @@ length for the with-metadata figure and strips the parsed JSON chunk for the
 other, never touching the BIN chunk, so a 400 MB model costs a header read
 rather than a stall (#1841). Both figures are exact: the same strip the export
 runs.
+
+**Portable is not free, even with no codec.** The header-only read above never
+touches the BIN chunk and the rewrite has to — it reads the instance TRS
+floats and ungzips two payloads out of it — so Portable takes the same
+whole-file path a codec takes and shows *Estimating…* while it runs. The
+estimate cache in `export/artifactSizes.js` is keyed
+`` `${portable ? 'portable' : 'native'}|${mode}` `` for that reason: portable
+and native are different FILES at the same codec, and a shared cell would
+quote one and download the other. `useExport.js#compressHookFor` supplies the
+hook whenever `portable || codec` rather than for a codec alone, and does the
+metadata strip itself for the portable-without-codec case, since the pro
+module runs no strip of its own once a hook is in play.
 
 **Compressed, the estimate is the compressed file.** The size of a Draco or
 Meshopt file is a property of the encoder, not of the input, so there is no
@@ -652,6 +742,7 @@ through `BLDRS_*` extensions.
 | Properties / psets | ✔ `BLDRS_element_properties` | ✔ | ✘ | ✘ | ✘ | ◐ customData (size!) | ◐ metadata | ✔ |
 | Units + coordination frame | ✔ `scenes[0].extras` (metres) | ✔ | ✘ (unitless) | ✘ | ✘ | ✔ `metersPerUnit`, root xform | ✔ (units attr) | ✔ |
 | Cut planes / hidden elements (view state) | ◐ `BLDRS_view_states` (designed, not written) | ◐ | ✘ | ✘ | ✘ | ◐ variants | ✘ | ✘ |
+| Portable (named node tree, no required extension) | ✔ per export (#1843) — `~100 B`/instance net | ✔ | — (always de-instanced) | — | — | ◐ (prim hierarchy is native) | ◐ | — |
 | Compression | ✔ Draco / Meshopt, chosen per export | ✔ | ✘ | ✘ (binary only) | ◐ binary | ◐ (USDZ is a zip) | ✔ (zip) | ✘ |
 | Source | artifact | artifact | scene | scene | scene | scene (or server) | scene | — (needs Conway write support) |
 | Effort | done in S2 | small (unpack GLB → JSON + bin) | small | small | small | medium (USDZExporter is texture-centric; instancing + metadata need work); server route if fidelity matters | medium | large — out of scope |
@@ -706,6 +797,14 @@ Chrome — with a real Auth0 account in each of the three tiers:
    fetches a `<script>` and a sibling `.wasm` from `/static/js/draco/` at
    click time — a blocked or mis-served asset is a per-browser failure the
    others never see.
+5c. **Portable** on (codec None): the line says *Estimating…*, then settles at
+   a different figure; the download weighs exactly what it said; the file
+   opens in <https://3dviewer.net/>, which refuses the default export
+   (`Unsupported extension: EXT_mesh_gpu_instancing`), and the three.js editor
+   shows the nested, named hierarchy (Bldrs › Build › Every › Thing) instead
+   of `mesh_N`. Then Portable + Draco, to confirm the codec preserves the node
+   names. Reopening a portable export in Share shows the nav tree and renders,
+   but does not pick — expected until #1849.
 6. Save → Export lists the exports below the button, with sizes and dates;
    "Download again" works on the cached one; Clear Local Cache → the row
    says the model must be reopened.

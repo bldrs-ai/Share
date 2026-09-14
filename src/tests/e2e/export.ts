@@ -210,14 +210,87 @@ export async function expectNoHorizontalScroll(page: Page) {
  * @return the byte count the settled line carries
  */
 export async function selectCompression(page: Page, mode: string): Promise<number> {
+  const sizeLine = page.getByTestId('export-size')
+  const previousBytes = await sizeLine.count() > 0 ?
+    Number(await sizeLine.getAttribute('data-bytes')) :
+    NaN
   // A dropdown (owner feedback on #1842): open it, pick the item, and read
   // the choice back off the closed control.
   await page.getByTestId('export-compression').click()
   await page.getByTestId(`export-compression-${mode}`).click()
   await expect(page.getByTestId('export-compression')).toContainText(compressionLabel(mode))
+  return await waitForNewSize(page, previousBytes)
+}
+
+
+/**
+ * Flip the Portable toggle and wait for the size line to settle on the new
+ * figure.
+ *
+ * Portable is not free even with no codec — the rewrite reads the whole
+ * artifact off OPFS where the plain uncompressed estimate is a header read
+ * (#1843) — so the line goes through "Estimating…" here just as it does for a
+ * codec. The wait is "the figure changed" rather than "the pending line
+ * appeared", because on a fixture this small the encode can finish inside one
+ * render and the pending state is then never observable.
+ *
+ * @param page Playwright page
+ * @param previousBytes the figure the line carries now
+ * @return the byte count the settled line carries
+ */
+export async function togglePortable(page: Page, previousBytes: number): Promise<number> {
+  await page.getByTestId('export-portable').locator('input').click()
+  return await waitForNewSize(page, previousBytes)
+}
+
+
+/**
+ * Wait for the size line to settle on a figure that is not the one it carried
+ * before, and return it.
+ *
+ * Both halves matter, and the second is what a bare `toBeVisible` misses: the
+ * line for the PREVIOUS choice is still on screen for the tick between the
+ * click and React clearing it, so a check that only asks "is a size line
+ * showing?" can read the old codec's number and compare it against itself.
+ * That is a real failure seen under four-worker contention (Draco read the
+ * Meshopt figure and the shrink assertion failed), not a hypothetical.
+ *
+ * @param page Playwright page
+ * @param previousBytes the figure the line carries now
+ * @return the byte count the settled line carries
+ */
+async function waitForNewSize(page: Page, previousBytes: number): Promise<number> {
   const sizeLine = page.getByTestId('export-size')
-  await expect(sizeLine).toBeVisible({timeout: COMPRESS_TIMEOUT_MS})
+  await expect
+    .poll(async () => {
+      if (await page.getByTestId('export-size-pending').count() > 0) {
+        return null
+      }
+      const settled = await sizeLine.count() > 0 ? await sizeLine.getAttribute('data-bytes') : null
+      return settled === String(previousBytes) ? null : settled
+    }, {timeout: COMPRESS_TIMEOUT_MS})
+    .not.toBeNull()
   return Number(await sizeLine.getAttribute('data-bytes'))
+}
+
+
+/**
+ * Bring a saved `.glb` back in through the Open dialog's file chooser, the way
+ * a user would, and wait for it to load.
+ *
+ * @param page Playwright page
+ * @param path the file on disk
+ */
+export async function reopenLocalGlb(page: Page, path: string) {
+  await page.getByTestId('control-button-open').click()
+  // The dialog opens on whichever tab it last showed (Google, for a signed-in
+  // user); Browse lives on Local.
+  await page.getByRole('tab', {name: 'Local'}).click()
+  const chooser = page.waitForEvent('filechooser')
+  await page.getByTestId('button_open_file').click()
+  await (await chooser).setFiles(path)
+  await expect(page).toHaveURL(/\/share\/v\/new\/.+\.glb/, {timeout: EXPORT_TEST_TIMEOUT_MS})
+  await expect(page.getByTestId('LoadStatusOk')).toBeVisible({timeout: EXPORT_TEST_TIMEOUT_MS})
 }
 
 
@@ -237,7 +310,11 @@ function compressionLabel(mode: string): string {
  * @param bytes the saved file
  * @return the parsed JSON chunk
  */
-export function glbJsonChunk(bytes: Buffer): {extensionsUsed?: string[]; extensionsRequired?: string[]} {
+export function glbJsonChunk(bytes: Buffer): {
+  extensionsUsed?: string[]
+  extensionsRequired?: string[]
+  nodes?: Array<{name?: string; mesh?: number}>
+} {
   const jsonByteLength = bytes.readUInt32LE(GLB_JSON_LENGTH_OFFSET)
   const start = GLB_JSON_LENGTH_OFFSET + GLB_CHUNK_HEADER_BYTES
   // The chunk is space-padded to 4 bytes, which `JSON.parse` need not accept.

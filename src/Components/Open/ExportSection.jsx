@@ -67,6 +67,12 @@ export default function ExportSection() {
   // two need the matching decoder registered in whatever the user opens it
   // with. Compression is the informed choice, so it is the opt-in one.
   const [compression, setCompression] = useState(COMPRESSION_NONE)
+  // Default OFF: the batched-native shape is smaller and is what Share itself
+  // reads best, and the rewrite trades JSON for portability — one node per
+  // placement, which on a big model is megabytes of names and transforms no
+  // codec compresses. It is the informed choice, so it is the opt-in one
+  // (#1843).
+  const [isPortable, setIsPortable] = useState(false)
 
   const {getAccessTokenSilently, isAuthenticated} = useAuth0()
   // `isExporting` is tab-wide, not this button's own (store/UISlice.js): a
@@ -92,7 +98,7 @@ export default function ExportSection() {
     let isStale = false
     setSizes(null)
     setIsEstimating(true)
-    artifactSizes(glbArtifact, compression).then((read) => {
+    artifactSizes(glbArtifact, compression, isPortable).then((read) => {
       if (!isStale) {
         setSizes(read)
         setIsEstimating(false)
@@ -101,7 +107,7 @@ export default function ExportSection() {
     return () => {
       isStale = true
     }
-  }, [glbArtifact, compression])
+  }, [glbArtifact, compression, isPortable])
 
   const isPro = getTier(appMetadata, isAuthenticated) === TIERS.PAID
   // The loader publishes this once the artifact is actually in OPFS — on a
@@ -133,7 +139,10 @@ export default function ExportSection() {
   // the encoder has run. Say so while it does, rather than showing a stale
   // figure from the previous choice: the line's promise is about the NEXT
   // click, and for the seconds this takes it has nothing to promise.
-  const isPendingEstimate = isEstimating && compression !== COMPRESSION_NONE
+  // Portable counts as pending work even with no codec: the rewrite has to
+  // read the whole artifact off OPFS and re-serialise it, where the plain
+  // uncompressed estimate is a header read (`export/artifactSizes.js`).
+  const isPendingEstimate = isEstimating && (compression !== COMPRESSION_NONE || isPortable)
   // The figure is honest even when the codec is not available here (its
   // encoder failed to load, say): the estimate fell back to the file as it
   // is — uncompressed, or still in the codec the cache wrote it with — and
@@ -149,7 +158,7 @@ export default function ExportSection() {
   }
 
   const onExportClick = async () => {
-    await run('glb', {stripBldrsMetadata: !isMetadataIncluded, compression})
+    await run('glb', {stripBldrsMetadata: !isMetadataIncluded, compression, portable: isPortable})
   }
 
   const onUpgradeClick = async () => {
@@ -230,6 +239,27 @@ export default function ExportSection() {
           onChange={() => setIsMetadataIncluded(!isMetadataIncluded)}
           checked={isMetadataIncluded}
           data-testid='export-include-metadata'
+        />
+      </Stack>
+      {/* Between the metadata toggle and the codec because that is the order
+          the choices compound in: what goes in the file, what SHAPE it is in,
+          and only then how it is squeezed (`export/artifactSizes.js` runs them
+          in exactly that order). */}
+      <Stack
+        direction='row'
+        justifyContent='space-between'
+        alignItems='center'
+        gap={1}
+        sx={{mt: '1em'}}
+      >
+        <Box>
+          <Typography variant='body2'>Portable</Typography>
+          <Typography variant='caption' color='text.secondary'>named nodes, opens anywhere</Typography>
+        </Box>
+        <Toggle
+          onChange={() => setIsPortable(!isPortable)}
+          checked={isPortable}
+          data-testid='export-portable'
         />
       </Stack>
       {/* An exclusive three-way choice rather than two more switches: the

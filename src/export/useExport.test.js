@@ -114,6 +114,7 @@ describe('useExport', () => {
       format: 'glb',
       bytes_bucket: '<1MB',
       source_kind: KIND_LABEL,
+      portable: false,
     })
   })
 
@@ -139,7 +140,7 @@ describe('useExport', () => {
     const forDownload = await compress(ARTIFACT_BYTES, {stripBldrsMetadata: true})
 
     expect(compressedExport).toHaveBeenCalledWith(
-      expect.objectContaining({schemaVer: SCHEMA_VER}), 'meshopt', ARTIFACT_BYTES)
+      expect.objectContaining({schemaVer: SCHEMA_VER}), 'meshopt', ARTIFACT_BYTES, false)
     expect(forDownload.bytes).toBe(compressed.withoutMetadata)
     expect(forDownload.withMetadataBytes).toBe(900)
     expect(forDownload.withoutMetadataBytes).toBe(400)
@@ -200,6 +201,52 @@ describe('useExport', () => {
 
     const {compress} = exportArtifact.mock.calls[0][0]
     await expect(compress(ARTIFACT_BYTES, {stripBldrsMetadata: false})).rejects.toThrow(/draco/)
+  })
+
+  it('runs the host hook for Portable even with no codec chosen (#1843)', async () => {
+    // The predicate is `portable || codec`, not the codec alone: Portable is a
+    // host rewrite the pro module cannot do, and with it on there IS something
+    // for the host to run at compression None. Without this the toggle would
+    // silently export the batched-native file.
+    const rewritten = {
+      withMetadata: new Uint8Array(700),
+      withoutMetadata: new Uint8Array(500),
+      strippedExtensions: ['BLDRS_spatial_tree'],
+      mode: 'none',
+    }
+    compressedExport.mockResolvedValue(rewritten)
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {stripBldrsMetadata: true, compression: 'none', portable: true})
+    })
+
+    const {compress} = exportArtifact.mock.calls[0][0]
+    expect(compress).toEqual(expect.any(Function))
+    expect((await compress(ARTIFACT_BYTES, {stripBldrsMetadata: true})).bytes)
+      .toBe(rewritten.withoutMetadata)
+    // The last argument is what keeps the portable and native cells of the
+    // estimate cache apart — they are different FILES at the same codec.
+    expect(compressedExport).toHaveBeenCalledWith(
+      expect.objectContaining({schemaVer: SCHEMA_VER}), 'none', ARTIFACT_BYTES, true)
+    // …and the choice is recorded, so "Download again" reproduces the portable
+    // file rather than the batched-native one at the size the row claims.
+    expect(recordExport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: {stripBldrsMetadata: true, compression: 'none', portable: true},
+      }),
+      expect.anything(), expect.any(Function), expect.any(Function))
+    expect(gtagEvent.mock.calls[0][1].portable).toBe(true)
+  })
+
+  it('still runs no hook when neither control asks for one', async () => {
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {stripBldrsMetadata: false, compression: 'none', portable: false})
+    })
+
+    expect(exportArtifact.mock.calls[0][0].compress).toBeNull()
   })
 
   it('reports the source KIND, never the cache key\'s first namespace', async () => {

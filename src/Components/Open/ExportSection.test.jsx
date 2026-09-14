@@ -173,12 +173,70 @@ describe('ExportSection', () => {
     expect(toggle.checked).toBe(true)
 
     fireEvent.click(getByTestId('export-glb-button'))
-    expect(mockRun).toHaveBeenCalledWith('glb', {stripBldrsMetadata: false, compression: 'none'})
+    expect(mockRun).toHaveBeenCalledWith(
+      'glb', {stripBldrsMetadata: false, compression: 'none', portable: false})
 
     // Off means "strip", which is the option the pro module acts on.
     fireEvent.click(toggle)
     fireEvent.click(getByTestId('export-glb-button'))
-    expect(mockRun).toHaveBeenLastCalledWith('glb', {stripBldrsMetadata: true, compression: 'none'})
+    expect(mockRun).toHaveBeenLastCalledWith(
+      'glb', {stripBldrsMetadata: true, compression: 'none', portable: false})
+  })
+
+  it('carries the Portable toggle into the export, off by default', async () => {
+    // #1843. Off by default: the batched-native shape is the smaller file and
+    // the one Share itself reads best, and the rewrite costs ~100 B of JSON
+    // per instance that no codec compresses.
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+    const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+    const portable = getByTestId('export-portable').querySelector('input')
+    expect(portable.checked).toBe(false)
+
+    fireEvent.click(portable)
+    fireEvent.click(getByTestId('export-glb-button'))
+
+    expect(mockRun).toHaveBeenLastCalledWith(
+      'glb', {stripBldrsMetadata: false, compression: 'none', portable: true})
+  })
+
+  it('re-estimates for Portable even at compression None, saying so while it runs', async () => {
+    // Portable + None is NOT the cheap header read: the rewrite has to read
+    // the whole artifact out of OPFS and re-serialise it, so the line goes
+    // through "Estimating…" exactly as a codec does (#1843).
+    artifactSizes.mockImplementation((artifact, mode, isPortable) => (isPortable ?
+      new Promise((resolve) => {
+        resolveMeshoptSizes = resolve
+      }) :
+      Promise.resolve({
+        withMetadata: WITH_METADATA_BYTES,
+        withoutMetadata: WITHOUT_METADATA_BYTES,
+        metadataBytes: METADATA_BYTES,
+      })))
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+    const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+    await act(async () => {})
+
+    expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(WITH_METADATA_BYTES))
+
+    fireEvent.click(getByTestId('export-portable').querySelector('input'))
+
+    expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', true)
+    expect(queryByTestId('export-size')).toBeNull()
+    expect(getByTestId('export-size-pending')).toHaveTextContent('Estimating…')
+
+    await act(async () => {
+      resolveMeshoptSizes({
+        withMetadata: MESHOPT_WITH_METADATA_BYTES,
+        withoutMetadata: MESHOPT_WITHOUT_METADATA_BYTES,
+        metadataBytes: MESHOPT_WITH_METADATA_BYTES - MESHOPT_WITHOUT_METADATA_BYTES,
+      })
+      // Let the `.then` that settles the state run inside this `act`.
+      await Promise.resolve()
+    })
+
+    expect(queryByTestId('export-size-pending')).toBeNull()
+    expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(MESHOPT_WITH_METADATA_BYTES))
   })
 
   it('offers the three compression choices, None selected', async () => {
@@ -198,7 +256,8 @@ describe('ExportSection', () => {
     chooseCompression('draco')
     fireEvent.click(getByTestId('export-glb-button'))
 
-    expect(mockRun).toHaveBeenLastCalledWith('glb', {stripBldrsMetadata: false, compression: 'draco'})
+    expect(mockRun).toHaveBeenLastCalledWith(
+      'glb', {stripBldrsMetadata: false, compression: 'draco', portable: false})
   })
 
   it('re-estimates when the compression choice changes, saying so while it runs', async () => {
@@ -206,7 +265,7 @@ describe('ExportSection', () => {
     // seconds on a real model. The line has to say the number is coming
     // rather than showing the previous codec's figure, which is a promise
     // about a file the next click would not produce (#1842).
-    artifactSizes.mockImplementation((artifact, mode) => (mode === 'none' ?
+    artifactSizes.mockImplementation((artifact, mode, isPortable) => (mode === 'none' && !isPortable ?
       Promise.resolve({
         withMetadata: WITH_METADATA_BYTES,
         withoutMetadata: WITHOUT_METADATA_BYTES,
@@ -223,7 +282,7 @@ describe('ExportSection', () => {
 
     chooseCompression('meshopt')
 
-    expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'meshopt')
+    expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'meshopt', false)
     expect(queryByTestId('export-size')).toBeNull()
     expect(getByTestId('export-size-pending')).toHaveTextContent('Estimating…')
 
