@@ -324,7 +324,9 @@ Two cases the first cut got wrong (#1837 codex round 6):
   module's `stats.compression` carries the codec the file actually has —
   `none`, or the source's own codec when the cache pipeline had already
   compressed it, since that file still needs that decoder whatever was
-  asked for — the history row records that rather than the request, and
+  asked for (a file declaring both codecs, which nothing in Share writes,
+  fails the estimate and this codec's export rather than be named by one
+  of them) — the history row records that rather than the request, and
   the panel names the fallback beside the figure ("Draco isn't available in
   this browser — the file is uncompressed" / "— the file keeps Meshopt") so
   "Draco" chosen beside that number is not read as a Draco number.

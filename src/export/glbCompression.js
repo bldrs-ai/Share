@@ -112,6 +112,15 @@ export async function compressExportGlb(glbBytes, mode) {
     // user still gets their model, uncompressed, at the size the panel then
     // quotes. Worth seeing, though: every artifact we write should encode.
     captureException(e)
+    // A file carrying BOTH codecs (Meshopt views beside Draco primitives —
+    // valid glTF, though nothing in Share writes one) has no single `mode`
+    // that describes it, and naming one would have the panel and the
+    // history row under-promise the decoders it needs. Rather than that,
+    // the estimate and the export for this codec fail; "None" still hands
+    // the file through as it is (#1837 codex round 8).
+    if (sourceCodecs.length > 1) {
+      throw e
+    }
     // Uncompressed does NOT mean untouched: the `withoutMetadata` side is
     // what "Include Bldrs metadata: off" downloads, and handing the input
     // back there would ship the properties and spatial tree the user asked
@@ -125,7 +134,7 @@ export async function compressExportGlb(glbBytes, mode) {
       // artifact handed back as-is is still a Meshopt file, and saying
       // "none" would have the panel and the history row promise a file that
       // opens without a decoder (#1837 codex round 7).
-      mode: sourceCodecs[0] ?? COMPRESSION_NONE,
+      mode: sourceCodecs.length === 1 ? sourceCodecs[0] : COMPRESSION_NONE,
     }
   }
 

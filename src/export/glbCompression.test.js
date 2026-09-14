@@ -108,6 +108,9 @@ async function instancedGlb() {
 }
 
 
+const {serializeGlb} = jest.requireActual('../loader/injectGlbExtensions')
+
+
 /**
  * Hang a Bldrs payload off a GLB the way `injectGlbExtensions.js` does: the
  * bytes go in a bufferView of their own, named by a root `BLDRS_*` entry.
@@ -120,7 +123,6 @@ async function instancedGlb() {
  * @return {Uint8Array} the same GLB with one Bldrs payload in it
  */
 function withBldrsPayload(glbBytes, name = 'BLDRS_element_properties') {
-  const {serializeGlb} = jest.requireActual('../loader/injectGlbExtensions')
   const {json, bin} = parseGlb(glbBytes)
   const at = (bin.byteLength + 3) & ~3
   const out = new Uint8Array(at + PAYLOAD_BYTES.byteLength)
@@ -409,11 +411,17 @@ describe('export/glbCompression', () => {
     /** @type {Uint8Array} */ let source
     /** @type {object} */ let outFromMeshopt
     /** @type {Uint8Array} */ let meshoptSource
+    /** @type {Promise<object>} */ let fromBothCodecs
 
     beforeAll(async () => {
       source = withBldrsPayload(await geometryGlb())
       // A `?feature=glbMeshopt` artifact, made by the (working) Meshopt path.
       meshoptSource = (await compressExportGlb(source, COMPRESSION_MESHOPT)).withMetadata
+      // …and one that claims Draco too. Only the declaration matters here:
+      // the encoder fails before anything is read.
+      const both = parseGlb(meshoptSource)
+      both.json.extensionsUsed.push('KHR_draco_mesh_compression')
+      const bothCodecsSource = serializeGlb(both.json, both.bin)
       const encoderBefore = window.DracoEncoderModule
       window.DracoEncoderModule = () => Promise.reject(new Error('draco_encoder.wasm unavailable'))
       let fresh
@@ -423,10 +431,20 @@ describe('export/glbCompression', () => {
       try {
         out = await fresh.compressExportGlb(source, COMPRESSION_DRACO)
         outFromMeshopt = await fresh.compressExportGlb(meshoptSource, COMPRESSION_DRACO)
+        fromBothCodecs = fresh.compressExportGlb(bothCodecsSource, COMPRESSION_DRACO)
+        await fromBothCodecs.catch(() => {})
       } finally {
         window.DracoEncoderModule = encoderBefore
       }
     }, TIMEOUT_MS)
+
+    it('refuses to hand back a file that carries two codecs under one name', async () => {
+      // No single `mode` describes a Meshopt-plus-Draco file, and naming
+      // one would under-promise the decoders it needs (#1837 codex round 8).
+      // The estimate and this codec's export fail instead; "None" still
+      // passes the file through as it is.
+      await expect(fromBothCodecs).rejects.toThrow('unavailable')
+    })
 
     it('reports the codec a pre-compressed source still carries, not "none"', () => {
       // The Meshopt artifact handed back as-is is still a Meshopt file — it
