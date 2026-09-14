@@ -27,7 +27,11 @@ module.exports = {
     'plugin:jsx-a11y/recommended',
     'plugin:jsdoc/recommended',
   ],
-  ignorePatterns: ['tools/playwright-report/**'],
+  // `_pro-modules/` is esbuild BUILD OUTPUT (minified premium bundles, see
+  // tools/esbuild/proModules.js). It sits under `netlify/`, which CI lints
+  // wholesale (`eslint src netlify tools`), so without this every build makes
+  // the lint gate fail on generated code.
+  ignorePatterns: ['tools/playwright-report/**', 'netlify/functions/_pro-modules/**'],
   overrides: [
     {
       files: ['*.js', '*.mjs', '*.jsx'],
@@ -62,6 +66,31 @@ module.exports = {
         'no-var': 'off',
         'no-shadow': 'off',
         'no-tabs': 'off',
+      },
+    },
+    // Pro-module import fence (design/new/glb-export-premium.md §4.1).
+    // Premium export code under `src/export/pro/` is built as its OWN
+    // bundle into `netlify/functions/_pro-modules/` and delivered only to a
+    // verified subscriber. The moment any host file imports it, esbuild
+    // pulls it into `docs/index.js` and it is public — the exact failure
+    // this epic exists to prevent, and one that nothing else would catch
+    // (the feature would keep working). Only `tools/esbuild/proModules.js`
+    // names the entry, and that is outside `src`.
+    //
+    // The zone bans the whole of `src` from importing it; the override
+    // below re-allows the directory to import itself.
+    {
+      files: ['src/**/*.js', 'src/**/*.jsx', 'src/**/*.ts', 'src/**/*.tsx'],
+      excludedFiles: ['src/export/pro/**'],
+      rules: {
+        'import/no-restricted-paths': ['error', {
+          zones: [{
+            target: './src',
+            from: './src/export/pro',
+            message: 'src/export/pro is premium code built outside docs/ — ' +
+              'load it at runtime via src/export/proModuleLoader.js, never by import',
+          }],
+        }],
       },
     },
     // --- TS / TSX

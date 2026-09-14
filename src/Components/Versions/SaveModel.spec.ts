@@ -27,8 +27,11 @@ describe('Versions 100: Save model', () => {
       await returningUserVisitsHomepageWaitForModel(page)
     })
 
-    test('Save button not visible', async ({page}) => {
-      await expect(page.getByTestId('Save')).toHaveCount(0, {timeout: 10000})
+    test('Save button visible but gated', async ({page}) => {
+      // Signed out, Save is shown in the gated look rather than hidden
+      // (#1838): the click opens help saying what unlocks it.
+      await expect(page.getByTestId('gated-save')).toBeVisible({timeout: 10000})
+      await expect(page.getByRole('dialog')).toHaveCount(0)
     })
 
     describe('User login', () => {

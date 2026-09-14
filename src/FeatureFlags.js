@@ -35,6 +35,15 @@ export const flags = [
   // to roll the limits out to everyone.
   // See design/new/quotas.md.
   {name: 'quotas', isActive: false},
+  // Model export ("Download GLB" in the Share dialog), sold as a Pro
+  // feature. Gates ONLY the UI section: the pro-module pipeline (the
+  // `pro-module` Netlify Function, `proModuleLoader`, the separately-built
+  // module) ships unconditionally and is gated by the subscription check on
+  // the server, not by this flag. Off by default while the flow is
+  // validated against real Auth0 tiers and a real Stripe subscription;
+  // enable per-session with `?feature=export`.
+  // See design/new/glb-export-premium.md.
+  {name: 'export', isActive: false},
   // GLB runtime artifact pipeline (design/new/glb-model-sharing.md).
   // `glb` enables both the writer (post-IFC-parse cache warm-up) and the
   // reader (skip-IFC-when-GLB-cached fast path in Loader.js).
@@ -42,9 +51,12 @@ export const flags = [
   // bypass wit-three entirely (spatial tree + properties + per-element
   // picking all round-trip through BLDRS_* glTF extensions).
   {name: 'glb', isActive: true},
-  // DRACO compression for cached GLBs. Applies to BOTH write and read:
-  // writer pipes the GLTFExporter output through @gltf-transform's
-  // draco() transform; reader wires DRACOLoader into the GLTFLoader.
+  // DRACO compression for cached GLBs. Gates the WRITE only: the writer
+  // pipes the GLTFExporter output through @gltf-transform's draco()
+  // transform. The reader's GLTFLoader always carries the DRACO and
+  // Meshopt decoders (`Loader.js#newGltfLoader`) since #1842, because it
+  // also opens files the user brings — a compressed Share export, any
+  // third-party GLB — and those don't wait for a flag.
   // The cached artifact's filename embeds a `-draco` schema suffix so
   // compressed and uncompressed caches don't collide. Three 0.135's
   // DRACO regression is resolved by the r184 upgrade (PR #1514).

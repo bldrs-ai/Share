@@ -132,3 +132,190 @@ export async function verifyAuth0Bearer(event) {
     }
   }
 }
+
+
+/**
+ * A Management API step that did not complete, carrying enough for the
+ * caller's error response and log line to say WHICH step and what the
+ * upstream answered. Without that, the `502 app_metadata_lookup_failed`
+ * the #1837 deploy preview produced was indistinguishable, from the browser,
+ * from a function that never started — and those are different fixes (a
+ * deploy context missing the client credentials versus a bundling fault).
+ *
+ * Never carries a secret: `missing` lists env var NAMES, `upstreamStatus`
+ * is an HTTP status code, and the message repeats only what axios put in
+ * its own.
+ */
+export class ManagementApiError extends Error {
+  /**
+   * @param {'mgmt_config'|'mgmt_token'|'user_lookup'|'user_patch'} step
+   * @param {object} [detail]
+   * @param {Error} [detail.cause] The axios error, when a request was made
+   * @param {Array<string>} [detail.missing] Unset env var names (`mgmt_config`)
+   */
+  constructor(step, {cause = null, missing = []} = {}) {
+    const upstreamStatus = cause?.response?.status ?? null
+    super(missing.length ?
+      `Management API not configured: ${missing.join(', ')} unset` :
+      `Management API ${step} failed` +
+        `${upstreamStatus === null ? '' : ` (upstream ${upstreamStatus})`}: ${cause?.message ?? 'unknown'}`)
+    this.name = 'ManagementApiError'
+    this.step = step
+    this.upstreamStatus = upstreamStatus
+    this.missing = missing
+    if (cause) {
+      this.cause = cause
+    }
+  }
+}
+
+
+/**
+ * The fields of a `ManagementApiError` a function returns beside its 502's
+ * error code — and nothing else off an arbitrary error, which is why this
+ * is a projection rather than the error itself.
+ *
+ * @param {Error} err
+ * @return {{step: string, upstreamStatus: ?number, missing: Array<string>}}
+ */
+export function managementApiFailureDetail(err) {
+  return {
+    step: err?.step || 'unknown',
+    upstreamStatus: err?.upstreamStatus ?? null,
+    missing: err?.missing || [],
+  }
+}
+
+
+// Everything the client-credentials grant needs. Checked before the request
+// is made: the credentials are set per Netlify deploy context, and a preview
+// context that lacks them is the first thing a 502 should rule in or out.
+const MGMT_ENV_VARS = ['AUTH0_DOMAIN', 'AUTH0_CLIENT_ID', 'AUTH0_CLIENT_SECRET']
+
+// Module-scope Management-API token cache — survives across warm Lambda
+// invocations, which is the whole point: a cold client-credentials round
+// trip per request would double the latency of every gated call.
+let cachedMgmtToken = null
+let cachedMgmtTokenExpiresAt = 0
+const MGMT_TOKEN_REFRESH_SAFETY_SEC = 60
+const MILLIS_PER_SECOND = 1000
+
+
+/**
+ * Drop the cached Management API token. Tests only: the cache is module
+ * scope, so without this a suite's first successful grant would satisfy
+ * every later test and the credential-check paths could never be reached.
+ */
+export function resetManagementApiTokenCache() {
+  cachedMgmtToken = null
+  cachedMgmtTokenExpiresAt = 0
+}
+
+
+/**
+ * Fetch (or reuse) an Auth0 Management API token via Client Credentials.
+ *
+ * Mirrors `record-load.js`'s private copy, which stays where it is: that
+ * function is CommonJS (`require`/`exports.handler`) and this module is ESM,
+ * so sharing would mean an interop wrapper for no behavioural gain. Keep the
+ * two in lock-step if the token flow changes.
+ *
+ * @return {Promise<string>} Management API access token
+ * @throws {ManagementApiError} `mgmt_config` when a credential env var is
+ *   unset, `mgmt_token` when Auth0 refuses the grant
+ */
+export async function getManagementApiToken() {
+  const now = Date.now()
+  if (cachedMgmtToken && now < cachedMgmtTokenExpiresAt) {
+    return cachedMgmtToken
+  }
+  const missing = MGMT_ENV_VARS.filter((name) => !process.env[name])
+  if (missing.length) {
+    throw new ManagementApiError('mgmt_config', {missing})
+  }
+  let resp
+  try {
+    resp = await axios.post(
+      `https://${process.env.AUTH0_DOMAIN}/oauth/token`,
+      {
+        client_id: process.env.AUTH0_CLIENT_ID,
+        client_secret: process.env.AUTH0_CLIENT_SECRET,
+        audience: `https://${process.env.AUTH0_DOMAIN}/api/v2/`,
+        grant_type: 'client_credentials',
+      },
+      {headers: {'Content-Type': 'application/json'}},
+    )
+  } catch (err) {
+    throw new ManagementApiError('mgmt_token', {cause: err})
+  }
+  cachedMgmtToken = resp.data.access_token
+  const expiresInSec = Number(resp.data.expires_in) || 0
+  cachedMgmtTokenExpiresAt = now + ((expiresInSec - MGMT_TOKEN_REFRESH_SAFETY_SEC) * MILLIS_PER_SECOND)
+  return cachedMgmtToken
+}
+
+
+/**
+ * Read a user's `app_metadata` through the Management API.
+ *
+ * The Management API — never the caller's JWT — is the authority for any
+ * entitlement decision: the client's own copy of `app_metadata` is whatever
+ * was minted into its token, which can be minutes (or a cancelled
+ * subscription) stale. Same rule `record-load.js` follows for quotas and
+ * `create-portal-session.js` for Stripe identity (#1489).
+ *
+ * @param {string} sub Auth0 user_id, e.g. 'google-oauth2|123…'
+ * @return {Promise<object>} app_metadata, `{}` when the user has none
+ * @throws {ManagementApiError} the token step's errors, or `user_lookup`
+ */
+export async function getUserAppMetadata(sub) {
+  const mgmtToken = await getManagementApiToken()
+  let resp
+  try {
+    resp = await axios.get(
+      `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(sub)}`,
+      {headers: {Authorization: `Bearer ${mgmtToken}`}},
+    )
+  } catch (err) {
+    throw new ManagementApiError('user_lookup', {cause: err})
+  }
+  return (resp.data && resp.data.app_metadata) || {}
+}
+
+
+/**
+ * Merge keys into a user's `app_metadata` through the Management API.
+ *
+ * Auth0's PATCH is a SHALLOW merge over `app_metadata`'s top-level keys, so
+ * a patch of `{exports: [...]}` rewrites that one key and leaves
+ * `usageQuota` / `subscriptionStatus` / `stripeCustomerId` exactly as they
+ * were. `record-load.js` relies on the same property when it writes
+ * `usageQuota` — nothing here may send a whole `app_metadata` object built
+ * client-side, which would drop every key it didn't know about.
+ *
+ * Read-modify-write is last-write-wins: two concurrent patches of the SAME
+ * key can lose one side's addition. Callers must keep the loss direction
+ * harmless (a missing history row, never a wrong entitlement).
+ *
+ * @param {string} sub Auth0 user_id, e.g. 'google-oauth2|123…'
+ * @param {object} patch Top-level `app_metadata` keys to write
+ * @return {Promise<void>}
+ * @throws {ManagementApiError} the token step's errors, or `user_patch`
+ */
+export async function patchUserAppMetadata(sub, patch) {
+  const mgmtToken = await getManagementApiToken()
+  try {
+    await axios.patch(
+      `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(sub)}`,
+      {app_metadata: patch},
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${mgmtToken}`,
+        },
+      },
+    )
+  } catch (err) {
+    throw new ManagementApiError('user_patch', {cause: err})
+  }
+}

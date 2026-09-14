@@ -3,6 +3,7 @@ import * as path from 'node:path'
 import esbuild from 'esbuild'
 import {fileURLToPath} from 'url'
 import config from './common.js'
+import {proModuleBuilds} from './proModules.js'
 
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../')
@@ -60,9 +61,15 @@ const opfsBuilds = workerBuilds('OPFS/OPFS.worker.js', 'OPFS.worker')
 // parse write. See `src/loader/GlbWriter.worker.js`.
 const glbWriterBuilds = workerBuilds('loader/GlbWriter.worker.js', 'GlbWriter.worker')
 
+// Pro modules — premium export code, built OUTSIDE `docs/` so it is never
+// published; the authenticated `pro-module` Netlify Function is the only
+// thing that can hand it out. See `proModules.js` and
+// design/new/glb-export-premium.md §4.2.
+const proBuilds = proModuleBuilds()
+
 
 // Wait for every build to complete
-Promise.all([mainBuild, ...opfsBuilds, ...glbWriterBuilds])
+Promise.all([mainBuild, ...opfsBuilds, ...glbWriterBuilds, ...proBuilds])
   .then(([result]) => {
     // Remove development resources from non-development builds
     if (config.define['process.env.MSW_IS_ENABLED'] !== 'true') {

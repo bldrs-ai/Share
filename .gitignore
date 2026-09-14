@@ -4,6 +4,13 @@
 # no longer check-in docs for builds.  This is handled by Netlify
 /docs
 
+# Pro-module build output (design/new/glb-export-premium.md §4.2). Premium
+# export code is built here, outside the published `docs/` dir, and shipped
+# to the `pro-module` Netlify Function by netlify.toml's `included_files`.
+# Build output, so never committed — and keeping it untracked is also what
+# guarantees no copy of it is ever public.
+/netlify/functions/_pro-modules
+
 cypress/downloads
 cypress/e2e/logs
 

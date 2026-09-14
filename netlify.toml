@@ -51,6 +51,34 @@
   functions = "netlify/functions"
   framework = "#custom"
 
+# The `pro-module` function serves premium JS built OUTSIDE `docs/` (so no
+# public copy exists) from `netlify/functions/_pro-modules/`, which is a
+# BUILD OUTPUT and gitignored. Netlify's bundler only ships files a function
+# statically imports, and this one reads its payload from disk at request
+# time, so the directory has to be declared here or the deployed function
+# 404s every module. See design/new/glb-export-premium.md §4.2.
+#
+# `node_bundler = "esbuild"` because the default (nft) bundler transpiles an
+# ESM function to CommonJS and then only ships the files it traced from the
+# ESM import graph: `import axios from 'axios'` becomes `require('axios')`,
+# Node resolves that through axios's `require` export condition to
+# `dist/node/axios.cjs`, and that file is not in the zip — the function
+# crashes on cold start with `Runtime.ImportModuleError: Cannot find module
+# '/var/task/node_modules/axios/dist/node/axios.cjs'` (the #1837 deploy
+# preview's 502). Reproducible locally with
+# `node_modules/.bin/zip-it-and-ship-it netlify/functions <out>` and a
+# `require()` of the zipped handler. esbuild bundles axios (and Sentry) into
+# the function file, so nothing is resolved from `node_modules` at runtime.
+# Scoped to this PR's two functions; every other ESM function that imports
+# axios (gh-oauth-*, unlink-identity, create-portal-session, stripe-webhook)
+# bundles the same way and is the same bug waiting — see the PR thread.
+[functions."pro-module"]
+  node_bundler = "esbuild"
+  included_files = ["netlify/functions/_pro-modules/*.js"]
+
+[functions."record-export"]
+  node_bundler = "esbuild"
+
 # COOP same-origin-allow-popups lets Google Identity Services deliver OAuth
 # tokens via postMessage without nulling window.opener in the cross-origin
 # popup. COEP is intentionally omitted (docs.google.com/picker sends

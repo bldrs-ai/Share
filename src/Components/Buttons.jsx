@@ -23,6 +23,7 @@ import {slugify} from '../utils/strings'
  * @property {boolean} [selected] Selected state.  Default: false
  * @property {string} [size] Size enum: 'small', 'medium' or 'large'.  Default: 'medium'
  * @property {string} [dataTestId] Internal attribute for component testing.
+ * @property {number} [tabIndex] Tab order; -1 takes the button out of it
  * @return {ReactElement}
  */
 export function TooltipIconButton({
@@ -37,6 +38,7 @@ export function TooltipIconButton({
   size,
   variant,
   dataTestId,
+  tabIndex,
 }) {
   assertDefined(title, onClick, icon, placement)
   const isMobile = useIsMobile()
@@ -77,6 +79,10 @@ export function TooltipIconButton({
         color={color}
         variant={variant}
         disabled={!enabled}
+        // Forwarded so a wrapper can take this button out of the tab order
+        // while keeping it on screen — `GatedAction` clones its child with
+        // `tabIndex: -1` so the gate's wrapper is the only tab stop.
+        tabIndex={tabIndex}
         data-testid={dataTestId || title}
         sx={{
           // TODO(pablo): couldn't figure how to set this in theme

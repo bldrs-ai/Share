@@ -109,6 +109,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Sharing PR3 (GitHub adapter) carry-over notes | [design/new/sharing-pr3-github.md](design/new/sharing-pr3-github.md) |
 | Marketing / blog site (Next.js SSG, sibling build to the viewer SPA), MDX content collections, SEO pipeline | [marketing/README.md](marketing/README.md) |
 | AdSense / ads strategy, route policy, test-hermeticity rules | [design/new/ads.md](design/new/ads.md) |
+| GLB export as a Pro feature (`share-140`, #1831): what the OPFS artifact is and how it becomes a download, the code-split pro module served only to subscribers (`pro-module` function + blob import), export tracking ("My Exports"), the per-format feature matrix for OBJ/STL/USD/…, the cross-browser smoke checklist | [design/new/glb-export-premium.md](design/new/glb-export-premium.md) |
 | Usage quotas: tiers, 30-day rolling window, `record-load` server gate, GitHub privacy detection, OPFS local fallback, `quotas` feature flag | [design/new/quotas.md](design/new/quotas.md) |
 | Conway-direct IFC pipeline, IfcInstanceMap, per-instance picking, `?feature=conwayDirectIfc` | [design/new/viewer-replacement.md](design/new/viewer-replacement.md) §3b |
 | STEP occurrence-keyed selection (NavTree↔scene per-occurrence), `PlacedGeometry.occurrencePath`, why one nut highlights all | [design/new/step-occurrence-selection.md](design/new/step-occurrence-selection.md) |

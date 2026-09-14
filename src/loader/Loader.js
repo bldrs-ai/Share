@@ -43,6 +43,7 @@ import {BldrsFaceIdsReader} from './bldrsFaceIds'
 import {BldrsSpatialTreeReader} from './bldrsSpatialTree'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {glbChunksHaveRenderableGeometry} from './glbArtifactHealth'
+import {NESTED_LOAD_GENERATION, beginGlbArtifactLoad, publishGlbArtifact} from './glbArtifactPublish'
 import {glbCacheKey} from './glbCacheKey'
 import {activeArtifactSpec, isGlbBatchedActive} from './glbCompress'
 import {isBldrsGlbContainer, unpackGlbContainer, viewGlbContainerChunks} from './glbContainer'
@@ -196,6 +197,12 @@ function probeLfsBytes(data) {
  * @param {boolean} isOpfsAvailable
  * @param {Function} setOpfsFile
  * @param {string} accessToken
+ * @param {object} [options]
+ * @param {boolean} [options.isNestedLoad] True for the recursive `load()`
+ *   `BLDLoader.parse` runs per referenced object of a `.bld` assembly. Such a
+ *   load renders INTO another load's model, so it owns no page-level state:
+ *   it takes no artifact generation and publishes no artifact
+ *   (glbArtifactPublish.js).
  * @return {object} The model or undefined
  */
 export async function load(
@@ -205,12 +212,29 @@ export async function load(
   isOpfsAvailable,
   setOpfsFile,
   accessToken = '',
+  {isNestedLoad = false} = {},
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
   // HACK: pathArg can be a URL or a string
   if (path instanceof URL) {
     path = path.toString()
   }
+
+  // Whatever the previous model left behind is not this model's artifact.
+  // Cleared before anything can fail or return early, so the Export section
+  // can never offer a download of the model the user just navigated away
+  // from; the writer or the cache reader sets it again for THIS load, under
+  // the generation taken here — the previous load's writer may still be
+  // running and must not republish over us (glbArtifactPublish.js).
+  //
+  // A nested load does neither: it must not clear the slot its PARENT load
+  // owns, and its own artifact (one object of a .bld assembly) is not the
+  // model the Export section offers. The sentinel generation it publishes
+  // under is never accepted, so both halves of the cache stay warm for the
+  // child while the page-level slot is left to the outer load.
+  const artifactGeneration = isNestedLoad ?
+    NESTED_LOAD_GENERATION :
+    beginGlbArtifactLoad()
 
   // TODO(pablo): we should pass in the routeResult instead of the path
   // Test for uploaded first
@@ -346,7 +370,7 @@ export async function load(
               `reader: cache lookup github key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
             `${cacheKeyArgs.sourcePath} sha=${cacheKeyArgs.sourceHash}`)
             glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
-            const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
+            const glbFile = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel)
             if (glbFile) {
               glbInfo(
                 `reader: github cache HIT (${glbFile.size}B); swapping to GLB loader for: ${filePath}`)
@@ -484,7 +508,7 @@ export async function load(
               `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
             `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
             glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
-            const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
+            const glbFile = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel)
             if (glbFile) {
               glbInfo(
                 `reader: ${kindLabel} cache HIT (${glbFile.size}B); swapping to GLB loader`)
@@ -829,6 +853,10 @@ export async function load(
         cacheKeyArgs: glbExportContext.cacheKeyArgs,
         ifcManager: viewer?.IFC?.loader?.ifcManager ?? null,
         modelID: engineModelID,
+        // Captured at the top of THIS load, not read when the writer finally
+        // runs: by then the user may have navigated to another model, whose
+        // own load owns the slot (glbArtifactPublish.js).
+        artifactGeneration,
       }).finally(() => {
         useStore.getState().setIsCacheWriteInFlight(false)
         // The writer's property/tree captures were the LAST load-time
@@ -1972,36 +2000,55 @@ async function findLoader(pathname, viewer) {
  * design/new/glb-model-sharing.md) expose their gzipped properties payload
  * on `gltf.scene.userData.bldrsPayload`.
  *
- * Decoder wiring is gated on the matching compression feature flag, so
- * a reader that's already paying for a compressed-artifact cache hit
- * gets the right decoder; readers running with the flag off skip the
- * decoder cost (and would miss the cache anyway because the schema
- * version embedded in the filename partitions compressed vs not).
- * Three 0.135's DRACO regression is resolved by the r184 upgrade
- * (PR #1514); the flag now exists to gate both write and read.
+ * Both decoders are ALWAYS wired, whatever the `glbDraco` / `glbMeshopt`
+ * flags say: those flags gate what the cache WRITER produces, but this
+ * loader also opens files the user brings — a Share export compressed
+ * from the Export tab (#1842), or any third-party GLB — and a
+ * `KHR_draco_mesh_compression` / `EXT_meshopt_compression` file with no
+ * decoder registered fails the load outright ("setMeshoptDecoder must be
+ * called before loading compressed files"; "No DRACOLoader instance
+ * provided" — the #1837 smoke). Gating on the flag only ever saved the
+ * cost of an idle decoder: `DRACOLoader` fetches its wasm on the first
+ * Draco primitive, not at construction, and `MeshoptDecoder.ready` is
+ * awaited by GLTFLoader only when a view is tagged. Three 0.135's DRACO
+ * regression is resolved by the r184 upgrade (PR #1514).
+ *
+ * Exported for `Loader.gltfDecoders.test.js`.
  *
  * @return {GLTFLoader}
  */
-function newGltfLoader() {
+export function newGltfLoader() {
   const loader = new GLTFLoader()
   loader.register((parser) => new ExtBldrsPropertiesPayload(parser))
   loader.register((parser) => new BldrsSpatialTreeReader(parser))
   loader.register((parser) => new BldrsElementPropertiesReader(parser))
   loader.register((parser) => new BldrsFaceIdsReader(parser))
   loader.register((parser) => new BldrsInstanceTablesReader(parser))
-  if (isFeatureEnabled('glbDraco')) {
-    const dracoLoader = new DRACOLoader()
-    dracoLoader.setDecoderPath('/static/js/draco/')
-    dracoLoader.setDecoderConfig({type: 'wasm'})
-    loader.setDRACOLoader(dracoLoader)
-  }
-  if (isFeatureEnabled('glbMeshopt')) {
-    // Lazy: MeshoptDecoder.ready resolves on first await; GLTFLoader
-    // awaits it internally before decoding a buffer view tagged with
-    // EXT_meshopt_compression, so registering here is cheap.
-    loader.setMeshoptDecoder(MeshoptDecoder)
-  }
+  loader.setDRACOLoader(getDracoLoader())
+  loader.setMeshoptDecoder(MeshoptDecoder)
   return loader
+}
+
+
+// One DRACOLoader for the page. Once it has decoded anything it owns up to
+// four Web Workers and a decoder blob URL, and nothing here ever calls
+// `dispose()` — a GLTFLoader is made per load (per `.bld` child, even), so a
+// per-loader instance would leak a worker pool per Draco file opened (#1837
+// codex round 9). Shared, the pool is paid for once; GLTFLoader only reads
+// from it.
+let sharedDracoLoader = null
+
+
+/**
+ * @return {DRACOLoader} the page's one DRACO decoder, created on first use
+ */
+function getDracoLoader() {
+  if (!sharedDracoLoader) {
+    sharedDracoLoader = new DRACOLoader()
+    sharedDracoLoader.setDecoderPath('/static/js/draco/')
+    sharedDracoLoader.setDecoderConfig({type: 'wasm'})
+  }
+  return sharedDracoLoader
 }
 
 
@@ -2059,9 +2106,14 @@ export class NotFoundError extends Error {
  *
  * @param {object} cacheKeyArgs Output of a sourceCacheKey adapter
  *   ({ns1, ns2, ns3, sourcePath, sourceHash}).
+ * @param {number} artifactGeneration The calling load's artifact generation;
+ *   an OPFS read can outlive its load, so the publish below is guarded on it.
+ * @param {string} kindLabel Source kind of the model this artifact came from
+ *   ('github' | 'local' | 'upload' | 'external'), carried onto the published
+ *   slot as the analytics dimension — see the publish below.
  * @return {Promise<File|null>}
  */
-async function tryLoadCachedGlb(cacheKeyArgs) {
+async function tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel) {
   try {
     // Schema version varies with the active flag state — compression mode
     // AND the batched-native layout flag — so a flag-off reader never picks
@@ -2115,6 +2167,26 @@ async function tryLoadCachedGlb(cacheKeyArgs) {
       }
       return null
     }
+    // A HIT is an export just as much as a fresh write is: the file that
+    // just passed every check IS what the Export section hands the user, and
+    // no writer will run on this load to publish it. Set only here, past the
+    // container/mode/geometry checks, so the slot never points at an
+    // artifact this same function is about to treat as a miss, and only for
+    // the load that is still current (glbArtifactPublish.js).
+    // Design: design/new/glb-export-premium.md §1.2.
+    publishGlbArtifact({
+      cacheKeyArgs,
+      schemaVer,
+      writtenAt: file.lastModified || Date.now(),
+      // The CATEGORICAL source kind, which is what `export_model` reports as
+      // `source_kind`. The cache key's `ns1` beside it looks like the same
+      // thing and is not: for GitHub it is the repo owner (a login, in an
+      // analytics event) and for every other adapter the constant
+      // 'BldrsLocalStorage', so it is leaky and uninformative at once
+      // (#1834). Published from here as well as from the writer, because a
+      // cache-hit load never runs a writer.
+      kindLabel,
+    }, artifactGeneration)
     return file
   } catch (e) {
     glbInfo('reader: lookup failed, falling back to source path:', e)

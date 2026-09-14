@@ -317,12 +317,21 @@ function hasPerVertexIfcIds(glbBytes) {
  * Cached at module scope so subsequent compressions reuse the same
  * factory. Resolves with the instantiated encoder Module.
  *
+ * Exported for `export/glbCompression.js`, which drives the DRACO
+ * extension directly rather than through `compressGlb` (it has to detach
+ * the `BLDRS_*` payloads around the transform) but must reach the encoder
+ * the same way, so a session that compresses on both paths injects and
+ * instantiates the wasm once.
+ *
  * @return {Promise<object>} the instantiated encoder Module
  */
-function loadDracoEncoder() {
+export function loadDracoEncoder() {
   if (dracoEncoderPromise) {
     return dracoEncoderPromise
   }
+  // NOT reset on rejection: the encoder script is a static asset of this
+  // deploy, so a failed injection fails the same way on retry, and each
+  // retry would append another dead <script>.
   dracoEncoderPromise = (async () => {
     if (typeof window === 'undefined') {
       throw new Error('loadDracoEncoder: no window')
@@ -347,4 +356,54 @@ function loadDracoEncoder() {
     })
   })()
   return dracoEncoderPromise
+}
+
+
+let dracoDecoderPromise = null
+
+
+/**
+ * Lazy-load Google's draco3d DECODER the same way, from the
+ * `draco_wasm_wrapper.js` + `draco_decoder.wasm` pair the viewer's
+ * `DRACOLoader` already ships under `/static/js/draco/` (Loader.js). The
+ * viewer runs its copy inside a worker, so the page has no
+ * `DracoDecoderModule` global to reuse; this instantiates one for
+ * `@gltf-transform` (`draco3d.decoder`).
+ *
+ * Only `export/glbCompression.js` needs it: re-encoding an artifact the
+ * cache pipeline already wrote with `?feature=glbDraco` means decoding it
+ * first, and `@gltf-transform` cannot READ a Draco file without the decoder
+ * registered — it would drop the whole primitive, not carry it (#1837 codex
+ * round 6).
+ *
+ * @return {Promise<object>} the instantiated decoder Module
+ */
+export function loadDracoDecoder() {
+  if (dracoDecoderPromise) {
+    return dracoDecoderPromise
+  }
+  dracoDecoderPromise = (async () => {
+    if (typeof window === 'undefined') {
+      throw new Error('loadDracoDecoder: no window')
+    }
+    if (typeof window.DracoDecoderModule !== 'function') {
+      glbVerbose('compress: injecting /static/js/draco/draco_wasm_wrapper.js')
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script')
+        s.src = '/static/js/draco/draco_wasm_wrapper.js'
+        s.async = true
+        s.onload = () => resolve()
+        s.onerror = () => reject(new Error('Failed to load draco_wasm_wrapper.js'))
+        document.head.appendChild(s)
+      })
+    }
+    if (typeof window.DracoDecoderModule !== 'function') {
+      throw new Error('DracoDecoderModule global not present after script load')
+    }
+    // eslint-disable-next-line new-cap
+    return await window.DracoDecoderModule({
+      locateFile: (file) => `/static/js/draco/${file}`,
+    })
+  })()
+  return dracoDecoderPromise
 }

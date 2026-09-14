@@ -16,4 +16,13 @@ describe('esbuild', () => {
     expect(config.logLevel).toBe('info')
     expect(config.define['process.env.OPFS_IS_ENABLED']).toBe('true')
   })
+
+  it('keeps real dynamic import syntax, which the pro-module loader needs', () => {
+    // Without this, esbuild lowers `import(expr)` (the target list includes
+    // firefox62, which predates it) into a `__require` shim that THROWS at
+    // runtime — and only for un-analyzable specifiers, i.e. exactly the
+    // `blob:` URL `src/export/importModuleFromUrl.js` imports. Nothing in
+    // the build fails; the export just never downloads. See common.js.
+    expect(config.supported['dynamic-import']).toBe(true)
+  })
 })

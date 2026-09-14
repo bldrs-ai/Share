@@ -18,6 +18,7 @@ import {LOOKS, DEFAULT_LOOK} from '../../viewer/looks'
 import {TooltipIconButton} from '../Buttons'
 import LoginDialog from './LoginDialog'
 import ManageProfile from './ManageProfile'
+import {goToSubscription} from './subscriptionNav'
 import {
   AccountBoxOutlined as AccountBoxOutlinedIcon,
   AccountCircleOutlined,
@@ -147,55 +148,9 @@ export default function ProfileControl() {
 
   const onSubscriptionClick = async () => {
     onCloseMenu()
-    const themeParam = isDay ? 'light' : 'dark'
-
-    if (stripeCustomerId) {
-      try {
-        const token = await getAccessTokenSilently({
-          authorizationParams: {
-            audience: 'https://api.github.com/',
-            scope: 'openid profile email offline_access',
-          },
-        })
-        const response = await fetch('/.netlify/functions/create-portal-session', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-        })
-        const data = await response.json()
-        if (data.url) {
-          window.location.href = data.url
-        } else {
-          console.error('No portal URL returned:', data)
-          // report in sentry
-          captureException(new Error('No portal URL returned:', data))
-        }
-      } catch (err) {
-        console.error('Error creating portal session:', err)
-        // report in sentry
-        captureException(err)
-      }
-    } else {
-      const subscribeUrl = `/subscribe/?theme=${themeParam}&userEmail=${userEmail}`
-      if (useMock) {
-        try {
-          const res = await fetch(subscribeUrl)
-          const html = await res.text()
-          document.open()
-          document.write(html)
-          document.close()
-        } catch (err) {
-          console.error('Error loading mock subscribe page:', err)
-          // report in sentry
-          captureException(err)
-        }
-      } else {
-        window.location.href = subscribeUrl
-      }
-    }
+    await goToSubscription({stripeCustomerId, userEmail, isDay, getAccessTokenSilently, useMock})
   }
+
 
   useEffect(() => {
     setIsDay(theme.palette.mode === 'light')

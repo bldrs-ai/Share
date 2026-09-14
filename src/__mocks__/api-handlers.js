@@ -4,6 +4,7 @@ import {
   HTTP_BAD_REQUEST,
   HTTP_FORBIDDEN,
   HTTP_INTERNAL_SERVER_ERROR,
+  HTTP_NOT_FOUND,
   HTTP_OK,
 } from '../net/http'
 import apiHandlersGithub from './api-handlers-github'
@@ -107,6 +108,15 @@ function workersAndWasmPassthrough() {
 
 
 const FREE_LIMIT_MOCK = 4
+
+// Kept in lock-step with `netlify/functions/pro-module.js`'s allowlist.
+const PRO_MODULE_NAMES_MOCK = ['glbExport']
+
+// Kept in lock-step with `netlify/functions/record-export.js`'s EXPORTS_CAP.
+const EXPORTS_CAP_MOCK = 100
+
+// Kept in lock-step with `record-export.js`'s UUID_PATTERN.
+const UUID_PATTERN_MOCK = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 /**
  * Handlers for Netlify functions
@@ -232,6 +242,135 @@ function netlifyHandlers() {
         JSON.stringify({allowed: true, used: newLoads.length, limit, tier, alreadyCounted: false, loads: newLoads}),
         {status: HTTP_OK, headers: {'Content-Type': 'application/json'}},
       )
+    }),
+
+    // Export history (design/new/glb-export-premium.md §4.5). Like the
+    // pro-module mock above, this IS the gate in dev and Playwright: same
+    // 401/403 bodies as `record-export.js`, the tier read off the store the
+    // way the record-load mock reads it, and the ledger on
+    // `window.__mockExports` so a spec can seed or inspect it (reset it
+    // between tests — nothing here clears it).
+    http.post('/.netlify/functions/record-export', async ({request}) => {
+      const auth = request.headers.get('authorization') || ''
+      if (!/^Bearer\s+.+/i.test(auth)) {
+        return new Response(
+          JSON.stringify({error: 'missing_auth0_token'}),
+          {status: HTTP_AUTHORIZATION_REQUIRED, headers: {'Content-Type': 'application/json'}},
+        )
+      }
+
+      const body = await request.json().catch(() => ({}))
+      const {id, key, format, bytes, title} = body || {}
+      if (typeof key !== 'string' || key.length === 0 ||
+          typeof format !== 'string' || format.length === 0 ||
+          !Number.isInteger(bytes) || bytes < 0) {
+        return new Response(
+          JSON.stringify({error: 'invalid_request'}),
+          {status: HTTP_BAD_REQUEST, headers: {'Content-Type': 'application/json'}},
+        )
+      }
+      // Same id contract as the function: a well-formed client id is echoed
+      // on the stored row (that shared id is what the client's mirror merge
+      // matches on), a malformed one is a 400, and an absent one is minted
+      // here.
+      if (id !== undefined && id !== null && (typeof id !== 'string' || !UUID_PATTERN_MOCK.test(id))) {
+        return new Response(
+          JSON.stringify({error: 'invalid_id'}),
+          {status: HTTP_BAD_REQUEST, headers: {'Content-Type': 'application/json'}},
+        )
+      }
+
+      let subscriptionStatus = null
+      try {
+        subscriptionStatus = window?.store?.getState?.()?.appMetadata?.subscriptionStatus
+      } catch {
+        // store not exposed in this test build — treat as not subscribed
+      }
+      if (subscriptionStatus !== 'sharePro') {
+        return new Response(
+          JSON.stringify({error: 'subscription_required'}),
+          {status: HTTP_FORBIDDEN, headers: {'Content-Type': 'application/json'}},
+        )
+      }
+
+      const existing = (typeof window !== 'undefined' && window.__mockExports) || []
+      const newExports = [
+        {
+          id: id || `mock-export-${existing.length}-${Date.now()}`,
+          key,
+          title: title || null,
+          format,
+          bytes,
+          exportedAt: new Date().toISOString(),
+        },
+        ...existing,
+      ].slice(0, EXPORTS_CAP_MOCK)
+      if (typeof window !== 'undefined') {
+        window.__mockExports = newExports
+      }
+      return new Response(
+        JSON.stringify({exports: newExports}),
+        {status: HTTP_OK, headers: {'Content-Type': 'application/json'}},
+      )
+    }),
+
+    // The dev copy the handler below proxies to. Declared so the built
+    // module reaches the page as a plain static file instead of being
+    // reported as an unhandled request.
+    http.get('/__pro_dev__/*', () => passthrough()),
+
+    // Pro-module delivery (design/new/glb-export-premium.md §4.2). Neither
+    // dev nor Playwright runs a real Netlify function, so this mock IS the
+    // gate in those builds: same 401/403 shape as `pro-module.js`, tier read
+    // off the store exactly as the record-load mock above does, and the
+    // module bytes proxied from the `docs/__pro_dev__/` copy the dev and
+    // playwright builds emit (never the prod build — see
+    // tools/esbuild/proModules.js).
+    http.get('/.netlify/functions/pro-module', async ({request}) => {
+      const auth = request.headers.get('authorization') || ''
+      if (!/^Bearer\s+.+/i.test(auth)) {
+        return new Response(
+          JSON.stringify({error: 'missing_auth0_token'}),
+          {status: HTTP_AUTHORIZATION_REQUIRED, headers: {'Content-Type': 'application/json'}},
+        )
+      }
+
+      const name = new URL(request.url).searchParams.get('name') || ''
+      if (!PRO_MODULE_NAMES_MOCK.includes(name)) {
+        return new Response(
+          JSON.stringify({error: 'unknown_module'}),
+          {status: HTTP_NOT_FOUND, headers: {'Content-Type': 'application/json'}},
+        )
+      }
+
+      let subscriptionStatus = null
+      try {
+        subscriptionStatus = window?.store?.getState?.()?.appMetadata?.subscriptionStatus
+      } catch {
+        // store not exposed in this test build — treat as not subscribed
+      }
+      if (subscriptionStatus !== 'sharePro') {
+        return new Response(
+          JSON.stringify({error: 'subscription_required'}),
+          {status: HTTP_FORBIDDEN, headers: {'Content-Type': 'application/json'}},
+        )
+      }
+
+      const built = await fetch(`/__pro_dev__/${name}.js`)
+      if (!built.ok) {
+        return new Response(
+          JSON.stringify({error: 'module_not_built'}),
+          {status: HTTP_NOT_FOUND, headers: {'Content-Type': 'application/json'}},
+        )
+      }
+      return new Response(await built.text(), {
+        status: HTTP_OK,
+        headers: {
+          'Content-Type': 'text/javascript; charset=utf-8',
+          'Cache-Control': 'private, no-store',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      })
     }),
   ]
 }
