@@ -2024,12 +2024,31 @@ export function newGltfLoader() {
   loader.register((parser) => new BldrsElementPropertiesReader(parser))
   loader.register((parser) => new BldrsFaceIdsReader(parser))
   loader.register((parser) => new BldrsInstanceTablesReader(parser))
-  const dracoLoader = new DRACOLoader()
-  dracoLoader.setDecoderPath('/static/js/draco/')
-  dracoLoader.setDecoderConfig({type: 'wasm'})
-  loader.setDRACOLoader(dracoLoader)
+  loader.setDRACOLoader(getDracoLoader())
   loader.setMeshoptDecoder(MeshoptDecoder)
   return loader
+}
+
+
+// One DRACOLoader for the page. Once it has decoded anything it owns up to
+// four Web Workers and a decoder blob URL, and nothing here ever calls
+// `dispose()` — a GLTFLoader is made per load (per `.bld` child, even), so a
+// per-loader instance would leak a worker pool per Draco file opened (#1837
+// codex round 9). Shared, the pool is paid for once; GLTFLoader only reads
+// from it.
+let sharedDracoLoader = null
+
+
+/**
+ * @return {DRACOLoader} the page's one DRACO decoder, created on first use
+ */
+function getDracoLoader() {
+  if (!sharedDracoLoader) {
+    sharedDracoLoader = new DRACOLoader()
+    sharedDracoLoader.setDecoderPath('/static/js/draco/')
+    sharedDracoLoader.setDecoderConfig({type: 'wasm'})
+  }
+  return sharedDracoLoader
 }
 
 

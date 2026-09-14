@@ -32,4 +32,16 @@ describe('Loader#newGltfLoader', () => {
     expect(loader.dracoLoader.decoderConfig).toEqual({type: 'wasm'})
     expect(loader.meshoptDecoder).toBe(MeshoptDecoder)
   })
+
+  it('shares one DRACOLoader across GLTFLoaders', () => {
+    // A GLTFLoader is made per load, and a DRACOLoader that has decoded
+    // owns a worker pool nothing disposes — one per page, not per load.
+    isFeatureEnabled.mockReturnValue(false)
+
+    const first = newGltfLoader()
+    const second = newGltfLoader()
+
+    expect(first).not.toBe(second)
+    expect(second.dracoLoader).toBe(first.dracoLoader)
+  })
 })
