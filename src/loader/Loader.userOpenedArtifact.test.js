@@ -21,8 +21,14 @@ import {BufferGeometry} from 'three'
 import {computeBoundsTree} from 'three-mesh-bvh'
 import {getGlbLogs} from '../../tools/jest/glbLogCapture'
 import {downloadToOPFS} from '../OPFS/utils'
-import {batchedArtifactBytes, liveBatchedModel, mergedGlbBytes} from './glbArtifact.fixture'
 import {isBldrsGlbArtifact, load} from './Loader'
+import {
+  batchedArtifactBytes,
+  liveBatchedModel,
+  mergedElementIds,
+  mergedGlbBytes,
+  mergedVertexCount,
+} from './glbArtifact.fixture'
 
 
 // Steer the `isOpfsAvailable` path without a real worker or cache: the
@@ -148,9 +154,14 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
       .toContain('reader: hydrated batched-native artifact to a BatchedMesh model')
   })
 
-  it('restores per-mesh instance maps and BVHs on the merged layout', async () => {
-    const model = await openGlb(mergedGlbBytes())
-
+  /**
+   * The single mesh of a merged-layout model, with the count pinned so a
+   * fixture that silently grew a second primitive can't slip an assertion.
+   *
+   * @param {object} model
+   * @return {object} the one Mesh
+   */
+  function onlyMesh(model) {
     const meshes = []
     model.traverse((obj) => {
       if (obj.isMesh) {
@@ -158,20 +169,60 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
       }
     })
     expect(meshes).toHaveLength(1)
-    const [mesh] = meshes
+    return meshes[0]
+  }
+
+  it('restores per-mesh instance maps and BVHs on the merged layout', async () => {
+    const model = await openGlb(mergedGlbBytes())
+    const mesh = onlyMesh(model)
 
     // Per-vertex identity survived the round trip and was promoted back off
     // GLTFLoader's lowercased `_expressid` / `_instanceid`.
-    expect(mesh.geometry.attributes.expressID.count).toBe(6)
+    expect(mesh.geometry.attributes.expressID.count).toBe(mergedVertexCount())
     expect(model.capabilities.instancePicking).toBe(true)
     // The map a scene pick resolves through: triangle → instance → element.
     expect(mesh.instanceMap).toBeDefined()
     expect(mesh.instanceMap.getParentExpressIdByInstance(
-      mesh.instanceMap.getInstanceIdByTriangle(0))).toBe(100)
+      mesh.instanceMap.getInstanceIdByTriangle(0))).toBe(mergedElementIds()[0])
     // …and the BVH that keeps hover off `Mesh.prototype.raycast`'s
     // O(triangles) brute force. This is the gate that used to read
     // `cameFromGlbCache`.
     expect(mesh.geometry.boundsTree).toBeDefined()
+    // Non-vacuity for the source of that map: the artifact carries
+    // `BLDRS_face_ids`, the PREFERRED source, and the reader says it resolved
+    // it. Without this the assertions above would pass just as well on the
+    // legacy per-vertex fallback (covered by the next test instead).
+    const faceIdsLogs = getGlbLogs().filter((l) => l.text.includes('face_ids'))
+    expect(faceIdsLogs.some((l) => /^BLDRS_face_ids: resolved /.test(l.text))).toBe(true)
+    // …and it validated rather than fell back. The order cross-check reads the
+    // per-vertex attribute, so a clobbered `expressID` (#1846) fails it and
+    // warns on the way to `instanceMapFromGeometry`.
+    expect(faceIdsLogs.filter((l) => l.level === 'warn')).toEqual([])
+  })
+
+  it('keeps per-vertex ids on a Mesh-rooted merged artifact with no face_ids (#1846)', async () => {
+    // The pre-face_ids merged artifact: per-vertex `_EXPRESSID`/`_INSTANCEID`
+    // are the only map source, so this is the read path #1846 broke outright.
+    // `batchedModelToMergedMesh` hands `GLTFExporter.parse` a bare `Mesh` and
+    // the exporter's `AuxScene` wrap puts it directly under `scenes[0]` — no
+    // container node — so `readModel` hoists that geometry onto the root and
+    // the decoration walk reaches the one geometry object twice. The second
+    // visit used to stamp its synthetic `Int8Array(1)` over the promoted
+    // per-vertex ids, and every pick then resolved to the placeholder.
+    const model = await openGlb(mergedGlbBytes({withFaceIds: false}))
+    const mesh = onlyMesh(model)
+
+    expect(mesh.geometry.attributes.expressID.count).toBe(mergedVertexCount())
+    const [firstId, lastId] = mergedElementIds()
+    expect(mesh.geometry.attributes.expressID.getX(0)).toBe(firstId)
+    expect(mesh.geometry.attributes.expressID.getX(mergedVertexCount() - 1)).toBe(lastId)
+    // …and the map built from them resolves both elements, rather than
+    // collapsing every triangle onto one placeholder id.
+    expect(mesh.instanceMap).toBeDefined()
+    expect(mesh.instanceMap.getParentExpressIdByInstance(
+      mesh.instanceMap.getInstanceIdByTriangle(0))).toBe(firstId)
+    expect(mesh.instanceMap.getParentExpressIdByInstance(
+      mesh.instanceMap.getInstanceIdByTriangle(1))).toBe(lastId)
   })
 
   it('leaves a GLB with no Bldrs payload plain, and does not throw', async () => {
@@ -185,15 +236,13 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
     expect(model.isBatchedMesh).toBeFalsy()
     expect(model.capabilities.instancePicking).toBeFalsy()
     expect(model.capabilities.batchedPicking).toBeFalsy()
-    const meshes = []
-    model.traverse((obj) => {
-      if (obj.isMesh) {
-        meshes.push(obj)
-      }
-    })
-    expect(meshes).toHaveLength(1)
-    expect(meshes[0].instanceMap).toBeUndefined()
-    expect(meshes[0].geometry.boundsTree).toBeUndefined()
+    const mesh = onlyMesh(model)
+    expect(mesh.instanceMap).toBeUndefined()
+    expect(mesh.geometry.boundsTree).toBeUndefined()
+    // The synthetic mesh-level placeholder still lands on a GLB with no
+    // identity of ours — the #1846 guard must not suppress it, or
+    // `getExpressId` has nothing to read on a plain drag-dropped model.
+    expect(mesh.geometry.attributes.expressID.count).toBe(1)
   })
 
   it('degrades an artifact from a different Share build to plain, not to an error', async () => {

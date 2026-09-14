@@ -1,8 +1,8 @@
 /* eslint-disable no-magic-numbers */
 import {Matrix4} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
-import {batchedArtifactBytes, liveBatchedModel} from './glbArtifact.fixture'
 import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
+import {batchedArtifactBytes, liveBatchedModel} from './glbArtifact.fixture'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {isDefaultColor} from '../viewer/ifc/productPalette'
 
@@ -26,7 +26,7 @@ import {isDefaultColor} from '../viewer/ifc/productPalette'
  * check 1 (schema-slot gating) is pinned in glbCompress.test.js, and check
  * 4 (third-party appearance) in glbBatchedExport.test.js.
  *
- * The model and the artifact bytes come from `batchedArtifact.fixture.js`,
+ * The model and the artifact bytes come from `glbArtifact.fixture.js`,
  * shared with `Loader.userOpenedArtifact.test.js` (which drives the same
  * bytes through `load()`).
  */

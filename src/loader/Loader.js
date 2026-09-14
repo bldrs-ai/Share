@@ -707,9 +707,18 @@ export async function load(
 
   // Did GLTFLoader parse this model? Both a cache-hit artifact (swapped in
   // above) and a `.glb`/`.gltf` the user opened land here, and neither has
-  // been through the live parse's own decoration — which is what the two
-  // artifact-keyed gates below need to know, and what `cameFromGlbCache`
-  // cannot tell them (#1844).
+  // been through the live parse's own decoration — which is what the BVH half
+  // of `restoreCacheHitPicking` needs to know, and what `cameFromGlbCache`
+  // cannot tell it (#1844).
+  //
+  // Only that one gate consumes it. The batched hydration below is re-keyed by
+  // the same issue but needs no scoping term, because its own condition is
+  // already unforgeable by a live parse: `userData.bldrsInstanceTables` is
+  // written by `BldrsInstanceTablesReader`, a GLTFLoader plugin, so its mere
+  // presence proves a GLTFLoader parse. `isBldrsGlbArtifact`'s third signature
+  // is not like that — per-vertex `expressID` is exactly what a live
+  // Conway-direct IFC parse emits, so the BVH gate has to say "and it came off
+  // a GLTFLoader parse" out loud or it would double-build every IFC's BVH.
   const isGlbParse = loader.type === 'glb' || loader.type === 'gltf'
 
   // Batched-native artifact hydration (view-140 S9, `glbBatched`, default-on):
@@ -746,6 +755,12 @@ export async function load(
   if (!isIfc) {
     onProgress('Converting model format...')
     debug().log('Loader#load: converting non-IFC model to IFC:', model)
+    // Deliberately still keyed on the CACHE, not re-keyed to the artifact like
+    // the hydration and BVH gates above: this block is a cost, not a
+    // capability. `glbInfo` is ungated (it prints on every load, unlike
+    // `glbVerbose`) and `summarizeGlbScene` walks the whole scene computing a
+    // per-mesh `Box3` — worth paying to explain a cache hit the user did not
+    // ask for, not worth paying on every third-party `.glb` someone opens.
     if (cameFromGlbCache) {
       const summary = summarizeGlbScene(model)
       glbInfo(
@@ -945,6 +960,15 @@ export async function load(
  * `inferModelCapabilities` uses it: `convertToShareModel` stamps a synthetic
  * single-element `Int8Array(1)` expressID on models that have none, and that
  * placeholder must not read as real per-vertex ids.
+ *
+ * One benign delta versus the `cameFromGlbCache` gate this replaced: a batched
+ * artifact whose `INSTANCE_TABLES_VERSION` the reader rejects, but whose
+ * `BLDRS_GLB_SCHEMA_VERSION` still matches, matches no signature here and so
+ * skips the BVH a cache hit used to build. Perf-only (hover falls back to
+ * brute-force raycast), and currently unreachable from the cache at all — the
+ * OPFS slot is partitioned by `schemaVer` (`glbCacheKey.js#glbArtifactPath`),
+ * so an artifact this reader's schema version can serve was written by a build
+ * whose table version it also accepts.
  *
  * @param {object} model the converted Share model (Mesh, Group or BatchedMesh)
  * @return {boolean}
@@ -1510,6 +1534,19 @@ export function convertToShareModel(model, viewer, {fileName = null} = {}) {
         obj3d.geometry.setAttribute('expressID', preserved)
         delete obj3d.geometry.attributes._expressid
         foundPreservedExpressId = true
+        hasPerVertex = true
+      } else if (obj3d.geometry.attributes.expressID?.count > 1) {
+        // Already promoted on an earlier visit in THIS walk: `readModel`
+        // hoists `children[0].geometry` onto a geometry-less root, so the
+        // root and that child share one geometry OBJECT and the walk reaches
+        // it twice. The first visit renamed `_expressid` → `expressID` and
+        // deleted the source, so without this arm the second visit fell to
+        // the synthetic branch below and stamped an `Int8Array(1)` placeholder
+        // over real per-vertex identity — which is every merged artifact the
+        // user opens, since `GLTFExporter` wraps the writer's bare `Mesh` in
+        // an `AuxScene` with no container node between them (#1846). Real
+        // per-vertex identity always outranks the placeholder, so the guard is
+        // stated as that rule rather than as an aliasing special case.
         hasPerVertex = true
       } else {
         const ids = new Int8Array(1)

@@ -7,13 +7,24 @@
 // parity) and `Loader.userOpenedArtifact.test.js` (the same bytes arriving
 // through `load()` as a file the user opened — #1844). One builder, so the
 // second suite cannot drift into testing a shape the writer never emits.
+//
+// "The shape the writer emits" is load-bearing and was got wrong once: the
+// merged half used to add a container node above the mesh and to omit
+// `BLDRS_face_ids`, and the container was the only reason the read path's
+// double-decoration bug (#1846) stayed hidden. Both halves now match their
+// writer — Mesh-rooted, face_ids injected by the writer's own capture.
 import {BatchedMesh, BufferAttribute, BufferGeometry, Matrix4} from 'three'
+import {
+  BLDRS_FACE_IDS_EXTENSION_NAME,
+  buildFaceIdsExtensionData,
+  capturePerTriangleIds,
+} from './bldrsFaceIds'
 import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
   buildInstanceTablesExtensionData,
 } from './bldrsInstanceTables'
 import {exportBatchedModelAsInstancedGlb} from './glbBatchedExport'
-import {injectGlbExtensions, serializeGlb} from './injectGlbExtensions'
+import {injectGlbExtensions, parseGlb, serializeGlb} from './injectGlbExtensions'
 
 
 const GREY = {x: 0.8, y: 0.8, z: 0.8, w: 1}
@@ -131,18 +142,27 @@ const VERTEX_COUNT = EXPRESS_IDS.length
 
 
 /**
- * One merged-layout GLB: a single indexed mesh, optionally carrying the
- * per-vertex element identity a Bldrs artifact bakes in.
+ * One merged-layout GLB: a single Mesh-rooted indexed mesh, optionally
+ * carrying the per-vertex element identity a Bldrs artifact bakes in and the
+ * `BLDRS_face_ids` payload the writer derives from it.
  *
  * `withElementIds: false` is the third-party / plain-GLB control — the same
  * geometry with nothing of ours in it, so a test can tell "the artifact was
- * recognised" apart from "any GLB gets this treatment".
+ * recognised" apart from "any GLB gets this treatment". It suppresses
+ * face_ids too, since `capturePerTriangleIds` reads `_EXPRESSID`.
+ *
+ * `withFaceIds: false` is the pre-face_ids artifact: per-vertex ids only, so
+ * the reader's LEGACY per-vertex fallback in `restoreCacheHitPicking` is what
+ * builds the instance map. With the default the preferred face_ids path runs
+ * instead, including its order cross-check against the per-vertex attribute.
  *
  * @param {object} [opts]
  * @param {boolean} [opts.withElementIds] include `_EXPRESSID`/`_INSTANCEID`
+ * @param {boolean} [opts.withFaceIds] inject `BLDRS_face_ids`, as the real
+ *   writer does for every merged artifact (`glbExport.js`)
  * @return {Uint8Array} the GLB bytes
  */
-export function mergedGlbBytes({withElementIds = true} = {}) {
+export function mergedGlbBytes({withElementIds = true, withFaceIds = true} = {}) {
   const parts = [POSITIONS, INDICES]
   if (withElementIds) {
     parts.splice(1, 0, EXPRESS_IDS, INSTANCE_IDS)
@@ -192,22 +212,36 @@ export function mergedGlbBytes({withElementIds = true} = {}) {
     type: 'SCALAR',
   })
 
-  return serializeGlb({
-    asset: {version: '2.0', generator: 'batchedArtifact.fixture'},
+  const bytes = serializeGlb({
+    asset: {version: '2.0', generator: 'glbArtifact.fixture'},
     scene: 0,
     scenes: [{nodes: [0]}],
-    // A container node above the mesh, as the writer's Group-rooted models
-    // produce. It is load-bearing for this fixture rather than decoration:
-    // `readModel` hoists `children[0].geometry` onto the scene root when the
-    // root has none, and `convertToShareModel`'s decoration walk then visits
-    // that one geometry twice — promoting `_expressid` on the first visit and
-    // stamping its synthetic placeholder over the result on the second.
-    nodes: [{children: [1], name: 'Model'}, {mesh: 0, name: 'Part'}],
+    // Mesh-rooted, with NO container node above it — what the merged writer
+    // actually emits. `batchedModelToMergedMesh` hands `GLTFExporter.parse` a
+    // bare `Mesh`, and the exporter wraps a non-`Scene` input in an `AuxScene`
+    // whose `nodes` is that one mesh node (three's GLTFExporter.js, `parse`).
+    // The shape matters to the read path: with the mesh directly under the
+    // scene, `readModel` hoists its geometry onto the scene root, so the
+    // decoration walk meets that one geometry object twice (#1846).
+    nodes: [{mesh: 0, name: 'Model'}],
     meshes: [{primitives: [{attributes, indices: indicesAccessor}]}],
     accessors,
     bufferViews,
     buffers: [{byteLength: bin.byteLength}],
   }, bin)
+
+  if (!withFaceIds) {
+    return bytes
+  }
+  // Derived from the serialized bytes by the writer's own capture, not
+  // hand-written: `exportAndCacheGlb` runs exactly this pair over the
+  // pristine pre-compression GLB (`glbExport.js`, the `capturePerTriangleIds`
+  // call and the `BLDRS_FACE_IDS_EXTENSION_NAME` entry it injects). Null
+  // capture — the no-`_EXPRESSID` control — drops out of the inject filter.
+  const {json, bin: parsedBin} = parseGlb(bytes)
+  const faceIdsData = buildFaceIdsExtensionData(capturePerTriangleIds(json, parsedBin))
+  return injectGlbExtensions(
+    bytes, [{name: BLDRS_FACE_IDS_EXTENSION_NAME, data: faceIdsData, compress: true}], null, null).bytes
 }
 
 

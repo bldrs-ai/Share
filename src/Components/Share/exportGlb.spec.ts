@@ -374,7 +374,6 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // per-vertex ids do not survive them — a compressed artifact's picking
     // rides on `BLDRS_face_ids` instead, which is a different claim.
     test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
 
     await routeProModule(page)
     await loadModelAndWaitForArtifact(page)
