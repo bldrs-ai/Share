@@ -17,6 +17,7 @@ import {
   watchProModuleRequests,
 } from '../../tests/e2e/export'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
+import {waitForModelReady} from '../../tests/e2e/models'
 import {
   auth0Login,
   clearOpfs,
@@ -256,6 +257,62 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       await metadataToggle.click()
       await expect(sizeLine).toHaveAttribute('data-bytes', String(withMetadataBytes))
       return withMetadataBytes - stripped
+    }
+  })
+
+  test('a compressed export opens back in Share', async ({page}) => {
+    // Share is one of the viewers a compressed export has to open in, and it
+    // didn't: the GLTFLoader's DRACO and Meshopt decoders were gated on the
+    // cache WRITER's feature flags, so a file the user brought failed with
+    // "setMeshoptDecoder must be called before loading compressed files" /
+    // "No DRACOLoader instance provided" (#1837 smoke). Both codecs' files
+    // come back in through the Open dialog's file chooser, the way a user
+    // would bring them.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+
+    const downloads: Array<{mode: string; path: string}> = []
+    for (const codec of COMPRESSION_CODECS) {
+      await selectCompression(page, codec.mode)
+      const downloadPromise = page.waitForEvent('download')
+      await exportButton.click()
+      // Saved under its own name: Playwright's download temp file has no
+      // extension, and the local-file loader needs one to know what it is.
+      const path = test.info().outputPath(`index-${codec.mode}.glb`)
+      await (await downloadPromise).saveAs(path)
+      downloads.push({mode: codec.mode, path})
+    }
+    await page.keyboard.press('Escape')
+
+    for (const {mode, path} of downloads) {
+      await page.getByTestId('control-button-open').click()
+      // The dialog opens on whichever tab it last showed (Google, for a
+      // signed-in user); Browse lives on Local.
+      await page.getByRole('tab', {name: 'Local'}).click()
+      const chooser = page.waitForEvent('filechooser')
+      await page.getByTestId('button_open_file').click()
+      await (await chooser).setFiles(path)
+
+      // The upload lands under `/v/new/` and loads from OPFS; the load
+      // report's OK is a fresh signal per load (the first one was
+      // dismissed above), so it can't be the previous model's.
+      await expect(page).toHaveURL(/\/share\/v\/new\/.+\.glb/, {timeout: EXPORT_TEST_TIMEOUT_MS})
+      await expect(page.getByTestId('LoadStatusOk'), `${mode} export should load`)
+        .toBeVisible({timeout: EXPORT_TEST_TIMEOUT_MS})
+      await expect(page.getByText(/Loader error|Unhandled error in parse|DRACOLoader|setMeshoptDecoder/))
+        .toHaveCount(0)
+      await waitForModelReady(page)
+      await dismissLoadSnackbar(page)
     }
   })
 

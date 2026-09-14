@@ -2000,35 +2000,35 @@ async function findLoader(pathname, viewer) {
  * design/new/glb-model-sharing.md) expose their gzipped properties payload
  * on `gltf.scene.userData.bldrsPayload`.
  *
- * Decoder wiring is gated on the matching compression feature flag, so
- * a reader that's already paying for a compressed-artifact cache hit
- * gets the right decoder; readers running with the flag off skip the
- * decoder cost (and would miss the cache anyway because the schema
- * version embedded in the filename partitions compressed vs not).
- * Three 0.135's DRACO regression is resolved by the r184 upgrade
- * (PR #1514); the flag now exists to gate both write and read.
+ * Both decoders are ALWAYS wired, whatever the `glbDraco` / `glbMeshopt`
+ * flags say: those flags gate what the cache WRITER produces, but this
+ * loader also opens files the user brings — a Share export compressed
+ * from the Export tab (#1842), or any third-party GLB — and a
+ * `KHR_draco_mesh_compression` / `EXT_meshopt_compression` file with no
+ * decoder registered fails the load outright ("setMeshoptDecoder must be
+ * called before loading compressed files"; "No DRACOLoader instance
+ * provided" — the #1837 smoke). Gating on the flag only ever saved the
+ * cost of an idle decoder: `DRACOLoader` fetches its wasm on the first
+ * Draco primitive, not at construction, and `MeshoptDecoder.ready` is
+ * awaited by GLTFLoader only when a view is tagged. Three 0.135's DRACO
+ * regression is resolved by the r184 upgrade (PR #1514).
+ *
+ * Exported for `Loader.gltfDecoders.test.js`.
  *
  * @return {GLTFLoader}
  */
-function newGltfLoader() {
+export function newGltfLoader() {
   const loader = new GLTFLoader()
   loader.register((parser) => new ExtBldrsPropertiesPayload(parser))
   loader.register((parser) => new BldrsSpatialTreeReader(parser))
   loader.register((parser) => new BldrsElementPropertiesReader(parser))
   loader.register((parser) => new BldrsFaceIdsReader(parser))
   loader.register((parser) => new BldrsInstanceTablesReader(parser))
-  if (isFeatureEnabled('glbDraco')) {
-    const dracoLoader = new DRACOLoader()
-    dracoLoader.setDecoderPath('/static/js/draco/')
-    dracoLoader.setDecoderConfig({type: 'wasm'})
-    loader.setDRACOLoader(dracoLoader)
-  }
-  if (isFeatureEnabled('glbMeshopt')) {
-    // Lazy: MeshoptDecoder.ready resolves on first await; GLTFLoader
-    // awaits it internally before decoding a buffer view tagged with
-    // EXT_meshopt_compression, so registering here is cheap.
-    loader.setMeshoptDecoder(MeshoptDecoder)
-  }
+  const dracoLoader = new DRACOLoader()
+  dracoLoader.setDecoderPath('/static/js/draco/')
+  dracoLoader.setDecoderConfig({type: 'wasm'})
+  loader.setDRACOLoader(dracoLoader)
+  loader.setMeshoptDecoder(MeshoptDecoder)
   return loader
 }
 

@@ -345,7 +345,15 @@ Options surfaced in the UI: *Include Bldrs metadata (properties, spatial
 tree)* — default **on** (it's their model; the toggle exists for onward
 sharing) — and *Compression: None / Meshopt / Draco* — default **None** (the
 file opens everywhere; the other two need the matching decoder registered in
-whatever the user opens it with).
+whatever the user opens it with). Share itself is one of those viewers:
+`Loader.js#newGltfLoader` carries both decoders unconditionally (they were
+gated on the cache writer's `glbDraco` / `glbMeshopt` flags, so a compressed
+export failed to open in Share — the #1837 smoke), and the export E2E opens
+each compressed download back through the Open dialog. Two smoke findings on
+the round trip are tracked separately: element picking on a re-opened Bldrs
+GLB (#1844 — the hydration gates key off the cache, not the file) and a
+portable, de-instanced export with named nodes for viewers without
+`EXT_mesh_gpu_instancing` (#1843).
 
 ### 4.4 UI
 
