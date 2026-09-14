@@ -36,9 +36,15 @@ const compressedByArtifact = new WeakMap()
  * Cache, OPFS is unavailable, the container is a layout we don't size) leaves
  * the export itself working. The caller shows no size line.
  *
+ * `compression` in the answer is the codec the measured file actually
+ * carries. It is the one asked for unless its encoder was unavailable, in
+ * which case `compressExportGlb` fell back to the uncompressed file and
+ * this says `none` — the panel's cue to tell the user the figure is not a
+ * Draco figure.
+ *
  * @param {?object} artifact The store's `glbArtifact` slot
  * @param {string} [mode] One of `glbCompression.js`'s `COMPRESSION_MODES`
- * @return {Promise<?{withMetadata: number, withoutMetadata: number, metadataBytes: number}>}
+ * @return {Promise<?{withMetadata: number, withoutMetadata: number, metadataBytes: number, compression: string}>}
  */
 export function artifactSizes(artifact, mode = COMPRESSION_NONE) {
   if (!artifact) {
@@ -98,7 +104,7 @@ function cached(store, artifact, mode, compute) {
 
 /**
  * @param {?object} compressed `compressExportGlb`'s result
- * @return {?{withMetadata: number, withoutMetadata: number, metadataBytes: number}}
+ * @return {?{withMetadata: number, withoutMetadata: number, metadataBytes: number, compression: string}}
  */
 function sizesOfCompressed(compressed) {
   if (!compressed) {
@@ -106,7 +112,7 @@ function sizesOfCompressed(compressed) {
   }
   const withMetadata = compressed.withMetadata.byteLength
   const withoutMetadata = compressed.withoutMetadata.byteLength
-  return {withMetadata, withoutMetadata, metadataBytes: withMetadata - withoutMetadata}
+  return {withMetadata, withoutMetadata, metadataBytes: withMetadata - withoutMetadata, compression: compressed.mode}
 }
 
 
@@ -177,7 +183,8 @@ async function readArtifactSizes(artifact) {
       // twice, once unprompted, is noise.
       return null
     }
-    return await artifactSizesFromFile(file)
+    const sizes = await artifactSizesFromFile(file)
+    return sizes && {...sizes, compression: COMPRESSION_NONE}
   } catch (e) {
     // Not user-facing, but a header we can't read is a malformed artifact —
     // worth seeing, since the export path parses the same bytes.

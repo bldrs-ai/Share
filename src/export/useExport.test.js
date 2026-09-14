@@ -143,6 +143,7 @@ describe('useExport', () => {
     expect(forDownload.bytes).toBe(compressed.withoutMetadata)
     expect(forDownload.withMetadataBytes).toBe(900)
     expect(forDownload.withoutMetadataBytes).toBe(400)
+    expect(forDownload.mode).toBe('meshopt')
     // …and the choice is recorded, so "Download again" reproduces this file
     // rather than an uncompressed one at the size the row claims.
     expect(recordExport).toHaveBeenCalledWith(
@@ -167,6 +168,23 @@ describe('useExport', () => {
     const {compress} = exportArtifact.mock.calls[0][0]
     expect((await compress(ARTIFACT_BYTES, {stripBldrsMetadata: false})).bytes)
       .toBe(compressed.withMetadata)
+  })
+
+  it('records the codec the module reports it applied, when that differs from the request', async () => {
+    // The encoder could not load, the host fell back to the uncompressed
+    // file (`glbCompression.js`), and the pro module said so in `stats`. The
+    // history row's options are what "Download again" replays and what sits
+    // beside the row's size, so they describe the file that exists.
+    exportArtifact.mockResolvedValue({...EXPORTED, stats: {...EXPORTED.stats, compression: 'none'}})
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {stripBldrsMetadata: false, compression: 'draco'})
+    })
+
+    expect(recordExport).toHaveBeenCalledWith(
+      expect.objectContaining({options: {stripBldrsMetadata: false, compression: 'none'}}),
+      expect.anything(), expect.any(Function), expect.any(Function))
   })
 
   it('fails the export rather than downloading an uncompressed file as a compressed one', async () => {

@@ -14,8 +14,10 @@
 // as bytes since there is no server here to fetch it from.
 import {readFileSync} from 'node:fs'
 import path from 'node:path'
+import {captureException} from '@sentry/react'
 import {Document, WebIO} from '@gltf-transform/core'
 import {EXTMeshGPUInstancing} from '@gltf-transform/extensions'
+import {isBldrsExtension} from '../loader/glbArtifactSize'
 import {parseGlb} from '../loader/injectGlbExtensions'
 import {
   COMPRESSION_DRACO,
@@ -164,6 +166,42 @@ function installDracoEncoder() {
 }
 
 
+/**
+ * Same for the decoder, from the `draco_wasm_wrapper.js` + `draco_decoder.wasm`
+ * pair the viewer's DRACOLoader ships (`glbCompress.js#loadDracoDecoder`).
+ */
+function installDracoDecoder() {
+  const factory = require(path.join(DRACO_DIR, 'draco_wasm_wrapper.js'))
+  const wasmBinary = new Uint8Array(readFileSync(path.join(DRACO_DIR, 'draco_decoder.wasm')))
+  window.DracoDecoderModule = (options) => factory({...options, wasmBinary})
+}
+
+
+/**
+ * @param {Uint8Array} glbBytes
+ * @return {Array<string>} the codec extensions the file declares as used
+ */
+function codecsDeclaredBy(glbBytes) {
+  const {json} = parseGlb(glbBytes)
+  return (json.extensionsUsed || []).filter((name) => name.endsWith('_compression'))
+}
+
+
+/**
+ * How many triangle corners the file's one primitive indexes — the count
+ * that says every triangle is still there. NOT the vertex count: an encoder
+ * is free to weld or unweld vertices (DRACO's sequential method keeps one
+ * point per corner), so that number is the codec's, not the geometry's.
+ *
+ * @param {Uint8Array} glbBytes
+ * @return {number}
+ */
+function indexCountOf(glbBytes) {
+  const {json} = parseGlb(glbBytes)
+  return json.accessors[json.meshes[0].primitives[0].indices].count
+}
+
+
 describe('export/glbCompression', () => {
   describe('isCompressionMode', () => {
     it('accepts the three the control offers and nothing else', () => {
@@ -293,6 +331,113 @@ describe('export/glbCompression', () => {
       expect(dracoByteLength(sequential.withoutMetadata))
         .toBeGreaterThan(dracoByteLength(free.withoutMetadata))
     }, TIMEOUT_MS)
+  })
+
+  describe('a source the cache pipeline already compressed', () => {
+    // `?feature=glbMeshopt` / `?feature=glbDraco` write compressed artifacts,
+    // and `@gltf-transform` cannot READ one without that codec's decoder
+    // registered: it drops the extension it doesn't know, and for a codec
+    // the geometry goes with it. Before this, picking Draco on a Meshopt
+    // artifact registered only the Draco encoder, the read failed, and the
+    // fallback handed over the original Meshopt file under a Draco label
+    // (#1837 codex round 6). Both directions, with the real encoders AND
+    // decoders.
+    /** @type {Uint8Array} */ let meshoptSource
+    /** @type {Uint8Array} */ let dracoSource
+    /** @type {number} */ let triangleCorners
+
+    beforeAll(async () => {
+      installDracoEncoder()
+      installDracoDecoder()
+      const plain = withBldrsPayload(await geometryGlb())
+      triangleCorners = indexCountOf(plain)
+      meshoptSource = (await compressExportGlb(plain, COMPRESSION_MESHOPT)).withMetadata
+      dracoSource = (await compressExportGlb(plain, COMPRESSION_DRACO)).withMetadata
+      expect(codecsDeclaredBy(meshoptSource)).toEqual(['EXT_meshopt_compression'])
+      expect(codecsDeclaredBy(dracoSource)).toEqual(['KHR_draco_mesh_compression'])
+    }, TIMEOUT_MS)
+
+    it('re-encodes a Meshopt artifact as Draco — and only Draco', async () => {
+      const out = await compressExportGlb(meshoptSource, COMPRESSION_DRACO)
+
+      expect(out.mode).toBe(COMPRESSION_DRACO)
+      expect(codecsDeclaredBy(out.withoutMetadata)).toEqual(['KHR_draco_mesh_compression'])
+      const {json} = parseGlb(out.withoutMetadata)
+      expect(json.extensionsRequired).toEqual(['KHR_draco_mesh_compression'])
+      // The geometry survived the decode — every triangle is still there,
+      // Draco-encoded — rather than a primitive the read silently dropped.
+      expect(json.meshes[0].primitives[0].extensions.KHR_draco_mesh_compression).toBeDefined()
+      expect(indexCountOf(out.withoutMetadata)).toBe(triangleCorners)
+      expect(payloadOf(out.withMetadata, 'BLDRS_element_properties')).toEqual(PAYLOAD_BYTES)
+    }, TIMEOUT_MS)
+
+    it('re-encodes a Draco artifact as Meshopt — and only Meshopt', async () => {
+      const out = await compressExportGlb(dracoSource, COMPRESSION_MESHOPT)
+
+      expect(out.mode).toBe(COMPRESSION_MESHOPT)
+      expect(codecsDeclaredBy(out.withoutMetadata)).toEqual(['EXT_meshopt_compression'])
+      const {json} = parseGlb(out.withoutMetadata)
+      expect(json.extensionsRequired).toContain('EXT_meshopt_compression')
+      expect(json.extensionsRequired).not.toContain('KHR_draco_mesh_compression')
+      expect(json.meshes[0].primitives[0].extensions?.KHR_draco_mesh_compression).toBeUndefined()
+      expect(indexCountOf(out.withoutMetadata)).toBe(triangleCorners)
+      expect(payloadOf(out.withMetadata, 'BLDRS_element_properties')).toEqual(PAYLOAD_BYTES)
+    }, TIMEOUT_MS)
+
+    it('re-encodes a Meshopt artifact as Meshopt without doubling the extension', async () => {
+      const out = await compressExportGlb(meshoptSource, COMPRESSION_MESHOPT)
+
+      expect(out.mode).toBe(COMPRESSION_MESHOPT)
+      expect(codecsDeclaredBy(out.withoutMetadata)).toEqual(['EXT_meshopt_compression'])
+      expect(indexCountOf(out.withoutMetadata)).toBe(triangleCorners)
+      expect(payloadOf(out.withMetadata, 'BLDRS_element_properties')).toEqual(PAYLOAD_BYTES)
+    }, TIMEOUT_MS)
+  })
+
+  describe('when the encoder is unavailable', () => {
+    // The DRACO encoder is a script the page fetches; a deploy that fails to
+    // serve it (or a browser that blocks it) must still export — but
+    // "uncompressed" must not mean "with the metadata the user turned off":
+    // the pro module runs no strip of its own once a hook is in play, so the
+    // fallback's `withoutMetadata` side has to be genuinely stripped (#1837
+    // codex round 6, P1).
+    //
+    // Fresh module instances, because `loadDracoEncoder` memoises its
+    // promise for the life of the module — the suites above have already
+    // loaded the real encoder into this registry's copy.
+    /** @type {object} */ let out
+    /** @type {Uint8Array} */ let source
+
+    beforeAll(async () => {
+      source = withBldrsPayload(await geometryGlb())
+      const encoderBefore = window.DracoEncoderModule
+      window.DracoEncoderModule = () => Promise.reject(new Error('draco_encoder.wasm unavailable'))
+      let fresh
+      jest.isolateModules(() => {
+        fresh = require('./glbCompression')
+      })
+      try {
+        out = await fresh.compressExportGlb(source, COMPRESSION_DRACO)
+      } finally {
+        window.DracoEncoderModule = encoderBefore
+      }
+    }, TIMEOUT_MS)
+
+    it('falls back to the uncompressed file and says so', () => {
+      expect(out.mode).toBe(COMPRESSION_NONE)
+      expect(out.withMetadata).toBe(source)
+      expect(codecsDeclaredBy(out.withMetadata)).toEqual([])
+      expect(captureException).toHaveBeenCalledWith(
+        expect.objectContaining({message: expect.stringContaining('unavailable')}))
+    })
+
+    it('still strips the metadata on the without-metadata side', () => {
+      const {json} = parseGlb(out.withoutMetadata)
+      expect((json.extensionsUsed || []).some(isBldrsExtension)).toBe(false)
+      expect(json.extensions?.BLDRS_element_properties).toBeUndefined()
+      expect(out.withoutMetadata.byteLength).toBeLessThan(source.byteLength)
+      expect(out.strippedExtensions).toEqual(['BLDRS_element_properties'])
+    })
   })
 })
 

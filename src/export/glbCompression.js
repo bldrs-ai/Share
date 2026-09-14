@@ -26,7 +26,8 @@
 // Design: design/new/glb-export-premium.md §4.3, §4.4.
 import {captureException} from '@sentry/react'
 import {isBldrsExtension} from '../loader/glbArtifactSize'
-import {loadDracoEncoder} from '../loader/glbCompress'
+import {loadDracoDecoder, loadDracoEncoder} from '../loader/glbCompress'
+import {stripGlbBldrs} from '../loader/glbStrip'
 import {injectGlbExtensions, parseGlb} from '../loader/injectGlbExtensions'
 
 
@@ -39,6 +40,14 @@ export const COMPRESSION_DRACO = 'draco'
 
 /** The choices the Export tab offers, in the order it offers them. */
 export const COMPRESSION_MODES = [COMPRESSION_NONE, COMPRESSION_MESHOPT, COMPRESSION_DRACO]
+
+// What each codec is called in a glTF's `extensionsUsed`, which is also how
+// the artifact says which codec the cache pipeline ALREADY applied to it
+// (`?feature=glbMeshopt` / `?feature=glbDraco` write compressed artifacts).
+const CODEC_EXTENSION = {
+  [COMPRESSION_MESHOPT]: 'EXT_meshopt_compression',
+  [COMPRESSION_DRACO]: 'KHR_draco_mesh_compression',
+}
 
 /** What each choice is called on the control. */
 export const COMPRESSION_LABELS = {
@@ -62,9 +71,11 @@ export function isCompressionMode(mode) {
  *
  * `mode` in the result is what was ACTUALLY applied: a codec that cannot
  * encode this geometry (a non-indexed primitive, a missing encoder) reports
- * `COMPRESSION_NONE` and returns the input, rather than failing an export the
- * user can still have. The sizes stay honest either way, because they are
- * measured off the bytes that come back.
+ * `COMPRESSION_NONE` and falls back to the uncompressed file — with the
+ * metadata genuinely stripped on the `withoutMetadata` side, since the pro
+ * module runs no strip of its own once a hook is in play — rather than
+ * failing an export the user can still have. The sizes stay honest either
+ * way, because they are measured off the bytes that come back.
  *
  * @param {Uint8Array} glbBytes One standalone GLB — the artifact's chunk 0
  * @param {string} mode One of `COMPRESSION_MODES`
@@ -91,13 +102,23 @@ export async function compressExportGlb(glbBytes, mode) {
     // is already orphaned and never reaches the output. Saving a
     // parse/serialise round trip of a possibly-hundreds-of-MB file is the
     // reason to rely on that rather than strip first.
-    withoutMetadata = await transformGlb(glbBytes, mode, needsTriangleOrder(json))
+    withoutMetadata = await transformGlb(glbBytes, mode, needsTriangleOrder(json), sourceCodecsOf(json))
   } catch (e) {
     // A codec that cannot take this geometry is not an export failure — the
     // user still gets their model, uncompressed, at the size the panel then
     // quotes. Worth seeing, though: every artifact we write should encode.
     captureException(e)
-    return {withMetadata: glbBytes, withoutMetadata: glbBytes, strippedExtensions: [], mode: COMPRESSION_NONE}
+    // Uncompressed does NOT mean untouched: the `withoutMetadata` side is
+    // what "Include Bldrs metadata: off" downloads, and handing the input
+    // back there would ship the properties and spatial tree the user asked
+    // to leave out. Same strip the pro module runs when no codec is chosen.
+    const stripped = stripGlbBldrs(glbBytes)
+    return {
+      withMetadata: glbBytes,
+      withoutMetadata: stripped.bytes,
+      strippedExtensions: stripped.strippedExtensions,
+      mode: COMPRESSION_NONE,
+    }
   }
 
   return {
@@ -130,15 +151,26 @@ export async function compressExportGlb(glbBytes, mode) {
  * jest does not transform (`tools/jest/common.js`), so the unit tests can run
  * the real encoder.
  *
+ * The source may already be compressed — the cache pipeline writes Meshopt
+ * or Draco artifacts under `?feature=glbMeshopt` / `?feature=glbDraco` — and
+ * `@gltf-transform` cannot READ such a file without that codec's decoder
+ * registered: an unregistered extension is dropped, and for a codec that
+ * means the geometry goes with it. So the source's decoder is registered
+ * before the read, and its codec extension is removed from the document
+ * afterwards when it is not the target, or the write would run both
+ * encoders over the same primitives (#1837 codex round 6).
+ *
  * @param {Uint8Array} glbBytes
  * @param {string} mode `COMPRESSION_MESHOPT` or `COMPRESSION_DRACO`
  * @param {boolean} preserveTriangleOrder Keep input triangle order, at some
  *   cost in ratio, because per-triangle Bldrs identity depends on it. It
  *   selects DRACO's `sequential` method; the Meshopt arm below never reorders
  *   in the first place, so nothing there is conditional on it
+ * @param {Array<string>} sourceCodecs Codecs the input already declares
+ *   (`sourceCodecsOf`)
  * @return {Promise<Uint8Array>} the compressed GLB
  */
-async function transformGlb(glbBytes, mode, preserveTriangleOrder) {
+async function transformGlb(glbBytes, mode, preserveTriangleOrder, sourceCodecs = []) {
   const {Logger, WebIO} = await import('@gltf-transform/core')
   const {ALL_EXTENSIONS, EXTMeshoptCompression, KHRDracoMeshCompression} =
     await import('@gltf-transform/extensions')
@@ -151,20 +183,39 @@ async function transformGlb(glbBytes, mode, preserveTriangleOrder) {
     .setLogger(new Logger(Logger.Verbosity.SILENT))
     .registerExtensions(ALL_EXTENSIONS)
 
+  const dependencies = {}
   if (mode === COMPRESSION_DRACO) {
-    io.registerDependencies({'draco3d.encoder': await loadDracoEncoder()})
+    dependencies['draco3d.encoder'] = await loadDracoEncoder()
   } else {
     const {MeshoptEncoder} = await import('meshoptimizer/encoder')
     await MeshoptEncoder.ready
-    // The DECODER too: the source artifact is already Meshopt-compressed when
-    // the session runs `?feature=glbMeshopt`, and reading it back needs to
-    // decode before it can re-encode.
+    dependencies['meshopt.encoder'] = MeshoptEncoder
+  }
+  // Decoders, only for what the source actually carries: the Meshopt one is
+  // a module the bundle already holds, the Draco one is a second wasm the
+  // page has to fetch, and neither is needed for an uncompressed artifact.
+  if (sourceCodecs.includes(COMPRESSION_MESHOPT)) {
     const {MeshoptDecoder} = await import('meshoptimizer/decoder')
     await MeshoptDecoder.ready
-    io.registerDependencies({'meshopt.encoder': MeshoptEncoder, 'meshopt.decoder': MeshoptDecoder})
+    dependencies['meshopt.decoder'] = MeshoptDecoder
   }
+  if (sourceCodecs.includes(COMPRESSION_DRACO)) {
+    dependencies['draco3d.decoder'] = await loadDracoDecoder()
+  }
+  io.registerDependencies(dependencies)
 
   const doc = await io.readBinary(glbBytes)
+  // The read decoded the source's geometry into plain accessors; the codec
+  // extension itself is still on the document and, left there, would encode
+  // on write beside the target. Disposing it is `@gltf-transform`'s
+  // documented "remove compression" — the same codec as the target is
+  // simply re-configured below, since `createExtension` returns it.
+  for (const extension of doc.getRoot().listExtensionsUsed()) {
+    if (extension.extensionName !== CODEC_EXTENSION[mode] &&
+        Object.values(CODEC_EXTENSION).includes(extension.extensionName)) {
+      extension.dispose()
+    }
+  }
   if (mode === COMPRESSION_DRACO) {
     doc.createExtension(KHRDracoMeshCompression)
       .setRequired(true)
@@ -179,6 +230,22 @@ async function transformGlb(glbBytes, mode, preserveTriangleOrder) {
       .setEncoderOptions({method: EXTMeshoptCompression.EncoderMethod.QUANTIZE})
   }
   return new Uint8Array(await io.writeBinary(doc))
+}
+
+
+/**
+ * Which codecs a GLB already declares — what the cache pipeline applied
+ * when it wrote the artifact, so the transform knows which decoder the read
+ * needs and which extension to drop afterwards.
+ *
+ * @param {object} json Parsed glTF JSON
+ * @return {Array<string>} a subset of `COMPRESSION_MESHOPT` / `COMPRESSION_DRACO`
+ */
+function sourceCodecsOf(json) {
+  const used = json?.extensionsUsed || []
+  return Object.entries(CODEC_EXTENSION)
+    .filter(([, extensionName]) => used.includes(extensionName))
+    .map(([codec]) => codec)
 }
 
 

@@ -1,6 +1,7 @@
-import {estimateStrippedGlbSize, stripBldrsJson} from '../../loader/glbArtifactSize'
+import {estimateStrippedGlbSize} from '../../loader/glbArtifactSize'
 import {unpackGlbContainer} from '../../loader/glbContainer'
-import {parseGlb, serializeGlb} from '../../loader/injectGlbExtensions'
+import {stripGlbBldrs} from '../../loader/glbStrip'
+import {parseGlb} from '../../loader/injectGlbExtensions'
 
 
 /**
@@ -18,10 +19,12 @@ import {parseGlb, serializeGlb} from '../../loader/injectGlbExtensions'
  * instance beside the host's. Shared plain-JS source is fine and is why
  * `parseGlb`/`serializeGlb` are reused rather than reimplemented.
  *
- * The strip's JSON half lives in `loader/glbArtifactSize.js` for the same
- * reason with an extra twist: the host shows the user what the stripped file
- * will weigh BEFORE this module is ever fetched, and the only way the figure
- * and the file agree is for both to be the same computation (#1841).
+ * The strip itself lives in `loader/glbStrip.js` for the same reason with an
+ * extra twist: the host shows the user what the stripped file will weigh
+ * BEFORE this module is ever fetched, and the only way the figure and the
+ * file agree is for both to be the same computation (#1841) — and the host's
+ * compressor runs the same strip when a codec fails and the export falls
+ * back to the uncompressed file.
  *
  * Design: design/new/glb-export-premium.md §4.3.
  */
@@ -30,6 +33,10 @@ import {parseGlb, serializeGlb} from '../../loader/injectGlbExtensions'
 export const format = {id: 'glb', ext: 'glb', mime: 'model/gltf-binary'}
 
 const DEFAULT_BASENAME = 'model'
+// The host's `export/glbCompression.js#COMPRESSION_NONE`, spelled out here
+// rather than imported: that module pulls in `@sentry/react`, which has no
+// business in the pro bundle.
+const NO_COMPRESSION = 'none'
 // Byte offset of the JSON chunk's length field in a GLB: past the 12-byte
 // file header.
 const JSON_CHUNK_LENGTH_OFFSET = 12
@@ -54,13 +61,16 @@ const UNSAFE_FILENAME_CHARS = /[^A-Za-z0-9._-]+/g
  * @param {string} [args.options.sourceBasename] Source filename, the fallback
  * @param {?Function} [args.compress] Host hook: given this GLB and the
  *   metadata choice, returns `{bytes, withMetadataBytes, withoutMetadataBytes,
- *   strippedExtensions}` for the chosen codec. Absent (the default) means no
- *   compression, and the strip below is the only rewrite.
+ *   strippedExtensions, mode}` for the chosen codec — `mode` being the codec
+ *   ACTUALLY applied, which is `'none'` when the encoder was unavailable and
+ *   the host fell back to the uncompressed (still stripped) file. Absent (the
+ *   default) means no compression, and the strip below is the only rewrite.
  * @return {Promise<{blob: Blob, filename: string, stats: object}>} `stats`
  *   carries both sizes of THIS run — `withMetadataBytes` /
  *   `withoutMetadataBytes` / `metadataBytes` — so the caller can report what
- *   the toggle was worth. The two it did not produce are null when the file
- *   could not be measured.
+ *   the toggle was worth, and `compression`, the codec the file actually
+ *   carries. The two sizes it did not produce are null when the file could
+ *   not be measured.
  */
 export async function exportArtifact({bytes, options = {}, compress = null}) {
   const container = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
@@ -80,6 +90,7 @@ export async function exportArtifact({bytes, options = {}, compress = null}) {
   let withMetadataBytes = glbBytes.byteLength
   let strippedExtensions = []
   let withoutMetadataBytes = null
+  let compression = NO_COMPRESSION
   if (compress) {
     // The codecs (and their wasm) live in the host bundle, so compression is
     // the host's to run — but the DOWNLOAD is still only reachable through
@@ -92,8 +103,13 @@ export async function exportArtifact({bytes, options = {}, compress = null}) {
     withMetadataBytes = compressed.withMetadataBytes
     withoutMetadataBytes = compressed.withoutMetadataBytes
     strippedExtensions = options.stripBldrsMetadata ? compressed.strippedExtensions : []
+    // What the hook APPLIED, not what was asked for: a codec whose encoder
+    // could not load hands back the uncompressed file, and the history row
+    // and analytics must say so rather than record a Draco export that
+    // opens in any viewer.
+    compression = compressed.mode || NO_COMPRESSION
   } else if (options.stripBldrsMetadata) {
-    const stripped = stripArtifact(glbBytes)
+    const stripped = stripGlbBldrs(glbBytes)
     glbBytes = stripped.bytes
     strippedExtensions = stripped.strippedExtensions
     withoutMetadataBytes = glbBytes.byteLength
@@ -111,55 +127,9 @@ export async function exportArtifact({bytes, options = {}, compress = null}) {
       withMetadataBytes,
       withoutMetadataBytes,
       metadataBytes: withoutMetadataBytes === null ? null : withMetadataBytes - withoutMetadataBytes,
+      compression,
     },
   }
-}
-
-
-/**
- * Drop every `BLDRS_*` extension AND the bufferViews only they referenced.
- *
- * The payloads are gzipped bufferViews, and through v0.1 the JSON entries
- * went while their bytes stayed — valid glTF, but it made the toggle almost
- * free of charge in the only currency the user cares about (#1841). Now the
- * BIN chunk is rebuilt from the surviving views, which `stripBldrsJson` has
- * already re-indexed and re-laid at 4-byte boundaries.
- *
- * A GLB with no Bldrs data in it at all is returned untouched rather than
- * re-serialised: there is nothing to remove, and rewriting the user's file
- * to the byte-for-byte same content is a risk taken for no gain.
- *
- * @param {Uint8Array} glbBytes One standalone GLB (the container's chunk 0)
- * @return {{bytes: Uint8Array, strippedExtensions: Array<string>}}
- */
-function stripArtifact(glbBytes) {
-  const {json, bin} = parseGlb(glbBytes)
-  const {strippedExtensions, binPlan, binByteLength, isChanged} = stripBldrsJson(json)
-  if (!isChanged) {
-    return {bytes: glbBytes, strippedExtensions}
-  }
-  return {bytes: serializeGlb(json, repackBin(bin, binPlan, binByteLength)), strippedExtensions}
-}
-
-
-/**
- * Copy the surviving bufferViews into a compacted BIN chunk, following the
- * layout `stripBldrsJson` already wrote into the JSON.
- *
- * @param {Uint8Array|null} bin The original BIN chunk
- * @param {Array<{fromOffset: number, byteLength: number, toOffset: number}>} binPlan
- * @param {number} binByteLength Length of the compacted chunk
- * @return {Uint8Array|null} null when nothing binary survives
- */
-function repackBin(bin, binPlan, binByteLength) {
-  if (!bin || binByteLength === 0) {
-    return null
-  }
-  const out = new Uint8Array(binByteLength)
-  for (const {fromOffset, byteLength, toOffset} of binPlan) {
-    out.set(bin.subarray(fromOffset, fromOffset + byteLength), toOffset)
-  }
-  return out
 }
 
 

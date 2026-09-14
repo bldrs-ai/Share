@@ -154,8 +154,12 @@ export default function useExport() {
           // The options this run USED, so "Download again" reproduces this
           // file. Without them a row exported with the metadata stripped
           // re-downloads with every BLDRS_* payload back in it — a bigger,
-          // more sensitive file than the size beside the row claims.
-          options,
+          // more sensitive file than the size beside the row claims. The
+          // codec is the one the module reports it APPLIED: when an encoder
+          // was unavailable the file is uncompressed, and a row saying
+          // "draco" beside its size would describe a file that was never
+          // made.
+          options: stats?.compression ? {...options, compression: stats.compression} : options,
         },
         user?.sub,
         () => getAccessTokenSilently(TOKEN_PARAMS),
@@ -213,6 +217,10 @@ export default function useExport() {
  * user just read. A click fast enough to beat the estimate shares its
  * in-flight run rather than starting a second one.
  *
+ * What it returns says which codec was APPLIED (`mode`): the cache holds the
+ * uncompressed fallback when the encoder could not load, and the pro module
+ * passes that on so the history row and analytics describe the real file.
+ *
  * @param {object} artifact The store's `glbArtifact` slot, or a history row's
  * @param {object} options The run's options, carrying `compression`
  * @return {?Function} `(glbBytes, {stripBldrsMetadata}) => Promise<object>`
@@ -232,6 +240,7 @@ function compressHookFor(artifact, options) {
       withMetadataBytes: compressed.withMetadata.byteLength,
       withoutMetadataBytes: compressed.withoutMetadata.byteLength,
       strippedExtensions: compressed.strippedExtensions,
+      mode: compressed.mode,
     }
   }
 }

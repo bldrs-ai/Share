@@ -235,6 +235,53 @@ describe('ExportSection', () => {
       .toHaveAttribute('data-bytes', String(MESHOPT_WITHOUT_METADATA_BYTES))
   })
 
+  it('names the fallback when the chosen codec is not available here', async () => {
+    // The estimate is honest either way — it measured the uncompressed file
+    // the download will also produce — but a pressed Draco button beside an
+    // uncompressed figure reads as a Draco figure (#1837 codex round 6).
+    artifactSizes.mockImplementation((artifact, mode) => Promise.resolve({
+      withMetadata: WITH_METADATA_BYTES,
+      withoutMetadata: WITHOUT_METADATA_BYTES,
+      metadataBytes: METADATA_BYTES,
+      // Whatever was asked for, the encoder was unavailable.
+      compression: mode === 'none' ? 'none' : 'none',
+    }))
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+    const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+    await act(async () => {})
+
+    expect(queryByTestId('export-compression-fallback')).toBeNull()
+
+    fireEvent.click(getByTestId('export-compression-draco'))
+    await act(async () => {})
+
+    expect(getByTestId('export-compression-fallback'))
+      .toHaveTextContent('Draco isn\'t available in this browser — the file is uncompressed')
+    expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(WITH_METADATA_BYTES))
+
+    fireEvent.click(getByTestId('export-compression-none'))
+    await act(async () => {})
+
+    expect(queryByTestId('export-compression-fallback')).toBeNull()
+  })
+
+  it('shows no fallback note when the codec did apply', async () => {
+    artifactSizes.mockImplementation((artifact, mode) => Promise.resolve({
+      withMetadata: WITH_METADATA_BYTES,
+      withoutMetadata: WITHOUT_METADATA_BYTES,
+      metadataBytes: METADATA_BYTES,
+      compression: mode,
+    }))
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+    const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+    await act(async () => {})
+
+    fireEvent.click(getByTestId('export-compression-draco'))
+    await act(async () => {})
+
+    expect(queryByTestId('export-compression-fallback')).toBeNull()
+  })
+
   it('left-justifies its label blocks, and only the action row stays centred', async () => {
     // The theme centres a Dialog's whole paper (theme/Components.js,
     // `MuiDialog.paper.textAlign`), which made each two-line block float its

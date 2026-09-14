@@ -389,10 +389,11 @@ describe('pro/glbExport', () => {
         withMetadataBytes: 120,
         withoutMetadataBytes: 48,
         strippedExtensions: ['BLDRS_spatial_tree'],
+        mode: 'meshopt',
       })
 
       const {blob, stats} = await exportArtifact(
-        {bytes: container, options: {stripBldrsMetadata: true}, compress})
+        {bytes: container, options: {stripBldrsMetadata: true, compression: 'meshopt'}, compress})
 
       expect(compress).toHaveBeenCalledWith(glb, {stripBldrsMetadata: true})
       expect(await blobBytes(blob)).toEqual(COMPRESSED)
@@ -401,6 +402,35 @@ describe('pro/glbExport', () => {
       expect(stats.withoutMetadataBytes).toBe(48)
       expect(stats.metadataBytes).toBe(72)
       expect(stats.strippedExtensions).toEqual(['BLDRS_spatial_tree'])
+      expect(stats.compression).toBe('meshopt')
+    })
+
+    it('reports the codec the hook APPLIED, not the one that was asked for', async () => {
+      // An encoder that could not load hands back the uncompressed file
+      // (`export/glbCompression.js`); the history row and the analytics event
+      // are built from `stats`, and a row saying "draco" beside the size of
+      // an uncompressed file would describe a download that was never made.
+      const {container} = cachedArtifact()
+      const compress = jest.fn().mockResolvedValue({
+        bytes: COMPRESSED,
+        withMetadataBytes: 120,
+        withoutMetadataBytes: 48,
+        strippedExtensions: [],
+        mode: 'none',
+      })
+
+      const {stats} = await exportArtifact(
+        {bytes: container, options: {compression: 'draco'}, compress})
+
+      expect(stats.compression).toBe('none')
+    })
+
+    it('reports no compression when there is no hook', async () => {
+      const {container} = cachedArtifact()
+
+      const {stats} = await exportArtifact({bytes: container, options: {}})
+
+      expect(stats.compression).toBe('none')
     })
 
     it('does not run its own strip when the host already handled it', async () => {

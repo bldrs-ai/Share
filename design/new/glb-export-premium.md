@@ -301,8 +301,31 @@ One encode serves both metadata states: the transform's own output IS the
 without-metadata file (the payloads it dropped are exactly what the toggle
 removes), and the with-metadata file is that plus the saved payloads injected
 back — arithmetic beside the encode, since the costly stringify+gzip is
-already done. A codec that cannot take the geometry reports mode `none` and
-returns the input rather than failing an export the user can still have.
+already done.
+
+Two cases the first cut got wrong (#1837 codex round 6):
+
+- **The encoder is unavailable** (the DRACO script fails to load, the codec
+  rejects the geometry). The export still happens, uncompressed, and reports
+  mode `none` — but *uncompressed is not untouched*: the pro module runs no
+  strip of its own once a hook is in play, so the fallback's without-metadata
+  side is the same strip the module runs for an uncompressed export
+  (`loader/glbStrip.js`, shared by both for exactly this reason). The pro
+  module's `stats.compression` carries the codec actually applied, the
+  history row records that rather than the request, and the panel names the
+  fallback beside the figure ("Draco isn't available in this browser — the
+  file is uncompressed") so a pressed Draco button beside an uncompressed
+  number is not read as a Draco number.
+- **The artifact is already compressed.** `?feature=glbMeshopt` /
+  `?feature=glbDraco` write compressed artifacts, and `@gltf-transform`
+  cannot *read* one without that codec's decoder registered — an
+  unregistered extension is dropped, and for a codec the geometry goes with
+  it. The compressor reads `extensionsUsed`, registers the source's decoder
+  (`meshoptimizer/decoder`; `loader/glbCompress.js#loadDracoDecoder`, the
+  viewer's own `draco_wasm_wrapper.js` + `draco_decoder.wasm`) before the
+  read, and disposes the source's codec extension from the document when it
+  is not the target, or the write would run both encoders over the same
+  primitives.
 
 Options surfaced in the UI: *Include Bldrs metadata (properties, spatial
 tree)* — default **on** (it's their model; the toggle exists for onward

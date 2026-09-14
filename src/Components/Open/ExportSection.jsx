@@ -134,6 +134,13 @@ export default function ExportSection() {
   // figure from the previous choice: the line's promise is about the NEXT
   // click, and for the seconds this takes it has nothing to promise.
   const isPendingEstimate = isEstimating && compression !== COMPRESSION_NONE
+  // The figure is honest even when the codec is not available here (its
+  // encoder failed to load, say): the estimate fell back to the uncompressed
+  // file and so will the download. But a Draco button pressed beside an
+  // uncompressed figure reads as a Draco figure, so the fallback is named.
+  const fallbackCaption = sizes && compression !== COMPRESSION_NONE && sizes.compression === COMPRESSION_NONE ?
+    `${COMPRESSION_LABELS[compression]} isn't available in this browser — the file is uncompressed` :
+    null
 
   const onExportClick = async () => {
     await run('glb', {stripBldrsMetadata: !isMetadataIncluded, compression})
@@ -278,6 +285,15 @@ export default function ExportSection() {
            <Typography variant='body2'>Download size</Typography>
            {metadataCaption &&
             <Typography variant='caption' color='text.secondary'>{metadataCaption}</Typography>}
+           {fallbackCaption &&
+            <Typography
+              variant='caption'
+              color='warning.main'
+              display='block'
+              data-testid='export-compression-fallback'
+            >
+              {fallbackCaption}
+            </Typography>}
          </Box>
          {isPendingEstimate ?
            <Typography variant='body2' color='text.secondary' data-testid='export-size-pending'>

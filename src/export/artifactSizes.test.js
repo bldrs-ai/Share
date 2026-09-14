@@ -69,6 +69,7 @@ describe('artifactSizes', () => {
 
     expect(sizes.withMetadata).toBeGreaterThan(sizes.withoutMetadata)
     expect(sizes.metadataBytes).toBe(sizes.withMetadata - sizes.withoutMetadata)
+    expect(sizes.compression).toBe('none')
     // The same OPFS coordinates the export itself reads (useExport.js), so
     // the panel and the download can't be sizing different files.
     expect(readModelByPathFromOPFS).toHaveBeenCalledWith(
@@ -138,8 +139,19 @@ describe('artifactSizes', () => {
       // exist (#1842).
       const sizes = await artifactSizes({...ARTIFACT}, 'meshopt')
 
-      expect(sizes).toEqual({withMetadata: 300, withoutMetadata: 120, metadataBytes: 180})
+      expect(sizes).toEqual({withMetadata: 300, withoutMetadata: 120, metadataBytes: 180, compression: 'meshopt'})
       expect(compressExportGlb).toHaveBeenCalledWith(expect.any(Uint8Array), 'meshopt')
+    })
+
+    it('says which codec the figure is for, which is none when the encoder fell back', async () => {
+      // `compressExportGlb` hands back the uncompressed file when its encoder
+      // is unavailable; the panel needs to know the Draco figure it asked
+      // for is not one (ExportSection.jsx).
+      compressExportGlb.mockResolvedValue({...COMPRESSED, mode: 'none'})
+
+      const sizes = await artifactSizes({...ARTIFACT}, 'draco')
+
+      expect(sizes.compression).toBe('none')
     })
 
     it('encodes once per artifact and codec, and the export gets those bytes', async () => {
