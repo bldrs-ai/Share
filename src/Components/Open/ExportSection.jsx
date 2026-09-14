@@ -135,12 +135,18 @@ export default function ExportSection() {
   // click, and for the seconds this takes it has nothing to promise.
   const isPendingEstimate = isEstimating && compression !== COMPRESSION_NONE
   // The figure is honest even when the codec is not available here (its
-  // encoder failed to load, say): the estimate fell back to the uncompressed
-  // file and so will the download. But a Draco button pressed beside an
-  // uncompressed figure reads as a Draco figure, so the fallback is named.
-  const fallbackCaption = sizes && compression !== COMPRESSION_NONE && sizes.compression === COMPRESSION_NONE ?
-    `${COMPRESSION_LABELS[compression]} isn't available in this browser — the file is uncompressed` :
-    null
+  // encoder failed to load, say): the estimate fell back to the file as it
+  // is — uncompressed, or still in the codec the cache wrote it with — and
+  // so will the download. But "Draco" chosen beside that figure reads as a
+  // Draco figure, so the fallback is named, with what the file actually is.
+  const isFallback = sizes && compression !== COMPRESSION_NONE && sizes.compression !== compression
+  let fallbackCaption = null
+  if (isFallback) {
+    const actual = sizes.compression === COMPRESSION_NONE ?
+      'the file is uncompressed' :
+      `the file keeps ${COMPRESSION_LABELS[sizes.compression] || sizes.compression}`
+    fallbackCaption = `${COMPRESSION_LABELS[compression]} isn't available in this browser — ${actual}`
+  }
 
   const onExportClick = async () => {
     await run('glb', {stripBldrsMetadata: !isMetadataIncluded, compression})

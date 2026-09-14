@@ -277,6 +277,33 @@ describe('ExportSection', () => {
     expect(queryByTestId('export-compression-fallback')).toBeNull()
   })
 
+  it('names the codec a pre-compressed artifact keeps when the chosen one falls back', async () => {
+    // A `?feature=glbMeshopt` artifact whose Draco re-encode could not run is
+    // handed back as the Meshopt file it is — which still needs a decoder,
+    // so "uncompressed" would be the wrong promise (#1837 codex round 7).
+    artifactSizes.mockImplementation((artifact, mode) => Promise.resolve({
+      withMetadata: WITH_METADATA_BYTES,
+      withoutMetadata: WITHOUT_METADATA_BYTES,
+      metadataBytes: METADATA_BYTES,
+      compression: mode === 'none' ? 'none' : 'meshopt',
+    }))
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+    const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+    await act(async () => {})
+
+    chooseCompression('draco')
+    await act(async () => {})
+
+    expect(getByTestId('export-compression-fallback'))
+      .toHaveTextContent('Draco isn\'t available in this browser — the file keeps Meshopt')
+
+    // Asking for the codec the file already has is not a fallback.
+    chooseCompression('meshopt')
+    await act(async () => {})
+
+    expect(queryByTestId('export-compression-fallback')).toBeNull()
+  })
+
   it('shows no fallback note when the codec did apply', async () => {
     artifactSizes.mockImplementation((artifact, mode) => Promise.resolve({
       withMetadata: WITH_METADATA_BYTES,

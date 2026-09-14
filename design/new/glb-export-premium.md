@@ -321,11 +321,13 @@ Two cases the first cut got wrong (#1837 codex round 6):
   strip of its own once a hook is in play, so the fallback's without-metadata
   side is the same strip the module runs for an uncompressed export
   (`loader/glbStrip.js`, shared by both for exactly this reason). The pro
-  module's `stats.compression` carries the codec actually applied, the
-  history row records that rather than the request, and the panel names the
-  fallback beside the figure ("Draco isn't available in this browser — the
-  file is uncompressed") so a pressed Draco button beside an uncompressed
-  number is not read as a Draco number.
+  module's `stats.compression` carries the codec the file actually has —
+  `none`, or the source's own codec when the cache pipeline had already
+  compressed it, since that file still needs that decoder whatever was
+  asked for — the history row records that rather than the request, and
+  the panel names the fallback beside the figure ("Draco isn't available in
+  this browser — the file is uncompressed" / "— the file keeps Meshopt") so
+  "Draco" chosen beside that number is not read as a Draco number.
 - **The artifact is already compressed.** `?feature=glbMeshopt` /
   `?feature=glbDraco` write compressed artifacts, and `@gltf-transform`
   cannot *read* one without that codec's decoder registered — an

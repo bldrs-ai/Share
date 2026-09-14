@@ -407,9 +407,13 @@ describe('export/glbCompression', () => {
     // loaded the real encoder into this registry's copy.
     /** @type {object} */ let out
     /** @type {Uint8Array} */ let source
+    /** @type {object} */ let outFromMeshopt
+    /** @type {Uint8Array} */ let meshoptSource
 
     beforeAll(async () => {
       source = withBldrsPayload(await geometryGlb())
+      // A `?feature=glbMeshopt` artifact, made by the (working) Meshopt path.
+      meshoptSource = (await compressExportGlb(source, COMPRESSION_MESHOPT)).withMetadata
       const encoderBefore = window.DracoEncoderModule
       window.DracoEncoderModule = () => Promise.reject(new Error('draco_encoder.wasm unavailable'))
       let fresh
@@ -418,10 +422,22 @@ describe('export/glbCompression', () => {
       })
       try {
         out = await fresh.compressExportGlb(source, COMPRESSION_DRACO)
+        outFromMeshopt = await fresh.compressExportGlb(meshoptSource, COMPRESSION_DRACO)
       } finally {
         window.DracoEncoderModule = encoderBefore
       }
     }, TIMEOUT_MS)
+
+    it('reports the codec a pre-compressed source still carries, not "none"', () => {
+      // The Meshopt artifact handed back as-is is still a Meshopt file — it
+      // needs that decoder whatever was asked for — and the panel and the
+      // history row describe the file, not the request (#1837 codex round 7).
+      expect(outFromMeshopt.mode).toBe(COMPRESSION_MESHOPT)
+      expect(outFromMeshopt.withMetadata).toBe(meshoptSource)
+      expect(codecsDeclaredBy(outFromMeshopt.withoutMetadata)).toEqual(['EXT_meshopt_compression'])
+      expect((parseGlb(outFromMeshopt.withoutMetadata).json.extensionsUsed || []).some(isBldrsExtension)).toBe(false)
+      expect(outFromMeshopt.strippedExtensions).toEqual(['BLDRS_element_properties'])
+    })
 
     it('falls back to the uncompressed file and says so', () => {
       expect(out.mode).toBe(COMPRESSION_NONE)

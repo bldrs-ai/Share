@@ -69,13 +69,16 @@ export function isCompressionMode(mode) {
  * Both sides of the metadata toggle for one artifact and one codec, from a
  * single compression run.
  *
- * `mode` in the result is what was ACTUALLY applied: a codec that cannot
- * encode this geometry (a non-indexed primitive, a missing encoder) reports
- * `COMPRESSION_NONE` and falls back to the uncompressed file — with the
- * metadata genuinely stripped on the `withoutMetadata` side, since the pro
- * module runs no strip of its own once a hook is in play — rather than
- * failing an export the user can still have. The sizes stay honest either
- * way, because they are measured off the bytes that come back.
+ * `mode` in the result is what the returned bytes ACTUALLY carry: a codec
+ * that cannot encode this geometry (a non-indexed primitive, a missing
+ * encoder) falls back to the input file — with the metadata genuinely
+ * stripped on the `withoutMetadata` side, since the pro module runs no strip
+ * of its own once a hook is in play — rather than failing an export the user
+ * can still have, and reports `COMPRESSION_NONE` for an uncompressed input
+ * or the input's OWN codec for one the cache pipeline already compressed
+ * (that file still needs that decoder, whatever was asked for). The sizes
+ * stay honest either way, because they are measured off the bytes that
+ * come back.
  *
  * @param {Uint8Array} glbBytes One standalone GLB — the artifact's chunk 0
  * @param {string} mode One of `COMPRESSION_MODES`
@@ -93,6 +96,7 @@ export async function compressExportGlb(glbBytes, mode) {
   const {json, bin} = parseGlb(glbBytes)
   const payloads = detachBldrsPayloads(json, bin)
   const strippedExtensions = payloads.map(({name}) => name).sort()
+  const sourceCodecs = sourceCodecsOf(json)
 
   let withoutMetadata
   try {
@@ -102,7 +106,7 @@ export async function compressExportGlb(glbBytes, mode) {
     // is already orphaned and never reaches the output. Saving a
     // parse/serialise round trip of a possibly-hundreds-of-MB file is the
     // reason to rely on that rather than strip first.
-    withoutMetadata = await transformGlb(glbBytes, mode, needsTriangleOrder(json), sourceCodecsOf(json))
+    withoutMetadata = await transformGlb(glbBytes, mode, needsTriangleOrder(json), sourceCodecs)
   } catch (e) {
     // A codec that cannot take this geometry is not an export failure — the
     // user still gets their model, uncompressed, at the size the panel then
@@ -117,7 +121,11 @@ export async function compressExportGlb(glbBytes, mode) {
       withMetadata: glbBytes,
       withoutMetadata: stripped.bytes,
       strippedExtensions: stripped.strippedExtensions,
-      mode: COMPRESSION_NONE,
+      // The input's own codec, if it had one: a `?feature=glbMeshopt`
+      // artifact handed back as-is is still a Meshopt file, and saying
+      // "none" would have the panel and the history row promise a file that
+      // opens without a decoder (#1837 codex round 7).
+      mode: sourceCodecs[0] ?? COMPRESSION_NONE,
     }
   }
 
