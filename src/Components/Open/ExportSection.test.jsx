@@ -2,7 +2,7 @@ import React from 'react'
 import {act, fireEvent, render, renderHook, screen, within} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
-import {artifactPositionRange, artifactSizes} from '../../export/artifactSizes'
+import {artifactPositionRange, artifactSizes, releaseQualityExports} from '../../export/artifactSizes'
 import useCodecSizes from '../../export/useCodecSizes'
 import {gtagEvent} from '../../privacy/analytics'
 import useStore from '../../store/useStore'
@@ -21,6 +21,7 @@ jest.mock('../../privacy/analytics', () => ({gtagEvent: jest.fn()}))
 jest.mock('../../export/artifactSizes', () => ({
   artifactSizes: jest.fn(),
   artifactPositionRange: jest.fn(),
+  releaseQualityExports: jest.fn(),
 }))
 jest.mock('../Profile/subscriptionNav', () => ({goToSubscription: jest.fn()}))
 // The background codec sweep runs three encoders off OPFS; its ordering,
@@ -632,6 +633,35 @@ describe('ExportSection', () => {
 
       expect(getByTestId('export-quality')).toHaveTextContent('Reduced')
       expect(getByTestId('export-quality')).not.toHaveTextContent(/small/i)
+    })
+
+    it('hands back the rung it left, so comparing three does not retain six copies', async () => {
+      // Each compressed cell holds two whole copies of the export and #1848
+      // split them three ways by rung, so clicking through the rungs to read
+      // their captions — the interaction this control exists for — would pin
+      // about six copies of the model for the life of the artifact. Nothing
+      // reads the rung just left (#1852 review).
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+      // Mounting is not a rung change: the default rung's cells are the ones
+      // being filled.
+      expect(releaseQualityExports).not.toHaveBeenCalled()
+
+      chooseCompression('draco')
+      chooseQuality('smallest')
+      await act(async () => {})
+
+      expect(releaseQualityExports)
+        .toHaveBeenCalledWith(expect.objectContaining(ARTIFACT), 'balanced')
+      expect(releaseQualityExports).toHaveBeenCalledTimes(1)
+
+      chooseQuality('best')
+      await act(async () => {})
+
+      expect(releaseQualityExports)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'smallest')
     })
 
     it('re-estimates on the rung, because two rungs are two different files', async () => {

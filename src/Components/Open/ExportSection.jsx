@@ -1,8 +1,8 @@
-import React, {ReactElement, useEffect, useState} from 'react'
+import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {Box, Button, Chip, MenuItem, Select, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {artifactPositionRange, artifactSizes} from '../../export/artifactSizes'
+import {artifactPositionRange, artifactSizes, releaseQualityExports} from '../../export/artifactSizes'
 import {codecToSelect} from '../../export/codecSizes'
 import {
   QUALITY_DEFAULT,
@@ -130,6 +130,9 @@ export default function ExportSection() {
   // once per artifact and rides on the size line's cached header read
   // (`export/artifactSizes.js#artifactPositionRange`) — no second file read.
   const [positionRange, setPositionRange] = useState(null)
+  // Which rung the compressed cells in the estimate cache were filled for, so
+  // the effect below can name the one to evict when it changes.
+  const measuredQualityRef = useRef(quality)
 
   useEffect(() => {
     let isStale = false
@@ -145,6 +148,22 @@ export default function ExportSection() {
       isStale = true
     }
   }, [glbArtifact, compression, isPortable, quality])
+
+  useEffect(() => {
+    // Hand back the rung the user just left. Every rung is a different file,
+    // so each holds its own compressed cells — two whole copies of the export
+    // apiece — and clicking through the three to read their millimetre
+    // captions, which is what this control is for, would otherwise retain
+    // about six copies for the life of the artifact
+    // (`export/artifactSizes.js#releaseQualityExports`). The rung being left
+    // is the one cell nothing is about to read again, so the eviction point
+    // is known exactly and needs no policy.
+    const previousQuality = measuredQualityRef.current
+    measuredQualityRef.current = quality
+    if (previousQuality !== quality) {
+      releaseQualityExports(glbArtifact, previousQuality)
+    }
+  }, [glbArtifact, quality])
 
   useEffect(() => {
     let isStale = false

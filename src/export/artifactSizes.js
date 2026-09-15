@@ -5,16 +5,26 @@ import {unpackGlbContainer} from '../loader/glbContainer'
 import {stripGlbBldrs} from '../loader/glbStrip'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
 import {QUALITY_DEFAULT} from './exportQuality'
-import {COMPRESSION_NONE, compressExportGlb, isCompressionMode} from './glbCompression'
+import {COMPRESSION_MODES, COMPRESSION_NONE, compressExportGlb, isCompressionMode} from './glbCompression'
 import {rewriteGlbPortable} from './glbPortable'
 
 
 // One in-flight or settled answer per (artifact, portable × codec × quality).
 // The store publishes a fresh `glbArtifact` object per load (store/IFCSlice.js), so
-// identity is the outer cache key: reopening the Export tab on the same model
-// reuses the answer, and a new load misses. Weak so a superseded artifact's
-// entries go with it — which matters more for the compressed ones, since each
-// holds two whole copies of the file.
+// identity is the outer cache key, and a new load misses. Weak so a superseded
+// artifact's entries go with it — which matters more for the compressed ones,
+// since each holds two whole copies of the file.
+//
+// The two maps have different lifetimes, and only the cheap one is really a
+// per-artifact cache. A header read (`sizesByArtifact`) is two numbers and is
+// kept for as long as the artifact is, so reopening the Export tab on the same
+// model reuses it. A compressed cell is EVICTED as soon as nothing is expected
+// to read it again — by the codec sweep when a codec loses
+// (`codecSizes.js`), and by the Export tab when the user leaves a quality rung
+// (`releaseQualityExports`) — so reopening the tab on a compressed selection
+// may well re-encode. That is the trade the memory bound buys: the encoders
+// are deterministic, so a re-encode reproduces the figure exactly, and holding
+// the whole matrix would be six copies of the model for one caption read.
 const sizesByArtifact = new WeakMap()
 const compressedByArtifact = new WeakMap()
 
@@ -186,6 +196,42 @@ export function compressedExport(artifact, mode, glbBytes = null, isPortable = f
  */
 export function releaseCompressedExport(artifact, mode, isPortable = false, quality = QUALITY_DEFAULT) {
   compressedByArtifact.get(artifact)?.delete(rewriteKey(isPortable, mode, quality))
+}
+
+
+/**
+ * Drop every compressed cell measured at one quality rung.
+ *
+ * #1848 tripled this cache's compressed key space from portable × codec to
+ * portable × codec × quality, and every cell holds two whole copies of the
+ * export. Reading the three rungs' millimetre captions — the interaction the
+ * Quality control exists for — therefore retained about six copies of the
+ * model for the life of the artifact. The rung the user just LEFT is the one
+ * cell nothing is going to read again, so the Export tab hands it back here
+ * (#1852 review).
+ *
+ * Deliberately not an LRU: the eviction point is known exactly, and a policy
+ * that guessed would be strictly worse than one that doesn't have to.
+ *
+ * The uncompressed and portable-without-codec cells are not touched — they do
+ * not carry quality in their key at all (`rewriteKey`), so they are the same
+ * file at every rung.
+ *
+ * @param {?object} artifact
+ * @param {string} quality One of `exportQuality.js`'s `QUALITY_LEVELS`
+ */
+export function releaseQualityExports(artifact, quality) {
+  const byKey = compressedByArtifact.get(artifact)
+  if (!byKey) {
+    return
+  }
+  for (const isPortable of [false, true]) {
+    for (const mode of COMPRESSION_MODES) {
+      if (hasCodec(mode)) {
+        byKey.delete(rewriteKey(isPortable, mode, quality))
+      }
+    }
+  }
 }
 
 

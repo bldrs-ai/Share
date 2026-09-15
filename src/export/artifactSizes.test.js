@@ -2,7 +2,13 @@ import {captureException} from '@sentry/react'
 import {packGlbChunks} from '../loader/glbContainer'
 import {serializeGlb} from '../loader/injectGlbExtensions'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
-import {artifactPositionRange, artifactSizes, compressedExport, releaseCompressedExport} from './artifactSizes'
+import {
+  artifactPositionRange,
+  artifactSizes,
+  compressedExport,
+  releaseCompressedExport,
+  releaseQualityExports,
+} from './artifactSizes'
 import {compressExportGlb} from './glbCompression'
 import {rewriteGlbPortable} from './glbPortable'
 
@@ -380,6 +386,69 @@ describe('artifactSizes', () => {
       // The sweep releases whatever it measured, including a codec whose
       // encode failed and left nothing behind.
       expect(() => releaseCompressedExport({...ARTIFACT}, 'draco')).not.toThrow()
+    })
+  })
+
+  describe('releasing a quality rung (#1852 review)', () => {
+    const COMPRESSED = {
+      withMetadata: new Uint8Array(300),
+      withoutMetadata: new Uint8Array(120),
+      strippedExtensions: [],
+      mode: 'draco',
+    }
+
+    beforeEach(() => {
+      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+      compressExportGlb.mockResolvedValue(COMPRESSED)
+      rewriteGlbPortable.mockReturnValue({bytes: cachedGlb(), isChanged: true, stats: {}})
+    })
+
+    it('drops every codec measured at the rung the user left, portable and native', async () => {
+      // #1848 tripled the compressed key space, and each cell holds two whole
+      // copies of the export — so reading the three rungs' captions retained
+      // about six copies of the model. The rung being left is the one nothing
+      // reads again.
+      const artifact = {...ARTIFACT}
+      for (const isPortable of [false, true]) {
+        for (const mode of ['meshopt', 'draco']) {
+          await artifactSizes(artifact, mode, isPortable, 'best')
+        }
+      }
+      expect(compressExportGlb).toHaveBeenCalledTimes(4)
+
+      releaseQualityExports(artifact, 'best')
+
+      for (const isPortable of [false, true]) {
+        for (const mode of ['meshopt', 'draco']) {
+          await artifactSizes(artifact, mode, isPortable, 'best')
+        }
+      }
+      expect(compressExportGlb).toHaveBeenCalledTimes(8)
+    })
+
+    it('keeps the rung the user moved TO, and the cells that carry no rung', async () => {
+      // The other half: an eviction that took the current selection with it
+      // would make the size line re-encode the file it is already showing.
+      // The uncompressed and portable-without-codec cells are the same file at
+      // every rung and are not keyed by one at all (`rewriteKey`).
+      const artifact = {...ARTIFACT}
+      await artifactSizes(artifact, 'draco', false, 'best')
+      await artifactSizes(artifact, 'draco', false, 'smallest')
+      await artifactSizes(artifact, 'none', true, 'smallest')
+      expect(compressExportGlb).toHaveBeenCalledTimes(2)
+      expect(rewriteGlbPortable).toHaveBeenCalledTimes(1)
+
+      releaseQualityExports(artifact, 'best')
+
+      await artifactSizes(artifact, 'draco', false, 'smallest')
+      await artifactSizes(artifact, 'none', true, 'smallest')
+      expect(compressExportGlb).toHaveBeenCalledTimes(2)
+      expect(rewriteGlbPortable).toHaveBeenCalledTimes(1)
+    })
+
+    it('is harmless on an artifact that never had a cell', () => {
+      expect(() => releaseQualityExports({...ARTIFACT}, 'best')).not.toThrow()
+      expect(() => releaseQualityExports(null, 'best')).not.toThrow()
     })
   })
 
