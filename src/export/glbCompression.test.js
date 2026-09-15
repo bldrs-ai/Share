@@ -65,14 +65,20 @@ const MOMENTUM_RANGE_M = 22.0
  * An uncompressed GLB with enough geometry to be worth compressing.
  *
  * @param {object} [options]
- * @param {boolean} [options.withPerVertexIds] Add `_EXPRESSID`, the attribute
- *   that means triangle order is load-bearing
+ * @param {boolean} [options.withPerVertexIds] Add `_EXPRESSID` as a
+ *   `Uint32Array`, the attribute that means triangle order is load-bearing —
+ *   and typed the way Share's own writers type it
+ *   (`viewer/ifc/batchedToMergedMesh.js`), because that typing is what keeps
+ *   Draco's GENERIC quantization off it
+ * @param {boolean} [options.areIdsFloat] Type `_EXPRESSID` `Float32Array`
+ *   instead: the shape the guard above is a guard AGAINST, used only to show
+ *   that it is one
  * @param {boolean} [options.withNormals] Add `NORMAL`, the one attribute the
  *   two codecs treat DIFFERENTLY under quality: Draco quantizes it to
  *   NORMAL bits, Meshopt's `FILTER` rewrites it octahedrally
  * @return {Promise<Uint8Array>} a standalone GLB
  */
-async function geometryGlb({withPerVertexIds = false, withNormals = false} = {}) {
+async function geometryGlb({withPerVertexIds = false, withNormals = false, areIdsFloat = false} = {}) {
   const doc = new Document()
   const buffer = doc.createBuffer()
   const positions = []
@@ -99,8 +105,13 @@ async function geometryGlb({withPerVertexIds = false, withNormals = false} = {})
       .setType('VEC3').setArray(new Float32Array(normals)).setBuffer(buffer))
   }
   if (withPerVertexIds) {
+    // Uint32, as `batchedToMergedMesh.js`/`flatMeshToBufferGeometry.js` write
+    // it: three's `GLTFExporter` exempts `_`-prefixed attributes from its
+    // Uint32→FLOAT coercion, so the id reaches Draco on the integer path where
+    // `quantizationBits` is ignored. `areIdsFloat` is the counter-example.
+    const ids = areIdsFloat ? new Float32Array(expressIds) : new Uint32Array(expressIds)
     primitive.setAttribute('_EXPRESSID', doc.createAccessor()
-      .setType('SCALAR').setArray(new Float32Array(expressIds)).setBuffer(buffer))
+      .setType('SCALAR').setArray(ids).setBuffer(buffer))
   }
   doc.createScene().addChild(doc.createNode().setMesh(doc.createMesh().addPrimitive(primitive)))
   return new Uint8Array(await new WebIO().writeBinary(doc))
@@ -241,7 +252,20 @@ function indexCountOf(glbBytes) {
  *   geometry
  * @return {Promise<Float32Array>}
  */
-async function positionsOf(glbBytes, codec = COMPRESSION_NONE) {
+function positionsOf(glbBytes, codec = COMPRESSION_NONE) {
+  return attributeOf(glbBytes, 'POSITION', codec)
+}
+
+
+/**
+ * Any one attribute of a GLB's one primitive, decoded the same way.
+ *
+ * @param {Uint8Array} glbBytes
+ * @param {string} name e.g. 'POSITION', '_EXPRESSID'
+ * @param {string} [codec] One of `COMPRESSION_MODES`
+ * @return {Promise<*>} the accessor's own typed array, whatever type it is
+ */
+async function attributeOf(glbBytes, name, codec = COMPRESSION_NONE) {
   const io = new WebIO().setLogger(new Logger(Logger.Verbosity.SILENT))
   if (codec === COMPRESSION_DRACO) {
     io.registerExtensions([KHRDracoMeshCompression])
@@ -253,7 +277,7 @@ async function positionsOf(glbBytes, codec = COMPRESSION_NONE) {
       .registerDependencies({'meshopt.decoder': MeshoptDecoder})
   }
   const doc = await io.readBinary(glbBytes)
-  return doc.getRoot().listMeshes()[0].listPrimitives()[0].getAttribute('POSITION').getArray()
+  return doc.getRoot().listMeshes()[0].listPrimitives()[0].getAttribute(name).getArray()
 }
 
 
@@ -459,13 +483,16 @@ describe('export/glbCompression', () => {
     // only be shown here is that they reach the encoder and change the file —
     // and, for the two that cost fidelity, by how much.
     //
-    // Deliberately NOT asserted: that the coarse rung (`smallest`, labelled
-    // "Reduced") weighs less than Balanced weighs less than Best. Measured, Draco's speed pair is a −8.6% win on
-    // EDGEBREAKER over the Momentum building model and a +0.5% loss on the
-    // same model under SEQUENTIAL, so the rungs are a fidelity ladder and not
-    // a size one (`exportQuality.js` module doc). The panel shows the real
-    // measured size for the selection; a test claiming a monotone ladder
-    // would be pinning a promise the feature does not make.
+    // Deliberately NOT asserted, and this is about the DRACO ladder
+    // specifically: that the coarse rung (`smallest`, labelled "Reduced")
+    // weighs less than Balanced weighs less than Best. Measured, Draco's speed
+    // pair is a −8.6% win on EDGEBREAKER over the Momentum building model and
+    // a +0.5% loss on the same model under SEQUENTIAL, so those rungs are a
+    // fidelity ladder and not a size one (`exportQuality.js` module doc). The
+    // panel shows the real measured size for the selection; a test claiming a
+    // monotone Draco ladder would be pinning a promise the feature does not
+    // make. The one byte comparison below is Meshopt's FILTER-vs-QUANTIZE
+    // step, which is structural rather than model-shaped — see it there.
     /** @type {Uint8Array} */ let source
     /** @type {Float32Array} */ let sourcePositions
     /** @type {number} */ let positionRange
@@ -503,7 +530,11 @@ describe('export/glbCompression', () => {
 
       expect(meshoptFiltersOf(balanced.withoutMetadata)).toEqual(['OCTAHEDRAL'])
       expect(normalComponentTypeOf(balanced.withoutMetadata)).toBe(BYTE_COMPONENT_TYPE)
-      // …and it is worth real bytes even on a fixture this small.
+      // …and it is worth real bytes even on a fixture this small. The one
+      // byte ordering in this describe that IS asserted, and the exception the
+      // preamble above allows for: FILTER rewrites every NORMAL from three
+      // float32s to four normalized bytes, so on a fixture with normals the
+      // octahedral file is smaller by construction rather than by measurement.
       expect(balanced.withoutMetadata.byteLength).toBeLessThan(best.withoutMetadata.byteLength)
     }, TIMEOUT_MS)
 
@@ -559,6 +590,49 @@ describe('export/glbCompression', () => {
       expect(smallestShift).toBeGreaterThan(bestShift)
       expect(bestShift).toBeLessThanOrEqual(maxPositionShift(QUALITY_BEST, positionRange))
       expect(smallestShift).toBeLessThanOrEqual(maxPositionShift(QUALITY_SMALLEST, positionRange))
+    }, TIMEOUT_MS)
+
+    it('brings Uint32 per-vertex ids back exactly, at the coarsest rung', async () => {
+      // Hazard A2's safety property, which nothing else asserts. `_EXPRESSID`
+      // and `_INSTANCEID` fall into Draco's GENERIC bucket, and no rung names
+      // GENERIC — but `quantizationBits` MERGES with `@gltf-transform`'s
+      // defaults (`khr-draco-mesh-compression/encoder.ts#encodeGeometry`), so
+      // every rung inherits its pinned `GENERIC: 12`. Twelve bits cannot hold
+      // a six-digit express id, and the only reason that is harmless is the
+      // attribute's TYPE: Share writes ids as `Uint32Array`
+      // (`viewer/ifc/batchedToMergedMesh.js`, `flatMeshToBufferGeometry.js`,
+      // `batchedSubset.js`) and three's `GLTFExporter` exempts `_`-prefixed
+      // attributes from its Uint32→FLOAT coercion, so they take Draco's
+      // integer path where quantization bits are ignored.
+      //
+      // The coarsest rung, because it is the one whose POSITION/NORMAL bits
+      // are lowest and so the one where a bits-are-applied-to-ids regression
+      // would be loudest. SEQUENTIAL via `BLDRS_face_ids`, so the ids come
+      // back index for index.
+      const ordered = withBldrsPayload(
+        await geometryGlb({withPerVertexIds: true}), 'BLDRS_face_ids')
+      const sourceIds = await attributeOf(ordered, '_EXPRESSID')
+
+      const out = await compressExportGlb(ordered, COMPRESSION_DRACO, QUALITY_SMALLEST)
+      const decodedIds = await attributeOf(out.withoutMetadata, '_EXPRESSID', COMPRESSION_DRACO)
+
+      expect(sourceIds).toBeInstanceOf(Uint32Array)
+      expect(decodedIds.length).toBe(sourceIds.length)
+      expect([...decodedIds]).toEqual([...sourceIds])
+
+      // …and the control that makes the line above an assertion rather than a
+      // hope: the SAME ids typed float, which is what an id attribute becomes
+      // if it ever loses the `_` prefix or the exemption, do NOT survive. The
+      // measured damage on this shape is 594 of 600 ids wrong
+      // (`100007` → `100007.1640625`), so "some id moved" is a floor, not a
+      // knife edge.
+      const asFloat = withBldrsPayload(
+        await geometryGlb({withPerVertexIds: true, areIdsFloat: true}), 'BLDRS_face_ids')
+      const floatOut = await compressExportGlb(asFloat, COMPRESSION_DRACO, QUALITY_SMALLEST)
+      const floatIds = await attributeOf(floatOut.withoutMetadata, '_EXPRESSID', COMPRESSION_DRACO)
+
+      expect(floatIds).toBeInstanceOf(Float32Array)
+      expect([...floatIds]).not.toEqual([...await attributeOf(asFloat, '_EXPRESSID')])
     }, TIMEOUT_MS)
 
     it('keeps the Draco method derived from the layout at every rung', async () => {

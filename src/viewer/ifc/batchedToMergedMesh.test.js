@@ -113,6 +113,16 @@ describe('viewer/ifc/batchedToMergedMesh', () => {
     expect(expressSet).toEqual(new Set([100, 200]))
     const instanceSet = new Set(Array.from({length: 6}, (_, v) => instance.getX(v)))
     expect(instanceSet.size).toBe(2) // two distinct occurrence ids
+    // …and INTEGER-typed, which is load-bearing well outside this module.
+    // `_EXPRESSID`/`_INSTANCEID` land in Draco's GENERIC quantization bucket
+    // on export, and `quantizationBits` merges with `@gltf-transform`'s pinned
+    // `GENERIC: 12` — twelve bits cannot hold a six-digit id. It is harmless
+    // only because Uint32 takes Draco's integer path, where those bits are
+    // ignored; typed float the same ids come back corrupted
+    // (`export/exportQuality.js` §"What is deliberately NOT here", and the
+    // round trip in `export/glbCompression.test.js`).
+    expect(express.array).toBeInstanceOf(Uint32Array)
+    expect(instance.array).toBeInstanceOf(Uint32Array)
   })
 
   it('bins by colour into one material + group per distinct colour', () => {
