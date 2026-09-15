@@ -81,6 +81,10 @@ function resolveFrom(table) {
 async function sweep(options = {}) {
   const published = []
   const sizesByCodec = {}
+  // Undefined until the sweep reports, which distinguishes "kept nothing"
+  // from "never said" — the caller owns releasing whatever it names, so
+  // silence and `null` are not the same answer.
+  let retained
   await measureCodecSizes(ARTIFACT, {
     quality: QUALITY,
     isPortable: false,
@@ -89,9 +93,12 @@ async function sweep(options = {}) {
       published.push([mode, sizes])
       sizesByCodec[mode] = sizes
     },
+    onRetain: (mode) => {
+      retained = mode
+    },
     ...options,
   })
-  return {published, sizesByCodec}
+  return {published, sizesByCodec, retained}
 }
 
 
@@ -221,6 +228,35 @@ describe('codecSizes', () => {
 
       expect(releaseCompressedExport)
         .toHaveBeenCalledWith(ARTIFACT, COMPRESSION_MESHOPT, false, QUALITY)
+    })
+
+    it('names the cell it left resident, so the caller can release it', async () => {
+      // The sweep keeps the winner on purpose and therefore cannot free it
+      // itself. Nobody else can work out which cell that is either: the
+      // winner is decided against the metadata flag as it stood during the
+      // sweep, and that flag moves without re-running anything.
+      resolveFrom(INSTANCE_HEAVY)
+
+      const {retained} = await sweep()
+
+      expect(retained).toBe(COMPRESSION_MESHOPT)
+    })
+
+    it('names nothing when it kept nothing', async () => {
+      // A Stop leaves no winner, so there is nothing for the caller to own —
+      // and `null` has to be said rather than left unsaid, or a caller
+      // holding a previous sweep's cell would never learn it was dropped.
+      const controller = new AbortController()
+      artifactSizes.mockImplementation((artifact, mode) => {
+        if (mode === COMPRESSION_MESHOPT) {
+          controller.abort()
+        }
+        return Promise.resolve(MOMENTUM[mode])
+      })
+
+      const {retained} = await sweep({signal: controller.signal})
+
+      expect(retained).toBeNull()
     })
 
     it('measures at the quality and Portable setting it was given', async () => {

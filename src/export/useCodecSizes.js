@@ -14,7 +14,7 @@
 //
 // Design: design/new/glb-export-premium.md §4.4.
 import {useCallback, useEffect, useRef, useState} from 'react'
-import {uncompressedSizes} from './artifactSizes'
+import {releaseCompressedExport, uncompressedSizes} from './artifactSizes'
 import {isSweepComplete, measureCodecSizes, shouldAutoMeasure} from './codecSizes'
 
 
@@ -63,6 +63,25 @@ export default function useCodecSizes(artifact, {quality, isPortable, isMetadata
   // re-running three encoders for that would be absurd.
   const metadataRef = useRef(isMetadataIncluded)
   metadataRef.current = isMetadataIncluded
+  // How to release the one cell the last sweep left in the estimate cache.
+  // A thunk rather than the mode, because releasing needs the artifact,
+  // Portable and quality THAT sweep ran at, and by the time this is called
+  // the render's own values may have moved on.
+  const releaseRetainedRef = useRef(null)
+
+  // Nothing outside a sweep reuses the retained cell: remounting the panel
+  // re-runs the whole axis from scratch, so a winner held past the sweep that
+  // produced it is never read again. Hence release on unmount and on restart,
+  // and release the previous one before recording a new one — a sweep that
+  // finished just before being superseded would otherwise strand its winner
+  // for the life of the artifact, which the store holds for the whole session.
+  // Releasing only drops a cache entry (`artifactSizes.js`), so an export
+  // already holding the promise still resolves; the cost of being wrong here
+  // is a re-encode, not a failure.
+  const releaseRetained = useCallback(() => {
+    releaseRetainedRef.current?.()
+    releaseRetainedRef.current = null
+  }, [])
 
   const stop = useCallback(() => {
     // The encoders are synchronous wasm with no abort, so this ends the QUEUE
@@ -117,6 +136,14 @@ export default function useCodecSizes(artifact, {quality, isPortable, isMetadata
           }
           setMeasuringCodec(mode)
         },
+        // Unguarded by generation, deliberately: a superseded sweep's
+        // retained cell is exactly the one nobody else will ever release.
+        onRetain: (mode) => {
+          releaseRetained()
+          releaseRetainedRef.current = mode === null ?
+            null :
+            () => releaseCompressedExport(artifact, mode, isPortable, quality)
+        },
       })
     } finally {
       if (abortRef.current === controller) {
@@ -129,7 +156,7 @@ export default function useCodecSizes(artifact, {quality, isPortable, isMetadata
         setIsPaused(!isSweepComplete(measured))
       }
     }
-  }, [artifact, quality, isPortable])
+  }, [artifact, quality, isPortable, releaseRetained])
 
   useEffect(() => {
     let isStale = false
@@ -161,8 +188,9 @@ export default function useCodecSizes(artifact, {quality, isPortable, isMetadata
     return () => {
       isStale = true
       abortRef.current?.abort()
+      releaseRetained()
     }
-  }, [artifact, run])
+  }, [artifact, run, releaseRetained])
 
   return {sizesByCodec, measuringCodec, isMeasuring, isStopping, isPaused, start: run, stop}
 }

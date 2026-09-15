@@ -235,4 +235,85 @@ describe('useCodecSizes', () => {
     expect(artifactSizes).not.toHaveBeenCalled()
     expect(releaseCompressedExport).not.toHaveBeenCalled()
   })
+
+  it('gives back the winner it was holding when the panel goes away', async () => {
+    // The sweep keeps the winner so the selection that follows can use it —
+    // but only for as long as there is a panel to select in. Reopening the
+    // tab re-runs the whole axis from scratch, so a cell held past unmount is
+    // never read again: it just sits on the artifact, which the store keeps
+    // for the rest of the session, holding both metadata variants.
+    const {result, unmount} = renderHook(() => useCodecSizes(ARTIFACT, BALANCED))
+    await waitFor(() => expect(result.current.sizesByCodec).toEqual(SIZES))
+    await waitFor(() => expect(result.current.isMeasuring).toBe(false))
+    releaseCompressedExport.mockClear()
+
+    unmount()
+
+    expect(releaseCompressedExport).toHaveBeenCalledWith(ARTIFACT, 'draco', false, 'balanced')
+  })
+
+  it('gives back the previous rung\'s winner when it restarts', async () => {
+    // Same cell, the other way out: the teardown that runs on a rung change
+    // hands back what the finished sweep was holding, because the new sweep
+    // measures a different rung and so can never name the old cell itself.
+    const {result, rerender} = renderHook(
+      (props) => useCodecSizes(ARTIFACT, props),
+      {initialProps: BALANCED},
+    )
+    await waitFor(() => expect(result.current.sizesByCodec).toEqual(SIZES))
+    await waitFor(() => expect(result.current.isMeasuring).toBe(false))
+    releaseCompressedExport.mockClear()
+
+    rerender({...BALANCED, quality: 'best'})
+    await waitFor(() => expect(result.current.sizesByCodec).toEqual(SIZES))
+
+    expect(releaseCompressedExport).toHaveBeenCalledWith(ARTIFACT, 'draco', false, 'balanced')
+  })
+
+  it('gives back a winner retained by a sweep that finished after it was superseded', async () => {
+    // The gap the teardown cannot cover. Abort stops the NEXT codec, not the
+    // one inside a synchronous wasm encode, so a rung change while the last
+    // codec is running leaves that sweep to finish the whole axis — and a
+    // sweep that finished keeps its winner. By then the teardown has already
+    // run, so nothing is left to hand that cell back except the next sweep
+    // that goes to retain one.
+    const pending = {}
+    artifactSizes.mockImplementation((artifact, mode, isPortable, quality) =>
+      new Promise((resolve) => {
+        pending[`${mode}|${quality}`] = resolve
+      }))
+    const {rerender} = renderHook(
+      ({quality}) => useCodecSizes(ARTIFACT, {...BALANCED, quality}),
+      {initialProps: {quality: 'balanced'}},
+    )
+
+    // Run the old rung down to its last codec, so the abort lands too late.
+    for (const mode of ['none', 'meshopt']) {
+      await waitFor(() => expect(pending[`${mode}|balanced`]).toBeDefined())
+      await act(async () => {
+        pending[`${mode}|balanced`](SIZES[mode])
+        await Promise.resolve()
+      })
+    }
+    await waitFor(() => expect(pending['draco|balanced']).toBeDefined())
+
+    rerender({quality: 'best'})
+    await act(async () => {
+      pending['draco|balanced'](SIZES.draco)
+      await Promise.resolve()
+    })
+    releaseCompressedExport.mockClear()
+
+    // The superseded sweep is now holding draco at the rung nobody is on.
+    for (const mode of ['none', 'meshopt', 'draco']) {
+      await waitFor(() => expect(pending[`${mode}|best`]).toBeDefined())
+      await act(async () => {
+        pending[`${mode}|best`](SIZES[mode])
+        await Promise.resolve()
+      })
+    }
+
+    await waitFor(() => expect(releaseCompressedExport)
+      .toHaveBeenCalledWith(ARTIFACT, 'draco', false, 'balanced'))
+  })
 })

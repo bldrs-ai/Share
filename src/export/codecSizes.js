@@ -239,6 +239,10 @@ export function codecToSelect(sizesByCodec, isMetadataIncluded, isUserChosen, cu
  * @param {Function} [options.onCodec] `(?mode) => void`, which codec is
  *   running now — the panel says so, and says it is still finishing after a
  *   cancel
+ * @param {Function} [options.onRetain] `(?mode) => void`, fired once as the
+ *   sweep ends with the one cell it is leaving in the estimate cache for the
+ *   selection that follows, or `null` if it kept nothing. Whoever owns the
+ *   sweep owns releasing that cell — see the `finally`
  * @param {Array<string>} [options.order]
  * @return {Promise<object>} `{[mode]: ?sizes}` for every codec that reported.
  *   Short of the whole axis after a Stop, which is how the caller tells a
@@ -253,6 +257,7 @@ export async function measureCodecSizes(artifact, {
   signal,
   onSize,
   onCodec = noop,
+  onRetain = noop,
   order = CODEC_MEASUREMENT_ORDER,
 }) {
   const measured = {}
@@ -302,7 +307,15 @@ export async function measureCodecSizes(artifact, {
     // waiting for.
     if (bestHeld !== null && bestHeld !== smallestCodec(measured, isMetadataIncluded, order)) {
       releaseCompressedExport(artifact, bestHeld, isPortable, quality)
+      bestHeld = null
     }
+    // Hand the surviving cell to the caller. The sweep cannot release it
+    // itself — it is kept precisely so the selection that follows can use it
+    // — so somebody outside has to own the other end of its life, and only
+    // the sweep knows which cell that is: the winner is decided against the
+    // metadata flag as it stood HERE, and that flag can move afterwards
+    // without re-running anything.
+    onRetain(bestHeld)
   }
   return measured
 }
