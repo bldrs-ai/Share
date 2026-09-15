@@ -24,8 +24,6 @@ import {
   QUALITY_BALANCED,
   QUALITY_BEST,
   QUALITY_SMALLEST,
-  QUALITY_SMOOSHED,
-  QUALITY_SQUASHED,
   maxPositionShift,
 } from './exportQuality'
 import {
@@ -546,8 +544,7 @@ describe('export/glbCompression', () => {
       // The claim the caption makes ("geometry exact"): FILTER's octahedral
       // pass is only ever applied to NORMAL/TANGENT, so POSITION comes back
       // byte for byte however hard the rung squeezes.
-      for (const quality of
-        [QUALITY_BEST, QUALITY_BALANCED, QUALITY_SMALLEST, QUALITY_SQUASHED, QUALITY_SMOOSHED]) {
+      for (const quality of [QUALITY_BEST, QUALITY_BALANCED, QUALITY_SMALLEST]) {
         const out = await compressExportGlb(source, COMPRESSION_MESHOPT, quality)
         expect(await positionsOf(out.withoutMetadata, COMPRESSION_MESHOPT)).toEqual(sourcePositions)
       }
@@ -557,15 +554,13 @@ describe('export/glbCompression', () => {
       // The finding behind `isDracoOnlyRung` (#1852), asserted on the BYTES
       // rather than on the table: `EXTMeshoptCompression`'s encoder surface in
       // the pinned 4.3.0 is `{method}` with two values, and Balanced already
-      // spends the coarser one — so the three rungs under it re-encode to
-      // Balanced's file exactly. A future rung that found a real Meshopt lever
-      // would turn this red, which is the point: the caption claiming "Meshopt
-      // has no coarser setting" would have become false.
+      // spends the coarser one — so Reduced re-encodes to Balanced's file
+      // exactly. A future rung that found a real Meshopt lever would turn this
+      // red, which is the point: the caption claiming "Meshopt has no coarser
+      // setting" would have become false.
       const balanced = await compressExportGlb(source, COMPRESSION_MESHOPT, QUALITY_BALANCED)
-      for (const quality of [QUALITY_SMALLEST, QUALITY_SQUASHED, QUALITY_SMOOSHED]) {
-        const out = await compressExportGlb(source, COMPRESSION_MESHOPT, quality)
-        expect([...out.withoutMetadata]).toEqual([...balanced.withoutMetadata])
-      }
+      const out = await compressExportGlb(source, COMPRESSION_MESHOPT, QUALITY_SMALLEST)
+      expect([...out.withoutMetadata]).toEqual([...balanced.withoutMetadata])
       // …and the control that makes the loop an assertion rather than a
       // tautology: Best asks for QUANTIZE and really is a different file.
       const best = await compressExportGlb(source, COMPRESSION_MESHOPT, QUALITY_BEST)
@@ -614,20 +609,6 @@ describe('export/glbCompression', () => {
       expect(smallestShift).toBeGreaterThan(bestShift)
       expect(bestShift).toBeLessThanOrEqual(maxPositionShift(QUALITY_BEST, positionRange))
       expect(smallestShift).toBeLessThanOrEqual(maxPositionShift(QUALITY_SMALLEST, positionRange))
-
-      // …and each rung below spends more of them again, still inside its own
-      // (larger) quoted figure. That strictly-growing chain is what makes the
-      // two lossy rungs fidelity steps rather than relabellings, and it is
-      // the same property a user reads off the caption (#1852).
-      let previousShift = smallestShift
-      for (const quality of [QUALITY_SQUASHED, QUALITY_SMOOSHED]) {
-        const out = await compressExportGlb(ordered, COMPRESSION_DRACO, quality)
-        const shift = maxVertexShift(
-          sourcePositions, await positionsOf(out.withoutMetadata, COMPRESSION_DRACO))
-        expect(shift).toBeGreaterThan(previousShift)
-        expect(shift).toBeLessThanOrEqual(maxPositionShift(quality, positionRange))
-        previousShift = shift
-      }
     }, TIMEOUT_MS)
 
     it('brings Uint32 per-vertex ids back exactly, at the coarsest rung', async () => {
@@ -681,8 +662,7 @@ describe('export/glbCompression', () => {
       // what per-triangle identity depends on — a rung that reached for
       // EDGEBREAKER for the better ratio would silently break re-import
       // picking.
-      for (const quality of
-        [QUALITY_BEST, QUALITY_BALANCED, QUALITY_SMALLEST, QUALITY_SQUASHED, QUALITY_SMOOSHED]) {
+      for (const quality of [QUALITY_BEST, QUALITY_BALANCED, QUALITY_SMALLEST]) {
         const ordered = await compressExportGlb(
           withBldrsPayload(source, 'BLDRS_face_ids'), COMPRESSION_DRACO, quality)
 
@@ -709,14 +689,11 @@ describe('export/glbCompression', () => {
     it('quotes Draco in millimetres off the artifact\'s own bounds', () => {
       expect(compressionFidelityCaption(COMPRESSION_DRACO, QUALITY_BEST, MOMENTUM_RANGE_M))
         .toBe('parts may move up to 1.2 mm; shading normals rounded')
+      // The coarsest rung the ladder has left, and it is still single-digit
+      // millimetres on this model — which is what let #1854 drop the two that
+      // printed 19 mm and 75 mm without leaving a gap a user would miss.
       expect(compressionFidelityCaption(COMPRESSION_DRACO, QUALITY_SMALLEST, MOMENTUM_RANGE_M))
         .toBe('parts may move up to 4.7 mm; shading normals rounded')
-      // Tens of millimetres, printed large rather than softened: that figure
-      // IS the "view-only" signal the coarsest rung is for (#1852).
-      expect(compressionFidelityCaption(COMPRESSION_DRACO, QUALITY_SQUASHED, MOMENTUM_RANGE_M))
-        .toBe('parts may move up to 19 mm; shading normals rounded')
-      expect(compressionFidelityCaption(COMPRESSION_DRACO, QUALITY_SMOOSHED, MOMENTUM_RANGE_M))
-        .toBe('parts may move up to 75 mm; shading normals rounded')
     })
 
     it('says what Meshopt actually costs, which is not a distance', () => {
@@ -727,14 +704,12 @@ describe('export/glbCompression', () => {
     })
 
     it('admits it when the rung the user picked cannot reach Meshopt', () => {
-      // All three coarse rungs re-encode to Balanced's Meshopt file (the byte
-      // assertion is above), so a caption that read the same as Balanced's
-      // would leave an unmoving size line unexplained beside an option
-      // promising "small" or "tiny" (#1852).
-      for (const quality of [QUALITY_SMALLEST, QUALITY_SQUASHED, QUALITY_SMOOSHED]) {
-        expect(compressionFidelityCaption(COMPRESSION_MESHOPT, quality, MOMENTUM_RANGE_M))
-          .toBe('geometry exact; shading normals rounded — Meshopt has no coarser setting')
-      }
+      // Reduced re-encodes to Balanced's Meshopt file (the byte assertion is
+      // above), so a caption that read the same as Balanced's would leave an
+      // unmoving size line unexplained beside an option promising "small"
+      // (#1852).
+      expect(compressionFidelityCaption(COMPRESSION_MESHOPT, QUALITY_SMALLEST, MOMENTUM_RANGE_M))
+        .toBe('geometry exact; shading normals rounded — Meshopt has no coarser setting')
     })
 
     it('has nothing to say with no codec, and no figure with no bounds', () => {

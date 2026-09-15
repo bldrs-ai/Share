@@ -206,7 +206,8 @@ export function releaseCompressedExport(artifact, mode, isPortable = false, qual
  * portable × codec × quality, and every cell holds two whole copies of the
  * export. Reading every rung's millimetre caption — the interaction the
  * Quality control exists for — therefore retained two copies per rung for the
- * life of the artifact, which at #1852's five rungs is ten. The rung the user just LEFT is the one
+ * life of the artifact — six copies at the three rungs #1854 leaves, and it
+ * was ten at #1852's five. The rung the user just LEFT is the one
  * cell nothing is going to read again, so the Export tab hands it back here
  * (#1852 review).
  *

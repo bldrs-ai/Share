@@ -359,13 +359,12 @@ export function smallestCodecIn(sizes: Record<string, number>): string {
  * line goes through "Estimating…" exactly as it does for a codec.
  *
  * Under MESHOPT that is true of the settings but not of the bytes: the codec
- * has one coarser setting and Balanced already spends it, so every rung below
- * Balanced re-encodes to Balanced's file
- * (`exportQuality.js#isDracoOnlyRung`). A spec asserting a rung MOVED the
- * figure has to pick Draco.
+ * has one coarser setting and Balanced already spends it, so Reduced
+ * re-encodes to Balanced's file (`exportQuality.js#isDracoOnlyRung`). A spec
+ * asserting a rung MOVED the figure has to pick Draco.
  *
  * @param page Playwright page
- * @param level 'best' | 'balanced' | 'smallest' | 'squashed' | 'smooshed'
+ * @param level 'best' | 'balanced' | 'smallest'
  * @return the byte count the settled line carries
  */
 export async function selectQuality(page: Page, level: string): Promise<number> {

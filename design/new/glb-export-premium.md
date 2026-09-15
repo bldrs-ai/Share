@@ -344,8 +344,8 @@ Two cases the first cut got wrong (#1837 codex round 6):
 **Quality** (#1848) is the second half of the compression option, and the
 whole of `export/exportQuality.js`. Through #1842 the export set exactly ONE
 encoder option per codec — Draco's `method`, Meshopt's `method` — and took
-`@gltf-transform` 4.3.0's defaults for everything else. Five named rungs now
-say what else to ask for (three through #1848; the two lossy ones in #1852). Presets rather than bit counts, because the bit
+`@gltf-transform` 4.3.0's defaults for everything else. Three named rungs now
+say what else to ask for. Presets rather than bit counts, because the bit
 count means nothing to a CAD user and the two codecs' knobs do not line up: a
 shared "12 bits" would be two different things and, for Meshopt, nothing at
 all.
@@ -355,14 +355,46 @@ all.
 | **Best (larger)** | today's defaults: `POSITION:14 NORMAL:10`, speeds 5 | `QUANTIZE` — entirely lossless |
 | **Balanced (medium)** *(default)* | same bits + `encodeSpeed:0 decodeSpeed:0` | `FILTER` |
 | **Reduced (small)** *(id `smallest`)* | `POSITION:12 NORMAL:8` + speeds 0 | `FILTER` — unchanged from Balanced |
-| **Squashed (lossy, tiny)** *(id `squashed`, #1852)* | `POSITION:10 NORMAL:6` + speeds 0 | `FILTER` — unchanged from Balanced |
-| **Smooshed (lossy, micro)** *(id `smooshed`, #1852)* | `POSITION:8 NORMAL:4` + speeds 0 | `FILTER` — unchanged from Balanced |
 
 Measured on `src/tests/fixtures/Momentum.ifc` → GLB (1,959,196 B, 43
 primitives), reproduced against the pinned encoders: Meshopt `QUANTIZE`
 1,347,740 B → `FILTER` 820,912 B (**−39.1%**); Draco EDGEBREAKER 250,184 B →
-speeds 0 228,652 B (**−8.6%**) → Reduced 194,932 B (**−22.1%**) → Squashed
-164,616 B (**−34.2%**) → Smooshed 134,748 B (**−46.1%**).
+speeds 0 228,652 B (**−8.6%**) → Reduced 194,932 B (**−22.1%**).
+
+**Three rungs, not the five #1852 shipped** (#1854). `squashed`
+(`POSITION:10 NORMAL:6`) and `smooshed` (`POSITION:8 NORMAL:4`) were added on
+the strength of those Momentum figures — −34.2% and −46.1% — and removed again
+after the owner smoke-tested the ladder on **Snowdon** (Autodesk's large IFC
+demo, 83.2 MB `.ifc` → 63.7 MB uncompressed GLB), which is the model class
+this feature is sold on:
+
+| | Best | Balanced | Reduced | Squashed | Smooshed |
+|---|---|---|---|---|---|
+| Meshopt | 49.5 | 38.7 | 38.7 | 38.7 | 38.7 MB |
+| Draco | 25.1 | 24.5 | 23.9 | 23.0 | 22.0 MB |
+
+The whole Draco ladder is **−12.4%** there against −46.1% on the fixture it
+was tuned on, with visible artifacts at the coarsest rung; Meshopt is flat
+across four rungs exactly as `isDracoOnlyRung` says. Two lossy rungs buying
+8% between them, for damage the user can see, is not a trade worth offering.
+The sweep tables stay in `exportQuality.js`'s module doc rather than being
+deleted with the rungs: they are the evidence for where the ladder now ends
+and for why P7 N3 was never offered, and without them the next person
+re-derives a coarser rung and re-learns this.
+
+**Why the ladder was always going to be worth so little there**, which is the
+finding that matters more than the two rungs. With metadata off that 22.0 MB
+Draco file is 16.7 MB, and bzip2 of it is **2.8 MB — 6×**. Draco output is
+entropy-coded and near-incompressible; measured per chunk on real batched
+exports, the JSON chunk gzips 7.5–9.8×, the `BLDRS_*` payloads 1.0× (already
+gzipped internally) and the Draco streams ~1×. A 6× whole-file ratio therefore
+means almost none of the file IS Draco output — solving `D + R = 16.7`,
+`D + R/10 = 2.8` gives **≈1.3 MB of compressed geometry against ≈15.4 MB of
+container**: the glTF JSON node graph plus raw float32 instance transforms
+(40 B each) that `EXT_mesh_gpu_instancing` puts permanently out of Draco's
+reach. Every rung was tuning that 1.3 MB slice. The container is what the
+gzipped download below goes after losslessly, and what #1853 goes after
+structurally.
 
 Four things about that table are load-bearing:
 
@@ -389,57 +421,51 @@ Four things about that table are load-bearing:
   superlative about bytes on the control would be exactly the promise this
   bullet says the table cannot make. Its *id* stays `smallest` — it is written into
   export-history rows and estimate cache keys, and renaming it would break
-  rows already recorded. The owner chose the parentheticals in #1852 knowing
-  that: **larger / medium / small / tiny / micro is a hint, not a guarantee**,
-  it holds on the EDGEBREAKER path the default artifact takes, and the
-  dropdown above shows each codec's real measured bytes beside it. The word
-  that *is* load-bearing is "lossy", which the bottom two carry in one shared
-  `<name> (lossy, <size>)` shape so the pair reads as one step past the top
-  three rather than as two unrelated options.
+  rows already recorded. The owner chose the parentheticals knowing
+  that: **larger / medium / small is a hint, not a guarantee**, it holds on
+  the EDGEBREAKER path the default artifact takes, and the dropdown above
+  shows each codec's real measured bytes beside it. No rung carries the word
+  "lossy" any more — the two that did are gone (#1854), and the coarsest left
+  prints a 4.65 mm bound on Momentum, which is a caption rather than a
+  warning.
 - **Meshopt runs out of rungs before Draco does, and the panel says so.** The
   pinned `EXTMeshoptCompression`'s entire encoder surface is
   `{method: QUANTIZE | FILTER}`; the filter each attribute gets and the bit
   depth it gets it at are hard-coded by attribute semantic in the extension's
   own `getMeshoptFilter` (POSITION and TEXCOORD_0 → none, NORMAL/TANGENT →
-  octahedral at 8 bits). Balanced already spends `FILTER`, so **Reduced,
-  Squashed and Smooshed all produce Balanced's Meshopt file byte for byte** —
-  true since #1848,
-  not new with the fourth rung. The lever `gltfpack` would reach for next is
+  octahedral at 8 bits). Balanced already spends `FILTER`, so **Reduced
+  produces Balanced's Meshopt file byte for byte** — true since #1848. The lever `gltfpack` would reach for next is
   `quantize()`, which lives in `@gltf-transform/functions` and reorders
   geometry, so it is off the table for `BLDRS_face_ids`. Rather than ship a
-  silently inert option, `exportQuality.js#isDracoOnlyRung` marks those rungs
+  silently inert option, `exportQuality.js#isDracoOnlyRung` marks that rung
   and the fidelity caption reads "geometry exact; shading normals rounded —
   Meshopt has no coarser setting".
 
-**How the two lossy rungs' bits were chosen** (#1852). Swept on the same two
-models through the same pinned encoders, against Reduced, EDGEBREAKER /
-SEQUENTIAL: P12 N6 −11.3% / −4.1% at an *unchanged* bound; **P10 N6 −15.6% /
-−8.1%**; P10 N5 −21.4% / −10.1%; P10 N4 −27.1% / −12.1%; **P8 N4 −30.9% /
-−15.4%**; P7 N3 −39.7% / −18.9%; and at P2 N2, with the geometry destroyed,
+**Where the ladder stops, and what it cost to stop there** (#1852's sweep,
+kept as #1854's evidence). Swept on the same two models through the same
+pinned encoders, against Reduced, EDGEBREAKER / SEQUENTIAL: P12 N6 −11.3% /
+−4.1% at an *unchanged* bound; P10 N6 −15.6% / −8.1% (was `squashed`); P10 N5
+−21.4% / −10.1%; P10 N4 −27.1% / −12.1%; P8 N4 −30.9% / −15.4% (was
+`smooshed`); P7 N3 −39.7% / −18.9%; and at P2 N2, with the geometry destroyed,
 still −56.0% — the floor, which is connectivity and which no bit count
 touches.
 
-Three readings decide the pair. **NORMAL, not POSITION, is where the bytes
-are**: P12→P8 at NORMAL 8 buys −4.8%, while N8→N6 at POSITION 12 buys −11.3%
-and moves no vertex at all, and NORMAL keeps paying — another 5.8 and 5.7
-percentage points of the Reduced baseline at N5 and N4 — long after POSITION
-has stopped. **Past 10 bits POSITION stops
-paying**: P10→P9 is −1.0% for double the positional error, P9→P8 another
-−1.3% for double again — and that error is the figure the caption quotes, so
-POSITION is spent only where a rung needs a visibly coarser shape. And **the
-pair is picked for separation as much as for size**: 164,616 B against
-134,748 B (the second −18.1% below the first), captions reading "19 mm"
-against "75 mm", shading normals at 3.65° against 13.81°. Two options a user
-cannot tell apart would be worse UI than one.
+Three readings, and the first two are why a coarser rung is not worth
+re-deriving. **NORMAL, not POSITION, is where the bytes are**: P12→P8 at
+NORMAL 8 buys −4.8%, while N8→N6 at POSITION 12 buys −11.3% and moves no
+vertex at all, and NORMAL keeps paying — another 5.8 and 5.7 percentage points
+of the Reduced baseline at N5 and N4 — long after POSITION has stopped. **Past
+10 bits POSITION stops paying**: P10→P9 is −1.0% for double the positional
+error, P9→P8 another −1.3% for double again — and that error is the figure the
+caption quotes, so POSITION is spent only where a rung needs a visibly coarser
+shape. And **the floor is connectivity**, which is the honest ceiling on this
+whole axis and the reason decimation (#1853) is a separate piece of work.
 
-Where the ladder stops is the other half of the pick. P7 N3 is another −12.8%
-below Smooshed and is **not** offered: 34.29° of normal error is where shading
-stops describing the surface, so the model reads as blotchy rather than as
-coarse. Both rungs are verified through an encode→decode round trip — Squashed
-max 10.645 mm / rms 2.023 mm against its 18.62 mm printed bound, Smooshed max
-64.204 mm / rms 10.739 mm against 74.72 mm — and the bound holds on
-EDGEBREAKER too, checked order-independently because that method renumbers
-vertices.
+P7 N3 was never offered even when the ladder had five rungs: 34.29° of normal
+error is where shading stops describing the surface, so the model reads as
+blotchy rather than as coarse. What #1854 establishes is that the two rungs
+above that line were not worth their damage either — a caption reading "19 mm"
+or "75 mm" against a 4.65 mm one, for 8% of a Snowdon-sized file.
 
 `public/index.ifc` → GLB is the second model and shows the other limit: at
 6,800 B it is JSON and header, so **every** rung lands within 3% of every
@@ -455,15 +481,12 @@ measured byte-for-byte identical on both models, and a key that cannot move a
 byte on any artifact Share writes is a key the allowlist would carry for
 nothing.
 
-**"Micro" is a relative word here, and that is deliberate.** Everything above
-is quantization, and quantization bottoms out at the triangle count: the whole
-axis is worth about −56% on Momentum before the geometry is gone. A
-*dramatically* smaller file needs mesh **decimation**, which is a separate
-sub-issue of #1831 — `@gltf-transform/functions`' `simplify()` reorders
-triangles and `BLDRS_face_ids` indexes identity by triangle position, so it
-cannot simply be switched on here. Smooshed ships as the most aggressive
-quantization-only setting that still leaves a lit, recognisable model; the
-decimation work later makes the same rung genuinely micro.
+**Quantization bottoms out at the triangle count.** The whole axis is worth
+about −56% on Momentum before the geometry is gone, and ~−12% on a real large
+model. A *dramatically* smaller file needs mesh **decimation** (#1853) —
+`@gltf-transform/functions`' `simplify()` reorders triangles and
+`BLDRS_face_ids` indexes identity by triangle position, so it cannot simply be
+switched on here — or it needs the container, which is where #1854 went.
 
 Four knobs are deliberately **not** exposed, each measured
 (#1848 §4): `quantizationVolume: 'scene'` (4× worse RMS at equal bits, worst
@@ -638,9 +661,8 @@ codecs are alternatives, not independent options — it began as a
 `ToggleButtonGroup`, whose three side-by-side buttons were the widest control
 in the dialog and read as a run-on word under the theme's toggle styling
 (owner feedback on #1842). The menu items carry the per-mode test ids.
-Quality (Best (larger) / Balanced (medium) / Reduced (small) / Squashed
-(lossy, tiny) / Smooshed (lossy, micro), §4.3) is a second dropdown directly
-under it, **disabled rather than hidden** while Compression is None — showing it
+Quality (Best (larger) / Balanced (medium) / Reduced (small), §4.3) is a
+second dropdown directly under it, **disabled rather than hidden** while Compression is None — showing it
 only once a codec is picked would change the panel's height under the user's
 cursor at the moment they reach for the next control. Under the size line it
 captions what the rung costs *this* model: "parts may move up to 4.7 mm;
@@ -998,7 +1020,7 @@ through `BLDRS_*` extensions.
 | Units + coordination frame | ✔ `scenes[0].extras` (metres) | ✔ | ✘ (unitless) | ✘ | ✘ | ✔ `metersPerUnit`, root xform | ✔ (units attr) | ✔ |
 | Cut planes / hidden elements (view state) | ◐ `BLDRS_view_states` (designed, not written) | ◐ | ✘ | ✘ | ✘ | ◐ variants | ✘ | ✘ |
 | Portable (named node tree, no required extension) | ✔ per export (#1843) — `~100 B`/instance net | ✔ | — (always de-instanced) | — | — | ◐ (prim hierarchy is native) | ◐ | — |
-| Compression | ✔ Draco / Meshopt × Best / Balanced / Reduced / Squashed / Smooshed, chosen per export (#1842, #1848, #1852) | ✔ | ✘ | ✘ (binary only) | ◐ binary | ◐ (USDZ is a zip) | ✔ (zip) | ✘ |
+| Compression | ✔ Draco / Meshopt × Best / Balanced / Reduced, chosen per export (#1842, #1848, #1854) | ✔ | ✘ | ✘ (binary only) | ◐ binary | ◐ (USDZ is a zip) | ✔ (zip) | ✘ |
 | Source | artifact | artifact | scene | scene | scene | scene (or server) | scene | — (needs Conway write support) |
 | Effort | done in S2 | small (unpack GLB → JSON + bin) | small | small | small | medium (USDZExporter is texture-centric; instancing + metadata need work); server route if fidelity matters | medium | large — out of scope |
 

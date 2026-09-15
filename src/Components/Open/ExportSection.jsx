@@ -152,9 +152,9 @@ export default function ExportSection() {
   useEffect(() => {
     // Hand back the rung the user just left. Every rung is a different file,
     // so each holds its own compressed cells — two whole copies of the export
-    // apiece — and clicking through all five to read their millimetre
-    // captions, which is what this control is for, would otherwise retain
-    // about ten copies for the life of the artifact
+    // apiece — and clicking through every rung to read their millimetre
+    // captions, which is what this control is for, would otherwise retain two
+    // copies per rung for the life of the artifact
     // (`export/artifactSizes.js#releaseQualityExports`). The rung being left
     // is the one cell nothing is about to read again, so the eviction point
     // is known exactly and needs no policy.
@@ -506,7 +506,7 @@ export default function ExportSection() {
           meaningless to a CAD user and dangerous when wrong, and the two
           codecs' knobs don't line up, so one number would mean two different
           things (#1848 §5). The rung names are FIDELITY names with a size
-          HINT in parentheses — larger / medium / small / tiny — and the hint
+          HINT in parentheses — larger / medium / small — and the hint
           is deliberately not a superlative: `exportQuality.js` measured the
           coarse rung heavier than Balanced under SEQUENTIAL, so "Smallest"
           would promise an ordering the encoders don't keep while "small"

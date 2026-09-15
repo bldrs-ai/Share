@@ -37,8 +37,7 @@
  * @param mode 'none' | 'meshopt' | 'draco'
  * @param isPortable the Portable toggle
  * @param isMetadataIncluded the "Include Bldrs metadata" toggle
- * @param quality 'best' | 'balanced' | 'smallest' | 'squashed' | 'smooshed'
- *   (#1848, #1852)
+ * @param quality 'best' | 'balanced' | 'smallest' (#1848, #1854)
  * @return the value `data-estimate-key` carries for that selection
  */
 export function estimateKey(

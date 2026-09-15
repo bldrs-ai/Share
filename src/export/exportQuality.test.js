@@ -14,8 +14,6 @@ import {
   QUALITY_LABELS,
   QUALITY_LEVELS,
   QUALITY_SMALLEST,
-  QUALITY_SMOOSHED,
-  QUALITY_SQUASHED,
   formatMaxShift,
   isDracoOnlyRung,
   isQualityLevel,
@@ -37,9 +35,12 @@ const BOLT_RANGE_M = 0.05
 
 describe('exportQuality', () => {
   describe('the rungs', () => {
-    it('offers exactly five, and defaults to Balanced', () => {
-      expect(QUALITY_LEVELS).toEqual(
-        [QUALITY_BEST, QUALITY_BALANCED, QUALITY_SMALLEST, QUALITY_SQUASHED, QUALITY_SMOOSHED])
+    it('offers exactly three, and defaults to Balanced', () => {
+      // Three, not the five #1852 shipped: the two lossy rungs came back out
+      // in #1854 when the whole ladder measured −12.4% on Snowdon (module
+      // doc). Pinned as an exact list so re-adding a rung is a deliberate act
+      // with a red test in front of it, not a table edit nobody reviews.
+      expect(QUALITY_LEVELS).toEqual([QUALITY_BEST, QUALITY_BALANCED, QUALITY_SMALLEST])
       expect(QUALITY_DEFAULT).toBe(QUALITY_BALANCED)
       expect(isQualityLevel(QUALITY_BALANCED)).toBe(true)
       expect(isQualityLevel('tiny')).toBe(false)
@@ -47,27 +48,26 @@ describe('exportQuality', () => {
     })
 
     it('labels the size hint without ever claiming a rung is THE smallest', () => {
-      // The owner's #1852 wording: a larger/medium/small/tiny ladder, chosen
-      // knowing the byte ordering is not guaranteed (module doc). What the
-      // labels may not do is turn that hint into a superlative — "Smallest"
-      // on a rung the encoders measured HEAVIER than Balanced under
-      // SEQUENTIAL would be a promise the table cannot keep, which is the
-      // whole reason the id/label split exists.
+      // The owner's wording, kept through #1854: a larger/medium/small
+      // ladder, chosen knowing the byte ordering is not guaranteed (module
+      // doc). What the labels may not do is turn that hint into a superlative
+      // — "Smallest" on a rung the encoders measured HEAVIER than Balanced
+      // under SEQUENTIAL would be a promise the table cannot keep, which is
+      // the whole reason the id/label split exists.
       expect(QUALITY_LEVELS.map((level) => QUALITY_LABELS[level])).toEqual([
         'Best (larger)',
         'Balanced (medium)',
         'Reduced (small)',
-        'Squashed (lossy, tiny)',
-        'Smooshed (lossy, micro)',
       ])
       for (const label of Object.values(QUALITY_LABELS)) {
         expect(label).not.toMatch(/smallest|tiniest|best size/i)
       }
-      // The bottom two share one shape — `<name> (lossy, <size>)` — so the
-      // pair reads as one step past the top three rather than as two
-      // unrelated options, and the word a skimming user meets is "lossy".
-      for (const level of [QUALITY_SQUASHED, QUALITY_SMOOSHED]) {
-        expect(QUALITY_LABELS[level]).toMatch(/^\w+ \(lossy, \w+\)$/)
+      // And no rung claims to be lossy any more. The two that did are gone,
+      // and a label still carrying the word would be advertising damage the
+      // remaining rungs do not do — Reduced's own bound is 4.65 mm on
+      // Momentum, a caption rather than a warning (#1854).
+      for (const label of Object.values(QUALITY_LABELS)) {
+        expect(label).not.toMatch(/lossy/i)
       }
     })
 
@@ -95,63 +95,40 @@ describe('exportQuality', () => {
       expect(draco.quantizationBits).toEqual(qualitySettings(QUALITY_BEST).draco.quantizationBits)
     })
 
-    it('spends bits, not just encoder effort, only on the coarse rungs', () => {
+    it('spends bits, not just encoder effort, on the last rung', () => {
       expect(qualitySettings(QUALITY_SMALLEST)).toEqual({
         draco: {encodeSpeed: 0, decodeSpeed: 0, quantizationBits: {POSITION: 12, NORMAL: 8}},
         isMeshoptFiltered: true,
       })
     })
 
-    it('spends the swept bits, and only those, on the two lossy rungs', () => {
-      // The sweep's picks, not round numbers: NORMAL is where the bytes are
-      // (N8→N6 at POSITION 12 measured −11.3% and moved no vertex, and NORMAL
-      // keeps paying past where POSITION stops), while POSITION is spent only
-      // where a rung needs a visibly coarser SHAPE, because its cost is the
-      // millimetre figure the panel promises a user's model. The module doc
-      // carries the whole table. Pinned exactly: a bit count nudged by one
-      // changes that promise.
-      expect(qualitySettings(QUALITY_SQUASHED)).toEqual({
-        draco: {encodeSpeed: 0, decodeSpeed: 0, quantizationBits: {POSITION: 10, NORMAL: 6}},
-        isMeshoptFiltered: true,
-      })
-      expect(qualitySettings(QUALITY_SMOOSHED)).toEqual({
-        draco: {encodeSpeed: 0, decodeSpeed: 0, quantizationBits: {POSITION: 8, NORMAL: 4}},
-        isMeshoptFiltered: true,
-      })
-    })
-
-    it('separates the two lossy rungs on every axis the panel shows', () => {
-      // Two options a user cannot tell apart are worse UI than one, so the
-      // pair was picked for SEPARATION as much as for size. Measured on
-      // Momentum EDGEBREAKER they are 164,616 B against 134,748 B — the
-      // second −18.1% below the first — and the two axes this module owns
-      // have to move with it: a coarser POSITION grid (which the caption
-      // quotes) and a coarser NORMAL one (which the renderer shows). A rung
-      // that differed in neither would be a relabelling.
-      const tiny = qualitySettings(QUALITY_SQUASHED).draco.quantizationBits
-      const micro = qualitySettings(QUALITY_SMOOSHED).draco.quantizationBits
-
-      expect(micro.POSITION).toBeLessThan(tiny.POSITION)
-      expect(micro.NORMAL).toBeLessThan(tiny.NORMAL)
-      // Four times the grid step, not one notch: the printed bounds are
-      // "19 mm" and "75 mm" on Momentum, which is the difference a user reads.
-      expect(maxPositionShift(QUALITY_SMOOSHED, MOMENTUM_RANGE_M))
-        .toBeGreaterThan(3 * maxPositionShift(QUALITY_SQUASHED, MOMENTUM_RANGE_M))
-      expect(formatMaxShift(maxPositionShift(QUALITY_SMOOSHED, MOMENTUM_RANGE_M))).toBe('75 mm')
+    it('stops at 12 bits of POSITION, which is where the sweep stopped paying', () => {
+      // The floor the module doc's sweep argues for, asserted rather than
+      // only narrated. Below this the measured return collapses — P10→P9 is
+      // −1.0% for DOUBLE the positional error, P9→P8 another −1.3% for double
+      // again — and the whole ladder measured −12.4% on Snowdon, where the
+      // container and not the geometry is the file (#1854). So no rung may
+      // quietly reach for a coarser grid: a table edit that did would make
+      // the panel promise a millimetre figure the owner has already rejected.
+      for (const level of QUALITY_LEVELS) {
+        const {POSITION, NORMAL} = qualitySettings(level).draco.quantizationBits
+        expect(POSITION).toBeGreaterThanOrEqual(12)
+        expect(NORMAL).toBeGreaterThanOrEqual(8)
+      }
     })
 
     it('marks the rungs Meshopt cannot tell apart, and only those', () => {
       // `EXTMeshoptCompression`'s whole encoder surface in the pinned 4.3.0 is
       // `{method}`, with two values — Balanced already spends the coarser one,
-      // so the three rungs below it re-encode to Balanced's file byte for
-      // byte. The
-      // panel captions that rather than shipping a rung that silently does
-      // nothing under the codec the user has selected (#1852).
+      // so Reduced re-encodes to Balanced's file byte for byte. The panel
+      // captions that rather than shipping a rung that silently does nothing
+      // under the codec the user has selected (#1852). Still exactly one rung
+      // after #1854 took the other two away, and still derived from the table
+      // rather than named, which is what keeps it right either way.
       expect(isDracoOnlyRung(QUALITY_BEST)).toBe(false)
       expect(isDracoOnlyRung(QUALITY_BALANCED)).toBe(false)
       expect(isDracoOnlyRung(QUALITY_SMALLEST)).toBe(true)
-      expect(isDracoOnlyRung(QUALITY_SQUASHED)).toBe(true)
-      expect(isDracoOnlyRung(QUALITY_SMOOSHED)).toBe(true)
+      expect(QUALITY_LEVELS.filter(isDracoOnlyRung)).toEqual([QUALITY_SMALLEST])
       // Derived from the table rather than listed, so the claim survives an
       // unknown rung the same way every other read of the table does.
       expect(isDracoOnlyRung('turbo')).toBe(isDracoOnlyRung(QUALITY_DEFAULT))
@@ -190,7 +167,7 @@ describe('exportQuality', () => {
       //     on exactly the large-board-with-small-parts models this would be
       //     sold on.
       //
-      // Only Best and the coarse rung are pinned with an exact `toEqual`
+      // Only Best and Reduced are pinned with an exact `toEqual`
       // above, so a key added to Balanced alone reached the encoder with
       // nothing red. This closes all three at once, and catches the next key
       // too.
@@ -206,6 +183,17 @@ describe('exportQuality', () => {
       // row recorded before this feature existed carries no rung at all.
       expect(qualitySettings('turbo')).toBe(qualitySettings(QUALITY_DEFAULT))
       expect(qualitySettings(undefined)).toBe(qualitySettings(QUALITY_DEFAULT))
+      // And the two ids that were real rungs for the length of #1852. They
+      // are written into export-history rows and into permalink-shaped state,
+      // so removing them from the table is only safe because a row still
+      // naming one re-exports at Balanced instead of failing the download
+      // (#1854). Named literally rather than through a constant, because the
+      // constants are exactly what went away.
+      for (const removed of ['squashed', 'smooshed']) {
+        expect(isQualityLevel(removed)).toBe(false)
+        expect(qualitySettings(removed)).toBe(qualitySettings(QUALITY_DEFAULT))
+        expect(isDracoOnlyRung(removed)).toBe(isDracoOnlyRung(QUALITY_DEFAULT))
+      }
     })
   })
 
@@ -230,26 +218,12 @@ describe('exportQuality', () => {
         .toBe(maxPositionShift(QUALITY_BEST, MOMENTUM_RANGE_M))
       expect(maxPositionShift(QUALITY_SMALLEST, MOMENTUM_RANGE_M))
         .toBeGreaterThan(maxPositionShift(QUALITY_BEST, MOMENTUM_RANGE_M))
-      expect(maxPositionShift(QUALITY_SQUASHED, MOMENTUM_RANGE_M))
-        .toBeGreaterThan(maxPositionShift(QUALITY_SMALLEST, MOMENTUM_RANGE_M))
-    })
-
-    it('bounds the lossy rungs too, and prints them large rather than softened', () => {
-      // Measured through an encode→decode round trip on the Momentum fixture:
-      // 10.645 mm at POSITION 10 and 64.204 mm at POSITION 8, against
-      // predictions of 18.62 and 74.72. Tens of millimetres is the honest
-      // signal for a view-only file and the caption must not round it down
-      // into something reassuring, so the printed figures are pinned here as
-      // well as the arithmetic.
-      const at10 = maxPositionShift(QUALITY_SQUASHED, MOMENTUM_RANGE_M) * 1000
-      const at8 = maxPositionShift(QUALITY_SMOOSHED, MOMENTUM_RANGE_M) * 1000
-
-      expect(at10).toBeGreaterThan(10.645)
-      expect(at10).toBeLessThan(10.645 * 2)
-      expect(at8).toBeGreaterThan(64.204)
-      expect(at8).toBeLessThan(64.204 * 2)
-      expect(formatMaxShift(maxPositionShift(QUALITY_SQUASHED, MOMENTUM_RANGE_M))).toBe('19 mm')
-      expect(formatMaxShift(maxPositionShift(QUALITY_SMOOSHED, MOMENTUM_RANGE_M))).toBe('75 mm')
+      // And the coarsest rung the ladder has left still prints a figure a
+      // modeller reads as "fine": 4.65 mm on this model, against the 19 mm and
+      // 75 mm the two removed rungs printed. That the ladder's own worst case
+      // is single-digit millimetres is the other half of why #1854 could drop
+      // them — nothing on offer needs the word "lossy" beside it.
+      expect(formatMaxShift(maxPositionShift(QUALITY_SMALLEST, MOMENTUM_RANGE_M))).toBe('4.7 mm')
     })
 
     it('scales with the model, which is why it is worth showing at all', () => {

@@ -125,7 +125,7 @@ function chooseCompression(mode) {
 /**
  * Pick a Quality rung the same way (#1848).
  *
- * @param {string} level 'best' | 'balanced' | 'smallest' | 'squashed' | 'smooshed'
+ * @param {string} level 'best' | 'balanced' | 'smallest'
  */
 function chooseQuality(level) {
   fireEvent.mouseDown(within(screen.getByTestId('export-quality')).getByRole('combobox'))
@@ -641,65 +641,54 @@ describe('ExportSection', () => {
 
       expect(getByTestId('export-quality')).toHaveTextContent('Reduced (small)')
       expect(getByTestId('export-quality')).not.toHaveTextContent(/smallest/i)
-
-      chooseQuality('squashed')
-      await act(async () => {})
-
-      expect(getByTestId('export-quality')).toHaveTextContent('Squashed (lossy, tiny)')
-      expect(getByTestId('export-quality')).not.toHaveTextContent(/tiniest/i)
-
-      chooseQuality('smooshed')
-      await act(async () => {})
-
-      expect(getByTestId('export-quality')).toHaveTextContent('Smooshed (lossy, micro)')
+      // And the rung below it is gone rather than renamed: #1854 took the two
+      // lossy entries out of `QUALITY_LEVELS`, so the panel must not still be
+      // rendering a MenuItem for one.
+      expect(() => getByTestId('export-quality-squashed')).toThrow()
+      expect(() => getByTestId('export-quality-smooshed')).toThrow()
     })
 
-    it('offers both lossy rungs, each carrying its own millimetre figure', async () => {
-      // The two rungs #1852 adds: POSITION 10 / NORMAL 6 and POSITION 8 /
-      // NORMAL 4, both view-only files. Their whole visible difference in this
-      // panel is the caption, so those figures have to GROW down the ladder —
-      // a second lossy entry quoting the first one's 19 mm would be a rung in
-      // name only, and two options a user cannot tell apart are worse than
-      // one.
+    it('carries the rung\'s own millimetre figure into the caption and the estimate key', async () => {
+      // The rung's whole visible effect in this panel is the caption and the
+      // figure beside it, so both have to follow the control. Reduced is now
+      // the coarsest the ladder offers (#1854) and prints the largest bound it
+      // has: 4.7 mm on this fixture, against Balanced's 1.2 mm.
       settleSizes()
       await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
       const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
       await act(async () => {})
 
       chooseCompression('draco')
-      chooseQuality('squashed')
       await act(async () => {})
 
-      expect(getByTestId('export-quality-caption')).toHaveTextContent('parts may move up to 19 mm')
-      expect(artifactSizes)
-        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'squashed')
+      expect(getByTestId('export-quality-caption')).toHaveTextContent('parts may move up to 1.2 mm')
       expect(getByTestId('export-size'))
-        .toHaveAttribute('data-estimate-key', 'native|draco|squashed|meta')
+        .toHaveAttribute('data-estimate-key', 'native|draco|balanced|meta')
 
-      chooseQuality('smooshed')
+      chooseQuality('smallest')
       await act(async () => {})
 
-      expect(getByTestId('export-quality-caption')).toHaveTextContent('parts may move up to 75 mm')
+      expect(getByTestId('export-quality-caption')).toHaveTextContent('parts may move up to 4.7 mm')
       expect(artifactSizes)
-        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'smooshed')
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'smallest')
       expect(getByTestId('export-size'))
-        .toHaveAttribute('data-estimate-key', 'native|draco|smooshed|meta')
+        .toHaveAttribute('data-estimate-key', 'native|draco|smallest|meta')
     })
 
-    it('says outright that the coarse rungs do not reach Meshopt', async () => {
-      // They re-encode to Balanced's file byte for byte — Meshopt's encoder
+    it('says outright that the coarse rung does not reach Meshopt', async () => {
+      // It re-encodes to Balanced's file byte for byte — Meshopt's encoder
       // surface is `{method}` with two values and Balanced already spends the
       // coarser one (`exportQuality.js#isDracoOnlyRung`). The size line will
-      // sit still for all three rungs under Balanced; without this sentence
-      // the user reads that as a broken control rather than as the codec
-      // having nothing more to give (#1852).
+      // sit still on Reduced; without this sentence the user reads that as a
+      // broken control rather than as the codec having nothing more to give
+      // (#1852).
       settleSizes()
       await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
       const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
       await act(async () => {})
 
       chooseCompression('meshopt')
-      chooseQuality('smooshed')
+      chooseQuality('smallest')
       await act(async () => {})
 
       expect(getByTestId('export-quality-caption'))
@@ -715,10 +704,10 @@ describe('ExportSection', () => {
 
     it('hands back the rung it left, so comparing rungs does not retain a copy each', async () => {
       // Each compressed cell holds two whole copies of the export and #1848
-      // split them by rung, so clicking through all five to read their
-      // captions — the interaction this control exists for — would pin about
-      // ten copies of the model for the life of the artifact. Nothing reads
-      // the rung just left (#1852 review).
+      // split them by rung, so clicking through every rung to read their
+      // captions — the interaction this control exists for — would pin two
+      // copies of the model per rung for the life of the artifact. Nothing
+      // reads the rung just left (#1852 review).
       settleSizes()
       await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
       render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})

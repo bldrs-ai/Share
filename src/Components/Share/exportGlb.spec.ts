@@ -691,7 +691,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     const balancedCaption = await page.getByTestId('export-quality-caption').textContent()
     expect(balancedCaption).toMatch(/parts may move up to [\d.]+ mm/)
 
-    await selectQuality(page, 'smallest')
+    const smallestBytes = await selectQuality(page, 'smallest')
 
     // Fewer POSITION bits is a coarser grid, so the figure has to grow — the
     // one thing about the caption that cannot be a constant.
@@ -699,17 +699,12 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     expect(smallestCaption).toMatch(/parts may move up to [\d.]+ mm/)
     expect(millimetresIn(smallestCaption)).toBeGreaterThan(millimetresIn(balancedCaption))
 
-    // …and the two lossy rungs below it again (#1852). Each is a coarser
-    // POSITION grid than the last, so the figure has to grow at every step:
-    // two options a user cannot tell apart are worse UI than one, and this is
-    // the axis the panel shows them apart on.
-    await selectQuality(page, 'squashed')
-    const squashedCaption = await page.getByTestId('export-quality-caption').textContent()
-    expect(millimetresIn(squashedCaption)).toBeGreaterThan(millimetresIn(smallestCaption))
-
-    const smooshedBytes = await selectQuality(page, 'smooshed')
-    const smooshedCaption = await page.getByTestId('export-quality-caption').textContent()
-    expect(millimetresIn(smooshedCaption)).toBeGreaterThan(millimetresIn(squashedCaption))
+    // Reduced is the last rung there is. #1852 shipped two lossy rungs below
+    // it and #1854 removed them again — the whole ladder measured −12.4% on
+    // Snowdon, where the container and not the geometry is the file — so the
+    // panel must not still be offering one.
+    await expect(page.getByTestId('export-quality-squashed')).toHaveCount(0)
+    await expect(page.getByTestId('export-quality-smooshed')).toHaveCount(0)
 
     // Two rungs are two different files. On a fixture this small they need
     // not differ in SIZE — the encoder-effort half of a rung is model-shaped
@@ -720,20 +715,18 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     const file = await readFile(await (await downloadPromise).path())
 
     expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
-    expect(file.byteLength).toBe(smooshedBytes)
+    expect(file.byteLength).toBe(smallestBytes)
     expect(glbJsonChunk(file).extensionsRequired).toContain('KHR_draco_mesh_compression')
     // A fourth control row is where a mobile layout regression would show up
-    // as a sideways scroll rather than a missing element (#1838) — and the
-    // #1852 labels are the longest text this row has ever carried, so at
-    // 390px "Smooshed (lossy, micro)" beside "Compression type" is exactly
-    // the pair that would push the dialog sideways if the row stopped
-    // wrapping.
+    // as a sideways scroll rather than a missing element (#1838), and at
+    // 390px "Balanced (medium)" beside "Compression type" is the pair that
+    // would push the dialog sideways if the row stopped wrapping.
     await expectNoHorizontalScroll(page)
 
     // Meshopt has ONE coarser setting and Balanced already spends it, so
-    // every rung under Balanced re-encodes to Balanced's file. The panel says
-    // that rather than leaving a "micro" option beside a size line that does
-    // not move (`exportQuality.js#isDracoOnlyRung`).
+    // Reduced re-encodes to Balanced's file. The panel says that rather than
+    // leaving a "small" option beside a size line that does not move
+    // (`exportQuality.js#isDracoOnlyRung`).
     await selectCompression(page, 'meshopt')
     await expect(page.getByTestId('export-quality-caption'))
       .toContainText('Meshopt has no coarser setting')
