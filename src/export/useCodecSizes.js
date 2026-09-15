@@ -81,10 +81,30 @@ export default function useCodecSizes(artifact, {quality, isPortable, isMetadata
         isPortable,
         isMetadataIncluded: metadataRef.current,
         signal: controller.signal,
-        // Published even after a cancel: that figure has already been paid
-        // for, and Cancel is meant to leave what was computed usable.
-        onSize: (mode, sizes) => setSizesByCodec((previous) => ({...previous, [mode]: sizes})),
-        onCodec: (mode) => setMeasuringCodec(mode),
+        // Guarded on GENERATION, not on the abort — the two are different
+        // and conflating them loses one of the behaviours. A figure that
+        // lands after Stop is still THIS sweep's, and is published: it has
+        // already been paid for, and Stop is meant to leave what was
+        // computed usable. A figure from a SUPERSEDED sweep is dropped. Both
+        // are aborted runs; only the second one is measuring the wrong
+        // thing. It happens because the encoders are synchronous wasm with
+        // no abort, so a quality or Portable change stops the old sweep's
+        // next codec but not the one already running — and publishing that
+        // would mix rungs in `sizesByCodec`, which is the set auto-select
+        // reads the winner off, and satisfy `data-codec-sizes` with figures
+        // measured at two different settings.
+        onSize: (mode, sizes) => {
+          if (abortRef.current !== controller) {
+            return
+          }
+          setSizesByCodec((previous) => ({...previous, [mode]: sizes}))
+        },
+        onCodec: (mode) => {
+          if (abortRef.current !== controller) {
+            return
+          }
+          setMeasuringCodec(mode)
+        },
       })
     } finally {
       if (abortRef.current === controller) {
@@ -97,6 +117,12 @@ export default function useCodecSizes(artifact, {quality, isPortable, isMetadata
   useEffect(() => {
     let isStale = false
     abortRef.current?.abort()
+    // Ends the old sweep's GENERATION here, not when the new run starts:
+    // `run` is reached through an await, and the superseded codec — already
+    // in flight, uninterruptible — can resolve inside that gap. While
+    // `abortRef` still held it, its callbacks would pass the guard above and
+    // publish into the state this effect has just cleared.
+    abortRef.current = null
     setSizesByCodec({})
     setMeasuringCodec(null)
     setIsMeasuring(false)

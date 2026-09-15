@@ -650,8 +650,16 @@ Five constraints shape it, and they are the design:
   codec × quality × portable × metadata; the sweep runs the codec axis at the
   *currently selected* quality and Portable setting and restarts — cancelling
   first — when either changes, because every figure it published was measured
-  at the old one. The metadata toggle is deliberately **not** a restart axis:
-  one estimate produces both sides, so it keeps moving every figure for free.
+  at the old one. The restart cancels but cannot stop the codec already
+  running, so the publishing callbacks are gated on **generation**, not on the
+  abort (`useCodecSizes.js`): a figure that lands after **Stop** is still this
+  sweep's and is kept, while one from a superseded sweep is dropped. Written
+  as "not aborted" the two collapse together and one of them breaks —
+  either Stop throws away a figure already paid for, or `sizesByCodec` ends up
+  holding one figure from the old rung beside two from the new one, which is
+  the set the auto-selected winner is read off. The metadata toggle is
+  deliberately **not** a restart axis: one estimate produces both sides, so it
+  keeps moving every figure for free.
 - **An explicit choice is final.** A codec the user picked is never overridden,
   however small a later figure turns out to be. That hangs off the MenuItem's
   own `onClick`, not the `Select`'s `onChange`, because MUI fires `onChange`

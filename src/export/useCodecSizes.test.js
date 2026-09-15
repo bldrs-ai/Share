@@ -113,6 +113,10 @@ describe('useCodecSizes', () => {
   it('stops the queue and keeps what it measured', async () => {
     // The honest contract: `stop` aborts the QUEUE, the codec in flight runs
     // to completion, and `isStopping` is what lets the panel say which one.
+    // Also the same-generation half of the publish guard below (the
+    // superseded-sweep test): an aborted run whose generation is still the
+    // current one keeps publishing, so a guard written as "not aborted"
+    // rather than "same generation" fails here.
     let resolveMeshopt
     artifactSizes.mockImplementation((artifact, mode) => {
       if (mode === 'meshopt') {
@@ -138,6 +142,46 @@ describe('useCodecSizes', () => {
     // Meshopt's figure was paid for and stays usable; Draco was never started.
     expect(result.current.sizesByCodec).toEqual({none: SIZES.none, meshopt: SIZES.meshopt})
     expect(artifactSizes).not.toHaveBeenCalledWith(ARTIFACT, 'draco', false, 'balanced')
+  })
+
+  it('drops a superseded sweep\'s figure instead of publishing it into the new rung', async () => {
+    // The other half of the Stop contract, and the one that is a bug rather
+    // than a feature. Both a Stop and a rung change abort the run, but only a
+    // rung change makes the codec still in flight — synchronous wasm, so it
+    // runs to completion either way — the WRONG measurement. Its figure must
+    // not reach `sizesByCodec`, which is the set `smallestCodec` reads the
+    // auto-selected winner off: one figure from the old rung beside two from
+    // the new one is a recommendation made on numbers that were never
+    // comparable.
+    const pending = {}
+    artifactSizes.mockImplementation((artifact, mode, isPortable, quality) =>
+      new Promise((resolve) => {
+        pending[`${mode}|${quality}`] = resolve
+      }))
+    const {result, rerender} = renderHook(
+      ({quality}) => useCodecSizes(ARTIFACT, {...BALANCED, quality}),
+      {initialProps: {quality: 'balanced'}})
+
+    await waitFor(() => expect(pending['none|balanced']).toBeDefined())
+    await act(async () => {
+      pending['none|balanced'](SIZES.none)
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(result.current.measuringCodec).toBe('meshopt'))
+
+    rerender({quality: 'smallest'})
+    await waitFor(() => expect(pending['none|smallest']).toBeDefined())
+    expect(result.current.sizesByCodec).toEqual({})
+
+    // Now the superseded Meshopt encode finishes, at the OLD rung.
+    const staleSizes = {withMetadata: 111, withoutMetadata: 99}
+    await act(async () => {
+      pending['meshopt|balanced'](staleSizes)
+      await Promise.resolve()
+    })
+
+    expect(result.current.sizesByCodec).toEqual({})
+    expect(result.current.measuringCodec).toBe('none')
   })
 
   it('has nothing to measure before the loader publishes an artifact', async () => {
