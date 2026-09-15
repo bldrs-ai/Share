@@ -743,7 +743,12 @@ export async function load(
       typeof viewer?.context?.getScene === 'function' ? viewer.context.getScene() : null
     const hydrated = hydrateBatchedModelFromInstancedGlb(model, {scene: hydrateScene})
     if (hydrated) {
-      glbInfo('reader: hydrated batched-native artifact to a BatchedMesh model')
+      // "instance-table", not "batched-native": the portable rewrite of the
+      // same artifact (#1849) hydrates through this very line, and it carries
+      // no instancing at all. The tables are what the two shapes share and
+      // what this gate keys on; the module's own verbose line names which of
+      // the two it read.
+      glbInfo('reader: hydrated instance-table artifact to a BatchedMesh model')
       model = hydrated
     }
   }

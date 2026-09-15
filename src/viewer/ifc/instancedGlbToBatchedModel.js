@@ -169,8 +169,15 @@ function detectArtifactShape(gltfModel) {
  *   exposing the `geometry` + `getMatrixAt` surface `buildPartition` reads
  */
 function joinPortableNodesToTables(gltfModel, tables) {
-  // Once for the whole scene, before any matrixWorld is read: GLTFLoader
-  // leaves the graph un-updated, and a per-table refresh would re-walk it.
+  // Once for the whole scene, before any matrixWorld is read. GLTFLoader has
+  // already done this on a real load — three 0.184.0 calls
+  // `scene.updateMatrixWorld()` for every parsed scene unconditionally, in the
+  // `afterRoot` continuation just before `onLoad`
+  // (examples/jsm/loaders/GLTFLoader.js:2689-2693) — so this is a cheap
+  // force-refresh covering a caller that has moved a node since the parse. The
+  // hand-built unit fixtures, which never went through GLTFLoader at all,
+  // depend on it outright. Scene-wide rather than per table, because a
+  // per-table refresh would re-walk the same graph once per table.
   gltfModel.updateMatrixWorld?.(true)
   const toModelSpace = new Matrix4()
   if (gltfModel.matrixWorld) {
@@ -219,7 +226,14 @@ function joinPortableNodesToTables(gltfModel, tables) {
   // the wrong shape rather than fail, so it is checked.
   const sources = []
   for (const rows of slots) {
-    const geometry = rows[0].geometry
+    // `?.` because a `count: 0` table has no row 0: `BldrsInstanceTablesReader`
+    // admits that count (it rejects only a negative or non-integer one) and the
+    // null-slot check above passes vacuously on the empty slot list, so this is
+    // the first place an empty table is seen. `Loader.js#load` calls the
+    // hydration with no try/catch around it, so a throw here would fail the
+    // whole model open where the contract (module doc) is to return null and
+    // keep the GLTFLoader model.
+    const geometry = rows[0]?.geometry
     if (!geometry || rows.some((mesh) => mesh.geometry !== geometry)) {
       return null
     }
@@ -234,17 +248,25 @@ function joinPortableNodesToTables(gltfModel, tables) {
  * `buildPartition` reads off an InstancedMesh, so the batch assembly below is
  * one implementation rather than two.
  *
+ * Composed into the caller's target on demand rather than materialised up
+ * front: `buildPartition` reads each row exactly once, into a single scratch
+ * matrix it immediately copies out of (`BatchedMesh.setMatrixAt` writes the
+ * elements through to the matrices texture), so nothing is retained and an
+ * eager array would be pure transient garbage — ~20MB of it on the 100k-
+ * placement files portable produces. Reading lazily also moves the read from
+ * join time to batch-assembly time, which is the same value: the scene-wide
+ * `updateMatrixWorld` above is the last thing to touch these transforms.
+ *
  * @param {object} geometry the BufferGeometry all the rows share
  * @param {Array<object>} rows placement meshes, indexed by table row
  * @param {Matrix4} toModelSpace inverse of the model root's world matrix
  * @return {object} placement source
  */
 function makePlacementSource(geometry, rows, toModelSpace) {
-  const matrices = rows.map(
-    (mesh) => new Matrix4().multiplyMatrices(toModelSpace, mesh.matrixWorld))
   return {
     geometry,
-    getMatrixAt: (i, target) => target.copy(matrices[i]),
+    getMatrixAt: (i, target) =>
+      target.multiplyMatrices(toModelSpace, rows[i].matrixWorld),
   }
 }
 

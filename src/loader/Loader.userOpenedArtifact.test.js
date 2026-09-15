@@ -152,7 +152,7 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
     expect(model.capabilities.expressIdPicking).toBe(true)
     expect(model.capabilities.ifcSubsets).toBe(false)
     expect(getGlbLogs().map((l) => l.text))
-      .toContain('reader: hydrated batched-native artifact to a BatchedMesh model')
+      .toContain('reader: hydrated instance-table artifact to a BatchedMesh model')
   })
 
   /**

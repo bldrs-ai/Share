@@ -310,15 +310,28 @@ describe('viewer/ifc/instancedGlbToBatchedModel', () => {
       delete missing.rows[1].userData.bldrsInstance
       expect(hydrateBatchedModelFromInstancedGlb(missing.scene)).toBeNull()
 
-      // Row index past the table's count.
+      // Row index past the table's count — refused by the range check, and by
+      // the strict null test on the hole it would otherwise punch in the slots.
       const overflow = portableFixture()
       overflow.rows[1].userData.bldrsInstance = 7
       expect(hydrateBatchedModelFromInstancedGlb(overflow.scene)).toBeNull()
 
-      // Two placements claiming one row leaves another uncovered.
+      // A row re-stamped onto one already taken. The duplicate flag sees it
+      // first, but the row it vacated would catch it anyway — the extra-node
+      // case below is the one only the flag refuses.
       const duplicate = portableFixture()
       duplicate.rows[1].userData.bldrsInstance = 0
       expect(hydrateBatchedModelFromInstancedGlb(duplicate.scene)).toBeNull()
+
+      // An EXTRA placement stamped onto a row another node already covers —
+      // a tool that duplicated a node rather than moving its stamp. Every row
+      // still fills, so the null-slot check passes and only the duplicate flag
+      // refuses the file; without it the extra placement is silently dropped
+      // and the model comes back one instance short of what the file draws.
+      const extra = portableFixture()
+      extra.storey.add(portableNode(
+        extra.rows[0].geometry, new Matrix4().makeTranslation(99, 0, 0), 0, 0))
+      expect(hydrateBatchedModelFromInstancedGlb(extra.scene)).toBeNull()
 
       // Table index past the table list.
       const badTable = portableFixture()
@@ -336,6 +349,20 @@ describe('viewer/ifc/instancedGlbToBatchedModel', () => {
       const split = portableFixture()
       split.rows[1].geometry = triangleGeometry()
       expect(hydrateBatchedModelFromInstancedGlb(split.scene)).toBeNull()
+    })
+
+    it('returns null on a row-less table instead of throwing', () => {
+      // `BldrsInstanceTablesReader` accepts `count: 0` (it rejects only a
+      // negative or non-integer count), and `Loader.js#load` calls the
+      // hydration with no try/catch around it — so an empty table has to fail
+      // soft like every other join failure. Dereferencing row 0 of the empty
+      // slot list instead throws a TypeError out of `load()` and the model
+      // never opens, where the instanced reader tolerates the same input.
+      const {scene, tables} = portableFixture()
+      tables.push({count: 0, color: {...GREY}, parents: [], occurrenceIds: [],
+        geometryIds: [], occurrencePaths: []})
+
+      expect(hydrateBatchedModelFromInstancedGlb(scene)).toBeNull()
     })
 
     it('leaves a stamp-less GLB alone even when tables are present', () => {

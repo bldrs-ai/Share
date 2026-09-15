@@ -87,6 +87,66 @@ async function roundTrip(model, sceneExtras = null) {
 }
 
 
+/**
+ * Parse GLB bytes with a real GLTFLoader carrying the tables reader, then
+ * hydrate — the read half of both round trips below.
+ *
+ * @param {Uint8Array} bytes one standalone GLB
+ * @param {boolean} [meshopt] register the Meshopt decoder (a compressed file
+ *   fails the parse outright without it — `Loader.js#configureGltfDecoders`)
+ * @return {Promise<object>} the hydrated model (or null)
+ */
+async function parseAndHydrate(bytes, meshopt = false) {
+  const loader = new GLTFLoader()
+  loader.register((parser) => new BldrsInstanceTablesReader(parser))
+  if (meshopt) {
+    await MeshoptDecoder.ready
+    loader.setMeshoptDecoder(MeshoptDecoder)
+  }
+  const gltf = await new Promise((resolve, reject) => {
+    // Copy into a standalone ArrayBuffer — GLTFLoader requires the buffer
+    // to start at the GLB header.
+    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+    loader.parse(ab, '', resolve, reject)
+  })
+  expect(gltf.scene.userData.bldrsInstanceTables).toBeTruthy()
+  return hydrateBatchedModelFromInstancedGlb(gltf.scene)
+}
+
+
+/**
+ * The batched-native artifact for `liveBatchedModel`, carrying the spatial
+ * tree a real IFC/STEP cache write injects beside the tables.
+ *
+ * @return {Promise<Uint8Array>} the artifact's chunk 0
+ */
+async function artifactWithTree() {
+  const bytes = await batchedArtifactBytes(liveBatchedModel())
+  return injectGlbExtensions(
+    bytes,
+    [{name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: STEP_TREE, compress: true}],
+    null, null).bytes
+}
+
+
+/**
+ * Every instance's world placement, as flat matrix elements indexed by batch
+ * id — the comparable the two shapes must agree on.
+ *
+ * @param {object} model hydrated BatchedMesh
+ * @return {Array<Array<number>>}
+ */
+function instanceMatrices(model) {
+  const m = new Matrix4()
+  const out = []
+  for (let i = 0; i < model.instanceParents.length; i++) {
+    model.getMatrixAt(i, m)
+    out.push(Array.from(m.elements))
+  }
+  return out
+}
+
+
 describe('batched-native GLB round-trip (writer -> GLTFLoader -> hydrate)', () => {
   it('restores the batched shape and identity tables', async () => {
     const hydrated = await roundTrip(liveBatchedModel())
@@ -198,64 +258,6 @@ describe('batched-native GLB round-trip (writer -> GLTFLoader -> hydrate)', () =
     expect(seen.sort()).toEqual([[0, 3], [1, 0], [2, 0]].sort())
   })
 })
-/**
- * Parse GLB bytes with a real GLTFLoader carrying the tables reader, then
- * hydrate — the read half of both round trips below.
- *
- * @param {Uint8Array} bytes one standalone GLB
- * @param {boolean} [meshopt] register the Meshopt decoder (a compressed file
- *   fails the parse outright without it — `Loader.js#configureGltfDecoders`)
- * @return {Promise<object>} the hydrated model (or null)
- */
-async function parseAndHydrate(bytes, meshopt = false) {
-  const loader = new GLTFLoader()
-  loader.register((parser) => new BldrsInstanceTablesReader(parser))
-  if (meshopt) {
-    await MeshoptDecoder.ready
-    loader.setMeshoptDecoder(MeshoptDecoder)
-  }
-  const gltf = await new Promise((resolve, reject) => {
-    // Copy into a standalone ArrayBuffer — GLTFLoader requires the buffer
-    // to start at the GLB header.
-    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
-    loader.parse(ab, '', resolve, reject)
-  })
-  expect(gltf.scene.userData.bldrsInstanceTables).toBeTruthy()
-  return hydrateBatchedModelFromInstancedGlb(gltf.scene)
-}
-
-
-/**
- * The batched-native artifact for `liveBatchedModel`, carrying the spatial
- * tree a real IFC/STEP cache write injects beside the tables.
- *
- * @return {Promise<Uint8Array>} the artifact's chunk 0
- */
-async function artifactWithTree() {
-  const bytes = await batchedArtifactBytes(liveBatchedModel())
-  return injectGlbExtensions(
-    bytes,
-    [{name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: STEP_TREE, compress: true}],
-    null, null).bytes
-}
-
-
-/**
- * Every instance's world placement, as flat matrix elements indexed by batch
- * id — the comparable the two shapes must agree on.
- *
- * @param {object} model hydrated BatchedMesh
- * @return {Array<Array<number>>}
- */
-function instanceMatrices(model) {
-  const m = new Matrix4()
-  const out = []
-  for (let i = 0; i < model.instanceParents.length; i++) {
-    model.getMatrixAt(i, m)
-    out.push(Array.from(m.elements))
-  }
-  return out
-}
 
 
 describe('portable GLB round-trip (rewrite -> GLTFLoader -> hydrate, #1849)', () => {
