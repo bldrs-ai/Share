@@ -102,6 +102,25 @@ export function classifyBldrsBufferViews(json) {
 
 
 /**
+ * Every bufferView index something in the document still points at.
+ *
+ * Same walk as `classifyBldrsBufferViews`, without the Bldrs/non-Bldrs split,
+ * so "what counts as a reference" has one definition. `export/glbPortable.js`
+ * subtracts this from the full index range to find the views its rewrite
+ * orphaned — asking who still points at a view answers "is it shared?" for
+ * free, which a drop-list built from what was removed would not.
+ *
+ * @param {object} json Parsed glTF JSON
+ * @return {Set<number>} referenced bufferView indices
+ */
+export function referencedBufferViews(json) {
+  const referenced = new Set()
+  collectBufferViewRefs(json, false, referenced, referenced)
+  return referenced
+}
+
+
+/**
  * The JSON half of the strip: remove every `BLDRS_*` extension, drop the
  * bufferViews only they referenced, re-index what is left, and re-lay the
  * surviving views out over a compacted BIN chunk. `json` is mutated.
@@ -339,6 +358,10 @@ function stripExtensionsOf(holder, stripped) {
  * a Meshopt view, whose BIN-resident range is its extension's rather than
  * its own (`meshoptCompressedRange`).
  *
+ * Exported for `export/glbPortable.js`, which reclaims the instance-TRS views
+ * the portable rewrite orphans and needs exactly this compaction rather than
+ * a second one of its own.
+ *
  * @param {object} json Parsed glTF JSON, with the BLDRS entries already gone
  * @param {Set<number>} dropIndices bufferViews to remove
  * @return {{
@@ -347,7 +370,7 @@ function stripExtensionsOf(holder, stripped) {
  *   binByteLength: number,
  * }}
  */
-function dropBufferViews(json, dropIndices) {
+export function dropBufferViews(json, dropIndices) {
   const views = Array.isArray(json.bufferViews) ? json.bufferViews : []
   const droppedBufferViews = []
   const binPlan = []

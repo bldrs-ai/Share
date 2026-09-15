@@ -214,7 +214,7 @@ describeMobileAndDesktop('Batched-native GLB cache', () => {
     // A wait, not a `.some()`: this line is emitted after `cache HIT`, and
     // console events reach the Node-side buffer asynchronously over CDP with
     // no flush barrier, so a synchronous read here is a flake by construction.
-    await waitForGlbLog(glbLogs, 'hydrated batched-native', CACHE_TIMEOUT_MS)
+    await waitForGlbLog(glbLogs, 'hydrated instance-table', CACHE_TIMEOUT_MS)
 
     // Risk check 2: numeric parity. Same batched shape, same instance
     // count, same per-instance colors — which for this colorless fixture

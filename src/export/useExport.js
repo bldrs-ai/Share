@@ -182,6 +182,11 @@ export default function useExport() {
         // no kind (the history row predates this field, and the server row
         // never had it), which is what 'unknown' means here.
         source_kind: artifact.kindLabel || 'unknown',
+        // Which shape the file is in, not just how it was squeezed: a
+        // portable export is a different artifact from the batched-native
+        // one at the same codec, and the funnel question #1843 asks is
+        // whether anyone chooses it.
+        portable: Boolean(options.portable),
       })
       return {filename, stats}
     } catch (e) {
@@ -208,32 +213,41 @@ export default function useExport() {
 
 
 /**
- * The compression hook the pro module calls, or null when the user chose
- * "None" (and there is then nothing for the host to do).
+ * The host hook the pro module calls to rewrite the GLB, or null when neither
+ * control asks for one (and there is then nothing for the host to do).
  *
- * It resolves through `artifactSizes.js`'s per-(artifact, codec) cache, which
- * the size line has almost always filled already — picking a codec runs the
- * encode, and the click that follows finds the very bytes whose length the
- * user just read. A click fast enough to beat the estimate shares its
- * in-flight run rather than starting a second one.
+ * "Neither" is the operative word since #1843: Portable is a rewrite the host
+ * owns just as the codecs are, so the predicate is `portable || codec` rather
+ * than the codec alone. Portable with no codec still goes through here, and
+ * `artifactSizes.js` does the metadata strip for it — the module runs none of
+ * its own once a hook is in play.
+ *
+ * It resolves through `artifactSizes.js`'s per-(artifact, portable × codec)
+ * cache, which the size line has almost always filled already — picking either
+ * control runs the rewrite, and the click that follows finds the very bytes
+ * whose length the user just read. A click fast enough to beat the estimate
+ * shares its in-flight run rather than starting a second one.
  *
  * What it returns says which codec was APPLIED (`mode`): the cache holds the
  * uncompressed fallback when the encoder could not load, and the pro module
  * passes that on so the history row and analytics describe the real file.
  *
  * @param {object} artifact The store's `glbArtifact` slot, or a history row's
- * @param {object} options The run's options, carrying `compression`
+ * @param {object} options The run's options, carrying `compression` + `portable`
  * @return {?Function} `(glbBytes, {stripBldrsMetadata}) => Promise<object>`
  */
 function compressHookFor(artifact, options) {
   const mode = options.compression
-  if (!isCompressionMode(mode) || mode === COMPRESSION_NONE) {
+  const isPortable = Boolean(options.portable)
+  const hasCodec = isCompressionMode(mode) && mode !== COMPRESSION_NONE
+  if (!isPortable && !hasCodec) {
     return null
   }
   return async (glbBytes, {stripBldrsMetadata}) => {
-    const compressed = await compressedExport(artifact, mode, glbBytes)
+    const compressed = await compressedExport(
+      artifact, hasCodec ? mode : COMPRESSION_NONE, glbBytes, isPortable)
     if (!compressed) {
-      throw new Error(`useExport: ${mode} compression produced nothing`)
+      throw new Error(`useExport: ${isPortable ? 'portable ' : ''}${mode} rewrite produced nothing`)
     }
     return {
       bytes: stripBldrsMetadata ? compressed.withoutMetadata : compressed.withMetadata,

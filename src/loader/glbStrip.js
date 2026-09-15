@@ -1,5 +1,5 @@
 import {stripBldrsJson} from './glbArtifactSize'
-import {parseGlb, serializeGlb} from './injectGlbExtensions'
+import {parseGlb, repackGlbBin, serializeGlb} from './injectGlbExtensions'
 
 
 /**
@@ -37,26 +37,6 @@ export function stripGlbBldrs(glbBytes) {
   if (!isChanged) {
     return {bytes: glbBytes, strippedExtensions}
   }
-  return {bytes: serializeGlb(json, repackBin(bin, binPlan, binByteLength)), strippedExtensions}
+  return {bytes: serializeGlb(json, repackGlbBin(bin, binPlan, binByteLength)), strippedExtensions}
 }
 
-
-/**
- * Copy the surviving bufferViews into a compacted BIN chunk, following the
- * layout `stripBldrsJson` already wrote into the JSON.
- *
- * @param {Uint8Array|null} bin The original BIN chunk
- * @param {Array<{fromOffset: number, byteLength: number, toOffset: number}>} binPlan
- * @param {number} binByteLength Length of the compacted chunk
- * @return {Uint8Array|null} null when nothing binary survives
- */
-function repackBin(bin, binPlan, binByteLength) {
-  if (!bin || binByteLength === 0) {
-    return null
-  }
-  const out = new Uint8Array(binByteLength)
-  for (const {fromOffset, byteLength, toOffset} of binPlan) {
-    out.set(bin.subarray(fromOffset, fromOffset + byteLength), toOffset)
-  }
-  return out
-}

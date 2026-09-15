@@ -124,6 +124,33 @@ export function parseGlb(bytes) {
 
 
 /**
+ * Copy the surviving bufferViews into a compacted BIN chunk, following the
+ * layout a `binPlan` already wrote into the JSON.
+ *
+ * The pair of it is `glbArtifactSize.js#dropBufferViews`, which produces the
+ * plan but deliberately never touches model bytes. Both callers that rewrite
+ * a GLB's view table — the metadata strip (`glbStrip.js`) and the portable
+ * rewrite (`export/glbPortable.js`) — need exactly this copy afterwards, so
+ * it lives here beside `serializeGlb` rather than once in each.
+ *
+ * @param {Uint8Array|null} bin The original BIN chunk
+ * @param {Array<{fromOffset: number, byteLength: number, toOffset: number}>} binPlan
+ * @param {number} binByteLength Length of the compacted chunk
+ * @return {Uint8Array|null} null when nothing binary survives
+ */
+export function repackGlbBin(bin, binPlan, binByteLength) {
+  if (!bin || binByteLength === 0) {
+    return null
+  }
+  const out = new Uint8Array(binByteLength)
+  for (const {fromOffset, byteLength, toOffset} of binPlan) {
+    out.set(bin.subarray(fromOffset, fromOffset + byteLength), toOffset)
+  }
+  return out
+}
+
+
+/**
  * Serialize a {json, bin} pair into a GLB binary. Inverse of parseGlb.
  *
  * @param {object} json

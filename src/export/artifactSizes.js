@@ -2,18 +2,35 @@ import {captureException} from '@sentry/react'
 import {artifactSizesFromFile} from '../loader/glbArtifactSize'
 import {glbCacheKey} from '../loader/glbCacheKey'
 import {unpackGlbContainer} from '../loader/glbContainer'
+import {stripGlbBldrs} from '../loader/glbStrip'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
 import {COMPRESSION_NONE, compressExportGlb, isCompressionMode} from './glbCompression'
+import {rewriteGlbPortable} from './glbPortable'
 
 
-// One in-flight or settled answer per (artifact, compression mode). The store
-// publishes a fresh `glbArtifact` object per load (store/IFCSlice.js), so
+// One in-flight or settled answer per (artifact, portable × compression mode).
+// The store publishes a fresh `glbArtifact` object per load (store/IFCSlice.js), so
 // identity is the outer cache key: reopening the Export tab on the same model
 // reuses the answer, and a new load misses. Weak so a superseded artifact's
 // entries go with it — which matters more for the compressed ones, since each
 // holds two whole copies of the file.
 const sizesByArtifact = new WeakMap()
 const compressedByArtifact = new WeakMap()
+
+
+/**
+ * The inner cache key. Portable and native are different FILES for the same
+ * codec, so the two must not share a cell — the size line and the export both
+ * read through this, and a collision would quote one file and download the
+ * other.
+ *
+ * @param {boolean} isPortable
+ * @param {string} mode
+ * @return {string}
+ */
+function rewriteKey(isPortable, mode) {
+  return `${isPortable ? 'portable' : 'native'}|${mode}`
+}
 
 
 /**
@@ -44,16 +61,25 @@ const compressedByArtifact = new WeakMap()
  *
  * @param {?object} artifact The store's `glbArtifact` slot
  * @param {string} [mode] One of `glbCompression.js`'s `COMPRESSION_MODES`
+ * @param {boolean} [isPortable] Expand the instancing into a named node tree
+ *   first (`glbPortable.js`)
  * @return {Promise<?{withMetadata: number, withoutMetadata: number, metadataBytes: number, compression: string}>}
  */
-export function artifactSizes(artifact, mode = COMPRESSION_NONE) {
+export function artifactSizes(artifact, mode = COMPRESSION_NONE, isPortable = false) {
   if (!artifact) {
     return Promise.resolve(null)
   }
-  if (mode !== COMPRESSION_NONE && isCompressionMode(mode)) {
-    return compressedExport(artifact, mode).then(sizesOfCompressed)
+  // Portable is NOT free, even with no codec. The header-only read below never
+  // touches the BIN chunk, and the portable rewrite has to: it reads the
+  // instance TRS floats and ungzips two payloads out of it. So it takes the
+  // whole-file path a codec takes, and the panel shows "Estimating…" while it
+  // runs (#1843).
+  if (isPortable || (mode !== COMPRESSION_NONE && isCompressionMode(mode))) {
+    return compressedExport(artifact, mode, null, isPortable).then(sizesOfCompressed)
   }
-  return cached(sizesByArtifact, artifact, COMPRESSION_NONE, () => readArtifactSizes(artifact))
+  return cached(
+    sizesByArtifact, artifact, rewriteKey(false, COMPRESSION_NONE),
+    () => readArtifactSizes(artifact))
 }
 
 
@@ -69,12 +95,16 @@ export function artifactSizes(artifact, mode = COMPRESSION_NONE) {
  * passes nothing and the artifact is read from OPFS.
  *
  * @param {object} artifact The store's `glbArtifact` slot
- * @param {string} mode One of `COMPRESSION_MODES`, other than none
+ * @param {string} mode One of `COMPRESSION_MODES`; `none` is meaningful here
+ *   when `isPortable` is set, since the rewrite is then the only change
  * @param {?Uint8Array} [glbBytes] The artifact's GLB, if the caller has it
+ * @param {boolean} [isPortable] Run the portable rewrite before the codec
  * @return {Promise<?object>} `compressExportGlb`'s result, or null
  */
-export function compressedExport(artifact, mode, glbBytes = null) {
-  return cached(compressedByArtifact, artifact, mode, () => runCompression(artifact, mode, glbBytes))
+export function compressedExport(artifact, mode, glbBytes = null, isPortable = false) {
+  return cached(
+    compressedByArtifact, artifact, rewriteKey(isPortable, mode),
+    () => runRewrite(artifact, mode, glbBytes, isPortable))
 }
 
 
@@ -85,20 +115,20 @@ export function compressedExport(artifact, mode, glbBytes = null) {
  *
  * @param {WeakMap} store Outer map, keyed by artifact identity
  * @param {object} artifact
- * @param {string} mode
+ * @param {string} key From `rewriteKey`
  * @param {Function} compute Called on a miss
  * @return {Promise<*>}
  */
-function cached(store, artifact, mode, compute) {
-  let byMode = store.get(artifact)
-  if (!byMode) {
-    byMode = new Map()
-    store.set(artifact, byMode)
+function cached(store, artifact, key, compute) {
+  let byKey = store.get(artifact)
+  if (!byKey) {
+    byKey = new Map()
+    store.set(artifact, byKey)
   }
-  if (!byMode.has(mode)) {
-    byMode.set(mode, compute())
+  if (!byKey.has(key)) {
+    byKey.set(key, compute())
   }
-  return byMode.get(mode)
+  return byKey.get(key)
 }
 
 
@@ -117,18 +147,45 @@ function sizesOfCompressed(compressed) {
 
 
 /**
+ * Produce the exact bytes of one (portable × codec) export, both toggle
+ * states.
+ *
+ * **Order: portable, then codec.** The rewrite reads instance TRS floats and
+ * gzipped payloads straight out of the BIN chunk, and after a codec has run
+ * neither is there to read — Meshopt's bufferViews address decoded bytes on a
+ * fallback buffer the file does not carry, and Draco's floats are not floats.
+ * The strip comes last of all, inside `compressExportGlb` or here
+ * (`export/glbPortable.js` module doc).
+ *
  * @param {object} artifact
  * @param {string} mode
  * @param {?Uint8Array} glbBytes
- * @return {Promise<?object>} `compressExportGlb`'s result, or null
+ * @param {boolean} isPortable
+ * @return {Promise<?object>} `compressExportGlb`'s result shape, or null
  */
-async function runCompression(artifact, mode, glbBytes) {
+async function runRewrite(artifact, mode, glbBytes, isPortable) {
   try {
     const bytes = glbBytes || await readArtifactGlb(artifact)
     if (!bytes) {
       return null
     }
-    return await compressExportGlb(bytes, mode)
+    const source = isPortable ? rewriteGlbPortable(bytes).bytes : bytes
+    if (mode === COMPRESSION_NONE || !isCompressionMode(mode)) {
+      // Portable with no codec still needs both sides of the metadata toggle,
+      // and `compressExportGlb` short-circuits to "input unchanged" for the
+      // no-codec case — which would hand the metadata-off side a file with
+      // every payload still in it. The strip that the pro module would have
+      // run for an un-hooked export runs here instead, because once a hook is
+      // in play the module runs none of its own.
+      const stripped = stripGlbBldrs(source)
+      return {
+        withMetadata: source,
+        withoutMetadata: stripped.bytes,
+        strippedExtensions: stripped.strippedExtensions,
+        mode: COMPRESSION_NONE,
+      }
+    }
+    return await compressExportGlb(source, mode)
   } catch (e) {
     captureException(e)
     return null

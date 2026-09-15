@@ -23,10 +23,15 @@ specs. Keep it that way.
   denylist itself.
 - `loadRun.ts` — run-level bookkeeping for a measurement: `summarizeSamples`
   (statistics over *completed* samples only) and `measureTestTimeoutMs`.
+- `exportEstimate.ts` — `estimateKey` / `settledEstimateBytes`: which
+  selection the Export tab's size line is quoting (`data-estimate-key`), and
+  the decision `export.ts#waitForEstimate` polls on. Keyed on the selection
+  and never on the byte count, which two selections can share.
 
-  All four are deliberately free of any Playwright import so they can be
+  All five are deliberately free of any Playwright import so they can be
   unit-tested under Jest (`loadProbe.test.js`, `loadReport.test.js`,
-  `networkGuard.test.js`, `loadRun.test.js`). That is load-bearing, not tidy: importing
+  `networkGuard.test.js`, `loadRun.test.js`, `exportEstimate.test.js`). That
+  is load-bearing, not tidy: importing
   `@playwright/test` into a module a Jest suite loads brings Playwright's
   own `expect` along, and every `toEqual` in that suite then dies with
   `TypeError: this.customTesters is not iterable`.

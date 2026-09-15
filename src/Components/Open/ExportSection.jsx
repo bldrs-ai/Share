@@ -67,6 +67,12 @@ export default function ExportSection() {
   // two need the matching decoder registered in whatever the user opens it
   // with. Compression is the informed choice, so it is the opt-in one.
   const [compression, setCompression] = useState(COMPRESSION_NONE)
+  // Default OFF: the batched-native shape is smaller and is what Share itself
+  // reads best, and the rewrite trades JSON for portability — one node per
+  // placement, which on a big model is megabytes of names and transforms no
+  // codec compresses. It is the informed choice, so it is the opt-in one
+  // (#1843).
+  const [isPortable, setIsPortable] = useState(false)
 
   const {getAccessTokenSilently, isAuthenticated} = useAuth0()
   // `isExporting` is tab-wide, not this button's own (store/UISlice.js): a
@@ -80,7 +86,14 @@ export default function ExportSection() {
   // absent. A placeholder that flashes a number and then corrects itself is
   // worse than no number: this one is a promise about the file the next
   // click produces.
-  const [sizes, setSizes] = useState(null)
+  //
+  // Held together with the selection the figures were computed FOR, rather
+  // than as the figures alone, because the two get out of step by one render:
+  // the click that changes a control re-renders with the new selection before
+  // the effect below has even re-run, so for that render the OLD figures are
+  // on screen under the NEW controls. `displayedEstimateKey` publishes the
+  // distinction.
+  const [estimate, setEstimate] = useState(null)
   // Whether a read is still in flight, as opposed to having come back with
   // nothing. Uncompressed the two are indistinguishable to the user — a
   // header read is a few milliseconds — but a compression run is seconds on a
@@ -90,18 +103,20 @@ export default function ExportSection() {
 
   useEffect(() => {
     let isStale = false
-    setSizes(null)
+    setEstimate(null)
     setIsEstimating(true)
-    artifactSizes(glbArtifact, compression).then((read) => {
+    artifactSizes(glbArtifact, compression, isPortable).then((read) => {
       if (!isStale) {
-        setSizes(read)
+        setEstimate({compression, isPortable, sizes: read})
         setIsEstimating(false)
       }
     })
     return () => {
       isStale = true
     }
-  }, [glbArtifact, compression])
+  }, [glbArtifact, compression, isPortable])
+
+  const sizes = estimate?.sizes ?? null
 
   const isPro = getTier(appMetadata, isAuthenticated) === TIERS.PAID
   // The loader publishes this once the artifact is actually in OPFS — on a
@@ -126,6 +141,20 @@ export default function ExportSection() {
   // `loader/glbArtifactSize.js` is the same computation the strip runs, so
   // it does, exactly (#1841).
   const downloadBytes = sizes && (isMetadataIncluded ? sizes.withMetadata : sizes.withoutMetadata)
+  // Which selection the figure beside it is FOR. Two selections can produce
+  // the SAME byte count — a codec whose encoder failed falls back to the file
+  // as it is (#1842), and Portable is a documented pass-through on a
+  // merged-layout artifact (`export/glbPortable.js`) — so the count alone
+  // cannot say whether the line has caught up with the controls, and a test
+  // that waits for it to change waits forever. This can. The codec/portable
+  // half comes from the ESTIMATE, so it lags the controls exactly as the
+  // figure does; the metadata half is live, because that toggle picks between
+  // two figures one estimate already produced (it is deliberately not in the
+  // effect's deps above). Read by `tests/e2e/exportEstimate.ts`, which is the
+  // other end of this contract.
+  const displayedEstimateKey = estimate &&
+        `${estimate.isPortable ? 'portable' : 'native'}|${estimate.compression}` +
+        `|${isMetadataIncluded ? 'meta' : 'nometa'}`
   const metadataCaption = sizes && sizes.metadataBytes > 0 ?
     `${formatBytes(sizes.metadataBytes)} of Bldrs metadata ${isMetadataIncluded ? 'included' : 'removed'}` :
     null
@@ -133,7 +162,10 @@ export default function ExportSection() {
   // the encoder has run. Say so while it does, rather than showing a stale
   // figure from the previous choice: the line's promise is about the NEXT
   // click, and for the seconds this takes it has nothing to promise.
-  const isPendingEstimate = isEstimating && compression !== COMPRESSION_NONE
+  // Portable counts as pending work even with no codec: the rewrite has to
+  // read the whole artifact off OPFS and re-serialise it, where the plain
+  // uncompressed estimate is a header read (`export/artifactSizes.js`).
+  const isPendingEstimate = isEstimating && (compression !== COMPRESSION_NONE || isPortable)
   // The figure is honest even when the codec is not available here (its
   // encoder failed to load, say): the estimate fell back to the file as it
   // is — uncompressed, or still in the codec the cache wrote it with — and
@@ -149,7 +181,7 @@ export default function ExportSection() {
   }
 
   const onExportClick = async () => {
-    await run('glb', {stripBldrsMetadata: !isMetadataIncluded, compression})
+    await run('glb', {stripBldrsMetadata: !isMetadataIncluded, compression, portable: isPortable})
   }
 
   const onUpgradeClick = async () => {
@@ -232,6 +264,27 @@ export default function ExportSection() {
           data-testid='export-include-metadata'
         />
       </Stack>
+      {/* Between the metadata toggle and the codec because that is the order
+          the choices compound in: what goes in the file, what SHAPE it is in,
+          and only then how it is squeezed (`export/artifactSizes.js` runs them
+          in exactly that order). */}
+      <Stack
+        direction='row'
+        justifyContent='space-between'
+        alignItems='center'
+        gap={1}
+        sx={{mt: '1em'}}
+      >
+        <Box>
+          <Typography variant='body2'>Portable</Typography>
+          <Typography variant='caption' color='text.secondary'>named nodes, opens anywhere</Typography>
+        </Box>
+        <Toggle
+          onChange={() => setIsPortable(!isPortable)}
+          checked={isPortable}
+          data-testid='export-portable'
+        />
+      </Stack>
       {/* An exclusive three-way choice rather than two more switches: the
           codecs are alternatives, not independent options, and a group makes
           that unmistakable. `flexWrap` because at 390px the label and three
@@ -298,7 +351,12 @@ export default function ExportSection() {
            <Typography variant='body2' color='text.secondary' data-testid='export-size-pending'>
              Estimating…
            </Typography> :
-           <Typography variant='body2' data-testid='export-size' data-bytes={downloadBytes}>
+           <Typography
+             variant='body2'
+             data-testid='export-size'
+             data-bytes={downloadBytes}
+             data-estimate-key={displayedEstimateKey}
+           >
              {formatBytes(downloadBytes)}
            </Typography>}
        </Stack>}

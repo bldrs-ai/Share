@@ -1,4 +1,5 @@
 import {Page, expect} from '@playwright/test'
+import {estimateKey, settledEstimateBytes} from './exportEstimate'
 import {captureGlbLogs, waitForGlbLog} from './glbLogs'
 import {waitForModelReady} from './models'
 
@@ -198,8 +199,8 @@ export async function expectNoHorizontalScroll(page: Page) {
 
 
 /**
- * Pick a compression codec and wait for the size line to settle on the new
- * figure.
+ * Pick a compression codec and wait for the size line to settle on the
+ * figure for it.
  *
  * A compressed estimate IS the compressed file, so selecting one runs the
  * encoder and the line reads "Estimating…" until it lands (#1842) — there is
@@ -215,9 +216,113 @@ export async function selectCompression(page: Page, mode: string): Promise<numbe
   await page.getByTestId('export-compression').click()
   await page.getByTestId(`export-compression-${mode}`).click()
   await expect(page.getByTestId('export-compression')).toContainText(compressionLabel(mode))
+  return await waitForEstimate(page)
+}
+
+
+/**
+ * Flip the Portable toggle and wait for the size line to settle on the figure
+ * for it.
+ *
+ * Portable is not free even with no codec — the rewrite reads the whole
+ * artifact off OPFS where the plain uncompressed estimate is a header read
+ * (#1843) — so the line goes through "Estimating…" here just as it does for a
+ * codec.
+ *
+ * @param page Playwright page
+ * @return the byte count the settled line carries
+ */
+export async function togglePortable(page: Page): Promise<number> {
+  await page.getByTestId('export-portable').locator('input').click()
+  return await waitForEstimate(page)
+}
+
+
+/**
+ * Flip "Include Bldrs metadata" and wait for the size line to settle on the
+ * figure for it.
+ *
+ * No re-estimate happens here — one run produces both figures and the toggle
+ * picks between them (#1842) — but the wait goes through the same key, so a
+ * fixture whose metadata happens to weigh nothing reports a wrong FIGURE
+ * rather than hanging on "the number never changed".
+ *
+ * @param page Playwright page
+ * @return the byte count the settled line carries
+ */
+export async function toggleMetadata(page: Page): Promise<number> {
+  await page.getByTestId('export-include-metadata').locator('input').click()
+  return await waitForEstimate(page)
+}
+
+
+/**
+ * Wait for the size line to settle on the figure for the selection the
+ * controls now hold, and return it.
+ *
+ * Keyed on WHICH selection the displayed figure describes, never on the
+ * figure itself: see `exportEstimate.ts` for the two failure modes that
+ * closes. The expected key is read back off the controls rather than passed
+ * in, so a caller can flip one axis without knowing the other two.
+ *
+ * @param page Playwright page
+ * @return the byte count the settled line carries
+ */
+async function waitForEstimate(page: Page): Promise<number> {
+  const expected = await currentEstimateKey(page)
   const sizeLine = page.getByTestId('export-size')
-  await expect(sizeLine).toBeVisible({timeout: COMPRESS_TIMEOUT_MS})
+  await expect
+    .poll(async () => {
+      if (await sizeLine.count() === 0) {
+        return null
+      }
+      return settledEstimateBytes(
+        await sizeLine.getAttribute('data-estimate-key'),
+        await sizeLine.getAttribute('data-bytes'),
+        expected)
+    }, {timeout: COMPRESS_TIMEOUT_MS})
+    .not.toBeNull()
+  // The poll reports only pass/fail, so read the figure back off the line it
+  // just accepted. Nothing is clicking in between, so the key still matches.
   return Number(await sizeLine.getAttribute('data-bytes'))
+}
+
+
+/**
+ * The key the size line will carry once it has caught up with the controls.
+ *
+ * Read off the controls themselves — the dropdown's hidden native input
+ * carries the raw mode, not the label — because they update with the click,
+ * while the line lags by an estimate.
+ *
+ * @param page Playwright page
+ * @return `estimateKey` for the selection now showing
+ */
+async function currentEstimateKey(page: Page): Promise<string> {
+  const mode = await page.getByTestId('export-compression').locator('input').inputValue()
+  const isPortable = await page.getByTestId('export-portable').locator('input').isChecked()
+  const isMetadataIncluded = await page.getByTestId('export-include-metadata').locator('input').isChecked()
+  return estimateKey(mode, isPortable, isMetadataIncluded)
+}
+
+
+/**
+ * Bring a saved `.glb` back in through the Open dialog's file chooser, the way
+ * a user would, and wait for it to load.
+ *
+ * @param page Playwright page
+ * @param path the file on disk
+ */
+export async function reopenLocalGlb(page: Page, path: string) {
+  await page.getByTestId('control-button-open').click()
+  // The dialog opens on whichever tab it last showed (Google, for a signed-in
+  // user); Browse lives on Local.
+  await page.getByRole('tab', {name: 'Local'}).click()
+  const chooser = page.waitForEvent('filechooser')
+  await page.getByTestId('button_open_file').click()
+  await (await chooser).setFiles(path)
+  await expect(page).toHaveURL(/\/share\/v\/new\/.+\.glb/, {timeout: EXPORT_TEST_TIMEOUT_MS})
+  await expect(page.getByTestId('LoadStatusOk')).toBeVisible({timeout: EXPORT_TEST_TIMEOUT_MS})
 }
 
 
@@ -237,7 +342,11 @@ function compressionLabel(mode: string): string {
  * @param bytes the saved file
  * @return the parsed JSON chunk
  */
-export function glbJsonChunk(bytes: Buffer): {extensionsUsed?: string[]; extensionsRequired?: string[]} {
+export function glbJsonChunk(bytes: Buffer): {
+  extensionsUsed?: string[]
+  extensionsRequired?: string[]
+  nodes?: Array<{name?: string; mesh?: number}>
+} {
   const jsonByteLength = bytes.readUInt32LE(GLB_JSON_LENGTH_OFFSET)
   const start = GLB_JSON_LENGTH_OFFSET + GLB_CHUNK_HEADER_BYTES
   // The chunk is space-padded to 4 bytes, which `JSON.parse` need not accept.
@@ -266,6 +375,31 @@ export async function routeProModule(page: Page) {
       contentType: 'text/javascript; charset=utf-8',
       headers: {'Cache-Control': 'private, no-store'},
     })
+  })
+}
+
+
+/**
+ * Take the DRACO encoder away, so picking Draco exercises the fallback: the
+ * estimate and the export both come back as the file already is, at the size
+ * the panel then quotes (#1842).
+ *
+ * Done by planting the global rather than by blocking the script that defines
+ * it (`loader/glbCompress.js#loadDracoEncoder` injects
+ * `/static/js/draco/draco_encoder.js` only when the global is missing, then
+ * calls it). A `page.route` abort does not reach a request MSW's service
+ * worker has already claimed — see `routeProModule` — and a codec that
+ * silently succeeded would make this test assert the opposite of its name.
+ * Same stand-in the jest suite uses (`export/glbCompression.test.js`).
+ *
+ * Must be in place before the page loads, which is what `addInitScript` gives.
+ *
+ * @param page Playwright page
+ */
+export async function disableDracoEncoder(page: Page) {
+  await page.addInitScript(() => {
+    (window as unknown as {DracoEncoderModule: () => Promise<never>}).DracoEncoderModule =
+      () => Promise.reject(new Error('draco_encoder.wasm unavailable'))
   })
 }
 

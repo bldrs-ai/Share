@@ -4,6 +4,7 @@ import {serializeGlb} from '../loader/injectGlbExtensions'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
 import {artifactSizes, compressedExport} from './artifactSizes'
 import {compressExportGlb} from './glbCompression'
+import {rewriteGlbPortable} from './glbPortable'
 
 
 jest.mock('../OPFS/utils', () => ({readModelByPathFromOPFS: jest.fn()}))
@@ -16,6 +17,10 @@ jest.mock('./glbCompression', () => ({
   ...jest.requireActual('./glbCompression'),
   compressExportGlb: jest.fn(),
 }))
+// Same reasoning for the portable rewrite: it has its own suite against real
+// artifact bytes (glbPortable.test.js). Mocked here so this one can assert the
+// ORDER — that what reaches the codec is what the rewrite produced.
+jest.mock('./glbPortable', () => ({rewriteGlbPortable: jest.fn()}))
 
 
 /* eslint-disable no-magic-numbers */
@@ -42,7 +47,18 @@ const ARTIFACT = {
  * @return {Blob}
  */
 function cachedArtifact() {
-  const glb = serializeGlb({
+  return new Blob([packGlbChunks([cachedGlb()])])
+}
+
+
+/**
+ * The artifact's chunk 0 on its own — a standalone GLB with one Bldrs payload,
+ * so a strip of it really removes something.
+ *
+ * @return {Uint8Array}
+ */
+function cachedGlb() {
+  return serializeGlb({
     asset: {version: '2.0'},
     extensionsUsed: ['BLDRS_spatial_tree'],
     extensions: {BLDRS_spatial_tree: {compressed: true, bufferView: 1}},
@@ -53,7 +69,6 @@ function cachedArtifact() {
       {buffer: 0, byteOffset: 8, byteLength: 8},
     ],
   }, BIN)
-  return new Blob([packGlbChunks([glb])])
 }
 
 
@@ -198,6 +213,76 @@ describe('artifactSizes', () => {
 
       expect(await artifactSizes({...ARTIFACT}, 'draco')).toBeNull()
       expect(captureException).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('with Portable on (#1843)', () => {
+    // A real GLB, not a byte blob: the portable-without-codec path strips it
+    // for the metadata-off side, and a strip needs something to parse.
+    const PORTABLE_BYTES = cachedGlb()
+
+    beforeEach(() => {
+      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+      rewriteGlbPortable.mockReturnValue({bytes: PORTABLE_BYTES, isChanged: true, stats: {}})
+    })
+
+    it('reads the whole artifact even with no codec, because the rewrite must', async () => {
+      // The uncompressed estimate is otherwise a header read that never
+      // touches the BIN chunk — and the rewrite reads instance TRS floats and
+      // ungzips two payloads out of exactly that chunk. So Portable + None is
+      // not free, and the panel shows "Estimating…" for it.
+      const sizes = await artifactSizes({...ARTIFACT}, 'none', true)
+
+      expect(rewriteGlbPortable).toHaveBeenCalledWith(expect.any(Uint8Array))
+      // No codec ran, but the metadata toggle still has two sides: the strip
+      // that the pro module would have done is done here, because the module
+      // runs none of its own once a hook is in play.
+      expect(compressExportGlb).not.toHaveBeenCalled()
+      expect(sizes.compression).toBe('none')
+      expect(sizes.withMetadata).toBe(PORTABLE_BYTES.byteLength)
+      expect(sizes.withoutMetadata).toBeLessThan(sizes.withMetadata)
+    })
+
+    it('rewrites BEFORE the codec, never after', async () => {
+      // Order is load-bearing: after Meshopt a bufferView addresses decoded
+      // bytes on a fallback buffer the file does not carry, and after Draco
+      // the instance TRS floats are not floats — the rewrite would read
+      // rubbish either way.
+      compressExportGlb.mockResolvedValue({
+        withMetadata: new Uint8Array(300),
+        withoutMetadata: new Uint8Array(120),
+        strippedExtensions: [],
+        mode: 'meshopt',
+      })
+
+      await artifactSizes({...ARTIFACT}, 'meshopt', true)
+
+      expect(compressExportGlb).toHaveBeenCalledWith(PORTABLE_BYTES, 'meshopt')
+    })
+
+    it('keeps portable and native apart in the cache at the same codec', async () => {
+      // They are different FILES. A shared cell would quote one and hand the
+      // export the other.
+      compressExportGlb.mockResolvedValue({
+        withMetadata: new Uint8Array(300),
+        withoutMetadata: new Uint8Array(120),
+        strippedExtensions: [],
+        mode: 'meshopt',
+      })
+      const artifact = {...ARTIFACT}
+
+      await artifactSizes(artifact, 'meshopt', false)
+      await artifactSizes(artifact, 'meshopt', true)
+      await artifactSizes(artifact, 'meshopt', true)
+
+      expect(compressExportGlb).toHaveBeenCalledTimes(2)
+      expect(rewriteGlbPortable).toHaveBeenCalledTimes(1)
+    })
+
+    it('leaves the native uncompressed estimate on its cheap header read', async () => {
+      await artifactSizes({...ARTIFACT}, 'none', false)
+
+      expect(rewriteGlbPortable).not.toHaveBeenCalled()
     })
   })
 })

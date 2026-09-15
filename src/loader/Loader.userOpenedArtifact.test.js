@@ -20,6 +20,7 @@
 import {BufferGeometry} from 'three'
 import {computeBoundsTree} from 'three-mesh-bvh'
 import {getGlbLogs} from '../../tools/jest/glbLogCapture'
+import {COMPRESSION_MESHOPT, compressExportGlb} from '../export/glbCompression'
 import {downloadToOPFS} from '../OPFS/utils'
 import {isBldrsGlbArtifact, load} from './Loader'
 import {
@@ -151,7 +152,7 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
     expect(model.capabilities.expressIdPicking).toBe(true)
     expect(model.capabilities.ifcSubsets).toBe(false)
     expect(getGlbLogs().map((l) => l.text))
-      .toContain('reader: hydrated batched-native artifact to a BatchedMesh model')
+      .toContain('reader: hydrated instance-table artifact to a BatchedMesh model')
   })
 
   /**
@@ -265,5 +266,76 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
     // the only signal a triager gets for a version mismatch.
     expect(getGlbLogs().map((l) => l.text))
       .toContain('BLDRS_instance_tables: payload failed validation; skipping')
+  })
+
+  // #1847: whether the per-vertex `_EXPRESSID`/`_INSTANCEID` attributes can be
+  // trusted is a property of the FILE, and used to be read off the Bldrs
+  // container header — which a user-opened export does not have, because the
+  // export IS the container's chunk 0. So a file the user had just compressed
+  // from the Export tab came back through `load()` with
+  // `bldrsCompressionMode` undefined and its per-vertex ids treated as
+  // pristine.
+  //
+  // Meshopt, not DRACO, for the codec here. Encoding Draco under jsdom is
+  // possible — `glbCompression.test.js` plants the `window.DracoEncoderModule`
+  // the script injection would have defined — but READING one back is not:
+  // `DRACOLoader` decodes on a `Worker` built from a blob URL, and jsdom has
+  // no `Worker`. These tests have to go all the way through `load()`, so
+  // Meshopt is the only codec that can. The flag being pinned does not
+  // distinguish the two, and `glbCompressionModeFromExtensions` is unit-tested
+  // over both extension names in `glbCompress.test.js`.
+  describe('…compressed from the Export tab (#1847)', () => {
+    /**
+     * @param {object} [opts] forwarded to `mergedGlbBytes`
+     * @return {Promise<object>} the model, opened as a downloaded export
+     */
+    async function openMeshoptMerged(opts) {
+      const compressed = await compressExportGlb(mergedGlbBytes(opts), COMPRESSION_MESHOPT)
+      // Non-vacuity: a codec that declined the geometry would hand the input
+      // straight back, and every assertion below would be about an
+      // uncompressed file.
+      expect(compressed.mode).toBe(COMPRESSION_MESHOPT)
+      return await openGlb(compressed.withMetadata)
+    }
+
+    it('reads the codec off the file when there is no container header', async () => {
+      const model = await openMeshoptMerged()
+
+      // The fix, directly: no container, but the file says Meshopt and the
+      // reader believes the file. This read `undefined` before.
+      expect(model.userData.bldrsCompressionMode).toBe(COMPRESSION_MESHOPT)
+      // …and picking still lands, through the per-triangle source that is
+      // immune to the codec in the first place.
+      const mesh = onlyMesh(model)
+      expect(mesh.instanceMap).toBeDefined()
+      expect(mesh.instanceMap.getParentExpressIdByInstance(
+        mesh.instanceMap.getInstanceIdByTriangle(0))).toBe(mergedElementIds()[0])
+      const faceIdsLogs = getGlbLogs().filter((l) => l.text.includes('face_ids'))
+      expect(faceIdsLogs.some((l) => /^BLDRS_face_ids: resolved /.test(l.text))).toBe(true)
+      expect(faceIdsLogs.filter((l) => l.level === 'warn')).toEqual([])
+    })
+
+    it('drops picking rather than trusting per-vertex ids a codec may have scrambled', async () => {
+      // The reachable-from-the-UI case: "Include Bldrs metadata: off" strips
+      // `BLDRS_face_ids` (a `BLDRS_*` root extension) while leaving
+      // `_EXPRESSID` / `_INSTANCEID` in place, since those are ordinary
+      // primitive attributes. Compressed, they are the only id source left
+      // and they are the untrustworthy one.
+      //
+      // No map is the right answer, not a best-effort one: a scrambled map
+      // selects the WRONG element on every click, which is worse for the
+      // user and far harder to diagnose than a model that simply does not
+      // respond to picking. The reader has always had this branch — this is
+      // the first arrival path that can reach it.
+      const model = await openMeshoptMerged({withFaceIds: false})
+      const mesh = onlyMesh(model)
+
+      expect(mesh.instanceMap).toBeUndefined()
+      // …and it said so. Silent degradation here would be indistinguishable
+      // from the third-party-GLB case.
+      expect(getGlbLogs().filter((l) => l.level === 'warn').map((l) => l.text)).toContain(
+        'reader: skipped picking on 1 mesh(es) — compressed (meshopt) artifact with ' +
+        'no BLDRS_face_ids coverage; per-vertex IDs would be corrupted')
+    })
   })
 })

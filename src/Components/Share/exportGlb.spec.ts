@@ -5,15 +5,19 @@ import {
   GLTF_MAGIC,
   PRO_MODULE_PATTERN,
   clickGate,
+  disableDracoEncoder,
   dismissLoadSnackbar,
   expectNoHorizontalScroll,
   expectSnackbarOnTop,
   glbJsonChunk,
   loadModelAndWaitForArtifact,
   openExportTab,
+  reopenLocalGlb,
   routeProModule,
   selectCompression,
   setSubscriptionTier,
+  toggleMetadata,
+  togglePortable,
   watchProModuleRequests,
 } from '../../tests/e2e/export'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
@@ -164,13 +168,9 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // Turning the metadata off has to move the number, which is the half of
     // this feature that was missing: through v0.1 the strip dropped the JSON
     // entries and left their payloads in the BIN chunk.
-    const metadataToggle = page.getByTestId('export-include-metadata').locator('input')
-    await metadataToggle.click()
-    await expect(sizeLine).not.toHaveAttribute('data-bytes', String(withMetadataBytes))
-    const strippedBytes = await sizeBytes(sizeLine)
+    const strippedBytes = await toggleMetadata(page)
     expect(strippedBytes).toBeLessThan(withMetadataBytes)
-    await metadataToggle.click()
-    await expect(sizeLine).toHaveAttribute('data-bytes', String(withMetadataBytes))
+    expect(await toggleMetadata(page)).toBe(withMetadataBytes)
     // The action is the LAST thing in the panel and centred, with the Pro
     // chip riding beside it for a free user (#1838). On the mobile
     // projection that row is the dialog's widest, so this is where a
@@ -210,8 +210,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // Now the other toggle state, end to end: the stripped file really is
     // the smaller size the panel quoted, which is only true once the strip
     // drops the metadata's bufferViews and their bytes (#1841).
-    await metadataToggle.click()
-    await expect(sizeLine).toHaveAttribute('data-bytes', String(strippedBytes))
+    expect(await toggleMetadata(page)).toBe(strippedBytes)
     const strippedDownloadPromise = page.waitForEvent('download')
     await exportButton.click()
     const strippedDownload = await strippedDownloadPromise
@@ -242,8 +241,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(page.getByTestId('export-compression')).toContainText('None')
     const uncompressedBytes = await sizeBytes(sizeLine)
     expect(uncompressedBytes).toBeGreaterThan(0)
-    const metadataToggle = page.getByTestId('export-include-metadata').locator('input')
-    const uncompressedMetadataBytes = await metadataDelta(page, uncompressedBytes)
+    const uncompressedMetadataBytes = await metadataDelta(uncompressedBytes)
 
     for (const codec of COMPRESSION_CODECS) {
       // The encoders are real wasm and only exist in a browser: the unit
@@ -258,7 +256,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       // One encode serves both states of the metadata toggle — the payloads
       // pass through untouched and are re-added by arithmetic (#1842) — so
       // what the toggle is worth cannot move with the codec.
-      expect(await metadataDelta(page, compressedBytes)).toBe(uncompressedMetadataBytes)
+      expect(await metadataDelta(compressedBytes)).toBe(uncompressedMetadataBytes)
       // Three toggle buttons plus their label are the widest control row in
       // the dialog, and on the mobile projection that is where a layout
       // regression shows up as a sideways scroll (#1838).
@@ -289,18 +287,65 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
      * What "Include Bldrs metadata" is worth right now: toggle it off, read
      * the line, toggle it back.
      *
-     * @param target Playwright page
      * @param withMetadataBytes the figure the line carries with it on
      * @return the difference the toggle makes
      */
-    async function metadataDelta(target: typeof page, withMetadataBytes: number): Promise<number> {
-      await metadataToggle.click()
-      await expect(sizeLine).not.toHaveAttribute('data-bytes', String(withMetadataBytes))
-      const stripped = await sizeBytes(sizeLine)
-      await metadataToggle.click()
-      await expect(sizeLine).toHaveAttribute('data-bytes', String(withMetadataBytes))
+    async function metadataDelta(withMetadataBytes: number): Promise<number> {
+      const stripped = await toggleMetadata(page)
+      expect(await toggleMetadata(page)).toBe(withMetadataBytes)
       return withMetadataBytes - stripped
     }
+  })
+
+  test('a codec with no encoder in the browser falls back, and says so', async ({page}) => {
+    // #1842's fallback, end to end: with no encoder in the browser the
+    // estimate and the download are the file exactly as it was, at exactly
+    // the size "None" quoted. Only a browser shows that — the encoder is a
+    // script tag and a wasm module, and the jest suite reaches the same
+    // branch with a stubbed global.
+    //
+    // That equality is also the case the harness itself used to hang on: a
+    // wait keyed on "the figure changed" waits for a change that never comes
+    // (`tests/e2e/exportEstimate.ts`), which is why the wait is keyed on the
+    // SELECTION the figure describes instead.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await routeProModule(page)
+    // Before the load, not before the click: the stand-in has to be in the
+    // page by the time the page's own scripts are.
+    await disableDracoEncoder(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+
+    const sizeLine = page.getByTestId('export-size')
+    await expect(sizeLine).toBeVisible()
+    const uncompressedBytes = await sizeBytes(sizeLine)
+    expect(uncompressedBytes).toBeGreaterThan(0)
+
+    const fallbackBytes = await selectCompression(page, 'draco')
+    expect(fallbackBytes, 'the fallback file is the input file').toBe(uncompressedBytes)
+    // "Draco" chosen beside an uncompressed figure reads as a Draco figure,
+    // so the panel names what the file actually is.
+    await expect(page.getByTestId('export-compression-fallback'))
+      .toContainText('Draco isn\'t available in this browser')
+
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    const file = await readFile(await (await downloadPromise).path())
+
+    expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+    // The panel's promise holds on the fallback path too…
+    expect(file.byteLength).toBe(fallbackBytes)
+    // …and the file really is the uncompressed one: nothing declares a Draco
+    // decoder that the file's geometry would then need and not have.
+    expect(glbJsonChunk(file).extensionsRequired ?? []).not.toContain('KHR_draco_mesh_compression')
   })
 
   test('a compressed export opens back in Share', async ({page}) => {
@@ -436,6 +481,115 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // exposed store the way `Containers/sceneHighlightPermalink.spec.ts`
     // reads it — batched selection sets for the hydrated artifact, merged
     // selection subsets for anything that fell back.
+    expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
+  })
+
+  test('a portable .glb names its elements, and reopens as a pickable model', async ({page}) => {
+    // #1843: the default export IS the batched-native cache artifact, and its
+    // `EXT_mesh_gpu_instancing` is `extensionsRequired` — so 3dviewer.net
+    // refuses the file outright, and the three.js editor shows a flat list of
+    // `mesh_N` where Share shows the named IFC hierarchy. Portable rewrites it
+    // into a plain scene graph: one named node per element, nested, each
+    // placement a child referencing the shared mesh.
+    //
+    // What only a browser can show, and the jest suite cannot: that the toggle
+    // is wired to the estimate and to the export through the same cache, so
+    // the figure on the line is the file that lands in Downloads.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+
+    // Off by default: the batched-native shape is the smaller file and the one
+    // Share itself reads best.
+    const portableToggle = page.getByTestId('export-portable').locator('input')
+    await expect(portableToggle).not.toBeChecked()
+    const sizeLine = page.getByTestId('export-size')
+    await expect(sizeLine).toBeVisible()
+    const nativeBytes = await sizeBytes(sizeLine)
+
+    const portableBytes = await togglePortable(page)
+    await expect(portableToggle).toBeChecked()
+    expect(portableBytes).toBeGreaterThan(0)
+    // One node per placement plus its name and TRS is JSON the batched shape
+    // does not carry, and no codec compresses the JSON chunk. On `index.ifc`
+    // that is a handful of elements; on a 100k-instance model it is ~100 B per
+    // instance net of the TRS accessors the rewrite reclaims, which is why the
+    // control is opt-in.
+    expect(portableBytes).not.toBe(nativeBytes)
+    // A third control row in the dialog is where a mobile layout regression
+    // would show up as a sideways scroll rather than a missing element (#1838).
+    await expectNoHorizontalScroll(page)
+
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    // Saved under its own name: Playwright's download temp file has no
+    // extension, and the local-file loader needs one to know what it is.
+    const savedPath = test.info().outputPath('index-portable.glb')
+    const download = await downloadPromise
+    await download.saveAs(savedPath)
+    const file = await readFile(savedPath)
+
+    expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+    // The figure on the line is the file: the panel rewrote once, cached the
+    // bytes, and the export handed over those very bytes (§4.4).
+    expect(file.byteLength).toBe(portableBytes)
+
+    const json = glbJsonChunk(file)
+    // The refusal, gone — from BOTH arrays. `extensionsRequired` is the one
+    // that made 3dviewer.net reject the file rather than degrade.
+    expect(json.extensionsUsed ?? []).not.toContain('EXT_mesh_gpu_instancing')
+    expect(json.extensionsRequired ?? []).not.toContain('EXT_mesh_gpu_instancing')
+    // …and the names the three.js editor showed as `mesh_N` are the nav tree's.
+    // Read off the FILE, not off a three parse: `GLTFLoader` runs every node
+    // name through `PropertyBinding.sanitizeNodeName`, which turns spaces into
+    // underscores — three's mangling, not the file's.
+    const nodeNames = (json.nodes ?? []).map((node) => node.name)
+    for (const name of SPATIAL_CHAIN) {
+      expect(nodeNames, `portable export should name ${name}`).toContain(name)
+    }
+    expect(nodeNames).toContain(LEAF_LABEL)
+    // Every element node is a real node, and the placements carry the meshes.
+    expect((json.nodes ?? []).filter((node) => Number.isInteger(node.mesh)).length).toBeGreaterThan(0)
+
+    // Back into Share. The nav tree survives — it hydrates from
+    // `BLDRS_spatial_tree`, which is indifferent to the node graph — and since
+    // #1849 so does picking: `joinPortableNodesToTables` regroups the stamped
+    // plain Meshes per table row, so the file rehydrates to the same decorated
+    // BatchedMesh the batched-native artifact does. Before it, this reopened
+    // as a plain, grey, un-pickable GLB.
+    await page.keyboard.press('Escape')
+    await reopenLocalGlb(page, savedPath)
+    await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+
+    await page.getByTestId('control-button-navigation').click()
+    await expect(page.getByTestId('NavTreePanel')).toBeVisible()
+    const node = (label: string) => page.locator(`[data-node-label="${label}"]`)
+    for (const name of SPATIAL_CHAIN) {
+      await expect(node(name)).toHaveCount(1)
+      await node(name).getByTestId('NavTreeNodeToggle').click()
+    }
+    await expect(node(LEAF_LABEL).first()).toBeVisible()
+
+    await node(LEAF_LABEL).first().getByTestId('NavTreeNodeLabel').click()
+
+    // The same three assertions the batched-native reopen makes (#1844): the
+    // row selects, the URL addresses the element so the selection is
+    // shareable, and — the one that was failing — the SCENE carries the
+    // highlight. The highlight has no DOM, so it is read off the exposed
+    // store.
+    await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
+    await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.glb(\/\d+)+/)
     expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
   })
 
