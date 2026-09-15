@@ -638,13 +638,17 @@ Five constraints shape it, and they are the design:
 - **Sequential, cheapest first, releasing as it goes.** Each estimate cell
   holds two whole copies of the export, so a naive sweep would leave three
   codecs' worth resident beside the source. The loop awaits each estimate and
-  releases the previous codec's bytes *before* starting the next
-  (`artifactSizes.js#releaseCompressedExport`), keeping exactly one codec's
-  output in memory. The order — none, Meshopt, Draco — is measured, not
-  guessed: on Momentum, `none` is a header read, Meshopt encodes at ~33 ms/MB
-  from a module already in the bundle, Draco at ~135 ms/MB behind a second
-  wasm the page has to fetch. The **winner is kept**, so the selection that
-  follows lands on a filled cache and the export hands over those very bytes.
+  releases a codec's bytes (`artifactSizes.js#releaseCompressedExport`) the
+  moment its figure loses, keeping **at most two** in memory: the best
+  measured so far and the one in flight. The order — none, Meshopt, Draco — is
+  measured, not guessed: on Momentum, `none` is a header read, Meshopt encodes
+  at ~33 ms/MB from a module already in the bundle, Draco at ~135 ms/MB behind
+  a second wasm the page has to fetch. The **winner is kept**, so the
+  selection that follows lands on a filled cache and the export hands over
+  those very bytes. Two cells rather than one is the deliberate trade: Meshopt
+  is measured second and wins on instance-heavy artifacts, so a sweep holding
+  only the last-measured codec would drop the winner and make the panel
+  re-encode up to 50 MB on the main thread the instant it selected it.
 - **Nothing starts above ~50 MB.** ~170 ms/MB across the whole axis, and it is
   not interruptible, so 50 MB is about eight seconds of main-thread work.
   Above the line the panel shows "Codec sizes not measured" and a **Calculate

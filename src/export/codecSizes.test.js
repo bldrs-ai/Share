@@ -134,48 +134,93 @@ describe('codecSizes', () => {
       expect(worst).toBe(1)
     })
 
-    it('releases each codec\'s bytes before starting the next', async () => {
-      // "Release as you go", and specifically BEFORE — releasing after the
-      // loop would still have held every codec at once at its peak. `none`
-      // native caches no bytes at all (a header read), so the only release
-      // during the run is Meshopt's, just before Draco starts.
-      const releasesBeforeDraco = []
-      artifactSizes.mockImplementation((artifact, mode) => {
-        releasesBeforeDraco.push([mode, releaseCompressedExport.mock.calls.length])
-        return Promise.resolve(MOMENTUM[mode])
-      })
+    it('never holds more than two codecs\' bytes at once', async () => {
+      // The memory bound the sweep promises now that it keeps a best-so-far:
+      // the best and the one in flight, never a third. Portable, because
+      // that is the only setting under which all THREE codecs hold a cell —
+      // natively `none` is a header read, so a sweep that released nothing
+      // would still peak at two there and this count could not go red.
+      //
+      // Both tables, because the release SCHEDULE differs between them:
+      // Momentum drops the old best each time, the instance-heavy one drops
+      // the codec just measured.
+      for (const table of [MOMENTUM, INSTANCE_HEAVY]) {
+        jest.clearAllMocks()
+        const resident = new Set()
+        releaseCompressedExport.mockImplementation((artifact, mode) => resident.delete(mode))
+        let worst = 0
+        artifactSizes.mockImplementation((artifact, mode) => {
+          resident.add(mode)
+          worst = Math.max(worst, resident.size)
+          return Promise.resolve(table[mode])
+        })
 
-      await sweep()
+        await sweep({isPortable: true})
 
-      expect(releasesBeforeDraco).toEqual([
-        [COMPRESSION_NONE, 0],
-        [COMPRESSION_MESHOPT, 0],
-        [COMPRESSION_DRACO, 1],
-      ])
-      expect(releaseCompressedExport)
-        .toHaveBeenCalledWith(ARTIFACT, COMPRESSION_MESHOPT, false, QUALITY)
+        expect(worst).toBe(2)
+      }
+      releaseCompressedExport.mockReset()
     })
 
     it('keeps the winner, so selecting it does not re-encode', async () => {
-      // Draco wins on Momentum and is measured last, so nothing is released
-      // at the end: the bytes the panel is about to select are already in the
-      // cache and the export hands over those very bytes.
+      // Draco wins on Momentum and is measured last, so its cell is the one
+      // left standing: the bytes the panel is about to select are already in
+      // the cache and the export hands over those very bytes. Meshopt lost
+      // and went.
       await sweep()
 
       expect(releaseCompressedExport)
         .not.toHaveBeenCalledWith(ARTIFACT, COMPRESSION_DRACO, false, QUALITY)
+      expect(releaseCompressedExport)
+        .toHaveBeenCalledWith(ARTIFACT, COMPRESSION_MESHOPT, false, QUALITY)
     })
 
-    it('releases the last codec when it is not the winner', async () => {
-      // Meshopt wins on an instance-heavy artifact, so the Draco bytes still
-      // in hand when the queue ends are dead weight. One codec's output
-      // resident, always.
+    it('keeps a winner that was measured before the last codec', async () => {
+      // The falsifying case for "keep the last one and hope": Meshopt wins on
+      // an instance-heavy artifact — which is exactly what Share's batched
+      // writer produces — and it is measured SECOND. Drop it when Draco
+      // starts and the panel selects a codec whose cell is empty, so the size
+      // line reverts to "Estimating…" and a fourth full encode runs on the
+      // main thread seconds after the sweep declared itself done.
       resolveFrom(INSTANCE_HEAVY)
 
       await sweep()
 
       expect(releaseCompressedExport)
         .toHaveBeenCalledWith(ARTIFACT, COMPRESSION_DRACO, false, QUALITY)
+      expect(releaseCompressedExport)
+        .not.toHaveBeenCalledWith(ARTIFACT, COMPRESSION_MESHOPT, false, QUALITY)
+    })
+
+    it('keeps nothing when the winner is the cell that holds no bytes', async () => {
+      // Native `none` is a header read with no cell to keep, so a sweep where
+      // it wins must not go on holding a compressed codec for a selection
+      // that will never read it.
+      resolveFrom({...MOMENTUM, [COMPRESSION_NONE]: sizesOf(1)})
+
+      await sweep()
+
+      for (const mode of [COMPRESSION_MESHOPT, COMPRESSION_DRACO]) {
+        expect(releaseCompressedExport).toHaveBeenCalledWith(ARTIFACT, mode, false, QUALITY)
+      }
+    })
+
+    it('keeps nothing from a sweep that never finished', async () => {
+      // `smallestCodec` names no winner until every codec has reported, so
+      // after a Stop the best-so-far is bytes waiting for a selection that is
+      // not coming.
+      const controller = new AbortController()
+      artifactSizes.mockImplementation((artifact, mode) => {
+        if (mode === COMPRESSION_MESHOPT) {
+          controller.abort()
+        }
+        return Promise.resolve(MOMENTUM[mode])
+      })
+
+      await sweep({signal: controller.signal})
+
+      expect(releaseCompressedExport)
+        .toHaveBeenCalledWith(ARTIFACT, COMPRESSION_MESHOPT, false, QUALITY)
     })
 
     it('measures at the quality and Portable setting it was given', async () => {

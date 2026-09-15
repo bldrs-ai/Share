@@ -169,9 +169,9 @@ export function compressedExport(artifact, mode, glbBytes = null, isPortable = f
  * The background codec sweep (#1850) is the reason this exists. Every cell
  * holds two whole copies of the export — `withMetadata` and `withoutMetadata`
  * — so measuring the codec axis eagerly would leave three codecs' worth
- * resident beside the source. The sweep therefore releases each codec before
- * it starts the next, and the numbers it has already published stay on the
- * dropdown.
+ * resident beside the source. The sweep therefore keeps at most two: the best
+ * figure measured so far and the one in flight. A beaten codec is released as
+ * its figure lands, and the numbers it published stay on the dropdown.
  *
  * Releasing costs at most one re-encode: if the user then picks that codec,
  * the size line's own effect fills the cell again with the identical bytes —

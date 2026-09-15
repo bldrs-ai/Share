@@ -16,12 +16,17 @@
 //
 // The interesting half of this module is what it refuses to do:
 //
-//   - **One codec's output resident at a time.** Each estimate cell holds two
-//     whole copies of the export (`artifactSizes.js`), so a naive sweep would
-//     leave three codecs' worth in memory beside the source. Each codec's
-//     bytes are released before the next one starts. The winner is kept, so
-//     the selection that follows lands on a filled cache rather than
-//     re-encoding.
+//   - **At most two codecs' output resident: the best measured so far, and
+//     the one in flight.** Each estimate cell holds two whole copies of the
+//     export (`artifactSizes.js`), so a naive sweep would leave three codecs'
+//     worth in memory beside the source. A codec that is beaten is released
+//     as soon as its figure lands, and the old best is released the moment a
+//     new one displaces it. Keeping the best-so-far rather than only the
+//     last-measured is what makes the selection that follows land on a filled
+//     cache: Meshopt wins on the instance-heavy artifacts Share's batched
+//     writer produces (−68.0% above) and is measured SECOND, so a sweep that
+//     only ever held the most recent codec would have thrown the winner away
+//     and made the panel re-encode up to 50 MB on the main thread.
 //   - **Only the codec axis.** With quality and Portable the estimate matrix
 //     is codec × quality × portable × metadata, and the cross product is not
 //     something to compute on a hunch. The sweep runs the codec axis at
@@ -86,8 +91,8 @@ function noop() {
 
 /**
  * Whether measuring this cell leaves a whole copy of the export in the
- * estimate cache — which is what has to be released before the next codec
- * starts.
+ * estimate cache — which is what the sweep has to release once the codec is
+ * beaten.
  *
  * Mirrors `artifactSizes.js`'s own branch: uncompressed-and-native is a
  * header read and caches nothing but two numbers, and everything else runs
@@ -113,6 +118,23 @@ export function shouldAutoMeasure(artifactBytes, limit = AUTO_MEASURE_MAX_BYTES)
 
 
 /**
+ * Whether every codec on the axis has reported — the one definition of "the
+ * sweep is done", shared by the winner (below, which refuses to name one
+ * before then) and by the panel, which offers a way to resume while this is
+ * false.
+ *
+ * A codec that reported NULL counts: "no figure" is a settled answer.
+ *
+ * @param {object} sizesByCodec `{[mode]: ?sizes}`
+ * @param {Array<string>} [order]
+ * @return {boolean}
+ */
+export function isSweepComplete(sizesByCodec, order = CODEC_MEASUREMENT_ORDER) {
+  return order.every((mode) => mode in sizesByCodec)
+}
+
+
+/**
  * The codec with the smallest measured download, or null while that is not
  * yet knowable.
  *
@@ -133,23 +155,39 @@ export function shouldAutoMeasure(artifactBytes, limit = AUTO_MEASURE_MAX_BYTES)
  * @return {?string} the mode, or null
  */
 export function smallestCodec(sizesByCodec, isMetadataIncluded, order = CODEC_MEASUREMENT_ORDER) {
+  if (!isSweepComplete(sizesByCodec, order)) {
+    return null
+  }
   let best = null
   let bestBytes = Infinity
   for (const mode of order) {
-    if (!(mode in sizesByCodec)) {
-      return null
-    }
-    const sizes = sizesByCodec[mode]
-    if (!sizes) {
-      continue
-    }
-    const bytes = isMetadataIncluded ? sizes.withMetadata : sizes.withoutMetadata
+    const bytes = shownBytes(sizesByCodec[mode], isMetadataIncluded)
     if (bytes < bestBytes) {
       best = mode
       bestBytes = bytes
     }
   }
   return best
+}
+
+
+/**
+ * The figure the panel is SHOWING for one codec — the one a winner is chosen
+ * on, above and inside the sweep, so the two agree by construction rather
+ * than by two comparisons that are supposed to match.
+ *
+ * A codec that reported no figure at all scores `Infinity`: a settled answer
+ * of "no figure" never wins and never holds the decision up.
+ *
+ * @param {?object} sizes One codec's entry
+ * @param {boolean} isMetadataIncluded Which of the two figures is on screen
+ * @return {number} bytes, or `Infinity`
+ */
+function shownBytes(sizes, isMetadataIncluded) {
+  if (!sizes) {
+    return Infinity
+  }
+  return isMetadataIncluded ? sizes.withMetadata : sizes.withoutMetadata
 }
 
 
@@ -182,8 +220,9 @@ export function codecToSelect(sizesByCodec, isMetadataIncluded, isUserChosen, cu
  * Measure every codec, in order, publishing each figure as it lands.
  *
  * Sequential by construction: the loop awaits each estimate, so two encoders
- * are never resident at once and the release below is enough to keep memory
- * to one codec's output. Resolves when the queue is done or abandoned.
+ * are never resident at once and the releases below keep memory to at most
+ * two codecs' output — the best measured so far and the one in flight.
+ * Resolves when the queue is done or abandoned.
  *
  * A result that arrives after the cancel is still published — it has already
  * been paid for, and "Cancel leaves whatever was computed visible and usable"
@@ -201,7 +240,11 @@ export function codecToSelect(sizesByCodec, isMetadataIncluded, isUserChosen, cu
  *   running now — the panel says so, and says it is still finishing after a
  *   cancel
  * @param {Array<string>} [options.order]
- * @return {Promise<void>}
+ * @return {Promise<object>} `{[mode]: ?sizes}` for every codec that reported.
+ *   Short of the whole axis after a Stop, which is how the caller tells a
+ *   sweep that finished from one that can still be resumed
+ *   (`isSweepComplete`) — the state itself is published through `onSize` as
+ *   it lands, so this is a summary and not the channel.
  */
 export async function measureCodecSizes(artifact, {
   quality,
@@ -213,26 +256,37 @@ export async function measureCodecSizes(artifact, {
   order = CODEC_MEASUREMENT_ORDER,
 }) {
   const measured = {}
-  // The one codec whose bytes are currently in the estimate cache, if any.
-  let held = null
+  // The BEST-so-far cell, kept for the selection that follows, and the figure
+  // it is best by. Not the last-measured one: the winner is whichever codec
+  // came in smallest, and on the instance-heavy shape Share's batched writer
+  // produces that is Meshopt, measured second (module doc). `null` also covers
+  // a best that holds no bytes to keep — `none` in native mode is a header
+  // read — in which case there is simply nothing to release later.
+  let bestHeld = null
+  let bestBytes = Infinity
   try {
     for (const mode of order) {
       if (signal?.aborted) {
-        return
-      }
-      // BEFORE the next one starts, never after: this is what bounds the
-      // sweep's memory to a single codec's output.
-      if (held !== null) {
-        releaseCompressedExport(artifact, held, isPortable, quality)
-        held = null
+        return measured
       }
       onCodec(mode)
       const sizes = await artifactSizes(artifact, mode, isPortable, quality)
-      if (holdsBytes(mode, isPortable)) {
-        held = mode
-      }
       measured[mode] = sizes
       onSize(mode, sizes)
+      // Settle the keep-or-drop decision HERE, while both cells are known,
+      // rather than after the loop: that is what bounds the sweep to two
+      // codecs' output — the best so far and the one just measured — instead
+      // of the three a release-at-the-end sweep would peak at.
+      const bytes = shownBytes(sizes, isMetadataIncluded)
+      if (bytes < bestBytes) {
+        if (bestHeld !== null) {
+          releaseCompressedExport(artifact, bestHeld, isPortable, quality)
+        }
+        bestBytes = bytes
+        bestHeld = holdsBytes(mode, isPortable) ? mode : null
+      } else if (holdsBytes(mode, isPortable)) {
+        releaseCompressedExport(artifact, mode, isPortable, quality)
+      }
       // Hand the event loop back between codecs. This is the whole of what
       // keeps the dialog usable: the encode itself is synchronous wasm, so
       // this yield is where the freshly-published figure paints and where a
@@ -241,11 +295,14 @@ export async function measureCodecSizes(artifact, {
     }
   } finally {
     onCodec(null)
-    // Keep exactly the codec the panel is about to select, so the winner's
-    // bytes are the ones the export hands over rather than a re-encode.
-    // Anything else the sweep is still holding goes.
-    if (held !== null && held !== smallestCodec(measured, isMetadataIncluded, order)) {
-      releaseCompressedExport(artifact, held, isPortable, quality)
+    // The loop already dropped every beaten codec, so the only cell that can
+    // still be dead weight is the best-so-far of a sweep that never finished:
+    // `smallestCodec` refuses to name a winner until every codec has
+    // reported, so after a Stop there is no selection for those bytes to be
+    // waiting for.
+    if (bestHeld !== null && bestHeld !== smallestCodec(measured, isMetadataIncluded, order)) {
+      releaseCompressedExport(artifact, bestHeld, isPortable, quality)
     }
   }
+  return measured
 }
