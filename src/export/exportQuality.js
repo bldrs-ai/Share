@@ -9,11 +9,12 @@
 // the single table that says what each rung asks of each encoder.
 //
 // The rungs are FIDELITY rungs, not size rungs. Nothing here promises that
-// Smallest weighs less than Best — measured, it usually does, but Draco's
-// speed pair is an encoder-effort knob whose payoff is model-shaped (below),
-// and the panel shows the real measured size for the current selection
-// anyway. Claiming a monotone ladder in the UI would be a promise this module
-// cannot keep.
+// the coarsest rung weighs less than Best — measured, it usually does, but
+// Draco's speed pair is an encoder-effort knob whose payoff is model-shaped
+// (below), and the panel shows the real measured size for the current
+// selection anyway. Claiming a monotone ladder in the UI would be a promise
+// this module cannot keep, which is why the label the user reads is
+// "Reduced" and not "Smallest" — see `QUALITY_LABELS`.
 //
 // Measured on `src/tests/fixtures/Momentum.ifc` → GLB (1,959,196 B, 43
 // primitives, 71,307 triangles), through the same `ALL_EXTENSIONS` IO and the
@@ -36,8 +37,8 @@
 //     under SEQUENTIAL, and +2.4% on an instance-heavy synthetic. It is a
 //     clear win on EDGEBREAKER over real building geometry (−8.6% on
 //     Momentum, −6.0% on `public/index.ifc`), which is what the batched-native
-//     default artifact takes, so it rides on Balanced and Smallest — but see
-//     the note above about not promising a ladder.
+//     default artifact takes, so it rides on Balanced and the coarse rung —
+//     but see the note above about not promising a ladder.
 //
 // What is deliberately NOT here, each an owner decision recorded in #1848 §4:
 //
@@ -64,17 +65,28 @@
 export const QUALITY_BEST = 'best'
 /** Highest fidelity, encoder tuned for size. The default. */
 export const QUALITY_BALANCED = 'balanced'
-/** Fewer position/normal bits, for a visibly smaller file. */
+/** Fewer position/normal bits — the coarsest rung offered. */
 export const QUALITY_SMALLEST = 'smallest'
 
 /** The choices the Export tab offers, in the order it offers them. */
 export const QUALITY_LEVELS = [QUALITY_BEST, QUALITY_BALANCED, QUALITY_SMALLEST]
 
-/** What each choice is called on the control. */
+/**
+ * What each choice is called on the control.
+ *
+ * "Reduced", not "Smallest", and the divergence from the id is deliberate:
+ * the id is written into export-history rows and estimate cache keys and has
+ * to keep meaning the same thing across a rename, while the LABEL is a claim
+ * made to the user. The module doc's own measurements say the coarse rung is
+ * not guaranteed to weigh less (+0.5% under SEQUENTIAL on Momentum, +2.4% on
+ * an instance-heavy synthetic), so a superlative about size is a promise the
+ * table cannot keep. "Reduced" names what the rung really does change —
+ * fidelity — which is also the axis the caption underneath quantifies.
+ */
 export const QUALITY_LABELS = {
   [QUALITY_BEST]: 'Best',
   [QUALITY_BALANCED]: 'Balanced',
-  [QUALITY_SMALLEST]: 'Smallest',
+  [QUALITY_SMALLEST]: 'Reduced',
 }
 
 /**
@@ -108,9 +120,16 @@ const HALF_DIAGONAL_OF_UNIT_CUBE = Math.sqrt(3) / 2
 const MM_PER_M = 1000
 // Below this the figure says less than float32's own rounding does, and
 // "0.00 mm" reads as a bug. Overstating a worst case is the safe direction.
+// Rounding up already lifts every positive figure to at least this, so what
+// the clamp still catches is an exact zero.
 const MIN_REPORTED_MM = 0.01
 const MM_ONE_DECIMAL_BELOW = 10
 const MM_TWO_DECIMALS_BELOW = 1
+// `4.6 * 10` is 46.00000000000001 in binary floating point, and a bare
+// `Math.ceil` would read that noise as a whole extra display step. Twelve
+// significant digits is far more than any figure here carries and far fewer
+// than the ~16 where the noise lives.
+const CEIL_SIGNIFICANT_DIGITS = 12
 
 // Per rung, what each encoder is asked for. `quantizationBits` is MERGED with
 // `@gltf-transform`'s own defaults rather than replacing them
@@ -182,9 +201,27 @@ export function maxPositionShift(quality, positionRange) {
 
 
 /**
+ * @param {number} mm
+ * @param {number} decimals
+ * @return {number} mm rounded UP at that many decimals
+ */
+function ceilTo(mm, decimals) {
+  const factor = 10 ** decimals
+  return Math.ceil(Number((mm * factor).toPrecision(CEIL_SIGNIFICANT_DIGITS))) / factor
+}
+
+
+/**
  * That distance as the panel prints it. Millimetres, because that is the unit
  * a building modeller decides in — "POSITION: 12 bits" is not a decision
  * anybody can make.
+ *
+ * Rounded UP at whatever precision is shown, never to nearest. The caption
+ * says "parts may move up to X", which is a bound and not an estimate: at
+ * `Math.round`, 4.64 mm printed as "4.6 mm" and 10.49 mm as "10 mm", and a
+ * vertex really can land near the unrounded figure. Overstating the worst
+ * case by less than one display step is the safe direction; understating it
+ * makes the caption a promise the file does not keep.
  *
  * @param {number} metres
  * @return {string} e.g. '4.1 mm'
@@ -192,10 +229,10 @@ export function maxPositionShift(quality, positionRange) {
 export function formatMaxShift(metres) {
   const mm = metres * MM_PER_M
   if (mm >= MM_ONE_DECIMAL_BELOW) {
-    return `${Math.round(mm)} mm`
+    return `${ceilTo(mm, 0)} mm`
   }
   if (mm >= MM_TWO_DECIMALS_BELOW) {
-    return `${mm.toFixed(1)} mm`
+    return `${ceilTo(mm, 1).toFixed(1)} mm`
   }
-  return `${Math.max(mm, MIN_REPORTED_MM).toFixed(2)} mm`
+  return `${Math.max(ceilTo(mm, 2), MIN_REPORTED_MM).toFixed(2)} mm`
 }

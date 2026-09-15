@@ -323,7 +323,7 @@ export function smallestCodecIn(sizes: Record<string, number>): string {
  * it (#1848).
  *
  * Two rungs are two different files — different encoder settings, and for
- * Smallest different POSITION bits — so the estimate re-runs and the line
+ * the coarse rung different POSITION bits — so the estimate re-runs and the line
  * goes through "Estimating…" exactly as it does for a codec.
  *
  * @param page Playwright page

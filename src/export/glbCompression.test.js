@@ -459,8 +459,8 @@ describe('export/glbCompression', () => {
     // only be shown here is that they reach the encoder and change the file —
     // and, for the two that cost fidelity, by how much.
     //
-    // Deliberately NOT asserted: that Smallest weighs less than Balanced
-    // weighs less than Best. Measured, Draco's speed pair is a −8.6% win on
+    // Deliberately NOT asserted: that the coarse rung (`smallest`, labelled
+    // "Reduced") weighs less than Balanced weighs less than Best. Measured, Draco's speed pair is a −8.6% win on
     // EDGEBREAKER over the Momentum building model and a +0.5% loss on the
     // same model under SEQUENTIAL, so the rungs are a fidelity ladder and not
     // a size one (`exportQuality.js` module doc). The panel shows the real
@@ -539,8 +539,8 @@ describe('export/glbCompression', () => {
         .toEqual(sortedPositions(await positionsOf(best.withoutMetadata, COMPRESSION_DRACO)))
     }, TIMEOUT_MS)
 
-    it('spends POSITION bits on Smallest, within the millimetre figure it quotes', async () => {
-      // The other half of the caption's promise: Smallest really does move
+    it('spends POSITION bits on the coarse rung, within the figure it quotes', async () => {
+      // The other half of the caption's promise: the coarse rung really moves
       // vertices further than Best, and neither moves one further than
       // `maxPositionShift` says. Sequential, so the decode comes back vertex
       // for vertex — this fixture's positions are all distinct, so DRACO's

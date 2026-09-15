@@ -354,12 +354,12 @@ all.
 |---|---|---|
 | **Best** | today's defaults: `POSITION:14 NORMAL:10`, speeds 5 | `QUANTIZE` — entirely lossless |
 | **Balanced** *(default)* | same bits + `encodeSpeed:0 decodeSpeed:0` | `FILTER` |
-| **Smallest** | `POSITION:12 NORMAL:8` + speeds 0 | `FILTER` (Meshopt has no third rung) |
+| **Reduced** *(id `smallest`)* | `POSITION:12 NORMAL:8` + speeds 0 | `FILTER` (Meshopt has no third rung) |
 
 Measured on `src/tests/fixtures/Momentum.ifc` → GLB (1,959,196 B, 43
 primitives), reproduced against the pinned encoders: Meshopt `QUANTIZE`
 1,347,740 B → `FILTER` 820,912 B (**−39.1%**); Draco EDGEBREAKER 250,184 B →
-speeds 0 228,652 B (**−8.6%**) → Smallest 194,932 B (**−22.1%**).
+speeds 0 228,652 B (**−8.6%**) → Reduced 194,932 B (**−22.1%**).
 
 Three things about that table are load-bearing:
 
@@ -379,8 +379,14 @@ Three things about that table are load-bearing:
   under EDGEBREAKER (which is what the batched-native default takes) and
   −6.0% on `public/index.ifc`, but **+0.5%** on the same Momentum file under
   SEQUENTIAL and +2.4% on an instance-heavy synthetic. Nothing promises
-  Smallest ≤ Balanced ≤ Best; the size line shows the real measured figure
-  for whatever is selected, which is what the user actually needs.
+  Reduced ≤ Balanced ≤ Best; the size line shows the real measured figure
+  for whatever is selected, which is what the user actually needs. That is
+  also why the coarse rung is **labelled** "Reduced" and not "Smallest",
+  under a sub-caption reading "how much detail to keep": a superlative about
+  bytes on the control would be exactly the promise this bullet says the
+  table cannot make. Its *id* stays `smallest` — it is written into
+  export-history rows and estimate cache keys, and renaming it would break
+  rows already recorded.
 
 Four knobs are deliberately **not** exposed, each measured
 (#1848 §4): `quantizationVolume: 'scene'` (4× worse RMS at equal bits, worst
@@ -404,6 +410,13 @@ batched-native artifact's positions are in local geometry space, so a 5 cm
 bolt quantizes in a 5 cm box however large the site is, and scene bounds would
 quote a grid four times coarser than the file has. Meshopt gets no millimetre
 figure because it has none to give: "geometry exact; shading normals rounded".
+
+The printed figure rounds **up** at whatever precision it shows, never to
+nearest (`exportQuality.js#formatMaxShift`). "up to X" is a bound, and to
+nearest it stops being one: 4.64 mm printed as "4.6 mm" and 10.49 mm as
+"10 mm" both promise less movement than a vertex can really take. Overstating
+by under one display step is the safe direction; understating is a caption the
+file breaks.
 
 Quality joins portable × codec in the estimate cache key
 (`export/artifactSizes.js#rewriteKey`) — but only when an encoder actually
@@ -548,7 +561,7 @@ codecs are alternatives, not independent options — it began as a
 `ToggleButtonGroup`, whose three side-by-side buttons were the widest control
 in the dialog and read as a run-on word under the theme's toggle styling
 (owner feedback on #1842). The menu items carry the per-mode test ids.
-Quality (Best / Balanced / Smallest, §4.3) is a second dropdown directly under
+Quality (Best / Balanced / Reduced, §4.3) is a second dropdown directly under
 it, **disabled rather than hidden** while Compression is None — showing it
 only once a codec is picked would change the panel's height under the user's
 cursor at the moment they reach for the next control. Under the size line it
@@ -903,7 +916,7 @@ through `BLDRS_*` extensions.
 | Units + coordination frame | ✔ `scenes[0].extras` (metres) | ✔ | ✘ (unitless) | ✘ | ✘ | ✔ `metersPerUnit`, root xform | ✔ (units attr) | ✔ |
 | Cut planes / hidden elements (view state) | ◐ `BLDRS_view_states` (designed, not written) | ◐ | ✘ | ✘ | ✘ | ◐ variants | ✘ | ✘ |
 | Portable (named node tree, no required extension) | ✔ per export (#1843) — `~100 B`/instance net | ✔ | — (always de-instanced) | — | — | ◐ (prim hierarchy is native) | ◐ | — |
-| Compression | ✔ Draco / Meshopt × Best / Balanced / Smallest, chosen per export (#1842, #1848) | ✔ | ✘ | ✘ (binary only) | ◐ binary | ◐ (USDZ is a zip) | ✔ (zip) | ✘ |
+| Compression | ✔ Draco / Meshopt × Best / Balanced / Reduced, chosen per export (#1842, #1848) | ✔ | ✘ | ✘ (binary only) | ◐ binary | ◐ (USDZ is a zip) | ✔ (zip) | ✘ |
 | Source | artifact | artifact | scene | scene | scene | scene (or server) | scene | — (needs Conway write support) |
 | Effort | done in S2 | small (unpack GLB → JSON + bin) | small | small | small | medium (USDZExporter is texture-centric; instancing + metadata need work); server route if fidelity matters | medium | large — out of scope |
 

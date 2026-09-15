@@ -614,6 +614,26 @@ describe('ExportSection', () => {
         .not.toHaveAttribute('aria-disabled')
     })
 
+    it('names the rungs by fidelity, because the size ordering is not guaranteed', async () => {
+      // `exportQuality.js` measured the coarse rung HEAVIER than Balanced on
+      // some models (+0.5% under SEQUENTIAL on Momentum, +2.4% on an
+      // instance-heavy synthetic), so "Smallest" on the control would be a
+      // promise the encoders don't keep. The id stays `smallest` — it is
+      // written into export-history rows and estimate keys — but what the
+      // user reads names fidelity and claims no ordering.
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      chooseCompression('draco')
+      chooseQuality('smallest')
+      await act(async () => {})
+
+      expect(getByTestId('export-quality')).toHaveTextContent('Reduced')
+      expect(getByTestId('export-quality')).not.toHaveTextContent(/small/i)
+    })
+
     it('re-estimates on the rung, because two rungs are two different files', async () => {
       settleSizes()
       await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
@@ -638,7 +658,7 @@ describe('ExportSection', () => {
     })
 
     it('captions what the rung costs, in millimetres off this model', async () => {
-      // "Smallest — parts may move up to 4.7 mm" is a decision a building
+      // "Reduced — parts may move up to 4.7 mm" is a decision a building
       // modeller can make; "POSITION: 12 bits" is not (#1848 §5b). The figure
       // is derived from the artifact's own bounds, so it moves with the model.
       settleSizes()

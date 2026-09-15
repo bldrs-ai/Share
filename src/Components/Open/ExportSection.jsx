@@ -476,7 +476,10 @@ export default function ExportSection() {
           pick one. Presets rather than bit counts: the bit count is
           meaningless to a CAD user and dangerous when wrong, and the two
           codecs' knobs don't line up, so one number would mean two different
-          things (#1848 §5). */}
+          things (#1848 §5). The rung names and this sub-caption are about
+          FIDELITY, never size: `exportQuality.js` measured the coarse rung
+          heavier than Balanced on some models, so a "Smallest" here would
+          promise an ordering the encoders don't keep. */}
       <Stack
         direction='row'
         justifyContent='space-between'
@@ -487,7 +490,7 @@ export default function ExportSection() {
       >
         <Box>
           <Typography variant='body2'>Quality</Typography>
-          <Typography variant='caption' color='text.secondary'>how hard to squeeze</Typography>
+          <Typography variant='caption' color='text.secondary'>how much detail to keep</Typography>
         </Box>
         <Select
           value={quality}

@@ -65,7 +65,7 @@ describe('exportQuality', () => {
       expect(draco.quantizationBits).toEqual(qualitySettings(QUALITY_BEST).draco.quantizationBits)
     })
 
-    it('spends bits, not just encoder effort, only on Smallest', () => {
+    it('spends bits, not just encoder effort, only on the coarse rung', () => {
       expect(qualitySettings(QUALITY_SMALLEST)).toEqual({
         draco: {encodeSpeed: 0, decodeSpeed: 0, quantizationBits: {POSITION: 12, NORMAL: 8}},
         isMeshoptFiltered: true,
@@ -119,7 +119,7 @@ describe('exportQuality', () => {
       expect(at12).toBeLessThan(4.067 * 1.2)
     })
 
-    it('is the same at Best and Balanced, and coarser at Smallest', () => {
+    it('is the same at Best and Balanced, and coarser at the rung below', () => {
       // Balanced buys its bytes from the encoder, not from the geometry.
       expect(maxPositionShift(QUALITY_BALANCED, MOMENTUM_RANGE_M))
         .toBe(maxPositionShift(QUALITY_BEST, MOMENTUM_RANGE_M))
@@ -128,12 +128,17 @@ describe('exportQuality', () => {
     })
 
     it('scales with the model, which is why it is worth showing at all', () => {
-      // A 5 cm bolt in local geometry space quantizes in a 5 cm box, so
-      // Smallest costs it micrometres — the number a user needs to see before
-      // deciding, and the reason a fixed "12 bits" caption would be useless.
+      // A 5 cm bolt in local geometry space quantizes in a 5 cm box, so the
+      // coarse rung costs it micrometres — the number a user needs to see
+      // before deciding, and the reason a fixed "12 bits" caption would be
+      // useless. Printed as 0.02 mm rather than 0.0106: two decimals is the
+      // finest the caption goes and it rounds UP to stay a bound, so at this
+      // scale it overstates by up to a hundredth of a millimetre. Still the
+      // right direction — a bolt this figure understated would be a caption
+      // the file breaks.
       const bolt = maxPositionShift(QUALITY_SMALLEST, BOLT_RANGE_M)
       expect(bolt * 1000).toBeLessThan(0.02)
-      expect(formatMaxShift(bolt)).toBe('0.01 mm')
+      expect(formatMaxShift(bolt)).toBe('0.02 mm')
     })
 
     it('has nothing to say when the artifact declares no bounds', () => {
@@ -144,11 +149,27 @@ describe('exportQuality', () => {
     it('prints a figure a modeller reads, not a float', () => {
       expect(formatMaxShift(0.0040670)).toBe('4.1 mm')
       expect(formatMaxShift(0.0106450)).toBe('11 mm')
-      expect(formatMaxShift(0.0001234)).toBe('0.12 mm')
+      expect(formatMaxShift(0.0001234)).toBe('0.13 mm')
       // Floored rather than rounded to zero: below this the figure says less
       // than float32's own rounding does, and overstating a worst case is the
       // safe direction.
       expect(formatMaxShift(0.0000001)).toBe('0.01 mm')
+    })
+
+    it('rounds the printed figure UP, at every precision it prints', () => {
+      // "up to X" is a bound, so the display must not shave it. Each of these
+      // rounds DOWN to nearest — 4.64→"4.6", 10.49→"10", 0.124→"0.12" — and a
+      // vertex can land near the unrounded value, which would make the
+      // caption promise less movement than the file can contain.
+      expect(formatMaxShift(0.004640)).toBe('4.7 mm')
+      expect(formatMaxShift(0.010490)).toBe('11 mm')
+      expect(formatMaxShift(0.0001240)).toBe('0.13 mm')
+      // And a figure already ON a display tick stays there: `4.6 * 10` is
+      // 46.00000000000001 in binary floating point, which a bare `Math.ceil`
+      // would inflate by a whole step.
+      expect(formatMaxShift(0.004600)).toBe('4.6 mm')
+      expect(formatMaxShift(0.011000)).toBe('11 mm')
+      expect(formatMaxShift(0.000120)).toBe('0.12 mm')
     })
   })
 })
