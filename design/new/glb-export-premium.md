@@ -421,8 +421,9 @@ touches.
 
 Three readings decide the pair. **NORMAL, not POSITION, is where the bytes
 are**: P12→P8 at NORMAL 8 buys −4.8%, while N8→N6 at POSITION 12 buys −11.3%
-and moves no vertex at all, and NORMAL keeps paying (−5.8% more at N5, −5.7%
-more at N4) long after POSITION has stopped. **Past 10 bits POSITION stops
+and moves no vertex at all, and NORMAL keeps paying — another 5.8 and 5.7
+percentage points of the Reduced baseline at N5 and N4 — long after POSITION
+has stopped. **Past 10 bits POSITION stops
 paying**: P10→P9 is −1.0% for double the positional error, P9→P8 another
 −1.3% for double again — and that error is the figure the caption quotes, so
 POSITION is spent only where a rung needs a visibly coarser shape. And **the
@@ -431,7 +432,7 @@ pair is picked for separation as much as for size**: 164,616 B against
 against "75 mm", shading normals at 3.65° against 13.81°. Two options a user
 cannot tell apart would be worse UI than one.
 
-Where the ladder stops is the other half of the pick. P7 N3 is another −13.9%
+Where the ladder stops is the other half of the pick. P7 N3 is another −12.8%
 below Smooshed and is **not** offered: 34.29° of normal error is where shading
 stops describing the surface, so the model reads as blotchy rather than as
 coarse. Both rungs are verified through an encode→decode round trip — Squashed

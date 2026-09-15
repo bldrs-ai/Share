@@ -55,8 +55,8 @@
 //
 //   - NORMAL, not POSITION, is where the bytes are. P12→P8 at NORMAL 8 buys
 //     −4.8%; N8→N6 at POSITION 12 buys −11.3% and moves no vertex at all, and
-//     NORMAL keeps paying (−5.8% more at N5, −5.7% more at N4) long after
-//     POSITION has stopped.
+//     NORMAL keeps paying — another 5.8 and 5.7 percentage points of the
+//     Reduced baseline at N5 and N4 — long after POSITION has stopped.
 //   - Past 10 bits POSITION stops paying. P10→P9 is −1.0% for DOUBLE the
 //     positional error, P9→P8 another −1.3% for double again — and that error
 //     is the number the caption quotes to the user. POSITION is therefore
@@ -79,7 +79,7 @@
 // printed bound, `smooshed` max 64.204 mm / rms 10.739 mm against 74.72 mm.
 //
 // Where the ladder STOPS is the other half of the pick. P7 N3 is another
-// −13.9% below `smooshed`, and it is not offered: 34.29° of normal error is
+// −12.8% below `smooshed`, and it is not offered: 34.29° of normal error is
 // where shading stops describing the surface at all, so the model reads as
 // blotchy rather than as coarse. 13.81° is faceting — visible, which is what
 // "lossy" in the label is for, and still a lit model.
