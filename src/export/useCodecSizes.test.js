@@ -45,6 +45,9 @@ describe('useCodecSizes', () => {
     await waitFor(() => expect(result.current.sizesByCodec).toEqual(SIZES))
     await waitFor(() => expect(result.current.isMeasuring).toBe(false))
     expect(result.current.measuringCodec).toBeNull()
+    // And a sweep that got all the way through is NOT parked: the panel's
+    // status row says nothing at all once there is nothing left to do.
+    expect(result.current.isPaused).toBe(false)
   })
 
   it('starts nothing above the size threshold, and offers to on request', async () => {
@@ -54,14 +57,14 @@ describe('useCodecSizes', () => {
     uncompressedSizes.mockResolvedValue({withMetadata: AUTO_MEASURE_MAX_BYTES + 1})
     const {result} = renderHook(() => useCodecSizes(ARTIFACT, BALANCED))
 
-    await waitFor(() => expect(result.current.isSuppressed).toBe(true))
+    await waitFor(() => expect(result.current.isPaused).toBe(true))
     expect(artifactSizes).not.toHaveBeenCalled()
 
     await act(async () => {
       await result.current.start()
     })
 
-    expect(result.current.isSuppressed).toBe(false)
+    expect(result.current.isPaused).toBe(false)
     expect(result.current.sizesByCodec).toEqual(SIZES)
   })
 
@@ -144,6 +147,45 @@ describe('useCodecSizes', () => {
     expect(artifactSizes).not.toHaveBeenCalledWith(ARTIFACT, 'draco', false, 'balanced')
   })
 
+  it('parks a stopped sweep instead of leaving it unfinishable', async () => {
+    // Stop was a one-way door: `isMeasuring` went false and nothing replaced
+    // it, so the panel's status row — which is where BOTH its buttons live —
+    // unmounted, and a sweep two codecs into three could never be finished
+    // and never name a winner. Recovery meant reopening the dialog (#1852
+    // review). It parks in the same state the size threshold parks it in,
+    // because the way out is the same button.
+    let resolveMeshopt
+    artifactSizes.mockImplementation((artifact, mode) => {
+      if (mode === 'meshopt') {
+        return new Promise((resolve) => {
+          resolveMeshopt = resolve
+        })
+      }
+      return Promise.resolve(SIZES[mode])
+    })
+    const {result} = renderHook(() => useCodecSizes(ARTIFACT, BALANCED))
+    await waitFor(() => expect(result.current.measuringCodec).toBe('meshopt'))
+
+    act(() => result.current.stop())
+    await act(async () => {
+      resolveMeshopt(SIZES.meshopt)
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(result.current.isMeasuring).toBe(false))
+
+    expect(result.current.isPaused).toBe(true)
+
+    // …and asking again finishes the axis, which is the whole point of
+    // parking rather than vanishing.
+    artifactSizes.mockImplementation((artifact, mode) => Promise.resolve(SIZES[mode] ?? null))
+    await act(async () => {
+      await result.current.start()
+    })
+
+    expect(result.current.isPaused).toBe(false)
+    expect(result.current.sizesByCodec).toEqual(SIZES)
+  })
+
   it('drops a superseded sweep\'s figure instead of publishing it into the new rung', async () => {
     // The other half of the Stop contract, and the one that is a bug rather
     // than a feature. Both a Stop and a rung change abort the run, but only a
@@ -189,7 +231,7 @@ describe('useCodecSizes', () => {
     const {result} = renderHook(() => useCodecSizes(null, BALANCED))
 
     await waitFor(() => expect(result.current.isMeasuring).toBe(false))
-    expect(result.current.isSuppressed).toBe(false)
+    expect(result.current.isPaused).toBe(false)
     expect(artifactSizes).not.toHaveBeenCalled()
     expect(releaseCompressedExport).not.toHaveBeenCalled()
   })

@@ -102,7 +102,7 @@ export default function ExportSection() {
   // intuition: Draco cannot touch `EXT_mesh_gpu_instancing` accessors at all,
   // which is most of a batched-native artifact (#1850, `codecSizes.js`).
   const {
-    sizesByCodec, measuringCodec, isMeasuring, isStopping, isSuppressed, start: startSizing, stop: stopSizing,
+    sizesByCodec, measuringCodec, isMeasuring, isStopping, isPaused, start: startSizing, stop: stopSizing,
   } = useCodecSizes(glbArtifact, {quality, isPortable, isMetadataIncluded})
   const theme = useTheme()
   // Both download sizes, read from the artifact's header when the tab opens
@@ -224,7 +224,12 @@ export default function ExportSection() {
   // encoders are synchronous wasm with no abort — so once it is pressed the
   // line names the codec that is still finishing rather than claiming the
   // work stopped (`export/codecSizes.js`).
-  let sizingStatus = MSG_SIZES_TOO_BIG
+  // A parked sweep that has already published figures was stopped part-way;
+  // one that has published none never started, because the artifact is over
+  // the threshold. Derived rather than flagged: the hook's `isPaused` is one
+  // state with one way out, and which sentence to print is the only place the
+  // two entrances differ.
+  let sizingStatus = Object.keys(sizesByCodec).length > 0 ? MSG_SIZING_STOPPED : MSG_SIZES_TOO_BIG
   if (isStopping) {
     sizingStatus = measuringCodec ?
       `Finishing ${COMPRESSION_LABELS[measuringCodec]}…` :
@@ -437,8 +442,12 @@ export default function ExportSection() {
       {/* What the background sweep is doing, and the one control over it.
           Only rendered while there is something to say — a finished sweep on
           a small model is over before most users have read the label above,
-          and a permanent status line for it would be noise. */}
-      {(isMeasuring || isSuppressed) &&
+          and a permanent status line for it would be noise. A PARKED sweep
+          still has something to say, though, and it is the only way back:
+          hiding the row on a stopped-but-incomplete sweep took the Stop and
+          the Calculate buttons with it, leaving no route to a winner short of
+          reopening the dialog (#1852 review). */}
+      {(isMeasuring || isPaused) &&
        <Stack
          direction='row'
          justifyContent='space-between'
@@ -451,7 +460,7 @@ export default function ExportSection() {
          <Typography variant='caption' color='text.secondary' data-testid='export-codec-sizes-status'>
            {sizingStatus}
          </Typography>
-         {isSuppressed ?
+         {isPaused ?
            <Button
              size='small'
              sx={{textTransform: 'none'}}
@@ -601,4 +610,7 @@ const MSG_EXPORT_NEEDS_PRO = 'Exporting a GLB needs a Pro subscription'
 // that size is seconds of uninterruptible main-thread work, and the user
 // should be the one who asks for it (`export/codecSizes.js`).
 const MSG_SIZES_TOO_BIG = 'Codec sizes not measured'
+// A sweep the user stopped part-way: some codecs have figures, the rest never
+// ran, and the same "Calculate sizes" button restarts the axis.
+const MSG_SIZING_STOPPED = 'Codec sizing stopped'
 const MSG_LOGIN_TO_EXPORT = 'Log in to export this model as a GLB'

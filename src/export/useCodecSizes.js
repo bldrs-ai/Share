@@ -15,7 +15,7 @@
 // Design: design/new/glb-export-premium.md §4.4.
 import {useCallback, useEffect, useRef, useState} from 'react'
 import {uncompressedSizes} from './artifactSizes'
-import {measureCodecSizes, shouldAutoMeasure} from './codecSizes'
+import {isSweepComplete, measureCodecSizes, shouldAutoMeasure} from './codecSizes'
 
 
 /**
@@ -25,7 +25,7 @@ import {measureCodecSizes, shouldAutoMeasure} from './codecSizes'
  * `isMetadataIncluded` is deliberately NOT a restart axis: one estimate
  * produces both sides, so flipping that toggle moves every figure without a
  * single re-encode, exactly as it does on the size line. It is passed in only
- * so the run's final release keeps the codec the panel will select.
+ * so the run's releases keep the codec the panel will select.
  *
  * @param {?object} artifact The store's `glbArtifact` slot
  * @param {object} options
@@ -37,7 +37,7 @@ import {measureCodecSizes, shouldAutoMeasure} from './codecSizes'
  *   measuringCodec: ?string,
  *   isMeasuring: boolean,
  *   isStopping: boolean,
- *   isSuppressed: boolean,
+ *   isPaused: boolean,
  *   start: Function,
  *   stop: Function,
  * }}
@@ -47,8 +47,15 @@ export default function useCodecSizes(artifact, {quality, isPortable, isMetadata
   const [measuringCodec, setMeasuringCodec] = useState(null)
   const [isMeasuring, setIsMeasuring] = useState(false)
   const [isStopping, setIsStopping] = useState(false)
-  // The sweep was held back by the size threshold and is waiting to be asked.
-  const [isSuppressed, setIsSuppressed] = useState(false)
+  // The sweep is parked with codecs still unmeasured and will only go on if
+  // it is asked to. Two ways in, and the panel treats them the same because
+  // the way OUT is the same: held back by the size threshold before it ever
+  // started, or stopped by the user part-way through. Written as "suppressed"
+  // (threshold only) this state was a one-way door — Stop cleared it, the
+  // status row it gates unmounted with the Stop and the Calculate buttons
+  // inside it, and a partly-measured sweep could never be finished or its
+  // winner selected (#1852 review).
+  const [isPaused, setIsPaused] = useState(false)
 
   const abortRef = useRef(null)
   // What the RUN needs but must not restart on. A ref rather than a
@@ -72,11 +79,16 @@ export default function useCodecSizes(artifact, {quality, isPortable, isMetadata
     const controller = new AbortController()
     abortRef.current?.abort()
     abortRef.current = controller
-    setIsSuppressed(false)
+    setIsPaused(false)
     setIsMeasuring(true)
     setIsStopping(false)
+    // What the run got through, so the `finally` can tell a sweep that
+    // finished from one a Stop cut short. `sizesByCodec` cannot answer that
+    // here: it is this closure's stale copy, and reading it through a
+    // functional setState would mean a side effect inside an updater.
+    let measured = {}
     try {
-      await measureCodecSizes(artifact, {
+      measured = await measureCodecSizes(artifact, {
         quality,
         isPortable,
         isMetadataIncluded: metadataRef.current,
@@ -110,6 +122,11 @@ export default function useCodecSizes(artifact, {quality, isPortable, isMetadata
       if (abortRef.current === controller) {
         setIsMeasuring(false)
         setIsStopping(false)
+        // Park rather than vanish. `start` re-runs the whole axis from
+        // scratch — the released cells have to be re-encoded either way
+        // (`codecSizes.js`) — which is why this is the same state, and the
+        // same button, as the threshold's.
+        setIsPaused(!isSweepComplete(measured))
       }
     }
   }, [artifact, quality, isPortable])
@@ -127,7 +144,7 @@ export default function useCodecSizes(artifact, {quality, isPortable, isMetadata
     setMeasuringCodec(null)
     setIsMeasuring(false)
     setIsStopping(false)
-    setIsSuppressed(false)
+    setIsPaused(false)
     // The threshold reads the artifact's own header — the same cheap,
     // already-cached read the uncompressed size line makes — so deciding NOT
     // to sweep costs nothing itself.
@@ -138,7 +155,7 @@ export default function useCodecSizes(artifact, {quality, isPortable, isMetadata
       if (shouldAutoMeasure(sizes?.withMetadata ?? null)) {
         run()
       } else if (artifact && sizes) {
-        setIsSuppressed(true)
+        setIsPaused(true)
       }
     })
     return () => {
@@ -147,5 +164,5 @@ export default function useCodecSizes(artifact, {quality, isPortable, isMetadata
     }
   }, [artifact, run])
 
-  return {sizesByCodec, measuringCodec, isMeasuring, isStopping, isSuppressed, start: run, stop}
+  return {sizesByCodec, measuringCodec, isMeasuring, isStopping, isPaused, start: run, stop}
 }

@@ -74,7 +74,7 @@ const NO_CODEC_SIZES = {
   measuringCodec: null,
   isMeasuring: false,
   isStopping: false,
-  isSuppressed: false,
+  isPaused: false,
   start: jest.fn(),
   stop: jest.fn(),
 }
@@ -851,7 +851,7 @@ describe('ExportSection', () => {
 
     it('offers to calculate rather than starting on a huge artifact', async () => {
       const start = jest.fn()
-      sweepState({isSuppressed: true, start})
+      sweepState({isPaused: true, start})
       await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
       const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
       await act(async () => {})
@@ -892,6 +892,31 @@ describe('ExportSection', () => {
       await act(async () => {})
 
       expect(queryByTestId('export-codec-sizes')).toBeNull()
+    })
+
+    it('keeps offering to finish a sweep the user stopped part-way', async () => {
+      // The counterpart to the test above, and the one the row's visibility
+      // used to get wrong: nothing running, nothing suppressed by the
+      // threshold, so the whole row unmounted — taking Stop and Calculate
+      // sizes with it — while two codecs of three had figures and no winner
+      // could ever be named. Reopening the dialog was the only way back
+      // (#1852 review).
+      const start = jest.fn()
+      sweepState({
+        sizesByCodec: {none: CODEC_SIZES.none, meshopt: CODEC_SIZES.meshopt},
+        isPaused: true,
+        start,
+      })
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      // Said as what it is: some figures are in, the rest never ran.
+      expect(getByTestId('export-codec-sizes-status')).toHaveTextContent('Codec sizing stopped')
+
+      fireEvent.click(getByTestId('export-codec-sizes-start'))
+
+      expect(start).toHaveBeenCalled()
     })
   })
 })
