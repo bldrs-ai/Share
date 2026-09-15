@@ -1,7 +1,7 @@
 import esbuild from 'esbuild'
 import * as path from 'node:path'
 import {fileURLToPath} from 'url'
-import config from './common.js'
+import config, {staticCopyPlugin} from './common.js'
 import {createProxyServer} from './proxy.js'
 import {log} from './utils.js'
 import defines from './defines.js'
@@ -11,9 +11,14 @@ const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../')
 const indexFile = path.resolve(repoRoot, 'src', 'index.jsx')
 const subscribeFile = path.resolve(repoRoot, 'src', 'subscribe', 'index.jsx')
 
-// Add entry points for watch mode to know what to rebuild
+// Add entry points for watch mode to know what to rebuild.
+//
+// The dev server serves out of `docs/`, so this build owns the `public/`
+// asset copy the way `build.js`'s main build does — it is the only build
+// here, so nothing races it. See `plugins.js#makeStaticCopyPlugin`.
 const serveConfig = {
   ...config,
+  plugins: [...config.plugins, staticCopyPlugin],
   entryPoints: [indexFile, subscribeFile],
 }
 

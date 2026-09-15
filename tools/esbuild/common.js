@@ -1,13 +1,18 @@
 import * as path from 'node:path'
 import {fileURLToPath} from 'url'
 import defines from './defines.js'
-import makePlugins from './plugins.js'
+import makePlugins, {makeStaticCopyPlugin} from './plugins.js'
 import {log} from './utils.js'
 
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../')
 const buildDir = path.resolve(repoRoot, 'docs')
 const plugins = makePlugins(repoRoot, buildDir)
+
+// Owned by whichever build emits into `docs/`, rather than shared — the
+// shared array is spread into every concurrent build and they would race
+// each other's `mkdir`. See `makeStaticCopyPlugin`.
+export const staticCopyPlugin = makeStaticCopyPlugin(repoRoot, buildDir)
 
 log('using defines\n', defines)
 
