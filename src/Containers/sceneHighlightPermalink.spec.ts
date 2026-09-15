@@ -249,7 +249,7 @@ describeMobileAndDesktop('Element-path permalink on a digit-prefixed filename', 
     await waitForGlbLog(glbLogs, 'cache HIT', CACHE_HIT_LOG_TIMEOUT_MS)
     // Without this the test would pass on a merged hit too, which is the whole
     // thing it exists to distinguish from the leg above.
-    await waitForGlbLog(glbLogs, 'hydrated batched-native', CACHE_HIT_LOG_TIMEOUT_MS)
+    await waitForGlbLog(glbLogs, 'hydrated instance-table', CACHE_HIT_LOG_TIMEOUT_MS)
     await page.waitForTimeout(SETTLE_MS)
 
     const hit = await page.evaluate(() => {
