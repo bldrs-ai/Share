@@ -29,7 +29,13 @@ import {isBldrsExtension} from '../loader/glbArtifactSize'
 import {loadDracoDecoder, loadDracoEncoder} from '../loader/glbCompress'
 import {stripGlbBldrs} from '../loader/glbStrip'
 import {injectGlbExtensions, parseGlb} from '../loader/injectGlbExtensions'
-import {QUALITY_DEFAULT, formatMaxShift, maxPositionShift, qualitySettings} from './exportQuality'
+import {
+  QUALITY_DEFAULT,
+  formatMaxShift,
+  isDracoOnlyRung,
+  maxPositionShift,
+  qualitySettings,
+} from './exportQuality'
 
 
 /** No codec: the GLB opens in every viewer, which is why it is the default. */
@@ -282,6 +288,12 @@ async function transformGlb(glbBytes, mode, preserveTriangleOrder, sourceCodecs 
  * NORMAL/TANGENT, so its cost is shading, and there is no millimetre figure
  * to give.
  *
+ * Meshopt also runs OUT of rungs before Draco does — its encoder surface is
+ * two values and Balanced already spends the coarser one — so below Balanced
+ * the caption says that outright. Otherwise the coarse rungs read as a
+ * promise of a smaller file beside a size line that does not move
+ * (`exportQuality.js#isDracoOnlyRung`).
+ *
  * @param {string} mode One of `COMPRESSION_MODES`
  * @param {string} quality One of `exportQuality.js`'s `QUALITY_LEVELS`
  * @param {?number} positionRange From
@@ -291,9 +303,12 @@ async function transformGlb(glbBytes, mode, preserveTriangleOrder, sourceCodecs 
  */
 export function compressionFidelityCaption(mode, quality, positionRange) {
   if (mode === COMPRESSION_MESHOPT) {
-    return qualitySettings(quality).isMeshoptFiltered ?
-      'geometry exact; shading normals rounded' :
-      'geometry and shading normals exact'
+    if (!qualitySettings(quality).isMeshoptFiltered) {
+      return 'geometry and shading normals exact'
+    }
+    return isDracoOnlyRung(quality) ?
+      'geometry exact; shading normals rounded — Meshopt has no coarser setting' :
+      'geometry exact; shading normals rounded'
   }
   if (mode !== COMPRESSION_DRACO) {
     return null

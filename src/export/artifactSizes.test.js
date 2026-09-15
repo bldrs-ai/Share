@@ -405,9 +405,9 @@ describe('artifactSizes', () => {
 
     it('drops every codec measured at the rung the user left, portable and native', async () => {
       // #1848 tripled the compressed key space, and each cell holds two whole
-      // copies of the export — so reading the three rungs' captions retained
-      // about six copies of the model. The rung being left is the one nothing
-      // reads again.
+      // copies of the export — so reading every rung's caption retained two
+      // copies of the model per rung, ten at #1852's five. The rung being
+      // left is the one nothing reads again.
       const artifact = {...ARTIFACT}
       for (const isPortable of [false, true]) {
         for (const mode of ['meshopt', 'draco']) {

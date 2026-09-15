@@ -125,7 +125,7 @@ function chooseCompression(mode) {
 /**
  * Pick a Quality rung the same way (#1848).
  *
- * @param {string} level 'best' | 'balanced' | 'smallest'
+ * @param {string} level 'best' | 'balanced' | 'smallest' | 'squashed' | 'smooshed'
  */
 function chooseQuality(level) {
   fireEvent.mouseDown(within(screen.getByTestId('export-quality')).getByRole('combobox'))
@@ -286,14 +286,21 @@ describe('ExportSection', () => {
     expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(MESHOPT_WITH_METADATA_BYTES))
   })
 
-  it('offers the three compression choices, None selected', async () => {
+  it('offers the three compression choices, None selected, under "Compression type"', async () => {
     // Exclusive, and defaulting to the file that opens everywhere: Meshopt
     // and Draco both need the matching decoder registered in whatever the
     // user opens the download with (#1842).
     await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
-    const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+    const {getByLabelText, getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
     expect(getByTestId('export-compression')).toHaveTextContent('None')
+    // "Compression type", not "Compression" (#1852): the row below it is
+    // labelled Quality, and two bare nouns read as one setting split in half
+    // rather than as a codec CHOICE followed by how hard to run it. The
+    // accessible name has to move with the visible one, or a screen reader
+    // gets the pre-#1852 wording.
+    expect(getByTestId('export-compression-row')).toHaveTextContent('Compression type')
+    expect(getByLabelText('Compression type')).toBeInTheDocument()
   })
 
   it('carries the compression choice into the export', async () => {
@@ -615,13 +622,14 @@ describe('ExportSection', () => {
         .not.toHaveAttribute('aria-disabled')
     })
 
-    it('names the rungs by fidelity, because the size ordering is not guaranteed', async () => {
+    it('names the rungs by fidelity, with a size hint that is never a superlative', async () => {
       // `exportQuality.js` measured the coarse rung HEAVIER than Balanced on
-      // some models (+0.5% under SEQUENTIAL on Momentum, +2.4% on an
-      // instance-heavy synthetic), so "Smallest" on the control would be a
-      // promise the encoders don't keep. The id stays `smallest` — it is
-      // written into export-history rows and estimate keys — but what the
-      // user reads names fidelity and claims no ordering.
+      // some models (+0.5% under SEQUENTIAL on Momentum, +21.5% on the small
+      // jest fixture), so the parenthetical the owner chose in #1852 is a
+      // hint — "small", read against the real measured bytes on the codec
+      // dropdown — and never "Smallest", which would be an ordering the
+      // encoders don't keep. The id stays `smallest`: it is written into
+      // export-history rows and estimate keys.
       settleSizes()
       await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
       const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
@@ -631,16 +639,86 @@ describe('ExportSection', () => {
       chooseQuality('smallest')
       await act(async () => {})
 
-      expect(getByTestId('export-quality')).toHaveTextContent('Reduced')
-      expect(getByTestId('export-quality')).not.toHaveTextContent(/small/i)
+      expect(getByTestId('export-quality')).toHaveTextContent('Reduced (small)')
+      expect(getByTestId('export-quality')).not.toHaveTextContent(/smallest/i)
+
+      chooseQuality('squashed')
+      await act(async () => {})
+
+      expect(getByTestId('export-quality')).toHaveTextContent('Squashed (lossy, tiny)')
+      expect(getByTestId('export-quality')).not.toHaveTextContent(/tiniest/i)
+
+      chooseQuality('smooshed')
+      await act(async () => {})
+
+      expect(getByTestId('export-quality')).toHaveTextContent('Smooshed (lossy, micro)')
     })
 
-    it('hands back the rung it left, so comparing three does not retain six copies', async () => {
+    it('offers both lossy rungs, each carrying its own millimetre figure', async () => {
+      // The two rungs #1852 adds: POSITION 10 / NORMAL 6 and POSITION 8 /
+      // NORMAL 4, both view-only files. Their whole visible difference in this
+      // panel is the caption, so those figures have to GROW down the ladder —
+      // a second lossy entry quoting the first one's 19 mm would be a rung in
+      // name only, and two options a user cannot tell apart are worse than
+      // one.
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      chooseCompression('draco')
+      chooseQuality('squashed')
+      await act(async () => {})
+
+      expect(getByTestId('export-quality-caption')).toHaveTextContent('parts may move up to 19 mm')
+      expect(artifactSizes)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'squashed')
+      expect(getByTestId('export-size'))
+        .toHaveAttribute('data-estimate-key', 'native|draco|squashed|meta')
+
+      chooseQuality('smooshed')
+      await act(async () => {})
+
+      expect(getByTestId('export-quality-caption')).toHaveTextContent('parts may move up to 75 mm')
+      expect(artifactSizes)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'smooshed')
+      expect(getByTestId('export-size'))
+        .toHaveAttribute('data-estimate-key', 'native|draco|smooshed|meta')
+    })
+
+    it('says outright that the coarse rungs do not reach Meshopt', async () => {
+      // They re-encode to Balanced's file byte for byte — Meshopt's encoder
+      // surface is `{method}` with two values and Balanced already spends the
+      // coarser one (`exportQuality.js#isDracoOnlyRung`). The size line will
+      // sit still for all three rungs under Balanced; without this sentence
+      // the user reads that as a broken control rather than as the codec
+      // having nothing more to give (#1852).
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      chooseCompression('meshopt')
+      chooseQuality('smooshed')
+      await act(async () => {})
+
+      expect(getByTestId('export-quality-caption'))
+        .toHaveTextContent('Meshopt has no coarser setting')
+
+      // Draco is where the rung does land, so it gets no such sentence.
+      chooseCompression('draco')
+      await act(async () => {})
+
+      expect(getByTestId('export-quality-caption'))
+        .not.toHaveTextContent('Meshopt has no coarser setting')
+    })
+
+    it('hands back the rung it left, so comparing rungs does not retain a copy each', async () => {
       // Each compressed cell holds two whole copies of the export and #1848
-      // split them three ways by rung, so clicking through the rungs to read
-      // their captions — the interaction this control exists for — would pin
-      // about six copies of the model for the life of the artifact. Nothing
-      // reads the rung just left (#1852 review).
+      // split them by rung, so clicking through all five to read their
+      // captions — the interaction this control exists for — would pin about
+      // ten copies of the model for the life of the artifact. Nothing reads
+      // the rung just left (#1852 review).
       settleSizes()
       await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
       render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})

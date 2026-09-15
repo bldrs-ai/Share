@@ -5,16 +5,22 @@
 // for everything else. The measured headroom behind those defaults is large
 // enough to be worth a control, but the two codecs' knobs do not line up: a
 // shared "12 bits" would mean two different things, and for Meshopt it would
-// mean nothing at all. So the control is three named rungs and this module is
+// mean nothing at all. So the control is five named rungs and this module is
 // the single table that says what each rung asks of each encoder.
 //
-// The rungs are FIDELITY rungs, not size rungs. Nothing here promises that
-// the coarsest rung weighs less than Best — measured, it usually does, but
-// Draco's speed pair is an encoder-effort knob whose payoff is model-shaped
-// (below), and the panel shows the real measured size for the current
-// selection anyway. Claiming a monotone ladder in the UI would be a promise
-// this module cannot keep, which is why the label the user reads is
-// "Reduced" and not "Smallest" — see `QUALITY_LABELS`.
+// The rungs are a FIDELITY ladder, and the parentheticals on their labels —
+// larger / medium / small / tiny / micro — are a HINT about where that lands
+// in bytes, not a guarantee. The hint holds on EDGEBREAKER, which is what the
+// default batched-native artifact takes (below: −8.6%, −22.1%, −34.2%,
+// −46.1%, each against the shipped setting before there was a control). It
+// does not hold universally: Draco's speed pair is an encoder-effort knob
+// whose payoff is model-shaped, and under SEQUENTIAL Balanced measured +0.5%
+// LARGER than Best on Momentum and +21.5% on the small jest fixture. So the
+// labels are read against the real per-codec byte counts the dropdown shows
+// beside them (`export/codecSizes.js`), which are measured, not predicted —
+// and no test here asserts a monotone ladder, because there is not one. What
+// the ladder IS monotone in is fidelity, which is the axis the caption under
+// the size line quantifies.
 //
 // Measured on `src/tests/fixtures/Momentum.ifc` → GLB (1,959,196 B, 43
 // primitives, 71,307 triangles), through the same `ALL_EXTENSIONS` IO and the
@@ -26,6 +32,72 @@
 //   Draco EDGEBREAKER, speeds 0+0              228,652 B    −8.6%
 //   Draco EDGEBREAKER, POSITION:12 NORMAL:8
 //     + speeds 0+0                             194,932 B   −22.1%
+//   Draco EDGEBREAKER, POSITION:10 NORMAL:6
+//     + speeds 0+0                             164,616 B   −34.2%
+//   Draco EDGEBREAKER, POSITION:8 NORMAL:4
+//     + speeds 0+0                             134,748 B   −46.1%
+//
+// The two lossy rungs' bits were swept rather than guessed (#1852). Against
+// Reduced, on the same model and the same encoders, EDGEBREAKER / SEQUENTIAL:
+//
+//   P12 N8 (Reduced)  194,932 / 643,520 B     bound  4.65 mm, nrm  0.91°
+//   P12 N6            172,984 / 616,896 B   −11.3% / −4.1%, SAME bound
+//   P10 N6            164,616 / 591,232 B   −15.6% / −8.1%, bound 18.62 mm
+//   P9  N6            162,480 / 580,140 B   −16.6% / −9.8%, bound 37.28 mm
+//   P10 N5            153,236 / 578,424 B   −21.4% / −10.1%, nrm  6.77°
+//   P8  N5            147,456 / 557,472 B   −24.4% / −13.4%, bound 74.72 mm
+//   P10 N4            142,052 / 565,636 B   −27.1% / −12.1%, nrm 13.81°
+//   P8  N4            134,748 / 544,684 B   −30.9% / −15.4%, bound 74.72 mm
+//   P7  N3            117,496 / 521,812 B   −39.7% / −18.9%, nrm 34.29°
+//   P2  N2             85,700 / 481,748 B   −56.0% / −25.1%, the floor
+//
+// Three readings decide the pair, and the first two are counter-intuitive:
+//
+//   - NORMAL, not POSITION, is where the bytes are. P12→P8 at NORMAL 8 buys
+//     −4.8%; N8→N6 at POSITION 12 buys −11.3% and moves no vertex at all, and
+//     NORMAL keeps paying (−5.8% more at N5, −5.7% more at N4) long after
+//     POSITION has stopped.
+//   - Past 10 bits POSITION stops paying. P10→P9 is −1.0% for DOUBLE the
+//     positional error, P9→P8 another −1.3% for double again — and that error
+//     is the number the caption quotes to the user. POSITION is therefore
+//     spent only where a rung needs a visibly coarser SHAPE, not for bytes.
+//   - The floor is connectivity. At P2 N2 — geometry destroyed — EDGEBREAKER
+//     still needs 85,700 B of the original 194,932. Everything below about
+//     −56% on this model is triangles, which no bit count touches. That is
+//     the honest ceiling on this whole axis and the reason "micro" is a
+//     relative word here; the decimation sub-issue of #1831 is what would
+//     move the floor itself, and it is off the table while `BLDRS_face_ids`
+//     indexes identity by triangle position.
+//
+// So P10 N6 for `squashed` and P8 N4 for `smooshed`. The pair is chosen for
+// SEPARATION as much as for size — two options a user cannot tell apart are
+// worse than one — and they separate on all three things the panel shows:
+// 164,616 B against 134,748 B (the second is −18.1% below the first), a
+// caption reading "19 mm" against "75 mm", and shading normals at 3.65° max
+// against 13.81°. Both verified through an encode→decode round trip:
+// `squashed` positions max 10.645 mm / rms 2.023 mm against its 18.62 mm
+// printed bound, `smooshed` max 64.204 mm / rms 10.739 mm against 74.72 mm.
+//
+// Where the ladder STOPS is the other half of the pick. P7 N3 is another
+// −13.9% below `smooshed`, and it is not offered: 34.29° of normal error is
+// where shading stops describing the surface at all, so the model reads as
+// blotchy rather than as coarse. 13.81° is faceting — visible, which is what
+// "lossy" in the label is for, and still a lit model.
+//
+// `public/index.ifc` → GLB is the second model and shows the other limit: at
+// 6,800 B it is JSON and header, so EVERY rung lands within 3% of every other
+// (P12 N8 1,252 B, P10 N6 1,224 B, P8 N4 1,212 B) while the printed bound goes
+// 18.19 mm → 72.80 mm → 292.07 mm over its single 86 m primitive. On a model
+// that small the lossy rungs are all cost and no benefit — which is exactly
+// what the measured size beside each codec in the dropdown tells the user,
+// and the reason this module quotes no percentage in the UI.
+//
+// `TEX_COORD` and `COLOR` were swept too and are not named: Share's writers
+// emit POSITION, NORMAL, `_EXPRESSID` and `_INSTANCEID` and nothing else
+// (`viewer/ifc/flatMeshToBufferGeometry.js`, `batchedSubset.js`), so both
+// buckets measured byte-for-byte identical on both models. A key that cannot
+// move a byte on any artifact Share writes is a key the allowlist has to
+// carry for nothing.
 //
 // Two results that shape the table and are easy to get wrong:
 //
@@ -37,7 +109,7 @@
 //     under SEQUENTIAL, and +2.4% on an instance-heavy synthetic. It is a
 //     clear win on EDGEBREAKER over real building geometry (−8.6% on
 //     Momentum, −6.0% on `public/index.ifc`), which is what the batched-native
-//     default artifact takes, so it rides on Balanced and the coarse rung —
+//     default artifact takes, so it rides on Balanced and both coarse rungs —
 //     but see the note above about not promising a ladder.
 //
 // What is deliberately NOT here, each an owner decision recorded in #1848 §4:
@@ -63,6 +135,19 @@
 //     quality: SEQUENTIAL is what preserves the triangle order
 //     `BLDRS_face_ids` indexes identity by, and a rung that "also picks
 //     edgebreaker for smaller files" would silently break re-import picking.
+//   - Anything at all for MESHOPT below `FILTER`. `EXTMeshoptCompression`'s
+//     entire encoder surface in the pinned 4.3.0 is `{method: QUANTIZE |
+//     FILTER}` — the filter each attribute gets and the bit depth it gets it
+//     at are hard-coded by attribute semantic in the extension's own
+//     `getMeshoptFilter` (POSITION and TEXCOORD_0 → no filter, NORMAL and
+//     TANGENT → octahedral at 8 bits), with no option plumbed through. What
+//     `gltfpack` would reach for next is `quantize()`, which is in
+//     `@gltf-transform/functions` and reorders geometry, so it is off the
+//     table for `BLDRS_face_ids` (`glbCompression.js#transformGlb`). The
+//     consequence is a real one and the UI says it rather than hiding it:
+//     Reduced and the two rungs below it ask Meshopt for exactly what
+//     Balanced asks for and produce exactly Balanced's bytes — see
+//     `isDracoOnlyRung`.
 //
 // Design: design/new/glb-export-premium.md §4.3.
 
@@ -70,28 +155,46 @@
 export const QUALITY_BEST = 'best'
 /** Highest fidelity, encoder tuned for size. The default. */
 export const QUALITY_BALANCED = 'balanced'
-/** Fewer position/normal bits — the coarsest rung offered. */
+/** Fewer position/normal bits, at a millimetre cost the caption quotes. */
 export const QUALITY_SMALLEST = 'smallest'
+/** Coarser still: a view-only file, with loss the user is meant to see. */
+export const QUALITY_SQUASHED = 'squashed'
+/** The coarsest quantization that still leaves a lit, recognisable model. */
+export const QUALITY_SMOOSHED = 'smooshed'
 
 /** The choices the Export tab offers, in the order it offers them. */
-export const QUALITY_LEVELS = [QUALITY_BEST, QUALITY_BALANCED, QUALITY_SMALLEST]
+export const QUALITY_LEVELS = [
+  QUALITY_BEST,
+  QUALITY_BALANCED,
+  QUALITY_SMALLEST,
+  QUALITY_SQUASHED,
+  QUALITY_SMOOSHED,
+]
 
 /**
  * What each choice is called on the control.
  *
- * "Reduced", not "Smallest", and the divergence from the id is deliberate:
- * the id is written into export-history rows and estimate cache keys and has
- * to keep meaning the same thing across a rename, while the LABEL is a claim
- * made to the user. The module doc's own measurements say the coarse rung is
- * not guaranteed to weigh less (+0.5% under SEQUENTIAL on Momentum, +2.4% on
- * an instance-heavy synthetic), so a superlative about size is a promise the
- * table cannot keep. "Reduced" names what the rung really does change —
- * fidelity — which is also the axis the caption underneath quantifies.
+ * Two names for one rung, and the divergence is deliberate: the ID is written
+ * into export-history rows and estimate cache keys and has to keep meaning the
+ * same thing across a rename, while the LABEL is a claim made to the user.
+ * So `smallest` reads "Reduced (small)" and `squashed` reads
+ * "Squashed (lossy, tiny)"; renaming either id would break rows already
+ * recorded.
+ *
+ * The parenthetical is a size HINT, not a guarantee — the module doc above has
+ * the SEQUENTIAL counter-examples, and the dropdown shows each codec's real
+ * measured bytes beside it. What the words do promise, and what IS monotone,
+ * is how much of the model's geometry survives. The bottom two carry "lossy"
+ * in the same `<name> (lossy, <size>)` shape so the pair reads as one step
+ * past the top three rather than as two unrelated options — and so that the
+ * word a user skims is the one that costs them something.
  */
 export const QUALITY_LABELS = {
-  [QUALITY_BEST]: 'Best',
-  [QUALITY_BALANCED]: 'Balanced',
-  [QUALITY_SMALLEST]: 'Reduced',
+  [QUALITY_BEST]: 'Best (larger)',
+  [QUALITY_BALANCED]: 'Balanced (medium)',
+  [QUALITY_SMALLEST]: 'Reduced (small)',
+  [QUALITY_SQUASHED]: 'Squashed (lossy, tiny)',
+  [QUALITY_SMOOSHED]: 'Smooshed (lossy, micro)',
 }
 
 /**
@@ -154,12 +257,28 @@ const QUALITY_SETTINGS = {
     draco: {encodeSpeed: 0, decodeSpeed: 0, quantizationBits: {POSITION: 12, NORMAL: 8}},
     isMeshoptFiltered: true,
   },
+  // The two lossy rungs, swept rather than guessed — the table in the module
+  // doc above is the whole sweep and says why these four numbers and not the
+  // coarser pairs that measured smaller. They are picked as a PAIR, for
+  // separation: −15.6% and −30.9% against Reduced on Momentum EDGEBREAKER,
+  // with printed bounds of 19 mm and 75 mm and shading normals at 3.65° and
+  // 13.81°, so a user can see why both exist. `isMeshoptFiltered` repeats
+  // Reduced's value on both because there is nothing coarser to ask Meshopt
+  // for; `isDracoOnlyRung` is what makes the panel say so.
+  [QUALITY_SQUASHED]: {
+    draco: {encodeSpeed: 0, decodeSpeed: 0, quantizationBits: {POSITION: 10, NORMAL: 6}},
+    isMeshoptFiltered: true,
+  },
+  [QUALITY_SMOOSHED]: {
+    draco: {encodeSpeed: 0, decodeSpeed: 0, quantizationBits: {POSITION: 8, NORMAL: 4}},
+    isMeshoptFiltered: true,
+  },
 }
 
 
 /**
  * @param {*} quality
- * @return {boolean} true for one of the three rungs the UI offers
+ * @return {boolean} true for one of the five rungs the UI offers
  */
 export function isQualityLevel(quality) {
   return QUALITY_LEVELS.includes(quality)
@@ -179,6 +298,33 @@ export function isQualityLevel(quality) {
  */
 export function qualitySettings(quality) {
   return QUALITY_SETTINGS[isQualityLevel(quality) ? quality : QUALITY_DEFAULT]
+}
+
+
+/**
+ * Whether this rung asks MESHOPT for nothing a rung above it did not already
+ * ask for — so under Meshopt it produces that rung's file, byte for byte.
+ *
+ * It is true of Reduced and of the two rungs below it, and it is a property
+ * of the library rather than of this table: `EXTMeshoptCompression`'s whole encoder
+ * surface in the pinned `@gltf-transform` 4.3.0 is `{method}`, with two
+ * values, and Balanced already spends the coarser one (see the module doc's
+ * last "deliberately NOT here" bullet). The panel says so in the fidelity
+ * caption rather than shipping a rung that silently changes nothing — the
+ * codec sweep already shows the real per-codec bytes, so the user would SEE
+ * Meshopt not moving, but an unexplained no-op teaches people the control is
+ * broken.
+ *
+ * Derived from the table, not hard-coded to a rung name, so that a future
+ * rung which does reach a new Meshopt setting stops claiming this by itself.
+ *
+ * @param {string} quality One of `QUALITY_LEVELS`
+ * @return {boolean}
+ */
+export function isDracoOnlyRung(quality) {
+  const level = isQualityLevel(quality) ? quality : QUALITY_DEFAULT
+  const {isMeshoptFiltered} = QUALITY_SETTINGS[level]
+  return QUALITY_LEVELS.find((l) => QUALITY_SETTINGS[l].isMeshoptFiltered === isMeshoptFiltered) !== level
 }
 
 

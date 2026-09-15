@@ -152,9 +152,9 @@ export default function ExportSection() {
   useEffect(() => {
     // Hand back the rung the user just left. Every rung is a different file,
     // so each holds its own compressed cells — two whole copies of the export
-    // apiece — and clicking through the three to read their millimetre
+    // apiece — and clicking through all five to read their millimetre
     // captions, which is what this control is for, would otherwise retain
-    // about six copies for the life of the artifact
+    // about ten copies for the life of the artifact
     // (`export/artifactSizes.js#releaseQualityExports`). The rung being left
     // is the one cell nothing is about to read again, so the eviction point
     // is known exactly and needs no policy.
@@ -410,9 +410,10 @@ export default function ExportSection() {
         flexWrap='wrap'
         gap={1}
         sx={{mt: '1em'}}
+        data-testid='export-compression-row'
       >
         <Box>
-          <Typography variant='body2'>Compression</Typography>
+          <Typography variant='body2'>Compression type</Typography>
           <Typography variant='caption' color='text.secondary'>needs a matching decoder</Typography>
         </Box>
         {/* A dropdown, not a toggle group: three side-by-side buttons were
@@ -423,7 +424,7 @@ export default function ExportSection() {
           value={compression}
           size='small'
           onChange={(event) => setCompression(event.target.value)}
-          inputProps={{'aria-label': 'Compression'}}
+          inputProps={{'aria-label': 'Compression type'}}
           // The CLOSED control shows the bare label, never the size. The
           // menu is where the comparison happens and where there is room for
           // it; at 390px "Meshopt · 1.3 MB" would either ellipsize away the
@@ -504,10 +505,12 @@ export default function ExportSection() {
           pick one. Presets rather than bit counts: the bit count is
           meaningless to a CAD user and dangerous when wrong, and the two
           codecs' knobs don't line up, so one number would mean two different
-          things (#1848 §5). The rung names and this sub-caption are about
-          FIDELITY, never size: `exportQuality.js` measured the coarse rung
-          heavier than Balanced on some models, so a "Smallest" here would
-          promise an ordering the encoders don't keep. */}
+          things (#1848 §5). The rung names are FIDELITY names with a size
+          HINT in parentheses — larger / medium / small / tiny — and the hint
+          is deliberately not a superlative: `exportQuality.js` measured the
+          coarse rung heavier than Balanced under SEQUENTIAL, so "Smallest"
+          would promise an ordering the encoders don't keep while "small"
+          reads against the real per-codec bytes on the dropdown above. */}
       <Stack
         direction='row'
         justifyContent='space-between'
