@@ -45,7 +45,12 @@
 //   - `quantizationVolume`. Stays at `@gltf-transform`'s `'mesh'` default.
 //     `'scene'` measured 4× worse RMS error at the same bit count, and the
 //     penalty grows with scene-extent ÷ part-extent — worst exactly on the
-//     large-board-with-small-parts models this would be sold on.
+//     large-board-with-small-parts models this would be sold on. `'mesh'` is
+//     also the volume `maxPositionShift` below computes the caption's
+//     millimetres in, so a rung that reached for `'scene'` would understate
+//     its own bound by that same ratio. `exportQuality.test.js` guards the
+//     table with a key ALLOWLIST rather than a ban list for that reason —
+//     every key here is spread straight into `setEncoderOptions`.
 //   - `quantizationBits.GENERIC`. `_EXPRESSID`/`_INSTANCEID` map to Draco's
 //     GENERIC bucket, and are safe today only because Share writes them as
 //     `Uint32Array` (`viewer/ifc/batchedToMergedMesh.js`), which takes Draco's

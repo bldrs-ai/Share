@@ -86,13 +86,33 @@ describe('exportQuality', () => {
       }
     })
 
-    it('never names the Draco method, which is derived from the layout', () => {
-      // SEQUENTIAL is what preserves the triangle order `BLDRS_face_ids`
-      // indexes identity by. A rung carrying a `method` would be spread into
-      // the encoder options beside the derived one, and whichever landed last
-      // would win — so the table must not carry one at all.
+    it('names nothing but the three encoder options a rung is allowed to set', () => {
+      // An ALLOWLIST, not a list of banned keys, because the whole table is
+      // spread straight into `setEncoderOptions`
+      // (`glbCompression.js#transformGlb`) and every key it grows reaches the
+      // encoder. Two that must not be there, one of them the reason this test
+      // was widened (#1852 review):
+      //
+      //   - `method`. SEQUENTIAL is what preserves the triangle order
+      //     `BLDRS_face_ids` indexes identity by, and it is DERIVED from the
+      //     layout. A rung carrying one would be spread in beside the derived
+      //     value and whichever landed last would win.
+      //   - `quantizationVolume`. Pinned at `@gltf-transform`'s `'mesh'`
+      //     default, which is also the volume `maxPositionShift` computes the
+      //     caption's millimetres in. `'scene'` measured 4× worse RMS error at
+      //     the same bit count AND would silently turn "parts may move up to
+      //     X mm" into an understatement by scene-extent ÷ part-extent — worst
+      //     on exactly the large-board-with-small-parts models this would be
+      //     sold on.
+      //
+      // Only Best and the coarse rung are pinned with an exact `toEqual`
+      // above, so a key added to Balanced alone reached the encoder with
+      // nothing red. This closes all three at once, and catches the next key
+      // too.
       for (const level of QUALITY_LEVELS) {
-        expect(qualitySettings(level).draco).not.toHaveProperty('method')
+        expect(Object.keys(qualitySettings(level)).sort()).toEqual(['draco', 'isMeshoptFiltered'])
+        expect(Object.keys(qualitySettings(level).draco).sort())
+          .toEqual(['decodeSpeed', 'encodeSpeed', 'quantizationBits'])
       }
     })
 
