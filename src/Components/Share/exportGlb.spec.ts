@@ -484,7 +484,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
   })
 
-  test('a Pro user downloads a portable .glb that names its elements', async ({page}) => {
+  test('a portable .glb names its elements, and reopens as a pickable model', async ({page}) => {
     // #1843: the default export IS the batched-native cache artifact, and its
     // `EXT_mesh_gpu_instancing` is `extensionsRequired` — so 3dviewer.net
     // refuses the file outright, and the three.js editor shows a flat list of
@@ -561,10 +561,11 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     expect((json.nodes ?? []).filter((node) => Number.isInteger(node.mesh)).length).toBeGreaterThan(0)
 
     // Back into Share. The nav tree survives — it hydrates from
-    // `BLDRS_spatial_tree`, which is indifferent to the node graph. Picking
-    // does NOT: the batched hydration joins on `isInstancedMesh` and a
-    // portable file has plain Meshes, so it fails soft to a plain GLB (#1849).
-    // That is what this asserts: loads, renders, navigates.
+    // `BLDRS_spatial_tree`, which is indifferent to the node graph — and since
+    // #1849 so does picking: `joinPortableNodesToTables` regroups the stamped
+    // plain Meshes per table row, so the file rehydrates to the same decorated
+    // BatchedMesh the batched-native artifact does. Before it, this reopened
+    // as a plain, grey, un-pickable GLB.
     await page.keyboard.press('Escape')
     await reopenLocalGlb(page, savedPath)
     await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
@@ -573,11 +574,23 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
 
     await page.getByTestId('control-button-navigation').click()
     await expect(page.getByTestId('NavTreePanel')).toBeVisible()
+    const node = (label: string) => page.locator(`[data-node-label="${label}"]`)
     for (const name of SPATIAL_CHAIN) {
-      await expect(page.locator(`[data-node-label="${name}"]`)).toHaveCount(1)
-      await page.locator(`[data-node-label="${name}"]`).getByTestId('NavTreeNodeToggle').click()
+      await expect(node(name)).toHaveCount(1)
+      await node(name).getByTestId('NavTreeNodeToggle').click()
     }
-    await expect(page.locator(`[data-node-label="${LEAF_LABEL}"]`).first()).toBeVisible()
+    await expect(node(LEAF_LABEL).first()).toBeVisible()
+
+    await node(LEAF_LABEL).first().getByTestId('NavTreeNodeLabel').click()
+
+    // The same three assertions the batched-native reopen makes (#1844): the
+    // row selects, the URL addresses the element so the selection is
+    // shareable, and — the one that was failing — the SCENE carries the
+    // highlight. The highlight has no DOM, so it is read off the exposed
+    // store.
+    await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
+    await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.glb(\/\d+)+/)
+    expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
   })
 
   test('a signed-out user is told what unlocks Save, and gets no dialog', async ({page}) => {

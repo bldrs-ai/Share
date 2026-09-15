@@ -32,17 +32,16 @@
 // Draco the instance TRS floats are not floats any more. `artifactSizes.js`
 // owns that order.
 //
-// **What survives the round trip back into Share, and what does not.** The
-// nav tree and the Properties panel key off the root `BLDRS_*` extension
-// entries and are indifferent to the node graph, so they come back intact.
-// PICKING does not: `hydrateBatchedModelFromInstancedGlb` joins on
-// `obj.isInstancedMesh` (`viewer/ifc/instancedGlbToBatchedModel.js`) and a
-// portable file has plain Meshes by construction, so the hydration fails soft
-// to a plain — and, on a colourless model, grey — GLB. Every mesh-bearing
-// node is stamped with the `extras` a future portable hydration needs
-// (`bldrsTableNode` + `bldrsInstance`); without that stamp a portable file
-// would be permanently un-hydratable, which is not a decision to make
-// implicitly. The hydration itself is #1849.
+// **What survives the round trip back into Share.** The nav tree and the
+// Properties panel key off the root `BLDRS_*` extension entries and are
+// indifferent to the node graph, so they come back intact. Picking does too,
+// since #1849: every mesh-bearing node here is stamped with the `extras` that
+// hydration needs (`bldrsTableNode` + `bldrsInstance`), and
+// `instancedGlbToBatchedModel.js#joinPortableNodesToTables` reads them back
+// into the same decorated BatchedMesh the batched-native artifact hydrates to
+// — so keep the stamp. Without it a portable file is permanently
+// un-hydratable and reopens as a plain, un-pickable and (on a colourless
+// model) grey GLB, which is what it did before #1849.
 //
 // Design: design/new/glb-export-premium.md §4.3.
 import {reifyName} from '@bldrs-ai/ifclib'

@@ -410,11 +410,24 @@ itself is ~1.6 s for 100k instances.
 
 **Round trip back into Share, plainly:** the nav tree and Properties survive
 (they hydrate from the root `BLDRS_*` entries and are indifferent to the node
-graph); **picking does not.**
+graph), and since #1849 **so does picking**. It did not at first:
 `instancedGlbToBatchedModel.js#joinNodesToTables` joins on
-`obj.isInstancedMesh`, and a portable file has plain Meshes by construction,
-so the hydration fails soft to a plain — and, on a colourless model, grey —
-GLB. The stamped `extras` are what makes fixing that possible; it is #1849.
+`obj.isInstancedMesh`, a portable file has plain Meshes by construction, and
+the hydration failed soft to a plain — and, on a colourless model, grey — GLB.
+The stamped `extras` are what made fixing that possible.
+`joinPortableNodesToTables` is the second reader: it regroups the stamped
+plain Meshes per table row and reads each one's WORLD matrix (portable nodes
+are nested, so the parent chain is part of the placement) where the instanced
+join reads `InstancedMesh.getMatrixAt`. From `buildPartition` down the two
+shapes are the same code, so a portable file rehydrates to the same decorated
+`BatchedMesh` — same `instanceParents`, same matrices, same palette — as the
+batched-native artifact it was rewritten from. `detectArtifactShape` picks the
+reader off the file (one stamped `InstancedMesh` means native, anything else
+takes the portable reader, whose totality check refuses what it cannot cover),
+so no flag has to travel with the bytes — the same artifact-not-source
+principle #1844 established. Fail-soft is unchanged: missing or partial
+stamps, a row index out of range, or no tables all keep the plain GLTFLoader
+model.
 
 Options surfaced in the UI: *Include Bldrs metadata (properties, spatial
 tree)* — default **on** (it's their model; the toggle exists for onward
@@ -428,8 +441,8 @@ export failed to open in Share — the #1837 smoke), and the export E2E opens
 each compressed download back through the Open dialog. Both smoke findings on
 the round trip are now addressed: element picking on a re-opened Bldrs GLB
 (#1844 — the hydration gates keyed off the cache, not the file) and the
-portable, de-instanced export above (#1843), whose own round trip leaves
-picking to #1849.
+portable, de-instanced export above (#1843), whose own round trip is pickable
+as of #1849.
 
 ### 4.4 UI
 
@@ -804,8 +817,9 @@ Chrome — with a real Auth0 account in each of the three tiers:
    (`Unsupported extension: EXT_mesh_gpu_instancing`), and the three.js editor
    shows the nested, named hierarchy (Bldrs › Build › Every › Thing) instead
    of `mesh_N`. Then Portable + Draco, to confirm the codec preserves the node
-   names. Reopening a portable export in Share shows the nav tree and renders,
-   but does not pick — expected until #1849.
+   names. Reopening a portable export in Share shows the nav tree, renders
+   palette-coloured, and picks: clicking a nav-tree row highlights in the
+   scene and vice versa, exactly as the default export does (#1849).
 6. Save → Export lists the exports below the button, with sizes and dates;
    "Download again" works on the cached one; Clear Local Cache → the row
    says the model must be reopened.

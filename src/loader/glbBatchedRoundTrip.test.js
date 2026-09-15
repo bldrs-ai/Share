@@ -1,10 +1,18 @@
 /* eslint-disable no-magic-numbers */
 import {Matrix4} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
+import {MeshoptDecoder} from 'meshoptimizer/decoder'
+import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from './bldrsSpatialTree'
 import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
 import {batchedArtifactBytes, liveBatchedModel} from './glbArtifact.fixture'
+import {injectGlbExtensions, parseGlb, serializeGlb} from './injectGlbExtensions'
+import {COMPRESSION_MESHOPT, compressExportGlb} from '../export/glbCompression'
+import {rewriteGlbPortable} from '../export/glbPortable'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {isDefaultColor} from '../viewer/ifc/productPalette'
+
+
+jest.mock('@sentry/react', () => ({captureException: jest.fn()}))
 
 
 /**
@@ -29,7 +37,39 @@ import {isDefaultColor} from '../viewer/ifc/productPalette'
  * The model and the artifact bytes come from `glbArtifact.fixture.js`,
  * shared with `Loader.userOpenedArtifact.test.js` (which drives the same
  * bytes through `load()`).
+ *
+ * The second describe does the same for the PORTABLE shape of the SAME
+ * artifact (#1849) — `rewriteGlbPortable` over these very bytes, so the input
+ * is what the Export tab hands the user rather than a stub of it — and
+ * asserts the two hydrate to the same model. That equality is the claim worth
+ * having: a portable file is not a second kind of model the viewer has to
+ * cope with, it is the same model written down differently.
  */
+
+
+/**
+ * A STEP-flavoured spatial tree naming `liveBatchedModel`'s three placements.
+ *
+ * STEP rather than IFC because `liveBatchedModel` carries occurrence paths,
+ * and the portable rewrite joins on `parents` refined by `occurrencePaths`
+ * (`glbPortable.js#collectInstances`). Naming every placement is what keeps
+ * them out of the `Unassigned` root, so the file under test has the nesting a
+ * real export has.
+ */
+const STEP_TREE = {
+  expressID: 1,
+  type: 'PRODUCT',
+  Name: {value: 'Assembly'},
+  children: [
+    {expressID: 11, type: 'PRODUCT', Name: {value: 'Nut A'}, occurrencePath: [3, 7], children: []},
+    {expressID: 12, type: 'PRODUCT', Name: {value: 'Nut B'}, occurrencePath: [3, 8], children: []},
+    {expressID: 20, type: 'PRODUCT', Name: {value: 'Plate'}, occurrencePath: [4], children: []},
+  ],
+}
+
+// Instantiating the Meshopt wasm decoder on a loaded CI worker outruns jest's
+// default 5s.
+const TIMEOUT_MS = 120000
 
 
 /**
@@ -43,18 +83,7 @@ import {isDefaultColor} from '../viewer/ifc/productPalette'
  * @return {Promise<object>} the hydrated model (or null)
  */
 async function roundTrip(model, sceneExtras = null) {
-  const bytes = await batchedArtifactBytes(model, {sceneExtras})
-
-  const loader = new GLTFLoader()
-  loader.register((parser) => new BldrsInstanceTablesReader(parser))
-  const gltf = await new Promise((resolve, reject) => {
-    // Copy into a standalone ArrayBuffer — GLTFLoader requires the buffer
-    // to start at the GLB header.
-    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
-    loader.parse(ab, '', resolve, reject)
-  })
-  expect(gltf.scene.userData.bldrsInstanceTables).toBeTruthy()
-  return hydrateBatchedModelFromInstancedGlb(gltf.scene)
+  return parseAndHydrate(await batchedArtifactBytes(model, {sceneExtras}))
 }
 
 
@@ -110,7 +139,6 @@ describe('batched-native GLB round-trip (writer -> GLTFLoader -> hydrate)', () =
     // GLTFLoader (whose auto-promotion of `scenes[0].extras` onto
     // `scene.userData` is the mechanism under test), real hydration (whose
     // userData merge is the other half).
-    /* eslint-disable no-magic-numbers */
     const frame = [
       0.001, 0, 0, 0,
       0, 0, -0.001, 0,
@@ -118,7 +146,6 @@ describe('batched-native GLB round-trip (writer -> GLTFLoader -> hydrate)', () =
       -2600, 450, 1200, 1,
     ]
     const offset = [2600000, 450, -1200000]
-    /* eslint-enable no-magic-numbers */
 
     const hydrated = await roundTrip(
       liveBatchedModel(), {appliedCoordination: frame, coordinationOffset: offset})
@@ -146,14 +173,12 @@ describe('batched-native GLB round-trip (writer -> GLTFLoader -> hydrate)', () =
   it('carries the frame alone on a healthy load (backstop never fired)', async () => {
     // The normal case since the conway#680 fix chain — the two keys are
     // independent, so a model with no backstop offset still gets its frame.
-    /* eslint-disable no-magic-numbers */
     const frame = [
       0.001, 0, 0, 0,
       0, 0, -0.001, 0,
       0, 0.001, 0, 0,
       -2600, 450, 1200, 1,
     ]
-    /* eslint-enable no-magic-numbers */
 
     const hydrated = await roundTrip(liveBatchedModel(), {appliedCoordination: frame})
 
@@ -171,5 +196,166 @@ describe('batched-native GLB round-trip (writer -> GLTFLoader -> hydrate)', () =
       seen.push([m.elements[12], m.elements[13]].map((v) => Math.round(v)))
     }
     expect(seen.sort()).toEqual([[0, 3], [1, 0], [2, 0]].sort())
+  })
+})
+/**
+ * Parse GLB bytes with a real GLTFLoader carrying the tables reader, then
+ * hydrate — the read half of both round trips below.
+ *
+ * @param {Uint8Array} bytes one standalone GLB
+ * @param {boolean} [meshopt] register the Meshopt decoder (a compressed file
+ *   fails the parse outright without it — `Loader.js#configureGltfDecoders`)
+ * @return {Promise<object>} the hydrated model (or null)
+ */
+async function parseAndHydrate(bytes, meshopt = false) {
+  const loader = new GLTFLoader()
+  loader.register((parser) => new BldrsInstanceTablesReader(parser))
+  if (meshopt) {
+    await MeshoptDecoder.ready
+    loader.setMeshoptDecoder(MeshoptDecoder)
+  }
+  const gltf = await new Promise((resolve, reject) => {
+    // Copy into a standalone ArrayBuffer — GLTFLoader requires the buffer
+    // to start at the GLB header.
+    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+    loader.parse(ab, '', resolve, reject)
+  })
+  expect(gltf.scene.userData.bldrsInstanceTables).toBeTruthy()
+  return hydrateBatchedModelFromInstancedGlb(gltf.scene)
+}
+
+
+/**
+ * The batched-native artifact for `liveBatchedModel`, carrying the spatial
+ * tree a real IFC/STEP cache write injects beside the tables.
+ *
+ * @return {Promise<Uint8Array>} the artifact's chunk 0
+ */
+async function artifactWithTree() {
+  const bytes = await batchedArtifactBytes(liveBatchedModel())
+  return injectGlbExtensions(
+    bytes,
+    [{name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: STEP_TREE, compress: true}],
+    null, null).bytes
+}
+
+
+/**
+ * Every instance's world placement, as flat matrix elements indexed by batch
+ * id — the comparable the two shapes must agree on.
+ *
+ * @param {object} model hydrated BatchedMesh
+ * @return {Array<Array<number>>}
+ */
+function instanceMatrices(model) {
+  const m = new Matrix4()
+  const out = []
+  for (let i = 0; i < model.instanceParents.length; i++) {
+    model.getMatrixAt(i, m)
+    out.push(Array.from(m.elements))
+  }
+  return out
+}
+
+
+describe('portable GLB round-trip (rewrite -> GLTFLoader -> hydrate, #1849)', () => {
+  it('hydrates to the SAME model the batched-native artifact does', async () => {
+    const source = await artifactWithTree()
+    const portable = rewriteGlbPortable(source)
+    expect(portable.isChanged).toBe(true)
+    // Nothing was orphaned: the tree names all three placements, so the file
+    // under test is the nested shape, not a flat `Unassigned` list.
+    expect(portable.stats.unassignedInstances).toBe(0)
+
+    const native = await parseAndHydrate(source)
+    const hydrated = await parseAndHydrate(portable.bytes)
+
+    expect(hydrated).not.toBeNull()
+    expect(hydrated.isBatchedMesh).toBe(true)
+    // The acceptance criterion from #1849: interchangeable to the viewer.
+    expect(Array.from(hydrated.instanceParents)).toEqual(Array.from(native.instanceParents))
+    expect(instanceMatrices(hydrated)).toEqual(instanceMatrices(native))
+    expect(Array.from(hydrated.instanceGeometryIds))
+      .toEqual(Array.from(native.instanceGeometryIds))
+    expect(hydrated.instanceOccurrencePaths).toEqual(native.instanceOccurrencePaths)
+    expect(hydrated.instanceColors).toEqual(native.instanceColors)
+    // The interaction surfaces #1849 exists to restore.
+    expect(hydrated.createSubset).toBeInstanceOf(Function)
+    expect(hydrated.capabilities.batchedPicking).toBe(true)
+    expect(hydrated.occurrencePathToBatchIds.size).toBe(native.occurrencePathToBatchIds.size)
+    // `decorateBatchMeshes` ran: the bounds it computes are what the pick
+    // path narrows with before the BVH (which is prototype-patched at
+    // runtime and absent under the Jest `three` build).
+    expect(hydrated.boundingSphere).toBeTruthy()
+  })
+
+  it('comes back palette-colored, not grey', async () => {
+    // The visible half of #1849. Before it, a portable file fell through to
+    // the plain GLTFLoader model, which never reaches `applyProductPalette`.
+    const portable = rewriteGlbPortable(await artifactWithTree())
+    const hydrated = await parseAndHydrate(portable.bytes)
+
+    for (const source of hydrated.instanceSourceColors) {
+      expect(isDefaultColor(source)).toBe(true)
+    }
+    expect(isDefaultColor(hydrated.instanceColors[0])).toBe(false)
+  })
+
+  it('folds an ancestor transform into every placement below it', async () => {
+    // Portable nodes are nested, so a placement's matrix is the product down
+    // the chain. Today's rewrite never puts a TRS on a node with children,
+    // but the FILE may: any tool that re-parents or hoists a transform
+    // produces this, and every other glTF viewer would draw it shifted.
+    const portable = rewriteGlbPortable(await artifactWithTree())
+    const {json, bin} = parseGlb(portable.bytes)
+    const assembly = json.nodes.find((node) => node.name === 'Assembly')
+    expect(assembly.children).toHaveLength(3)
+    expect(assembly.translation).toBeUndefined()
+    assembly.translation = [100, 0, 0]
+
+    const hydrated = await parseAndHydrate(serializeGlb(json, bin))
+
+    const shifted = instanceMatrices(hydrated).map((m) => m[12])
+    const base = instanceMatrices(await parseAndHydrate(portable.bytes)).map((m) => m[12])
+    expect(shifted).toEqual(base.map((x) => x + 100))
+  })
+
+  it('still hydrates after a Meshopt encode — the file a user downloads', async () => {
+    // Portable and a codec are independent toggles, and "portable + Meshopt"
+    // is the combination the Export tab's defaults steer toward. The encode
+    // rebuilds the whole document through `@gltf-transform`; that the extras
+    // stamp survives it is pinned in `glbPortable.test.js`, and this asserts
+    // the surviving stamp is enough to get the model back.
+    //
+    // Meshopt only: DRACO decodes on a Worker built from a blob URL, which
+    // jsdom has none of, so no Draco file can be read back through a
+    // GLTFLoader here (the same gap `glbCompression`'s read tests note).
+    const portable = rewriteGlbPortable(await artifactWithTree())
+    const compressed = await compressExportGlb(portable.bytes, COMPRESSION_MESHOPT)
+    expect(compressed.mode).toBe(COMPRESSION_MESHOPT)
+    // Not a pass-through: the encoder fallback (#1842) would leave a mode of
+    // null and a file with no codec in it, and the read below would prove
+    // nothing about a compressed file.
+    expect(parseGlb(compressed.withMetadata).json.extensionsUsed)
+      .toContain('EXT_meshopt_compression')
+
+    const hydrated = await parseAndHydrate(compressed.withMetadata, true)
+
+    expect(hydrated).not.toBeNull()
+    expect(hydrated.isBatchedMesh).toBe(true)
+    expect(Array.from(hydrated.instanceParents)).toEqual([11, 12, 20])
+    expect(hydrated.capabilities.batchedPicking).toBe(true)
+  }, TIMEOUT_MS)
+
+  it('degrades to the plain GLTF model when the stamps are gone', async () => {
+    // Fail-soft is the contract, not an accident: a portable file whose
+    // `extras` a tool dropped must render, not throw.
+    const portable = rewriteGlbPortable(await artifactWithTree())
+    const {json, bin} = parseGlb(portable.bytes)
+    for (const node of json.nodes) {
+      delete node.extras
+    }
+
+    expect(await parseAndHydrate(serializeGlb(json, bin))).toBeNull()
   })
 })

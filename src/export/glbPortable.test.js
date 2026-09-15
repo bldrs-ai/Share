@@ -404,7 +404,9 @@ describe('export/glbPortable', () => {
     it('stamps the join keys a portable re-hydration needs', () => {
       // Without this pair a portable file is permanently un-hydratable: there
       // is no other way back from a plain Mesh to its row in
-      // `BLDRS_instance_tables`. #1849 is the hydration itself.
+      // `BLDRS_instance_tables`. The hydration that consumes the pair is
+      // `instancedGlbToBatchedModel.js#joinPortableNodesToTables` (#1849);
+      // its own round trip over these bytes is in `glbBatchedRoundTrip.test.js`.
       for (const node of meshBearingNodes(json)) {
         expect(Number.isInteger(node.extras.bldrsTableNode)).toBe(true)
         expect(Number.isInteger(node.extras.bldrsInstance)).toBe(true)
