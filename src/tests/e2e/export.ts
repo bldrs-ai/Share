@@ -261,7 +261,7 @@ export async function toggleMetadata(page: Page): Promise<number> {
 
 
 /**
- * Wait until the background codec sweep has finished (#1850).
+ * Wait until the background codec sweep has a figure for every codec (#1850).
  *
  * Anything that touches the Compression control has to come after this. The
  * sweep selects the smallest codec the moment its last figure lands, so a
@@ -270,11 +270,43 @@ export async function toggleMetadata(page: Page): Promise<number> {
  * choice for the pin to hold, which is what the MenuItem's own `onClick` in
  * `ExportSection.jsx` is for.
  *
+ * What this DOES guarantee is only the figures. `data-codec-sizes` completes
+ * in the same render commit that first makes `codecToSelect` return a new
+ * codec, and `setCompression` lands in the effect after it, so the selection
+ * is one commit behind this wait. In practice every caller then does
+ * something Playwright retries against a live DOM — `waitForCodecSizes` opens
+ * the menu, `selectCompression` waits on the size line's estimate key — and
+ * the commit is long gone by the time anything is read. A caller that wants
+ * the selection itself should assert on the closed control, as
+ * `exportGlb.spec.ts` does.
+ *
+ * Fails fast rather than timing out if the sweep is PARKED — over the ~50 MB
+ * threshold so it never auto-started, or stopped part-way — because in that
+ * state the attribute never completes on its own and the bare
+ * `toHaveAttribute` diff ("expected `none,meshopt,draco`, got ``") does not
+ * say why. No spec is in that state today; all six callers load `index.ifc`,
+ * which is far under the threshold. The first spec pointed at a large fixture
+ * will be, and it should read "click Calculate sizes first", not wait a
+ * minute for nothing.
+ *
  * @param page Playwright page
  */
 export async function waitForCodecSizing(page: Page) {
-  await expect(page.getByTestId('export-section'))
-    .toHaveAttribute('data-codec-sizes', CODEC_MODES.join(','), {timeout: COMPRESS_TIMEOUT_MS})
+  const section = page.getByTestId('export-section')
+  const parked = page.getByTestId('export-codec-sizes-start')
+  const complete = CODEC_MODES.join(',')
+  await page.waitForFunction(
+    ({selector, expected}) => Boolean(
+      document.querySelector(`[data-testid="${selector}"]`) ||
+      document.querySelector('[data-testid="export-section"]')?.getAttribute('data-codec-sizes') === expected),
+    {selector: 'export-codec-sizes-start', expected: complete},
+    {timeout: COMPRESS_TIMEOUT_MS})
+  await expect(
+    parked,
+    'the codec sweep is parked — the artifact is over the auto-measure threshold, or a Stop ' +
+    'left it part-way. Click "Calculate sizes" (export-codec-sizes-start) before waiting on it.',
+  ).toHaveCount(0)
+  await expect(section).toHaveAttribute('data-codec-sizes', complete)
 }
 
 

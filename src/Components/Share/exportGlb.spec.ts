@@ -747,8 +747,10 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     for (const mode of ['none', 'meshopt', 'draco']) {
       expect(codecSizes[mode], `${mode} should have a measured size`).toBeGreaterThan(0)
     }
-    // On `index.ifc` Draco wins, but the assertion is about the RULE, not
-    // about this fixture: whichever option is smallest is the one selected.
+    // On `index.ifc` Draco wins — 13,084 B, against Meshopt's 21,480 and
+    // 17,244 uncompressed, measured through this very spec — but the assertion
+    // is about the RULE, not about this fixture: whichever option is smallest
+    // is the one selected.
     const smallest = smallestCodecIn(codecSizes)
     await expect(page.getByTestId('export-compression'))
       .toContainText(smallest.charAt(0).toUpperCase() + smallest.slice(1))
@@ -765,10 +767,22 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     const file = await readFile(await (await downloadPromise).path())
 
     expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
-    // …and so does the file. The sweep releases each codec's bytes as it
-    // goes, so this is also the assertion that a released-and-re-encoded
-    // codec produces the very same file.
+    // …and so does the file. This is a CACHE HIT, not a re-encode: measured
+    // here, `index.ifc` comes out at 13,084 B under Draco against 21,480 under
+    // Meshopt and 17,244 uncompressed, and the winner's cell is precisely the
+    // one the sweep keeps (`export/codecSizes.js`). So what it pins is that
+    // the panel hands over the bytes it measured — which is the point of
+    // keeping the winner — and nothing about re-encoding.
     expect(file.byteLength).toBe(codecSizes[smallest])
+
+    // The other half, which the download above cannot reach on any fixture:
+    // the sweep RELEASED Meshopt when Draco beat it, so picking it now runs
+    // the encoder a second time, and the figure it lands on has to be the one
+    // the dropdown option was carrying. That equality is what makes releasing
+    // safe — the encoders are deterministic, so a dropped cell costs CPU and
+    // never a wrong number.
+    const meshoptBytes = await selectCompression(page, 'meshopt')
+    expect(meshoptBytes).toBe(codecSizes.meshopt)
 
     // An explicit choice is never overridden, however small a figure the
     // panel is holding for something else.
