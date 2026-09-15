@@ -257,18 +257,37 @@ export async function toggleMetadata(page: Page): Promise<number> {
 
 
 /**
+ * Pick a Quality rung and wait for the size line to settle on the figure for
+ * it (#1848).
+ *
+ * Two rungs are two different files — different encoder settings, and for
+ * Smallest different POSITION bits — so the estimate re-runs and the line
+ * goes through "Estimating…" exactly as it does for a codec.
+ *
+ * @param page Playwright page
+ * @param level 'best' | 'balanced' | 'smallest'
+ * @return the byte count the settled line carries
+ */
+export async function selectQuality(page: Page, level: string): Promise<number> {
+  await page.getByTestId('export-quality').click()
+  await page.getByTestId(`export-quality-${level}`).click()
+  return await waitForEstimate(page)
+}
+
+
+/**
  * Wait for the size line to settle on the figure for the selection the
  * controls now hold, and return it.
  *
  * Keyed on WHICH selection the displayed figure describes, never on the
  * figure itself: see `exportEstimate.ts` for the two failure modes that
  * closes. The expected key is read back off the controls rather than passed
- * in, so a caller can flip one axis without knowing the other two.
+ * in, so a caller can flip one axis without knowing the other three.
  *
  * @param page Playwright page
  * @return the byte count the settled line carries
  */
-async function waitForEstimate(page: Page): Promise<number> {
+export async function waitForEstimate(page: Page): Promise<number> {
   const expected = await currentEstimateKey(page)
   const sizeLine = page.getByTestId('export-size')
   await expect
@@ -300,9 +319,10 @@ async function waitForEstimate(page: Page): Promise<number> {
  */
 async function currentEstimateKey(page: Page): Promise<string> {
   const mode = await page.getByTestId('export-compression').locator('input').inputValue()
+  const quality = await page.getByTestId('export-quality').locator('input').inputValue()
   const isPortable = await page.getByTestId('export-portable').locator('input').isChecked()
   const isMetadataIncluded = await page.getByTestId('export-include-metadata').locator('input').isChecked()
-  return estimateKey(mode, isPortable, isMetadataIncluded)
+  return estimateKey(mode, isPortable, isMetadataIncluded, quality)
 }
 
 

@@ -21,19 +21,33 @@
 
 /**
  * The identity of one displayed figure: the estimate it came from — portable
- * × codec, the axes `export/artifactSizes.js` caches on — plus the metadata
- * toggle, which picks between the two figures that one estimate produces.
+ * × codec × quality, the axes `export/artifactSizes.js` caches on — plus the
+ * metadata toggle, which picks between the two figures that one estimate
+ * produces.
  *
  * `Open/ExportSection.jsx` builds the same string into `data-estimate-key`
  * and is the other end of the contract.
  *
+ * Quality is in the DISPLAY key at every codec, including `none`, even though
+ * the cache leaves it out where no encoder runs. The two keys answer
+ * different questions: the cache's asks "is this the same file?", this one
+ * asks "has the line caught up with the controls?" — and the controls carry a
+ * rung whatever the codec is.
+ *
  * @param mode 'none' | 'meshopt' | 'draco'
  * @param isPortable the Portable toggle
  * @param isMetadataIncluded the "Include Bldrs metadata" toggle
+ * @param quality 'best' | 'balanced' | 'smallest' (#1848)
  * @return the value `data-estimate-key` carries for that selection
  */
-export function estimateKey(mode: string, isPortable: boolean, isMetadataIncluded: boolean): string {
-  return `${isPortable ? 'portable' : 'native'}|${mode}|${isMetadataIncluded ? 'meta' : 'nometa'}`
+export function estimateKey(
+  mode: string,
+  isPortable: boolean,
+  isMetadataIncluded: boolean,
+  quality: string,
+): string {
+  return `${isPortable ? 'portable' : 'native'}|${mode}` +
+    `|${quality}|${isMetadataIncluded ? 'meta' : 'nometa'}`
 }
 
 

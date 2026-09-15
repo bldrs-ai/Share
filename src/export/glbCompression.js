@@ -29,6 +29,7 @@ import {isBldrsExtension} from '../loader/glbArtifactSize'
 import {loadDracoDecoder, loadDracoEncoder} from '../loader/glbCompress'
 import {stripGlbBldrs} from '../loader/glbStrip'
 import {injectGlbExtensions, parseGlb} from '../loader/injectGlbExtensions'
+import {QUALITY_DEFAULT, formatMaxShift, maxPositionShift, qualitySettings} from './exportQuality'
 
 
 /** No codec: the GLB opens in every viewer, which is why it is the default. */
@@ -82,6 +83,8 @@ export function isCompressionMode(mode) {
  *
  * @param {Uint8Array} glbBytes One standalone GLB — the artifact's chunk 0
  * @param {string} mode One of `COMPRESSION_MODES`
+ * @param {string} [quality] One of `exportQuality.js`'s `QUALITY_LEVELS`;
+ *   what the encoder is asked for beyond the derived `method`
  * @return {Promise<{
  *   withMetadata: Uint8Array,
  *   withoutMetadata: Uint8Array,
@@ -89,7 +92,7 @@ export function isCompressionMode(mode) {
  *   mode: string,
  * }>}
  */
-export async function compressExportGlb(glbBytes, mode) {
+export async function compressExportGlb(glbBytes, mode, quality = QUALITY_DEFAULT) {
   if (mode === COMPRESSION_NONE || !isCompressionMode(mode)) {
     return {withMetadata: glbBytes, withoutMetadata: glbBytes, strippedExtensions: [], mode: COMPRESSION_NONE}
   }
@@ -106,7 +109,7 @@ export async function compressExportGlb(glbBytes, mode) {
     // is already orphaned and never reaches the output. Saving a
     // parse/serialise round trip of a possibly-hundreds-of-MB file is the
     // reason to rely on that rather than strip first.
-    withoutMetadata = await transformGlb(glbBytes, mode, needsTriangleOrder(json), sourceCodecs)
+    withoutMetadata = await transformGlb(glbBytes, mode, needsTriangleOrder(json), sourceCodecs, quality)
   } catch (e) {
     // A codec that cannot take this geometry is not an export failure — the
     // user still gets their model, uncompressed, at the size the panel then
@@ -185,9 +188,10 @@ export async function compressExportGlb(glbBytes, mode) {
  *   in the first place, so nothing there is conditional on it
  * @param {Array<string>} sourceCodecs Codecs the input already declares
  *   (`sourceCodecsOf`)
+ * @param {string} quality One of `exportQuality.js`'s `QUALITY_LEVELS`
  * @return {Promise<Uint8Array>} the compressed GLB
  */
-async function transformGlb(glbBytes, mode, preserveTriangleOrder, sourceCodecs = []) {
+async function transformGlb(glbBytes, mode, preserveTriangleOrder, sourceCodecs = [], quality = QUALITY_DEFAULT) {
   const {Logger, WebIO} = await import('@gltf-transform/core')
   const {ALL_EXTENSIONS, EXTMeshoptCompression, KHRDracoMeshCompression} =
     await import('@gltf-transform/extensions')
@@ -233,10 +237,17 @@ async function transformGlb(glbBytes, mode, preserveTriangleOrder, sourceCodecs 
       extension.dispose()
     }
   }
+  const settings = qualitySettings(quality)
   if (mode === COMPRESSION_DRACO) {
     doc.createExtension(KHRDracoMeshCompression)
       .setRequired(true)
       .setEncoderOptions({
+        // `method` is DERIVED and is the one option quality may not touch: a
+        // rung that picked EDGEBREAKER on a `BLDRS_face_ids` artifact for the
+        // better ratio would silently break re-import picking (#1848 §4.2).
+        // Spread order matters for the same reason — the settings go in
+        // first so nothing in the table can override it.
+        ...settings.draco,
         method: preserveTriangleOrder ?
           KHRDracoMeshCompression.EncoderMethod.SEQUENTIAL :
           KHRDracoMeshCompression.EncoderMethod.EDGEBREAKER,
@@ -244,9 +255,56 @@ async function transformGlb(glbBytes, mode, preserveTriangleOrder, sourceCodecs 
   } else {
     doc.createExtension(EXTMeshoptCompression)
       .setRequired(true)
-      .setEncoderOptions({method: EXTMeshoptCompression.EncoderMethod.QUANTIZE})
+      // FILTER is the −39.1% (measured) that Balanced buys: positions stay
+      // bit-exact and only NORMAL/TANGENT are rewritten, octahedrally, as
+      // normalized BYTE. QUANTIZE — what shipped through #1842, and what Best
+      // still asks for — is entirely lossless.
+      .setEncoderOptions({
+        method: settings.isMeshoptFiltered ?
+          EXTMeshoptCompression.EncoderMethod.FILTER :
+          EXTMeshoptCompression.EncoderMethod.QUANTIZE,
+      })
   }
   return new Uint8Array(await io.writeBinary(doc))
+}
+
+
+/**
+ * What this codec at this rung does to the geometry, in the terms the person
+ * choosing actually decides in.
+ *
+ * The two codecs degrade in completely different places, so one number cannot
+ * caption both and pretending otherwise would be the dishonest half of the
+ * feature. Draco quantizes POSITION, so its cost is a distance and it is
+ * quoted in millimetres off the artifact's OWN bounds. Meshopt leaves
+ * positions bit-exact at every rung — measured over all 60,608 vertices of
+ * the Momentum fixture through a decode round trip — and touches only
+ * NORMAL/TANGENT, so its cost is shading, and there is no millimetre figure
+ * to give.
+ *
+ * @param {string} mode One of `COMPRESSION_MODES`
+ * @param {string} quality One of `exportQuality.js`'s `QUALITY_LEVELS`
+ * @param {?number} positionRange From
+ *   `loader/glbArtifactSize.js#positionQuantizationRange`; null when the
+ *   artifact's accessors carry no bounds
+ * @return {?string} the caption, or null when no codec is chosen
+ */
+export function compressionFidelityCaption(mode, quality, positionRange) {
+  if (mode === COMPRESSION_MESHOPT) {
+    return qualitySettings(quality).isMeshoptFiltered ?
+      'geometry exact; shading normals rounded' :
+      'geometry and shading normals exact'
+  }
+  if (mode !== COMPRESSION_DRACO) {
+    return null
+  }
+  const shift = maxPositionShift(quality, positionRange)
+  return shift === null ?
+    // A GLB whose POSITION accessors declare no min/max. Saying "quantized"
+    // without a figure is still the honest thing — the alternative is a
+    // millimetre count invented from nothing.
+    'positions quantized; shading normals rounded' :
+    `parts may move up to ${formatMaxShift(shift)}; shading normals rounded`
 }
 
 

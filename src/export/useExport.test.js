@@ -139,8 +139,12 @@ describe('useExport', () => {
     const {compress} = exportArtifact.mock.calls[0][0]
     const forDownload = await compress(ARTIFACT_BYTES, {stripBldrsMetadata: true})
 
+    // The last two arguments keep the estimate cache's cells apart — portable
+    // vs native, and one Quality rung from another. A run that names no rung
+    // resolves to the default rather than failing, which is what a
+    // "Download again" row recorded before #1848 carries.
     expect(compressedExport).toHaveBeenCalledWith(
-      expect.objectContaining({schemaVer: SCHEMA_VER}), 'meshopt', ARTIFACT_BYTES, false)
+      expect.objectContaining({schemaVer: SCHEMA_VER}), 'meshopt', ARTIFACT_BYTES, false, 'balanced')
     expect(forDownload.bytes).toBe(compressed.withoutMetadata)
     expect(forDownload.withMetadataBytes).toBe(900)
     expect(forDownload.withoutMetadataBytes).toBe(400)
@@ -225,10 +229,11 @@ describe('useExport', () => {
     expect(compress).toEqual(expect.any(Function))
     expect((await compress(ARTIFACT_BYTES, {stripBldrsMetadata: true})).bytes)
       .toBe(rewritten.withoutMetadata)
-    // The last argument is what keeps the portable and native cells of the
-    // estimate cache apart — they are different FILES at the same codec.
+    // The last two arguments are what keep the estimate cache's cells apart —
+    // portable and native are different FILES at the same codec, and so are
+    // two Quality rungs.
     expect(compressedExport).toHaveBeenCalledWith(
-      expect.objectContaining({schemaVer: SCHEMA_VER}), 'none', ARTIFACT_BYTES, true)
+      expect.objectContaining({schemaVer: SCHEMA_VER}), 'none', ARTIFACT_BYTES, true, 'balanced')
     // …and the choice is recorded, so "Download again" reproduces the portable
     // file rather than the batched-native one at the size the row claims.
     expect(recordExport).toHaveBeenCalledWith(

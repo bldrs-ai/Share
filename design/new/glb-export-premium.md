@@ -341,7 +341,76 @@ Two cases the first cut got wrong (#1837 codex round 6):
   is not the target, or the write would run both encoders over the same
   primitives.
 
-**Portable** (#1843) is the third option, and like compression it is a host
+**Quality** (#1848) is the second half of the compression option, and the
+whole of `export/exportQuality.js`. Through #1842 the export set exactly ONE
+encoder option per codec — Draco's `method`, Meshopt's `method` — and took
+`@gltf-transform` 4.3.0's defaults for everything else. Three named rungs now
+say what else to ask for. Presets rather than bit counts, because the bit
+count means nothing to a CAD user and the two codecs' knobs do not line up: a
+shared "12 bits" would be two different things and, for Meshopt, nothing at
+all.
+
+| Quality | Draco | Meshopt |
+|---|---|---|
+| **Best** | today's defaults: `POSITION:14 NORMAL:10`, speeds 5 | `QUANTIZE` — entirely lossless |
+| **Balanced** *(default)* | same bits + `encodeSpeed:0 decodeSpeed:0` | `FILTER` |
+| **Smallest** | `POSITION:12 NORMAL:8` + speeds 0 | `FILTER` (Meshopt has no third rung) |
+
+Measured on `src/tests/fixtures/Momentum.ifc` → GLB (1,959,196 B, 43
+primitives), reproduced against the pinned encoders: Meshopt `QUANTIZE`
+1,347,740 B → `FILTER` 820,912 B (**−39.1%**); Draco EDGEBREAKER 250,184 B →
+speeds 0 228,652 B (**−8.6%**) → Smallest 194,932 B (**−22.1%**).
+
+Three things about that table are load-bearing:
+
+- **`FILTER` is the default, not a rung you have to find.** It is the largest
+  single win in the issue and its cost is narrow and knowable: positions come
+  back **bit-exact** (0.000000 mm over all 60,608 vertices, through a decode
+  round trip), and only `NORMAL`/`TANGENT` are touched — rewritten
+  octahedrally as normalized `BYTE`, ≤1.155°. A shading normal a degree out is
+  invisible in a renderer and means nothing to a measurement. Best still
+  reaches `QUANTIZE`, because a QA round trip that must be bit-exact in every
+  attribute needs a rung that guarantees it.
+- **Both Draco speeds or neither.** `encodeSpeed: 0` alone and
+  `decodeSpeed: 0` alone each measured exactly 0.0% — 250,184 B either way —
+  and only the pair reaches −8.6%.
+- **The rungs are a FIDELITY ladder, not a size one, and the UI never claims
+  otherwise.** The speed pair's payoff is model-shaped: −8.6% on Momentum
+  under EDGEBREAKER (which is what the batched-native default takes) and
+  −6.0% on `public/index.ifc`, but **+0.5%** on the same Momentum file under
+  SEQUENTIAL and +2.4% on an instance-heavy synthetic. Nothing promises
+  Smallest ≤ Balanced ≤ Best; the size line shows the real measured figure
+  for whatever is selected, which is what the user actually needs.
+
+Four knobs are deliberately **not** exposed, each measured
+(#1848 §4): `quantizationVolume: 'scene'` (4× worse RMS at equal bits, worst
+on the large-site/small-part models it would be sold on — `'mesh'` stays);
+`quantizationBits.GENERIC` (safe today only because `_EXPRESSID`/`_INSTANCEID`
+are `Uint32Array` and take Draco's integer path, where bits are ignored; the
+same attribute typed FLOAT came back corrupted at the pinned 12-bit default);
+the Draco `method`, which stays derived from `needsTriangleOrder`; and raw bit
+spinners.
+
+The caption under the size line says what the rung costs **this** model.
+Draco quantizes `POSITION` over the largest axis of each primitive's own box
+(`quantizationVolume: 'mesh'`), so the worst-case displacement is
+`(√3/2) × range / (2^bits − 1)` — arithmetic over the accessor `min`/`max`
+already in the JSON chunk
+(`loader/glbArtifactSize.js#positionQuantizationRange`, which keeps the size
+read's promise of never touching BIN). Verified as a true upper bound:
+predicted 1.163 mm against 1.056 mm measured at 14 bits, 4.653 against 4.067
+at 12. The *maximum over primitives*, never the scene bounds — the
+batched-native artifact's positions are in local geometry space, so a 5 cm
+bolt quantizes in a 5 cm box however large the site is, and scene bounds would
+quote a grid four times coarser than the file has. Meshopt gets no millimetre
+figure because it has none to give: "geometry exact; shading normals rounded".
+
+Quality joins portable × codec in the estimate cache key
+(`export/artifactSizes.js#rewriteKey`) — but only when an encoder actually
+runs, or the uncompressed cell would split three ways and Portable+None would
+run the whole rewrite once per rung for three identical files.
+
+**Portable** (#1843) is the fourth option, and like compression it is a host
 rewrite the pro module only calls: `export/glbPortable.js#rewriteGlbPortable`.
 
 The default export IS the batched-native artifact (§1.1) — one glTF mesh per
@@ -468,16 +537,24 @@ all-caps button on the #1837 preview read as disabled when it wasn't
 (#1838).
 
 The Export tab hosts `Open/ExportSection.jsx` — the metadata toggle, then the
-**Portable** toggle, then the **Compression** choice, then the **download
-size** for the state those three are in, then **Export GLB last and centred**,
-with the Pro chip for a free user riding beside it. That order is the order
-the choices compound in — what goes in the file, what shape it is in, how it
-is squeezed — and it is the order `export/artifactSizes.js` runs them in.
+**Portable** toggle, then the **Compression** choice, then the **Quality**
+rung, then the **download size** for the state those four are in, then
+**Export GLB last and centred**, with the Pro chip for a free user riding
+beside it. That order is the order the choices compound in — what goes in the
+file, what shape it is in, how it is squeezed, how hard — and it is the order
+`export/artifactSizes.js` runs them in.
 Compression is a dropdown (`Select`: None / Meshopt / Draco) because the
 codecs are alternatives, not independent options — it began as a
 `ToggleButtonGroup`, whose three side-by-side buttons were the widest control
 in the dialog and read as a run-on word under the theme's toggle styling
 (owner feedback on #1842). The menu items carry the per-mode test ids.
+Quality (Best / Balanced / Smallest, §4.3) is a second dropdown directly under
+it, **disabled rather than hidden** while Compression is None — showing it
+only once a codec is picked would change the panel's height under the user's
+cursor at the moment they reach for the next control. Under the size line it
+captions what the rung costs *this* model: "parts may move up to 4.7 mm;
+shading normals rounded" for Draco, "geometry exact; shading normals rounded"
+for Meshopt, which has no distance to quote.
 
 Every label block in the section is **left-aligned** (#1842). The theme centres
 a Dialog's whole paper (`theme/Components.js`, `MuiDialog.paper.textAlign`),
@@ -500,9 +577,10 @@ touches the BIN chunk and the rewrite has to — it reads the instance TRS
 floats and ungzips two payloads out of it — so Portable takes the same
 whole-file path a codec takes and shows *Estimating…* while it runs. The
 estimate cache in `export/artifactSizes.js` is keyed
-`` `${portable ? 'portable' : 'native'}|${mode}` `` for that reason: portable
-and native are different FILES at the same codec, and a shared cell would
-quote one and download the other. `useExport.js#compressHookFor` supplies the
+`` `${portable ? 'portable' : 'native'}|${mode}` `` — plus `|${quality}`
+whenever an encoder actually runs (§4.3) — for that reason: portable and
+native are different FILES at the same codec, two rungs are two different
+files again, and a shared cell would quote one and download the other. `useExport.js#compressHookFor` supplies the
 hook whenever `portable || codec` rather than for a codec alone, and
 `artifactSizes.js#runRewrite` behind it does the metadata strip for the
 portable-without-codec case, since the pro module runs no strip of its own
@@ -514,7 +592,8 @@ honest shortcut: picking a codec reads the whole artifact, encodes it once,
 and reports the byte lengths of the two files that came out. The line reads
 *Estimating…* while that runs — a stale figure from the previous choice is a
 promise about a file the next click would not produce — and the bytes are
-cached per (artifact, codec) in `export/artifactSizes.js`, so the export that
+cached per (artifact, portable × codec × quality) in
+`export/artifactSizes.js`, so the export that
 follows hands over the very bytes whose length the user just read rather than
 re-encoding and hoping the two agree. A click fast enough to beat the estimate
 shares its in-flight run. Sizes are otherwise cached per published
@@ -757,7 +836,7 @@ through `BLDRS_*` extensions.
 | Units + coordination frame | ✔ `scenes[0].extras` (metres) | ✔ | ✘ (unitless) | ✘ | ✘ | ✔ `metersPerUnit`, root xform | ✔ (units attr) | ✔ |
 | Cut planes / hidden elements (view state) | ◐ `BLDRS_view_states` (designed, not written) | ◐ | ✘ | ✘ | ✘ | ◐ variants | ✘ | ✘ |
 | Portable (named node tree, no required extension) | ✔ per export (#1843) — `~100 B`/instance net | ✔ | — (always de-instanced) | — | — | ◐ (prim hierarchy is native) | ◐ | — |
-| Compression | ✔ Draco / Meshopt, chosen per export | ✔ | ✘ | ✘ (binary only) | ◐ binary | ◐ (USDZ is a zip) | ✔ (zip) | ✘ |
+| Compression | ✔ Draco / Meshopt × Best / Balanced / Smallest, chosen per export (#1842, #1848) | ✔ | ✘ | ✘ (binary only) | ◐ binary | ◐ (USDZ is a zip) | ✔ (zip) | ✘ |
 | Source | artifact | artifact | scene | scene | scene | scene (or server) | scene | — (needs Conway write support) |
 | Effort | done in S2 | small (unpack GLB → JSON + bin) | small | small | small | medium (USDZExporter is texture-centric; instancing + metadata need work); server route if fidelity matters | medium | large — out of scope |
 

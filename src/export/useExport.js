@@ -10,6 +10,7 @@ import useStore from '../store/useStore'
 import {compressedExport} from './artifactSizes'
 import {triggerDownload} from './download'
 import {recordExport} from './exportHistory'
+import {QUALITY_DEFAULT, isQualityLevel} from './exportQuality'
 import {getExportFormat} from './exportRegistry'
 import {COMPRESSION_NONE, isCompressionMode} from './glbCompression'
 import {ProModuleDeniedError, loadProModule} from './proModuleLoader'
@@ -233,19 +234,24 @@ export default function useExport() {
  * passes that on so the history row and analytics describe the real file.
  *
  * @param {object} artifact The store's `glbArtifact` slot, or a history row's
- * @param {object} options The run's options, carrying `compression` + `portable`
+ * @param {object} options The run's options, carrying `compression`, `quality`
+ *   + `portable`
  * @return {?Function} `(glbBytes, {stripBldrsMetadata}) => Promise<object>`
  */
 function compressHookFor(artifact, options) {
   const mode = options.compression
   const isPortable = Boolean(options.portable)
   const hasCodec = isCompressionMode(mode) && mode !== COMPRESSION_NONE
+  // A "Download again" row recorded before #1848 carries no quality at all,
+  // and its own recorded `compression` is what it promises to reproduce — so
+  // an absent rung resolves to the default rather than failing the re-export.
+  const quality = isQualityLevel(options.quality) ? options.quality : QUALITY_DEFAULT
   if (!isPortable && !hasCodec) {
     return null
   }
   return async (glbBytes, {stripBldrsMetadata}) => {
     const compressed = await compressedExport(
-      artifact, hasCodec ? mode : COMPRESSION_NONE, glbBytes, isPortable)
+      artifact, hasCodec ? mode : COMPRESSION_NONE, glbBytes, isPortable, quality)
     if (!compressed) {
       throw new Error(`useExport: ${isPortable ? 'portable ' : ''}${mode} rewrite produced nothing`)
     }

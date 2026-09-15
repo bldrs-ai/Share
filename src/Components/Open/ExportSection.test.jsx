@@ -2,7 +2,7 @@ import React from 'react'
 import {act, fireEvent, render, renderHook, screen, within} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
-import {artifactSizes} from '../../export/artifactSizes'
+import {artifactPositionRange, artifactSizes} from '../../export/artifactSizes'
 import {gtagEvent} from '../../privacy/analytics'
 import useStore from '../../store/useStore'
 import {goToSubscription} from '../Profile/subscriptionNav'
@@ -17,7 +17,10 @@ jest.mock('../../privacy/analytics', () => ({gtagEvent: jest.fn()}))
 // The size line's source is an OPFS header read (`export/artifactSizes.js`),
 // which needs a worker and a real artifact; the component's job is what it
 // does with the two numbers.
-jest.mock('../../export/artifactSizes', () => ({artifactSizes: jest.fn()}))
+jest.mock('../../export/artifactSizes', () => ({
+  artifactSizes: jest.fn(),
+  artifactPositionRange: jest.fn(),
+}))
 jest.mock('../Profile/subscriptionNav', () => ({goToSubscription: jest.fn()}))
 const mockRun = jest.fn()
 // A stand-in for the hook's `run` only: `isExporting` still comes from the
@@ -49,6 +52,10 @@ const METADATA_BYTES = WITH_METADATA_BYTES - WITHOUT_METADATA_BYTES
 const MESHOPT_WITH_METADATA_BYTES = 7 * BYTES_PER_MB
 const MESHOPT_WITHOUT_METADATA_BYTES = 3 * BYTES_PER_MB
 /* eslint-enable no-magic-numbers */
+
+// The Momentum fixture's scene range, so the millimetre caption below is the
+// figure #1848 measured against rather than an invented one.
+const MOMENTUM_RANGE_M = 22.0
 
 const ARTIFACT = {
   cacheKeyArgs: {ns1: 'gh-bldrs-ai', ns2: 'test-models', ns3: 'main', sourcePath: 'box.ifc', sourceHash: 'sha'},
@@ -92,6 +99,17 @@ function chooseCompression(mode) {
 }
 
 
+/**
+ * Pick a Quality rung the same way (#1848).
+ *
+ * @param {string} level 'best' | 'balanced' | 'smallest'
+ */
+function chooseQuality(level) {
+  fireEvent.mouseDown(within(screen.getByTestId('export-quality')).getByRole('combobox'))
+  fireEvent.click(screen.getByTestId(`export-quality-${level}`))
+}
+
+
 describe('ExportSection', () => {
   /** Settles the pending compressed estimate, from inside the test's `act`. */
   let resolveMeshoptSizes
@@ -104,12 +122,17 @@ describe('ExportSection', () => {
     // assertion here alone. A promise that settles would land its state
     // update outside `act()` in the tests that don't await it.
     artifactSizes.mockReturnValue(new Promise(() => {}))
+    // Parked for the same reason the size read is: a promise that settles
+    // outside a test's `act` lands its state update where React can't see it.
+    // The caption's own test resolves it.
+    artifactPositionRange.mockReturnValue(new Promise(() => {}))
   })
 
   afterEach(async () => {
     // Clearing the artifact re-runs the size effect, and a read that settles
     // during the teardown lands its state update outside `act`. Park it.
     artifactSizes.mockReturnValue(new Promise(() => {}))
+    artifactPositionRange.mockReturnValue(new Promise(() => {}))
     await setStore(null, null)
   })
 
@@ -174,13 +197,13 @@ describe('ExportSection', () => {
 
     fireEvent.click(getByTestId('export-glb-button'))
     expect(mockRun).toHaveBeenCalledWith(
-      'glb', {stripBldrsMetadata: false, compression: 'none', portable: false})
+      'glb', {stripBldrsMetadata: false, compression: 'none', quality: 'balanced', portable: false})
 
     // Off means "strip", which is the option the pro module acts on.
     fireEvent.click(toggle)
     fireEvent.click(getByTestId('export-glb-button'))
     expect(mockRun).toHaveBeenLastCalledWith(
-      'glb', {stripBldrsMetadata: true, compression: 'none', portable: false})
+      'glb', {stripBldrsMetadata: true, compression: 'none', quality: 'balanced', portable: false})
   })
 
   it('carries the Portable toggle into the export, off by default', async () => {
@@ -197,7 +220,7 @@ describe('ExportSection', () => {
     fireEvent.click(getByTestId('export-glb-button'))
 
     expect(mockRun).toHaveBeenLastCalledWith(
-      'glb', {stripBldrsMetadata: false, compression: 'none', portable: true})
+      'glb', {stripBldrsMetadata: false, compression: 'none', quality: 'balanced', portable: true})
   })
 
   it('re-estimates for Portable even at compression None, saying so while it runs', async () => {
@@ -221,7 +244,7 @@ describe('ExportSection', () => {
 
     fireEvent.click(getByTestId('export-portable').querySelector('input'))
 
-    expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', true)
+    expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', true, 'balanced')
     expect(queryByTestId('export-size')).toBeNull()
     expect(getByTestId('export-size-pending')).toHaveTextContent('Estimating…')
 
@@ -257,7 +280,7 @@ describe('ExportSection', () => {
     fireEvent.click(getByTestId('export-glb-button'))
 
     expect(mockRun).toHaveBeenLastCalledWith(
-      'glb', {stripBldrsMetadata: false, compression: 'draco', portable: false})
+      'glb', {stripBldrsMetadata: false, compression: 'draco', quality: 'balanced', portable: false})
   })
 
   it('re-estimates when the compression choice changes, saying so while it runs', async () => {
@@ -282,7 +305,7 @@ describe('ExportSection', () => {
 
     chooseCompression('meshopt')
 
-    expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'meshopt', false)
+    expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'meshopt', false, 'balanced')
     expect(queryByTestId('export-size')).toBeNull()
     expect(getByTestId('export-size-pending')).toHaveTextContent('Estimating…')
 
@@ -328,7 +351,7 @@ describe('ExportSection', () => {
     const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
     await act(async () => {})
 
-    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|none|meta')
+    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|none|balanced|meta')
 
     chooseCompression('draco')
     await act(async () => {
@@ -344,7 +367,7 @@ describe('ExportSection', () => {
     })
 
     expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(WITH_METADATA_BYTES))
-    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|draco|meta')
+    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|draco|balanced|meta')
 
     // The metadata half moves without a re-estimate — one run produced both
     // figures — so it has to be part of the key or the key would name two
@@ -352,7 +375,7 @@ describe('ExportSection', () => {
     fireEvent.click(getByTestId('export-include-metadata').querySelector('input'))
 
     expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(WITHOUT_METADATA_BYTES))
-    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|draco|nometa')
+    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|draco|balanced|nometa')
   })
 
   it('names the fallback when the chosen codec is not available here', async () => {
@@ -531,5 +554,119 @@ describe('ExportSection', () => {
 
     expect(mockRun).not.toHaveBeenCalled()
     expect(goToSubscription).toHaveBeenCalled()
+  })
+
+  describe('the Quality control (#1848)', () => {
+    /**
+     * Settle every size read at once, so a test can assert the steady state
+     * of the panel rather than the pending one.
+     */
+    function settleSizes() {
+      artifactSizes.mockResolvedValue({
+        withMetadata: WITH_METADATA_BYTES,
+        withoutMetadata: WITHOUT_METADATA_BYTES,
+        metadataBytes: METADATA_BYTES,
+        compression: 'draco',
+      })
+      artifactPositionRange.mockResolvedValue(MOMENTUM_RANGE_M)
+    }
+
+    it('is present but inert until a codec is chosen', async () => {
+      // Disabled rather than hidden: showing it only once a codec is picked
+      // would change the panel's height under the user's cursor at the exact
+      // moment they are reaching for the next control.
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      const quality = within(getByTestId('export-quality')).getByRole('combobox')
+      expect(getByTestId('export-quality')).toHaveTextContent('Balanced')
+      expect(quality).toHaveAttribute('aria-disabled', 'true')
+
+      chooseCompression('draco')
+      await act(async () => {})
+
+      expect(within(getByTestId('export-quality')).getByRole('combobox'))
+        .not.toHaveAttribute('aria-disabled')
+    })
+
+    it('re-estimates on the rung, because two rungs are two different files', async () => {
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      chooseCompression('draco')
+      await act(async () => {})
+      expect(artifactSizes)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'balanced')
+
+      chooseQuality('smallest')
+      await act(async () => {})
+
+      expect(artifactSizes)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'smallest')
+      // …and the figure on the line says which rung it is for, so a test that
+      // waits for it cannot read the previous rung's number
+      // (`tests/e2e/exportEstimate.ts`).
+      expect(getByTestId('export-size'))
+        .toHaveAttribute('data-estimate-key', 'native|draco|smallest|meta')
+    })
+
+    it('captions what the rung costs, in millimetres off this model', async () => {
+      // "Smallest — parts may move up to 4.7 mm" is a decision a building
+      // modeller can make; "POSITION: 12 bits" is not (#1848 §5b). The figure
+      // is derived from the artifact's own bounds, so it moves with the model.
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      // Nothing to say with no codec: the file is not being re-encoded.
+      expect(queryByTestId('export-quality-caption')).toBeNull()
+
+      chooseCompression('draco')
+      await act(async () => {})
+      expect(getByTestId('export-quality-caption')).toHaveTextContent('parts may move up to 1.2 mm')
+
+      chooseQuality('smallest')
+      await act(async () => {})
+      expect(getByTestId('export-quality-caption')).toHaveTextContent('parts may move up to 4.7 mm')
+    })
+
+    it('says what Meshopt costs instead, which is not a distance', async () => {
+      // Positions are bit-exact at every rung, so a millimetre figure here
+      // would be a fiction. What FILTER actually rounds is shading.
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      chooseCompression('meshopt')
+      await act(async () => {})
+      expect(getByTestId('export-quality-caption'))
+        .toHaveTextContent('geometry exact; shading normals rounded')
+
+      chooseQuality('best')
+      await act(async () => {})
+      expect(getByTestId('export-quality-caption'))
+        .toHaveTextContent('geometry and shading normals exact')
+    })
+
+    it('carries the rung into the export', async () => {
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      chooseCompression('draco')
+      chooseQuality('smallest')
+      await act(async () => {})
+      fireEvent.click(getByTestId('export-glb-button'))
+
+      expect(mockRun).toHaveBeenLastCalledWith(
+        'glb', {stripBldrsMetadata: false, compression: 'draco', quality: 'smallest', portable: false})
+    })
   })
 })

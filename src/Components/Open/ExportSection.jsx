@@ -2,11 +2,17 @@ import React, {ReactElement, useEffect, useState} from 'react'
 import {Box, Button, Chip, MenuItem, Select, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {artifactSizes} from '../../export/artifactSizes'
+import {artifactPositionRange, artifactSizes} from '../../export/artifactSizes'
+import {
+  QUALITY_DEFAULT,
+  QUALITY_LABELS,
+  QUALITY_LEVELS,
+} from '../../export/exportQuality'
 import {
   COMPRESSION_LABELS,
   COMPRESSION_MODES,
   COMPRESSION_NONE,
+  compressionFidelityCaption,
 } from '../../export/glbCompression'
 import useExport, {formatBytes} from '../../export/useExport'
 import {gtagEvent} from '../../privacy/analytics'
@@ -73,6 +79,11 @@ export default function ExportSection() {
   // codec compresses. It is the informed choice, so it is the opt-in one
   // (#1843).
   const [isPortable, setIsPortable] = useState(false)
+  // Default Balanced, which for Meshopt means `FILTER`: −39.1% measured, with
+  // positions bit-exact and only shading normals rounded. The reasoning, and
+  // why a lossless rung still has to be reachable, is `exportQuality.js`
+  // §QUALITY_DEFAULT.
+  const [quality, setQuality] = useState(QUALITY_DEFAULT)
 
   const {getAccessTokenSilently, isAuthenticated} = useAuth0()
   // `isExporting` is tab-wide, not this button's own (store/UISlice.js): a
@@ -100,21 +111,39 @@ export default function ExportSection() {
   // real model, and a size line that simply vanishes for that long reads as a
   // broken panel rather than as work in progress.
   const [isEstimating, setIsEstimating] = useState(false)
+  // The artifact's own geometry bounds, which is all the millimetre caption
+  // needs. A property of the model rather than of any selection, so it is read
+  // once per artifact and rides on the size line's cached header read
+  // (`export/artifactSizes.js#artifactPositionRange`) — no second file read.
+  const [positionRange, setPositionRange] = useState(null)
 
   useEffect(() => {
     let isStale = false
     setEstimate(null)
     setIsEstimating(true)
-    artifactSizes(glbArtifact, compression, isPortable).then((read) => {
+    artifactSizes(glbArtifact, compression, isPortable, quality).then((read) => {
       if (!isStale) {
-        setEstimate({compression, isPortable, sizes: read})
+        setEstimate({compression, isPortable, quality, sizes: read})
         setIsEstimating(false)
       }
     })
     return () => {
       isStale = true
     }
-  }, [glbArtifact, compression, isPortable])
+  }, [glbArtifact, compression, isPortable, quality])
+
+  useEffect(() => {
+    let isStale = false
+    setPositionRange(null)
+    artifactPositionRange(glbArtifact).then((range) => {
+      if (!isStale) {
+        setPositionRange(range)
+      }
+    })
+    return () => {
+      isStale = true
+    }
+  }, [glbArtifact])
 
   const sizes = estimate?.sizes ?? null
 
@@ -154,7 +183,7 @@ export default function ExportSection() {
   // other end of this contract.
   const displayedEstimateKey = estimate &&
         `${estimate.isPortable ? 'portable' : 'native'}|${estimate.compression}` +
-        `|${isMetadataIncluded ? 'meta' : 'nometa'}`
+        `|${estimate.quality}|${isMetadataIncluded ? 'meta' : 'nometa'}`
   const metadataCaption = sizes && sizes.metadataBytes > 0 ?
     `${formatBytes(sizes.metadataBytes)} of Bldrs metadata ${isMetadataIncluded ? 'included' : 'removed'}` :
     null
@@ -166,6 +195,17 @@ export default function ExportSection() {
   // read the whole artifact off OPFS and re-serialise it, where the plain
   // uncompressed estimate is a header read (`export/artifactSizes.js`).
   const isPendingEstimate = isEstimating && (compression !== COMPRESSION_NONE || isPortable)
+  // What the rung costs the geometry, on THIS model — a distance in
+  // millimetres for Draco, computed from the artifact's own primitive bounds,
+  // and a sentence about shading for Meshopt, which leaves positions
+  // bit-exact (`export/glbCompression.js#compressionFidelityCaption`). Read
+  // off the ESTIMATE's selection, not the controls', for the same reason the
+  // figure is: for the render between a click and the re-estimate the two
+  // disagree, and a caption promising 4 mm above a 1 mm figure is worse than
+  // no caption.
+  const fidelityCaption = estimate && !isPendingEstimate ?
+    compressionFidelityCaption(estimate.compression, estimate.quality, positionRange) :
+    null
   // The figure is honest even when the codec is not available here (its
   // encoder failed to load, say): the estimate fell back to the file as it
   // is — uncompressed, or still in the codec the cache wrote it with — and
@@ -181,7 +221,7 @@ export default function ExportSection() {
   }
 
   const onExportClick = async () => {
-    await run('glb', {stripBldrsMetadata: !isMetadataIncluded, compression, portable: isPortable})
+    await run('glb', {stripBldrsMetadata: !isMetadataIncluded, compression, quality, portable: isPortable})
   }
 
   const onUpgradeClick = async () => {
@@ -321,6 +361,41 @@ export default function ExportSection() {
           ))}
         </Select>
       </Stack>
+      {/* Directly under Compression, because it only means anything once a
+          codec is chosen — and disabled rather than hidden while it isn't, so
+          the panel doesn't change height under the user's cursor when they
+          pick one. Presets rather than bit counts: the bit count is
+          meaningless to a CAD user and dangerous when wrong, and the two
+          codecs' knobs don't line up, so one number would mean two different
+          things (#1848 §5). */}
+      <Stack
+        direction='row'
+        justifyContent='space-between'
+        alignItems='center'
+        flexWrap='wrap'
+        gap={1}
+        sx={{mt: '1em'}}
+      >
+        <Box>
+          <Typography variant='body2'>Quality</Typography>
+          <Typography variant='caption' color='text.secondary'>how hard to squeeze</Typography>
+        </Box>
+        <Select
+          value={quality}
+          size='small'
+          disabled={compression === COMPRESSION_NONE}
+          onChange={(event) => setQuality(event.target.value)}
+          inputProps={{'aria-label': 'Quality'}}
+          sx={{minWidth: '8em', textAlign: 'left'}}
+          data-testid='export-quality'
+        >
+          {QUALITY_LEVELS.map((level) => (
+            <MenuItem key={level} value={level} data-testid={`export-quality-${level}`}>
+              {QUALITY_LABELS[level]}
+            </MenuItem>
+          ))}
+        </Select>
+      </Stack>
       {/* The size the controls above just chose, above the action it applies
           to. Its `data-bytes` is the raw count the label rounds, so a test
           can compare it with the downloaded file byte for byte rather than
@@ -337,6 +412,15 @@ export default function ExportSection() {
            <Typography variant='body2'>Download size</Typography>
            {metadataCaption &&
             <Typography variant='caption' color='text.secondary'>{metadataCaption}</Typography>}
+           {fidelityCaption &&
+            <Typography
+              variant='caption'
+              color='text.secondary'
+              display='block'
+              data-testid='export-quality-caption'
+            >
+              {fidelityCaption}
+            </Typography>}
            {fallbackCaption &&
             <Typography
               variant='caption'

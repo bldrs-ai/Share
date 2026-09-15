@@ -4,11 +4,12 @@ import {glbCacheKey} from '../loader/glbCacheKey'
 import {unpackGlbContainer} from '../loader/glbContainer'
 import {stripGlbBldrs} from '../loader/glbStrip'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
+import {QUALITY_DEFAULT} from './exportQuality'
 import {COMPRESSION_NONE, compressExportGlb, isCompressionMode} from './glbCompression'
 import {rewriteGlbPortable} from './glbPortable'
 
 
-// One in-flight or settled answer per (artifact, portable × compression mode).
+// One in-flight or settled answer per (artifact, portable × codec × quality).
 // The store publishes a fresh `glbArtifact` object per load (store/IFCSlice.js), so
 // identity is the outer cache key: reopening the Export tab on the same model
 // reuses the answer, and a new load misses. Weak so a superseded artifact's
@@ -20,16 +21,32 @@ const compressedByArtifact = new WeakMap()
 
 /**
  * The inner cache key. Portable and native are different FILES for the same
- * codec, so the two must not share a cell — the size line and the export both
- * read through this, and a collision would quote one file and download the
- * other.
+ * codec, and since #1848 so are two quality rungs, so none of them may share a
+ * cell — the size line and the export both read through this, and a collision
+ * would quote one file and download the other.
+ *
+ * Quality is in the key ONLY when a codec is running. It is an encoder
+ * setting and nothing else reads it, so folding it in unconditionally would
+ * split the uncompressed cell three ways and — with Portable on — run the
+ * whole artifact rewrite once per rung for three identical files.
  *
  * @param {boolean} isPortable
  * @param {string} mode
+ * @param {string} quality
  * @return {string}
  */
-function rewriteKey(isPortable, mode) {
-  return `${isPortable ? 'portable' : 'native'}|${mode}`
+function rewriteKey(isPortable, mode, quality) {
+  const shape = `${isPortable ? 'portable' : 'native'}|${mode}`
+  return hasCodec(mode) ? `${shape}|${quality}` : shape
+}
+
+
+/**
+ * @param {string} mode
+ * @return {boolean} true when an encoder will actually run for this mode
+ */
+function hasCodec(mode) {
+  return mode !== COMPRESSION_NONE && isCompressionMode(mode)
 }
 
 
@@ -63,9 +80,10 @@ function rewriteKey(isPortable, mode) {
  * @param {string} [mode] One of `glbCompression.js`'s `COMPRESSION_MODES`
  * @param {boolean} [isPortable] Expand the instancing into a named node tree
  *   first (`glbPortable.js`)
+ * @param {string} [quality] One of `exportQuality.js`'s `QUALITY_LEVELS`
  * @return {Promise<?{withMetadata: number, withoutMetadata: number, metadataBytes: number, compression: string}>}
  */
-export function artifactSizes(artifact, mode = COMPRESSION_NONE, isPortable = false) {
+export function artifactSizes(artifact, mode = COMPRESSION_NONE, isPortable = false, quality = QUALITY_DEFAULT) {
   if (!artifact) {
     return Promise.resolve(null)
   }
@@ -74,12 +92,48 @@ export function artifactSizes(artifact, mode = COMPRESSION_NONE, isPortable = fa
   // instance TRS floats and ungzips two payloads out of it. So it takes the
   // whole-file path a codec takes, and the panel shows "Estimating…" while it
   // runs (#1843).
-  if (isPortable || (mode !== COMPRESSION_NONE && isCompressionMode(mode))) {
-    return compressedExport(artifact, mode, null, isPortable).then(sizesOfCompressed)
+  if (isPortable || hasCodec(mode)) {
+    return compressedExport(artifact, mode, null, isPortable, quality).then(sizesOfCompressed)
+  }
+  return uncompressedSizes(artifact)
+}
+
+
+/**
+ * The cheap answer: the artifact's own header, never its BIN chunk
+ * (`loader/glbArtifactSize.js`). Its own function because three callers want
+ * it for three reasons — the size line, the background scheduler's size
+ * threshold, and the fidelity caption's bounds — and all three must share the
+ * one read.
+ *
+ * @param {?object} artifact
+ * @return {Promise<?object>} sizes plus `positionRange`, or null
+ */
+export function uncompressedSizes(artifact) {
+  if (!artifact) {
+    return Promise.resolve(null)
   }
   return cached(
-    sizesByArtifact, artifact, rewriteKey(false, COMPRESSION_NONE),
+    sizesByArtifact, artifact, rewriteKey(false, COMPRESSION_NONE, QUALITY_DEFAULT),
     () => readArtifactSizes(artifact))
+}
+
+
+/**
+ * The range Draco quantizes this artifact's worst primitive in, for the
+ * Export tab's millimetre caption
+ * (`loader/glbArtifactSize.js#positionQuantizationRange`).
+ *
+ * A property of the ARTIFACT, not of any selection: the codecs do not change
+ * the geometry's bounds, and the portable rewrite moves placements into nodes
+ * without touching a POSITION accessor. So it rides on the same cached header
+ * read the uncompressed size line already made — no extra I/O at all.
+ *
+ * @param {?object} artifact The store's `glbArtifact` slot
+ * @return {Promise<?number>} metres, or null when the bounds can't be read
+ */
+export function artifactPositionRange(artifact) {
+  return uncompressedSizes(artifact).then((sizes) => sizes?.positionRange ?? null)
 }
 
 
@@ -99,12 +153,13 @@ export function artifactSizes(artifact, mode = COMPRESSION_NONE, isPortable = fa
  *   when `isPortable` is set, since the rewrite is then the only change
  * @param {?Uint8Array} [glbBytes] The artifact's GLB, if the caller has it
  * @param {boolean} [isPortable] Run the portable rewrite before the codec
+ * @param {string} [quality] One of `exportQuality.js`'s `QUALITY_LEVELS`
  * @return {Promise<?object>} `compressExportGlb`'s result, or null
  */
-export function compressedExport(artifact, mode, glbBytes = null, isPortable = false) {
+export function compressedExport(artifact, mode, glbBytes = null, isPortable = false, quality = QUALITY_DEFAULT) {
   return cached(
-    compressedByArtifact, artifact, rewriteKey(isPortable, mode),
-    () => runRewrite(artifact, mode, glbBytes, isPortable))
+    compressedByArtifact, artifact, rewriteKey(isPortable, mode, quality),
+    () => runRewrite(artifact, mode, glbBytes, isPortable, quality))
 }
 
 
@@ -161,16 +216,17 @@ function sizesOfCompressed(compressed) {
  * @param {string} mode
  * @param {?Uint8Array} glbBytes
  * @param {boolean} isPortable
+ * @param {string} quality
  * @return {Promise<?object>} `compressExportGlb`'s result shape, or null
  */
-async function runRewrite(artifact, mode, glbBytes, isPortable) {
+async function runRewrite(artifact, mode, glbBytes, isPortable, quality) {
   try {
     const bytes = glbBytes || await readArtifactGlb(artifact)
     if (!bytes) {
       return null
     }
     const source = isPortable ? rewriteGlbPortable(bytes).bytes : bytes
-    if (mode === COMPRESSION_NONE || !isCompressionMode(mode)) {
+    if (!hasCodec(mode)) {
       // Portable with no codec still needs both sides of the metadata toggle,
       // and `compressExportGlb` short-circuits to "input unchanged" for the
       // no-codec case — which would hand the metadata-off side a file with
@@ -185,7 +241,7 @@ async function runRewrite(artifact, mode, glbBytes, isPortable) {
         mode: COMPRESSION_NONE,
       }
     }
-    return await compressExportGlb(source, mode)
+    return await compressExportGlb(source, mode, quality)
   } catch (e) {
     captureException(e)
     return null

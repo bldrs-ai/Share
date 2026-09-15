@@ -15,6 +15,7 @@ import {
   reopenLocalGlb,
   routeProModule,
   selectCompression,
+  selectQuality,
   setSubscriptionTier,
   toggleMetadata,
   togglePortable,
@@ -39,6 +40,21 @@ import {
  */
 async function sizeBytes(sizeLine: Locator): Promise<number> {
   return Number(await sizeLine.getAttribute('data-bytes'))
+}
+
+
+/**
+ * The millimetre figure out of a Quality caption, for comparing two rungs.
+ *
+ * @param caption e.g. 'parts may move up to 4.7 mm; shading normals rounded'
+ * @return the number of millimetres it quotes
+ */
+function millimetresIn(caption: string | null): number {
+  const match = /([\d.]+) mm/.exec(caption ?? '')
+  if (match === null) {
+    throw new Error(`No millimetre figure in Quality caption: ${caption}`)
+  }
+  return Number(match[1])
 }
 
 
@@ -591,6 +607,65 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
     await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.glb(\/\d+)+/)
     expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
+  })
+
+  test('a Pro user picks a Quality rung, and the panel says what it costs', async ({page}) => {
+    // #1848. The rungs are encoder settings, so what only a browser can show
+    // is that they reach the real wasm encoders and change the file the user
+    // gets — and that the millimetre caption beside them is computed off THIS
+    // model's own bounds rather than being a constant.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+
+    // Balanced by default, and inert until a codec is chosen — there is
+    // nothing for a rung to mean while the file is being handed over as it is.
+    const qualityControl = page.getByTestId('export-quality')
+    await expect(qualityControl).toContainText('Balanced')
+    await expect(qualityControl.getByRole('combobox')).toHaveAttribute('aria-disabled', 'true')
+    await expect(page.getByTestId('export-quality-caption')).toHaveCount(0)
+
+    const balancedBytes = await selectCompression(page, 'draco')
+    await expect(qualityControl.getByRole('combobox')).not.toHaveAttribute('aria-disabled')
+    // The caption is a promise about the user's model, in the unit they
+    // decide in.
+    const balancedCaption = await page.getByTestId('export-quality-caption').textContent()
+    expect(balancedCaption).toMatch(/parts may move up to [\d.]+ mm/)
+
+    const smallestBytes = await selectQuality(page, 'smallest')
+
+    // Fewer POSITION bits is a coarser grid, so the figure has to grow — the
+    // one thing about the caption that cannot be a constant.
+    const smallestCaption = await page.getByTestId('export-quality-caption').textContent()
+    expect(smallestCaption).toMatch(/parts may move up to [\d.]+ mm/)
+    expect(millimetresIn(smallestCaption)).toBeGreaterThan(millimetresIn(balancedCaption))
+    // Two rungs are two different files. On a fixture this small they need
+    // not differ in SIZE — the encoder-effort half of a rung is model-shaped
+    // (#1848) — so what is asserted is what the panel promises: the figure on
+    // the line is the file that lands in Downloads, at the rung now chosen.
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    const file = await readFile(await (await downloadPromise).path())
+
+    expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+    expect(file.byteLength).toBe(smallestBytes)
+    expect(glbJsonChunk(file).extensionsRequired).toContain('KHR_draco_mesh_compression')
+    // A fourth control row is where a mobile layout regression would show up
+    // as a sideways scroll rather than a missing element (#1838).
+    await expectNoHorizontalScroll(page)
+
+    // Back to Balanced and the panel is exactly where it was — the cached
+    // figure for that rung, not a third encode.
+    expect(await selectQuality(page, 'balanced')).toBe(balancedBytes)
   })
 
   test('a signed-out user is told what unlocks Save, and gets no dialog', async ({page}) => {
