@@ -605,6 +605,65 @@ GitHub tab only: the Export tab's actions are its own buttons.
 took "My Exports" back off the panel after the #1837 preview (#1838); the
 component and the recording pipeline behind it stay.
 
+**Every codec is measured in the background** (#1850), because *which codec
+wins swings with model shape and swings against intuition*. Measured:
+Momentum.ifc → GLB gives Draco 250,184 B against Meshopt 1,347,740 B; an
+instance-heavy synthetic gives Draco −17.3% against Meshopt **−68.0%**. Draco
+encodes mesh primitives only and cannot reach `EXT_mesh_gpu_instancing`
+accessors at all — and instance-heavy is exactly what the batched-native
+writer produces. A user picking on reputation picks wrong about half the time,
+and the panel already knew the answer.
+
+So while the tab is open, `export/codecSizes.js` measures each codec's real
+output and `export/useCodecSizes.js` wires it to React. Each figure is
+appended to that codec's dropdown **option** as it lands (never to the closed
+control — at 390px a size beside the label would ellipsize away the half that
+matters), and when the last one arrives the panel selects the smallest.
+
+Five constraints shape it, and they are the design:
+
+- **Sequential, cheapest first, releasing as it goes.** Each estimate cell
+  holds two whole copies of the export, so a naive sweep would leave three
+  codecs' worth resident beside the source. The loop awaits each estimate and
+  releases the previous codec's bytes *before* starting the next
+  (`artifactSizes.js#releaseCompressedExport`), keeping exactly one codec's
+  output in memory. The order — none, Meshopt, Draco — is measured, not
+  guessed: on Momentum, `none` is a header read, Meshopt encodes at ~33 ms/MB
+  from a module already in the bundle, Draco at ~135 ms/MB behind a second
+  wasm the page has to fetch. The **winner is kept**, so the selection that
+  follows lands on a filled cache and the export hands over those very bytes.
+- **Nothing starts above ~50 MB.** ~170 ms/MB across the whole axis, and it is
+  not interruptible, so 50 MB is about eight seconds of main-thread work.
+  Above the line the panel shows "Codec sizes not measured" and a **Calculate
+  sizes** button.
+- **Cancel stops the QUEUE, and says so.** `@gltf-transform`'s `writeBinary`
+  drives both wasm encoders synchronously and neither exposes an abort, so
+  mid-encode cancellation is not available short of terminating the thread.
+  The control is therefore labelled **Stop**, and once pressed the status line
+  reads "Finishing Draco…" rather than pretending the CPU is idle — a Cancel
+  that leaves the work running while claiming otherwise teaches people the
+  control doesn't work. Whatever was already measured stays on the dropdown
+  and stays usable. Between codecs the scheduler yields to the event loop,
+  which is what lets the click be seen at all and what keeps each new figure
+  painting as it arrives.
+- **The codec axis only.** With Quality (§4.3) and Portable the matrix is
+  codec × quality × portable × metadata; the sweep runs the codec axis at the
+  *currently selected* quality and Portable setting and restarts — cancelling
+  first — when either changes, because every figure it published was measured
+  at the old one. The metadata toggle is deliberately **not** a restart axis:
+  one estimate produces both sides, so it keeps moving every figure for free.
+- **An explicit choice is final.** A codec the user picked is never overridden,
+  however small a later figure turns out to be. That hangs off the MenuItem's
+  own `onClick`, not the `Select`'s `onChange`, because MUI fires `onChange`
+  only when the value *changes* — and re-picking the codec already showing,
+  having just read the three sizes, is exactly how a user says "this one, stop
+  moving it".
+
+`export-section` carries `data-codec-sizes` — the modes measured so far, in
+order — so an E2E can wait for the sweep before touching the codec control
+(`tests/e2e/export.ts#waitForCodecSizing`); a click racing the auto-selection
+reads a dropdown that moved under it.
+
 **Gated actions.** An action the user can't take *yet* is not hidden. It
 renders in its normal place in a disabled LOOK, stays clickable, and the
 click opens help saying what unlocks it, with the unlocking action as a

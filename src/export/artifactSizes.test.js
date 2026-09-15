@@ -2,7 +2,7 @@ import {captureException} from '@sentry/react'
 import {packGlbChunks} from '../loader/glbContainer'
 import {serializeGlb} from '../loader/injectGlbExtensions'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
-import {artifactPositionRange, artifactSizes, compressedExport} from './artifactSizes'
+import {artifactPositionRange, artifactSizes, compressedExport, releaseCompressedExport} from './artifactSizes'
 import {compressExportGlb} from './glbCompression'
 import {rewriteGlbPortable} from './glbPortable'
 
@@ -342,6 +342,44 @@ describe('artifactSizes', () => {
 
       expect(rewriteGlbPortable).toHaveBeenCalledTimes(1)
       expect(compressExportGlb).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('releasing a measured codec (#1850)', () => {
+    const COMPRESSED = {
+      withMetadata: new Uint8Array(300),
+      withoutMetadata: new Uint8Array(120),
+      strippedExtensions: [],
+      mode: 'draco',
+    }
+
+    beforeEach(() => {
+      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+      compressExportGlb.mockResolvedValue(COMPRESSED)
+    })
+
+    it('drops the bytes of exactly the cell it names', async () => {
+      // The background sweep measures every codec, and each cell holds two
+      // whole copies of the export. Without a release, opening the tab would
+      // leave three codecs' worth resident beside the source.
+      const artifact = {...ARTIFACT}
+      await artifactSizes(artifact, 'draco', false, 'best')
+      await artifactSizes(artifact, 'meshopt', false, 'best')
+      expect(compressExportGlb).toHaveBeenCalledTimes(2)
+
+      releaseCompressedExport(artifact, 'draco', false, 'best')
+
+      // Draco has to be encoded again; Meshopt is still in hand.
+      await artifactSizes(artifact, 'meshopt', false, 'best')
+      expect(compressExportGlb).toHaveBeenCalledTimes(2)
+      await artifactSizes(artifact, 'draco', false, 'best')
+      expect(compressExportGlb).toHaveBeenCalledTimes(3)
+    })
+
+    it('is harmless on an artifact that never had a cell', () => {
+      // The sweep releases whatever it measured, including a codec whose
+      // encode failed and left nothing behind.
+      expect(() => releaseCompressedExport({...ARTIFACT}, 'draco')).not.toThrow()
     })
   })
 

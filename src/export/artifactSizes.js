@@ -164,6 +164,32 @@ export function compressedExport(artifact, mode, glbBytes = null, isPortable = f
 
 
 /**
+ * Drop one cell's BYTES, keeping whatever size was read off them.
+ *
+ * The background codec sweep (#1850) is the reason this exists. Every cell
+ * holds two whole copies of the export — `withMetadata` and `withoutMetadata`
+ * — so measuring the codec axis eagerly would leave three codecs' worth
+ * resident beside the source. The sweep therefore releases each codec before
+ * it starts the next, and the numbers it has already published stay on the
+ * dropdown.
+ *
+ * Releasing costs at most one re-encode: if the user then picks that codec,
+ * the size line's own effect fills the cell again with the identical bytes —
+ * the encoders are deterministic, so the figure it re-derives is the figure
+ * it showed. `codecSizes.js#measureCodecSizes` keeps the winner for exactly
+ * that reason.
+ *
+ * @param {?object} artifact
+ * @param {string} mode
+ * @param {boolean} [isPortable]
+ * @param {string} [quality]
+ */
+export function releaseCompressedExport(artifact, mode, isPortable = false, quality = QUALITY_DEFAULT) {
+  compressedByArtifact.get(artifact)?.delete(rewriteKey(isPortable, mode, quality))
+}
+
+
+/**
  * Look one up in a per-artifact, per-mode map, filling it on a miss. The
  * PROMISE is stored, not its value, so two callers racing for the same cell
  * (the size line and a fast click on Export) share one compression run.

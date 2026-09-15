@@ -17,8 +17,12 @@ import {
   selectCompression,
   selectQuality,
   setSubscriptionTier,
+  smallestCodecIn,
   toggleMetadata,
   togglePortable,
+  waitForCodecSizes,
+  waitForCodecSizing,
+  waitForEstimate,
   watchProModuleRequests,
 } from '../../tests/e2e/export'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
@@ -171,6 +175,14 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(exportButton).toBeEnabled()
     await expect(exportButton).toHaveText('Export GLB')
 
+    // Pin the codec before reading anything. Since #1850 the panel measures
+    // every codec in the background and defaults to the smallest, so the
+    // selection is in motion for the first seconds the tab is open. Let the
+    // sweep finish, then choose explicitly — an explicit choice is never
+    // overridden, so from here the selection is this test's.
+    await waitForCodecSizing(page)
+    await selectCompression(page, 'none')
+
     // What the file will weigh, before anything is downloaded (#1841). The
     // figure is read from the artifact's header; `data-bytes` carries the
     // raw count the label rounds, so the comparison with the saved file
@@ -250,8 +262,15 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
 
-    // Uncompressed is the default, and the baseline each codec is read
-    // against.
+    // Pin the codec before reading anything. Since #1850 the panel measures
+    // every codec in the background and defaults to the smallest, so the
+    // selection is in motion for the first seconds the tab is open. Let the
+    // sweep finish, then choose explicitly — an explicit choice is never
+    // overridden, so from here the selection is this test's.
+    await waitForCodecSizing(page)
+    await selectCompression(page, 'none')
+
+    // Uncompressed is the baseline each codec is read against.
     const sizeLine = page.getByTestId('export-size')
     await expect(sizeLine).toBeVisible()
     await expect(page.getByTestId('export-compression')).toContainText('None')
@@ -339,6 +358,14 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+
+    // Pin the codec before reading anything. Since #1850 the panel measures
+    // every codec in the background and defaults to the smallest, so the
+    // selection is in motion for the first seconds the tab is open. Let the
+    // sweep finish, then choose explicitly — an explicit choice is never
+    // overridden, so from here the selection is this test's.
+    await waitForCodecSizing(page)
+    await selectCompression(page, 'none')
 
     const sizeLine = page.getByTestId('export-size')
     await expect(sizeLine).toBeVisible()
@@ -445,6 +472,13 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+    // Pin the codec before reading anything. Since #1850 the panel measures
+    // every codec in the background and defaults to the smallest, so the
+    // selection is in motion for the first seconds the tab is open. Let the
+    // sweep finish, then choose explicitly — an explicit choice is never
+    // overridden, so from here the selection is this test's.
+    await waitForCodecSizing(page)
+    await selectCompression(page, 'none')
     await expect(page.getByTestId('export-compression')).toContainText('None')
 
     const downloadPromise = page.waitForEvent('download')
@@ -523,6 +557,14 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+
+    // Pin the codec before reading anything. Since #1850 the panel measures
+    // every codec in the background and defaults to the smallest, so the
+    // selection is in motion for the first seconds the tab is open. Let the
+    // sweep finish, then choose explicitly — an explicit choice is never
+    // overridden, so from here the selection is this test's.
+    await waitForCodecSizing(page)
+    await selectCompression(page, 'none')
 
     // Off by default: the batched-native shape is the smaller file and the one
     // Share itself reads best.
@@ -627,6 +669,14 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
 
+    // Pin the codec before reading anything. Since #1850 the panel measures
+    // every codec in the background and defaults to the smallest, so the
+    // selection is in motion for the first seconds the tab is open. Let the
+    // sweep finish, then choose explicitly — an explicit choice is never
+    // overridden, so from here the selection is this test's.
+    await waitForCodecSizing(page)
+    await selectCompression(page, 'none')
+
     // Balanced by default, and inert until a codec is chosen — there is
     // nothing for a rung to mean while the file is being handed over as it is.
     const qualityControl = page.getByTestId('export-quality')
@@ -666,6 +716,65 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // Back to Balanced and the panel is exactly where it was — the cached
     // figure for that rung, not a third encode.
     expect(await selectQuality(page, 'balanced')).toBe(balancedBytes)
+  })
+
+  test('the panel measures every codec and defaults to the smallest', async ({page}) => {
+    // #1850. Which codec wins swings enormously with model shape — Draco by
+    // 5× on a geometry-heavy building model, Meshopt by 2.6× on an
+    // instance-heavy one, which is exactly what Share's batched writer
+    // produces — so a user picking on reputation picks wrong about half the
+    // time. The panel measures instead.
+    //
+    // Only a browser can show this: the figures are three REAL encoder runs
+    // against the wasm the page ships, done in the background while the
+    // dialog stays usable, and what is asserted at the end is that the
+    // download weighs exactly the figure the winning option carried.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+
+    // No interaction: opening the tab is the whole trigger.
+    const codecSizes = await waitForCodecSizes(page)
+    for (const mode of ['none', 'meshopt', 'draco']) {
+      expect(codecSizes[mode], `${mode} should have a measured size`).toBeGreaterThan(0)
+    }
+    // On `index.ifc` Draco wins, but the assertion is about the RULE, not
+    // about this fixture: whichever option is smallest is the one selected.
+    const smallest = smallestCodecIn(codecSizes)
+    await expect(page.getByTestId('export-compression'))
+      .toContainText(smallest.charAt(0).toUpperCase() + smallest.slice(1))
+    // The dialog took the sweep without seizing up — every control above is
+    // still live, and the layout still fits the mobile projection.
+    await expect(page.getByTestId('export-include-metadata').locator('input')).toBeEnabled()
+    await expectNoHorizontalScroll(page)
+
+    // The size line agrees with the option that won it…
+    expect(await waitForEstimate(page)).toBe(codecSizes[smallest])
+
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    const file = await readFile(await (await downloadPromise).path())
+
+    expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+    // …and so does the file. The sweep releases each codec's bytes as it
+    // goes, so this is also the assertion that a released-and-re-encoded
+    // codec produces the very same file.
+    expect(file.byteLength).toBe(codecSizes[smallest])
+
+    // An explicit choice is never overridden, however small a figure the
+    // panel is holding for something else.
+    const uncompressedBytes = await selectCompression(page, 'none')
+    expect(uncompressedBytes).toBe(codecSizes.none)
+    await expect(page.getByTestId('export-compression')).toContainText('None')
   })
 
   test('a signed-out user is told what unlocks Save, and gets no dialog', async ({page}) => {

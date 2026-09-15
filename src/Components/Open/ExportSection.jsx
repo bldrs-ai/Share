@@ -3,6 +3,7 @@ import {Box, Button, Chip, MenuItem, Select, Stack, Typography} from '@mui/mater
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {artifactPositionRange, artifactSizes} from '../../export/artifactSizes'
+import {codecToSelect} from '../../export/codecSizes'
 import {
   QUALITY_DEFAULT,
   QUALITY_LABELS,
@@ -14,6 +15,7 @@ import {
   COMPRESSION_NONE,
   compressionFidelityCaption,
 } from '../../export/glbCompression'
+import useCodecSizes from '../../export/useCodecSizes'
 import useExport, {formatBytes} from '../../export/useExport'
 import {gtagEvent} from '../../privacy/analytics'
 import {TIERS, getTier} from '../../quota/quota'
@@ -73,6 +75,11 @@ export default function ExportSection() {
   // two need the matching decoder registered in whatever the user opens it
   // with. Compression is the informed choice, so it is the opt-in one.
   const [compression, setCompression] = useState(COMPRESSION_NONE)
+  // Whether the user has picked the codec THEMSELVES. Once they have, the
+  // background sweep's auto-selection stands down for good: a dropdown that
+  // moves under the cursor because a later-arriving figure turned out smaller
+  // is worse than a suboptimal default (#1850).
+  const [isCodecUserChosen, setIsCodecUserChosen] = useState(false)
   // Default OFF: the batched-native shape is smaller and is what Share itself
   // reads best, and the rewrite trades JSON for portability — one node per
   // placement, which on a big model is megabytes of names and transforms no
@@ -90,6 +97,13 @@ export default function ExportSection() {
   // "Download again" running in the list below must disable this button too,
   // or the user gets two exports racing each other's history write (#1834).
   const {isExporting, run} = useExport()
+  // Every codec's real size, measured in the background while the tab is open
+  // — because which one wins swings with model shape, and swings against
+  // intuition: Draco cannot touch `EXT_mesh_gpu_instancing` accessors at all,
+  // which is most of a batched-native artifact (#1850, `codecSizes.js`).
+  const {
+    sizesByCodec, measuringCodec, isMeasuring, isStopping, isSuppressed, start: startSizing, stop: stopSizing,
+  } = useCodecSizes(glbArtifact, {quality, isPortable, isMetadataIncluded})
   const theme = useTheme()
   // Both download sizes, read from the artifact's header when the tab opens
   // (`export/artifactSizes.js`) — null while that read is in flight and for
@@ -145,6 +159,17 @@ export default function ExportSection() {
     }
   }, [glbArtifact])
 
+  useEffect(() => {
+    // The whole point of the sweep: once every codec has reported, the panel
+    // defaults to the smallest rather than leaving the user to click through
+    // all three and remember. `codecToSelect` is where the two refusals live
+    // — an unfinished sweep, and a codec the user chose themselves.
+    const best = codecToSelect(sizesByCodec, isMetadataIncluded, isCodecUserChosen, compression)
+    if (best !== null) {
+      setCompression(best)
+    }
+  }, [sizesByCodec, isMetadataIncluded, isCodecUserChosen, compression])
+
   const sizes = estimate?.sizes ?? null
 
   const isPro = getTier(appMetadata, isAuthenticated) === TIERS.PAID
@@ -195,6 +220,20 @@ export default function ExportSection() {
   // read the whole artifact off OPFS and re-serialise it, where the plain
   // uncompressed estimate is a header read (`export/artifactSizes.js`).
   const isPendingEstimate = isEstimating && (compression !== COMPRESSION_NONE || isPortable)
+  // What the sweep is doing, said honestly. "Stop" ends the QUEUE — the
+  // encoders are synchronous wasm with no abort — so once it is pressed the
+  // line names the codec that is still finishing rather than claiming the
+  // work stopped (`export/codecSizes.js`).
+  let sizingStatus = MSG_SIZES_TOO_BIG
+  if (isStopping) {
+    sizingStatus = measuringCodec ?
+      `Finishing ${COMPRESSION_LABELS[measuringCodec]}…` :
+      'Stopping…'
+  } else if (isMeasuring) {
+    sizingStatus = measuringCodec ?
+      `Sizing ${COMPRESSION_LABELS[measuringCodec]}…` :
+      'Sizing…'
+  }
   // What the rung costs the geometry, on THIS model — a distance in
   // millimetres for Draco, computed from the artifact's own primitive bounds,
   // and a sentence about shading for Meshopt, which leaves positions
@@ -292,7 +331,17 @@ export default function ExportSection() {
     // action row — is the action row's own `mt: '1em'` below, so there's one
     // source of truth for it rather than a Stack spacing and an `mt` adding
     // up to something other than 1em.
-    <Stack data-testid='export-section' sx={{textAlign: 'left'}}>
+    <Stack
+      data-testid='export-section'
+      // Which codecs the background sweep has a figure for, in the order it
+      // measured them. The figures themselves live on the dropdown options,
+      // where the user compares them; this says whether the sweep is still
+      // going — which is what an E2E needs before it touches the codec
+      // control, since an auto-selection landing mid-click would move the
+      // dropdown out from under it (`tests/e2e/export.ts#waitForCodecSizing`).
+      data-codec-sizes={COMPRESSION_MODES.filter((mode) => mode in sizesByCodec).join(',')}
+      sx={{textAlign: 'left'}}
+    >
       <Stack direction='row' justifyContent='space-between' alignItems='center' gap={1}>
         <Box>
           <Typography variant='body2'>Include Bldrs metadata</Typography>
@@ -351,16 +400,76 @@ export default function ExportSection() {
           size='small'
           onChange={(event) => setCompression(event.target.value)}
           inputProps={{'aria-label': 'Compression'}}
+          // The CLOSED control shows the bare label, never the size. The
+          // menu is where the comparison happens and where there is room for
+          // it; at 390px "Meshopt · 1.3 MB" would either ellipsize away the
+          // half that matters or push the dialog sideways (#1838).
+          renderValue={(mode) => COMPRESSION_LABELS[mode]}
           sx={{minWidth: '8em', textAlign: 'left'}}
           data-testid='export-compression'
         >
           {COMPRESSION_MODES.map((mode) => (
-            <MenuItem key={mode} value={mode} data-testid={`export-compression-${mode}`}>
+            <MenuItem
+              key={mode}
+              value={mode}
+              // "The user chose" hangs off the ITEM, not off the Select's
+              // `onChange`, because MUI fires `onChange` only when the value
+              // actually changes — and picking the codec that is already
+              // selected, having just read the three sizes, is exactly how a
+              // user says "this one, stop moving it". The sweep must stand
+              // down for that click too (`codecSizes.js#codecToSelect`).
+              onClick={() => setIsCodecUserChosen(true)}
+              // The raw count beside the rounded label, like the size line's,
+              // so a test can compare the figure the user chose by with the
+              // downloaded file byte for byte.
+              data-bytes={codecBytes(sizesByCodec[mode], isMetadataIncluded) ?? undefined}
+              data-testid={`export-compression-${mode}`}
+            >
               {COMPRESSION_LABELS[mode]}
+              {codecBytes(sizesByCodec[mode], isMetadataIncluded) !== null &&
+               <Typography component='span' variant='caption' color='text.secondary' sx={{ml: 1}}>
+                 {formatBytes(codecBytes(sizesByCodec[mode], isMetadataIncluded))}
+               </Typography>}
             </MenuItem>
           ))}
         </Select>
       </Stack>
+      {/* What the background sweep is doing, and the one control over it.
+          Only rendered while there is something to say — a finished sweep on
+          a small model is over before most users have read the label above,
+          and a permanent status line for it would be noise. */}
+      {(isMeasuring || isSuppressed) &&
+       <Stack
+         direction='row'
+         justifyContent='space-between'
+         alignItems='center'
+         flexWrap='wrap'
+         gap={1}
+         sx={{mt: '0.5em'}}
+         data-testid='export-codec-sizes'
+       >
+         <Typography variant='caption' color='text.secondary' data-testid='export-codec-sizes-status'>
+           {sizingStatus}
+         </Typography>
+         {isSuppressed ?
+           <Button
+             size='small'
+             sx={{textTransform: 'none'}}
+             onClick={startSizing}
+             data-testid='export-codec-sizes-start'
+           >
+             Calculate sizes
+           </Button> :
+           <Button
+             size='small'
+             sx={{textTransform: 'none'}}
+             disabled={isStopping}
+             onClick={stopSizing}
+             data-testid='export-codec-sizes-stop'
+           >
+             Stop
+           </Button>}
+       </Stack>}
       {/* Directly under Compression, because it only means anything once a
           codec is chosen — and disabled rather than hidden while it isn't, so
           the panel doesn't change height under the user's cursor when they
@@ -468,5 +577,25 @@ export default function ExportSection() {
 }
 
 
+/**
+ * Which of one codec's two figures the dropdown shows, following the metadata
+ * toggle so the option a user compares by is the file they would get.
+ *
+ * @param {?object} sizes One codec's entry in the sweep's results
+ * @param {boolean} isMetadataIncluded
+ * @return {?number} the byte count, or null while it is unknown or unreadable
+ */
+function codecBytes(sizes, isMetadataIncluded) {
+  if (!sizes) {
+    return null
+  }
+  return isMetadataIncluded ? sizes.withMetadata : sizes.withoutMetadata
+}
+
+
 const MSG_EXPORT_NEEDS_PRO = 'Exporting a GLB needs a Pro subscription'
+// Above ~50 MB nothing starts on its own: three encoders over an artifact
+// that size is seconds of uninterruptible main-thread work, and the user
+// should be the one who asks for it (`export/codecSizes.js`).
+const MSG_SIZES_TOO_BIG = 'Codec sizes not measured'
 const MSG_LOGIN_TO_EXPORT = 'Log in to export this model as a GLB'

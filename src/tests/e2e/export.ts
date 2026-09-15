@@ -46,6 +46,10 @@ const COMPRESS_TIMEOUT_MS = 60_000
 const GLB_JSON_LENGTH_OFFSET = 12
 const GLB_CHUNK_HEADER_BYTES = 8
 
+// `glbCompression.js`'s COMPRESSION_MODES, in the same order — which is also
+// the order the background sweep measures them in (`export/codecSizes.js`).
+const CODEC_MODES = ['none', 'meshopt', 'draco']
+
 const SNACKBAR_SELECTOR = '[data-testid="snackbar"]'
 // Centre of a box.
 const HALF = 2
@@ -253,6 +257,64 @@ export async function togglePortable(page: Page): Promise<number> {
 export async function toggleMetadata(page: Page): Promise<number> {
   await page.getByTestId('export-include-metadata').locator('input').click()
   return await waitForEstimate(page)
+}
+
+
+/**
+ * Wait until the background codec sweep has finished (#1850).
+ *
+ * Anything that touches the Compression control has to come after this. The
+ * sweep selects the smallest codec the moment its last figure lands, so a
+ * click racing that selection reads a dropdown that moved under it — and a
+ * click that merely re-picks what was already showing has to register as a
+ * choice for the pin to hold, which is what the MenuItem's own `onClick` in
+ * `ExportSection.jsx` is for.
+ *
+ * @param page Playwright page
+ */
+export async function waitForCodecSizing(page: Page) {
+  await expect(page.getByTestId('export-section'))
+    .toHaveAttribute('data-codec-sizes', CODEC_MODES.join(','), {timeout: COMPRESS_TIMEOUT_MS})
+}
+
+
+/**
+ * Wait until the background sweep has put a real byte count on every codec's
+ * dropdown option, and read them off (#1850).
+ *
+ * The figures live on the OPTIONS, not on the closed control, so the menu has
+ * to be open to see them — which is also where a user compares them. MUI
+ * keeps the menu mounted while it is open and React updates it in place, so
+ * one open is enough to watch all three land.
+ *
+ * @param page Playwright page
+ * @return `{none, meshopt, draco}` in bytes
+ */
+export async function waitForCodecSizes(page: Page): Promise<Record<string, number>> {
+  await waitForCodecSizing(page)
+  await page.getByTestId('export-compression').click()
+  const options = CODEC_MODES.map((mode) => page.getByTestId(`export-compression-${mode}`))
+  const sizes: Record<string, number> = {}
+  for (let i = 0; i < CODEC_MODES.length; i++) {
+    sizes[CODEC_MODES[i]] = Number(await options[i].getAttribute('data-bytes'))
+  }
+  // Escape closes the Select's menu without changing the selection, and the
+  // Save dialog around it stays open (MUI's menu consumes the key).
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('export-compression-none')).toHaveCount(0)
+  return sizes
+}
+
+
+/**
+ * The codec with the smallest figure, which is what the panel should have
+ * selected on its own.
+ *
+ * @param sizes from `waitForCodecSizes`
+ * @return the mode
+ */
+export function smallestCodecIn(sizes: Record<string, number>): string {
+  return CODEC_MODES.reduce((best, mode) => (sizes[mode] < sizes[best] ? mode : best), CODEC_MODES[0])
 }
 
 
