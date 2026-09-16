@@ -90,9 +90,24 @@ export function pathSuffixSupported(pathWithSuffix) {
 }
 
 
+// One trailing gzip suffix, case-insensitively — the `.gz` of `model.glb.gz`.
+// Not in `supportedTypes` on purpose: gzip is a transport envelope around a
+// model, not a model format, so it must never be something `findLoader` can
+// route to or `pathSuffixSupported` can offer. It is only ever REMOVED, here
+// and in `analyzeHeader`, to get at the format underneath.
+const GZIP_SUFFIX_REGEX = /\.gz$/i
+
+
 /**
  * Given a path or extension, return just the extension, and only if it is
  * recognized.  Otherwise throw a FilenameParseError.
+ *
+ * A gzip envelope is transparent: `model.glb.gz` is a `glb`, because the
+ * bytes get inflated before any loader sees them
+ * (`loader/gzipEnvelope.js`). So is `MODEL.GLB.GZ`, via the same lowercasing
+ * every other extension gets. A bare `.gz` names no format underneath and
+ * still throws, which is the honest answer — sniff its header instead
+ * ({@link guessTypeFromNameOrFile}).
  *
  * @param {string} pathOrExt
  * @return {string} The extension
@@ -100,6 +115,7 @@ export function pathSuffixSupported(pathWithSuffix) {
  */
 export function getValidExtension(pathOrExt) {
   assertDefined(pathOrExt)
+  pathOrExt = pathOrExt.replace(GZIP_SUFFIX_REGEX, '')
   const lastDotNdx = pathOrExt.lastIndexOf('.')
   if (lastDotNdx !== -1) {
     pathOrExt = pathOrExt.substring(lastDotNdx + 1)
@@ -134,10 +150,31 @@ const ZIP_MAGIC = [...Array.from('PK', (c) => c.charCodeAt(0)), 3, 4]
 const ZIP_NAME_LEN_OFFSET = 26
 const ZIP_NAME_OFFSET = 30
 
-// gzip magic (0x1f 0x8b) read as a little-endian uint16. Among the
-// supported formats only .spz (gzipped gaussian-splat data) is a gzip
-// stream, so the magic is a sufficient discriminator here.
+// gzip magic (0x1f 0x8b) read as a little-endian uint16. It says only
+// "gzip member": .spz IS one (gzipped gaussian-splat data), and so is a
+// `.glb.gz` Share exported, a .tar.gz and a gzipped log. What the stream
+// carries is decided by inflating a little of it, below.
 const GZIP_MAGIC_NUMBER = 0x8B1F
+
+
+/**
+ * True when these bytes begin a gzip member.
+ *
+ * Exported because the envelope has to be recognized at two more seams than
+ * sniffing: the upload path, which strips it before OPFS, and the loader's
+ * byte seam, which is the net under every other path
+ * (`loader/gzipEnvelope.js`).
+ *
+ * @param {ArrayBuffer|Uint8Array} bytes
+ * @return {boolean}
+ */
+export function looksLikeGzipBytes(bytes) {
+  const view = ArrayBuffer.isView(bytes) ?
+    new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength) :
+    new DataView(bytes)
+  const GZIP_MAGIC_BYTES = 2
+  return view.byteLength >= GZIP_MAGIC_BYTES && view.getUint16(0, true) === GZIP_MAGIC_NUMBER
+}
 
 
 /**
@@ -175,12 +212,46 @@ export async function guessTypeFromFile(file) {
 
 
 /**
+ * The filetype of a picked or dropped file: what its NAME says when that
+ * parses, and what its BYTES say when it does not.
+ *
+ * The name comes first because it is the one thing the user chose and the
+ * sniffer is deliberately conservative — binary STL, for one, has no magic
+ * to match, so a name-less answer would be worse than the name. The sniff is
+ * what saves the cases the name cannot express: a double extension whose
+ * tail is not a format (`model.glb.gz` — though `getValidExtension` reads
+ * that one off the name too), a mangled or extension-less download, and the
+ * `.gz` a browser appended to a name that never had a model extension in it.
+ *
+ * Replaces the `split('.').pop()` that threw "Cannot extract filetype from
+ * filename" at the two upload seams for any name it could not parse.
+ *
+ * @param {File} file
+ * @return {Promise<string|null>} the extension, or null when neither answers
+ */
+export async function guessTypeFromNameOrFile(file) {
+  try {
+    return getValidExtension(file.name)
+  } catch (e) {
+    if (!(e instanceof FilenameParseError)) {
+      throw e
+    }
+    return await guessTypeFromFile(file)
+  }
+}
+
+
+/**
  * Attempts to guess the filetype by inspecting the given headerBuffer
  *
  * @param {ArrayBuffer} headerBuffer
+ * @param {object} [options]
+ * @param {boolean} [options.isEnvelopeAllowed] Look INSIDE a gzip member for
+ *   a model. False on the recursive call, so `.gz.gz` reads as unknown
+ *   instead of unwrapping forever — one envelope is the whole feature.
  * @return {string|null} type
  */
-export function analyzeHeader(headerBuffer) {
+export function analyzeHeader(headerBuffer, {isEnvelopeAllowed = true} = {}) {
   // Check binary formats first (binary files won't decode properly as UTF-8)
   if (matchesMagic(headerBuffer, GLB_MAGIC)) {
     return 'glb'
@@ -188,14 +259,27 @@ export function analyzeHeader(headerBuffer) {
   if (matchesMagic(headerBuffer, USDC_MAGIC)) {
     return 'usdc'
   }
-  if (headerBuffer.byteLength >= 2 &&
-      new DataView(headerBuffer).getUint16(0, true) === GZIP_MAGIC_NUMBER) {
-    // The gzip signature is shared by SPZ splats and every ordinary
-    // gzipped upload (.tar.gz, gzipped logs/JSON) — same trap as the
-    // zip branch below. Decompress the head and require SPZ's own
-    // magic; anything else stays unrecognized so it fails sniffing
-    // cleanly instead of dying inside the splat decoder.
-    return looksLikeSpzStream(headerBuffer) ? 'spz' : null
+  if (looksLikeGzipBytes(headerBuffer)) {
+    // The gzip signature is shared by SPZ splats, Share's own `.glb.gz`
+    // export and every ordinary gzipped upload (.tar.gz, gzipped
+    // logs/JSON) — same trap as the zip branch below. Inflate the head and
+    // ask what came out.
+    //
+    // SPZ first, and it is NOT an envelope: gzip is the .spz container
+    // itself, so the file loads as gzip bytes and must not be inflated on
+    // the way in. Anything else is a transport envelope — the type is what
+    // is inside it, which is what makes `model.glb.gz` a glb whatever its
+    // name got mangled to (#1831). A stream carrying neither stays
+    // unrecognized, so it fails sniffing cleanly rather than dying inside
+    // a loader.
+    const inflatedHead = inflateHeadPrefix(headerBuffer)
+    if (inflatedHead === null) {
+      return null
+    }
+    if (isSpzMagic(inflatedHead)) {
+      return 'spz'
+    }
+    return isEnvelopeAllowed ? analyzeHeader(inflatedHead.buffer, {isEnvelopeAllowed: false}) : null
   }
   if (matchesMagic(headerBuffer, ZIP_MAGIC)) {
     // The zip signature is shared by USDZ packages, SOG splat bundles,
@@ -256,16 +340,21 @@ const SPZ_MAGIC = Array.from('NGSP', (c) => c.charCodeAt(0))
 
 
 /**
- * Distinguish an SPZ splat from any other gzip stream by inflating the
- * head and checking SPZ's own magic. The header buffer is a truncated
- * prefix of the file, so this streams through fflate's `Gunzip` (which
- * emits the decompressed prefix of a partial member) rather than
- * `gunzipSync` (which would throw on the missing tail).
+ * The first inflated bytes of a gzip member, from a buffer holding only its
+ * head.
+ *
+ * Streams through fflate's `Gunzip` (which emits the decompressed prefix of
+ * a partial member) rather than `gunzipSync`, which would throw on the
+ * missing tail — the caller has a 1KB sniff window, not a file. fflate is
+ * three's vendored copy, already shipped, and this stays SYNCHRONOUS, which
+ * is what lets `analyzeHeader` keep its signature; the real inflate of a
+ * whole upload is `DecompressionStream` through
+ * `export/glbGzip.js#gunzipBytes`.
  *
  * @param {ArrayBuffer} headerBuffer
- * @return {boolean}
+ * @return {Uint8Array|null} null when nothing decodes
  */
-function looksLikeSpzStream(headerBuffer) {
+function inflateHeadPrefix(headerBuffer) {
   try {
     /** @type {Array<Uint8Array>} */
     const chunks = []
@@ -274,13 +363,27 @@ function looksLikeSpzStream(headerBuffer) {
       chunks.push(chunk)
     }
     gunzip.push(new Uint8Array(headerBuffer), false)
-    const decoded = chunks[0]
-    return decoded !== undefined && decoded.length >= SPZ_MAGIC.length &&
-      SPZ_MAGIC.every((byte, index) => decoded[index] === byte)
+    // Copied out of fflate's chunk (which may be a view into a larger
+    // buffer) so `.buffer` is exactly these bytes for the caller that
+    // re-analyzes them.
+    return chunks[0] === undefined ? null : chunks[0].slice()
   } catch {
     // Truncated-at-an-awkward-boundary or corrupt gzip: not sniffable.
-    return false
+    return null
   }
+}
+
+
+/**
+ * What distinguishes an SPZ splat from any other gzip stream: SPZ's own
+ * magic on the DECOMPRESSED bytes.
+ *
+ * @param {Uint8Array} decoded inflated head of a gzip member
+ * @return {boolean}
+ */
+function isSpzMagic(decoded) {
+  return decoded.length >= SPZ_MAGIC.length &&
+    SPZ_MAGIC.every((byte, index) => decoded[index] === byte)
 }
 
 

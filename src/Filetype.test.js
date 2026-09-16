@@ -5,6 +5,7 @@ import {
   analyzeHeaderStr,
   fileSuffixBoundaryRegex,
   getValidExtension,
+  guessTypeFromNameOrFile,
   isExtensionSupported,
   pathSuffixSupported,
   splitAroundExtension,
@@ -253,6 +254,31 @@ describe('Filetype', () => {
       expect(analyzeHeader(gzipSync(tarball).buffer)).toBe(null)
     })
 
+    it('reads a gzipped model as the model inside the envelope', () => {
+      // Share's own `.glb.gz` export (#1854), opened back (#1831 S5). gzip is
+      // a transport encoding, so the answer is the format underneath — which
+      // is what lets an upload be stored, routed and loaded as the `.glb` it
+      // becomes, with no `.gz` anywhere downstream.
+      const glb = new TextEncoder().encode('glTFthen the chunks')
+      expect(analyzeHeader(gzipSync(glb).buffer)).toBe('glb')
+    })
+
+    it('reads a gzipped model by its header, not its name', () => {
+      // There is no name here at all — which is the point. A `.glb.gz` that
+      // arrived mangled, and a `.glb` that is secretly gzipped, both answer
+      // 'glb' because the bytes do.
+      const ifc = new TextEncoder().encode(`ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));`)
+      expect(analyzeHeader(gzipSync(ifc).buffer)).toBe('ifc')
+    })
+
+    it('does not unwrap a gzip inside a gzip', () => {
+      // One envelope is the whole feature. Recursing would let a `.gz.gz`
+      // (or a chain of them) through as a model, and every unwrap is an
+      // inflate of an attacker's choosing.
+      const glb = new TextEncoder().encode('glTFthen the chunks')
+      expect(analyzeHeader(gzipSync(gzipSync(glb)).buffer)).toBe(null)
+    })
+
     it('leaves a gzip header with no decodable payload unrecognized', () => {
       const GZIP_MAGIC_NUMBER = 0x8B1F // gzip magic 1f 8b, little-endian
       const buffer = new ArrayBuffer(GLB_MIN_SIZE)
@@ -355,6 +381,25 @@ describe('Filetype', () => {
       expect(getValidExtension('gltf')).toBe('gltf')
     })
 
+    it('reads a gzip-enveloped name as the format underneath', () => {
+      // `model.glb.gz` is a glb: the envelope comes off before any loader
+      // sees the bytes (`loader/gzipEnvelope.js`), so the name that describes
+      // the model is the one with the `.gz` removed. In caps too — the same
+      // lowercasing every other extension gets.
+      expect(getValidExtension('model.glb.gz')).toBe('glb')
+      expect(getValidExtension('MODEL.GLB.GZ')).toBe('glb')
+      expect(getValidExtension('path/to/index.ifc.gz')).toBe('ifc')
+    })
+
+    it('refuses a name that is only an envelope', () => {
+      // A file called `.gz`, or `archive.gz`: there is no format in the name
+      // to find, and answering one would be a guess. The header is what
+      // settles these (`guessTypeFromNameOrFile`).
+      expect(() => getValidExtension('.gz')).toThrow(FilenameParseError)
+      expect(() => getValidExtension('archive.gz')).toThrow(FilenameParseError)
+      expect(() => getValidExtension('gz')).toThrow(FilenameParseError)
+    })
+
     it('validates the USD family, matching the longest extension', () => {
       // 'usd' is a prefix of the other three — the alternation must not
       // stop at the prefix (typeRegexStr sorts longest-first).
@@ -455,5 +500,46 @@ describe('Filetype', () => {
       // the guard above exists.
       expect(analyzeHeaderStr(hdr(`FILE_SCHEMA((''));`))).toBe('ifc')
     })
+  })
+})
+
+
+// Not the head of any format the sniffer knows, and not valid UTF-8 either.
+const UNRECOGNIZABLE_BYTE = 0xff
+const UNRECOGNIZABLE_BYTES = new Uint8Array([UNRECOGNIZABLE_BYTE, 0])
+
+
+describe('guessTypeFromNameOrFile', () => {
+  // A picked `File`'s surface, on the global Blob: under `jest-fixed-jsdom`
+  // jsdom's own `File` has no `arrayBuffer()` and neither do its slices, so
+  // the code under test could not read one. A browser's File has both.
+  /**
+   * @param {Uint8Array} bytes
+   * @param {string} name
+   * @return {Blob} with a `name`, as a File has
+   */
+  function fileOf(bytes, name) {
+    return Object.assign(new Blob([bytes]), {name})
+  }
+
+  it('answers from the name when the name parses, even against the header', async () => {
+    // The name comes first because the user chose it and the sniffer is
+    // deliberately conservative — binary STL has no magic to match at all, so
+    // a header-only answer would be worse than the name for it. Asserted on
+    // a file whose two answers DISAGREE, or 'stl' would be what both said.
+    const glbBytes = new TextEncoder().encode('glTFand the chunks after it')
+    expect(await guessTypeFromNameOrFile(fileOf(glbBytes, 'part.stl'))).toBe('stl')
+  })
+
+  it('answers from the header when the name does not parse', async () => {
+    // The case that used to throw "Cannot extract filetype from filename":
+    // a name with no format in it at all. The bytes still say what it is.
+    const glbBytes = new TextEncoder().encode('glTFand the chunks after it')
+    expect(await guessTypeFromNameOrFile(fileOf(glbBytes, 'download'))).toBe('glb')
+    expect(await guessTypeFromNameOrFile(fileOf(gzipSync(glbBytes), '.gz'))).toBe('glb')
+  })
+
+  it('answers null when neither the name nor the header knows', async () => {
+    expect(await guessTypeFromNameOrFile(fileOf(UNRECOGNIZABLE_BYTES, 'mystery'))).toBe(null)
   })
 })

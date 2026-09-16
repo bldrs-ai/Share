@@ -805,10 +805,85 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
 
     await expectSnackbarOnTop(page)
     // A fifth control row, and the one carrying the longest caption in the
-    // panel — at 390px "gzip — saves a .glb.gz, unarchive to open" beside the
+    // panel — at 390px "gzip — saves a .glb.gz, reopens in Share" beside the
     // toggle is what would push the dialog sideways if the row stopped
     // wrapping (#1838).
     await expectNoHorizontalScroll(page)
+  })
+
+  test('a gzipped export opens back in Share, with its BLDRS data intact', async ({page}) => {
+    // The round trip closed (#1831). #1854 shipped the `.glb.gz` and
+    // argued the way back was out of scope, so Share could write a file it
+    // could not read — and the caption above had to say "unarchive to open".
+    // Only a browser can show the whole loop: `CompressionStream` writes the
+    // file, `DecompressionStream` opens it, and the two are the browser's,
+    // not this repo's.
+    //
+    // What makes this more than "it loaded" is the last third: the inflated
+    // bytes have to be the SAME GLB, so the `BLDRS_*` extensions survive and
+    // the model comes back pickable, not just visible.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+
+    // Uncompressed + gzipped: the codecs are the sibling tests' subject, and
+    // per-vertex picking ids do not survive them, which would make the
+    // selection assertion below a different claim. Pinned after the sweep so
+    // the auto-selection cannot move it later (#1850).
+    await waitForCodecSizing(page)
+    const rawBytes = await selectCompression(page, 'none')
+    const gzippedBytes = await toggleGzip(page)
+    expect(gzippedBytes).toBeLessThan(rawBytes)
+
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    const download = await downloadPromise
+    // Saved under its own name: Playwright's download temp file has no
+    // extension at all, and the point here is the DOUBLE one — `.glb.gz` is
+    // the shape that defeats a last-dot filetype parse.
+    expect(download.suggestedFilename()).toMatch(/\.glb\.gz$/)
+    const savedPath = test.info().outputPath('index-reopened.glb.gz')
+    await download.saveAs(savedPath)
+    await page.keyboard.press('Escape')
+
+    // Back in through the Open dialog's file chooser, the way a user would.
+    // The URL it lands on ends `.glb`, not `.glb.gz`: the envelope comes off
+    // at the upload seam, so what OPFS holds and what the route names is the
+    // model (`loader/gzipEnvelope.js`).
+    await reopenLocalGlb(page, savedPath)
+    await expect(page.getByText(/Loader error|Unhandled error in parse|Could not guess filetype|decompress/))
+      .toHaveCount(0)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+
+    await page.getByTestId('control-button-navigation').click()
+    await expect(page.getByTestId('NavTreePanel')).toBeVisible()
+    const node = (label: string) => page.locator(`[data-node-label="${label}"]`)
+
+    // `BLDRS_spatial_tree` came through the gzip: project → site → building
+    // → storey, one child each, then the leaves. A GLB that inflated to
+    // anything but the exported bytes would not draw this.
+    for (const name of SPATIAL_CHAIN) {
+      await expect(node(name)).toHaveCount(1)
+      await node(name).getByTestId('NavTreeNodeToggle').click()
+    }
+    await expect(node(LEAF_LABEL).first()).toBeVisible()
+
+    // And it is a model, not just geometry: the leaf selects, the URL
+    // addresses it, and the scene paints the highlight.
+    await node(LEAF_LABEL).first().getByTestId('NavTreeNodeLabel').click()
+    await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
+    await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.glb(\/\d+)+/)
+    expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
   })
 
   test('the panel measures every codec and defaults to the smallest', async ({page}) => {

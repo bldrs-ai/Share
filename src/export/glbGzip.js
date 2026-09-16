@@ -122,6 +122,23 @@ export function isGunzipAvailable() {
 
 
 /**
+ * A gzip member that expanded past the caller's ceiling.
+ *
+ * Its own class because the two answers are different sentences: corrupt
+ * input is "this file is damaged", this is "this file is not what it claims
+ * to be", and only one of them should ever reach a user as a refusal
+ * (`loader/gzipEnvelope.js`).
+ */
+export class GzipExpansionError extends Error {
+  /** @param {string} msg */
+  constructor(msg) {
+    super(msg)
+    this.name = 'GzipExpansionError'
+  }
+}
+
+
+/**
  * Inflate one gzip member.
  *
  * The mirror of `gzipBytes`, and written the same way for the same reason:
@@ -134,12 +151,23 @@ export function isGunzipAvailable() {
  * (`loader/glbContainer.js`).
  *
  * @param {Uint8Array} bytes a gzip member, as produced by `gzipBytes`
+ * @param {object} [options]
+ * @param {number} [options.maxOutputBytes] Stop and throw
+ *   {@link GzipExpansionError} once this many bytes have come out. Unbounded
+ *   by default, which is right for a member this app wrote into its own OPFS
+ *   cache; a member a USER brought needs a ceiling, since gzip reaches ~1032:1
+ *   and an unbounded inflate of a hostile file ends the tab rather than the
+ *   load.
  * @return {Promise<Uint8Array>} the inflated bytes
  */
-export async function gunzipBytes(bytes) {
+export async function gunzipBytes(bytes, {maxOutputBytes = Infinity} = {}) {
   const stream = new DecompressionStream('gzip')
   const writer = stream.writable.getWriter()
-  const read = new Response(stream.readable).arrayBuffer()
+  // Drained through a reader rather than `new Response(readable).arrayBuffer()`
+  // because the cap has to be enforced DURING the inflate: a Response resolves
+  // only once the whole expansion is already in memory, which is the failure
+  // the cap exists to prevent.
+  const read = readAllCapped(stream.readable, maxOutputBytes)
   try {
     for (let offset = 0; offset < bytes.byteLength; offset += GZIP_CHUNK_BYTES) {
       await writer.ready
@@ -155,10 +183,53 @@ export async function gunzipBytes(bytes) {
     // in preference to the writable side's relay of it. `gzipBytes` has the
     // same shape and no guard because a deflate has no invalid input to
     // reject; an inflate meets one whenever an OPFS write was truncated.
+    //
+    // A tripped cap arrives here the same way: cancelling the readable errors
+    // the writable, so the write loop throws and the expansion error — the
+    // one that says what actually happened — is the one reported.
     const readError = await read.then(() => null, (e) => e)
     throw readError ?? writeError
   }
-  return new Uint8Array(await read)
+  return await read
+}
+
+
+/**
+ * Concatenate a stream's chunks, refusing to accumulate more than
+ * `maxOutputBytes`.
+ *
+ * @param {ReadableStream} readable
+ * @param {number} maxOutputBytes
+ * @return {Promise<Uint8Array>}
+ * @throws {GzipExpansionError} once the cap is passed
+ */
+async function readAllCapped(readable, maxOutputBytes) {
+  const reader = readable.getReader()
+  /** @type {Array<Uint8Array>} */
+  const chunks = []
+  let total = 0
+  for (;;) {
+    const {done, value} = await reader.read()
+    if (done) {
+      break
+    }
+    total += value.byteLength
+    if (total > maxOutputBytes) {
+      // Cancel rather than read on: the point is to stop the expansion, not
+      // to notice it afterwards.
+      await reader.cancel()
+      throw new GzipExpansionError(
+        `Gzip member expands past ${maxOutputBytes} bytes`)
+    }
+    chunks.push(value)
+  }
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    out.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return out
 }
 
 

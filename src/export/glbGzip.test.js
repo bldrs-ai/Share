@@ -11,7 +11,7 @@ import {
   DecompressionStream as NodeDecompressionStream,
 } from 'node:stream/web'
 import {gunzipSync, gzipSync} from 'node:zlib'
-import {gunzipBytes, gzipBytes, gzippedLength, isGunzipAvailable, isGzipAvailable} from './glbGzip'
+import {GzipExpansionError, gunzipBytes, gzipBytes, gzippedLength, isGunzipAvailable, isGzipAvailable} from './glbGzip'
 
 
 // Over the 1 MiB write chunk, so the loop in `gzipBytes` runs more than once —
@@ -25,6 +25,13 @@ const REPEAT_PERIOD = 7
 // them at the header rather than partway through.
 const CORRUPT_BYTES = 4096
 const CORRUPT_FILL = 0xab
+// A bomb small enough to run in a unit test and still be an expansion: 4 MiB
+// of zeros is a few KB of gzip, and the ceiling stops it a quarter of the way
+// in.
+const BYTES_PER_KIB = 1024
+const BOMB_CEILING_BYTES = BYTES_PER_KIB * BYTES_PER_KIB
+const BOMB_EXPANSION = 4
+const BOMB_INFLATED_BYTES = BOMB_EXPANSION * BOMB_CEILING_BYTES
 
 
 /**
@@ -122,6 +129,55 @@ describe('glbGzip', () => {
       } finally {
         process.off('unhandledRejection', onUnhandled)
       }
+    })
+
+    it('stops a member that expands past the caller\'s ceiling', async () => {
+      // The decompression-bomb guard (#1831). gzip reaches ~1032:1, so a
+      // file a user drops can expand until the tab dies; `loader/gzipEnvelope.js`
+      // passes a ceiling for exactly that. Zeros because they are the bomb's
+      // own shape — 4 MiB of them is a few KB of gzip.
+      const zeros = new Uint8Array(BOMB_INFLATED_BYTES)
+
+      await expect(gunzipBytes(new Uint8Array(gzipSync(Buffer.from(zeros))), {maxOutputBytes: BOMB_CEILING_BYTES}))
+        .rejects.toThrow(GzipExpansionError)
+    })
+
+    it('stops DURING the inflate, not after holding the whole expansion', async () => {
+      // The claim the ceiling rests on: a check on the finished buffer would
+      // run only once the bomb had already been allocated, which is the
+      // failure it exists to prevent. Read off the stream itself — the
+      // decoder is cancelled with output still to come, so the bytes it was
+      // asked for never all arrive.
+      const zeros = new Uint8Array(BOMB_INFLATED_BYTES)
+      const member = new Uint8Array(gzipSync(Buffer.from(zeros)))
+      let delivered = 0
+      const ceiling = BOMB_CEILING_BYTES
+      const counted = new TransformStream({
+        /**
+         * @param {Uint8Array} chunk
+         * @param {TransformStreamDefaultController} controller
+         */
+        transform(chunk, controller) {
+          delivered += chunk.byteLength
+          controller.enqueue(chunk)
+        },
+      })
+      // Same inflate, with a meter between the decoder and the drain.
+      const RealDecompressionStream = global.DecompressionStream
+      global.DecompressionStream = class {
+        /** @param {string} format */
+        constructor(format) {
+          const inner = new RealDecompressionStream(format)
+          this.writable = inner.writable
+          this.readable = inner.readable.pipeThrough(counted)
+        }
+      }
+      try {
+        await expect(gunzipBytes(member, {maxOutputBytes: ceiling})).rejects.toThrow(GzipExpansionError)
+      } finally {
+        global.DecompressionStream = RealDecompressionStream
+      }
+      expect(delivered).toBeLessThan(zeros.byteLength)
     })
 
     it('handles an empty input rather than hanging on the writer', async () => {

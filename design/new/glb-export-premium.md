@@ -20,7 +20,8 @@ become the epic's sub-issues; §8 the cross-browser smoke checklist.
 ## Status & remaining work
 
 *Updated 2026-09-16, after #1837/#1851/#1852 landed, the #1855 container
-gzip (§1.1a), and today's byte-attribution measurement on #1831.*
+gzip (§1.1a), today's byte-attribution measurement on #1831, and the
+`.glb.gz` round trip (§4.7), which reverses a decision §4.3 used to record.*
 
 **Where things stand:** the feature described in §1–§6 below is fully built
 and ships behind `?feature=export` (default **off**). Export lives in the
@@ -41,7 +42,11 @@ function importing axios on cold start (§4.2). Just landed on this branch:
 the byte-attribution instrument `tools/glb/byteBudget.mjs` (0ec7339) and the
 v3 gzipped OPFS container, #1855, 6d20d33 (§1.1a) — a real Snowdon artifact
 goes 67,830,692 → 21,396,007 B stored, 68.5% saved, ~0.5 s to inflate, the
-size read still never touching BIN.
+size read still never touching BIN. **And the `.glb.gz` round trip closes**
+(§4.7): Share opens its own compressed export by drag-and-drop and through the
+Open dialog's Local tab, with no `supportedTypes` entry and no `findLoader`
+arm — the envelope comes off at the upload seam, and a second seam in
+`Loader#load` covers the paths that skip it.
 
 1. **The measurement the epic was waiting on landed today, and it reframes
    the remaining lossless work.** §4.3's "container" finding (≈1.2 MB
@@ -886,17 +891,9 @@ Four decisions behind it:
   replaying `gzip: true` degrades the same way rather than shipping
   uncompressed bytes under a `.gz`.
 
-**Share does not re-open its own `.glb.gz`, deliberately.** `DecompressionStream`
-would be cheap, but `.gz` is a transport encoding and not a model format:
-accepting one means a `supportedTypes` entry, a `findLoader` arm and header
-sniffing that every source adapter (upload, GitHub raw, Drive) would have to
-agree on (design/new/adding-model-formats.md), for a file the user asked to be
-given in archive form. The "export opens back in Share" E2E keeps its subject
-— it runs on the uncompressed path, which is unchanged — and the gzipped
-spec proves the same thing about the bytes by gunzipping the download and
-asserting the `glTF` magic, the inflated length against the panel's raw figure,
-and that the JSON chunk still parses with its `BLDRS_*` payloads. If a user
-ever asks to drag a `.glb.gz` back in, that is its own issue.
+**Share now re-opens its own `.glb.gz`, by drag-and-drop or the Open dialog's
+Local tab — see §4.7**, which also records why this section previously said it
+would not, and what of that argument survived.
 
 **Portable** (#1843) is the fourth option, and like compression it is a host
 rewrite the pro module only calls: `export/glbPortable.js#rewriteGlbPortable`.
@@ -1367,6 +1364,97 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
 - What this is not: a Pro user can copy the module text from devtools.
   That's the same exposure as any client-side feature and is accepted; the
   line held is *distribution*, which is what the pricing depends on.
+
+
+### 4.7 The way back in: opening a `.glb.gz`
+
+This section reverses a decision §4.3 used to record. The old text: *"Share
+does not re-open its own `.glb.gz`, deliberately. `DecompressionStream` would
+be cheap, but `.gz` is a transport encoding and not a model format: accepting
+one means a `supportedTypes` entry, a `findLoader` arm and header sniffing that
+every source adapter (upload, GitHub raw, Drive) would have to agree on."* The
+owner asked for the round trip anyway, scoped to **drag-and-drop and local
+open of our own export**, and the argument's premise turned out to be the
+design rather than the objection: because `.gz` is a transport encoding, the
+way to accept it is to **decode the transport and never name it a format**.
+There is still no `supportedTypes` entry and no `findLoader` arm.
+
+`loader/gzipEnvelope.js` owns it, at two seams:
+
+- **Upload** — `inflateIfGzipEnvelope(file)`, called by `utils/dragAndDrop.js`
+  and `utils/loader.js#loadLocalFile` **before** the file reaches OPFS. What
+  gets cached and named `<blob-uuid>.glb` is then really a GLB, so every later
+  reader of that entry — a re-open from Recents, a save, a size report — sees
+  what its name says, and no `.gz` ever enters the app's URL space.
+- **Load** — `decodeGzipEnvelope(modelData, loader.type)`, one line in
+  `Loader#load` just before `readModel`. This is the net under every path the
+  upload seam cannot reach (below), and the reason the sniffer can afford to
+  be honest: once `analyzeHeader` answers `glb` for gzipped bytes, anything
+  that skipped the upload seam would otherwise hand a gzip member to the GLTF
+  parser and fail somewhere deep in it.
+
+The supporting changes, each small:
+
+- **`Filetype#analyzeHeader` looks inside one gzip envelope.** The magic
+  `1f 8b` already had a branch (SPZ splats are gzip streams); it now inflates
+  the sniff window through fflate's streaming `Gunzip` — which tolerates a
+  truncated member, and keeps `analyzeHeader` synchronous — and re-analyzes
+  what comes out. SPZ is checked first and is *not* an envelope: gzip is that
+  format's own container and its decoder wants the member. One level only, so
+  a `.gz.gz` reads as unknown.
+- **`Filetype#getValidExtension` strips one trailing `.gz`.** `model.glb.gz`
+  is a `glb`, `MODEL.GLB.GZ` too; a bare `.gz` still throws, because there is
+  no format in that name to find. `pathSuffixSupported` deliberately does NOT
+  strip it — it gates the GitHub file browser's listing, and a GitHub-hosted
+  `.glb.gz` is not openable (below).
+- **`Filetype#guessTypeFromNameOrFile`** is the name-then-header answer both
+  upload seams now use for the OPFS storage extension. It replaces the
+  `split('.').pop()` that threw *"Cannot extract filetype from filename"* —
+  the exact shape `.glb.gz` defeats. Name first, because the sniffer is
+  conservative (binary STL has no magic at all) and the name is what the user
+  chose.
+- **`gunzipBytes` takes an optional `maxOutputBytes`.** gzip reaches ~1032:1,
+  so a few MB of hostile input expands to hundreds of GB and an unbounded
+  inflate ends the tab rather than the load. The ceiling is 512 MiB —
+  ~8× the largest GLB this epic has measured (63.7 MB, Snowdon) — and it is
+  enforced *during* the inflate: the drain reads the stream itself rather than
+  `new Response(readable).arrayBuffer()`, which resolves only once the whole
+  expansion is already in memory. The OPFS container reader (§1.1a) passes no
+  ceiling: it wrote those bytes itself.
+- **No `DecompressionStream`, no claim.** Safari before 16.4 — the same bound
+  §1.1a has. The seam refuses with a sentence naming the browsers that can,
+  rather than a stack trace out of a missing global, and the Local tab grew an
+  `onError` callback so the Open dialog can alert it (the picker has already
+  closed by then; nothing else was watching).
+
+**The name is never rewritten.** The inflated file keeps the user's
+`index.glb.gz` for the recents row and the load report's model line, while the
+storage id under it is `<blob-uuid>.glb`. Those two have been distinct since
+#1682 and this is one more reason to keep them so.
+
+**What a `.glb.gz` does on the paths that are out of scope**, stated plainly
+because "not required" is not the same as "no behaviour":
+
+| path | what happens |
+|---|---|
+| drag-and-drop, Open → Local | **works** (both seams) |
+| Recents, after either of those | works — OPFS holds the inflated GLB |
+| locally hosted (`/x.glb.gz`) or a pasted URL | **works** via the load seam, as long as the name or the sniff resolves the type |
+| GitHub (`/share/v/gh/.../x.glb.gz`) | **refused at the router.** `fileSuffixBoundaryRegex` needs the `.glb` at a path boundary and `.glb.gz` does not offer one, so the route never parses. The file browser does not list it either (`pathSuffixSupported` is false for it). Deliberate: extending the boundary regex would put `.gz` into route-space, which is what §4.3's objection was actually about |
+| Google Drive (`connections/loadFromSource.js`) | **unverified.** That path has its own `split('.')` extension logic, which this change did not touch; a `.glb.gz` there stores as `<blob-uuid>.gz`, and whether the loader's sniff then rescues it depends on an `axios` ranged GET of a `blob:` URL that was not exercised. If Drive is ever brought in scope, route it through `guessTypeFromNameOrFile` like the other two seams |
+| a gzipped TEXT-format model (`.obj.gz`, `.ifc.gz`) by URL | opens only through the upload seams. By the load seam the bytes are already a `TextDecoder` string, and gzip run through that is mojibake, not something to recognize |
+
+**Tests.** `loader/gzipEnvelope.test.js` (both seams, against Node's real
+`DecompressionStream`), `Filetype.test.js` (envelope sniff, `.gz` names,
+name-vs-header), `export/glbGzip.test.js` (the ceiling, including that it
+stops mid-inflate), `Loader.test.js` (a gzipped `cube.glb` through `load()`),
+plus the two upload seams' own suites. E2E: *"a gzipped export opens back in
+Share, with its BLDRS data intact"* in `Components/Share/exportGlb.spec.ts`
+exports a `.glb.gz`, saves it under that name, brings it back through the file
+chooser, and walks the NavTree to a leaf it can select — the `BLDRS_*`
+extensions surviving the round trip is the claim, not merely that something
+rendered. The Compress download caption changed with it: *"gzip — saves a
+.glb.gz, reopens in Share"*.
 
 
 ## 5. Stages (→ sub-issues of the epic)

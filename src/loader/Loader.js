@@ -50,6 +50,7 @@ import {isBldrsGlbContainer, readGlbContainerHeader, readGlbContainerJsonPrefixe
 import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import glbToThree from './glb'
+import {decodeGzipEnvelope} from './gzipEnvelope'
 import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
 import {
   APPLIED_COORDINATION_KEY,
@@ -653,6 +654,16 @@ export async function load(
       'This file is stored with Git LFS, so the URL returned a pointer file instead of the model. ' +
       'Open it via its github.com/<org>/<repo>/blob/<ref>/<path> URL, which resolves LFS content.')
   }
+
+  // A gzip transport envelope comes off HERE, not in a loader arm, because
+  // `.gz` is not a model format — no `supportedTypes` entry, no `findLoader`
+  // case — and every path that can still be carrying one converges on these
+  // bytes. Uploads normally arrive already inflated (the drop handler and the
+  // Local tab strip the envelope before OPFS, so a cached `<uuid>.glb` really
+  // is one); this is the net under the rest: the non-OPFS upload fallback, a
+  // locally hosted `/x.glb.gz`, a pasted URL. `.spz` is excluded inside —
+  // gzip is that format's own container. See `loader/gzipEnvelope.js`.
+  modelData = await decodeGzipEnvelope(modelData, loader.type)
 
   // Provide basePath for multi-file models.  Keep the last '/' for
   // correct resolution of subpaths with '../'.

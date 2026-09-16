@@ -744,6 +744,9 @@ const MSG_SIZING_STOPPED = 'Codec sizing stopped'
 const MSG_LOGIN_TO_EXPORT = 'Log in to export this model as a GLB'
 // Names the file the user gets, because that is the part that surprises: a
 // `.glb.gz` is not a `.glb` and will not drop into the three.js editor
-// without being unarchived first (#1854). Short enough to stay on one line at
-// 390px beside the toggle.
-const MSG_GZIP_CAPTION = 'gzip — saves a .glb.gz, unarchive to open'
+// without being unarchived first (#1854). Share itself opens one back —
+// drag-drop or the Open dialog's Local tab strip the envelope
+// (`loader/gzipEnvelope.js`, #1831) — which is what the caption promises
+// now that the round trip closes. Short enough to stay on one line at 390px
+// beside the toggle.
+const MSG_GZIP_CAPTION = 'gzip — saves a .glb.gz, reopens in Share'
