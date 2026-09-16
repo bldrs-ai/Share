@@ -36,7 +36,15 @@
 //     cache: Meshopt wins on the instance-heavy artifacts Share's batched
 //     writer produces (−68.0% above) and is measured SECOND, so a sweep that
 //     only ever held the most recent codec would have thrown the winner away
-//     and made the panel re-encode up to 50 MB on the main thread.
+//     and made the panel re-encode up to 50 MB on the main thread. The one
+//     cell exempt from all of this is `keepCodec`'s — the codec the user is
+//     looking at, which the sweep may not free under them (three, then, if
+//     they have selected a losing codec mid-run).
+//   - **Nothing about what survives the run.** Releasing as it goes bounds
+//     ONE sweep, which is self-contained and knows its own order. What should
+//     still be resident afterwards depends on the panel's selection and on
+//     whether another sweep has since superseded this one, and is reconciled
+//     from outside (`artifactSizes.js#retainOnlyCompressedExports`).
 //   - **Only the codec axis.** With quality, Portable and gzip the estimate
 //     matrix is codec × quality × portable × gzip × metadata, and the cross
 //     product is not something to compute on a hunch. The sweep runs the codec
@@ -269,10 +277,8 @@ export function codecToSelect(sizesByCodec, isMetadataIncluded, isUserChosen, cu
  * @param {Function} [options.onCodec] `(?mode) => void`, which codec is
  *   running now — the panel says so, and says it is still finishing after a
  *   cancel
- * @param {Function} [options.onRetain] `(?mode) => void`, fired once as the
- *   sweep ends with the one cell it is leaving in the estimate cache for the
- *   selection that follows, or `null` if it kept nothing. Whoever owns the
- *   sweep owns releasing that cell — see the `finally`
+ * @param {Function} [options.keepCodec] `() => ?string`, the codec whose
+ *   figure is on screen. Its cell is never released here — see `release`
  * @param {Array<string>} [options.order]
  * @return {Promise<object>} `{[mode]: ?sizes}` for every codec that reported.
  *   Short of the whole axis after a Stop, which is how the caller tells a
@@ -288,10 +294,23 @@ export async function measureCodecSizes(artifact, {
   signal,
   onSize,
   onCodec = noop,
-  onRetain = noop,
+  keepCodec = () => null,
   order = CODEC_MEASUREMENT_ORDER,
 }) {
   const measured = {}
+  // The codec whose figure the panel is SHOWING, read at each release rather
+  // than captured once: the user can pick a codec part-way through a sweep,
+  // and freeing the cell behind the number they are looking at is a defect
+  // nothing downstream repairs. The size line's effect keys on the selection,
+  // which has not changed again, so the cell stays empty until Export
+  // re-encodes it on the main thread — up to the whole auto-measure limit
+  // (#1852 review). It costs a third resident cell, and only while the
+  // selected codec is one the sweep has beaten.
+  const release = (mode) => {
+    if (mode !== keepCodec()) {
+      releaseCompressedExport(artifact, mode, isPortable, quality)
+    }
+  }
   // The BEST-so-far cell, kept for the selection that follows, and the figure
   // it is best by. Not the last-measured one: the winner is whichever codec
   // came in smallest, and on the instance-heavy shape Share's batched writer
@@ -316,12 +335,12 @@ export async function measureCodecSizes(artifact, {
       const bytes = shownBytes(sizes, isMetadataIncluded)
       if (bytes < bestBytes) {
         if (bestHeld !== null) {
-          releaseCompressedExport(artifact, bestHeld, isPortable, quality)
+          release(bestHeld)
         }
         bestBytes = bytes
         bestHeld = holdsBytes(mode, isPortable, isGzipped) ? mode : null
       } else if (holdsBytes(mode, isPortable, isGzipped)) {
-        releaseCompressedExport(artifact, mode, isPortable, quality)
+        release(mode)
       }
       // Hand the event loop back between codecs. This is the whole of what
       // keeps the dialog usable: the encode itself is synchronous wasm, so
@@ -336,17 +355,17 @@ export async function measureCodecSizes(artifact, {
     // `smallestCodec` refuses to name a winner until every codec has
     // reported, so after a Stop there is no selection for those bytes to be
     // waiting for.
+    //
+    // The winner of a run that DID finish is left in the cache deliberately,
+    // and is handed to nobody. The panel reconciles the whole cache down to
+    // what it is showing once the run settles
+    // (`artifactSizes.js#retainOnlyCompressedExports`), which covers this
+    // cell whether the auto-selection lands on it or the user has already
+    // chosen something else. Naming an owner for it instead is what the three
+    // rounds before this one tried (#1852 review).
     if (bestHeld !== null && bestHeld !== smallestCodec(measured, isMetadataIncluded, order)) {
-      releaseCompressedExport(artifact, bestHeld, isPortable, quality)
-      bestHeld = null
+      release(bestHeld)
     }
-    // Hand the surviving cell to the caller. The sweep cannot release it
-    // itself — it is kept precisely so the selection that follows can use it
-    // — so somebody outside has to own the other end of its life, and only
-    // the sweep knows which cell that is: the winner is decided against the
-    // metadata flag as it stood HERE, and that flag can move afterwards
-    // without re-running anything.
-    onRetain(bestHeld)
   }
   return measured
 }

@@ -91,10 +91,6 @@ function resolveFrom(table) {
 async function sweep(options = {}) {
   const published = []
   const sizesByCodec = {}
-  // Undefined until the sweep reports, which distinguishes "kept nothing"
-  // from "never said" — the caller owns releasing whatever it names, so
-  // silence and `null` are not the same answer.
-  let retained
   await measureCodecSizes(ARTIFACT, {
     quality: QUALITY,
     isPortable: false,
@@ -104,12 +100,9 @@ async function sweep(options = {}) {
       published.push([mode, sizes])
       sizesByCodec[mode] = sizes
     },
-    onRetain: (mode) => {
-      retained = mode
-    },
     ...options,
   })
-  return {published, sizesByCodec, retained}
+  return {published, sizesByCodec}
 }
 
 
@@ -241,33 +234,45 @@ describe('codecSizes', () => {
         .toHaveBeenCalledWith(ARTIFACT, COMPRESSION_MESHOPT, false, QUALITY)
     })
 
-    it('names the cell it left resident, so the caller can release it', async () => {
-      // The sweep keeps the winner on purpose and therefore cannot free it
-      // itself. Nobody else can work out which cell that is either: the
-      // winner is decided against the metadata flag as it stood during the
-      // sweep, and that flag moves without re-running anything.
-      resolveFrom(INSTANCE_HEAVY)
+    it('never frees the cell behind the figure on screen', async () => {
+      // Picking a codec mid-sweep fills its cell through the size line, and
+      // the sweep then measures that same codec and beats it. Freeing it
+      // there is unrecoverable from outside: the selection has not changed
+      // again, so nothing re-estimates, and Export re-encodes up to the
+      // auto-measure limit on the main thread (#1852 review).
+      //
+      // Portable, so `none` holds bytes too and the sweep has a second loser
+      // to drop — protecting one cell must not read as switching the release
+      // off.
+      await sweep({isPortable: true, keepCodec: () => COMPRESSION_MESHOPT})
 
-      const {retained} = await sweep()
-
-      expect(retained).toBe(COMPRESSION_MESHOPT)
+      expect(releaseCompressedExport)
+        .not.toHaveBeenCalledWith(ARTIFACT, COMPRESSION_MESHOPT, true, QUALITY)
+      expect(releaseCompressedExport)
+        .toHaveBeenCalledWith(ARTIFACT, COMPRESSION_NONE, true, QUALITY)
     })
 
-    it('names nothing when it kept nothing', async () => {
-      // A Stop leaves no winner, so there is nothing for the caller to own —
-      // and `null` has to be said rather than left unsaid, or a caller
-      // holding a previous sweep's cell would never learn it was dropped.
-      const controller = new AbortController()
+    it('reads the selection at each release, not once when the run starts', async () => {
+      // The interesting half of the case above: the user picks the codec
+      // WHILE the sweep runs, which is exactly the window in which it is
+      // about to be beaten. A protected codec captured at the top of the run
+      // would have said "nothing is selected" and dropped the cell the size
+      // line had just filled.
+      let selected = null
       artifactSizes.mockImplementation((artifact, mode) => {
-        if (mode === COMPRESSION_MESHOPT) {
-          controller.abort()
+        if (mode === COMPRESSION_DRACO) {
+          selected = COMPRESSION_MESHOPT
         }
         return Promise.resolve(MOMENTUM[mode])
       })
 
-      const {retained} = await sweep({signal: controller.signal})
+      await sweep({isPortable: true, keepCodec: () => selected})
 
-      expect(retained).toBeNull()
+      expect(releaseCompressedExport)
+        .not.toHaveBeenCalledWith(ARTIFACT, COMPRESSION_MESHOPT, true, QUALITY)
+      // `none` was beaten before the selection moved, so it still goes.
+      expect(releaseCompressedExport)
+        .toHaveBeenCalledWith(ARTIFACT, COMPRESSION_NONE, true, QUALITY)
     })
 
     it('measures at the quality and Portable setting it was given', async () => {

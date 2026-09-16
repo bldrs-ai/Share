@@ -18,7 +18,7 @@
 //
 // Design: design/new/glb-export-premium.md §4.4.
 import {useCallback, useEffect, useRef, useState} from 'react'
-import {releaseCompressedExport, uncompressedSizes} from './artifactSizes'
+import {uncompressedSizes} from './artifactSizes'
 import {isSweepComplete, measureCodecSizes, shouldAutoMeasure} from './codecSizes'
 
 
@@ -31,11 +31,11 @@ import {isSweepComplete, measureCodecSizes, shouldAutoMeasure} from './codecSize
  * single re-encode, exactly as it does on the size line. It is passed in only
  * so the run's releases keep the codec the panel will select.
  *
- * `retainEstimate` is the other half of the sweep's memory bound, handed out
- * because the panel fills estimate cells the sweep never sees: the size line
- * re-encodes for whatever codec is selected, and a cell filled that way was
- * attached to the artifact for the rest of the session. Both claim the one
- * slot below; see it for why that is a slot and not two.
+ * `compression` is not a restart axis either, and is here for one reason: the
+ * sweep releases the codecs it beats, and the user may have SELECTED one of
+ * them part-way through. What survives a run is reconciled by the panel
+ * (`artifactSizes.js#retainOnlyCompressedExports`); what must survive DURING
+ * one only the run can protect, so the selection is passed down to it.
  *
  * @param {?object} artifact The store's `glbArtifact` slot
  * @param {object} options
@@ -43,6 +43,8 @@ import {isSweepComplete, measureCodecSizes, shouldAutoMeasure} from './codecSize
  * @param {boolean} options.isPortable
  * @param {boolean} [options.isGzipped]
  * @param {boolean} options.isMetadataIncluded
+ * @param {?string} [options.compression] The codec on screen, whose cell no
+ *   sweep may free
  * @return {{
  *   sizesByCodec: object,
  *   measuringCodec: ?string,
@@ -51,10 +53,10 @@ import {isSweepComplete, measureCodecSizes, shouldAutoMeasure} from './codecSize
  *   isPaused: boolean,
  *   start: Function,
  *   stop: Function,
- *   retainEstimate: Function,
  * }}
  */
-export default function useCodecSizes(artifact, {quality, isPortable, isGzipped = false, isMetadataIncluded}) {
+export default function useCodecSizes(
+  artifact, {quality, isPortable, isGzipped = false, isMetadataIncluded, compression = null}) {
   const [sizesByCodec, setSizesByCodec] = useState({})
   const [measuringCodec, setMeasuringCodec] = useState(null)
   const [isMeasuring, setIsMeasuring] = useState(false)
@@ -75,53 +77,12 @@ export default function useCodecSizes(artifact, {quality, isPortable, isGzipped 
   // re-running three encoders for that would be absurd.
   const metadataRef = useRef(isMetadataIncluded)
   metadataRef.current = isMetadataIncluded
-  // THE one compressed cell the Export tab keeps, as the four fields it takes
-  // to release it (`releaseCompressedExport`) rather than as a thunk, so a
-  // claim can tell "the cell I already hold" from "a different one". Not the
-  // render's values: a sweep retains the cell IT ran at, and by the time this
-  // is read the panel may have moved on.
-  const retainedRef = useRef(null)
-
-  // Nothing outside the panel reuses a retained cell: remounting re-runs the
-  // whole axis from scratch, so a cell held past unmount is never read again.
-  // Hence release on unmount and on restart, and release whatever is in the
-  // slot before recording a new cell in it. Releasing only drops a cache
-  // entry (`artifactSizes.js`), so an export already holding the promise still
-  // resolves; the cost of being wrong here is a re-encode, not a failure.
-  const releaseRetained = useCallback(() => {
-    const held = retainedRef.current
-    retainedRef.current = null
-    if (held) {
-      releaseCompressedExport(held.artifact, held.mode, held.isPortable, held.quality)
-    }
-  }, [])
-
-  // ONE slot, two claimants, last claim wins — the whole of the Export tab's
-  // estimate-cell retention policy, in one place because splitting it is what
-  // went wrong twice (#1852 review). The sweep claims the winner it kept for
-  // the selection that follows; the panel's size line claims whatever cell it
-  // just filled for the codec on screen, which nothing tracked at all before
-  // and so stayed on the artifact — both metadata variants — for the rest of
-  // the session. They cannot fight over a cell because there is only one to
-  // hold, and re-claiming the cell already held releases nothing: that is the
-  // auto-selection landing on the sweep's winner, and freeing it there would
-  // make the panel re-encode the very file the sweep kept it to avoid.
-  //
-  // Gzip is deliberately absent from the key, as it is from the cache's own
-  // (`artifactSizes.js`): gzip caches two integers beside the cell rather than
-  // a fourth dimension of it, so releasing by these four covers the gzipped
-  // selection too.
-  const retain = useCallback((cellArtifact, mode, cellIsPortable, cellQuality) => {
-    const held = retainedRef.current
-    if (held && held.artifact === cellArtifact && held.mode === mode &&
-        held.isPortable === cellIsPortable && held.quality === cellQuality) {
-      return
-    }
-    releaseRetained()
-    retainedRef.current = mode === null ?
-      null :
-      {artifact: cellArtifact, mode, isPortable: cellIsPortable, quality: cellQuality}
-  }, [releaseRetained])
+  // Read by the run at each of its releases, so a codec picked mid-sweep is
+  // protected from the moment it is picked. A SUPERSEDED sweep reads this ref
+  // too, which is the point: whichever generation a release comes from, it is
+  // measured against the one selection the user actually has.
+  const selectedCodecRef = useRef(compression)
+  selectedCodecRef.current = compression
 
   const stop = useCallback(() => {
     // The encoders are synchronous wasm with no abort, so this ends the QUEUE
@@ -177,25 +138,15 @@ export default function useCodecSizes(artifact, {quality, isPortable, isGzipped 
           }
           setMeasuringCodec(mode)
         },
-        // Guarded on the same generation as the two above, and for a reason
-        // worth spelling out because the unguarded version read as the
-        // careful one. The slot below holds ONE cell and belongs to whichever
-        // sweep is live, so a dead sweep writing to it evicts the live
-        // sweep's winner and parks a cell measured for a rung nobody is on
-        // (#1852 review). A dead sweep therefore frees its own cell DIRECTLY:
-        // nobody else knows that cell exists — the live sweep is tracking its
-        // own, and after unmount there is no next sweep to inherit it — so
-        // the choice is free it here or leak it for the life of the artifact,
-        // which the store holds for the whole session.
-        onRetain: (mode) => {
-          if (abortRef.current !== controller) {
-            if (mode !== null) {
-              releaseCompressedExport(artifact, mode, isPortable, quality)
-            }
-            return
-          }
-          retain(artifact, mode, isPortable, quality)
-        },
+        // Ungenerationed on purpose, unlike the two above. This decides only
+        // what the run may FREE, and the answer is the same for a live sweep
+        // and a dead one: the cell behind the figure on screen. The cells a
+        // run leaves behind are nobody's here — the panel reconciles them
+        // against its own selection once the run settles
+        // (`artifactSizes.js#retainOnlyCompressedExports`), which is what
+        // replaced three rounds of trying to name an owner for them (#1852
+        // review).
+        keepCodec: () => selectedCodecRef.current,
       })
     } finally {
       if (abortRef.current === controller) {
@@ -208,7 +159,7 @@ export default function useCodecSizes(artifact, {quality, isPortable, isGzipped 
         setIsPaused(!isSweepComplete(measured))
       }
     }
-  }, [artifact, quality, isPortable, isGzipped, retain])
+  }, [artifact, quality, isPortable, isGzipped])
 
   useEffect(() => {
     let isStale = false
@@ -238,14 +189,13 @@ export default function useCodecSizes(artifact, {quality, isPortable, isGzipped 
       // `run` is reached through an await, so the superseded codec — already
       // in flight, uninterruptible — can resolve in the gap before the new
       // sweep installs its own controller; and on unmount there is no next
-      // body at all, which is how a dead sweep came to publish into an
-      // unmounted hook and install a retained cell nothing was left to
-      // release (#1852 review). Nulling here is what makes "am I still the
-      // live sweep?" answerable, above, after the panel has gone.
+      // body at all, so a dead sweep would go on publishing figures into a
+      // hook nobody is rendering (#1852 review). Nulling here is what makes
+      // "am I still the live sweep?" answerable, above, after the panel has
+      // gone.
       abortRef.current = null
-      releaseRetained()
     }
-  }, [artifact, run, releaseRetained])
+  }, [artifact, run])
 
-  return {sizesByCodec, measuringCodec, isMeasuring, isStopping, isPaused, start: run, stop, retainEstimate: retain}
+  return {sizesByCodec, measuringCodec, isMeasuring, isStopping, isPaused, start: run, stop}
 }

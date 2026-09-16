@@ -9,7 +9,7 @@ import {
   compressedExport,
   gzippedExport,
   releaseCompressedExport,
-  releaseQualityExports,
+  retainOnlyCompressedExports,
 } from './artifactSizes'
 import {compressExportGlb} from './glbCompression'
 import {rewriteGlbPortable} from './glbPortable'
@@ -391,7 +391,7 @@ describe('artifactSizes', () => {
     })
   })
 
-  describe('releasing a quality rung (#1852 review)', () => {
+  describe('reconciling what stays resident (#1852 review)', () => {
     const COMPRESSED = {
       withMetadata: new Uint8Array(300),
       withoutMetadata: new Uint8Array(120),
@@ -405,52 +405,90 @@ describe('artifactSizes', () => {
       rewriteGlbPortable.mockReturnValue({bytes: cachedGlb(), isChanged: true, stats: {}})
     })
 
-    it('drops every codec measured at the rung the user left, portable and native', async () => {
-      // #1848 tripled the compressed key space, and each cell holds two whole
-      // copies of the export — so reading every rung's caption retained two
-      // copies of the model per rung, ten at #1852's five. The rung being
-      // left is the one nothing reads again.
+    it('keeps the cells it is given and drops the rest, whatever axis they differ on', async () => {
+      // The whole retention policy in one statement. It replaces a per-rung
+      // eviction that had to enumerate the codec × Portable product and know
+      // which keys carry a rung at all: here the inner map is walked, so a
+      // cell left over from any axis — another rung, the other Portable
+      // setting, a codec nobody selected — goes because it was not named.
       const artifact = {...ARTIFACT}
       for (const isPortable of [false, true]) {
-        for (const mode of ['meshopt', 'draco']) {
-          await artifactSizes(artifact, mode, isPortable, 'best')
+        for (const quality of ['best', 'smallest']) {
+          await artifactSizes(artifact, 'draco', isPortable, quality)
         }
       }
+      // Portable-with-no-codec carries no rung in its key at all, and is a
+      // rewrite rather than an encode — the cell the rung-shaped eviction had
+      // to be told to leave alone.
+      await artifactSizes(artifact, 'none', true, 'best')
       expect(compressExportGlb).toHaveBeenCalledTimes(4)
+      expect(rewriteGlbPortable).toHaveBeenCalledTimes(3)
 
-      releaseQualityExports(artifact, 'best')
+      retainOnlyCompressedExports(artifact, [{mode: 'draco', isPortable: false, quality: 'best'}])
 
-      for (const isPortable of [false, true]) {
-        for (const mode of ['meshopt', 'draco']) {
-          await artifactSizes(artifact, mode, isPortable, 'best')
-        }
-      }
-      expect(compressExportGlb).toHaveBeenCalledTimes(8)
+      await artifactSizes(artifact, 'draco', false, 'best')
+      expect(compressExportGlb).toHaveBeenCalledTimes(4)
+      await artifactSizes(artifact, 'draco', false, 'smallest')
+      await artifactSizes(artifact, 'draco', true, 'best')
+      await artifactSizes(artifact, 'draco', true, 'smallest')
+      expect(compressExportGlb).toHaveBeenCalledTimes(7)
+      await artifactSizes(artifact, 'none', true, 'best')
+      expect(rewriteGlbPortable).toHaveBeenCalledTimes(6)
     })
 
-    it('keeps the rung the user moved TO, and the cells that carry no rung', async () => {
-      // The other half: an eviction that took the current selection with it
-      // would make the size line re-encode the file it is already showing.
-      // The uncompressed and portable-without-codec cells are the same file at
-      // every rung and are not keyed by one at all (`rewriteKey`).
+    it('keeps nothing when given nothing, which is the panel going away', async () => {
+      // Nothing outside the Export tab reads an estimate cell — reopening it
+      // re-runs the whole codec axis — so a cell held past unmount is two
+      // copies of the model on an artifact the store keeps for the session.
       const artifact = {...ARTIFACT}
       await artifactSizes(artifact, 'draco', false, 'best')
-      await artifactSizes(artifact, 'draco', false, 'smallest')
-      await artifactSizes(artifact, 'none', true, 'smallest')
-      expect(compressExportGlb).toHaveBeenCalledTimes(2)
-      expect(rewriteGlbPortable).toHaveBeenCalledTimes(1)
+      expect(compressExportGlb).toHaveBeenCalledTimes(1)
 
-      releaseQualityExports(artifact, 'best')
+      retainOnlyCompressedExports(artifact, [])
 
-      await artifactSizes(artifact, 'draco', false, 'smallest')
-      await artifactSizes(artifact, 'none', true, 'smallest')
+      await artifactSizes(artifact, 'draco', false, 'best')
       expect(compressExportGlb).toHaveBeenCalledTimes(2)
-      expect(rewriteGlbPortable).toHaveBeenCalledTimes(1)
+    })
+
+    it('says the same thing twice without taking anything the second time', async () => {
+      // The property the claim-and-release design could not have, and the
+      // reason this is a reconcile: a superseded sweep finishing late makes
+      // the panel state the same set again, and stating it again has to be a
+      // no-op rather than a second release of a cell that is being displayed.
+      const artifact = {...ARTIFACT}
+      await artifactSizes(artifact, 'draco', false, 'best')
+      const keep = [{mode: 'draco', isPortable: false, quality: 'best'}]
+
+      retainOnlyCompressedExports(artifact, keep)
+      retainOnlyCompressedExports(artifact, keep)
+
+      await artifactSizes(artifact, 'draco', false, 'best')
+      expect(compressExportGlb).toHaveBeenCalledTimes(1)
+    })
+
+    it('leaves the header read alone — two numbers, not a copy of the file', async () => {
+      // Only the BYTES cache is reconciled. The uncompressed sizes are kept
+      // for as long as the artifact is, so reopening the tab on the same
+      // model does not go back to OPFS for them (module doc).
+      const artifact = {...ARTIFACT}
+      await artifactSizes(artifact)
+      await artifactSizes(artifact, 'draco', false, 'best')
+      readModelByPathFromOPFS.mockClear()
+
+      retainOnlyCompressedExports(artifact, [])
+
+      await artifactSizes(artifact)
+      expect(readModelByPathFromOPFS).not.toHaveBeenCalled()
+      // …and the compressed cell really did go, or the line above proves
+      // nothing about which map was spared.
+      await artifactSizes(artifact, 'draco', false, 'best')
+      expect(readModelByPathFromOPFS).toHaveBeenCalledTimes(1)
     })
 
     it('is harmless on an artifact that never had a cell', () => {
-      expect(() => releaseQualityExports({...ARTIFACT}, 'best')).not.toThrow()
-      expect(() => releaseQualityExports(null, 'best')).not.toThrow()
+      expect(() => retainOnlyCompressedExports({...ARTIFACT}, [])).not.toThrow()
+      expect(() => retainOnlyCompressedExports(
+        null, [{mode: 'draco', isPortable: false, quality: 'best'}])).not.toThrow()
     })
   })
 

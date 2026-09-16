@@ -3,7 +3,7 @@ import React from 'react'
 import {act, fireEvent, render, renderHook, screen, within} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
-import {artifactPositionRange, artifactSizes, releaseQualityExports} from '../../export/artifactSizes'
+import {artifactPositionRange, artifactSizes, retainOnlyCompressedExports} from '../../export/artifactSizes'
 import useCodecSizes from '../../export/useCodecSizes'
 import {gtagEvent} from '../../privacy/analytics'
 import useStore from '../../store/useStore'
@@ -22,7 +22,7 @@ jest.mock('../../privacy/analytics', () => ({gtagEvent: jest.fn()}))
 jest.mock('../../export/artifactSizes', () => ({
   artifactSizes: jest.fn(),
   artifactPositionRange: jest.fn(),
-  releaseQualityExports: jest.fn(),
+  retainOnlyCompressedExports: jest.fn(),
 }))
 jest.mock('../Profile/subscriptionNav', () => ({goToSubscription: jest.fn()}))
 // The background codec sweep runs three encoders off OPFS; its ordering,
@@ -84,11 +84,6 @@ const NO_CODEC_SIZES = {
   isPaused: false,
   start: jest.fn(),
   stop: jest.fn(),
-  // The hook's one retention slot, which the panel's size-line effect claims
-  // on every run (`export/useCodecSizes.js`). A jest.fn here, because what
-  // this suite can say about it is which cell the panel hands over; that a
-  // claim releases the cell before it is the hook's own suite.
-  retainEstimate: jest.fn(),
 }
 
 const ARTIFACT = {
@@ -720,61 +715,6 @@ describe('ExportSection', () => {
         .not.toHaveTextContent('Meshopt has no coarser setting')
     })
 
-    it('hands back the rung it left, so comparing rungs does not retain a copy each', async () => {
-      // Each compressed cell holds two whole copies of the export and #1848
-      // split them by rung, so clicking through every rung to read their
-      // captions — the interaction this control exists for — would pin two
-      // copies of the model per rung for the life of the artifact. Nothing
-      // reads the rung just left (#1852 review).
-      settleSizes()
-      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
-      render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
-      await act(async () => {})
-      // Mounting is not a rung change: the default rung's cells are the ones
-      // being filled.
-      expect(releaseQualityExports).not.toHaveBeenCalled()
-
-      chooseCompression('draco')
-      chooseQuality('smallest')
-      await act(async () => {})
-
-      expect(releaseQualityExports)
-        .toHaveBeenCalledWith(expect.objectContaining(ARTIFACT), 'balanced')
-      expect(releaseQualityExports).toHaveBeenCalledTimes(1)
-
-      chooseQuality('best')
-      await act(async () => {})
-
-      expect(releaseQualityExports)
-        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'smallest')
-    })
-
-    it('hands the cell it just filled to the one retention slot', async () => {
-      // The estimate read POPULATES a compressed cell for the codec on
-      // screen, and the sweep tracks only its own winner — so a manually
-      // selected codec, or a rung the sweep never measured, filled a cell
-      // nothing was ever going to release (#1852 review). Every axis of the
-      // cell has to travel with it: the slot releases by artifact, codec,
-      // Portable and rung, and a claim naming the wrong rung would free a
-      // file the user is still looking at.
-      settleSizes()
-      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
-      render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
-      await act(async () => {})
-
-      chooseCompression('draco')
-      await act(async () => {})
-
-      expect(NO_CODEC_SIZES.retainEstimate)
-        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'balanced')
-
-      chooseQuality('smallest')
-      await act(async () => {})
-
-      expect(NO_CODEC_SIZES.retainEstimate)
-        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'smallest')
-    })
-
     it('re-estimates on the rung, because two rungs are two different files', async () => {
       settleSizes()
       await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
@@ -1058,6 +998,115 @@ describe('ExportSection', () => {
       fireEvent.click(getByTestId('export-codec-sizes-start'))
 
       expect(start).toHaveBeenCalled()
+    })
+
+    describe('what stays in the estimate cache (#1852 review)', () => {
+      /**
+       * Every cell the panel said should still exist, on the last reconcile.
+       *
+       * @return {Array<object>} `{mode, isPortable, quality}` entries
+       */
+      function lastKept() {
+        const calls = retainOnlyCompressedExports.mock.calls
+        return calls[calls.length - 1][1]
+      }
+
+      it('keeps the cell it is showing, and drops the rest whatever changed', async () => {
+        // Each compressed cell holds two whole copies of the export, and
+        // #1848 split them by rung as well as by codec — so clicking through
+        // the controls to read their captions, which is what they are for,
+        // pinned a pair of copies per combination for the life of the
+        // artifact. One statement of what should be resident replaces the
+        // per-rung eviction that used to do half of this.
+        sweepState()
+        await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+        render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+        await act(async () => {})
+
+        chooseCompression('draco')
+        await act(async () => {})
+
+        expect(lastKept()).toEqual([{mode: 'draco', isPortable: false, quality: 'balanced'}])
+
+        chooseQuality('smallest')
+        await act(async () => {})
+
+        expect(lastKept()).toEqual([{mode: 'draco', isPortable: false, quality: 'smallest'}])
+      })
+
+      it('keeps the sweep\'s winner only while it is about to be selected', async () => {
+        // The handoff. The sweep leaves its winner in the cache for the
+        // auto-selection that follows, and the auto-selection is a render
+        // later — so for that one render the winner is a cell the panel is
+        // not yet showing. Both are derived from `codecToSelect`, so neither
+        // can drop what the other is about to need.
+        sweepState({sizesByCodec: CODEC_SIZES})
+        await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+        render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+        await act(async () => {})
+
+        // Draco wins and the panel has switched to it.
+        expect(screen.getByTestId('export-compression')).toHaveTextContent('Draco')
+        expect(lastKept()).toEqual([{mode: 'draco', isPortable: false, quality: 'balanced'}])
+        // …and while the selection was still `none`, Draco was already being
+        // kept beside it rather than swept up before the switch landed.
+        expect(retainOnlyCompressedExports.mock.calls.map(([, kept]) => kept))
+          .toContainEqual([
+            {mode: 'none', isPortable: false, quality: 'balanced'},
+            {mode: 'draco', isPortable: false, quality: 'balanced'},
+          ])
+      })
+
+      it('drops the winner the user has overruled, and keeps their own cell', async () => {
+        // The finding this replaced. `codecToSelect` refuses to override a
+        // codec the user picked, so the winner is a cell nothing will ever
+        // read — while the user's own cell, the one behind the figure on
+        // screen and the bytes Export is about to hand over, was the one left
+        // unheld.
+        sweepState({sizesByCodec: CODEC_SIZES})
+        await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+        render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+        await act(async () => {})
+
+        chooseCompression('meshopt')
+        await act(async () => {})
+
+        expect(lastKept()).toEqual([{mode: 'meshopt', isPortable: false, quality: 'balanced'}])
+      })
+
+      it('leaves the cache alone while a sweep is running', async () => {
+        // A run bounds its own memory as it goes and protects the selection
+        // while doing it (`export/codecSizes.js`). Reconciling against a
+        // selection that knows nothing of the sweep's best-so-far would throw
+        // the winner away mid-run and make the auto-selection re-encode it.
+        sweepState({isMeasuring: true, measuringCodec: 'meshopt'})
+        await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+        render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+        await act(async () => {})
+
+        chooseCompression('draco')
+        await act(async () => {})
+
+        expect(retainOnlyCompressedExports).not.toHaveBeenCalled()
+      })
+
+      it('takes the whole cache with it when the panel goes away', async () => {
+        // Nothing outside this panel reads an estimate cell — reopening the
+        // tab re-runs the codec axis from scratch — so anything held past
+        // unmount is two copies of the model on an artifact the store keeps
+        // for the rest of the session.
+        sweepState()
+        await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+        const {unmount} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+        await act(async () => {})
+        chooseCompression('draco')
+        await act(async () => {})
+        expect(lastKept()).not.toEqual([])
+
+        unmount()
+
+        expect(lastKept()).toEqual([])
+      })
     })
   })
 

@@ -814,7 +814,7 @@ appended to that codec's dropdown **option** as it lands (never to the closed
 control — at 390px a size beside the label would ellipsize away the half that
 matters), and when the last one arrives the panel selects the smallest.
 
-Five constraints shape it, and they are the design:
+Six constraints shape it, and they are the design:
 
 - **Sequential, cheapest first, releasing as it goes.** Each estimate cell
   holds two whole copies of the export, so a naive sweep would leave three
@@ -829,7 +829,27 @@ Five constraints shape it, and they are the design:
   those very bytes. Two cells rather than one is the deliberate trade: Meshopt
   is measured second and wins on instance-heavy artifacts, so a sweep holding
   only the last-measured codec would drop the winner and make the panel
-  re-encode up to 50 MB on the main thread the instant it selected it.
+  re-encode up to 50 MB on the main thread the instant it selected it. One
+  cell is exempt: the codec the user has SELECTED, passed down as `keepCodec`
+  and read at each release rather than captured when the run starts, since
+  they can pick one mid-sweep. Freeing that one is unrecoverable from
+  outside — the selection has not changed again, so nothing re-estimates.
+- **Nothing coordinates what survives a run; it is reconciled.** Releasing as
+  it goes bounds ONE sweep, which knows its own order. What should still be
+  resident *afterwards* depends on the panel's selection and on whether
+  another sweep has superseded this one, and #1852 spent three review rounds
+  failing to express that as a handoff — a winner kept and never freed, then a
+  release slot raced across sweep generations, then a slot claiming the
+  winner while the user was looking at a codec of their own. The panel instead
+  states the set it still needs, and everything else for that artifact goes
+  (`artifactSizes.js#retainOnlyCompressedExports`): the cell behind the figure
+  on screen, plus — only while `codecToSelect` says the dropdown is about to
+  move onto it — the sweep's winner. Both come from the same call the
+  auto-selection makes, so the two cannot disagree and their order does not
+  matter; a superseded sweep finishing late just makes the panel state the
+  same set again. It runs on a selection or axis change and on unmount, never
+  mid-run, and it subsumes the per-rung eviction that used to enumerate the
+  codec × Portable product by hand.
 - **Nothing starts above ~50 MB.** ~170 ms/MB across the whole axis, and it is
   not interruptible, so 50 MB is about eight seconds of main-thread work.
   Above the line the panel shows "Codec sizes not measured" and a **Calculate

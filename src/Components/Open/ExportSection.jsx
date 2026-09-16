@@ -2,7 +2,7 @@ import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {Box, Button, Chip, MenuItem, Select, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {artifactPositionRange, artifactSizes, releaseQualityExports} from '../../export/artifactSizes'
+import {artifactPositionRange, artifactSizes, retainOnlyCompressedExports} from '../../export/artifactSizes'
 import {codecToSelect} from '../../export/codecSizes'
 import {
   QUALITY_DEFAULT,
@@ -118,8 +118,8 @@ export default function ExportSection() {
   // which is most of a batched-native artifact (#1850, `codecSizes.js`).
   const {
     sizesByCodec, measuringCodec, isMeasuring, isStopping, isPaused,
-    start: startSizing, stop: stopSizing, retainEstimate,
-  } = useCodecSizes(glbArtifact, {quality, isPortable, isGzipped, isMetadataIncluded})
+    start: startSizing, stop: stopSizing,
+  } = useCodecSizes(glbArtifact, {quality, isPortable, isGzipped, isMetadataIncluded, compression})
   const theme = useTheme()
   // Both download sizes, read from the artifact's header when the tab opens
   // (`export/artifactSizes.js`) — null while that read is in flight and for
@@ -146,9 +146,11 @@ export default function ExportSection() {
   // once per artifact and rides on the size line's cached header read
   // (`export/artifactSizes.js#artifactPositionRange`) — no second file read.
   const [positionRange, setPositionRange] = useState(null)
-  // Which rung the compressed cells in the estimate cache were filled for, so
-  // the effect below can name the one to evict when it changes.
-  const measuredQualityRef = useRef(quality)
+  // The artifact as of the last render, for the unmount teardown below: a
+  // cleanup with an empty dependency list closes over the value this panel
+  // mounted with, and the store publishes a fresh slot per load.
+  const artifactRef = useRef(glbArtifact)
+  artifactRef.current = glbArtifact
 
   useEffect(() => {
     let isStale = false
@@ -161,40 +163,13 @@ export default function ExportSection() {
       }
     })
     // The read above POPULATES a compressed cell for the codec on screen —
-    // two whole copies of the export — and the sweep only ever tracked the
-    // winner it kept, so manually selecting a codec it had already released
-    // left that cell on the artifact for the rest of the session (#1852
-    // review). Hand it to the one retention slot, which releases whatever it
-    // held before and empties itself when the panel goes
-    // (`useCodecSizes.js`). Claimed synchronously rather than in the `.then`,
-    // because `artifactSizes` inserts the cell on the way in and the
-    // selection can move again before it resolves.
-    //
-    // The rung eviction below overlaps this by exactly one cell when the
-    // quality changes — both name the cell being left. Releasing twice is a
-    // second `Map.delete` of a key already gone, which is why the overlap is
-    // spelled out here rather than worked around.
-    retainEstimate(glbArtifact, compression, isPortable, quality)
+    // two whole copies of the export. Nothing is claimed for it here; the
+    // reconcile below states which cells should exist at all, and this one is
+    // always in that set.
     return () => {
       isStale = true
     }
-  }, [glbArtifact, compression, isPortable, quality, isGzipped, retainEstimate])
-
-  useEffect(() => {
-    // Hand back the rung the user just left. Every rung is a different file,
-    // so each holds its own compressed cells — two whole copies of the export
-    // apiece — and clicking through every rung to read their millimetre
-    // captions, which is what this control is for, would otherwise retain two
-    // copies per rung for the life of the artifact
-    // (`export/artifactSizes.js#releaseQualityExports`). The rung being left
-    // is the one cell nothing is about to read again, so the eviction point
-    // is known exactly and needs no policy.
-    const previousQuality = measuredQualityRef.current
-    measuredQualityRef.current = quality
-    if (previousQuality !== quality) {
-      releaseQualityExports(glbArtifact, previousQuality)
-    }
-  }, [glbArtifact, quality])
+  }, [glbArtifact, compression, isPortable, quality, isGzipped])
 
   useEffect(() => {
     let isStale = false
@@ -219,6 +194,57 @@ export default function ExportSection() {
       setCompression(best)
     }
   }, [sizesByCodec, isMetadataIncluded, isCodecUserChosen, compression])
+
+  useEffect(() => {
+    // Everything the estimate cache is allowed to keep, stated as a set
+    // rather than performed as a claim and a release. At most two cells: the
+    // one behind the figure on screen, and — only while the auto-selection is
+    // about to move the dropdown onto it — the winner the sweep left for
+    // exactly that. `codecToSelect` is the same call the effect above makes,
+    // so the two cannot disagree about which that is, and the ordering
+    // between them does not matter: the effect that runs first keeps both
+    // cells, the next render drops the one the selection did not become.
+    //
+    // That derivation is what dissolves the finding this replaced. A winner
+    // the panel will NOT select — because the user picked a codec themselves,
+    // which is `codecToSelect`'s other refusal — is a cell nobody will read,
+    // while the user's own cell was the one going unheld (#1852 review).
+    //
+    // Skipped while a sweep is running: a run bounds its own memory as it
+    // goes and protects the selection while doing it (`codecSizes.js`), and
+    // reconciling against a selection that knows nothing of the best-so-far
+    // would throw the winner away mid-run. Being wrong here costs a
+    // re-encode and never a wrong figure, because the selection's own cell is
+    // in the set on every path — which is the invariant the size line rests
+    // on: displayed size == downloaded bytes.
+    if (isMeasuring) {
+      return
+    }
+    const keep = [{mode: compression, isPortable, quality}]
+    const pending = codecToSelect(sizesByCodec, isMetadataIncluded, isCodecUserChosen, compression)
+    if (pending !== null) {
+      keep.push({mode: pending, isPortable, quality})
+    }
+    retainOnlyCompressedExports(glbArtifact, keep)
+  }, [
+    glbArtifact, compression, isPortable, quality,
+    isMeasuring, sizesByCodec, isMetadataIncluded, isCodecUserChosen,
+  ])
+
+  useEffect(() => () => {
+    // Nothing outside this panel reads an estimate cell — reopening the tab
+    // re-runs the whole codec axis from scratch — so the panel takes the
+    // cache with it. Its own effect, because the reconcile above re-runs on
+    // every selection change and a cleanup there would empty the cache on
+    // each one instead of only when there is no panel left to read it.
+    //
+    // A sweep still finishing cannot resurrect anything: every cell a run can
+    // create is created by the `artifactSizes` call it is already awaiting,
+    // and past its abort the loop starts no further codec
+    // (`export/codecSizes.js`), so the last cell it can add already exists
+    // when this runs.
+    retainOnlyCompressedExports(artifactRef.current, [])
+  }, [])
 
   const sizes = estimate?.sizes ?? null
 
