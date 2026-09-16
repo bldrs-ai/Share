@@ -42,7 +42,7 @@
 const FNV_OFFSET_BASIS = 0x811c9dc5
 const FNV_PRIME = 16777619
 
-/** Attributes this writer serializes, in the order they are hashed. */
+/** Attributes the batched GLB writer serializes, in the order hashed. */
 const HASHED_ATTRIBUTES = ['position', 'normal']
 
 

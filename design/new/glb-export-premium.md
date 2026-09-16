@@ -81,6 +81,12 @@ size read still never touching BIN.
      cut its premise to ~0.7 MB, and what is left needs a mixed
      instanced/plain artifact shape that both readers refuse today —
      evaluated and deferred, not skipped.
+   - **All of this is now measured end to end.** A real Snowdon artifact
+     rebuilt through Share's own writer goes **67,830,672 → 53,131,764 B,
+     −21.7%**, of which the JSON chunk is −8,167,232 (14,440,907 →
+     6,273,675) and BIN is −6,536,756. 21,849 placements, unchanged, and
+     the placement multiset — identity, transform, colour and geometry
+     content hash — compares with **0 differences** (§1.1b).
    - **The largest single lossless item, #1859, has since landed** (§1.1b).
      The batched writer keyed geometry groups on `geometry.uuid` (object
      identity) rather than content, so 5,031 of the 12,251 groups were
@@ -312,6 +318,50 @@ it off the table, in this order:
    being in `extensionsUsed` at all. Unifying the two joins and the two
    shapes is a larger change than both levers above combined, against ~0.7 MB
    — so it is recorded here rather than half-landed.
+
+#### Measured, before and after, on a real Snowdon artifact
+
+Both artifacts produced end to end by Share's own writer through a browser
+(`ifc/autodesk/snowdon/…_IFC4.ifc`, 83,153,231 B), partitioned with
+`tools/glb/byteBudget.mjs`. **67,830,672 → 53,131,764 B, −14,698,908
+(−21.7%)**, with the element-properties and spatial-tree payloads byte for
+byte unchanged:
+
+| bucket | before | after | delta |
+|---|---:|---:|---:|
+| `json.chunk` | 14,440,907 | 6,273,675 | **−8,167,232** |
+| `bin.geometry.POSITION` | 16,069,512 | 13,785,108 | −2,284,404 |
+| `bin.geometry.NORMAL` | 16,069,512 | 13,785,108 | −2,284,404 |
+| `bin.geometry.indices` | 14,039,544 | 12,528,984 | −1,510,560 |
+| `bin.instancing.ROTATION` | 349,584 | 106,864 | −242,720 |
+| `bin.instancing.SCALE` | 262,188 | 49,560 | −212,628 |
+| `bin.instancing.TRANSLATION` | 262,188 | 260,148 | −2,040 |
+| `bin.extension.BLDRS_instance_tables` | 136,116 | 141,196 | **+5,080** |
+| `bin.extension.BLDRS_element_properties` | 6,129,233 | 6,129,233 | 0 |
+| `bin.extension.BLDRS_spatial_tree` | 71,856 | 71,856 | 0 |
+
+Inside the JSON chunk: `accessors` 7,757,948 → 3,401,917, `materials`
+1,758,085 → 12,982, `nodes` 1,913,447 → 1,109,611, `bufferViews` 1,647,498 →
+968,400, `meshes` 1,300,898 → 745,140. Counts: 12,251 → 7,220 nodes and
+meshes, 73,506 → 29,169 accessors, 24,506 → 14,387 bufferViews, 12,251 → 90
+materials — and **21,849 instances, unchanged**.
+
+**The tables payload gets 5,080 B BIGGER**, the one line in the table that
+goes the wrong way. Nothing is added to it: `parents` and `occurrenceIds`
+still carry one entry per placement and `nodes` carries 5,031 fewer rows.
+What changed is the ORDER — placements are now grouped by geometry content
+rather than by emission — and the payload is gzipped, so a sequence that
+clusters less compresses less. 3.7% of a 136 KB payload against 8.2 MB of
+JSON is a trade worth making; it is recorded because "one bucket grew" is
+exactly the kind of thing a reader would otherwise flag as a bug.
+
+**Losslessness is checked, not asserted.** The 21,849 placements were
+extracted from both files as
+`(parent, occurrenceId, geometryId, occurrencePath, TRS, colour, SHA-256 of
+POSITION+NORMAL+indices)` and compared as multisets: **0 differences.** The
+tables' 12,251 distinct conway geometry ids survive intact even though the
+file now holds 7,178 distinct glTF geometries, which is the point — geometry
+id is per-placement identity, the geometry payload is not.
 
 ### 1.2 Where a download can be located from
 

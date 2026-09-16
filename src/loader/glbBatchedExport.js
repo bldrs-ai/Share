@@ -22,9 +22,9 @@ import {glbVerbose} from './glbLog'
  * must not round-trip through glTF materials).
  *
  * Node grouping is per (unique geometry × source color), where "unique
- * geometry" means unique CONTENT — `contentKey` interns the shapes
- * by their attribute bytes, because object identity groups two IFC types
- * that emit the same mesh separately and wrote them twice (Share#1859). A
+ * geometry" means unique CONTENT — `contentKey` interns the shapes by their
+ * attribute bytes, because object identity groups two IFC types that emit
+ * the same mesh separately and wrote them twice (Share#1859). A
  * generic viewer without our tables still shows an authored-color model
  * colored, while instances of one part stay one draw batch. Materials are
  * shared across every bin of one color rather than minted per bin
