@@ -291,8 +291,9 @@ describe('useCodecSizes', () => {
     // one inside a synchronous wasm encode, so a rung change while the last
     // codec is running leaves that sweep to finish the whole axis — and a
     // sweep that finished keeps its winner. By then the teardown has already
-    // run, so nothing is left to hand that cell back except the next sweep
-    // that goes to retain one.
+    // run, so the dead sweep is the only thing left that knows the cell
+    // exists: it hands it straight back rather than parking it in the slot
+    // the live sweep owns.
     const pending = {}
     artifactSizes.mockImplementation((artifact, mode, isPortable, quality) =>
       new Promise((resolve) => {
@@ -303,24 +304,42 @@ describe('useCodecSizes', () => {
       {initialProps: {quality: 'balanced'}},
     )
 
-    // Run the old rung down to its last codec, so the abort lands too late.
-    for (const mode of ['none', 'meshopt']) {
-      await waitFor(() => expect(pending[`${mode}|balanced`]).toBeDefined())
-      await act(async () => {
-        pending[`${mode}|balanced`](SIZES[mode])
-        await Promise.resolve()
-      })
-    }
-    await waitFor(() => expect(pending['draco|balanced']).toBeDefined())
+    await runDownToLastCodec(pending, 'balanced')
 
     rerender({quality: 'best'})
+    releaseCompressedExport.mockClear()
     await act(async () => {
       pending['draco|balanced'](SIZES.draco)
       await Promise.resolve()
     })
-    releaseCompressedExport.mockClear()
 
-    // The superseded sweep is now holding draco at the rung nobody is on.
+    await waitFor(() => expect(releaseCompressedExport)
+      .toHaveBeenCalledWith(ARTIFACT, 'draco', false, 'balanced'))
+  })
+
+  it('leaves the live sweep\'s winner alone when a superseded one finishes after it', async () => {
+    // The other order, and the one the unguarded version got wrong. A sweep
+    // that is already dead still runs its last codec to completion and still
+    // reaches `onRetain`; writing to the shared slot there released whatever
+    // the LIVE sweep had just retained — the cell the panel is about to
+    // select — and left the dead sweep's own cell parked in its place. Two
+    // faults from one line: a re-encode the user pays for on selection, and a
+    // rung nobody is on pinned for the life of the artifact (#1852 review).
+    const pending = {}
+    artifactSizes.mockImplementation((artifact, mode, isPortable, quality) =>
+      new Promise((resolve) => {
+        pending[`${mode}|${quality}`] = resolve
+      }))
+    const {rerender} = renderHook(
+      ({quality}) => useCodecSizes(ARTIFACT, {...BALANCED, quality}),
+      {initialProps: {quality: 'balanced'}},
+    )
+
+    await runDownToLastCodec(pending, 'balanced')
+
+    // The live sweep gets all the way home FIRST, so it is holding draco at
+    // the rung the panel is actually on.
+    rerender({quality: 'best'})
     for (const mode of ['none', 'meshopt', 'draco']) {
       await waitFor(() => expect(pending[`${mode}|best`]).toBeDefined())
       await act(async () => {
@@ -328,8 +347,68 @@ describe('useCodecSizes', () => {
         await Promise.resolve()
       })
     }
+    await waitFor(() => expect(releaseCompressedExport)
+      .toHaveBeenCalledWith(ARTIFACT, 'meshopt', false, 'best'))
+    releaseCompressedExport.mockClear()
+
+    // …and only then does the superseded encode come back.
+    await act(async () => {
+      pending['draco|balanced'](SIZES.draco)
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(releaseCompressedExport)
+      .toHaveBeenCalledWith(ARTIFACT, 'draco', false, 'balanced'))
+
+    expect(releaseCompressedExport).not.toHaveBeenCalledWith(ARTIFACT, 'draco', false, 'best')
+  })
+
+  it('installs nothing after the panel is gone, and frees what the dead sweep kept', async () => {
+    // Unmount is the case with no next sweep to clean up after this one, so
+    // an `onRetain` that parked its cell in the slot parked it forever: the
+    // panel was gone, the teardown had already run, and both metadata
+    // variants stayed on an artifact the store holds for the rest of the
+    // session. Exactly the leak the round before this one was asked to fix
+    // (#1852 review).
+    const pending = {}
+    artifactSizes.mockImplementation((artifact, mode, isPortable, quality) =>
+      new Promise((resolve) => {
+        pending[`${mode}|${quality}`] = resolve
+      }))
+    const {unmount} = renderHook(() => useCodecSizes(ARTIFACT, BALANCED))
+
+    await runDownToLastCodec(pending, 'balanced')
+
+    unmount()
+    releaseCompressedExport.mockClear()
+    await act(async () => {
+      pending['draco|balanced'](SIZES.draco)
+      await Promise.resolve()
+    })
 
     await waitFor(() => expect(releaseCompressedExport)
       .toHaveBeenCalledWith(ARTIFACT, 'draco', false, 'balanced'))
+    // Once, by the sweep itself — not installed in a slot that no longer has
+    // an owner to empty it.
+    expect(releaseCompressedExport.mock.calls
+      .filter(([, mode]) => mode === 'draco')).toHaveLength(1)
   })
 })
+
+
+/**
+ * Settle every codec but the last, leaving the sweep inside an encode an
+ * abort cannot reach — the state all three supersession tests start from.
+ *
+ * @param {object} pending The deferred-resolution map, keyed `mode|quality`
+ * @param {string} quality The rung this sweep is running at
+ */
+async function runDownToLastCodec(pending, quality) {
+  for (const mode of ['none', 'meshopt']) {
+    await waitFor(() => expect(pending[`${mode}|${quality}`]).toBeDefined())
+    await act(async () => {
+      pending[`${mode}|${quality}`](SIZES[mode])
+      await Promise.resolve()
+    })
+  }
+  await waitFor(() => expect(pending[`draco|${quality}`]).toBeDefined())
+}

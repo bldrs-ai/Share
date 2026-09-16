@@ -77,9 +77,7 @@ export default function useCodecSizes(artifact, {quality, isPortable, isGzipped 
   // Nothing outside a sweep reuses the retained cell: remounting the panel
   // re-runs the whole axis from scratch, so a winner held past the sweep that
   // produced it is never read again. Hence release on unmount and on restart,
-  // and release the previous one before recording a new one — a sweep that
-  // finished just before being superseded would otherwise strand its winner
-  // for the life of the artifact, which the store holds for the whole session.
+  // and release whatever is in the slot before recording a new cell in it.
   // Releasing only drops a cache entry (`artifactSizes.js`), so an export
   // already holding the promise still resolves; the cost of being wrong here
   // is a re-encode, not a failure.
@@ -142,9 +140,23 @@ export default function useCodecSizes(artifact, {quality, isPortable, isGzipped 
           }
           setMeasuringCodec(mode)
         },
-        // Unguarded by generation, deliberately: a superseded sweep's
-        // retained cell is exactly the one nobody else will ever release.
+        // Guarded on the same generation as the two above, and for a reason
+        // worth spelling out because the unguarded version read as the
+        // careful one. The slot below holds ONE cell and belongs to whichever
+        // sweep is live, so a dead sweep writing to it evicts the live
+        // sweep's winner and parks a cell measured for a rung nobody is on
+        // (#1852 review). A dead sweep therefore frees its own cell DIRECTLY:
+        // nobody else knows that cell exists — the live sweep is tracking its
+        // own, and after unmount there is no next sweep to inherit it — so
+        // the choice is free it here or leak it for the life of the artifact,
+        // which the store holds for the whole session.
         onRetain: (mode) => {
+          if (abortRef.current !== controller) {
+            if (mode !== null) {
+              releaseCompressedExport(artifact, mode, isPortable, quality)
+            }
+            return
+          }
           releaseRetained()
           releaseRetainedRef.current = mode === null ?
             null :
@@ -166,13 +178,6 @@ export default function useCodecSizes(artifact, {quality, isPortable, isGzipped 
 
   useEffect(() => {
     let isStale = false
-    abortRef.current?.abort()
-    // Ends the old sweep's GENERATION here, not when the new run starts:
-    // `run` is reached through an await, and the superseded codec — already
-    // in flight, uninterruptible — can resolve inside that gap. While
-    // `abortRef` still held it, its callbacks would pass the guard above and
-    // publish into the state this effect has just cleared.
-    abortRef.current = null
     setSizesByCodec({})
     setMeasuringCodec(null)
     setIsMeasuring(false)
@@ -194,6 +199,16 @@ export default function useCodecSizes(artifact, {quality, isPortable, isGzipped 
     return () => {
       isStale = true
       abortRef.current?.abort()
+      // Ending the old sweep's GENERATION is the teardown's job, and only the
+      // teardown's. Two reasons it cannot be left to the next effect body:
+      // `run` is reached through an await, so the superseded codec — already
+      // in flight, uninterruptible — can resolve in the gap before the new
+      // sweep installs its own controller; and on unmount there is no next
+      // body at all, which is how a dead sweep came to publish into an
+      // unmounted hook and install a retained cell nothing was left to
+      // release (#1852 review). Nulling here is what makes "am I still the
+      // live sweep?" answerable, above, after the panel has gone.
+      abortRef.current = null
       releaseRetained()
     }
   }, [artifact, run, releaseRetained])
