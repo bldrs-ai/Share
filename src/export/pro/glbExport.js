@@ -84,7 +84,7 @@ const UNSAFE_FILENAME_CHARS = /[^A-Za-z0-9._-]+/g
 export async function exportArtifact({bytes, options = {}, compress = null}) {
   const container = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
   const inputBytes = container.byteLength
-  const {chunks} = unpackGlbContainer(container)
+  const {chunks} = await unpackGlbContainer(container)
   if (!chunks.length) {
     throw new Error('exportArtifact: container has no chunks')
   }

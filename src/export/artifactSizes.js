@@ -443,7 +443,7 @@ async function readArtifactGlb(artifact) {
   if (!file) {
     return null
   }
-  const {chunks} = unpackGlbContainer(new Uint8Array(await file.arrayBuffer()))
+  const {chunks} = await unpackGlbContainer(new Uint8Array(await file.arrayBuffer()))
   if (chunks.length !== 1) {
     // The writer always packs exactly one chunk; more than one is a layout
     // this code predates, and compressing its first chunk would size a

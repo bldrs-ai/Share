@@ -27,10 +27,54 @@ the key `src/loader/glbCacheKey.js#glbCacheKey` derives from the source
 adapters in `src/loader/sourceCacheKey.js` produce the key input for GitHub,
 local, upload, Drive and external sources. The file is not a bare GLB: it is
 the **Bldrs container** (`src/loader/glbContainer.js`) — a 16-byte header
-(`BLDR`, version, chunkCount, compression-mode byte) followed by exactly one
-chunk (the writer always packs a single chunk, `packGlbChunks([bytes])`), and
-the chunk *is* a valid standalone GLB. So the export is, at the byte level,
-`unpackGlbContainer(bytes).chunks[0]`.
+(`BLDR`, version, chunkCount, compression-mode byte, container-codec byte)
+followed by exactly one chunk (the writer always packs a single chunk,
+`packGlbChunks([bytes])`), and that chunk *is* a valid standalone GLB. So the
+export is, at the byte level, `(await unpackGlbContainer(bytes)).chunks[0]`.
+
+### 1.1a The container is gzipped (v3, #1855)
+
+Since #1855 the container stores its chunks **compressed**, because Share was
+caching every model it opened uncompressed: a real Snowdon artifact is
+67,830,692 B, and gzip stores it in 21,396,007 B — **68.5% saved** — for
+~1.7 s to deflate on the write and ~0.5 s to inflate on the read. The owner's
+ruling on #1855 governs the trade: *"saving 10s or 100s of MB of disk space
+for a slightly slower load (100s of ms) is a great tradeoff."* **Do not
+"fix" that latency by reverting to uncompressed bytes** — it is the price
+this was bought at, not a regression.
+
+Three things about the shape are load-bearing, and the full argument (with
+the wire format) is in `glbContainer.js`'s module doc:
+
+- **Each chunk is TWO gzip members**, split at the inner GLB's JSON/BIN chunk
+  boundary, with both stored lengths in the chunk record. That is what keeps
+  `glbArtifactSize.js#artifactSizesFromFile` — the Export tab's size line —
+  able to answer from a `File.slice` without ever touching BIN (902,702 B
+  inflated instead of 21 MB, ~90 ms). A whole-file gzip would have destroyed
+  that random access, and the obvious alternative of leaving the JSON chunk
+  raw and gzipping only BIN measures 34,934,225 B — it forfeits 40% of the
+  win, because the glTF node graph is the most compressible thing in the file
+  (16.0× on its own). The split costs nothing: 21,396,007 B against a
+  whole-file gzip's 21,397,212 B.
+- **The container codec is byte 13, not the `mode` byte.** `mode` means "codec
+  inside the inner glTF" and `Loader.js#tryLoadCachedGlb` treats a mismatch
+  against the active feature flag as a cache MISS, so a gzip value smuggled
+  into it would false-miss on every load, re-parsing the model while the cache
+  sat there unread.
+- **v2 (uncompressed) artifacts are read in place, and `schemaVer` is NOT
+  bumped.** The container version describes the envelope; `schemaVer`
+  describes the contents, which are unchanged. A bump would also be
+  counterproductive: `schemaVer` is part of the artifact filename and nothing
+  sweeps retired slots, so it would leave the old 68 MB file on disk *and*
+  write a 21 MB one beside it, after a full re-parse. The cost of reading in
+  place is that an existing v2 artifact never shrinks, since a cache hit runs
+  no writer — reclaiming those wants a stale-slot sweep, not a version bump.
+
+`packGlbChunks` and `unpackGlbContainer` are consequently **async**:
+`CompressionStream` has no synchronous form, and pako measures 4.2 s against
+the native 1.6 s on a Snowdon-sized BIN chunk. Where `CompressionStream` is
+missing (Safari before 16.4) the writer emits a v2 container, so the cache
+keeps working at the old size rather than failing.
 
 What that GLB carries depends on the render path that produced it (all
 default-on today):

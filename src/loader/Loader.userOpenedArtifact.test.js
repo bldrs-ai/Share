@@ -17,11 +17,16 @@
 // lookup never even runs). What they assert is the state that makes a model
 // pickable: the decorated BatchedMesh with its instance tables, or the merged
 // model's per-mesh `IfcInstanceMap` and its BVH.
+import {
+  CompressionStream as NodeCompressionStream,
+  DecompressionStream as NodeDecompressionStream,
+} from 'node:stream/web'
 import {BufferGeometry} from 'three'
 import {computeBoundsTree} from 'three-mesh-bvh'
 import {getGlbLogs} from '../../tools/jest/glbLogCapture'
 import {COMPRESSION_MESHOPT, compressExportGlb} from '../export/glbCompression'
 import {downloadToOPFS} from '../OPFS/utils'
+import {packGlbChunks} from './glbContainer'
 import {isBldrsGlbArtifact, load} from './Loader'
 import {
   batchedArtifactBytes,
@@ -153,6 +158,41 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
     expect(model.capabilities.ifcSubsets).toBe(false)
     expect(getGlbLogs().map((l) => l.text))
       .toContain('reader: hydrated instance-table artifact to a BatchedMesh model')
+  })
+
+  describe('…wrapped in a gzipped v3 container (#1855)', () => {
+    // The cache-hit path end to end on compressed bytes: `readModel` sees
+    // the BLDR magic, `parseBldrsGlbContainer` inflates both members back
+    // into one GLB, and a real GLTFLoader parses the result. If the two
+    // members were concatenated in the wrong order, joined without the
+    // length check, or handed over as an unresolved promise, this is where
+    // it shows.
+    beforeAll(() => {
+      global.CompressionStream = NodeCompressionStream
+      global.DecompressionStream = NodeDecompressionStream
+    })
+
+    afterAll(() => {
+      delete global.CompressionStream
+      delete global.DecompressionStream
+    })
+
+    it('hydrates to the same BatchedMesh the bare artifact does', async () => {
+      const bare = await batchedArtifactBytes(liveBatchedModel())
+      const container = await packGlbChunks([bare])
+      // Non-vacuity for the whole describe: these really are compressed
+      // bytes, not the GLB with a header stapled on.
+      expect(container.byteLength).toBeLessThan(bare.byteLength)
+
+      const model = await openGlb(container)
+
+      expect(model.isBatchedMesh).toBe(true)
+      expect(model.userData.bldrsInstanceTables).toBeTruthy()
+      expect(Array.from(model.instanceParents).sort((a, b) => a - b)).toEqual([11, 12, 20])
+      expect(model.capabilities.batchedPicking).toBe(true)
+      expect(getGlbLogs().map((l) => l.text))
+        .toContain('reader: unpacked Bldrs container v3 — 1 GLB chunk(s), mode=none')
+    })
   })
 
   /**

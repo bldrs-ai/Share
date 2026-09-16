@@ -140,7 +140,7 @@ describe('pro/glbExport against the real Meshopt writer', () => {
 
   beforeAll(async () => {
     sourceGlb = withBldrsPayload(await meshoptGlb())
-    container = packGlbChunks([sourceGlb])
+    container = await packGlbChunks([sourceGlb])
   }, TIMEOUT_MS)
 
   it('produces the layout the hand-written fixtures assume', () => {

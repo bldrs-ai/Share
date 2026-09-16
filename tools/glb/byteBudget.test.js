@@ -188,8 +188,14 @@ function bucketMap(budget) {
 
 describe('byteBudget', () => {
   const {bytes, jsonBytes, jsonPadding, bin} = buildSyntheticGlb()
-  const budget = computeBudget(bytes, {name: 'synthetic.glb'})
-  const buckets = bucketMap(budget)
+  // `computeBudget` is async since the v3 container (Share#1855): inflating
+  // a gzip member has no synchronous form.
+  let budget
+  let buckets
+  beforeAll(async () => {
+    budget = await computeBudget(bytes, {name: 'synthetic.glb'})
+    buckets = bucketMap(budget)
+  })
 
   it('the fixture offsets tile buffers[0].byteLength with one deliberate hole', () => {
     // Guards the arithmetic the rest of the file asserts against: if a
@@ -287,23 +293,33 @@ describe('byteBudget', () => {
     expect(detail.accessorMinMax).toBe('"min":[0,0,0],'.length + '"max":[1,1,0],'.length)
   })
 
-  it('accounts a Bldrs container header and its per-chunk prefixes', () => {
+  it('accounts a Bldrs container header and its per-chunk record headers', async () => {
     // Packed by the shipping writer, not by hand, so the tool is checked
-    // against the bytes `glbExport.js` actually produces.
+    // against the bytes `glbExport.js` actually produces. Node has
+    // `CompressionStream`, so that is a v3 (gzipped) container here, and the
+    // partition is over its uncompressed form — see `computeBudget`.
     const CONTAINER_HEADER_BYTES = 16
-    const CONTAINER_CHUNK_PREFIX_BYTES = 4
+    const CONTAINER_CODEC_RECORD_BYTES = 12
+    const CONTAINER_VERSION_CODEC = 3
     const chunkCount = 2
-    const packed = packGlbChunks([bytes, bytes], 'draco')
-    expect(packed.byteLength).toBe(CONTAINER_HEADER_BYTES +
-      (chunkCount * (CONTAINER_CHUNK_PREFIX_BYTES + bytes.byteLength)))
+    const packed = await packGlbChunks([bytes, bytes], 'draco')
+    const uncompressedBytes = CONTAINER_HEADER_BYTES +
+      (chunkCount * (CONTAINER_CODEC_RECORD_BYTES + bytes.byteLength))
 
-    const packedBudget = computeBudget(packed, {name: 'synthetic.container'})
+    const packedBudget = await computeBudget(packed, {name: 'synthetic.container'})
     const packedBuckets = bucketMap(packedBudget)
+    expect(packedBudget.container.version).toBe(CONTAINER_VERSION_CODEC)
+    expect(packedBudget.container.codec).toBe('gzip')
     expect(packedBudget.container.chunkCount).toBe(chunkCount)
     expect(packedBuckets['container.header']).toBe(CONTAINER_HEADER_BYTES)
-    expect(packedBuckets['container.chunkHeaders']).toBe(chunkCount * CONTAINER_CHUNK_PREFIX_BYTES)
+    expect(packedBuckets['container.chunkHeaders']).toBe(chunkCount * CONTAINER_CODEC_RECORD_BYTES)
     expect(packedBuckets['bin.instancing.ROTATION']).toBe(chunkCount * ROTATION_BYTES)
     expect(packedBudget.unaccounted).toBe(0)
-    expect(packedBudget.buckets.reduce((n, b) => n + b.bytes, 0)).toBe(packed.byteLength)
+    expect(packedBudget.buckets.reduce((n, b) => n + b.bytes, 0)).toBe(uncompressedBytes)
+    // The stored file is the compressed one, and it is reported as such
+    // rather than being confused with what the partition adds up to.
+    expect(packedBudget.file.bytes).toBe(packed.byteLength)
+    expect(packedBudget.file.partitionBytes).toBe(uncompressedBytes)
+    expect(packedBudget.container.storedBytes).toBe(packed.byteLength)
   })
 })

@@ -107,6 +107,62 @@ export async function gzipBytes(bytes) {
 
 
 /**
+ * Whether this browser can UNgzip.
+ *
+ * Separate from `isGzipAvailable` because the two are asked in different
+ * places for different reasons — the export panel asks whether to offer the
+ * option at all, the OPFS cache reader asks whether an artifact it already
+ * holds is readable — even though every engine that shipped one shipped both.
+ *
+ * @return {boolean}
+ */
+export function isGunzipAvailable() {
+  return typeof DecompressionStream === 'function'
+}
+
+
+/**
+ * Inflate one gzip member.
+ *
+ * The mirror of `gzipBytes`, and written the same way for the same reason:
+ * the read is started BEFORE the first write, because `DecompressionStream`
+ * applies backpressure through `writer.ready` and a writer nobody drains
+ * stalls on anything larger than the internal queue. The chunking is on the
+ * INPUT, so a 21 MB compressed member hands the event loop back ~21 times
+ * rather than blocking it once — which matters here more than on the export
+ * side, since the OPFS cache reader runs on the load's critical path
+ * (`loader/glbContainer.js`).
+ *
+ * @param {Uint8Array} bytes a gzip member, as produced by `gzipBytes`
+ * @return {Promise<Uint8Array>} the inflated bytes
+ */
+export async function gunzipBytes(bytes) {
+  const stream = new DecompressionStream('gzip')
+  const writer = stream.writable.getWriter()
+  const read = new Response(stream.readable).arrayBuffer()
+  try {
+    for (let offset = 0; offset < bytes.byteLength; offset += GZIP_CHUNK_BYTES) {
+      await writer.ready
+      await writer.write(bytes.subarray(offset, offset + GZIP_CHUNK_BYTES))
+    }
+    await writer.close()
+  } catch (writeError) {
+    // Corrupt input rejects BOTH halves of the stream — the write that fed
+    // it and the read that was draining it — and the one nobody awaits
+    // becomes an unhandled rejection: a console error and a Sentry event
+    // for a failure the caller is already handling by treating the artifact
+    // as a cache miss. So drain `read`, and report the decoder's own error
+    // in preference to the writable side's relay of it. `gzipBytes` has the
+    // same shape and no guard because a deflate has no invalid input to
+    // reject; an inflate meets one whenever an OPFS write was truncated.
+    const readError = await read.then(() => null, (e) => e)
+    throw readError ?? writeError
+  }
+  return new Uint8Array(await read)
+}
+
+
+/**
  * How much one export weighs gzipped, without keeping the gzipped bytes.
  *
  * The panel needs the LENGTH for every codec at every rung and the BYTES only

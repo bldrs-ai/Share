@@ -191,11 +191,11 @@ function dracoGlbJson() {
  *
  * @param {object} [json]
  * @param {Uint8Array} [binBytes] The BIN chunk that JSON describes
- * @return {{container: Uint8Array, glb: Uint8Array}}
+ * @return {Promise<{container: Uint8Array, glb: Uint8Array}>}
  */
-function cachedArtifact(json = glbJson(), binBytes = BIN) {
+async function cachedArtifact(json = glbJson(), binBytes = BIN) {
   const glb = serializeGlb(json, binBytes)
-  return {container: packGlbChunks([glb]), glb}
+  return {container: await packGlbChunks([glb]), glb}
 }
 
 
@@ -227,7 +227,7 @@ describe('pro/glbExport', () => {
       // The container's single chunk IS a standalone GLB, so the default
       // export must be a copy and not a re-serialisation: anything else
       // risks changing the user's file for no reason.
-      const {container, glb} = cachedArtifact()
+      const {container, glb} = await cachedArtifact()
 
       const {blob, stats} = await exportArtifact({bytes: container, options: {}})
       const out = await blobBytes(blob)
@@ -246,7 +246,7 @@ describe('pro/glbExport', () => {
     })
 
     it('accepts the artifact as an ArrayBuffer too', async () => {
-      const {container, glb} = cachedArtifact()
+      const {container, glb} = await cachedArtifact()
       const asArrayBuffer = container.slice().buffer
 
       const {blob} = await exportArtifact({bytes: asArrayBuffer, options: {}})
@@ -261,7 +261,7 @@ describe('pro/glbExport', () => {
      * @return {Promise<{json: object, bin: Uint8Array, stats: object, bytes: Uint8Array}>}
      */
     async function exportStripped() {
-      const {container} = cachedArtifact()
+      const {container} = await cachedArtifact()
       const {blob, stats} = await exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
       const bytes = await blobBytes(blob)
       const {json, bin} = parseGlb(bytes)
@@ -322,7 +322,7 @@ describe('pro/glbExport', () => {
       // model with it — a corrupt export, not a smaller one.
       const shared = glbJson()
       shared.meshes[0].primitives[0].extensions.BLDRS_face_ids = {bufferView: 0}
-      const {container} = cachedArtifact(shared)
+      const {container} = await cachedArtifact(shared)
 
       const {blob} = await exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
       const {json, bin} = parseGlb(await blobBytes(blob))
@@ -337,7 +337,7 @@ describe('pro/glbExport', () => {
       // the pro module and without reading the BIN chunk
       // (`loader/glbArtifactSize.js`). They are the same computation, and
       // this is where that stops being a claim: estimate against real output.
-      const {container} = cachedArtifact()
+      const {container} = await cachedArtifact()
       const sizes = await artifactSizesFromFile(new Blob([container]))
 
       const kept = await exportArtifact({bytes: container, options: {}})
@@ -366,7 +366,7 @@ describe('pro/glbExport', () => {
     })
 
     it('reports the size it saved', async () => {
-      const {container} = cachedArtifact()
+      const {container} = await cachedArtifact()
       const kept = await exportArtifact({bytes: container, options: {}})
       const {stats} = await exportStripped()
 
@@ -383,7 +383,7 @@ describe('pro/glbExport', () => {
     const COMPRESSED = new Uint8Array(48).fill(0xcc)
 
     it('hands over the hook\'s bytes and reports its sizes', async () => {
-      const {container, glb} = cachedArtifact()
+      const {container, glb} = await cachedArtifact()
       const compress = jest.fn().mockResolvedValue({
         bytes: COMPRESSED,
         withMetadataBytes: 120,
@@ -411,7 +411,7 @@ describe('pro/glbExport', () => {
       // every other rewrite is the host's and keeping this one there is what
       // lets the panel's figure and the download be the same computation
       // (#1854).
-      const {container} = cachedArtifact()
+      const {container} = await cachedArtifact()
       const compress = jest.fn().mockResolvedValue({
         bytes: COMPRESSED,
         withMetadataBytes: 120,
@@ -434,7 +434,7 @@ describe('pro/glbExport', () => {
       // OPTIONS ask for gzip and the hook reports it did not, so the file is
       // plain bytes and must not be named as an archive. A browser without
       // `CompressionStream` is exactly this case (`useExport.js`).
-      const {container} = cachedArtifact()
+      const {container} = await cachedArtifact()
       const compress = jest.fn().mockResolvedValue({
         bytes: COMPRESSED,
         withMetadataBytes: 120,
@@ -457,7 +457,7 @@ describe('pro/glbExport', () => {
       // (`export/glbCompression.js`); the history row and the analytics event
       // are built from `stats`, and a row saying "draco" beside the size of
       // an uncompressed file would describe a download that was never made.
-      const {container} = cachedArtifact()
+      const {container} = await cachedArtifact()
       const compress = jest.fn().mockResolvedValue({
         bytes: COMPRESSED,
         withMetadataBytes: 120,
@@ -473,7 +473,7 @@ describe('pro/glbExport', () => {
     })
 
     it('reports no compression when there is no hook', async () => {
-      const {container} = cachedArtifact()
+      const {container} = await cachedArtifact()
 
       const {stats} = await exportArtifact({bytes: container, options: {}})
 
@@ -483,7 +483,7 @@ describe('pro/glbExport', () => {
     it('does not run its own strip when the host already handled it', async () => {
       // Stripping the hook's output a second time would be stripping an
       // already-compressed file whose bufferViews the codec rewrote.
-      const {container} = cachedArtifact()
+      const {container} = await cachedArtifact()
       const compress = jest.fn().mockResolvedValue({
         bytes: COMPRESSED,
         withMetadataBytes: 120,
@@ -503,7 +503,7 @@ describe('pro/glbExport', () => {
      * @return {Promise<{json: object, bin: Uint8Array, bytes: Uint8Array, container: Uint8Array}>}
      */
     async function exportStrippedMeshopt() {
-      const {container} = cachedArtifact(meshoptGlbJson(), meshoptBin())
+      const {container} = await cachedArtifact(meshoptGlbJson(), meshoptBin())
       const {blob} = await exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
       const bytes = await blobBytes(blob)
       return {...parseGlb(bytes), bytes, container}
@@ -580,7 +580,7 @@ describe('pro/glbExport', () => {
       // the way Meshopt's was — but the accessors carry no `bufferView` of
       // their own, so the extension's reference is the only thing standing
       // between this view and being dropped as unreferenced.
-      const {container} = cachedArtifact(dracoGlbJson(), dracoBin())
+      const {container} = await cachedArtifact(dracoGlbJson(), dracoBin())
 
       const {blob} = await exportArtifact({bytes: container, options: {stripBldrsMetadata: true}})
       const {json, bin} = parseGlb(await blobBytes(blob))
@@ -635,8 +635,8 @@ describe('pro/glbExport', () => {
     })
 
     it('rejects a multi-chunk container rather than exporting a fraction of it', async () => {
-      const {glb} = cachedArtifact()
-      const twoChunks = packGlbChunks([glb, glb])
+      const {glb} = await cachedArtifact()
+      const twoChunks = await packGlbChunks([glb, glb])
 
       await expect(exportArtifact({bytes: twoChunks, options: {}})).rejects.toThrow(/expected 1 chunk/)
     })

@@ -23,7 +23,8 @@
 // `.eslintrc.cjs`).
 //
 // Design: design/new/glb-export-premium.md §4.3, §4.4.
-import {CONTAINER_CHUNK_HEADER_BYTES, readGlbContainerHeader} from './glbContainer'
+import {gunzipBytes} from '../export/glbGzip'
+import {readGlbContainerHeader, readGlbContainerJsonExtent} from './glbContainer'
 
 
 // Every Bldrs-private glTF extension shares this prefix (BLDRS_spatial_tree,
@@ -42,8 +43,9 @@ const GLB_CHUNK_HEADER_BYTES = 8
 const JSON_CHUNK_TYPE = 0x4E4F534A // "JSON" LE
 const ALIGNMENT = 4
 const HEX_RADIX = 16
-// Enough for any container header (16B) + chunk length (4B) + the GLB
-// header (12B) + the JSON chunk header (8B), with room to spare.
+// Enough for any container header (16B) plus the largest chunk record
+// header — v2's 4B chunk length followed by the inner GLB's own 12B header
+// and 8B JSON chunk header, or v3's 12B record — with room to spare.
 const PREFIX_BYTES = 64
 
 
@@ -266,11 +268,17 @@ export function positionQuantizationRange(json) {
  * Both sizes of a cached artifact, read from its header.
  *
  * The artifact is a Bldrs container (16-byte header) holding exactly one
- * chunk (4-byte length prefix) which IS the GLB, so `withMetadata` is a
- * field read — the chunk's own length. `withoutMetadata` needs the glTF
- * JSON, so the JSON chunk is sliced out and parsed; the BIN chunk, which is
+ * chunk which IS the GLB, so `withMetadata` is a field read — the chunk
+ * record's declared GLB length. `withoutMetadata` needs the glTF JSON, so
+ * the JSON chunk alone is sliced out and parsed; the BIN chunk, which is
  * all of the size and none of the information, is never read. On a 400 MB
  * model that is the difference between a number and a stall.
+ *
+ * That promise is why the v3 container gzips a chunk's JSON and BIN halves
+ * as two independent members instead of gzipping the file (`glbContainer.js`
+ * module doc): `readGlbContainerJsonExtent` hands back a byte range either
+ * way, and on a compressed artifact only the ~900 KB JSON member is fetched
+ * and inflated.
  *
  * @param {File|Blob} file The OPFS artifact, from `readModelByPathFromOPFS`
  * @return {Promise<{withMetadata: number, withoutMetadata: number,
@@ -278,21 +286,20 @@ export function positionQuantizationRange(json) {
  */
 export async function artifactSizesFromFile(file) {
   const head = new Uint8Array(await file.slice(0, PREFIX_BYTES).arrayBuffer())
-  const {chunkCount, headerBytes} = readGlbContainerHeader(head)
+  const {chunkCount} = readGlbContainerHeader(head)
   if (chunkCount !== 1) {
     // The writer always packs exactly one chunk; more than one is a layout
     // this code predates, and sizing its first chunk would report a fraction
     // of the model (`export/pro/glbExport.js` refuses to export it, too).
     throw new Error(`artifactSizesFromFile: expected 1 chunk, got ${chunkCount}`)
   }
-  const dv = new DataView(head.buffer, head.byteOffset, head.byteLength)
-  const withMetadata = dv.getUint32(headerBytes, true)
-
-  const glbStart = headerBytes + CONTAINER_CHUNK_HEADER_BYTES
-  const jsonByteLength = dv.getUint32(glbStart + GLB_HEADER_BYTES, true)
-  const jsonEnd = glbStart + GLB_HEADER_BYTES + GLB_CHUNK_HEADER_BYTES + jsonByteLength
-  const prefix = new Uint8Array(await file.slice(glbStart, jsonEnd).arrayBuffer())
+  const {glbByteLength: withMetadata, jsonStart, jsonStoredBytes, isCompressed} =
+    readGlbContainerJsonExtent(head)
+  const stored = new Uint8Array(await file.slice(jsonStart, jsonStart + jsonStoredBytes).arrayBuffer())
+  const prefix = isCompressed ? await gunzipBytes(stored) : stored
   const json = parseGlbJsonChunk(prefix)
+  const jsonByteLength = new DataView(prefix.buffer, prefix.byteOffset, prefix.byteLength)
+    .getUint32(GLB_HEADER_BYTES, true)
   const binByteLength = json?.buffers?.[0]?.byteLength ?? 0
   // Before the strip: `estimateStrippedGlbSize` CONSUMES `json`, and the
   // Export tab's fidelity caption is about the geometry that survives it.
@@ -309,10 +316,13 @@ export async function artifactSizesFromFile(file) {
  * it validates the header's total length against the buffer it was given and
  * throws on a truncated one, which is precisely what a size read hands it.
  *
+ * Exported for `glbArtifactHealth.js`, which since v3 asks its cache-hit
+ * geometry question of exactly such a prefix rather than of a whole GLB.
+ *
  * @param {Uint8Array} bytes from the GLB's first byte through its JSON chunk
  * @return {object} parsed glTF JSON
  */
-function parseGlbJsonChunk(bytes) {
+export function parseGlbJsonChunk(bytes) {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const magic = dv.getUint32(0, true)
   if (magic !== GLB_MAGIC) {

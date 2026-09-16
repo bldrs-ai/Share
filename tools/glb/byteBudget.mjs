@@ -11,10 +11,15 @@
  *
  * ## The partition contract
  *
- * Every byte of the input file lands in exactly ONE bucket, and the tool
- * checks it: `accounted + unaccounted === fileBytes`, with `unaccounted`
- * printed rather than swallowed. Two things make that harder than "sum the
- * bufferView byteLengths", and both are real in the wild:
+ * Every byte of the input lands in exactly ONE bucket, and the tool checks
+ * it: `accounted + unaccounted === partitionBytes`, with `unaccounted`
+ * printed rather than swallowed. `partitionBytes` is the file's own length,
+ * except for a **v3 (gzipped) Bldrs container**, where it is the container's
+ * UNCOMPRESSED form — the stored length is reported separately. Partitioning
+ * a deflate stream would put every byte in one bucket and answer nothing;
+ * the question this tool exists for is about glTF structure (Share#1855).
+ * Two more things make it harder than "sum the bufferView byteLengths", and
+ * both are real in the wild:
  *
  * 1. **bufferViews are not a partition of the BIN chunk.** They may alias
  *    (two views over one range), interleave, leave gaps, or be orphaned.
@@ -32,9 +37,10 @@
  * ## Why this file re-reads the GLB chunk headers
  *
  * `src/loader/glbContainer.js` imports cleanly under plain Node (the root
- * package.json is `"type": "module"` and the module is dependency-free), so
- * the BLDR container header is read with the real reader rather than a
- * copy. `src/loader/injectGlbExtensions.js#parseGlb` is NOT reused: it
+ * package.json is `"type": "module"`, and it plus the `src/export/glbGzip.js`
+ * it pulls in use no npm dependencies — hence that import's explicit `.js`,
+ * which plain Node's ESM resolver requires), so the BLDR container header is
+ * read with the real reader rather than a copy. `src/loader/injectGlbExtensions.js#parseGlb` is NOT reused: it
  * discards exactly what a byte budget is about (chunk offsets, chunk
  * padding, trailing bytes) and pulls in pako. The GLB chunk walk below is
  * therefore local, and deliberately tolerant — it reports a malformed tail
@@ -50,7 +56,7 @@ import path from 'node:path'
 import process from 'node:process'
 import {pathToFileURL} from 'node:url'
 import {brotliCompressSync, gzipSync} from 'node:zlib'
-import {isBldrsGlbContainer, readGlbContainerHeader, viewGlbContainerChunks} from '../../src/loader/glbContainer.js'
+import {isBldrsGlbContainer, readGlbContainerHeader, unpackGlbContainer} from '../../src/loader/glbContainer.js'
 
 
 const GLB_MAGIC = 0x46546C67 // "glTF" LE
@@ -69,6 +75,9 @@ const JSON_PAD_BYTES = new Set([PAD_SPACE, PAD_TAB, PAD_LF, PAD_CR, PAD_NUL])
 const GLB_HEADER_BYTES = 12
 const CHUNK_HEADER_BYTES = 8
 const CONTAINER_CHUNK_HEADER_BYTES = 4
+// v3's three-field chunk record (glbLen, jsonMemberLen, binMemberLen).
+const CONTAINER_CODEC_CHUNK_HEADER_BYTES = 12
+const CONTAINER_VERSION_CODEC = 3
 const PERCENT = 100
 const HEX_RADIX = 16
 const DRACO_EXTENSION = 'KHR_draco_mesh_compression'
@@ -1019,13 +1028,25 @@ function glbBudget(bytes, {compress = true} = {}) {
 /**
  * Exhaustive byte budget for a plain GLB or a Bldrs `.container`.
  *
+ * Async since Share#1855: a v3 container's payload is gzipped, and there is
+ * no synchronous inflate in the platform.
+ *
+ * **What the partition is over.** For a plain GLB or a v1/v2 container it is
+ * the file, as it always was. For a v3 container it is the container's
+ * UNCOMPRESSED form — header, chunk record headers, inflated inner GLBs —
+ * because "where do this model's bytes go" is a question about glTF
+ * structure, and answering it in the compressed domain would attribute
+ * everything to one opaque deflate stream. The on-disk figure is reported
+ * beside it as `file.bytes`, so the ratio the container buys is still
+ * visible.
+ *
  * @param {Uint8Array} bytes whole file
  * @param {object} [options]
  * @param {string} [options.name] label for the report
  * @param {boolean} [options.compress]
- * @return {object} see the module doc for the partition contract
+ * @return {Promise<object>} see the module doc for the partition contract
  */
-export function computeBudget(bytes, {name = '<buffer>', compress = true} = {}) {
+export async function computeBudget(bytes, {name = '<buffer>', compress = true} = {}) {
   const buckets = new Map()
   /**
    * @param {string} key
@@ -1039,18 +1060,29 @@ export function computeBudget(bytes, {name = '<buffer>', compress = true} = {}) 
 
   let container = null
   let glbs = []
+  // What `accounted` has to add up to. Only a compressed container makes
+  // this differ from the file's own length; see the doc comment above.
+  let partitionBytes = bytes.byteLength
   if (isBldrsGlbContainer(bytes)) {
     const header = readGlbContainerHeader(bytes)
-    const {chunks} = viewGlbContainerChunks(bytes)
+    const {chunks} = await unpackGlbContainer(bytes)
+    const inner = chunks.map((ab) => new Uint8Array(ab))
+    const recordHeaderBytes = header.version === CONTAINER_VERSION_CODEC ?
+      CONTAINER_CODEC_CHUNK_HEADER_BYTES :
+      CONTAINER_CHUNK_HEADER_BYTES
     container = {
       version: header.version,
       chunkCount: header.chunkCount,
       mode: header.mode,
+      codec: header.codec,
       headerBytes: header.headerBytes,
+      storedBytes: bytes.byteLength,
     }
     add('container.header', header.headerBytes)
-    add('container.chunkHeaders', CONTAINER_CHUNK_HEADER_BYTES * chunks.length)
-    glbs = chunks.map((chunk) => glbBudget(chunk, {compress}))
+    add('container.chunkHeaders', recordHeaderBytes * inner.length)
+    partitionBytes = header.headerBytes + (recordHeaderBytes * inner.length) +
+      inner.reduce((n, chunk) => n + chunk.byteLength, 0)
+    glbs = inner.map((chunk) => glbBudget(chunk, {compress}))
   } else {
     glbs = [glbBudget(bytes, {compress})]
   }
@@ -1067,7 +1099,7 @@ export function computeBudget(bytes, {name = '<buffer>', compress = true} = {}) 
   }
   // Container trailing slack, and any inner-GLB slack, surfaces here rather
   // than being absorbed — see the module doc's partition contract.
-  const unaccounted = bytes.byteLength - accounted
+  const unaccounted = partitionBytes - accounted
 
   /**
    * @param {function(object): number} pick
@@ -1103,16 +1135,16 @@ export function computeBudget(bytes, {name = '<buffer>', compress = true} = {}) 
   }
 
   const bucketList = [...buckets.entries()]
-    .map(([key, value]) => ({key, bytes: value, pct: (value * PERCENT) / bytes.byteLength}))
+    .map(([key, value]) => ({key, bytes: value, pct: (value * PERCENT) / partitionBytes}))
     .sort((a, b) => b.bytes - a.bytes)
 
   return {
-    file: {name, bytes: bytes.byteLength},
+    file: {name, bytes: bytes.byteLength, partitionBytes},
     container,
     buckets: bucketList,
     accounted,
     unaccounted,
-    balanced: accounted + unaccounted === bytes.byteLength && unaccounted === 0,
+    balanced: accounted + unaccounted === partitionBytes && unaccounted === 0,
     summary,
     glbs: glbs.map((g, i) => ({
       index: i,
@@ -1168,7 +1200,9 @@ export function formatBudget(budget) {
   const PCT_DECIMALS = 2
   const PCT_WIDTH = 6
   const lines = []
-  const total = budget.file.bytes
+  // The partition's total, which is the uncompressed form for a v3
+  // container and the file itself for everything else (`computeBudget`).
+  const total = budget.file.partitionBytes ?? budget.file.bytes
   /**
    * @param {number} n
    * @return {string}
@@ -1179,7 +1213,13 @@ export function formatBudget(budget) {
   lines.push(`bytes       ${commas(total)}`)
   if (budget.container) {
     const c = budget.container
-    lines.push(`container   BLDR v${c.version}  chunks=${c.chunkCount}  mode=${c.mode ?? 'none'}`)
+    lines.push(`container   BLDR v${c.version}  chunks=${c.chunkCount}  mode=${c.mode ?? 'none'}` +
+      `  codec=${c.codec ?? 'none'}`)
+    if (c.codec) {
+      const RATIO_DECIMALS = 2
+      lines.push(`stored      ${commas(c.storedBytes)}  ` +
+        `(${(total / c.storedBytes).toFixed(RATIO_DECIMALS)}x; partition below is over the uncompressed form)`)
+    }
   } else {
     lines.push('container   none (plain GLB)')
   }
@@ -1191,7 +1231,7 @@ export function formatBudget(budget) {
   }
   lines.push(`${'UNACCOUNTED'.padEnd(KEY_WIDTH)}${padLeft(budget.unaccounted, NUM_WIDTH)}  ${pct(budget.unaccounted)}`)
   lines.push(`${'accounted + unaccounted'.padEnd(KEY_WIDTH)}${padLeft(budget.accounted + budget.unaccounted, NUM_WIDTH)}` +
-    `  (file ${commas(total)}) ${budget.accounted + budget.unaccounted === total ? 'OK' : 'MISMATCH'}`)
+    `  (total ${commas(total)}) ${budget.accounted + budget.unaccounted === total ? 'OK' : 'MISMATCH'}`)
 
   const s = budget.summary
   lines.push('')
@@ -1272,7 +1312,7 @@ export function formatBudget(budget) {
  * @param {Array<string>} argv
  * @return {number} process exit code
  */
-function main(argv) {
+async function main(argv) {
   const args = argv.filter((a) => !a.startsWith('--'))
   const asJson = argv.includes('--json')
   if (args.length !== 1) {
@@ -1281,7 +1321,7 @@ function main(argv) {
   }
   const filePath = path.resolve(args[0])
   const bytes = new Uint8Array(fs.readFileSync(filePath))
-  const budget = computeBudget(bytes, {name: path.basename(filePath)})
+  const budget = await computeBudget(bytes, {name: path.basename(filePath)})
   process.stdout.write(asJson ? `${JSON.stringify(budget, null, 2)}\n` : `${formatBudget(budget)}\n`)
   // A non-zero unaccounted is the instrument telling on itself; make that
   // visible to a script, not only to a reader.
@@ -1290,5 +1330,5 @@ function main(argv) {
 
 
 if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
-  process.exitCode = main(process.argv.slice(2))
+  process.exitCode = await main(process.argv.slice(2))
 }
