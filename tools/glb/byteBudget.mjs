@@ -170,16 +170,29 @@ export function scanGlbChunks(bytes) {
     return {...empty, error: `bad magic 0x${magic.toString(HEX_RADIX)}`}
   }
   const version = dv.getUint32(4, true)
-  const declaredLength = Math.min(dv.getUint32(8, true), bytes.byteLength)
+  // The header's `length` is "the total length of the Binary glTF, including
+  // header and all chunks", so a declaration beyond the bytes on hand means
+  // the file is truncated — not that the header is advisory. Clamping it to
+  // `byteLength` reported a Snowdon artifact cut off after its JSON chunk,
+  // missing all 53 MB of BIN, as ok/balanced/unaccounted 0/exit 0: every
+  // chunk record it could see was intact, and the only surviving evidence of
+  // the loss was the number being clamped away (#1860, codex). Walk just the
+  // bytes that are present, but report what the header claimed.
+  const declaredLength = dv.getUint32(8, true)
+  const walkLimit = Math.min(declaredLength, bytes.byteLength)
   const chunks = []
   let offset = GLB_HEADER_BYTES
-  let error = null
-  while (offset + CHUNK_HEADER_BYTES <= declaredLength) {
+  let error = declaredLength > bytes.byteLength ?
+    `declares ${declaredLength}B but file holds ${bytes.byteLength}B (truncated)` :
+    null
+  while (offset + CHUNK_HEADER_BYTES <= walkLimit) {
     const dataLength = dv.getUint32(offset, true)
     const type = dv.getUint32(offset + 4, true)
     const dataOffset = offset + CHUNK_HEADER_BYTES
-    if (dataOffset + dataLength > declaredLength) {
-      error = `chunk at ${offset} overruns declared length`
+    if (dataOffset + dataLength > walkLimit) {
+      // Keep the truncation as the diagnosis when both hold: the overrun is
+      // its symptom, and naming the symptom hides the cause.
+      error = error ?? `chunk at ${offset} overruns declared length`
       break
     }
     chunks.push({type, dataOffset, dataLength})
@@ -777,7 +790,15 @@ function binPartition(json, binDataLength) {
     pushEvent(sentinel.start, true, sentinel)
     pushEvent(sentinel.end, false, sentinel)
   }
-  const points = [...new Set([0, binDataLength, ...eventsAt.keys()])].sort((a, b) => a - b)
+  // Bounded by the BIN data that is actually present, not by where the views
+  // claim to reach. A truncated GLB keeps a JSON chunk describing a 53 MB
+  // buffer that is no longer in the file; sweeping to the views' own extents
+  // then invented 47 MB of `bin.uncovered` and drove UNACCOUNTED negative to
+  // balance it (#1860). Views past the end are already recorded in
+  // `outOfRange` — they must not also become bytes.
+  const points = [...new Set([0, binDataLength, ...eventsAt.keys()])]
+    .filter((at) => at >= 0 && at <= binDataLength)
+    .sort((a, b) => a - b)
 
   const buckets = new Map()
   const segments = []
@@ -1138,13 +1159,19 @@ export async function computeBudget(bytes, {name = '<buffer>', compress = true} 
     .map(([key, value]) => ({key, bytes: value, pct: (value * PERCENT) / partitionBytes}))
     .sort((a, b) => b.bytes - a.bytes)
 
+  // A structural complaint from any chunk is the whole file's, and it has to
+  // outrank the arithmetic: a truncated GLB still accounts every byte it has
+  // left, so `unaccounted === 0` alone would call it sound.
+  const error = glbs.map((g) => g.error).find((e) => e) ?? null
+
   return {
     file: {name, bytes: bytes.byteLength, partitionBytes},
     container,
+    error,
     buckets: bucketList,
     accounted,
     unaccounted,
-    balanced: accounted + unaccounted === partitionBytes && unaccounted === 0,
+    balanced: error === null && accounted + unaccounted === partitionBytes && unaccounted === 0,
     summary,
     glbs: glbs.map((g, i) => ({
       index: i,
@@ -1324,8 +1351,10 @@ async function main(argv) {
   const budget = await computeBudget(bytes, {name: path.basename(filePath)})
   process.stdout.write(asJson ? `${JSON.stringify(budget, null, 2)}\n` : `${formatBudget(budget)}\n`)
   // A non-zero unaccounted is the instrument telling on itself; make that
-  // visible to a script, not only to a reader.
-  return budget.unaccounted === 0 ? 0 : 2
+  // visible to a script, not only to a reader. A structural error counts the
+  // same way — a truncated file accounts every byte it still has, so exiting
+  // on the arithmetic alone would report it as sound (#1860).
+  return budget.balanced ? 0 : 2
 }
 
 

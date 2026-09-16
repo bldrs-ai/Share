@@ -26,6 +26,8 @@ const GLB_VERSION = 2
 const JSON_CHUNK_TYPE = 0x4E4F534A
 const BIN_CHUNK_TYPE = 0x004E4942
 const GLB_HEADER_BYTES = 12
+/** Byte offset of the GLB header's total-length field. */
+const GLB_LENGTH_OFFSET = 8
 const CHUNK_HEADER_BYTES = 8
 const JSON_PAD_BYTE = 0x20
 const BYTE_MASK = 0xFF
@@ -321,5 +323,42 @@ describe('byteBudget', () => {
     expect(packedBudget.file.bytes).toBe(packed.byteLength)
     expect(packedBudget.file.partitionBytes).toBe(uncompressedBytes)
     expect(packedBudget.container.storedBytes).toBe(packed.byteLength)
+  })
+
+  it('refuses a GLB whose header declares more bytes than the file holds', async () => {
+    // A file cut off after its JSON chunk still presents a COMPLETE chunk
+    // record, so the walk finds nothing wrong with what it can see — the
+    // only evidence of the loss is the header's own length. Clamping that
+    // to the bytes on hand made the tool report a Snowdon artifact missing
+    // all 53 MB of its BIN chunk as balanced, unaccounted 0, exit 0
+    // (Share#1860, codex). Reporting a truncated file as sound is the one
+    // failure this instrument exists to not have.
+    const jsonChunkEnd = GLB_HEADER_BYTES + CHUNK_HEADER_BYTES + jsonBytes + jsonPadding
+    const truncated = bytes.slice(0, jsonChunkEnd)
+    expect(new DataView(truncated.buffer, truncated.byteOffset).getUint32(GLB_LENGTH_OFFSET, true))
+      .toBe(bytes.byteLength)
+
+    const cut = await computeBudget(truncated, {name: 'truncated.glb'})
+    expect(cut.error).toMatch(/truncated/)
+    expect(cut.balanced).toBe(false)
+    // The bytes that ARE present are still attributed — a diagnostic that
+    // refuses to describe a damaged file is no more useful than one that
+    // calls it sound.
+    expect(bucketMap(cut)['json.chunk']).toBe(jsonBytes)
+    // And the bytes that are NOT present stay out of the partition. The
+    // surviving JSON still describes a whole BIN buffer, so sweeping to the
+    // bufferViews' own extents attributes megabytes that left with the
+    // truncation and drives UNACCOUNTED negative to balance the books.
+    expect(bucketMap(cut)['bin.uncovered']).toBeUndefined()
+    expect(cut.accounted).toBe(truncated.byteLength)
+    expect(cut.unaccounted).toBe(0)
+    expect(cut.buckets.every((b) => b.bytes >= 0)).toBe(true)
+  })
+
+  it('accepts a GLB whose header length matches, so the guard is not just always-on', () => {
+    // Pairs with the test above: without this, clamping could be "fixed"
+    // by failing every file, and both would still look green.
+    expect(budget.error).toBe(null)
+    expect(budget.balanced).toBe(true)
   })
 })
