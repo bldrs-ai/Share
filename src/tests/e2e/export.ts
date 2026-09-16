@@ -46,6 +46,10 @@ const COMPRESS_TIMEOUT_MS = 60_000
 const GLB_JSON_LENGTH_OFFSET = 12
 const GLB_CHUNK_HEADER_BYTES = 8
 
+// `glbCompression.js`'s COMPRESSION_MODES, in the same order — which is also
+// the order the background sweep measures them in (`export/codecSizes.js`).
+const CODEC_MODES = ['none', 'meshopt', 'draco']
+
 const SNACKBAR_SELECTOR = '[data-testid="snackbar"]'
 // Centre of a box.
 const HALF = 2
@@ -257,18 +261,132 @@ export async function toggleMetadata(page: Page): Promise<number> {
 
 
 /**
+ * Wait until the background codec sweep has a figure for every codec (#1850).
+ *
+ * Anything that touches the Compression control has to come after this. The
+ * sweep selects the smallest codec the moment its last figure lands, so a
+ * click racing that selection reads a dropdown that moved under it — and a
+ * click that merely re-picks what was already showing has to register as a
+ * choice for the pin to hold, which is what the MenuItem's own `onClick` in
+ * `ExportSection.jsx` is for.
+ *
+ * What this DOES guarantee is only the figures. `data-codec-sizes` completes
+ * in the same render commit that first makes `codecToSelect` return a new
+ * codec, and `setCompression` lands in the effect after it, so the selection
+ * is one commit behind this wait. In practice every caller then does
+ * something Playwright retries against a live DOM — `waitForCodecSizes` opens
+ * the menu, `selectCompression` waits on the size line's estimate key — and
+ * the commit is long gone by the time anything is read. A caller that wants
+ * the selection itself should assert on the closed control, as
+ * `exportGlb.spec.ts` does.
+ *
+ * Fails fast rather than timing out if the sweep is PARKED — over the ~50 MB
+ * threshold so it never auto-started, or stopped part-way — because in that
+ * state the attribute never completes on its own and the bare
+ * `toHaveAttribute` diff ("expected `none,meshopt,draco`, got ``") does not
+ * say why. No spec is in that state today; all six callers load `index.ifc`,
+ * which is far under the threshold. The first spec pointed at a large fixture
+ * will be, and it should read "click Calculate sizes first", not wait a
+ * minute for nothing.
+ *
+ * @param page Playwright page
+ */
+export async function waitForCodecSizing(page: Page) {
+  const section = page.getByTestId('export-section')
+  const parked = page.getByTestId('export-codec-sizes-start')
+  const complete = CODEC_MODES.join(',')
+  await page.waitForFunction(
+    ({selector, expected}) => Boolean(
+      document.querySelector(`[data-testid="${selector}"]`) ||
+      document.querySelector('[data-testid="export-section"]')?.getAttribute('data-codec-sizes') === expected),
+    {selector: 'export-codec-sizes-start', expected: complete},
+    {timeout: COMPRESS_TIMEOUT_MS})
+  await expect(
+    parked,
+    'the codec sweep is parked — the artifact is over the auto-measure threshold, or a Stop ' +
+    'left it part-way. Click "Calculate sizes" (export-codec-sizes-start) before waiting on it.',
+  ).toHaveCount(0)
+  await expect(section).toHaveAttribute('data-codec-sizes', complete)
+}
+
+
+/**
+ * Wait until the background sweep has put a real byte count on every codec's
+ * dropdown option, and read them off (#1850).
+ *
+ * The figures live on the OPTIONS, not on the closed control, so the menu has
+ * to be open to see them — which is also where a user compares them. MUI
+ * keeps the menu mounted while it is open and React updates it in place, so
+ * one open is enough to watch all three land.
+ *
+ * @param page Playwright page
+ * @return `{none, meshopt, draco}` in bytes
+ */
+export async function waitForCodecSizes(page: Page): Promise<Record<string, number>> {
+  await waitForCodecSizing(page)
+  await page.getByTestId('export-compression').click()
+  const options = CODEC_MODES.map((mode) => page.getByTestId(`export-compression-${mode}`))
+  const sizes: Record<string, number> = {}
+  for (let i = 0; i < CODEC_MODES.length; i++) {
+    sizes[CODEC_MODES[i]] = Number(await options[i].getAttribute('data-bytes'))
+  }
+  // Escape closes the Select's menu without changing the selection, and the
+  // Save dialog around it stays open (MUI's menu consumes the key).
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('export-compression-none')).toHaveCount(0)
+  return sizes
+}
+
+
+/**
+ * The codec with the smallest figure, which is what the panel should have
+ * selected on its own.
+ *
+ * @param sizes from `waitForCodecSizes`
+ * @return the mode
+ */
+export function smallestCodecIn(sizes: Record<string, number>): string {
+  return CODEC_MODES.reduce((best, mode) => (sizes[mode] < sizes[best] ? mode : best), CODEC_MODES[0])
+}
+
+
+/**
+ * Pick a Quality rung and wait for the size line to settle on the figure for
+ * it (#1848).
+ *
+ * Two rungs are two different files — different encoder settings, and for
+ * the coarse rungs different POSITION bits — so the estimate re-runs and the
+ * line goes through "Estimating…" exactly as it does for a codec.
+ *
+ * Under MESHOPT that is true of the settings but not of the bytes: the codec
+ * has one coarser setting and Balanced already spends it, so Reduced
+ * re-encodes to Balanced's file (`exportQuality.js#isDracoOnlyRung`). A spec
+ * asserting a rung MOVED the figure has to pick Draco.
+ *
+ * @param page Playwright page
+ * @param level 'best' | 'balanced' | 'smallest'
+ * @return the byte count the settled line carries
+ */
+export async function selectQuality(page: Page, level: string): Promise<number> {
+  await page.getByTestId('export-quality').click()
+  await page.getByTestId(`export-quality-${level}`).click()
+  return await waitForEstimate(page)
+}
+
+
+/**
  * Wait for the size line to settle on the figure for the selection the
  * controls now hold, and return it.
  *
  * Keyed on WHICH selection the displayed figure describes, never on the
  * figure itself: see `exportEstimate.ts` for the two failure modes that
  * closes. The expected key is read back off the controls rather than passed
- * in, so a caller can flip one axis without knowing the other two.
+ * in, so a caller can flip one axis without knowing the other three.
  *
  * @param page Playwright page
  * @return the byte count the settled line carries
  */
-async function waitForEstimate(page: Page): Promise<number> {
+export async function waitForEstimate(page: Page): Promise<number> {
   const expected = await currentEstimateKey(page)
   const sizeLine = page.getByTestId('export-size')
   await expect
@@ -300,9 +418,33 @@ async function waitForEstimate(page: Page): Promise<number> {
  */
 async function currentEstimateKey(page: Page): Promise<string> {
   const mode = await page.getByTestId('export-compression').locator('input').inputValue()
+  const quality = await page.getByTestId('export-quality').locator('input').inputValue()
   const isPortable = await page.getByTestId('export-portable').locator('input').isChecked()
   const isMetadataIncluded = await page.getByTestId('export-include-metadata').locator('input').isChecked()
-  return estimateKey(mode, isPortable, isMetadataIncluded)
+  // Absent where `CompressionStream` is (Safari before 16.4) — the row is not
+  // rendered at all there, and `count()` rather than `isChecked()` is what
+  // tells the two apart without failing the lookup.
+  const gzip = page.getByTestId('export-gzip').locator('input')
+  const isGzipped = await gzip.count() > 0 && await gzip.isChecked()
+  return estimateKey(mode, isPortable, isMetadataIncluded, quality, isGzipped)
+}
+
+
+/**
+ * Flip "Compress download" and wait for the size line to settle on the figure
+ * for it (#1854).
+ *
+ * Gzip re-estimates at every codec, `none` included: it is the one control
+ * with no header shortcut, so the file has to be read and compressed before
+ * there is a figure. What comes back is the `.glb.gz` byte count, which is
+ * what the browser will save.
+ *
+ * @param page Playwright page
+ * @return the byte count the settled line carries
+ */
+export async function toggleGzip(page: Page): Promise<number> {
+  await page.getByTestId('export-gzip').locator('input').click()
+  return await waitForEstimate(page)
 }
 
 

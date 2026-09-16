@@ -7,11 +7,13 @@ import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
 import {gtagEvent} from '../privacy/analytics'
 import useStore from '../store/useStore'
-import {compressedExport} from './artifactSizes'
+import {compressedExport, gzippedExport} from './artifactSizes'
 import {triggerDownload} from './download'
 import {recordExport} from './exportHistory'
+import {QUALITY_DEFAULT, isQualityLevel} from './exportQuality'
 import {getExportFormat} from './exportRegistry'
 import {COMPRESSION_NONE, isCompressionMode} from './glbCompression'
+import {isGzipAvailable} from './glbGzip'
 import {ProModuleDeniedError, loadProModule} from './proModuleLoader'
 
 
@@ -159,7 +161,15 @@ export default function useExport() {
           // was unavailable the file is uncompressed, and a row saying
           // "draco" beside its size would describe a file that was never
           // made.
-          options: stats?.compression ? {...options, compression: stats.compression} : options,
+          // Both fallbacks are folded in for the same reason: the row has to
+          // describe the file that landed. A codec whose encoder was
+          // unavailable produced an uncompressed file, and a gzip this
+          // browser could not do produced a plain `.glb` — replaying either
+          // option as ASKED would re-download something the row's own size
+          // does not describe.
+          options: stats?.compression ?
+            {...options, compression: stats.compression, gzip: Boolean(stats.gzip)} :
+            options,
         },
         user?.sub,
         () => getAccessTokenSilently(TOKEN_PARAMS),
@@ -216,11 +226,12 @@ export default function useExport() {
  * The host hook the pro module calls to rewrite the GLB, or null when neither
  * control asks for one (and there is then nothing for the host to do).
  *
- * "Neither" is the operative word since #1843: Portable is a rewrite the host
- * owns just as the codecs are, so the predicate is `portable || codec` rather
- * than the codec alone. Portable with no codec still goes through here, and
- * `artifactSizes.js` does the metadata strip for it — the module runs none of
- * its own once a hook is in play.
+ * "Neither" is the operative word since #1843, and it now covers three
+ * controls: Portable and gzip are rewrites the host owns just as the codecs
+ * are, so the predicate is `portable || codec || gzip` rather than the codec
+ * alone. Either of the other two with no codec still goes through here, and
+ * `artifactSizes.js` does the metadata strip for that case — the module runs
+ * none of its own once a hook is in play.
  *
  * It resolves through `artifactSizes.js`'s per-(artifact, portable × codec)
  * cache, which the size line has almost always filled already — picking either
@@ -228,24 +239,56 @@ export default function useExport() {
  * whose length the user just read. A click fast enough to beat the estimate
  * shares its in-flight run rather than starting a second one.
  *
- * What it returns says which codec was APPLIED (`mode`): the cache holds the
- * uncompressed fallback when the encoder could not load, and the pro module
- * passes that on so the history row and analytics describe the real file.
+ * What it returns says which codec was APPLIED (`mode`) and whether the bytes
+ * really are gzipped (`isGzipped`): the cache holds the uncompressed fallback
+ * when the encoder could not load, and the pro module passes both on so the
+ * filename, the history row and analytics describe the real file.
  *
  * @param {object} artifact The store's `glbArtifact` slot, or a history row's
- * @param {object} options The run's options, carrying `compression` + `portable`
+ * @param {object} options The run's options, carrying `compression`, `quality`,
+ *   `portable` + `gzip`
  * @return {?Function} `(glbBytes, {stripBldrsMetadata}) => Promise<object>`
  */
 function compressHookFor(artifact, options) {
   const mode = options.compression
   const isPortable = Boolean(options.portable)
   const hasCodec = isCompressionMode(mode) && mode !== COMPRESSION_NONE
-  if (!isPortable && !hasCodec) {
+  // Checked HERE and not only in the panel, because a "Download again" row
+  // replays the options its export ran with and can be replayed on a browser
+  // that has no `CompressionStream` — Safari only got one in 16.4. An export
+  // that asked for gzip and could not have it comes back as a plain `.glb`
+  // named `.glb`, the same shape as the codec fallback below; what must never
+  // happen is uncompressed bytes under a `.gz` name (#1854).
+  const isGzipped = Boolean(options.gzip) && isGzipAvailable()
+  // A "Download again" row recorded before #1848 carries no quality at all,
+  // and its own recorded `compression` is what it promises to reproduce — so
+  // an absent rung resolves to the default rather than failing the re-export.
+  const quality = isQualityLevel(options.quality) ? options.quality : QUALITY_DEFAULT
+  if (!isPortable && !hasCodec && !isGzipped) {
     return null
   }
+  const codec = hasCodec ? mode : COMPRESSION_NONE
   return async (glbBytes, {stripBldrsMetadata}) => {
-    const compressed = await compressedExport(
-      artifact, hasCodec ? mode : COMPRESSION_NONE, glbBytes, isPortable)
+    if (isGzipped) {
+      // The gzipped path re-derives the bytes rather than reading them out of
+      // a cache — gzip is deterministic, so this reproduces the very length
+      // the size line quoted without a third copy of the file having sat in
+      // memory since the user read it (`artifactSizes.js#gzippedExport`).
+      const gzipped = await gzippedExport(
+        artifact, codec, glbBytes, isPortable, quality, stripBldrsMetadata)
+      if (!gzipped) {
+        throw new Error(`useExport: gzipped ${mode} rewrite produced nothing`)
+      }
+      return {
+        bytes: gzipped.bytes,
+        withMetadataBytes: gzipped.withMetadataBytes,
+        withoutMetadataBytes: gzipped.withoutMetadataBytes,
+        strippedExtensions: gzipped.strippedExtensions,
+        mode: gzipped.mode,
+        isGzipped: true,
+      }
+    }
+    const compressed = await compressedExport(artifact, codec, glbBytes, isPortable, quality)
     if (!compressed) {
       throw new Error(`useExport: ${isPortable ? 'portable ' : ''}${mode} rewrite produced nothing`)
     }
@@ -255,6 +298,7 @@ function compressHookFor(artifact, options) {
       withoutMetadataBytes: compressed.withoutMetadata.byteLength,
       strippedExtensions: compressed.strippedExtensions,
       mode: compressed.mode,
+      isGzipped: false,
     }
   }
 }

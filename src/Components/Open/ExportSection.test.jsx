@@ -1,8 +1,10 @@
+import {CompressionStream as NodeCompressionStream} from 'node:stream/web'
 import React from 'react'
 import {act, fireEvent, render, renderHook, screen, within} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
-import {artifactSizes} from '../../export/artifactSizes'
+import {artifactPositionRange, artifactSizes, retainOnlyCompressedExports} from '../../export/artifactSizes'
+import useCodecSizes from '../../export/useCodecSizes'
 import {gtagEvent} from '../../privacy/analytics'
 import useStore from '../../store/useStore'
 import {goToSubscription} from '../Profile/subscriptionNav'
@@ -17,8 +19,21 @@ jest.mock('../../privacy/analytics', () => ({gtagEvent: jest.fn()}))
 // The size line's source is an OPFS header read (`export/artifactSizes.js`),
 // which needs a worker and a real artifact; the component's job is what it
 // does with the two numbers.
-jest.mock('../../export/artifactSizes', () => ({artifactSizes: jest.fn()}))
+jest.mock('../../export/artifactSizes', () => ({
+  artifactSizes: jest.fn(),
+  artifactPositionRange: jest.fn(),
+  retainOnlyCompressedExports: jest.fn(),
+}))
 jest.mock('../Profile/subscriptionNav', () => ({goToSubscription: jest.fn()}))
+// The background codec sweep runs three encoders off OPFS; its ordering,
+// release and cancellation are pinned in `export/codecSizes.test.js` and
+// `export/useCodecSizes.test.js`. Here the hook is a hand the test deals, so
+// these assertions are about what the PANEL does with the figures — which is
+// the auto-selection, the per-option labels and the Stop control.
+jest.mock('../../export/useCodecSizes', () => ({
+  __esModule: true,
+  default: jest.fn(),
+}))
 const mockRun = jest.fn()
 // A stand-in for the hook's `run` only: `isExporting` still comes from the
 // store slot the real hook reads (`isExportInFlight`), so the disabled state
@@ -48,7 +63,28 @@ const METADATA_BYTES = WITH_METADATA_BYTES - WITHOUT_METADATA_BYTES
 // uncompressed pair above, because that is the entire promise of the control.
 const MESHOPT_WITH_METADATA_BYTES = 7 * BYTES_PER_MB
 const MESHOPT_WITHOUT_METADATA_BYTES = 3 * BYTES_PER_MB
+// And what gzip takes off the uncompressed pair. Roughly the ~6× the #1854
+// measurement found on a real model, so the figures read as the feature's own
+// claim rather than as arbitrary smaller numbers.
+const GZIPPED_WITH_METADATA_BYTES = 2 * BYTES_PER_MB
+const GZIPPED_WITHOUT_METADATA_BYTES = 1.5 * BYTES_PER_MB
 /* eslint-enable no-magic-numbers */
+
+// The Momentum fixture's scene range, so the millimetre caption below is the
+// figure #1848 measured against rather than an invented one.
+const MOMENTUM_RANGE_M = 22.0
+
+// What the sweep hook reports when a test says nothing about it: no figures,
+// nothing running, nothing suppressed — the panel exactly as #1842 left it.
+const NO_CODEC_SIZES = {
+  sizesByCodec: {},
+  measuringCodec: null,
+  isMeasuring: false,
+  isStopping: false,
+  isPaused: false,
+  start: jest.fn(),
+  stop: jest.fn(),
+}
 
 const ARTIFACT = {
   cacheKeyArgs: {ns1: 'gh-bldrs-ai', ns2: 'test-models', ns3: 'main', sourcePath: 'box.ifc', sourceHash: 'sha'},
@@ -92,6 +128,17 @@ function chooseCompression(mode) {
 }
 
 
+/**
+ * Pick a Quality rung the same way (#1848).
+ *
+ * @param {string} level 'best' | 'balanced' | 'smallest'
+ */
+function chooseQuality(level) {
+  fireEvent.mouseDown(within(screen.getByTestId('export-quality')).getByRole('combobox'))
+  fireEvent.click(screen.getByTestId(`export-quality-${level}`))
+}
+
+
 describe('ExportSection', () => {
   /** Settles the pending compressed estimate, from inside the test's `act`. */
   let resolveMeshoptSizes
@@ -104,12 +151,25 @@ describe('ExportSection', () => {
     // assertion here alone. A promise that settles would land its state
     // update outside `act()` in the tests that don't await it.
     artifactSizes.mockReturnValue(new Promise(() => {}))
+    // Parked for the same reason the size read is: a promise that settles
+    // outside a test's `act` lands its state update where React can't see it.
+    // The caption's own test resolves it.
+    artifactPositionRange.mockReturnValue(new Promise(() => {}))
+    useCodecSizes.mockReturnValue(NO_CODEC_SIZES)
+    // jsdom has no `CompressionStream`, and the gzip row is hidden without
+    // one — so without this the control under test would simply not be in the
+    // DOM and every assertion about it would fail for the wrong reason
+    // (`export/glbGzip.js#isGzipAvailable`). The test for the missing case
+    // deletes it again.
+    global.CompressionStream = NodeCompressionStream
   })
 
   afterEach(async () => {
+    delete global.CompressionStream
     // Clearing the artifact re-runs the size effect, and a read that settles
     // during the teardown lands its state update outside `act`. Park it.
     artifactSizes.mockReturnValue(new Promise(() => {}))
+    artifactPositionRange.mockReturnValue(new Promise(() => {}))
     await setStore(null, null)
   })
 
@@ -174,13 +234,13 @@ describe('ExportSection', () => {
 
     fireEvent.click(getByTestId('export-glb-button'))
     expect(mockRun).toHaveBeenCalledWith(
-      'glb', {stripBldrsMetadata: false, compression: 'none', portable: false})
+      'glb', {stripBldrsMetadata: false, compression: 'none', quality: 'balanced', portable: false, gzip: false})
 
     // Off means "strip", which is the option the pro module acts on.
     fireEvent.click(toggle)
     fireEvent.click(getByTestId('export-glb-button'))
     expect(mockRun).toHaveBeenLastCalledWith(
-      'glb', {stripBldrsMetadata: true, compression: 'none', portable: false})
+      'glb', {stripBldrsMetadata: true, compression: 'none', quality: 'balanced', portable: false, gzip: false})
   })
 
   it('carries the Portable toggle into the export, off by default', async () => {
@@ -197,7 +257,7 @@ describe('ExportSection', () => {
     fireEvent.click(getByTestId('export-glb-button'))
 
     expect(mockRun).toHaveBeenLastCalledWith(
-      'glb', {stripBldrsMetadata: false, compression: 'none', portable: true})
+      'glb', {stripBldrsMetadata: false, compression: 'none', quality: 'balanced', portable: true, gzip: false})
   })
 
   it('re-estimates for Portable even at compression None, saying so while it runs', async () => {
@@ -221,7 +281,7 @@ describe('ExportSection', () => {
 
     fireEvent.click(getByTestId('export-portable').querySelector('input'))
 
-    expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', true)
+    expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', true, 'balanced', false)
     expect(queryByTestId('export-size')).toBeNull()
     expect(getByTestId('export-size-pending')).toHaveTextContent('Estimating…')
 
@@ -239,14 +299,21 @@ describe('ExportSection', () => {
     expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(MESHOPT_WITH_METADATA_BYTES))
   })
 
-  it('offers the three compression choices, None selected', async () => {
+  it('offers the three compression choices, None selected, under "Compression type"', async () => {
     // Exclusive, and defaulting to the file that opens everywhere: Meshopt
     // and Draco both need the matching decoder registered in whatever the
     // user opens the download with (#1842).
     await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
-    const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+    const {getByLabelText, getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
     expect(getByTestId('export-compression')).toHaveTextContent('None')
+    // "Compression type", not "Compression" (#1852): the row below it is
+    // labelled Quality, and two bare nouns read as one setting split in half
+    // rather than as a codec CHOICE followed by how hard to run it. The
+    // accessible name has to move with the visible one, or a screen reader
+    // gets the pre-#1852 wording.
+    expect(getByTestId('export-compression-row')).toHaveTextContent('Compression type')
+    expect(getByLabelText('Compression type')).toBeInTheDocument()
   })
 
   it('carries the compression choice into the export', async () => {
@@ -257,7 +324,7 @@ describe('ExportSection', () => {
     fireEvent.click(getByTestId('export-glb-button'))
 
     expect(mockRun).toHaveBeenLastCalledWith(
-      'glb', {stripBldrsMetadata: false, compression: 'draco', portable: false})
+      'glb', {stripBldrsMetadata: false, compression: 'draco', quality: 'balanced', portable: false, gzip: false})
   })
 
   it('re-estimates when the compression choice changes, saying so while it runs', async () => {
@@ -282,7 +349,7 @@ describe('ExportSection', () => {
 
     chooseCompression('meshopt')
 
-    expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'meshopt', false)
+    expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'meshopt', false, 'balanced', false)
     expect(queryByTestId('export-size')).toBeNull()
     expect(getByTestId('export-size-pending')).toHaveTextContent('Estimating…')
 
@@ -328,7 +395,7 @@ describe('ExportSection', () => {
     const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
     await act(async () => {})
 
-    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|none|meta')
+    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|none|balanced|plain|meta')
 
     chooseCompression('draco')
     await act(async () => {
@@ -344,7 +411,7 @@ describe('ExportSection', () => {
     })
 
     expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(WITH_METADATA_BYTES))
-    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|draco|meta')
+    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|draco|balanced|plain|meta')
 
     // The metadata half moves without a re-estimate — one run produced both
     // figures — so it has to be part of the key or the key would name two
@@ -352,7 +419,7 @@ describe('ExportSection', () => {
     fireEvent.click(getByTestId('export-include-metadata').querySelector('input'))
 
     expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(WITHOUT_METADATA_BYTES))
-    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|draco|nometa')
+    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|draco|balanced|plain|nometa')
   })
 
   it('names the fallback when the chosen codec is not available here', async () => {
@@ -531,5 +598,639 @@ describe('ExportSection', () => {
 
     expect(mockRun).not.toHaveBeenCalled()
     expect(goToSubscription).toHaveBeenCalled()
+  })
+
+  describe('the Quality control (#1848)', () => {
+    /**
+     * Settle every size read at once, so a test can assert the steady state
+     * of the panel rather than the pending one.
+     */
+    function settleSizes() {
+      artifactSizes.mockResolvedValue({
+        withMetadata: WITH_METADATA_BYTES,
+        withoutMetadata: WITHOUT_METADATA_BYTES,
+        metadataBytes: METADATA_BYTES,
+        compression: 'draco',
+      })
+      artifactPositionRange.mockResolvedValue(MOMENTUM_RANGE_M)
+    }
+
+    it('is present but inert until a codec is chosen', async () => {
+      // Disabled rather than hidden: showing it only once a codec is picked
+      // would change the panel's height under the user's cursor at the exact
+      // moment they are reaching for the next control.
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      const quality = within(getByTestId('export-quality')).getByRole('combobox')
+      expect(getByTestId('export-quality')).toHaveTextContent('Balanced')
+      expect(quality).toHaveAttribute('aria-disabled', 'true')
+
+      chooseCompression('draco')
+      await act(async () => {})
+
+      expect(within(getByTestId('export-quality')).getByRole('combobox'))
+        .not.toHaveAttribute('aria-disabled')
+    })
+
+    it('names the rungs by fidelity, with a size hint that is never a superlative', async () => {
+      // `exportQuality.js` measured the coarse rung HEAVIER than Balanced on
+      // some models (+0.5% under SEQUENTIAL on Momentum, +21.5% on the small
+      // jest fixture), so the parenthetical the owner chose in #1852 is a
+      // hint — "small", read against the real measured bytes on the codec
+      // dropdown — and never "Smallest", which would be an ordering the
+      // encoders don't keep. The id stays `smallest`: it is written into
+      // export-history rows and estimate keys.
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      chooseCompression('draco')
+      chooseQuality('smallest')
+      await act(async () => {})
+
+      expect(getByTestId('export-quality')).toHaveTextContent('Reduced (small)')
+      expect(getByTestId('export-quality')).not.toHaveTextContent(/smallest/i)
+      // And the rung below it is gone rather than renamed: #1854 took the two
+      // lossy entries out of `QUALITY_LEVELS`, so the panel must not still be
+      // rendering a MenuItem for one.
+      expect(() => getByTestId('export-quality-squashed')).toThrow()
+      expect(() => getByTestId('export-quality-smooshed')).toThrow()
+    })
+
+    it('carries the rung\'s own millimetre figure into the caption and the estimate key', async () => {
+      // The rung's whole visible effect in this panel is the caption and the
+      // figure beside it, so both have to follow the control. Reduced is now
+      // the coarsest the ladder offers (#1854) and prints the largest bound it
+      // has: 4.7 mm on this fixture, against Balanced's 1.2 mm.
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      chooseCompression('draco')
+      await act(async () => {})
+
+      expect(getByTestId('export-quality-caption')).toHaveTextContent('parts may move up to 1.2 mm')
+      expect(getByTestId('export-size'))
+        .toHaveAttribute('data-estimate-key', 'native|draco|balanced|plain|meta')
+
+      chooseQuality('smallest')
+      await act(async () => {})
+
+      expect(getByTestId('export-quality-caption')).toHaveTextContent('parts may move up to 4.7 mm')
+      expect(artifactSizes)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'smallest', false)
+      expect(getByTestId('export-size'))
+        .toHaveAttribute('data-estimate-key', 'native|draco|smallest|plain|meta')
+    })
+
+    it('says outright that the coarse rung does not reach Meshopt', async () => {
+      // It re-encodes to Balanced's file byte for byte — Meshopt's encoder
+      // surface is `{method}` with two values and Balanced already spends the
+      // coarser one (`exportQuality.js#isDracoOnlyRung`). The size line will
+      // sit still on Reduced; without this sentence the user reads that as a
+      // broken control rather than as the codec having nothing more to give
+      // (#1852).
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      chooseCompression('meshopt')
+      chooseQuality('smallest')
+      await act(async () => {})
+
+      expect(getByTestId('export-quality-caption'))
+        .toHaveTextContent('Meshopt has no coarser setting')
+
+      // Draco is where the rung does land, so it gets no such sentence.
+      chooseCompression('draco')
+      await act(async () => {})
+
+      expect(getByTestId('export-quality-caption'))
+        .not.toHaveTextContent('Meshopt has no coarser setting')
+    })
+
+    it('re-estimates on the rung, because two rungs are two different files', async () => {
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      chooseCompression('draco')
+      await act(async () => {})
+      expect(artifactSizes)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'balanced', false)
+
+      chooseQuality('smallest')
+      await act(async () => {})
+
+      expect(artifactSizes)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'smallest', false)
+      // …and the figure on the line says which rung it is for, so a test that
+      // waits for it cannot read the previous rung's number
+      // (`tests/e2e/exportEstimate.ts`).
+      expect(getByTestId('export-size'))
+        .toHaveAttribute('data-estimate-key', 'native|draco|smallest|plain|meta')
+    })
+
+    it('captions what the rung costs, in millimetres off this model', async () => {
+      // "Reduced — parts may move up to 4.7 mm" is a decision a building
+      // modeller can make; "POSITION: 12 bits" is not (#1848 §5b). The figure
+      // is derived from the artifact's own bounds, so it moves with the model.
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      // Nothing to say with no codec: the file is not being re-encoded.
+      expect(queryByTestId('export-quality-caption')).toBeNull()
+
+      chooseCompression('draco')
+      await act(async () => {})
+      expect(getByTestId('export-quality-caption')).toHaveTextContent('parts may move up to 1.2 mm')
+
+      chooseQuality('smallest')
+      await act(async () => {})
+      expect(getByTestId('export-quality-caption')).toHaveTextContent('parts may move up to 4.7 mm')
+    })
+
+    it('says what Meshopt costs instead, which is not a distance', async () => {
+      // Positions are bit-exact at every rung, so a millimetre figure here
+      // would be a fiction. What FILTER actually rounds is shading.
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      chooseCompression('meshopt')
+      await act(async () => {})
+      expect(getByTestId('export-quality-caption'))
+        .toHaveTextContent('geometry exact; shading normals rounded')
+
+      chooseQuality('best')
+      await act(async () => {})
+      expect(getByTestId('export-quality-caption'))
+        .toHaveTextContent('geometry and shading normals exact')
+    })
+
+    it('carries the rung into the export', async () => {
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      chooseCompression('draco')
+      chooseQuality('smallest')
+      await act(async () => {})
+      fireEvent.click(getByTestId('export-glb-button'))
+
+      expect(mockRun).toHaveBeenLastCalledWith(
+        'glb', {stripBldrsMetadata: false, compression: 'draco', quality: 'smallest', portable: false, gzip: false})
+    })
+  })
+
+  describe('the background codec sweep (#1850)', () => {
+    // Momentum's real figures: Draco wins by 5× on a geometry-heavy building
+    // model. Which codec wins swings with model shape, so the panel measures
+    // rather than recommending on reputation (#1850).
+    const CODEC_SIZES = {
+      none: {withMetadata: 1959196, withoutMetadata: 1800000},
+      meshopt: {withMetadata: 1347740, withoutMetadata: 1200000},
+      draco: {withMetadata: 250184, withoutMetadata: 220000},
+    }
+
+    /**
+     * Deal the panel a sweep state.
+     *
+     * @param {object} [state] merged over "nothing measured, nothing running"
+     */
+    function sweepState(state = {}) {
+      useCodecSizes.mockReturnValue({...NO_CODEC_SIZES, ...state})
+    }
+
+    beforeEach(() => {
+      artifactSizes.mockResolvedValue({
+        withMetadata: WITH_METADATA_BYTES,
+        withoutMetadata: WITHOUT_METADATA_BYTES,
+        metadataBytes: METADATA_BYTES,
+        compression: 'none',
+      })
+    })
+
+    it('defaults to the smallest codec once every figure is in', async () => {
+      sweepState({sizesByCodec: CODEC_SIZES})
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      expect(getByTestId('export-compression')).toHaveTextContent('Draco')
+      // …and that selection is what the button exports.
+      fireEvent.click(getByTestId('export-glb-button'))
+      expect(mockRun).toHaveBeenLastCalledWith(
+        'glb', {stripBldrsMetadata: false, compression: 'draco', quality: 'balanced', portable: false, gzip: false})
+    })
+
+    it('leaves the selection alone until every figure is in', async () => {
+      // Meshopt is the smallest SO FAR here and Draco has not reported. A
+      // recommendation the next second contradicts is worse than none.
+      sweepState({sizesByCodec: {none: CODEC_SIZES.none, meshopt: CODEC_SIZES.meshopt}, isMeasuring: true})
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      expect(getByTestId('export-compression')).toHaveTextContent('None')
+    })
+
+    it('never overrides a codec the user chose themselves', async () => {
+      // Even though Draco is measurably smaller. A dropdown that moves under
+      // the cursor because a later figure came in smaller is worse than a
+      // suboptimal default.
+      sweepState({sizesByCodec: {none: CODEC_SIZES.none, meshopt: CODEC_SIZES.meshopt}, isMeasuring: true})
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      chooseCompression('meshopt')
+      await act(async () => {})
+      sweepState({sizesByCodec: CODEC_SIZES})
+      // Re-render with the completed sweep, the way the hook's own state
+      // change would.
+      fireEvent.click(getByTestId('export-include-metadata').querySelector('input'))
+      await act(async () => {})
+
+      expect(getByTestId('export-compression')).toHaveTextContent('Meshopt')
+    })
+
+    it('treats picking the codec already selected as a choice', async () => {
+      // MUI fires a Select's `onChange` only when the value CHANGES, so a user
+      // who opens the dropdown mid-sweep, reads the sizes and clicks the one
+      // already showing would otherwise have said nothing — and the sweep
+      // would move it out from under them a second later.
+      sweepState({sizesByCodec: {none: CODEC_SIZES.none, meshopt: CODEC_SIZES.meshopt}, isMeasuring: true})
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+      expect(getByTestId('export-compression')).toHaveTextContent('None')
+
+      chooseCompression('none')
+      await act(async () => {})
+      sweepState({sizesByCodec: CODEC_SIZES})
+      fireEvent.click(getByTestId('export-include-metadata').querySelector('input'))
+      await act(async () => {})
+
+      expect(getByTestId('export-compression')).toHaveTextContent('None')
+    })
+
+    it('puts each codec\'s measured size on its own option, following the toggle', async () => {
+      // Appended to the dropdown OPTION, not to the closed control: the menu
+      // is where the comparison happens and where there is room for it.
+      sweepState({sizesByCodec: CODEC_SIZES})
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      fireEvent.mouseDown(within(getByTestId('export-compression')).getByRole('combobox'))
+
+      expect(screen.getByTestId('export-compression-draco'))
+        .toHaveAttribute('data-bytes', String(CODEC_SIZES.draco.withMetadata))
+      expect(screen.getByTestId('export-compression-meshopt'))
+        .toHaveAttribute('data-bytes', String(CODEC_SIZES.meshopt.withMetadata))
+      expect(screen.getByTestId('export-compression-draco')).toHaveTextContent('Draco')
+      // The closed control stays a bare label — at 390px a figure beside it
+      // would ellipsize away the half that matters or push the dialog
+      // sideways (#1838).
+      expect(getByTestId('export-compression')).not.toHaveTextContent('MB')
+    })
+
+    it('says which codec it is sizing, and offers one honest way to stop', async () => {
+      // The encoders are synchronous wasm with no abort, so Stop ends the
+      // QUEUE and the codec in flight finishes. The status line says so
+      // rather than claiming the work stopped.
+      const stop = jest.fn()
+      sweepState({isMeasuring: true, measuringCodec: 'draco', stop})
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId, rerender} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      expect(getByTestId('export-codec-sizes-status')).toHaveTextContent('Sizing Draco…')
+
+      fireEvent.click(getByTestId('export-codec-sizes-stop'))
+      expect(stop).toHaveBeenCalled()
+
+      sweepState({isMeasuring: true, isStopping: true, measuringCodec: 'draco', stop})
+      rerender(<ExportSection/>)
+      await act(async () => {})
+
+      expect(getByTestId('export-codec-sizes-status')).toHaveTextContent('Finishing Draco…')
+      expect(getByTestId('export-codec-sizes-stop')).toBeDisabled()
+    })
+
+    it('offers to calculate rather than starting on a huge artifact', async () => {
+      const start = jest.fn()
+      sweepState({isPaused: true, start})
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      expect(getByTestId('export-codec-sizes-status')).toHaveTextContent('Codec sizes not measured')
+      expect(queryByTestId('export-codec-sizes-stop')).toBeNull()
+
+      fireEvent.click(getByTestId('export-codec-sizes-start'))
+
+      expect(start).toHaveBeenCalled()
+    })
+
+    it('publishes which codecs it has a figure for', async () => {
+      // The seam an E2E needs: the auto-selection lands the moment the last
+      // figure does, so a test that touches the codec control before then is
+      // clicking at a dropdown that is about to move
+      // (`tests/e2e/export.ts#waitForCodecSizing`).
+      sweepState({sizesByCodec: {none: CODEC_SIZES.none, meshopt: CODEC_SIZES.meshopt}, isMeasuring: true})
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId, rerender} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      expect(getByTestId('export-section')).toHaveAttribute('data-codec-sizes', 'none,meshopt')
+
+      sweepState({sizesByCodec: CODEC_SIZES})
+      rerender(<ExportSection/>)
+      await act(async () => {})
+
+      expect(getByTestId('export-section')).toHaveAttribute('data-codec-sizes', 'none,meshopt,draco')
+    })
+
+    it('says nothing at all once the sweep is done', async () => {
+      // A finished sweep on a small model is over before most users have read
+      // the label above it; a permanent status line for it would be noise.
+      sweepState({sizesByCodec: CODEC_SIZES})
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      expect(queryByTestId('export-codec-sizes')).toBeNull()
+    })
+
+    it('keeps offering to finish a sweep the user stopped part-way', async () => {
+      // The counterpart to the test above, and the one the row's visibility
+      // used to get wrong: nothing running, nothing suppressed by the
+      // threshold, so the whole row unmounted — taking Stop and Calculate
+      // sizes with it — while two codecs of three had figures and no winner
+      // could ever be named. Reopening the dialog was the only way back
+      // (#1852 review).
+      const start = jest.fn()
+      sweepState({
+        sizesByCodec: {none: CODEC_SIZES.none, meshopt: CODEC_SIZES.meshopt},
+        isPaused: true,
+        start,
+      })
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      // Said as what it is: some figures are in, the rest never ran.
+      expect(getByTestId('export-codec-sizes-status')).toHaveTextContent('Codec sizing stopped')
+
+      fireEvent.click(getByTestId('export-codec-sizes-start'))
+
+      expect(start).toHaveBeenCalled()
+    })
+
+    describe('what stays in the estimate cache (#1852 review)', () => {
+      /**
+       * Every cell the panel said should still exist, on the last reconcile.
+       *
+       * @return {Array<object>} `{mode, isPortable, quality}` entries
+       */
+      function lastKept() {
+        const calls = retainOnlyCompressedExports.mock.calls
+        return calls[calls.length - 1][1]
+      }
+
+      it('keeps the cell it is showing, and drops the rest whatever changed', async () => {
+        // Each compressed cell holds two whole copies of the export, and
+        // #1848 split them by rung as well as by codec — so clicking through
+        // the controls to read their captions, which is what they are for,
+        // pinned a pair of copies per combination for the life of the
+        // artifact. One statement of what should be resident replaces the
+        // per-rung eviction that used to do half of this.
+        sweepState()
+        await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+        render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+        await act(async () => {})
+
+        chooseCompression('draco')
+        await act(async () => {})
+
+        expect(lastKept()).toEqual([{mode: 'draco', isPortable: false, quality: 'balanced'}])
+
+        chooseQuality('smallest')
+        await act(async () => {})
+
+        expect(lastKept()).toEqual([{mode: 'draco', isPortable: false, quality: 'smallest'}])
+      })
+
+      it('keeps the sweep\'s winner only while it is about to be selected', async () => {
+        // The handoff. The sweep leaves its winner in the cache for the
+        // auto-selection that follows, and the auto-selection is a render
+        // later — so for that one render the winner is a cell the panel is
+        // not yet showing. Both are derived from `codecToSelect`, so neither
+        // can drop what the other is about to need.
+        sweepState({sizesByCodec: CODEC_SIZES})
+        await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+        render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+        await act(async () => {})
+
+        // Draco wins and the panel has switched to it.
+        expect(screen.getByTestId('export-compression')).toHaveTextContent('Draco')
+        expect(lastKept()).toEqual([{mode: 'draco', isPortable: false, quality: 'balanced'}])
+        // …and while the selection was still `none`, Draco was already being
+        // kept beside it rather than swept up before the switch landed.
+        expect(retainOnlyCompressedExports.mock.calls.map(([, kept]) => kept))
+          .toContainEqual([
+            {mode: 'none', isPortable: false, quality: 'balanced'},
+            {mode: 'draco', isPortable: false, quality: 'balanced'},
+          ])
+      })
+
+      it('drops the winner the user has overruled, and keeps their own cell', async () => {
+        // The finding this replaced. `codecToSelect` refuses to override a
+        // codec the user picked, so the winner is a cell nothing will ever
+        // read — while the user's own cell, the one behind the figure on
+        // screen and the bytes Export is about to hand over, was the one left
+        // unheld.
+        sweepState({sizesByCodec: CODEC_SIZES})
+        await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+        render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+        await act(async () => {})
+
+        chooseCompression('meshopt')
+        await act(async () => {})
+
+        expect(lastKept()).toEqual([{mode: 'meshopt', isPortable: false, quality: 'balanced'}])
+      })
+
+      it('leaves the cache alone while a sweep is running', async () => {
+        // A run bounds its own memory as it goes and protects the selection
+        // while doing it (`export/codecSizes.js`). Reconciling against a
+        // selection that knows nothing of the sweep's best-so-far would throw
+        // the winner away mid-run and make the auto-selection re-encode it.
+        sweepState({isMeasuring: true, measuringCodec: 'meshopt'})
+        await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+        render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+        await act(async () => {})
+
+        chooseCompression('draco')
+        await act(async () => {})
+
+        expect(retainOnlyCompressedExports).not.toHaveBeenCalled()
+      })
+
+      it('takes the whole cache with it when the panel goes away', async () => {
+        // Nothing outside this panel reads an estimate cell — reopening the
+        // tab re-runs the codec axis from scratch — so anything held past
+        // unmount is two copies of the model on an artifact the store keeps
+        // for the rest of the session.
+        sweepState()
+        await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+        const {unmount} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+        await act(async () => {})
+        chooseCompression('draco')
+        await act(async () => {})
+        expect(lastKept()).not.toEqual([])
+
+        unmount()
+
+        expect(lastKept()).toEqual([])
+      })
+    })
+  })
+
+  describe('the Compress download toggle (#1854)', () => {
+    /** The pair of figures the compressed estimate settles on. */
+    function settleSizes() {
+      artifactSizes.mockResolvedValue({
+        withMetadata: WITH_METADATA_BYTES,
+        withoutMetadata: WITHOUT_METADATA_BYTES,
+        metadataBytes: METADATA_BYTES,
+        compression: 'none',
+      })
+      artifactPositionRange.mockResolvedValue(MOMENTUM_RANGE_M)
+    }
+
+    it('says what the user gets, which is not a .glb', async () => {
+      // The part that surprises. A `.glb.gz` does not drop into the three.js
+      // editor, so the caption names the file rather than only promising it
+      // is smaller — this is an explicit choice and never a silent one.
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      expect(getByTestId('export-gzip-row')).toHaveTextContent('Compress download')
+      expect(getByTestId('export-gzip-row')).toHaveTextContent('.glb.gz')
+      // Off by default: the default export is the one that opens everywhere.
+      expect(within(getByTestId('export-gzip')).getByRole('checkbox')).not.toBeChecked()
+    })
+
+    it('is not rendered at all where the browser cannot gzip', async () => {
+      // Safari before 16.4. Hidden rather than disabled, because there is no
+      // click that would help — and shipping uncompressed bytes under a `.gz`
+      // name is the one outcome this option must not have.
+      delete global.CompressionStream
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {queryByTestId, getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      expect(queryByTestId('export-gzip-row')).toBeNull()
+      expect(queryByTestId('export-gzip')).toBeNull()
+      // …and the rest of the panel is untouched, which is what makes this a
+      // hidden control rather than a broken render.
+      expect(getByTestId('export-glb-button')).toBeEnabled()
+      expect(getByTestId('export-size')).toBeInTheDocument()
+    })
+
+    it('re-estimates on the toggle, even at compression None', async () => {
+      // The one selection that was a header read stops being one: there is
+      // nothing to gzip without the file. So the figure has to be re-measured
+      // and the line has to say "Estimating…" while it is — at None, where
+      // it never did before (#1854).
+      let resolveGzipped
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+      expect(artifactSizes)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', false, 'balanced', false)
+
+      artifactSizes.mockReturnValue(new Promise((resolve) => {
+        resolveGzipped = resolve
+      }))
+      fireEvent.click(within(getByTestId('export-gzip')).getByRole('checkbox'))
+      await act(async () => {})
+
+      expect(artifactSizes)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', false, 'balanced', true)
+      expect(getByTestId('export-size-pending')).toBeInTheDocument()
+      expect(queryByTestId('export-size')).toBeNull()
+
+      await act(async () => {
+        resolveGzipped({
+          withMetadata: GZIPPED_WITH_METADATA_BYTES,
+          withoutMetadata: GZIPPED_WITHOUT_METADATA_BYTES,
+          metadataBytes: GZIPPED_WITH_METADATA_BYTES - GZIPPED_WITHOUT_METADATA_BYTES,
+          compression: 'none',
+        })
+        await Promise.resolve()
+      })
+
+      // The figure on the line is the gzipped one, and it says so in its key
+      // — which is how an E2E tells a settled gzipped line from the raw one
+      // it replaced, since keying on the byte count alone cannot
+      // (`tests/e2e/exportEstimate.ts`).
+      expect(getByTestId('export-size'))
+        .toHaveAttribute('data-bytes', String(GZIPPED_WITH_METADATA_BYTES))
+      expect(getByTestId('export-size'))
+        .toHaveAttribute('data-estimate-key', 'native|none|balanced|gzip|meta')
+    })
+
+    it('carries the choice into the export', async () => {
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      fireEvent.click(within(getByTestId('export-gzip')).getByRole('checkbox'))
+      await act(async () => {})
+      fireEvent.click(getByTestId('export-glb-button'))
+
+      expect(mockRun).toHaveBeenLastCalledWith(
+        'glb',
+        {stripBldrsMetadata: false, compression: 'none', quality: 'balanced', portable: false, gzip: true})
+    })
+
+    it('re-runs the codec sweep, because gzip can reorder the codecs', async () => {
+      // Not a display detail: Draco's output is near-incompressible while the
+      // instance transforms it leaves alone are not, so on the shape Share's
+      // batched writer produces the winner flips
+      // (`export/codecSizes.js` module doc). The sweep has to be told.
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+      expect(useCodecSizes)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), expect.objectContaining({isGzipped: false}))
+
+      fireEvent.click(within(getByTestId('export-gzip')).getByRole('checkbox'))
+      await act(async () => {})
+
+      expect(useCodecSizes)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), expect.objectContaining({isGzipped: true}))
+    })
   })
 })

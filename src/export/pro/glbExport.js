@@ -37,6 +37,13 @@ const DEFAULT_BASENAME = 'model'
 // rather than imported: that module pulls in `@sentry/react`, which has no
 // business in the pro bundle.
 const NO_COMPRESSION = 'none'
+// What a gzipped export is called and served as. Their canonical home, since
+// this bundle may not import from the host's and a host-side copy would have
+// no caller (`export/glbGzip.js` module doc). Both extensions, not a swap —
+// `.glb.gz` is what a web server would serve and what an unarchiver expects,
+// and keeping `.glb` in the middle is what says what is inside.
+const GZIP_EXTENSION = 'gz'
+const GZIP_MIME = 'application/gzip'
 // Byte offset of the JSON chunk's length field in a GLB: past the 12-byte
 // file header.
 const JSON_CHUNK_LENGTH_OFFSET = 12
@@ -61,10 +68,12 @@ const UNSAFE_FILENAME_CHARS = /[^A-Za-z0-9._-]+/g
  * @param {string} [args.options.sourceBasename] Source filename, the fallback
  * @param {?Function} [args.compress] Host hook: given this GLB and the
  *   metadata choice, returns `{bytes, withMetadataBytes, withoutMetadataBytes,
- *   strippedExtensions, mode}` for the chosen codec — `mode` being the codec
- *   ACTUALLY applied, which is `'none'` when the encoder was unavailable and
- *   the host fell back to the uncompressed (still stripped) file. Absent (the
- *   default) means no compression, and the strip below is the only rewrite.
+ *   strippedExtensions, mode, isGzipped}` for the chosen codec — `mode` being
+ *   the codec ACTUALLY applied, which is `'none'` when the encoder was
+ *   unavailable and the host fell back to the uncompressed (still stripped)
+ *   file, and `isGzipped` saying whether the bytes really are a gzip member,
+ *   which is what decides the `.gz` on the name. Absent (the default) means no
+ *   compression, and the strip below is the only rewrite.
  * @return {Promise<{blob: Blob, filename: string, stats: object}>} `stats`
  *   carries both sizes of THIS run — `withMetadataBytes` /
  *   `withoutMetadataBytes` / `metadataBytes` — so the caller can report what
@@ -91,6 +100,7 @@ export async function exportArtifact({bytes, options = {}, compress = null}) {
   let strippedExtensions = []
   let withoutMetadataBytes = null
   let compression = NO_COMPRESSION
+  let isGzipped = false
   if (compress) {
     // The codecs (and their wasm) live in the host bundle, so compression is
     // the host's to run — but the DOWNLOAD is still only reachable through
@@ -108,6 +118,11 @@ export async function exportArtifact({bytes, options = {}, compress = null}) {
     // and analytics must say so rather than record a Draco export that
     // opens in any viewer.
     compression = compressed.mode || NO_COMPRESSION
+    // Read off what the hook DID, never off what was asked for. A browser
+    // with no `CompressionStream` hands back plain bytes, and naming that
+    // file `.glb.gz` would be the one failure this option must not have
+    // (#1854).
+    isGzipped = Boolean(compressed.isGzipped)
   } else if (options.stripBldrsMetadata) {
     const stripped = stripGlbBldrs(glbBytes)
     glbBytes = stripped.bytes
@@ -118,8 +133,8 @@ export async function exportArtifact({bytes, options = {}, compress = null}) {
   }
 
   return {
-    blob: new Blob([glbBytes], {type: format.mime}),
-    filename: exportFilename(options),
+    blob: new Blob([glbBytes], {type: isGzipped ? GZIP_MIME : format.mime}),
+    filename: exportFilename(options, isGzipped),
     stats: {
       inputBytes,
       outputBytes: glbBytes.byteLength,
@@ -128,6 +143,7 @@ export async function exportArtifact({bytes, options = {}, compress = null}) {
       withoutMetadataBytes,
       metadataBytes: withoutMetadataBytes === null ? null : withMetadataBytes - withoutMetadataBytes,
       compression,
+      gzip: isGzipped,
     },
   }
 }
@@ -161,15 +177,18 @@ function strippedSizeOf(glbBytes) {
  * @param {object} [options]
  * @param {string} [options.title] Model title (IFC project name, …)
  * @param {string} [options.sourceBasename] e.g. 'index.ifc'
- * @return {string} e.g. 'index.glb'
+ * @param {boolean} [isGzipped] Whether the bytes are a gzip member — what the
+ *   host hook DID, not what the user asked for
+ * @return {string} e.g. 'index.glb', or 'index.glb.gz'
  */
-export function exportFilename({title, sourceBasename} = {}) {
+export function exportFilename({title, sourceBasename} = {}, isGzipped = false) {
   const raw = (title || stripExtension(sourceBasename || '') || DEFAULT_BASENAME)
   // Trim leading/trailing '.' and '_' as well as substituting: a title of
   // '../../etc/passwd' sanitises to '.._.._etc_passwd', and a name that
   // starts with a dot is a hidden file on every unix the download lands on.
   const safe = raw.trim().replace(UNSAFE_FILENAME_CHARS, '_').replace(/^[._]+|[._]+$/g, '')
-  return `${safe || DEFAULT_BASENAME}.${format.ext}`
+  const name = `${safe || DEFAULT_BASENAME}.${format.ext}`
+  return isGzipped ? `${name}.${GZIP_EXTENSION}` : name
 }
 
 

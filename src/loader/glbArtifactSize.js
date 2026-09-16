@@ -219,6 +219,50 @@ export function estimateStrippedGlbSize(json, binByteLength, jsonByteLength) {
 
 
 /**
+ * The largest axis of the largest primitive's own POSITION bounds — the range
+ * Draco quantizes in, at `@gltf-transform`'s pinned `quantizationVolume:
+ * 'mesh'` default, for the worst primitive in the file.
+ *
+ * This is what turns "POSITION: 12 bits" into a millimetre figure the Export
+ * tab can put in front of a building modeller
+ * (`export/exportQuality.js#maxPositionShift`). Taking the MAXIMUM over
+ * primitives rather than the scene bounds is deliberate and is what makes the
+ * figure both honest and useful: glTF requires `min`/`max` on POSITION
+ * accessors, each primitive is quantized inside its own box, and the batched
+ * -native artifact's positions are in LOCAL geometry space with placement
+ * carried by `EXT_mesh_gpu_instancing` — so a 5 cm bolt quantizes in a 5 cm
+ * box however large the site is. Scene bounds would quote a grid four times
+ * coarser than the file actually has (#1848 §3).
+ *
+ * Reads only the JSON chunk — accessor `min`/`max` are metadata — so it keeps
+ * the size read's promise of never touching BIN.
+ *
+ * @param {object} json Parsed glTF JSON
+ * @return {?number} the range in the file's own units (metres, for a Share
+ *   artifact), or null when no POSITION accessor declares bounds
+ */
+export function positionQuantizationRange(json) {
+  let range = null
+  for (const mesh of json?.meshes || []) {
+    for (const primitive of mesh?.primitives || []) {
+      const accessor = json?.accessors?.[primitive?.attributes?.POSITION]
+      const {min, max} = accessor || {}
+      if (!Array.isArray(min) || !Array.isArray(max) || min.length !== max.length) {
+        continue
+      }
+      for (let axis = 0; axis < min.length; axis++) {
+        const extent = max[axis] - min[axis]
+        if (Number.isFinite(extent) && (range === null || extent > range)) {
+          range = extent
+        }
+      }
+    }
+  }
+  return range
+}
+
+
+/**
  * Both sizes of a cached artifact, read from its header.
  *
  * The artifact is a Bldrs container (16-byte header) holding exactly one
@@ -229,7 +273,8 @@ export function estimateStrippedGlbSize(json, binByteLength, jsonByteLength) {
  * model that is the difference between a number and a stall.
  *
  * @param {File|Blob} file The OPFS artifact, from `readModelByPathFromOPFS`
- * @return {Promise<{withMetadata: number, withoutMetadata: number, metadataBytes: number}>}
+ * @return {Promise<{withMetadata: number, withoutMetadata: number,
+ *   metadataBytes: number, positionRange: ?number}>}
  */
 export async function artifactSizesFromFile(file) {
   const head = new Uint8Array(await file.slice(0, PREFIX_BYTES).arrayBuffer())
@@ -249,9 +294,12 @@ export async function artifactSizesFromFile(file) {
   const prefix = new Uint8Array(await file.slice(glbStart, jsonEnd).arrayBuffer())
   const json = parseGlbJsonChunk(prefix)
   const binByteLength = json?.buffers?.[0]?.byteLength ?? 0
+  // Before the strip: `estimateStrippedGlbSize` CONSUMES `json`, and the
+  // Export tab's fidelity caption is about the geometry that survives it.
+  const positionRange = positionQuantizationRange(json)
 
   const withoutMetadata = estimateStrippedGlbSize(json, binByteLength, jsonByteLength)
-  return {withMetadata, withoutMetadata, metadataBytes: withMetadata - withoutMetadata}
+  return {withMetadata, withoutMetadata, metadataBytes: withMetadata - withoutMetadata, positionRange}
 }
 
 

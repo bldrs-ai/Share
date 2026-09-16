@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import * as path from 'node:path'
 import esbuild from 'esbuild'
 import {fileURLToPath} from 'url'
-import config from './common.js'
+import config, {staticCopyPlugin} from './common.js'
 import {proModuleBuilds} from './proModules.js'
 
 
@@ -11,8 +11,15 @@ const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../')
 // Main build
 const indexFile = path.resolve(repoRoot, 'src', 'index.jsx')
 const subscribeFile = path.resolve(repoRoot, 'src', 'subscribe', 'index.jsx')
+// The one build that owns the `public/` → `docs/` copy. Every build below
+// runs concurrently under the `Promise.all` at the foot of this file, and the
+// copy plugin creates its destination with a check-then-`mkdir`, so sharing it
+// across them races and intermittently fails the whole build with
+// `EEXIST: mkdir docs`. The workers and pro modules emit single bundles and
+// never needed the asset tree. See `plugins.js#makeStaticCopyPlugin`.
 const mainBuild = esbuild.build({
   ...config,
+  plugins: [...config.plugins, staticCopyPlugin],
   entryPoints: [indexFile, subscribeFile],
 })
 

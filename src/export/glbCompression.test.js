@@ -15,15 +15,23 @@
 import {readFileSync} from 'node:fs'
 import path from 'node:path'
 import {captureException} from '@sentry/react'
-import {Document, WebIO} from '@gltf-transform/core'
-import {EXTMeshGPUInstancing} from '@gltf-transform/extensions'
+import {Document, Logger, WebIO} from '@gltf-transform/core'
+import {EXTMeshGPUInstancing, EXTMeshoptCompression, KHRDracoMeshCompression} from '@gltf-transform/extensions'
 import {isBldrsExtension} from '../loader/glbArtifactSize'
+import {loadDracoDecoder} from '../loader/glbCompress'
 import {parseGlb} from '../loader/injectGlbExtensions'
+import {
+  QUALITY_BALANCED,
+  QUALITY_BEST,
+  QUALITY_SMALLEST,
+  maxPositionShift,
+} from './exportQuality'
 import {
   COMPRESSION_DRACO,
   COMPRESSION_MESHOPT,
   COMPRESSION_NONE,
   compressExportGlb,
+  compressionFidelityCaption,
   isCompressionMode,
 } from './glbCompression'
 
@@ -44,23 +52,44 @@ const TIMEOUT_MS = 120000
 
 const DRACO_DIR = path.resolve(__dirname, '../../public/static/js/draco')
 
+// glTF accessor component types: what Meshopt's octahedral filter rewrites
+// NORMAL from, and to.
+const FLOAT_COMPONENT_TYPE = 5126
+const BYTE_COMPONENT_TYPE = 5120
+// The Momentum fixture's scene range, the model every measured figure in
+// #1848 is quoted against.
+const MOMENTUM_RANGE_M = 22.0
+
 
 /**
  * An uncompressed GLB with enough geometry to be worth compressing.
  *
  * @param {object} [options]
- * @param {boolean} [options.withPerVertexIds] Add `_EXPRESSID`, the attribute
- *   that means triangle order is load-bearing
+ * @param {boolean} [options.withPerVertexIds] Add `_EXPRESSID` as a
+ *   `Uint32Array`, the attribute that means triangle order is load-bearing —
+ *   and typed the way Share's own writers type it
+ *   (`viewer/ifc/batchedToMergedMesh.js`), because that typing is what keeps
+ *   Draco's GENERIC quantization off it
+ * @param {boolean} [options.areIdsFloat] Type `_EXPRESSID` `Float32Array`
+ *   instead: the shape the guard above is a guard AGAINST, used only to show
+ *   that it is one
+ * @param {boolean} [options.withNormals] Add `NORMAL`, the one attribute the
+ *   two codecs treat DIFFERENTLY under quality: Draco quantizes it to
+ *   NORMAL bits, Meshopt's `FILTER` rewrites it octahedrally
  * @return {Promise<Uint8Array>} a standalone GLB
  */
-async function geometryGlb({withPerVertexIds = false} = {}) {
+async function geometryGlb({withPerVertexIds = false, withNormals = false, areIdsFloat = false} = {}) {
   const doc = new Document()
   const buffer = doc.createBuffer()
   const positions = []
+  const normals = []
   const expressIds = []
   const indices = []
   for (let i = 0; i < VERTEX_COUNT; i++) {
     positions.push(i * 0.5, (i % 7) * 0.25, (i % 3) * 1.5)
+    const [x, y, z] = [Math.sin(i), Math.cos(i * 1.3), Math.sin(i * 0.7)]
+    const length = Math.hypot(x, y, z)
+    normals.push(x / length, y / length, z / length)
     expressIds.push(i)
   }
   for (let i = 0; i + 2 < VERTEX_COUNT; i++) {
@@ -71,9 +100,18 @@ async function geometryGlb({withPerVertexIds = false} = {}) {
       .setType('VEC3').setArray(new Float32Array(positions)).setBuffer(buffer))
     .setIndices(doc.createAccessor()
       .setType('SCALAR').setArray(new Uint32Array(indices)).setBuffer(buffer))
+  if (withNormals) {
+    primitive.setAttribute('NORMAL', doc.createAccessor()
+      .setType('VEC3').setArray(new Float32Array(normals)).setBuffer(buffer))
+  }
   if (withPerVertexIds) {
+    // Uint32, as `batchedToMergedMesh.js`/`flatMeshToBufferGeometry.js` write
+    // it: three's `GLTFExporter` exempts `_`-prefixed attributes from its
+    // Uint32→FLOAT coercion, so the id reaches Draco on the integer path where
+    // `quantizationBits` is ignored. `areIdsFloat` is the counter-example.
+    const ids = areIdsFloat ? new Float32Array(expressIds) : new Uint32Array(expressIds)
     primitive.setAttribute('_EXPRESSID', doc.createAccessor()
-      .setType('SCALAR').setArray(new Float32Array(expressIds)).setBuffer(buffer))
+      .setType('SCALAR').setArray(ids).setBuffer(buffer))
   }
   doc.createScene().addChild(doc.createNode().setMesh(doc.createMesh().addPrimitive(primitive)))
   return new Uint8Array(await new WebIO().writeBinary(doc))
@@ -201,6 +239,111 @@ function codecsDeclaredBy(glbBytes) {
 function indexCountOf(glbBytes) {
   const {json} = parseGlb(glbBytes)
   return json.accessors[json.meshes[0].primitives[0].indices].count
+}
+
+
+/**
+ * The POSITION values of a GLB's one primitive, decoding whichever codec the
+ * file carries on the way.
+ *
+ * @param {Uint8Array} glbBytes
+ * @param {string} [codec] One of `COMPRESSION_MODES`; a compressed file whose
+ *   codec is not registered reads back as a validation failure, not as
+ *   geometry
+ * @return {Promise<Float32Array>}
+ */
+function positionsOf(glbBytes, codec = COMPRESSION_NONE) {
+  return attributeOf(glbBytes, 'POSITION', codec)
+}
+
+
+/**
+ * Any one attribute of a GLB's one primitive, decoded the same way.
+ *
+ * @param {Uint8Array} glbBytes
+ * @param {string} name e.g. 'POSITION', '_EXPRESSID'
+ * @param {string} [codec] One of `COMPRESSION_MODES`
+ * @return {Promise<*>} the accessor's own typed array, whatever type it is
+ */
+async function attributeOf(glbBytes, name, codec = COMPRESSION_NONE) {
+  const io = new WebIO().setLogger(new Logger(Logger.Verbosity.SILENT))
+  if (codec === COMPRESSION_DRACO) {
+    io.registerExtensions([KHRDracoMeshCompression])
+      .registerDependencies({'draco3d.decoder': await loadDracoDecoder()})
+  } else if (codec === COMPRESSION_MESHOPT) {
+    const {MeshoptDecoder} = await import('meshoptimizer/decoder')
+    await MeshoptDecoder.ready
+    io.registerExtensions([EXTMeshoptCompression])
+      .registerDependencies({'meshopt.decoder': MeshoptDecoder})
+  }
+  const doc = await io.readBinary(glbBytes)
+  return doc.getRoot().listMeshes()[0].listPrimitives()[0].getAttribute(name).getArray()
+}
+
+
+/**
+ * The same values as a sorted plain array — the comparison to make when two
+ * encodes quantize identically but need not lay their vertices out in the
+ * same order, which is what EDGEBREAKER reserves the right to do.
+ *
+ * @param {Float32Array} positions
+ * @return {Array<number>}
+ */
+function sortedPositions(positions) {
+  return [...positions].sort((a, b) => a - b)
+}
+
+
+/**
+ * How far the worst vertex moved, comparing index for index.
+ *
+ * Only meaningful for a SEQUENTIAL encode of geometry whose positions are all
+ * distinct — DRACO deduplicates vertices even there — which is why the caller
+ * asserts the counts match first.
+ *
+ * @param {Float32Array} before
+ * @param {Float32Array} after
+ * @return {number} in the file's own units
+ */
+function maxVertexShift(before, after) {
+  let worst = 0
+  for (let i = 0; i < before.length; i += 3) {
+    const shift = Math.hypot(
+      before[i] - after[i], before[i + 1] - after[i + 1], before[i + 2] - after[i + 2])
+    worst = Math.max(worst, shift)
+  }
+  return worst
+}
+
+
+/**
+ * The per-bufferView `EXT_meshopt_compression` filters a Meshopt file
+ * declares — the readable, exact evidence that FILTER ran rather than
+ * QUANTIZE.
+ *
+ * @param {Uint8Array} glbBytes
+ * @return {Array<string>} the filters present, deduped and sorted
+ */
+function meshoptFiltersOf(glbBytes) {
+  const {json} = parseGlb(glbBytes)
+  const filters = (json.bufferViews || [])
+    .map((view) => view.extensions?.EXT_meshopt_compression?.filter)
+    .filter(Boolean)
+  return [...new Set(filters)].sort()
+}
+
+
+/**
+ * The component type a Meshopt file's NORMAL accessor came out as: 5126
+ * (FLOAT) when nothing touched it, 5120 (BYTE, normalized) once the
+ * octahedral filter has rewritten it.
+ *
+ * @param {Uint8Array} glbBytes
+ * @return {number}
+ */
+function normalComponentTypeOf(glbBytes) {
+  const {json} = parseGlb(glbBytes)
+  return json.accessors[json.meshes[0].primitives[0].attributes.NORMAL].componentType
 }
 
 
@@ -333,6 +476,247 @@ describe('export/glbCompression', () => {
       expect(dracoByteLength(sequential.withoutMetadata))
         .toBeGreaterThan(dracoByteLength(free.withoutMetadata))
     }, TIMEOUT_MS)
+  })
+
+  describe('the Quality rungs, against the real encoders (#1848)', () => {
+    // `exportQuality.test.js` pins WHICH options each rung asks for. What can
+    // only be shown here is that they reach the encoder and change the file —
+    // and, for the two that cost fidelity, by how much.
+    //
+    // Deliberately NOT asserted, and this is about the DRACO ladder
+    // specifically: that each rung weighs less than the one above it. The
+    // labels carry a size HINT — larger / medium / small / tiny — but measured,
+    // Draco's speed pair is a −8.6% win on EDGEBREAKER over the Momentum
+    // building model and a +0.5% loss on the same model under SEQUENTIAL, so
+    // the rungs are a fidelity ladder and not a size one, and the hint is read
+    // against the dropdown's real measured bytes (`exportQuality.js` module
+    // doc). The
+    // panel shows the real measured size for the selection; a test claiming a
+    // monotone Draco ladder would be pinning a promise the feature does not
+    // make. The one byte comparison below is Meshopt's FILTER-vs-QUANTIZE
+    // step, which is structural rather than model-shaped — see it there.
+    /** @type {Uint8Array} */ let source
+    /** @type {Float32Array} */ let sourcePositions
+    /** @type {number} */ let positionRange
+
+    beforeAll(async () => {
+      installDracoEncoder()
+      installDracoDecoder()
+      // NORMAL is the attribute the rungs treat differently — Draco quantizes
+      // it, Meshopt's FILTER rewrites it octahedrally — so it has to be there
+      // or half of what is under test is invisible.
+      source = await geometryGlb({withNormals: true})
+      sourcePositions = await positionsOf(source)
+      let min = Infinity
+      let max = -Infinity
+      for (let i = 0; i < sourcePositions.length; i += 3) {
+        min = Math.min(min, sourcePositions[i])
+        max = Math.max(max, sourcePositions[i])
+      }
+      // The fixture's longest axis is X, which is what Draco quantizes over.
+      positionRange = max - min
+    }, TIMEOUT_MS)
+
+    it('switches Meshopt from QUANTIZE to FILTER off the rung, and Best keeps QUANTIZE', async () => {
+      // The single biggest win in #1848 — −39.1% on the Momentum fixture —
+      // and a one-enum change, so it is worth an assertion that cannot pass
+      // by accident. The evidence is in the FILE: FILTER rewrites NORMAL
+      // octahedrally as normalized BYTE (componentType 5120) and stamps the
+      // bufferView with the filter it used, where QUANTIZE leaves the float
+      // accessor alone.
+      const best = await compressExportGlb(source, COMPRESSION_MESHOPT, QUALITY_BEST)
+      const balanced = await compressExportGlb(source, COMPRESSION_MESHOPT, QUALITY_BALANCED)
+
+      expect(meshoptFiltersOf(best.withoutMetadata)).toEqual([])
+      expect(normalComponentTypeOf(best.withoutMetadata)).toBe(FLOAT_COMPONENT_TYPE)
+
+      expect(meshoptFiltersOf(balanced.withoutMetadata)).toEqual(['OCTAHEDRAL'])
+      expect(normalComponentTypeOf(balanced.withoutMetadata)).toBe(BYTE_COMPONENT_TYPE)
+      // …and it is worth real bytes even on a fixture this small. The one
+      // byte ordering in this describe that IS asserted, and the exception the
+      // preamble above allows for: FILTER rewrites every NORMAL from three
+      // float32s to four normalized bytes, so on a fixture with normals the
+      // octahedral file is smaller by construction rather than by measurement.
+      expect(balanced.withoutMetadata.byteLength).toBeLessThan(best.withoutMetadata.byteLength)
+    }, TIMEOUT_MS)
+
+    it('leaves Meshopt positions bit-exact at every rung', async () => {
+      // The claim the caption makes ("geometry exact"): FILTER's octahedral
+      // pass is only ever applied to NORMAL/TANGENT, so POSITION comes back
+      // byte for byte however hard the rung squeezes.
+      for (const quality of [QUALITY_BEST, QUALITY_BALANCED, QUALITY_SMALLEST]) {
+        const out = await compressExportGlb(source, COMPRESSION_MESHOPT, quality)
+        expect(await positionsOf(out.withoutMetadata, COMPRESSION_MESHOPT)).toEqual(sourcePositions)
+      }
+    }, TIMEOUT_MS)
+
+    it('gives Meshopt Balanced\'s file at every rung below it, which is why the caption says so', async () => {
+      // The finding behind `isDracoOnlyRung` (#1852), asserted on the BYTES
+      // rather than on the table: `EXTMeshoptCompression`'s encoder surface in
+      // the pinned 4.3.0 is `{method}` with two values, and Balanced already
+      // spends the coarser one — so Reduced re-encodes to Balanced's file
+      // exactly. A future rung that found a real Meshopt lever would turn this
+      // red, which is the point: the caption claiming "Meshopt has no coarser
+      // setting" would have become false.
+      const balanced = await compressExportGlb(source, COMPRESSION_MESHOPT, QUALITY_BALANCED)
+      const out = await compressExportGlb(source, COMPRESSION_MESHOPT, QUALITY_SMALLEST)
+      expect([...out.withoutMetadata]).toEqual([...balanced.withoutMetadata])
+      // …and the control that makes the loop an assertion rather than a
+      // tautology: Best asks for QUANTIZE and really is a different file.
+      const best = await compressExportGlb(source, COMPRESSION_MESHOPT, QUALITY_BEST)
+      expect([...best.withoutMetadata]).not.toEqual([...balanced.withoutMetadata])
+    }, TIMEOUT_MS)
+
+    it('sets both Draco speeds, changing the file without moving a vertex', async () => {
+      // The A2 pair, shown where it can actually be seen: same POSITION bits,
+      // so the decoded geometry is identical to the last float — and a
+      // different encoded payload, which is only possible if the speed
+      // settings reached Draco. Either speed alone measured a 0.0% change on
+      // the Momentum fixture, so "the encode changed" is precisely the signal
+      // that the PAIR was applied.
+      // EDGEBREAKER, i.e. the batched-native default: the speed pair is the
+      // measured win there (−8.6% on Momentum) and measured a wash under
+      // SEQUENTIAL, so this is where the setting has an effect to observe.
+      const best = await compressExportGlb(source, COMPRESSION_DRACO, QUALITY_BEST)
+      const balanced = await compressExportGlb(source, COMPRESSION_DRACO, QUALITY_BALANCED)
+
+      expect(dracoByteLength(balanced.withoutMetadata))
+        .not.toBe(dracoByteLength(best.withoutMetadata))
+      // Same POSITION bits, so the same quantization grid and the same set of
+      // points — sorted, because EDGEBREAKER need not lay them out in the
+      // same order twice.
+      expect(sortedPositions(await positionsOf(balanced.withoutMetadata, COMPRESSION_DRACO)))
+        .toEqual(sortedPositions(await positionsOf(best.withoutMetadata, COMPRESSION_DRACO)))
+    }, TIMEOUT_MS)
+
+    it('spends POSITION bits on the coarse rung, within the figure it quotes', async () => {
+      // The other half of the caption's promise: the coarse rung really moves
+      // vertices further than Best, and neither moves one further than
+      // `maxPositionShift` says. Sequential, so the decode comes back vertex
+      // for vertex — this fixture's positions are all distinct, so DRACO's
+      // deduplication has nothing to merge.
+      const ordered = withBldrsPayload(source, 'BLDRS_face_ids')
+      const best = await compressExportGlb(ordered, COMPRESSION_DRACO, QUALITY_BEST)
+      const smallest = await compressExportGlb(ordered, COMPRESSION_DRACO, QUALITY_SMALLEST)
+
+      const bestPositions = await positionsOf(best.withoutMetadata, COMPRESSION_DRACO)
+      const smallestPositions = await positionsOf(smallest.withoutMetadata, COMPRESSION_DRACO)
+      expect(bestPositions.length).toBe(sourcePositions.length)
+      expect(smallestPositions.length).toBe(sourcePositions.length)
+
+      const bestShift = maxVertexShift(sourcePositions, bestPositions)
+      const smallestShift = maxVertexShift(sourcePositions, smallestPositions)
+      expect(smallestShift).toBeGreaterThan(bestShift)
+      expect(bestShift).toBeLessThanOrEqual(maxPositionShift(QUALITY_BEST, positionRange))
+      expect(smallestShift).toBeLessThanOrEqual(maxPositionShift(QUALITY_SMALLEST, positionRange))
+    }, TIMEOUT_MS)
+
+    it('brings Uint32 per-vertex ids back exactly, at the coarsest rung', async () => {
+      // Hazard A2's safety property, which nothing else asserts. `_EXPRESSID`
+      // and `_INSTANCEID` fall into Draco's GENERIC bucket, and no rung names
+      // GENERIC — but `quantizationBits` MERGES with `@gltf-transform`'s
+      // defaults (`khr-draco-mesh-compression/encoder.ts#encodeGeometry`), so
+      // every rung inherits its pinned `GENERIC: 12`. Twelve bits cannot hold
+      // a six-digit express id, and the only reason that is harmless is the
+      // attribute's TYPE: Share writes ids as `Uint32Array`
+      // (`viewer/ifc/batchedToMergedMesh.js`, `flatMeshToBufferGeometry.js`,
+      // `batchedSubset.js`) and three's `GLTFExporter` exempts `_`-prefixed
+      // attributes from its Uint32→FLOAT coercion, so they take Draco's
+      // integer path where quantization bits are ignored.
+      //
+      // The coarsest rung, because it is the one whose POSITION/NORMAL bits
+      // are lowest and so the one where a bits-are-applied-to-ids regression
+      // would be loudest. SEQUENTIAL via `BLDRS_face_ids`, so the ids come
+      // back index for index.
+      const ordered = withBldrsPayload(
+        await geometryGlb({withPerVertexIds: true}), 'BLDRS_face_ids')
+      const sourceIds = await attributeOf(ordered, '_EXPRESSID')
+
+      const out = await compressExportGlb(ordered, COMPRESSION_DRACO, QUALITY_SMALLEST)
+      const decodedIds = await attributeOf(out.withoutMetadata, '_EXPRESSID', COMPRESSION_DRACO)
+
+      expect(sourceIds).toBeInstanceOf(Uint32Array)
+      expect(decodedIds.length).toBe(sourceIds.length)
+      expect([...decodedIds]).toEqual([...sourceIds])
+
+      // …and the control that makes the line above an assertion rather than a
+      // hope: the SAME ids typed float, which is what an id attribute becomes
+      // if it ever loses the `_` prefix or the exemption, do NOT survive. The
+      // measured damage on this shape is 594 of 600 ids wrong
+      // (`100007` → `100007.1640625`), so "some id moved" is a floor, not a
+      // knife edge.
+      const asFloat = withBldrsPayload(
+        await geometryGlb({withPerVertexIds: true, areIdsFloat: true}), 'BLDRS_face_ids')
+      const floatOut = await compressExportGlb(asFloat, COMPRESSION_DRACO, QUALITY_SMALLEST)
+      const floatIds = await attributeOf(floatOut.withoutMetadata, '_EXPRESSID', COMPRESSION_DRACO)
+
+      expect(floatIds).toBeInstanceOf(Float32Array)
+      expect([...floatIds]).not.toEqual([...await attributeOf(asFloat, '_EXPRESSID')])
+    }, TIMEOUT_MS)
+
+    it('keeps the Draco method derived from the layout at every rung', async () => {
+      // The one option quality may not touch, asserted on the PROPERTY the
+      // choice exists for rather than on a byte count: with `BLDRS_face_ids`
+      // present, every vertex must come back at the index it went in at, to
+      // within the rung's own quantization. That is what SEQUENTIAL buys and
+      // what per-triangle identity depends on — a rung that reached for
+      // EDGEBREAKER for the better ratio would silently break re-import
+      // picking.
+      for (const quality of [QUALITY_BEST, QUALITY_BALANCED, QUALITY_SMALLEST]) {
+        const ordered = await compressExportGlb(
+          withBldrsPayload(source, 'BLDRS_face_ids'), COMPRESSION_DRACO, quality)
+
+        const decoded = await positionsOf(ordered.withoutMetadata, COMPRESSION_DRACO)
+        expect(decoded.length).toBe(sourcePositions.length)
+        expect(maxVertexShift(sourcePositions, decoded))
+          .toBeLessThanOrEqual(maxPositionShift(quality, positionRange))
+      }
+
+      // …and the same geometry WITHOUT that payload does not come back in
+      // order, which is what makes the loop above an assertion rather than a
+      // tautology.
+      const free = await compressExportGlb(source, COMPRESSION_DRACO, QUALITY_BEST)
+      const freePositions = await positionsOf(free.withoutMetadata, COMPRESSION_DRACO)
+      expect(maxVertexShift(sourcePositions, freePositions))
+        .toBeGreaterThan(maxPositionShift(QUALITY_BEST, positionRange))
+    }, TIMEOUT_MS)
+  })
+
+  describe('compressionFidelityCaption', () => {
+    // The sentence under the size line. It is a promise about the user's own
+    // model, so it is derived from that model's bounds — and it says two
+    // different things because the codecs degrade in two different places.
+    it('quotes Draco in millimetres off the artifact\'s own bounds', () => {
+      expect(compressionFidelityCaption(COMPRESSION_DRACO, QUALITY_BEST, MOMENTUM_RANGE_M))
+        .toBe('parts may move up to 1.2 mm; shading normals rounded')
+      // The coarsest rung the ladder has left, and it is still single-digit
+      // millimetres on this model — which is what let #1854 drop the two that
+      // printed 19 mm and 75 mm without leaving a gap a user would miss.
+      expect(compressionFidelityCaption(COMPRESSION_DRACO, QUALITY_SMALLEST, MOMENTUM_RANGE_M))
+        .toBe('parts may move up to 4.7 mm; shading normals rounded')
+    })
+
+    it('says what Meshopt actually costs, which is not a distance', () => {
+      expect(compressionFidelityCaption(COMPRESSION_MESHOPT, QUALITY_BEST, MOMENTUM_RANGE_M))
+        .toBe('geometry and shading normals exact')
+      expect(compressionFidelityCaption(COMPRESSION_MESHOPT, QUALITY_BALANCED, MOMENTUM_RANGE_M))
+        .toBe('geometry exact; shading normals rounded')
+    })
+
+    it('admits it when the rung the user picked cannot reach Meshopt', () => {
+      // Reduced re-encodes to Balanced's Meshopt file (the byte assertion is
+      // above), so a caption that read the same as Balanced's would leave an
+      // unmoving size line unexplained beside an option promising "small"
+      // (#1852).
+      expect(compressionFidelityCaption(COMPRESSION_MESHOPT, QUALITY_SMALLEST, MOMENTUM_RANGE_M))
+        .toBe('geometry exact; shading normals rounded — Meshopt has no coarser setting')
+    })
+
+    it('has nothing to say with no codec, and no figure with no bounds', () => {
+      expect(compressionFidelityCaption(COMPRESSION_NONE, QUALITY_SMALLEST, MOMENTUM_RANGE_M)).toBeNull()
+      expect(compressionFidelityCaption(COMPRESSION_DRACO, QUALITY_SMALLEST, null))
+        .toBe('positions quantized; shading normals rounded')
+    })
   })
 
   describe('a source the cache pipeline already compressed', () => {

@@ -405,6 +405,53 @@ describe('pro/glbExport', () => {
       expect(stats.compression).toBe('meshopt')
     })
 
+    it('names the file .glb.gz only when the hook says it gzipped', async () => {
+      // The `.gz` is read off what the hook DID. Gzip happens in the host —
+      // `CompressionStream` is a browser global this module could call, but
+      // every other rewrite is the host's and keeping this one there is what
+      // lets the panel's figure and the download be the same computation
+      // (#1854).
+      const {container} = cachedArtifact()
+      const compress = jest.fn().mockResolvedValue({
+        bytes: COMPRESSED,
+        withMetadataBytes: 120,
+        withoutMetadataBytes: 48,
+        strippedExtensions: [],
+        mode: 'meshopt',
+        isGzipped: true,
+      })
+
+      const {blob, filename, stats} = await exportArtifact(
+        {bytes: container, options: {sourceBasename: 'index.ifc', compression: 'meshopt', gzip: true}, compress})
+
+      expect(filename).toBe('index.glb.gz')
+      expect(blob.type).toBe('application/gzip')
+      expect(stats.gzip).toBe(true)
+    })
+
+    it('leaves the name a plain .glb when the hook could not gzip', async () => {
+      // The falsifying half, and the failure this option must not have: the
+      // OPTIONS ask for gzip and the hook reports it did not, so the file is
+      // plain bytes and must not be named as an archive. A browser without
+      // `CompressionStream` is exactly this case (`useExport.js`).
+      const {container} = cachedArtifact()
+      const compress = jest.fn().mockResolvedValue({
+        bytes: COMPRESSED,
+        withMetadataBytes: 120,
+        withoutMetadataBytes: 48,
+        strippedExtensions: [],
+        mode: 'meshopt',
+        isGzipped: false,
+      })
+
+      const {blob, filename, stats} = await exportArtifact(
+        {bytes: container, options: {sourceBasename: 'index.ifc', compression: 'meshopt', gzip: true}, compress})
+
+      expect(filename).toBe('index.glb')
+      expect(blob.type).toBe('model/gltf-binary')
+      expect(stats.gzip).toBe(false)
+    })
+
     it('reports the codec the hook APPLIED, not the one that was asked for', async () => {
       // An encoder that could not load hands back the uncompressed file
       // (`export/glbCompression.js`); the history row and the analytics event
@@ -568,6 +615,16 @@ describe('pro/glbExport', () => {
     it('has a default for a model with neither', () => {
       expect(exportFilename()).toBe('model.glb')
       expect(exportFilename({title: '   '})).toBe('model.glb')
+    })
+
+    it('adds .gz rather than replacing .glb', () => {
+      // Both extensions: `.glb.gz` is what a web server would serve and what
+      // an unarchiver expects, and keeping `.glb` in the middle is what says
+      // what is inside. It also means the sanitiser above still runs over the
+      // same name — the `.gz` is appended after it, not fed through it.
+      expect(exportFilename({sourceBasename: 'index.ifc'}, true)).toBe('index.glb.gz')
+      expect(exportFilename({title: 'Bldrs Plaza: Level 2'}, true)).toBe('Bldrs_Plaza_Level_2.glb.gz')
+      expect(exportFilename({sourceBasename: 'index.ifc'}, false)).toBe('index.glb')
     })
   })
 
