@@ -1,8 +1,16 @@
+import {CompressionStream as NodeCompressionStream} from 'node:stream/web'
 import {captureException} from '@sentry/react'
 import {packGlbChunks} from '../loader/glbContainer'
 import {serializeGlb} from '../loader/injectGlbExtensions'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
-import {artifactSizes, compressedExport} from './artifactSizes'
+import {
+  artifactPositionRange,
+  artifactSizes,
+  compressedExport,
+  gzippedExport,
+  releaseCompressedExport,
+  retainOnlyCompressedExports,
+} from './artifactSizes'
 import {compressExportGlb} from './glbCompression'
 import {rewriteGlbPortable} from './glbPortable'
 
@@ -155,7 +163,7 @@ describe('artifactSizes', () => {
       const sizes = await artifactSizes({...ARTIFACT}, 'meshopt')
 
       expect(sizes).toEqual({withMetadata: 300, withoutMetadata: 120, metadataBytes: 180, compression: 'meshopt'})
-      expect(compressExportGlb).toHaveBeenCalledWith(expect.any(Uint8Array), 'meshopt')
+      expect(compressExportGlb).toHaveBeenCalledWith(expect.any(Uint8Array), 'meshopt', 'balanced')
     })
 
     it('says which codec the figure is for, which is none when the encoder fell back', async () => {
@@ -193,7 +201,7 @@ describe('artifactSizes', () => {
       await artifactSizes(artifact, 'draco')
 
       expect(compressExportGlb).toHaveBeenCalledTimes(2)
-      expect(compressExportGlb).toHaveBeenLastCalledWith(expect.any(Uint8Array), 'draco')
+      expect(compressExportGlb).toHaveBeenLastCalledWith(expect.any(Uint8Array), 'draco', 'balanced')
     })
 
     it('uses the bytes the caller already has rather than re-reading OPFS', async () => {
@@ -205,7 +213,7 @@ describe('artifactSizes', () => {
       await compressedExport({...ARTIFACT}, 'draco', glb)
 
       expect(readModelByPathFromOPFS).not.toHaveBeenCalled()
-      expect(compressExportGlb).toHaveBeenCalledWith(glb, 'draco')
+      expect(compressExportGlb).toHaveBeenCalledWith(glb, 'draco', 'balanced')
     })
 
     it('reports a failed encode and shows no size', async () => {
@@ -257,7 +265,7 @@ describe('artifactSizes', () => {
 
       await artifactSizes({...ARTIFACT}, 'meshopt', true)
 
-      expect(compressExportGlb).toHaveBeenCalledWith(PORTABLE_BYTES, 'meshopt')
+      expect(compressExportGlb).toHaveBeenCalledWith(PORTABLE_BYTES, 'meshopt', 'balanced')
     })
 
     it('keeps portable and native apart in the cache at the same codec', async () => {
@@ -283,6 +291,324 @@ describe('artifactSizes', () => {
       await artifactSizes({...ARTIFACT}, 'none', false)
 
       expect(rewriteGlbPortable).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('with a Quality rung chosen (#1848)', () => {
+    const COMPRESSED = {
+      withMetadata: new Uint8Array(300),
+      withoutMetadata: new Uint8Array(120),
+      strippedExtensions: [],
+      mode: 'draco',
+    }
+
+    beforeEach(() => {
+      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+      compressExportGlb.mockResolvedValue(COMPRESSED)
+    })
+
+    it('carries the rung to the encoder, defaulting to Balanced', async () => {
+      await artifactSizes({...ARTIFACT}, 'draco', false, 'smallest')
+      expect(compressExportGlb).toHaveBeenLastCalledWith(expect.any(Uint8Array), 'draco', 'smallest')
+
+      await artifactSizes({...ARTIFACT}, 'draco')
+      expect(compressExportGlb).toHaveBeenLastCalledWith(expect.any(Uint8Array), 'draco', 'balanced')
+    })
+
+    it('keeps two rungs apart in the cache at the same codec', async () => {
+      // They are different FILES — different POSITION bits, different encoder
+      // settings — so a shared cell would quote one and hand the export the
+      // other, which is the exact failure the portable/native split closed.
+      const artifact = {...ARTIFACT}
+
+      await artifactSizes(artifact, 'draco', false, 'best')
+      await artifactSizes(artifact, 'draco', false, 'smallest')
+      await artifactSizes(artifact, 'draco', false, 'smallest')
+
+      expect(compressExportGlb).toHaveBeenCalledTimes(2)
+    })
+
+    it('does not split the uncompressed cell, where no encoder runs', async () => {
+      // Quality is an encoder setting and nothing else reads it. Folding it
+      // into the key unconditionally would read the header three times for
+      // one number — and with Portable on, run the whole artifact rewrite
+      // once per rung for three identical files.
+      const artifact = {...ARTIFACT}
+
+      await artifactSizes(artifact, 'none', false, 'best')
+      await artifactSizes(artifact, 'none', false, 'smallest')
+
+      expect(readModelByPathFromOPFS).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not split the portable-without-codec cell either', async () => {
+      rewriteGlbPortable.mockReturnValue({bytes: cachedGlb(), isChanged: true, stats: {}})
+      const artifact = {...ARTIFACT}
+
+      await artifactSizes(artifact, 'none', true, 'best')
+      await artifactSizes(artifact, 'none', true, 'smallest')
+
+      expect(rewriteGlbPortable).toHaveBeenCalledTimes(1)
+      expect(compressExportGlb).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('releasing a measured codec (#1850)', () => {
+    const COMPRESSED = {
+      withMetadata: new Uint8Array(300),
+      withoutMetadata: new Uint8Array(120),
+      strippedExtensions: [],
+      mode: 'draco',
+    }
+
+    beforeEach(() => {
+      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+      compressExportGlb.mockResolvedValue(COMPRESSED)
+    })
+
+    it('drops the bytes of exactly the cell it names', async () => {
+      // The background sweep measures every codec, and each cell holds two
+      // whole copies of the export. Without a release, opening the tab would
+      // leave three codecs' worth resident beside the source.
+      const artifact = {...ARTIFACT}
+      await artifactSizes(artifact, 'draco', false, 'best')
+      await artifactSizes(artifact, 'meshopt', false, 'best')
+      expect(compressExportGlb).toHaveBeenCalledTimes(2)
+
+      releaseCompressedExport(artifact, 'draco', false, 'best')
+
+      // Draco has to be encoded again; Meshopt is still in hand.
+      await artifactSizes(artifact, 'meshopt', false, 'best')
+      expect(compressExportGlb).toHaveBeenCalledTimes(2)
+      await artifactSizes(artifact, 'draco', false, 'best')
+      expect(compressExportGlb).toHaveBeenCalledTimes(3)
+    })
+
+    it('is harmless on an artifact that never had a cell', () => {
+      // The sweep releases whatever it measured, including a codec whose
+      // encode failed and left nothing behind.
+      expect(() => releaseCompressedExport({...ARTIFACT}, 'draco')).not.toThrow()
+    })
+  })
+
+  describe('reconciling what stays resident (#1852 review)', () => {
+    const COMPRESSED = {
+      withMetadata: new Uint8Array(300),
+      withoutMetadata: new Uint8Array(120),
+      strippedExtensions: [],
+      mode: 'draco',
+    }
+
+    beforeEach(() => {
+      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+      compressExportGlb.mockResolvedValue(COMPRESSED)
+      rewriteGlbPortable.mockReturnValue({bytes: cachedGlb(), isChanged: true, stats: {}})
+    })
+
+    it('keeps the cells it is given and drops the rest, whatever axis they differ on', async () => {
+      // The whole retention policy in one statement. It replaces a per-rung
+      // eviction that had to enumerate the codec × Portable product and know
+      // which keys carry a rung at all: here the inner map is walked, so a
+      // cell left over from any axis — another rung, the other Portable
+      // setting, a codec nobody selected — goes because it was not named.
+      const artifact = {...ARTIFACT}
+      for (const isPortable of [false, true]) {
+        for (const quality of ['best', 'smallest']) {
+          await artifactSizes(artifact, 'draco', isPortable, quality)
+        }
+      }
+      // Portable-with-no-codec carries no rung in its key at all, and is a
+      // rewrite rather than an encode — the cell the rung-shaped eviction had
+      // to be told to leave alone.
+      await artifactSizes(artifact, 'none', true, 'best')
+      expect(compressExportGlb).toHaveBeenCalledTimes(4)
+      expect(rewriteGlbPortable).toHaveBeenCalledTimes(3)
+
+      retainOnlyCompressedExports(artifact, [{mode: 'draco', isPortable: false, quality: 'best'}])
+
+      await artifactSizes(artifact, 'draco', false, 'best')
+      expect(compressExportGlb).toHaveBeenCalledTimes(4)
+      await artifactSizes(artifact, 'draco', false, 'smallest')
+      await artifactSizes(artifact, 'draco', true, 'best')
+      await artifactSizes(artifact, 'draco', true, 'smallest')
+      expect(compressExportGlb).toHaveBeenCalledTimes(7)
+      await artifactSizes(artifact, 'none', true, 'best')
+      expect(rewriteGlbPortable).toHaveBeenCalledTimes(6)
+    })
+
+    it('keeps nothing when given nothing, which is the panel going away', async () => {
+      // Nothing outside the Export tab reads an estimate cell — reopening it
+      // re-runs the whole codec axis — so a cell held past unmount is two
+      // copies of the model on an artifact the store keeps for the session.
+      const artifact = {...ARTIFACT}
+      await artifactSizes(artifact, 'draco', false, 'best')
+      expect(compressExportGlb).toHaveBeenCalledTimes(1)
+
+      retainOnlyCompressedExports(artifact, [])
+
+      await artifactSizes(artifact, 'draco', false, 'best')
+      expect(compressExportGlb).toHaveBeenCalledTimes(2)
+    })
+
+    it('says the same thing twice without taking anything the second time', async () => {
+      // The property the claim-and-release design could not have, and the
+      // reason this is a reconcile: a superseded sweep finishing late makes
+      // the panel state the same set again, and stating it again has to be a
+      // no-op rather than a second release of a cell that is being displayed.
+      const artifact = {...ARTIFACT}
+      await artifactSizes(artifact, 'draco', false, 'best')
+      const keep = [{mode: 'draco', isPortable: false, quality: 'best'}]
+
+      retainOnlyCompressedExports(artifact, keep)
+      retainOnlyCompressedExports(artifact, keep)
+
+      await artifactSizes(artifact, 'draco', false, 'best')
+      expect(compressExportGlb).toHaveBeenCalledTimes(1)
+    })
+
+    it('leaves the header read alone — two numbers, not a copy of the file', async () => {
+      // Only the BYTES cache is reconciled. The uncompressed sizes are kept
+      // for as long as the artifact is, so reopening the tab on the same
+      // model does not go back to OPFS for them (module doc).
+      const artifact = {...ARTIFACT}
+      await artifactSizes(artifact)
+      await artifactSizes(artifact, 'draco', false, 'best')
+      readModelByPathFromOPFS.mockClear()
+
+      retainOnlyCompressedExports(artifact, [])
+
+      await artifactSizes(artifact)
+      expect(readModelByPathFromOPFS).not.toHaveBeenCalled()
+      // …and the compressed cell really did go, or the line above proves
+      // nothing about which map was spared.
+      await artifactSizes(artifact, 'draco', false, 'best')
+      expect(readModelByPathFromOPFS).toHaveBeenCalledTimes(1)
+    })
+
+    it('is harmless on an artifact that never had a cell', () => {
+      expect(() => retainOnlyCompressedExports({...ARTIFACT}, [])).not.toThrow()
+      expect(() => retainOnlyCompressedExports(
+        null, [{mode: 'draco', isPortable: false, quality: 'best'}])).not.toThrow()
+    })
+  })
+
+  describe('with the download gzipped (#1854)', () => {
+    // The real `CompressionStream`, planted the way `glbGzip.test.js` plants
+    // it: the figures this describes are byte lengths of an actual gzip
+    // member, so a stub returning a made-up number would test nothing about
+    // the invariant that the displayed size IS the downloaded size.
+    //
+    // Compressible bytes, deliberately: the codec mock hands back
+    // `Uint8Array(300)` of zeros, which gzips to ~30 B, so "gzip moved the
+    // figure" is unmistakable rather than a rounding difference.
+    const COMPRESSED = {
+      withMetadata: new Uint8Array(300),
+      withoutMetadata: new Uint8Array(120),
+      strippedExtensions: ['BLDRS_spatial_tree'],
+      mode: 'meshopt',
+    }
+
+    beforeEach(() => {
+      global.CompressionStream = NodeCompressionStream
+      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+      compressExportGlb.mockResolvedValue(COMPRESSED)
+    })
+
+    afterEach(() => {
+      delete global.CompressionStream
+    })
+
+    it('reports the gzipped lengths, which is what the browser saves', async () => {
+      const raw = await artifactSizes({...ARTIFACT}, 'meshopt')
+      const gzipped = await artifactSizes({...ARTIFACT}, 'meshopt', false, 'balanced', true)
+
+      expect(gzipped.withMetadata).toBeLessThan(raw.withMetadata)
+      expect(gzipped.withoutMetadata).toBeLessThan(raw.withoutMetadata)
+      // Both sides, from one run, because the metadata toggle is not a
+      // re-estimate axis anywhere else in this panel and gzip must not make
+      // it one.
+      expect(gzipped.metadataBytes).toBe(gzipped.withMetadata - gzipped.withoutMetadata)
+      expect(gzipped.compression).toBe('meshopt')
+    })
+
+    it('runs the whole-file path at codec none, which the header read cannot', async () => {
+      // The one selection that was free — native, no codec — stops being
+      // free: there is nothing to gzip without the file. The panel's
+      // "Estimating…" hangs off exactly this (`ExportSection.jsx`).
+      const plain = await artifactSizes({...ARTIFACT}, 'none', false, 'balanced', false)
+      expect(compressExportGlb).not.toHaveBeenCalled()
+
+      const gzipped = await artifactSizes({...ARTIFACT}, 'none', false, 'balanced', true)
+
+      expect(gzipped.withMetadata).toBeLessThan(plain.withMetadata)
+      expect(gzipped.withMetadata).toBeGreaterThan(0)
+    })
+
+    it('adds no axis to the cache that holds the file, and gzips once', async () => {
+      // The #1852 review's finding, honoured rather than repeated: the key
+      // space was already the problem, so gzip caches two INTEGERS under the
+      // SAME key and never a third copy of the export. Asking for both
+      // shapes therefore runs the encoder once, and asking twice for the
+      // gzipped one re-gzips nothing.
+      const artifact = {...ARTIFACT}
+
+      await artifactSizes(artifact, 'meshopt', false, 'balanced', false)
+      const first = await artifactSizes(artifact, 'meshopt', false, 'balanced', true)
+      const second = await artifactSizes(artifact, 'meshopt', false, 'balanced', true)
+
+      expect(compressExportGlb).toHaveBeenCalledTimes(1)
+      expect(second).toBe(first)
+    })
+
+    it('hands the export gzipped bytes whose length is the figure it quoted', async () => {
+      // The panel's whole contract, at the seam where it could break: the
+      // figure came from the measuring gzip and the bytes from a second one,
+      // so this is where non-determinism would show up as a file that does
+      // not weigh what the user was told.
+      const artifact = {...ARTIFACT}
+      const quoted = await artifactSizes(artifact, 'meshopt', false, 'balanced', true)
+
+      const forDownload = await gzippedExport(artifact, 'meshopt', null, false, 'balanced', false)
+
+      expect(forDownload.bytes.byteLength).toBe(quoted.withMetadata)
+      expect(forDownload.withMetadataBytes).toBe(quoted.withMetadata)
+      expect(forDownload.withoutMetadataBytes).toBe(quoted.withoutMetadata)
+      // …and the other side of the toggle is the other figure, not the same
+      // bytes under a different name.
+      const stripped = await gzippedExport(artifact, 'meshopt', null, false, 'balanced', true)
+      expect(stripped.bytes.byteLength).toBe(quoted.withoutMetadata)
+      expect(stripped.strippedExtensions).toEqual(['BLDRS_spatial_tree'])
+      expect(stripped.mode).toBe('meshopt')
+    })
+
+    it('has nothing to hand over when the encode failed', async () => {
+      compressExportGlb.mockRejectedValue(new Error('encoder unavailable'))
+
+      expect(await artifactSizes({...ARTIFACT}, 'draco', false, 'balanced', true)).toBeNull()
+      expect(await gzippedExport({...ARTIFACT}, 'draco', null, false, 'balanced', false)).toBeNull()
+    })
+  })
+
+
+  describe('artifactPositionRange', () => {
+    it('rides on the header read the size line already made', async () => {
+      // A property of the ARTIFACT, not of a selection: the caption needs it,
+      // and paying a second OPFS read for a number already parsed out of the
+      // same JSON chunk would undo the point of the cheap path.
+      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+      const artifact = {...ARTIFACT}
+
+      await artifactSizes(artifact)
+      const range = await artifactPositionRange(artifact)
+
+      expect(readModelByPathFromOPFS).toHaveBeenCalledTimes(1)
+      // The fixture's POSITION accessor declares no bounds, which is the
+      // "show no figure" case.
+      expect(range).toBeNull()
+    })
+
+    it('has nothing to give before the loader publishes an artifact', async () => {
+      expect(await artifactPositionRange(null)).toBeNull()
     })
   })
 })

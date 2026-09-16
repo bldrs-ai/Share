@@ -341,7 +341,258 @@ Two cases the first cut got wrong (#1837 codex round 6):
   is not the target, or the write would run both encoders over the same
   primitives.
 
-**Portable** (#1843) is the third option, and like compression it is a host
+**Quality** (#1848) is the second half of the compression option, and the
+whole of `export/exportQuality.js`. Through #1842 the export set exactly ONE
+encoder option per codec — Draco's `method`, Meshopt's `method` — and took
+`@gltf-transform` 4.3.0's defaults for everything else. Three named rungs now
+say what else to ask for. Presets rather than bit counts, because the bit
+count means nothing to a CAD user and the two codecs' knobs do not line up: a
+shared "12 bits" would be two different things and, for Meshopt, nothing at
+all.
+
+| Quality | Draco | Meshopt |
+|---|---|---|
+| **Best (larger)** | today's defaults: `POSITION:14 NORMAL:10`, speeds 5 | `QUANTIZE` — entirely lossless |
+| **Balanced (medium)** *(default)* | same bits + `encodeSpeed:0 decodeSpeed:0` | `FILTER` |
+| **Reduced (small)** *(id `smallest`)* | `POSITION:12 NORMAL:8` + speeds 0 | `FILTER` — unchanged from Balanced |
+
+Measured on `src/tests/fixtures/Momentum.ifc` → GLB (1,959,196 B, 43
+primitives), reproduced against the pinned encoders: Meshopt `QUANTIZE`
+1,347,740 B → `FILTER` 820,912 B (**−39.1%**); Draco EDGEBREAKER 250,184 B →
+speeds 0 228,652 B (**−8.6%**) → Reduced 194,932 B (**−22.1%**).
+
+**Three rungs, not the five #1852 shipped** (#1854). `squashed`
+(`POSITION:10 NORMAL:6`) and `smooshed` (`POSITION:8 NORMAL:4`) were added on
+the strength of those Momentum figures — −34.2% and −46.1% — and removed again
+after the owner smoke-tested the ladder on **Snowdon** (Autodesk's large IFC
+demo, 83.2 MB `.ifc` → 63.7 MB uncompressed GLB), which is the model class
+this feature is sold on:
+
+| | Best | Balanced | Reduced | Squashed | Smooshed |
+|---|---|---|---|---|---|
+| Meshopt | 49.5 | 38.7 | 38.7 | 38.7 | 38.7 MB |
+| Draco | 25.1 | 24.5 | 23.9 | 23.0 | 22.0 MB |
+
+The whole Draco ladder is **−12.4%** there against −46.1% on the fixture it
+was tuned on, with visible artifacts at the coarsest rung; Meshopt is flat
+across four rungs exactly as `isDracoOnlyRung` says. Two lossy rungs buying
+8% between them, for damage the user can see, is not a trade worth offering.
+The sweep tables stay in `exportQuality.js`'s module doc rather than being
+deleted with the rungs: they are the evidence for where the ladder now ends
+and for why P7 N3 was never offered, and without them the next person
+re-derives a coarser rung and re-learns this.
+
+**Why the ladder was always going to be worth so little there**, which is the
+finding that matters more than the two rungs. With metadata off that 22.0 MB
+Draco file is 16.7 MB, and bzip2 of it is **2.8 MB — 6×**. Draco output is
+entropy-coded and near-incompressible; measured per chunk on real batched
+exports, the JSON chunk gzips 7.5–9.8×, the `BLDRS_*` payloads 1.0× (already
+gzipped internally) and the Draco streams ~1×. A 6× whole-file ratio therefore
+means almost none of the file IS Draco output — solving `D + R = 16.7`,
+`D + R/10 = 2.8` gives **≈1.3 MB of compressed geometry against ≈15.4 MB of
+container**: the glTF JSON node graph plus raw float32 instance transforms
+(40 B each) that `EXT_mesh_gpu_instancing` puts permanently out of Draco's
+reach. Every rung was tuning that 1.3 MB slice. The container is what the
+gzipped download below goes after losslessly, and what #1853 goes after
+structurally.
+
+Four things about that table are load-bearing:
+
+- **`FILTER` is the default, not a rung you have to find.** It is the largest
+  single win in the issue and its cost is narrow and knowable: positions come
+  back **bit-exact** (0.000000 mm over all 60,608 vertices, through a decode
+  round trip), and only `NORMAL`/`TANGENT` are touched — rewritten
+  octahedrally as normalized `BYTE`, ≤1.155°. A shading normal a degree out is
+  invisible in a renderer and means nothing to a measurement. Best still
+  reaches `QUANTIZE`, because a QA round trip that must be bit-exact in every
+  attribute needs a rung that guarantees it.
+- **Both Draco speeds or neither.** `encodeSpeed: 0` alone and
+  `decodeSpeed: 0` alone each measured exactly 0.0% — 250,184 B either way —
+  and only the pair reaches −8.6%.
+- **The rungs are a FIDELITY ladder, not a size one, and the UI never claims
+  otherwise.** The speed pair's payoff is model-shaped: −8.6% on Momentum
+  under EDGEBREAKER (which is what the batched-native default takes) and
+  −6.0% on `public/index.ifc`, but **+0.5%** on the same Momentum file under
+  SEQUENTIAL and +2.4% on an instance-heavy synthetic. Nothing promises any
+  rung weighs less than the one above it; the size line shows the real measured figure
+  for whatever is selected, which is what the user actually needs. That is
+  also why the coarse rung is **labelled** "Reduced (small)" and never
+  "Smallest", under a sub-caption reading "how much detail to keep": a
+  superlative about bytes on the control would be exactly the promise this
+  bullet says the table cannot make. Its *id* stays `smallest` — it is written into
+  export-history rows and estimate cache keys, and renaming it would break
+  rows already recorded. The owner chose the parentheticals knowing
+  that: **larger / medium / small is a hint, not a guarantee**, it holds on
+  the EDGEBREAKER path the default artifact takes, and the dropdown above
+  shows each codec's real measured bytes beside it. No rung carries the word
+  "lossy" any more — the two that did are gone (#1854), and the coarsest left
+  prints a 4.65 mm bound on Momentum, which is a caption rather than a
+  warning.
+- **Meshopt runs out of rungs before Draco does, and the panel says so.** The
+  pinned `EXTMeshoptCompression`'s entire encoder surface is
+  `{method: QUANTIZE | FILTER}`; the filter each attribute gets and the bit
+  depth it gets it at are hard-coded by attribute semantic in the extension's
+  own `getMeshoptFilter` (POSITION and TEXCOORD_0 → none, NORMAL/TANGENT →
+  octahedral at 8 bits). Balanced already spends `FILTER`, so **Reduced
+  produces Balanced's Meshopt file byte for byte** — true since #1848. The lever `gltfpack` would reach for next is
+  `quantize()`, which lives in `@gltf-transform/functions` and reorders
+  geometry, so it is off the table for `BLDRS_face_ids`. Rather than ship a
+  silently inert option, `exportQuality.js#isDracoOnlyRung` marks that rung
+  and the fidelity caption reads "geometry exact; shading normals rounded —
+  Meshopt has no coarser setting".
+
+**Where the ladder stops, and what it cost to stop there** (#1852's sweep,
+kept as #1854's evidence). Swept on the same two models through the same
+pinned encoders, against Reduced, EDGEBREAKER / SEQUENTIAL: P12 N6 −11.3% /
+−4.1% at an *unchanged* bound; P10 N6 −15.6% / −8.1% (was `squashed`); P10 N5
+−21.4% / −10.1%; P10 N4 −27.1% / −12.1%; P8 N4 −30.9% / −15.4% (was
+`smooshed`); P7 N3 −39.7% / −18.9%; and at P2 N2, with the geometry destroyed,
+still −56.0% — the floor, which is connectivity and which no bit count
+touches.
+
+Three readings, and the first two are why a coarser rung is not worth
+re-deriving. **NORMAL, not POSITION, is where the bytes are**: P12→P8 at
+NORMAL 8 buys −4.8%, while N8→N6 at POSITION 12 buys −11.3% and moves no
+vertex at all, and NORMAL keeps paying — another 5.8 and 5.7 percentage points
+of the Reduced baseline at N5 and N4 — long after POSITION has stopped. **Past
+10 bits POSITION stops paying**: P10→P9 is −1.0% for double the positional
+error, P9→P8 another −1.3% for double again — and that error is the figure the
+caption quotes, so POSITION is spent only where a rung needs a visibly coarser
+shape. And **the floor is connectivity**, which is the honest ceiling on this
+whole axis and the reason decimation (#1853) is a separate piece of work.
+
+P7 N3 was never offered even when the ladder had five rungs: 34.29° of normal
+error is where shading stops describing the surface, so the model reads as
+blotchy rather than as coarse. What #1854 establishes is that the two rungs
+above that line were not worth their damage either — a caption reading "19 mm"
+or "75 mm" against a 4.65 mm one, for 8% of a Snowdon-sized file.
+
+`public/index.ifc` → GLB is the second model and shows the other limit: at
+6,800 B it is JSON and header, so **every** rung lands within 3% of every
+other (P12 N8 1,252 B, P10 N6 1,224 B, P8 N4 1,212 B) while the printed bound
+goes 18.19 mm → 72.80 mm → 292.07 mm over its single 86 m primitive. On a
+model that small the lossy rungs are all cost and no benefit, which is exactly
+what the measured size beside each codec in the dropdown tells the user.
+
+`TEX_COORD` and `COLOR` were swept too and are **not** named — Share's writers
+emit POSITION, NORMAL, `_EXPRESSID` and `_INSTANCEID` and nothing else
+(`viewer/ifc/flatMeshToBufferGeometry.js`, `batchedSubset.js`), so both
+measured byte-for-byte identical on both models, and a key that cannot move a
+byte on any artifact Share writes is a key the allowlist would carry for
+nothing.
+
+**Quantization bottoms out at the triangle count.** The whole axis is worth
+about −56% on Momentum before the geometry is gone, and ~−12% on a real large
+model. A *dramatically* smaller file needs mesh **decimation** (#1853) —
+`@gltf-transform/functions`' `simplify()` reorders triangles and
+`BLDRS_face_ids` indexes identity by triangle position, so it cannot simply be
+switched on here — or it needs the container, which is where #1854 went.
+
+Four knobs are deliberately **not** exposed, each measured
+(#1848 §4): `quantizationVolume: 'scene'` (4× worse RMS at equal bits, worst
+on the large-site/small-part models it would be sold on — `'mesh'` stays);
+`quantizationBits.GENERIC` (safe today only because `_EXPRESSID`/`_INSTANCEID`
+are `Uint32Array` and take Draco's integer path, where bits are ignored; the
+same attribute typed FLOAT came back corrupted at the pinned 12-bit default);
+the Draco `method`, which stays derived from `needsTriangleOrder`; and raw bit
+spinners.
+
+The caption under the size line says what the rung costs **this** model.
+Draco quantizes `POSITION` over the largest axis of each primitive's own box
+(`quantizationVolume: 'mesh'`), so the worst-case displacement is
+`(√3/2) × range / (2^bits − 1)` — arithmetic over the accessor `min`/`max`
+already in the JSON chunk
+(`loader/glbArtifactSize.js#positionQuantizationRange`, which keeps the size
+read's promise of never touching BIN). Verified as a true upper bound:
+predicted 1.163 mm against 1.056 mm measured at 14 bits, 4.653 against 4.067
+at 12. The *maximum over primitives*, never the scene bounds — the
+batched-native artifact's positions are in local geometry space, so a 5 cm
+bolt quantizes in a 5 cm box however large the site is, and scene bounds would
+quote a grid four times coarser than the file has. Meshopt gets no millimetre
+figure because it has none to give: "geometry exact; shading normals rounded".
+
+The printed figure rounds **up** at whatever precision it shows, never to
+nearest (`exportQuality.js#formatMaxShift`). "up to X" is a bound, and to
+nearest it stops being one: 4.64 mm printed as "4.6 mm" and 10.49 mm as
+"10 mm" both promise less movement than a vertex can really take. Overstating
+by under one display step is the safe direction; understating is a caption the
+file breaks.
+
+Quality joins portable × codec in the estimate cache key
+(`export/artifactSizes.js#rewriteKey`) — but only when an encoder actually
+runs, or the uncompressed cell would split three ways and Portable+None would
+run the whole rewrite once per rung for three identical files.
+
+**Compress download** (#1854) is the fifth option and the last rewrite to
+run, because it wraps whatever the other four produced. `export/glbGzip.js`,
+`CompressionStream('gzip')`, no dependency — and on a real model it is the
+largest win the panel has, for the reason above: the container is ~92% of a
+Snowdon-sized Draco export and gzip takes ~6× off it losslessly, where the
+whole quality ladder was worth −12.4% with visible damage.
+
+Reproduced here through the pinned encoders, raw against gzipped:
+
+| model | none | Meshopt | Draco |
+|---|---|---|---|
+| `Momentum.ifc` → GLB, 1,959,196 B | 1.81× | 1.56× | 1.15× |
+| `public/index.ifc` → GLB, 6,800 B | 5.11× | 2.26× | 1.47× |
+| instance-heavy synthetic, 622,480 B | 3.16× | 1.14× | 3.08× |
+
+The third row is the shape the batched-native writer actually produces and it
+carries the finding that shapes the code: **gzip changes which codec wins**.
+Meshopt 198,536 B beats Draco 527,316 B raw, and Draco 171,452 B beats Meshopt
+173,721 B gzipped — Draco leaves the instance transforms as raw float32 (whole
+file 3.08×) while Meshopt compresses them into something gzip cannot touch
+(1.14×). So the background sweep (§4.4) takes `isGzipped` as a real axis,
+measures post-compression bytes, and restarts on the toggle; ranking a gzipped
+download on raw byte counts would recommend the wrong codec on exactly the
+artifacts Share writes.
+
+Four decisions behind it:
+
+- **It is not a fourth axis on the compressed-export cache.** That key space
+  was already a review finding, and gzip is a cheap deterministic post-step on
+  a cell that already exists. So the bytes cache stays keyed
+  `portable × codec × quality`, and a parallel map holds two INTEGERS per cell
+  under the same key. The download re-gzips (`artifactSizes.js#gzippedExport`)
+  rather than holding a third copy of the file; `gzipBytes` gives the same
+  bytes twice, so the figure the user read is the file they get, and
+  `exportGlb.spec.ts` checks that end to end in a real browser. The property
+  needed is weak — two calls to one function, in one page, on one
+  implementation — so nothing depends on two browsers' deflate agreeing.
+- **Gzip has no header shortcut**, so codec None with Portable off — the one
+  selection whose estimate was a `File.slice` — becomes a whole-file read, and
+  the size line shows *Estimating…* for it. `holdsBytes` in `codecSizes.js`
+  learns the same thing, or a beaten `none` would leave the whole export
+  resident.
+- **The 50 MB auto-measure threshold does not move.** Gzip measures ~35 ms/MB
+  and the sweep gzips both metadata sides of three codecs, so at 50 MB it adds
+  roughly six seconds of wall clock — real, but not what that constant guards.
+  The threshold bounds UNINTERRUPTIBLE work: the wasm encoders block the thread
+  in one run, while `CompressionStream` is fed a megabyte at a time and awaited,
+  so it yields ~60 times on a 60 MB file and the Stop button stays live.
+- **`.glb.gz`, and hidden where it cannot be done.** Both extensions, not a
+  swap — it is what a web server would serve and what an unarchiver expects,
+  and `.glb` in the middle says what is inside. The name is stamped from what
+  the host hook *did*, never from what was asked for, so a browser without
+  `CompressionStream` (Safari before 16.4) produces a plain `.glb` named
+  `.glb`; the toggle is not rendered there at all, and a "Download again" row
+  replaying `gzip: true` degrades the same way rather than shipping
+  uncompressed bytes under a `.gz`.
+
+**Share does not re-open its own `.glb.gz`, deliberately.** `DecompressionStream`
+would be cheap, but `.gz` is a transport encoding and not a model format:
+accepting one means a `supportedTypes` entry, a `findLoader` arm and header
+sniffing that every source adapter (upload, GitHub raw, Drive) would have to
+agree on (design/new/adding-model-formats.md), for a file the user asked to be
+given in archive form. The "export opens back in Share" E2E keeps its subject
+— it runs on the uncompressed path, which is unchanged — and the gzipped
+spec proves the same thing about the bytes by gunzipping the download and
+asserting the `glTF` magic, the inflated length against the panel's raw figure,
+and that the JSON chunk still parses with its `BLDRS_*` payloads. If a user
+ever asks to drag a `.glb.gz` back in, that is its own issue.
+
+**Portable** (#1843) is the fourth option, and like compression it is a host
 rewrite the pro module only calls: `export/glbPortable.js#rewriteGlbPortable`.
 
 The default export IS the batched-native artifact (§1.1) — one glTF mesh per
@@ -431,10 +682,11 @@ model.
 
 Options surfaced in the UI: *Include Bldrs metadata (properties, spatial
 tree)* — default **on** (it's their model; the toggle exists for onward
-sharing) — *Portable* — default **off** (see the measured cost above) — and
+sharing) — *Portable* — default **off** (see the measured cost above) —
 *Compression: None / Meshopt / Draco* — default **None** (the
 file opens everywhere; the other two need the matching decoder registered in
-whatever the user opens it with). Share itself is one of those viewers:
+whatever the user opens it with) — and *Compress download* — default **off**
+(a `.glb.gz` is not a `.glb`). Share itself is one of those viewers:
 `Loader.js#newGltfLoader` carries both decoders unconditionally (they were
 gated on the cache writer's `glbDraco` / `glbMeshopt` flags, so a compressed
 export failed to open in Share — the #1837 smoke), and the export E2E opens
@@ -468,16 +720,28 @@ all-caps button on the #1837 preview read as disabled when it wasn't
 (#1838).
 
 The Export tab hosts `Open/ExportSection.jsx` — the metadata toggle, then the
-**Portable** toggle, then the **Compression** choice, then the **download
-size** for the state those three are in, then **Export GLB last and centred**,
-with the Pro chip for a free user riding beside it. That order is the order
-the choices compound in — what goes in the file, what shape it is in, how it
-is squeezed — and it is the order `export/artifactSizes.js` runs them in.
-Compression is a dropdown (`Select`: None / Meshopt / Draco) because the
+**Portable** toggle, then the **Compression type** choice, then the **Quality**
+rung, then **Compress download**, then the **download size** for the state
+those five are in, then **Export GLB last and centred**, with the Pro chip for
+a free user riding beside it. That order is the order the choices compound in
+— what goes in the file, what shape it is in, how it is squeezed, how hard,
+and whether the result travels in an archive — and it is the order
+`export/artifactSizes.js` runs them in. Compress download is last for that
+reason rather than beside the metadata toggle it otherwise resembles: it is the
+only control that wraps the output of all the others, and it sits directly
+above the size line it changes most.
+Compression type is a dropdown (`Select`: None / Meshopt / Draco) because the
 codecs are alternatives, not independent options — it began as a
 `ToggleButtonGroup`, whose three side-by-side buttons were the widest control
 in the dialog and read as a run-on word under the theme's toggle styling
 (owner feedback on #1842). The menu items carry the per-mode test ids.
+Quality (Best (larger) / Balanced (medium) / Reduced (small), §4.3) is a
+second dropdown directly under it, **disabled rather than hidden** while Compression is None — showing it
+only once a codec is picked would change the panel's height under the user's
+cursor at the moment they reach for the next control. Under the size line it
+captions what the rung costs *this* model: "parts may move up to 4.7 mm;
+shading normals rounded" for Draco, "geometry exact; shading normals rounded"
+for Meshopt, which has no distance to quote.
 
 Every label block in the section is **left-aligned** (#1842). The theme centres
 a Dialog's whole paper (`theme/Components.js`, `MuiDialog.paper.textAlign`),
@@ -500,13 +764,21 @@ touches the BIN chunk and the rewrite has to — it reads the instance TRS
 floats and ungzips two payloads out of it — so Portable takes the same
 whole-file path a codec takes and shows *Estimating…* while it runs. The
 estimate cache in `export/artifactSizes.js` is keyed
-`` `${portable ? 'portable' : 'native'}|${mode}` `` for that reason: portable
-and native are different FILES at the same codec, and a shared cell would
-quote one and download the other. `useExport.js#compressHookFor` supplies the
+`` `${portable ? 'portable' : 'native'}|${mode}` `` — plus `|${quality}`
+whenever an encoder actually runs (§4.3) — for that reason: portable and
+native are different FILES at the same codec, two rungs are two different
+files again, and a shared cell would quote one and download the other. `useExport.js#compressHookFor` supplies the
 hook whenever `portable || codec` rather than for a codec alone, and
 `artifactSizes.js#runRewrite` behind it does the metadata strip for the
 portable-without-codec case, since the pro module runs no strip of its own
 once a hook is in play.
+
+**Gzip rides on the same cache without widening it.** When *Compress download*
+is on, every figure the panel shows — the size line and each codec's figure in
+the dropdown — is the `.glb.gz` length, measured on the cell above and stored
+as two integers under the same key (§4.3). The metadata toggle stays free: one
+estimate gzips both sides, so flipping it still moves every figure without an
+encode.
 
 **Compressed, the estimate is the compressed file.** The size of a Draco or
 Meshopt file is a property of the encoder, not of the input, so there is no
@@ -514,7 +786,8 @@ honest shortcut: picking a codec reads the whole artifact, encodes it once,
 and reports the byte lengths of the two files that came out. The line reads
 *Estimating…* while that runs — a stale figure from the previous choice is a
 promise about a file the next click would not produce — and the bytes are
-cached per (artifact, codec) in `export/artifactSizes.js`, so the export that
+cached per (artifact, portable × codec × quality) in
+`export/artifactSizes.js`, so the export that
 follows hands over the very bytes whose length the user just read rather than
 re-encoding and hoping the two agree. A click fast enough to beat the estimate
 shares its in-flight run. Sizes are otherwise cached per published
@@ -525,6 +798,97 @@ GitHub tab only: the Export tab's actions are its own buttons.
 `Open/ExportsList.jsx` (§4.5) is **not mounted here for now** — the owner
 took "My Exports" back off the panel after the #1837 preview (#1838); the
 component and the recording pipeline behind it stay.
+
+**Every codec is measured in the background** (#1850), because *which codec
+wins swings with model shape and swings against intuition*. Measured:
+Momentum.ifc → GLB gives Draco 250,184 B against Meshopt 1,347,740 B; an
+instance-heavy synthetic gives Draco −17.3% against Meshopt **−68.0%**. Draco
+encodes mesh primitives only and cannot reach `EXT_mesh_gpu_instancing`
+accessors at all — and instance-heavy is exactly what the batched-native
+writer produces. A user picking on reputation picks wrong about half the time,
+and the panel already knew the answer.
+
+So while the tab is open, `export/codecSizes.js` measures each codec's real
+output and `export/useCodecSizes.js` wires it to React. Each figure is
+appended to that codec's dropdown **option** as it lands (never to the closed
+control — at 390px a size beside the label would ellipsize away the half that
+matters), and when the last one arrives the panel selects the smallest.
+
+Six constraints shape it, and they are the design:
+
+- **Sequential, cheapest first, releasing as it goes.** Each estimate cell
+  holds two whole copies of the export, so a naive sweep would leave three
+  codecs' worth resident beside the source. The loop awaits each estimate and
+  releases a codec's bytes (`artifactSizes.js#releaseCompressedExport`) the
+  moment its figure loses, keeping **at most two** in memory: the best
+  measured so far and the one in flight. The order — none, Meshopt, Draco — is
+  measured, not guessed: on Momentum, `none` is a header read, Meshopt encodes
+  at ~33 ms/MB from a module already in the bundle, Draco at ~135 ms/MB behind
+  a second wasm the page has to fetch. The **winner is kept**, so the
+  selection that follows lands on a filled cache and the export hands over
+  those very bytes. Two cells rather than one is the deliberate trade: Meshopt
+  is measured second and wins on instance-heavy artifacts, so a sweep holding
+  only the last-measured codec would drop the winner and make the panel
+  re-encode up to 50 MB on the main thread the instant it selected it. One
+  cell is exempt: the codec the user has SELECTED, passed down as `keepCodec`
+  and read at each release rather than captured when the run starts, since
+  they can pick one mid-sweep. Freeing that one is unrecoverable from
+  outside — the selection has not changed again, so nothing re-estimates.
+- **Nothing coordinates what survives a run; it is reconciled.** Releasing as
+  it goes bounds ONE sweep, which knows its own order. What should still be
+  resident *afterwards* depends on the panel's selection and on whether
+  another sweep has superseded this one, and #1852 spent three review rounds
+  failing to express that as a handoff — a winner kept and never freed, then a
+  release slot raced across sweep generations, then a slot claiming the
+  winner while the user was looking at a codec of their own. The panel instead
+  states the set it still needs, and everything else for that artifact goes
+  (`artifactSizes.js#retainOnlyCompressedExports`): the cell behind the figure
+  on screen, plus — only while `codecToSelect` says the dropdown is about to
+  move onto it — the sweep's winner. Both come from the same call the
+  auto-selection makes, so the two cannot disagree and their order does not
+  matter; a superseded sweep finishing late just makes the panel state the
+  same set again. It runs on a selection or axis change and on unmount, never
+  mid-run, and it subsumes the per-rung eviction that used to enumerate the
+  codec × Portable product by hand.
+- **Nothing starts above ~50 MB.** ~170 ms/MB across the whole axis, and it is
+  not interruptible, so 50 MB is about eight seconds of main-thread work.
+  Above the line the panel shows "Codec sizes not measured" and a **Calculate
+  sizes** button.
+- **Cancel stops the QUEUE, and says so.** `@gltf-transform`'s `writeBinary`
+  drives both wasm encoders synchronously and neither exposes an abort, so
+  mid-encode cancellation is not available short of terminating the thread.
+  The control is therefore labelled **Stop**, and once pressed the status line
+  reads "Finishing Draco…" rather than pretending the CPU is idle — a Cancel
+  that leaves the work running while claiming otherwise teaches people the
+  control doesn't work. Whatever was already measured stays on the dropdown
+  and stays usable. Between codecs the scheduler yields to the event loop,
+  which is what lets the click be seen at all and what keeps each new figure
+  painting as it arrives.
+- **The codec axis only.** With Quality (§4.3) and Portable the matrix is
+  codec × quality × portable × metadata; the sweep runs the codec axis at the
+  *currently selected* quality and Portable setting and restarts — cancelling
+  first — when either changes, because every figure it published was measured
+  at the old one. The restart cancels but cannot stop the codec already
+  running, so the publishing callbacks are gated on **generation**, not on the
+  abort (`useCodecSizes.js`): a figure that lands after **Stop** is still this
+  sweep's and is kept, while one from a superseded sweep is dropped. Written
+  as "not aborted" the two collapse together and one of them breaks —
+  either Stop throws away a figure already paid for, or `sizesByCodec` ends up
+  holding one figure from the old rung beside two from the new one, which is
+  the set the auto-selected winner is read off. The metadata toggle is
+  deliberately **not** a restart axis: one estimate produces both sides, so it
+  keeps moving every figure for free.
+- **An explicit choice is final.** A codec the user picked is never overridden,
+  however small a later figure turns out to be. That hangs off the MenuItem's
+  own `onClick`, not the `Select`'s `onChange`, because MUI fires `onChange`
+  only when the value *changes* — and re-picking the codec already showing,
+  having just read the three sizes, is exactly how a user says "this one, stop
+  moving it".
+
+`export-section` carries `data-codec-sizes` — the modes measured so far, in
+order — so an E2E can wait for the sweep before touching the codec control
+(`tests/e2e/export.ts#waitForCodecSizing`); a click racing the auto-selection
+reads a dropdown that moved under it.
 
 **Gated actions.** An action the user can't take *yet* is not hidden. It
 renders in its normal place in a disabled LOOK, stays clickable, and the
@@ -757,7 +1121,7 @@ through `BLDRS_*` extensions.
 | Units + coordination frame | ✔ `scenes[0].extras` (metres) | ✔ | ✘ (unitless) | ✘ | ✘ | ✔ `metersPerUnit`, root xform | ✔ (units attr) | ✔ |
 | Cut planes / hidden elements (view state) | ◐ `BLDRS_view_states` (designed, not written) | ◐ | ✘ | ✘ | ✘ | ◐ variants | ✘ | ✘ |
 | Portable (named node tree, no required extension) | ✔ per export (#1843) — `~100 B`/instance net | ✔ | — (always de-instanced) | — | — | ◐ (prim hierarchy is native) | ◐ | — |
-| Compression | ✔ Draco / Meshopt, chosen per export | ✔ | ✘ | ✘ (binary only) | ◐ binary | ◐ (USDZ is a zip) | ✔ (zip) | ✘ |
+| Compression | ✔ Draco / Meshopt × Best / Balanced / Reduced, chosen per export (#1842, #1848, #1854) | ✔ | ✘ | ✘ (binary only) | ◐ binary | ◐ (USDZ is a zip) | ✔ (zip) | ✘ |
 | Source | artifact | artifact | scene | scene | scene | scene (or server) | scene | — (needs Conway write support) |
 | Effort | done in S2 | small (unpack GLB → JSON + bin) | small | small | small | medium (USDZExporter is texture-centric; instancing + metadata need work); server route if fidelity matters | medium | large — out of scope |
 

@@ -1,4 +1,4 @@
-import config from './common.js'
+import config, {staticCopyPlugin} from './common.js'
 
 
 describe('esbuild', () => {
@@ -24,5 +24,19 @@ describe('esbuild', () => {
     // `blob:` URL `src/export/importModuleFromUrl.js` imports. Nothing in
     // the build fails; the export just never downloads. See common.js.
     expect(config.supported['dynamic-import']).toBe(true)
+  })
+
+  it('keeps the static-asset copy out of the config every build shares', () => {
+    // `build.js` spreads this config into five-plus builds and runs them
+    // concurrently under one `Promise.all`. `esbuild-copy-static-files`
+    // creates its destination with a check-then-`mkdir`, so a shared copy
+    // plugin races itself and the losers fail the whole build with
+    // `EEXIST: mkdir docs` — intermittently, which is the worst kind
+    // (#1852: green on one commit, red on its child, same command).
+    //
+    // Only a build that emits into `docs/` should carry it, and it has to
+    // still EXIST to be carried — hence both halves of this assertion.
+    expect(config.plugins.map((plugin) => plugin.name)).not.toContain('copy-static-files')
+    expect(staticCopyPlugin.name).toBe('copy-static-files')
   })
 })

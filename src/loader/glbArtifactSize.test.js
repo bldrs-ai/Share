@@ -17,6 +17,7 @@ import {
   estimateStrippedGlbSize,
   glbByteLength,
   glbJsonChunkBytes,
+  positionQuantizationRange,
   stripBldrsJson,
 } from './glbArtifactSize'
 import {packGlbChunks} from './glbContainer'
@@ -448,6 +449,47 @@ describe('glbArtifactSize', () => {
     })
   })
 
+  describe('positionQuantizationRange', () => {
+    // What turns Draco's "POSITION: 12 bits" into a millimetre figure the
+    // Export tab can put in front of a modeller
+    // (`export/exportQuality.js#maxPositionShift`, #1848 §3).
+
+    /**
+     * A document whose primitives declare the given POSITION bounds.
+     *
+     * @param {Array<{min: Array<number>, max: Array<number>}>} bounds one per primitive
+     * @return {object} parsed glTF JSON
+     */
+    function jsonWithBounds(bounds) {
+      return {
+        accessors: bounds.map((b, i) => ({bufferView: i, type: 'VEC3', componentType: 5126, ...b})),
+        meshes: bounds.map((b, i) => ({primitives: [{attributes: {POSITION: i}}]})),
+      }
+    }
+
+    it('takes the longest axis of the widest primitive, not the scene', () => {
+      // Each primitive is quantized inside its OWN box at
+      // `@gltf-transform`'s pinned `quantizationVolume: 'mesh'`, and the
+      // batched-native artifact's positions are in local geometry space —
+      // so two 1 m parts 200 m apart quantize like 1 m parts. Scene bounds
+      // would quote a grid 200× coarser than the file has.
+      const range = positionQuantizationRange(jsonWithBounds([
+        {min: [0, 0, 0], max: [1, 0.5, 0.5]},
+        {min: [200, 0, 0], max: [201, 0.25, 3]},
+      ]))
+
+      expect(range).toBe(3)
+    })
+
+    it('has nothing to report when the accessors declare no bounds', () => {
+      // glTF requires min/max on POSITION, but a hand-written or truncated
+      // file need not have them, and inventing a millimetre figure from
+      // nothing would be worse than showing none.
+      expect(positionQuantizationRange(jsonWithBounds([{}]))).toBeNull()
+      expect(positionQuantizationRange({})).toBeNull()
+    })
+  })
+
   describe('artifactSizesFromFile', () => {
     it('reports both sizes from the header, without reading the BIN chunk', async () => {
       const {file, glb} = cachedArtifact()
@@ -463,6 +505,10 @@ describe('glbArtifactSize', () => {
       expect(sizes.withMetadata).toBe(glb.byteLength)
       expect(sizes.withoutMetadata).toBeLessThan(sizes.withMetadata)
       expect(sizes.metadataBytes).toBe(sizes.withMetadata - sizes.withoutMetadata)
+      // The fidelity caption's bounds ride on this same read — the fixture's
+      // POSITION accessor declares none, and null is what the panel then
+      // shows no figure for.
+      expect(sizes.positionRange).toBeNull()
       // Nothing read past the JSON chunk: the BIN chunk is all of the size
       // and none of the information, and on a 400MB model reading it is the
       // difference between a number and a stall.

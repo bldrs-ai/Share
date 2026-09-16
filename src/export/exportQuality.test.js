@@ -1,0 +1,274 @@
+// The Quality rungs as a TABLE and as arithmetic, with no encoder in sight.
+//
+// `glbCompression.test.js` is where the rungs meet the real Draco and Meshopt
+// wasm and prove they actually reach the encoder. This suite pins the other
+// half: exactly which options each rung asks for — the pair of Draco speed
+// settings above all, since either one alone measured a 0.0% change and a
+// half-applied pair would look like a working feature — and the millimetre
+// figure the panel prints, which is a promise about a user's model and must
+// be derived, not guessed.
+import {
+  QUALITY_BALANCED,
+  QUALITY_BEST,
+  QUALITY_DEFAULT,
+  QUALITY_LABELS,
+  QUALITY_LEVELS,
+  QUALITY_SMALLEST,
+  formatMaxShift,
+  isDracoOnlyRung,
+  isQualityLevel,
+  maxPositionShift,
+  qualitySettings,
+} from './exportQuality'
+
+
+/* eslint-disable no-magic-numbers */
+// The Momentum fixture's worst primitive spans the whole 22.0 m scene, which
+// is what makes it the interesting case: measured max positional error there
+// was 1.056 mm at 14 bits and 4.067 mm at 12, so the figures below have a
+// measurement to be checked against (#1848 §3).
+const MOMENTUM_RANGE_M = 22.0
+// The batched-native artifact's positions are in LOCAL geometry space, so a
+// small part quantizes in a small box however large the site is.
+const BOLT_RANGE_M = 0.05
+
+
+describe('exportQuality', () => {
+  describe('the rungs', () => {
+    it('offers exactly three, and defaults to Balanced', () => {
+      // Three, not the five #1852 shipped: the two lossy rungs came back out
+      // in #1854 when the whole ladder measured −12.4% on Snowdon (module
+      // doc). Pinned as an exact list so re-adding a rung is a deliberate act
+      // with a red test in front of it, not a table edit nobody reviews.
+      expect(QUALITY_LEVELS).toEqual([QUALITY_BEST, QUALITY_BALANCED, QUALITY_SMALLEST])
+      expect(QUALITY_DEFAULT).toBe(QUALITY_BALANCED)
+      expect(isQualityLevel(QUALITY_BALANCED)).toBe(true)
+      expect(isQualityLevel('tiny')).toBe(false)
+      expect(isQualityLevel(undefined)).toBe(false)
+    })
+
+    it('labels the size hint without ever claiming a rung is THE smallest', () => {
+      // The owner's wording, kept through #1854: a larger/medium/small
+      // ladder, chosen knowing the byte ordering is not guaranteed (module
+      // doc). What the labels may not do is turn that hint into a superlative
+      // — "Smallest" on a rung the encoders measured HEAVIER than Balanced
+      // under SEQUENTIAL would be a promise the table cannot keep, which is
+      // the whole reason the id/label split exists.
+      expect(QUALITY_LEVELS.map((level) => QUALITY_LABELS[level])).toEqual([
+        'Best (larger)',
+        'Balanced (medium)',
+        'Reduced (small)',
+      ])
+      for (const label of Object.values(QUALITY_LABELS)) {
+        expect(label).not.toMatch(/smallest|tiniest|best size/i)
+      }
+      // And no rung claims to be lossy any more. The two that did are gone,
+      // and a label still carrying the word would be advertising damage the
+      // remaining rungs do not do — Reduced's own bound is 4.65 mm on
+      // Momentum, a caption rather than a warning (#1854).
+      for (const label of Object.values(QUALITY_LABELS)) {
+        expect(label).not.toMatch(/lossy/i)
+      }
+    })
+
+    it('leaves Best exactly where #1842 shipped it', () => {
+      // Best means "change nothing about the file's geometry from what the
+      // export produced before there was a control". `@gltf-transform`
+      // 4.3.0's pinned defaults are POSITION 14 / NORMAL 10 and speeds 5.
+      expect(qualitySettings(QUALITY_BEST)).toEqual({
+        draco: {encodeSpeed: 5, decodeSpeed: 5, quantizationBits: {POSITION: 14, NORMAL: 10}},
+        isMeshoptFiltered: false,
+      })
+    })
+
+    it('sets BOTH Draco speeds on Balanced, at Best\'s bit counts', () => {
+      // The pair is the whole of A2 and it is all-or-nothing: measured on
+      // Momentum, `encodeSpeed: 0` alone and `decodeSpeed: 0` alone each came
+      // back at 250,184 B — 0.0% — while the two together came back at
+      // 228,652 B, −8.6%. A rung that set one of them would look like it
+      // worked and buy nothing.
+      const {draco} = qualitySettings(QUALITY_BALANCED)
+      expect(draco.encodeSpeed).toBe(0)
+      expect(draco.decodeSpeed).toBe(0)
+      // …and Balanced costs no fidelity: same bits as Best, so the same
+      // vertices come back.
+      expect(draco.quantizationBits).toEqual(qualitySettings(QUALITY_BEST).draco.quantizationBits)
+    })
+
+    it('spends bits, not just encoder effort, on the last rung', () => {
+      expect(qualitySettings(QUALITY_SMALLEST)).toEqual({
+        draco: {encodeSpeed: 0, decodeSpeed: 0, quantizationBits: {POSITION: 12, NORMAL: 8}},
+        isMeshoptFiltered: true,
+      })
+    })
+
+    it('stops at 12 bits of POSITION, which is where the sweep stopped paying', () => {
+      // The floor the module doc's sweep argues for, asserted rather than
+      // only narrated. Below this the measured return collapses — P10→P9 is
+      // −1.0% for DOUBLE the positional error, P9→P8 another −1.3% for double
+      // again — and the whole ladder measured −12.4% on Snowdon, where the
+      // container and not the geometry is the file (#1854). So no rung may
+      // quietly reach for a coarser grid: a table edit that did would make
+      // the panel promise a millimetre figure the owner has already rejected.
+      for (const level of QUALITY_LEVELS) {
+        const {POSITION, NORMAL} = qualitySettings(level).draco.quantizationBits
+        expect(POSITION).toBeGreaterThanOrEqual(12)
+        expect(NORMAL).toBeGreaterThanOrEqual(8)
+      }
+    })
+
+    it('marks the rungs Meshopt cannot tell apart, and only those', () => {
+      // `EXTMeshoptCompression`'s whole encoder surface in the pinned 4.3.0 is
+      // `{method}`, with two values — Balanced already spends the coarser one,
+      // so Reduced re-encodes to Balanced's file byte for byte. The panel
+      // captions that rather than shipping a rung that silently does nothing
+      // under the codec the user has selected (#1852). Still exactly one rung
+      // after #1854 took the other two away, and still derived from the table
+      // rather than named, which is what keeps it right either way.
+      expect(isDracoOnlyRung(QUALITY_BEST)).toBe(false)
+      expect(isDracoOnlyRung(QUALITY_BALANCED)).toBe(false)
+      expect(isDracoOnlyRung(QUALITY_SMALLEST)).toBe(true)
+      expect(QUALITY_LEVELS.filter(isDracoOnlyRung)).toEqual([QUALITY_SMALLEST])
+      // Derived from the table rather than listed, so the claim survives an
+      // unknown rung the same way every other read of the table does.
+      expect(isDracoOnlyRung('turbo')).toBe(isDracoOnlyRung(QUALITY_DEFAULT))
+    })
+
+    it('never names GENERIC, whose bits would corrupt a float-typed id', () => {
+      // `_EXPRESSID`/`_INSTANCEID` fall into Draco's GENERIC bucket, and the
+      // pinned 12-bit default is harmless ONLY because Share writes them as
+      // Uint32Array and Draco's integer path ignores quantization bits. The
+      // same attribute typed FLOAT came back corrupted at that default
+      // (#1848 §4.3). Since `quantizationBits` MERGES with the library's
+      // defaults, naming a bucket here is the only way to change it — so the
+      // guarantee this suite can give is that no rung ever names this one.
+      for (const level of QUALITY_LEVELS) {
+        expect(Object.keys(qualitySettings(level).draco.quantizationBits).sort())
+          .toEqual(['NORMAL', 'POSITION'])
+      }
+    })
+
+    it('names nothing but the three encoder options a rung is allowed to set', () => {
+      // An ALLOWLIST, not a list of banned keys, because the whole table is
+      // spread straight into `setEncoderOptions`
+      // (`glbCompression.js#transformGlb`) and every key it grows reaches the
+      // encoder. Two that must not be there, one of them the reason this test
+      // was widened (#1852 review):
+      //
+      //   - `method`. SEQUENTIAL is what preserves the triangle order
+      //     `BLDRS_face_ids` indexes identity by, and it is DERIVED from the
+      //     layout. A rung carrying one would be spread in beside the derived
+      //     value and whichever landed last would win.
+      //   - `quantizationVolume`. Pinned at `@gltf-transform`'s `'mesh'`
+      //     default, which is also the volume `maxPositionShift` computes the
+      //     caption's millimetres in. `'scene'` measured 4× worse RMS error at
+      //     the same bit count AND would silently turn "parts may move up to
+      //     X mm" into an understatement by scene-extent ÷ part-extent — worst
+      //     on exactly the large-board-with-small-parts models this would be
+      //     sold on.
+      //
+      // Only Best and Reduced are pinned with an exact `toEqual`
+      // above, so a key added to Balanced alone reached the encoder with
+      // nothing red. This closes all three at once, and catches the next key
+      // too.
+      for (const level of QUALITY_LEVELS) {
+        expect(Object.keys(qualitySettings(level)).sort()).toEqual(['draco', 'isMeshoptFiltered'])
+        expect(Object.keys(qualitySettings(level).draco).sort())
+          .toEqual(['decodeSpeed', 'encodeSpeed', 'quantizationBits'])
+      }
+    })
+
+    it('falls back to the default rather than throwing on an unknown rung', () => {
+      // Read on the path that produces a user's download — a "Download again"
+      // row recorded before this feature existed carries no rung at all.
+      expect(qualitySettings('turbo')).toBe(qualitySettings(QUALITY_DEFAULT))
+      expect(qualitySettings(undefined)).toBe(qualitySettings(QUALITY_DEFAULT))
+      // And the two ids that were real rungs for the length of #1852. They
+      // are written into export-history rows and into permalink-shaped state,
+      // so removing them from the table is only safe because a row still
+      // naming one re-exports at Balanced instead of failing the download
+      // (#1854). Named literally rather than through a constant, because the
+      // constants are exactly what went away.
+      for (const removed of ['squashed', 'smooshed']) {
+        expect(isQualityLevel(removed)).toBe(false)
+        expect(qualitySettings(removed)).toBe(qualitySettings(QUALITY_DEFAULT))
+        expect(isDracoOnlyRung(removed)).toBe(isDracoOnlyRung(QUALITY_DEFAULT))
+      }
+    })
+  })
+
+  describe('the millimetre figure', () => {
+    it('bounds the error measured on the Momentum fixture', () => {
+      // The caption's whole job is to be a promise the file keeps. Measured
+      // through a Draco encode→decode round trip on that model: 1.056 mm max
+      // at 14 bits, 4.067 mm at 12. The prediction has to be an upper bound
+      // on both — close enough to be useful, never under.
+      const at14 = maxPositionShift(QUALITY_BALANCED, MOMENTUM_RANGE_M) * 1000
+      const at12 = maxPositionShift(QUALITY_SMALLEST, MOMENTUM_RANGE_M) * 1000
+
+      expect(at14).toBeGreaterThan(1.056)
+      expect(at14).toBeLessThan(1.056 * 1.2)
+      expect(at12).toBeGreaterThan(4.067)
+      expect(at12).toBeLessThan(4.067 * 1.2)
+    })
+
+    it('is the same at Best and Balanced, and coarser at the rung below', () => {
+      // Balanced buys its bytes from the encoder, not from the geometry.
+      expect(maxPositionShift(QUALITY_BALANCED, MOMENTUM_RANGE_M))
+        .toBe(maxPositionShift(QUALITY_BEST, MOMENTUM_RANGE_M))
+      expect(maxPositionShift(QUALITY_SMALLEST, MOMENTUM_RANGE_M))
+        .toBeGreaterThan(maxPositionShift(QUALITY_BEST, MOMENTUM_RANGE_M))
+      // And the coarsest rung the ladder has left still prints a figure a
+      // modeller reads as "fine": 4.65 mm on this model, against the 19 mm and
+      // 75 mm the two removed rungs printed. That the ladder's own worst case
+      // is single-digit millimetres is the other half of why #1854 could drop
+      // them — nothing on offer needs the word "lossy" beside it.
+      expect(formatMaxShift(maxPositionShift(QUALITY_SMALLEST, MOMENTUM_RANGE_M))).toBe('4.7 mm')
+    })
+
+    it('scales with the model, which is why it is worth showing at all', () => {
+      // A 5 cm bolt in local geometry space quantizes in a 5 cm box, so the
+      // coarse rung costs it micrometres — the number a user needs to see
+      // before deciding, and the reason a fixed "12 bits" caption would be
+      // useless. Printed as 0.02 mm rather than 0.0106: two decimals is the
+      // finest the caption goes and it rounds UP to stay a bound, so at this
+      // scale it overstates by up to a hundredth of a millimetre. Still the
+      // right direction — a bolt this figure understated would be a caption
+      // the file breaks.
+      const bolt = maxPositionShift(QUALITY_SMALLEST, BOLT_RANGE_M)
+      expect(bolt * 1000).toBeLessThan(0.02)
+      expect(formatMaxShift(bolt)).toBe('0.02 mm')
+    })
+
+    it('has nothing to say when the artifact declares no bounds', () => {
+      expect(maxPositionShift(QUALITY_SMALLEST, null)).toBeNull()
+      expect(maxPositionShift(QUALITY_SMALLEST, 0)).toBeNull()
+    })
+
+    it('prints a figure a modeller reads, not a float', () => {
+      expect(formatMaxShift(0.0040670)).toBe('4.1 mm')
+      expect(formatMaxShift(0.0106450)).toBe('11 mm')
+      expect(formatMaxShift(0.0001234)).toBe('0.13 mm')
+      // Floored rather than rounded to zero: below this the figure says less
+      // than float32's own rounding does, and overstating a worst case is the
+      // safe direction.
+      expect(formatMaxShift(0.0000001)).toBe('0.01 mm')
+    })
+
+    it('rounds the printed figure UP, at every precision it prints', () => {
+      // "up to X" is a bound, so the display must not shave it. Each of these
+      // rounds DOWN to nearest — 4.64→"4.6", 10.49→"10", 0.124→"0.12" — and a
+      // vertex can land near the unrounded value, which would make the
+      // caption promise less movement than the file can contain.
+      expect(formatMaxShift(0.004640)).toBe('4.7 mm')
+      expect(formatMaxShift(0.010490)).toBe('11 mm')
+      expect(formatMaxShift(0.0001240)).toBe('0.13 mm')
+      // And a figure already ON a display tick stays there: `4.6 * 10` is
+      // 46.00000000000001 in binary floating point, which a bare `Math.ceil`
+      // would inflate by a whole step.
+      expect(formatMaxShift(0.004600)).toBe('4.6 mm')
+      expect(formatMaxShift(0.011000)).toBe('11 mm')
+      expect(formatMaxShift(0.000120)).toBe('0.12 mm')
+    })
+  })
+})

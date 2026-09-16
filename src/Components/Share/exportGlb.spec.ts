@@ -1,4 +1,5 @@
 import {readFile} from 'node:fs/promises'
+import {gunzipSync} from 'node:zlib'
 import {Locator, Page, expect, test} from '@playwright/test'
 import {
   EXPORT_TEST_TIMEOUT_MS,
@@ -15,9 +16,15 @@ import {
   reopenLocalGlb,
   routeProModule,
   selectCompression,
+  selectQuality,
   setSubscriptionTier,
+  smallestCodecIn,
+  toggleGzip,
   toggleMetadata,
   togglePortable,
+  waitForCodecSizes,
+  waitForCodecSizing,
+  waitForEstimate,
   watchProModuleRequests,
 } from '../../tests/e2e/export'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
@@ -39,6 +46,21 @@ import {
  */
 async function sizeBytes(sizeLine: Locator): Promise<number> {
   return Number(await sizeLine.getAttribute('data-bytes'))
+}
+
+
+/**
+ * The millimetre figure out of a Quality caption, for comparing two rungs.
+ *
+ * @param caption e.g. 'parts may move up to 4.7 mm; shading normals rounded'
+ * @return the number of millimetres it quotes
+ */
+function millimetresIn(caption: string | null): number {
+  const match = /([\d.]+) mm/.exec(caption ?? '')
+  if (match === null) {
+    throw new Error(`No millimetre figure in Quality caption: ${caption}`)
+  }
+  return Number(match[1])
 }
 
 
@@ -155,6 +177,14 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(exportButton).toBeEnabled()
     await expect(exportButton).toHaveText('Export GLB')
 
+    // Pin the codec before reading anything. Since #1850 the panel measures
+    // every codec in the background and defaults to the smallest, so the
+    // selection is in motion for the first seconds the tab is open. Let the
+    // sweep finish, then choose explicitly — an explicit choice is never
+    // overridden, so from here the selection is this test's.
+    await waitForCodecSizing(page)
+    await selectCompression(page, 'none')
+
     // What the file will weigh, before anything is downloaded (#1841). The
     // figure is read from the artifact's header; `data-bytes` carries the
     // raw count the label rounds, so the comparison with the saved file
@@ -234,8 +264,15 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
 
-    // Uncompressed is the default, and the baseline each codec is read
-    // against.
+    // Pin the codec before reading anything. Since #1850 the panel measures
+    // every codec in the background and defaults to the smallest, so the
+    // selection is in motion for the first seconds the tab is open. Let the
+    // sweep finish, then choose explicitly — an explicit choice is never
+    // overridden, so from here the selection is this test's.
+    await waitForCodecSizing(page)
+    await selectCompression(page, 'none')
+
+    // Uncompressed is the baseline each codec is read against.
     const sizeLine = page.getByTestId('export-size')
     await expect(sizeLine).toBeVisible()
     await expect(page.getByTestId('export-compression')).toContainText('None')
@@ -323,6 +360,14 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+
+    // Pin the codec before reading anything. Since #1850 the panel measures
+    // every codec in the background and defaults to the smallest, so the
+    // selection is in motion for the first seconds the tab is open. Let the
+    // sweep finish, then choose explicitly — an explicit choice is never
+    // overridden, so from here the selection is this test's.
+    await waitForCodecSizing(page)
+    await selectCompression(page, 'none')
 
     const sizeLine = page.getByTestId('export-size')
     await expect(sizeLine).toBeVisible()
@@ -429,6 +474,13 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+    // Pin the codec before reading anything. Since #1850 the panel measures
+    // every codec in the background and defaults to the smallest, so the
+    // selection is in motion for the first seconds the tab is open. Let the
+    // sweep finish, then choose explicitly — an explicit choice is never
+    // overridden, so from here the selection is this test's.
+    await waitForCodecSizing(page)
+    await selectCompression(page, 'none')
     await expect(page.getByTestId('export-compression')).toContainText('None')
 
     const downloadPromise = page.waitForEvent('download')
@@ -507,6 +559,14 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+
+    // Pin the codec before reading anything. Since #1850 the panel measures
+    // every codec in the background and defaults to the smallest, so the
+    // selection is in motion for the first seconds the tab is open. Let the
+    // sweep finish, then choose explicitly — an explicit choice is never
+    // overridden, so from here the selection is this test's.
+    await waitForCodecSizing(page)
+    await selectCompression(page, 'none')
 
     // Off by default: the batched-native shape is the smaller file and the one
     // Share itself reads best.
@@ -591,6 +651,237 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
     await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.glb(\/\d+)+/)
     expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
+  })
+
+  test('a Pro user picks a Quality rung, and the panel says what it costs', async ({page}) => {
+    // #1848. The rungs are encoder settings, so what only a browser can show
+    // is that they reach the real wasm encoders and change the file the user
+    // gets — and that the millimetre caption beside them is computed off THIS
+    // model's own bounds rather than being a constant.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+
+    // Pin the codec before reading anything. Since #1850 the panel measures
+    // every codec in the background and defaults to the smallest, so the
+    // selection is in motion for the first seconds the tab is open. Let the
+    // sweep finish, then choose explicitly — an explicit choice is never
+    // overridden, so from here the selection is this test's.
+    await waitForCodecSizing(page)
+    await selectCompression(page, 'none')
+
+    // Balanced by default, and inert until a codec is chosen — there is
+    // nothing for a rung to mean while the file is being handed over as it is.
+    const qualityControl = page.getByTestId('export-quality')
+    await expect(qualityControl).toContainText('Balanced')
+    await expect(qualityControl.getByRole('combobox')).toHaveAttribute('aria-disabled', 'true')
+    await expect(page.getByTestId('export-quality-caption')).toHaveCount(0)
+
+    const balancedBytes = await selectCompression(page, 'draco')
+    await expect(qualityControl.getByRole('combobox')).not.toHaveAttribute('aria-disabled')
+    // The caption is a promise about the user's model, in the unit they
+    // decide in.
+    const balancedCaption = await page.getByTestId('export-quality-caption').textContent()
+    expect(balancedCaption).toMatch(/parts may move up to [\d.]+ mm/)
+
+    const smallestBytes = await selectQuality(page, 'smallest')
+
+    // Fewer POSITION bits is a coarser grid, so the figure has to grow — the
+    // one thing about the caption that cannot be a constant.
+    const smallestCaption = await page.getByTestId('export-quality-caption').textContent()
+    expect(smallestCaption).toMatch(/parts may move up to [\d.]+ mm/)
+    expect(millimetresIn(smallestCaption)).toBeGreaterThan(millimetresIn(balancedCaption))
+
+    // Reduced is the last rung there is. #1852 shipped two lossy rungs below
+    // it and #1854 removed them again — the whole ladder measured −12.4% on
+    // Snowdon, where the container and not the geometry is the file — so the
+    // panel must not still be offering one.
+    await expect(page.getByTestId('export-quality-squashed')).toHaveCount(0)
+    await expect(page.getByTestId('export-quality-smooshed')).toHaveCount(0)
+
+    // Two rungs are two different files. On a fixture this small they need
+    // not differ in SIZE — the encoder-effort half of a rung is model-shaped
+    // (#1848) — so what is asserted is what the panel promises: the figure on
+    // the line is the file that lands in Downloads, at the rung now chosen.
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    const file = await readFile(await (await downloadPromise).path())
+
+    expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+    expect(file.byteLength).toBe(smallestBytes)
+    expect(glbJsonChunk(file).extensionsRequired).toContain('KHR_draco_mesh_compression')
+    // A fourth control row is where a mobile layout regression would show up
+    // as a sideways scroll rather than a missing element (#1838), and at
+    // 390px "Balanced (medium)" beside "Compression type" is the pair that
+    // would push the dialog sideways if the row stopped wrapping.
+    await expectNoHorizontalScroll(page)
+
+    // Meshopt has ONE coarser setting and Balanced already spends it, so
+    // Reduced re-encodes to Balanced's file. The panel says that rather than
+    // leaving a "small" option beside a size line that does not move
+    // (`exportQuality.js#isDracoOnlyRung`).
+    await selectCompression(page, 'meshopt')
+    await expect(page.getByTestId('export-quality-caption'))
+      .toContainText('Meshopt has no coarser setting')
+    await selectCompression(page, 'draco')
+
+    // Back to Balanced and the panel is exactly where it was — the cached
+    // figure for that rung, not a third encode.
+    expect(await selectQuality(page, 'balanced')).toBe(balancedBytes)
+  })
+
+  test('a Pro user downloads a gzipped .glb.gz, at the size the panel promised', async ({page}) => {
+    // #1854. The lossless win that beats the whole quality ladder, because on
+    // a real model the container — JSON node graph plus raw float32 instance
+    // transforms — is where the bytes are, and no mesh codec touches it.
+    //
+    // Only a browser can show this end to end: `CompressionStream` is a
+    // browser API, the figure on the size line comes from one call to it and
+    // the downloaded bytes from another, and the invariant this panel is
+    // built on is that those two agree. A unit test can assert both halves
+    // and still miss that they disagree in Chromium.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+
+    // No codec, which is the selection the measurement is about: gzip alone,
+    // over a file nothing else has squeezed. Pinned after the sweep so the
+    // auto-selection cannot move it later (#1850).
+    await waitForCodecSizing(page)
+    const rawBytes = await selectCompression(page, 'none')
+    expect(rawBytes).toBeGreaterThan(0)
+
+    // The toggle says what the user gets before they get it — a `.glb.gz` is
+    // not a `.glb` and will not drop into the three.js editor.
+    const gzipRow = page.getByTestId('export-gzip-row')
+    await expect(gzipRow).toContainText('Compress download')
+    await expect(gzipRow).toContainText('.glb.gz')
+
+    const gzippedBytes = await toggleGzip(page)
+
+    // The figure on the line is now the `.glb.gz`, not the `.glb` inside it.
+    // `index.ifc` is ~17 KB of mostly JSON, so this is a large margin rather
+    // than a knife edge — and it is the same direction the 6× on Snowdon is.
+    expect(gzippedBytes).toBeLessThan(rawBytes)
+
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    const download = await downloadPromise
+    const file = await readFile(await download.path())
+
+    // Three separate claims, and each has its own way of being wrong. The
+    // NAME must carry both extensions; the LENGTH must be the figure the user
+    // read, which is where a non-deterministic gzip would show up; and the
+    // CONTENTS must be a gzip member of a real GLB, which is what stops an
+    // uncompressed file from being shipped under a `.gz`.
+    expect(download.suggestedFilename()).toMatch(/\.glb\.gz$/)
+    expect(file.byteLength).toBe(gzippedBytes)
+
+    const inflated = gunzipSync(file)
+    expect(inflated.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+    expect(inflated.byteLength).toBe(rawBytes)
+    // …and the GLB inside is the whole model, not a truncated stream: its
+    // JSON chunk parses and still declares the Bldrs payloads the metadata
+    // toggle was left on for.
+    expect(glbJsonChunk(inflated).extensionsUsed).toContain('BLDRS_spatial_tree')
+
+    await expectSnackbarOnTop(page)
+    // A fifth control row, and the one carrying the longest caption in the
+    // panel — at 390px "gzip — saves a .glb.gz, unarchive to open" beside the
+    // toggle is what would push the dialog sideways if the row stopped
+    // wrapping (#1838).
+    await expectNoHorizontalScroll(page)
+  })
+
+  test('the panel measures every codec and defaults to the smallest', async ({page}) => {
+    // #1850. Which codec wins swings enormously with model shape — Draco by
+    // 5× on a geometry-heavy building model, Meshopt by 2.6× on an
+    // instance-heavy one, which is exactly what Share's batched writer
+    // produces — so a user picking on reputation picks wrong about half the
+    // time. The panel measures instead.
+    //
+    // Only a browser can show this: the figures are three REAL encoder runs
+    // against the wasm the page ships, done in the background while the
+    // dialog stays usable, and what is asserted at the end is that the
+    // download weighs exactly the figure the winning option carried.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+
+    // No interaction: opening the tab is the whole trigger.
+    const codecSizes = await waitForCodecSizes(page)
+    for (const mode of ['none', 'meshopt', 'draco']) {
+      expect(codecSizes[mode], `${mode} should have a measured size`).toBeGreaterThan(0)
+    }
+    // On `index.ifc` Draco wins — 13,084 B, against Meshopt's 21,480 and
+    // 17,244 uncompressed, measured through this very spec — but the assertion
+    // is about the RULE, not about this fixture: whichever option is smallest
+    // is the one selected.
+    const smallest = smallestCodecIn(codecSizes)
+    await expect(page.getByTestId('export-compression'))
+      .toContainText(smallest.charAt(0).toUpperCase() + smallest.slice(1))
+    // The dialog took the sweep without seizing up — every control above is
+    // still live, and the layout still fits the mobile projection.
+    await expect(page.getByTestId('export-include-metadata').locator('input')).toBeEnabled()
+    await expectNoHorizontalScroll(page)
+
+    // The size line agrees with the option that won it…
+    expect(await waitForEstimate(page)).toBe(codecSizes[smallest])
+
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    const file = await readFile(await (await downloadPromise).path())
+
+    expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+    // …and so does the file. This is a CACHE HIT, not a re-encode: measured
+    // here, `index.ifc` comes out at 13,084 B under Draco against 21,480 under
+    // Meshopt and 17,244 uncompressed, and the winner's cell is precisely the
+    // one the sweep keeps (`export/codecSizes.js`). So what it pins is that
+    // the panel hands over the bytes it measured — which is the point of
+    // keeping the winner — and nothing about re-encoding.
+    expect(file.byteLength).toBe(codecSizes[smallest])
+
+    // The other half, which the download above cannot reach on any fixture:
+    // the sweep RELEASED Meshopt when Draco beat it, so picking it now runs
+    // the encoder a second time, and the figure it lands on has to be the one
+    // the dropdown option was carrying. That equality is what makes releasing
+    // safe — the encoders are deterministic, so a dropped cell costs CPU and
+    // never a wrong number.
+    const meshoptBytes = await selectCompression(page, 'meshopt')
+    expect(meshoptBytes).toBe(codecSizes.meshopt)
+
+    // An explicit choice is never overridden, however small a figure the
+    // panel is holding for something else.
+    const uncompressedBytes = await selectCompression(page, 'none')
+    expect(uncompressedBytes).toBe(codecSizes.none)
+    await expect(page.getByTestId('export-compression')).toContainText('None')
   })
 
   test('a signed-out user is told what unlocks Save, and gets no dialog', async ({page}) => {

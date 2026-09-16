@@ -13,8 +13,6 @@ import {log} from './utils.js'
  * @return {object}
  */
 export default function makePlugins(root, buildDir) {
-  const assetsDir = path.resolve(root, 'public')
-
   const webIfcShimAliasPlugin = {
     name: 'webIfcShimAlias',
     setup(build) {
@@ -132,16 +130,14 @@ export default function makePlugins(root, buildDir) {
     },
   }
 
-  // Initialize plugins array
+  // Initialize plugins array.
+  //
+  // `copyStaticFiles` is deliberately NOT here — see `makeStaticCopyPlugin`.
   const plugins = [
     progress(),
     threeJsmCompatPlugin,
     fontDisplayPlugin,
     svgrPlugin({plugins: ['@svgr/plugin-jsx'], dimensions: false}),
-    copyStaticFiles({
-      src: assetsDir,
-      dest: buildDir,
-    }),
   ]
 
   // Conditionally include webIfcShimAliasPlugin
@@ -154,4 +150,32 @@ export default function makePlugins(root, buildDir) {
   }
 
   return plugins
+}
+
+
+/**
+ * The `public/` → `docs/` asset copy, as a plugin ONE build may own.
+ *
+ * It is kept out of `makePlugins` because the shared config is spread into
+ * every build in `build.js`, and those builds run concurrently under a single
+ * `Promise.all`. `esbuild-copy-static-files` creates its destination with a
+ * check-then-`mkdir`, so five builds sharing one `dest` race it and the losers
+ * throw `EEXIST: mkdir docs` — intermittently, since it depends on which two
+ * land inside the window (#1852). Nothing was stale: `docs/` is gitignored, so
+ * on CI the builds race to CREATE it, which is why clearing the directory
+ * first never helped.
+ *
+ * Only the build that emits into `docs/` has any reason to copy the asset
+ * tree. The worker bundles and the pro modules were each doing a redundant
+ * full copy on top of that, four of them, for nothing.
+ *
+ * @param {string} root - Root directory
+ * @param {string} buildDir - Build directory
+ * @return {object} an esbuild plugin
+ */
+export function makeStaticCopyPlugin(root, buildDir) {
+  return copyStaticFiles({
+    src: path.resolve(root, 'public'),
+    dest: buildDir,
+  })
 }
