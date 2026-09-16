@@ -178,10 +178,11 @@ describe('loader/glbBatchedExport', () => {
     const result = await exportBatchedModelAsInstancedGlb(double)
     const {json} = parseGlb(result.bytes)
     // (shared x grey), (shared x orange), (other x grey) -> 3 nodes, but
-    // still only 2 unique geometries' worth of geometry accessors (6) + 3
-    // nodes x TRS (9).
+    // still only 2 unique geometries' worth of geometry accessors (6), + 3
+    // TRANSLATION, + 1 ROTATION and 1 SCALE shared by all three (every
+    // placement here is unit-scaled and unrotated).
     expect(json.nodes).toHaveLength(3)
-    expect(json.accessors).toHaveLength(15)
+    expect(json.accessors).toHaveLength(11)
   })
 
   it('bakes SOURCE colors, not the live display palette', async () => {
@@ -299,8 +300,9 @@ describe('loader/glbBatchedExport', () => {
 
     expect(json.nodes).toHaveLength(2)
     expect(json.materials).toHaveLength(2)
-    // 1 shape x 3 geometry accessors + 2 nodes x TRS.
-    expect(json.accessors).toHaveLength(9)
+    // 1 shape x 3 geometry accessors + 2 TRANSLATION + a shared ROTATION and
+    // SCALE.
+    expect(json.accessors).toHaveLength(7)
     const [a, b] = json.meshes.map((mesh) => mesh.primitives[0])
     expect(a.attributes.POSITION).toBe(b.attributes.POSITION)
     expect(a.attributes.NORMAL).toBe(b.attributes.NORMAL)
@@ -327,6 +329,31 @@ describe('loader/glbBatchedExport', () => {
     expect(materialOf[2]).not.toBe(materialOf[0])
   })
 
+  it('shares one instancing accessor across nodes whose transforms coincide', async () => {
+    // Almost every IFC placement is unit-scaled and repeats a small set of
+    // orientations, so SCALE and ROTATION payloads collide constantly across
+    // nodes while TRANSLATION rarely does. Sharing the accessor is legal for
+    // the same reason the geometry accessors are shared — an accessor is an
+    // index, and glTF puts no limit on how many properties resolve to one.
+    const result = await exportBatchedModelAsInstancedGlb(batchFromPlan([
+      {geometry: triangleGeometry(1), x: 1, parent: 11, occurrenceId: 0, path: [1]},
+      {geometry: triangleGeometry(2), x: 2, parent: 12, occurrenceId: 1, path: [2]},
+      {geometry: triangleGeometry(3), x: 3, parent: 13, occurrenceId: 2, path: [3]},
+    ]))
+    const {json} = parseGlb(result.bytes)
+
+    const attributes = json.nodes.map(
+      (node) => node.extensions['EXT_mesh_gpu_instancing'].attributes)
+    expect(attributes).toHaveLength(3)
+    expect(new Set(attributes.map((a) => a.SCALE)).size).toBe(1)
+    expect(new Set(attributes.map((a) => a.ROTATION)).size).toBe(1)
+    // The placements themselves differ, so TRANSLATION must NOT collapse —
+    // a dedup that folded these would put all three parts at one point.
+    expect(new Set(attributes.map((a) => a.TRANSLATION)).size).toBe(3)
+    // 3 shapes x 3 geometry accessors + 3 TRANSLATION + 1 ROTATION + 1 SCALE.
+    expect(json.accessors).toHaveLength(14)
+  })
+
   it('keeps shapes apart when only their normals differ', async () => {
     // ~730 Snowdon shapes share positions and topology but differ in
     // normals. Merging them would change the shading of one of the two.
@@ -339,7 +366,8 @@ describe('loader/glbBatchedExport', () => {
     const {json} = parseGlb(result.bytes)
 
     expect(json.nodes).toHaveLength(2)
-    // 2 shapes x 3 geometry accessors + 2 nodes x TRS.
-    expect(json.accessors).toHaveLength(12)
+    // 2 shapes x 3 geometry accessors + 2 TRANSLATION + a shared ROTATION
+    // and SCALE.
+    expect(json.accessors).toHaveLength(10)
   })
 })

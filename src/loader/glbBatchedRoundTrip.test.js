@@ -236,6 +236,40 @@ describe('batched-native GLB round-trip (writer -> GLTFLoader -> hydrate)', () =
     expect(hydrated.capabilities.batchedPicking).toBe(true)
   })
 
+  it('round-trips placements whose nodes SHARE an instancing accessor', async () => {
+    // Two single-placement shapes, both unit-scaled and unrotated, so their
+    // SCALE and ROTATION payloads are byte-identical and the writer emits one
+    // accessor for each pair. Sharing is invisible to a reader — it resolves
+    // indices — but a shared accessor read at the wrong offset would put both
+    // parts on one transform, so the placements are checked, not the count.
+    const live = new BatchedMesh(2, 6, 6)
+    for (const [i, geometry] of [triangleGeometry(), triangleGeometry(2)].entries()) {
+      live.setMatrixAt(
+        live.addInstance(live.addGeometry(geometry)),
+        new Matrix4().makeTranslation(i + 1, 0, 0))
+    }
+    live.instanceParents = [31, 32]
+    live.instanceOccurrenceIds = [81, 82]
+    live.instanceGeometryIds = [700, 800]
+    live.instanceOccurrencePaths = [[7], [8]]
+    live.instanceSourceColors = [
+      {x: 0.8, y: 0.8, z: 0.8, w: 1},
+      {x: 0.8, y: 0.8, z: 0.8, w: 1},
+    ]
+
+    const {json} = parseGlb(await batchedArtifactBytes(live))
+    const attributes = json.nodes.map(
+      (node) => node.extensions['EXT_mesh_gpu_instancing'].attributes)
+    expect(new Set(attributes.map((a) => a.SCALE)).size).toBe(1)
+    expect(new Set(attributes.map((a) => a.TRANSLATION)).size).toBe(2)
+
+    const hydrated = await parseAndHydrate(await batchedArtifactBytes(live))
+    expect(placementsByOccurrence(hydrated).get(81).matrix[12]).toBe(1)
+    expect(placementsByOccurrence(hydrated).get(82).matrix[12]).toBe(2)
+    expect(placementsByOccurrence(hydrated).get(81).parent).toBe(31)
+    expect(placementsByOccurrence(hydrated).get(82).parent).toBe(32)
+  })
+
   it('carries SOURCE colors through the artifact, not the display palette', async () => {
     const hydrated = await roundTrip(liveBatchedModel())
     // The writer baked grey; the reader's snapshot is grey — so "Source"

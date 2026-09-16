@@ -4,7 +4,7 @@ import {
   makeInstanceGeometryReader,
 } from '../viewer/ifc/batchedInstanceGeometry'
 import {eachBatch} from '../viewer/ifc/batchedModel'
-import {makeGeometryInterner} from './geometryContentKey'
+import {makeContentCache, makeGeometryInterner} from './contentKey'
 import {glbVerbose} from './glbLog'
 
 
@@ -22,14 +22,17 @@ import {glbVerbose} from './glbLog'
  * must not round-trip through glTF materials).
  *
  * Node grouping is per (unique geometry × source color), where "unique
- * geometry" means unique CONTENT — `geometryContentKey` interns the shapes
+ * geometry" means unique CONTENT — `contentKey` interns the shapes
  * by their attribute bytes, because object identity groups two IFC types
  * that emit the same mesh separately and wrote them twice (Share#1859). A
  * generic viewer without our tables still shows an authored-color model
  * colored, while instances of one part stay one draw batch. Materials are
  * shared across every bin of one color rather than minted per bin
  * (Share#1854), and geometry accessors across every bin of one shape — so
- * two colors of one part are two nodes over one set of accessors. Instance
+ * two colors of one part are two nodes over one set of accessors. The
+ * per-node instance transforms are shared the same way, by content: almost
+ * every IFC placement is unit-scaled, so 7,220 Snowdon nodes hold 74
+ * distinct SCALE payloads and 357 distinct ROTATION ones. Instance
  * matrices are written in mesh-local space via `getMatrixAt`, matching the
  * merged bake's convention (the mesh's own transform is ignored on both
  * paths).
@@ -271,6 +274,20 @@ export async function exportBatchedModelAsInstancedGlb(model) {
     return material
   }
 
+  // Instance transforms shared by CONTENT across nodes, the same dedup the
+  // geometry accessors get and legal for the same reason — an accessor is an
+  // index, and glTF puts no limit on how many properties resolve to one.
+  // Worth real bytes because IFC placements are overwhelmingly unit-scaled
+  // and repeat a small set of orientations: 7,220 Snowdon nodes carry 74
+  // distinct SCALE payloads and 357 distinct ROTATION ones, which is
+  // 1,801,935 B of accessor + bufferView JSON and 456,524 B of BIN
+  // (Share#1854). The `tag` keeps a count-4 VEC3 apart from a count-3 VEC4,
+  // which are the same twelve floats and not the same accessor.
+  const instanceAccessorCache = makeContentCache()
+  const instanceAccessor = (type, array) => instanceAccessorCache(
+    [array], type,
+    () => doc.createAccessor().setType(type).setArray(array).setBuffer(buffer))
+
   const tableNodes = []
   for (const group of groups) {
     const {geometry, color, entries} = group
@@ -297,12 +314,9 @@ export async function exportBatchedModelAsInstancedGlb(model) {
       trs.scale.toArray(scale, i * FLOATS_PER_VEC3)
     })
     const batch = instancingExt.createInstancedMesh()
-      .setAttribute('TRANSLATION',
-        doc.createAccessor().setType('VEC3').setArray(translation).setBuffer(buffer))
-      .setAttribute('ROTATION',
-        doc.createAccessor().setType('VEC4').setArray(rotation).setBuffer(buffer))
-      .setAttribute('SCALE',
-        doc.createAccessor().setType('VEC3').setArray(scale).setBuffer(buffer))
+      .setAttribute('TRANSLATION', instanceAccessor('VEC3', translation))
+      .setAttribute('ROTATION', instanceAccessor('VEC4', rotation))
+      .setAttribute('SCALE', instanceAccessor('VEC3', scale))
 
     const node = doc.createNode().setMesh(mesh)
     node.setExtension('EXT_mesh_gpu_instancing', batch)

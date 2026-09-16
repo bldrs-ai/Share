@@ -1,6 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {BufferAttribute, BufferGeometry} from 'three'
-import {makeGeometryInterner} from './geometryContentKey'
+import {makeContentCache, makeGeometryInterner} from './contentKey'
 
 
 /**
@@ -22,7 +22,7 @@ function triangle(over = {}) {
 }
 
 
-describe('loader/geometryContentKey', () => {
+describe('loader/contentKey', () => {
   it('interns two distinct objects holding the same bytes to one', () => {
     const intern = makeGeometryInterner()
     const first = triangle()
@@ -105,3 +105,31 @@ describe('loader/geometryContentKey', () => {
     expect(second(a)).toBe(b)
   })
 })
+
+
+describe('loader/contentKey makeContentCache', () => {
+  it('runs `make` once per distinct content and replays its value', () => {
+    const cache = makeContentCache()
+    const make = jest.fn(() => ({}))
+    const first = cache([new Float32Array([1, 2, 3])], 'VEC3', make)
+    const again = cache([new Float32Array([1, 2, 3])], 'VEC3', make)
+    const other = cache([new Float32Array([1, 2, 4])], 'VEC3', make)
+
+    expect(again).toBe(first)
+    expect(other).not.toBe(first)
+    expect(make).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps payloads apart by tag when the bytes alone would conflate them', () => {
+    // Four VEC3 elements and three VEC4 elements are the same twelve floats
+    // and are emphatically not the same glTF accessor.
+    const cache = makeContentCache()
+    const floats = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]
+    const asVec3 = cache([new Float32Array(floats)], 'VEC3', () => 'vec3')
+    const asVec4 = cache([new Float32Array(floats)], 'VEC4', () => 'vec4')
+
+    expect(asVec3).toBe('vec3')
+    expect(asVec4).toBe('vec4')
+  })
+})
+

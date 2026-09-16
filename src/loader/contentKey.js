@@ -1,7 +1,15 @@
 /**
- * geometryContentKey — intern `BufferGeometry` objects by the CONTENT of the
- * attributes the batched GLB writer serializes, so two objects holding the
- * same bytes are one shape rather than two.
+ * contentKey — identity over the BYTES of typed arrays, for the two places
+ * the batched GLB writer needs one thing where it was emitting many
+ * identical ones.
+ *
+ * `makeGeometryInterner` maps `BufferGeometry` objects to one canonical
+ * object per distinct content, so the writer's existing identity-keyed dedup
+ * becomes content dedup (Share#1859). `makeContentCache` is the same
+ * machinery with the payload left open, which is what lets the writer share
+ * one `EXT_mesh_gpu_instancing` accessor across every node whose
+ * TRANSLATION / ROTATION / SCALE bytes coincide (Share#1854) — 7,220 Snowdon
+ * nodes hold 74 distinct SCALE payloads and 357 distinct ROTATION ones.
  *
  * `glbBatchedExport` used to group on `geometry.uuid`, which is OBJECT
  * identity. The shapes it groups come from `makeInstanceGeometryReader`,
@@ -24,7 +32,9 @@
  * bucket key carries each array's `BYTES_PER_ELEMENT`: a `Uint16Array`
  * `[0, 1]` and a `Uint32Array` `[65536]` are the same four bytes and would
  * otherwise intern to one another, then serialize with different
- * `componentType`s.
+ * `componentType`s. The caller's `tag` is the other half of that: a
+ * count-4 `VEC3` and a count-3 `VEC4` are twelve identical floats and are
+ * not the same accessor.
  */
 
 
@@ -118,6 +128,39 @@ function arraysEqual(a, b) {
 
 
 /**
+ * A cache that returns whatever the FIRST call carrying these bytes produced,
+ * so a caller that would otherwise mint one object per occurrence mints one
+ * per distinct content instead.
+ *
+ * Scope it to one export pass: it retains every distinct payload it is shown,
+ * which is the same set the thing it is deduplicating already holds.
+ *
+ * @return {Function} `(arrays, tag, make) => value` — `arrays` are the typed
+ *   arrays whose bytes are the identity, `tag` separates payloads that the
+ *   bytes alone would conflate, and `make` runs only on a miss
+ */
+export function makeContentCache() {
+  const buckets = new Map()
+  return (arrays, tag, make) => {
+    const key = `${tag}|${bucketKey(arrays)}`
+    let bucket = buckets.get(key)
+    if (!bucket) {
+      bucket = []
+      buckets.set(key, bucket)
+    }
+    for (const candidate of bucket) {
+      if (arraysEqual(candidate.arrays, arrays)) {
+        return candidate.value
+      }
+    }
+    const value = make()
+    bucket.push({arrays, value})
+    return value
+  }
+}
+
+
+/**
  * An interner mapping every geometry to the FIRST object seen carrying the
  * same bytes, so downstream dedup keyed on object identity becomes dedup on
  * content.
@@ -127,30 +170,12 @@ function arraysEqual(a, b) {
  * the whole export on it a moment later, and hashing a shape the file will
  * never contain would only be able to merge two refusals.
  *
- * Scope it to one export pass: it retains every distinct shape it is shown,
- * which is the same set the accessor table already holds.
- *
  * @return {Function} `(geometry) => geometry` — the canonical object
  */
 export function makeGeometryInterner() {
-  const buckets = new Map()
+  const cache = makeContentCache()
   return (geometry) => {
     const arrays = writtenArrays(geometry)
-    if (!arrays) {
-      return geometry
-    }
-    const key = bucketKey(arrays)
-    let bucket = buckets.get(key)
-    if (!bucket) {
-      bucket = []
-      buckets.set(key, bucket)
-    }
-    for (const candidate of bucket) {
-      if (arraysEqual(candidate.arrays, arrays)) {
-        return candidate.geometry
-      }
-    }
-    bucket.push({geometry, arrays})
-    return geometry
+    return arrays ? cache(arrays, 'geometry', () => geometry) : geometry
   }
 }

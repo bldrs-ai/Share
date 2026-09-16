@@ -74,16 +74,19 @@ size read still never touching BIN.
      from the merged-mesh layout, not the batched one. The levers that do
      exist there are new — material dedup (12,251 materials, 90 distinct,
      ~1.74 MB) and single-instance node collapse (~2.5 MB) — for ~4.3 MB
-     together. **Material dedup has since landed** (§1.1b). Single-instance
-     collapse has not: content dedup cuts its premise to 5,235 nodes /
-     ~2.0 MB, and what is left needs a mixed instanced/plain artifact shape
-     that both readers refuse today — evaluated and deferred, not skipped.
+     together. **Material dedup has since landed**, and so has a third
+     lever neither issue named: sharing the `EXT_mesh_gpu_instancing`
+     accessors by content, worth 1,801,935 B of JSON + 456,524 B of BIN and
+     writer-side (§1.1b). Single-instance collapse has NOT landed: the two
+     cut its premise to ~0.7 MB, and what is left needs a mixed
+     instanced/plain artifact shape that both readers refuse today —
+     evaluated and deferred, not skipped.
    - **The largest single lossless item, #1859, has since landed** (§1.1b).
      The batched writer keyed geometry groups on `geometry.uuid` (object
      identity) rather than content, so 5,031 of the 12,251 groups were
      byte-identical duplicates — roughly 6.08 MB of duplicated BIN plus
      5.9 MB of JSON bookkeeping, **~12 MB, 17.7% of the artifact**. It now
-     keys on content via `src/loader/geometryContentKey.js`.
+     keys on content via `src/loader/contentKey.js`.
    - **New: #1858.** `BLDRS_element_properties` capture took **24.6
      minutes** on Snowdon — 92% of total writer time. The model is on
      screen in ~70 s; the artifact (and therefore export, and the
@@ -119,8 +122,8 @@ size read still never touching BIN.
    and are both now shipped.
 4. **Open work beyond S4, in roughly the priority order the epic's handoffs
    give it:** #1854 (JSON slimming — the two originally-named levers measure
-   0; of the two new ones material dedup has landed and single-instance node
-   collapse is evaluated and deferred, §1.1b), #1859 (dedupe duplicate
+   0; material dedup and instancing-accessor sharing have landed,
+   single-instance node collapse is evaluated and deferred, §1.1b), #1859 (dedupe duplicate
    geometry groups, ~12 MB / 17.7% — **landed**, §1.1b), #1858 (24.6-minute
    `BLDRS_element_properties` capture — new), #1857 (deferred — ~2.7% of a
    Draco'd export, not the headline it was thought to be), #1853
@@ -238,7 +241,7 @@ groups the writer's own stated key should already have merged. Cost:
 file, and the reuse ratio the node graph's cost follows from is 3.04×, not
 1.78×.
 
-`src/loader/geometryContentKey.js` is the fix: an interner that maps every
+`src/loader/contentKey.js` is the fix: an interner that maps every
 geometry to the first object seen carrying the same POSITION + NORMAL + index
 bytes, so the existing identity-keyed dedup below it becomes content dedup
 without changing shape. Three things it has to get right, and each has a test
@@ -247,8 +250,8 @@ that a mutation was verified to turn red:
 - **The hash only buckets; byte equality decides.** A 32-bit hash over
   thousands of shapes collides at a percent-level rate and a collision here
   would draw the wrong geometry, so every bucket candidate is compared byte
-  for byte. `geometryContentKey.test.js` carries a constructed FNV-1a
-  collision (0xEDC3_D3B7) precisely so that check is not vacuous.
+  for byte. `contentKey.test.js` carries a constructed FNV-1a collision
+  (0xEDC3_D3B7) precisely so that check is not vacuous.
 - **Merged groups concatenate in batch-iteration order, and the
   `BLDRS_instance_tables` rows travel with the transforms.** They cannot
   diverge, because both are derived from one `entries` list in one pass — but
@@ -275,18 +278,40 @@ pure function of the source colour, and readers take colours from
 `BLDRS_instance_tables` and never from the material (§1.1, and
 `bldrsInstanceTables.js` on why), so sharing is exact and writer-side only.
 
-**Not done: single-instance node collapse.** 10,591 of 12,251 nodes carried
-exactly one instance, and expressing that one transform through three
-`EXT_mesh_gpu_instancing` accessors instead of the node's own TRS cost ~2.5 MB
-of JSON. Content dedup takes most of that premise away — after it, 5,235
-nodes are single-instance and the lever is worth ~2.0 MB — and the remainder
-is not writer-side: it creates a third artifact shape (instanced nodes and
-plain nodes in one file) that `instancedGlbToBatchedModel.js`'s
-`detectArtifactShape` has no answer for and `glbPortable.js#collectInstances`
-skips outright
-(`continue` on a node with no instancing extension, which would silently drop
-86.5% of placements from a portable export). See #1854 for the full
-evaluation.
+**The instance transforms are shared by content too**, which is the same
+mechanism one level up: almost every IFC placement is unit-scaled and the
+orientations repeat, so the 7,220 nodes left after content dedup hold **74
+distinct SCALE payloads and 357 distinct ROTATION ones** against 7,205
+distinct TRANSLATION ones. One accessor per distinct payload is 1,801,935 B
+of accessor + bufferView JSON and 456,524 B of BIN. The `tag` on the content
+cache is what keeps a count-4 `VEC3` apart from a count-3 `VEC4` — twelve
+identical floats, emphatically not one accessor.
+
+**Evaluated and NOT done: single-instance node collapse.** 10,591 of 12,251
+nodes carried exactly one instance, and expressing that transform through
+three `EXT_mesh_gpu_instancing` accessors rather than the node's own TRS was
+measured at ~2.5 MB of JSON — the third lever #1854 named. Two things took
+it off the table, in this order:
+
+1. **The two levers above eat most of it, writer-side.** Content dedup leaves
+   5,235 single-instance nodes, not 10,591, dropping the lever to
+   ~2,015,475 B; accessor sharing then takes 1,801,935 B of that same JSON
+   without touching a reader. What collapse would still add is the
+   per-node TRANSLATION accessor and the extension object, minus the node
+   TRS it writes back — on the order of 0.7 MB.
+2. **It is not a writer change.** A collapsed node is a plain `Mesh` with
+   `extras.bldrsTableNode`, so the artifact becomes a THIRD shape — instanced
+   and plain nodes in one file — and both readers refuse it.
+   `instancedGlbToBatchedModel.js#detectArtifactShape` answers 'instanced' on
+   one stamped `InstancedMesh` and `joinNodesToTables` then leaves every
+   collapsed node's table row uncovered, so the join returns null and the
+   whole cache hit degrades to a plain GLTFLoader model with no picking and
+   no palette. `glbPortable.js#collectInstances` `continue`s on a node with
+   no instancing extension, silently dropping those placements from a
+   portable export, and `isPortableRewritable` gates on the extension name
+   being in `extensionsUsed` at all. Unifying the two joins and the two
+   shapes is a larger change than both levers above combined, against ~0.7 MB
+   — so it is recorded here rather than half-landed.
 
 ### 1.2 Where a download can be located from
 
