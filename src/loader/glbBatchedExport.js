@@ -4,6 +4,7 @@ import {
   makeInstanceGeometryReader,
 } from '../viewer/ifc/batchedInstanceGeometry'
 import {eachBatch} from '../viewer/ifc/batchedModel'
+import {makeGeometryInterner} from './geometryContentKey'
 import {glbVerbose} from './glbLog'
 
 
@@ -20,9 +21,15 @@ import {glbVerbose} from './glbLog'
  * colors ride in `BLDRS_instance_tables` (see that module for why colors
  * must not round-trip through glTF materials).
  *
- * Node grouping is per (unique geometry × source color): a generic viewer
- * without our tables still shows an authored-color model colored (material
- * per bin), while instances of one part stay one draw batch. Instance
+ * Node grouping is per (unique geometry × source color), where "unique
+ * geometry" means unique CONTENT — `geometryContentKey` interns the shapes
+ * by their attribute bytes, because object identity groups two IFC types
+ * that emit the same mesh separately and wrote them twice (Share#1859). A
+ * generic viewer without our tables still shows an authored-color model
+ * colored, while instances of one part stay one draw batch. Materials are
+ * shared across every bin of one color rather than minted per bin
+ * (Share#1854), and geometry accessors across every bin of one shape — so
+ * two colors of one part are two nodes over one set of accessors. Instance
  * matrices are written in mesh-local space via `getMatrixAt`, matching the
  * merged bake's convention (the mesh's own transform is ignored on both
  * paths).
@@ -67,8 +74,16 @@ function decomposeStrict(matrix) {
 
 
 /**
- * Group every instance of the model by (geometry reference × exact source
+ * Group every instance of the model by (geometry CONTENT × exact source
  * color), preserving batch iteration order within each group.
+ *
+ * Two shapes with the same bytes land in one group, so merging is just
+ * appending to the group that is already there: every group's `entries` is
+ * one list in global batch-iteration order, and the transforms AND the
+ * `BLDRS_instance_tables` rows are both derived from that one list further
+ * down. Nothing can reorder one without the other — which is the invariant
+ * the whole join rests on (see `bldrsInstanceTables.js`, "Instance order is
+ * the contract").
  *
  * @param {object} model BatchedMesh or Group of decorated batches
  * @return {Array<object>|null} groups
@@ -85,6 +100,10 @@ function collectInstanceGroups(model) {
   // shape used by both batches to come back as the same object, which is
   // what the retained table used to guarantee.
   const geometryAt = makeInstanceGeometryReader()
+  // ...and one interner, for the same reason at the next level down: the
+  // reader hands back one object per conway `geometryExpressID`, and
+  // distinct ids routinely carry identical bytes.
+  const internGeometry = makeGeometryInterner()
   eachBatch(model, (mesh) => {
     if (failed || !mesh.instanceParents || !hasBatchedGeometry(mesh) ||
         typeof mesh.getMatrixAt !== 'function') {
@@ -100,7 +119,7 @@ function collectInstanceGroups(model) {
     }
     const scratch = new Matrix4()
     for (let batchId = 0; batchId < mesh.instanceParents.length; batchId++) {
-      const geometry = geometryAt(mesh, batchId)
+      const geometry = internGeometry(geometryAt(mesh, batchId))
       const color = colors[batchId]
       if (!geometry || !color) {
         failed = true
@@ -113,7 +132,9 @@ function collectInstanceGroups(model) {
         failed = true
         return
       }
-      const key = `${geometry.uuid}|${color.x},${color.y},${color.z},${color.w}`
+      // `uuid` of the INTERNED object — content identity, since the
+      // interner returns the first object it saw with these bytes.
+      const key = `${geometry.uuid}|${colorKey(color)}`
       let group = groups.get(key)
       if (!group) {
         group = {geometry, color, entries: []}
@@ -132,6 +153,19 @@ function collectInstanceGroups(model) {
     return null
   }
   return [...groups.values()]
+}
+
+
+/**
+ * The exact source color, as a map key. Used for both halves of the writer's
+ * dedup — the group key's color component and the shared-material table — so
+ * that two bins agreeing on color agree on material by construction.
+ *
+ * @param {object} color `{x, y, z, w}`
+ * @return {string}
+ */
+function colorKey(color) {
+  return `${color.x},${color.y},${color.z},${color.w}`
 }
 
 
@@ -207,17 +241,25 @@ export async function exportBatchedModelAsInstancedGlb(model) {
     return acc
   }
 
-  const tableNodes = []
+  // Materials per distinct source color, shared across every geometry bin
+  // that color appears in. The writer used to mint one per (geometry ×
+  // color) bin: 12,251 declared for 90 distinct on Snowdon, 1,758,073 B of
+  // JSON for 12,970 B of content (Share#1854). A material here is a pure
+  // function of the color, so sharing is exact — and readers take colors
+  // from `BLDRS_instance_tables`, never from the material, so nothing
+  // downstream can tell the difference.
+  const materials = new Map()
   const scratchColor = new Color()
-  for (const group of groups) {
-    const {geometry, color, entries} = group
-    const acc = accessorsFor(geometry)
-
-    // Material for generic viewers only — OUR reader takes colors from the
-    // tables. baseColorFactor is linear-space per spec, so convert like
-    // three's exporter would; the verbatim value goes in the table.
+  const materialFor = (color) => {
+    const key = colorKey(color)
+    let material = materials.get(key)
+    if (material) {
+      return material
+    }
+    // baseColorFactor is linear-space per spec, so convert like three's
+    // exporter would; the verbatim value goes in the table.
     scratchColor.setRGB(color.x, color.y, color.z).convertSRGBToLinear()
-    const material = doc.createMaterial()
+    material = doc.createMaterial()
       .setBaseColorFactor([scratchColor.r, scratchColor.g, scratchColor.b, color.w])
       .setMetallicFactor(0)
       .setRoughnessFactor(1)
@@ -225,6 +267,18 @@ export async function exportBatchedModelAsInstancedGlb(model) {
     if (color.w < 1) {
       material.setAlphaMode('BLEND')
     }
+    materials.set(key, material)
+    return material
+  }
+
+  const tableNodes = []
+  for (const group of groups) {
+    const {geometry, color, entries} = group
+    const acc = accessorsFor(geometry)
+
+    // Material for generic viewers only — OUR reader takes colors from the
+    // tables.
+    const material = materialFor(color)
 
     const prim = doc.createPrimitive()
       .setAttribute('POSITION', acc.position)
@@ -277,6 +331,7 @@ export async function exportBatchedModelAsInstancedGlb(model) {
   const instanceCount = tableNodes.reduce((total, node) => total + node.count, 0)
   glbVerbose(
     `batched writer: ${groups.length} node(s), ${geometryAccessors.size} unique ` +
-    `geometry(ies), ${instanceCount} instance(s), ${bytes.byteLength}B`)
+    `geometry(ies), ${materials.size} material(s), ${instanceCount} instance(s), ` +
+    `${bytes.byteLength}B`)
   return {bytes, tableNodes}
 }

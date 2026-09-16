@@ -74,13 +74,16 @@ size read still never touching BIN.
      from the merged-mesh layout, not the batched one. The levers that do
      exist there are new — material dedup (12,251 materials, 90 distinct,
      ~1.74 MB) and single-instance node collapse (~2.5 MB) — for ~4.3 MB
-     together.
-   - **New, and now the largest single lossless item: #1859.** The batched
-     writer keys geometry groups on `geometry.uuid` (object identity)
-     rather than content, so 5,031 of the 12,251 groups are byte-identical
-     duplicates — roughly 6.08 MB of duplicated BIN plus 5.9 MB of JSON
-     bookkeeping, **~12 MB, 17.7% of the artifact**, entirely lossless and
-     untouched by anything shipped so far.
+     together. **Material dedup has since landed** (§1.1b). Single-instance
+     collapse has not: content dedup cuts its premise to 5,235 nodes /
+     ~2.0 MB, and what is left needs a mixed instanced/plain artifact shape
+     that both readers refuse today — evaluated and deferred, not skipped.
+   - **The largest single lossless item, #1859, has since landed** (§1.1b).
+     The batched writer keyed geometry groups on `geometry.uuid` (object
+     identity) rather than content, so 5,031 of the 12,251 groups were
+     byte-identical duplicates — roughly 6.08 MB of duplicated BIN plus
+     5.9 MB of JSON bookkeeping, **~12 MB, 17.7% of the artifact**. It now
+     keys on content via `src/loader/geometryContentKey.js`.
    - **New: #1858.** `BLDRS_element_properties` capture took **24.6
      minutes** on Snowdon — 92% of total writer time. The model is on
      screen in ~70 s; the artifact (and therefore export, and the
@@ -115,13 +118,14 @@ size read still never touching BIN.
    issues (#1844 picking on a re-opened Bldrs GLB, #1843 portable export)
    and are both now shipped.
 4. **Open work beyond S4, in roughly the priority order the epic's handoffs
-   give it:** #1854 (JSON slimming, now at the front of the queue — the two
-   originally-named levers measure 0, new ones are worth ~4.3 MB), #1859
-   (dedupe duplicate geometry groups, ~12 MB / 17.7% — new, and now the
-   largest single item), #1858 (24.6-minute `BLDRS_element_properties`
-   capture — new), #1857 (deferred — ~2.7% of a Draco'd export, not the
-   headline it was thought to be), #1853 (decimation, deprioritised — it
-   attacks the ~1.2 MB geometry term on Snowdon, not the container), S5
+   give it:** #1854 (JSON slimming — the two originally-named levers measure
+   0; of the two new ones material dedup has landed and single-instance node
+   collapse is evaluated and deferred, §1.1b), #1859 (dedupe duplicate
+   geometry groups, ~12 MB / 17.7% — **landed**, §1.1b), #1858 (24.6-minute
+   `BLDRS_element_properties` capture — new), #1857 (deferred — ~2.7% of a
+   Draco'd export, not the headline it was thought to be), #1853
+   (decimation, deprioritised — it attacks the ~1.2 MB geometry term on
+   Snowdon, not the container), S5
    #1836 (further export formats, §6).
 5. **§7's two open questions are still open.** Whether free users get one
    export as a conversion moment (§7.1) and how `shareProPendingReauth`
@@ -213,6 +217,76 @@ Two properties of the artifact matter for a download:
   originator's own model, so no leak *to us* — but a user exporting to hand
   the GLB onward may not want vendor psets travelling with it. The export
   therefore offers a "strip Bldrs metadata" option (§4.3).
+
+### 1.1b What the writer groups on (#1859, #1854)
+
+`src/loader/glbBatchedExport.js#collectInstanceGroups` bins every placement
+into one node per **(geometry content × exact source colour)**, and that
+grouping is where the artifact's size is decided — the batched-native layout
+spends one node + one mesh + six accessors + two bufferViews per group, so
+the group count multiplies straight through the JSON chunk.
+
+**It used to bin on `geometry.uuid`, which is object identity, not content.**
+The shapes arrive from `makeInstanceGeometryReader`, whose cache keys on
+conway's `geometryExpressID`
+(`viewer/ifc/batchedInstanceGeometry.js#sourceKey`), so two IFC types that
+emit byte-identical meshes arrived as two objects and were written twice.
+Measured on a real Snowdon artifact: **12,251 groups over 7,178 distinct
+contents** — 5,031 of them (41%) byte-identical in geometry *and* colour, i.e.
+groups the writer's own stated key should already have merged. Cost:
+6,079,368 B of duplicated BIN plus ~5.9 MB of JSON bookkeeping, ~17.7% of the
+file, and the reuse ratio the node graph's cost follows from is 3.04×, not
+1.78×.
+
+`src/loader/geometryContentKey.js` is the fix: an interner that maps every
+geometry to the first object seen carrying the same POSITION + NORMAL + index
+bytes, so the existing identity-keyed dedup below it becomes content dedup
+without changing shape. Three things it has to get right, and each has a test
+that a mutation was verified to turn red:
+
+- **The hash only buckets; byte equality decides.** A 32-bit hash over
+  thousands of shapes collides at a percent-level rate and a collision here
+  would draw the wrong geometry, so every bucket candidate is compared byte
+  for byte. `geometryContentKey.test.js` carries a constructed FNV-1a
+  collision (0xEDC3_D3B7) precisely so that check is not vacuous.
+- **Merged groups concatenate in batch-iteration order, and the
+  `BLDRS_instance_tables` rows travel with the transforms.** They cannot
+  diverge, because both are derived from one `entries` list in one pass — but
+  the join is by ROW (`extras.bldrsTableNode`, then index), so a merge that
+  ordered one side differently would decouple every element id from its
+  geometry. This is the `BLDRS_face_ids` identity hazard in a new place; it is
+  pinned by a fixture whose two duplicate shapes *interleave*, so a per-shape
+  concatenation is distinguishable from a batch-order one.
+- **Same geometry, different colour must SHARE accessors, not merge.** 42
+  Snowdon groups are that case. They stay distinct nodes with distinct
+  materials over one set of POSITION/NORMAL/indices accessors — which is what
+  `accessorsFor` already did for one geometry object, and now does for one
+  geometry *content*.
+
+**NORMAL is part of the identity.** ~730 Snowdon shapes share positions and
+topology but differ in normals (smoothing or winding variants); hashing
+POSITION + indices alone gives 6,448 distinct against 7,178. They are
+correctly not merged, and the two numbers are not in contradiction.
+
+**Materials are shared per colour, not minted per bin** (#1854). The writer
+used to create one material per group: 12,251 declared for 90 distinct
+colours, 1,758,073 B of JSON for 12,970 B of content. A material here is a
+pure function of the source colour, and readers take colours from
+`BLDRS_instance_tables` and never from the material (§1.1, and
+`bldrsInstanceTables.js` on why), so sharing is exact and writer-side only.
+
+**Not done: single-instance node collapse.** 10,591 of 12,251 nodes carried
+exactly one instance, and expressing that one transform through three
+`EXT_mesh_gpu_instancing` accessors instead of the node's own TRS cost ~2.5 MB
+of JSON. Content dedup takes most of that premise away — after it, 5,235
+nodes are single-instance and the lever is worth ~2.0 MB — and the remainder
+is not writer-side: it creates a third artifact shape (instanced nodes and
+plain nodes in one file) that `instancedGlbToBatchedModel.js`'s
+`detectArtifactShape` has no answer for and `glbPortable.js#collectInstances`
+skips outright
+(`continue` on a node with no instancing extension, which would silently drop
+86.5% of placements from a portable export). See #1854 for the full
+evaluation.
 
 ### 1.2 Where a download can be located from
 
@@ -753,7 +827,7 @@ ever asks to drag a `.glb.gz` back in, that is its own issue.
 rewrite the pro module only calls: `export/glbPortable.js#rewriteGlbPortable`.
 
 The default export IS the batched-native artifact (§1.1) — one glTF mesh per
-unique geometry × source colour, every placement carried by
+unique geometry CONTENT × source colour (§1.1b), every placement carried by
 `EXT_mesh_gpu_instancing`, and the element names in `BLDRS_spatial_tree`
 rather than in glTF nodes. That is the right shape for Share's reader and the
 wrong one for everyone else: the writer marks the extension
