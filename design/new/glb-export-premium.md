@@ -66,11 +66,15 @@ size read still never touching BIN.
      re-scored from "the biggest remaining win" to **~2.7% of a Draco'd
      export** and is deferred — not the priority the epic body still
      states.
-   - **#1854**'s two named JSON-slimming levers (material dedup,
-     single-instance node collapse) both measure **0 bytes**: the writer
-     emits no node names, and all 12,251 `min`/`max` pairs already live on
-     `POSITION` accessors, where glTF requires them. New levers there are
-     measured worth ~4.3 MB.
+   - **#1854**'s two named JSON-slimming levers both measure **0 bytes**:
+     dropping node `name` strings recovers nothing because the batched
+     writer emits no names at all, and dropping `min`/`max` on everything
+     but `POSITION` recovers nothing because all 12,251 pairs are already
+     on `POSITION` accessors, where glTF requires them. Both were reasoned
+     from the merged-mesh layout, not the batched one. The levers that do
+     exist there are new — material dedup (12,251 materials, 90 distinct,
+     ~1.74 MB) and single-instance node collapse (~2.5 MB) — for ~4.3 MB
+     together.
    - **New, and now the largest single lossless item: #1859.** The batched
      writer keys geometry groups on `geometry.uuid` (object identity)
      rather than content, so 5,031 of the 12,251 groups are byte-identical
