@@ -84,6 +84,11 @@ const NO_CODEC_SIZES = {
   isPaused: false,
   start: jest.fn(),
   stop: jest.fn(),
+  // The hook's one retention slot, which the panel's size-line effect claims
+  // on every run (`export/useCodecSizes.js`). A jest.fn here, because what
+  // this suite can say about it is which cell the panel hands over; that a
+  // claim releases the cell before it is the hook's own suite.
+  retainEstimate: jest.fn(),
 }
 
 const ARTIFACT = {
@@ -742,6 +747,32 @@ describe('ExportSection', () => {
 
       expect(releaseQualityExports)
         .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'smallest')
+    })
+
+    it('hands the cell it just filled to the one retention slot', async () => {
+      // The estimate read POPULATES a compressed cell for the codec on
+      // screen, and the sweep tracks only its own winner — so a manually
+      // selected codec, or a rung the sweep never measured, filled a cell
+      // nothing was ever going to release (#1852 review). Every axis of the
+      // cell has to travel with it: the slot releases by artifact, codec,
+      // Portable and rung, and a claim naming the wrong rung would free a
+      // file the user is still looking at.
+      settleSizes()
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      chooseCompression('draco')
+      await act(async () => {})
+
+      expect(NO_CODEC_SIZES.retainEstimate)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'balanced')
+
+      chooseQuality('smallest')
+      await act(async () => {})
+
+      expect(NO_CODEC_SIZES.retainEstimate)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'smallest')
     })
 
     it('re-estimates on the rung, because two rungs are two different files', async () => {

@@ -117,7 +117,8 @@ export default function ExportSection() {
   // intuition: Draco cannot touch `EXT_mesh_gpu_instancing` accessors at all,
   // which is most of a batched-native artifact (#1850, `codecSizes.js`).
   const {
-    sizesByCodec, measuringCodec, isMeasuring, isStopping, isPaused, start: startSizing, stop: stopSizing,
+    sizesByCodec, measuringCodec, isMeasuring, isStopping, isPaused,
+    start: startSizing, stop: stopSizing, retainEstimate,
   } = useCodecSizes(glbArtifact, {quality, isPortable, isGzipped, isMetadataIncluded})
   const theme = useTheme()
   // Both download sizes, read from the artifact's header when the tab opens
@@ -159,10 +160,25 @@ export default function ExportSection() {
         setIsEstimating(false)
       }
     })
+    // The read above POPULATES a compressed cell for the codec on screen —
+    // two whole copies of the export — and the sweep only ever tracked the
+    // winner it kept, so manually selecting a codec it had already released
+    // left that cell on the artifact for the rest of the session (#1852
+    // review). Hand it to the one retention slot, which releases whatever it
+    // held before and empties itself when the panel goes
+    // (`useCodecSizes.js`). Claimed synchronously rather than in the `.then`,
+    // because `artifactSizes` inserts the cell on the way in and the
+    // selection can move again before it resolves.
+    //
+    // The rung eviction below overlaps this by exactly one cell when the
+    // quality changes — both name the cell being left. Releasing twice is a
+    // second `Map.delete` of a key already gone, which is why the overlap is
+    // spelled out here rather than worked around.
+    retainEstimate(glbArtifact, compression, isPortable, quality)
     return () => {
       isStale = true
     }
-  }, [glbArtifact, compression, isPortable, quality, isGzipped])
+  }, [glbArtifact, compression, isPortable, quality, isGzipped, retainEstimate])
 
   useEffect(() => {
     // Hand back the rung the user just left. Every rung is a different file,

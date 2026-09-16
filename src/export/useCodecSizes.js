@@ -31,6 +31,12 @@ import {isSweepComplete, measureCodecSizes, shouldAutoMeasure} from './codecSize
  * single re-encode, exactly as it does on the size line. It is passed in only
  * so the run's releases keep the codec the panel will select.
  *
+ * `retainEstimate` is the other half of the sweep's memory bound, handed out
+ * because the panel fills estimate cells the sweep never sees: the size line
+ * re-encodes for whatever codec is selected, and a cell filled that way was
+ * attached to the artifact for the rest of the session. Both claim the one
+ * slot below; see it for why that is a slot and not two.
+ *
  * @param {?object} artifact The store's `glbArtifact` slot
  * @param {object} options
  * @param {string} options.quality One of `exportQuality.js`'s `QUALITY_LEVELS`
@@ -45,6 +51,7 @@ import {isSweepComplete, measureCodecSizes, shouldAutoMeasure} from './codecSize
  *   isPaused: boolean,
  *   start: Function,
  *   stop: Function,
+ *   retainEstimate: Function,
  * }}
  */
 export default function useCodecSizes(artifact, {quality, isPortable, isGzipped = false, isMetadataIncluded}) {
@@ -68,23 +75,53 @@ export default function useCodecSizes(artifact, {quality, isPortable, isGzipped 
   // re-running three encoders for that would be absurd.
   const metadataRef = useRef(isMetadataIncluded)
   metadataRef.current = isMetadataIncluded
-  // How to release the one cell the last sweep left in the estimate cache.
-  // A thunk rather than the mode, because releasing needs the artifact,
-  // Portable and quality THAT sweep ran at, and by the time this is called
-  // the render's own values may have moved on.
-  const releaseRetainedRef = useRef(null)
+  // THE one compressed cell the Export tab keeps, as the four fields it takes
+  // to release it (`releaseCompressedExport`) rather than as a thunk, so a
+  // claim can tell "the cell I already hold" from "a different one". Not the
+  // render's values: a sweep retains the cell IT ran at, and by the time this
+  // is read the panel may have moved on.
+  const retainedRef = useRef(null)
 
-  // Nothing outside a sweep reuses the retained cell: remounting the panel
-  // re-runs the whole axis from scratch, so a winner held past the sweep that
-  // produced it is never read again. Hence release on unmount and on restart,
-  // and release whatever is in the slot before recording a new cell in it.
-  // Releasing only drops a cache entry (`artifactSizes.js`), so an export
-  // already holding the promise still resolves; the cost of being wrong here
-  // is a re-encode, not a failure.
+  // Nothing outside the panel reuses a retained cell: remounting re-runs the
+  // whole axis from scratch, so a cell held past unmount is never read again.
+  // Hence release on unmount and on restart, and release whatever is in the
+  // slot before recording a new cell in it. Releasing only drops a cache
+  // entry (`artifactSizes.js`), so an export already holding the promise still
+  // resolves; the cost of being wrong here is a re-encode, not a failure.
   const releaseRetained = useCallback(() => {
-    releaseRetainedRef.current?.()
-    releaseRetainedRef.current = null
+    const held = retainedRef.current
+    retainedRef.current = null
+    if (held) {
+      releaseCompressedExport(held.artifact, held.mode, held.isPortable, held.quality)
+    }
   }, [])
+
+  // ONE slot, two claimants, last claim wins — the whole of the Export tab's
+  // estimate-cell retention policy, in one place because splitting it is what
+  // went wrong twice (#1852 review). The sweep claims the winner it kept for
+  // the selection that follows; the panel's size line claims whatever cell it
+  // just filled for the codec on screen, which nothing tracked at all before
+  // and so stayed on the artifact — both metadata variants — for the rest of
+  // the session. They cannot fight over a cell because there is only one to
+  // hold, and re-claiming the cell already held releases nothing: that is the
+  // auto-selection landing on the sweep's winner, and freeing it there would
+  // make the panel re-encode the very file the sweep kept it to avoid.
+  //
+  // Gzip is deliberately absent from the key, as it is from the cache's own
+  // (`artifactSizes.js`): gzip caches two integers beside the cell rather than
+  // a fourth dimension of it, so releasing by these four covers the gzipped
+  // selection too.
+  const retain = useCallback((cellArtifact, mode, cellIsPortable, cellQuality) => {
+    const held = retainedRef.current
+    if (held && held.artifact === cellArtifact && held.mode === mode &&
+        held.isPortable === cellIsPortable && held.quality === cellQuality) {
+      return
+    }
+    releaseRetained()
+    retainedRef.current = mode === null ?
+      null :
+      {artifact: cellArtifact, mode, isPortable: cellIsPortable, quality: cellQuality}
+  }, [releaseRetained])
 
   const stop = useCallback(() => {
     // The encoders are synchronous wasm with no abort, so this ends the QUEUE
@@ -157,10 +194,7 @@ export default function useCodecSizes(artifact, {quality, isPortable, isGzipped 
             }
             return
           }
-          releaseRetained()
-          releaseRetainedRef.current = mode === null ?
-            null :
-            () => releaseCompressedExport(artifact, mode, isPortable, quality)
+          retain(artifact, mode, isPortable, quality)
         },
       })
     } finally {
@@ -174,7 +208,7 @@ export default function useCodecSizes(artifact, {quality, isPortable, isGzipped 
         setIsPaused(!isSweepComplete(measured))
       }
     }
-  }, [artifact, quality, isPortable, isGzipped, releaseRetained])
+  }, [artifact, quality, isPortable, isGzipped, retain])
 
   useEffect(() => {
     let isStale = false
@@ -213,5 +247,5 @@ export default function useCodecSizes(artifact, {quality, isPortable, isGzipped 
     }
   }, [artifact, run, releaseRetained])
 
-  return {sizesByCodec, measuringCodec, isMeasuring, isStopping, isPaused, start: run, stop}
+  return {sizesByCodec, measuringCodec, isMeasuring, isStopping, isPaused, start: run, stop, retainEstimate: retain}
 }

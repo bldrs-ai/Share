@@ -268,6 +268,53 @@ describe('useCodecSizes', () => {
     expect(releaseCompressedExport).toHaveBeenCalledWith(ARTIFACT, 'draco', false, 'balanced')
   })
 
+  it('drops the sweep\'s winner when the panel claims a cell of its own', async () => {
+    // The panel's size line re-encodes for whatever codec is SELECTED, which
+    // fills a cell the sweep does not track — so picking a codec the sweep
+    // had already released left that cell on the artifact for the rest of the
+    // session while the hook went on holding the winner beside it (#1852
+    // review). One slot: the panel's claim displaces the sweep's.
+    const {result} = renderHook(() => useCodecSizes(ARTIFACT, BALANCED))
+    await waitFor(() => expect(result.current.sizesByCodec).toEqual(SIZES))
+    await waitFor(() => expect(result.current.isMeasuring).toBe(false))
+    releaseCompressedExport.mockClear()
+
+    act(() => result.current.retainEstimate(ARTIFACT, 'meshopt', false, 'balanced'))
+
+    expect(releaseCompressedExport).toHaveBeenCalledWith(ARTIFACT, 'draco', false, 'balanced')
+  })
+
+  it('keeps the winner when the panel claims the very cell the sweep kept', async () => {
+    // The auto-selection lands on the winner, and the size line then reads
+    // the cell the sweep kept for exactly that. Releasing it on the way past
+    // would re-create the bug two rounds of this review ago — a winner
+    // measured and then thrown away, so selecting it re-encodes up to 50 MB
+    // on the main thread.
+    const {result} = renderHook(() => useCodecSizes(ARTIFACT, BALANCED))
+    await waitFor(() => expect(result.current.sizesByCodec).toEqual(SIZES))
+    await waitFor(() => expect(result.current.isMeasuring).toBe(false))
+    releaseCompressedExport.mockClear()
+
+    act(() => result.current.retainEstimate(ARTIFACT, 'draco', false, 'balanced'))
+
+    expect(releaseCompressedExport).not.toHaveBeenCalled()
+  })
+
+  it('gives back the panel\'s own cell when the panel goes away', async () => {
+    // The same unmount contract as the winner above, for the other claimant:
+    // the cell the size line last filled is nobody's once there is no panel
+    // to display it in.
+    const {result, unmount} = renderHook(() => useCodecSizes(ARTIFACT, BALANCED))
+    await waitFor(() => expect(result.current.sizesByCodec).toEqual(SIZES))
+    await waitFor(() => expect(result.current.isMeasuring).toBe(false))
+    act(() => result.current.retainEstimate(ARTIFACT, 'meshopt', false, 'balanced'))
+    releaseCompressedExport.mockClear()
+
+    unmount()
+
+    expect(releaseCompressedExport).toHaveBeenCalledWith(ARTIFACT, 'meshopt', false, 'balanced')
+  })
+
   it('gives back the previous rung\'s winner when it restarts', async () => {
     // Same cell, the other way out: the teardown that runs on a rung change
     // hands back what the finished sweep was holding, because the new sweep
