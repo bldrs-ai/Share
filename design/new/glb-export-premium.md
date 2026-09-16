@@ -1,7 +1,8 @@
 # GLB Export as a Pro feature — design
 
-Status: v0.1 (2026-09-10). Epic `share-140` (tracking issue linked from the
-epic row in [roadmap.md](../roadmap.md) §3.1 once filed).
+Status: v0.1 (2026-09-10). Epic `share-140`, tracking issue
+[#1831](https://github.com/bldrs-ai/Share/issues/1831) (row in
+[roadmap.md](../roadmap.md) §3.1).
 Owner: Pablo (with Claude).
 
 Share already converts every IFC/STEP it opens into a GLB and parks it in
@@ -14,6 +15,114 @@ STL, USD, …) would need.
 
 Sections 1–3 are the investigation; §4–§6 the design; §7 the stages that
 become the epic's sub-issues; §8 the cross-browser smoke checklist.
+
+
+## Status & remaining work
+
+*Updated 2026-09-16, after #1837/#1851/#1852 landed, the #1855 container
+gzip (§1.1a), and today's byte-attribution measurement on #1831.*
+
+**Where things stand:** the feature described in §1–§6 below is fully built
+and ships behind `?feature=export` (default **off**). Export lives in the
+Save dialog's Export tab: the Include Bldrs metadata toggle, Portable
+toggle, Compression dropdown (None / Meshopt / Draco), Quality rung,
+Compress download toggle, a Download size line that *is* the file, and a
+centred accent Export GLB action last. #1837 landed the pro-module
+pipeline, Download GLB, and export tracking; #1851 added portable export +
+re-hydration; #1852 added the compression controls (three-rung quality
+ladder, background codec sweep, `.glb.gz`). **My Exports
+(`Open/ExportsList.jsx`) is built and unit-tested but not mounted**, per
+owner decision (#1838) — the `record-export.js` / `exportHistory.js`
+tracking data path stays live regardless. Code delivery is gated through
+the `pro-module` Netlify function (Auth0 bearer + Management API check on
+every request, `Cache-Control: private, no-store`), built with esbuild
+rather than Netlify's default nft bundler because nft crashes an ESM
+function importing axios on cold start (§4.2). Just landed on this branch:
+the byte-attribution instrument `tools/glb/byteBudget.mjs` (0ec7339) and the
+v3 gzipped OPFS container, #1855, 6d20d33 (§1.1a) — a real Snowdon artifact
+goes 67,830,692 → 21,396,007 B stored, 68.5% saved, ~0.5 s to inflate, the
+size read still never touching BIN.
+
+1. **The measurement the epic was waiting on landed today, and it reframes
+   the remaining lossless work.** §4.3's "container" finding (≈1.2 MB
+   geometry against ≈15.5 MB container on Snowdon) was right in total but
+   never split between the JSON chunk and the instance transforms — the
+   split decides which follow-up issue matters most, and nobody had run it.
+   It has now been run on a real batched-native Snowdon artifact
+   (67,830,672 B, produced end to end by Share's own writer, not
+   estimated). Exhaustive byte-level partition: geometry (`POSITION` +
+   `NORMAL` + indices) 46,178,568 B (68.1%), JSON chunk 14,440,907 B
+   (21.3%), `BLDRS_element_properties` 6,129,233 B (9.0%), instance
+   transforms (`TRANSLATION`/`ROTATION`/`SCALE`) 873,960 B (1.29%),
+   `BLDRS_instance_tables` 136,116 B, `BLDRS_spatial_tree` 71,856 B. So the
+   "~15.5 MB of container" is **94.3% JSON chunk, 5.7% instance
+   transforms** — the opposite of an instance-transform-dominated split.
+   Snowdon turns out not to be instance-heavy in the artifact Share
+   actually writes: 21,849 instances over 12,251 groups (a 1.78× reuse
+   ratio), and 86.5% of nodes carry exactly one instance — the cost is the
+   **node graph** (one full node + mesh + material + accessors +
+   bufferViews per group), not per-instance placement data. Consequences:
+   - **#1857** (Draco+Meshopt together / quantized instance transforms) is
+     re-scored from "the biggest remaining win" to **~2.7% of a Draco'd
+     export** and is deferred — not the priority the epic body still
+     states.
+   - **#1854**'s two named JSON-slimming levers (material dedup,
+     single-instance node collapse) both measure **0 bytes**: the writer
+     emits no node names, and all 12,251 `min`/`max` pairs already live on
+     `POSITION` accessors, where glTF requires them. New levers there are
+     measured worth ~4.3 MB.
+   - **New, and now the largest single lossless item: #1859.** The batched
+     writer keys geometry groups on `geometry.uuid` (object identity)
+     rather than content, so 5,031 of the 12,251 groups are byte-identical
+     duplicates — roughly 6.08 MB of duplicated BIN plus 5.9 MB of JSON
+     bookkeeping, **~12 MB, 17.7% of the artifact**, entirely lossless and
+     untouched by anything shipped so far.
+   - **New: #1858.** `BLDRS_element_properties` capture took **24.6
+     minutes** on Snowdon — 92% of total writer time. The model is on
+     screen in ~70 s; the artifact (and therefore export, and the
+     next-load cache) is unavailable for roughly another 27 minutes after
+     that.
+2. **Inline gzip of the glTF JSON chunk turned out to be spec-impossible,
+   not just hard.** The GLB chunk-type field is fixed at `0x4E4F534A`, the
+   JSON chunk's position is fixed first, and its contents are defined as
+   the glTF JSON verbatim — `extensionsUsed`, which would say the chunk is
+   compressed, lives *inside* the JSON a reader would have to inflate to
+   find that out. No Khronos extension targets JSON or the scene graph. An
+   extra chunk after BIN is spec-legal (verified against three.js r184 and
+   gltf-transform 4.3.0) but is a carrier, not a compressor — it doesn't
+   shrink what ships. This is why the win landed at the OPFS **container**
+   layer instead (§1.1a, gzip outside the GLB entirely), not as an in-GLB
+   JSON transform.
+3. **S4 (#1835) is the ship gate for all of the above, and it is not
+   done.** Outstanding: cross-browser smoke (Firefox, Safari — including
+   OPFS `createWritable` and `CompressionStream` for `.glb.gz` — Edge, iOS
+   Safari, Android Chrome) with real Auth0 accounts per tier, against the
+   §8 checklist; the real Management API path for `record-export`
+   (including whether the `https://bldrs.ai/app_metadata` JWT claim carries
+   `exports` at all — an Auth0 Action outside this repo); flipping `export`
+   to `isActive: true`; and the site-wide esbuild-bundling decision for
+   every other ESM Netlify function that imports axios
+   (`gh-oauth-exchange`, `gh-oauth-refresh`, `unlink-identity`,
+   `create-portal-session`, `stripe-webhook`), which shares the same latent
+   nft cold-start crash #1837 fixed locally for `pro-module` and
+   `record-export`. Desktop smoke on the deploy preview (14 Sep) found
+   export working end to end with None/Meshopt/Draco all opening in Share
+   and the three.js editor; the two findings it produced became their own
+   issues (#1844 picking on a re-opened Bldrs GLB, #1843 portable export)
+   and are both now shipped.
+4. **Open work beyond S4, in roughly the priority order the epic's handoffs
+   give it:** #1854 (JSON slimming, now at the front of the queue — the two
+   originally-named levers measure 0, new ones are worth ~4.3 MB), #1859
+   (dedupe duplicate geometry groups, ~12 MB / 17.7% — new, and now the
+   largest single item), #1858 (24.6-minute `BLDRS_element_properties`
+   capture — new), #1857 (deferred — ~2.7% of a Draco'd export, not the
+   headline it was thought to be), #1853 (decimation, deprioritised — it
+   attacks the ~1.2 MB geometry term on Snowdon, not the container), S5
+   #1836 (further export formats, §6).
+5. **§7's two open questions are still open.** Whether free users get one
+   export as a conversion moment (§7.1) and how `shareProPendingReauth`
+   should be treated (§7.2) are both **owner decisions S4 has not made** —
+   this fold-back records the shipped reality, not those decisions.
 
 
 ## 1. What we already have
