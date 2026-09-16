@@ -1,4 +1,5 @@
 import {readFile} from 'node:fs/promises'
+import {gunzipSync} from 'node:zlib'
 import {Locator, Page, expect, test} from '@playwright/test'
 import {
   EXPORT_TEST_TIMEOUT_MS,
@@ -18,6 +19,7 @@ import {
   selectQuality,
   setSubscriptionTier,
   smallestCodecIn,
+  toggleGzip,
   toggleMetadata,
   togglePortable,
   waitForCodecSizes,
@@ -735,6 +737,78 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // Back to Balanced and the panel is exactly where it was — the cached
     // figure for that rung, not a third encode.
     expect(await selectQuality(page, 'balanced')).toBe(balancedBytes)
+  })
+
+  test('a Pro user downloads a gzipped .glb.gz, at the size the panel promised', async ({page}) => {
+    // #1854. The lossless win that beats the whole quality ladder, because on
+    // a real model the container — JSON node graph plus raw float32 instance
+    // transforms — is where the bytes are, and no mesh codec touches it.
+    //
+    // Only a browser can show this end to end: `CompressionStream` is a
+    // browser API, the figure on the size line comes from one call to it and
+    // the downloaded bytes from another, and the invariant this panel is
+    // built on is that those two agree. A unit test can assert both halves
+    // and still miss that they disagree in Chromium.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+
+    // No codec, which is the selection the measurement is about: gzip alone,
+    // over a file nothing else has squeezed. Pinned after the sweep so the
+    // auto-selection cannot move it later (#1850).
+    await waitForCodecSizing(page)
+    const rawBytes = await selectCompression(page, 'none')
+    expect(rawBytes).toBeGreaterThan(0)
+
+    // The toggle says what the user gets before they get it — a `.glb.gz` is
+    // not a `.glb` and will not drop into the three.js editor.
+    const gzipRow = page.getByTestId('export-gzip-row')
+    await expect(gzipRow).toContainText('Compress download')
+    await expect(gzipRow).toContainText('.glb.gz')
+
+    const gzippedBytes = await toggleGzip(page)
+
+    // The figure on the line is now the `.glb.gz`, not the `.glb` inside it.
+    // `index.ifc` is ~17 KB of mostly JSON, so this is a large margin rather
+    // than a knife edge — and it is the same direction the 6× on Snowdon is.
+    expect(gzippedBytes).toBeLessThan(rawBytes)
+
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    const download = await downloadPromise
+    const file = await readFile(await download.path())
+
+    // Three separate claims, and each has its own way of being wrong. The
+    // NAME must carry both extensions; the LENGTH must be the figure the user
+    // read, which is where a non-deterministic gzip would show up; and the
+    // CONTENTS must be a gzip member of a real GLB, which is what stops an
+    // uncompressed file from being shipped under a `.gz`.
+    expect(download.suggestedFilename()).toMatch(/\.glb\.gz$/)
+    expect(file.byteLength).toBe(gzippedBytes)
+
+    const inflated = gunzipSync(file)
+    expect(inflated.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+    expect(inflated.byteLength).toBe(rawBytes)
+    // …and the GLB inside is the whole model, not a truncated stream: its
+    // JSON chunk parses and still declares the Bldrs payloads the metadata
+    // toggle was left on for.
+    expect(glbJsonChunk(inflated).extensionsUsed).toContain('BLDRS_spatial_tree')
+
+    await expectSnackbarOnTop(page)
+    // A fifth control row, and the one carrying the longest caption in the
+    // panel — at 390px "gzip — saves a .glb.gz, unarchive to open" beside the
+    // toggle is what would push the dialog sideways if the row stopped
+    // wrapping (#1838).
+    await expectNoHorizontalScroll(page)
   })
 
   test('the panel measures every codec and defaults to the smallest', async ({page}) => {

@@ -21,7 +21,7 @@
 
 /**
  * The identity of one displayed figure: the estimate it came from — portable
- * × codec × quality, the axes `export/artifactSizes.js` caches on — plus the
+ * × codec × quality × gzip, the axes that make a different FILE — plus the
  * metadata toggle, which picks between the two figures that one estimate
  * produces.
  *
@@ -34,10 +34,17 @@
  * asks "has the line caught up with the controls?" — and the controls carry a
  * rung whatever the codec is.
  *
+ * Gzip is here for the sharper version of the same reason (#1854). It is the
+ * one axis that can move the figure at codec `none` with Portable off — the
+ * selection whose estimate is otherwise a header read — so a key without it
+ * would call the raw figure settled while the gzipped one was still being
+ * measured, which is the exact stale read this module exists to stop.
+ *
  * @param mode 'none' | 'meshopt' | 'draco'
  * @param isPortable the Portable toggle
  * @param isMetadataIncluded the "Include Bldrs metadata" toggle
  * @param quality 'best' | 'balanced' | 'smallest' (#1848, #1854)
+ * @param isGzipped the "Compress download" toggle (#1854)
  * @return the value `data-estimate-key` carries for that selection
  */
 export function estimateKey(
@@ -45,9 +52,11 @@ export function estimateKey(
   isPortable: boolean,
   isMetadataIncluded: boolean,
   quality: string,
+  isGzipped = false,
 ): string {
   return `${isPortable ? 'portable' : 'native'}|${mode}` +
-    `|${quality}|${isMetadataIncluded ? 'meta' : 'nometa'}`
+    `|${quality}|${isGzipped ? 'gzip' : 'plain'}` +
+    `|${isMetadataIncluded ? 'meta' : 'nometa'}`
 }
 
 

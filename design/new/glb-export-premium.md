@@ -523,6 +523,75 @@ Quality joins portable × codec in the estimate cache key
 runs, or the uncompressed cell would split three ways and Portable+None would
 run the whole rewrite once per rung for three identical files.
 
+**Compress download** (#1854) is the fifth option and the last rewrite to
+run, because it wraps whatever the other four produced. `export/glbGzip.js`,
+`CompressionStream('gzip')`, no dependency — and on a real model it is the
+largest win the panel has, for the reason above: the container is ~92% of a
+Snowdon-sized Draco export and gzip takes ~6× off it losslessly, where the
+whole quality ladder was worth −12.4% with visible damage.
+
+Reproduced here through the pinned encoders, raw against gzipped:
+
+| model | none | Meshopt | Draco |
+|---|---|---|---|
+| `Momentum.ifc` → GLB, 1,959,196 B | 1.81× | 1.56× | 1.15× |
+| `public/index.ifc` → GLB, 6,800 B | 5.11× | 2.26× | 1.47× |
+| instance-heavy synthetic, 622,480 B | 3.16× | 1.14× | 3.08× |
+
+The third row is the shape the batched-native writer actually produces and it
+carries the finding that shapes the code: **gzip changes which codec wins**.
+Meshopt 198,536 B beats Draco 527,316 B raw, and Draco 171,452 B beats Meshopt
+173,721 B gzipped — Draco leaves the instance transforms as raw float32 (whole
+file 3.08×) while Meshopt compresses them into something gzip cannot touch
+(1.14×). So the background sweep (§4.4) takes `isGzipped` as a real axis,
+measures post-compression bytes, and restarts on the toggle; ranking a gzipped
+download on raw byte counts would recommend the wrong codec on exactly the
+artifacts Share writes.
+
+Four decisions behind it:
+
+- **It is not a fourth axis on the compressed-export cache.** That key space
+  was already a review finding, and gzip is a cheap deterministic post-step on
+  a cell that already exists. So the bytes cache stays keyed
+  `portable × codec × quality`, and a parallel map holds two INTEGERS per cell
+  under the same key. The download re-gzips (`artifactSizes.js#gzippedExport`)
+  rather than holding a third copy of the file; `gzipBytes` gives the same
+  bytes twice, so the figure the user read is the file they get, and
+  `exportGlb.spec.ts` checks that end to end in a real browser. The property
+  needed is weak — two calls to one function, in one page, on one
+  implementation — so nothing depends on two browsers' deflate agreeing.
+- **Gzip has no header shortcut**, so codec None with Portable off — the one
+  selection whose estimate was a `File.slice` — becomes a whole-file read, and
+  the size line shows *Estimating…* for it. `holdsBytes` in `codecSizes.js`
+  learns the same thing, or a beaten `none` would leave the whole export
+  resident.
+- **The 50 MB auto-measure threshold does not move.** Gzip measures ~35 ms/MB
+  and the sweep gzips both metadata sides of three codecs, so at 50 MB it adds
+  roughly six seconds of wall clock — real, but not what that constant guards.
+  The threshold bounds UNINTERRUPTIBLE work: the wasm encoders block the thread
+  in one run, while `CompressionStream` is fed a megabyte at a time and awaited,
+  so it yields ~60 times on a 60 MB file and the Stop button stays live.
+- **`.glb.gz`, and hidden where it cannot be done.** Both extensions, not a
+  swap — it is what a web server would serve and what an unarchiver expects,
+  and `.glb` in the middle says what is inside. The name is stamped from what
+  the host hook *did*, never from what was asked for, so a browser without
+  `CompressionStream` (Safari before 16.4) produces a plain `.glb` named
+  `.glb`; the toggle is not rendered there at all, and a "Download again" row
+  replaying `gzip: true` degrades the same way rather than shipping
+  uncompressed bytes under a `.gz`.
+
+**Share does not re-open its own `.glb.gz`, deliberately.** `DecompressionStream`
+would be cheap, but `.gz` is a transport encoding and not a model format:
+accepting one means a `supportedTypes` entry, a `findLoader` arm and header
+sniffing that every source adapter (upload, GitHub raw, Drive) would have to
+agree on (design/new/adding-model-formats.md), for a file the user asked to be
+given in archive form. The "export opens back in Share" E2E keeps its subject
+— it runs on the uncompressed path, which is unchanged — and the gzipped
+spec proves the same thing about the bytes by gunzipping the download and
+asserting the `glTF` magic, the inflated length against the panel's raw figure,
+and that the JSON chunk still parses with its `BLDRS_*` payloads. If a user
+ever asks to drag a `.glb.gz` back in, that is its own issue.
+
 **Portable** (#1843) is the fourth option, and like compression it is a host
 rewrite the pro module only calls: `export/glbPortable.js#rewriteGlbPortable`.
 
@@ -613,10 +682,11 @@ model.
 
 Options surfaced in the UI: *Include Bldrs metadata (properties, spatial
 tree)* — default **on** (it's their model; the toggle exists for onward
-sharing) — *Portable* — default **off** (see the measured cost above) — and
+sharing) — *Portable* — default **off** (see the measured cost above) —
 *Compression: None / Meshopt / Draco* — default **None** (the
 file opens everywhere; the other two need the matching decoder registered in
-whatever the user opens it with). Share itself is one of those viewers:
+whatever the user opens it with) — and *Compress download* — default **off**
+(a `.glb.gz` is not a `.glb`). Share itself is one of those viewers:
 `Loader.js#newGltfLoader` carries both decoders unconditionally (they were
 gated on the cache writer's `glbDraco` / `glbMeshopt` flags, so a compressed
 export failed to open in Share — the #1837 smoke), and the export E2E opens
@@ -651,11 +721,15 @@ all-caps button on the #1837 preview read as disabled when it wasn't
 
 The Export tab hosts `Open/ExportSection.jsx` — the metadata toggle, then the
 **Portable** toggle, then the **Compression type** choice, then the **Quality**
-rung, then the **download size** for the state those four are in, then
-**Export GLB last and centred**, with the Pro chip for a free user riding
-beside it. That order is the order the choices compound in — what goes in the
-file, what shape it is in, how it is squeezed, how hard — and it is the order
-`export/artifactSizes.js` runs them in.
+rung, then **Compress download**, then the **download size** for the state
+those five are in, then **Export GLB last and centred**, with the Pro chip for
+a free user riding beside it. That order is the order the choices compound in
+— what goes in the file, what shape it is in, how it is squeezed, how hard,
+and whether the result travels in an archive — and it is the order
+`export/artifactSizes.js` runs them in. Compress download is last for that
+reason rather than beside the metadata toggle it otherwise resembles: it is the
+only control that wraps the output of all the others, and it sits directly
+above the size line it changes most.
 Compression type is a dropdown (`Select`: None / Meshopt / Draco) because the
 codecs are alternatives, not independent options — it began as a
 `ToggleButtonGroup`, whose three side-by-side buttons were the widest control
@@ -698,6 +772,13 @@ hook whenever `portable || codec` rather than for a codec alone, and
 `artifactSizes.js#runRewrite` behind it does the metadata strip for the
 portable-without-codec case, since the pro module runs no strip of its own
 once a hook is in play.
+
+**Gzip rides on the same cache without widening it.** When *Compress download*
+is on, every figure the panel shows — the size line and each codec's figure in
+the dropdown — is the `.glb.gz` length, measured on the cell above and stored
+as two integers under the same key (§4.3). The metadata toggle stays free: one
+estimate gzips both sides, so flipping it still moves every figure without an
+encode.
 
 **Compressed, the estimate is the compressed file.** The size of a Draco or
 Meshopt file is a property of the encoder, not of the input, so there is no

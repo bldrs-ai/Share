@@ -421,7 +421,30 @@ async function currentEstimateKey(page: Page): Promise<string> {
   const quality = await page.getByTestId('export-quality').locator('input').inputValue()
   const isPortable = await page.getByTestId('export-portable').locator('input').isChecked()
   const isMetadataIncluded = await page.getByTestId('export-include-metadata').locator('input').isChecked()
-  return estimateKey(mode, isPortable, isMetadataIncluded, quality)
+  // Absent where `CompressionStream` is (Safari before 16.4) — the row is not
+  // rendered at all there, and `count()` rather than `isChecked()` is what
+  // tells the two apart without failing the lookup.
+  const gzip = page.getByTestId('export-gzip').locator('input')
+  const isGzipped = await gzip.count() > 0 && await gzip.isChecked()
+  return estimateKey(mode, isPortable, isMetadataIncluded, quality, isGzipped)
+}
+
+
+/**
+ * Flip "Compress download" and wait for the size line to settle on the figure
+ * for it (#1854).
+ *
+ * Gzip re-estimates at every codec, `none` included: it is the one control
+ * with no header shortcut, so the file has to be read and compressed before
+ * there is a figure. What comes back is the `.glb.gz` byte count, which is
+ * what the browser will save.
+ *
+ * @param page Playwright page
+ * @return the byte count the settled line carries
+ */
+export async function toggleGzip(page: Page): Promise<number> {
+  await page.getByTestId('export-gzip').locator('input').click()
+  return await waitForEstimate(page)
 }
 
 

@@ -6,11 +6,15 @@
 // Cancel that is a real `AbortController` rather than a discarded result.
 //
 // Restart-on-axis-change is the subtle part. The sweep measures the codec
-// axis AT the currently-selected quality and Portable setting, so changing
-// either invalidates every figure it has published — showing the old numbers
-// under the new setting would be exactly the stale-estimate lie the size
-// line's `data-estimate-key` exists to prevent. The effect below therefore
-// aborts, clears and re-runs on both, and on a new artifact.
+// axis AT the currently-selected quality, Portable and gzip setting, so
+// changing any of them invalidates every figure it has published — showing
+// the old numbers under the new setting would be exactly the stale-estimate
+// lie the size line's `data-estimate-key` exists to prevent. The effect below
+// therefore aborts, clears and re-runs on all three, and on a new artifact.
+// Gzip is the one whose figures move MOST: it does not merely scale them, it
+// can reorder the codecs outright (`codecSizes.js` module doc), so a sweep
+// that carried its raw figures across the toggle would auto-select the wrong
+// codec rather than merely quote a stale number.
 //
 // Design: design/new/glb-export-premium.md §4.4.
 import {useCallback, useEffect, useRef, useState} from 'react'
@@ -31,6 +35,7 @@ import {isSweepComplete, measureCodecSizes, shouldAutoMeasure} from './codecSize
  * @param {object} options
  * @param {string} options.quality One of `exportQuality.js`'s `QUALITY_LEVELS`
  * @param {boolean} options.isPortable
+ * @param {boolean} [options.isGzipped]
  * @param {boolean} options.isMetadataIncluded
  * @return {{
  *   sizesByCodec: object,
@@ -42,7 +47,7 @@ import {isSweepComplete, measureCodecSizes, shouldAutoMeasure} from './codecSize
  *   stop: Function,
  * }}
  */
-export default function useCodecSizes(artifact, {quality, isPortable, isMetadataIncluded}) {
+export default function useCodecSizes(artifact, {quality, isPortable, isGzipped = false, isMetadataIncluded}) {
   const [sizesByCodec, setSizesByCodec] = useState({})
   const [measuringCodec, setMeasuringCodec] = useState(null)
   const [isMeasuring, setIsMeasuring] = useState(false)
@@ -110,6 +115,7 @@ export default function useCodecSizes(artifact, {quality, isPortable, isMetadata
       measured = await measureCodecSizes(artifact, {
         quality,
         isPortable,
+        isGzipped,
         isMetadataIncluded: metadataRef.current,
         signal: controller.signal,
         // Guarded on GENERATION, not on the abort — the two are different
@@ -156,7 +162,7 @@ export default function useCodecSizes(artifact, {quality, isPortable, isMetadata
         setIsPaused(!isSweepComplete(measured))
       }
     }
-  }, [artifact, quality, isPortable, releaseRetained])
+  }, [artifact, quality, isPortable, isGzipped, releaseRetained])
 
   useEffect(() => {
     let isStale = false

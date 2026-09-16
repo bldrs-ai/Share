@@ -1,9 +1,10 @@
+import {CompressionStream as NodeCompressionStream} from 'node:stream/web'
 import {act, renderHook} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn} from '../__mocks__/authentication'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
 import {gtagEvent} from '../privacy/analytics'
 import useStore from '../store/useStore'
-import {compressedExport} from './artifactSizes'
+import {compressedExport, gzippedExport} from './artifactSizes'
 import {triggerDownload} from './download'
 import {recordExport} from './exportHistory'
 import {ProModuleDeniedError, loadProModule} from './proModuleLoader'
@@ -14,7 +15,7 @@ jest.mock('../OPFS/utils', () => ({readModelByPathFromOPFS: jest.fn()}))
 // The per-(artifact, codec) cache has its own suite (artifactSizes.test.js);
 // here it stands in for "the panel already compressed this", which is the
 // state the hook is written against.
-jest.mock('./artifactSizes', () => ({compressedExport: jest.fn()}))
+jest.mock('./artifactSizes', () => ({compressedExport: jest.fn(), gzippedExport: jest.fn()}))
 jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
 jest.mock('./download', () => ({triggerDownload: jest.fn()}))
 // The history lib has its own suite (exportHistory.test.js); here it stands
@@ -156,6 +157,97 @@ describe('useExport', () => {
       expect.anything(), expect.any(Function), expect.any(Function))
   })
 
+  it('gzips through the host, and says the bytes really are gzipped', async () => {
+    // The `.gz` on the filename hangs off what the hook REPORTS, not off what
+    // was asked for (`pro/glbExport.js`), so this is the signal that decides
+    // whether the user gets a name their unarchiver can believe.
+    global.CompressionStream = NodeCompressionStream
+    gzippedExport.mockResolvedValue({
+      bytes: new Uint8Array(120),
+      withMetadataBytes: 300,
+      withoutMetadataBytes: 120,
+      strippedExtensions: ['BLDRS_spatial_tree'],
+      mode: 'meshopt',
+    })
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {stripBldrsMetadata: true, compression: 'meshopt', gzip: true})
+    })
+
+    const {compress} = exportArtifact.mock.calls[0][0]
+    const forDownload = await compress(ARTIFACT_BYTES, {stripBldrsMetadata: true})
+
+    expect(gzippedExport).toHaveBeenCalledWith(
+      expect.objectContaining({schemaVer: SCHEMA_VER}), 'meshopt', ARTIFACT_BYTES, false, 'balanced', true)
+    // The raw cache is not consulted at all on this path — the gzipped one
+    // reads through it and gzips the side that was chosen, so a second read
+    // here would be a second encode.
+    expect(compressedExport).not.toHaveBeenCalled()
+    expect(forDownload.bytes.byteLength).toBe(120)
+    expect(forDownload.withMetadataBytes).toBe(300)
+    expect(forDownload.isGzipped).toBe(true)
+    delete global.CompressionStream
+  })
+
+  it('gzips with no codec at all, which is the case worth having', async () => {
+    // Compression None plus gzip is the selection the #1854 measurement is
+    // about: on a real model the container is ~92% of the file and gzip takes
+    // ~6× off it losslessly. It has to reach the host hook, which through
+    // #1843 only ran for `portable || codec`.
+    global.CompressionStream = NodeCompressionStream
+    gzippedExport.mockResolvedValue({
+      bytes: new Uint8Array(64),
+      withMetadataBytes: 64,
+      withoutMetadataBytes: 40,
+      strippedExtensions: [],
+      mode: 'none',
+    })
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {stripBldrsMetadata: false, compression: 'none', gzip: true})
+    })
+
+    const {compress} = exportArtifact.mock.calls[0][0]
+    expect(compress).not.toBeNull()
+    expect((await compress(ARTIFACT_BYTES, {stripBldrsMetadata: false})).isGzipped).toBe(true)
+    delete global.CompressionStream
+  })
+
+  it('never claims gzip in a browser that cannot do it', async () => {
+    // Safari before 16.4 has no `CompressionStream`, and a "Download again"
+    // row replays the options its export ran with — so a row recorded on
+    // Chrome can ask for gzip here. Uncompressed bytes under a `.gz` name is
+    // the one failure this option must not have, so the request is dropped:
+    // no hook at all, and the pro module hands over a plain `.glb`.
+    expect(global.CompressionStream).toBeUndefined()
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {stripBldrsMetadata: false, compression: 'none', gzip: true})
+    })
+
+    expect(gzippedExport).not.toHaveBeenCalled()
+    expect(exportArtifact.mock.calls[0][0].compress).toBeNull()
+  })
+
+  it('records whether the file really was gzipped, not whether it was asked for', async () => {
+    // Same rule the codec fallback follows, and for the same reason: the row
+    // is what "Download again" replays and what sits beside the row's size.
+    exportArtifact.mockResolvedValue(
+      {...EXPORTED, stats: {...EXPORTED.stats, compression: 'none', gzip: false}})
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {stripBldrsMetadata: false, compression: 'none', gzip: true})
+    })
+
+    expect(recordExport).toHaveBeenCalledWith(
+      expect.objectContaining({options: expect.objectContaining({gzip: false})}),
+      expect.anything(), expect.any(Function), expect.any(Function))
+  })
+
   it('keeps the with-metadata side when the toggle is on', async () => {
     const compressed = {
       withMetadata: new Uint8Array(900),
@@ -179,7 +271,11 @@ describe('useExport', () => {
     // The encoder could not load, the host fell back to the uncompressed
     // file (`glbCompression.js`), and the pro module said so in `stats`. The
     // history row's options are what "Download again" replays and what sits
-    // beside the row's size, so they describe the file that exists.
+    // beside the row's size, so they describe the file that exists. `gzip`
+    // rides on the same rule for the same reason (#1854): a browser without
+    // `CompressionStream` produces a plain `.glb`, and a row replaying
+    // `gzip: true` would re-download something its own size does not
+    // describe.
     exportArtifact.mockResolvedValue({...EXPORTED, stats: {...EXPORTED.stats, compression: 'none'}})
     const {result} = renderHook(() => useExport())
 
@@ -188,7 +284,7 @@ describe('useExport', () => {
     })
 
     expect(recordExport).toHaveBeenCalledWith(
-      expect.objectContaining({options: {stripBldrsMetadata: false, compression: 'none'}}),
+      expect.objectContaining({options: {stripBldrsMetadata: false, compression: 'none', gzip: false}}),
       expect.anything(), expect.any(Function), expect.any(Function))
   })
 

@@ -15,6 +15,7 @@ import {
   COMPRESSION_NONE,
   compressionFidelityCaption,
 } from '../../export/glbCompression'
+import {isGzipAvailable} from '../../export/glbGzip'
 import useCodecSizes from '../../export/useCodecSizes'
 import useExport, {formatBytes} from '../../export/useExport'
 import {gtagEvent} from '../../privacy/analytics'
@@ -48,12 +49,19 @@ import {
  * the `pro-module` function re-checks the subscription on every request and
  * is the authority.
  *
+ * The controls run in the order the choices COMPOUND: what goes in the file,
+ * what shape it is in, how it is squeezed, how hard, and whether the result
+ * travels in an archive. Compress download (#1854) is last for that reason
+ * rather than beside the metadata toggle it otherwise resembles — it is the
+ * only one that wraps the output of all the others.
+ *
  * Between the controls and the button sits what they cost: the download size
  * for the state they are in, and how much of that is Bldrs metadata. Both
  * figures are exact — the uncompressed ones are the same computation as the
- * strip itself (#1841, `loader/glbArtifactSize.js`), and a compressed one IS
- * the compressed file, measured (#1842) — so the number here is the number
- * the snackbar reports once the file has landed.
+ * strip itself (#1841, `loader/glbArtifactSize.js`), a compressed one IS the
+ * compressed file, measured (#1842), and a gzipped one is the `.glb.gz` the
+ * browser will save (#1854) — so the number here is the number the snackbar
+ * reports once the file has landed.
  *
  * Every label block is left-aligned against the theme, which centres a
  * Dialog's whole paper (`theme/Components.js`, `MuiDialog.paper.textAlign`):
@@ -91,6 +99,13 @@ export default function ExportSection() {
   // why a lossless rung still has to be reachable, is `exportQuality.js`
   // §QUALITY_DEFAULT.
   const [quality, setQuality] = useState(QUALITY_DEFAULT)
+  // Default OFF, and last in the order: gzip wraps whatever the four controls
+  // above produced, so it compounds after all of them. It is the largest
+  // lossless win the panel has — ~6× on a real large model, because the
+  // container and not the geometry is where the bytes are (#1854) — but a
+  // `.glb.gz` does not drop into the three.js editor, so it is an explicit
+  // choice and never a silent one.
+  const [isGzipped, setIsGzipped] = useState(false)
 
   const {getAccessTokenSilently, isAuthenticated} = useAuth0()
   // `isExporting` is tab-wide, not this button's own (store/UISlice.js): a
@@ -103,7 +118,7 @@ export default function ExportSection() {
   // which is most of a batched-native artifact (#1850, `codecSizes.js`).
   const {
     sizesByCodec, measuringCodec, isMeasuring, isStopping, isPaused, start: startSizing, stop: stopSizing,
-  } = useCodecSizes(glbArtifact, {quality, isPortable, isMetadataIncluded})
+  } = useCodecSizes(glbArtifact, {quality, isPortable, isGzipped, isMetadataIncluded})
   const theme = useTheme()
   // Both download sizes, read from the artifact's header when the tab opens
   // (`export/artifactSizes.js`) — null while that read is in flight and for
@@ -138,16 +153,16 @@ export default function ExportSection() {
     let isStale = false
     setEstimate(null)
     setIsEstimating(true)
-    artifactSizes(glbArtifact, compression, isPortable, quality).then((read) => {
+    artifactSizes(glbArtifact, compression, isPortable, quality, isGzipped).then((read) => {
       if (!isStale) {
-        setEstimate({compression, isPortable, quality, sizes: read})
+        setEstimate({compression, isPortable, quality, isGzipped, sizes: read})
         setIsEstimating(false)
       }
     })
     return () => {
       isStale = true
     }
-  }, [glbArtifact, compression, isPortable, quality])
+  }, [glbArtifact, compression, isPortable, quality, isGzipped])
 
   useEffect(() => {
     // Hand back the rung the user just left. Every rung is a different file,
@@ -201,6 +216,10 @@ export default function ExportSection() {
   // say whether an artifact is even expected; until it does, disabled is the
   // correct behaviour and only the label overstates it (#1833).
   const isArtifactReady = Boolean(glbArtifact)
+  // A browser capability, read at render rather than at import: jsdom has no
+  // `CompressionStream`, so the panel's own suite plants one and a constant
+  // captured at module load would have frozen the answer before it did.
+  const isGzipSupported = isGzipAvailable()
 
   let label = 'Export GLB'
   if (isExporting) {
@@ -227,7 +246,8 @@ export default function ExportSection() {
   // other end of this contract.
   const displayedEstimateKey = estimate &&
         `${estimate.isPortable ? 'portable' : 'native'}|${estimate.compression}` +
-        `|${estimate.quality}|${isMetadataIncluded ? 'meta' : 'nometa'}`
+        `|${estimate.quality}|${estimate.isGzipped ? 'gzip' : 'plain'}` +
+        `|${isMetadataIncluded ? 'meta' : 'nometa'}`
   const metadataCaption = sizes && sizes.metadataBytes > 0 ?
     `${formatBytes(sizes.metadataBytes)} of Bldrs metadata ${isMetadataIncluded ? 'included' : 'removed'}` :
     null
@@ -238,7 +258,11 @@ export default function ExportSection() {
   // Portable counts as pending work even with no codec: the rewrite has to
   // read the whole artifact off OPFS and re-serialise it, where the plain
   // uncompressed estimate is a header read (`export/artifactSizes.js`).
-  const isPendingEstimate = isEstimating && (compression !== COMPRESSION_NONE || isPortable)
+  // Gzip counts as pending work at every codec, `none` included: there is no
+  // header shortcut for it — the whole file has to be read and compressed
+  // before there is a figure — so the one selection that used to be instant
+  // is not, and the line has to say so (#1854).
+  const isPendingEstimate = isEstimating && (compression !== COMPRESSION_NONE || isPortable || isGzipped)
   // What the sweep is doing, said honestly. "Stop" ends the QUEUE — the
   // encoders are synchronous wasm with no abort — so once it is pressed the
   // line names the codec that is still finishing rather than claiming the
@@ -284,7 +308,9 @@ export default function ExportSection() {
   }
 
   const onExportClick = async () => {
-    await run('glb', {stripBldrsMetadata: !isMetadataIncluded, compression, quality, portable: isPortable})
+    await run(
+      'glb',
+      {stripBldrsMetadata: !isMetadataIncluded, compression, quality, portable: isPortable, gzip: isGzipped})
   }
 
   const onUpgradeClick = async () => {
@@ -539,6 +565,44 @@ export default function ExportSection() {
           ))}
         </Select>
       </Stack>
+      {/* LAST of the controls, because gzip is the only one that wraps the
+          others: the four above decide what the `.glb` contains and how its
+          geometry is encoded, and this decides whether that file travels
+          compressed. The panel's stated order is the order the choices
+          compound in (`export/artifactSizes.js` runs them in it), and gzip
+          compounds after all of them — which is also why it sits directly
+          above the size line it changes most.
+
+          Hidden outright where `CompressionStream` is missing (Safari before
+          16.4). A disabled toggle would be the usual choice here — the Quality
+          control two rows up is disabled rather than hidden for exactly the
+          layout reason — but this one is different in kind: Quality is
+          unavailable because of something the user can change in this panel,
+          while gzip is unavailable because of the browser, and there is no
+          click that would help. What must not happen is uncompressed bytes
+          under a `.gz` name (#1854). */}
+      {isGzipSupported &&
+       <Stack
+         direction='row'
+         justifyContent='space-between'
+         alignItems='center'
+         flexWrap='wrap'
+         gap={1}
+         sx={{mt: '1em'}}
+         data-testid='export-gzip-row'
+       >
+         <Box>
+           <Typography variant='body2'>Compress download</Typography>
+           <Typography variant='caption' color='text.secondary'>
+             {MSG_GZIP_CAPTION}
+           </Typography>
+         </Box>
+         <Toggle
+           onChange={() => setIsGzipped(!isGzipped)}
+           checked={isGzipped}
+           data-testid='export-gzip'
+         />
+       </Stack>}
       {/* The size the controls above just chose, above the action it applies
           to. Its `data-bytes` is the raw count the label rounds, so a test
           can compare it with the downloaded file byte for byte rather than
@@ -636,3 +700,8 @@ const MSG_SIZES_TOO_BIG = 'Codec sizes not measured'
 // ran, and the same "Calculate sizes" button restarts the axis.
 const MSG_SIZING_STOPPED = 'Codec sizing stopped'
 const MSG_LOGIN_TO_EXPORT = 'Log in to export this model as a GLB'
+// Names the file the user gets, because that is the part that surprises: a
+// `.glb.gz` is not a `.glb` and will not drop into the three.js editor
+// without being unarchived first (#1854). Short enough to stay on one line at
+// 390px beside the toggle.
+const MSG_GZIP_CAPTION = 'gzip — saves a .glb.gz, unarchive to open'

@@ -81,7 +81,7 @@ describe('useCodecSizes', () => {
 
     await waitFor(() => expect(result.current.sizesByCodec).toEqual(SIZES))
     for (const mode of ['none', 'meshopt', 'draco']) {
-      expect(artifactSizes).toHaveBeenCalledWith(ARTIFACT, mode, false, 'smallest')
+      expect(artifactSizes).toHaveBeenCalledWith(ARTIFACT, mode, false, 'smallest', false)
     }
   })
 
@@ -93,7 +93,23 @@ describe('useCodecSizes', () => {
 
     rerender({isPortable: true})
 
-    await waitFor(() => expect(artifactSizes).toHaveBeenCalledWith(ARTIFACT, 'draco', true, 'balanced'))
+    await waitFor(() => expect(artifactSizes).toHaveBeenCalledWith(ARTIFACT, 'draco', true, 'balanced', false))
+  })
+
+  it('restarts when the download is gzipped, because that can reorder the codecs', async () => {
+    // Stronger than a stale-number restart. Gzip does not merely scale the
+    // figures — on the instance-heavy shape Share's batched writer produces
+    // it inverts which codec is smallest (`codecSizes.js` module doc) — so a
+    // sweep that carried its raw figures across this toggle would leave
+    // `codecToSelect` reading the winner off the wrong set.
+    const {result, rerender} = renderHook(
+      ({isGzipped}) => useCodecSizes(ARTIFACT, {...BALANCED, isGzipped}),
+      {initialProps: {isGzipped: false}})
+    await waitFor(() => expect(result.current.sizesByCodec).toEqual(SIZES))
+
+    rerender({isGzipped: true})
+
+    await waitFor(() => expect(artifactSizes).toHaveBeenCalledWith(ARTIFACT, 'draco', false, 'balanced', true))
   })
 
   it('does NOT restart when the metadata toggle moves', async () => {
@@ -144,7 +160,7 @@ describe('useCodecSizes', () => {
     await waitFor(() => expect(result.current.isMeasuring).toBe(false))
     // Meshopt's figure was paid for and stays usable; Draco was never started.
     expect(result.current.sizesByCodec).toEqual({none: SIZES.none, meshopt: SIZES.meshopt})
-    expect(artifactSizes).not.toHaveBeenCalledWith(ARTIFACT, 'draco', false, 'balanced')
+    expect(artifactSizes).not.toHaveBeenCalledWith(ARTIFACT, 'draco', false, 'balanced', false)
   })
 
   it('parks a stopped sweep instead of leaving it unfinishable', async () => {

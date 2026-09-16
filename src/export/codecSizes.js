@@ -14,6 +14,16 @@
 // writer produces. So a user picking on reputation picks wrong about half the
 // time, and the panel already knew the answer.
 //
+// **Gzip moves the answer again** (#1854), which is why `isGzipped` is a real
+// axis here and not a display detail. Measured on that same instance-heavy
+// synthetic: Meshopt 198,536 B against Draco 527,316 B raw — Meshopt wins by
+// 2.7× — but gzipped it is Draco 171,452 B against Meshopt 173,721 B, and
+// Draco wins. Draco leaves the instance transforms as raw float32 (the whole
+// file gzips 3.08×) while Meshopt compresses them into something gzip cannot
+// touch (1.14×). Ranking a gzipped download on its raw byte counts would
+// therefore recommend the wrong codec on exactly the artifact shape Share
+// writes, so the sweep measures what the user receives.
+//
 // The interesting half of this module is what it refuses to do:
 //
 //   - **At most two codecs' output resident: the best measured so far, and
@@ -27,11 +37,11 @@
 //     writer produces (−68.0% above) and is measured SECOND, so a sweep that
 //     only ever held the most recent codec would have thrown the winner away
 //     and made the panel re-encode up to 50 MB on the main thread.
-//   - **Only the codec axis.** With quality and Portable the estimate matrix
-//     is codec × quality × portable × metadata, and the cross product is not
-//     something to compute on a hunch. The sweep runs the codec axis at
-//     whatever quality and Portable setting is CURRENTLY selected, and the
-//     caller restarts it when either changes.
+//   - **Only the codec axis.** With quality, Portable and gzip the estimate
+//     matrix is codec × quality × portable × gzip × metadata, and the cross
+//     product is not something to compute on a hunch. The sweep runs the codec
+//     axis at whatever quality, Portable and gzip setting is CURRENTLY
+//     selected, and the caller restarts it when any of them changes.
 //   - **Nothing at all above a size threshold.** Opening the Export tab on a
 //     400 MB model must not start a CPU fire on the user's behalf.
 //
@@ -65,6 +75,19 @@ const AUTO_MEASURE_MAX_MB = 50
  * so that time is not interruptible. Below the line the sweep is over before
  * a user has finished reading the panel; above it, they should be the one who
  * asks.
+ *
+ * **Gzip does not move this constant, and the reason is the word
+ * "interruptible"** (#1854). It measures ~35 ms/MB of input and the sweep
+ * gzips both metadata sides of all three codecs, so at 50 MB it is roughly
+ * another 6 seconds of wall clock — a real cost, and NOT what this threshold
+ * is protecting against. The threshold exists because the wasm encoders block
+ * the thread in one uninterruptible run; `CompressionStream` is fed chunk by
+ * chunk off a `Blob.stream()` and awaited (`glbGzip.js`), so it yields
+ * dozens of times per file and the dialog — Stop button included — stays
+ * live throughout. A gzip-aware limit would trade a responsive extra six
+ * seconds for a "Calculate sizes" click on models that need no such
+ * protection. Worth revisiting if the panel ever grows work that is both slow
+ * and blocking.
  */
 export const AUTO_MEASURE_MAX_BYTES = AUTO_MEASURE_MAX_MB * BYTES_PER_MB
 
@@ -96,14 +119,19 @@ function noop() {
  *
  * Mirrors `artifactSizes.js`'s own branch: uncompressed-and-native is a
  * header read and caches nothing but two numbers, and everything else runs
- * the rewrite and caches its bytes.
+ * the rewrite and caches its bytes. Gzip belongs in that "everything else"
+ * because it has no header shortcut — there is nothing to compress without
+ * the file — so `none` in native mode stops being free the moment it is on,
+ * and a sweep that still thought it was would leave the whole uncompressed
+ * export resident after losing (#1854).
  *
  * @param {string} mode One of `COMPRESSION_MODES`
  * @param {boolean} isPortable
+ * @param {boolean} isGzipped
  * @return {boolean}
  */
-function holdsBytes(mode, isPortable) {
-  return isPortable || mode !== COMPRESSION_NONE
+function holdsBytes(mode, isPortable, isGzipped) {
+  return isPortable || isGzipped || mode !== COMPRESSION_NONE
 }
 
 
@@ -232,6 +260,8 @@ export function codecToSelect(sizesByCodec, isMetadataIncluded, isUserChosen, cu
  * @param {object} options
  * @param {string} options.quality One of `exportQuality.js`'s `QUALITY_LEVELS`
  * @param {boolean} options.isPortable
+ * @param {boolean} [options.isGzipped] Rank on post-gzip bytes, which is a
+ *   different ranking — see the module doc
  * @param {boolean} options.isMetadataIncluded Which figure decides the winner
  * @param {AbortSignal} [options.signal] Checked between codecs; see the
  *   module doc on why it cannot be checked inside one
@@ -253,6 +283,7 @@ export function codecToSelect(sizesByCodec, isMetadataIncluded, isUserChosen, cu
 export async function measureCodecSizes(artifact, {
   quality,
   isPortable,
+  isGzipped = false,
   isMetadataIncluded,
   signal,
   onSize,
@@ -275,7 +306,7 @@ export async function measureCodecSizes(artifact, {
         return measured
       }
       onCodec(mode)
-      const sizes = await artifactSizes(artifact, mode, isPortable, quality)
+      const sizes = await artifactSizes(artifact, mode, isPortable, quality, isGzipped)
       measured[mode] = sizes
       onSize(mode, sizes)
       // Settle the keep-or-drop decision HERE, while both cells are known,
@@ -288,8 +319,8 @@ export async function measureCodecSizes(artifact, {
           releaseCompressedExport(artifact, bestHeld, isPortable, quality)
         }
         bestBytes = bytes
-        bestHeld = holdsBytes(mode, isPortable) ? mode : null
-      } else if (holdsBytes(mode, isPortable)) {
+        bestHeld = holdsBytes(mode, isPortable, isGzipped) ? mode : null
+      } else if (holdsBytes(mode, isPortable, isGzipped)) {
         releaseCompressedExport(artifact, mode, isPortable, quality)
       }
       // Hand the event loop back between codecs. This is the whole of what

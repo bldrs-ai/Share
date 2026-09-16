@@ -42,6 +42,16 @@ const INSTANCE_HEAVY = {
   [COMPRESSION_MESHOPT]: sizesOf(199032),
   [COMPRESSION_DRACO]: sizesOf(514752),
 }
+// The SAME instance-heavy artifact, measured gzipped — real figures from the
+// #1854 sweep, and the reason `isGzipped` is a sweep axis and not a display
+// detail. Draco leaves the instance transforms as raw float32 and the whole
+// file gzips 3.08×; Meshopt compresses them into something gzip cannot touch
+// (1.14×). So the ranking inverts: Meshopt wins raw, Draco wins gzipped.
+const INSTANCE_HEAVY_GZIPPED = {
+  [COMPRESSION_NONE]: sizesOf(196763),
+  [COMPRESSION_MESHOPT]: sizesOf(173721),
+  [COMPRESSION_DRACO]: sizesOf(171452),
+}
 
 
 /**
@@ -88,6 +98,7 @@ async function sweep(options = {}) {
   await measureCodecSizes(ARTIFACT, {
     quality: QUALITY,
     isPortable: false,
+    isGzipped: false,
     isMetadataIncluded: true,
     onSize: (mode, sizes) => {
       published.push([mode, sizes])
@@ -265,9 +276,50 @@ describe('codecSizes', () => {
       await sweep({quality: 'smallest', isPortable: true})
 
       for (const mode of CODEC_MEASUREMENT_ORDER) {
-        expect(artifactSizes).toHaveBeenCalledWith(ARTIFACT, mode, true, 'smallest')
+        expect(artifactSizes).toHaveBeenCalledWith(ARTIFACT, mode, true, 'smallest', false)
       }
       expect(artifactSizes).toHaveBeenCalledTimes(CODEC_MEASUREMENT_ORDER.length)
+    })
+
+    it('measures what the user receives once the download is gzipped', async () => {
+      // Not a display detail: the figures the sweep publishes are the ones
+      // `codecToSelect` reads the winner off, so measuring raw bytes for a
+      // gzipped download would recommend a codec on a file nobody gets.
+      await sweep({isGzipped: true})
+
+      for (const mode of CODEC_MEASUREMENT_ORDER) {
+        expect(artifactSizes).toHaveBeenCalledWith(ARTIFACT, mode, false, QUALITY, true)
+      }
+    })
+
+    it('picks a different codec gzipped than raw, on the shape Share writes', async () => {
+      // The #1854 finding, asserted rather than only narrated. Same artifact,
+      // measured both ways: Meshopt 199,032 B beats Draco 514,752 B raw, and
+      // Draco 171,452 B beats Meshopt 173,721 B gzipped. Draco's output is
+      // near-incompressible but the instance transforms it leaves alone are
+      // not, so gzip closes a 2.6× gap and crosses it — on exactly the
+      // instance-heavy shape the batched-native writer produces.
+      resolveFrom(INSTANCE_HEAVY)
+      const raw = await sweep()
+
+      resolveFrom(INSTANCE_HEAVY_GZIPPED)
+      const gzipped = await sweep({isGzipped: true})
+
+      expect(smallestCodec(raw.sizesByCodec, true)).toBe(COMPRESSION_MESHOPT)
+      expect(smallestCodec(gzipped.sizesByCodec, true)).toBe(COMPRESSION_DRACO)
+    })
+
+    it('releases the uncompressed cell once gzip makes it hold bytes', async () => {
+      // Native `none` is a header read and caches nothing — until gzip, which
+      // has no header shortcut and so leaves the whole export resident. A
+      // sweep that still thought that cell was free would hold a beaten
+      // codec's entire file for the life of the artifact. Here `none` loses
+      // (it is the largest of the three gzipped figures), so it must go.
+      resolveFrom(INSTANCE_HEAVY_GZIPPED)
+
+      await sweep({isGzipped: true})
+
+      expect(releaseCompressedExport).toHaveBeenCalledWith(ARTIFACT, COMPRESSION_NONE, false, QUALITY)
     })
 
     it('releases the uncompressed cell too once Portable is on', async () => {
@@ -295,7 +347,7 @@ describe('codecSizes', () => {
       const {published} = await sweep({signal: controller.signal})
 
       expect(published.map(([mode]) => mode)).toEqual([COMPRESSION_NONE, COMPRESSION_MESHOPT])
-      expect(artifactSizes).not.toHaveBeenCalledWith(ARTIFACT, COMPRESSION_DRACO, false, QUALITY)
+      expect(artifactSizes).not.toHaveBeenCalledWith(ARTIFACT, COMPRESSION_DRACO, false, QUALITY, false)
     })
 
     it('starts nothing at all when the signal is already aborted', async () => {

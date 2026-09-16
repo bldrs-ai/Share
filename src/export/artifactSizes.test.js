@@ -1,3 +1,4 @@
+import {CompressionStream as NodeCompressionStream} from 'node:stream/web'
 import {captureException} from '@sentry/react'
 import {packGlbChunks} from '../loader/glbContainer'
 import {serializeGlb} from '../loader/injectGlbExtensions'
@@ -6,6 +7,7 @@ import {
   artifactPositionRange,
   artifactSizes,
   compressedExport,
+  gzippedExport,
   releaseCompressedExport,
   releaseQualityExports,
 } from './artifactSizes'
@@ -451,6 +453,104 @@ describe('artifactSizes', () => {
       expect(() => releaseQualityExports(null, 'best')).not.toThrow()
     })
   })
+
+  describe('with the download gzipped (#1854)', () => {
+    // The real `CompressionStream`, planted the way `glbGzip.test.js` plants
+    // it: the figures this describes are byte lengths of an actual gzip
+    // member, so a stub returning a made-up number would test nothing about
+    // the invariant that the displayed size IS the downloaded size.
+    //
+    // Compressible bytes, deliberately: the codec mock hands back
+    // `Uint8Array(300)` of zeros, which gzips to ~30 B, so "gzip moved the
+    // figure" is unmistakable rather than a rounding difference.
+    const COMPRESSED = {
+      withMetadata: new Uint8Array(300),
+      withoutMetadata: new Uint8Array(120),
+      strippedExtensions: ['BLDRS_spatial_tree'],
+      mode: 'meshopt',
+    }
+
+    beforeEach(() => {
+      global.CompressionStream = NodeCompressionStream
+      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+      compressExportGlb.mockResolvedValue(COMPRESSED)
+    })
+
+    afterEach(() => {
+      delete global.CompressionStream
+    })
+
+    it('reports the gzipped lengths, which is what the browser saves', async () => {
+      const raw = await artifactSizes({...ARTIFACT}, 'meshopt')
+      const gzipped = await artifactSizes({...ARTIFACT}, 'meshopt', false, 'balanced', true)
+
+      expect(gzipped.withMetadata).toBeLessThan(raw.withMetadata)
+      expect(gzipped.withoutMetadata).toBeLessThan(raw.withoutMetadata)
+      // Both sides, from one run, because the metadata toggle is not a
+      // re-estimate axis anywhere else in this panel and gzip must not make
+      // it one.
+      expect(gzipped.metadataBytes).toBe(gzipped.withMetadata - gzipped.withoutMetadata)
+      expect(gzipped.compression).toBe('meshopt')
+    })
+
+    it('runs the whole-file path at codec none, which the header read cannot', async () => {
+      // The one selection that was free — native, no codec — stops being
+      // free: there is nothing to gzip without the file. The panel's
+      // "Estimating…" hangs off exactly this (`ExportSection.jsx`).
+      const plain = await artifactSizes({...ARTIFACT}, 'none', false, 'balanced', false)
+      expect(compressExportGlb).not.toHaveBeenCalled()
+
+      const gzipped = await artifactSizes({...ARTIFACT}, 'none', false, 'balanced', true)
+
+      expect(gzipped.withMetadata).toBeLessThan(plain.withMetadata)
+      expect(gzipped.withMetadata).toBeGreaterThan(0)
+    })
+
+    it('adds no axis to the cache that holds the file, and gzips once', async () => {
+      // The #1852 review's finding, honoured rather than repeated: the key
+      // space was already the problem, so gzip caches two INTEGERS under the
+      // SAME key and never a third copy of the export. Asking for both
+      // shapes therefore runs the encoder once, and asking twice for the
+      // gzipped one re-gzips nothing.
+      const artifact = {...ARTIFACT}
+
+      await artifactSizes(artifact, 'meshopt', false, 'balanced', false)
+      const first = await artifactSizes(artifact, 'meshopt', false, 'balanced', true)
+      const second = await artifactSizes(artifact, 'meshopt', false, 'balanced', true)
+
+      expect(compressExportGlb).toHaveBeenCalledTimes(1)
+      expect(second).toBe(first)
+    })
+
+    it('hands the export gzipped bytes whose length is the figure it quoted', async () => {
+      // The panel's whole contract, at the seam where it could break: the
+      // figure came from the measuring gzip and the bytes from a second one,
+      // so this is where non-determinism would show up as a file that does
+      // not weigh what the user was told.
+      const artifact = {...ARTIFACT}
+      const quoted = await artifactSizes(artifact, 'meshopt', false, 'balanced', true)
+
+      const forDownload = await gzippedExport(artifact, 'meshopt', null, false, 'balanced', false)
+
+      expect(forDownload.bytes.byteLength).toBe(quoted.withMetadata)
+      expect(forDownload.withMetadataBytes).toBe(quoted.withMetadata)
+      expect(forDownload.withoutMetadataBytes).toBe(quoted.withoutMetadata)
+      // …and the other side of the toggle is the other figure, not the same
+      // bytes under a different name.
+      const stripped = await gzippedExport(artifact, 'meshopt', null, false, 'balanced', true)
+      expect(stripped.bytes.byteLength).toBe(quoted.withoutMetadata)
+      expect(stripped.strippedExtensions).toEqual(['BLDRS_spatial_tree'])
+      expect(stripped.mode).toBe('meshopt')
+    })
+
+    it('has nothing to hand over when the encode failed', async () => {
+      compressExportGlb.mockRejectedValue(new Error('encoder unavailable'))
+
+      expect(await artifactSizes({...ARTIFACT}, 'draco', false, 'balanced', true)).toBeNull()
+      expect(await gzippedExport({...ARTIFACT}, 'draco', null, false, 'balanced', false)).toBeNull()
+    })
+  })
+
 
   describe('artifactPositionRange', () => {
     it('rides on the header read the size line already made', async () => {

@@ -6,6 +6,7 @@ import {stripGlbBldrs} from '../loader/glbStrip'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
 import {QUALITY_DEFAULT} from './exportQuality'
 import {COMPRESSION_MODES, COMPRESSION_NONE, compressExportGlb, isCompressionMode} from './glbCompression'
+import {gzipBytes, gzippedLength} from './glbGzip'
 import {rewriteGlbPortable} from './glbPortable'
 
 
@@ -27,6 +28,16 @@ import {rewriteGlbPortable} from './glbPortable'
 // the whole matrix would be six copies of the model for one caption read.
 const sizesByArtifact = new WeakMap()
 const compressedByArtifact = new WeakMap()
+// Gzip is deliberately NOT a fourth axis on the cache above. The key space was
+// already the problem #1852 spent a review round on, and gzip is a cheap
+// deterministic post-step on a cell that is already there — so what is cached
+// here is two INTEGERS per cell, under the very same `rewriteKey`, and the
+// bytes are re-made at download time. That is the whole memory argument:
+// every compressed cell holds two copies of the export already, and a third
+// pair of gzipped copies per cell would have doubled the panel's footprint to
+// spare it ~35 ms/MB it only pays once (`glbGzip.js`). Same weak keying, so
+// these go with the artifact too.
+const gzippedSizesByArtifact = new WeakMap()
 
 
 /**
@@ -91,11 +102,17 @@ function hasCodec(mode) {
  * @param {boolean} [isPortable] Expand the instancing into a named node tree
  *   first (`glbPortable.js`)
  * @param {string} [quality] One of `exportQuality.js`'s `QUALITY_LEVELS`
+ * @param {boolean} [isGzipped] Report what the `.glb.gz` weighs, not the
+ *   `.glb` inside it (#1854) — the figure has to be what the browser saves
  * @return {Promise<?{withMetadata: number, withoutMetadata: number, metadataBytes: number, compression: string}>}
  */
-export function artifactSizes(artifact, mode = COMPRESSION_NONE, isPortable = false, quality = QUALITY_DEFAULT) {
+export function artifactSizes(
+  artifact, mode = COMPRESSION_NONE, isPortable = false, quality = QUALITY_DEFAULT, isGzipped = false) {
   if (!artifact) {
     return Promise.resolve(null)
+  }
+  if (isGzipped) {
+    return gzippedSizes(artifact, mode, isPortable, quality)
   }
   // Portable is NOT free, even with no codec. The header-only read below never
   // touches the BIN chunk, and the portable rewrite has to: it reads the
@@ -106,6 +123,84 @@ export function artifactSizes(artifact, mode = COMPRESSION_NONE, isPortable = fa
     return compressedExport(artifact, mode, null, isPortable, quality).then(sizesOfCompressed)
   }
   return uncompressedSizes(artifact)
+}
+
+
+/**
+ * The same two figures, measured on the `.glb.gz` the user would actually
+ * receive.
+ *
+ * Gzip forces the whole-file path even at codec `none` and Portable off — the
+ * header read never materialises any bytes and there is nothing to compress
+ * without them — which is why the panel shows "Estimating…" here for a
+ * selection that is otherwise instant.
+ *
+ * Cached as LENGTHS, keyed by the very same `rewriteKey` as the bytes, so no
+ * axis is added to the cell that holds the file. Re-deriving the bytes for the
+ * download reproduces these figures exactly because gzip is deterministic
+ * (`glbGzip.js`), which is the invariant this panel is built on: what is
+ * displayed is what is downloaded.
+ *
+ * @param {object} artifact
+ * @param {string} mode
+ * @param {boolean} isPortable
+ * @param {string} quality
+ * @return {Promise<?object>}
+ */
+function gzippedSizes(artifact, mode, isPortable, quality) {
+  return cached(
+    gzippedSizesByArtifact, artifact, rewriteKey(isPortable, mode, quality),
+    async () => {
+      const compressed = await compressedExport(artifact, mode, null, isPortable, quality)
+      if (!compressed) {
+        return null
+      }
+      // Both sides, because the metadata toggle is deliberately not a
+      // re-estimate axis anywhere else in this panel — one run produces both
+      // figures and the toggle picks between them, and a gzip that measured
+      // only the selected side would have made that toggle the one control
+      // that costs seconds.
+      const withMetadata = await gzippedLength(compressed.withMetadata)
+      const withoutMetadata = await gzippedLength(compressed.withoutMetadata)
+      return {
+        withMetadata,
+        withoutMetadata,
+        metadataBytes: withMetadata - withoutMetadata,
+        compression: compressed.mode,
+      }
+    })
+}
+
+
+/**
+ * The exact bytes of one gzipped export side, for the download.
+ *
+ * Re-gzipped rather than read out of a cache: the length was measured above
+ * and gzip is deterministic, so this reproduces the figure the user read
+ * without a third copy of the file having been resident since they read it.
+ *
+ * @param {object} artifact
+ * @param {string} mode
+ * @param {?Uint8Array} glbBytes
+ * @param {boolean} isPortable
+ * @param {string} quality
+ * @param {boolean} stripBldrsMetadata Which side of the toggle to hand over
+ * @return {Promise<?object>} the cell, plus `bytes` gzipped and both gzipped
+ *   lengths, or null when the cell could not be produced
+ */
+export async function gzippedExport(artifact, mode, glbBytes, isPortable, quality, stripBldrsMetadata) {
+  const compressed = await compressedExport(artifact, mode, glbBytes, isPortable, quality)
+  if (!compressed) {
+    return null
+  }
+  const sizes = await gzippedSizes(artifact, mode, isPortable, quality)
+  const side = stripBldrsMetadata ? compressed.withoutMetadata : compressed.withMetadata
+  return {
+    ...compressed,
+    bytes: await gzipBytes(side),
+    withMetadataBytes: sizes?.withMetadata ?? null,
+    withoutMetadataBytes: sizes?.withoutMetadata ?? null,
+  }
 }
 
 
