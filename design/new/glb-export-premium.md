@@ -98,11 +98,18 @@ arm — the envelope comes off at the upload seam, and a second seam in
      byte-identical duplicates — roughly 6.08 MB of duplicated BIN plus
      5.9 MB of JSON bookkeeping, **~12 MB, 17.7% of the artifact**. It now
      keys on content via `src/loader/contentKey.js`.
-   - **New: #1858.** `BLDRS_element_properties` capture took **24.6
-     minutes** on Snowdon — 92% of total writer time. The model is on
-     screen in ~70 s; the artifact (and therefore export, and the
-     next-load cache) is unavailable for roughly another 27 minutes after
-     that.
+   - **Withdrawn: #1858**, closed `not_planned`. It claimed
+     `BLDRS_element_properties` capture took 24.6 minutes on Snowdon. The
+     same code on the same model, timed in a real browser with
+     `?feature=glbVerbose`, reports **1,855 ms** — a ~2,000x gap on
+     identical code and identical output. The minutes were an artefact of
+     the sandbox harness, where `yieldToBrowser()`'s `scheduler.yield()`
+     is frame-coupled and no frames are being produced
+     (`src/utils/scheduling.js`); 99.1% of writer wall time there sat in
+     75 yields. **No wall-clock duration measured in that harness is
+     trustworthy.** Byte counts from it are unaffected — they do not
+     depend on the clock — which is why the measurements elsewhere in this
+     doc stand.
 2. **Inline gzip of the glTF JSON chunk turned out to be spec-impossible,
    not just hard.** The GLB chunk-type field is fixed at `0x4E4F534A`, the
    JSON chunk's position is fixed first, and its contents are defined as
@@ -135,8 +142,11 @@ arm — the envelope comes off at the upload seam, and a second seam in
    give it:** #1854 (JSON slimming — the two originally-named levers measure
    0; material dedup and instancing-accessor sharing have landed,
    single-instance node collapse is evaluated and deferred, §1.1b), #1859 (dedupe duplicate
-   geometry groups, ~12 MB / 17.7% — **landed**, §1.1b), #1858 (24.6-minute
-   `BLDRS_element_properties` capture — new), #1857 (deferred — ~2.7% of a
+   geometry groups, ~12 MB / 17.7% — **landed**, §1.1b), #1862 (re-express the
+   JSON chunk after the write — merged bufferViews, dropped glTF-default
+   fields, shortest-round-trip float32 bounds, identity instancing attributes
+   omitted — **landed**, §1.1c; accessor-count reduction via mesh collapse
+   evaluated and deferred there), #1857 (deferred — ~2.7% of a
    Draco'd export, not the headline it was thought to be), #1853
    (decimation, deprioritised — it attacks the ~1.2 MB geometry term on
    Snowdon, not the container), S5
@@ -367,6 +377,100 @@ POSITION+NORMAL+indices)` and compared as multisets: **0 differences.** The
 tables' 12,251 distinct conway geometry ids survive intact even though the
 file now holds 7,178 distinct glTF geometries, which is the point — geometry
 id is per-placement identity, the geometry payload is not.
+
+### 1.1c The JSON chunk is re-expressed after the write (#1862)
+
+**The finding.** `tools/glb/byteBudget.mjs` on a real `DSA2.step` artifact,
+23,194,200 B total: `json.chunk` 20,630,338 B (88.95%), all geometry BIN
+2,408,616 B (10.38%), instance transforms BIN 40 B. Inside that JSON chunk:
+`accessors` 10,675,589 B (46.03%, 86,025 entries), `nodes` 4,508,281 B
+(19.44%, 28,674), `meshes` 2,970,996 B (12.81%, 28,674), `bufferViews`
+2,313,763 B (9.98%, 28,679). 28,674 nodes, each with exactly one instance at
+an identity transform over its own 3-vertex shape — instancing buys nothing
+on this model, and ~714 B of declaration describes ~84 B of triangle.
+
+**Why the bufferView count is what it is.** gltf-transform's default
+`VertexLayout.INTERLEAVED` emits one bufferView per mesh holding that mesh's
+POSITION+NORMAL at `byteStride: 24`, plus one shared view for all indices and
+one untargeted view for the instancing accessors. So the view count tracks
+the mesh count. `VertexLayout.SEPARATE` was measured and is worse — two views
+per mesh — and the library exposes no cross-mesh packing knob, which is why
+this is a pass over its output rather than a setting.
+
+**What the pass does** (`src/loader/glbSlim.js`, run inside
+`exportBatchedModelAsInstancedGlb` before `injectGlbExtensions`, which
+appends `BLDRS_*` payload views of its own):
+
+1. One bufferView per `(buffer, target, byteStride)` class, accessors rebased
+   onto it. Legal because nothing in glTF requires an accessor's
+   `byteOffset` to be smaller than the view's `byteStride`.
+2. Fields restating a glTF default dropped: `primitives[].mode === 4`,
+   `byteOffset === 0`.
+3. `accessors[].min`/`max` printed at shortest float32 round-trip precision.
+   A `Float32Array` element read into JS is a double holding the float32's
+   exact value, so `JSON.stringify` spells 1.1 as `1.100000023841858`. The
+   shortest decimal that `Math.fround`s back to the identical float32 is the
+   same number, not a rounded one — the bounds stay exactly the ones the spec
+   requires. Worth 1,173,173 B on the DSA2 shape.
+4. Writer-side: an `EXT_mesh_gpu_instancing` attribute that would only say
+   identity is not written.
+
+**Two constraints on (4) that are not style:**
+
+- **TRANSLATION can never be dropped.** `src/export/glbPortable.js:201`
+  derives the node's instance count from that accessor alone; without it the
+  portable rewrite silently emits zero placements for the node, and the file
+  it produces then fails its own re-hydration.
+- **`attributes` must never go empty.** three's `GLTFMeshGpuInstancing` bails
+  at `GLTFLoader.js:1739-1743`, the node hydrates as a plain `Mesh`, and
+  `joinNodesToTables` then finds an uncovered table row — so the WHOLE model,
+  not just that node, falls back to an undecorated GLTFLoader result with no
+  picking and no palette.
+
+**Measured**, via two synthetic proxies through the real writer
+(`exportBatchedModelAsInstancedGlb`); the DSA2 proxy reproduces the real
+artifact's node/mesh/accessor/bufferView counts and its `nodes` and `meshes`
+JSON byte-for-byte, so it is a stand-in for the layout, not for the model:
+
+| | DSA2-shaped | Snowdon-shaped |
+|---|---:|---:|
+| artifact before | 22,750,376 B | 44,382,356 B |
+| artifact after | 18,193,964 B | 42,562,928 B |
+| | −4,556,412 (−20.03%) | −1,819,428 (−4.10%) |
+| JSON chunk | 20,341,690 → 15,785,307 B (−22.4%) | 8,059,986 → 6,240,641 B (−22.6%) |
+| bufferViews | 28,676 → 3 | 19,136 → 3 |
+| accessors | 86,025 → 86,023 | 33,534 → 33,530 |
+
+Khronos `gltf-validator` on both outputs: 0 errors, 0 warnings — an issue
+profile identical to the inputs' (the only notices are `UNSUPPORTED_EXTENSION`
+for `EXT_mesh_gpu_instancing`, which the validator does not implement, and
+the `UNUSED_OBJECT` accessors that follow from it). Cost on the 20 MB worst
+case, in the writer worker: 580 ms for the whole pass, of which 247 ms is the
+JSON parse + re-serialize it cannot avoid and 70 ms the walk that proves no
+unknown holder references a bufferView. Partly repaid immediately, since
+`injectGlbExtensions` parses and re-serializes the same chunk right after and
+now gets a smaller one.
+
+**Evaluated and NOT done: reducing the accessor COUNT.** 86,025 accessors
+for 28,674 independently addressable meshes is what that mesh structure
+costs; the pass makes each one cheaper and leaves the count alone. Collapsing
+the meshes themselves — concatenating tiny single-instance shapes into
+shared primitives with per-node identity carried by index ranges — is where
+the remaining order of magnitude on a DSA2-shaped model is, and it reaches
+`BLDRS_face_ids` (which indexes identity BY triangle order), picking, and the
+portable rewrite. Recorded here rather than half-landed, same as the
+node-collapse decision in §1.1b.
+
+The one contract the pass makes about data is that **every accessor
+addresses byte-identical data before and after**, which is exactly what
+`glbSlim.test.js` asserts (verified red against a mutation that drops the
+offset rebasing). The first implementation laid views out in source order
+rather than class by class, which produced OVERLAPPING merged views —
+invisible to that byte-identity check, because every accessor keeps its own
+offset, but not invisible to three's `GLTFParser`, which uploads a whole
+bufferView as one GPU buffer. The fixture's view ORDER (mesh 0's attributes,
+indices, instancing, then the rest — copied from a real artifact) is what
+makes the regression test able to fail.
 
 ### 1.2 Where a download can be located from
 
