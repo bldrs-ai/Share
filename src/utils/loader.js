@@ -1,8 +1,10 @@
+import {guessTypeFromNameOrFile} from '../Filetype'
 import {
   initializeWorker,
   nextRequestId,
   opfsWriteModel,
 } from '../OPFS/OPFSService.js'
+import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 
@@ -53,8 +55,13 @@ export function loadLocalFileFallback(onLoad, testingSkipAutoRemove = false) {
  * @param {Function} onLoad Called with (storageId, lastModifiedUtc, originalName)
  * @param {boolean} testingSkipAutoRemove
  * @param {boolean} testingDisableWebWorker
+ * @param {Function} [onError] Called with a message for a pick that cannot be
+ *   opened at all — a compressed file in a browser with no
+ *   `DecompressionStream`, or a name and a header that between them name no
+ *   format. Without one this path can only log: the picker has already
+ *   closed, so nothing else would tell the user why nothing happened.
  */
-export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisableWebWorker = false) {
+export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisableWebWorker = false, onError = null) {
   const viewerContainer = document.getElementById('viewer-container')
   const fileInput = document.createElement('input')
   fileInput.setAttribute('type', 'file')
@@ -66,16 +73,45 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
   }
   fileInput.addEventListener(
     'change',
-    (event) => {
+    async (event) => {
       debug().log('loader#loadLocalFile#event:', event)
-      const file = event.target.files[0]
-      const lastModifiedUtc = file.lastModified
+      const picked = event.target.files[0]
+      const lastModifiedUtc = picked.lastModified
+      // A `.glb.gz` — Share's own compressed export (#1854) — is unwrapped
+      // before the blob URL is minted, because that URL is all the OPFS
+      // worker gets: what it writes is what the loader will later parse.
+      // Nothing else in this function then has to know about `.gz`
+      // (`loader/gzipEnvelope.js`).
+      let file
+      try {
+        file = await inflateIfGzipEnvelope(picked)
+      } catch (e) {
+        debug().error('loader#loadLocalFile: cannot open the picked file:', e.message)
+        if (onError) {
+          onError(e.message)
+        }
+        return
+      }
       const tmpUrl = URL.createObjectURL(file)
       debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
       // Post message to the worker to handle the file
       const parts = tmpUrl.split('/')
       const fileNametmpUrl = parts[parts.length - 1]
       if (!testingDisableWebWorker) {
+        // The storage extension is what `findLoader` will resolve this upload
+        // by, so it has to survive names the old `split('.').pop()` could not
+        // parse: `model.glb.gz` (a glb), `MODEL.GLB.GZ`, and a file called
+        // just `.gz`, which only its header can answer for.
+        const ext = await guessTypeFromNameOrFile(file)
+        if (ext === null) {
+          URL.revokeObjectURL(tmpUrl)
+          const message = `Cannot extract filetype from filename: ${picked.name}`
+          debug().error('loader#loadLocalFile:', message)
+          if (onError) {
+            onError(message)
+          }
+          return
+        }
         // Minted before the listener attaches so it can close over the id.
         const requestId = nextRequestId()
         // Listener for messages from the worker.  We can't revoke
@@ -101,26 +137,22 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
               debug().log('Worker finished writing file')
               workerRef.removeEventListener('message', listener)
               URL.revokeObjectURL(tmpUrl)
-              onLoad(workerEvent.data.fileName, lastModifiedUtc, file.name)
+              onLoad(workerEvent.data.fileName, lastModifiedUtc, picked.name)
             } else if (workerEvent.data.event === 'read') {
               debug().log('Worker finished reading file')
               workerRef.removeEventListener('message', listener)
               URL.revokeObjectURL(tmpUrl)
-              onLoad(workerEvent.data.file.name, lastModifiedUtc, file.name)
+              onLoad(workerEvent.data.file.name, lastModifiedUtc, picked.name)
             }
           }
         }
         workerRef.addEventListener('message', listener)
-        const filename = file.name
-        const dotParts = filename.split('.')
-        if (dotParts.length <= 1) {
-          throw new Error('Cannot extract filetype from filename')
-        }
-        const ext = dotParts[dotParts.length - 1]
-        opfsWriteModel(tmpUrl, filename, `${fileNametmpUrl}.${ext}`, requestId)
+        // The user's own filename, envelope and all: it is the display name
+        // for recents and the load report, not something to resolve against.
+        opfsWriteModel(tmpUrl, picked.name, `${fileNametmpUrl}.${ext}`, requestId)
       } else {
         URL.revokeObjectURL(tmpUrl)
-        onLoad(fileNametmpUrl, lastModifiedUtc, file.name)
+        onLoad(fileNametmpUrl, lastModifiedUtc, picked.name)
       }
     },
     false,

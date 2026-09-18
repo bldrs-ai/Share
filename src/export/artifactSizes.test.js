@@ -1,4 +1,7 @@
-import {CompressionStream as NodeCompressionStream} from 'node:stream/web'
+import {
+  CompressionStream as NodeCompressionStream,
+  DecompressionStream as NodeDecompressionStream,
+} from 'node:stream/web'
 import {captureException} from '@sentry/react'
 import {packGlbChunks} from '../loader/glbContainer'
 import {serializeGlb} from '../loader/injectGlbExtensions'
@@ -52,10 +55,10 @@ const ARTIFACT = {
  * A `Blob` rather than a `File`: jsdom's File has no `arrayBuffer()` on what
  * `slice()` returns, and only `size`/`slice`/`arrayBuffer` are used.
  *
- * @return {Blob}
+ * @return {Promise<Blob>}
  */
-function cachedArtifact() {
-  return new Blob([packGlbChunks([cachedGlb()])])
+async function cachedArtifact() {
+  return new Blob([await packGlbChunks([cachedGlb()])])
 }
 
 
@@ -86,7 +89,7 @@ describe('artifactSizes', () => {
   })
 
   it('sizes the artifact the store slot points at', async () => {
-    readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+    readModelByPathFromOPFS.mockResolvedValue(await cachedArtifact())
 
     const sizes = await artifactSizes({...ARTIFACT})
 
@@ -100,7 +103,7 @@ describe('artifactSizes', () => {
   })
 
   it('reads each artifact once, however often the tab is reopened', async () => {
-    readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+    readModelByPathFromOPFS.mockResolvedValue(await cachedArtifact())
     const artifact = {...ARTIFACT}
 
     const first = await artifactSizes(artifact)
@@ -111,7 +114,7 @@ describe('artifactSizes', () => {
   })
 
   it('re-reads when the loader publishes a new artifact', async () => {
-    readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+    readModelByPathFromOPFS.mockResolvedValue(await cachedArtifact())
 
     await artifactSizes({...ARTIFACT})
     await artifactSizes({...ARTIFACT, writtenAt: 2})
@@ -151,8 +154,8 @@ describe('artifactSizes', () => {
       mode: 'meshopt',
     }
 
-    beforeEach(() => {
-      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+    beforeEach(async () => {
+      readModelByPathFromOPFS.mockResolvedValue(await cachedArtifact())
       compressExportGlb.mockResolvedValue(COMPRESSED)
     })
 
@@ -229,8 +232,8 @@ describe('artifactSizes', () => {
     // for the metadata-off side, and a strip needs something to parse.
     const PORTABLE_BYTES = cachedGlb()
 
-    beforeEach(() => {
-      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+    beforeEach(async () => {
+      readModelByPathFromOPFS.mockResolvedValue(await cachedArtifact())
       rewriteGlbPortable.mockReturnValue({bytes: PORTABLE_BYTES, isChanged: true, stats: {}})
     })
 
@@ -302,8 +305,8 @@ describe('artifactSizes', () => {
       mode: 'draco',
     }
 
-    beforeEach(() => {
-      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+    beforeEach(async () => {
+      readModelByPathFromOPFS.mockResolvedValue(await cachedArtifact())
       compressExportGlb.mockResolvedValue(COMPRESSED)
     })
 
@@ -361,8 +364,8 @@ describe('artifactSizes', () => {
       mode: 'draco',
     }
 
-    beforeEach(() => {
-      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+    beforeEach(async () => {
+      readModelByPathFromOPFS.mockResolvedValue(await cachedArtifact())
       compressExportGlb.mockResolvedValue(COMPRESSED)
     })
 
@@ -399,8 +402,8 @@ describe('artifactSizes', () => {
       mode: 'draco',
     }
 
-    beforeEach(() => {
-      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+    beforeEach(async () => {
+      readModelByPathFromOPFS.mockResolvedValue(await cachedArtifact())
       compressExportGlb.mockResolvedValue(COMPRESSED)
       rewriteGlbPortable.mockReturnValue({bytes: cachedGlb(), isChanged: true, stats: {}})
     })
@@ -508,14 +511,21 @@ describe('artifactSizes', () => {
       mode: 'meshopt',
     }
 
-    beforeEach(() => {
+    beforeEach(async () => {
+      // Both streams, not just the compressor: with `CompressionStream`
+      // present the container writes a gzipped v3 artifact (#1855), and
+      // reading one back needs the decompressor. No engine ever shipped one
+      // without the other, so planting only half would be a fixture the
+      // browser cannot produce.
       global.CompressionStream = NodeCompressionStream
-      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+      global.DecompressionStream = NodeDecompressionStream
+      readModelByPathFromOPFS.mockResolvedValue(await cachedArtifact())
       compressExportGlb.mockResolvedValue(COMPRESSED)
     })
 
     afterEach(() => {
       delete global.CompressionStream
+      delete global.DecompressionStream
     })
 
     it('reports the gzipped lengths, which is what the browser saves', async () => {
@@ -595,7 +605,7 @@ describe('artifactSizes', () => {
       // A property of the ARTIFACT, not of a selection: the caption needs it,
       // and paying a second OPFS read for a number already parsed out of the
       // same JSON chunk would undo the point of the cheap path.
-      readModelByPathFromOPFS.mockResolvedValue(cachedArtifact())
+      readModelByPathFromOPFS.mockResolvedValue(await cachedArtifact())
       const artifact = {...ARTIFACT}
 
       await artifactSizes(artifact)

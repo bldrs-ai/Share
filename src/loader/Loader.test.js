@@ -1,3 +1,5 @@
+import {DecompressionStream as NodeDecompressionStream} from 'node:stream/web'
+import {gzipSync} from 'node:zlib'
 import {Object3D, Mesh, BufferGeometry, Material, BufferAttribute} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
@@ -151,6 +153,29 @@ describe('Loader', () => {
       expect(model).toMatchSnapshot()
     } finally {
       restoreArrayBuffer()
+    }
+  })
+
+  it('loads a GLB that arrived gzipped, envelope and all', async () => {
+    // The last seam before `readModel` takes a `.gz` transport envelope off
+    // (#1831 S5, `loader/gzipEnvelope.js`). Uploads normally arrive already
+    // inflated — the drop handler and the Local tab strip the envelope before
+    // OPFS — so what this covers is everything else that can still be
+    // carrying one: a locally hosted `/x.glb.gz`, a pasted URL, the non-OPFS
+    // upload fallback. The names below are the proof that it is the SAME
+    // model, not merely that something parsed.
+    global.DecompressionStream = NodeDecompressionStream
+    mockViewer.IFC.type = 'glb'
+    const testPath = 'glb/cube.glb'
+    const gzippedGlb = Buffer.from(gzipSync(readTestDataFile(testPath, true)))
+    const restoreArrayBuffer = setupMockBlobWithContent(gzippedGlb)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(model.name).toBe('Scene (cube.glb)')
+      expect(model.children.find((child) => child.name === 'Cube')).toBeDefined()
+    } finally {
+      restoreArrayBuffer()
+      delete global.DecompressionStream
     }
   })
 

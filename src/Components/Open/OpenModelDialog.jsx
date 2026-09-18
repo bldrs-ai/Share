@@ -276,7 +276,10 @@ export default function OpenModelDialog({
       setPendingModelNameUpdate(storageId)
     }
     if (isOpfsAvailable) {
-      loadLocalFile(onLoad, false)
+      // The dialog closes on pick, so a file that cannot be opened at all —
+      // a `.glb.gz` in a browser with no `DecompressionStream`, a name and a
+      // header that between them name no format — has no other way to say so.
+      loadLocalFile(onLoad, false, false, (message) => setAlert(message))
     } else {
       loadLocalFileFallback(onLoad, false)
     }

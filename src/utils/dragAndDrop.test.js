@@ -2,6 +2,7 @@ import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from './dragAndD
 import {guessTypeFromFile} from '../Filetype'
 import {saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
+import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {disablePageReloadApprovalCheck} from './event'
 import {saveDnDFileToOpfsFallback} from './loader'
 import {trackAlert} from './alertTracking'
@@ -12,6 +13,7 @@ import debug from './debug'
 jest.mock('../Filetype')
 jest.mock('../OPFS/utils')
 jest.mock('../connections/persistence')
+jest.mock('../loader/gzipEnvelope')
 jest.mock('./event')
 jest.mock('./loader')
 jest.mock('./alertTracking')
@@ -34,6 +36,11 @@ describe('dragAndDrop utility', () => {
   beforeEach(() => {
     // Reset all mocks
     jest.clearAllMocks()
+
+    // The envelope strip is a pass-through for every file that is not a gzip
+    // member, which is all of them here bar the one test that says otherwise.
+    // Automocked it would return undefined and every drop would lose its file.
+    inflateIfGzipEnvelope.mockImplementation((file) => Promise.resolve(file))
 
     // Mock event object
     mockEvent = {
@@ -269,6 +276,46 @@ describe('dragAndDrop utility', () => {
 
       expect(mockNavigate).toHaveBeenCalledWith('/prefix/v/new/generated-filename.ifc')
       // Should not throw errors when optional callbacks are not provided
+    })
+
+    it('stores the INFLATED bytes of a dropped .glb.gz, under the model\'s own type', async () => {
+      // The round trip this closes (#1831): Share exports `index.glb.gz`
+      // and a user drops it back. What reaches OPFS has to be the GLB — the
+      // envelope is gone by then, so the storage extension, the `/v/new/`
+      // route and the loader all describe the model rather than its transport
+      // encoding.
+      const droppedFile = {name: 'index.glb.gz', type: 'application/gzip', size: 512}
+      const inflatedFile = {name: 'index.glb.gz', type: '', size: 2048}
+      mockEvent.dataTransfer.files = [droppedFile]
+      inflateIfGzipEnvelope.mockResolvedValue(inflatedFile)
+      guessTypeFromFile.mockResolvedValue('glb')
+      saveDnDFileToOpfs.mockImplementation((file, type, onWritten) => onWritten('generated.glb'))
+
+      await handleFileDrop(mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError)
+
+      expect(inflateIfGzipEnvelope).toHaveBeenCalledWith(droppedFile)
+      // Sniffed AFTER the inflate, or the type would be whatever gzip is.
+      expect(guessTypeFromFile).toHaveBeenCalledWith(inflatedFile)
+      expect(saveDnDFileToOpfs).toHaveBeenCalledWith(inflatedFile, 'glb', expect.any(Function))
+      expect(mockNavigate).toHaveBeenCalledWith('/prefix/v/new/generated.glb')
+      expect(mockOnError).not.toHaveBeenCalled()
+    })
+
+    it('alerts, rather than throwing, when a compressed drop cannot be opened', async () => {
+      // A browser with no `DecompressionStream` (Safari before 16.4), or a
+      // file that is not what it claims. The drop handler is the only thing
+      // watching, so the sentence it was given is the one the user gets.
+      const message = 'Cannot open a compressed (.gz) model in this browser.'
+      mockEvent.dataTransfer.files = [{name: 'index.glb.gz', type: 'application/gzip', size: 512}]
+      inflateIfGzipEnvelope.mockRejectedValue(new Error(message))
+
+      await handleFileDrop(mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError)
+
+      expect(trackAlert).toHaveBeenCalledWith(message)
+      expect(mockSetAlert).toHaveBeenCalledWith(message)
+      expect(mockOnError).toHaveBeenCalledWith(message)
+      expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
+      expect(mockNavigate).not.toHaveBeenCalled()
     })
 
     it('should handle error without onError callback', async () => {

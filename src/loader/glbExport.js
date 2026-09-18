@@ -581,7 +581,7 @@ export async function exportAndCacheGlb({
       const inline = injectGlbExtensions(
         compressedBytes, extensionsForInject, sceneExtrasForInject, titleForExtras)
       extStats = inline.stats
-      packed = packGlbChunks([inline.bytes], mode)
+      packed = await packGlbChunks([inline.bytes], mode)
     }
     if (extStats.addedExtensions > 0) {
       glbVerbose(

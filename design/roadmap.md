@@ -97,6 +97,7 @@ B identity, C sharing, D subscribe+ads, E launch checklist); G = growth funnel
 | Share | `share-110` | Save model to user's hosting (originator share) | 🟡 | C | T2 |
 | Share | `share-120` | Extended Share/Login flow (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>) | 🟡 | C, D | — |
 | Share | `share-130` | Private link sharing + visibility chip | 🟡 | C | T4 |
+| Share | `share-140` | GLB export as a Pro feature (<a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a>) | 🟡 | D | T2, T8 |
 | Share | `share-200` | Grant/revoke per-principal sharing | 🟡 | C | T4 |
 | Share | `share-400` | Folder-scoped boundaries | ⬜ | Post | T4 |
 | Notes | `notes-100` | Anchored notes (GitHub-backed) | ✔ | — | — |

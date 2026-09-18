@@ -10,7 +10,9 @@
 //   - pako.gzip on the resulting bytes (CPU-bound)
 //   - injectGlbExtensions byte-splice (sync but fast once stringify
 //     + gzip are done)
-//   - packGlbChunks (Bldrs container wrap, ~ms)
+//   - packGlbChunks (Bldrs container wrap + the container's own gzip,
+//     ~1.7 s on a 68 MB artifact — the single biggest item here since
+//     #1855, and the reason this handler is async)
 //
 // What stays on main thread (intentionally — moving these is the
 // Phase 5 next-slice work):
@@ -61,7 +63,11 @@ import {packGlbChunks} from './glbContainer'
 import {injectGlbExtensions} from './injectGlbExtensions'
 
 
-self.addEventListener('message', (event) => {
+// Async because `packGlbChunks` is: the container gzips its payload through
+// `CompressionStream`, which has no synchronous form (#1855). That deflate
+// is the bulk of this worker's ~1.7 s on a Snowdon-sized artifact and is
+// exactly the kind of work the worker exists to keep off the main thread.
+self.addEventListener('message', async (event) => {
   const data = event.data
   if (!data || data.command !== 'inject-and-pack') {
     return
@@ -70,7 +76,7 @@ self.addEventListener('message', (event) => {
   try {
     const {bytes: withExtensions, stats: extStats} =
       injectGlbExtensions(bytes, extensions, sceneExtras, sceneName)
-    const packed = packGlbChunks([withExtensions], mode)
+    const packed = await packGlbChunks([withExtensions], mode)
     // Transfer the final bytes back zero-copy. The Uint8Array's
     // underlying ArrayBuffer is in the transferables list, so the
     // worker side loses access after postMessage returns — fine, we

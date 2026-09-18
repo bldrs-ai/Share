@@ -1,7 +1,8 @@
 # GLB Export as a Pro feature — design
 
-Status: v0.1 (2026-09-10). Epic `share-140` (tracking issue linked from the
-epic row in [roadmap.md](../roadmap.md) §3.1 once filed).
+Status: v0.1 (2026-09-10). Epic `share-140`, tracking issue
+[#1831](https://github.com/bldrs-ai/Share/issues/1831) (row in
+[roadmap.md](../roadmap.md) §3.1).
 Owner: Pablo (with Claude).
 
 Share already converts every IFC/STEP it opens into a GLB and parks it in
@@ -16,6 +17,136 @@ Sections 1–3 are the investigation; §4–§6 the design; §7 the stages that
 become the epic's sub-issues; §8 the cross-browser smoke checklist.
 
 
+## Status & remaining work
+
+*Updated 2026-09-16, after #1837/#1851/#1852 landed, the #1855 container
+gzip (§1.1a), today's byte-attribution measurement on #1831, and the
+`.glb.gz` round trip (§4.7), which reverses a decision §4.3 used to record.*
+
+**Where things stand:** the feature described in §1–§6 below is fully built
+and ships behind `?feature=export` (default **off**). Export lives in the
+Save dialog's Export tab: the Include Bldrs metadata toggle, Portable
+toggle, Compression dropdown (None / Meshopt / Draco), Quality rung,
+Compress download toggle, a Download size line that *is* the file, and a
+centred accent Export GLB action last. #1837 landed the pro-module
+pipeline, Download GLB, and export tracking; #1851 added portable export +
+re-hydration; #1852 added the compression controls (three-rung quality
+ladder, background codec sweep, `.glb.gz`). **My Exports
+(`Open/ExportsList.jsx`) is built and unit-tested but not mounted**, per
+owner decision (#1838) — the `record-export.js` / `exportHistory.js`
+tracking data path stays live regardless. Code delivery is gated through
+the `pro-module` Netlify function (Auth0 bearer + Management API check on
+every request, `Cache-Control: private, no-store`), built with esbuild
+rather than Netlify's default nft bundler because nft crashes an ESM
+function importing axios on cold start (§4.2). Just landed on this branch:
+the byte-attribution instrument `tools/glb/byteBudget.mjs` (0ec7339) and the
+v3 gzipped OPFS container, #1855, 6d20d33 (§1.1a) — a real Snowdon artifact
+goes 67,830,692 → 21,396,007 B stored, 68.5% saved, ~0.5 s to inflate, the
+size read still never touching BIN. **And the `.glb.gz` round trip closes**
+(§4.7): Share opens its own compressed export by drag-and-drop and through the
+Open dialog's Local tab, with no `supportedTypes` entry and no `findLoader`
+arm — the envelope comes off at the upload seam, and a second seam in
+`Loader#load` covers the paths that skip it.
+
+1. **The measurement the epic was waiting on landed today, and it reframes
+   the remaining lossless work.** §4.3's "container" finding (≈1.2 MB
+   geometry against ≈15.5 MB container on Snowdon) was right in total but
+   never split between the JSON chunk and the instance transforms — the
+   split decides which follow-up issue matters most, and nobody had run it.
+   It has now been run on a real batched-native Snowdon artifact
+   (67,830,672 B, produced end to end by Share's own writer, not
+   estimated). Exhaustive byte-level partition: geometry (`POSITION` +
+   `NORMAL` + indices) 46,178,568 B (68.1%), JSON chunk 14,440,907 B
+   (21.3%), `BLDRS_element_properties` 6,129,233 B (9.0%), instance
+   transforms (`TRANSLATION`/`ROTATION`/`SCALE`) 873,960 B (1.29%),
+   `BLDRS_instance_tables` 136,116 B, `BLDRS_spatial_tree` 71,856 B. So the
+   "~15.5 MB of container" is **94.3% JSON chunk, 5.7% instance
+   transforms** — the opposite of an instance-transform-dominated split.
+   Snowdon turns out not to be instance-heavy in the artifact Share
+   actually writes: 21,849 instances over 12,251 groups (a 1.78× reuse
+   ratio), and 86.5% of nodes carry exactly one instance — the cost is the
+   **node graph** (one full node + mesh + material + accessors +
+   bufferViews per group), not per-instance placement data. Consequences:
+   - **#1857** (Draco+Meshopt together / quantized instance transforms) is
+     re-scored from "the biggest remaining win" to **~2.7% of a Draco'd
+     export** and is deferred — not the priority the epic body still
+     states.
+   - **#1854**'s two named JSON-slimming levers both measure **0 bytes**:
+     dropping node `name` strings recovers nothing because the batched
+     writer emits no names at all, and dropping `min`/`max` on everything
+     but `POSITION` recovers nothing because all 12,251 pairs are already
+     on `POSITION` accessors, where glTF requires them. Both were reasoned
+     from the merged-mesh layout, not the batched one. The levers that do
+     exist there are new — material dedup (12,251 materials, 90 distinct,
+     ~1.74 MB) and single-instance node collapse (~2.5 MB) — for ~4.3 MB
+     together. **Material dedup has since landed**, and so has a third
+     lever neither issue named: sharing the `EXT_mesh_gpu_instancing`
+     accessors by content, worth 1,801,935 B of JSON + 456,524 B of BIN and
+     writer-side (§1.1b). Single-instance collapse has NOT landed: the two
+     cut its premise to ~0.7 MB, and what is left needs a mixed
+     instanced/plain artifact shape that both readers refuse today —
+     evaluated and deferred, not skipped.
+   - **All of this is now measured end to end.** A real Snowdon artifact
+     rebuilt through Share's own writer goes **67,830,672 → 53,131,764 B,
+     −21.7%**, of which the JSON chunk is −8,167,232 (14,440,907 →
+     6,273,675) and BIN is −6,536,756. 21,849 placements, unchanged, and
+     the placement multiset — identity, transform, colour and geometry
+     content hash — compares with **0 differences** (§1.1b).
+   - **The largest single lossless item, #1859, has since landed** (§1.1b).
+     The batched writer keyed geometry groups on `geometry.uuid` (object
+     identity) rather than content, so 5,031 of the 12,251 groups were
+     byte-identical duplicates — roughly 6.08 MB of duplicated BIN plus
+     5.9 MB of JSON bookkeeping, **~12 MB, 17.7% of the artifact**. It now
+     keys on content via `src/loader/contentKey.js`.
+   - **New: #1858.** `BLDRS_element_properties` capture took **24.6
+     minutes** on Snowdon — 92% of total writer time. The model is on
+     screen in ~70 s; the artifact (and therefore export, and the
+     next-load cache) is unavailable for roughly another 27 minutes after
+     that.
+2. **Inline gzip of the glTF JSON chunk turned out to be spec-impossible,
+   not just hard.** The GLB chunk-type field is fixed at `0x4E4F534A`, the
+   JSON chunk's position is fixed first, and its contents are defined as
+   the glTF JSON verbatim — `extensionsUsed`, which would say the chunk is
+   compressed, lives *inside* the JSON a reader would have to inflate to
+   find that out. No Khronos extension targets JSON or the scene graph. An
+   extra chunk after BIN is spec-legal (verified against three.js r184 and
+   gltf-transform 4.3.0) but is a carrier, not a compressor — it doesn't
+   shrink what ships. This is why the win landed at the OPFS **container**
+   layer instead (§1.1a, gzip outside the GLB entirely), not as an in-GLB
+   JSON transform.
+3. **S4 (#1835) is the ship gate for all of the above, and it is not
+   done.** Outstanding: cross-browser smoke (Firefox, Safari — including
+   OPFS `createWritable` and `CompressionStream` for `.glb.gz` — Edge, iOS
+   Safari, Android Chrome) with real Auth0 accounts per tier, against the
+   §8 checklist; the real Management API path for `record-export`
+   (including whether the `https://bldrs.ai/app_metadata` JWT claim carries
+   `exports` at all — an Auth0 Action outside this repo); flipping `export`
+   to `isActive: true`; and the site-wide esbuild-bundling decision for
+   every other ESM Netlify function that imports axios
+   (`gh-oauth-exchange`, `gh-oauth-refresh`, `unlink-identity`,
+   `create-portal-session`, `stripe-webhook`), which shares the same latent
+   nft cold-start crash #1837 fixed locally for `pro-module` and
+   `record-export`. Desktop smoke on the deploy preview (14 Sep) found
+   export working end to end with None/Meshopt/Draco all opening in Share
+   and the three.js editor; the two findings it produced became their own
+   issues (#1844 picking on a re-opened Bldrs GLB, #1843 portable export)
+   and are both now shipped.
+4. **Open work beyond S4, in roughly the priority order the epic's handoffs
+   give it:** #1854 (JSON slimming — the two originally-named levers measure
+   0; material dedup and instancing-accessor sharing have landed,
+   single-instance node collapse is evaluated and deferred, §1.1b), #1859 (dedupe duplicate
+   geometry groups, ~12 MB / 17.7% — **landed**, §1.1b), #1858 (24.6-minute
+   `BLDRS_element_properties` capture — new), #1857 (deferred — ~2.7% of a
+   Draco'd export, not the headline it was thought to be), #1853
+   (decimation, deprioritised — it attacks the ~1.2 MB geometry term on
+   Snowdon, not the container), S5
+   #1836 (further export formats, §6).
+5. **§7's two open questions are still open.** Whether free users get one
+   export as a conversion moment (§7.1) and how `shareProPendingReauth`
+   should be treated (§7.2) are both **owner decisions S4 has not made** —
+   this fold-back records the shipped reality, not those decisions.
+
+
 ## 1. What we already have
 
 ### 1.1 The artifact
@@ -27,10 +158,54 @@ the key `src/loader/glbCacheKey.js#glbCacheKey` derives from the source
 adapters in `src/loader/sourceCacheKey.js` produce the key input for GitHub,
 local, upload, Drive and external sources. The file is not a bare GLB: it is
 the **Bldrs container** (`src/loader/glbContainer.js`) — a 16-byte header
-(`BLDR`, version, chunkCount, compression-mode byte) followed by exactly one
-chunk (the writer always packs a single chunk, `packGlbChunks([bytes])`), and
-the chunk *is* a valid standalone GLB. So the export is, at the byte level,
-`unpackGlbContainer(bytes).chunks[0]`.
+(`BLDR`, version, chunkCount, compression-mode byte, container-codec byte)
+followed by exactly one chunk (the writer always packs a single chunk,
+`packGlbChunks([bytes])`), and that chunk *is* a valid standalone GLB. So the
+export is, at the byte level, `(await unpackGlbContainer(bytes)).chunks[0]`.
+
+### 1.1a The container is gzipped (v3, #1855)
+
+Since #1855 the container stores its chunks **compressed**, because Share was
+caching every model it opened uncompressed: a real Snowdon artifact is
+67,830,692 B, and gzip stores it in 21,396,007 B — **68.5% saved** — for
+~1.7 s to deflate on the write and ~0.5 s to inflate on the read. The owner's
+ruling on #1855 governs the trade: *"saving 10s or 100s of MB of disk space
+for a slightly slower load (100s of ms) is a great tradeoff."* **Do not
+"fix" that latency by reverting to uncompressed bytes** — it is the price
+this was bought at, not a regression.
+
+Three things about the shape are load-bearing, and the full argument (with
+the wire format) is in `glbContainer.js`'s module doc:
+
+- **Each chunk is TWO gzip members**, split at the inner GLB's JSON/BIN chunk
+  boundary, with both stored lengths in the chunk record. That is what keeps
+  `glbArtifactSize.js#artifactSizesFromFile` — the Export tab's size line —
+  able to answer from a `File.slice` without ever touching BIN (902,702 B
+  inflated instead of 21 MB, ~90 ms). A whole-file gzip would have destroyed
+  that random access, and the obvious alternative of leaving the JSON chunk
+  raw and gzipping only BIN measures 34,934,225 B — it forfeits 40% of the
+  win, because the glTF node graph is the most compressible thing in the file
+  (16.0× on its own). The split costs nothing: 21,396,007 B against a
+  whole-file gzip's 21,397,212 B.
+- **The container codec is byte 13, not the `mode` byte.** `mode` means "codec
+  inside the inner glTF" and `Loader.js#tryLoadCachedGlb` treats a mismatch
+  against the active feature flag as a cache MISS, so a gzip value smuggled
+  into it would false-miss on every load, re-parsing the model while the cache
+  sat there unread.
+- **v2 (uncompressed) artifacts are read in place, and `schemaVer` is NOT
+  bumped.** The container version describes the envelope; `schemaVer`
+  describes the contents, which are unchanged. A bump would also be
+  counterproductive: `schemaVer` is part of the artifact filename and nothing
+  sweeps retired slots, so it would leave the old 68 MB file on disk *and*
+  write a 21 MB one beside it, after a full re-parse. The cost of reading in
+  place is that an existing v2 artifact never shrinks, since a cache hit runs
+  no writer — reclaiming those wants a stale-slot sweep, not a version bump.
+
+`packGlbChunks` and `unpackGlbContainer` are consequently **async**:
+`CompressionStream` has no synchronous form, and pako measures 4.2 s against
+the native 1.6 s on a Snowdon-sized BIN chunk. Where `CompressionStream` is
+missing (Safari before 16.4) the writer emits a v2 container, so the cache
+keeps working at the old size rather than failing.
 
 What that GLB carries depends on the render path that produced it (all
 default-on today):
@@ -56,6 +231,142 @@ Two properties of the artifact matter for a download:
   originator's own model, so no leak *to us* — but a user exporting to hand
   the GLB onward may not want vendor psets travelling with it. The export
   therefore offers a "strip Bldrs metadata" option (§4.3).
+
+### 1.1b What the writer groups on (#1859, #1854)
+
+`src/loader/glbBatchedExport.js#collectInstanceGroups` bins every placement
+into one node per **(geometry content × exact source colour)**, and that
+grouping is where the artifact's size is decided — the batched-native layout
+spends one node + one mesh + six accessors + two bufferViews per group, so
+the group count multiplies straight through the JSON chunk.
+
+**It used to bin on `geometry.uuid`, which is object identity, not content.**
+The shapes arrive from `makeInstanceGeometryReader`, whose cache keys on
+conway's `geometryExpressID`
+(`viewer/ifc/batchedInstanceGeometry.js#sourceKey`), so two IFC types that
+emit byte-identical meshes arrived as two objects and were written twice.
+Measured on a real Snowdon artifact: **12,251 groups over 7,178 distinct
+contents** — 5,031 of them (41%) byte-identical in geometry *and* colour, i.e.
+groups the writer's own stated key should already have merged. Cost:
+6,079,368 B of duplicated BIN plus ~5.9 MB of JSON bookkeeping, ~17.7% of the
+file, and the reuse ratio the node graph's cost follows from is 3.04×, not
+1.78×.
+
+`src/loader/contentKey.js` is the fix: an interner that maps every
+geometry to the first object seen carrying the same POSITION + NORMAL + index
+bytes, so the existing identity-keyed dedup below it becomes content dedup
+without changing shape. Three things it has to get right, and each has a test
+that a mutation was verified to turn red:
+
+- **The hash only buckets; byte equality decides.** A 32-bit hash over
+  thousands of shapes collides at a percent-level rate and a collision here
+  would draw the wrong geometry, so every bucket candidate is compared byte
+  for byte. `contentKey.test.js` carries a constructed FNV-1a collision
+  (0xEDC3_D3B7) precisely so that check is not vacuous.
+- **Merged groups concatenate in batch-iteration order, and the
+  `BLDRS_instance_tables` rows travel with the transforms.** They cannot
+  diverge, because both are derived from one `entries` list in one pass — but
+  the join is by ROW (`extras.bldrsTableNode`, then index), so a merge that
+  ordered one side differently would decouple every element id from its
+  geometry. This is the `BLDRS_face_ids` identity hazard in a new place; it is
+  pinned by a fixture whose two duplicate shapes *interleave*, so a per-shape
+  concatenation is distinguishable from a batch-order one.
+- **Same geometry, different colour must SHARE accessors, not merge.** 42
+  Snowdon groups are that case. They stay distinct nodes with distinct
+  materials over one set of POSITION/NORMAL/indices accessors — which is what
+  `accessorsFor` already did for one geometry object, and now does for one
+  geometry *content*.
+
+**NORMAL is part of the identity.** ~730 Snowdon shapes share positions and
+topology but differ in normals (smoothing or winding variants); hashing
+POSITION + indices alone gives 6,448 distinct against 7,178. They are
+correctly not merged, and the two numbers are not in contradiction.
+
+**Materials are shared per colour, not minted per bin** (#1854). The writer
+used to create one material per group: 12,251 declared for 90 distinct
+colours, 1,758,073 B of JSON for 12,970 B of content. A material here is a
+pure function of the source colour, and readers take colours from
+`BLDRS_instance_tables` and never from the material (§1.1, and
+`bldrsInstanceTables.js` on why), so sharing is exact and writer-side only.
+
+**The instance transforms are shared by content too**, which is the same
+mechanism one level up: almost every IFC placement is unit-scaled and the
+orientations repeat, so the 7,220 nodes left after content dedup hold **74
+distinct SCALE payloads and 357 distinct ROTATION ones** against 7,205
+distinct TRANSLATION ones. One accessor per distinct payload is 1,801,935 B
+of accessor + bufferView JSON and 456,524 B of BIN. The `tag` on the content
+cache is what keeps a count-4 `VEC3` apart from a count-3 `VEC4` — twelve
+identical floats, emphatically not one accessor.
+
+**Evaluated and NOT done: single-instance node collapse.** 10,591 of 12,251
+nodes carried exactly one instance, and expressing that transform through
+three `EXT_mesh_gpu_instancing` accessors rather than the node's own TRS was
+measured at ~2.5 MB of JSON — the third lever #1854 named. Two things took
+it off the table, in this order:
+
+1. **The two levers above eat most of it, writer-side.** Content dedup leaves
+   5,235 single-instance nodes, not 10,591, dropping the lever to
+   ~2,015,475 B; accessor sharing then takes 1,801,935 B of that same JSON
+   without touching a reader. What collapse would still add is the
+   per-node TRANSLATION accessor and the extension object, minus the node
+   TRS it writes back — on the order of 0.7 MB.
+2. **It is not a writer change.** A collapsed node is a plain `Mesh` with
+   `extras.bldrsTableNode`, so the artifact becomes a THIRD shape — instanced
+   and plain nodes in one file — and both readers refuse it.
+   `instancedGlbToBatchedModel.js#detectArtifactShape` answers 'instanced' on
+   one stamped `InstancedMesh` and `joinNodesToTables` then leaves every
+   collapsed node's table row uncovered, so the join returns null and the
+   whole cache hit degrades to a plain GLTFLoader model with no picking and
+   no palette. `glbPortable.js#collectInstances` `continue`s on a node with
+   no instancing extension, silently dropping those placements from a
+   portable export, and `isPortableRewritable` gates on the extension name
+   being in `extensionsUsed` at all. Unifying the two joins and the two
+   shapes is a larger change than both levers above combined, against ~0.7 MB
+   — so it is recorded here rather than half-landed.
+
+#### Measured, before and after, on a real Snowdon artifact
+
+Both artifacts produced end to end by Share's own writer through a browser
+(`ifc/autodesk/snowdon/…_IFC4.ifc`, 83,153,231 B), partitioned with
+`tools/glb/byteBudget.mjs`. **67,830,672 → 53,131,764 B, −14,698,908
+(−21.7%)**, with the element-properties and spatial-tree payloads byte for
+byte unchanged:
+
+| bucket | before | after | delta |
+|---|---:|---:|---:|
+| `json.chunk` | 14,440,907 | 6,273,675 | **−8,167,232** |
+| `bin.geometry.POSITION` | 16,069,512 | 13,785,108 | −2,284,404 |
+| `bin.geometry.NORMAL` | 16,069,512 | 13,785,108 | −2,284,404 |
+| `bin.geometry.indices` | 14,039,544 | 12,528,984 | −1,510,560 |
+| `bin.instancing.ROTATION` | 349,584 | 106,864 | −242,720 |
+| `bin.instancing.SCALE` | 262,188 | 49,560 | −212,628 |
+| `bin.instancing.TRANSLATION` | 262,188 | 260,148 | −2,040 |
+| `bin.extension.BLDRS_instance_tables` | 136,116 | 141,196 | **+5,080** |
+| `bin.extension.BLDRS_element_properties` | 6,129,233 | 6,129,233 | 0 |
+| `bin.extension.BLDRS_spatial_tree` | 71,856 | 71,856 | 0 |
+
+Inside the JSON chunk: `accessors` 7,757,948 → 3,401,917, `materials`
+1,758,085 → 12,982, `nodes` 1,913,447 → 1,109,611, `bufferViews` 1,647,498 →
+968,400, `meshes` 1,300,898 → 745,140. Counts: 12,251 → 7,220 nodes and
+meshes, 73,506 → 29,169 accessors, 24,506 → 14,387 bufferViews, 12,251 → 90
+materials — and **21,849 instances, unchanged**.
+
+**The tables payload gets 5,080 B BIGGER**, the one line in the table that
+goes the wrong way. Nothing is added to it: `parents` and `occurrenceIds`
+still carry one entry per placement and `nodes` carries 5,031 fewer rows.
+What changed is the ORDER — placements are now grouped by geometry content
+rather than by emission — and the payload is gzipped, so a sequence that
+clusters less compresses less. 3.7% of a 136 KB payload against 8.2 MB of
+JSON is a trade worth making; it is recorded because "one bucket grew" is
+exactly the kind of thing a reader would otherwise flag as a bug.
+
+**Losslessness is checked, not asserted.** The 21,849 placements were
+extracted from both files as
+`(parent, occurrenceId, geometryId, occurrencePath, TRS, colour, SHA-256 of
+POSITION+NORMAL+indices)` and compared as multisets: **0 differences.** The
+tables' 12,251 distinct conway geometry ids survive intact even though the
+file now holds 7,178 distinct glTF geometries, which is the point — geometry
+id is per-placement identity, the geometry payload is not.
 
 ### 1.2 Where a download can be located from
 
@@ -580,23 +891,15 @@ Four decisions behind it:
   replaying `gzip: true` degrades the same way rather than shipping
   uncompressed bytes under a `.gz`.
 
-**Share does not re-open its own `.glb.gz`, deliberately.** `DecompressionStream`
-would be cheap, but `.gz` is a transport encoding and not a model format:
-accepting one means a `supportedTypes` entry, a `findLoader` arm and header
-sniffing that every source adapter (upload, GitHub raw, Drive) would have to
-agree on (design/new/adding-model-formats.md), for a file the user asked to be
-given in archive form. The "export opens back in Share" E2E keeps its subject
-— it runs on the uncompressed path, which is unchanged — and the gzipped
-spec proves the same thing about the bytes by gunzipping the download and
-asserting the `glTF` magic, the inflated length against the panel's raw figure,
-and that the JSON chunk still parses with its `BLDRS_*` payloads. If a user
-ever asks to drag a `.glb.gz` back in, that is its own issue.
+**Share now re-opens its own `.glb.gz`, by drag-and-drop or the Open dialog's
+Local tab — see §4.7**, which also records why this section previously said it
+would not, and what of that argument survived.
 
 **Portable** (#1843) is the fourth option, and like compression it is a host
 rewrite the pro module only calls: `export/glbPortable.js#rewriteGlbPortable`.
 
 The default export IS the batched-native artifact (§1.1) — one glTF mesh per
-unique geometry × source colour, every placement carried by
+unique geometry CONTENT × source colour (§1.1b), every placement carried by
 `EXT_mesh_gpu_instancing`, and the element names in `BLDRS_spatial_tree`
 rather than in glTF nodes. That is the right shape for Share's reader and the
 wrong one for everyone else: the writer marks the extension
@@ -1061,6 +1364,97 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
 - What this is not: a Pro user can copy the module text from devtools.
   That's the same exposure as any client-side feature and is accepted; the
   line held is *distribution*, which is what the pricing depends on.
+
+
+### 4.7 The way back in: opening a `.glb.gz`
+
+This section reverses a decision §4.3 used to record. The old text: *"Share
+does not re-open its own `.glb.gz`, deliberately. `DecompressionStream` would
+be cheap, but `.gz` is a transport encoding and not a model format: accepting
+one means a `supportedTypes` entry, a `findLoader` arm and header sniffing that
+every source adapter (upload, GitHub raw, Drive) would have to agree on."* The
+owner asked for the round trip anyway, scoped to **drag-and-drop and local
+open of our own export**, and the argument's premise turned out to be the
+design rather than the objection: because `.gz` is a transport encoding, the
+way to accept it is to **decode the transport and never name it a format**.
+There is still no `supportedTypes` entry and no `findLoader` arm.
+
+`loader/gzipEnvelope.js` owns it, at two seams:
+
+- **Upload** — `inflateIfGzipEnvelope(file)`, called by `utils/dragAndDrop.js`
+  and `utils/loader.js#loadLocalFile` **before** the file reaches OPFS. What
+  gets cached and named `<blob-uuid>.glb` is then really a GLB, so every later
+  reader of that entry — a re-open from Recents, a save, a size report — sees
+  what its name says, and no `.gz` ever enters the app's URL space.
+- **Load** — `decodeGzipEnvelope(modelData, loader.type)`, one line in
+  `Loader#load` just before `readModel`. This is the net under every path the
+  upload seam cannot reach (below), and the reason the sniffer can afford to
+  be honest: once `analyzeHeader` answers `glb` for gzipped bytes, anything
+  that skipped the upload seam would otherwise hand a gzip member to the GLTF
+  parser and fail somewhere deep in it.
+
+The supporting changes, each small:
+
+- **`Filetype#analyzeHeader` looks inside one gzip envelope.** The magic
+  `1f 8b` already had a branch (SPZ splats are gzip streams); it now inflates
+  the sniff window through fflate's streaming `Gunzip` — which tolerates a
+  truncated member, and keeps `analyzeHeader` synchronous — and re-analyzes
+  what comes out. SPZ is checked first and is *not* an envelope: gzip is that
+  format's own container and its decoder wants the member. One level only, so
+  a `.gz.gz` reads as unknown.
+- **`Filetype#getValidExtension` strips one trailing `.gz`.** `model.glb.gz`
+  is a `glb`, `MODEL.GLB.GZ` too; a bare `.gz` still throws, because there is
+  no format in that name to find. `pathSuffixSupported` deliberately does NOT
+  strip it — it gates the GitHub file browser's listing, and a GitHub-hosted
+  `.glb.gz` is not openable (below).
+- **`Filetype#guessTypeFromNameOrFile`** is the name-then-header answer both
+  upload seams now use for the OPFS storage extension. It replaces the
+  `split('.').pop()` that threw *"Cannot extract filetype from filename"* —
+  the exact shape `.glb.gz` defeats. Name first, because the sniffer is
+  conservative (binary STL has no magic at all) and the name is what the user
+  chose.
+- **`gunzipBytes` takes an optional `maxOutputBytes`.** gzip reaches ~1032:1,
+  so a few MB of hostile input expands to hundreds of GB and an unbounded
+  inflate ends the tab rather than the load. The ceiling is 512 MiB —
+  ~8× the largest GLB this epic has measured (63.7 MB, Snowdon) — and it is
+  enforced *during* the inflate: the drain reads the stream itself rather than
+  `new Response(readable).arrayBuffer()`, which resolves only once the whole
+  expansion is already in memory. The OPFS container reader (§1.1a) passes no
+  ceiling: it wrote those bytes itself.
+- **No `DecompressionStream`, no claim.** Safari before 16.4 — the same bound
+  §1.1a has. The seam refuses with a sentence naming the browsers that can,
+  rather than a stack trace out of a missing global, and the Local tab grew an
+  `onError` callback so the Open dialog can alert it (the picker has already
+  closed by then; nothing else was watching).
+
+**The name is never rewritten.** The inflated file keeps the user's
+`index.glb.gz` for the recents row and the load report's model line, while the
+storage id under it is `<blob-uuid>.glb`. Those two have been distinct since
+#1682 and this is one more reason to keep them so.
+
+**What a `.glb.gz` does on the paths that are out of scope**, stated plainly
+because "not required" is not the same as "no behaviour":
+
+| path | what happens |
+|---|---|
+| drag-and-drop, Open → Local | **works** (both seams) |
+| Recents, after either of those | works — OPFS holds the inflated GLB |
+| locally hosted (`/x.glb.gz`) or a pasted URL | **works** via the load seam, as long as the name or the sniff resolves the type |
+| GitHub (`/share/v/gh/.../x.glb.gz`) | **refused at the router.** `fileSuffixBoundaryRegex` needs the `.glb` at a path boundary and `.glb.gz` does not offer one, so the route never parses. The file browser does not list it either (`pathSuffixSupported` is false for it). Deliberate: extending the boundary regex would put `.gz` into route-space, which is what §4.3's objection was actually about |
+| Google Drive (`connections/loadFromSource.js`) | **unverified.** That path has its own `split('.')` extension logic, which this change did not touch; a `.glb.gz` there stores as `<blob-uuid>.gz`, and whether the loader's sniff then rescues it depends on an `axios` ranged GET of a `blob:` URL that was not exercised. If Drive is ever brought in scope, route it through `guessTypeFromNameOrFile` like the other two seams |
+| a gzipped TEXT-format model (`.obj.gz`, `.ifc.gz`) by URL | opens only through the upload seams. By the load seam the bytes are already a `TextDecoder` string, and gzip run through that is mojibake, not something to recognize |
+
+**Tests.** `loader/gzipEnvelope.test.js` (both seams, against Node's real
+`DecompressionStream`), `Filetype.test.js` (envelope sniff, `.gz` names,
+name-vs-header), `export/glbGzip.test.js` (the ceiling, including that it
+stops mid-inflate), `Loader.test.js` (a gzipped `cube.glb` through `load()`),
+plus the two upload seams' own suites. E2E: *"a gzipped export opens back in
+Share, with its BLDRS data intact"* in `Components/Share/exportGlb.spec.ts`
+exports a `.glb.gz`, saves it under that name, brings it back through the file
+chooser, and walks the NavTree to a leaf it can select — the `BLDRS_*`
+extensions surviving the round trip is the claim, not merely that something
+rendered. The Compress download caption changed with it: *"gzip — saves a
+.glb.gz, reopens in Share"*.
 
 
 ## 5. Stages (→ sub-issues of the epic)
