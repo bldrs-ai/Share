@@ -15,7 +15,9 @@
  * it: `accounted + unaccounted === partitionBytes`, with `unaccounted`
  * printed rather than swallowed. `partitionBytes` is the file's own length,
  * except for a **v3 (gzipped) Bldrs container**, where it is the container's
- * UNCOMPRESSED form — the stored length is reported separately. Partitioning
+ * UNCOMPRESSED form plus any bytes stored past the last chunk record (those
+ * are raw in both domains) — the stored length is reported separately.
+ * Partitioning
  * a deflate stream would put every byte in one bucket and answer nothing;
  * the question this tool exists for is about glTF structure (Share#1855).
  * Two more things make it harder than "sum the bufferView byteLengths", and
@@ -326,12 +328,24 @@ function accessorByteRange(json, accessorIndex) {
  * (stride padding) goes to `backdropBucket`. The result covers the period
  * exactly, which is what lets the caller multiply it by a stride count.
  *
+ * `direct` — a claim that names the bufferView ITSELF rather than going
+ * through an accessor (a BLDRS payload, an image, a Draco stream) — covers
+ * every byte of the period, so it competes for the accessor slots too
+ * instead of only inheriting the padding. Without that, a strided view an
+ * extension owns was reported entirely as geometry while
+ * `flags.sharedBufferViews` said "counted as" the extension (#1860, codex
+ * P2): the flat and the interleaved paths disagreed about the same
+ * bufferView. It is scored exactly as the sweep scores a view's backdrop
+ * interval against an accessor sub-range, so both paths now resolve a
+ * shared view the same way.
+ *
  * @param {Array<{offset: number, elementBytes: number, bucket: string, rank: number}>} live
  * @param {number} periodBytes
  * @param {string} backdropBucket
+ * @param {?{bucket: string, rank: number}} direct claim on the view itself, if any
  * @return {{period: Array<{offset: number, length: number, bucket: string}>, contested: Array<object>}}
  */
-function partitionPeriod(live, periodBytes, backdropBucket) {
+function partitionPeriod(live, periodBytes, backdropBucket, direct) {
   const marks = new Set([0, periodBytes])
   for (const a of live) {
     marks.add(Math.max(0, Math.min(a.offset, periodBytes)))
@@ -349,7 +363,9 @@ function partitionPeriod(live, periodBytes, backdropBucket) {
     const covering = live.filter((a) => a.offset <= start && a.offset + a.elementBytes >= end)
     let bucket = backdropBucket
     if (covering.length > 0) {
-      bucket = covering.reduce((a, b) => (b.rank < a.rank ? b : a)).bucket
+      const best = covering.reduce((a, b) => (b.rank < a.rank ? b : a))
+      const directScore = direct ? (direct.rank * RANK_SCALE) + BACKDROP_RANK_BUMP : Infinity
+      bucket = directScore < best.rank * RANK_SCALE ? direct.bucket : best.bucket
       if (covering.length > 1) {
         contested.push({start, end, awardedTo: bucket, contenders: covering.map((a) => a.bucket)})
       }
@@ -385,9 +401,10 @@ function partitionPeriod(live, periodBytes, backdropBucket) {
  * @param {Array<object>} viewAccessors `{offset, elementBytes, count, bucket, rank}`, offsets view-relative
  * @param {string} backdropBucket owner of the stride padding
  * @param {number} clippedLength view byteLength, already clipped into the BIN data
+ * @param {?{bucket: string, rank: number}} direct claim on the view itself; see `partitionPeriod`
  * @return {{plan: object, buckets: Map<string, number>, contested: Array<object>}}
  */
-function partitionStridedView(view, viewAccessors, backdropBucket, clippedLength) {
+function partitionStridedView(view, viewAccessors, backdropBucket, clippedLength, direct) {
   const stride = view.byteStride
   const viewStart = view.byteOffset ?? 0
   const fullStrides = Math.floor(clippedLength / stride)
@@ -417,7 +434,7 @@ function partitionStridedView(view, viewAccessors, backdropBucket, clippedLength
     }
     const live = viewAccessors.filter((a) => a.count > firstStride)
     const periodBytes = (tail > 0 && firstStride >= fullStrides) ? tail : stride
-    const {period, contested: periodContested} = partitionPeriod(live, periodBytes, backdropBucket)
+    const {period, contested: periodContested} = partitionPeriod(live, periodBytes, backdropBucket, direct)
     for (const segment of period) {
       buckets.set(segment.bucket, (buckets.get(segment.bucket) ?? 0) + (segment.length * runStrides))
     }
@@ -730,7 +747,11 @@ function binPartition(json, binDataLength) {
           rank: accessorOwner.rank,
         }
       })
-      const strided = partitionStridedView(view, viewAccessors, owner.bucket, clipped)
+      // The direct claim is passed separately from `owner`: `owner` is the
+      // best of ALL claims, so handing it to the period competition would
+      // let one accessor's rank take another accessor's slots.
+      const strided = partitionStridedView(view, viewAccessors, owner.bucket, clipped,
+        direct.length > 0 ? resolveClaim(direct) : null)
       stridedPlans.push(strided.plan)
       for (const [bucket, value] of strided.buckets) {
         stridedBuckets.set(bucket, (stridedBuckets.get(bucket) ?? 0) + value)
@@ -1047,6 +1068,45 @@ function glbBudget(bytes, {compress = true} = {}) {
 
 
 /**
+ * Offset just past the container's last declared chunk record.
+ *
+ * `unpackGlbContainer` hands back the chunk payloads and forgets where they
+ * came from, so a container with bytes appended AFTER its records looks
+ * exactly like a well-formed one: the partition total is rebuilt from
+ * header + record headers + payloads and the extra stored bytes are never
+ * compared against the file's own length. A v3 container with three bytes
+ * appended reported `unaccounted: 0`, `balanced: true`, exit 0 (#1860,
+ * codex P2) — the same "malformed input scans as sound" failure as the
+ * truncated GLB, in the container walk instead of the GLB one. So the
+ * record headers are re-walked here in the byte domain, the same way the
+ * GLB chunk table is.
+ *
+ * Runs AFTER `unpackGlbContainer`, which throws on a record that runs off
+ * the end; every field read below is therefore known to be present.
+ *
+ * @param {Uint8Array} bytes whole container file
+ * @param {{version: number, chunkCount: number, headerBytes: number}} header
+ * @param {number} recordHeaderBytes per-record header size for this version
+ * @return {number} offset just past the last chunk record
+ */
+function containerStoredExtent(bytes, header, recordHeaderBytes) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  let offset = header.headerBytes
+  for (let i = 0; i < header.chunkCount; i++) {
+    // v1/v2 store the inner GLB raw, so its declared length IS its stored
+    // length. v3 stores two gzip members whose stored lengths are the
+    // record's second and third fields; its first field is the
+    // UNCOMPRESSED length and would overshoot the file.
+    const storedPayload = header.version === CONTAINER_VERSION_CODEC ?
+      dv.getUint32(offset + 4, true) + dv.getUint32(offset + 8, true) :
+      dv.getUint32(offset, true)
+    offset += recordHeaderBytes + storedPayload
+  }
+  return offset
+}
+
+
+/**
  * Exhaustive byte budget for a plain GLB or a Bldrs `.container`.
  *
  * Async since Share#1855: a v3 container's payload is gzipped, and there is
@@ -1091,6 +1151,17 @@ export async function computeBudget(bytes, {name = '<buffer>', compress = true} 
     const recordHeaderBytes = header.version === CONTAINER_VERSION_CODEC ?
       CONTAINER_CODEC_CHUNK_HEADER_BYTES :
       CONTAINER_CHUNK_HEADER_BYTES
+    // Bytes past the last chunk record are inside no member, so inflating
+    // never finds them and the payload sum below cannot see them. They are
+    // stored raw, so they carry into the uncompressed domain unchanged —
+    // which is what makes it sound to add them to a v3 partition total:
+    // nothing claims them, they land in UNACCOUNTED, and the file stops
+    // scanning as balanced (#1860, codex P2).
+    // Deliberately not clamped at zero: `unpackGlbContainer` has already
+    // refused every record that runs off the end, so an extent past the end
+    // would mean this walk disagrees with the reader's, and clamping would
+    // bury that the way ignoring the tail buried the appended bytes.
+    const trailingBytes = bytes.byteLength - containerStoredExtent(bytes, header, recordHeaderBytes)
     container = {
       version: header.version,
       chunkCount: header.chunkCount,
@@ -1098,11 +1169,12 @@ export async function computeBudget(bytes, {name = '<buffer>', compress = true} 
       codec: header.codec,
       headerBytes: header.headerBytes,
       storedBytes: bytes.byteLength,
+      trailingBytes,
     }
     add('container.header', header.headerBytes)
     add('container.chunkHeaders', recordHeaderBytes * inner.length)
     partitionBytes = header.headerBytes + (recordHeaderBytes * inner.length) +
-      inner.reduce((n, chunk) => n + chunk.byteLength, 0)
+      inner.reduce((n, chunk) => n + chunk.byteLength, 0) + trailingBytes
     glbs = inner.map((chunk) => glbBudget(chunk, {compress}))
   } else {
     glbs = [glbBudget(bytes, {compress})]
@@ -1246,6 +1318,11 @@ export function formatBudget(budget) {
       const RATIO_DECIMALS = 2
       lines.push(`stored      ${commas(c.storedBytes)}  ` +
         `(${(total / c.storedBytes).toFixed(RATIO_DECIMALS)}x; partition below is over the uncompressed form)`)
+    }
+    if (c.trailingBytes > 0) {
+      // Says why UNACCOUNTED is non-zero: these bytes sit past the last
+      // chunk record, so no reader ever reaches them.
+      lines.push(`trailing    ${commas(c.trailingBytes)}  bytes after the last chunk record (UNACCOUNTED below)`)
     }
   } else {
     lines.push('container   none (plain GLB)')

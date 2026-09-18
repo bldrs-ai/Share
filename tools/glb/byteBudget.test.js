@@ -31,7 +31,16 @@ const GLB_LENGTH_OFFSET = 8
 const CHUNK_HEADER_BYTES = 8
 const JSON_PAD_BYTE = 0x20
 const BYTE_MASK = 0xFF
+/** The container magic a v2 container starts with, as its four bytes. */
+const CONTAINER_MAGIC = Buffer.from('BLDR', 'ascii')
+/** Filler for bytes appended past a container's records — any non-zero value. */
+const TRAILING_FILL = 0xAB
 const PAYLOAD_EXTENSION = 'BLDRS_test_payload'
+/**
+ * A second BLDRS_* extension, used only by the variant fixture that claims
+ * the INTERLEAVED view directly — see `buildSyntheticGlb`'s `interleavedClaim`.
+ */
+const INTERLEAVED_EXTENSION = 'BLDRS_test_interleaved'
 /** Index of the payload view in `bufferViews` — shared by the extension and the image. */
 const PAYLOAD_VIEW_INDEX = 8
 /** Index of the interleaved POSITION/NORMAL view in `bufferViews`. */
@@ -77,9 +86,15 @@ const BIN_DATA_BYTES = OFFSET_PAYLOAD + PAYLOAD_BYTES
 
 
 /**
+ * @param {?string} [interleavedClaim] when set, something also claims the
+ *   INTERLEAVED view directly, by name rather than through an accessor:
+ *   `'extension'` for a BLDRS_* payload (RANK.extension, which OUTRANKS the
+ *   POSITION/NORMAL accessors sharing the view) or `'image'` (RANK.image,
+ *   which loses to them). The pair is what distinguishes "rank decides" from
+ *   "whoever names the view wins".
  * @return {{bytes: Uint8Array, jsonBytes: number, jsonPadding: number, bin: Uint8Array}}
  */
-function buildSyntheticGlb() {
+function buildSyntheticGlb(interleavedClaim = null) {
   const bin = new Uint8Array(BIN_DATA_BYTES)
   // Content is arbitrary but must not be all-zero: a gzip figure over a
   // zero-filled range is the same no matter which range was gathered, so a
@@ -141,6 +156,12 @@ function buildSyntheticGlb() {
     extensionsUsed: ['EXT_mesh_gpu_instancing', PAYLOAD_EXTENSION],
     extensions: {[PAYLOAD_EXTENSION]: {compressed: true, bufferView: PAYLOAD_VIEW_INDEX}},
     buffers: [{byteLength: BIN_DATA_BYTES}],
+  }
+  if (interleavedClaim === 'extension') {
+    json.extensionsUsed.push(INTERLEAVED_EXTENSION)
+    json.extensions[INTERLEAVED_EXTENSION] = {bufferView: INTERLEAVED_VIEW_INDEX}
+  } else if (interleavedClaim === 'image') {
+    json.images.push({bufferView: INTERLEAVED_VIEW_INDEX, mimeType: 'image/png'})
   }
 
   const jsonText = Buffer.from(JSON.stringify(json), 'utf8')
@@ -323,6 +344,102 @@ describe('byteBudget', () => {
     expect(packedBudget.file.bytes).toBe(packed.byteLength)
     expect(packedBudget.file.partitionBytes).toBe(uncompressedBytes)
     expect(packedBudget.container.storedBytes).toBe(packed.byteLength)
+    // Pairs with the two trailing-byte tests below: the stored extent has to
+    // land exactly on the end of a well-formed file, or "no trailing bytes"
+    // would be a claim about arithmetic slack rather than about the file.
+    expect(packedBudget.container.trailingBytes).toBe(0)
+  })
+
+  it('gives an interleaved view to the extension that claims it, not to the accessors sharing it', async () => {
+    // Same interleaved POSITION/NORMAL range as the main fixture, plus a
+    // BLDRS_* extension naming the VIEW itself. `RANK.extension` beats
+    // `RANK.position`, so all 72 bytes are the extension's — the answer the
+    // flat path has always given for a shared view, and the one
+    // `flags.sharedBufferViews` already printed ("counted as") while the
+    // partition handed the bytes to geometry (#1860, codex P2).
+    const claimed = buildSyntheticGlb('extension')
+    const claimedBudget = await computeBudget(claimed.bytes, {name: 'interleaved-extension.glb'})
+    const claimedBuckets = bucketMap(claimedBudget)
+
+    expect(claimedBuckets[`bin.extension.${INTERLEAVED_EXTENSION}`]).toBe(INTERLEAVED_BYTES)
+    // The two accessors keep their FLAT views and lose only their slots in
+    // the view the extension owns.
+    expect(claimedBuckets['bin.geometry.POSITION']).toBe(FLAT_POSITION_BYTES)
+    expect(claimedBuckets['bin.geometry.NORMAL']).toBe(FLAT_NORMAL_BYTES)
+    expect(claimedBudget.unaccounted).toBe(0)
+    expect(claimedBudget.balanced).toBe(true)
+    const shared = claimedBudget.glbs[0].flags.sharedBufferViews
+      .find((v) => v.viewIndex === INTERLEAVED_VIEW_INDEX)
+    expect(shared.countedAs).toBe(`bin.extension.${INTERLEAVED_EXTENSION}`)
+  })
+
+  it('leaves an interleaved view with its accessors when the direct claim is outranked', async () => {
+    // The other half of the pair: an IMAGE claims the same interleaved view,
+    // and `RANK.image` (90) loses to POSITION (60) and NORMAL (70). Awarding
+    // the view to whoever names it directly — rather than to whoever ranks
+    // best — would show up here as 72 bytes of `bin.image`.
+    const claimed = buildSyntheticGlb('image')
+    const claimedBudget = await computeBudget(claimed.bytes, {name: 'interleaved-image.glb'})
+    const claimedBuckets = bucketMap(claimedBudget)
+
+    const interleavedPerAttribute = VERTEX_COUNT * VEC3_F32_BYTES
+    expect(claimedBuckets['bin.image']).toBeUndefined()
+    expect(claimedBuckets['bin.geometry.POSITION']).toBe(FLAT_POSITION_BYTES + interleavedPerAttribute)
+    expect(claimedBuckets['bin.geometry.NORMAL']).toBe(FLAT_NORMAL_BYTES + interleavedPerAttribute)
+    expect(claimedBudget.unaccounted).toBe(0)
+    expect(claimedBudget.balanced).toBe(true)
+  })
+
+  it('reports bytes appended after a v3 container\'s last chunk record', async () => {
+    // `unpackGlbContainer` reads the records and stops; anything after them
+    // is invisible to it, so sizing the partition from header + records +
+    // inflated payload made a malformed file report unaccounted 0, balanced
+    // true, exit 0 (#1860, codex P2) — the container-walk twin of the
+    // truncated GLB above.
+    const CONTAINER_HEADER_BYTES = 16
+    const CONTAINER_CODEC_RECORD_BYTES = 12
+    const TRAILING_BYTES = 3
+    const packed = await packGlbChunks([bytes], null)
+    const tailed = new Uint8Array(packed.byteLength + TRAILING_BYTES)
+    tailed.set(packed)
+    tailed.fill(TRAILING_FILL, packed.byteLength)
+
+    const tailedBudget = await computeBudget(tailed, {name: 'tailed.container'})
+    expect(tailedBudget.container.trailingBytes).toBe(TRAILING_BYTES)
+    expect(tailedBudget.container.storedBytes).toBe(tailed.byteLength)
+    // The trailing bytes are stored raw — outside every gzip member — so they
+    // join the uncompressed form unchanged, and nothing claims them.
+    expect(tailedBudget.file.partitionBytes)
+      .toBe(CONTAINER_HEADER_BYTES + CONTAINER_CODEC_RECORD_BYTES + bytes.byteLength + TRAILING_BYTES)
+    expect(tailedBudget.unaccounted).toBe(TRAILING_BYTES)
+    expect(tailedBudget.balanced).toBe(false)
+  })
+
+  it('reports bytes appended after a v2 container\'s last chunk record', async () => {
+    // v2 is the uncompressed container Safari-before-16.4 still writes, and
+    // its record header carries only `glbLen` — a different field to walk
+    // than v3's stored member lengths, so it needs its own case. Here the
+    // partition total IS the file's own length, as the module doc says.
+    const CONTAINER_HEADER_BYTES = 16
+    const CONTAINER_RECORD_BYTES = 4
+    const CONTAINER_VERSION_PLAIN = 2
+    const TRAILING_BYTES = 2
+    const plain = new Uint8Array(
+      CONTAINER_HEADER_BYTES + CONTAINER_RECORD_BYTES + bytes.byteLength + TRAILING_BYTES)
+    plain.set(CONTAINER_MAGIC)
+    const dv = new DataView(plain.buffer)
+    dv.setUint32(4, CONTAINER_VERSION_PLAIN, true)
+    dv.setUint32(8, 1, true)
+    dv.setUint32(CONTAINER_HEADER_BYTES, bytes.byteLength, true)
+    plain.set(bytes, CONTAINER_HEADER_BYTES + CONTAINER_RECORD_BYTES)
+    plain.fill(TRAILING_FILL, plain.byteLength - TRAILING_BYTES)
+
+    const plainBudget = await computeBudget(plain, {name: 'tailed-v2.container'})
+    expect(plainBudget.container.version).toBe(CONTAINER_VERSION_PLAIN)
+    expect(plainBudget.container.trailingBytes).toBe(TRAILING_BYTES)
+    expect(plainBudget.file.partitionBytes).toBe(plain.byteLength)
+    expect(plainBudget.unaccounted).toBe(TRAILING_BYTES)
+    expect(plainBudget.balanced).toBe(false)
   })
 
   it('refuses a GLB whose header declares more bytes than the file holds', async () => {
