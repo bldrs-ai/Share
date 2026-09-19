@@ -6,6 +6,7 @@ import {
 import {eachBatch} from '../viewer/ifc/batchedModel'
 import {makeContentCache, makeGeometryInterner} from './contentKey'
 import {glbVerbose} from './glbLog'
+import {slimGlbBytes} from './glbSlim'
 
 
 /**
@@ -173,6 +174,35 @@ function colorKey(color) {
 
 
 /**
+ * True when every quaternion in the packed array is the identity rotation,
+ * i.e. the ROTATION attribute would say exactly what its absence says.
+ *
+ * @param {Float32Array} rotation `n * 4` packed xyzw
+ * @return {boolean}
+ */
+function isIdentityRotation(rotation) {
+  for (let i = 0; i < rotation.length; i++) {
+    const identity = i % FLOATS_PER_QUAT === FLOATS_PER_QUAT - 1 ? 1 : 0
+    if (rotation[i] !== identity) {
+      return false
+    }
+  }
+  return true
+}
+
+
+/**
+ * True when every instance is unit-scaled.
+ *
+ * @param {Float32Array} scale `n * 3` packed xyz
+ * @return {boolean}
+ */
+function isUnitScale(scale) {
+  return scale.every((component) => component === 1)
+}
+
+
+/**
  * A geometry is writable when it has non-interleaved float positions +
  * normals and an index — the shape Conway's assembler emits.
  *
@@ -313,10 +343,27 @@ export async function exportBatchedModelAsInstancedGlb(model) {
       trs.quaternion.toArray(rotation, i * FLOATS_PER_QUAT)
       trs.scale.toArray(scale, i * FLOATS_PER_VEC3)
     })
+    // TRANSLATION is written unconditionally even when every instance sits at
+    // the origin, for two reasons that are not style: `glbPortable.js` reads
+    // the node's instance COUNT off this one accessor, and would emit zero
+    // placements without it; and an `attributes` object that ends up EMPTY
+    // makes three's GLTFMeshGpuInstancing bail, so the node hydrates as a
+    // plain Mesh, `joinNodesToTables` finds an uncovered table row and the
+    // whole model — not just that node — loses picking and palette. The
+    // other two are dropped when they say nothing: readers default a missing
+    // instance attribute to identity (three's extension composes from
+    // `(0,0,0)`, identity quat, `(1,1,1)`; `glbPortable.js` has its own
+    // IDENTITY_* fallbacks), and IFC placements are overwhelmingly unrotated
+    // or unit-scaled, so this is one `"SCALE":N` key per node off the JSON
+    // chunk — 888,894 B on the DSA2 shape (Share#1862).
     const batch = instancingExt.createInstancedMesh()
       .setAttribute('TRANSLATION', instanceAccessor('VEC3', translation))
-      .setAttribute('ROTATION', instanceAccessor('VEC4', rotation))
-      .setAttribute('SCALE', instanceAccessor('VEC3', scale))
+    if (!isIdentityRotation(rotation)) {
+      batch.setAttribute('ROTATION', instanceAccessor('VEC4', rotation))
+    }
+    if (!isUnitScale(scale)) {
+      batch.setAttribute('SCALE', instanceAccessor('VEC3', scale))
+    }
 
     const node = doc.createNode().setMesh(mesh)
     node.setExtension('EXT_mesh_gpu_instancing', batch)
@@ -341,11 +388,19 @@ export async function exportBatchedModelAsInstancedGlb(model) {
 
   const {WebIO} = await import('@gltf-transform/core')
   const io = new WebIO().registerExtensions([EXTMeshGPUInstancing])
-  const bytes = await io.writeBinary(doc)
+  // gltf-transform lays out one bufferView per mesh and spells every float
+  // bound at double precision; `slimGlbBytes` re-expresses both without
+  // moving a byte of geometry (Share#1862). It runs HERE and not in
+  // `glbExport.js` so that the pass only ever sees this writer's output —
+  // before `injectGlbExtensions` appends BLDRS_* payload views of its own.
+  const {bytes, stats} = slimGlbBytes(await io.writeBinary(doc))
   const instanceCount = tableNodes.reduce((total, node) => total + node.count, 0)
   glbVerbose(
     `batched writer: ${groups.length} node(s), ${geometryAccessors.size} unique ` +
     `geometry(ies), ${materials.size} material(s), ${instanceCount} instance(s), ` +
     `${bytes.byteLength}B`)
+  glbVerbose(
+    `batched writer: slimmed ${stats.bytesBefore}B to ${stats.bytesAfter}B, ` +
+    `${stats.bufferViewsBefore} bufferView(s) to ${stats.bufferViewsAfter}`)
   return {bytes, tableNodes}
 }

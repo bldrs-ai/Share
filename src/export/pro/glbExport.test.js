@@ -306,8 +306,10 @@ describe('pro/glbExport', () => {
       // toggle barely moved the file size (#1841).
       const {json, bin, stats} = await exportStripped()
 
+      // 0 is the glTF default `byteOffset` and the strip omits it rather
+      // than restate it, matching what `glbSlim` writes.
       expect(json.bufferViews).toEqual([
-        {buffer: 0, byteOffset: 0, byteLength: GEOMETRY_BYTES.byteLength},
+        {buffer: 0, byteLength: GEOMETRY_BYTES.byteLength},
       ])
       expect(json.buffers[0].byteLength).toBe(GEOMETRY_BYTES.byteLength)
       expect(json.accessors[0].bufferView).toBe(0)
@@ -521,9 +523,14 @@ describe('pro/glbExport', () => {
       const [first, second] = json.bufferViews
       const rangeA = first.extensions.EXT_meshopt_compression
       const rangeB = second.extensions.EXT_meshopt_compression
-      expect(rangeA).toMatchObject({buffer: 0, byteOffset: 0, byteLength: MESHOPT_A_BYTES.byteLength})
+      expect(rangeA).toMatchObject({buffer: 0, byteLength: MESHOPT_A_BYTES.byteLength})
       expect(rangeB).toMatchObject({buffer: 0, byteOffset: 24, byteLength: MESHOPT_B_BYTES.byteLength})
-      expect(bin.subarray(rangeA.byteOffset, rangeA.byteOffset + rangeA.byteLength))
+      // The EFFECTIVE offset, since a zero one is omitted — and the slice
+      // below reads through the same defaulting, so a wrong offset still
+      // shows up as the wrong bytes.
+      const offsetA = rangeA.byteOffset ?? 0
+      expect(offsetA).toBe(0)
+      expect(bin.subarray(offsetA, offsetA + rangeA.byteLength))
         .toEqual(MESHOPT_A_BYTES)
       expect(bin.subarray(rangeB.byteOffset, rangeB.byteOffset + rangeB.byteLength))
         .toEqual(MESHOPT_B_BYTES)
@@ -586,7 +593,7 @@ describe('pro/glbExport', () => {
       const {json, bin} = parseGlb(await blobBytes(blob))
 
       expect(bin).toEqual(DRACO_BYTES)
-      expect(json.bufferViews).toEqual([{buffer: 0, byteOffset: 0, byteLength: DRACO_BYTES.byteLength}])
+      expect(json.bufferViews).toEqual([{buffer: 0, byteLength: DRACO_BYTES.byteLength}])
       expect(json.meshes[0].primitives[0].extensions.KHR_draco_mesh_compression)
         .toEqual({bufferView: 0, attributes: {POSITION: 0}})
       expect(json.extensionsRequired).toEqual(['KHR_draco_mesh_compression'])

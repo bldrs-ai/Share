@@ -458,7 +458,21 @@ export function dropBufferViews(json, dropIndices) {
     const fromOffset = range.byteOffset ?? 0
     const byteLength = range.byteLength ?? 0
     binPlan.push({fromOffset, byteLength, toOffset: nextOffset})
-    range.byteOffset = nextOffset
+    // Omit the offset when it is the glTF default rather than restating it.
+    // Not cosmetic: `glbSlim` already drops `byteOffset: 0` from the artifact
+    // it writes, so restating it here made the STRIPPED document ~15 B larger
+    // than the one it was stripped from. That inflation lands squarely on
+    // what the metadata toggle appears to be worth — the toggle's value is
+    // measured as the difference between the two documents — so the same
+    // payloads read 20 B cheaper on the uncompressed artifact than on a
+    // codec'd one, whose both sides come from gltf-transform and do restate
+    // it. `exportGlb.spec.ts` pins that the toggle's worth cannot move with
+    // the codec (Share#1862).
+    if (nextOffset === 0) {
+      delete range.byteOffset
+    } else {
+      range.byteOffset = nextOffset
+    }
     dataEnd = nextOffset + byteLength
     nextOffset += pad4(byteLength)
   }
