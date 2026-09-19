@@ -427,7 +427,36 @@ appends `BLDRS_*` payload views of its own):
   not just that node, falls back to an undecorated GLTFLoader result with no
   picking and no palette.
 
-**Measured**, via two synthetic proxies through the real writer
+**Confirmed on the real model.** Owner export of DSA through the Export tab,
+prod against this change:
+
+| DSA | prod | #1862 | delta |
+|---|---:|---:|---:|
+| `.glb` | 22.1 MB | 18.3 MB | **−3.8 MB, −17.2%** |
+| `BLDRS_*` metadata | 152 KB | 152 KB | unchanged |
+| `.glb.gz` | 2.1 MB | 1.9 MB | −0.2 MB, −9.5% |
+
+Three things that measurement settles:
+
+- **The synthetic proxy below slightly overstated the win** — it predicts
+  −20.03% where the real model gives −17.2%. Near enough to have been a fair
+  stand-in for the layout, but the real number is the one to quote.
+- **Metadata unchanged is the negative check.** The pass runs before
+  `injectGlbExtensions`, so the `BLDRS_*` payloads are outside its reach by
+  construction; a moved number there would mean something was wrong.
+- **Draco and Meshopt both GROW this file**, on prod and on this change
+  alike, so the codec sweep auto-selects plain `.glb`. Both codecs only reach
+  the geometry BIN — ~10% of this artifact — and each adds its own
+  bookkeeping on top, so on a declaration-dominated model they lose outright.
+  This is §1.1's container argument reproduced end to end by a user export.
+
+The gzipped delta is proportionally smaller (−9.5% against −17.2%) because
+gzip already collapses much of the repetition this pass removes
+structurally. The pass earns its keep on the *uncompressed* `.glb` — what a
+third-party viewer opens, and what has to be parsed into memory — not on the
+wire size.
+
+**Measured in development**, via two synthetic proxies through the real writer
 (`exportBatchedModelAsInstancedGlb`); the DSA2 proxy reproduces the real
 artifact's node/mesh/accessor/bufferView counts and its `nodes` and `meshes`
 JSON byte-for-byte, so it is a stand-in for the layout, not for the model:
