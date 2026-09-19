@@ -199,6 +199,19 @@ function repackBufferViews(json, bin) {
   if (collectBufferViewHolders(json).some((holder) => !known.has(holder))) {
     return bin
   }
+  // A view reaching past the BIN chunk has to stop the repack before it
+  // starts. `bin.subarray` CLAMPS rather than throwing, so the copy below
+  // would silently write a short prefix and leave the remainder zero, and the
+  // merged view would still declare the full length — a structurally valid
+  // GLB whose accessors read zeros in place of the data they name. Declining
+  // leaves the malformed input exactly as malformed as it arrived, which is
+  // the only honest option for a transform (Codex review on #1864).
+  if (views.some((view) => {
+    const start = view.byteOffset ?? 0
+    return start < 0 || view.byteLength < 0 || start + view.byteLength > bin.byteLength
+  })) {
+    return bin
+  }
   const movable = findMovableViews(json)
   const classOf = (view) => `${view.buffer ?? 0}|${view.target ?? ''}|${view.byteStride ?? ''}`
 

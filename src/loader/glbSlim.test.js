@@ -286,6 +286,23 @@ describe('loader/glbSlim', () => {
       expect(after.meshes[1].primitives[0].mode).toBeUndefined()
     })
 
+    it('declines rather than zero-fill a view that overruns the BIN chunk', () => {
+      // `bin.subarray` clamps instead of throwing, so a repack that trusted
+      // the declared extent would copy a short prefix, leave the rest zero,
+      // and still declare the full byteLength — a file that parses, validates
+      // and reads zeros where its data should be. Worse than the truncation
+      // it came from, so the pass leaves the input alone.
+      const {json, bin} = parseGlb(interleavedGlb(6))
+      const before = json.bufferViews.length
+      json.bufferViews[1].byteLength += 1024
+      const source = serializeGlb(json, bin)
+
+      const {json: after, bin: afterBin} = parseGlb(slimGlbBytes(source).bytes)
+
+      expect(after.bufferViews).toHaveLength(before)
+      expect(Array.from(afterBin)).toEqual(Array.from(bin))
+    })
+
     it('is idempotent — a second pass changes nothing', () => {
       const once = slimGlbBytes(interleavedGlb(12)).bytes
       const twice = slimGlbBytes(once).bytes
