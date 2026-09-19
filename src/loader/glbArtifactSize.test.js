@@ -275,8 +275,11 @@ describe('glbArtifactSize', () => {
       expect(strippedExtensions).toEqual(
         ['BLDRS_element_properties', 'BLDRS_face_ids', 'BLDRS_spatial_tree'])
       expect(droppedBufferViews).toEqual([1, 3])
+      // No `byteOffset` on the first view: 0 is the glTF default and the
+      // strip omits it rather than restate it, matching what `glbSlim`
+      // writes. `binPlan` above pins that the bytes really land at 0.
       expect(json.bufferViews).toEqual([
-        {buffer: 0, byteOffset: 0, byteLength: GEOMETRY.byteLength},
+        {buffer: 0, byteLength: GEOMETRY.byteLength},
         {buffer: 0, byteOffset: 16, byteLength: SHARED.byteLength},
       ])
       // The accessors now point at the compacted table, not at the holes.
@@ -354,7 +357,10 @@ describe('glbArtifactSize', () => {
 
       const [first, second] = json.bufferViews
       expect(first.extensions.EXT_meshopt_compression).toMatchObject(
-        {buffer: 0, byteOffset: 0, byteLength: MESHOPT_A.byteLength})
+        {buffer: 0, byteLength: MESHOPT_A.byteLength})
+      // Asserted on the EFFECTIVE offset, because the strip omits a zero
+      // `byteOffset` — so `toMatchObject` alone would stop checking it.
+      expect(first.extensions.EXT_meshopt_compression.byteOffset ?? 0).toBe(0)
       expect(second.extensions.EXT_meshopt_compression).toMatchObject(
         {buffer: 0, byteOffset: 24, byteLength: MESHOPT_B.byteLength})
       // The decoded side addresses the fallback buffer, which carries no
@@ -435,7 +441,7 @@ describe('glbArtifactSize', () => {
       expect(droppedBufferViews).toEqual([0])
       expect(binPlan).toEqual([{fromOffset: 16, byteLength: 20, toOffset: 0}])
       expect(binByteLength).toBe(20)
-      expect(json.bufferViews).toEqual([{buffer: 0, byteOffset: 0, byteLength: 20}])
+      expect(json.bufferViews).toEqual([{buffer: 0, byteLength: 20}])
       expect(json.meshes[0].primitives[0].extensions.KHR_draco_mesh_compression)
         .toEqual({bufferView: 0, attributes: {POSITION: 0}})
       expect(json.extensionsRequired).toEqual(['KHR_draco_mesh_compression'])

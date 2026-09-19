@@ -105,7 +105,10 @@ function compressedRanges(json, bin) {
   return json.bufferViews
     .map((view) => view.extensions?.EXT_meshopt_compression)
     .filter(Boolean)
-    .map((range) => bin.slice(range.byteOffset, range.byteOffset + range.byteLength))
+    // `?? 0` because a zero `byteOffset` is the glTF default and the strip
+    // omits it rather than restate it — reading it raw silently sliced from
+    // `undefined` and handed the decoder nothing.
+    .map((range) => bin.slice(range.byteOffset ?? 0, (range.byteOffset ?? 0) + range.byteLength))
 }
 
 
@@ -127,7 +130,7 @@ async function decodeAll(json, bin) {
       const target = new Uint8Array(range.count * range.byteStride)
       MeshoptDecoder.decodeGltfBuffer(
         target, range.count, range.byteStride,
-        bin.subarray(range.byteOffset, range.byteOffset + range.byteLength),
+        bin.subarray(range.byteOffset ?? 0, (range.byteOffset ?? 0) + range.byteLength),
         range.mode, range.filter)
       return target
     })
@@ -177,7 +180,8 @@ describe('pro/glbExport against the real Meshopt writer', () => {
     for (const view of json.bufferViews) {
       const range = view.extensions?.EXT_meshopt_compression
       if (range) {
-        expect(range.byteOffset + range.byteLength).toBeLessThanOrEqual(json.buffers[0].byteLength)
+        expect((range.byteOffset ?? 0) + range.byteLength)
+          .toBeLessThanOrEqual(json.buffers[0].byteLength)
       }
     }
     expect(bytes.byteLength).toBeLessThan(sourceGlb.byteLength)
