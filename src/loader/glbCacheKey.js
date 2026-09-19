@@ -20,6 +20,24 @@
  * it (`BLDRS_GLB_BATCHED_SCHEMA_VERSION` below) — deliberately, since that
  * is the slot most users actually read. Nothing extra to do here; the note
  * exists so the coupling is visible from where the bump gets written.
+ * 0.22.0 — retires artifacts baked by an engine that read IFC4X3 files
+ *         under IFC4's entity space. conway 1.1601 (bldrs-ai/conway#713)
+ *         generates a real IFC4X3 schema and REFUSES a 4x3 file rather
+ *         than reinterpreting its reordered ordinals as IFC4 — 4x3
+ *         renumbers AND reorders them (IFCWALL 119->154 while
+ *         IFCBUILDINGSTOREY 147->125), so the old path silently
+ *         misidentified entities and baked corrupted geometry. Nothing in
+ *         the cache key identifies the engine, so without this bump a
+ *         returning user who opened a 4x3 model on an older conway keeps
+ *         getting that corrupted artifact served from cache — still
+ *         RENDERING, and rendering wrongly — while a cache-miss user
+ *         correctly sees the model refused. Worse than the 0.20.0 case it
+ *         otherwise mirrors: there the stale artifact was merely
+ *         under-coloured, here it is geometry the engine has since
+ *         concluded it cannot read at all. IFC4 and STEP artifacts are
+ *         unaffected in content (conway's digests are byte-identical
+ *         across this release) and pay one re-parse, the tradeoff every
+ *         merged bump already accepts.
  * 0.21.0 — retires artifacts baked before the render-frame mapping was
  *         carried across the cache. The writer now stamps BOTH halves into
  *         `scenes[0].extras` beside the existing `bldrsTitle`:
@@ -250,7 +268,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.21.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.22.0'
 
 
 /**
