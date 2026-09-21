@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import {BatchedMesh, BufferAttribute, BufferGeometry, Matrix4} from 'three'
+import {BatchedMesh, BufferAttribute, BufferGeometry, Matrix4, Quaternion, Vector3} from 'three'
 import {exportBatchedModelAsInstancedGlb} from './glbBatchedExport'
 import {parseGlb} from './injectGlbExtensions'
 
@@ -43,7 +43,10 @@ const TRIANGLE_INDICES = 3
  * exercise, before the content interner ever sees it.
  *
  * @param {Array<object>} plan per instance: `{geometry, x, parent,
- *   occurrenceId, path, color}`
+ *   occurrenceId, path, color, scale, angle}`. `scale` and `angle` (radians
+ *   about Z) default to the identity TRS, which is what most fixtures want
+ *   and also what makes the writer omit those instancing attributes
+ *   entirely (Share#1862) — a test about SHARING them has to opt out.
  * @return {BatchedMesh}
  */
 function batchFromPlan(plan) {
@@ -60,7 +63,11 @@ function batchFromPlan(plan) {
   }
   for (const entry of plan) {
     const batchId = mesh.addInstance(batchGeometryIds.get(entry.geometry))
-    mesh.setMatrixAt(batchId, new Matrix4().makeTranslation(entry.x, 0, 0))
+    const scale = entry.scale ?? 1
+    mesh.setMatrixAt(batchId, new Matrix4().compose(
+      new Vector3(entry.x, 0, 0),
+      new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), entry.angle ?? 0),
+      new Vector3(scale, scale, scale)))
   }
   mesh.instanceParents = plan.map((entry) => entry.parent)
   mesh.instanceOccurrenceIds = plan.map((entry) => entry.occurrenceId)
@@ -141,13 +148,18 @@ describe('loader/glbBatchedExport', () => {
     expect(counts).toEqual([1, 2])
 
     // Geometry dedup: 2 unique geometries x (position+normal+index) = 6
-    // geometry accessors, + 2 nodes x TRS = 6 instancing accessors.
-    expect(json.accessors).toHaveLength(12)
+    // geometry accessors, + 2 nodes x TRANSLATION. Every placement here is
+    // unrotated and unit-scaled, so ROTATION and SCALE say nothing and are
+    // not written at all (Share#1862).
+    expect(json.accessors).toHaveLength(8)
 
-    // Every node declares the instancing extension with full TRS.
+    // TRANSLATION is the one attribute that is always present, whatever its
+    // value: glbPortable.js reads the instance count off it, and an EMPTY
+    // attributes object makes three's extension bail into a plain Mesh,
+    // which costs the whole model its table join.
     for (const node of json.nodes) {
       const attrs = node.extensions['EXT_mesh_gpu_instancing'].attributes
-      expect(Object.keys(attrs).sort()).toEqual(['ROTATION', 'SCALE', 'TRANSLATION'])
+      expect(Object.keys(attrs)).toEqual(['TRANSLATION'])
     }
   })
 
@@ -179,10 +191,10 @@ describe('loader/glbBatchedExport', () => {
     const {json} = parseGlb(result.bytes)
     // (shared x grey), (shared x orange), (other x grey) -> 3 nodes, but
     // still only 2 unique geometries' worth of geometry accessors (6), + 3
-    // TRANSLATION, + 1 ROTATION and 1 SCALE shared by all three (every
-    // placement here is unit-scaled and unrotated).
+    // TRANSLATION. Every placement here is unit-scaled and unrotated, so no
+    // ROTATION or SCALE accessor exists to share.
     expect(json.nodes).toHaveLength(3)
-    expect(json.accessors).toHaveLength(11)
+    expect(json.accessors).toHaveLength(9)
   })
 
   it('bakes SOURCE colors, not the live display palette', async () => {
@@ -245,8 +257,8 @@ describe('loader/glbBatchedExport', () => {
 
     expect(json.nodes).toHaveLength(1)
     expect(json.meshes).toHaveLength(1)
-    // 1 shape x (POSITION + NORMAL + indices) + 1 node x TRS.
-    expect(json.accessors).toHaveLength(6)
+    // 1 shape x (POSITION + NORMAL + indices) + 1 node x TRANSLATION.
+    expect(json.accessors).toHaveLength(4)
     expect(result.tableNodes).toHaveLength(1)
     expect(result.tableNodes[0].count).toBe(3)
   })
@@ -300,9 +312,8 @@ describe('loader/glbBatchedExport', () => {
 
     expect(json.nodes).toHaveLength(2)
     expect(json.materials).toHaveLength(2)
-    // 1 shape x 3 geometry accessors + 2 TRANSLATION + a shared ROTATION and
-    // SCALE.
-    expect(json.accessors).toHaveLength(7)
+    // 1 shape x 3 geometry accessors + 2 TRANSLATION.
+    expect(json.accessors).toHaveLength(5)
     const [a, b] = json.meshes.map((mesh) => mesh.primitives[0])
     expect(a.attributes.POSITION).toBe(b.attributes.POSITION)
     expect(a.attributes.NORMAL).toBe(b.attributes.NORMAL)
@@ -335,16 +346,27 @@ describe('loader/glbBatchedExport', () => {
     // nodes while TRANSLATION rarely does. Sharing the accessor is legal for
     // the same reason the geometry accessors are shared — an accessor is an
     // index, and glTF puts no limit on how many properties resolve to one.
+    // The placements are deliberately NOT unit-scaled or unrotated: an
+    // identity payload is omitted rather than shared, and a `Set` over three
+    // `undefined`s also has size 1 — so on identity fixtures the two
+    // assertions below would pass while testing nothing.
     const result = await exportBatchedModelAsInstancedGlb(batchFromPlan([
-      {geometry: triangleGeometry(1), x: 1, parent: 11, occurrenceId: 0, path: [1]},
-      {geometry: triangleGeometry(2), x: 2, parent: 12, occurrenceId: 1, path: [2]},
-      {geometry: triangleGeometry(3), x: 3, parent: 13, occurrenceId: 2, path: [3]},
+      {geometry: triangleGeometry(1), x: 1, parent: 11, occurrenceId: 0, path: [1],
+        scale: 2, angle: Math.PI / 2},
+      {geometry: triangleGeometry(2), x: 2, parent: 12, occurrenceId: 1, path: [2],
+        scale: 2, angle: Math.PI / 2},
+      {geometry: triangleGeometry(3), x: 3, parent: 13, occurrenceId: 2, path: [3],
+        scale: 2, angle: Math.PI / 2},
     ]))
     const {json} = parseGlb(result.bytes)
 
     const attributes = json.nodes.map(
       (node) => node.extensions['EXT_mesh_gpu_instancing'].attributes)
     expect(attributes).toHaveLength(3)
+    for (const attrs of attributes) {
+      expect(attrs.SCALE).toEqual(expect.any(Number))
+      expect(attrs.ROTATION).toEqual(expect.any(Number))
+    }
     expect(new Set(attributes.map((a) => a.SCALE)).size).toBe(1)
     expect(new Set(attributes.map((a) => a.ROTATION)).size).toBe(1)
     // The placements themselves differ, so TRANSLATION must NOT collapse —
@@ -352,6 +374,40 @@ describe('loader/glbBatchedExport', () => {
     expect(new Set(attributes.map((a) => a.TRANSLATION)).size).toBe(3)
     // 3 shapes x 3 geometry accessors + 3 TRANSLATION + 1 ROTATION + 1 SCALE.
     expect(json.accessors).toHaveLength(14)
+  })
+
+  it('omits an instancing attribute that would only say identity', async () => {
+    // Per NODE, not per file: the rotated node keeps its ROTATION while the
+    // unrotated one drops it, so this cannot pass by the writer simply
+    // never writing the attribute.
+    const result = await exportBatchedModelAsInstancedGlb(batchFromPlan([
+      {geometry: triangleGeometry(1), x: 1, parent: 11, occurrenceId: 0, path: [1]},
+      {geometry: triangleGeometry(2), x: 2, parent: 12, occurrenceId: 1, path: [2],
+        angle: Math.PI / 2, scale: 3},
+    ]))
+    const {json} = parseGlb(result.bytes)
+
+    const [plain, transformed] = json.nodes.map(
+      (node) => node.extensions['EXT_mesh_gpu_instancing'].attributes)
+    expect(Object.keys(plain)).toEqual(['TRANSLATION'])
+    expect(Object.keys(transformed).sort()).toEqual(['ROTATION', 'SCALE', 'TRANSLATION'])
+  })
+
+  it('never lets an instancing attributes object go empty', async () => {
+    // A node whose single instance is at the origin, unrotated and
+    // unit-scaled — every attribute it could write is identity. TRANSLATION
+    // still has to survive: three's GLTFMeshGpuInstancing bails on an empty
+    // attributes object and hands back a plain Mesh, at which point
+    // `joinNodesToTables` finds an uncovered table row and the WHOLE model
+    // loses its batched decoration, not just this node.
+    const result = await exportBatchedModelAsInstancedGlb(batchFromPlan([
+      {geometry: triangleGeometry(1), x: 0, parent: 11, occurrenceId: 0, path: [1]},
+    ]))
+    const {json, bin} = parseGlb(result.bytes)
+
+    const attrs = json.nodes[0].extensions['EXT_mesh_gpu_instancing'].attributes
+    expect(Object.keys(attrs)).toEqual(['TRANSLATION'])
+    expect(readVec3Accessor(json, bin, attrs.TRANSLATION)).toEqual([[0, 0, 0]])
   })
 
   it('keeps shapes apart when only their normals differ', async () => {
@@ -366,8 +422,7 @@ describe('loader/glbBatchedExport', () => {
     const {json} = parseGlb(result.bytes)
 
     expect(json.nodes).toHaveLength(2)
-    // 2 shapes x 3 geometry accessors + 2 TRANSLATION + a shared ROTATION
-    // and SCALE.
-    expect(json.accessors).toHaveLength(10)
+    // 2 shapes x 3 geometry accessors + 2 TRANSLATION.
+    expect(json.accessors).toHaveLength(8)
   })
 })

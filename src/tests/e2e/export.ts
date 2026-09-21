@@ -488,6 +488,8 @@ export function glbJsonChunk(bytes: Buffer): {
   extensionsUsed?: string[]
   extensionsRequired?: string[]
   nodes?: Array<{name?: string; mesh?: number}>
+  bufferViews?: Array<{byteOffset?: number; byteLength: number}>
+  extensions?: Record<string, {bufferView?: number}>
 } {
   const jsonByteLength = bytes.readUInt32LE(GLB_JSON_LENGTH_OFFSET)
   const start = GLB_JSON_LENGTH_OFFSET + GLB_CHUNK_HEADER_BYTES

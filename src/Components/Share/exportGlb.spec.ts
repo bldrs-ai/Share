@@ -39,6 +39,47 @@ import {
 
 
 /**
+ * The `BLDRS_*` extension descriptors of a downloaded file.
+ *
+ * Each one names its payload by bufferView index and says how it is stored
+ * (`compressed`). Everything about them except that index must survive a
+ * codec untouched — the payloads are re-attached around the transform, not
+ * re-encoded (#1842).
+ *
+ * @param json the parsed JSON chunk of an exported file
+ * @return the Bldrs entries of `extensions`, by name
+ */
+function bldrsDescriptors(
+  json: ReturnType<typeof glbJsonChunk>,
+): Record<string, {bufferView?: number}> {
+  return Object.fromEntries(
+    Object.entries(json.extensions ?? {}).filter(([name]) => name.startsWith('BLDRS_')))
+}
+
+
+/**
+ * The BIN-chunk bytes the `BLDRS_*` payloads occupy in a downloaded file.
+ *
+ * This is the half of the metadata toggle's worth that IS identical across
+ * codecs: the payloads are encoded once and re-attached around the transform
+ * (#1842), so a codec never re-encodes them. The other half — the JSON that
+ * REFERENCES them — is not identical, which is why the toggle's total worth
+ * is asserted with a bound rather than exactly. See the call site.
+ *
+ * @param json the parsed JSON chunk of an exported file
+ * @return total byteLength of the views the Bldrs extensions name
+ */
+function bldrsPayloadBytes(json: ReturnType<typeof glbJsonChunk>): number {
+  const views = json.bufferViews ?? []
+  return Object.entries(bldrsDescriptors(json))
+    .reduce((total, [, extension]) => {
+      const view = extension.bufferView === undefined ? null : views[extension.bufferView]
+      return total + (view?.byteLength ?? 0)
+    }, 0)
+}
+
+
+/**
  * The raw byte count behind the panel's rounded size label.
  *
  * @param sizeLine the `export-size` locator
@@ -107,6 +148,10 @@ const COMPRESSION_CODECS = [
 // `index.ifc`'s spatial chain, one child per level, and the leaf label its
 // building elements share — the same shape `Containers/indexStepLogo.spec.ts`
 // walks for the STEP twin of this model.
+// A GLB chunk's data is padded to a 4-byte boundary, so two documents whose
+// JSON differs by N bytes can differ by as much as N + 3 bytes of file.
+const GLB_CHUNK_PADDING_SLACK_BYTES = 3
+
 const SPATIAL_CHAIN = ['Bldrs', 'Build', 'Every', 'Thing']
 const LEAF_LABEL = 'Together'
 
@@ -280,6 +325,19 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     expect(uncompressedBytes).toBeGreaterThan(0)
     const uncompressedMetadataBytes = await metadataDelta(uncompressedBytes)
 
+    // What the payloads themselves weigh, read off the uncompressed download.
+    // That figure is the part of the toggle's worth a codec cannot move, and
+    // it is asserted exactly against every codec below.
+    const uncompressedDownload = page.waitForEvent('download')
+    await exportButton.click()
+    const uncompressedJson = glbJsonChunk(await readFile(await (await uncompressedDownload).path()))
+    const uncompressedPayloadBytes = bldrsPayloadBytes(uncompressedJson)
+    const uncompressedDescriptors = bldrsDescriptors(uncompressedJson)
+    expect(uncompressedPayloadBytes).toBeGreaterThan(0)
+    // Guards the per-codec descriptor comparison below against passing
+    // vacuously on an empty set.
+    expect(Object.keys(uncompressedDescriptors).length).toBeGreaterThan(0)
+
     for (const codec of COMPRESSION_CODECS) {
       // The encoders are real wasm and only exist in a browser: the unit
       // suite runs them under jsdom with the wasm handed over as bytes, which
@@ -290,10 +348,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       if (codec.isSmallerOnThisFixture) {
         expect(compressedBytes, `${codec.mode} should shrink the download`).toBeLessThan(uncompressedBytes)
       }
-      // One encode serves both states of the metadata toggle — the payloads
-      // pass through untouched and are re-added by arithmetic (#1842) — so
-      // what the toggle is worth cannot move with the codec.
-      expect(await metadataDelta(compressedBytes)).toBe(uncompressedMetadataBytes)
+      const codecMetadataBytes = await metadataDelta(compressedBytes)
       // Three toggle buttons plus their label are the widest control row in
       // the dialog, and on the mobile projection that is where a layout
       // regression shows up as a sideways scroll (#1838).
@@ -309,6 +364,41 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       expect(file.byteLength, `${codec.mode} download should weigh what the panel said`)
         .toBe(compressedBytes)
       const json = glbJsonChunk(file)
+
+      // One encode serves both states of the metadata toggle: the payloads
+      // pass through untouched and are re-added by arithmetic (#1842). THIS
+      // half is exact — a codec that re-encoded or re-compressed them would
+      // move it.
+      expect(bldrsPayloadBytes(json), `${codec.mode} must not re-encode the payloads`)
+        .toBe(uncompressedPayloadBytes)
+
+      // Also exact: every descriptor survives the codec unchanged APART from
+      // the bufferView index it names. This is what makes the bound below
+      // safe to state — without it, a descriptor regression that left the
+      // payload bytes alone (reattaching one as `compressed: false`, say,
+      // which costs 3 characters and renders that metadata unreadable) could
+      // hide inside the slack.
+      const codecDescriptors = bldrsDescriptors(json)
+      expect(Object.keys(codecDescriptors)).toEqual(Object.keys(uncompressedDescriptors))
+      for (const [name, descriptor] of Object.entries(codecDescriptors)) {
+        expect({...descriptor, bufferView: undefined}, `${codec.mode} changed ${name}`)
+          .toEqual({...uncompressedDescriptors[name], bufferView: undefined})
+      }
+
+      // What is left to differ is the INDEX WIDTH, and nothing else: since
+      // #1862 merges the geometry views this artifact carries 3 bufferViews
+      // uncompressed against 15 Draco'd, so three single-digit indices become
+      // double-digit. Measured on this model: 4,476 B against 4,480 B, every
+      // byte of it in `extensions`, with the payloads identical at 4,068 B.
+      // Bound it by the EXACT width difference these descriptors cost rather
+      // than by the width they could cost, plus the most two independently
+      // 4-byte-padded JSON chunks can differ by.
+      const indexWidthDelta = Math.abs(
+        JSON.stringify(codecDescriptors).length - JSON.stringify(uncompressedDescriptors).length)
+      expect(Math.abs(codecMetadataBytes - uncompressedMetadataBytes),
+        `${codec.mode} moved the metadata toggle's worth beyond its index width`)
+        .toBeLessThanOrEqual(indexWidthDelta + GLB_CHUNK_PADDING_SLACK_BYTES)
+
       expect(json.extensionsUsed).toContain(codec.extension)
       expect(json.extensionsRequired).toContain(codec.extension)
       // …and the Bldrs metadata is still in there, which is the half
