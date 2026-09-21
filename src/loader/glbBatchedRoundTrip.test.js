@@ -1,10 +1,10 @@
 /* eslint-disable no-magic-numbers */
-import {Matrix4} from 'three'
+import {BatchedMesh, Matrix4} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
 import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from './bldrsSpatialTree'
 import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
-import {batchedArtifactBytes, liveBatchedModel} from './glbArtifact.fixture'
+import {batchedArtifactBytes, liveBatchedModel, triangleGeometry} from './glbArtifact.fixture'
 import {injectGlbExtensions, parseGlb, serializeGlb} from './injectGlbExtensions'
 import {COMPRESSION_MESHOPT, compressExportGlb} from '../export/glbCompression'
 import {rewriteGlbPortable} from '../export/glbPortable'
@@ -147,7 +147,83 @@ function instanceMatrices(model) {
 }
 
 
+/**
+ * A live model whose two shapes are byte-identical but arrive as separate
+ * objects under separate conway geometry ids — the Share#1859 duplication as
+ * the writer actually meets it, since `makeInstanceGeometryReader` memoises
+ * per geometry id and hands back one object per id.
+ *
+ * The placements INTERLEAVE (A, B, A, B), so an artifact that concatenated
+ * the merged group per shape rather than in batch order is distinguishable
+ * from one that did not.
+ *
+ * @return {BatchedMesh} decorated model double
+ */
+function liveModelWithDuplicateShapes() {
+  const mesh = new BatchedMesh(4, 6, 6)
+  const first = mesh.addGeometry(triangleGeometry())
+  const second = mesh.addGeometry(triangleGeometry())
+  for (const [i, geometryId] of [first, second, first, second].entries()) {
+    mesh.setMatrixAt(
+      mesh.addInstance(geometryId), new Matrix4().makeTranslation(i + 1, 0, 0))
+  }
+  mesh.instanceParents = [101, 102, 103, 104]
+  mesh.instanceOccurrenceIds = [91, 92, 93, 94]
+  mesh.instanceGeometryIds = [500, 600, 500, 600]
+  mesh.instanceOccurrencePaths = [[1], [2], [3], [4]]
+  mesh.instanceSourceColors = [
+    {x: 0.8, y: 0.8, z: 0.8, w: 1},
+    {x: 0.8, y: 0.8, z: 0.8, w: 1},
+    {x: 0.8, y: 0.8, z: 0.8, w: 1},
+    {x: 0.8, y: 0.8, z: 0.8, w: 1},
+  ]
+  return mesh
+}
+
+
+/**
+ * Every placement's transform AND identity, keyed by occurrence id so the
+ * comparison survives any re-ordering the artifact is allowed to make.
+ *
+ * @param {object} model a decorated BatchedMesh
+ * @return {Map<number, object>}
+ */
+function placementsByOccurrence(model) {
+  const m = new Matrix4()
+  const out = new Map()
+  for (let i = 0; i < model.instanceParents.length; i++) {
+    model.getMatrixAt(i, m)
+    out.set(model.instanceOccurrenceIds[i], {
+      matrix: Array.from(m.elements),
+      parent: model.instanceParents[i],
+      geometryId: model.instanceGeometryIds[i],
+      occurrencePath: model.instanceOccurrencePaths[i],
+      color: {...model.instanceSourceColors[i]},
+    })
+  }
+  return out
+}
+
+
 describe('batched-native GLB round-trip (writer -> GLTFLoader -> hydrate)', () => {
+  it('merges duplicate shapes into one node and still returns every placement intact', async () => {
+    // The losslessness claim for Share#1859, end to end: the artifact really
+    // is smaller (one node where there were two), and every placement comes
+    // back on the same transform, parent, geometry id, occurrence path and
+    // source color it went in with. A merge that concatenated the transforms
+    // in one order and the table rows in another passes neither half.
+    const live = liveModelWithDuplicateShapes()
+    const {json} = parseGlb(await batchedArtifactBytes(liveModelWithDuplicateShapes()))
+    expect(json.nodes).toHaveLength(1)
+    expect(json.meshes).toHaveLength(1)
+
+    const hydrated = await roundTrip(liveModelWithDuplicateShapes())
+
+    expect(hydrated).not.toBeNull()
+    expect(hydrated.instanceParents).toHaveLength(4)
+    expect(placementsByOccurrence(hydrated)).toEqual(placementsByOccurrence(live))
+  })
+
   it('restores the batched shape and identity tables', async () => {
     const hydrated = await roundTrip(liveBatchedModel())
 
@@ -158,6 +234,40 @@ describe('batched-native GLB round-trip (writer -> GLTFLoader -> hydrate)', () =
     expect(hydrated.instanceOccurrencePaths).toHaveLength(3)
     expect(hydrated.createSubset).toBeInstanceOf(Function)
     expect(hydrated.capabilities.batchedPicking).toBe(true)
+  })
+
+  it('round-trips placements whose nodes SHARE an instancing accessor', async () => {
+    // Two single-placement shapes, both unit-scaled and unrotated, so their
+    // SCALE and ROTATION payloads are byte-identical and the writer emits one
+    // accessor for each pair. Sharing is invisible to a reader — it resolves
+    // indices — but a shared accessor read at the wrong offset would put both
+    // parts on one transform, so the placements are checked, not the count.
+    const live = new BatchedMesh(2, 6, 6)
+    for (const [i, geometry] of [triangleGeometry(), triangleGeometry(2)].entries()) {
+      live.setMatrixAt(
+        live.addInstance(live.addGeometry(geometry)),
+        new Matrix4().makeTranslation(i + 1, 0, 0))
+    }
+    live.instanceParents = [31, 32]
+    live.instanceOccurrenceIds = [81, 82]
+    live.instanceGeometryIds = [700, 800]
+    live.instanceOccurrencePaths = [[7], [8]]
+    live.instanceSourceColors = [
+      {x: 0.8, y: 0.8, z: 0.8, w: 1},
+      {x: 0.8, y: 0.8, z: 0.8, w: 1},
+    ]
+
+    const {json} = parseGlb(await batchedArtifactBytes(live))
+    const attributes = json.nodes.map(
+      (node) => node.extensions['EXT_mesh_gpu_instancing'].attributes)
+    expect(new Set(attributes.map((a) => a.SCALE)).size).toBe(1)
+    expect(new Set(attributes.map((a) => a.TRANSLATION)).size).toBe(2)
+
+    const hydrated = await parseAndHydrate(await batchedArtifactBytes(live))
+    expect(placementsByOccurrence(hydrated).get(81).matrix[12]).toBe(1)
+    expect(placementsByOccurrence(hydrated).get(82).matrix[12]).toBe(2)
+    expect(placementsByOccurrence(hydrated).get(81).parent).toBe(31)
+    expect(placementsByOccurrence(hydrated).get(82).parent).toBe(32)
   })
 
   it('carries SOURCE colors through the artifact, not the display palette', async () => {

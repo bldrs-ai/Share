@@ -12,6 +12,10 @@
 // lives in `src/export/pro/glbExport.test.js`, because the eslint fence
 // stops anything under `src/` outside that directory from importing it.
 import {
+  CompressionStream as NodeCompressionStream,
+  DecompressionStream as NodeDecompressionStream,
+} from 'node:stream/web'
+import {
   artifactSizesFromFile,
   classifyBldrsBufferViews,
   estimateStrippedGlbSize,
@@ -20,7 +24,7 @@ import {
   positionQuantizationRange,
   stripBldrsJson,
 } from './glbArtifactSize'
-import {packGlbChunks} from './glbContainer'
+import {packGlbChunks, readGlbContainerJsonExtent, unpackGlbContainer} from './glbContainer'
 import {serializeGlb} from './injectGlbExtensions'
 
 
@@ -231,11 +235,11 @@ function dracoGlbJson() {
  *
  * @param {object} [json]
  * @param {Uint8Array} [binBytes] The BIN chunk that JSON describes
- * @return {{file: Blob, glb: Uint8Array}}
+ * @return {Promise<{file: Blob, glb: Uint8Array}>}
  */
-function cachedArtifact(json = glbJson(), binBytes = bin()) {
+async function cachedArtifact(json = glbJson(), binBytes = bin()) {
   const glb = serializeGlb(json, binBytes)
-  return {file: new Blob([packGlbChunks([glb])]), glb}
+  return {file: new Blob([await packGlbChunks([glb])]), glb}
 }
 
 
@@ -492,7 +496,7 @@ describe('glbArtifactSize', () => {
 
   describe('artifactSizesFromFile', () => {
     it('reports both sizes from the header, without reading the BIN chunk', async () => {
-      const {file, glb} = cachedArtifact()
+      const {file, glb} = await cachedArtifact()
       const readRanges = []
       const slice = file.slice.bind(file)
       jest.spyOn(file, 'slice').mockImplementation((start, end) => {
@@ -519,7 +523,7 @@ describe('glbArtifactSize', () => {
     })
 
     it('reports no saving for a GLB that carries no Bldrs data', async () => {
-      const {file, glb} = cachedArtifact(plainGlbJson())
+      const {file, glb} = await cachedArtifact(plainGlbJson())
 
       const sizes = await artifactSizesFromFile(file)
 
@@ -532,7 +536,7 @@ describe('glbArtifactSize', () => {
       // Two buffers, and the only bytes in the file belong to an extension
       // rather than to the views themselves — the shape the header-only read
       // has the least to go on.
-      const {file, glb} = cachedArtifact(meshoptGlbJson(), meshoptBin())
+      const {file, glb} = await cachedArtifact(meshoptGlbJson(), meshoptBin())
       const stripped = meshoptGlbJson()
       stripBldrsJson(stripped)
       const written = serializeGlb(stripped, new Uint8Array(stripped.buffers[0].byteLength))
@@ -545,7 +549,7 @@ describe('glbArtifactSize', () => {
 
     it('refuses a multi-chunk container rather than sizing a fraction of it', async () => {
       const glb = serializeGlb(glbJson(), bin())
-      const file = new Blob([packGlbChunks([glb, glb])])
+      const file = new Blob([await packGlbChunks([glb, glb])])
 
       await expect(artifactSizesFromFile(file)).rejects.toThrow(/expected 1 chunk/)
     })
@@ -553,6 +557,55 @@ describe('glbArtifactSize', () => {
     it('rejects a file that is not a container at all', async () => {
       await expect(artifactSizesFromFile(new Blob([new Uint8Array(64)])))
         .rejects.toThrow(/BLDR magic/)
+    })
+
+    describe('on a gzipped v3 artifact (#1855)', () => {
+      // The whole reason the container gzips a chunk's JSON and BIN halves
+      // as two members: this read has to keep working on a compressed
+      // artifact, and keep not reading BIN.
+      beforeAll(() => {
+        global.CompressionStream = NodeCompressionStream
+        global.DecompressionStream = NodeDecompressionStream
+      })
+
+      afterAll(() => {
+        delete global.CompressionStream
+        delete global.DecompressionStream
+      })
+
+      it('reports exactly what it reports for the same GLB uncompressed', async () => {
+        delete global.CompressionStream
+        const plain = await cachedArtifact()
+        global.CompressionStream = NodeCompressionStream
+        const gzipped = await cachedArtifact()
+
+        expect(gzipped.file.size).toBeLessThan(plain.file.size)
+        expect(await artifactSizesFromFile(gzipped.file))
+          .toEqual(await artifactSizesFromFile(plain.file))
+      })
+
+      it('answers with the BIN member destroyed, having never read it', async () => {
+        // Stronger than watching the read ranges, because a gzip member's
+        // boundaries are not visible in the file the way a GLB chunk's are:
+        // overwrite every byte past the JSON member and show the answer is
+        // unchanged. A whole-file gzip could not survive this.
+        const {file, glb} = await cachedArtifact()
+        const bytes = new Uint8Array(await file.arrayBuffer())
+        const {jsonStart, jsonStoredBytes, isCompressed} =
+          readGlbContainerJsonExtent(bytes.subarray(0, 64))
+        expect(isCompressed).toBe(true)
+        const binStart = jsonStart + jsonStoredBytes
+        expect(binStart).toBeLessThan(bytes.byteLength)
+        bytes.fill(0xab, binStart)
+
+        const sizes = await artifactSizesFromFile(new Blob([bytes]))
+
+        expect(sizes.withMetadata).toBe(glb.byteLength)
+        expect(sizes.withoutMetadata).toBeLessThan(sizes.withMetadata)
+        // And the poisoning really was destructive, or the assertions above
+        // would hold for a read that DID inflate BIN.
+        await expect(unpackGlbContainer(bytes)).rejects.toThrow()
+      })
     })
   })
 })

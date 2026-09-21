@@ -46,6 +46,20 @@ USDZ check therefore also requires the archive's first entry to be a
 `.usd*` layer — the rule the USDZ spec mandates and the loader
 enforces.
 
+**A compression envelope is not a format**, and must not be added as
+one. `.glb.gz` opens (#1831), and it has no `supportedTypes` entry, no
+`findLoader` arm and no `ShareModel` capability — it would poison all
+three, since every one of them answers a question about the MODEL. What
+it has instead is `loader/gzipEnvelope.js`, which takes the envelope off
+at two seams — before an upload reaches OPFS, and once more in
+`Loader#load` for the paths that skip that — so everything downstream
+only ever sees the `glb` inside. `analyzeHeader` looks through one gzip
+member and reports what is under it; `getValidExtension` strips one
+trailing `.gz`. The exception that proves it: `.spz` IS a gzip stream,
+so it is checked first and passed through compressed. Full reasoning,
+including which paths a `.glb.gz` still cannot take:
+[glb-export-premium.md](glb-export-premium.md) §4.7.
+
 
 ## 2. Wire the loader — `src/loader/Loader.js#findLoader`
 

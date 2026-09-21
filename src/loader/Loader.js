@@ -46,10 +46,11 @@ import {glbChunksHaveRenderableGeometry} from './glbArtifactHealth'
 import {NESTED_LOAD_GENERATION, beginGlbArtifactLoad, publishGlbArtifact} from './glbArtifactPublish'
 import {glbCacheKey} from './glbCacheKey'
 import {activeArtifactSpec, glbCompressionModeFromExtensions, isGlbBatchedActive} from './glbCompress'
-import {isBldrsGlbContainer, unpackGlbContainer, viewGlbContainerChunks} from './glbContainer'
+import {isBldrsGlbContainer, readGlbContainerHeader, readGlbContainerJsonPrefixes, unpackGlbContainer} from './glbContainer'
 import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import glbToThree from './glb'
+import {decodeGzipEnvelope} from './gzipEnvelope'
 import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
 import {
   APPLIED_COORDINATION_KEY,
@@ -653,6 +654,16 @@ export async function load(
       'This file is stored with Git LFS, so the URL returned a pointer file instead of the model. ' +
       'Open it via its github.com/<org>/<repo>/blob/<ref>/<path> URL, which resolves LFS content.')
   }
+
+  // A gzip transport envelope comes off HERE, not in a loader arm, because
+  // `.gz` is not a model format — no `supportedTypes` entry, no `findLoader`
+  // case — and every path that can still be carrying one converges on these
+  // bytes. Uploads normally arrive already inflated (the drop handler and the
+  // Local tab strip the envelope before OPFS, so a cached `<uuid>.glb` really
+  // is one); this is the net under the rest: the non-OPFS upload fallback, a
+  // locally hosted `/x.glb.gz`, a pasted URL. `.spz` is excluded inside —
+  // gzip is that format's own container. See `loader/gzipEnvelope.js`.
+  modelData = await decodeGzipEnvelope(modelData, loader.type)
 
   // Provide basePath for multi-file models.  Keep the last '/' for
   // correct resolution of subpaths with '../'.
@@ -2267,20 +2278,25 @@ async function tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel) {
       glbInfo('reader: found OPFS file but it is not a Bldrs container; treating as miss')
       return null
     }
-    // Views, not copies: `bytes` is already the whole artifact in
-    // memory. unpackGlbContainer would allocate a second full-size
-    // buffer just to read the mode byte and JSON mesh list.
-    const peek = viewGlbContainerChunks(bytes)
-    if (peek.mode !== requestedMode) {
+    // The mode byte is a header field, so the mismatch check costs one
+    // DataView read and must happen BEFORE anything walks the payload — a
+    // mismatched artifact is a miss whatever its chunks say.
+    const cachedMode = readGlbContainerHeader(bytes).mode
+    if (cachedMode !== requestedMode) {
       glbInfo(
-        `reader: cached artifact mode mismatch (cached=${peek.mode || 'none'}, ` +
+        `reader: cached artifact mode mismatch (cached=${cachedMode || 'none'}, ` +
         `requested=${requestedMode || 'none'}); treating as miss`)
       return null
     }
+    // JSON halves only. On a v3 (gzipped) artifact this inflates the ~900 KB
+    // JSON member and leaves the ~20 MB BIN member alone, so the hit path
+    // does not pay for an inflation that `parseBldrsGlbContainer` is about
+    // to do properly a moment later (`glbContainer.js` module doc).
+    const {prefixes} = await readGlbContainerJsonPrefixes(bytes)
     // Empty artifacts are a poisoned HIT: the writer used to cache a
     // 0-mesh scene after a failed extract, and every later load skipped
     // the source parse. Evict so this load (and the next) re-parse.
-    if (!glbChunksHaveRenderableGeometry(peek.chunks)) {
+    if (!glbChunksHaveRenderableGeometry(prefixes)) {
       glbInfo('reader: cached artifact has no geometry; evicting and treating as miss')
       try {
         await deleteFileFromOPFS(
@@ -2359,7 +2375,7 @@ function swapToGlbLoader(viewer) {
  * @return {Promise<{scenes: object[]}>}
  */
 async function parseBldrsGlbContainer(loader, containerBytes) {
-  const {chunks, mode, version} = unpackGlbContainer(containerBytes)
+  const {chunks, mode, version} = await unpackGlbContainer(containerBytes)
   glbInfo(
     `reader: unpacked Bldrs container v${version} — ${chunks.length} GLB chunk(s), ` +
     `mode=${mode || 'none'}`)

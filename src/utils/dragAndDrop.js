@@ -1,6 +1,7 @@
 import {guessTypeFromFile} from '../Filetype'
 import {saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
+import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {disablePageReloadApprovalCheck} from './event'
 import {trackAlert} from './alertTracking'
 import {navigateToModel} from './navigate'
@@ -50,9 +51,27 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     return
   }
 
-  const uploadedFile = files[0]
+  const dropped = files[0]
 
-  debug().log('handleFileDrop: uploadedFile', uploadedFile)
+  debug().log('handleFileDrop: uploadedFile', dropped)
+  // A `.glb.gz` — Share's own compressed export (#1854) — is unwrapped
+  // before anything else looks at it, so the type sniffed below, the
+  // extension OPFS stores it under and the bytes the loader later parses all
+  // describe the model rather than its transport encoding
+  // (`loader/gzipEnvelope.js`). Anything that isn't a gzip envelope around a
+  // model comes back as-is, `.spz` included.
+  let uploadedFile
+  try {
+    uploadedFile = await inflateIfGzipEnvelope(dropped)
+  } catch (e) {
+    const message = e.message
+    trackAlert(message)
+    setAlert(message)
+    if (onError) {
+      onError(message)
+    }
+    return
+  }
   const type = await guessTypeFromFile(uploadedFile)
   if (type === null) {
     const message = `File upload of unknown type: type(${uploadedFile.type}) size(${uploadedFile.size})`

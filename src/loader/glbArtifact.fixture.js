@@ -30,11 +30,19 @@ import {injectGlbExtensions, parseGlb, serializeGlb} from './injectGlbExtensions
 const GREY = {x: 0.8, y: 0.8, z: 0.8, w: 1}
 
 
-/** @return {BufferGeometry} one-triangle indexed geometry */
-export function triangleGeometry() {
+/**
+ * One-triangle indexed geometry. `size` is what makes two calls produce
+ * different SHAPES rather than two objects holding the same bytes — which
+ * the writer now folds into one node (Share#1859), so a fixture that wants
+ * two parts has to ask for two.
+ *
+ * @param {number} [size] leg length of the triangle
+ * @return {BufferGeometry}
+ */
+export function triangleGeometry(size = 1) {
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new BufferAttribute(
-    new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3))
+    new Float32Array([0, 0, 0, size, 0, 0, 0, size, 0]), 3))
   geometry.setAttribute('normal', new BufferAttribute(
     new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]), 3))
   geometry.setIndex(new BufferAttribute(new Uint32Array([0, 1, 2]), 1))
@@ -56,7 +64,7 @@ export function liveBatchedModel() {
   // the geometry has to actually be in the batch.
   const mesh = new BatchedMesh(3, 6, 6)
   const sharedId = mesh.addGeometry(triangleGeometry())
-  const otherId = mesh.addGeometry(triangleGeometry())
+  const otherId = mesh.addGeometry(triangleGeometry(2))
   const matrices = [
     new Matrix4().makeTranslation(1, 0, 0),
     new Matrix4().makeTranslation(2, 0, 0),
