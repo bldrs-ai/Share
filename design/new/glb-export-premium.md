@@ -485,10 +485,61 @@ for 28,674 independently addressable meshes is what that mesh structure
 costs; the pass makes each one cheaper and leaves the count alone. Collapsing
 the meshes themselves — concatenating tiny single-instance shapes into
 shared primitives with per-node identity carried by index ranges — is where
-the remaining order of magnitude on a DSA2-shaped model is, and it reaches
-`BLDRS_face_ids` (which indexes identity BY triangle order), picking, and the
-portable rewrite. Recorded here rather than half-landed, same as the
-node-collapse decision in §1.1b.
+the remaining order of magnitude on a DSA2-shaped model is. Measured on the
+post-slim artifact: `accessors` 9,291,470 B, `nodes` 3,619,387 B, `meshes`
+2,712,930 B and `scenes` 160,956 B are 99.99% of the 15,785,307 B JSON chunk,
+and a collapse removes essentially all of it — 18,193,964 → ~2.6 MB, about
+7×. Only on this SHAPE, though: on the Snowdon-shaped proxy, where the nodes
+are genuinely instanced and merging them would de-instance and duplicate
+geometry, it is worth ~6%.
+
+It is deferred because it is a reader change wearing a writer change's
+clothes. Per-element identity lives in the glTF node graph today, and the
+readers get at it through FOUR parallel `batchId`-keyed tables, not one:
+`instanceParents`, `instanceOccurrenceIds`, `instanceOccurrencePaths` and
+`instanceGeometryIds` (`CadView.jsx` reads all four on a click;
+`ShareViewer.js` resolves occurrence paths and per-solid selection through
+the last three). Packing several elements into one batch instance makes every
+one of them ambiguous, and none is guarded — the read is a bare array index —
+so the wrong element comes back silently rather than failing. Naming only
+`instanceParents` here would invite a redesign that fixes parent picking and
+quietly breaks STEP occurrence and per-solid selection, which is the harder
+half to notice.
+
+`BatchedMesh` also has no "add a slice of this geometry" API, so `buildPartition`
+would have to re-split the merged mesh on every cache hit, spending the win
+at load time instead of banking it. The storage side is the cheap half: the
+schema version is in the OPFS filename (`glbCacheKey.js`), so a bump retires
+old artifacts by itself.
+
+Note what this does NOT reach, because the obvious guess is wrong:
+**`BLDRS_face_ids` is not written on the batched path at all** —
+`glbExport.js` skips capture when `batchedTables` exists, since per-triangle
+identity is a merged-layout concept and the batched artifact carries identity
+per instance instead. The hazard is subtler than "it breaks face_ids": a
+range-keyed artifact would *import* face_ids' triangle-order fragility into
+the one slot currently immune to it, and it would need a NEW canary to do it
+safely.
+
+Be precise about what face_ids has, because the obvious reading overstates
+it. Of its three checks (`Loader.js`), only ONE is an independent witness:
+the order cross-check against the per-vertex `_EXPRESSID`, which reads the
+mesh's own data. The `firstExpressId` canary is **self-referential** — it is
+`expressIds[0]` copied at capture time and compared against `expressIds[0]`
+after decode, so it guards decode integrity and travels happily with a
+misordered table. And the one real witness is **disabled on compressed
+artifacts**, since DRACO and Meshopt corrupt the per-vertex ids. So a
+compressed merged artifact already has no on-file witness for primitive-order
+misalignment; only the uncompressed one does.
+
+That is why a range-keyed batched artifact needs its own answer rather than
+face_ids' precedent: the batched writer emits no `_EXPRESSID` at all, so the
+one mechanism that works uncompressed is not even available to borrow. A
+misaligned range table would be undetectable from the file alone, in every
+codec.
+
+Recorded here rather than half-landed, same as the node-collapse decision in
+§1.1b.
 
 The one contract the pass makes about data is that **every accessor
 addresses byte-identical data before and after**, which is exactly what

@@ -39,8 +39,9 @@ import {parseGlb, serializeGlb} from './injectGlbExtensions'
  *
  * What this does NOT do: reduce the accessor *count*. 86,025 accessors for
  * 28,674 independently addressable meshes is what that mesh structure costs,
- * and collapsing the meshes would move per-node identity into index ranges —
- * a change reaching `BLDRS_face_ids`, picking and the portable rewrite. See
+ * and collapsing the meshes would move per-node identity out of the glTF node
+ * graph and into index ranges — which every reader of that identity then has
+ * to learn, from picking to the portable rewrite. See
  * `design/new/glb-export-premium.md` §1.1c.
  *
  * Measured end to end on synthetic proxies of the two real shapes, through
