@@ -485,10 +485,38 @@ for 28,674 independently addressable meshes is what that mesh structure
 costs; the pass makes each one cheaper and leaves the count alone. Collapsing
 the meshes themselves — concatenating tiny single-instance shapes into
 shared primitives with per-node identity carried by index ranges — is where
-the remaining order of magnitude on a DSA2-shaped model is, and it reaches
-`BLDRS_face_ids` (which indexes identity BY triangle order), picking, and the
-portable rewrite. Recorded here rather than half-landed, same as the
-node-collapse decision in §1.1b.
+the remaining order of magnitude on a DSA2-shaped model is. Measured on the
+post-slim artifact: `accessors` 9,291,470 B, `nodes` 3,619,387 B, `meshes`
+2,712,930 B and `scenes` 160,956 B are 99.99% of the 15,785,307 B JSON chunk,
+and a collapse removes essentially all of it — 18,193,964 → ~2.6 MB, about
+7×. Only on this SHAPE, though: on the Snowdon-shaped proxy, where the nodes
+are genuinely instanced and merging them would de-instance and duplicate
+geometry, it is worth ~6%.
+
+It is deferred because it is a reader change wearing a writer change's
+clothes. Per-element identity lives in the glTF node graph today, and every
+consumer reads it as `instanceParents[batchId]` — picking, hide/isolate,
+residency, colour — with no guard, so a batch instance that stops being one
+element returns the WRONG element silently rather than failing. And
+`BatchedMesh` has no "add a slice of this geometry" API, so `buildPartition`
+would have to re-split the merged mesh on every cache hit, spending the win
+at load time instead of banking it. The storage side is the cheap half: the
+schema version is in the OPFS filename (`glbCacheKey.js`), so a bump retires
+old artifacts by itself.
+
+Note what this does NOT reach, because the obvious guess is wrong:
+**`BLDRS_face_ids` is not written on the batched path at all** —
+`glbExport.js` skips capture when `batchedTables` exists, since per-triangle
+identity is a merged-layout concept and the batched artifact carries identity
+per instance instead. The hazard is subtler than "it breaks face_ids": a
+range-keyed artifact would *import* face_ids' triangle-order fragility into
+the one slot currently immune to it, and with no independent witness —
+face_ids can self-check against its `firstExpressId` canary and the
+per-vertex `_EXPRESSID`, whereas the batched writer emits no `_EXPRESSID`, so
+a misaligned range table would be undetectable from the file alone.
+
+Recorded here rather than half-landed, same as the node-collapse decision in
+§1.1b.
 
 The one contract the pass makes about data is that **every accessor
 addresses byte-identical data before and after**, which is exactly what
