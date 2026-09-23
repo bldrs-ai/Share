@@ -1,5 +1,13 @@
 /* eslint-disable no-magic-numbers */
-import {BufferAttribute, BufferGeometry, Group, InstancedMesh, Matrix4, Mesh} from 'three'
+import {
+  Box3,
+  BufferAttribute,
+  BufferGeometry,
+  Group,
+  InstancedMesh,
+  Matrix4,
+  Mesh,
+} from 'three'
 import {hydrateBatchedModelFromInstancedGlb} from './instancedGlbToBatchedModel'
 import {isDefaultColor} from './productPalette'
 import {occurrencePathKey} from '../../utils/occurrencePaths'
@@ -152,6 +160,112 @@ function translations(model) {
   for (let i = 0; i < model.instanceParents.length; i++) {
     model.getMatrixAt(i, m)
     out.push([m.elements[12], m.elements[13], m.elements[14]].map((v) => Math.round(v)))
+  }
+  return out
+}
+
+
+/**
+ * A collapsed group's merged primitive (glb-export-premium.md §1.1c): one
+ * triangle per placement, concatenated into a single indexed buffer with each
+ * placement's translation already BAKED into its vertices — which is what lets
+ * a viewer that knows nothing about `BLDRS_instance_tables` draw the file
+ * correctly from one node at one transform.
+ *
+ * @param {Array<Array<number>>} offsets one `[x, y, z]` per placement
+ * @return {{geometry: BufferGeometry, ranges: Array<object>}}
+ */
+function mergedGeometry(offsets) {
+  const source = triangleGeometry()
+  const localPositions = source.getAttribute('position').array
+  const localNormals = source.getAttribute('normal').array
+  const stride = source.getAttribute('position').count
+  const positions = new Float32Array(offsets.length * stride * 3)
+  const normals = new Float32Array(offsets.length * stride * 3)
+  const indices = new Uint32Array(offsets.length * stride)
+  const ranges = []
+  offsets.forEach((offset, k) => {
+    const at = k * stride
+    for (let v = 0; v < stride; v++) {
+      for (let c = 0; c < 3; c++) {
+        positions[((at + v) * 3) + c] = localPositions[(v * 3) + c] + offset[c]
+        normals[((at + v) * 3) + c] = localNormals[(v * 3) + c]
+      }
+      indices[at + v] = at + v
+    }
+    ranges.push({
+      vertexStart: at, vertexCount: stride, indexStart: at, indexCount: stride,
+    })
+  })
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new BufferAttribute(positions, 3))
+  geometry.setAttribute('normal', new BufferAttribute(normals, 3))
+  geometry.setIndex(new BufferAttribute(indices, 1))
+  return {geometry, ranges}
+}
+
+
+/**
+ * A collapsed table's node: one plain Mesh holding the whole group's merged
+ * primitive, stamped with its table index and nothing else. No
+ * `bldrsInstance` — a collapsed node stands for every row of its table, not
+ * for one of them, which is what distinguishes it from a portable placement.
+ *
+ * @param {BufferGeometry} geometry the merged primitive
+ * @param {number} tableIndex
+ * @return {Mesh}
+ */
+function collapsedNode(geometry, tableIndex) {
+  const mesh = new Mesh(geometry)
+  mesh.userData.bldrsTableNode = tableIndex
+  return mesh
+}
+
+
+/**
+ * `colorlessFixture`'s model, written the collapsed way: the same two tables
+ * and the same three placements, but each table's geometry merged into one
+ * primitive and its rows addressed by index range.
+ *
+ * @return {{scene: Group, tables: Array<object>, nodes: Array<Mesh>}}
+ */
+function collapsedFixture() {
+  const groups = [mergedGeometry([[1, 0, 0], [2, 0, 0]]), mergedGeometry([[0, 3, 0]])]
+  const nodes = groups.map((group, i) => collapsedNode(group.geometry, i))
+  const tables = [
+    {count: 2, color: {...GREY}, parents: [11, 12], occurrenceIds: [0, 1],
+      geometryIds: [500, 500], occurrencePaths: [[3, 7], [3, 8]],
+      ranges: groups[0].ranges},
+    {count: 1, color: {...GREY}, parents: [20], occurrenceIds: [2],
+      geometryIds: [600], occurrencePaths: [[4]], ranges: groups[1].ranges},
+  ]
+  return {scene: gltfScene(nodes, tables), tables, nodes}
+}
+
+
+/**
+ * Each instance's geometry in MODEL space, as `[minX, minY, minZ, maxX, maxY,
+ * maxZ]` rounded to the fixture's grid.
+ *
+ * This is the parity measure the collapse needs, and `translations()` is not:
+ * a collapsed instance's matrix is the group's, with the element's own
+ * placement baked into the vertices, so comparing matrices would report a
+ * difference where the drawn picture is identical. What has to match across
+ * the shapes is where each element's triangles actually land.
+ *
+ * @param {object} model hydrated BatchedMesh
+ * @return {Array<Array<number>>} indexed by batch id
+ */
+function instanceBounds(model) {
+  const box = new Box3()
+  const matrix = new Matrix4()
+  const out = []
+  for (let i = 0; i < model.instanceParents.length; i++) {
+    model.getBoundingBoxAt(model.getGeometryIdAt(i), box)
+    model.getMatrixAt(i, matrix)
+    const placed = box.clone().applyMatrix4(matrix)
+    out.push([...placed.min.toArray(), ...placed.max.toArray()]
+      .map((v) => Math.round(v)))
   }
   return out
 }
@@ -373,6 +487,123 @@ describe('viewer/ifc/instancedGlbToBatchedModel', () => {
       for (const row of rows) {
         row.userData = {}
       }
+      expect(hydrateBatchedModelFromInstancedGlb(scene)).toBeNull()
+    })
+  })
+
+  // §1.1c's mesh collapse: a group's elements share ONE merged primitive and
+  // are addressed by index range instead of each getting its own glTF mesh.
+  // Everything below asserts the same contract the two shapes above do — the
+  // point of the third reader, again, is that only the join differs.
+  describe('the collapsed shape (merged primitive + index ranges)', () => {
+    it('hydrates the same tables and the same picture as the instanced shape', () => {
+      const reference = hydrateBatchedModelFromInstancedGlb(colorlessFixture().scene)
+      const model = hydrateBatchedModelFromInstancedGlb(collapsedFixture().scene)
+
+      expect(model).not.toBeNull()
+      expect(model.isBatchedMesh).toBe(true)
+      expect(Array.from(model.instanceParents)).toEqual([11, 12, 20])
+      expect(Array.from(model.instanceOccurrenceIds)).toEqual([0, 1, 2])
+      expect(Array.from(model.instanceGeometryIds)).toEqual([500, 500, 600])
+      expect(model.instanceOccurrencePaths).toEqual([[3, 7], [3, 8], [4]])
+      expect(model.occurrencePathToBatchIds.get(occurrencePathKey([3, 7]))).toEqual([0])
+      expect(typeof model.createSubset).toBe('function')
+      expect(model.capabilities.batchedPicking).toBe(true)
+      // The claim the collapse lives or dies on: each element still occupies
+      // its own place, addressed independently, from one shared buffer.
+      expect(instanceBounds(model)).toEqual([
+        [1, 0, 0, 2, 1, 0], [2, 0, 0, 3, 1, 0], [0, 3, 0, 1, 4, 0],
+      ])
+      expect(instanceBounds(model)).toEqual(instanceBounds(reference))
+    })
+
+    it('holds one copy of the geometry, not one per element', () => {
+      const model = hydrateBatchedModelFromInstancedGlb(collapsedFixture().scene)
+
+      // Table 0's two elements resolve to two geometry ids over one upload.
+      expect(model.getGeometryIdAt(0)).not.toBe(model.getGeometryIdAt(1))
+      const first = model.getGeometryRangeAt(model.getGeometryIdAt(0))
+      const second = model.getGeometryRangeAt(model.getGeometryIdAt(1))
+      expect(second.vertexStart).toBe(first.vertexStart + first.vertexCount)
+      expect(second.indexStart).toBe(first.indexStart + first.indexCount)
+    })
+
+    it('comes back palette-colored, not grey', () => {
+      const model = hydrateBatchedModelFromInstancedGlb(collapsedFixture().scene)
+
+      for (const source of model.instanceSourceColors) {
+        expect(isDefaultColor(source)).toBe(true)
+      }
+      expect(isDefaultColor(model.instanceColors[0])).toBe(false)
+      expect(model.instanceColors[0]).toEqual(model.instanceColors[1])
+      expect(model.instanceColors[2]).not.toEqual(model.instanceColors[0])
+    })
+
+    it('multiplies the group node\'s transform into every element', () => {
+      // A collapsed group is placed by its node, so the whole group moves with
+      // it. The writer keeps the group's offset there rather than baking it,
+      // so vertices stay small relative to the group and a far-from-origin
+      // model does not lose float32 precision to the collapse.
+      const {scene, nodes} = collapsedFixture()
+      nodes[0].position.set(10, 0, 0)
+
+      const model = hydrateBatchedModelFromInstancedGlb(scene)
+
+      expect(instanceBounds(model)).toEqual([
+        [11, 0, 0, 12, 1, 0], [12, 0, 0, 13, 1, 0], [0, 3, 0, 1, 4, 0],
+      ])
+    })
+
+    it('reads the collapsed shape off the TABLES, not off the node kind', () => {
+      // A fully-collapsed file holds no InstancedMesh at all, so the node test
+      // alone would send it to the portable reader — which would then refuse
+      // it, because a collapsed node carries no `bldrsInstance` row stamp.
+      const {scene} = collapsedFixture()
+      let instanced = 0
+      scene.traverse((obj) => {
+        if (obj.isInstancedMesh) {
+          instanced++
+        }
+      })
+
+      expect(instanced).toBe(0)
+      expect(hydrateBatchedModelFromInstancedGlb(scene)).not.toBeNull()
+    })
+
+    it('returns null when the ranges disagree with the table count', () => {
+      // The range list IS the instance list on this shape, so a disagreement
+      // means some element has no geometry or some geometry no identity —
+      // and both come back as the wrong element under a click, silently.
+      const short = collapsedFixture()
+      short.tables[0].ranges.pop()
+      expect(hydrateBatchedModelFromInstancedGlb(short.scene)).toBeNull()
+
+      const long = collapsedFixture()
+      long.tables[1].ranges.push({...long.tables[1].ranges[0]})
+      expect(hydrateBatchedModelFromInstancedGlb(long.scene)).toBeNull()
+    })
+
+    it('returns null when a range escapes its merged primitive', () => {
+      const {scene, tables} = collapsedFixture()
+      tables[0].ranges[1].indexCount += 1
+
+      expect(hydrateBatchedModelFromInstancedGlb(scene)).toBeNull()
+    })
+
+    it('returns null when two collapsed tables share one merged primitive', () => {
+      // Sharing would upload the primitive twice against a capacity computed
+      // for one copy, and `addGeometry` would throw out of `load()`.
+      const {scene, tables, nodes} = collapsedFixture()
+      nodes[1].geometry = nodes[0].geometry
+      tables[1].ranges = [{...tables[0].ranges[0]}]
+
+      expect(hydrateBatchedModelFromInstancedGlb(scene)).toBeNull()
+    })
+
+    it('returns null when a collapsed table has no node', () => {
+      const {scene, nodes} = collapsedFixture()
+      nodes[1].removeFromParent()
+
       expect(hydrateBatchedModelFromInstancedGlb(scene)).toBeNull()
     })
   })
