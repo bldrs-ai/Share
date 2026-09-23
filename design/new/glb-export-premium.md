@@ -146,7 +146,9 @@ arm — the envelope comes off at the upload seam, and a second seam in
    JSON chunk after the write — merged bufferViews, dropped glTF-default
    fields, shortest-round-trip float32 bounds, identity instancing attributes
    omitted — **landed**, §1.1c; accessor-count reduction via mesh collapse
-   deferred there, reader now proven in §1.1d), #1857 (deferred — ~2.7% of a
+   deferred there, reader proven in §1.1d, and the **writer landed behind
+   the default-off `glbCollapse`** (#1871, §1.1d) — 7.4× on a DSA-shaped
+   proxy, its rollout still owed), #1857 (deferred — ~2.7% of a
    Draco'd export, not the headline it was thought to be), #1853
    (decimation, deprioritised — it attacks the ~1.2 MB geometry term on
    Snowdon, not the container), S5
@@ -553,7 +555,7 @@ bufferView as one GPU buffer. The fixture's view ORDER (mesh 0's attributes,
 indices, instancing, then the rest — copied from a real artifact) is what
 makes the regression test able to fail.
 
-### 1.1d The collapse, reader first (#1831)
+### 1.1d The collapse: reader (#1870), then writer (#1871)
 
 §1.1c left the collapse deferred on a reader question, not a writer one:
 `BatchedMesh` has no "add a slice of this geometry" API, so it was unclear
@@ -645,29 +647,119 @@ entry's reserved block, and ranges deliberately share one. Neither is on the
 cache-hit path; the batch is stamped `bldrsHasGeometryRanges` so a caller can
 assert it.
 
-**What is not done yet**, in the order it has to land:
+**The writer (#1871), behind the default-off `glbCollapse`.**
+`src/loader/glbCollapse.js` plans and bakes; `glbBatchedExport.js` emits.
+Every group with exactly ONE placement is binned by source colour, each
+element's placement is baked into its vertices in double precision, the bin
+is recentred on the centre of its bounds (that offset goes on the node, so
+float32 keeps the element's *shape* — a 1 mm triangle 10^5 m out survives to
+the micrometre, pinned in `glbCollapse.test.js`), and the bin becomes one
+primitive. Genuinely instanced groups are untouched, so the file is hybrid.
+Three details that are not obvious from the code's shape:
 
-1. **The writer** — group single-placement nodes by source color, merge and
-   bake, emit the range table. `BLDRS_instance_tables` gains `ranges`; the
-   payload version and the OPFS `schemaVer` both move, which retires old
-   artifacts by filename (`glbCacheKey.js`).
-2. **The portable rewrite** (`glbPortable.js`) reads a node's placement count
-   off its `TRANSLATION` accessor, which a collapsed node does not have. It
-   has to re-split the merged primitive per element instead.
-3. **Re-export of a re-opened collapsed artifact** un-collapses today: the
-   batched writer dedupes by `instanceGeometryIds`, and every collapsed
-   element has its own range, so it would emit per-element meshes again. Self
-   heals once (1) lands, since the writer re-collapses on the way out — but
-   until then the round trip does not preserve the saving.
-4. **Rollout.** `glbBatched` is default-on, so this is the OPFS path every
-   user takes, and the failure mode is a silently wrong element under a click
-   rather than a crash. The flag and kill-switch shape follows
-   `isGlbBatchedActive()` (`glbCompress.js:146`).
+- **A mirrored placement reverses the triangle's winding**, because a
+  renderer compensates a mirrored NODE transform and never baked vertices.
+- **`EXT_mesh_gpu_instancing` is created only when some node uses it.**
+  gltf-transform lists every created extension, so a fully-collapsed file
+  would otherwise REQUIRE one it never uses, and 3dviewer.net refuses that.
+- **A merged bin's index buffer is Uint16 whenever its vertices fit.** The
+  per-shape accessors are always Uint32 (`batchedInstanceGeometry` rebuilds
+  them that way), so this is a saving of its own — see the Snowdon row
+  below — and one the un-collapsed writer could take too. Not done here.
 
-There is still **no on-file witness** for a misaligned range table, exactly as
-§1.1c warns: the batched writer emits no `_EXPRESSID`, so face_ids' one real
-cross-check is not available to borrow. A canary for the range table is part
-of (1), not an afterthought to it.
+**`BLDRS_instance_tables` v2** adds, per collapsed node, two per-row count
+arrays (vertices, indices) and a `canary`. Counts rather than explicit
+starts: rows are back to back by construction, so a stored form that cannot
+express a gap or overlap removes that failure outright. The un-collapsed
+writer still emits **v1**, so an older build — or a rollback — never meets a
+payload it would refuse.
+
+**The range canary** (`bldrsInstanceTables.js#makeRangeCanary`) is the
+on-file witness §1.1c said was missing. The writer hashes each row's vertex
+count, index count, LOCAL indices and positions (as float32 bits) from the
+element's OWN baked arrays, before the copy into the merged buffers; the
+reader re-hashes the file's merged buffers through the ranges. They agree
+only if the copy, the bookkeeping, and anything that touched the mesh since
+all left row i on row i's triangles. On a DSA-shaped model, where every
+element is exactly three vertices, a table shifted by one element passes
+every structural check there is — that is the case it exists for, and its
+test swaps two same-sized triangles and was verified red with the check
+disabled. It is **exact on purpose**: Meshopt keeps positions bit-exact and
+never reorders, so a Meshopt export re-opens with picking (tested); Draco
+quantizes POSITION, so **a Draco export of a collapsed artifact re-opens as
+the plain GLTFLoader model — correct picture, no picking.** A tolerance
+would have to be wider than Draco's error and narrower than the gap between
+neighbouring elements, and on DSA those are the same order. Recorded as a
+known limitation of the flag, not solved.
+
+**Its own OPFS slot, not a bump** — a deliberate change from what #1871
+proposed. `BLDRS_GLB_COLLAPSED_SCHEMA_VERSION` (`0.22.0-batched-collapsed`,
+derived from the batched slot). Bumping the batched slot would have
+re-parsed every model for every user to change nothing for the flag-off
+majority; sharing it would have broken rollback, since an older build
+meeting v2 tables keeps the undecorated model on every cache hit forever
+(a hit never rewrites). With the slot in the filename neither end meets the
+other's bytes, and `?feature=disableGlbCollapse` finds the un-collapsed
+artifacts still on disk. As with `glbBatched`, the writer's slot follows
+the bytes (the mode it actually ran in), the reader's follows the flags
+(`activeArtifactSpec`), and `isGlbCollapseActive()` is the one seam.
+Hydration is NOT gated on the flag: a user can open a collapsed download in
+a session that has it off.
+
+**The portable rewrite splits collapsed nodes** (`glbPortable.js#
+splitCollapsedNodes`): each element gets POSITION/NORMAL accessors that are
+windows onto the merged views and its own index slice, with the indices
+rewritten from absolute to local IN PLACE — the BIN does not grow. Re-opening
+that file re-merges the rows (`instancedGlbToBatchedModel.js#
+remergeCollapsedRows`) instead of adding each as its own geometry, because
+only the range path marks range ids, and that mark is what keeps
+`batchedInstanceGeometry`'s cache honest (the rule above). The same canary
+then witnesses the portable file too. Shape detection now checks the
+portable row stamp first: a portable export of a collapsed artifact still
+carries tables with `ranges`, and the table test alone routed it to the
+wrong join.
+
+**Audit of the rule**, surface by surface: `ResidencyController`'s use
+counts and `robustBounds`' box cache key on the batch's own geometry id,
+which is unique per range — sound. `ShareViewer`'s solid selection and
+`productPalette` read `instanceGeometryIds` as identity, not geometry
+equality — sound. The writer's own dedup keys on interned CONTENT, which is
+unique per baked element — sound, and it is why re-exporting a re-opened
+collapsed artifact re-collapses rather than un-collapsing (tested).
+
+**Measured** on synthetic proxies through the real writer (the #1862
+method; real-model numbers are the owner's to take):
+
+| proxy | before | collapsed | |
+|---|---:|---:|---|
+| DSA-shaped (28,674 single-placement triangles, 12 colours) | 18,404,352 B | 2,502,148 B | **−86.4%, 7.4×** |
+| — JSON chunk | 15,748,048 B | 8,596 B | 28,674 nodes → 12 |
+| Snowdon-shaped (7,220 groups, 5,235 single, 90 colours) | 46,964,632 B | 38,543,208 B | −17.9% |
+| — JSON chunk | 4,913,756 B | 1,506,112 B | −3,407,644 B, 7.3% of the file |
+| — indices | 13,689,120 B | 8,726,340 B | −4,962,780 B, Uint16 bins |
+
+So the ~6% predicted for a Snowdon shape is the JSON half, confirmed at
+7.3%; the rest is index narrowing. `BLDRS_instance_tables` grows by the
+ranges and canaries (DSA: 247,648 → 256,938 B). The portable rewrite of a
+collapsed DSA artifact is ~8% LARGER than that of an un-collapsed one
+(18.5 vs 17.2 MB) — per-element accessors need a `byteOffset` into the
+shared views — which is the right trade for a file whose purpose is
+third-party readability. Khronos `gltf-validator` 2.0.0-dev.3.10 on the
+collapsed, portable-of-collapsed and baseline files: **0 errors, 0
+warnings**, and a fully-collapsed file no longer declares
+`EXT_mesh_gpu_instancing` at all.
+
+**Still owed before `glbCollapse` flips on** (#1871 stays the tracker):
+
+1. **Real-model numbers** — a DSA export and an instance-heavy one, through
+   a browser with `?feature=glbCollapse`, byte-budgeted.
+2. **Third-party viewers** — the three.js editor and 3dviewer.net on a
+   collapsed download and on its portable rewrite. Validator-clean is
+   necessary, not sufficient.
+3. **The owner's call on the Draco limitation above.**
+4. Browser coverage: `batchedGlbCache.spec.ts` runs MISS → OPFS → HIT under
+   the flag on desktop and mobile, asserting per-element world-bounds
+   parity against the live model.
 
 ### 1.2 Where a download can be located from
 

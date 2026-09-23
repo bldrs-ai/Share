@@ -5,6 +5,7 @@ import {
 } from '../viewer/ifc/batchedInstanceGeometry'
 import {eachBatch} from '../viewer/ifc/batchedModel'
 import {makeContentCache, makeGeometryInterner} from './contentKey'
+import {bakeCollapsedBin, planCollapse} from './glbCollapse'
 import {glbVerbose} from './glbLog'
 import {slimGlbBytes} from './glbSlim'
 
@@ -37,6 +38,12 @@ import {slimGlbBytes} from './glbSlim'
  * matrices are written in mesh-local space via `getMatrixAt`, matching the
  * merged bake's convention (the mesh's own transform is ignored on both
  * paths).
+ *
+ * Collapse mode (`glbCollapse`, default-off, #1871): single-placement groups
+ * are merged per colour into range-addressed primitives instead of each
+ * getting a node — `glbCollapse.js` has the why and the rules. The rest of
+ * this writer is unchanged by it; collapsed nodes are simply a second kind
+ * of node in the same scene, joined to their tables the same way.
  *
  * Fail-soft contract: returns null whenever the model can't round-trip
  * faithfully — a matrix that TRS decomposition can't represent (shear), a
@@ -90,11 +97,15 @@ function decomposeStrict(matrix) {
  * the contract").
  *
  * @param {object} model BatchedMesh or Group of decorated batches
+ * @param {boolean} keepMatrices also keep each entry's full `matrix`, which
+ *   only the collapse needs (it bakes the placement rather than
+ *   decomposing it) — so the default path allocates nothing new
  * @return {Array<object>|null} groups
- *   `{geometry, color, entries: [{matrix, parent, occurrenceId, geometryId,
- *   occurrencePath}]}`, or null when any instance can't be represented
+ *   `{geometry, color, entries: [{trs, matrix?, parent, occurrenceId,
+ *   geometryId, occurrencePath}]}`, or null when any instance can't be
+ *   represented
  */
-function collectInstanceGroups(model) {
+function collectInstanceGroups(model, keepMatrices = false) {
   const groups = new Map()
   let failed = false
   // Geometry is read back out of the batch buffers instead of from a
@@ -146,6 +157,7 @@ function collectInstanceGroups(model) {
       }
       group.entries.push({
         trs,
+        matrix: keepMatrices ? scratch.clone() : undefined,
         parent: mesh.instanceParents[batchId],
         occurrenceId: mesh.instanceOccurrenceIds ? mesh.instanceOccurrenceIds[batchId] : batchId,
         geometryId: mesh.instanceGeometryIds ? mesh.instanceGeometryIds[batchId] : null,
@@ -228,12 +240,17 @@ function isWritableGeometry(geometry) {
  * library is only paid for on the writer path.
  *
  * @param {object} model BatchedMesh or Group of decorated batches
- * @return {Promise<{bytes: Uint8Array, tableNodes: Array<object>}|null>}
- *   null when the model can't round-trip faithfully (caller falls back to
- *   the merged writer)
+ * @param {object} [opts]
+ * @param {boolean} [opts.collapse] merge single-placement groups into
+ *   range-addressed primitives (`glbCompress#isGlbCollapseActive`; the flag
+ *   is read by the caller so this stays a pure function of its arguments)
+ * @return {Promise<{bytes: Uint8Array, tableNodes: Array<object>,
+ *   collapsed: boolean}|null>} null when the model can't round-trip
+ *   faithfully (caller falls back to the merged writer). `collapsed` echoes
+ *   the mode, which picks the table version and so the OPFS slot
  */
-export async function exportBatchedModelAsInstancedGlb(model) {
-  const groups = collectInstanceGroups(model)
+export async function exportBatchedModelAsInstancedGlb(model, {collapse = false} = {}) {
+  const groups = collectInstanceGroups(model, collapse)
   if (!groups) {
     return null
   }
@@ -243,6 +260,9 @@ export async function exportBatchedModelAsInstancedGlb(model) {
       return null
     }
   }
+  const {instanced, collapsed: bins} = collapse ?
+    planCollapse(groups, colorKey) :
+    {instanced: groups, collapsed: []}
 
   const {Document} = await import('@gltf-transform/core')
   const {EXTMeshGPUInstancing} = await import('@gltf-transform/extensions')
@@ -253,7 +273,13 @@ export async function exportBatchedModelAsInstancedGlb(model) {
   doc.getRoot().setDefaultScene(scene)
   // Required, not optional: without the extension a viewer would render one
   // instance at the node origin — a wrong picture, worse than refusing.
-  const instancingExt = doc.createExtension(EXTMeshGPUInstancing).setRequired(true)
+  // Created only when some node is instanced: gltf-transform lists every
+  // created extension in `extensionsUsed`, so a fully-collapsed file would
+  // otherwise REQUIRE an extension it never uses, and a viewer that does not
+  // implement it (3dviewer.net) refuses the file outright.
+  const instancingExt = instanced.length > 0 ?
+    doc.createExtension(EXTMeshGPUInstancing).setRequired(true) :
+    null
 
   // Accessors per UNIQUE geometry, shared across color-bin nodes — the
   // dedup that makes this artifact smaller than the merged bake.
@@ -319,7 +345,7 @@ export async function exportBatchedModelAsInstancedGlb(model) {
     () => doc.createAccessor().setType(type).setArray(array).setBuffer(buffer))
 
   const tableNodes = []
-  for (const group of groups) {
+  for (const group of instanced) {
     const {geometry, color, entries} = group
     const acc = accessorsFor(geometry)
 
@@ -386,6 +412,46 @@ export async function exportBatchedModelAsInstancedGlb(model) {
     })
   }
 
+  let collapsedRows = 0
+  for (const bin of bins) {
+    const baked = bakeCollapsedBin(bin)
+    collapsedRows += baked.entries.length
+    // Accessors of their own, never shared: the baked arrays are unique to
+    // this bin by construction, and `accessorsFor` keys on a geometry OBJECT
+    // this bin does not have.
+    const prim = doc.createPrimitive()
+      .setAttribute('POSITION', doc.createAccessor().setType('VEC3')
+        .setArray(baked.positions).setBuffer(buffer))
+      .setAttribute('NORMAL', doc.createAccessor().setType('VEC3')
+        .setArray(baked.normals).setBuffer(buffer))
+      .setIndices(doc.createAccessor().setType('SCALAR')
+        .setArray(baked.indices).setBuffer(buffer))
+      .setMaterial(materialFor(baked.color))
+    // The bin's centre on the node — the offset the vertices are relative
+    // to, which is what keeps their float32 precision (glbCollapse.js, rule
+    // 1). The reader places every row at this node's matrix.
+    const node = doc.createNode()
+      .setMesh(doc.createMesh().addPrimitive(prim))
+      .setTranslation(baked.centre)
+    node.setExtras({bldrsTableNode: tableNodes.length})
+    scene.addChild(node)
+
+    const {entries} = baked
+    const anyGeometryId = entries.some((e) => e.geometryId !== null && e.geometryId !== undefined)
+    const anyPath = entries.some((e) => Array.isArray(e.occurrencePath))
+    const {color} = baked
+    tableNodes.push({
+      count: entries.length,
+      color: {x: color.x, y: color.y, z: color.z, w: color.w},
+      parents: entries.map((e) => e.parent),
+      occurrenceIds: entries.map((e) => e.occurrenceId),
+      geometryIds: anyGeometryId ? entries.map((e) => e.geometryId ?? 0) : null,
+      occurrencePaths: anyPath ? entries.map((e) => e.occurrencePath ?? null) : null,
+      ranges: baked.ranges,
+      canary: baked.canary,
+    })
+  }
+
   const {WebIO} = await import('@gltf-transform/core')
   const io = new WebIO().registerExtensions([EXTMeshGPUInstancing])
   // gltf-transform lays out one bufferView per mesh and spells every float
@@ -396,11 +462,16 @@ export async function exportBatchedModelAsInstancedGlb(model) {
   const {bytes, stats} = slimGlbBytes(await io.writeBinary(doc))
   const instanceCount = tableNodes.reduce((total, node) => total + node.count, 0)
   glbVerbose(
-    `batched writer: ${groups.length} node(s), ${geometryAccessors.size} unique ` +
+    `batched writer: ${tableNodes.length} node(s), ${geometryAccessors.size} unique ` +
     `geometry(ies), ${materials.size} material(s), ${instanceCount} instance(s), ` +
     `${bytes.byteLength}B`)
+  if (collapse) {
+    glbVerbose(
+      `batched writer: collapsed ${collapsedRows} single-placement element(s) into ` +
+      `${bins.length} merged primitive(s); ${instanced.length} instanced node(s) kept`)
+  }
   glbVerbose(
     `batched writer: slimmed ${stats.bytesBefore}B to ${stats.bytesAfter}B, ` +
     `${stats.bufferViewsBefore} bufferView(s) to ${stats.bufferViewsAfter}`)
-  return {bytes, tableNodes}
+  return {bytes, tableNodes, collapsed: collapse}
 }

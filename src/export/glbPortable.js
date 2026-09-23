@@ -43,6 +43,19 @@
 // un-hydratable and reopens as a plain, un-pickable and (on a colourless
 // model) grey GLB, which is what it did before #1849.
 //
+// **Collapsed nodes (#1871) are split back into one mesh per element.** A
+// collapsed artifact holds each colour's single-placement elements as ONE
+// merged primitive, addressed by the ranges in `BLDRS_instance_tables` v2
+// (glb-export-premium.md §1.1d). A third-party viewer would show that as one
+// object per colour, so the rewrite slices it: each element gets POSITION /
+// NORMAL accessors that are windows onto the merged vertex views (no bytes
+// copied) and an index accessor onto its own slice of the merged index
+// buffer. The one byte-level change is to those indices, which the writer
+// stored ABSOLUTE (relative to the merged primitive) and a window onto the
+// vertices needs LOCAL; they are rewritten in place, on a copy of the BIN, so
+// nothing grows. Every element keeps the collapsed node's transform — the
+// group offset its vertices are relative to.
+//
 // Design: design/new/glb-export-premium.md §4.3.
 import {reifyName} from '@bldrs-ai/ifclib'
 import * as pako from 'pako'
@@ -52,6 +65,7 @@ import {
 } from '../loader/bldrsInstanceTables'
 import {BLDRS_SPATIAL_TREE_EXTENSION_NAME, validateDecodedTree} from '../loader/bldrsSpatialTree'
 import {dropBufferViews, referencedBufferViews} from '../loader/glbArtifactSize'
+import {shortestFloat32} from '../loader/glbSlim'
 import {parseGlb, repackGlbBin, serializeGlb} from '../loader/injectGlbExtensions'
 
 
@@ -63,6 +77,17 @@ export const UNASSIGNED_NODE_NAME = 'Unassigned'
 
 const GLTF_FLOAT = 5126
 const BYTES_PER_FLOAT = 4
+const GLTF_UNSIGNED_BYTE = 5121
+const GLTF_UNSIGNED_SHORT = 5123
+const GLTF_UNSIGNED_INT = 5125
+const UINT16_BYTES = 2
+const UINT32_BYTES = 4
+// Index component types a glTF primitive may use, and their byte widths.
+const INDEX_COMPONENT_BYTES = {
+  [GLTF_UNSIGNED_BYTE]: 1,
+  [GLTF_UNSIGNED_SHORT]: UINT16_BYTES,
+  [GLTF_UNSIGNED_INT]: UINT32_BYTES,
+}
 const COMPONENTS_BY_TYPE = {SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4}
 // Nine significant digits round-trip a float32 exactly (24 bits of mantissa
 // need at most 9 decimal digits), so this shortens the JSON without changing
@@ -94,12 +119,21 @@ const IFC_TYPE_IDENTITY = {properties: {getIfcType: (type) => type}}
  * @return {boolean}
  */
 export function isPortableRewritable(json) {
-  if (!(json?.extensionsUsed || []).includes(INSTANCING_EXTENSION_NAME)) {
+  const nodes = json?.nodes || []
+  if (nodes.length === 0 ||
+      !nodes.every((node) => Number.isInteger(node?.extras?.bldrsTableNode))) {
     return false
   }
-  const nodes = json.nodes || []
-  return nodes.length > 0 &&
-    nodes.every((node) => Number.isInteger(node?.extras?.bldrsTableNode))
+  if ((json.extensionsUsed || []).includes(INSTANCING_EXTENSION_NAME)) {
+    return true
+  }
+  // A FULLY collapsed artifact (#1871) uses no instancing at all — the writer
+  // does not even declare the extension — yet is exactly as un-portable: one
+  // merged mesh per colour. Its nodes are the only stamped, mesh-bearing
+  // nodes without a `bldrsInstance` row, which is what marks a node this
+  // rewrite already emitted.
+  return nodes.every((node) =>
+    Number.isInteger(node.mesh) && !Number.isInteger(node.extras.bldrsInstance))
 }
 
 
@@ -135,7 +169,11 @@ export function rewriteGlbPortable(glbBytes) {
   const spatialTree =
     readJsonPayload(json, bin, BLDRS_SPATIAL_TREE_EXTENSION_NAME, validateDecodedTree)
 
-  const instances = collectInstances(json, bin, tables)
+  // A private copy, because splitting a collapsed node rewrites its index
+  // bytes in place and the caller's buffer is not ours to change.
+  const workingBin = bin ? bin.slice() : bin
+  const splits = splitCollapsedNodes(json, workingBin, tables)
+  const instances = collectInstances(json, workingBin, tables, splits)
   const {nodes, roots, stats} = buildPortableNodes(instances, spatialTree)
 
   const droppedAccessors = removeInstancingAccessors(json)
@@ -152,7 +190,7 @@ export function rewriteGlbPortable(glbBytes) {
   const orphans = orphanedBufferViews(json)
   const {binPlan, binByteLength} = dropBufferViews(json, orphans)
 
-  const bytes = serializeGlb(json, repackGlbBin(bin, binPlan, binByteLength))
+  const bytes = serializeGlb(json, repackGlbBin(workingBin, binPlan, binByteLength))
   return {
     bytes,
     isChanged: true,
@@ -181,18 +219,40 @@ export function rewriteGlbPortable(glbBytes) {
  * placements under `Unassigned`. Losing the names is a smaller harm than
  * losing the file.
  *
+ * A collapsed node contributes one instance per ROW, each on the per-element
+ * mesh `splitCollapsedNodes` made for it and all at the node's own transform.
+ * One that could not be split stays one placement of its merged mesh, keyed
+ * to nothing: it renders right and lands under `Unassigned`, since a single
+ * node cannot carry several elements' names.
+ *
  * @param {object} json Parsed glTF JSON
  * @param {?Uint8Array} bin Its BIN chunk
  * @param {?Array<object>} tables Parsed `BLDRS_instance_tables` nodes
+ * @param {Map<number, Array<number>>} splits node index → mesh per row, from
+ *   `splitCollapsedNodes`
  * @return {Array<object>} `{key, mesh, tableNode, instance, translation,
  *   rotation, scale}`, one per instance
  */
-function collectInstances(json, bin, tables) {
+function collectInstances(json, bin, tables, splits) {
   const instances = []
-  for (const node of json.nodes) {
+  for (const [nodeIndex, node] of json.nodes.entries()) {
     const tableIndex = node.extras.bldrsTableNode
     const attributes = node.extensions?.[INSTANCING_EXTENSION_NAME]?.attributes
     if (!attributes) {
+      if (Number.isInteger(node.mesh)) {
+        const table = tables?.[tableIndex] ?? null
+        const meshes = splits.get(nodeIndex) ?? [node.mesh]
+        const keyed = splits.has(nodeIndex) ? table : null
+        meshes.forEach((mesh, j) => instances.push({
+          key: keyed ? elementKeyOf(keyed.parents[j], keyed.occurrencePaths?.[j]) : null,
+          mesh,
+          tableNode: tableIndex,
+          instance: j,
+          translation: node.translation ?? IDENTITY_TRANSLATION,
+          rotation: node.rotation ?? IDENTITY_ROTATION,
+          scale: node.scale ?? IDENTITY_SCALE,
+        }))
+      }
       continue
     }
     const translation = readFloatAccessor(json, bin, attributes.TRANSLATION, COMPONENTS_BY_TYPE.VEC3)
@@ -219,6 +279,261 @@ function collectInstances(json, bin, tables) {
     }
   }
   return instances
+}
+
+
+/**
+ * Split every collapsed node's merged primitive into one mesh per table row.
+ *
+ * A node is split only when every precondition holds — a table with ranges
+ * that tile the primitive exactly, a single indexed primitive on the file's
+ * own buffer, an index accessor nothing else uses, and every index inside its
+ * own row's vertices (the reader's invariant, `batchedGeometryRanges.js`).
+ * Any doubt leaves the node whole: the file still renders correctly, and a
+ * half-split node would not.
+ *
+ * Row 0 takes over the merged mesh and its accessors, re-pointed at its own
+ * slice; rows 1..n get new ones appended. So no mesh or accessor is orphaned
+ * and nothing needs re-indexing.
+ *
+ * @param {object} json Parsed glTF JSON, mutated
+ * @param {?Uint8Array} bin Its BIN chunk (a private copy), mutated
+ * @param {?Array<object>} tables Parsed `BLDRS_instance_tables` nodes
+ * @return {Map<number, Array<number>>} node index → mesh index per row
+ */
+function splitCollapsedNodes(json, bin, tables) {
+  const splits = new Map()
+  if (!bin || !tables) {
+    return splits
+  }
+  const accessorUses = new Map()
+  for (const mesh of json.meshes || []) {
+    for (const primitive of mesh.primitives || []) {
+      for (const index of [...Object.values(primitive.attributes || {}), primitive.indices]) {
+        accessorUses.set(index, (accessorUses.get(index) ?? 0) + 1)
+      }
+    }
+  }
+  for (const [nodeIndex, node] of json.nodes.entries()) {
+    const table = tables[node.extras.bldrsTableNode]
+    if (node.extensions?.[INSTANCING_EXTENSION_NAME] || !Array.isArray(table?.ranges)) {
+      continue
+    }
+    const plan = planSplit(json, bin, node, table.ranges, accessorUses)
+    if (plan) {
+      splits.set(nodeIndex, applySplit(json, bin, node, table.ranges, plan))
+    }
+  }
+  return splits
+}
+
+
+/**
+ * Check a collapsed node can be split, and gather what the split needs.
+ *
+ * @param {object} json
+ * @param {Uint8Array} bin
+ * @param {object} node
+ * @param {Array<object>} ranges the table's rows
+ * @param {Map<number, number>} accessorUses how many primitive slots each
+ *   accessor fills, file-wide
+ * @return {?object} `{primitive, index, indexBytes, base, dv}` — the index
+ *   accessor's absolute byte base and a view to rewrite it through — or null
+ *   to leave the node whole
+ */
+function planSplit(json, bin, node, ranges, accessorUses) {
+  const primitives = json.meshes?.[node.mesh]?.primitives
+  if (!Array.isArray(primitives) || primitives.length !== 1) {
+    return null
+  }
+  const [primitive] = primitives
+  const index = json.accessors?.[primitive.indices]
+  const position = json.accessors?.[primitive.attributes?.POSITION]
+  const indexBytes = INDEX_COMPONENT_BYTES[index?.componentType]
+  const indexView = json.bufferViews?.[index?.bufferView]
+  const positionView = json.bufferViews?.[position?.bufferView]
+  if (!indexBytes || !indexView || !positionView || index.sparse || position.sparse ||
+      (indexView.buffer ?? 0) !== 0 || (positionView.buffer ?? 0) !== 0 ||
+      accessorUses.get(primitive.indices) !== 1) {
+    return null
+  }
+  for (const attribute of Object.values(primitive.attributes)) {
+    const accessor = json.accessors[attribute]
+    if (!accessor || accessor.sparse || accessorUses.get(attribute) !== 1) {
+      return null
+    }
+  }
+  const last = ranges[ranges.length - 1]
+  if (last.vertexStart + last.vertexCount !== position.count ||
+      last.indexStart + last.indexCount !== index.count) {
+    return null
+  }
+  const dv = new DataView(bin.buffer, bin.byteOffset, bin.byteLength)
+  const base = (indexView.byteOffset ?? 0) + (index.byteOffset ?? 0)
+  for (const {vertexStart, vertexCount, indexStart, indexCount} of ranges) {
+    for (let i = indexStart; i < indexStart + indexCount; i++) {
+      const value = readIndex(dv, base + (i * indexBytes), indexBytes)
+      if (value < vertexStart || value >= vertexStart + vertexCount) {
+        return null
+      }
+    }
+  }
+  return {primitive, index, indexBytes, base, dv}
+}
+
+
+/**
+ * Carry out a planned split: indices rewritten to row-local in place, then
+ * one mesh per row over windows onto the merged views.
+ *
+ * @param {object} json
+ * @param {Uint8Array} bin
+ * @param {object} node
+ * @param {Array<object>} ranges
+ * @param {object} plan from `planSplit`
+ * @return {Array<number>} mesh index per row
+ */
+function applySplit(json, bin, node, ranges, plan) {
+  const {primitive, index, indexBytes, base, dv} = plan
+  for (const {vertexStart, indexStart, indexCount} of ranges) {
+    for (let i = indexStart; i < indexStart + indexCount; i++) {
+      const at = base + (i * indexBytes)
+      writeIndex(dv, at, indexBytes, readIndex(dv, at, indexBytes) - vertexStart)
+    }
+  }
+  // Snapshot the merged accessors before row 0 overwrites them in place.
+  const mergedAttributes = Object.entries(primitive.attributes)
+    .map(([name, accessorIndex]) => [name, accessorIndex, {...json.accessors[accessorIndex]}])
+  const mergedIndex = {...index}
+  const mergedMesh = {...json.meshes[node.mesh]}
+
+  const meshes = []
+  ranges.forEach(({vertexStart, vertexCount, indexStart, indexCount}, row) => {
+    const attributes = {}
+    for (const [name, accessorIndex, merged] of mergedAttributes) {
+      const view = json.bufferViews[merged.bufferView]
+      const slice = windowOnto(merged, view, vertexStart, vertexCount)
+      if (name === 'POSITION') {
+        Object.assign(slice, floatBounds(bin, slice, view))
+      }
+      attributes[name] = placeAccessor(json, row === 0 ? accessorIndex : null, slice)
+    }
+    const indexSlice = {...mergedIndex, count: indexCount}
+    indexSlice.byteOffset = (mergedIndex.byteOffset ?? 0) + (indexStart * indexBytes)
+    delete indexSlice.min
+    delete indexSlice.max
+    const indices = placeAccessor(json, row === 0 ? primitive.indices : null, indexSlice)
+    const rowPrimitive = {...primitive, attributes, indices}
+    const mesh = {...mergedMesh, primitives: [rowPrimitive]}
+    if (row === 0) {
+      json.meshes[node.mesh] = mesh
+      meshes.push(node.mesh)
+    } else {
+      json.meshes.push(mesh)
+      meshes.push(json.meshes.length - 1)
+    }
+  })
+  return meshes
+}
+
+
+/**
+ * An accessor that reads `count` elements of `merged` starting at element
+ * `start` — the same view, a later offset.
+ *
+ * @param {object} merged accessor
+ * @param {object} view its bufferView
+ * @param {number} start first element
+ * @param {number} count
+ * @return {object} a new accessor (bounds dropped; the caller recomputes
+ *   what it needs)
+ */
+function windowOnto(merged, view, start, count) {
+  const elementBytes = COMPONENTS_BY_TYPE[merged.type] * BYTES_PER_FLOAT
+  const stride = view.byteStride || elementBytes
+  const slice = {...merged, count, byteOffset: (merged.byteOffset ?? 0) + (start * stride)}
+  delete slice.min
+  delete slice.max
+  return slice
+}
+
+
+/**
+ * POSITION's `min`/`max`, which glTF requires, read from the slice itself.
+ *
+ * @param {Uint8Array} bin
+ * @param {object} accessor a VEC3 float accessor
+ * @param {object} view its bufferView
+ * @return {{min: Array<number>, max: Array<number>}}
+ */
+function floatBounds(bin, accessor, view) {
+  const components = COMPONENTS_BY_TYPE.VEC3
+  const stride = view.byteStride || (components * BYTES_PER_FLOAT)
+  const base = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+  const dv = new DataView(bin.buffer, bin.byteOffset, bin.byteLength)
+  const min = [Infinity, Infinity, Infinity]
+  const max = [-Infinity, -Infinity, -Infinity]
+  for (let i = 0; i < accessor.count; i++) {
+    for (let c = 0; c < components; c++) {
+      const value = dv.getFloat32(base + (i * stride) + (c * BYTES_PER_FLOAT), true)
+      min[c] = Math.min(min[c], value)
+      max[c] = Math.max(max[c], value)
+    }
+  }
+  // Shortest float32 round trip, as `glbSlim` prints the writer's own bounds:
+  // the same exact values, without spelling each float32 as a 17-digit
+  // double. Six numbers per element is most of what a split element's
+  // accessors cost in JSON.
+  return {min: min.map(shortestFloat32), max: max.map(shortestFloat32)}
+}
+
+
+/**
+ * Store an accessor at `at`, or append it when `at` is null.
+ *
+ * @param {object} json
+ * @param {?number} at
+ * @param {object} accessor
+ * @return {number} its index
+ */
+function placeAccessor(json, at, accessor) {
+  if (at !== null) {
+    json.accessors[at] = accessor
+    return at
+  }
+  json.accessors.push(accessor)
+  return json.accessors.length - 1
+}
+
+
+/**
+ * @param {DataView} dv
+ * @param {number} at byte offset
+ * @param {number} bytes 1, 2 or 4
+ * @return {number}
+ */
+function readIndex(dv, at, bytes) {
+  if (bytes === UINT32_BYTES) {
+    return dv.getUint32(at, true)
+  }
+  return bytes === UINT16_BYTES ? dv.getUint16(at, true) : dv.getUint8(at)
+}
+
+
+/**
+ * @param {DataView} dv
+ * @param {number} at byte offset
+ * @param {number} bytes 1, 2 or 4
+ * @param {number} value
+ */
+function writeIndex(dv, at, bytes, value) {
+  if (bytes === UINT32_BYTES) {
+    dv.setUint32(at, value, true)
+  } else if (bytes === UINT16_BYTES) {
+    dv.setUint16(at, value, true)
+  } else {
+    dv.setUint8(at, value)
+  }
 }
 
 

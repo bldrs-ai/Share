@@ -26,6 +26,7 @@ import {computeBoundsTree} from 'three-mesh-bvh'
 import {getGlbLogs} from '../../tools/jest/glbLogCapture'
 import {COMPRESSION_MESHOPT, compressExportGlb} from '../export/glbCompression'
 import {downloadToOPFS} from '../OPFS/utils'
+import {INSTANCE_TABLES_VERSION} from './bldrsInstanceTables'
 import {packGlbChunks} from './glbContainer'
 import {isBldrsGlbArtifact, load} from './Loader'
 import {
@@ -294,7 +295,9 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
     // geometry (three draws EXT_mesh_gpu_instancing natively) instead of a
     // failed load.
     const bytes = await batchedArtifactBytes(liveBatchedModel(), {
-      mutatePayload: (payload) => ({...payload, version: payload.version + 1}),
+      // One past the NEWEST version this reader knows, not past the payload's
+      // own: the fixture writes v1, and v1 + 1 is now a version it reads.
+      mutatePayload: (payload) => ({...payload, version: INSTANCE_TABLES_VERSION + 1}),
     })
 
     const model = await openGlb(bytes)

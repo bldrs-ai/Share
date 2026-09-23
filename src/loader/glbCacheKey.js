@@ -316,6 +316,30 @@ export const BLDRS_GLB_BATCHED_SCHEMA_VERSION = `${BLDRS_GLB_SCHEMA_VERSION}-bat
 
 
 /**
+ * Schema version for the COLLAPSED batched artifact (share-140 #1871, the
+ * default-off `glbCollapse` flag): the batched-native layout with its
+ * single-placement nodes merged into one primitive per source colour and
+ * addressed by index ranges, which `BLDRS_instance_tables` v2 carries
+ * (glb-export-premium.md §1.1d).
+ *
+ * **A slot of its own rather than a bump of the batched one**, which is what
+ * #1871 first proposed. A bump would retire every batched artifact for every
+ * user — a full re-parse of each model they open — to change nothing for
+ * the flag-off majority, whose writer still emits v1 tables. And a shared
+ * slot would break the rollback: an older build (or this one with the flag
+ * off) that met a v2 artifact would reject the tables, keep the plain
+ * GLTFLoader model and lose picking on every cache hit from then on, since
+ * a hit never rewrites. With the slot in the filename neither end can meet
+ * the other's bytes, and turning the flag off finds the batched artifacts
+ * still on disk.
+ *
+ * Derived from the batched slot for the reason that one is derived from the
+ * merged one (above): an engine-coupled bump has to retire this too.
+ */
+export const BLDRS_GLB_COLLAPSED_SCHEMA_VERSION = `${BLDRS_GLB_BATCHED_SCHEMA_VERSION}-collapsed`
+
+
+/**
  * Derive the OPFS originalFilePath for the GLB artifact corresponding to a
  * source file. The returned path is the value to pass as `originalFilePath`
  * to `doesFileExistInOPFS` and to the worker's retrieveFileWithPathNew.

@@ -31,14 +31,175 @@ import {glbInfo} from './glbLog'
  * Encoding: per-instance id tables as base64 Uint32 (the `BLDRS_face_ids`
  * convention, shared helpers); occurrence paths as plain JSON int arrays
  * (variable-length NAUO chains, STEP only); per-node data inline JSON.
+ *
+ * **v2: collapsed nodes (share-140 #1871, glb-export-premium.md §1.1d).** A
+ * v2 node MAY carry `ranges` + `canary`, meaning its glTF node is not an
+ * `EXT_mesh_gpu_instancing` node but one plain mesh holding every row's
+ * geometry merged, placement baked in, each row addressed by its slice.
+ * Ranges are stored as two per-row COUNT arrays (vertices, indices), not as
+ * explicit starts: the writer lays the rows out back to back in row order,
+ * so the starts are prefix sums, and a stored form that cannot express a gap
+ * or an overlap is one class of misalignment that cannot be written down at
+ * all. A v2 node without them is an ordinary instanced node, so a v2 file is
+ * a HYBRID. v1 stays what the un-collapsed writer emits, so a build that
+ * predates v2 still reads every artifact written with the collapse off.
+ *
+ * **The canary is the one on-file witness that a row's range really is that
+ * row's geometry.** Nothing else in the file can say so: the batched writer
+ * emits no `_EXPRESSID`, and every structural check the reader makes passes
+ * on a table that is shifted by one element of the same size — which on a
+ * DSA-shaped model, 28,674 elements of exactly three vertices, is every
+ * shift. So the writer hashes each row's geometry AS IT BAKES IT, from the
+ * element's own arrays and before they are copied into the merged buffers,
+ * and the reader re-hashes the file's merged buffers through the ranges. The
+ * two agree only if the copy, the range bookkeeping, and anything that
+ * rewrote the mesh since (a codec, another tool) all left row i on row i's
+ * triangles. It is exact on purpose: positions are hashed as float32 BITS,
+ * so a lossy codec (Draco quantizes POSITION) fails it and the file falls
+ * back to the plain GLTFLoader model — renders right, no picking — rather
+ * than being trusted on a tolerance that a neighbouring element could fall
+ * inside. Normals are left out, since Meshopt's FILTER rewrites them while
+ * leaving positions bit-exact.
  */
 
 
 /** Extension name in the GLB JSON's top-level `extensions`. */
 export const BLDRS_INSTANCE_TABLES_EXTENSION_NAME = 'BLDRS_instance_tables'
 
-/** Payload schema version, independent of the artifact path version. */
-export const INSTANCE_TABLES_VERSION = 1
+/**
+ * Payload schema version, independent of the artifact path version. The
+ * newest this reader understands, and what the collapsing writer emits.
+ */
+export const INSTANCE_TABLES_VERSION = 2
+
+/** What the un-collapsed writer still emits: no node carries `ranges`. */
+export const INSTANCE_TABLES_VERSION_UNCOLLAPSED = 1
+
+// murmur3's 32-bit mixing constants. Chosen for diffusion, not security —
+// the canary guards against an accident, and an accident that happens to
+// collide in 32 bits is a 1-in-4-billion event per table.
+const CANARY_SEED = 0x9747b28c
+const CANARY_C1 = 0xcc9e2d51
+const CANARY_C2 = 0x1b873593
+const CANARY_ROUND_ADD = 0xe6546b64
+const CANARY_ROUND_MUL = 5
+const ROTL_K = 15
+const ROTL_H = 13
+const FMIX_1 = 0x85ebca6b
+const FMIX_2 = 0xc2b2ae35
+const FMIX_SHIFT_A = 16
+const FMIX_SHIFT_B = 13
+const WORD_BITS = 32
+const COMPONENTS_PER_POSITION = 3
+
+
+/**
+ * @param {number} value
+ * @param {number} bits
+ * @return {number}
+ */
+function rotl(value, bits) {
+  return (value << bits) | (value >>> (WORD_BITS - bits))
+}
+
+
+/**
+ * A streaming hash over collapsed rows — see the module doc for what it
+ * witnesses and why it is exact.
+ *
+ * Each row contributes its vertex count, its index count, its LOCAL index
+ * values (relative to the row's first vertex) and its positions as float32
+ * bit patterns, in that order. The counts are what make it order- and
+ * boundary-sensitive even when two rows carry identical geometry: moving a
+ * boundary changes which words land in which row.
+ *
+ * @return {{row: Function, digest: Function}}
+ */
+export function makeRangeCanary() {
+  const float = new Float32Array(1)
+  const bits = new Uint32Array(float.buffer)
+  let hash = CANARY_SEED
+  let words = 0
+  const word = (value) => {
+    let k = Math.imul(value | 0, CANARY_C1)
+    k = rotl(k, ROTL_K)
+    k = Math.imul(k, CANARY_C2)
+    hash ^= k
+    hash = rotl(hash, ROTL_H)
+    hash = (Math.imul(hash, CANARY_ROUND_MUL) + CANARY_ROUND_ADD) | 0
+    words++
+  }
+  return {
+    /**
+     * @param {number} vertexCount
+     * @param {function(number, number): number} positionAt `(vertex,
+     *   component) => value`
+     * @param {number} indexCount
+     * @param {function(number): number} localIndexAt
+     */
+    row(vertexCount, positionAt, indexCount, localIndexAt) {
+      word(vertexCount)
+      word(indexCount)
+      for (let i = 0; i < indexCount; i++) {
+        word(localIndexAt(i))
+      }
+      for (let v = 0; v < vertexCount; v++) {
+        for (let c = 0; c < COMPONENTS_PER_POSITION; c++) {
+          float[0] = positionAt(v, c)
+          word(bits[0])
+        }
+      }
+    },
+    /** @return {number} the uint32 digest */
+    digest() {
+      let h = hash ^ words
+      h ^= h >>> FMIX_SHIFT_A
+      h = Math.imul(h, FMIX_1)
+      h ^= h >>> FMIX_SHIFT_B
+      h = Math.imul(h, FMIX_2)
+      h ^= h >>> FMIX_SHIFT_A
+      return h >>> 0
+    },
+  }
+}
+
+
+/**
+ * The canary a collapsed table's ranges produce over a merged geometry — the
+ * READER half, compared against the `canary` the writer stored.
+ *
+ * Reads through `getX/getY/getZ` rather than `.array`: GLTFLoader hands back
+ * an interleaved attribute for a POSITION that shares a strided bufferView
+ * with NORMAL, which is what the writer's layout produces.
+ *
+ * @param {object} geometry merged BufferGeometry
+ * @param {Array<object>} ranges `{vertexStart, vertexCount, indexStart,
+ *   indexCount}` per row
+ * @return {?number} the digest, or null when a range falls outside the
+ *   geometry (not a hash to compare — a table to refuse)
+ */
+export function rangeCanaryOf(geometry, ranges) {
+  const position = geometry?.getAttribute?.('position')
+  const index = geometry?.getIndex?.()
+  if (!position || !index) {
+    return null
+  }
+  const canary = makeRangeCanary()
+  const read = [
+    (v) => position.getX(v),
+    (v) => position.getY(v),
+    (v) => position.getZ(v),
+  ]
+  for (const {vertexStart, vertexCount, indexStart, indexCount} of ranges) {
+    if (vertexStart + vertexCount > position.count || indexStart + indexCount > index.count) {
+      return null
+    }
+    canary.row(
+      vertexCount, (v, c) => read[c](vertexStart + v),
+      indexCount, (i) => index.getX(indexStart + i) - vertexStart)
+  }
+  return canary.digest()
+}
 
 
 /**
@@ -46,10 +207,18 @@ export const INSTANCE_TABLES_VERSION = 1
  *
  * @param {Array<object>} nodes writer collection order; each
  *   `{count, color: {x,y,z,w}, parents: number[], occurrenceIds: number[],
- *   geometryIds: (number[]|null), occurrencePaths: (Array[]|null)}`
+ *   geometryIds: (number[]|null), occurrencePaths: (Array[]|null)}`, plus
+ *   `ranges: [{vertexCount, indexCount}]` (one per row, in row order) and
+ *   `canary` on a collapsed node
+ * @param {object} [opts]
+ * @param {boolean} [opts.collapsed] the writer ran in collapse mode: emit v2.
+ *   Keyed off the MODE rather than off whether any node actually collapsed,
+ *   because the version picks the OPFS slot (`glbExport.js`) and a
+ *   collapse-mode artifact that happened to collapse nothing still belongs
+ *   in the slot a collapse-mode reader looks in
  * @return {object} JSON-serializable extension payload
  */
-export function buildInstanceTablesExtensionData(nodes) {
+export function buildInstanceTablesExtensionData(nodes, {collapsed = false} = {}) {
   const parents = []
   const occurrenceIds = []
   const geometryIds = []
@@ -72,11 +241,24 @@ export function buildInstanceTablesExtensionData(nodes) {
       occurrencePaths.push(...new Array(node.count).fill(null))
     }
     const {color} = node
-    return {count: node.count, color: [color.x, color.y, color.z, color.w]}
+    const meta = {count: node.count, color: [color.x, color.y, color.z, color.w]}
+    if (node.ranges) {
+      if (!collapsed) {
+        // A programming error, not a data one: a v1 payload with ranges would
+        // be refused by every reader, this one included.
+        throw new Error('buildInstanceTablesExtensionData: ranges need collapsed (v2) tables')
+      }
+      meta.ranges = {
+        vertexCounts: uint32ArrayToBase64(Uint32Array.from(node.ranges, (r) => r.vertexCount)),
+        indexCounts: uint32ArrayToBase64(Uint32Array.from(node.ranges, (r) => r.indexCount)),
+      }
+      meta.canary = node.canary
+    }
+    return meta
   })
 
   const data = {
-    version: INSTANCE_TABLES_VERSION,
+    version: collapsed ? INSTANCE_TABLES_VERSION : INSTANCE_TABLES_VERSION_UNCOLLAPSED,
     nodes: nodeMeta,
     parents: uint32ArrayToBase64(Uint32Array.from(parents)),
     occurrenceIds: uint32ArrayToBase64(Uint32Array.from(occurrenceIds)),
@@ -92,18 +274,62 @@ export function buildInstanceTablesExtensionData(nodes) {
 
 
 /**
+ * Decode a v2 node's stored range counts into the explicit
+ * `{vertexStart, vertexCount, indexStart, indexCount}` rows the reader
+ * (`batchedGeometryRanges.js#addGeometryRanges`) takes.
+ *
+ * @param {object} meta one payload node
+ * @return {?Array<object>} ranges, or null when malformed
+ */
+function parseRanges(meta) {
+  let vertexCounts
+  let indexCounts
+  try {
+    vertexCounts = base64ToUint32Array(meta.ranges.vertexCounts)
+    indexCounts = base64ToUint32Array(meta.ranges.indexCounts)
+  } catch {
+    return null
+  }
+  if (vertexCounts.length !== meta.count || indexCounts.length !== meta.count ||
+      !Number.isInteger(meta.canary) || meta.canary < 0) {
+    return null
+  }
+  const ranges = new Array(meta.count)
+  let vertexStart = 0
+  let indexStart = 0
+  for (let i = 0; i < meta.count; i++) {
+    // Zero is refused here as well as by `addGeometryRanges`: an empty row is
+    // an element that draws nothing and cannot be picked.
+    if (vertexCounts[i] === 0 || indexCounts[i] === 0) {
+      return null
+    }
+    ranges[i] = {
+      vertexStart, vertexCount: vertexCounts[i],
+      indexStart, indexCount: indexCounts[i],
+    }
+    vertexStart += vertexCounts[i]
+    indexStart += indexCounts[i]
+  }
+  return ranges
+}
+
+
+/**
  * Parse a payload back into the writer-collection shape (the reader slices
  * these into per-batch tables). Returns null on any structural mismatch —
- * wrong version, table lengths disagreeing with node counts — so the caller
- * treats the artifact as unreadable and falls back to a cache miss, never a
- * half-hydrated model.
+ * unknown version, table lengths disagreeing with node counts, ranges on a
+ * v1 node or ranges that do not decode — so the caller treats the artifact
+ * as unreadable and falls back to a cache miss, never a half-hydrated model.
  *
  * @param {object} raw parsed JSON payload
  * @return {Array<object>|null} per-node data as in
- *   {@link buildInstanceTablesExtensionData}, or null
+ *   {@link buildInstanceTablesExtensionData}, with a collapsed node's
+ *   `ranges` expanded to explicit starts and its `canary` alongside; or null
  */
 export function parseInstanceTablesExtensionData(raw) {
-  if (!raw || raw.version !== INSTANCE_TABLES_VERSION || !Array.isArray(raw.nodes)) {
+  const version = raw?.version
+  if (!raw || (version !== INSTANCE_TABLES_VERSION && version !== INSTANCE_TABLES_VERSION_UNCOLLAPSED) ||
+      !Array.isArray(raw.nodes)) {
     return null
   }
   let parents
@@ -133,15 +359,27 @@ export function parseInstanceTablesExtensionData(raw) {
         !Array.isArray(color) || color.length !== 4) {
       return null
     }
+    let ranges = null
+    if (meta.ranges !== undefined) {
+      ranges = version === INSTANCE_TABLES_VERSION ? parseRanges(meta) : null
+      if (ranges === null) {
+        return null
+      }
+    }
     const end = offset + count
-    nodes.push({
+    const node = {
       count,
       color: {x: color[0], y: color[1], z: color[2], w: color[3]},
       parents: Array.from(parents.subarray(offset, end)),
       occurrenceIds: Array.from(occurrenceIds.subarray(offset, end)),
       geometryIds: geometryIds ? Array.from(geometryIds.subarray(offset, end)) : null,
       occurrencePaths: occurrencePaths ? occurrencePaths.slice(offset, end) : null,
-    })
+    }
+    if (ranges) {
+      node.ranges = ranges
+      node.canary = meta.canary
+    }
+    nodes.push(node)
     offset = end
   }
   return nodes
