@@ -240,11 +240,13 @@ function collapsedFixture() {
   const tables = [
     {count: 2, color: {...GREY}, parents: [11, 12], occurrenceIds: [0, 1],
       geometryIds: [500, 500], occurrencePaths: [[3, 7], [3, 8]],
-      ranges: groups[0].ranges, canary: rangeCanaryOf(groups[0].geometry, groups[0].ranges)},
+      ranges: groups[0].ranges},
     {count: 1, color: {...GREY}, parents: [20], occurrenceIds: [2],
-      geometryIds: [600], occurrencePaths: [[4]], ranges: groups[1].ranges,
-      canary: rangeCanaryOf(groups[1].geometry, groups[1].ranges)},
+      geometryIds: [600], occurrencePaths: [[4]], ranges: groups[1].ranges},
   ]
+  tables.forEach((table, i) => {
+    table.canary = rangeCanaryOf(groups[i].geometry, table)
+  })
   return {scene: gltfScene(nodes, tables), tables, nodes}
 }
 
@@ -636,6 +638,16 @@ describe('viewer/ifc/instancedGlbToBatchedModel', () => {
         positions.setXYZ(v, positions.getX(v + 3), positions.getY(v + 3), positions.getZ(v + 3))
         positions.setXYZ(v + 3, ...a)
       }
+
+      expect(hydrateBatchedModelFromInstancedGlb(scene)).toBeNull()
+    })
+
+    it('refuses a table whose identity rows were reordered against its geometry', () => {
+      // Codex on #1872: the mirror image of the swap above. Geometry and
+      // ranges untouched, `parents` swapped — a click on element 11's
+      // triangle would report 12. The canary hashes identity too.
+      const {scene, tables} = collapsedFixture()
+      tables[0].parents = [12, 11]
 
       expect(hydrateBatchedModelFromInstancedGlb(scene)).toBeNull()
     })

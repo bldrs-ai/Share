@@ -54,7 +54,11 @@ import {glbInfo} from './glbLog'
  * and the reader re-hashes the file's merged buffers through the ranges. The
  * two agree only if the copy, the range bookkeeping, and anything that
  * rewrote the mesh since (a codec, another tool) all left row i on row i's
- * triangles. It is exact on purpose: positions are hashed as float32 BITS,
+ * triangles. Each row's IDENTITY — parent, occurrence id, geometry id,
+ * occurrence path — is hashed with it, so the witness also refuses the
+ * mirror-image failure: geometry untouched, identity arrays reordered
+ * against it. A pick reads identity by row, so either half moving alone is
+ * the same wrong-element result. It is exact on purpose: positions are hashed as float32 BITS,
  * so a lossy codec (Draco quantizes POSITION) fails it and the file falls
  * back to the plain GLTFLoader model — renders right, no picking — rather
  * than being trusted on a tolerance that a neighbouring element could fall
@@ -107,11 +111,12 @@ function rotl(value, bits) {
  * A streaming hash over collapsed rows — see the module doc for what it
  * witnesses and why it is exact.
  *
- * Each row contributes its vertex count, its index count, its LOCAL index
- * values (relative to the row's first vertex) and its positions as float32
- * bit patterns, in that order. The counts are what make it order- and
- * boundary-sensitive even when two rows carry identical geometry: moving a
- * boundary changes which words land in which row.
+ * Each row contributes its identity (see {@link tableRowIdentity}), its
+ * vertex count, its index count, its LOCAL index values (relative to the
+ * row's first vertex) and its positions as float32 bit patterns, in that
+ * order. The counts are what make it order- and boundary-sensitive even when
+ * two rows carry identical geometry: moving a boundary changes which words
+ * land in which row.
  *
  * @return {{row: Function, digest: Function}}
  */
@@ -131,13 +136,27 @@ export function makeRangeCanary() {
   }
   return {
     /**
+     * @param {object} identity `{parent, occurrenceId, geometryId,
+     *   occurrencePath}` — the row's table entries
      * @param {number} vertexCount
      * @param {function(number, number): number} positionAt `(vertex,
      *   component) => value`
      * @param {number} indexCount
      * @param {function(number): number} localIndexAt
      */
-    row(vertexCount, positionAt, indexCount, localIndexAt) {
+    row(identity, vertexCount, positionAt, indexCount, localIndexAt) {
+      word(identity.parent)
+      word(identity.occurrenceId)
+      // Absent is 0 on both sides: the writer stores a missing geometry id as
+      // 0 (`buildInstanceTablesExtensionData`) and a table with none at all
+      // parses back as null.
+      word(identity.geometryId ?? 0)
+      // Length + 1 so a null path and an empty one hash apart.
+      const path = identity.occurrencePath
+      word(Array.isArray(path) ? path.length + 1 : 0)
+      for (const step of Array.isArray(path) ? path : []) {
+        word(step)
+      }
       word(vertexCount)
       word(indexCount)
       for (let i = 0; i < indexCount; i++) {
@@ -165,20 +184,39 @@ export function makeRangeCanary() {
 
 
 /**
- * The canary a collapsed table's ranges produce over a merged geometry — the
- * READER half, compared against the `canary` the writer stored.
+ * One table row's identity, in the shape {@link makeRangeCanary}'s `row`
+ * takes — the same fields the writer hashes from its entry.
+ *
+ * @param {object} table parsed (or writer-shaped) table node
+ * @param {number} row
+ * @return {object} `{parent, occurrenceId, geometryId, occurrencePath}`
+ */
+export function tableRowIdentity(table, row) {
+  return {
+    parent: table.parents?.[row] ?? 0,
+    occurrenceId: table.occurrenceIds?.[row] ?? 0,
+    geometryId: table.geometryIds?.[row] ?? 0,
+    occurrencePath: table.occurrencePaths?.[row] ?? null,
+  }
+}
+
+
+/**
+ * The canary a collapsed table produces over a merged geometry — the READER
+ * half, compared against the `canary` the writer stored.
  *
  * Reads through `getX/getY/getZ` rather than `.array`: GLTFLoader hands back
  * an interleaved attribute for a POSITION that shares a strided bufferView
  * with NORMAL, which is what the writer's layout produces.
  *
  * @param {object} geometry merged BufferGeometry
- * @param {Array<object>} ranges `{vertexStart, vertexCount, indexStart,
- *   indexCount}` per row
+ * @param {object} table collapsed table: `ranges` (`{vertexStart,
+ *   vertexCount, indexStart, indexCount}` per row) plus the identity arrays
  * @return {?number} the digest, or null when a range falls outside the
  *   geometry (not a hash to compare — a table to refuse)
  */
-export function rangeCanaryOf(geometry, ranges) {
+export function rangeCanaryOf(geometry, table) {
+  const {ranges} = table
   const position = geometry?.getAttribute?.('position')
   const index = geometry?.getIndex?.()
   if (!position || !index) {
@@ -190,11 +228,13 @@ export function rangeCanaryOf(geometry, ranges) {
     (v) => position.getY(v),
     (v) => position.getZ(v),
   ]
-  for (const {vertexStart, vertexCount, indexStart, indexCount} of ranges) {
+  for (let r = 0; r < ranges.length; r++) {
+    const {vertexStart, vertexCount, indexStart, indexCount} = ranges[r]
     if (vertexStart + vertexCount > position.count || indexStart + indexCount > index.count) {
       return null
     }
     canary.row(
+      tableRowIdentity(table, r),
       vertexCount, (v, c) => read[c](vertexStart + v),
       indexCount, (i) => index.getX(indexStart + i) - vertexStart)
   }

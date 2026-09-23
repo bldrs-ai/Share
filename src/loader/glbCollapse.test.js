@@ -489,6 +489,40 @@ describe('portable export of a collapsed artifact (#1871)', () => {
     })
   }, TIMEOUT_MS)
 
+  it('leaves a collapsed node whole when its canary fails, rather than mislabel the split', async () => {
+    // Codex on #1872: the split's own checks (tiling, containment) pass on a
+    // file whose same-sized rows were swapped after the write, so without
+    // the canary each slice would get the other row's name. Tamper exactly
+    // that way — swap the grey bin's first two triangles in the BIN — and
+    // the node must stay one unnamed placement instead.
+    const {json, bin} = parseGlb(await artifact(true))
+    const grey = json.nodes.find((n) => !n.extensions?.EXT_mesh_gpu_instancing &&
+      json.accessors[json.meshes[n.mesh].primitives[0].attributes.POSITION].count > 3)
+    const accessor = json.accessors[json.meshes[grey.mesh].primitives[0].attributes.POSITION]
+    const view = json.bufferViews[accessor.bufferView]
+    const stride = view.byteStride ?? 12
+    const base = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+    const tampered = bin.slice()
+    for (let v = 0; v < 3; v++) {
+      const a = tampered.slice(base + (v * stride), base + (v * stride) + 12)
+      const b = tampered.slice(base + ((v + 3) * stride), base + ((v + 3) * stride) + 12)
+      tampered.set(b, base + (v * stride))
+      tampered.set(a, base + ((v + 3) * stride))
+    }
+
+    const clean = rewriteGlbPortable(await artifact(true))
+    const result = rewriteGlbPortable(serializeGlb(json, tampered))
+
+    expect(clean.stats.unassignedInstances).toBe(0)
+    // The whole grey bin is one placement under `Unassigned`, and no part
+    // it holds is named with a mesh of its own.
+    expect(result.stats.unassignedInstances).toBe(1)
+    const out = parseGlb(result.bytes).json
+    for (const id of [103, 105, 106, 107]) {
+      expect(out.nodes.find((node) => node.name === `Part ${id}`).mesh).toBeUndefined()
+    }
+  })
+
   it('treats a FULLY collapsed file as rewritable, though it declares no instancing', async () => {
     const model = onlyInstances(liveHybridModel().model, [0, 2, 3])
     const {json} = parseGlb(await batchedArtifactBytes(model, {collapse: true}))
@@ -571,7 +605,12 @@ describe('glbCollapse baking', () => {
       single(triangleGeometry(2), new Matrix4().makeRotationZ(1)),
       single(triangleGeometry(3), new Matrix4().makeScale(-1, 2, 1)),
     ]})
-    expect(rangeCanaryOf(mergedOf(baked), explicitRanges(baked))).toBe(baked.canary)
+    const table = {
+      ranges: explicitRanges(baked),
+      parents: baked.entries.map((e) => e.parent),
+      occurrenceIds: baked.entries.map((e) => e.occurrenceId),
+    }
+    expect(rangeCanaryOf(mergedOf(baked), table)).toBe(baked.canary)
   })
 
   it('uses a Uint16 index while every vertex fits, Uint32 beyond', () => {

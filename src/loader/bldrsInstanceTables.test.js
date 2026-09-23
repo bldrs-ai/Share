@@ -164,6 +164,17 @@ describe('loader/bldrsInstanceTables', () => {
       {vertexStart: 0, vertexCount: 3, indexStart: 0, indexCount: 3},
       {vertexStart: 3, vertexCount: 3, indexStart: 3, indexCount: 3},
     ]
+    const PARENTS = [11, 12]
+    const OCCURRENCES = [0, 1]
+
+    /**
+     * @param {Array<object>} [ranges]
+     * @param {Array<number>} [parents]
+     * @return {object} a collapsed table over the two triangles
+     */
+    function tableOf(ranges = RANGES, parents = PARENTS) {
+      return {ranges, parents, occurrenceIds: OCCURRENCES, geometryIds: null, occurrencePaths: null}
+    }
 
     it('agrees between the writer\'s per-row stream and the reader\'s merged walk', () => {
       // The two halves are computed from different data on purpose — the
@@ -172,31 +183,41 @@ describe('loader/bldrsInstanceTables', () => {
       const writer = makeRangeCanary()
       for (const row of [0, 1]) {
         const local = TWO_TRIANGLES.slice(row * 9, (row + 1) * 9)
-        writer.row(3, (v, c) => local[(v * 3) + c], 3, (i) => i)
+        writer.row({parent: PARENTS[row], occurrenceId: OCCURRENCES[row]},
+          3, (v, c) => local[(v * 3) + c], 3, (i) => i)
       }
-      expect(rangeCanaryOf(geometryOf(TWO_TRIANGLES, [0, 1, 2, 3, 4, 5]), RANGES))
+      expect(rangeCanaryOf(geometryOf(TWO_TRIANGLES, [0, 1, 2, 3, 4, 5]), tableOf()))
         .toBe(writer.digest())
     })
 
     it('moves when rows swap, when a boundary moves, and when a position changes by one ulp', () => {
-      const base = rangeCanaryOf(geometryOf(TWO_TRIANGLES, [0, 1, 2, 3, 4, 5]), RANGES)
+      const base = rangeCanaryOf(geometryOf(TWO_TRIANGLES, [0, 1, 2, 3, 4, 5]), tableOf())
       const swapped = [...TWO_TRIANGLES.slice(9), ...TWO_TRIANGLES.slice(0, 9)]
-      expect(rangeCanaryOf(geometryOf(swapped, [0, 1, 2, 3, 4, 5]), RANGES)).not.toBe(base)
+      expect(rangeCanaryOf(geometryOf(swapped, [0, 1, 2, 3, 4, 5]), tableOf())).not.toBe(base)
 
       const shifted = [
         {vertexStart: 0, vertexCount: 4, indexStart: 0, indexCount: 3},
         {vertexStart: 4, vertexCount: 2, indexStart: 3, indexCount: 3},
       ]
-      expect(rangeCanaryOf(geometryOf(TWO_TRIANGLES, [0, 1, 2, 3, 4, 5]), shifted)).not.toBe(base)
+      expect(rangeCanaryOf(geometryOf(TWO_TRIANGLES, [0, 1, 2, 3, 4, 5]), tableOf(shifted)))
+        .not.toBe(base)
 
       const nudged = [...TWO_TRIANGLES]
       nudged[16] = Math.fround(1 + (2 ** -23))
-      expect(rangeCanaryOf(geometryOf(nudged, [0, 1, 2, 3, 4, 5]), RANGES)).not.toBe(base)
+      expect(rangeCanaryOf(geometryOf(nudged, [0, 1, 2, 3, 4, 5]), tableOf())).not.toBe(base)
+    })
+
+    it('moves when the IDENTITY rows are reordered against untouched geometry', () => {
+      // Codex on #1872: geometry and ranges intact, `parents` swapped — every
+      // pick would name the other element. The identity words are what see it.
+      const geometry = geometryOf(TWO_TRIANGLES, [0, 1, 2, 3, 4, 5])
+      expect(rangeCanaryOf(geometry, tableOf(RANGES, [12, 11])))
+        .not.toBe(rangeCanaryOf(geometry, tableOf()))
     })
 
     it('returns null for a range outside the geometry, rather than a hash', () => {
       expect(rangeCanaryOf(geometryOf(TWO_TRIANGLES, [0, 1, 2, 3, 4, 5]),
-        [{vertexStart: 3, vertexCount: 9, indexStart: 0, indexCount: 3}])).toBeNull()
+        tableOf([{vertexStart: 3, vertexCount: 9, indexStart: 0, indexCount: 3}]))).toBeNull()
     })
   })
 })

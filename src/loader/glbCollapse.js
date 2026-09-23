@@ -245,8 +245,11 @@ export function bakeCollapsedBin(bin) {
   for (const {geometry, entries: [entry]} of bin.groups) {
     const row = bakeElement(geometry, entry.matrix, centre)
     const vertexCount = row.positions.length / COMPONENTS
-    // Hashed from the row's OWN arrays, before the copy below (module doc).
+    // Hashed from the row's OWN arrays, before the copy below, and with the
+    // entry's identity — the same entry the table row is built from
+    // (module doc).
     canary.row(
+      entry,
       vertexCount, (v, c) => row.positions[(v * COMPONENTS) + c],
       row.indices.length, (i) => row.indices[i])
     positions.set(row.positions, vertexStart * COMPONENTS)

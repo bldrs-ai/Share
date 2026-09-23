@@ -675,12 +675,18 @@ writer still emits **v1**, so an older build — or a rollback — never meets a
 payload it would refuse.
 
 **The range canary** (`bldrsInstanceTables.js#makeRangeCanary`) is the
-on-file witness §1.1c said was missing. The writer hashes each row's vertex
+on-file witness §1.1c said was missing. The writer hashes each row's
+identity (parent, occurrence id, geometry id, occurrence path), vertex
 count, index count, LOCAL indices and positions (as float32 bits) from the
-element's OWN baked arrays, before the copy into the merged buffers; the
-reader re-hashes the file's merged buffers through the ranges. They agree
-only if the copy, the bookkeeping, and anything that touched the mesh since
-all left row i on row i's triangles. On a DSA-shaped model, where every
+element's OWN entry and baked arrays, before the copy into the merged
+buffers; the reader re-hashes the file's merged buffers and identity arrays
+through the ranges. They agree only if the copy, the bookkeeping, and
+anything that touched the mesh or the tables since all left row i's identity
+on row i's triangles — geometry reordered under fixed identity, or identity
+reordered over fixed geometry, both refuse (the second caught by codex on
+#1872). The portable split checks the same canary, straight off the BIN,
+before it names any slice (`glbPortable.js#planSplit`); a failure leaves the
+group whole under `Unassigned` rather than exporting mislabelled parts. On a DSA-shaped model, where every
 element is exactly three vertices, a table shifted by one element passes
 every structural check there is — that is the case it exists for, and its
 test swaps two same-sized triangles and was verified red with the check

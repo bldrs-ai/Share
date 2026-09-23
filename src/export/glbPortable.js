@@ -61,7 +61,9 @@ import {reifyName} from '@bldrs-ai/ifclib'
 import * as pako from 'pako'
 import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
+  makeRangeCanary,
   parseInstanceTablesExtensionData,
+  tableRowIdentity,
 } from '../loader/bldrsInstanceTables'
 import {BLDRS_SPATIAL_TREE_EXTENSION_NAME, validateDecodedTree} from '../loader/bldrsSpatialTree'
 import {dropBufferViews, referencedBufferViews} from '../loader/glbArtifactSize'
@@ -319,7 +321,7 @@ function splitCollapsedNodes(json, bin, tables) {
     if (node.extensions?.[INSTANCING_EXTENSION_NAME] || !Array.isArray(table?.ranges)) {
       continue
     }
-    const plan = planSplit(json, bin, node, table.ranges, accessorUses)
+    const plan = planSplit(json, bin, node, table, accessorUses)
     if (plan) {
       splits.set(nodeIndex, applySplit(json, bin, node, table.ranges, plan))
     }
@@ -331,17 +333,25 @@ function splitCollapsedNodes(json, bin, tables) {
 /**
  * Check a collapsed node can be split, and gather what the split needs.
  *
+ * The last check is the range canary, the same witness hydration applies
+ * (`instancedGlbToBatchedModel.js#isCollapsedGeometryWitnessed`). Tiling and
+ * containment pass on a file whose same-sized rows were reordered after the
+ * write, and splitting it would hand each slice the WRONG row's name and
+ * identity — a plausible portable file that mislabels its parts, which is
+ * worse than leaving the group whole and unassigned.
+ *
  * @param {object} json
  * @param {Uint8Array} bin
  * @param {object} node
- * @param {Array<object>} ranges the table's rows
+ * @param {object} table the node's parsed collapsed table
  * @param {Map<number, number>} accessorUses how many primitive slots each
  *   accessor fills, file-wide
  * @return {?object} `{primitive, index, indexBytes, base, dv}` — the index
  *   accessor's absolute byte base and a view to rewrite it through — or null
  *   to leave the node whole
  */
-function planSplit(json, bin, node, ranges, accessorUses) {
+function planSplit(json, bin, node, table, accessorUses) {
+  const {ranges} = table
   const primitives = json.meshes?.[node.mesh]?.primitives
   if (!Array.isArray(primitives) || primitives.length !== 1) {
     return null
@@ -378,7 +388,40 @@ function planSplit(json, bin, node, ranges, accessorUses) {
       }
     }
   }
+  if (position.componentType !== GLTF_FLOAT ||
+      binRangeCanary(dv, table, position, positionView, base, indexBytes) !== table.canary) {
+    return null
+  }
   return {primitive, index, indexBytes, base, dv}
+}
+
+
+/**
+ * `bldrsInstanceTables.js#rangeCanaryOf`, read straight off the BIN chunk —
+ * this module works on bytes, not on a GLTFLoader parse.
+ *
+ * @param {DataView} dv over the BIN chunk
+ * @param {object} table parsed collapsed table
+ * @param {object} position the merged POSITION accessor (float VEC3)
+ * @param {object} positionView its bufferView
+ * @param {number} indexBase absolute byte offset of the merged indices
+ * @param {number} indexBytes their component width
+ * @return {number} the digest
+ */
+function binRangeCanary(dv, table, position, positionView, indexBase, indexBytes) {
+  const components = COMPONENTS_BY_TYPE.VEC3
+  const stride = positionView.byteStride || (components * BYTES_PER_FLOAT)
+  const positionBase = (positionView.byteOffset ?? 0) + (position.byteOffset ?? 0)
+  const canary = makeRangeCanary()
+  table.ranges.forEach(({vertexStart, vertexCount, indexStart, indexCount}, row) => {
+    canary.row(
+      tableRowIdentity(table, row),
+      vertexCount,
+      (v, c) => dv.getFloat32(positionBase + ((vertexStart + v) * stride) + (c * BYTES_PER_FLOAT), true),
+      indexCount,
+      (i) => readIndex(dv, indexBase + ((indexStart + i) * indexBytes), indexBytes) - vertexStart)
+  })
+  return canary.digest()
 }
 
 

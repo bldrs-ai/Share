@@ -198,7 +198,7 @@ function isCollapsedGeometryWitnessed(geometry, table) {
     glbInfo('reader: collapsed ranges do not tile their merged geometry; refusing')
     return false
   }
-  if (rangeCanaryOf(geometry, table.ranges) !== table.canary) {
+  if (rangeCanaryOf(geometry, table) !== table.canary) {
     glbInfo('reader: collapsed range canary mismatch; refusing the table')
     return false
   }
