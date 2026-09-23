@@ -84,6 +84,13 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   installed, `yarn install` first; nothing is being checked otherwise.
   conway uses the same lifecycle, gating `run-ifc-regression` and
   `visual-diff` while leaving its `build` job ungated.
+- **The chain is yours to drive.** A fix that spans conway-geom →
+  conway → npm → Share is one task, not four approvals: open each PR,
+  drive it green, merge it, and pin it downstream without stopping for
+  a nudge between links. Stop only for what a human alone can do —
+  re-blessing regression baselines, closing issues someone else filed —
+  or for a decision the measurements genuinely don't settle, and say
+  which it is.
 - **PRs: auto-subscribe to CI / review activity.** Immediately after `create_pull_request` succeeds, call `subscribe_pr_activity` for that PR without asking. The default-prompt asks first — for this repo, skip that question and just subscribe. Babysitting is the expected mode here: watch CI, autofix tractable failures, respond to review comments per the system-prompt rules (small + confident → push the fix; ambiguous or architecturally significant → `AskUserQuestion` first; no-op-able → skip silently). Only `unsubscribe_pr_activity` when the user explicitly says to stop.
 
 
