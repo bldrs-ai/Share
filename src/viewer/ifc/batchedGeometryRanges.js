@@ -76,6 +76,21 @@ export const BATCHED_GEOMETRY_RANGES_FLAG = 'bldrsHasGeometryRanges'
 
 
 /**
+ * The geometry ids on a `BatchedMesh` that are synthesised RANGES rather than
+ * whole uploads, as a `Set`.
+ *
+ * Needed because a collapsed slice breaks an assumption the rest of the repo
+ * is entitled to make about an ordinary batch: that two instances sharing a
+ * source shape share their local geometry. A collapsed element's placement is
+ * baked into the merged vertices (§1.1d), so two elements of one STEP solid —
+ * same `instanceGeometryIds` row — hold DIFFERENT triangles. Anything keying
+ * geometry by source id has to be able to tell the two cases apart, and a
+ * batch is hybrid, so the answer is per geometry id and not per mesh.
+ */
+export const BATCHED_GEOMETRY_RANGE_IDS = 'bldrsGeometryRangeIds'
+
+
+/**
  * The exact own-property set of a three r0.184 `_geometryInfo` entry, as
  * `addGeometry` builds it (BatchedMesh.js:630-649). Synthesising an entry
  * means reproducing this shape; a three release that adds or renames a field
@@ -269,5 +284,10 @@ export function addGeometryRanges(mesh, geometry, ranges) {
     }
   }
   mesh[BATCHED_GEOMETRY_RANGES_FLAG] = true
+  const rangeIds = mesh[BATCHED_GEOMETRY_RANGE_IDS] ?? new Set()
+  for (const id of ids) {
+    rangeIds.add(id)
+  }
+  mesh[BATCHED_GEOMETRY_RANGE_IDS] = rangeIds
   return ids
 }

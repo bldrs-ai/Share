@@ -619,6 +619,20 @@ every re-export rather than throwing. `addGeometryRanges` scans for it and
 declines — one linear pass, next to nothing beside the upload that just
 happened.
 
+**One assumption the collapse breaks, and where.** An ordinary batch lets a
+consumer treat `instanceGeometryIds` — the per-solid identity table — as a
+geometry-EQUALITY key, because two instances of one solid genuinely share
+their local geometry. A collapsed slice does not: placement is baked, so two
+elements of one solid hold different triangles while sharing a row.
+`batchedInstanceGeometry`'s per-pass cache keyed on exactly that, so it would
+have handed the first element's geometry to every later one — wrong triangles
+in isolation subsets, the merged conversion and GLB re-export, silently.
+Range ids are therefore recorded on the mesh (`bldrsGeometryRangeIds`) and
+take the per-mesh key instead, which is unique per element; a hybrid batch
+keeps the source-id key for its ordinary instances. Caught in review, and
+worth stating as a rule for the writer work: **anything that reuses an
+identity table as a geometry-equality key has to exclude collapsed slices.**
+
 **Private state, guarded.** The repo already depends on `_geometryInfo`
 through three-mesh-bvh, so the dependency is not new; what is new is that this
 module version-guards it. It compares the entry three actually produced

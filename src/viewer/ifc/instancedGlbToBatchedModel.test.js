@@ -9,6 +9,7 @@ import {
   Mesh,
 } from 'three'
 import {hydrateBatchedModelFromInstancedGlb} from './instancedGlbToBatchedModel'
+import {makeInstanceGeometryReader} from './batchedInstanceGeometry'
 import {isDefaultColor} from './productPalette'
 import {occurrencePathKey} from '../../utils/occurrencePaths'
 
@@ -598,6 +599,20 @@ describe('viewer/ifc/instancedGlbToBatchedModel', () => {
       tables[1].ranges = [{...tables[0].ranges[0]}]
 
       expect(hydrateBatchedModelFromInstancedGlb(scene)).toBeNull()
+    })
+
+    it('does not let two slices share a cached geometry via their source id', () => {
+      // Table 0's two elements share `geometryIds: 500` — the per-solid
+      // IDENTITY table — but their baked slices are DIFFERENT geometry,
+      // because the writer bakes each placement into the merged vertices.
+      const model = hydrateBatchedModelFromInstancedGlb(collapsedFixture().scene)
+      const read = makeInstanceGeometryReader()
+
+      const first = read(model, 0)
+      const second = read(model, 1)
+
+      expect(Array.from(first.getAttribute('position').array))
+        .not.toEqual(Array.from(second.getAttribute('position').array))
     })
 
     it('returns null when a collapsed table has no node', () => {
