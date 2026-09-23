@@ -11,7 +11,7 @@ import {makeSurfaceMaterial} from '../lookMaterial'
 import {addGeometryRanges} from './batchedGeometryRanges'
 import {attachBatchedSubsets} from './batchedSubset'
 import {decorateBatchMeshes} from './buildBatchedConwayModel'
-import {rangeCanaryOf} from '../../loader/bldrsInstanceTables'
+import {matchesLossyWitness, rangeCanaryOf} from '../../loader/bldrsInstanceTables'
 import {glbInfo, glbVerbose} from '../../loader/glbLog'
 
 
@@ -160,11 +160,130 @@ function joinNodesToTables(gltfModel, tables) {
     if (declared !== tables[i].count) {
       return null
     }
-    if (isCollapsedTable(tables[i]) && !isCollapsedGeometryWitnessed(sources[i].geometry, tables[i])) {
+    if (!isCollapsedTable(tables[i])) {
+      continue
+    }
+    if (tables[i].lossyGeometry) {
+      // Draco: the merged primitive's vertices were merged and quantized, so
+      // rebuild each row from its triangle run and check the lossy witness
+      // (`bldrsInstanceTables.js`, "THE LOSSY WITNESS"). The runs must still
+      // tile the index buffer: a codec that dropped or added a triangle has
+      // shifted every run after it.
+      const last = tables[i].ranges[tables[i].ranges.length - 1]
+      if (last.indexStart + last.indexCount !== sources[i].geometry.getIndex?.()?.count) {
+        glbInfo('reader: lossy collapsed triangle runs do not tile their primitive; refusing')
+        return null
+      }
+      const rebuilt = rebuildLossyCollapsed(tables[i], (r) => ({
+        geometry: sources[i].geometry,
+        indexStart: tables[i].ranges[r].indexStart,
+      }))
+      if (!rebuilt) {
+        return null
+      }
+      sources[i] = {...sources[i], geometry: rebuilt.geometry, ranges: rebuilt.ranges}
+    } else if (!isCollapsedGeometryWitnessed(sources[i].geometry, tables[i])) {
       return null
     }
   }
   return sources
+}
+
+
+/**
+ * Rebuild a lossy collapsed table's geometry row by row from its TRIANGLES,
+ * then check it against the table's lossy witness.
+ *
+ * Only triangle order and each row's index count survive a (sequential)
+ * Draco encode; the vertices do not, because Draco merges coincident ones
+ * across rows. So each row's corners are gathered from its own triangle run,
+ * given a fresh contiguous vertex block (first-use order), and the ranges are
+ * re-derived for that block. The result tiles by construction, which is what
+ * `addGeometryRanges` needs, and it is witnessed by the export's identity hash
+ * and per-row centroids rather than the exact canary Draco made unreachable.
+ *
+ * @param {object} table parsed collapsed table: `ranges` (for the row count
+ *   and each row's index count), `witness`
+ * @param {function(number): {geometry: object, indexStart: number}} rowAt
+ *   where row r's triangle run lives
+ * @return {?{geometry: BufferGeometry, ranges: Array<object>}} or null when
+ *   the table has no witness, a count disagrees, or the witness refuses it
+ */
+function rebuildLossyCollapsed(table, rowAt) {
+  if (!table.witness) {
+    glbInfo('reader: lossy collapsed table carries no witness; refusing')
+    return null
+  }
+  const {ranges} = table
+  let vertexTotal = 0
+  let indexTotal = 0
+  for (let r = 0; r < ranges.length; r++) {
+    const {geometry, indexStart} = rowAt(r)
+    const index = geometry?.getIndex?.()
+    if (!index || !geometry.getAttribute('position') ||
+        indexStart + ranges[r].indexCount > index.count) {
+      return null
+    }
+    vertexTotal += ranges[r].indexCount
+    indexTotal += ranges[r].indexCount
+  }
+  // Worst case every corner is its own vertex; trimmed below.
+  const positions = new Float32Array(vertexTotal * 3)
+  const normals = new Float32Array(vertexTotal * 3)
+  const indices = new Uint32Array(indexTotal)
+  const rebuiltRanges = []
+  const centroids = new Float64Array(ranges.length * 3)
+  let hasNormals = true
+  let vertexCursor = 0
+  let indexCursor = 0
+  for (let r = 0; r < ranges.length; r++) {
+    const {geometry, indexStart} = rowAt(r)
+    const index = geometry.getIndex()
+    const position = geometry.getAttribute('position')
+    const normal = geometry.getAttribute('normal')
+    hasNormals = hasNormals && Boolean(normal)
+    const local = new Map()
+    const vertexStart = vertexCursor
+    const {indexCount} = ranges[r]
+    for (let i = 0; i < indexCount; i++) {
+      const point = index.getX(indexStart + i)
+      let v = local.get(point)
+      if (v === undefined) {
+        v = vertexCursor - vertexStart
+        local.set(point, v)
+        const at = vertexCursor * 3
+        positions[at] = position.getX(point)
+        positions[at + 1] = position.getY(point)
+        positions[at + 2] = position.getZ(point)
+        if (normal) {
+          normals[at] = normal.getX(point)
+          normals[at + 1] = normal.getY(point)
+          normals[at + 2] = normal.getZ(point)
+        }
+        vertexCursor++
+      }
+      indices[indexCursor + i] = vertexStart + v
+      centroids[r * 3] += position.getX(point) / indexCount
+      centroids[(r * 3) + 1] += position.getY(point) / indexCount
+      centroids[(r * 3) + 2] += position.getZ(point) / indexCount
+    }
+    rebuiltRanges.push({
+      vertexStart, vertexCount: vertexCursor - vertexStart,
+      indexStart: indexCursor, indexCount,
+    })
+    indexCursor += indexCount
+  }
+  if (!matchesLossyWitness(table, centroids)) {
+    glbInfo('reader: lossy collapsed table does not match its witness; refusing')
+    return null
+  }
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new BufferAttribute(positions.slice(0, vertexCursor * 3), 3))
+  if (hasNormals) {
+    geometry.setAttribute('normal', new BufferAttribute(normals.slice(0, vertexCursor * 3), 3))
+  }
+  geometry.setIndex(new BufferAttribute(indices, 1))
+  return {geometry, ranges: rebuiltRanges}
 }
 
 
@@ -431,6 +550,20 @@ function joinPortableNodesToTables(gltfModel, tables) {
  * @return {?object} placement source carrying `ranges`, or null
  */
 function remergeCollapsedRows(rows, table, toModelSpace) {
+  const matrixOfRow = (i, target) => target.multiplyMatrices(toModelSpace, rows[i].matrixWorld)
+  if (table.lossyGeometry) {
+    // Each row is its own Draco primitive, with its own merged and quantized
+    // vertices, so rebuild from each row's triangles — the whole index — and
+    // check the lossy witness, as the instanced join does for a merged one.
+    // Every triangle of a row's own primitive is that row's, so its index
+    // count must match the table's exactly — a surplus would otherwise ride
+    // along unchecked past the rebuild's prefix walk.
+    if (rows.some((row, r) => row.geometry?.getIndex?.()?.count !== table.ranges[r].indexCount)) {
+      return null
+    }
+    const rebuilt = rebuildLossyCollapsed(table, (r) => ({geometry: rows[r].geometry, indexStart: 0}))
+    return rebuilt && {...rebuilt, getMatrixAt: matrixOfRow}
+  }
   const {ranges} = table
   const last = ranges[ranges.length - 1]
   if (!last) {

@@ -94,10 +94,13 @@ export async function setSubscriptionTier(page: Page, tier: 'sharePro' | 'free')
  * what enables the Export button.
  *
  * @param page Playwright page
+ * @param extraFlags more `?feature=` names, comma-joined onto
+ *   `EXPORT_FLAGS` — e.g. `glbCollapse` to export the collapsed artifact
  */
-export async function loadModelAndWaitForArtifact(page: Page) {
+export async function loadModelAndWaitForArtifact(page: Page, extraFlags = '') {
   const glbLogs = captureGlbLogs(page)
-  await page.goto(`${EXPORT_MODEL_PATH}${EXPORT_FLAGS}`, {waitUntil: 'domcontentloaded'})
+  const flags = extraFlags ? `${EXPORT_FLAGS},${extraFlags}` : EXPORT_FLAGS
+  await page.goto(`${EXPORT_MODEL_PATH}${flags}`, {waitUntil: 'domcontentloaded'})
   await waitForModelReady(page)
   // The writer is idle-scheduled and fires well after `data-model-ready`;
   // this line is the only signal that the artifact is actually on disk.

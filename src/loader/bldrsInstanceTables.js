@@ -95,6 +95,7 @@ const FMIX_SHIFT_A = 16
 const FMIX_SHIFT_B = 13
 const WORD_BITS = 32
 const COMPONENTS_PER_POSITION = 3
+const TRIANGLE_CORNERS = 3
 
 
 /**
@@ -123,17 +124,8 @@ function rotl(value, bits) {
 export function makeRangeCanary() {
   const float = new Float32Array(1)
   const bits = new Uint32Array(float.buffer)
-  let hash = CANARY_SEED
-  let words = 0
-  const word = (value) => {
-    let k = Math.imul(value | 0, CANARY_C1)
-    k = rotl(k, ROTL_K)
-    k = Math.imul(k, CANARY_C2)
-    hash ^= k
-    hash = rotl(hash, ROTL_H)
-    hash = (Math.imul(hash, CANARY_ROUND_MUL) + CANARY_ROUND_ADD) | 0
-    words++
-  }
+  const hasher = makeWordHash()
+  const {word} = hasher
   return {
     /**
      * @param {object} identity `{parent, occurrenceId, geometryId,
@@ -145,21 +137,27 @@ export function makeRangeCanary() {
      * @param {function(number): number} localIndexAt
      */
     row(identity, vertexCount, positionAt, indexCount, localIndexAt) {
-      word(identity.parent)
-      word(identity.occurrenceId)
-      // Absent is 0 on both sides: the writer stores a missing geometry id as
-      // 0 (`buildInstanceTablesExtensionData`) and a table with none at all
-      // parses back as null.
-      word(identity.geometryId ?? 0)
-      // Length + 1 so a null path and an empty one hash apart.
-      const path = identity.occurrencePath
-      word(Array.isArray(path) ? path.length + 1 : 0)
-      for (const step of Array.isArray(path) ? path : []) {
-        word(step)
-      }
+      identityWords(identity, word)
       word(vertexCount)
       word(indexCount)
-      for (let i = 0; i < indexCount; i++) {
+      // Triangle by triangle, each in a CANONICAL rotation: the one whose
+      // corner sequence is lexicographically smallest. Meshopt's index codec
+      // is lossless but may rotate a triangle's corners to compress better —
+      // the Export tab's Meshopt download of index.ifc came back refused
+      // until this, while the tiny jest fixtures happened not to trigger it.
+      // A rotation keeps winding and the triangle, so it is not a change the
+      // canary exists to see; a REFLECTION (winding flip) still is.
+      const whole = indexCount - (indexCount % TRIANGLE_CORNERS)
+      for (let t = 0; t < whole; t += TRIANGLE_CORNERS) {
+        const a = localIndexAt(t)
+        const b = localIndexAt(t + 1)
+        const c = localIndexAt(t + 2)
+        const [x, y, z] = smallestRotation(a, b, c)
+        word(x)
+        word(y)
+        word(z)
+      }
+      for (let i = whole; i < indexCount; i++) {
         word(localIndexAt(i))
       }
       for (let v = 0; v < vertexCount; v++) {
@@ -169,7 +167,50 @@ export function makeRangeCanary() {
         }
       }
     },
-    /** @return {number} the uint32 digest */
+    digest: hasher.digest,
+  }
+}
+
+
+/**
+ * The rotation of a triangle's corners that is lexicographically smallest.
+ *
+ * @param {number} a
+ * @param {number} b
+ * @param {number} c
+ * @return {Array<number>}
+ */
+function smallestRotation(a, b, c) {
+  const rotations = [[a, b, c], [b, c, a], [c, a, b]]
+  let best = rotations[0]
+  for (const r of rotations) {
+    if (r[0] < best[0] || (r[0] === best[0] && (r[1] < best[1] ||
+        (r[1] === best[1] && r[2] < best[2])))) {
+      best = r
+    }
+  }
+  return best
+}
+
+
+/**
+ * The murmur3-style word stream both canaries hash with.
+ *
+ * @return {{word: Function, digest: Function}}
+ */
+function makeWordHash() {
+  let hash = CANARY_SEED
+  let words = 0
+  return {
+    word(value) {
+      let k = Math.imul(value | 0, CANARY_C1)
+      k = rotl(k, ROTL_K)
+      k = Math.imul(k, CANARY_C2)
+      hash ^= k
+      hash = rotl(hash, ROTL_H)
+      hash = (Math.imul(hash, CANARY_ROUND_MUL) + CANARY_ROUND_ADD) | 0
+      words++
+    },
     digest() {
       let h = hash ^ words
       h ^= h >>> FMIX_SHIFT_A
@@ -179,6 +220,29 @@ export function makeRangeCanary() {
       h ^= h >>> FMIX_SHIFT_A
       return h >>> 0
     },
+  }
+}
+
+
+/**
+ * Feed one row's identity to a hash — the same words for the writer's entry
+ * and the reader's parsed row.
+ *
+ * @param {object} identity `{parent, occurrenceId, geometryId, occurrencePath}`
+ * @param {Function} word `(value) => void`
+ */
+function identityWords(identity, word) {
+  word(identity.parent)
+  word(identity.occurrenceId)
+  // Absent is 0 on both sides: the writer stores a missing geometry id as
+  // 0 (`buildInstanceTablesExtensionData`) and a table with none at all
+  // parses back as null.
+  word(identity.geometryId ?? 0)
+  // Length + 1 so a null path and an empty one hash apart.
+  const path = identity.occurrencePath
+  word(Array.isArray(path) ? path.length + 1 : 0)
+  for (const step of Array.isArray(path) ? path : []) {
+    word(step)
   }
 }
 
@@ -239,6 +303,191 @@ export function rangeCanaryOf(geometry, table) {
       indexCount, (i) => index.getX(indexStart + i) - vertexStart)
   }
   return canary.digest()
+}
+
+
+/**
+ * THE LOSSY WITNESS — what stands in for the exact canary on a file a lossy
+ * codec has been through (Draco, share-140 #1871 follow-up).
+ *
+ * The exact canary cannot survive Draco by construction: positions are
+ * quantized, and Draco also MERGES coincident vertices across elements —
+ * measured on a DSA-shaped strip, 600 vertices come back as 202 — so neither
+ * the float bits nor the per-row vertex ranges exist any more. What does
+ * survive, provided the export encodes SEQUENTIALLY
+ * (`export/glbCompression.js#needsTriangleOrder`), is triangle ORDER and
+ * therefore each row's index COUNT: row r's triangles are still the r-th
+ * contiguous run. So the reader rebuilds each row's vertex block from its
+ * triangles (`instancedGlbToBatchedModel.js#rebuildRowsFromTriangles`), and
+ * this witness checks the result:
+ *
+ * - `identity` — an EXACT hash of every row's identity and index count,
+ *   neither of which a codec touches. Binds rows to identities the way the
+ *   exact canary does.
+ * - `centroids` — each row's corner-mean position, uint16-quantized over the
+ *   table's bounds, compared within `tolerance`. Corner-mean rather than
+ *   vertex-mean because it is invariant under the vertex merging and
+ *   re-indexing above. `tolerance` is one Draco quantization step at the
+ *   encode's own POSITION bits, plus the witness's own uint16 step — a
+ *   dequantized corner is within half a step, so this has 2× margin.
+ *
+ * It is written by the EXPORT, only into Draco files, from a source whose
+ * exact canary it verifies first (`export/collapsedWitness.js`) — so the
+ * OPFS artifact and every lossless file keep the exact check and pay nothing.
+ * What it cannot see: two rows whose centroids lie within one quantization
+ * step of each other swapping identities. At that separation the codec has
+ * already made them indistinguishable on screen.
+ */
+
+/** uint16 grid the witness centroids are stored on. */
+/** The codec extension whose presence on a primitive means lossy positions. */
+export const LOSSY_POSITION_CODEC = 'KHR_draco_mesh_compression'
+
+const WITNESS_GRID = 65535
+
+
+/**
+ * Exact hash of each row's identity and index count.
+ *
+ * @param {object} table collapsed table (parsed shape) with `ranges`
+ * @return {number} uint32
+ */
+export function rowIdentityCanary(table) {
+  const hasher = makeWordHash()
+  table.ranges.forEach(({indexCount}, row) => {
+    identityWords(tableRowIdentity(table, row), hasher.word)
+    hasher.word(indexCount)
+  })
+  return hasher.digest()
+}
+
+
+/**
+ * Corner-mean centroid of each row.
+ *
+ * @param {number} rowCount
+ * @param {function(number): number} cornerCountOf row -> index count
+ * @param {function(number, number, number): number} cornerAt `(row, corner,
+ *   component) => value`
+ * @return {Float64Array} `rowCount * 3`
+ */
+export function rowCentroids(rowCount, cornerCountOf, cornerAt) {
+  const out = new Float64Array(rowCount * COMPONENTS_PER_POSITION)
+  for (let r = 0; r < rowCount; r++) {
+    const corners = cornerCountOf(r)
+    for (let c = 0; c < COMPONENTS_PER_POSITION; c++) {
+      let sum = 0
+      for (let i = 0; i < corners; i++) {
+        sum += cornerAt(r, i, c)
+      }
+      out[(r * COMPONENTS_PER_POSITION) + c] = corners > 0 ? sum / corners : 0
+    }
+  }
+  return out
+}
+
+
+/**
+ * Build a table's lossy witness from its exact centroids.
+ *
+ * @param {object} table collapsed table with `ranges` + identity arrays
+ * @param {Float64Array} centroids from {@link rowCentroids}
+ * @param {number} positionBits the Draco POSITION quantization bits
+ * @param {number} extent the largest axis extent Draco quantizes over
+ * @return {object} JSON-serializable witness
+ */
+export function buildLossyWitness(table, centroids, positionBits, extent) {
+  const min = [Infinity, Infinity, Infinity]
+  const max = [-Infinity, -Infinity, -Infinity]
+  for (let i = 0; i < centroids.length; i++) {
+    const c = i % COMPONENTS_PER_POSITION
+    min[c] = Math.min(min[c], centroids[i])
+    max[c] = Math.max(max[c], centroids[i])
+  }
+  const q = new Uint16Array(centroids.length)
+  for (let i = 0; i < centroids.length; i++) {
+    const c = i % COMPONENTS_PER_POSITION
+    const span = max[c] - min[c]
+    q[i] = span > 0 ? Math.round(((centroids[i] - min[c]) / span) * WITNESS_GRID) : 0
+  }
+  const gridStep = Math.max(...max.map((m, c) => m - min[c])) / WITNESS_GRID
+  const dracoStep = extent / ((2 ** positionBits) - 1)
+  return {
+    identity: rowIdentityCanary(table),
+    min,
+    max,
+    tolerance: dracoStep + gridStep,
+    centroids: uint32ArrayToBase64(padToUint32(q)),
+  }
+}
+
+
+/**
+ * Whether a rebuilt collapsed table matches its lossy witness.
+ *
+ * @param {object} table parsed collapsed table carrying `witness`, with
+ *   `ranges` describing the REBUILT geometry
+ * @param {Float64Array} centroids the rebuilt rows' corner-mean centroids
+ * @return {boolean}
+ */
+export function matchesLossyWitness(table, centroids) {
+  const {witness} = table
+  if (!witness || rowIdentityCanary(table) !== witness.identity) {
+    return false
+  }
+  const stored = witness.centroidsQ
+  if (!stored || stored.length < centroids.length) {
+    return false
+  }
+  for (let i = 0; i < centroids.length; i++) {
+    const c = i % COMPONENTS_PER_POSITION
+    const span = witness.max[c] - witness.min[c]
+    const expected = witness.min[c] + ((stored[i] / WITNESS_GRID) * span)
+    if (!(Math.abs(centroids[i] - expected) <= witness.tolerance)) {
+      return false
+    }
+  }
+  return true
+}
+
+
+/**
+ * @param {Uint16Array} values
+ * @return {Uint32Array} the same bytes, zero-padded to a 4-byte multiple so
+ *   the shared base64 helper takes them
+ */
+function padToUint32(values) {
+  const bytes = new Uint8Array(Math.ceil(values.byteLength / 4) * 4)
+  bytes.set(new Uint8Array(values.buffer, values.byteOffset, values.byteLength))
+  return new Uint32Array(bytes.buffer)
+}
+
+
+/**
+ * Decode and validate a collapsed node's optional lossy witness.
+ *
+ * @param {object} raw payload `witness`
+ * @param {number} count rows in the table
+ * @return {?object} the witness with `centroidsQ` decoded, or null
+ */
+function parseLossyWitness(raw, count) {
+  const finite3 = (v) => Array.isArray(v) && v.length === COMPONENTS_PER_POSITION &&
+    v.every(Number.isFinite)
+  if (!raw || !Number.isInteger(raw.identity) || !finite3(raw.min) || !finite3(raw.max) ||
+      !(raw.tolerance >= 0) || typeof raw.centroids !== 'string') {
+    return null
+  }
+  let words
+  try {
+    words = base64ToUint32Array(raw.centroids)
+  } catch {
+    return null
+  }
+  const centroidsQ = new Uint16Array(words.buffer, words.byteOffset, words.byteLength / 2)
+  if (centroidsQ.length < count * COMPONENTS_PER_POSITION) {
+    return null
+  }
+  return {...raw, centroidsQ: centroidsQ.subarray(0, count * COMPONENTS_PER_POSITION)}
 }
 
 
@@ -418,6 +667,14 @@ export function parseInstanceTablesExtensionData(raw) {
     if (ranges) {
       node.ranges = ranges
       node.canary = meta.canary
+      if (meta.witness !== undefined) {
+        // A malformed witness only costs the lossy path — the exact canary
+        // is still there — so it is dropped, not a reason to refuse the file.
+        const witness = parseLossyWitness(meta.witness, count)
+        if (witness) {
+          node.witness = witness
+        }
+      }
     }
     nodes.push(node)
     offset = end
@@ -474,11 +731,33 @@ export class BldrsInstanceTablesReader {
       glbInfo(`${this.name}: payload failed validation; skipping`)
       return gltf
     }
+    markLossyTables(json, nodes)
     if (gltf.scene) {
       gltf.scene.userData.bldrsInstanceTables = nodes
       const total = nodes.reduce((n, node) => n + node.count, 0)
       glbInfo(`${this.name}: resolved ${nodes.length} node(s), ${total} instance(s)`)
     }
     return gltf
+  }
+}
+
+
+/**
+ * Flag every table whose geometry a lossy codec has been through, so the
+ * reader knows to rebuild and check it against the lossy witness instead of
+ * the exact canary. Read off the FILE, from the table's own node primitives,
+ * because three's GLTFLoader decodes Draco transparently and keeps no trace
+ * of it on the geometry.
+ *
+ * @param {object} json the file's glTF JSON
+ * @param {Array<object>} tables parsed tables, mutated
+ */
+export function markLossyTables(json, tables) {
+  for (const node of json?.nodes || []) {
+    const table = tables[node?.extras?.bldrsTableNode]
+    const primitives = json.meshes?.[node.mesh]?.primitives || []
+    if (table && primitives.some((p) => p?.extensions?.[LOSSY_POSITION_CODEC])) {
+      table.lossyGeometry = true
+    }
   }
 }

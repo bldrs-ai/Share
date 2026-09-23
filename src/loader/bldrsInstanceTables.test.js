@@ -215,6 +215,15 @@ describe('loader/bldrsInstanceTables', () => {
         .not.toBe(rangeCanaryOf(geometry, tableOf()))
     })
 
+    it('ignores a triangle\'s corner ROTATION but not its reflection', () => {
+      // Meshopt's index codec may rotate corners (lossless: same triangle,
+      // same winding); the canary must not refuse that. A reflection flips
+      // the winding, which is a different triangle facing, and still counts.
+      const base = rangeCanaryOf(geometryOf(TWO_TRIANGLES, [0, 1, 2, 3, 4, 5]), tableOf())
+      expect(rangeCanaryOf(geometryOf(TWO_TRIANGLES, [1, 2, 0, 5, 3, 4]), tableOf())).toBe(base)
+      expect(rangeCanaryOf(geometryOf(TWO_TRIANGLES, [0, 2, 1, 3, 4, 5]), tableOf())).not.toBe(base)
+    })
+
     it('returns null for a range outside the geometry, rather than a hash', () => {
       expect(rangeCanaryOf(geometryOf(TWO_TRIANGLES, [0, 1, 2, 3, 4, 5]),
         tableOf([{vertexStart: 3, vertexCount: 9, indexStart: 0, indexCount: 3}]))).toBeNull()

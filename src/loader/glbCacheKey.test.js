@@ -34,7 +34,7 @@ describe('loader/glbCacheKey — batched slot coupling', () => {
 
   it('derives the collapsed slot from the batched one, for the same reason (#1871)', () => {
     expect(BLDRS_GLB_COLLAPSED_SCHEMA_VERSION)
-      .toBe(`${BLDRS_GLB_BATCHED_SCHEMA_VERSION}-collapsed`)
+      .toBe(`${BLDRS_GLB_BATCHED_SCHEMA_VERSION}-collapsed2`)
     expect(BLDRS_GLB_COLLAPSED_SCHEMA_VERSION.startsWith(BLDRS_GLB_SCHEMA_VERSION)).toBe(true)
   })
 

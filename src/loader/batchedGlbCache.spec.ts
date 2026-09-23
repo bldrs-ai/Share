@@ -310,7 +310,7 @@ describeMobileAndDesktop('Batched-native GLB cache', () => {
     expect(collapsedLine).toBeDefined()
     expect(Number(/collapsed (\d+) single-placement/.exec(collapsedLine ?? '')?.[1])).toBeGreaterThan(0)
     // Written to the collapsed slot, which is what the HIT below must find.
-    expect(glbLogs.some((l) => l.includes('-batched-collapsed.glb'))).toBe(true)
+    expect(glbLogs.some((l) => l.includes('-batched-collapsed2.glb'))).toBe(true)
     const missState = await sceneState(page)
     const missCentres = await instanceCentres(page)
     expect(distinctColors(missState)).toBeGreaterThan(1)

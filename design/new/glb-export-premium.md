@@ -690,17 +690,42 @@ group whole under `Unassigned` rather than exporting mislabelled parts. On a DSA
 element is exactly three vertices, a table shifted by one element passes
 every structural check there is — that is the case it exists for, and its
 test swaps two same-sized triangles and was verified red with the check
-disabled. It is **exact on purpose**: Meshopt keeps positions bit-exact and
-never reorders, so a Meshopt export re-opens with picking (tested); Draco
-quantizes POSITION, so **a Draco export of a collapsed artifact re-opens as
-the plain GLTFLoader model — correct picture, no picking.** A tolerance
-would have to be wider than Draco's error and narrower than the gap between
-neighbouring elements, and on DSA those are the same order. Recorded as a
-known limitation of the flag, not solved.
+disabled. It is **exact**, with one allowance: each triangle is hashed in a
+canonical corner ROTATION, because Meshopt's (lossless) index codec may rotate a
+triangle's corners — the Export tab's Meshopt download of `index.ifc` was
+refused until that, while the tiny jest fixtures never triggered it.
+
+**Draco exports carry a lossy witness instead** (the owner's smoke on #1872: a
+Draco download of DSA and of Right_Hand rendered perfectly and could not be
+selected). Measured on a DSA-shaped strip through the real codec: Draco MERGES
+coincident vertices across elements whatever the method (600 → 202), so no row's
+vertex range survives; EDGEBREAKER also reorders triangles across rows, while
+SEQUENTIAL keeps them in order. So:
+
+- the export encodes collapsed files SEQUENTIALLY
+  (`glbCompression.js#needsTriangleOrder`);
+- it writes a **lossy witness** into the Draco file's tables only
+  (`export/collapsedWitness.js`), after re-verifying the SOURCE's exact canary —
+  an exact hash of each row's identity and index count, plus each row's
+  corner-mean centroid on a uint16 grid with a tolerance of one Draco
+  quantization step at the encode's POSITION bits;
+- the reader, for a table whose primitive declares `KHR_draco_mesh_compression`
+  (`bldrsInstanceTables.js#markLossyTables`), rebuilds each row's vertex block
+  from its triangle run and checks the witness
+  (`instancedGlbToBatchedModel.js#rebuildLossyCollapsed`); the portable split
+  and its re-hydration do the same.
+
+The OPFS artifact and every lossless file keep the exact canary and pay nothing
+for this. What the witness cannot see: two rows within one quantization step of
+each other swapping identities — at that separation Draco has already made them
+indistinguishable on screen. A table that fails either check now also raises a
+WARNING in the load report ("shown without picking or selection") instead of an
+info line, so the fallback is no longer silent.
 
 **Its own OPFS slot, not a bump** — a deliberate change from what #1871
-proposed. `BLDRS_GLB_COLLAPSED_SCHEMA_VERSION` (`0.22.0-batched-collapsed`,
-derived from the batched slot). Bumping the batched slot would have
+proposed. `BLDRS_GLB_COLLAPSED_SCHEMA_VERSION` (`0.22.0-batched-collapsed2`,
+derived from the batched slot; `2` since the canary became rotation-invariant,
+so previews' first-canary artifacts re-parse rather than hit and refuse). Bumping the batched slot would have
 re-parsed every model for every user to change nothing for the flag-off
 majority; sharing it would have broken rollback, since an older build
 meeting v2 tables keeps the undecorated model on every cache hit forever
@@ -762,10 +787,11 @@ warnings**, and a fully-collapsed file no longer declares
 2. **Third-party viewers** — the three.js editor and 3dviewer.net on a
    collapsed download and on its portable rewrite. Validator-clean is
    necessary, not sufficient.
-3. **The owner's call on the Draco limitation above.**
-4. Browser coverage: `batchedGlbCache.spec.ts` runs MISS → OPFS → HIT under
-   the flag on desktop and mobile, asserting per-element world-bounds
-   parity against the live model.
+
+Browser coverage: `Components/Share/exportCollapsed.spec.ts` double-clicks a
+COLLAPSED element and asserts store, NavTree and URL selection on the cache hit
+and on each Export codec reopened (desktop + mobile), verified red against the
+pre-fix Draco export; `batchedGlbCache.spec.ts` covers MISS → OPFS → HIT parity.
 
 ### 1.2 Where a download can be located from
 

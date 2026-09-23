@@ -335,8 +335,13 @@ export const BLDRS_GLB_BATCHED_SCHEMA_VERSION = `${BLDRS_GLB_SCHEMA_VERSION}-bat
  *
  * Derived from the batched slot for the reason that one is derived from the
  * merged one (above): an engine-coupled bump has to retire this too.
+ *
+ * `collapsed2`: the range canary became rotation-invariant per triangle
+ * (Meshopt may rotate corners). An artifact written with the first canary
+ * would be refused on every hit — a hit never rewrites — so the slot moves
+ * and those re-parse once instead. Only deploy previews ever wrote one.
  */
-export const BLDRS_GLB_COLLAPSED_SCHEMA_VERSION = `${BLDRS_GLB_BATCHED_SCHEMA_VERSION}-collapsed`
+export const BLDRS_GLB_COLLAPSED_SCHEMA_VERSION = `${BLDRS_GLB_BATCHED_SCHEMA_VERSION}-collapsed2`
 
 
 /**

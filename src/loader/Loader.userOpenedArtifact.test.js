@@ -311,6 +311,27 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
       .toContain('BLDRS_instance_tables: payload failed validation; skipping')
   })
 
+  it('WARNS when a file\'s selection tables are refused, rather than going quietly unpickable', async () => {
+    // #1871: a Draco export of a collapsed DSA rendered perfectly and could
+    // not be selected, and nothing said why — the refusal was an info line.
+    // A collapsed table whose canary does not match is the same outcome
+    // reached on purpose here: the tables parse, hydration refuses them.
+    const bytes = await batchedArtifactBytes(liveBatchedModel(), {
+      collapse: true,
+      mutatePayload: (payload) => ({
+        ...payload,
+        nodes: payload.nodes.map((node) =>
+          (node.canary === undefined ? node : {...node, canary: (node.canary + 1) >>> 0})),
+      }),
+    })
+
+    const model = await openGlb(bytes)
+
+    expect(model.isBatchedMesh).toBeFalsy()
+    const warnings = getGlbLogs().filter((l) => l.level === 'warn').map((l) => l.text)
+    expect(warnings.some((text) => text.includes('shown without picking or selection'))).toBe(true)
+  })
+
   // #1847: whether the per-vertex `_EXPRESSID`/`_INSTANCEID` attributes can be
   // trusted is a property of the FILE, and used to be read off the Bldrs
   // container header — which a user-opened export does not have, because the
