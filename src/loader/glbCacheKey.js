@@ -20,6 +20,29 @@
  * it (`BLDRS_GLB_BATCHED_SCHEMA_VERSION` below) — deliberately, since that
  * is the slot most users actually read. Nothing extra to do here; the note
  * exists so the coupling is visible from where the bump gets written.
+ * 0.23.0 — retires artifacts whose STEP b-spline faces were baked by an
+ *         engine that could not tessellate them. THREE conway releases
+ *         since 0.22.0 changed baked STEP geometry and none bumped this
+ *         constant, so the stale window is wider than one release.
+ *         1.1602.711 (bldrs-ai/conway#711) fixed b-spline face
+ *         triangulation: `Right_Hand.step`'s ADVANCED_FACE #19215 /
+ *         #19218 / #19333 went from dropped trim rings to fully mapped —
+ *         from MISSING SHELLS to a closed hand. 1.1603.714 (conway#714)
+ *         fixed `tesselate`'s subdivision non-termination (solid #19702's
+ *         signed-volume error -5.371% -> -1.082%). 1.1604.715
+ *         (conway#715) fixed its deflection TEST (#19702: 1,903
+ *         degenerate triangles -> 0, surface area +22.3% -> +1.1% of
+ *         OpenCascade's converged reference). Nothing in the cache key
+ *         identifies the engine, so a returning user who opened such a
+ *         model before any of the three keeps that artifact indefinitely
+ *         — on the first of them, that means still seeing the missing
+ *         shells bldrs-ai/test-models#65 is about, while a cache-miss
+ *         user sees the model whole. That the two intervening bumps each
+ *         shipped without retiring the slot is why this entry names all
+ *         three: one bump retires them together. Same failure shape and
+ *         remedy as 0.22.0/0.20.0/0.18.0. IFC artifacts are unaffected in
+ *         content and pay one re-parse, the tradeoff every merged bump
+ *         already accepts.
  * 0.22.0 — retires artifacts baked by an engine that read IFC4X3 files
  *         under IFC4's entity space. conway 1.1601 (bldrs-ai/conway#713)
  *         generates a real IFC4X3 schema and REFUSES a 4x3 file rather
@@ -268,7 +291,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.22.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.23.0'
 
 
 /**
