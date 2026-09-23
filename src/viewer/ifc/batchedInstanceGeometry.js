@@ -1,4 +1,5 @@
 import {BufferAttribute, BufferGeometry} from 'three'
+import {BATCHED_GEOMETRY_RANGE_IDS} from './batchedGeometryRanges'
 
 
 /**
@@ -147,6 +148,19 @@ function rebuildGeometry(mesh, range) {
  * geometry ids) fall back to per-mesh geometry ids, which dedupes within a
  * batch and never across one.
  *
+ * **A COLLAPSED SLICE never takes the source-id key.** `instanceGeometryIds`
+ * is a per-solid IDENTITY table that this cache reuses as a geometry-EQUALITY
+ * key, and that reuse is sound only while local geometry is
+ * placement-independent. A collapsed element's placement is baked into the
+ * merged vertices (glb-export-premium.md §1.1d), so two elements of one solid
+ * hold different triangles while sharing a row — and keying them together
+ * would hand the first element's geometry to every later one, silently
+ * placing the wrong triangles in isolation subsets, the merged conversion and
+ * GLB re-export. Range ids therefore fall back to the per-mesh key, which is
+ * unique per element by construction. A hybrid batch keeps the source-id key
+ * for its ordinary instances, so nothing that is still placement-independent
+ * loses its cross-batch dedup.
+ *
  * @param {object} mesh a THREE.BatchedMesh
  * @param {number} batchId instance id
  * @param {number} geometryId the batch's own geometry id
@@ -155,7 +169,10 @@ function rebuildGeometry(mesh, range) {
 function sourceKey(mesh, batchId, geometryId) {
   const sourceIds = mesh.instanceGeometryIds
   const sourceId = sourceIds ? sourceIds[batchId] : undefined
-  return sourceId === undefined ? `${mesh.uuid}#${geometryId}` : `src#${sourceId}`
+  if (sourceId === undefined || mesh[BATCHED_GEOMETRY_RANGE_IDS]?.has(geometryId)) {
+    return `${mesh.uuid}#${geometryId}`
+  }
+  return `src#${sourceId}`
 }
 
 

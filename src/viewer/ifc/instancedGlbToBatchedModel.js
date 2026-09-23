@@ -1,5 +1,6 @@
 import {BatchedMesh, DoubleSide, Group, Matrix4, Vector4} from 'three'
 import {makeSurfaceMaterial} from '../lookMaterial'
+import {addGeometryRanges} from './batchedGeometryRanges'
 import {attachBatchedSubsets} from './batchedSubset'
 import {decorateBatchMeshes} from './buildBatchedConwayModel'
 import {glbInfo, glbVerbose} from '../../loader/glbLog'
@@ -74,37 +75,115 @@ const SHAPE_PORTABLE = 'portable'
 
 
 /**
- * Collect the model's InstancedMeshes keyed by their writer-stamped table
+ * Whether a table's geometry is COLLAPSED: one merged primitive holding every
+ * element in the table, addressed by index range rather than by its own glTF
+ * mesh (glb-export-premium.md §1.1c).
+ *
+ * @param {object} table one parsed BLDRS_instance_tables node
+ * @return {boolean}
+ */
+function isCollapsedTable(table) {
+  return Array.isArray(table?.ranges)
+}
+
+
+/**
+ * Collect the model's mesh-bearing nodes keyed by their writer-stamped table
  * index, validating the join is total and counts agree.
+ *
+ * Two node kinds, decided by the TABLE rather than by the node: an ordinary
+ * table joins to an `InstancedMesh` (one `EXT_mesh_gpu_instancing` node), a
+ * collapsed one to a plain `Mesh` carrying the whole group's merged
+ * primitive. A node of the wrong kind for its table is skipped rather than
+ * rejected outright — as this join has always skipped a plain node — and the
+ * totality check below then refuses the file, since its row stays uncovered.
  *
  * @param {object} gltfModel GLTFLoader scene
  * @param {Array<object>} tables parsed BLDRS_instance_tables nodes
- * @return {Array<object>|null} `instanced[i]` pairs with `tables[i]`
+ * @return {Array<object>|null} `sources[i]` pairs with `tables[i]`, each
+ *   exposing the `{geometry, getMatrixAt}` surface `buildPartition` reads
+ *   (plus `ranges` on a collapsed one)
  */
 function joinNodesToTables(gltfModel, tables) {
-  const instanced = new Array(tables.length).fill(null)
+  // A collapsed group is placed by its NODE's transform, not by a per-instance
+  // accessor, so world matrices have to be current before any is read — the
+  // same force-refresh, for the same reason, as the portable join below. Run
+  // unconditionally rather than only for collapsed tables: it is one walk of a
+  // scene GLTFLoader has already updated, and gating it would make the
+  // hand-built unit fixtures depend on which table shape they happen to use.
+  gltfModel.updateMatrixWorld?.(true)
+  const toModelSpace = new Matrix4()
+  if (gltfModel.matrixWorld) {
+    toModelSpace.copy(gltfModel.matrixWorld).invert()
+  }
+
+  const sources = new Array(tables.length).fill(null)
   let bad = false
   gltfModel.traverse?.((obj) => {
-    if (!obj.isInstancedMesh) {
+    if (!obj.isMesh) {
       return
     }
     const index = obj.userData?.bldrsTableNode
-    if (!Number.isInteger(index) || index < 0 || index >= tables.length ||
-        instanced[index] !== null) {
+    if (index === undefined) {
+      return
+    }
+    if (!Number.isInteger(index) || index < 0 || index >= tables.length) {
       bad = true
       return
     }
-    instanced[index] = obj
+    const collapsed = isCollapsedTable(tables[index])
+    if (collapsed ? (obj.isInstancedMesh || obj.isBatchedMesh) : !obj.isInstancedMesh) {
+      return
+    }
+    if (sources[index] !== null) {
+      bad = true
+      return
+    }
+    sources[index] = collapsed ?
+      makeCollapsedSource(obj, tables[index].ranges, toModelSpace) : obj
   })
-  if (bad || instanced.some((mesh) => mesh === null)) {
+  if (bad || sources.some((source) => source === null)) {
     return null
   }
   for (let i = 0; i < tables.length; i++) {
-    if (instanced[i].count !== tables[i].count) {
+    const declared = isCollapsedTable(tables[i]) ?
+      tables[i].ranges.length : sources[i].count
+    if (declared !== tables[i].count) {
       return null
     }
   }
-  return instanced
+  return sources
+}
+
+
+/**
+ * Adapt a collapsed table's single merged node to the surface
+ * `buildPartition` reads, with the range list it needs to split the merged
+ * primitive back into per-element geometry ids.
+ *
+ * **Every row gets the SAME matrix** — the node's, in the model root's frame.
+ * That is not a simplification: a collapsed group's per-element placement is
+ * baked into the merged vertices by the writer, because a glTF primitive can
+ * only be drawn at one transform and the file has to render correctly in a
+ * viewer that knows nothing about `BLDRS_instance_tables`. What stays on the
+ * node is the group's own offset, which the writer keeps there precisely so
+ * baking does not cost precision: vertices are expressed relative to the
+ * group rather than to the world, so a model placed 10^5 m from the origin
+ * still resolves millimetre detail in float32.
+ *
+ * @param {object} node the merged plain Mesh
+ * @param {Array<object>} ranges per-element `{vertexStart, vertexCount,
+ *   indexStart, indexCount}` into that node's geometry
+ * @param {Matrix4} toModelSpace inverse of the model root's world matrix
+ * @return {object} placement source
+ */
+function makeCollapsedSource(node, ranges, toModelSpace) {
+  return {
+    geometry: node.geometry,
+    ranges,
+    getMatrixAt: (i, target) =>
+      target.multiplyMatrices(toModelSpace, node.matrixWorld),
+  }
 }
 
 
@@ -125,10 +204,23 @@ function joinNodesToTables(gltfModel, tables) {
  * a separate refusal here would be a branch no test could tell from the one
  * beside it.
  *
+ * COLLAPSED TABLES ARE NOT A THIRD SHAPE. A collapsed group (§1.1c) is a
+ * plain `Mesh` too, so a fully-collapsed artifact holds no InstancedMesh at
+ * all and the node test alone would misroute it to the portable reader. The
+ * TABLES say which it is — `ranges` is present or it is not — and a table
+ * shape is the one discriminator that survives a file being partly collapsed,
+ * which is what the writer actually emits: collapsing a genuinely instanced
+ * node would de-instance and duplicate its geometry, so those nodes keep
+ * `EXT_mesh_gpu_instancing` and only the single-placement ones merge.
+ *
  * @param {object} gltfModel GLTFLoader scene
+ * @param {Array<object>} tables parsed BLDRS_instance_tables nodes
  * @return {string} `'instanced'` or `'portable'`
  */
-function detectArtifactShape(gltfModel) {
+function detectArtifactShape(gltfModel, tables) {
+  if (tables.some(isCollapsedTable)) {
+    return SHAPE_INSTANCED
+  }
   let instanced = false
   gltfModel.traverse?.((obj) => {
     if (obj.isInstancedMesh && Number.isInteger(obj.userData?.bldrsTableNode)) {
@@ -282,6 +374,16 @@ function makePlacementSource(geometry, rows, toModelSpace) {
  */
 function buildPartition(pairs, transparent) {
   const uniqueGeometries = new Set(pairs.map(({node}) => node.geometry))
+  // A collapsed group's merged primitive is uploaded once and then sliced, so
+  // it cannot also back another table: the second table would upload it again
+  // and overrun the capacity computed from `uniqueGeometries` below. No writer
+  // emits that, and sharing would have to be deliberate — but the symptom is a
+  // throw from deep inside `addGeometry`, so name it here instead.
+  const shares = (geometry) =>
+    pairs.filter((pair) => pair.node.geometry === geometry).length > 1
+  if (pairs.some(({node}) => node.ranges && shares(node.geometry))) {
+    return null
+  }
   let vertexCount = 0
   let indexCount = 0
   let instanceCount = 0
@@ -323,14 +425,28 @@ function buildPartition(pairs, transparent) {
   const matrix = new Matrix4()
   const rgba = new Vector4()
   for (const {node, table} of pairs) {
-    let geometryId = geometryIdsByGeometry.get(node.geometry)
-    if (geometryId === undefined) {
-      geometryId = mesh.addGeometry(node.geometry)
-      geometryIdsByGeometry.set(node.geometry, geometryId)
+    // A collapsed table uploads its merged primitive once and registers one
+    // geometry id per element range over it; an ordinary table uploads one
+    // geometry and replays it per instance. From `addInstance` down the two
+    // are the same code, which is what keeps picking, color, visibility and
+    // isolation identical across the shapes rather than parity-tested.
+    let geometryIds = null
+    let geometryId
+    if (node.ranges) {
+      geometryIds = addGeometryRanges(mesh, node.geometry, node.ranges)
+      if (!geometryIds) {
+        return null
+      }
+    } else {
+      geometryId = geometryIdsByGeometry.get(node.geometry)
+      if (geometryId === undefined) {
+        geometryId = mesh.addGeometry(node.geometry)
+        geometryIdsByGeometry.set(node.geometry, geometryId)
+      }
     }
     const {color} = table
     for (let i = 0; i < table.count; i++) {
-      const batchId = mesh.addInstance(geometryId)
+      const batchId = mesh.addInstance(geometryIds ? geometryIds[i] : geometryId)
       node.getMatrixAt(i, matrix)
       mesh.setMatrixAt(batchId, matrix)
       mesh.setColorAt(batchId, rgba.set(color.x, color.y, color.z, color.w))
@@ -380,7 +496,7 @@ export function hydrateBatchedModelFromInstancedGlb(gltfModel, opts = {}) {
   if (!Array.isArray(tables) || tables.length === 0) {
     return null
   }
-  const shape = detectArtifactShape(gltfModel)
+  const shape = detectArtifactShape(gltfModel, tables)
   const sources = shape === SHAPE_INSTANCED ?
     joinNodesToTables(gltfModel, tables) :
     joinPortableNodesToTables(gltfModel, tables)

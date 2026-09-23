@@ -146,7 +146,7 @@ arm — the envelope comes off at the upload seam, and a second seam in
    JSON chunk after the write — merged bufferViews, dropped glTF-default
    fields, shortest-round-trip float32 bounds, identity instancing attributes
    omitted — **landed**, §1.1c; accessor-count reduction via mesh collapse
-   evaluated and deferred there), #1857 (deferred — ~2.7% of a
+   deferred there, reader now proven in §1.1d), #1857 (deferred — ~2.7% of a
    Draco'd export, not the headline it was thought to be), #1853
    (decimation, deprioritised — it attacks the ~1.2 MB geometry term on
    Snowdon, not the container), S5
@@ -480,7 +480,8 @@ unknown holder references a bufferView. Partly repaid immediately, since
 `injectGlbExtensions` parses and re-serializes the same chunk right after and
 now gets a smaller one.
 
-**Evaluated and NOT done: reducing the accessor COUNT.** 86,025 accessors
+**Evaluated, deferred at the time, now underway in §1.1d: reducing the
+accessor COUNT.** 86,025 accessors
 for 28,674 independently addressable meshes is what that mesh structure
 costs; the pass makes each one cheaper and leaves the count alone. Collapsing
 the meshes themselves — concatenating tiny single-instance shapes into
@@ -539,7 +540,7 @@ misaligned range table would be undetectable from the file alone, in every
 codec.
 
 Recorded here rather than half-landed, same as the node-collapse decision in
-§1.1b.
+§1.1b. §1.1d picks it up, answering the reader question first.
 
 The one contract the pass makes about data is that **every accessor
 addresses byte-identical data before and after**, which is exactly what
@@ -551,6 +552,122 @@ offset, but not invisible to three's `GLTFParser`, which uploads a whole
 bufferView as one GPU buffer. The fixture's view ORDER (mesh 0's attributes,
 indices, instancing, then the rest — copied from a real artifact) is what
 makes the regression test able to fail.
+
+### 1.1d The collapse, reader first (#1831)
+
+§1.1c left the collapse deferred on a reader question, not a writer one:
+`BatchedMesh` has no "add a slice of this geometry" API, so it was unclear
+whether a merged artifact could be hydrated at all without re-splitting the
+buffer on every cache hit and spending the win at load time. That question is
+now answered, and the answer is the reason the writer is worth building.
+
+**`src/viewer/ifc/batchedGeometryRanges.js` registers slices.**
+`addGeometryRanges(mesh, merged, ranges)` uploads the merged primitive ONCE
+through three's own `addGeometry`, then synthesises the `_geometryInfo`
+entries `addGeometry` would have produced for each element, pointing them at
+data that is already there. Nothing is copied per element. The reason this
+works rather than merely appearing to is that a batch's index buffer holds
+ABSOLUTE vertex indices — `setGeometryAt` writes each index as `vertexStart +
+srcIndex` (BatchedMesh.js:778) — so a draw is fully described by its index
+range, and every consumer reads exactly that: `raycast` sets the scratch
+mesh's draw range from it, `getBoundingBoxAt` / `getBoundingSphereAt` walk it,
+three-mesh-bvh builds one `MeshBVH` per range from it, and this repo's
+`batchedInstanceGeometry` re-derives an instance's local geometry from it.
+
+**Proven against the production picking path, not just three's.** `ShareIfc.js`
+replaces both `BatchedMesh.prototype.raycast` and `Mesh.prototype.raycast`
+with three-mesh-bvh's accelerated pair, and that library reads `_geometryInfo`
+itself. `batchedGeometryRanges.test.js` installs the same patches and asserts
+a ray aimed at each element returns that element's `batchId`, equal to what a
+per-element batch returns for the same ray — and that the collapsed batch
+holds exactly one BVH per element, no more. It also asserts per-element
+bounds, per-element visibility, and that `instanceGeometryAt` recovers each
+element's local geometry byte-for-byte against the per-element reference, so
+isolation subsets and both GLB writers keep working.
+
+**The merged upload's own geometry id is REPURPOSED as range 0**, not kept
+beside the ranges. `decorateBatchMeshes` calls `computeBoundsTree()` with no
+index, which builds a BVH for every geometry id; a leftover id spanning the
+whole merged buffer would add a second, model-sized BVH that nothing draws.
+
+**Three facts about glTF decided the file shape**, and they are why the
+artifact is hybrid rather than uniformly merged:
+
+1. **A primitive is drawn at one transform**, so each element's placement is
+   BAKED into the merged vertices — otherwise the file renders wrong in any
+   viewer that does not read `BLDRS_instance_tables`. The group's own offset
+   stays on the node, which is what stops baking from costing precision:
+   vertices are expressed relative to the group, so a model placed 10^5 m from
+   the origin still resolves millimetre detail in float32. Baking against the
+   world origin instead would quantise it to centimetres.
+2. **A primitive has one material**, so merging is per source color. A group
+   is a color, not the whole model.
+3. **Genuinely instanced nodes are not collapsed at all** — merging them
+   de-instances and duplicates their geometry, which is why §1.1c measures the
+   collapse at 7× on a DSA2-shaped model and ~6% on a Snowdon-shaped one. So a
+   real artifact carries both kinds of node, and the reader's shape
+   discriminator is therefore per TABLE (`ranges` present or not), not per
+   file and not per node kind. A fully-collapsed file holds no `InstancedMesh`
+   at all, so the old node-kind test alone would have misrouted it to the
+   portable reader.
+
+**The invariant the reader verifies.** Each element's index range must
+dereference only vertices in its own vertex range. `batchedInstanceGeometry`
+recovers local index values by subtracting `vertexStart`, so a stray
+cross-element index would underflow silently into every isolation subset and
+every re-export rather than throwing. `addGeometryRanges` scans for it and
+declines — one linear pass, next to nothing beside the upload that just
+happened.
+
+**One assumption the collapse breaks, and where.** An ordinary batch lets a
+consumer treat `instanceGeometryIds` — the per-solid identity table — as a
+geometry-EQUALITY key, because two instances of one solid genuinely share
+their local geometry. A collapsed slice does not: placement is baked, so two
+elements of one solid hold different triangles while sharing a row.
+`batchedInstanceGeometry`'s per-pass cache keyed on exactly that, so it would
+have handed the first element's geometry to every later one — wrong triangles
+in isolation subsets, the merged conversion and GLB re-export, silently.
+Range ids are therefore recorded on the mesh (`bldrsGeometryRangeIds`) and
+take the per-mesh key instead, which is unique per element; a hybrid batch
+keeps the source-id key for its ordinary instances. Caught in review, and
+worth stating as a rule for the writer work: **anything that reuses an
+identity table as a geometry-equality key has to exclude collapsed slices.**
+
+**Private state, guarded.** The repo already depends on `_geometryInfo`
+through three-mesh-bvh, so the dependency is not new; what is new is that this
+module version-guards it. It compares the entry three actually produced
+against the field set it is about to synthesise and returns null on any
+mismatch, so a three upgrade that reshapes the entry degrades to the
+un-collapsed path instead of picking the wrong element. Two three APIs are
+NOT compatible with synthesised ranges and must never be called on such a
+batch: `optimize()` and `setGeometrySize()` both re-pack by moving each
+entry's reserved block, and ranges deliberately share one. Neither is on the
+cache-hit path; the batch is stamped `bldrsHasGeometryRanges` so a caller can
+assert it.
+
+**What is not done yet**, in the order it has to land:
+
+1. **The writer** — group single-placement nodes by source color, merge and
+   bake, emit the range table. `BLDRS_instance_tables` gains `ranges`; the
+   payload version and the OPFS `schemaVer` both move, which retires old
+   artifacts by filename (`glbCacheKey.js`).
+2. **The portable rewrite** (`glbPortable.js`) reads a node's placement count
+   off its `TRANSLATION` accessor, which a collapsed node does not have. It
+   has to re-split the merged primitive per element instead.
+3. **Re-export of a re-opened collapsed artifact** un-collapses today: the
+   batched writer dedupes by `instanceGeometryIds`, and every collapsed
+   element has its own range, so it would emit per-element meshes again. Self
+   heals once (1) lands, since the writer re-collapses on the way out — but
+   until then the round trip does not preserve the saving.
+4. **Rollout.** `glbBatched` is default-on, so this is the OPFS path every
+   user takes, and the failure mode is a silently wrong element under a click
+   rather than a crash. The flag and kill-switch shape follows
+   `isGlbBatchedActive()` (`glbCompress.js:146`).
+
+There is still **no on-file witness** for a misaligned range table, exactly as
+§1.1c warns: the batched writer emits no `_EXPRESSID`, so face_ids' one real
+cross-check is not available to borrow. A canary for the range table is part
+of (1), not an afterthought to it.
 
 ### 1.2 Where a download can be located from
 
