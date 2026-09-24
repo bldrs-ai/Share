@@ -728,7 +728,7 @@ WARNING in the load report ("shown without picking or selection") instead of an
 info line, so the fallback is no longer silent.
 
 **Its own OPFS slot, not a bump** — a deliberate change from what #1871
-proposed. `BLDRS_GLB_COLLAPSED_SCHEMA_VERSION` (`0.22.0-batched-collapsed2`,
+proposed. `BLDRS_GLB_COLLAPSED_SCHEMA_VERSION` (`0.23.0-batched-collapsed2` since #1873,
 derived from the batched slot; `2` since the canary became rotation-invariant,
 so previews' first-canary artifacts re-parse rather than hit and refuse). Bumping the batched slot would have
 re-parsed every model for every user to change nothing for the flag-off
