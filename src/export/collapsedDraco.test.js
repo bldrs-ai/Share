@@ -55,6 +55,8 @@ const ELEMENTS = 60
 /** World offset the strip sits at, so baking and recentring are exercised. */
 const OFFSET = 1000
 const EDGE = 0.37
+/** `stripModel(true)`'s slab: counter-clockwise from +z, like the strip. */
+const SLAB_CORNERS = [[-40000, -40000, 0], [-20000, -40000, 0], [-40000, -20000, 0]]
 
 
 beforeAll(() => {
@@ -72,22 +74,28 @@ beforeAll(() => {
  * whose neighbours share edge POSITIONS through separate vertices — the case
  * where Draco merges vertices across rows (measured: 600 in, 202 out).
  *
+ * With `slab`, one more element follows the strip: a triangle 20 km across,
+ * well clear of it, sharing its table (same colour, single placement) — the
+ * shape where one row's Draco step dwarfs its neighbours'.
+ *
+ * @param {boolean} [slab]
  * @return {{model: BatchedMesh, centres: Array<Vector3>}} model + a point
  *   inside each element, in model space
  */
-function stripModel() {
-  const mesh = new BatchedMesh(ELEMENTS, ELEMENTS * 3, ELEMENTS * 3)
+function stripModel(slab = false) {
+  const count = ELEMENTS + (slab ? 1 : 0)
+  const mesh = new BatchedMesh(count, count * 3, count * 3)
   const centres = []
-  for (let i = 0; i < ELEMENTS; i++) {
+  for (let i = 0; i < count; i++) {
     const x = Math.floor(i / 2) * EDGE
     const up = i % 2 === 1
-    const corners = up ?
+    const corners = i === ELEMENTS ? SLAB_CORNERS : up ?
       [[x, EDGE, 0], [x + EDGE, EDGE, 0], [x + EDGE, 0, 0]] :
       [[x, 0, 0], [x + EDGE, 0, 0], [x, EDGE, 0]]
     const geometry = new BufferGeometry()
     geometry.setAttribute('position', new BufferAttribute(new Float32Array(corners.flat()), 3))
     geometry.setAttribute('normal', new BufferAttribute(new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]), 3))
-    geometry.setIndex(new BufferAttribute(new Uint32Array(up ? [0, 2, 1] : [0, 1, 2]), 1))
+    geometry.setIndex(new BufferAttribute(new Uint32Array(up && i !== ELEMENTS ? [0, 2, 1] : [0, 1, 2]), 1))
     mesh.setMatrixAt(
       mesh.addInstance(mesh.addGeometry(geometry)),
       new Matrix4().makeTranslation(OFFSET, OFFSET, 0))
@@ -97,10 +105,10 @@ function stripModel() {
     }
     centres.push(centre.divideScalar(3).add(new Vector3(OFFSET, OFFSET, 0)))
   }
-  mesh.instanceParents = Array.from({length: ELEMENTS}, (_, i) => 1000 + i)
-  mesh.instanceOccurrenceIds = Array.from({length: ELEMENTS}, (_, i) => i)
-  mesh.instanceOccurrencePaths = Array.from({length: ELEMENTS}, (_, i) => [7, i])
-  mesh.instanceSourceColors = Array.from({length: ELEMENTS}, () => ({x: 0.8, y: 0.8, z: 0.8, w: 1}))
+  mesh.instanceParents = Array.from({length: count}, (_, i) => 1000 + i)
+  mesh.instanceOccurrenceIds = Array.from({length: count}, (_, i) => i)
+  mesh.instanceOccurrencePaths = Array.from({length: count}, (_, i) => [7, i])
+  mesh.instanceSourceColors = Array.from({length: count}, () => ({x: 0.8, y: 0.8, z: 0.8, w: 1}))
   return {model: mesh, centres}
 }
 
@@ -247,7 +255,7 @@ describe('collapsed artifact through a Draco export', () => {
 
   it('refuses the Draco file when its identity rows are reordered', async () => {
     // The identity half of the witness: geometry untouched, two rows' parents
-    // swapped — every centroid still matches, only the exact identity hash can
+    // swapped — every corner stat still matches, only the exact identity hash can
     // see it.
     const swapped = withTables(draco.withMetadata, (raw) => {
       const parents = parseInstanceTablesExtensionData(raw).flatMap((t) => t.parents)
@@ -259,14 +267,14 @@ describe('collapsed artifact through a Draco export', () => {
   }, TIMEOUT_MS)
 
   it('refuses the Draco file when a row\'s geometry has moved', async () => {
-    // The centroid half: nudge one stored centroid far outside tolerance —
+    // The geometry half: nudge one stored stat far outside tolerance —
     // equivalent to that row's triangles being somewhere else.
     const moved = withTables(draco.withMetadata, (raw) => {
       const node = raw.nodes.find((n) => n.witness)
-      const words = Buffer.from(node.witness.centroids, 'base64')
+      const words = Buffer.from(node.witness.stats, 'base64')
       const q = new Uint16Array(words.buffer, words.byteOffset, words.byteLength / 2)
       q[0] = q[0] > 30000 ? 0 : 65535
-      node.witness.centroids = Buffer.from(words).toString('base64')
+      node.witness.stats = Buffer.from(words).toString('base64')
       return raw
     })
 
@@ -303,8 +311,11 @@ describe('collapsed artifact through a Draco export', () => {
 
 
 describe('portable collapsed artifact through a Draco export', () => {
-  it('re-opens pickable', async () => {
-    const strip = stripModel()
+  /**
+   * @param {object} strip from `stripModel`
+   * @return {Promise<Uint8Array>} its collapsed artifact, portable, then Draco
+   */
+  async function portableDraco(strip) {
     const tree = {
       expressID: 1, type: 'PRODUCT', Name: {value: 'Strip'},
       children: strip.model.instanceParents.map((id, i) => ({
@@ -314,14 +325,38 @@ describe('portable collapsed artifact through a Draco export', () => {
     const withTree = injectGlbExtensions(await batchedArtifactBytes(strip.model, {collapse: true}),
       [{name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: tree, compress: true}], null, null).bytes
     const portable = rewriteGlbPortable(withTree)
-    const draco = await compressExportGlb(portable.bytes, COMPRESSION_DRACO)
+    return (await compressExportGlb(portable.bytes, COMPRESSION_DRACO)).withMetadata
+  }
 
-    const model = hydrateBatchedModelFromInstancedGlb(await loadLikeGltfLoader(draco.withMetadata))
+  it('re-opens pickable', async () => {
+    const strip = stripModel()
+    const model = hydrateBatchedModelFromInstancedGlb(await loadLikeGltfLoader(await portableDraco(strip)))
 
     expect(model).not.toBeNull()
     strip.centres.forEach((centre, i) => {
       expect(pickParent(model, centre)).toBe(1000 + i)
     })
+  }, TIMEOUT_MS)
+
+  it('holds each row to its OWN primitive\'s Draco step, not a slab\'s', async () => {
+    // Codex round 3 on #1872. In a portable file each row is its own Draco
+    // primitive, quantized on its own grid. Rows 0 and 6 of the strip are the
+    // same triangle 3 × EDGE (1.11) apart; the slab's step at 14 bits is
+    // 20000 / 16383 ≈ 1.2. Swap the two rows' stamps and a tolerance taken
+    // from the table's largest primitive passes it — every pick on those two
+    // would name the other element. Each row's own step refuses it.
+    const strip = stripModel(true)
+    const bytes = await portableDraco(strip)
+    const model = hydrateBatchedModelFromInstancedGlb(await loadLikeGltfLoader(bytes))
+    expect(model).not.toBeNull()
+    expect(pickParent(model, strip.centres[6])).toBe(1006)
+
+    const {json, bin} = parseGlb(bytes)
+    const stamped = (row) => json.nodes.find((node) => node.extras?.bldrsInstance === row)
+    const [a, b] = [stamped(0), stamped(6)]
+    ;[a.extras.bldrsInstance, b.extras.bldrsInstance] = [6, 0]
+    expect(hydrateBatchedModelFromInstancedGlb(await loadLikeGltfLoader(serializeGlb(json, bin))))
+      .toBeNull()
   }, TIMEOUT_MS)
 })
 

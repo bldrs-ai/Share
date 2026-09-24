@@ -23,7 +23,7 @@ import {
   buildLossyWitness,
   makeRangeCanary,
   parseInstanceTablesExtensionData,
-  rowCentroids,
+  rowWitnessStats,
   tableRowIdentity,
 } from '../loader/bldrsInstanceTables'
 import {glbInfo} from '../loader/glbLog'
@@ -68,10 +68,10 @@ export function addLossyWitnesses(json, bin, rawPayload, positionBits) {
       glbInfo(`export: collapsed table ${t} does not verify on the source; no lossy witness`)
       return
     }
-    const centroids = rowCentroids(
+    const stats = rowWitnessStats(
       table.count, (r) => view.indexCountOf(r),
       (r, i, c) => view.cornerAt(r, i, c))
-    out.nodes[t].witness = buildLossyWitness(table, centroids, positionBits, view.extent)
+    out.nodes[t].witness = buildLossyWitness(table, stats, positionBits)
     witnessed++
   })
   return witnessed > 0 ? out : null
@@ -112,8 +112,9 @@ function collectRows(json, tables) {
 
 /**
  * A uniform view over a table's rows, whichever shape holds them: per row, a
- * vertex count, an index count, local index values, positions, and the
- * extent Draco will quantize over (per primitive, so the largest one).
+ * vertex count, an index count, local index values and positions. (No
+ * extent: the reader takes each row's Draco step from the primitive it
+ * decodes that row from — see "THE LOSSY WITNESS".)
  *
  * @param {object} json
  * @param {DataView} dv over BIN
@@ -134,7 +135,6 @@ function rowReader(json, dv, table, rows) {
     }
     const {ranges} = table
     return {
-      extent: merged.position.extent,
       vertexCountOf: (r) => ranges[r].vertexCount,
       indexCountOf: (r) => ranges[r].indexCount,
       positionAt: (r, v, c) => merged.position.at(ranges[r].vertexStart + v, c),
@@ -147,7 +147,6 @@ function rowReader(json, dv, table, rows) {
     return null
   }
   return {
-    extent: Math.max(...perRow.map((row) => row.position.extent)),
     vertexCountOf: (r) => perRow[r].position.count,
     indexCountOf: (r) => perRow[r].index.count,
     positionAt: (r, v, c) => perRow[r].position.at(v, c),
@@ -180,7 +179,7 @@ function exactCanary(table, view) {
  * @param {object} json
  * @param {DataView} dv
  * @param {number} index accessor index
- * @return {?{count: number, extent: number, at: Function}} a float VEC3 reader
+ * @return {?{count: number, at: Function}} a float VEC3 reader
  */
 function floatAccessor(json, dv, index) {
   const accessor = json.accessors?.[index]
@@ -192,16 +191,7 @@ function floatAccessor(json, dv, index) {
   const stride = view.byteStride || (COMPONENTS * BYTES_PER_FLOAT)
   const base = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
   const at = (v, c) => dv.getFloat32(base + (v * stride) + (c * BYTES_PER_FLOAT), true)
-  const min = [Infinity, Infinity, Infinity]
-  const max = [-Infinity, -Infinity, -Infinity]
-  for (let v = 0; v < accessor.count; v++) {
-    for (let c = 0; c < COMPONENTS; c++) {
-      const value = at(v, c)
-      min[c] = Math.min(min[c], value)
-      max[c] = Math.max(max[c], value)
-    }
-  }
-  return {count: accessor.count, extent: Math.max(...max.map((m, c) => m - min[c])), at}
+  return {count: accessor.count, at}
 }
 
 

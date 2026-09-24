@@ -707,8 +707,13 @@ SEQUENTIAL keeps them in order. So:
 - it writes a **lossy witness** into the Draco file's tables only
   (`export/collapsedWitness.js`), after re-verifying the SOURCE's exact canary —
   an exact hash of each row's identity and index count, plus each row's
-  corner-mean centroid on a uint16 grid with a tolerance of one Draco
-  quantization step at the encode's POSITION bits;
+  corner mean, min and max per axis on a uint16 grid, and the encode's
+  POSITION bits. The bounds are there because a centroid alone passes a swap
+  of two concentric rows (codex round 3). The reader takes each row's
+  tolerance, one Draco step, from the extent of the primitive THAT row was
+  decoded from: the merged primitive, or in a portable file the row's own. A
+  table-wide step taken from a slab would be loose enough to let two small
+  neighbours swap;
 - the reader, for a table whose primitive declares `KHR_draco_mesh_compression`
   (`bldrsInstanceTables.js#markLossyTables`), rebuilds each row's vertex block
   from its triangle run and checks the witness
@@ -716,9 +721,9 @@ SEQUENTIAL keeps them in order. So:
   and its re-hydration do the same.
 
 The OPFS artifact and every lossless file keep the exact canary and pay nothing
-for this. What the witness cannot see: two rows within one quantization step of
-each other swapping identities — at that separation Draco has already made them
-indistinguishable on screen. A table that fails either check now also raises a
+for this. What the witness cannot see: two rows that agree on all nine numbers
+within their tolerance swapping identities. The floor on that tolerance is the
+uint16 grid over the table's span (1.5 mm on a 100 m table). A table that fails either check now also raises a
 WARNING in the load report ("shown without picking or selection") instead of an
 info line, so the fallback is no longer silent.
 

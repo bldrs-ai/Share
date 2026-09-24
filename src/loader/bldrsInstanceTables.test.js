@@ -4,9 +4,12 @@ import {
   INSTANCE_TABLES_VERSION,
   INSTANCE_TABLES_VERSION_UNCOLLAPSED,
   buildInstanceTablesExtensionData,
+  buildLossyWitness,
   makeRangeCanary,
+  matchesLossyWitness,
   parseInstanceTablesExtensionData,
   rangeCanaryOf,
+  rowWitnessStats,
 } from './bldrsInstanceTables'
 
 
@@ -227,6 +230,109 @@ describe('loader/bldrsInstanceTables', () => {
     it('returns null for a range outside the geometry, rather than a hash', () => {
       expect(rangeCanaryOf(geometryOf(TWO_TRIANGLES, [0, 1, 2, 3, 4, 5]),
         tableOf([{vertexStart: 3, vertexCount: 9, indexStart: 0, indexCount: 3}]))).toBeNull()
+    })
+  })
+
+
+  describe('the lossy witness', () => {
+    const POSITION_BITS = 14
+
+    /**
+     * @param {Array<Array<number>>} rows each row's triangle corners, flat xyz
+     * @return {Float64Array} their witness stats
+     */
+    function statsOf(rows) {
+      return rowWitnessStats(rows.length, (r) => rows[r].length / 3,
+        (r, i, c) => rows[r][(i * 3) + c])
+    }
+
+    /**
+     * A parsed one-node collapsed table over `rows`, witnessed as written.
+     *
+     * @param {Array<Array<number>>} rows
+     * @return {object}
+     */
+    function witnessedTable(rows) {
+      const node = {
+        count: rows.length,
+        color: {x: 1, y: 1, z: 1, w: 1},
+        parents: rows.map((_, r) => 100 + r),
+        occurrenceIds: rows.map((_, r) => r),
+        geometryIds: null,
+        occurrencePaths: null,
+        ranges: rows.map((row) => ({vertexCount: row.length / 3, indexCount: row.length / 3})),
+        canary: 1,
+      }
+      const raw = buildInstanceTablesExtensionData([node], {collapsed: true})
+      const table = parseInstanceTablesExtensionData(raw)[0]
+      raw.nodes[0].witness = buildLossyWitness(table, statsOf(rows), POSITION_BITS)
+      return parseInstanceTablesExtensionData(JSON.parse(JSON.stringify(raw)))[0]
+    }
+
+    /**
+     * @param {number} x centre
+     * @param {number} size
+     * @return {Array<number>} a triangle whose corner mean is (x, 0, 0)
+     */
+    function triangleAt(x, size) {
+      return [x - size, -size, 0, x + (2 * size), -size, 0, x - size, 2 * size, 0]
+    }
+
+    it('accepts rows as written, within a quantization step', () => {
+      const rows = [triangleAt(0, 1), triangleAt(10, 2)]
+      const table = witnessedTable(rows)
+      const step = 20 / ((2 ** POSITION_BITS) - 1)
+      const jittered = rows.map((row) => row.map((v, i) => v + (i % 2 ? step / 2 : -step / 2)))
+      expect(matchesLossyWitness(table, statsOf(jittered), () => 20)).toBe(true)
+    })
+
+    it('refuses two rows with the SAME centroid swapped — the bounds see it', () => {
+      // Codex round 3 on #1872: concentric parts share a corner mean, so a
+      // centroid-only witness passes their swap, and the identity hash does
+      // too (identities and index counts did not move).
+      const small = triangleAt(0, 1)
+      const large = triangleAt(0, 10)
+      const table = witnessedTable([small, large])
+      const swapped = statsOf([large, small])
+      // Same centroids, row for row: this is the case under test.
+      expect(Array.from(swapped.subarray(0, 3))).toEqual(Array.from(statsOf([small]).subarray(0, 3)))
+      expect(matchesLossyWitness(table, swapped, () => 30)).toBe(false)
+    })
+
+    it('takes each row\'s tolerance from ITS primitive, not the table\'s largest', () => {
+      // Codex round 3 on #1872, the portable shape: one Draco primitive per
+      // row. A slab's quantization step (1000 / 16383 ≈ 0.06) is wider than
+      // the gap between two small neighbouring parts, so a table-wide
+      // tolerance would pass their swap; each part's own step would not.
+      const slab = triangleAt(500, 250)
+      const a = triangleAt(0, 0.001)
+      const b = triangleAt(0.05, 0.001)
+      const table = witnessedTable([slab, a, b])
+      const swapped = statsOf([slab, b, a])
+      const perRow = [1000, 0.003, 0.003]
+
+      expect(matchesLossyWitness(table, swapped, () => 1000)).toBe(true)
+      expect(matchesLossyWitness(table, swapped, (r) => perRow[r])).toBe(false)
+      expect(matchesLossyWitness(table, statsOf([slab, a, b]), (r) => perRow[r])).toBe(true)
+    })
+
+    it('drops a witness with no positionBits, or too few stats (the table then refuses on Draco)', () => {
+      const rows = [triangleAt(0, 1), triangleAt(10, 2)]
+      const raw = buildInstanceTablesExtensionData([{
+        count: 2, color: {x: 1, y: 1, z: 1, w: 1}, parents: [1, 2], occurrenceIds: [0, 1],
+        geometryIds: null, occurrencePaths: null,
+        ranges: [{vertexCount: 3, indexCount: 3}, {vertexCount: 3, indexCount: 3}], canary: 1,
+      }], {collapsed: true})
+      const witness = buildLossyWitness(parseInstanceTablesExtensionData(raw)[0], statsOf(rows), 14)
+      const noBits = structuredClone(raw)
+      noBits.nodes[0].witness = {...witness, positionBits: undefined}
+      expect(parseInstanceTablesExtensionData(noBits)[0].witness).toBeUndefined()
+      const short = structuredClone(raw)
+      short.nodes[0].witness = {...witness,
+        stats: buildLossyWitness(parseInstanceTablesExtensionData(raw)[0], statsOf(rows.slice(1)), 14).stats}
+      expect(parseInstanceTablesExtensionData(short)[0].witness).toBeUndefined()
+      expect(parseInstanceTablesExtensionData(structuredClone({...raw, nodes: [{...raw.nodes[0], witness}]}))[0]
+        .witness).toBeDefined()
     })
   })
 })

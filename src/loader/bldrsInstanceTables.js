@@ -318,32 +318,47 @@ export function rangeCanaryOf(geometry, table) {
  * (`export/glbCompression.js#needsTriangleOrder`), is triangle ORDER and
  * therefore each row's index COUNT: row r's triangles are still the r-th
  * contiguous run. So the reader rebuilds each row's vertex block from its
- * triangles (`instancedGlbToBatchedModel.js#rebuildRowsFromTriangles`), and
+ * triangles (`instancedGlbToBatchedModel.js#rebuildLossyCollapsed`), and
  * this witness checks the result:
  *
  * - `identity` — an EXACT hash of every row's identity and index count,
  *   neither of which a codec touches. Binds rows to identities the way the
  *   exact canary does.
- * - `centroids` — each row's corner-mean position, uint16-quantized over the
- *   table's bounds, compared within `tolerance`. Corner-mean rather than
- *   vertex-mean because it is invariant under the vertex merging and
- *   re-indexing above. `tolerance` is one Draco quantization step at the
- *   encode's own POSITION bits, plus the witness's own uint16 step — a
- *   dequantized corner is within half a step, so this has 2× margin.
+ * - `stats` — per row, nine numbers over its triangle CORNERS: the mean, the
+ *   min and the max of each axis. Over corners rather than vertices because
+ *   that is invariant under the vertex merging and re-indexing above. The
+ *   bounds are there because a centroid alone cannot tell apart two rows
+ *   centred on the same point (concentric parts, a nut and its bolt), whose
+ *   swap would otherwise pass (codex round 3 on #1872). Stored uint16 over
+ *   the witness's own frame (`min`/`max`, per axis over all nine).
+ * - `positionBits` — the encode's Draco POSITION bits. The reader derives
+ *   each row's tolerance from it and the extent of the primitive THAT ROW was
+ *   decoded from, because that is the grid Draco quantized it on: one merged
+ *   primitive for the collapsed artifact, but one primitive per row for its
+ *   portable rewrite, where a table-wide tolerance taken from its largest
+ *   row (a slab) would be loose enough to let two small neighbouring rows
+ *   swap (codex round 3 again). A dequantized corner is within half a step,
+ *   so every mean/min/max is too; the tolerance is one full step plus the
+ *   witness's own uint16 step — 2× margin.
  *
  * It is written by the EXPORT, only into Draco files, from a source whose
  * exact canary it verifies first (`export/collapsedWitness.js`) — so the
  * OPFS artifact and every lossless file keep the exact check and pay nothing.
- * What it cannot see: two rows whose centroids lie within one quantization
- * step of each other swapping identities. At that separation the codec has
- * already made them indistinguishable on screen.
+ * What it cannot see: two rows that agree on all nine numbers within their
+ * tolerance swapping identities — e.g. two triangles with the same bounds and
+ * the same corner mean. The floor on that tolerance is the uint16 grid over
+ * the table's span (1.5 mm on a 100 m table), which for a portable file's
+ * small per-row primitives is the binding term, not Draco's.
  */
 
-/** uint16 grid the witness centroids are stored on. */
 /** The codec extension whose presence on a primitive means lossy positions. */
 export const LOSSY_POSITION_CODEC = 'KHR_draco_mesh_compression'
 
+/** uint16 grid the witness stats are stored on. */
 const WITNESS_GRID = 65535
+
+/** Per row: corner mean, corner min, corner max — three VEC3s. */
+export const WITNESS_STATS_PER_ROW = 3 * COMPONENTS_PER_POSITION
 
 
 /**
@@ -363,24 +378,33 @@ export function rowIdentityCanary(table) {
 
 
 /**
- * Corner-mean centroid of each row.
+ * Each row's corner mean, min and max, per axis.
  *
  * @param {number} rowCount
  * @param {function(number): number} cornerCountOf row -> index count
  * @param {function(number, number, number): number} cornerAt `(row, corner,
  *   component) => value`
- * @return {Float64Array} `rowCount * 3`
+ * @return {Float64Array} `rowCount * WITNESS_STATS_PER_ROW`, each row laid
+ *   out `[mean xyz, min xyz, max xyz]`
  */
-export function rowCentroids(rowCount, cornerCountOf, cornerAt) {
-  const out = new Float64Array(rowCount * COMPONENTS_PER_POSITION)
+export function rowWitnessStats(rowCount, cornerCountOf, cornerAt) {
+  const out = new Float64Array(rowCount * WITNESS_STATS_PER_ROW)
   for (let r = 0; r < rowCount; r++) {
     const corners = cornerCountOf(r)
+    const at = r * WITNESS_STATS_PER_ROW
     for (let c = 0; c < COMPONENTS_PER_POSITION; c++) {
       let sum = 0
+      let min = Infinity
+      let max = -Infinity
       for (let i = 0; i < corners; i++) {
-        sum += cornerAt(r, i, c)
+        const value = cornerAt(r, i, c)
+        sum += value
+        min = Math.min(min, value)
+        max = Math.max(max, value)
       }
-      out[(r * COMPONENTS_PER_POSITION) + c] = corners > 0 ? sum / corners : 0
+      out[at + c] = corners > 0 ? sum / corners : 0
+      out[at + COMPONENTS_PER_POSITION + c] = corners > 0 ? min : 0
+      out[at + (2 * COMPONENTS_PER_POSITION) + c] = corners > 0 ? max : 0
     }
   }
   return out
@@ -388,37 +412,46 @@ export function rowCentroids(rowCount, cornerCountOf, cornerAt) {
 
 
 /**
- * Build a table's lossy witness from its exact centroids.
+ * Build a table's lossy witness from its exact per-row stats.
  *
  * @param {object} table collapsed table with `ranges` + identity arrays
- * @param {Float64Array} centroids from {@link rowCentroids}
+ * @param {Float64Array} stats from {@link rowWitnessStats}
  * @param {number} positionBits the Draco POSITION quantization bits
- * @param {number} extent the largest axis extent Draco quantizes over
  * @return {object} JSON-serializable witness
  */
-export function buildLossyWitness(table, centroids, positionBits, extent) {
+export function buildLossyWitness(table, stats, positionBits) {
   const min = [Infinity, Infinity, Infinity]
   const max = [-Infinity, -Infinity, -Infinity]
-  for (let i = 0; i < centroids.length; i++) {
+  for (let i = 0; i < stats.length; i++) {
     const c = i % COMPONENTS_PER_POSITION
-    min[c] = Math.min(min[c], centroids[i])
-    max[c] = Math.max(max[c], centroids[i])
+    min[c] = Math.min(min[c], stats[i])
+    max[c] = Math.max(max[c], stats[i])
   }
-  const q = new Uint16Array(centroids.length)
-  for (let i = 0; i < centroids.length; i++) {
+  const q = new Uint16Array(stats.length)
+  for (let i = 0; i < stats.length; i++) {
     const c = i % COMPONENTS_PER_POSITION
     const span = max[c] - min[c]
-    q[i] = span > 0 ? Math.round(((centroids[i] - min[c]) / span) * WITNESS_GRID) : 0
+    q[i] = span > 0 ? Math.round(((stats[i] - min[c]) / span) * WITNESS_GRID) : 0
   }
-  const gridStep = Math.max(...max.map((m, c) => m - min[c])) / WITNESS_GRID
-  const dracoStep = extent / ((2 ** positionBits) - 1)
   return {
     identity: rowIdentityCanary(table),
+    positionBits,
     min,
     max,
-    tolerance: dracoStep + gridStep,
-    centroids: uint32ArrayToBase64(padToUint32(q)),
+    stats: uint32ArrayToBase64(padToUint32(q)),
   }
+}
+
+
+/**
+ * One Draco quantization step for a primitive of this extent.
+ *
+ * @param {number} extent the primitive's largest axis extent
+ * @param {number} positionBits
+ * @return {number}
+ */
+export function dracoStep(extent, positionBits) {
+  return extent / ((2 ** positionBits) - 1)
 }
 
 
@@ -427,24 +460,31 @@ export function buildLossyWitness(table, centroids, positionBits, extent) {
  *
  * @param {object} table parsed collapsed table carrying `witness`, with
  *   `ranges` describing the REBUILT geometry
- * @param {Float64Array} centroids the rebuilt rows' corner-mean centroids
+ * @param {Float64Array} stats the rebuilt rows' {@link rowWitnessStats}
+ * @param {function(number): number} extentOf row -> the largest axis extent
+ *   of the primitive that row was decoded from
  * @return {boolean}
  */
-export function matchesLossyWitness(table, centroids) {
+export function matchesLossyWitness(table, stats, extentOf) {
   const {witness} = table
   if (!witness || rowIdentityCanary(table) !== witness.identity) {
     return false
   }
-  const stored = witness.centroidsQ
-  if (!stored || stored.length < centroids.length) {
+  const stored = witness.statsQ
+  if (!stored || stored.length < stats.length) {
     return false
   }
-  for (let i = 0; i < centroids.length; i++) {
-    const c = i % COMPONENTS_PER_POSITION
-    const span = witness.max[c] - witness.min[c]
-    const expected = witness.min[c] + ((stored[i] / WITNESS_GRID) * span)
-    if (!(Math.abs(centroids[i] - expected) <= witness.tolerance)) {
-      return false
+  const gridStep = Math.max(...witness.max.map((m, c) => m - witness.min[c])) / WITNESS_GRID
+  for (let r = 0; r * WITNESS_STATS_PER_ROW < stats.length; r++) {
+    const tolerance = dracoStep(extentOf(r), witness.positionBits) + gridStep
+    for (let k = 0; k < WITNESS_STATS_PER_ROW; k++) {
+      const i = (r * WITNESS_STATS_PER_ROW) + k
+      const c = i % COMPONENTS_PER_POSITION
+      const span = witness.max[c] - witness.min[c]
+      const expected = witness.min[c] + ((stored[i] / WITNESS_GRID) * span)
+      if (!(Math.abs(stats[i] - expected) <= tolerance)) {
+        return false
+      }
     }
   }
   return true
@@ -463,31 +503,36 @@ function padToUint32(values) {
 }
 
 
+/** Draco's POSITION quantization accepts 1..30 bits. */
+const MAX_DRACO_POSITION_BITS = 30
+
+
 /**
  * Decode and validate a collapsed node's optional lossy witness.
  *
  * @param {object} raw payload `witness`
  * @param {number} count rows in the table
- * @return {?object} the witness with `centroidsQ` decoded, or null
+ * @return {?object} the witness with `statsQ` decoded, or null
  */
 function parseLossyWitness(raw, count) {
   const finite3 = (v) => Array.isArray(v) && v.length === COMPONENTS_PER_POSITION &&
     v.every(Number.isFinite)
   if (!raw || !Number.isInteger(raw.identity) || !finite3(raw.min) || !finite3(raw.max) ||
-      !(raw.tolerance >= 0) || typeof raw.centroids !== 'string') {
+      !Number.isInteger(raw.positionBits) || raw.positionBits < 1 ||
+      raw.positionBits > MAX_DRACO_POSITION_BITS || typeof raw.stats !== 'string') {
     return null
   }
   let words
   try {
-    words = base64ToUint32Array(raw.centroids)
+    words = base64ToUint32Array(raw.stats)
   } catch {
     return null
   }
-  const centroidsQ = new Uint16Array(words.buffer, words.byteOffset, words.byteLength / 2)
-  if (centroidsQ.length < count * COMPONENTS_PER_POSITION) {
+  const statsQ = new Uint16Array(words.buffer, words.byteOffset, words.byteLength / 2)
+  if (statsQ.length < count * WITNESS_STATS_PER_ROW) {
     return null
   }
-  return {...raw, centroidsQ: centroidsQ.subarray(0, count * COMPONENTS_PER_POSITION)}
+  return {...raw, statsQ: statsQ.subarray(0, count * WITNESS_STATS_PER_ROW)}
 }
 
 

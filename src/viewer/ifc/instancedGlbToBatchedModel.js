@@ -11,7 +11,11 @@ import {makeSurfaceMaterial} from '../lookMaterial'
 import {addGeometryRanges} from './batchedGeometryRanges'
 import {attachBatchedSubsets} from './batchedSubset'
 import {decorateBatchMeshes} from './buildBatchedConwayModel'
-import {matchesLossyWitness, rangeCanaryOf} from '../../loader/bldrsInstanceTables'
+import {
+  matchesLossyWitness,
+  rangeCanaryOf,
+  rowWitnessStats,
+} from '../../loader/bldrsInstanceTables'
 import {glbInfo, glbVerbose} from '../../loader/glbLog'
 
 
@@ -200,7 +204,7 @@ function joinNodesToTables(gltfModel, tables) {
  * given a fresh contiguous vertex block (first-use order), and the ranges are
  * re-derived for that block. The result tiles by construction, which is what
  * `addGeometryRanges` needs, and it is witnessed by the export's identity hash
- * and per-row centroids rather than the exact canary Draco made unreachable.
+ * and per-row corner stats rather than the exact canary Draco made unreachable.
  *
  * @param {object} table parsed collapsed table: `ranges` (for the row count
  *   and each row's index count), `witness`
@@ -232,7 +236,6 @@ function rebuildLossyCollapsed(table, rowAt) {
   const normals = new Float32Array(vertexTotal * 3)
   const indices = new Uint32Array(indexTotal)
   const rebuiltRanges = []
-  const centroids = new Float64Array(ranges.length * 3)
   let hasNormals = true
   let vertexCursor = 0
   let indexCursor = 0
@@ -263,9 +266,6 @@ function rebuildLossyCollapsed(table, rowAt) {
         vertexCursor++
       }
       indices[indexCursor + i] = vertexStart + v
-      centroids[r * 3] += position.getX(point) / indexCount
-      centroids[(r * 3) + 1] += position.getY(point) / indexCount
-      centroids[(r * 3) + 2] += position.getZ(point) / indexCount
     }
     rebuiltRanges.push({
       vertexStart, vertexCount: vertexCursor - vertexStart,
@@ -273,7 +273,24 @@ function rebuildLossyCollapsed(table, rowAt) {
     })
     indexCursor += indexCount
   }
-  if (!matchesLossyWitness(table, centroids)) {
+  // The witness's stats are over each row's triangle corners, read here from
+  // the DECODED geometry — so they see exactly what will be drawn.
+  const stats = rowWitnessStats(ranges.length, (r) => ranges[r].indexCount, (r, i, c) => {
+    const {geometry, indexStart} = rowAt(r)
+    return geometry.getAttribute('position').getComponent(geometry.getIndex().getX(indexStart + i), c)
+  })
+  // Each row's tolerance follows the primitive it was decoded from, which is
+  // the grid Draco quantized it on: shared for the merged artifact, one per
+  // row for its portable rewrite.
+  const extents = new Map()
+  const extentOf = (r) => {
+    const {geometry} = rowAt(r)
+    if (!extents.has(geometry)) {
+      extents.set(geometry, largestExtent(geometry.getAttribute('position')))
+    }
+    return extents.get(geometry)
+  }
+  if (!matchesLossyWitness(table, stats, extentOf)) {
     glbInfo('reader: lossy collapsed table does not match its witness; refusing')
     return null
   }
@@ -284,6 +301,26 @@ function rebuildLossyCollapsed(table, rowAt) {
   }
   geometry.setIndex(new BufferAttribute(indices, 1))
   return {geometry, ranges: rebuiltRanges}
+}
+
+
+/**
+ * @param {BufferAttribute} position
+ * @return {number} the largest axis extent of its values
+ */
+function largestExtent(position) {
+  let extent = 0
+  for (let c = 0; c < 3; c++) {
+    let min = Infinity
+    let max = -Infinity
+    for (let v = 0; v < position.count; v++) {
+      const value = position.getComponent(v, c)
+      min = Math.min(min, value)
+      max = Math.max(max, value)
+    }
+    extent = Math.max(extent, max - min)
+  }
+  return extent
 }
 
 
