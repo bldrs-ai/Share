@@ -94,10 +94,13 @@ export async function setSubscriptionTier(page: Page, tier: 'sharePro' | 'free')
  * what enables the Export button.
  *
  * @param page Playwright page
+ * @param extraFlags more `?feature=` names, comma-joined onto
+ *   `EXPORT_FLAGS` — e.g. `glbCollapse` to export the collapsed artifact
  */
-export async function loadModelAndWaitForArtifact(page: Page) {
+export async function loadModelAndWaitForArtifact(page: Page, extraFlags = '') {
   const glbLogs = captureGlbLogs(page)
-  await page.goto(`${EXPORT_MODEL_PATH}${EXPORT_FLAGS}`, {waitUntil: 'domcontentloaded'})
+  const flags = extraFlags ? `${EXPORT_FLAGS},${extraFlags}` : EXPORT_FLAGS
+  await page.goto(`${EXPORT_MODEL_PATH}${flags}`, {waitUntil: 'domcontentloaded'})
   await waitForModelReady(page)
   // The writer is idle-scheduled and fires well after `data-model-ready`;
   // this line is the only signal that the artifact is actually on disk.
@@ -460,9 +463,26 @@ export async function reopenLocalGlb(page: Page, path: string) {
   // The dialog opens on whichever tab it last showed (Google, for a signed-in
   // user); Browse lives on Local.
   await page.getByRole('tab', {name: 'Local'}).click()
-  const chooser = page.waitForEvent('filechooser')
-  await page.getByTestId('button_open_file').click()
-  await (await chooser).setFiles(path)
+  // Bounded and retried: in CI the chooser event has twice failed to arrive
+  // after this click (#1872, shard 2), and an unbounded `waitForEvent` then
+  // sat on the whole test budget — 4 and 8 minutes — before failing, which
+  // pushed the shard past its 15-minute job limit. A click that lands while
+  // the freshly shown tab is still settling is the likely miss; clicking
+  // again is what a user would do.
+  const browse = page.getByTestId('button_open_file')
+  await expect(browse).toBeVisible()
+  const CHOOSER_WAIT_MS = 15_000
+  const MAX_CLICKS = 3
+  let chooser = null
+  for (let attempt = 0; attempt < MAX_CLICKS && !chooser; attempt++) {
+    const waiting = page.waitForEvent('filechooser', {timeout: CHOOSER_WAIT_MS})
+    await browse.click()
+    chooser = await waiting.catch(() => null)
+  }
+  if (!chooser) {
+    throw new Error(`the Open dialog's Browse button opened no file chooser in ${MAX_CLICKS} clicks`)
+  }
+  await chooser.setFiles(path)
   await expect(page).toHaveURL(/\/share\/v\/new\/.+\.glb/, {timeout: EXPORT_TEST_TIMEOUT_MS})
   await expect(page.getByTestId('LoadStatusOk')).toBeVisible({timeout: EXPORT_TEST_TIMEOUT_MS})
 }

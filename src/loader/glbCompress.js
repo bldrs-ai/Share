@@ -27,7 +27,11 @@
 // the encoder modules at module-load time so the cost is zero when the
 // compression flags are off.
 import {isFeatureEnabled} from '../FeatureFlags'
-import {BLDRS_GLB_BATCHED_SCHEMA_VERSION, BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
+import {
+  BLDRS_GLB_BATCHED_SCHEMA_VERSION,
+  BLDRS_GLB_COLLAPSED_SCHEMA_VERSION,
+  BLDRS_GLB_SCHEMA_VERSION,
+} from './glbCacheKey'
 import {glbInfo, glbVerbose} from './glbLog'
 import {parseGlb} from './injectGlbExtensions'
 
@@ -149,6 +153,27 @@ export function isGlbBatchedActive() {
 
 
 /**
+ * Whether the batched writer collapses single-placement nodes into merged,
+ * range-addressed primitives (`glbCollapse`, default-off, #1871), unless this
+ * session opted out via `disableGlbCollapse`. Implies the batched layout: a
+ * collapse is a shape OF that layout, so it is inert whenever
+ * {@link isGlbBatchedActive} is false.
+ *
+ * The one seam for the slot the reader looks in (`activeArtifactSpec`) and
+ * the mode the writer runs in (`glbExport`), for the reason given on
+ * `isGlbBatchedActive`. It does NOT gate hydration: a collapsed table is
+ * read whatever the flags say, because a user can open a collapsed Export
+ * download in a session that has the flag off.
+ *
+ * @return {boolean}
+ */
+export function isGlbCollapseActive() {
+  return isGlbBatchedActive() &&
+    isFeatureEnabled('glbCollapse') && !isFeatureEnabled('disableGlbCollapse')
+}
+
+
+/**
  * The (schemaVer, expected compression mode) pair for the artifact slot the
  * CURRENT flag state reads and writes. One helper on purpose: the reader's
  * lookup and the writer's key derivation must agree, or a written artifact
@@ -163,9 +188,15 @@ export function isGlbBatchedActive() {
  * now the DEFAULT+opt-in one rather than an exotic pair, since `glbBatched`
  * ships on: anyone who turns compression on lands here.
  *
+ * The collapsed layout (`glbCollapse`) is a batched artifact too, so the
+ * same precedence applies one level up: collapsed slot, mode null.
+ *
  * @return {{schemaVer: string, mode: GlbCompressionMode}}
  */
 export function activeArtifactSpec() {
+  if (isGlbCollapseActive()) {
+    return {schemaVer: BLDRS_GLB_COLLAPSED_SCHEMA_VERSION, mode: null}
+  }
   if (isGlbBatchedActive()) {
     return {schemaVer: BLDRS_GLB_BATCHED_SCHEMA_VERSION, mode: null}
   }

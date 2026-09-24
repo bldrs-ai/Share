@@ -26,6 +26,7 @@ import {computeBoundsTree} from 'three-mesh-bvh'
 import {getGlbLogs} from '../../tools/jest/glbLogCapture'
 import {COMPRESSION_MESHOPT, compressExportGlb} from '../export/glbCompression'
 import {downloadToOPFS} from '../OPFS/utils'
+import {INSTANCE_TABLES_VERSION} from './bldrsInstanceTables'
 import {packGlbChunks} from './glbContainer'
 import {isBldrsGlbArtifact, load} from './Loader'
 import {
@@ -294,7 +295,9 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
     // geometry (three draws EXT_mesh_gpu_instancing natively) instead of a
     // failed load.
     const bytes = await batchedArtifactBytes(liveBatchedModel(), {
-      mutatePayload: (payload) => ({...payload, version: payload.version + 1}),
+      // One past the NEWEST version this reader knows, not past the payload's
+      // own: the fixture writes v1, and v1 + 1 is now a version it reads.
+      mutatePayload: (payload) => ({...payload, version: INSTANCE_TABLES_VERSION + 1}),
     })
 
     const model = await openGlb(bytes)
@@ -306,6 +309,27 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
     // the only signal a triager gets for a version mismatch.
     expect(getGlbLogs().map((l) => l.text))
       .toContain('BLDRS_instance_tables: payload failed validation; skipping')
+  })
+
+  it('WARNS when a file\'s selection tables are refused, rather than going quietly unpickable', async () => {
+    // #1871: a Draco export of a collapsed DSA rendered perfectly and could
+    // not be selected, and nothing said why — the refusal was an info line.
+    // A collapsed table whose canary does not match is the same outcome
+    // reached on purpose here: the tables parse, hydration refuses them.
+    const bytes = await batchedArtifactBytes(liveBatchedModel(), {
+      collapse: true,
+      mutatePayload: (payload) => ({
+        ...payload,
+        nodes: payload.nodes.map((node) =>
+          (node.canary === undefined ? node : {...node, canary: (node.canary + 1) >>> 0})),
+      }),
+    })
+
+    const model = await openGlb(bytes)
+
+    expect(model.isBatchedMesh).toBeFalsy()
+    const warnings = getGlbLogs().filter((l) => l.level === 'warn').map((l) => l.text)
+    expect(warnings.some((text) => text.includes('shown without picking or selection'))).toBe(true)
   })
 
   // #1847: whether the per-vertex `_EXPRESSID`/`_INSTANCEID` attributes can be

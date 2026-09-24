@@ -1,8 +1,21 @@
-import {BatchedMesh, DoubleSide, Group, Matrix4, Vector4} from 'three'
+import {
+  BatchedMesh,
+  BufferAttribute,
+  BufferGeometry,
+  DoubleSide,
+  Group,
+  Matrix4,
+  Vector4,
+} from 'three'
 import {makeSurfaceMaterial} from '../lookMaterial'
 import {addGeometryRanges} from './batchedGeometryRanges'
 import {attachBatchedSubsets} from './batchedSubset'
 import {decorateBatchMeshes} from './buildBatchedConwayModel'
+import {
+  matchesLossyWitness,
+  rangeCanaryOf,
+  rowWitnessStats,
+} from '../../loader/bldrsInstanceTables'
 import {glbInfo, glbVerbose} from '../../loader/glbLog'
 
 
@@ -151,8 +164,201 @@ function joinNodesToTables(gltfModel, tables) {
     if (declared !== tables[i].count) {
       return null
     }
+    if (!isCollapsedTable(tables[i])) {
+      continue
+    }
+    if (tables[i].lossyGeometry) {
+      // Draco: the merged primitive's vertices were merged and quantized, so
+      // rebuild each row from its triangle run and check the lossy witness
+      // (`bldrsInstanceTables.js`, "THE LOSSY WITNESS"). The runs must still
+      // tile the index buffer: a codec that dropped or added a triangle has
+      // shifted every run after it.
+      const last = tables[i].ranges[tables[i].ranges.length - 1]
+      if (last.indexStart + last.indexCount !== sources[i].geometry.getIndex?.()?.count) {
+        glbInfo('reader: lossy collapsed triangle runs do not tile their primitive; refusing')
+        return null
+      }
+      const rebuilt = rebuildLossyCollapsed(tables[i], (r) => ({
+        geometry: sources[i].geometry,
+        indexStart: tables[i].ranges[r].indexStart,
+      }))
+      if (!rebuilt) {
+        return null
+      }
+      sources[i] = {...sources[i], geometry: rebuilt.geometry, ranges: rebuilt.ranges}
+    } else if (!isCollapsedGeometryWitnessed(sources[i].geometry, tables[i])) {
+      return null
+    }
   }
   return sources
+}
+
+
+/**
+ * Rebuild a lossy collapsed table's geometry row by row from its TRIANGLES,
+ * then check it against the table's lossy witness.
+ *
+ * Only triangle order and each row's index count survive a (sequential)
+ * Draco encode; the vertices do not, because Draco merges coincident ones
+ * across rows. So each row's corners are gathered from its own triangle run,
+ * given a fresh contiguous vertex block (first-use order), and the ranges are
+ * re-derived for that block. The result tiles by construction, which is what
+ * `addGeometryRanges` needs, and it is witnessed by the export's identity hash
+ * and per-row corner stats rather than the exact canary Draco made unreachable.
+ *
+ * @param {object} table parsed collapsed table: `ranges` (for the row count
+ *   and each row's index count), `witness`
+ * @param {function(number): {geometry: object, indexStart: number}} rowAt
+ *   where row r's triangle run lives
+ * @return {?{geometry: BufferGeometry, ranges: Array<object>}} or null when
+ *   the table has no witness, a count disagrees, or the witness refuses it
+ */
+function rebuildLossyCollapsed(table, rowAt) {
+  if (!table.witness) {
+    glbInfo('reader: lossy collapsed table carries no witness; refusing')
+    return null
+  }
+  const {ranges} = table
+  let vertexTotal = 0
+  let indexTotal = 0
+  for (let r = 0; r < ranges.length; r++) {
+    const {geometry, indexStart} = rowAt(r)
+    const index = geometry?.getIndex?.()
+    if (!index || !geometry.getAttribute('position') ||
+        indexStart + ranges[r].indexCount > index.count) {
+      return null
+    }
+    vertexTotal += ranges[r].indexCount
+    indexTotal += ranges[r].indexCount
+  }
+  // Worst case every corner is its own vertex; trimmed below.
+  const positions = new Float32Array(vertexTotal * 3)
+  const normals = new Float32Array(vertexTotal * 3)
+  const indices = new Uint32Array(indexTotal)
+  const rebuiltRanges = []
+  let hasNormals = true
+  let vertexCursor = 0
+  let indexCursor = 0
+  for (let r = 0; r < ranges.length; r++) {
+    const {geometry, indexStart} = rowAt(r)
+    const index = geometry.getIndex()
+    const position = geometry.getAttribute('position')
+    const normal = geometry.getAttribute('normal')
+    hasNormals = hasNormals && Boolean(normal)
+    const local = new Map()
+    const vertexStart = vertexCursor
+    const {indexCount} = ranges[r]
+    for (let i = 0; i < indexCount; i++) {
+      const point = index.getX(indexStart + i)
+      let v = local.get(point)
+      if (v === undefined) {
+        v = vertexCursor - vertexStart
+        local.set(point, v)
+        const at = vertexCursor * 3
+        positions[at] = position.getX(point)
+        positions[at + 1] = position.getY(point)
+        positions[at + 2] = position.getZ(point)
+        if (normal) {
+          normals[at] = normal.getX(point)
+          normals[at + 1] = normal.getY(point)
+          normals[at + 2] = normal.getZ(point)
+        }
+        vertexCursor++
+      }
+      indices[indexCursor + i] = vertexStart + v
+    }
+    rebuiltRanges.push({
+      vertexStart, vertexCount: vertexCursor - vertexStart,
+      indexStart: indexCursor, indexCount,
+    })
+    indexCursor += indexCount
+  }
+  // The witness's stats are over each row's triangle corners, read here from
+  // the DECODED geometry — so they see exactly what will be drawn.
+  const stats = rowWitnessStats(ranges.length, (r) => ranges[r].indexCount, (r, i, c) => {
+    const {geometry, indexStart} = rowAt(r)
+    return geometry.getAttribute('position').getComponent(geometry.getIndex().getX(indexStart + i), c)
+  })
+  // Each row's tolerance follows the primitive it was decoded from, which is
+  // the grid Draco quantized it on: shared for the merged artifact, one per
+  // row for its portable rewrite.
+  const extents = new Map()
+  const extentOf = (r) => {
+    const {geometry} = rowAt(r)
+    if (!extents.has(geometry)) {
+      extents.set(geometry, largestExtent(geometry.getAttribute('position')))
+    }
+    return extents.get(geometry)
+  }
+  if (!matchesLossyWitness(table, stats, extentOf)) {
+    glbInfo('reader: lossy collapsed table does not match its witness; refusing')
+    return null
+  }
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new BufferAttribute(positions.slice(0, vertexCursor * 3), 3))
+  if (hasNormals) {
+    geometry.setAttribute('normal', new BufferAttribute(normals.slice(0, vertexCursor * 3), 3))
+  }
+  geometry.setIndex(new BufferAttribute(indices, 1))
+  return {geometry, ranges: rebuiltRanges}
+}
+
+
+/**
+ * @param {BufferAttribute} position
+ * @return {number} the largest axis extent of its values
+ */
+function largestExtent(position) {
+  let extent = 0
+  for (let c = 0; c < 3; c++) {
+    let min = Infinity
+    let max = -Infinity
+    for (let v = 0; v < position.count; v++) {
+      const value = position.getComponent(v, c)
+      min = Math.min(min, value)
+      max = Math.max(max, value)
+    }
+    extent = Math.max(extent, max - min)
+  }
+  return extent
+}
+
+
+/**
+ * Whether a collapsed table's ranges are witnessed by the geometry they
+ * slice: they tile it exactly, and the writer's canary re-derives from it.
+ *
+ * The tiling check is structural and cheap, and catches a table from a
+ * different file. The canary is the one that catches a table from the RIGHT
+ * file whose rows point at the wrong elements — the failure every other check
+ * here passes, because a range that is shifted by one element of the same
+ * size is perfectly well formed (`bldrsInstanceTables.js`, module doc). It is
+ * required, not optional: `parseInstanceTablesExtensionData` refuses a
+ * collapsed node without one, so a missing canary here means a table that did
+ * not come out of a file, and trusting it is exactly the silent wrong-element
+ * pick this exists to prevent.
+ *
+ * @param {object} geometry the merged BufferGeometry
+ * @param {object} table parsed collapsed table
+ * @return {boolean}
+ */
+function isCollapsedGeometryWitnessed(geometry, table) {
+  const position = geometry?.getAttribute?.('position')
+  const index = geometry?.getIndex?.()
+  if (!position || !index || !Number.isInteger(table.canary)) {
+    return false
+  }
+  const last = table.ranges[table.ranges.length - 1]
+  if (!last || last.vertexStart + last.vertexCount !== position.count ||
+      last.indexStart + last.indexCount !== index.count) {
+    glbInfo('reader: collapsed ranges do not tile their merged geometry; refusing')
+    return false
+  }
+  if (rangeCanaryOf(geometry, table) !== table.canary) {
+    glbInfo('reader: collapsed range canary mismatch; refusing the table')
+    return false
+  }
+  return true
 }
 
 
@@ -204,6 +410,9 @@ function makeCollapsedSource(node, ranges, toModelSpace) {
  * a separate refusal here would be a branch no test could tell from the one
  * beside it.
  *
+ * A stamped Mesh carrying a `bldrsInstance` row is portable whatever else
+ * the file holds — see the note in the body.
+ *
  * COLLAPSED TABLES ARE NOT A THIRD SHAPE. A collapsed group (§1.1c) is a
  * plain `Mesh` too, so a fully-collapsed artifact holds no InstancedMesh at
  * all and the node test alone would misroute it to the portable reader. The
@@ -218,16 +427,27 @@ function makeCollapsedSource(node, ranges, toModelSpace) {
  * @return {string} `'instanced'` or `'portable'`
  */
 function detectArtifactShape(gltfModel, tables) {
-  if (tables.some(isCollapsedTable)) {
-    return SHAPE_INSTANCED
-  }
   let instanced = false
+  let portable = false
   gltfModel.traverse?.((obj) => {
-    if (obj.isInstancedMesh && Number.isInteger(obj.userData?.bldrsTableNode)) {
+    if (!Number.isInteger(obj.userData?.bldrsTableNode)) {
+      return
+    }
+    if (obj.isInstancedMesh) {
       instanced = true
+    } else if (obj.isMesh && Number.isInteger(obj.userData?.bldrsInstance)) {
+      portable = true
     }
   })
-  return instanced ? SHAPE_INSTANCED : SHAPE_PORTABLE
+  // The row stamp decides first: only the portable rewrite writes it, and a
+  // portable export of a COLLAPSED artifact still carries tables with
+  // `ranges` (the rewrite splits the geometry, not the tables), so the
+  // table test below would otherwise send it to the instanced join — which
+  // would then meet one stamped node per row and refuse the file.
+  if (portable) {
+    return SHAPE_PORTABLE
+  }
+  return instanced || tables.some(isCollapsedTable) ? SHAPE_INSTANCED : SHAPE_PORTABLE
 }
 
 
@@ -317,7 +537,15 @@ function joinPortableNodesToTables(gltfModel, tables) {
   // node copies it makes for it — but it is the assumption that would render
   // the wrong shape rather than fail, so it is checked.
   const sources = []
-  for (const rows of slots) {
+  for (const [t, rows] of slots.entries()) {
+    if (isCollapsedTable(tables[t])) {
+      const source = remergeCollapsedRows(rows, tables[t], toModelSpace)
+      if (!source) {
+        return null
+      }
+      sources.push(source)
+      continue
+    }
     // `?.` because a `count: 0` table has no row 0: `BldrsInstanceTablesReader`
     // admits that count (it rejects only a negative or non-integer one) and the
     // null-slot check above passes vacuously on the empty slot list, so this is
@@ -332,6 +560,102 @@ function joinPortableNodesToTables(gltfModel, tables) {
     sources.push(makePlacementSource(geometry, rows, toModelSpace))
   }
   return sources
+}
+
+
+/**
+ * Rebuild a collapsed table's merged primitive from a portable file, where
+ * the rewrite split it into one mesh per row (`glbPortable.js#
+ * splitCollapsedNodes`).
+ *
+ * Re-merged rather than added row by row, for the rule §1.1d states: a
+ * collapsed element's placement is baked into its vertices, so two rows of
+ * one solid share an `instanceGeometryIds` entry while holding different
+ * triangles. Only the range path marks those geometry ids as ranges
+ * (`batchedGeometryRanges.js#BATCHED_GEOMETRY_RANGE_IDS`), which is what
+ * keeps `batchedInstanceGeometry`'s per-pass cache from handing one row's
+ * triangles to the other. Adding each row as its own geometry would skip that
+ * mark and reintroduce the bug #1870's review caught.
+ *
+ * Re-merging also lets the SAME canary witness the portable file: the split
+ * keeps every row's vertex bytes and makes its indices local, so the
+ * concatenation is the merged primitive the writer hashed.
+ *
+ * @param {Array<object>} rows placement meshes, indexed by table row
+ * @param {object} table parsed collapsed table
+ * @param {Matrix4} toModelSpace inverse of the model root's world matrix
+ * @return {?object} placement source carrying `ranges`, or null
+ */
+function remergeCollapsedRows(rows, table, toModelSpace) {
+  const matrixOfRow = (i, target) => target.multiplyMatrices(toModelSpace, rows[i].matrixWorld)
+  if (table.lossyGeometry) {
+    // Each row is its own Draco primitive, with its own merged and quantized
+    // vertices, so rebuild from each row's triangles — the whole index — and
+    // check the lossy witness, as the instanced join does for a merged one.
+    // Every triangle of a row's own primitive is that row's, so its index
+    // count must match the table's exactly — a surplus would otherwise ride
+    // along unchecked past the rebuild's prefix walk.
+    if (rows.some((row, r) => row.geometry?.getIndex?.()?.count !== table.ranges[r].indexCount)) {
+      return null
+    }
+    const rebuilt = rebuildLossyCollapsed(table, (r) => ({geometry: rows[r].geometry, indexStart: 0}))
+    return rebuilt && {...rebuilt, getMatrixAt: matrixOfRow}
+  }
+  const {ranges} = table
+  const last = ranges[ranges.length - 1]
+  if (!last) {
+    return null
+  }
+  const vertexTotal = last.vertexStart + last.vertexCount
+  const positions = new Float32Array(vertexTotal * 3)
+  const normals = new Float32Array(vertexTotal * 3)
+  const indices = new Uint32Array(last.indexStart + last.indexCount)
+  let hasNormals = true
+  for (let r = 0; r < rows.length; r++) {
+    const geometry = rows[r].geometry
+    const position = geometry?.getAttribute?.('position')
+    const normal = geometry?.getAttribute?.('normal')
+    const index = geometry?.getIndex?.()
+    const {vertexStart, vertexCount, indexStart, indexCount} = ranges[r]
+    if (!position || !index || position.count !== vertexCount || index.count !== indexCount) {
+      return null
+    }
+    hasNormals = hasNormals && Boolean(normal)
+    for (let v = 0; v < vertexCount; v++) {
+      const at = (vertexStart + v) * 3
+      positions[at] = position.getX(v)
+      positions[at + 1] = position.getY(v)
+      positions[at + 2] = position.getZ(v)
+      if (normal) {
+        normals[at] = normal.getX(v)
+        normals[at + 1] = normal.getY(v)
+        normals[at + 2] = normal.getZ(v)
+      }
+    }
+    for (let i = 0; i < indexCount; i++) {
+      const local = index.getX(i)
+      if (local >= vertexCount) {
+        return null
+      }
+      indices[indexStart + i] = vertexStart + local
+    }
+  }
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new BufferAttribute(positions, 3))
+  if (hasNormals) {
+    geometry.setAttribute('normal', new BufferAttribute(normals, 3))
+  }
+  geometry.setIndex(new BufferAttribute(indices, 1))
+  if (!isCollapsedGeometryWitnessed(geometry, table)) {
+    return null
+  }
+  return {
+    geometry,
+    ranges,
+    // Per ROW, not one matrix for the table as the instanced-file join uses:
+    // each row is its own node here, and a tool is free to have moved one.
+    getMatrixAt: (i, target) => target.multiplyMatrices(toModelSpace, rows[i].matrixWorld),
+  }
 }
 
 
@@ -551,8 +875,11 @@ export function hydrateBatchedModelFromInstancedGlb(gltfModel, opts = {}) {
   attachBatchedSubsets(model, opts.scene ?? null, {})
 
   const total = tables.reduce((n, t) => n + t.count, 0)
+  // The collapsed count is the one reader-side signal that the range path
+  // ran (#1871) — `batchedGlbCache.spec.ts` waits on it.
+  const collapsed = tables.filter(isCollapsedTable).length
   glbVerbose(
     `reader: hydrated ${shape} artifact — ${batches.length} batch(es), ` +
-    `${total} instance(s)`)
+    `${total} instance(s), ${collapsed} collapsed table(s)`)
   return model
 }

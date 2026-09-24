@@ -234,6 +234,28 @@ export const flags = [
   // it to keep the #1639 per-triangle alignment invariant — which exists only
   // on the merged layout — under test.
   {name: 'disableGlbBatched', isActive: false},
+  // Collapse the batched-native artifact's single-placement nodes into one
+  // merged primitive per source colour, addressed by per-element index
+  // ranges in `BLDRS_instance_tables` v2 (share-140 #1871,
+  // glb-export-premium.md §1.1d). ~7× off the JSON chunk on a DSA-shaped
+  // model, ~6% on a Snowdon-shaped one.
+  //
+  // Default-OFF, and deliberately so: `glbBatched` is default-on, so this
+  // changes the OPFS artifact every user gets, and a misaligned range table
+  // presents as the WRONG ELEMENT under a click rather than as a crash. The
+  // range canary refuses such a table, but the first release still rides a
+  // flag. Collapsed artifacts live in their own slot
+  // (glbCacheKey#BLDRS_GLB_COLLAPSED_SCHEMA_VERSION), so turning this on or
+  // off never half-reads the other layout, and turning it OFF finds the
+  // un-collapsed artifacts still on disk — rollback costs no re-parse.
+  // The reader hydrates a collapsed table whatever this flag says: a user
+  // may open a collapsed Export download in a session that has it off.
+  // Only meaningful with `glbBatched` active (`glbCompress#isGlbCollapseActive`).
+  {name: 'glbCollapse', isActive: false},
+  // OFF-switch for `glbCollapse`, same shape as `disableGlbBatched`: inert
+  // while `glbCollapse` is default-off, and the per-session escape hatch
+  // (`?feature=disableGlbCollapse`) plus prod kill switch once it flips on.
+  {name: 'disableGlbCollapse', isActive: false},
   // Diagnostic OFF-switch for the full-screen loading overlay
   // (Components/LoadingBackdrop.jsx). The overlay is a dimmer that sits
   // above the canvas, so it also swallows pointer events for the whole
@@ -269,7 +291,7 @@ export const flags = [
  * caller-supplied name in `isFeatureEnabled`.
  */
 const FEATURE_IMPLICATIONS = {
-  glb: ['glbdraco', 'glbmeshopt', 'glbverbose', 'glbbatched'],
+  glb: ['glbdraco', 'glbmeshopt', 'glbverbose', 'glbbatched', 'glbcollapse'],
 }
 
 

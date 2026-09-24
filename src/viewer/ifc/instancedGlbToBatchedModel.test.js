@@ -8,6 +8,7 @@ import {
   Matrix4,
   Mesh,
 } from 'three'
+import {rangeCanaryOf} from '../../loader/bldrsInstanceTables'
 import {hydrateBatchedModelFromInstancedGlb} from './instancedGlbToBatchedModel'
 import {makeInstanceGeometryReader} from './batchedInstanceGeometry'
 import {isDefaultColor} from './productPalette'
@@ -233,6 +234,9 @@ function collapsedNode(geometry, tableIndex) {
 function collapsedFixture() {
   const groups = [mergedGeometry([[1, 0, 0], [2, 0, 0]]), mergedGeometry([[0, 3, 0]])]
   const nodes = groups.map((group, i) => collapsedNode(group.geometry, i))
+  // The canary is what a real file carries beside its ranges
+  // (`bldrsInstanceTables.js`), computed here the way the reader will
+  // recompute it, so these fixtures exercise the join rather than bypass it.
   const tables = [
     {count: 2, color: {...GREY}, parents: [11, 12], occurrenceIds: [0, 1],
       geometryIds: [500, 500], occurrencePaths: [[3, 7], [3, 8]],
@@ -240,6 +244,9 @@ function collapsedFixture() {
     {count: 1, color: {...GREY}, parents: [20], occurrenceIds: [2],
       geometryIds: [600], occurrencePaths: [[4]], ranges: groups[1].ranges},
   ]
+  tables.forEach((table, i) => {
+    table.canary = rangeCanaryOf(groups[i].geometry, table)
+  })
   return {scene: gltfScene(nodes, tables), tables, nodes}
 }
 
@@ -613,6 +620,46 @@ describe('viewer/ifc/instancedGlbToBatchedModel', () => {
 
       expect(Array.from(first.getAttribute('position').array))
         .not.toEqual(Array.from(second.getAttribute('position').array))
+    })
+
+    it('refuses a table whose rows point at each other\'s geometry (the range canary)', () => {
+      // The failure every structural check passes: both rows are one
+      // three-vertex triangle, so swapping their ranges leaves a table that
+      // tiles its primitive exactly, stays inside every bound and satisfies
+      // `addGeometryRanges`' containment scan — and would hand element 11's
+      // triangle to a click on element 12. Only the canary can see it.
+      // Swapping the two triangles' vertices is the same misalignment seen
+      // from the other side — row 0's range now covers row 1's geometry —
+      // and it leaves the table object untouched, so nothing structural moved.
+      const {scene} = collapsedFixture()
+      const positions = scene.children[0].geometry.getAttribute('position')
+      for (let v = 0; v < 3; v++) {
+        const a = [positions.getX(v), positions.getY(v), positions.getZ(v)]
+        positions.setXYZ(v, positions.getX(v + 3), positions.getY(v + 3), positions.getZ(v + 3))
+        positions.setXYZ(v + 3, ...a)
+      }
+
+      expect(hydrateBatchedModelFromInstancedGlb(scene)).toBeNull()
+    })
+
+    it('refuses a table whose identity rows were reordered against its geometry', () => {
+      // Codex on #1872: the mirror image of the swap above. Geometry and
+      // ranges untouched, `parents` swapped — a click on element 11's
+      // triangle would report 12. The canary hashes identity too.
+      const {scene, tables} = collapsedFixture()
+      tables[0].parents = [12, 11]
+
+      expect(hydrateBatchedModelFromInstancedGlb(scene)).toBeNull()
+    })
+
+    it('refuses a collapsed table that carries no canary', () => {
+      // A parsed file cannot produce one (`parseInstanceTablesExtensionData`
+      // refuses it), so this is a table that did not come out of a file —
+      // and an unwitnessed range table is the thing this module refuses.
+      const {scene, tables} = collapsedFixture()
+      delete tables[1].canary
+
+      expect(hydrateBatchedModelFromInstancedGlb(scene)).toBeNull()
     })
 
     it('returns null when a collapsed table has no node', () => {
