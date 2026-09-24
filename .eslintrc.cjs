@@ -68,6 +68,26 @@ module.exports = {
         'no-tabs': 'off',
       },
     },
+    // Vendored Align ADF parser + loader (`src/loader/adf/**`), from
+    // pablo-mayrgundter/freality `bio/med/dental/src/` (#17). Upstream is
+    // still evolving (a JS port of the MetaStream mesh decoder is next), so
+    // it is kept to the upstream shape plus only `eslint --fix`'s mechanical
+    // rewrites, which keeps a re-sync to "copy, --fix, diff". A binary
+    // parser is all byte offsets and bit widths, hence magic numbers and
+    // mixed operators; `== null` is its deliberate null-or-undefined test.
+    {
+      files: ['src/loader/adf/**/*.js'],
+      rules: {
+        'require-jsdoc': 'off',
+        'no-magic-numbers': 'off',
+        'no-mixed-operators': 'off',
+        'jsdoc/require-jsdoc': 'off',
+        'jsdoc/require-returns': 'off',
+        'valid-jsdoc': 'off',
+        'no-eq-null': 'off',
+        'eqeqeq': ['error', 'always', {null: 'ignore'}],
+      },
+    },
     // Pro-module import fence (design/new/glb-export-premium.md §4.1).
     // Premium export code under `src/export/pro/` is built as its OWN
     // bundle into `netlify/functions/_pro-modules/` and delivered only to a

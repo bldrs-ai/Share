@@ -8,6 +8,8 @@ import debug from './utils/debug'
 
 export const supportedTypes = [
   // '3dm',
+  // Align Technology ClinCheck dental scans (see src/loader/adf.js).
+  'adf',
   // 'bld',
   'fbx',
   'glb',
@@ -138,6 +140,13 @@ const GLB_MAGIC = Array.from('glTF', (c) => c.charCodeAt(0))
 // USDC (crate) files start with the ASCII bytes "PXR-USDC"
 const USDC_MAGIC = Array.from('PXR-USDC', (c) => c.charCodeAt(0))
 
+// Binary Align ADF files open with a text line, then length-prefixed binary
+// fields. Matched as magic bytes, before the UTF-8 decode, because the body
+// is binary: loose string checks further down (`includes('FBX')`) could
+// otherwise hit bytes inside it. Only the `bin` flavour is matched, since
+// it is the only one `loader/adf/adf-parser.js` reads.
+const ADF_MAGIC = Array.from('AlignDataFile ( bin )', (c) => c.charCodeAt(0))
+
 // Zip local-file-header signature "PK\x03\x04". A zip signature alone
 // is NOT enough to classify as usdz — docx/xlsx/plain .zip uploads are
 // zips too, and they must keep failing sniffing cleanly ("unknown
@@ -258,6 +267,9 @@ export function analyzeHeader(headerBuffer, {isEnvelopeAllowed = true} = {}) {
   }
   if (matchesMagic(headerBuffer, USDC_MAGIC)) {
     return 'usdc'
+  }
+  if (matchesMagic(headerBuffer, ADF_MAGIC)) {
+    return 'adf'
   }
   if (looksLikeGzipBytes(headerBuffer)) {
     // The gzip signature is shared by SPZ splats, Share's own `.glb.gz`

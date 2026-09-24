@@ -11,7 +11,7 @@ const {beforeEach, describe} = test
 
 /**
  * Tests for opening models in multiple file formats.
- * Tests support for various 3D model file formats (FBX, OBJ, STL, USDA, STEP, STP).
+ * Tests support for various 3D model file formats (FBX, OBJ, STL, USDA, ADF, STEP, STP).
  *
  * Migrated from cypress/e2e/open/200/open-multiple-model-formats.cy.js
  *
@@ -77,6 +77,15 @@ describe('Open 200: Open Models in multiple formats', () => {
       urlPath: '/share/v/gh/bldrs-ai/test-models/main/usd/cube.usda',
       filePath: 'test-models/usd/cube.usda',
       debugTag: 'usdaLoad',
+    })
+  })
+
+  test('Loads ADF - Screen', async ({page}) => {
+    await doTest({
+      page,
+      urlPath: '/share/v/gh/bldrs-ai/test-models/main/adf/PM.adf',
+      filePath: 'test-models/adf/PM.adf',
+      debugTag: 'adfLoad',
     })
   })
 

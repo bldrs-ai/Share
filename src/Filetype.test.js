@@ -291,6 +291,15 @@ describe('Filetype', () => {
       expect(analyzeHeader(buffer)).toBe('usdc')
     })
 
+    it('detects binary Align ADF ahead of the loose text checks', () => {
+      // The body is binary, so bytes spelling "FBX" can land in the sniff
+      // window; the magic check must win before analyzeHeaderStr's
+      // `includes('FBX')` sees them.
+      const buffer = new TextEncoder().encode('AlignDataFile ( bin )\nVersion 1.1\n\n{JawPair FBX').buffer
+      expect(analyzeHeader(buffer)).toBe('adf')
+      expect(getValidExtension('scan.ADF')).toBe('adf')
+    })
+
     /**
      * Build the start of a zip: a local file header whose first entry
      * has the given name. Enough for the sniffing path, which only

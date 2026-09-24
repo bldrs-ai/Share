@@ -67,6 +67,7 @@ import {
   localCacheKey,
   uploadCacheKey,
 } from './sourceCacheKey'
+import adfToThree, {newAdfLoader} from './adf'
 import objToThree from './obj'
 import pdbToThree from './pdb'
 import splatsToThree, {newSplatLoader} from './splats'
@@ -2007,6 +2008,15 @@ async function findLoader(pathname, viewer) {
   let loader
   let fixupCb
   switch (extension) {
+    case 'adf': {
+      // Align ClinCheck dental scan; the parser and three.js loader are
+      // vendored under loader/adf/. See loader/adf.js for what the wrapper
+      // and fixup adapt.
+      loader = newAdfLoader()
+      fixupCb = adfToThree
+      isFormatText = false
+      break
+    }
     case 'bld': {
       loader = new BLDLoader(viewer)
       isFormatText = true

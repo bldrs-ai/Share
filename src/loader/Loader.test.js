@@ -318,6 +318,45 @@ describe('Loader', () => {
     }
   })
 
+  it('loads an Align ADF dental scan', async () => {
+    mockViewer.IFC.type = 'adf'
+    // Read from the E2E fixture tree rather than keeping a second 1.8MB
+    // copy under testdata/models.
+    const fixture = require('path').resolve(
+      __dirname, '../tests/fixtures/github/bldrs-ai/test-models/main/adf/PM.adf')
+    const restoreArrayBuffer = setupMockBlobWithContent(require('fs').readFileSync(fixture))
+    try {
+      const model = await load(testPathToUrl('adf/PM.adf'), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(model.format).toBe('adf')
+      // NavTree: jaws with ADF's '+'-for-space names decoded, then teeth.
+      const jawNames = model.children.map((jaw) => jaw.Name.value)
+      expect(jawNames).toEqual(['Upper Jaw', 'Lower Jaw'])
+      const teethOf = (jaw) => jaw.children.find((child) => child.name === 'teeth').children
+      const [upper, lower] = model.children
+      const upperToothCount = 13
+      const lowerToothCount = 14
+      expect(teethOf(upper)).toHaveLength(upperToothCount)
+      expect(teethOf(lower)).toHaveLength(lowerToothCount)
+      const tooth = teethOf(upper).find((child) => child.name === 'Tooth_08')
+      expect(tooth.Name.value).toBe('Tooth_08')
+      // Picking resolves against the crown mesh's expressID serial.
+      const crown = tooth.children.find((child) => child.name === 'Tooth_08_crown')
+      expect(Number.isSafeInteger(crown.expressID)).toBe(true)
+      // Upstream viewer defaults: FACC curves on, the other overlays off.
+      const overlay = (name) => upper.children.find((child) => child.name === name)
+      expect(overlay('facc').visible).toBe(true)
+      expect(overlay('gingiva').visible).toBe(false)
+      expect(overlay('scanPoints').visible).toBe(false)
+      expect(overlay('meshBounds').visible).toBe(false)
+      // The loader's back-references (tooth records holding their own
+      // Group/Mesh) are dropped. Left in, they stringify to ~2MB per jaw.
+      const maxUserDataJsonLength = 1024
+      expect(JSON.stringify(upper.userData).length).toBeLessThan(maxUserDataJsonLength)
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
   it('rejects a Git LFS pointer with an actionable error, not a parse failure', async () => {
     // bldrs-ai/test-models LFS-tracks every model extension it carries,
     // so a URL that skips the Contents API dereference (a pasted
