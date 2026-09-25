@@ -1457,6 +1457,23 @@ export default function CadView({
         if (!props && typeof viewer.getProperties === 'function') {
           props = await viewer.getProperties(0, Number(lastId))
         }
+        // STEP scene pick on a cache-hit GLB: `lastId` is the geometry's
+        // shared product_definition_shape, which BLDRS_element_properties
+        // never captured (it is seeded from spatial-tree nodes only, and a
+        // shape is not one) — so both lookups above miss and the panel went
+        // blank. The same pick also recorded which occurrence was clicked;
+        // its leaf is the part's tree node, which IS captured — so resolve
+        // the leaf, and only the leaf. Walking on up to an ancestor when the
+        // leaf is missing would put a parent assembly's properties beside a
+        // scene and NavTree that still select the part (codex on #1876);
+        // the empty state is the honest answer then. A live parse answers
+        // the shape id directly, so this only runs on the cached path.
+        const occurrenceLeaf = Array.isArray(selectedOccurrencePath) ?
+          selectedOccurrencePath[selectedOccurrencePath.length - 1] : undefined
+        if (!props && occurrenceLeaf !== undefined && model &&
+            typeof model.getItemProperties === 'function') {
+          props = await model.getItemProperties(Number(occurrenceLeaf))
+        }
         if (isStale) {
           return
         }
