@@ -88,6 +88,18 @@ module.exports = {
         'eqeqeq': ['error', 'always', {null: 'ignore'}],
       },
     },
+    // The MetaStream decoder (`src/loader/mts/**`) is Share's own code, but
+    // it transcribes a bit-level format: its numbers are field widths, bit
+    // offsets and DLL constants, each commented where it matters, and
+    // naming every one would bury the correspondence with the DLL that the
+    // comments cite (design/new/adf-mts-decoder.md).
+    {
+      files: ['src/loader/mts/**/*.js'],
+      rules: {
+        'no-magic-numbers': 'off',
+        'no-mixed-operators': 'off',
+      },
+    },
     // Pro-module import fence (design/new/glb-export-premium.md §4.1).
     // Premium export code under `src/export/pro/` is built as its OWN
     // bundle into `netlify/functions/_pro-modules/` and delivered only to a

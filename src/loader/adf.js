@@ -1,5 +1,10 @@
 import {Group} from 'three'
 import {ADFLoader} from './adf/ADFLoader'
+import {asList, i32, parseADF} from './adf/adf-parser'
+import {MESH_KIND_CROWN} from './adf/mesh-sidecar'
+import {meshPayloadFromCompressedData} from './mts/container'
+import {decodeMesh} from './mts/decoder'
+import debug from '../utils/debug'
 
 
 /**
@@ -8,13 +13,14 @@ import {ADFLoader} from './adf/ADFLoader'
  * The parser and three.js loader under `./adf/` are vendored from
  * pablo-mayrgundter/freality `bio/med/dental/src/` (see `./adf/README.md`).
  * This module is the Share-side adapter: it fits that loader to the
- * `findLoader` tuple and trims what it returns down to a renderable Group.
+ * `findLoader` tuple, decodes the real crown surfaces, and trims what the
+ * loader returns down to a renderable Group.
  *
- * Crowns are drawn as parametric proxies posed from each tooth's FACC frame.
- * The real crown surfaces are MetaStream progressive meshes that no browser
- * code decodes yet. Upstream draws them from an offline-decoded
- * `*.meshes.bin` sidecar (`ADFLoader#parse(buffer, {meshes})`), but a
- * single-file load here doesn't fetch sibling files, so no sidecar is passed.
+ * Each tooth's crown is a MetaStream progressive mesh inside the ADF.
+ * `./mts/` decodes it (design/new/adf-mts-decoder.md) and the results go to
+ * the vendored loader as parsed `*.meshes.bin` entries through its
+ * `ADFLoader#parse(buffer, {meshes})` option, so upstream needs no change.
+ * A tooth whose stream fails to decode keeps upstream's parametric proxy.
  */
 
 
@@ -28,8 +34,85 @@ import {ADFLoader} from './adf/ADFLoader'
 export function newAdfLoader() {
   const adfLoader = new ADFLoader()
   return {
-    parse: (buffer) => adfLoader.parse(buffer),
+    parse: (buffer) => adfLoader.parse(buffer, {meshes: decodeCrowns(buffer).meshes}),
   }
+}
+
+
+/**
+ * Decode every tooth's crown surface in an ADF.
+ *
+ * The ADF is parsed here and again inside `ADFLoader#parse`; that costs a
+ * few milliseconds, against a vendored loader left exactly as upstream has it.
+ *
+ * @param {ArrayBuffer|Uint8Array} buffer the .adf file
+ * @return {{meshes: Array<object>, failures: Array<{toothId: number, error: Error}>}}
+ *   `meshes` in `*.meshes.bin` entry shape (`mesh-sidecar.js`): positions in
+ *   metres, faces wound outward
+ */
+export function decodeCrowns(buffer) {
+  const {root} = parseADF(buffer)
+  const jawPair = root.JawPair && root.JawPair.__type === 'object' ? root.JawPair : root
+  const meshes = []
+  const failures = []
+  for (const jaw of [jawPair.upper, jawPair.lower]) {
+    if (!jaw) {
+      continue
+    }
+    for (const tooth of asList(jaw.Tooth)) {
+      if (!tooth || tooth.__type !== 'object') {
+        continue
+      }
+      const toothId = i32(tooth.id)
+      const blob = asList(tooth.CompressedQedge).map((q) => q?.CompressedData?.bytes).find((b) => b)
+      if (!blob) {
+        continue
+      }
+      try {
+        const {positions, indices} = decodeMesh(meshPayloadFromCompressedData(blob))
+        meshes.push({toothId, kind: MESH_KIND_CROWN, positions, indices: windOutward(positions, indices)})
+      } catch (error) {
+        failures.push({toothId, error})
+      }
+    }
+  }
+  if (failures.length) {
+    debug().warn(`ADF: ${failures.length} crown(s) failed to decode and are drawn as proxies:`,
+      failures.map((f) => `${f.toothId}: ${f.error.message}`))
+  }
+  return {meshes, failures}
+}
+
+
+/**
+ * A MetaStream mesh can come out wound either way. Reverse every face when
+ * the signed volume is negative, as freality's `build_meshes.py` does, so
+ * three.js's front faces and computed normals point out of the tooth.
+ *
+ * @param {Float32Array} p
+ * @param {Uint32Array} indices
+ * @return {Uint32Array}
+ */
+function windOutward(p, indices) {
+  let volume = 0
+  for (let i = 0; i < indices.length; i += 3) {
+    const a = 3 * indices[i]
+    const b = 3 * indices[i + 1]
+    const c = 3 * indices[i + 2]
+    volume += (p[a] * ((p[b + 1] * p[c + 2]) - (p[b + 2] * p[c + 1]))) -
+      (p[a + 1] * ((p[b] * p[c + 2]) - (p[b + 2] * p[c]))) +
+      (p[a + 2] * ((p[b] * p[c + 1]) - (p[b + 1] * p[c])))
+  }
+  if (volume >= 0) {
+    return indices
+  }
+  const flipped = new Uint32Array(indices.length)
+  for (let i = 0; i < indices.length; i += 3) {
+    flipped[i] = indices[i + 2]
+    flipped[i + 1] = indices[i + 1]
+    flipped[i + 2] = indices[i]
+  }
+  return flipped
 }
 
 

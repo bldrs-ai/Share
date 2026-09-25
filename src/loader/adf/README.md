@@ -23,6 +23,8 @@ inserts, then re-apply the three edits above.
 Share-side glue (the `findLoader` wrapper and the fixup) is in
 `src/loader/adf.js`, not here, so this directory stays a copy of upstream.
 
-The crowns are drawn as proxies because nothing in the browser decodes their
-MetaStream meshes yet. The plan for a JS decoder is
-[design/new/adf-mts-decoder.md](../../../design/new/adf-mts-decoder.md).
+The real crown surfaces are MetaStream meshes, decoded by Share's own
+`src/loader/mts/` and passed in through `ADFLoader#parse(buffer, {meshes})`
+(see `src/loader/adf.js` and
+[design/new/adf-mts-decoder.md](../../../design/new/adf-mts-decoder.md)).
+Upstream's proxies still draw any tooth whose stream fails to decode.

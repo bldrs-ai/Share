@@ -1,64 +1,93 @@
 # ADF crown meshes: a JavaScript MetaStream decoder
 
-Status: **spec, not started.** Measurements below are reproducible with
-[`tools/adf-mts/probe.py`](../../tools/adf-mts/probe.py).
+Status: **implemented** in `src/loader/mts/`, used by `src/loader/adf.js`. It
+decodes all 54 meshes in `PM.adf` exactly as Viewpoint's DLL does. The one
+open item is the shipping decision in §6.
 
 Share opens Align ClinCheck `.adf` dental scans (`src/loader/adf.js`, vendored
-parser under `src/loader/adf/`) but draws each tooth as a parametric *proxy*.
-Every tooth's real crown is in the file, compressed as a **MetaStream 3**
-progressive mesh (Viewpoint VET, 1998–2000). Today the only decoder is
-Viewpoint's own `Mts3Reader.dll`, run under a CPU emulator by
-pablo-mayrgundter/freality `bio/med/dental/tools/mts/` to write a
-`PM.meshes.bin` sidecar offline. This doc specs a pure-JS decoder so Share can
-draw real crowns for any ADF, with no sidecar and no DLL.
+parser under `src/loader/adf/`). Every tooth's crown is in the file as a
+**MetaStream 3** progressive mesh (Viewpoint VET, 1998–2000). Until this port,
+the only decoder was Viewpoint's own `Mts3Reader.dll`, run under a CPU
+emulator by pablo-mayrgundter/freality `bio/med/dental/tools/mts/` to write a
+`PM.meshes.bin` sidecar offline. Without it, teeth drew as parametric proxies.
+
+The port was written by reading the DLL (disassembly plus angr's decompiler)
+and checked against it running under that emulator, step by step. The tools
+for that are in `tools/adf-mts/` (§4).
 
 
-## 1. What we know (measured)
+## 1. Results
 
-All on `PM.adf` (27 teeth → 54 blobs: 27 crowns + 27 `InitialToothShape`s),
+All on `PM.adf` (27 teeth → 54 streams: 27 crowns + 27 `InitialToothShape`s),
 DLL `Mts3Reader.dll` 3.0.15.12, sha256 `a87b0712…fc0b765`.
 
-| Fact | Evidence |
+| | |
 |---|---|
-| The emulator reproduces the checked-in sidecar **byte for byte**, so `PM.meshes.bin` is a pure function of `PM.adf` + the DLL. | `build_meshes.py` rerun, `cmp` identical |
-| One crown decode (tooth 8, 3016 verts) runs **226 functions / 8,403 distinct x86 instructions**, 13.9M executed. Teeth 2, 8, 30 run the identical function set. | `probe.py profile` |
-| **86%** of it is the vertex-split routine `0x1181c5e0` (3014 calls = one per split). | `profile` |
-| The base mesh is **2 vertices, 0 faces** (its decoder `0x1181aef0` runs once, 102 instructions). Everything else is vertex splits: each adds 1 vertex and 2 faces (`F = 2V − 4`, closed genus 0). | `profile`, face/vertex counts |
-| There are **two entropy coders** sharing **one bit cursor**: a 16-bit arithmetic coder for connectivity/attributes and raw bits for coordinates, interleaved in decode order. | `probe.py streams`: both read BitStream `0x40003c50` |
-| Positions are **16-bit quantized** integers (0..65535), dequantized as `float32(i · scale + offset)` with float32 `scale`/`offset` per axis. In JS, `Math.fround(i * scale + offset)` in doubles matches the x87 result **bit for bit on all 215,704 vertices** of all 54 blobs. | `probe.py fp`: 0 mismatches |
-| After the first vertex, every position is a **delta from a reference vertex**. The first is "absolute", but its range is `[x, x+1)`, so it costs zero bits. | `probe.py census` |
-| The arithmetic stream uses **9 adaptive models** (alphabets 1–7) and one **uniform** decode (`n ≤ 13`), with ~6 symbols per split. | `census` |
+| Positions | **bit-identical** float32 on all 215,704 vertices |
+| Faces | **identical**, including order and rotation (newest face first, as the DLL hands them over) |
+| Bit cursor | ends where the DLL's does, on every stream |
+| Sidecar | freality's `PM.meshes.bin`, rebuilt from the JS output with `build_meshes.py`'s packing, is **byte-identical** to the committed file |
+| Speed | all 27 crowns in ~160 ms warm, ~220 ms cold (Node 22, one core); the DLL under the emulator takes ~10 s |
 
-So the port is mostly **integer bookkeeping plus one progressive-mesh topology
-routine**. Floating point is one multiply-add per coordinate, and it's
-already verified exact.
+The DLL side, measured before porting (`tools/adf-mts/probe.py`): a crown
+decode runs 226 functions, 8,403 distinct x86 instructions, 13.9M executed,
+86% of them in the vertex-split routine `0x1181c5e0`.
 
 
-## 2. Decoder anatomy
+## 2. The format, as decoded
 
-Addresses are `Mts3Reader.dll` 3.0.15.12 (image base `0x11800000`). "static"
-means distinct instructions executed while decoding tooth 8, which is a
-rough size for the port.
+Addresses are `Mts3Reader.dll` 3.0.15.12 (image base `0x11800000`).
 
-| Stage | Routine | static | What it is |
-|---|---|---|---|
-| Container | (Python `mts.streams`) | — | `"mts"` header, varint-sized typed chunks; a type's stream = its chunks' payloads concatenated (see freality `tools/mts/README.md`). **Known.** |
-| Bit reader | inline everywhere | — | LSB-first: bit `p` is `(bytes[p >> 3] >> (p & 7)) & 1`. `ReadUInt` = 5-bit length `L`, then `L−1` bits, value `(1 << (L−1)) \| bits`. **Known.** |
-| Driver + header | `0x1180faa0` | 239 | Flags, version, optional key, plug-in headers, counts, quantization parameters; then base mesh, then the split loop. |
-| Coordinate trees | `0x1181b5b0` → `0x11822840` → `0x118226c0` (recursive) | ~190 | Builds 6 interval trees once per stream (3 axes × {delta, absolute}) from header data. |
-| Base mesh | `0x1181aef0` | 102 | Trivial for Align streams (2 verts, 0 faces). Port the general case only if a stream needs it; fail loudly otherwise. |
-| **Vertex split** | `0x1181c5e0` + helpers | 834 + ~5k | Picks where to split (arithmetic symbols + uniform), updates the quad-edge mesh, runs the attribute plug-ins. **The bulk of the work.** |
-| Attribute plug-ins | `0x1181a330` / `0x1181a360` / `0x1181a390` | — | Per split: position (`0x11819790`), a 5-symbol attribute decoded twice per split (`0x118147f0`), most likely one per new face, and a plug-in (`0x118146f0` → `0x1181a910`) that reads no bits. |
-| Output | `0x11814940` (take-mesh) | 130 | Walks the face list into arrays. The port writes its own arrays. |
+### 2.1 Container and bits (`container.js`, `bitstream.js`)
 
-### 2.1 Arithmetic decoder (fully read; port literally)
+- **Container:** `"mts"` + big-endian version + `$$` + 1 byte, a varint-sized
+  header, then chunks of `varint length · varint typeId · [type definition on
+  first use] · payload`. A type's stream is its chunks' payloads
+  concatenated; the first payload byte is an object index, not data. ADF
+  `CompressedData` is a uint32 size, then one stream holding one `mesh` type.
+- **One bit cursor** serves everything: header fields, raw-bit coordinates,
+  raw uniform choices and the arithmetic decoder, interleaved in decode order.
+  Bits are LSB-first; bit `k` of a multi-bit field is stream bit `pos + k`.
+- `ReadUInt` = a 5-bit length `L`, then `L − 1` bits `b`: `(1 << (L−1)) | b`,
+  or 0 when `L` is 0. Strings are a `ReadUInt` length, then 8-bit characters,
+  with no alignment in any header these streams use.
 
-State: `low`, `range`, `value` (16-bit), `bitsLeft`, shared `bitstream`.
+### 2.2 Header (`header.js`)
+
+In stream order:
+
+| Routine | Bits (tooth 8) | Content |
+|---|---|---|
+| `0x11810a90` | 0–32 | flags (bit 0: key-protected, unsupported) |
+| `0x11809ab0` | 32–37 | version, must be 0 |
+| `0x1180ffb0` | 37–101 | six counts: vertices, faces, base vertices, base faces, **splits**, reserved. The base mesh is empty (0, 0) in every stream. |
+| `0x11819e20` | 101–190 | named plug-in parameters (`"c"`, `"T"`, `"aN"`, `"ffl"`), each followed by a 0 bit |
+| `0x11819570` | 190–397 | position quantizer: bbox min, max (float32 ×3 each), bits per axis (5 bits ×3; 15/15/16). `scale = extent / (2^bits − 1)` (§2.6), `offset = min` |
+| `0x11817850` | 397–412 | a vertex-attribute channel table (consumed, unused) |
+| `0x11817090` | 412–480 | a 4-bit type, then one or two 32-bit words (consumed, unused) |
+| `0x11814390` | 480–865 | face-flag names (`"Fbits0"`…); one 32-bit flag channel per 32 names |
+| `0x1181b5b0` | 865–2338 | six coordinate trees: delta x/y/z, then absolute x/y/z (§2.5) |
+| `0x1181e9c0` | 2338–2418 | the arithmetic models' shapes (§2.3), then the coder's bit budget |
+
+Every adaptive model starts flat (frequency 1 per symbol) with
+`incShift = rescaleShift = 7`. Their alphabets and offsets, in descriptor
+order: a vertex-channel model (fixed: offset −1, 2 symbols, unused); the
+face-flag model (offset and alphabet stored: −1, 5); then the split
+decoder's models m0 and m4 (fixed at 2 symbols) and m1, m5, m2, m3, m9, m8,
+m6, plus an unused tenth (alphabets stored). A "value" model returns
+`symbol + offset`. A "bounded" one decodes `symbolBounded(m, limit − offset)
++ offset`, with offset 0 in practice.
+
+### 2.3 Arithmetic decoder (`arith.js`)
+
+A 16-bit Witten–Neal–Cleary coder. State: `low`, `range`, `value`, and
+`bitsLeft`, the budget from the header. Past the budget it shifts in zeros
+without moving the cursor.
 
 ```
 start(bs, budget):                       // 0x11822b50
   low = 0; range = 0x10000; value = 0; bitsLeft = budget
-  repeat 16: value = (value << 1) | nextBit()   // nextBit() is 0 once bitsLeft is spent
+  repeat 16: value = (value << 1) | nextBit()
 nextBit(): b = (bitsLeft > 0) ? bs.read1() : 0; bitsLeft -= 1; return b
 
 renorm():                                // 0x11822bd0
@@ -72,35 +101,32 @@ renorm():                                // 0x11822bd0
     value = ((value & ~0x8000) << 1) | nextBit()
 ```
 
-Adaptive model (`0x11822a70` update, `0x11822b10` lookup). Entries are
-`{freq, cum}` for `k = 0..n−1`, with `cum` accumulated **from the top**
-(`cum[k] = Σ freq[j≥k]`, `cum[0]` = total, `cum[n] = 0`), plus `incShift` and
-`rescaleShift`:
+Adaptive model (`0x11822a70` update, `0x11822b10` lookup): `{freq, cum}`
+entries for `k = 0..n−1`, `cum` accumulated from the top (`cum[0]` = total,
+`cum[n] = 0`):
 
 ```
-lookup(target): largest k with cum[k] > target      // binary search, 0x11822b10
+lookup(target): largest k with cum[k] > target
 update(s):
   inc = (cum[0] >> incShift) + 1
   freq[s] += inc; for k = s..0: cum[k] += inc
-  if cum[0] > 0x3fff:                                // rescale
+  if cum[0] > 0x3fff:
     acc = 0
     for k = n−1..0: f = (freq[k] + (1 << (rescaleShift−1))) >> rescaleShift
                     if f == 0 && freq[k] != 0: f = 1
                     freq[k] = f; acc += f; cum[k] = acc
 ```
 
-Decoding. `range_old` is `range` on entry. Every division truncates, and
-every product fits in int32 (16-bit range × 14-bit totals), so plain JS
-numbers with `Math.trunc` are enough:
+Decoding (`range_old` is `range` on entry; divisions truncate; products fit
+in int32):
 
 ```
-symbol(m):                               // 0x11822ca0; the caller then calls m.update(s)
+symbol(m):                               // 0x11822ca0; caller then m.update(s)
   t = floor(((value − low + 1) · cum[0] − 1) / range)
-  s = m.lookup(t)
-  lo = cum[s+1]; hi = cum[s]
+  s = m.lookup(t); lo = cum[s+1]; hi = cum[s]
   range = trunc((hi − lo) · range_old / cum[0]);  low += trunc(lo · range_old / cum[0]);  renorm()
-symbolBounded(m, limit):                 // 0x11822d50: symbol restricted to [0, min(limit, n−1))
-  base = cum[min(limit, n−1)]; tot = cum[0] − base
+symbolBounded(m, limit):                 // 0x11822d50: symbols [0, min(limit, n)) only
+  base = cum[min(limit, n)]; tot = cum[0] − base
   t = floor(((value − low + 1) · tot − 1) / range) + base
   s = m.lookup(t); lo = cum[s+1]; hi = cum[s]
   range = trunc((hi − lo) · range_old / tot);  low += trunc((lo − base) · range_old / tot);  renorm()
@@ -109,125 +135,152 @@ uniform(n):                              // 0x11822d10
   range = trunc(range_old / n);  low += trunc(t · range_old / n);  renorm();  return t
 ```
 
-The model's initial frequencies, `incShift` and `rescaleShift`, and where each
-of the 9 models is created are **still to be read** (milestone M2). The
-census gives the targets:
+Two further choices are made with **raw bits**, not the coder: coordinates
+(§2.5), and `rawUniform(n)` (`0x1181b500`), which is plain bisection over
+`[0, n)`.
 
-| Call site | Kind | Alphabet | Calls (tooth 8) | Likely role |
-|---|---|---|---|---|
-| `0x1181e2f4` | bounded | 7 | 2921 | common-case split parameter |
-| `0x1181e141` | symbol | 2 | 3014 | per-split flag (common vs rare branch) |
-| `0x1181e1a1` | symbol | 1 | 3014 | per-split, carries no information but updates |
-| `0x1181e171`, `…1d7`, `…214`, `…247`, `…277`, `…2b4` | mixed | 1–7 | ~93 each | rare-case split (93 of 3014) |
-| `0x1181e323` | uniform | n = 1..13 | 3754 | choice among a vertex's neighbours (valence-sized) |
-| `0x11814835` | symbol | 5 | 6028 | per-face attribute of each new face |
+### 2.4 The mesh and its splits (`mesh.js`, `decoder.js`)
 
-### 2.2 Coordinates (fully read)
+**Representation.** It's not a quad-edge but a triangle-adjacency mesh.
+Face `f` has vertices `v[f][0..2]` and, across the edge opposite vertex `i`,
+a link `n[f][i]`. Links are tagged half-edges `face·4 + edge`; half-edge
+`(f, i)` runs `v[i+1] → v[i+2]`. Each vertex has an anchor (one outgoing
+half-edge). Stepping around a vertex: `step(h) = n[face(h)][prev(edge(h))]`.
+A vertex's **ring starts at the half-edge whose face was created last**
+(`0x1181a910`), which makes ring positions independent of the anchor.
+
+The decoder reproduces the DLL's link surgery exactly, not just its
+topology, because the stream's choices index into this structure. That
+covers ring positions, wedges, and a sorted candidate list.
+
+**Splits.** The base mesh is empty. Each of the header's `splits` splits
+first reads m0 (common or rare) and m1 (always 0; nonzero would mean extra
+records, unsupported).
+
+*Common split* (the vast majority):
+1. `vs = rawUniform(vertexCount)`; a new vertex `vt`.
+2. `h1 = rotate(ringStart(vs), uniform(valence))`, `e1 = prev(h1)`.
+3. `s = symbolBounded(m9, valence − 1)`, `e2 = prev(rotate(twin(e1), s))`.
+4. New faces `F1 = [vs, vt, b]` and `F2 = [vs, a, vt]`, in that order, where
+   `a`, `b` are the tails of `e1`, `e2`. Linked in as `0x1180dcc0` does.
+5. The fan from `twin(e1)` up to `F1` is relabelled `vs → vt`: `s + 1` faces.
+
+*Rare split* (93 of 3014 in tooth 8, including the first five that build the
+initial mesh). It is a general record:
+1. **Counts:** m2 existing vertices (picked by running `rawUniform`) and m3
+   new vertices; an m4 flag for "cut the split vertex".
+2. **Split vertex:** `rawUniform(vertexCount + created)`, which may be one of
+   the just-created vertices.
+3. **Candidates:** a sorted set of vertex indices holding the counted
+   vertices, the created ones and the split vertex's ring.
+4. **Cut** (if flagged): `h1 = rotate(ringStart, uniform(valence))`,
+   `h2 = rotate(h1, symbolBounded(m8, valence))`. Swapping the twin links of
+   `prev(h1)` and `prev(h2)` splits the ring in two, and the half from the
+   old twin moves to `vt`.
+5. **Faces:** m5 is the number of new faces and m6 how many of them are
+   oriented `[v, vt, x]` (the rest `[v, x, vt]`). For each face, `x` is
+   `candidates[uniform(size)]`, and each corner with an existing fan is
+   spliced into the wedge `uniform(valence)` picks.
+
+**Plug-ins, per split.** Their order is fixed.
+- **Face flags:** before the ring changes, the split vertex's ring face flags
+  are collected (consecutive repeats dropped) as a recent list. After the new
+  faces exist, each gets `value(faceFlag)`: negative picks a recent flag,
+  0 reads a new 32-bit flag raw, positive picks an earlier new one.
+- **Positions:** new vertices are decoded in index order, each predicted
+  from the split vertex (§2.5).
+
+### 2.5 Coordinates (`trees.js`)
 
 ```
-readTreeInt(tree, bs):                   // 0x118228f0, raw bits, no arithmetic coding
+readTreeInt(tree, bs):                   // 0x118228f0, raw bits
   lo = tree.lo; hi = tree.hi; node = tree.root
   while lo < hi − 1 && node:
-    if bs.read1(): lo = node.lo; node = node.right     // node: +0 lo, +4 hi, +8 left, +0xc right
+    if bs.read1(): lo = node.lo; node = node.right
     else:          hi = node.hi; node = node.left
-  while hi > lo + 1:                           // then plain bisection
-    mid = (lo + hi) >> 1                       // arithmetic shift: floor for negatives
-    if bs.read1(): lo = mid else hi = mid
-  return lo
-
-position(ref):                           // 0x11819790
-  if ref >= 0: q = qint[ref] + (readTreeInt(delta.x), …y, …z)
-  else:        q = (readTreeInt(abs.x), …y, …z)
-  qint.push(q)
-  pos.push(Math.fround(q.x * scale.x + offset.x), …)   // verified bit-exact
+  bisect(lo, hi)                         // one bit per halving, >> 1 floors
 ```
 
-`ref`, the vertex a new position is predicted from, comes from the split
-routine. Per-axis delta ranges for tooth 8 are e.g. `[−14892, 28526)`. How
-the trees are built from the header (`0x118226c0`) is **still to be read**
-(M3).
+A tree header (`0x11822840`) is a sign bit, a `ReadUInt` magnitude for `lo`,
+and a `ReadUInt` extent. Nodes (`0x118226c0`) follow recursively, as
+presence bit, `cutLo = bisect(lo, hi)`, `cutHi = bisect(cutLo, hi)`, left
+subtree over `[lo, cutLo)`, right over `[cutHi, hi)`. Values in
+`[cutLo, cutHi)` never occur, so they cost nothing: the encoder shapes the
+tree to the data.
+
+A vertex with a reference is `qint[ref] + (delta x, y, z)`. The first vertex
+has none and uses the absolute trees, whose range is a single value, so it
+costs zero bits.
+
+### 2.6 Floating point
+
+`position = Math.fround(q · scale + offset)` in doubles matches the DLL's x87
+bit for bit on every vertex. For `scale`, the DLL keeps x's extent at full
+precision but rounds y's and z's to float32 before dividing; `header.js`
+mirrors that. It's verified through the positions, which use it.
 
 
-## 3. Where the code goes
+## 3. Code map
 
-- **`src/loader/mts/`**, Share-owned (not under the vendored `loader/adf/`).
-  MetaStream is a general 3D format, not an Align one. Suggested modules:
-  `container.js`, `bitstream.js`, `arith.js`, `trees.js`, `header.js`,
-  `splits.js`, and `index.js` exporting
-  `decodeMts(bytes) → {positions: Float32Array, indices: Uint32Array}`.
-- **Integration in `src/loader/adf.js`**, with no change to the vendored
-  loader: `ADFLoader#parse(buffer, {meshes})` already accepts parsed sidecar
-  entries (`{toothId, kind, min, max, positions, indices}`). The glue walks
-  `parseADF(buffer)` for each tooth's `CompressedQedge.CompressedData`, decodes
-  it, and passes the entries in. Parsing twice costs milliseconds.
-  - Winding: `build_meshes.py` reverses faces when the signed volume is
-    negative. Do the same until the rule is understood.
-  - A tooth whose blob fails to decode keeps its proxy and logs once. One bad
-    tooth mustn't fail the model.
-- **Performance target:** all 27 crowns under 500 ms on a desktop, measured.
-  The emulator's ~14M x86 instructions per crown include allocator and
-  quad-edge overhead that typed arrays avoid. If the target is missed, decode
-  in a worker.
+| File | Role |
+|---|---|
+| `src/loader/mts/container.js` | MetaStream chunks → the `mesh` stream |
+| `src/loader/mts/bitstream.js` | the shared bit cursor, `ReadUInt`, strings |
+| `src/loader/mts/arith.js` | arithmetic decoder, adaptive model |
+| `src/loader/mts/trees.js` | coordinate trees, bisection |
+| `src/loader/mts/header.js` | §2.2; `UnsupportedMtsError` for paths no ADF uses |
+| `src/loader/mts/mesh.js` | the split mesh (§2.4) |
+| `src/loader/mts/decoder.js` | `decodeMesh(payload)`: header, split loop, plug-ins |
+| `src/loader/adf.js` | `decodeCrowns(buffer)`: every crown → `*.meshes.bin`-shaped entries for the vendored `ADFLoader#parse(buffer, {meshes})`; winds faces outward by signed volume; a tooth that fails keeps its proxy |
+
+**Robustness.** Walks around a vertex are bounded (`SplitMesh#checkWalk`),
+and a collapsed arithmetic range throws. So a corrupt stream fails that
+tooth instead of hanging the page.
 
 
-## 4. Verification: the emulator as oracle
+## 4. Verification
 
-CI can't run the DLL (not redistributable). So the emulator produces
-**committed fixtures** once, and Jest tests the JS against them. Fixtures
-are derived from `PM.adf` only; they contain no Viewpoint code.
+The DLL can't run in CI (not redistributable), so:
 
-1. **Event trace** (new `probe.py oracle` subcommand, M0). Hook the coder
-   entry points in §2.1/§2.2 and record, in order, one row per event:
-   `{kind, callSite, modelId, arg, result, bitPos}`. That's ~28k rows for
-   tooth 8 (~19k arithmetic, ~9k raw). Also dump the 6 coordinate trees after setup, and the final
-   `qint`, positions and faces.
-2. **Driven replay tests** (M2, M3). Feed the JS coder the oracle's
-   `(kind, model, arg)` sequence and assert the same `result` and `bitPos`
-   at every row. This proves the arithmetic coder, models and trees
-   **independently of the topology code**, which is the risky part.
-3. **Free-running decode** (M4). The JS decoder produces its own event
-   stream. The test diffs it against the oracle and reports the **first
-   divergent row** (split number, call site). That turns "wrong mesh" into
-   "split 1,207, site `0x1181e323`, expected 4 got 2".
-4. **End to end** (M5), with no DLL:
-   - All 54 blobs: positions bit-exact; faces equal after canonicalization
-     (rotate each triangle to its smallest index, sort); bits consumed equal.
-   - Regenerate the sidecar from JS and compare it to `PM.meshes.bin`: equal
-     after canonicalization, byte-identical if the port also reproduces the
-     face-list order of `0x11814940`.
+- `src/loader/mts/decoder.test.js` decodes all 54 streams and checks, per
+  stream, the counts, final bit position, and SHA-1s of positions and faces
+  against `testdata/models/adf/PM.adf.mts-dll.json`. That fixture holds the
+  **DLL's** results, recorded with `tools/adf-mts/oracle.py`, so the test is
+  anchored to Viewpoint's decoder, not to this port's own output.
+- `src/loader/Loader.test.js` checks that every tooth loads its real crown.
+- `src/Components/Open/Filetypes.spec.ts` renders it (golden `Filetypes-adfLoad`).
 
-Fixture budget: the tooth-8 trace plus one molar, a few hundred KB. The
-end-to-end check reads `test-models/adf/PM.adf` and `PM.meshes.bin` (and the
-E2E fixture copy already in Share).
+With the DLL at hand (`MTS_TOOLS`, `MTS_DLL`; see each script's docstring),
+these tools diagnose divergences:
+
+| Tool | Gives |
+|---|---|
+| `tools/adf-mts/probe.py` | profile, call-site census, the float check, bit-cursor sharing, coder seeding |
+| `tools/adf-mts/oracle.py` | every primitive call in order: kind, call site, model/tree, argument, result, bit cursor; plus model and tree dumps, coder state, final mesh |
+| `tools/adf-mts/meshstates.py` | the DLL's whole mesh after each split, in `SplitMesh`'s shape |
+
+The port was built in that order. Replaying the oracle's calls proved the
+coders on all 54 streams before any mesh code existed. Diffing `meshstates`
+snapshots after every split then proved the split logic.
 
 
-## 5. Milestones
+## 5. What's left
 
-| | Deliverable | Gate |
-|---|---|---|
-| M0 | `probe.py oracle`: trace + trees + final mesh, for tooth 8 and a molar | Fixtures committed; `probe.py` rerun reproduces them |
-| M1 | container, bit reader, `ReadUInt`, header | Header fields match an emulator memory dump; locate the caller of `start()` and where its `budget` (0x6400 for tooth 8) comes from |
-| M2 | arithmetic coder + adaptive models (§2.1) | Driven replay: every arithmetic row matches |
-| M3 | coordinate trees (§2.2) + position plug-in | Driven replay: every raw row matches; the 6 trees equal the dumps |
-| M4 | vertex split, the per-face attribute and bookkeeping plug-ins, output arrays | Free-running trace matches to the last row on tooth 8, then on the molar |
-| M5 | all 54 blobs | §4 point 4 |
-| M6 | Share integration (§3) | Loader unit test asserts real vertex counts per tooth; the `Filetypes-adfLoad` golden is regenerated (real crowns); perf target met |
-
-M4 is the unknown. The rest is either already read (§2.1, §2.2) or small.
-The split routine's 834 instructions and its quad-edge helpers are where the
-effort goes. The oracle is what makes that tractable: every symbol has a
-known expected value and a known call site to read next.
-
-
-## 6. Open questions
-
-- **Shipping a reimplementation.** The port is an independent implementation
-  of a file format, derived by studying the DLL for interoperability. The DLL
-  itself is never committed. Whether that's comfortable to ship in Share is a
-  product/legal call, not an engineering one; decide before M6.
-- **Other ADFs.** Every measurement here is one file. Two more ADFs (ideally
-  from other cases or ClinCheck versions) would show whether the base-mesh
-  and rare-branch paths ever get exercised.
-- **`InitialToothShape`**, the second mesh per tooth: the same decoder
-  handles it (it's in the 54-blob check). Whether Share shows it is a UI
+- **Other ADFs.** Everything was verified on one file. Paths it never
+  exercises (a non-empty base mesh, key-protected streams, plug-in parameter
+  values, flagged vertex channels, extra split records) throw
+  `UnsupportedMtsError` rather than guess. A second or third ADF, ideally
+  from another case or ClinCheck version, would show whether any are needed.
+- **`InitialToothShape`** decodes too (it's in the 54). Showing it is a UI
   question.
+- **Face flags** are decoded (they drive the stream) but not displayed.
+- **Upstream.** The decoder could go back to freality's
+  `bio/med/dental/src/` so its viewer stops needing the sidecar.
+
+
+## 6. Open question: shipping it
+
+The decoder is an independent implementation of a file format, written by
+studying Viewpoint's DLL for interoperability. The DLL is never committed.
+Whether that is comfortable to ship in Share is a product and legal call, not
+an engineering one, and it should be made before this merges.

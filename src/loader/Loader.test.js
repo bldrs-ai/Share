@@ -342,6 +342,15 @@ describe('Loader', () => {
       // Picking resolves against the crown mesh's expressID serial.
       const crown = tooth.children.find((child) => child.name === 'Tooth_08_crown')
       expect(Number.isSafeInteger(crown.expressID)).toBe(true)
+      // Every crown is the decoded MetaStream surface, not a proxy: tooth 8's
+      // stream holds 3016 vertices and 6028 faces (loader/mts/decoder.test.js
+      // checks them against the DLL).
+      const allTeeth = [...teethOf(upper), ...teethOf(lower)]
+      expect(allTeeth.filter((t) => !t.userData.realMesh).map((t) => t.name)).toEqual([])
+      const tooth8Vertices = 3016
+      const tooth8Faces = 6028
+      expect(tooth.userData.vertexCount).toBe(tooth8Vertices)
+      expect(crown.geometry.index.count).toBe(3 * tooth8Faces)
       // Upstream viewer defaults: FACC curves on, the other overlays off.
       const overlay = (name) => upper.children.find((child) => child.name === name)
       expect(overlay('facc').visible).toBe(true)
