@@ -8,7 +8,10 @@ import {stepSchemaName} from '../Filetype'
  * conway fails closed on IFC4X3 content it cannot read correctly
  * (bldrs-ai/conway#713): its geometry extraction is typed against IFC4, and
  * 4x3 adds entity types IFC4 does not have and changes the attribute layout
- * of some it does. It refuses instead of guessing, and the web-ifc compat
+ * of some it does. Since bldrs-ai/conway#718 a 4x3 file whose content IFC4
+ * can decode (plus the road entities it translates) loads, so only the rest
+ * — alignments, spirals, sectioned solids, … (bldrs-ai/conway#716) — still
+ * reach here. It refuses instead of guessing, and the web-ifc compat
  * surface reports that as `OpenModel` returning -1 — the same value every
  * other open failure returns. Without this type the user saw
  * "parseIfcWithConway: OpenModel returned -1" and a "contact us on Discord"
