@@ -920,6 +920,46 @@ describe('loadProgress', () => {
           expect(context.tags).not.toHaveProperty('data_defect')
         })
 
+        /*
+         * Conway's category is part of an entry's dedup identity, so the
+         * same text logged with and without the marker is two Logger entries
+         * whose echoes are identical — the tee merges them into one
+         * diagnostic. The text cannot say which dominated, so it must not be
+         * tagged (engine triage wins), in either order.
+         */
+        it.each([
+          ['marked, then unmarked', [DATA_DEFECT, undefined]],
+          ['unmarked, then marked', [undefined, DATA_DEFECT]],
+        ])('does not tag a message logged both marked and unmarked: %s', (_label, categories) => {
+          beginLoadProgress({fileInfo: 'part.step'})
+          categories.forEach((category) => Logger.error(DANGLING, EXPRESS_ID, category))
+          endLoadProgress()
+          captureLoadDiagnostics({errorCount: 2})
+
+          const [message, context] = diagnosticsCall()
+          // One merged tee diagnostic, seen twice — the collision itself.
+          expect(context.contexts.loadDiagnostics.consoleDistinct).toBe(1)
+          expect(context.contexts.loadDiagnostics.consoleTotal).toBe(2)
+          expect(message).toMatch(new RegExp(`^Load diagnostics: ${DANGLING} exp…$`))
+          expect(context.tags).not.toHaveProperty('data_defect')
+        })
+
+        it('is not cancelled by an info-level sighting the tee never captures', () => {
+          const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+          beginLoadProgress({fileInfo: 'part.step'})
+          Logger.info(DANGLING)
+          Logger.error(DANGLING, EXPRESS_ID, DATA_DEFECT)
+          endLoadProgress()
+          captureLoadDiagnostics({errorCount: 1})
+
+          // The info entry really was logged and echoed — to console.log,
+          // which the tee does not capture.
+          expect(logSpy).toHaveBeenCalledWith(DANGLING)
+          expect(diagnosticsCall()[1].contexts.loadDiagnostics.consoleDistinct).toBe(1)
+          expect(diagnosticsCall()[1].tags.data_defect).toBe('true')
+          logSpy.mockRestore()
+        })
+
         it.each([
           ['No units defined.', 'No units defined.'],
           ['No IfcProjects found?', 'No IfcProjects found?'],

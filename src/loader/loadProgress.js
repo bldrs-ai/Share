@@ -166,10 +166,12 @@ class LoadProgressReporter {
     // route through console.warn/error.
     this.diagnostics = new Map()
     // Base messages (conway LogEntry.message, whitespace-collapsed like the
-    // tee's text) of the entries conway marked as data defects during this
-    // load — what isDataDefectDiagnostic matches the captured diagnostic
-    // against. See installDefectProxy.
+    // tee's text) conway logged during this load, split by whether the entry
+    // carried the data-defect marker — what isDataDefectDiagnostic matches
+    // the captured diagnostic against. Both are kept because a message can
+    // land in both; see installDefectProxy.
     this.dataDefectMessages = new Set()
+    this.unmarkedMessages = new Set()
     this.installConsoleTee()
     this.installDefectProxy()
 
@@ -231,12 +233,25 @@ class LoadProgressReporter {
    * The proxy only records; the text the Sentry event is titled by still
    * comes from the console tee, and isDataDefectDiagnostic joins the two.
    * Detached with the tee in restoreConsole, so both cover the same window.
+   *
+   * Unmarked warnings/errors are recorded too, because the join is lossy in
+   * one case. Conway's category is part of an entry's dedup identity
+   * (conway#712), so the SAME base message logged with and without the
+   * marker is two Logger entries — but both echo the identical line, which
+   * the tee folds into one diagnostic. Only warning/error are kept: those
+   * are the levels the tee captures, so only they can collide with a
+   * defect's echo.
    */
   installDefectProxy() {
     this.defectProxy = {
       log: (entry) => {
-        if (entry?.category === DATA_DEFECT && typeof entry.message === 'string') {
+        if (typeof entry?.message !== 'string') {
+          return
+        }
+        if (entry.category === DATA_DEFECT) {
           this.dataDefectMessages.add(collapseWhitespace(entry.message))
+        } else if (entry.level === 'warning' || entry.level === 'error') {
+          this.unmarkedMessages.add(collapseWhitespace(entry.message))
         }
       },
     }
@@ -276,8 +291,16 @@ class LoadProgressReporter {
    *    is exact, not a prefix: conway logs a marked and an unmarked variant
    *    that share a prefix ("…untypeable in AP214" vs "…untypeable in AP214:
    *    <error>"), and only the first is a defect.
+   *
+   *    A base message this load ALSO logged without the marker is not a
+   *    defect. That is the identical-text case installDefectProxy describes:
+   *    the tee has merged a defect with an engine diagnostic, the text cannot
+   *    say which one dominated, and the tag errs toward engine triage — the
+   *    same rule as a load whose top diagnostic is an engine error, because
+   *    hiding a real engine gap behind the filter is the costlier mistake.
    * 2. DATA_DEFECT_FALLBACK_MESSAGES, for the data-quality diagnostics conway
-   *    does not mark.
+   *    does not mark. These arrive unmarked by definition, so the both-ways
+   *    guard above does not apply to them.
    *
    * @param {string} text a diagnostic as the console tee captured it
    * @return {boolean}
@@ -287,7 +310,8 @@ class LoadProgressReporter {
       return false
     }
     const base = text.split(' expressID: ')[0]
-    return this.dataDefectMessages.has(base) ||
+    const markedOnly = this.dataDefectMessages.has(base) && !this.unmarkedMessages.has(base)
+    return markedOnly ||
       DATA_DEFECT_FALLBACK_MESSAGES.has(normalizeMessageDigits(base))
   }
 
