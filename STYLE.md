@@ -124,7 +124,8 @@ An assertion that cannot fail is worse than a missing one, because it reads as
 coverage. The #1776 work stream (#1777, #1782, #1783, #1788, #1789, #1790)
 produced about a dozen of these — several inside code written to prevent exactly
 that. They are **three different diseases** wearing one symptom, and they take
-different remedies, so name which one you have before reaching for a fix.
+different remedies, so name which one you have before reaching for a fix. (A
+fourth, below, is not a broken assertion at all but a missing one.)
 
 **1. The assertion genuinely cannot fail.** No input makes it red.
 
@@ -186,7 +187,36 @@ assertion was right, the explanation was not, and the next reader would have
 gone hunting for slack that does not exist. Check the claim, not just the pass;
 a green test proves nothing about the sentence above it.
 
-**For 1 and 3 the check is cheap: break the thing the assertion guards, watch it
+**4. Every assertion is sound, and none of them is the one that matters.** The
+first cut of the collapsed artifact (#1871) passed jest raycasts, bounds parity,
+a canary test verified red, and a desktop+mobile cache E2E — and the owner's
+first smoke found a Draco export of DSA that rendered perfectly and could not be
+selected. Each test had asserted a *proxy* for the feature (a raycast returns
+the right `batchId`; per-element bounds match) one layer below what a user does,
+and on inputs gentler than theirs: the fixture collapsed 2 elements of 18, the
+codec matrix stopped at what jsdom can decode, and a fail-soft fallback ("render,
+don't pick") was asserted as a pass. The remedies, in the order they would have
+caught it:
+
+- **Assert the user's action end to end at least once per feature.** For
+  anything pickable, that is: double-click in the scene → the element is in
+  `selectedElements`, its NavTree row is `data-is-selected`, the URL carries its
+  path (`Components/Share/exportCollapsed.spec.ts`). A proxy test is cheaper and
+  worth having; it is not a substitute.
+- **Cover every way the artifact reaches the viewer**, not the one you built
+  first: cache hit, and each Export codec reopened. Codecs are where "lossless"
+  stops being true — Draco merges vertices, Meshopt rotates triangle corners —
+  and jsdom cannot decode Draco through three's loader, so that half lives in
+  Playwright or it does not live anywhere.
+- **Aim at the thing under test.** A hybrid model's centre pixel landed on an
+  instanced part and "proved" picking for the collapsed one. Choose targets by
+  the property you are testing (`bldrsGeometryRangeIds`), not by where they
+  happen to be.
+- **A fallback is a failure to the user.** When fail-soft degrades a feature,
+  make the degradation loud (a warning the load report shows) and assert the
+  undegraded path, so a green test cannot mean "fell back quietly".
+
+**For 1, 3 and 4 the check is cheap: break the thing the assertion guards, watch it
 go red, restore it.** Every repair above was confirmed that way, and the mutation
 run is what caught two of them being vacuous a *second* time after a first fix,
 which reading alone had missed both times. Put the result in the PR — "26 passed

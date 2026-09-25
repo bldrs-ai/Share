@@ -1,5 +1,6 @@
 import {
   BLDRS_GLB_BATCHED_SCHEMA_VERSION,
+  BLDRS_GLB_COLLAPSED_SCHEMA_VERSION,
   BLDRS_GLB_SCHEMA_VERSION,
   glbArtifactPath,
   glbCacheKey,
@@ -31,12 +32,19 @@ describe('loader/glbCacheKey — batched slot coupling', () => {
     expect(BLDRS_GLB_BATCHED_SCHEMA_VERSION).not.toBe(BLDRS_GLB_SCHEMA_VERSION)
   })
 
+  it('derives the collapsed slot from the batched one, for the same reason (#1871)', () => {
+    expect(BLDRS_GLB_COLLAPSED_SCHEMA_VERSION)
+      .toBe(`${BLDRS_GLB_BATCHED_SCHEMA_VERSION}-collapsed2`)
+    expect(BLDRS_GLB_COLLAPSED_SCHEMA_VERSION.startsWith(BLDRS_GLB_SCHEMA_VERSION)).toBe(true)
+  })
+
   it('stays disjoint from every merged slot, so the layouts cannot alias', () => {
     const slots = [
       BLDRS_GLB_SCHEMA_VERSION,
       `${BLDRS_GLB_SCHEMA_VERSION}-draco`,
       `${BLDRS_GLB_SCHEMA_VERSION}-meshopt`,
       BLDRS_GLB_BATCHED_SCHEMA_VERSION,
+      BLDRS_GLB_COLLAPSED_SCHEMA_VERSION,
     ]
     expect(new Set(slots).size).toBe(slots.length)
     // Disjointness is only meaningful at the level that decides a cache

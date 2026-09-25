@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/react'
 import {gtagEvent} from '../privacy/analytics'
-import {trackAlert} from './alertTracking'
+import {trackAlert, trackAlertEvent} from './alertTracking'
 
 
 jest.mock('@sentry/react', () => ({captureException: jest.fn()}))
@@ -82,5 +82,20 @@ describe('trackAlert', () => {
     expect(gtagEvent).toHaveBeenCalledWith('alert', {
       message: 'File upload of unknown type: type() size(180384)',
     })
+  })
+})
+
+
+describe('trackAlertEvent', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  // The unsupported-schema alert is an expected outcome, and CadView keeps
+  // its error out of Sentry; this is the path that must not put it back.
+  it('counts the alert in analytics and sends nothing to Sentry', () => {
+    trackAlertEvent('This model is IFC4X3_RC2 (IFC 4.3).')
+    expect(gtagEvent).toHaveBeenCalledWith('alert', {message: 'This model is IFC4X3_RC2 (IFC 4.3).'})
+    expect(Sentry.captureException).not.toHaveBeenCalled()
   })
 })

@@ -106,14 +106,17 @@ export function liveBatchedModel() {
  *   extension payload before it is injected — how a suite fabricates an
  *   artifact from a different Share build (a schema version this reader
  *   rejects).
+ * @param {boolean} [opts.collapse] write the collapsed layout (#1871), as
+ *   `exportAndCacheGlb` does under `glbCollapse`
  * @return {Promise<Uint8Array>} the artifact bytes
  */
 export async function batchedArtifactBytes(model, opts = {}) {
-  const written = await exportBatchedModelAsInstancedGlb(model)
+  const written = await exportBatchedModelAsInstancedGlb(model, {collapse: Boolean(opts.collapse)})
   if (!written) {
     throw new Error('batchedArtifactBytes: the writer declined this model')
   }
-  const payload = buildInstanceTablesExtensionData(written.tableNodes)
+  const payload = buildInstanceTablesExtensionData(
+    written.tableNodes, {collapsed: written.collapsed})
   const {bytes} = injectGlbExtensions(written.bytes, [{
     name: BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
     data: opts.mutatePayload ? opts.mutatePayload(payload) : payload,

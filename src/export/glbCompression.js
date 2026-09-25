@@ -25,10 +25,12 @@
 //
 // Design: design/new/glb-export-premium.md §4.3, §4.4.
 import {captureException} from '@sentry/react'
+import * as pako from 'pako'
 import {isBldrsExtension} from '../loader/glbArtifactSize'
 import {loadDracoDecoder, loadDracoEncoder} from '../loader/glbCompress'
 import {stripGlbBldrs} from '../loader/glbStrip'
 import {injectGlbExtensions, parseGlb} from '../loader/injectGlbExtensions'
+import {WITNESSED_PAYLOAD, addLossyWitnesses} from './collapsedWitness'
 import {
   QUALITY_DEFAULT,
   formatMaxShift,
@@ -148,11 +150,49 @@ export async function compressExportGlb(glbBytes, mode, quality = QUALITY_DEFAUL
   }
 
   return {
-    withMetadata: reattachBldrsPayloads(withoutMetadata, payloads),
+    withMetadata: reattachBldrsPayloads(
+      withoutMetadata,
+      mode === COMPRESSION_DRACO ? withLossyWitness(json, bin, payloads, quality) : payloads),
     withoutMetadata,
     strippedExtensions,
     mode,
   }
+}
+
+
+/**
+ * Draco only: give each collapsed table in the tables payload the lossy
+ * witness its reader will need (`collapsedWitness.js`), since Draco destroys
+ * the exact canary's inputs. Every other payload, and every other codec,
+ * passes through byte for byte.
+ *
+ * A payload that cannot be decoded or witnessed is kept as it was: the file
+ * still renders, and its collapsed tables are refused on read exactly as they
+ * were before this existed.
+ *
+ * @param {object} json the source GLB's JSON
+ * @param {Uint8Array} bin its BIN chunk
+ * @param {Array<object>} payloads from `detachBldrsPayloads`
+ * @param {string} quality the rung the encode used, for its POSITION bits
+ * @return {Array<object>} payloads, the tables one possibly replaced
+ */
+function withLossyWitness(json, bin, payloads, quality) {
+  return payloads.map((payload) => {
+    if (payload.name !== WITNESSED_PAYLOAD || !payload.compressed) {
+      return payload
+    }
+    try {
+      const raw = JSON.parse(pako.ungzip(payload.bytes, {to: 'string'}))
+      const bits = qualitySettings(quality).draco.quantizationBits.POSITION
+      const witnessed = addLossyWitnesses(json, bin, raw, bits)
+      return witnessed ?
+        {...payload, bytes: pako.gzip(JSON.stringify(witnessed))} :
+        payload
+    } catch (e) {
+      captureException(e)
+      return payload
+    }
+  })
 }
 
 
@@ -357,6 +397,16 @@ function needsTriangleOrder(json) {
   if (json?.extensions?.BLDRS_face_ids) {
     return true
   }
+  // A collapsed table's rows are contiguous TRIANGLE runs in one primitive
+  // (share-140 #1871). Draco merges coincident vertices whatever the method,
+  // so the rows' vertex ranges do not survive it — but their triangle runs do
+  // under SEQUENTIAL, and that is what the reader rebuilds each row from.
+  // EDGEBREAKER reorders triangles across rows, which nothing can undo.
+  // Measured: 200 one-triangle rows, 600 vertices in, 202 out either way;
+  // triangle order kept by sequential, scrambled by edgebreaker.
+  if (hasCollapsedNode(json)) {
+    return true
+  }
   for (const mesh of json?.meshes || []) {
     for (const primitive of mesh?.primitives || []) {
       const attributes = primitive?.attributes
@@ -366,6 +416,22 @@ function needsTriangleOrder(json) {
     }
   }
   return false
+}
+
+
+/**
+ * Whether this file carries a collapsed batched node: stamped with a table
+ * index, holding a mesh, and neither instanced nor a portable per-row node.
+ *
+ * @param {object} json Parsed glTF JSON
+ * @return {boolean}
+ */
+function hasCollapsedNode(json) {
+  return (json?.nodes || []).some((node) =>
+    Number.isInteger(node?.extras?.bldrsTableNode) &&
+    Number.isInteger(node.mesh) &&
+    !node.extensions?.EXT_mesh_gpu_instancing &&
+    !Number.isInteger(node.extras.bldrsInstance))
 }
 
 

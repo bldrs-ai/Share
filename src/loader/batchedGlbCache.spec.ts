@@ -148,6 +148,59 @@ function sceneState(page: Page): Promise<SceneState> {
 
 
 /**
+ * Each instance's world-space bounds centre, keyed by instance identity — the
+ * GEOMETRY parity a collapsed artifact (#1871) has to keep.
+ *
+ * Instance matrices cannot be compared across that boundary: a collapsed
+ * element's placement is baked into its vertices and its matrix is its
+ * group's, so the matrices differ exactly where the drawn picture does not.
+ * Where each element's triangles land is the thing that must agree, and it is
+ * also what picking, framing and isolation all read. `getBoundingBoxAt` walks
+ * the element's own index range, so on the collapsed side this measures the
+ * range table, not the merged primitive.
+ *
+ * `Box3` / `Vector3` come off objects the model already holds, since the page
+ * exposes no `three` import.
+ *
+ * @param page Playwright page
+ * @return identity → `[x, y, z]`
+ */
+function instanceCentres(page: Page): Promise<Record<string, number[]>> {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const store = (window as unknown as {store?: {getState: () => {model?: unknown}}}).store
+    const model = store?.getState().model as any
+    const out: Record<string, number[]> = {}
+    const visit = (mesh: any) => {
+      if (!mesh?.isBatchedMesh) {
+        return
+      }
+      mesh.updateMatrixWorld(true)
+      mesh.computeBoundingBox()
+      const Box3 = mesh.boundingBox.constructor
+      const Matrix4 = mesh.matrixWorld.constructor
+      const box = new Box3()
+      const matrix = new Matrix4()
+      const center = mesh.boundingBox.min.clone()
+      for (let batchId = 0; batchId < (mesh.instanceParents?.length ?? 0); batchId++) {
+        mesh.getBoundingBoxAt(mesh.getGeometryIdAt(batchId), box)
+        mesh.getMatrixAt(batchId, matrix)
+        box.applyMatrix4(matrix.premultiply(mesh.matrixWorld)).getCenter(center)
+        out[mesh.instanceOccurrencePaths[batchId].join('/')] = center.toArray()
+      }
+    }
+    if (model?.traverse) {
+      model.traverse(visit)
+    } else {
+      visit(model)
+    }
+    return out
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
  * How many distinct colors the model is displaying.
  *
  * @param state from {@link sceneState}
@@ -233,5 +286,62 @@ describeMobileAndDesktop('Batched-native GLB cache', () => {
     await page.getByTestId('control-button-residency').click()
     await expect(page.getByTestId('color-mode-group')).toBeVisible()
     await expect(page.getByText('Auto (Share-assigned)')).toBeVisible()
+  })
+
+  test('with glbCollapse: MISS writes the collapsed artifact; HIT puts every element back', async ({page}) => {
+    // share-140 #1871, behind the default-off `glbCollapse`. The flag is named
+    // here because the behaviour is NOT the default yet — the opposite of the
+    // test above, which deliberately names nothing. `glbVerbose` as there:
+    // both discriminants below are verbose lines.
+    test.setTimeout(TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+    const flags = '?feature=glbVerbose,glbCollapse'
+    await setupVirtualPathIntercept(page, AS1_PATH, '')
+
+    // Load 1 — MISS: the live model is the un-collapsed reference.
+    await page.goto(`${AS1_PATH}${flags}`, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page, MODEL_READY_TIMEOUT_MS)
+    await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT_MS)
+    // The writer ran in collapse mode AND found something to collapse: a
+    // model with no single-placement part would pass everything below
+    // without the range path ever running.
+    const collapsedLine = glbLogs.find((l) => l.includes('batched writer: collapsed'))
+    expect(collapsedLine).toBeDefined()
+    expect(Number(/collapsed (\d+) single-placement/.exec(collapsedLine ?? '')?.[1])).toBeGreaterThan(0)
+    // Written to the collapsed slot, which is what the HIT below must find.
+    expect(glbLogs.some((l) => l.includes('-batched-collapsed2.glb'))).toBe(true)
+    const missState = await sceneState(page)
+    const missCentres = await instanceCentres(page)
+    expect(distinctColors(missState)).toBeGreaterThan(1)
+
+    // Load 2 — HIT: the collapsed artifact hydrates through the range path.
+    resetGlbLogs(glbLogs)
+    await page.goto(`${AS1_PATH}${flags}`, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page, MODEL_READY_TIMEOUT_MS)
+    await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT_MS)
+    await waitForGlbLog(glbLogs, 'hydrated instance-table', CACHE_TIMEOUT_MS)
+    const hydratedLine = glbLogs.find((l) => l.includes('reader: hydrated instanced artifact'))
+    expect(Number(/(\d+) collapsed table/.exec(hydratedLine ?? '')?.[1])).toBeGreaterThan(0)
+
+    // Identity, colour and palette parity, as the un-collapsed test asserts…
+    const hitState = await sceneState(page)
+    expect(hitState.instances).toBe(missState.instances)
+    expect(hitState.withOccurrencePath).toBe(hitState.instances)
+    expect(hitState.colorByInstance).toEqual(missState.colorByInstance)
+    // …and the one a collapse could break silently: every element's triangles
+    // where they were. A range table off by one element would put a part's
+    // identity on its neighbour's geometry and still pass every check above.
+    const hitCentres = await instanceCentres(page)
+    expect(Object.keys(hitCentres).sort()).toEqual(Object.keys(missCentres).sort())
+    const TOLERANCE = 1e-3
+    for (const [identity, centre] of Object.entries(missCentres)) {
+      hitCentres[identity].forEach((value, axis) => {
+        expect(Math.abs(value - centre[axis])).toBeLessThan(TOLERANCE)
+      })
+    }
+
+    await page.getByTestId('control-button-residency').click()
+    await expect(page.getByTestId('color-mode-group')).toBeVisible()
   })
 })

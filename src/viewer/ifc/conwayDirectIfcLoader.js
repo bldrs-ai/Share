@@ -55,6 +55,7 @@
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {reportEngineVersion} from '../../loader/loadProgress'
 import {makeBlobByteStore} from '../../loader/opfsSourceByteStore'
+import {beginOpenAttempt, conwayRefusedSchema, openModelFailure} from '../../loader/unsupportedSchema'
 import debug, {WARN} from '../../utils/debug'
 import {attachInstanceMapSubsets} from '../three/elementSubsets'
 import {instanceMapFromGeometry} from './IfcInstanceMap'
@@ -198,23 +199,33 @@ export async function parseIfcWithConway(
     // one call that would (`spillModelSource`) runs from the GLB writer's
     // `finally`, long after `parse` has returned.
     let windowedSource = false
+    // The LAST open below, marked immediately before it is made — how a
+    // refusal's load status is found (unsupportedSchema.js#beginOpenAttempt).
+    let attempt
     if (store !== null) {
+      attempt = beginOpenAttempt(ifcAPI)
       // eslint-disable-next-line new-cap
       modelID = await ifcAPI.OpenModelStream(store, deferSettings)
       windowedSource = typeof modelID === 'number' && modelID >= 0
-      if (!windowedSource) {
+      // A schema refusal is final: the buffered fallback would only reach
+      // the same refusal after up to two more whole-file parses (conway's
+      // streamed open falls back to the classic one), and a large file
+      // could run out of memory before refusing.
+      if (!windowedSource && !conwayRefusedSchema(ifcAPI, attempt)) {
         // IFC-only store path: STEP / failed sniff falls back to a
         // buffered streamed open (conway#510 contract).
         openData = await bytesFromSource(buffer)
+        attempt = beginOpenAttempt(ifcAPI)
         // eslint-disable-next-line new-cap
         modelID = await ifcAPI.OpenModelStreamed(openData, deferSettings)
       }
     } else {
+      attempt = beginOpenAttempt(ifcAPI)
       // eslint-disable-next-line new-cap
       modelID = await ifcAPI.OpenModelStreamed(openData, deferSettings)
     }
     if (typeof modelID !== 'number' || modelID < 0) {
-      throw new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
+      throw await openModelFailure(modelID, buffer, conwayRefusedSchema(ifcAPI, attempt))
     }
     const captured = []
     // Does this engine expose conway#660's async whole-model ask? That is
@@ -492,26 +503,35 @@ export async function parseIfcWithConway(
   //   3. OpenModel: classic synchronous open (real web-ifc, old pins).
   // All feature-detected, so any engine pin keeps loading.
   let modelID
+  // As in the deferred path above: the last open, marked immediately
+  // before it is made.
+  let attempt
   if (!isFeatureEnabled('disableStreamOpen') && store !== null) {
+    attempt = beginOpenAttempt(ifcAPI)
     // eslint-disable-next-line new-cap
     modelID = await ifcAPI.OpenModelStream(store, openSettings)
-    if (typeof modelID !== 'number' || modelID < 0) {
+    // A schema refusal is final — see the deferred path above.
+    if ((typeof modelID !== 'number' || modelID < 0) && !conwayRefusedSchema(ifcAPI, attempt)) {
       data = await bytesFromSource(buffer)
+      attempt = beginOpenAttempt(ifcAPI)
       // eslint-disable-next-line new-cap
       modelID = await ifcAPI.OpenModelStreamed(data, openSettings)
     }
   } else if (!isFeatureEnabled('disableStreamOpen') && typeof ifcAPI.OpenModelStreamed === 'function') {
+    attempt = beginOpenAttempt(ifcAPI)
     // eslint-disable-next-line new-cap
     modelID = await ifcAPI.OpenModelStreamed(data, openSettings)
   } else if (typeof ifcAPI.OpenModelAsync === 'function') {
+    attempt = beginOpenAttempt(ifcAPI)
     // eslint-disable-next-line new-cap
     modelID = await ifcAPI.OpenModelAsync(data, openSettings)
   } else {
+    attempt = beginOpenAttempt(ifcAPI)
     // eslint-disable-next-line new-cap
     modelID = ifcAPI.OpenModel(data, openSettings)
   }
   if (typeof modelID !== 'number' || modelID < 0) {
-    throw new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
+    throw await openModelFailure(modelID, buffer, conwayRefusedSchema(ifcAPI, attempt))
   }
   const captured = []
   // eslint-disable-next-line new-cap

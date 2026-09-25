@@ -23,13 +23,18 @@ jest.mock('@gltf-transform/core', () => {
   throw new Error('gltf-transform unavailable under jsdom (see mock comment)')
 })
 
-import {BLDRS_GLB_BATCHED_SCHEMA_VERSION, BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
+import {
+  BLDRS_GLB_BATCHED_SCHEMA_VERSION,
+  BLDRS_GLB_COLLAPSED_SCHEMA_VERSION,
+  BLDRS_GLB_SCHEMA_VERSION,
+} from './glbCacheKey'
 import {
   activeArtifactSpec,
   activeGlbCompressionMode,
   activeSchemaVersion,
   compressGlb,
   glbCompressionModeFromExtensions,
+  isGlbCollapseActive,
   schemaVersionFor,
 } from './glbCompress'
 
@@ -163,14 +168,46 @@ describe('loader/glbCompress', () => {
         .toEqual({schemaVer: BLDRS_GLB_SCHEMA_VERSION, mode: null})
     })
 
-    it('keeps the batched slot disjoint from every merged slot', () => {
+    it('keeps the batched and collapsed slots disjoint from every other slot', () => {
       const slots = new Set([
+        BLDRS_GLB_COLLAPSED_SCHEMA_VERSION,
         BLDRS_GLB_BATCHED_SCHEMA_VERSION,
         schemaVersionFor(null),
         schemaVersionFor('draco'),
         schemaVersionFor('meshopt'),
       ])
-      expect(slots.size).toBe(4)
+      expect(slots.size).toBe(5)
+    })
+
+    it('selects the collapsed slot when glbCollapse is on', () => {
+      mockIsFeatureEnabled.mockImplementation((n) => n === 'glbBatched' || n === 'glbCollapse')
+      expect(activeArtifactSpec())
+        .toEqual({schemaVer: BLDRS_GLB_COLLAPSED_SCHEMA_VERSION, mode: null})
+    })
+
+    it('leaves the batched slot alone while glbCollapse is off (its default)', () => {
+      // The rollout promise: with the flag off NOTHING about today's slot
+      // moves, so shipping this code re-parses no one's models.
+      mockIsFeatureEnabled.mockImplementation((n) => n === 'glbBatched')
+      expect(activeArtifactSpec().schemaVer).toBe(BLDRS_GLB_BATCHED_SCHEMA_VERSION)
+      expect(isGlbCollapseActive()).toBe(false)
+    })
+
+    it('sends disableGlbCollapse back to the batched slot — the kill switch', () => {
+      mockIsFeatureEnabled.mockImplementation(
+        (n) => n === 'glbBatched' || n === 'glbCollapse' || n === 'disableGlbCollapse')
+      expect(activeArtifactSpec())
+        .toEqual({schemaVer: BLDRS_GLB_BATCHED_SCHEMA_VERSION, mode: null})
+    })
+
+    it('makes glbCollapse inert without the batched layout', () => {
+      // A collapse is a shape OF the batched artifact; with that layout off
+      // (or killed) the flag must not steer a merged reader into its slot.
+      mockIsFeatureEnabled.mockImplementation((n) => n === 'glbCollapse')
+      expect(activeArtifactSpec().schemaVer).toBe(BLDRS_GLB_SCHEMA_VERSION)
+      mockIsFeatureEnabled.mockImplementation(
+        (n) => n === 'glbBatched' || n === 'disableGlbBatched' || n === 'glbCollapse')
+      expect(activeArtifactSpec().schemaVer).toBe(BLDRS_GLB_SCHEMA_VERSION)
     })
   })
 

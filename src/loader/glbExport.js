@@ -53,11 +53,16 @@ import {
   batchedModelToMergedMesh,
   disposeMergedMesh,
 } from '../viewer/ifc/batchedToMergedMesh'
-import {BLDRS_GLB_BATCHED_SCHEMA_VERSION, glbCacheKey} from './glbCacheKey'
+import {
+  BLDRS_GLB_BATCHED_SCHEMA_VERSION,
+  BLDRS_GLB_COLLAPSED_SCHEMA_VERSION,
+  glbCacheKey,
+} from './glbCacheKey'
 import {
   activeGlbCompressionMode,
   compressGlb,
   isGlbBatchedActive,
+  isGlbCollapseActive,
   schemaVersionFor,
 } from './glbCompress'
 import {
@@ -268,11 +273,18 @@ export async function exportAndCacheGlb({
     // missing for that model rather than ever reading a wrong layout.
     let rawBytes
     let batchedTables = null
+    // Whether the batched writer ran in collapse mode (#1871). Like
+    // `batchedTables`, a property of the bytes it produced rather than a
+    // re-read of the flag: it picks the table version AND the slot below, and
+    // the two must never disagree.
+    let collapsedTables = false
     if (isBatched && isGlbBatchedActive()) {
-      const batchedNative = await exportBatchedModelAsInstancedGlb(model)
+      const batchedNative = await exportBatchedModelAsInstancedGlb(
+        model, {collapse: isGlbCollapseActive()})
       if (batchedNative) {
         rawBytes = batchedNative.bytes
         batchedTables = batchedNative.tableNodes
+        collapsedTables = batchedNative.collapsed
         glbVerbose('writer: batched-native export produced', rawBytes.byteLength, 'bytes')
       } else {
         // Worth saying out loud now that `glbBatched` is default-on: this
@@ -533,7 +545,9 @@ export async function exportAndCacheGlb({
       // to the EXT_mesh_gpu_instancing nodes in the same GLB.
       {
         name: BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
-        data: batchedTables ? buildInstanceTablesExtensionData(batchedTables) : null,
+        data: batchedTables ?
+          buildInstanceTablesExtensionData(batchedTables, {collapsed: collapsedTables}) :
+          null,
         compress: true,
       },
     ]
@@ -595,10 +609,15 @@ export async function exportAndCacheGlb({
       glbVerbose(`writer: stamped standard scenes[0].name = "${titleForExtras}"`)
     }
     // Batched-native artifacts land in their own schema slot so flag-off
-    // readers never see them (glbCacheKey#BLDRS_GLB_BATCHED_SCHEMA_VERSION).
-    const schemaVer = batchedTables ?
-      BLDRS_GLB_BATCHED_SCHEMA_VERSION :
-      schemaVersionFor(mode)
+    // readers never see them (glbCacheKey#BLDRS_GLB_BATCHED_SCHEMA_VERSION),
+    // and collapsed ones (v2 tables) in theirs, for the same reason one level
+    // down (glbCacheKey#BLDRS_GLB_COLLAPSED_SCHEMA_VERSION).
+    let schemaVer = schemaVersionFor(mode)
+    if (batchedTables) {
+      schemaVer = collapsedTables ?
+        BLDRS_GLB_COLLAPSED_SCHEMA_VERSION :
+        BLDRS_GLB_BATCHED_SCHEMA_VERSION
+    }
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})
     await writeGlbBytesToOPFS(
       packed, key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)

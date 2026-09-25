@@ -762,6 +762,15 @@ export async function load(
       // the two it read.
       glbInfo('reader: hydrated instance-table artifact to a BatchedMesh model')
       model = hydrated
+    } else {
+      // The file carries Share's selection tables and they did not hold —
+      // the model renders but nothing in it can be picked. That is the
+      // failure a user notices, so it is a WARNING (which the load report
+      // captures and shows) rather than the info line the module logs: the
+      // Draco export of a collapsed DSA rendered perfectly and could not be
+      // selected, and nothing on screen said why (#1871).
+      glbWarn('reader: this model\'s selection data did not match its geometry; ' +
+        'it is shown without picking or selection')
     }
   }
 

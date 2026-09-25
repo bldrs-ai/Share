@@ -31,6 +31,7 @@ import {
 } from '../loader/loadProgress'
 import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
+import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
 import {getBrowser} from '../connections/registry'
 import useStore from '../store/useStore'
 import {expandedIdsForSelection, getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
@@ -319,6 +320,12 @@ export default function CadView({
             'Try opening it on a desktop browser with more memory or ' +
             'refresh the page.',
         })
+      } else if (e instanceof UnsupportedSchemaError) {
+        // conway refused the model's schema by design (IFC4X3 content it
+        // can't read correctly — bldrs-ai/conway#713), not because the file
+        // or the engine is broken. Say what happened in the user's terms
+        // instead of the raw "OpenModel returned -1".
+        setAlert({type: 'unsupportedSchema', message: e.message})
       } else if (e instanceof NeedsReconnectError) {
         // Deep-link / reload landed on a Drive route with a stale token, and
         // GIS couldn't escalate to a popup outside a user gesture. Surface a
@@ -344,7 +351,9 @@ export default function CadView({
       // (via attachLoadFailureContext), so they group by phase in Sentry
       // instead of landing in one detail-free "model loading failed"
       // bucket (conway #301 §7).
-      if (!isOOM) {
+      // Same for an unsupported schema: an intended, documented limit that
+      // is already explained to the user, not a defect for triage.
+      if (!isOOM && !(e instanceof UnsupportedSchemaError)) {
         attachLoadFailureContext()
         captureException(e)
       }
@@ -1447,6 +1456,23 @@ export default function CadView({
         }
         if (!props && typeof viewer.getProperties === 'function') {
           props = await viewer.getProperties(0, Number(lastId))
+        }
+        // STEP scene pick on a cache-hit GLB: `lastId` is the geometry's
+        // shared product_definition_shape, which BLDRS_element_properties
+        // never captured (it is seeded from spatial-tree nodes only, and a
+        // shape is not one) — so both lookups above miss and the panel went
+        // blank. The same pick also recorded which occurrence was clicked;
+        // its leaf is the part's tree node, which IS captured — so resolve
+        // the leaf, and only the leaf. Walking on up to an ancestor when the
+        // leaf is missing would put a parent assembly's properties beside a
+        // scene and NavTree that still select the part (codex on #1876);
+        // the empty state is the honest answer then. A live parse answers
+        // the shape id directly, so this only runs on the cached path.
+        const occurrenceLeaf = Array.isArray(selectedOccurrencePath) ?
+          selectedOccurrencePath[selectedOccurrencePath.length - 1] : undefined
+        if (!props && occurrenceLeaf !== undefined && model &&
+            typeof model.getItemProperties === 'function') {
+          props = await model.getItemProperties(Number(occurrenceLeaf))
         }
         if (isStale) {
           return
