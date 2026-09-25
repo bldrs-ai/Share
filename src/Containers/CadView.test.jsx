@@ -20,6 +20,7 @@ import Clipper from '../viewer/three/Clipper'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
+import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
@@ -619,6 +620,29 @@ describe('CadView', () => {
     // Sentry's error stream — capturing it is what produced the SHARE-RS
     // noise. Real (non-OOM) loader failures are still captured.
     expect(captureExceptionSpy).not.toHaveBeenCalledWith(oomErr)
+  })
+
+  it('sets an unsupportedSchema alert, and does not report to Sentry, when conway refuses an IFC4X3 model', async () => {
+    const schemaErr = new UnsupportedSchemaError('IFC4X3_RC2')
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw schemaErr
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => {
+      const alert = result.current.alert
+      expect(alert).toBeTruthy()
+      expect(alert.type).toBe('unsupportedSchema')
+      expect(alert.message).toMatch(/IFC4X3_RC2 \(IFC 4\.3\)/)
+    })
+    // A deliberate schema refusal (bldrs-ai/conway#713) is a documented limit
+    // already explained to the user, not a defect — same reasoning as OOM.
+    expect(captureExceptionSpy).not.toHaveBeenCalledWith(schemaErr)
   })
 
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing

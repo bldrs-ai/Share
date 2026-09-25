@@ -3,12 +3,12 @@ import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {StoreRouteThemeCtx} from '../Share.fixture'
 import {getProvider} from '../connections/registry'
 import useStore from '../store/useStore'
-import {trackAlert} from '../utils/alertTracking'
+import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import AlertDialog from './AlertDialog'
 
 
 jest.mock('../connections/registry')
-jest.mock('../utils/alertTracking', () => ({trackAlert: jest.fn()}))
+jest.mock('../utils/alertTracking', () => ({trackAlert: jest.fn(), trackAlertEvent: jest.fn()}))
 
 
 /**
@@ -185,5 +185,50 @@ describe('AlertDialog — trackAlert side effects', () => {
       {wrapper: StoreRouteThemeCtx},
     )
     expect(trackAlert).toHaveBeenCalledTimes(1)
+  })
+})
+
+
+describe('AlertDialog — unsupportedSchema alert type', () => {
+  const onClose = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  it('says the schema is not supported yet, in place of the generic Error header', () => {
+    act(() => {
+      useStore.getState().setAlert({
+        type: 'unsupportedSchema',
+        message: 'This model is IFC4X3_RC2 (IFC 4.3). Share can open some IFC 4.3 models, but not this one yet.',
+      })
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('Not supported yet')).toBeInTheDocument()
+    expect(screen.queryByText('Error')).not.toBeInTheDocument()
+    expect(screen.getByText(/IFC4X3_RC2 \(IFC 4\.3\)/)).toBeInTheDocument()
+  })
+
+  it('omits the Discord help footer (a documented limit, nothing for support to diagnose)', () => {
+    act(() => {
+      useStore.getState().setAlert({type: 'unsupportedSchema', message: 'Not displayable yet.'})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.queryByText(/Discord/i)).not.toBeInTheDocument()
+  })
+
+  // trackAlert(message, alert) sends its second argument to Sentry, which
+  // would undo CadView keeping this expected refusal out of it (codex
+  // review of Share#1875). Analytics only.
+  it('counts the alert in analytics only, never through the Sentry path', () => {
+    act(() => {
+      useStore.getState().setAlert({type: 'unsupportedSchema', message: 'Not displayable yet.'})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(trackAlertEvent).toHaveBeenCalledWith('Not displayable yet.')
+    expect(trackAlert).not.toHaveBeenCalled()
   })
 })

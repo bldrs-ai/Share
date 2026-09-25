@@ -34,7 +34,22 @@ export function trackAlert(message, error = null) {
     })
   }
 
-  // Track in Google Analytics (just the message)
+  trackAlertEvent(message)
+}
+
+
+/**
+ * Counts an alert in Google Analytics only, with no Sentry event.
+ *
+ * For alerts that report an expected outcome rather than a defect — the
+ * unsupported-schema refusal (Share#1875), which CadView already keeps out
+ * of Sentry. Routing it through {@link trackAlert} with the alert object
+ * would send it to Sentry anyway, as a plain object with neither the
+ * original stack nor the load context.
+ *
+ * @param {string} message The alert message to count
+ */
+export function trackAlertEvent(message) {
   gtagEvent('alert', {
     message: message,
   })
