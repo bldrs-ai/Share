@@ -8,9 +8,13 @@
  * and multi-bit fields are little-endian: bit `k` of a value is stream bit
  * `pos + k` (Mts3Reader.dll `0x1180ccb0`, `0x1180cbe0`).
  *
- * Reading past the end returns zero bits rather than throwing. The DLL's
- * read-mode BitStream does the same thing for the arithmetic decoder's tail,
- * and the caller checks `pos` against `length` to detect truncation.
+ * Reading past the end throws. The DLL's read-mode BitStream returns zeros
+ * there instead, but no valid stream reads past its end (all 54 in the test
+ * fixture stop at or before it), and the zeros would let a truncated or
+ * corrupt stream keep decoding: the header's count-driven loops and the split
+ * loop would spin through zeros instead of failing. The arithmetic decoder's
+ * own zero tail is separate: `ArithDecoder` stops calling `read1` once its
+ * budget is spent.
  */
 export default class BitReader {
   /**
@@ -28,7 +32,7 @@ export default class BitReader {
   read1() {
     const p = this.pos++
     if (p >= this.length) {
-      return 0
+      throw new Error('mts: truncated stream (read past the end)')
     }
     return (this.bytes[p >> 3] >> (p & 7)) & 1
   }

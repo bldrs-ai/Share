@@ -16,6 +16,15 @@ import {readTree} from './trees'
  */
 
 
+// Sanity bounds on header values, so a corrupt stream fails here instead of
+// sizing arrays or loops from garbage. Each is far outside what real streams
+// use: the densest crown in the fixture spends 53 bits per vertex and 26 per
+// face (and a split adds at least one vertex), and its largest alphabet is 10.
+const MIN_BITS_PER_VERTEX = 1
+const MIN_BITS_PER_FACE = 0.5
+const MAX_ALPHABET = 1024
+
+
 /** A stream uses a MetaStream feature this port does not implement. */
 export class UnsupportedMtsError extends Error {
   /** @param {string} what */
@@ -52,6 +61,11 @@ export function readHeader(bs) {
   }
   if (counts.baseVertices !== 0 || counts.baseFaces !== 0) {
     throw new UnsupportedMtsError('non-empty base mesh')
+  }
+  if (counts.vertices * MIN_BITS_PER_VERTEX > bs.length || counts.splits * MIN_BITS_PER_VERTEX > bs.length ||
+    counts.faces * MIN_BITS_PER_FACE > bs.length) {
+    throw new Error(`mts: corrupt stream (${counts.vertices} vertices, ${counts.faces} faces, ` +
+      `${counts.splits} splits in ${bs.length} bits)`)
   }
 
   // 0x11819e20: named plug-in parameters. A set bit after a name carries
@@ -209,7 +223,7 @@ function readModels(bs, faceFlagChannels) {
  * @return {{model: AdaptiveModel, offset: number}}
  */
 function valueModel(offset, alphabet) {
-  return {model: new AdaptiveModel(alphabet), offset}
+  return {model: newModel(alphabet), offset}
 }
 
 
@@ -218,5 +232,20 @@ function valueModel(offset, alphabet) {
  * @return {{model: AdaptiveModel, offset: number}}
  */
 function boundedModel(alphabet) {
-  return {model: new AdaptiveModel(alphabet), offset: 0}
+  return {model: newModel(alphabet), offset: 0}
+}
+
+
+/**
+ * An alphabet of 0 is let through: nothing reads the unused tenth model, and
+ * `ArithDecoder` throws if a corrupt stream decodes from an empty one.
+ *
+ * @param {number} alphabet
+ * @return {AdaptiveModel}
+ */
+function newModel(alphabet) {
+  if (alphabet > MAX_ALPHABET) {
+    throw new Error(`mts: corrupt stream (model alphabet ${alphabet})`)
+  }
+  return new AdaptiveModel(alphabet)
 }

@@ -6,6 +6,7 @@ import {createHash} from 'node:crypto'
 import {readFileSync} from 'node:fs'
 import {resolve} from 'node:path'
 import {asList, i32, parseADF} from '../adf/adf-parser'
+import {AdaptiveModel, ArithDecoder} from './arith'
 import BitReader from './bitstream'
 import {meshPayloadFromCompressedData} from './container'
 import {decodeMesh} from './decoder'
@@ -29,6 +30,54 @@ function pmStreams() {
       out.push({key: `${id}/initial`, payload: meshPayloadFromCompressedData(initial)})
     }
   }
+  return out
+}
+
+
+/**
+ * Re-encode a stream's six header counts, keeping every other bit. Mirrors
+ * `BitReader#readUInt`: a 5-bit length `L`, then the low `L − 1` bits.
+ *
+ * @param {Uint8Array} payload
+ * @param {object} counts replacements by name, as in `readHeader().counts`
+ * @return {Uint8Array}
+ */
+function withCounts(payload, counts) {
+  const header = readHeader(new BitReader(payload))
+  const src = new BitReader(payload)
+  src.readBits(32)
+  src.readUInt()
+  const start = src.pos
+  for (let k = 0; k < 6; k++) {
+    src.readUInt()
+  }
+  const end = src.pos
+  const bits = []
+  const put = (v, n) => {
+    for (let k = 0; k < n; k++) {
+      bits.push(Math.floor(v / (2 ** k)) % 2)
+    }
+  }
+  src.pos = 0
+  for (let k = 0; k < start; k++) {
+    bits.push(src.read1())
+  }
+  for (const name of ['vertices', 'faces', 'baseVertices', 'baseFaces', 'splits', 'reserved']) {
+    const v = counts[name] ?? header.counts[name]
+    const len = v === 0 ? 0 : Math.floor(Math.log2(v)) + 1
+    put(len, 5)
+    if (len > 0) {
+      put(v - (2 ** (len - 1)), len - 1)
+    }
+  }
+  src.pos = end
+  while (src.pos < src.length) {
+    bits.push(src.read1())
+  }
+  const out = new Uint8Array(Math.ceil(bits.length / 8))
+  bits.forEach((b, k) => {
+    out[k >> 3] |= b << (k & 7)
+  })
   return out
 }
 
@@ -68,6 +117,40 @@ describe('loader/mts/decoder', () => {
     const got = decodeMesh(payload)
     // The DLL leaves at most a few padding bits of the last byte unread.
     expect(got.bitLength - got.bitsRead).toBeLessThan(8)
+  })
+
+  // Corrupt input must fail its own tooth quickly: decodeMesh runs on the
+  // main thread, so a hang freezes the tab, and adf.js can only fall back to
+  // a proxy crown for a tooth that throws.
+  describe('on corrupt input', () => {
+    const byKey = Object.fromEntries(streams.map((s) => [s.key, s.payload]))
+
+    it.each([
+      // Before the arithmetic state was bounds-checked, this cut sent
+      // renorm's range through an int32 overflow to 0 and it never returned.
+      ['13/crown', 7273],
+      // These decoded "successfully" with hundreds of wrong coordinates.
+      ['8/crown', 0.99],
+      ['13/crown', 0.9],
+      ['8/crown', -1],
+    ])('throws on %s truncated to %s', (key, keep) => {
+      const full = byKey[key]
+      const bytes = keep < 0 ? full.length + keep : keep < 1 ? Math.floor(full.length * keep) : keep
+      expect(() => decodeMesh(full.slice(0, bytes))).toThrow(/^mts: /)
+    })
+
+    it('rejects header counts the stream is too short to hold', () => {
+      const payload = withCounts(byKey['8/crown'], {vertices: 2 ** 24, faces: 2 ** 25, splits: 2 ** 24})
+      // Guard the helper: the counts really were re-encoded.
+      expect(readHeader.bind(null, new BitReader(payload))).toThrow(/16777216 vertices/)
+      expect(() => decodeMesh(payload)).toThrow(/^mts: corrupt stream/)
+    })
+
+    it('throws when asked for a symbol from an empty range', () => {
+      const coder = new ArithDecoder(new BitReader(new Uint8Array(4)), 0)
+      expect(() => coder.uniform(0)).toThrow(/^mts: corrupt stream/)
+      expect(() => coder.symbolBounded(new AdaptiveModel(3), 0)).toThrow(/^mts: corrupt stream/)
+    })
   })
 
   it('refuses a key-protected stream instead of decoding garbage', () => {

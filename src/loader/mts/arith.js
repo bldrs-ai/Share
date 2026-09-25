@@ -14,6 +14,12 @@ const HALF = 0x8000
 const QUARTER = 0x4000
 const THREE_QUARTERS = 0xc000
 const RESCALE_THRESHOLD = 0x3fff
+const FULL = 0x10000
+// How far past its budget the coder may shift in zeros. It holds 16 bits of
+// lookahead in `value`, so a valid stream ends up to 16 past; the fixture's
+// worst is 14. A corrupt one can keep decoding symbols from zeros forever.
+const MAX_OVERRUN = 32
+const CORRUPT = 'mts: corrupt stream'
 
 
 /**
@@ -105,6 +111,12 @@ export class ArithDecoder {
    * @param {number} budget
    */
   constructor(bs, budget) {
+    // The budget counts only the coder's bits; the raw reads interleaved
+    // with them come out of the same stream, so it is always smaller than
+    // what is left after the header (by 88k bits or more in the fixture).
+    if (budget > bs.length - bs.pos) {
+      throw new Error(`${CORRUPT} (arithmetic budget ${budget} runs past the end)`)
+    }
     this.bs = bs
     this.low = 0
     this.range = 0x10000
@@ -119,17 +131,22 @@ export class ArithDecoder {
   /** @return {number} */
   nextBit() {
     const b = this.bitsLeft > 0 ? this.bs.read1() : 0
-    this.bitsLeft--
+    if (--this.bitsLeft < -MAX_OVERRUN) {
+      throw new Error(`${CORRUPT} (arithmetic decoder overran its budget)`)
+    }
     return b
   }
 
 
   /** `0x11822bd0` */
   renorm() {
-    // A valid stream never narrows the range to nothing; a corrupt one can,
-    // and then the loop below would never exit.
-    if (this.range <= 0) {
-      throw new Error('mts: corrupt stream (arithmetic range collapsed)')
+    // A valid stream keeps `[low, low + range)` a non-empty part of the
+    // 16-bit window, which also ends the loop below: each pass doubles
+    // `range` and it exits by the time `range` passes HALF. A corrupt one can
+    // leave `low` negative or `range` empty, and then `range <<= 1` can
+    // overflow int32 to 0 and spin forever. The negated test also catches NaN.
+    if (!(this.low >= 0 && this.range > 0 && this.low + this.range <= FULL)) {
+      throw new Error(`${CORRUPT} (arithmetic state out of range)`)
     }
     for (;;) {
       if (this.low >= HALF) {
@@ -159,6 +176,11 @@ export class ArithDecoder {
     const total = m.cum[0]
     const range = this.range
     const target = Math.floor((((this.value - this.low + 1) * total) - 1) / range)
+    // Only reachable when `value` has left `[low, low + range)`, i.e. the
+    // stream is corrupt; `lookup` would clamp it to a wrong symbol.
+    if (!(target >= 0 && target < total)) {
+      throw new Error(`${CORRUPT} (symbol out of range)`)
+    }
     const s = m.lookup(target)
     const lo = m.cum[s + 1]
     const hi = m.cum[s]
@@ -183,6 +205,10 @@ export class ArithDecoder {
     const total = m.cum[0] - base
     const range = this.range
     const target = Math.floor((((this.value - this.low + 1) * total) - 1) / range) + base
+    // `total` is 0 when `limit` is 0 or less, which a valid stream never asks for.
+    if (!(total > 0 && target >= base && target < m.cum[0])) {
+      throw new Error(`${CORRUPT} (bounded symbol out of range)`)
+    }
     const s = m.lookup(target)
     const lo = m.cum[s + 1]
     const hi = m.cum[s]
@@ -202,6 +228,9 @@ export class ArithDecoder {
   uniform(n) {
     const range = this.range
     const t = Math.floor((((this.value - this.low + 1) * n) - 1) / range)
+    if (!(t >= 0 && t < n)) {
+      throw new Error(`${CORRUPT} (uniform value out of range)`)
+    }
     this.range = Math.trunc(range / n)
     this.low += Math.trunc(t * range / n)
     this.renorm()

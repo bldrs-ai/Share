@@ -233,9 +233,34 @@ mirrors that. It's verified through the positions, which use it.
 | `src/loader/mts/decoder.js` | `decodeMesh(payload)`: header, split loop, plug-ins |
 | `src/loader/adf.js` | `decodeCrowns(buffer)`: every crown → `*.meshes.bin`-shaped entries for the vendored `ADFLoader#parse(buffer, {meshes})`; winds faces outward by signed volume; a tooth that fails keeps its proxy |
 
-**Robustness.** Walks around a vertex are bounded (`SplitMesh#checkWalk`),
-and a collapsed arithmetic range throws. So a corrupt stream fails that
-tooth instead of hanging the page.
+**Robustness.** `decodeMesh` runs on the main thread, so a corrupt or
+truncated stream has to throw, and quickly: a hang freezes the tab, and
+`adf.js` can only fall back to a proxy crown for a tooth that throws. Every
+loop and allocation is bounded by the stream's own length:
+
+- `BitReader#read1` throws past the end. The DLL returns zeros there, but no
+  valid stream reads that far, and zeros let every count-driven loop keep
+  going: the header's name, parameter and channel lists, string lengths, and
+  the split loop.
+- `readHeader` rejects vertex, face and split counts that can't fit in the
+  stream: fewer than 1 bit per vertex or split, or ½ per face. The fixture's
+  densest crown spends 53 and 26. It also rejects model alphabets over 1024;
+  the largest real one is 10.
+- The arithmetic coder rejects:
+  - a budget larger than the bits left after the header;
+  - running more than 32 bits past that budget (valid streams: 14);
+  - any state where `[low, low + range)` isn't a non-empty part of the 16-bit
+    window;
+  - a decoded target outside the model's total.
+
+  Without the state check, a corrupt `low` goes negative, `range <<= 1`
+  overflows int32 to 0, and `renorm` never returns.
+- Walks around a vertex are bounded (`SplitMesh#checkWalk`).
+
+Fuzzing `PM.adf`'s streams (random truncations, and bit flips in the header
+and body) gives no case over 3 s. Every truncation throws. Before these
+checks, 3% of header flips hung, and 40% of truncations decoded into wrong
+coordinates without an error. `decoder.test.js` keeps representatives of each.
 
 
 ## 4. Verification
