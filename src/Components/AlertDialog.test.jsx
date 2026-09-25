@@ -3,12 +3,12 @@ import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {StoreRouteThemeCtx} from '../Share.fixture'
 import {getProvider} from '../connections/registry'
 import useStore from '../store/useStore'
-import {trackAlert} from '../utils/alertTracking'
+import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import AlertDialog from './AlertDialog'
 
 
 jest.mock('../connections/registry')
-jest.mock('../utils/alertTracking', () => ({trackAlert: jest.fn()}))
+jest.mock('../utils/alertTracking', () => ({trackAlert: jest.fn(), trackAlertEvent: jest.fn()}))
 
 
 /**
@@ -203,7 +203,7 @@ describe('AlertDialog — unsupportedSchema alert type', () => {
     act(() => {
       useStore.getState().setAlert({
         type: 'unsupportedSchema',
-        message: 'This model is IFC4X3_RC2 (IFC 4.3), and it uses parts of that schema Share can\'t display yet.',
+        message: 'This model is IFC4X3_RC2 (IFC 4.3). Share can open some IFC 4.3 models, but not this one yet.',
       })
     })
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
@@ -220,12 +220,15 @@ describe('AlertDialog — unsupportedSchema alert type', () => {
     expect(screen.queryByText(/Discord/i)).not.toBeInTheDocument()
   })
 
-  it('tracks the alert by its message, like the other typed alerts', () => {
+  // trackAlert(message, alert) sends its second argument to Sentry, which
+  // would undo CadView keeping this expected refusal out of it (codex
+  // review of Share#1875). Analytics only.
+  it('counts the alert in analytics only, never through the Sentry path', () => {
     act(() => {
       useStore.getState().setAlert({type: 'unsupportedSchema', message: 'Not displayable yet.'})
     })
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
-    expect(trackAlert).toHaveBeenCalledWith(
-      'Not displayable yet.', expect.objectContaining({type: 'unsupportedSchema'}))
+    expect(trackAlertEvent).toHaveBeenCalledWith('Not displayable yet.')
+    expect(trackAlert).not.toHaveBeenCalled()
   })
 })

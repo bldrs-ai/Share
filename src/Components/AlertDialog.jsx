@@ -4,7 +4,7 @@ import {ErrorOutline as ErrorOutlineIcon} from '@mui/icons-material'
 import {NotFoundError} from '../loader/Loader'
 import {getProvider} from '../connections/registry'
 import useStore from '../store/useStore'
-import {trackAlert} from '../utils/alertTracking'
+import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import Dialog from './Dialog'
 
 
@@ -46,7 +46,11 @@ export default function AlertDialog({onClose}) {
     if (typeof alert !== 'object') {
       return
     }
-    if (alert.type === 'oom' || alert.type === 'needsReconnect' || alert.type === 'unsupportedSchema') {
+    if (alert.type === 'unsupportedSchema') {
+      // Expected outcome, not a defect: analytics only, never Sentry
+      // (alertTracking.js#trackAlertEvent).
+      trackAlertEvent(alert.message)
+    } else if (alert.type === 'oom' || alert.type === 'needsReconnect') {
       trackAlert(alert.message, alert)
     } else if (alert instanceof NotFoundError || alert instanceof Error) {
       if (!(alert instanceof NotFoundError)) {

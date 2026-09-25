@@ -26,8 +26,8 @@ export class UnsupportedSchemaError extends Error {
    * @param {string} schema the file's FILE_SCHEMA value, e.g. 'IFC4X3_RC2'
    */
   constructor(schema) {
-    super(`This model is ${schema} (IFC 4.3), and it uses parts of that schema ` +
-      'Share can\'t display yet.')
+    super(`This model is ${schema} (IFC 4.3). Share can open some IFC 4.3 ` +
+      'models, but not this one yet.')
     this.name = 'UnsupportedSchemaError'
     this.schema = schema
   }
@@ -45,36 +45,87 @@ const HEADER_SNIFF_BYTES = HEADER_SNIFF_KIB * BYTES_PER_KIB
 
 
 /**
+ * The model id conway will assign to the NEXT open, read immediately before
+ * making it.
+ *
+ * conway keys a load's statistics — including the `UNSUPPORTED_SCHEMA` load
+ * status its IFC4X3 refusal records — by the id the open was attempted
+ * under, and a refused open returns -1 rather than that id. Every conway
+ * open takes its id from the public `globalModelIDCounter` synchronously at
+ * call time (the async ones post-increment it before their first await; the
+ * sync `OpenModel` increments only on success), so the counter's value
+ * immediately before the call IS the attempted id — provided nothing else
+ * opens in between, which holds when the read and the call are adjacent
+ * statements. Undefined on an engine without the counter (real web-ifc),
+ * which never refuses on schema anyway.
+ *
+ * @param {object} ifcAPI
+ * @return {number|undefined}
+ */
+export function nextModelID(ifcAPI) {
+  const next = ifcAPI?.globalModelIDCounter
+  return typeof next === 'number' ? next : undefined
+}
+
+
+/**
+ * Did conway refuse the open attempted under `attemptedID` because of its
+ * schema? This is the POSITIVE signal: conway sets the load status only on
+ * its IFC4X3 refusal paths (bldrs-ai/conway#713, #718), never on a parse
+ * or geometry failure, so a corrupt or regressed load of an IFC4X3 file
+ * conway does support reads anything but `UNSUPPORTED_SCHEMA` and keeps the
+ * generic error — the header alone cannot tell those apart.
+ *
+ * @param {object} ifcAPI
+ * @param {number|undefined} attemptedID from {@link nextModelID}
+ * @return {boolean}
+ */
+export function conwayRefusedSchema(ifcAPI, attemptedID) {
+  if (attemptedID === undefined || typeof ifcAPI?.getStatistics !== 'function') {
+    return false
+  }
+  try {
+    return ifcAPI.getStatistics(attemptedID)?.getLoadStatus?.() === 'UNSUPPORTED_SCHEMA'
+  } catch (_) {
+    return false
+  }
+}
+
+
+/**
  * The error to throw when conway's open returned a non-model id.
  *
- * Only IFC4X3 is singled out, because that is the one schema conway refuses
- * BY DESIGN; for anything else the original message is kept verbatim so
- * genuine engine failures stay recognisable in Sentry and in tests that
- * assert on it. The schema is read from the file's own header, not inferred
- * from conway's logs: it is a naming question (which message to show), which
- * is what `stepSchemaName` is for — a wrong answer costs only a less specific
- * message, never a routing decision. See its doc comment in Filetype.js.
+ * Only a load conway itself reported as a schema refusal
+ * ({@link conwayRefusedSchema}) is singled out; everything else keeps the
+ * original message verbatim, so genuine engine failures stay recognisable
+ * in Sentry and in tests that assert on it — including a failed load of an
+ * IFC4X3 file conway does support (codex review of Share#1875). The file's
+ * own header only NAMES the schema in the message, which is what
+ * `stepSchemaName` is for; it never decides. A refusal whose header cannot
+ * be read still gets the specific message, naming the family.
  *
- * Note a -1 on an IFC4X3 file is not proof of the schema refusal: conway can
- * also accept an eligible 4x3 file and then fail it for another reason. The
- * message is worded to stay true either way ("parts … Share can't display").
+ * A truncated IFC4X3 file is also refused by conway as ineligible (a partial
+ * parse cannot establish eligibility), which is why the message says "not
+ * this one yet" rather than naming a missing feature.
  *
  * @param {number|undefined} modelID what OpenModel* returned
  * @param {ArrayBuffer|Uint8Array|Blob} source the bytes that were opened
+ * @param {boolean} refused {@link conwayRefusedSchema} for this open
  * @return {Promise<Error>} an UnsupportedSchemaError, or the generic open error
  */
-export async function openModelFailure(modelID, source) {
+export async function openModelFailure(modelID, source, refused) {
   const generic = new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
+  if (!refused) {
+    return generic
+  }
   let schema = null
   try {
     schema = stepSchemaName(await headerText(source))
   } catch (_) {
-    // A header we cannot read is not a reason to replace the real error.
-    return generic
+    // Unreadable header: still a refusal, just an unnamed one.
   }
-  return schema !== null && /^IFC4X3/i.test(schema) ?
-    new UnsupportedSchemaError(schema) :
-    generic
+  return new UnsupportedSchemaError(
+    schema !== null && /^IFC4X3/i.test(schema) ? schema : 'IFC4X3')
 }
 
 

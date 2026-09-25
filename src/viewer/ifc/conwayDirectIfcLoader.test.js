@@ -147,20 +147,50 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
     // as the same -1 every other failure returns (bldrs-ai/conway#713). The
     // loader must turn that into the typed error CadView routes to its own
     // dialog, instead of the raw "OpenModel returned -1".
-    it('throws UnsupportedSchemaError when a -1 comes back for an IFC4X3 file', async () => {
-      const ifcAPI = {
+    const ifc4x3Header = new TextEncoder().encode(
+      'ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION((\'\'),\'2;1\');\n' +
+      'FILE_NAME(\'r.ifc\',\'\',(\'\'),(\'\'),\'\',\'\',\'\');\n' +
+      'FILE_SCHEMA((\'IFC4X3_RC2\'));\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n')
+
+    /**
+     * A conway-shaped engine whose OpenModel fails, recording `status` as
+     * the load status of the id the open was attempted under — the way
+     * conway's refusal does (it keys statistics by that id, and a failed
+     * sync open leaves the counter where it was).
+     *
+     * @param {string} status the load status conway would record
+     * @return {object}
+     */
+    function failingEngine(status) {
+      const stats = new Map()
+      const api = {
         wasmModule: {},
-        OpenModel: jest.fn(() => -1),
+        globalModelIDCounter: 4,
+        OpenModel: jest.fn(() => {
+          stats.set(api.globalModelIDCounter, status)
+          return -1
+        }),
+        getStatistics: (id) => (stats.has(id) ? {getLoadStatus: () => stats.get(id)} : undefined),
         StreamAllMeshes: jest.fn(),
       }
-      const header = new TextEncoder().encode(
-        'ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION((\'\'),\'2;1\');\n' +
-        'FILE_NAME(\'r.ifc\',\'\',(\'\'),(\'\'),\'\',\'\',\'\');\n' +
-        'FILE_SCHEMA((\'IFC4X3_RC2\'));\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n')
-      const rejection = parseIfcWithConway(header, ifcAPI)
+      return api
+    }
+
+    it('throws UnsupportedSchemaError when conway refused the open on schema', async () => {
+      const ifcAPI = failingEngine('UNSUPPORTED_SCHEMA')
+      const rejection = parseIfcWithConway(ifc4x3Header, ifcAPI)
       await expect(rejection).rejects.toBeInstanceOf(UnsupportedSchemaError)
       await expect(rejection).rejects.toThrow(/IFC4X3_RC2 \(IFC 4\.3\)/)
       expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
+    })
+
+    // An IFC4X3 file conway supports can still fail to open (corrupt bytes,
+    // an engine regression); the header alone must not relabel that as a
+    // schema refusal (codex review of Share#1875).
+    it('keeps the generic error when an IFC4X3 open failed for another reason', async () => {
+      const rejection = parseIfcWithConway(ifc4x3Header, failingEngine('FAILED'))
+      await expect(rejection).rejects.not.toBeInstanceOf(UnsupportedSchemaError)
+      await expect(rejection).rejects.toThrow('parseIfcWithConway: OpenModel returned -1')
     })
 
     it('forwards custom settings to OpenModel when provided', async () => {

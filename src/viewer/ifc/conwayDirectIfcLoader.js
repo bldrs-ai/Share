@@ -55,7 +55,7 @@
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {reportEngineVersion} from '../../loader/loadProgress'
 import {makeBlobByteStore} from '../../loader/opfsSourceByteStore'
-import {openModelFailure} from '../../loader/unsupportedSchema'
+import {conwayRefusedSchema, nextModelID, openModelFailure} from '../../loader/unsupportedSchema'
 import debug, {WARN} from '../../utils/debug'
 import {attachInstanceMapSubsets} from '../three/elementSubsets'
 import {instanceMapFromGeometry} from './IfcInstanceMap'
@@ -199,7 +199,12 @@ export async function parseIfcWithConway(
     // one call that would (`spillModelSource`) runs from the GLB writer's
     // `finally`, long after `parse` has returned.
     let windowedSource = false
+    // The id the LAST open below was attempted under — how a refusal's
+    // load status is found (see unsupportedSchema.js#nextModelID). Read
+    // immediately before each open call, with nothing awaited in between.
+    let attemptedID
     if (store !== null) {
+      attemptedID = nextModelID(ifcAPI)
       // eslint-disable-next-line new-cap
       modelID = await ifcAPI.OpenModelStream(store, deferSettings)
       windowedSource = typeof modelID === 'number' && modelID >= 0
@@ -207,15 +212,17 @@ export async function parseIfcWithConway(
         // IFC-only store path: STEP / failed sniff falls back to a
         // buffered streamed open (conway#510 contract).
         openData = await bytesFromSource(buffer)
+        attemptedID = nextModelID(ifcAPI)
         // eslint-disable-next-line new-cap
         modelID = await ifcAPI.OpenModelStreamed(openData, deferSettings)
       }
     } else {
+      attemptedID = nextModelID(ifcAPI)
       // eslint-disable-next-line new-cap
       modelID = await ifcAPI.OpenModelStreamed(openData, deferSettings)
     }
     if (typeof modelID !== 'number' || modelID < 0) {
-      throw await openModelFailure(modelID, buffer)
+      throw await openModelFailure(modelID, buffer, conwayRefusedSchema(ifcAPI, attemptedID))
     }
     const captured = []
     // Does this engine expose conway#660's async whole-model ask? That is
@@ -493,26 +500,34 @@ export async function parseIfcWithConway(
   //   3. OpenModel: classic synchronous open (real web-ifc, old pins).
   // All feature-detected, so any engine pin keeps loading.
   let modelID
+  // As in the deferred path above: the id the last open was attempted
+  // under, read immediately before each open call.
+  let attemptedID
   if (!isFeatureEnabled('disableStreamOpen') && store !== null) {
+    attemptedID = nextModelID(ifcAPI)
     // eslint-disable-next-line new-cap
     modelID = await ifcAPI.OpenModelStream(store, openSettings)
     if (typeof modelID !== 'number' || modelID < 0) {
       data = await bytesFromSource(buffer)
+      attemptedID = nextModelID(ifcAPI)
       // eslint-disable-next-line new-cap
       modelID = await ifcAPI.OpenModelStreamed(data, openSettings)
     }
   } else if (!isFeatureEnabled('disableStreamOpen') && typeof ifcAPI.OpenModelStreamed === 'function') {
+    attemptedID = nextModelID(ifcAPI)
     // eslint-disable-next-line new-cap
     modelID = await ifcAPI.OpenModelStreamed(data, openSettings)
   } else if (typeof ifcAPI.OpenModelAsync === 'function') {
+    attemptedID = nextModelID(ifcAPI)
     // eslint-disable-next-line new-cap
     modelID = await ifcAPI.OpenModelAsync(data, openSettings)
   } else {
+    attemptedID = nextModelID(ifcAPI)
     // eslint-disable-next-line new-cap
     modelID = ifcAPI.OpenModel(data, openSettings)
   }
   if (typeof modelID !== 'number' || modelID < 0) {
-    throw await openModelFailure(modelID, buffer)
+    throw await openModelFailure(modelID, buffer, conwayRefusedSchema(ifcAPI, attemptedID))
   }
   const captured = []
   // eslint-disable-next-line new-cap
