@@ -24,8 +24,14 @@ export const NONE = -1
 
 /** A growable mesh of the shape above. */
 export default class SplitMesh {
-  /** Empty: ADF streams have an empty base mesh. */
-  constructor() {
+  /**
+   * Empty: ADF streams have an empty base mesh.
+   *
+   * @param {number} [walkBudget] total ring-walk steps allowed over the
+   *   whole decode (see `checkWalk`)
+   */
+  constructor(walkBudget = Infinity) {
+    this.walkBudget = walkBudget
     this.v = new Int32Array(3 * 64)
     this.n = new Int32Array(3 * 64)
     this.faceCount = 0
@@ -90,6 +96,13 @@ export default class SplitMesh {
   checkWalk(h, steps) {
     if (steps > this.walkLimit() || !(h >= 0)) {
       throw new Error('mts: corrupt stream (a vertex ring does not close)')
+    }
+    // Each walk is bounded, but a split costs O(valence) and a crafted
+    // stream can grow one vertex's valence by 1 per split, so the total is
+    // quadratic in stream length (~1 minute for 100 KB). The decoder sets a
+    // budget proportional to the stream's bits instead.
+    if (--this.walkBudget < 0) {
+      throw new Error('mts: corrupt stream (too much ring walking for its length)')
     }
     return h
   }

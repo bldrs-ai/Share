@@ -11,6 +11,7 @@ import BitReader from './bitstream'
 import {meshPayloadFromCompressedData} from './container'
 import {decodeMesh} from './decoder'
 import {UnsupportedMtsError, readHeader} from './header'
+import SplitMesh from './mesh'
 
 
 const PM_ADF = resolve(__dirname, '../../tests/fixtures/github/bldrs-ai/test-models/main/adf/PM.adf')
@@ -144,6 +145,40 @@ describe('loader/mts/decoder', () => {
       // Guard the helper: the counts really were re-encoded.
       expect(readHeader.bind(null, new BitReader(payload))).toThrow(/16777216 vertices/)
       expect(() => decodeMesh(payload)).toThrow(/^mts: corrupt stream/)
+    })
+
+    it('throws on a header bit flip that once hung reading a garbage string length', () => {
+      const payload = byKey['23/crown'].slice()
+      payload[630 >> 3] ^= 1 << (630 & 7)
+      expect(() => decodeMesh(payload)).toThrow(/^mts: /)
+    })
+
+    it('rejects an arithmetic budget longer than the stream, and running far past it', () => {
+      const bs = new BitReader(new Uint8Array(4))
+      expect(() => new ArithDecoder(bs, 33)).toThrow(/budget 33 runs past the end/)
+      const coder = new ArithDecoder(new BitReader(new Uint8Array(4)), 16)
+      // 16 bits were spent seeding `value`; up to 32 more zeros are allowed.
+      for (let k = 0; k < 32; k++) {
+        coder.nextBit()
+      }
+      expect(() => coder.nextBit()).toThrow(/overran its budget/)
+    })
+
+    it('throws instead of renormalizing a state outside the 16-bit window', () => {
+      const coder = new ArithDecoder(new BitReader(new Uint8Array(4)), 0)
+      coder.low = -1
+      expect(() => coder.renorm()).toThrow(/state out of range/)
+      coder.low = 0x8000
+      coder.range = 0x8001
+      expect(() => coder.renorm()).toThrow(/state out of range/)
+    })
+
+    it('caps total ring walking, which a crafted stream can make quadratic', () => {
+      const mesh = new SplitMesh(2)
+      mesh.faceCount = 1
+      mesh.checkWalk(0, 1)
+      mesh.checkWalk(0, 1)
+      expect(() => mesh.checkWalk(0, 1)).toThrow(/too much ring walking/)
     })
 
     it('throws when asked for a symbol from an empty range', () => {

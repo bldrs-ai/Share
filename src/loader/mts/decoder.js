@@ -5,6 +5,11 @@ import SplitMesh, {NONE, NXT, PRV, nextTag, prevTag} from './mesh'
 import {bisect, readTreeInt} from './trees'
 
 
+// Total ring-walk steps allowed per stream bit (`SplitMesh#checkWalk`). The
+// fixture's streams take at most 0.57; a vertex of valence 11 is their max.
+const WALK_STEPS_PER_BIT = 64
+
+
 /**
  * Decode one MetaStream progressive mesh: a header, then `splits` vertex
  * splits grown from an empty base mesh (design/new/adf-mts-decoder.md).
@@ -30,7 +35,7 @@ export function decodeMesh(payload, {onSplit} = {}) {
   const header = readHeader(bs)
   const coder = new ArithDecoder(bs, header.arithBudget)
   const models = header.models
-  const mesh = new SplitMesh()
+  const mesh = new SplitMesh(WALK_STEPS_PER_BIT * bs.length)
   const quant = header.position
   const nVerts = header.counts.vertices
   const qint = new Int32Array(3 * nVerts)

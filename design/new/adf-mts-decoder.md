@@ -255,7 +255,11 @@ loop and allocation is bounded by the stream's own length:
 
   Without the state check, a corrupt `low` goes negative, `range <<= 1`
   overflows int32 to 0, and `renorm` never returns.
-- Walks around a vertex are bounded (`SplitMesh#checkWalk`).
+- Walks around a vertex are bounded one by one, and in total
+  (`SplitMesh#checkWalk`): at most 64 steps per stream bit over the whole
+  decode, against the fixture's 0.57. Without the total, a crafted stream
+  that keeps splitting one hub vertex pays O(valence) per split, so time
+  grows with the square of its length (11 s for ~110 KB).
 
 Fuzzing `PM.adf`'s streams (random truncations, and bit flips in the header
 and body) gives no case over 3 s. Every truncation throws. Before these
