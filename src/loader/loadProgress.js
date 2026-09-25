@@ -12,6 +12,15 @@ import {version as shareVersion} from '../../package.json'
 // (dependency-free — no wasm). Was an interim byte-identical local copy until
 // the 1.381.1195 pin shipped this module.
 import {LoadLogAccumulator, formatMb} from '@bldrs-ai/conway/src/core/progress_log'
+// Conway's static Logger, for the data-defect marker (conway#712) on the
+// entries it logs — see installDefectProxy. This is the SAME module instance
+// the engine logs through: the esbuild `webIfcShimAlias` resolves 'web-ifc' to
+// compiled/src/compat/web-ifc/index.js, whose ifc_api.js imports
+// ../../logging/logger.js — the file this `./src/*` subpath resolves to — so
+// esbuild bundles one Logger, not two. In the real-web-ifc build nothing logs
+// through it and the proxy simply never fires; the import tree-shakes to a
+// few KB there (it does not drag in the conway-geom wasm glue).
+import Logger, {DATA_DEFECT} from '@bldrs-ai/conway/src/logging/logger'
 
 
 /**
@@ -156,7 +165,13 @@ class LoadProgressReporter {
     // preview feedback #4). Includes conway's engine warnings/errors, which
     // route through console.warn/error.
     this.diagnostics = new Map()
+    // Base messages (conway LogEntry.message, whitespace-collapsed like the
+    // tee's text) of the entries conway marked as data defects during this
+    // load — what isDataDefectDiagnostic matches the captured diagnostic
+    // against. See installDefectProxy.
+    this.dataDefectMessages = new Set()
     this.installConsoleTee()
+    this.installDefectProxy()
 
     // Report preamble (log lines 1-2): Share version + memory condition
     // before the load. The engine line arrives via reportEngineVersion once
@@ -181,9 +196,9 @@ class LoadProgressReporter {
       } else {
         this.errorCount++
       }
-      const text = args
+      const text = collapseWhitespace(args
         .map((arg) => (arg instanceof Error ? arg.message : String(arg)))
-        .join(' ').replace(/\s+/g, ' ').trim()
+        .join(' '))
       if (text !== '') {
         this.diagnostics.set(text, (this.diagnostics.get(text) ?? 0) + 1)
       }
@@ -198,7 +213,40 @@ class LoadProgressReporter {
     }
   }
 
-  /** Restore the console methods the tee replaced. Idempotent. */
+  /**
+   * Watch conway's Logger for the load window and remember which entries it
+   * marked `category: 'dataDefect'` (conway#712) — the classification
+   * source #1863 prefers for the `data_defect` tag.
+   *
+   * Why a proxy, and not `Logger.getDataDefects()` at capture time: conway's
+   * `StreamAllMeshes` / `StreamAllMeshesAsync` end with `Logger.clearLogs()`,
+   * so the buffer that call reads is already empty by the time the load
+   * reaches CadView's captureLoadDiagnostics — and a demand-geometry load
+   * keeps logging after that point, into a fresh buffer. A proxy is handed
+   * every entry synchronously as it is logged (`Logger.log` echoes to the
+   * console sink first, then calls the proxies), so nothing depends on when
+   * the buffer is cleared, and the category is read straight off the
+   * `LogEntry` rather than reconstructed from prose.
+   *
+   * The proxy only records; the text the Sentry event is titled by still
+   * comes from the console tee, and isDataDefectDiagnostic joins the two.
+   * Detached with the tee in restoreConsole, so both cover the same window.
+   */
+  installDefectProxy() {
+    this.defectProxy = {
+      log: (entry) => {
+        if (entry?.category === DATA_DEFECT && typeof entry.message === 'string') {
+          this.dataDefectMessages.add(collapseWhitespace(entry.message))
+        }
+      },
+    }
+    Logger.addProxy(this.defectProxy)
+  }
+
+  /**
+   * Close the capture window: restore the console methods the tee replaced
+   * and detach the conway log proxy. Idempotent.
+   */
   restoreConsole() {
     if (this.originalWarn !== undefined) {
       console.warn = this.originalWarn
@@ -208,6 +256,39 @@ class LoadProgressReporter {
       console.error = this.originalError
       this.originalError = undefined
     }
+    if (this.defectProxy !== undefined) {
+      Logger.removeProxy(this.defectProxy)
+      this.defectProxy = undefined
+    }
+  }
+
+  /**
+   * Is this captured diagnostic from the data-defect family — a statement
+   * about the input file rather than about the engine (Share#1863)?
+   *
+   * Two sources, in the issue's preference order:
+   *
+   * 1. conway's own marker, via installDefectProxy. The tee holds the
+   *    console ECHO, which conway spells `<message> expressID: <id>` when the
+   *    entry names a record (Logger.log in conway src/logging/logger.ts), so
+   *    the text is cut at that separator before comparing — the same split
+   *    Logger.log itself uses to derive the entry's base message. The match
+   *    is exact, not a prefix: conway logs a marked and an unmarked variant
+   *    that share a prefix ("…untypeable in AP214" vs "…untypeable in AP214:
+   *    <error>"), and only the first is a defect.
+   * 2. DATA_DEFECT_FALLBACK_MESSAGES, for the data-quality diagnostics conway
+   *    does not mark.
+   *
+   * @param {string} text a diagnostic as the console tee captured it
+   * @return {boolean}
+   */
+  isDataDefectDiagnostic(text) {
+    if (text === '') {
+      return false
+    }
+    const base = text.split(' expressID: ')[0]
+    return this.dataDefectMessages.has(base) ||
+      DATA_DEFECT_FALLBACK_MESSAGES.has(normalizeMessageDigits(base))
   }
 
   /**
@@ -583,6 +664,17 @@ class LoadProgressReporter {
     if (Number.isFinite(this.fileSize)) {
       tags.model_size_mb = Math.round(this.fileSize / BYTES_PER_MB)
     }
+    // Share#1863 (ops#28 T1): lets triage filter authoring defects out of
+    // engine-gap searches. It classifies the diagnostic this event is titled
+    // and grouped by (summary.topText), not the load: a file with defects
+    // can still hit a real engine gap, and when that gap is what dominated,
+    // tagging the event would hide an engine bug behind the filter meant to
+    // surface them. Independent of the load_outcome severity split above.
+    // Present only when true — an absent tag already reads as "not a
+    // defect", and a 'false' value on every other event is just noise.
+    if (this.isDataDefectDiagnostic(summary.topText)) {
+      tags.data_defect = 'true'
+    }
     captureMessage(diagnosticsTitle(summary.topText), {
       level: loadOutcome === 'unusable' ? 'error' : 'warning',
       tags,
@@ -747,6 +839,38 @@ function diagnosticsTitle(topText) {
     'Load completed with diagnostics' :
     `Load diagnostics: ${normalized}`
 }
+
+
+/**
+ * Collapse whitespace runs to single spaces and trim. The console tee stores
+ * diagnostics in this form (multi-line wasm stack traces become one line), so
+ * anything compared against a tee key has to be put through it too.
+ *
+ * @param {string} text
+ * @return {string}
+ */
+function collapseWhitespace(text) {
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+
+/**
+ * Data-quality diagnostics conway emits WITHOUT its data-defect marker, as
+ * normalizeMessageDigits leaves them — the fallback half of
+ * isDataDefectDiagnostic (Share#1863). Both are conway's IFC unit/project
+ * lookups (ifc_geometry_extraction) reporting that the file never declared
+ * the thing, which is an authoring gap, not an engine one; the triage behind
+ * ops#28 found them among the top load diagnostics.
+ *
+ * Keep this small. The marker is the durable mechanism — prose matching
+ * breaks silently on a reword — so a new family belongs in conway as a
+ * `DATA_DEFECT` call site, and an entry here should come out once conway
+ * marks it.
+ */
+const DATA_DEFECT_FALLBACK_MESSAGES = new Set([
+  'No units defined.',
+  'No IfcProjects found?',
+])
 
 
 /**

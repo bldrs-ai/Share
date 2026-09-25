@@ -6,11 +6,13 @@ jest.mock('@sentry/react', () => ({
 }))
 
 import Cookies from 'js-cookie'
+import Logger, {DATA_DEFECT} from '@bldrs-ai/conway/src/logging/logger'
 import {captureMessage, setContext, setTag} from '@sentry/react'
 import {_resetGaClientIdForTests} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {
   STALL_TIMEOUT_MS,
+  _getActiveReporterForTests,
   attachLoadFailureContext,
   beginLoadProgress,
   captureLoadDiagnostics,
@@ -845,6 +847,131 @@ describe('loadProgress', () => {
         captureLoadDiagnostics({warningCount: 1})
         expect(diagnosticsCall()[1].tags).not.toHaveProperty('open_cid')
         warnSpy.mockRestore()
+      })
+
+      /*
+       * Share#1863: `data_defect` marks events whose captured diagnostic is
+       * an authoring defect in the file, so engine-gap triage can filter
+       * them out. Driven through conway's REAL Logger — its console echo is
+       * what the tee captures and its proxy hand-off is what carries the
+       * marker — so these exercise the same join production relies on.
+       */
+      describe('data_defect tag', () => {
+        const DANGLING = 'Skipping representation items with an unresolved or mistyped STEP reference'
+        const EXPRESS_ID = 4242
+        let warnSpy
+        let errorSpy
+
+        beforeEach(() => {
+          warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+          errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+          // Logger is static and echoes only an entry's FIRST occurrence, so
+          // a message another test already logged would never reach the tee.
+          Logger.clearLogs()
+        })
+
+        afterEach(() => {
+          Logger.clearLogs()
+          warnSpy.mockRestore()
+          errorSpy.mockRestore()
+        })
+
+        it('tags a diagnostic conway marked as a data defect', () => {
+          beginLoadProgress({fileInfo: 'part.step'})
+          Logger.error(DANGLING, EXPRESS_ID, DATA_DEFECT)
+          endLoadProgress()
+          captureLoadDiagnostics({errorCount: 1})
+
+          const [message, context] = diagnosticsCall()
+          // The tee holds conway's echo, record id appended — the separator
+          // the classifier cuts at is really there (the title ellipsizes it).
+          expect(message).toMatch(new RegExp(`^Load diagnostics: ${DANGLING} exp…$`))
+          expect(context.tags.data_defect).toBe('true')
+        })
+
+        it('leaves the same text unmarked when conway did not mark it', () => {
+          // Identical prose, no category: only the marker differs, so this
+          // is what fails if the tag were derived from the message text.
+          beginLoadProgress({fileInfo: 'part.step'})
+          Logger.error(DANGLING, EXPRESS_ID)
+          endLoadProgress()
+          captureLoadDiagnostics({errorCount: 1})
+
+          expect(diagnosticsCall()[1].tags).not.toHaveProperty('data_defect')
+        })
+
+        it('matches the marked message exactly, not an unmarked one it prefixes', () => {
+          // conway logs both of these: the first marked, the second (a
+          // different failure carrying its error text) not.
+          const untypeable = 'Skipping property definition representation that is untypeable in AP214'
+          beginLoadProgress({fileInfo: 'part.step'})
+          // One tee echo each, so the tie goes to the first seen: the
+          // unmarked variant titles the event while the marked one is still
+          // registered — a prefix match would tag it.
+          Logger.warning(`${untypeable}: TypeError: boom`, '#8')
+          Logger.warning(untypeable, '#7', DATA_DEFECT)
+          endLoadProgress()
+          captureLoadDiagnostics({warningCount: 2})
+
+          const [message, context] = diagnosticsCall()
+          // Titled by the unmarked variant (digits normalized, ellipsized).
+          expect(message).toMatch(/untypeable in AP#: TypeErro…$/)
+          expect(_getActiveReporterForTests().dataDefectMessages.has(untypeable)).toBe(true)
+          expect(context.tags).not.toHaveProperty('data_defect')
+        })
+
+        it.each([
+          ['No units defined.', 'No units defined.'],
+          ['No IfcProjects found?', 'No IfcProjects found?'],
+          // The tee collapses whitespace; the fallback must see the same form.
+          ['a whitespace variant', 'No  units\n  defined.'],
+        ])('tags the unmarked data-quality fallback: %s', (_label, text) => {
+          beginLoadProgress({fileInfo: 'index.ifc'})
+          Logger.warning(text)
+          endLoadProgress()
+          captureLoadDiagnostics({warningCount: 1})
+
+          expect(diagnosticsCall()[1].tags.data_defect).toBe('true')
+        })
+
+        it('does not tag an ordinary engine diagnostic', () => {
+          beginLoadProgress({fileInfo: 'index.ifc'})
+          Logger.warning('No basis found for brep!')
+          endLoadProgress()
+          captureLoadDiagnostics({warningCount: 1})
+
+          expect(diagnosticsCall()[1].tags).not.toHaveProperty('data_defect')
+        })
+
+        /*
+         * The issue's rule: the tag classifies the diagnostic the event is
+         * titled and grouped by, not the load. Here the file has a defect,
+         * but an engine error dominated — the event is that engine error's
+         * issue, and tagging it would filter a real engine gap out of the
+         * very searches the tag exists to clean up.
+         */
+        it('does not tag when an engine error, not the defect, is the top diagnostic', () => {
+          beginLoadProgress({fileInfo: 'part.step'})
+          Logger.error(DANGLING, EXPRESS_ID, DATA_DEFECT)
+          console.error('CDT Exception (hemisphere: 0)')
+          console.error('CDT Exception (hemisphere: 0)')
+          endLoadProgress()
+          captureLoadDiagnostics({errorCount: 3})
+
+          const [message, context] = diagnosticsCall()
+          expect(message).toBe('Load diagnostics: CDT Exception (hemisphere: #)')
+          // The defect was seen — the tag's absence is the rule, not a miss.
+          expect(_getActiveReporterForTests().dataDefectMessages.has(DANGLING)).toBe(true)
+          expect(context.tags).not.toHaveProperty('data_defect')
+        })
+
+        it('stops listening to conway when the load ends', () => {
+          beginLoadProgress({fileInfo: 'part.step'})
+          endLoadProgress()
+          Logger.error(DANGLING, EXPRESS_ID, DATA_DEFECT)
+
+          expect(_getActiveReporterForTests().dataDefectMessages.size).toBe(0)
+        })
       })
     })
 
