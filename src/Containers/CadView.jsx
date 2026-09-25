@@ -1453,15 +1453,17 @@ export default function CadView({
         // never captured (it is seeded from spatial-tree nodes only, and a
         // shape is not one) — so both lookups above miss and the panel went
         // blank. The same pick also recorded which occurrence was clicked;
-        // its leaf is the part's tree node, which IS captured. Walk from the
-        // leaf toward the root and take the first node that resolves. A live
-        // parse answers the shape id directly, so this only runs on the
-        // cached path.
-        if (!props && model && typeof model.getItemProperties === 'function' &&
-            Array.isArray(selectedOccurrencePath)) {
-          for (let i = selectedOccurrencePath.length - 1; i >= 0 && !props; i--) {
-            props = await model.getItemProperties(Number(selectedOccurrencePath[i]))
-          }
+        // its leaf is the part's tree node, which IS captured — so resolve
+        // the leaf, and only the leaf. Walking on up to an ancestor when the
+        // leaf is missing would put a parent assembly's properties beside a
+        // scene and NavTree that still select the part (codex on #1876);
+        // the empty state is the honest answer then. A live parse answers
+        // the shape id directly, so this only runs on the cached path.
+        const occurrenceLeaf = Array.isArray(selectedOccurrencePath) ?
+          selectedOccurrencePath[selectedOccurrencePath.length - 1] : undefined
+        if (!props && occurrenceLeaf !== undefined && model &&
+            typeof model.getItemProperties === 'function') {
+          props = await model.getItemProperties(Number(occurrenceLeaf))
         }
         if (isStale) {
           return

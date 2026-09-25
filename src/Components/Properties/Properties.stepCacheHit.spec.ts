@@ -34,9 +34,12 @@ const MODEL_READY_TIMEOUT_MS = 60_000
  * Double-click parts until one is selected with an occurrence path.
  *
  * @param page Playwright page
- * @return the selected occurrence's leaf expressID and its tree Name
+ * @param excludeLeaf keep trying until a part OTHER than this one is picked
+ * @param minDepth keep trying until the occurrence path is at least this long
+ * @return the selected occurrence's leaf expressID, its tree Name, and its path
  */
-async function doubleClickAPart(page: Page): Promise<{leaf: number, name: string}> {
+async function doubleClickAPart(page: Page, excludeLeaf: number | null = null, minDepth = 1):
+    Promise<{leaf: number, name: string, path: number[]}> {
   const points: Array<{x: number, y: number}> = await page.evaluate(() => {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const w = window as any
@@ -82,15 +85,18 @@ async function doubleClickAPart(page: Page): Promise<{leaf: number, name: string
   const MAX_TRIES = 6
   for (const {x, y} of points.slice(0, MAX_TRIES)) {
     await page.mouse.dblclick(x, y)
-    const picked = await page.waitForFunction(() => {
+    const picked = await page.waitForFunction(({excluded, depth}) => {
       /* eslint-disable @typescript-eslint/no-explicit-any */
       const w = window as any
       const state = (w.store ?? w.useStore).getState()
       const path = state.selectedOccurrencePath
-      if (!Array.isArray(path) || path.length === 0) {
+      if (!Array.isArray(path) || path.length < Math.max(depth, 1)) {
         return null
       }
       const leaf = Number(path[path.length - 1])
+      if (leaf === excluded) {
+        return null
+      }
       let name: string | null = null
       const walk = (node: any) => {
         if (!node || name !== null) {
@@ -105,14 +111,39 @@ async function doubleClickAPart(page: Page): Promise<{leaf: number, name: string
         }
       }
       walk(state.model?.userData?.bldrsSpatialTree)
-      return name === null ? null : {leaf, name}
+      return name === null ? null : {leaf, name, path: path.map(Number)}
       /* eslint-enable @typescript-eslint/no-explicit-any */
-    }, null, {timeout: 3000}).then((handle) => handle.jsonValue(), () => null)
+    }, {excluded: excludeLeaf, depth: minDepth}, {timeout: 3000}).then((handle) => handle.jsonValue(), () => null)
     if (picked) {
       return picked
     }
   }
   throw new Error('double-click selected no STEP occurrence')
+}
+
+
+/**
+ * Load AS1 twice: a cache MISS writes the artifact, then a cache HIT loads it.
+ *
+ * @param page Playwright page
+ */
+async function loadCacheHit(page: Page) {
+  const glbLogs = captureGlbLogs(page)
+  // The intercept derives the fixture URL from the CLEAN path; a query
+  // suffix would land inside its filePath.
+  await setupVirtualPathIntercept(page, AS1_PATH, '')
+
+  // Load 1 — cache MISS writes the artifact.
+  await page.goto(`${AS1_PATH}${FLAGS}`, {waitUntil: 'domcontentloaded'})
+  await waitForModelReady(page, MODEL_READY_TIMEOUT_MS)
+  await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT_MS)
+
+  // Load 2 — cache HIT, the path that broke.
+  resetGlbLogs(glbLogs)
+  await page.goto(`${AS1_PATH}${FLAGS}`, {waitUntil: 'domcontentloaded'})
+  await waitForModelReady(page, MODEL_READY_TIMEOUT_MS)
+  await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT_MS)
+  await waitForGlbLog(glbLogs, 'hydrated Properties panel from BLDRS_element_properties', CACHE_TIMEOUT_MS)
 }
 
 
@@ -125,22 +156,7 @@ describeMobileAndDesktop('View 100: STEP Properties on a cache-hit GLB', () => {
 
   test('double-clicking a part shows that part in Properties', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
-    const glbLogs = captureGlbLogs(page)
-    // The intercept derives the fixture URL from the CLEAN path; a query
-    // suffix would land inside its filePath.
-    await setupVirtualPathIntercept(page, AS1_PATH, '')
-
-    // Load 1 — cache MISS writes the artifact.
-    await page.goto(`${AS1_PATH}${FLAGS}`, {waitUntil: 'domcontentloaded'})
-    await waitForModelReady(page, MODEL_READY_TIMEOUT_MS)
-    await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT_MS)
-
-    // Load 2 — cache HIT, the path that broke.
-    resetGlbLogs(glbLogs)
-    await page.goto(`${AS1_PATH}${FLAGS}`, {waitUntil: 'domcontentloaded'})
-    await waitForModelReady(page, MODEL_READY_TIMEOUT_MS)
-    await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT_MS)
-    await waitForGlbLog(glbLogs, 'hydrated Properties panel from BLDRS_element_properties', CACHE_TIMEOUT_MS)
+    await loadCacheHit(page)
 
     const {leaf, name} = await doubleClickAPart(page)
     expect(name, 'the picked part has a name to show').not.toBe('')
@@ -153,5 +169,54 @@ describeMobileAndDesktop('View 100: STEP Properties on a cache-hit GLB', () => {
     await expect(panel).not.toContainText('Please select an element')
     await expect(panel.locator('tr').filter({hasText: 'Express Id'})).toContainText(`${leaf}`)
     await expect(panel.locator('tr').filter({hasText: 'Name'}).first()).toContainText(name)
+  })
+
+  test('a part with no cached record keeps the empty state, not a parent\'s properties', async ({page}) => {
+    // Codex on #1876: the fallback resolves the picked occurrence's LEAF
+    // only. Walking on up the path when the leaf is missing would show a
+    // parent assembly beside a scene and NavTree that select the part.
+    //
+    // The panel's button is disabled while nothing resolves, so open it on
+    // an ordinary pick first, then make the NEXT pick's leaf unresolvable
+    // and pick a different part: the panel must fall back to its empty
+    // state rather than to an ancestor.
+    test.setTimeout(TEST_TIMEOUT_MS)
+    await loadCacheHit(page)
+    const first = await doubleClickAPart(page)
+    const panel = page.getByTestId('PropertiesPanel')
+    if (!await panel.isVisible()) {
+      await page.getByTestId('control-button-properties').click()
+    }
+    await expect(panel.locator('tr').filter({hasText: 'Express Id'})).toContainText(`${first.leaf}`)
+
+    await page.evaluate((keep) => {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const w = window as any
+      const store = w.store ?? w.useStore
+      const model = store.getState().model
+      const original = model.getItemProperties.bind(model)
+      model.getItemProperties = (id: number) => {
+        const path = store.getState().selectedOccurrencePath
+        const leaf = Array.isArray(path) && path.length > 0 ? Number(path[path.length - 1]) : null
+        return Number(id) === leaf && leaf !== keep ? Promise.resolve(null) : original(id)
+      }
+      /* eslint-enable @typescript-eslint/no-explicit-any */
+    }, first.leaf)
+
+    // A part nested at least one level deep, so there IS an ancestor for a
+    // walk to land on — and that ancestor must resolve, or the walk would
+    // come up empty too and this test could not tell the two apart.
+    const MIN_DEPTH = 2
+    const second = await doubleClickAPart(page, first.leaf, MIN_DEPTH)
+    const parent = second.path[second.path.length - 2]
+    const parentResolves = await page.evaluate(async (id) => {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const w = window as any
+      return Boolean(await (w.store ?? w.useStore).getState().model.getItemProperties(id))
+      /* eslint-enable @typescript-eslint/no-explicit-any */
+    }, parent)
+    expect(parentResolves, `the picked part's parent #${parent} has a cached record`).toBe(true)
+    await expect(panel).toContainText('Please select an element')
+    await expect(panel.locator('tr').filter({hasText: 'Express Id'})).toHaveCount(0)
   })
 })
