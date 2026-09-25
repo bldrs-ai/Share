@@ -3,8 +3,8 @@
 What it takes to teach Share a new file format, in the order the code
 runs. Derived from the USD/USDA/USDC/USDZ addition
 ([#1728](https://github.com/bldrs-ai/Share/issues/1728) /
-[#1729](https://github.com/bldrs-ai/Share/pull/1729)); the FBX, OBJ,
-STL, PDB and XYZ formats sit on the same seams.
+[#1729](https://github.com/bldrs-ai/Share/pull/1729)); the ADF, FBX,
+OBJ, STL, PDB and XYZ formats sit on the same seams.
 
 The short version: if a three.js loader exists for the format, the work
 is one entry in `supportedTypes`, one arm in `findLoader`, one line in
@@ -74,6 +74,10 @@ Add a `case` returning the tuple
   returning a `Group` needs none.
 - Related extensions can share one arm when the loader sniffs the
   variant itself.
+- `readModel` calls `loader.parse(modelData, basePath)`. A loader whose
+  second `parse` argument means something else needs a small wrapper,
+  e.g. `ADFLoader#parse(buffer, {meshes})`, which `loader/adf.js`
+  wraps so the basePath string never reaches it.
 
 
 ## 3. Declare capabilities — `src/viewer/ShareModel.js`

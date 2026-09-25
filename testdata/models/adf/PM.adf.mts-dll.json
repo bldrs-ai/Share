@@ -1,0 +1,437 @@
+{
+ "_comment": "What Viewpoint Mts3Reader.dll 3.0.15.12 decodes from each CompressedQedge in PM.adf, recorded with tools/adf-mts/oracle.py: counts, the final bit position, and SHA-1s of its float32 positions and uint32 faces (newest face first). The JS decoder must reproduce these exactly. Keys are \"<Align tooth id>/<crown|initial>\".",
+ "meshes": {
+  "2/crown": {
+   "vertices": 4204,
+   "faces": 8404,
+   "bitsRead": 234224,
+   "bitLength": 234224,
+   "positionsSha1": "97a878095830f34b30efeb7c7efd3cf654f504b4",
+   "facesSha1": "eb5dd0340d1ba4ddefc1151e102aa8dc55cd820d"
+  },
+  "2/initial": {
+   "vertices": 5523,
+   "faces": 11042,
+   "bitsRead": 304366,
+   "bitLength": 304368,
+   "positionsSha1": "a0efedc57ebed88293e6beab3affc3e658c158a5",
+   "facesSha1": "468b493ddb8517db770d38b28a8c77ea76243831"
+  },
+  "3/crown": {
+   "vertices": 4777,
+   "faces": 9550,
+   "bitsRead": 265580,
+   "bitLength": 265584,
+   "positionsSha1": "7c8a3155bc86973856a8729f278818bd70f7fb3f",
+   "facesSha1": "c4ae9723c6b6d97922a03d568d7ac3dea9add0b7"
+  },
+  "3/initial": {
+   "vertices": 5523,
+   "faces": 11042,
+   "bitsRead": 304384,
+   "bitLength": 304384,
+   "positionsSha1": "68ca9f1ae590a95ffacb87abac3062dcae02e633",
+   "facesSha1": "4c130bc758192af25de9184942ac66b1dd552a78"
+  },
+  "4/crown": {
+   "vertices": 2524,
+   "faces": 5044,
+   "bitsRead": 143022,
+   "bitLength": 143024,
+   "positionsSha1": "e01c497e0c97d7a596163740ff2f6f72086abd0f",
+   "facesSha1": "6a479ad212c389e29befee41b9c5238233890ac1"
+  },
+  "4/initial": {
+   "vertices": 3516,
+   "faces": 7028,
+   "bitsRead": 195314,
+   "bitLength": 195320,
+   "positionsSha1": "f5e495a94c00933f0643319997e5c95541740135",
+   "facesSha1": "6a912798737b97047772f8af84b0cb3c35966331"
+  },
+  "5/crown": {
+   "vertices": 2681,
+   "faces": 5358,
+   "bitsRead": 151064,
+   "bitLength": 151064,
+   "positionsSha1": "3fbe7b88d62a02674af2528b511631087ce5d2f5",
+   "facesSha1": "08435e92affadafc2cc879f5a09e5e35ff4a4942"
+  },
+  "5/initial": {
+   "vertices": 3516,
+   "faces": 7028,
+   "bitsRead": 195586,
+   "bitLength": 195592,
+   "positionsSha1": "62cfa06a33f38d438f68cb551e821fb12ab7ea7b",
+   "facesSha1": "74566206d50f668a4b53356e718635e57849ac5f"
+  },
+  "6/crown": {
+   "vertices": 2698,
+   "faces": 5392,
+   "bitsRead": 152342,
+   "bitLength": 152344,
+   "positionsSha1": "2805a17990b7446dc73dd2f1e702d0f67ec03468",
+   "facesSha1": "e6473d4066df5261130419f4295f4b8dd92823e1"
+  },
+  "6/initial": {
+   "vertices": 6731,
+   "faces": 13458,
+   "bitsRead": 372055,
+   "bitLength": 372056,
+   "positionsSha1": "054e574c05d7245b36c5209aa78895192b4c0b53",
+   "facesSha1": "112c99c797f2855b8d206b35e4634a6eb56bbd1d"
+  },
+  "7/crown": {
+   "vertices": 2265,
+   "faces": 4526,
+   "bitsRead": 128615,
+   "bitLength": 128616,
+   "positionsSha1": "f083743e122fda3775713c50a859a08aaaaf6d92",
+   "facesSha1": "0d1c742481f110d6f21e9e64890b559212cff29a"
+  },
+  "7/initial": {
+   "vertices": 5427,
+   "faces": 10850,
+   "bitsRead": 294822,
+   "bitLength": 294824,
+   "positionsSha1": "163721c0dd45aae530f0b1bb4359aa74e22969e8",
+   "facesSha1": "44c81c94ea3929a01972969bc2676beb0338b4b6"
+  },
+  "8/crown": {
+   "vertices": 3016,
+   "faces": 6028,
+   "bitsRead": 169697,
+   "bitLength": 169704,
+   "positionsSha1": "8d6d5a3c68d9377a143b7efb949bdf569a4186de",
+   "facesSha1": "a544ffc034f331be37b23a7d57ffde0eae0bb34b"
+  },
+  "8/initial": {
+   "vertices": 7606,
+   "faces": 15208,
+   "bitsRead": 418081,
+   "bitLength": 418088,
+   "positionsSha1": "1a996e6118df51f1e781872bddeb52819aa912de",
+   "facesSha1": "1bc181b83c2d287fcad89bae0acbecd43f58495f"
+  },
+  "9/crown": {
+   "vertices": 3020,
+   "faces": 6036,
+   "bitsRead": 169725,
+   "bitLength": 169728,
+   "positionsSha1": "85dfcc41500e982a65902b35967d6821dabca867",
+   "facesSha1": "820616facf22409b41bc04333dd0f17da30c574e"
+  },
+  "9/initial": {
+   "vertices": 7606,
+   "faces": 15208,
+   "bitsRead": 420311,
+   "bitLength": 420312,
+   "positionsSha1": "0de5f8f3a77af9be5b2f984c22369d704e293abf",
+   "facesSha1": "2cfb6c0c4eaf45924a65714ce91ca138a4c4963b"
+  },
+  "10/crown": {
+   "vertices": 2382,
+   "faces": 4760,
+   "bitsRead": 134630,
+   "bitLength": 134632,
+   "positionsSha1": "96bc08cb9c519aa23c75c8ab4d8799089e4cb908",
+   "facesSha1": "6fffee5c7ce0931078231c0e0cde6f4f1501ab59"
+  },
+  "10/initial": {
+   "vertices": 5427,
+   "faces": 10850,
+   "bitsRead": 299838,
+   "bitLength": 299840,
+   "positionsSha1": "656d370fabfda62eb917931be0a907b256ced82e",
+   "facesSha1": "5b66ac9537b843ab22f8aeb5cc58673ea1760210"
+  },
+  "11/crown": {
+   "vertices": 2835,
+   "faces": 5666,
+   "bitsRead": 159264,
+   "bitLength": 159264,
+   "positionsSha1": "2eaac8d3a10ec5aeb89641799ef5fa86b2bf842a",
+   "facesSha1": "e604cbbb24b495890d5ed41bc08adca9608bb924"
+  },
+  "11/initial": {
+   "vertices": 6731,
+   "faces": 13458,
+   "bitsRead": 371650,
+   "bitLength": 371656,
+   "positionsSha1": "452765d8733aa5f200358b1ff35a22d356c89b72",
+   "facesSha1": "0b91cb88375d33c21f36132a7f8547c163635017"
+  },
+  "12/crown": {
+   "vertices": 2701,
+   "faces": 5398,
+   "bitsRead": 152667,
+   "bitLength": 152672,
+   "positionsSha1": "08bed15580b5fe404b9448572fb0acafc164ad9e",
+   "facesSha1": "00747ee52333975c46ac6dd03bac9e72cf764f8a"
+  },
+  "12/initial": {
+   "vertices": 3516,
+   "faces": 7028,
+   "bitsRead": 195420,
+   "bitLength": 195424,
+   "positionsSha1": "72fe6c043c0210d3dddf69a13c03cec53dc87cbb",
+   "facesSha1": "3fd0b4ddd0915add1c4af79561a1166c2b78ca67"
+  },
+  "13/crown": {
+   "vertices": 2547,
+   "faces": 5090,
+   "bitsRead": 144224,
+   "bitLength": 144224,
+   "positionsSha1": "4aeb58e64517ddbbdc4735d6d53be6131ec8e94e",
+   "facesSha1": "154baa1df5d28e529ccfe39e14f7ad3283d78803"
+  },
+  "13/initial": {
+   "vertices": 3516,
+   "faces": 7028,
+   "bitsRead": 195512,
+   "bitLength": 195512,
+   "positionsSha1": "fe2e31a7a035f6a09f53d2148d21ac77a63ee00d",
+   "facesSha1": "2dc9900b3667ceb03cf46d6130a12d6d0086ec52"
+  },
+  "14/crown": {
+   "vertices": 4759,
+   "faces": 9514,
+   "bitsRead": 264589,
+   "bitLength": 264592,
+   "positionsSha1": "6de8da356653b44609b7df1a5bdbe1b0e99bbce6",
+   "facesSha1": "ab69db42b09a30bb365c1898e43c5a2793893b6e"
+  },
+  "14/initial": {
+   "vertices": 5523,
+   "faces": 11042,
+   "bitsRead": 304745,
+   "bitLength": 304752,
+   "positionsSha1": "7f83d67f2f26bf8a96eb665cb390b251b38f884b",
+   "facesSha1": "e703c8754abf881a7305aa4c6a41b7901b3b61c1"
+  },
+  "18/crown": {
+   "vertices": 4269,
+   "faces": 8534,
+   "bitsRead": 238146,
+   "bitLength": 238152,
+   "positionsSha1": "4974afdddaf7feb5e09d76b7b3073d2abcd6fb9b",
+   "facesSha1": "f9c1c0cdecd0d2127fe8b2edb2b3d57430f2fe25"
+  },
+  "18/initial": {
+   "vertices": 5540,
+   "faces": 11076,
+   "bitsRead": 305915,
+   "bitLength": 305920,
+   "positionsSha1": "f58825d20c64e58e745032a4e653bd735cfb492f",
+   "facesSha1": "920030086065f86f3aa7fd72e183c7976922ea93"
+  },
+  "19/crown": {
+   "vertices": 4429,
+   "faces": 8854,
+   "bitsRead": 246746,
+   "bitLength": 246752,
+   "positionsSha1": "9e6677ab6dec16fc4aa1f2c0f6db3943601582e7",
+   "facesSha1": "30ab05113807d6459aba5f849ac09ea25f6e70ea"
+  },
+  "19/initial": {
+   "vertices": 5540,
+   "faces": 11076,
+   "bitsRead": 305260,
+   "bitLength": 305264,
+   "positionsSha1": "6caed974bf8428515872581ee9464a51e9b33b68",
+   "facesSha1": "fac906f2346f164a4ecf6e2d2cc9a256cd43b0ce"
+  },
+  "20/crown": {
+   "vertices": 2355,
+   "faces": 4706,
+   "bitsRead": 133344,
+   "bitLength": 133344,
+   "positionsSha1": "a8549e3c67693b08caefbbd8d81d676246348e72",
+   "facesSha1": "d4589f189b609d2be2db6b108f24dc53c03b4801"
+  },
+  "20/initial": {
+   "vertices": 3188,
+   "faces": 6372,
+   "bitsRead": 177097,
+   "bitLength": 177104,
+   "positionsSha1": "fa9f9293c7bd8e2259d1d759621ab2481381572b",
+   "facesSha1": "27bf872c6801610307bf42663b590fd522dccc15"
+  },
+  "21/crown": {
+   "vertices": 2557,
+   "faces": 5110,
+   "bitsRead": 144739,
+   "bitLength": 144744,
+   "positionsSha1": "d37c4a80e412ad6a8ce03ed49093568ef7372f12",
+   "facesSha1": "839372efeb8869e479b0561f1f5ec429e10adb0b"
+  },
+  "21/initial": {
+   "vertices": 3188,
+   "faces": 6372,
+   "bitsRead": 174311,
+   "bitLength": 174312,
+   "positionsSha1": "a640bb0d5cab80640b2f4376ee16e87c7f4a8c80",
+   "facesSha1": "e304ad8dd3e530bb7e3bfe909f587c1a0ff4062c"
+  },
+  "22/crown": {
+   "vertices": 2366,
+   "faces": 4728,
+   "bitsRead": 134097,
+   "bitLength": 134104,
+   "positionsSha1": "31c190f287d7f42c4b025203d1f489a2f9a057d4",
+   "facesSha1": "4f7c7fe85980d045f373331f0e95ee37995e2d1e"
+  },
+  "22/initial": {
+   "vertices": 5927,
+   "faces": 11850,
+   "bitsRead": 316452,
+   "bitLength": 316456,
+   "positionsSha1": "c7dea2f4b4a15953da5712afa26af800ee47910f",
+   "facesSha1": "7260676f482be1fefccda7af03fa46061d926235"
+  },
+  "23/crown": {
+   "vertices": 1892,
+   "faces": 3780,
+   "bitsRead": 105944,
+   "bitLength": 105944,
+   "positionsSha1": "4a558483faf358c27eede0edf6c7babaca924945",
+   "facesSha1": "4a6e09e3df7f5a09dc7ceb205ec559bfce2f5459"
+  },
+  "23/initial": {
+   "vertices": 4844,
+   "faces": 9684,
+   "bitsRead": 258886,
+   "bitLength": 258888,
+   "positionsSha1": "3a2ac15b4b5a434a3a24bf16f07a91eb4d1a5722",
+   "facesSha1": "4f01e4b1dc58320875769383e3d4213a27837020"
+  },
+  "24/crown": {
+   "vertices": 1900,
+   "faces": 3796,
+   "bitsRead": 106377,
+   "bitLength": 106384,
+   "positionsSha1": "8e2a1cc820c2c6f3f7ca1dd25de7fb15539f53ec",
+   "facesSha1": "a45d0e765955ad6c91eac1ff6f3fc6ff3e366365"
+  },
+  "24/initial": {
+   "vertices": 4469,
+   "faces": 8934,
+   "bitsRead": 239352,
+   "bitLength": 239352,
+   "positionsSha1": "91d6b158ecd97841db98036bbd5cf6d8e4d86976",
+   "facesSha1": "2611573ecd2f1abba0e3da426febbce2d96302ed"
+  },
+  "25/crown": {
+   "vertices": 1973,
+   "faces": 3942,
+   "bitsRead": 110633,
+   "bitLength": 110640,
+   "positionsSha1": "f4834524e7b150b3747cf1de3020c5fd37271914",
+   "facesSha1": "4d27081ac3cb24087a1d7490eb0b1f8e43522981"
+  },
+  "25/initial": {
+   "vertices": 4469,
+   "faces": 8934,
+   "bitsRead": 239462,
+   "bitLength": 239464,
+   "positionsSha1": "bfa7fed9c8b469e8535a2964ce9bb69661404c82",
+   "facesSha1": "49075fecd6137a67479ff9a680afb62ffbe8d083"
+  },
+  "26/crown": {
+   "vertices": 1924,
+   "faces": 3844,
+   "bitsRead": 107976,
+   "bitLength": 107976,
+   "positionsSha1": "872676c15e735b78849b33b5b9991daf96532098",
+   "facesSha1": "fdb2398a8dc8fbd9619b56d5e132a1ffa8d560b0"
+  },
+  "26/initial": {
+   "vertices": 4844,
+   "faces": 9684,
+   "bitsRead": 259825,
+   "bitLength": 259832,
+   "positionsSha1": "4002ddda4c329af6f1f3666b3f2dcb89b3268d2d",
+   "facesSha1": "de614cb31814c526cad54c2224be5ddfa8b06b67"
+  },
+  "27/crown": {
+   "vertices": 2391,
+   "faces": 4778,
+   "bitsRead": 135233,
+   "bitLength": 135240,
+   "positionsSha1": "4a440d29541bec41933f01d2b1c7db05d8876e66",
+   "facesSha1": "7b1547bab5b9e4ad76c19a865b6df0b13d77ff13"
+  },
+  "27/initial": {
+   "vertices": 5927,
+   "faces": 11850,
+   "bitsRead": 321732,
+   "bitLength": 321736,
+   "positionsSha1": "3754bd808d2fb4ad6942925cb51d8718ac2d686a",
+   "facesSha1": "03a99aa27d5be2ccf168e9fefcf05bc5b20dfdd3"
+  },
+  "28/crown": {
+   "vertices": 2427,
+   "faces": 4850,
+   "bitsRead": 137836,
+   "bitLength": 137840,
+   "positionsSha1": "651611abe35ba1fa9314bf059bcc9619af621b56",
+   "facesSha1": "18bbe91d4c259dba1e9ad2865d7d8127abfe6c26"
+  },
+  "28/initial": {
+   "vertices": 3188,
+   "faces": 6372,
+   "bitsRead": 178087,
+   "bitLength": 178088,
+   "positionsSha1": "1c7a649e823dc509ed741f515e3a8313f08d76d2",
+   "facesSha1": "6571d771906489bfe9b4185b49a4dfcbefd30f7b"
+  },
+  "29/crown": {
+   "vertices": 2378,
+   "faces": 4752,
+   "bitsRead": 134331,
+   "bitLength": 134336,
+   "positionsSha1": "5d7dfc7b99676161d7b7725f524cc1eab20f88bc",
+   "facesSha1": "09da7657dfaa5957a215d7273e325b6950077eac"
+  },
+  "29/initial": {
+   "vertices": 3188,
+   "faces": 6372,
+   "bitsRead": 177369,
+   "bitLength": 177376,
+   "positionsSha1": "3e1c342c556bfa43bc683a3de0bd847d034d4b30",
+   "facesSha1": "9387bdbccf99806be0ce7ea5c11104906cc35cca"
+  },
+  "30/crown": {
+   "vertices": 4608,
+   "faces": 9212,
+   "bitsRead": 256484,
+   "bitLength": 256488,
+   "positionsSha1": "d7f02d09ae52791e6c5eb2bdaf2395501b246fde",
+   "facesSha1": "57f28a792ee12e002da43d977dcb730df51e5862"
+  },
+  "30/initial": {
+   "vertices": 5540,
+   "faces": 11076,
+   "bitsRead": 305485,
+   "bitLength": 305488,
+   "positionsSha1": "10254b5d99b24f7be153590d77b6aa583d3a62b5",
+   "facesSha1": "0e89b6cd52c74cd450132df965d176deddbf2d3e"
+  },
+  "31/crown": {
+   "vertices": 4273,
+   "faces": 8542,
+   "bitsRead": 237802,
+   "bitLength": 237808,
+   "positionsSha1": "a5bed31bb3f97c90c4ec33a0f57702b70f578c9c",
+   "facesSha1": "e1d57b36527717351af53bd3f4be3779e725d429"
+  },
+  "31/initial": {
+   "vertices": 5540,
+   "faces": 11076,
+   "bitsRead": 305282,
+   "bitLength": 305288,
+   "positionsSha1": "0b0fe08e23a381c1ae28deadcf9911f5586b472d",
+   "facesSha1": "59113d6abf4a0a4977d053b70109fe59d229821c"
+  }
+ }
+}
