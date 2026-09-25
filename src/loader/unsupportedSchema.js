@@ -74,7 +74,10 @@ const HEADER_SNIFF_BYTES = HEADER_SNIFF_KIB * BYTES_PER_KIB
  * (a corrupt header) writes no statistics at all, and would read an
  * earlier refusal's. So the attempt also snapshots the statistics object
  * already under that id: conway creates a NEW one for every open that gets
- * far enough to refuse, and only a new one counts.
+ * far enough to refuse, and only a new one counts. Two loads running at
+ * once in separate `IfcAPI`s would share id 0 in that map and could read
+ * each other's status; Share runs one load at a time, so this is noted
+ * rather than guarded.
  *
  * @param {object} ifcAPI
  * @return {OpenAttempt|undefined} undefined on an engine without the
@@ -93,11 +96,16 @@ export function beginOpenAttempt(ifcAPI) {
  * Did conway refuse the open marked by `attempt` because of its schema?
  *
  * This is the POSITIVE signal: conway sets `UNSUPPORTED_SCHEMA` only on its
- * IFC4X3 refusal paths (bldrs-ai/conway#713, #718), never on a parse or
- * geometry failure, so a corrupt or regressed load of an IFC4X3 file conway
- * does support keeps the generic error — the header alone cannot tell
- * those apart. And it must be THIS open's statistics (a different object
- * from the one {@link beginOpenAttempt} saw), not a leftover.
+ * IFC4X3 refusal paths (bldrs-ai/conway#713, #718), never on a geometry
+ * failure or on a non-4X3 file, so an engine regression on an IFC4X3 file
+ * conway does support keeps the generic error — the header alone cannot
+ * tell those apart. One overlap is conway's by design: its eligibility
+ * decision needs a COMPLETE parse, so a truncated or syntax-broken 4X3 file
+ * is refused the same way (conway#718's `decide`) and gets this dialog
+ * rather than the generic error; the message's "not this one yet" is
+ * worded to stay true for it. And it must be THIS open's statistics (a
+ * different object from the one {@link beginOpenAttempt} saw), not a
+ * leftover.
  *
  * @param {object} ifcAPI
  * @param {OpenAttempt|undefined} attempt from {@link beginOpenAttempt}
