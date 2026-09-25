@@ -13,6 +13,7 @@ import {
   decorateConwayDirectIfcModel,
   parseIfcWithConway,
 } from './conwayDirectIfcLoader'
+import {UnsupportedSchemaError} from '../../loader/unsupportedSchema'
 
 // Controllable flag surface: defaults to "everything off" (matching
 // the real module for every flag these tests touch except
@@ -139,6 +140,26 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       }
       await expect(parseIfcWithConway(new ArrayBuffer(0), ifcAPI)).rejects.toThrow(
         /OpenModel returned -1/)
+      expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
+    })
+
+    // conway refuses IFC4X3 content it cannot read correctly and reports it
+    // as the same -1 every other failure returns (bldrs-ai/conway#713). The
+    // loader must turn that into the typed error CadView routes to its own
+    // dialog, instead of the raw "OpenModel returned -1".
+    it('throws UnsupportedSchemaError when a -1 comes back for an IFC4X3 file', async () => {
+      const ifcAPI = {
+        wasmModule: {},
+        OpenModel: jest.fn(() => -1),
+        StreamAllMeshes: jest.fn(),
+      }
+      const header = new TextEncoder().encode(
+        'ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION((\'\'),\'2;1\');\n' +
+        'FILE_NAME(\'r.ifc\',\'\',(\'\'),(\'\'),\'\',\'\',\'\');\n' +
+        'FILE_SCHEMA((\'IFC4X3_RC2\'));\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n')
+      const rejection = parseIfcWithConway(header, ifcAPI)
+      await expect(rejection).rejects.toBeInstanceOf(UnsupportedSchemaError)
+      await expect(rejection).rejects.toThrow(/IFC4X3_RC2 \(IFC 4\.3\)/)
       expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
     })
 

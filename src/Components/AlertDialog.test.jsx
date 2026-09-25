@@ -187,3 +187,45 @@ describe('AlertDialog — trackAlert side effects', () => {
     expect(trackAlert).toHaveBeenCalledTimes(1)
   })
 })
+
+
+describe('AlertDialog — unsupportedSchema alert type', () => {
+  const onClose = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  it('says the schema is not supported yet, in place of the generic Error header', () => {
+    act(() => {
+      useStore.getState().setAlert({
+        type: 'unsupportedSchema',
+        message: 'This model is IFC4X3_RC2 (IFC 4.3), and it uses parts of that schema Share can\'t display yet.',
+      })
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('Not supported yet')).toBeInTheDocument()
+    expect(screen.queryByText('Error')).not.toBeInTheDocument()
+    expect(screen.getByText(/IFC4X3_RC2 \(IFC 4\.3\)/)).toBeInTheDocument()
+  })
+
+  it('omits the Discord help footer (a documented limit, nothing for support to diagnose)', () => {
+    act(() => {
+      useStore.getState().setAlert({type: 'unsupportedSchema', message: 'Not displayable yet.'})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.queryByText(/Discord/i)).not.toBeInTheDocument()
+  })
+
+  it('tracks the alert by its message, like the other typed alerts', () => {
+    act(() => {
+      useStore.getState().setAlert({type: 'unsupportedSchema', message: 'Not displayable yet.'})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(trackAlert).toHaveBeenCalledWith(
+      'Not displayable yet.', expect.objectContaining({type: 'unsupportedSchema'}))
+  })
+})

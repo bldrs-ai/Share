@@ -46,7 +46,7 @@ export default function AlertDialog({onClose}) {
     if (typeof alert !== 'object') {
       return
     }
-    if (alert.type === 'oom' || alert.type === 'needsReconnect') {
+    if (alert.type === 'oom' || alert.type === 'needsReconnect' || alert.type === 'unsupportedSchema') {
       trackAlert(alert.message, alert)
     } else if (alert instanceof NotFoundError || alert instanceof Error) {
       if (!(alert instanceof NotFoundError)) {
@@ -63,6 +63,7 @@ export default function AlertDialog({onClose}) {
 
   const isOom = alert && typeof alert === 'object' && alert.type === 'oom'
   const isNeedsReconnect = alert && typeof alert === 'object' && alert.type === 'needsReconnect'
+  const isUnsupportedSchema = alert && typeof alert === 'object' && alert.type === 'unsupportedSchema'
 
   const refresh = () => {
     try {
@@ -110,11 +111,15 @@ export default function AlertDialog({onClose}) {
     headerText = 'Out of Memory'
   } else if (isNeedsReconnect) {
     headerText = 'Reconnect required'
+  } else if (isUnsupportedSchema) {
+    headerText = 'Not supported yet'
   } else {
     headerText = 'Error'
   }
 
-  const showHelpFooter = !isOom && !isNeedsReconnect
+  // No "contact us" footer for an unsupported schema: it is a known,
+  // documented limit, so there is nothing for support to diagnose.
+  const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema
   return (
     <Dialog
       headerText={headerText}
@@ -155,7 +160,7 @@ function createAlertReport(a) {
   if (typeof a === 'string') {
     return a
   } else if (typeof a === 'object') {
-    if (a && (a.type === 'oom' || a.type === 'needsReconnect')) {
+    if (a && (a.type === 'oom' || a.type === 'needsReconnect' || a.type === 'unsupportedSchema')) {
       return a.message
     } else if (a instanceof NotFoundError) {
       return displayPathAlert(a)
