@@ -45,49 +45,93 @@ const HEADER_SNIFF_BYTES = HEADER_SNIFF_KIB * BYTES_PER_KIB
 
 
 /**
- * The model id conway will assign to the NEXT open, read immediately before
- * making it.
+ * An open about to be made: the id conway will attempt it under, and the
+ * statistics object already under that id, if any.
+ *
+ * @typedef {object} OpenAttempt
+ * @property {number} id the id conway will attempt the open under
+ * @property {object} [before] the statistics object already under that id
+ */
+
+
+/**
+ * Mark an open about to be made, so {@link conwayRefusedSchema} can tell
+ * afterwards whether THAT open was refused. Call immediately before the
+ * open, with nothing awaited in between.
  *
  * conway keys a load's statistics — including the `UNSUPPORTED_SCHEMA` load
  * status its IFC4X3 refusal records — by the id the open was attempted
  * under, and a refused open returns -1 rather than that id. Every conway
  * open takes its id from the public `globalModelIDCounter` synchronously at
- * call time (the async ones post-increment it before their first await; the
+ * call time (the async opens increment it before their first await; the
  * sync `OpenModel` increments only on success), so the counter's value
- * immediately before the call IS the attempted id — provided nothing else
- * opens in between, which holds when the read and the call are adjacent
- * statements. Undefined on an engine without the counter (real web-ifc),
- * which never refuses on schema anyway.
+ * immediately before the call IS the attempted id.
+ *
+ * That id is only unique within one `IfcAPI`, while conway's statistics
+ * live in a module-level map that outlives it — Share builds a fresh
+ * `IfcAPI` per load (ShareIfc.js), so ids restart at 0 while an earlier
+ * load's statistics stay. An open that fails before its header parses
+ * (a corrupt header) writes no statistics at all, and would read an
+ * earlier refusal's. So the attempt also snapshots the statistics object
+ * already under that id: conway creates a NEW one for every open that gets
+ * far enough to refuse, and only a new one counts.
  *
  * @param {object} ifcAPI
- * @return {number|undefined}
+ * @return {OpenAttempt|undefined} undefined on an engine without the
+ *   counter (real web-ifc), which never refuses on schema anyway
  */
-export function nextModelID(ifcAPI) {
-  const next = ifcAPI?.globalModelIDCounter
-  return typeof next === 'number' ? next : undefined
+export function beginOpenAttempt(ifcAPI) {
+  const id = ifcAPI?.globalModelIDCounter
+  if (typeof id !== 'number') {
+    return undefined
+  }
+  return {id, before: statisticsFor(ifcAPI, id)}
 }
 
 
 /**
- * Did conway refuse the open attempted under `attemptedID` because of its
- * schema? This is the POSITIVE signal: conway sets the load status only on
- * its IFC4X3 refusal paths (bldrs-ai/conway#713, #718), never on a parse
- * or geometry failure, so a corrupt or regressed load of an IFC4X3 file
- * conway does support reads anything but `UNSUPPORTED_SCHEMA` and keeps the
- * generic error — the header alone cannot tell those apart.
+ * Did conway refuse the open marked by `attempt` because of its schema?
+ *
+ * This is the POSITIVE signal: conway sets `UNSUPPORTED_SCHEMA` only on its
+ * IFC4X3 refusal paths (bldrs-ai/conway#713, #718), never on a parse or
+ * geometry failure, so a corrupt or regressed load of an IFC4X3 file conway
+ * does support keeps the generic error — the header alone cannot tell
+ * those apart. And it must be THIS open's statistics (a different object
+ * from the one {@link beginOpenAttempt} saw), not a leftover.
  *
  * @param {object} ifcAPI
- * @param {number|undefined} attemptedID from {@link nextModelID}
+ * @param {OpenAttempt|undefined} attempt from {@link beginOpenAttempt}
  * @return {boolean}
  */
-export function conwayRefusedSchema(ifcAPI, attemptedID) {
-  if (attemptedID === undefined || typeof ifcAPI?.getStatistics !== 'function') {
+export function conwayRefusedSchema(ifcAPI, attempt) {
+  if (attempt === undefined) {
+    return false
+  }
+  const after = statisticsFor(ifcAPI, attempt.id)
+  if (after === undefined || after === attempt.before) {
     return false
   }
   try {
-    return ifcAPI.getStatistics(attemptedID)?.getLoadStatus?.() === 'UNSUPPORTED_SCHEMA'
+    return after.getLoadStatus?.() === 'UNSUPPORTED_SCHEMA'
   } catch (_) {
     return false
+  }
+}
+
+
+/**
+ * @param {object} ifcAPI
+ * @param {number} id
+ * @return {object|undefined} conway's statistics for `id`, if any
+ */
+function statisticsFor(ifcAPI, id) {
+  if (typeof ifcAPI?.getStatistics !== 'function') {
+    return undefined
+  }
+  try {
+    return ifcAPI.getStatistics(id) ?? undefined
+  } catch (_) {
+    return undefined
   }
 }
 

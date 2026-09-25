@@ -1,7 +1,7 @@
 import {
   UnsupportedSchemaError,
+  beginOpenAttempt,
   conwayRefusedSchema,
-  nextModelID,
   openModelFailure,
 } from './unsupportedSchema'
 
@@ -96,27 +96,50 @@ describe('loader/unsupportedSchema — openModelFailure', () => {
 
 
 describe('loader/unsupportedSchema — conway refusal signal', () => {
-  const api = (status, counter = 7) => ({
+  /**
+   * @param {Map} stats id -> statistics object
+   * @param {number} counter the engine's next id
+   * @return {object}
+   */
+  const engine = (stats, counter = 7) => ({
     globalModelIDCounter: counter,
-    getStatistics: jest.fn((id) => (id === counter ? {getLoadStatus: () => status} : undefined)),
+    getStatistics: jest.fn((id) => stats.get(id)),
+  })
+  const status = (s) => ({getLoadStatus: () => s})
+
+  it('marks the attempt with the engine\'s next id and what was already there', () => {
+    const old = status('OK')
+    expect(beginOpenAttempt(engine(new Map([[3, old]]), 3))).toEqual({id: 3, before: old})
+    expect(beginOpenAttempt({})).toBeUndefined()
   })
 
-  it('reads the next model id from the engine counter', () => {
-    expect(nextModelID(api('OK', 3))).toBe(3)
-    expect(nextModelID({})).toBeUndefined()
+  it('is a refusal only when THIS open recorded UNSUPPORTED_SCHEMA', () => {
+    const stats = new Map()
+    const api = engine(stats)
+    const attempt = beginOpenAttempt(api)
+    stats.set(7, status('UNSUPPORTED_SCHEMA'))
+    expect(conwayRefusedSchema(api, attempt)).toBe(true)
+
+    const other = new Map()
+    const attempt2 = beginOpenAttempt(engine(other))
+    other.set(7, status('OK'))
+    expect(conwayRefusedSchema(engine(other), attempt2)).toBe(false)
   })
 
-  it('is a refusal only when conway recorded UNSUPPORTED_SCHEMA for the attempted id', () => {
-    expect(conwayRefusedSchema(api('UNSUPPORTED_SCHEMA'), 7)).toBe(true)
-    expect(conwayRefusedSchema(api('OK'), 7)).toBe(false)
-    expect(conwayRefusedSchema(api('UNSUPPORTED_SCHEMA'), 8)).toBe(false)
+  // conway's statistics outlive the IfcAPI and ids restart per instance,
+  // so a leftover refusal under the same id is not this open's.
+  it('ignores a refusal left under the same id by an earlier open', () => {
+    const stats = new Map([[7, status('UNSUPPORTED_SCHEMA')]])
+    const api = engine(stats)
+    const attempt = beginOpenAttempt(api)
+    expect(conwayRefusedSchema(api, attempt)).toBe(false)
   })
 
-  it('is never a refusal on an engine without statistics, or without an attempted id', () => {
-    expect(conwayRefusedSchema({}, 7)).toBe(false)
-    expect(conwayRefusedSchema(api('UNSUPPORTED_SCHEMA'), undefined)).toBe(false)
+  it('is never a refusal on an engine without statistics, or without an attempt', () => {
+    expect(conwayRefusedSchema({}, {id: 7, before: undefined})).toBe(false)
+    expect(conwayRefusedSchema(engine(new Map([[7, status('UNSUPPORTED_SCHEMA')]])), undefined)).toBe(false)
     expect(conwayRefusedSchema({getStatistics: () => {
       throw new Error('boom')
-    }}, 7)).toBe(false)
+    }}, {id: 7, before: undefined})).toBe(false)
   })
 })

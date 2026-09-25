@@ -193,6 +193,79 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       await expect(rejection).rejects.toThrow('parseIfcWithConway: OpenModel returned -1')
     })
 
+    /**
+     * A conway-shaped engine over the real open-id discipline: each async
+     * open takes its id from `globalModelIDCounter` and increments it
+     * BEFORE its first await, and statistics live in a map shared by every
+     * engine instance (conway's Logger map is module-level, and Share
+     * builds a new IfcAPI per load). An open with a status records a NEW
+     * statistics object under its id; one without writes none, as a
+     * failure before the header parses does.
+     *
+     * @param {Map} stats the shared statistics map
+     * @param {object} statuses per-method load status to record, if any
+     * @return {object}
+     */
+    function conwayLikeEngine(stats, statuses) {
+      const open = (method) => jest.fn(async () => {
+        const id = api.globalModelIDCounter++
+        if (statuses[method]) {
+          stats.set(id, {getLoadStatus: () => statuses[method]})
+        }
+        await Promise.resolve()
+        return -1
+      })
+      const api = {
+        wasmModule: {},
+        globalModelIDCounter: 0,
+        OpenModel: jest.fn(() => -1),
+        OpenModelStream: open('OpenModelStream'),
+        OpenModelStreamed: open('OpenModelStreamed'),
+        getStatistics: (id) => stats.get(id),
+        StreamAllMeshes: jest.fn(),
+      }
+      return api
+    }
+
+    // The store-backed open is what a browser upload takes. A refusal there
+    // is final: the buffered fallback would reach the same refusal after up
+    // to two more whole-file parses. And the attempted id must be read
+    // BEFORE the open — this engine has moved the counter by the time it
+    // returns, so reading it after finds no statistics.
+    it('refuses from the store open without re-parsing through the fallback', async () => {
+      const ifcAPI = conwayLikeEngine(new Map(), {OpenModelStream: 'UNSUPPORTED_SCHEMA'})
+      const rejection = parseIfcWithConway(new Blob([ifc4x3Header]), ifcAPI)
+      await expect(rejection).rejects.toBeInstanceOf(UnsupportedSchemaError)
+      await expect(rejection).rejects.toThrow(/IFC4X3_RC2 \(IFC 4\.3\)/)
+      expect(ifcAPI.OpenModelStreamed).not.toHaveBeenCalled()
+    })
+
+    it('refuses from the store open on the deferred-geometry path too', async () => {
+      mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+      try {
+        const ifcAPI = conwayLikeEngine(new Map(), {OpenModelStream: 'UNSUPPORTED_SCHEMA'})
+        await expect(parseIfcWithConway(new Blob([ifc4x3Header]), ifcAPI))
+          .rejects.toBeInstanceOf(UnsupportedSchemaError)
+        expect(ifcAPI.OpenModelStreamed).not.toHaveBeenCalled()
+      } finally {
+        mockIsFeatureEnabled.mockReset()
+      }
+    })
+
+    // A previous load's refusal stays in conway's shared statistics map
+    // under ids a fresh IfcAPI reuses. A later open that fails before
+    // writing statistics (a corrupt header) must not read it as its own.
+    it('does not take an earlier load\'s refusal as this open\'s', async () => {
+      const stats = new Map()
+      stats.set(0, {getLoadStatus: () => 'UNSUPPORTED_SCHEMA'})
+      stats.set(1, {getLoadStatus: () => 'UNSUPPORTED_SCHEMA'})
+      const ifcAPI = conwayLikeEngine(stats, {})
+      const rejection = parseIfcWithConway(new Blob([ifc4x3Header]), ifcAPI)
+      await expect(rejection).rejects.not.toBeInstanceOf(UnsupportedSchemaError)
+      await expect(rejection).rejects.toThrow('parseIfcWithConway: OpenModel returned -1')
+      expect(ifcAPI.OpenModelStreamed).toHaveBeenCalledTimes(1)
+    })
+
     it('forwards custom settings to OpenModel when provided', async () => {
       const ifcAPI = {
         wasmModule: {},
