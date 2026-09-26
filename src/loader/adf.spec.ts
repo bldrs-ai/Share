@@ -131,5 +131,8 @@ describeMobileAndDesktop('ADF crown picking', () => {
     const selectedRows = page.locator('[data-is-selected="true"]')
     await expect(selectedRows).toHaveCount(1)
     await expect(selectedRows.first()).toHaveAttribute('data-node-label', hit.crownName)
+    // And the permalink: the element path after the model file ends at the
+    // crown (`/PM.adf/<jaw>/…/<crown>`), before any query or hash.
+    await expect(page).toHaveURL(new RegExp(`/PM\\.adf(?:/\\d+)*/${hit.crownId}(?:[?#]|$)`))
   })
 })
