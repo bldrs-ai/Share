@@ -132,10 +132,18 @@ export default function adfToThree(result) {
     // surface, so they z-fight into dashed lines that read as mesh seams
     // in a general viewer. The gingiva splines, interproximal sample points
     // and mesh bounding boxes are off upstream too.
-    jaw.userData.facc.visible = false
-    jaw.userData.gingiva.visible = false
-    jaw.userData.scanPoints.visible = false
-    jaw.userData.meshBounds.visible = false
+    //
+    // Hiding isn't enough for picking: three's Raycaster ignores `visible`,
+    // and Picker#castRay intersects the whole scene. The curves sit on the
+    // crown surface, and Line/Points hit within 1 world unit, so a hidden
+    // curve would win a double-click over the crown under it.
+    for (const key of ['facc', 'gingiva', 'scanPoints', 'meshBounds']) {
+      const overlay = jaw.userData[key]
+      overlay.visible = false
+      overlay.traverse((obj) => {
+        obj.raycast = noRaycast
+      })
+    }
     // Back-references kept for the upstream viewer's HUD. `teeth` holds every
     // tooth record (all its point arrays) plus its own Group and Mesh, and
     // JSON.stringify calls Object3D#toJSON on those. So anything that
@@ -146,4 +154,10 @@ export default function adfToThree(result) {
     }
   }
   return group
+}
+
+
+/** A `raycast` that never hits, for overlays that must not be picked. */
+function noRaycast() {
+  // Intentionally empty: adds no intersections.
 }
