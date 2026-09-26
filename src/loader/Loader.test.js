@@ -351,9 +351,11 @@ describe('Loader', () => {
       const tooth8Faces = 6028
       expect(tooth.userData.vertexCount).toBe(tooth8Vertices)
       expect(crown.geometry.index.count).toBe(3 * tooth8Faces)
-      // Upstream viewer defaults: FACC curves on, the other overlays off.
+      // Only the teeth show: every overlay, including the FACC and landmark
+      // curves the upstream viewer shows, starts hidden.
       const overlay = (name) => upper.children.find((child) => child.name === name)
-      expect(overlay('facc').visible).toBe(true)
+      expect(overlay('facc').children.length).toBeGreaterThan(0)
+      expect(overlay('facc').visible).toBe(false)
       expect(overlay('gingiva').visible).toBe(false)
       expect(overlay('scanPoints').visible).toBe(false)
       expect(overlay('meshBounds').visible).toBe(false)
