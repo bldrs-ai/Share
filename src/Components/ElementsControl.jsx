@@ -8,6 +8,7 @@ import {
   Close as CloseIcon,
   FilterCenterFocus as FilterCenterFocusIcon,
   HideSourceOutlined as HideSourceOutlinedIcon,
+  ViewInArOutlined as ViewInArOutlinedIcon,
   VisibilityOutlined as VisibilityOutlinedIcon,
 } from '@mui/icons-material'
 
@@ -39,6 +40,8 @@ export default function ElementsControl({deselectItems}) {
   const selectedElement = useStore((state) => state.selectedElement)
   const isTempIsolationModeOn = useStore((state) => state.isTempIsolationModeOn)
   const hiddenElements = useStore((state) => state.hiddenElements)
+  const isViewCubeVisible = useStore((state) => state.isViewCubeVisible)
+  const toggleIsViewCubeVisible = useStore((state) => state.toggleIsViewCubeVisible)
   const isSelected = selectedElement !== null
   // `hiddenElements` is a sparse map keyed by expressID with `true`
   // for currently-hidden, `false` for explicitly-unhidden, missing
@@ -62,6 +65,24 @@ export default function ElementsControl({deselectItems}) {
          * (which replaces the model's geometry slot).
          */}
         {!isTempIsolationModeOn && <CutPlaneMenu/>}
+
+        {/*
+         * View cube toggle. A viewport navigation aid grouped with the
+         * cut plane; hidden during isolation to match CutPlaneMenu (the
+         * gizmo would orbit the isolation subset, not the whole model).
+         * Enables/disables the ViewCube widget; state persists via the
+         * store's ViewCubeSlice.
+         */}
+        {!isTempIsolationModeOn &&
+         <TooltipIconButton
+           title='View cube'
+           onClick={toggleIsViewCubeVisible}
+           icon={<ViewInArOutlinedIcon className='icon-share'/>}
+           placement='top'
+           variant='control'
+           selected={isViewCubeVisible}
+           dataTestId='control-button-view-cube'
+         />}
 
         {/*
          * Residency (demand-model eviction / infill). Grouped with the
