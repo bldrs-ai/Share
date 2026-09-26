@@ -1,6 +1,6 @@
 import {DecompressionStream as NodeDecompressionStream} from 'node:stream/web'
 import {gzipSync} from 'node:zlib'
-import {Object3D, Mesh, BufferGeometry, Material, BufferAttribute} from 'three'
+import {Box3, Object3D, Mesh, BufferGeometry, Material, BufferAttribute, Raycaster, Vector3} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
@@ -351,12 +351,30 @@ describe('Loader', () => {
       const tooth8Faces = 6028
       expect(tooth.userData.vertexCount).toBe(tooth8Vertices)
       expect(crown.geometry.index.count).toBe(3 * tooth8Faces)
-      // Upstream viewer defaults: FACC curves on, the other overlays off.
+      // Only the teeth show: every overlay, including the FACC and landmark
+      // curves the upstream viewer shows, starts hidden.
       const overlay = (name) => upper.children.find((child) => child.name === name)
-      expect(overlay('facc').visible).toBe(true)
+      expect(overlay('facc').children.length).toBeGreaterThan(0)
+      expect(overlay('facc').visible).toBe(false)
       expect(overlay('gingiva').visible).toBe(false)
       expect(overlay('scanPoints').visible).toBe(false)
       expect(overlay('meshBounds').visible).toBe(false)
+      // Hidden overlays must not be picked either. three's Raycaster ignores
+      // `visible`, and the FACC curve lies on the crown, so cast a ray at a
+      // FACC point from outside the tooth: the crown must be the first hit
+      // and no overlay may be hit at all.
+      model.updateMatrixWorld(true)
+      const faccLine = overlay('facc').children.find((child) => child.isLine && /08/.test(child.name))
+      const faccMid = faccLine.geometry.getAttribute('position')
+      const onCrown = new Vector3().fromBufferAttribute(faccMid, Math.floor(faccMid.count / 2))
+        .applyMatrix4(faccLine.matrixWorld)
+      const crownCenter = new Box3().setFromObject(crown).getCenter(new Vector3())
+      const outward = onCrown.clone().sub(crownCenter)
+      const ray = new Raycaster(onCrown.clone().add(outward), outward.clone().negate().normalize())
+      const hits = ray.intersectObject(model, true)
+      expect(hits.filter((hit) => hit.object.isLine || hit.object.isPoints).map((hit) => hit.object.name))
+        .toEqual([])
+      expect(hits[0].object).toBe(crown)
       // The loader's back-references (tooth records holding their own
       // Group/Mesh) are dropped. Left in, they stringify to ~2MB per jaw.
       const maxUserDataJsonLength = 1024

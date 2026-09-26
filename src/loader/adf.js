@@ -126,11 +126,24 @@ export default function adfToThree(result) {
   for (const jaw of Object.values(jaws)) {
     // ADF encodes spaces as '+' in names ("Upper+Jaw"); the NavTree shows these.
     jaw.name = jaw.name.replace(/\+/g, ' ')
-    // Match the upstream viewer's defaults: teeth and FACC curves on; gingiva
-    // splines, interproximal sample points and mesh bounding boxes off.
-    jaw.userData.gingiva.visible = false
-    jaw.userData.scanPoints.visible = false
-    jaw.userData.meshBounds.visible = false
+    // Only the teeth show by default. The upstream viewer also shows the
+    // `facc` group: each tooth's FACC axis and its landmark curves (incisal
+    // ridge, cusps, grooves). Those polylines lie exactly on the crown
+    // surface, so they z-fight into dashed lines that read as mesh seams
+    // in a general viewer. The gingiva splines, interproximal sample points
+    // and mesh bounding boxes are off upstream too.
+    //
+    // Hiding isn't enough for picking: three's Raycaster ignores `visible`,
+    // and Picker#castRay intersects the whole scene. The curves sit on the
+    // crown surface, and Line/Points hit within 1 world unit, so a hidden
+    // curve would win a double-click over the crown under it.
+    for (const key of ['facc', 'gingiva', 'scanPoints', 'meshBounds']) {
+      const overlay = jaw.userData[key]
+      overlay.visible = false
+      overlay.traverse((obj) => {
+        obj.raycast = noRaycast
+      })
+    }
     // Back-references kept for the upstream viewer's HUD. `teeth` holds every
     // tooth record (all its point arrays) plus its own Group and Mesh, and
     // JSON.stringify calls Object3D#toJSON on those. So anything that
@@ -141,4 +154,10 @@ export default function adfToThree(result) {
     }
   }
   return group
+}
+
+
+/** A `raycast` that never hits, for overlays that must not be picked. */
+function noRaycast() {
+  // Intentionally empty: adds no intersections.
 }
