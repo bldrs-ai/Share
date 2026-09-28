@@ -30,6 +30,8 @@ import {
   RotateLeft as RotateLeftIcon,
   RotateRight as RotateRightIcon,
 } from '@mui/icons-material'
+import useExistInFeature from '../../hooks/useExistInFeature'
+import {removeCameraUrlParams} from '../Camera/hashState'
 import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
@@ -51,6 +53,10 @@ import debug from '../../utils/debug'
  * the same seam CameraControl.jsx and MeshClipper use), never the legacy
  * `viewer.IFC.context` it wraps.
  *
+ * Every cube-driven camera move (snap, drag, ring buttons, menu) clears the
+ * `#c:` camera permalink first, as CameraControl does for moves made on the
+ * main canvas. Otherwise the URL would keep the old pose.
+ *
  * @return {ReactElement}
  */
 export default function ViewCube() {
@@ -59,6 +65,9 @@ export default function ViewCube() {
   const setIsViewCubeVisible = useStore((state) => state.setIsViewCubeVisible)
   // Right-drawer state so the widget can sit clear of any open drawer.
   const isNotesVisible = useStore((state) => state.isNotesVisible)
+  const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
+  const isBotVisible = useStore((state) => state.isBotVisible)
+  const isBotEnabled = useExistInFeature('bot')
   const isAppsVisible = useStore((state) => state.isAppsVisible)
   const rightDrawerWidth = useStore((state) => state.rightDrawerWidth)
   const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
@@ -183,6 +192,7 @@ export default function ViewCube() {
         return
       }
       const direction = hit.object.userData.dir
+      removeCameraUrlParams()
       snapToDirection(cameraControls, direction)
       fitModelToFrame()
       debug().log('ViewCube: snap to', hit.object.userData.kind, direction)
@@ -208,6 +218,10 @@ export default function ViewCube() {
       const dy = event.clientY - lastY
       if (!isDragging && (Math.abs(dx) + Math.abs(dy)) < DRAG_THRESHOLD_PX) {
         return
+      }
+      if (!isDragging) {
+        // The pose is about to leave any `#c:` permalink behind.
+        removeCameraUrlParams()
       }
       isDragging = true
       setHover(null) // Clear the highlight while dragging.
@@ -279,6 +293,7 @@ export default function ViewCube() {
    */
   const orbit = (deltaAzimuthRad, deltaPolarRad) => {
     if (controlsRef.current) {
+      removeCameraUrlParams()
       controlsRef.current.rotate(deltaAzimuthRad, deltaPolarRad, true)
     }
   }
@@ -290,6 +305,7 @@ export default function ViewCube() {
    */
   const snapView = (direction) => {
     if (controlsRef.current) {
+      removeCameraUrlParams()
       snapToDirection(controlsRef.current, direction.clone())
       fitModelToFrame()
     }
@@ -367,8 +383,11 @@ export default function ViewCube() {
 
   // Sit clear of any open right-side drawer (Notes, Apps).  On mobile the
   // drawers are bottom sheets, so only the base margin applies.
+  // The right drawer is shared by Notes, Properties and Bot; this is the same
+  // visibility predicate as NotesAndPropertiesDrawer's isDrawerVisible.
+  const isRightDrawerVisible = isNotesVisible || isPropertiesVisible || (isBotEnabled && isBotVisible)
   const drawerInset = isMobile ? 0 :
-    (isNotesVisible ? rightDrawerWidth : 0) + (isAppsVisible ? appsDrawerWidth : 0)
+    (isRightDrawerVisible ? rightDrawerWidth : 0) + (isAppsVisible ? appsDrawerWidth : 0)
   const rightInset = MARGIN_PX + drawerInset
 
   return (

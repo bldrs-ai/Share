@@ -27,7 +27,7 @@ const ISO = 1 / Math.sqrt(3)
 // lands in the middle of TOP, well clear of the chamfers around it.
 const TOP_FACE_CLICK = {x: 48, y: 26}
 // An IfcProduct in index.ifc under its root (81), the same element
-// IfcIsolator.spec.ts isolates.
+// IfcIsolator.spec.ts isolates and Properties.spec.ts selects.
 const ISOLATE_PATH = '/share/v/p/index.ifc/81/621'
 
 
@@ -70,7 +70,7 @@ function viewDirError(page: Page, expected: Vec3): Promise<number> {
 }
 
 
-describeMobileAndDesktop('ViewCube', () => {
+describeMobileAndDesktop('ViewCube', (ff) => {
   test('toggle shows the cube, Home and a face click snap the camera, close hides it', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
@@ -169,4 +169,55 @@ describeMobileAndDesktop('ViewCube', () => {
     await expect.poll(() => viewDirError(page, {x: 0, y: 1, z: 0}), {timeout: SETTLE_TIMEOUT_MS})
       .toBeLessThan(DIR_TOLERANCE)
   })
+
+  test('cube navigation clears a #c: camera permalink', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+    await visitHomepageWaitForModel(page)
+    await page.getByTestId('control-button-view-cube').click()
+    const widget = page.getByTestId('view-cube')
+    await expect(widget).toBeVisible()
+
+    // Pin a pose the way a shared permalink does.
+    await page.evaluate(() => {
+      window.location.hash = 'c:8,10,20,1,1,1'
+    })
+    await expect.poll(() => page.evaluate(() => window.location.hash)).toContain('c:')
+
+    // Moving the camera from the cube must drop the now-stale pose, or a
+    // reload or copied URL would restore the old view.
+    await widget.getByRole('button', {name: 'Home (isometric)'}).click()
+    await expect.poll(() => page.evaluate(() => window.location.hash)).not.toContain('c:')
+  })
+
+  // Mobile drawers are bottom sheets, so the cube only moves aside on desktop.
+  if (!ff.isMobile) {
+    test('a right-anchored cube moves clear of the Properties drawer', async ({page}) => {
+      test.setTimeout(TEST_TIMEOUT_MS)
+      page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+      await homepageSetup(page)
+      await setIsReturningUser(page.context())
+      // The Properties control only appears with an element selected.
+      await page.goto(ISOLATE_PATH)
+      await waitForModelReady(page)
+      await page.getByTestId('control-button-view-cube').click()
+      const widget = page.getByTestId('view-cube')
+      await expect(widget).toBeVisible()
+
+      // Properties alone opens the shared right drawer (Notes stays closed).
+      await page.getByTestId('control-button-properties').click()
+      const drawer = page.getByTestId('NotesAndPropertiesDrawer')
+      await expect(drawer).toBeVisible()
+      // Poll: the cube slides over with a short CSS transition.
+      await expect.poll(async () => {
+        const cube = await widget.boundingBox()
+        const panel = await drawer.boundingBox()
+        return cube && panel ? panel.x - (cube.x + cube.width) : Number.NEGATIVE_INFINITY
+      }).toBeGreaterThanOrEqual(0)
+    })
+  }
 })
