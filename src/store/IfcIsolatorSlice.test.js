@@ -19,6 +19,34 @@ describe('store/IfcIsolatorSlice', () => {
   })
 
 
+  // Hidden state belongs to one model path (CadView#onViewer claims it).
+  describe('claimHiddenElementsForModel', () => {
+    it('drops hidden state and the seeding flag left by a different model', () => {
+      const store = makeStore()
+      store.setState({hiddenElements: {5: true}, hiddenElementsModelPath: '/a.obj', sceneGraphDefaultsSeeded: true})
+      store.getState().claimHiddenElementsForModel('/b.obj')
+      expect(store.getState()).toMatchObject({
+        hiddenElements: {}, hiddenElementsModelPath: '/b.obj', sceneGraphDefaultsSeeded: false,
+      })
+    })
+
+    it('keeps them for the same model, which a viewer re-init reloads', () => {
+      const store = makeStore()
+      store.setState({hiddenElements: {5: true}, hiddenElementsModelPath: '/a.obj', sceneGraphDefaultsSeeded: true})
+      store.getState().claimHiddenElementsForModel('/a.obj')
+      expect(store.getState()).toMatchObject({
+        hiddenElements: {5: true}, hiddenElementsModelPath: '/a.obj', sceneGraphDefaultsSeeded: true,
+      })
+    })
+
+    it('claims the first model loaded', () => {
+      const store = makeStore()
+      store.getState().claimHiddenElementsForModel('/a.obj')
+      expect(store.getState().hiddenElementsModelPath).toBe('/a.obj')
+    })
+  })
+
+
   describe('updateHiddenStatus', () => {
     it('merges a single id without clobbering others', () => {
       const store = makeStore()

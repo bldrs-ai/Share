@@ -1446,4 +1446,144 @@ describe('viewer/three/IfcIsolator', () => {
       expect(iso.flattenChildren(99)).toEqual([99])
     })
   })
+
+
+  // ADF, OBJ, third-party GLB, …: elements are Object3Ds tagged with serial
+  // `expressID`s and the model has no `createSubset`. The subset path used to
+  // detach the model and then throw on the missing `createSubset`, so hiding
+  // one tooth blanked the scene.
+  describe('scene-graph models (sceneGraphVisibility.js)', () => {
+    const useStoreMock = require('../../store/useStore').default
+
+    /**
+     * root 0 ─ jaw 1 ─┬─ facc 2 (loader-hidden)
+     *                 └─ tooth 3 ─ crown 4, tooth 5 ─ crown 6
+     *
+     * @return {object}
+     */
+    function makeSceneGraph() {
+      const tag = (obj, id) => {
+        obj.expressID = id
+        return obj
+      }
+      const crown = (id) => tag(new Mesh(new BufferGeometry(), new MeshBasicMaterial()), id)
+      const root = tag(new Group(), 0)
+      const jaw = tag(new Group(), 1)
+      const facc = tag(new Group(), 2)
+      facc.visible = false
+      const tooth3 = tag(new Group(), 3)
+      const crown4 = crown(4)
+      const tooth5 = tag(new Group(), 5)
+      const crown6 = crown(6)
+      tooth3.add(crown4)
+      tooth5.add(crown6)
+      jaw.add(facc, tooth3, tooth5)
+      root.add(jaw)
+      const node = (obj) => ({expressID: obj.expressID, children: obj.children.map(node)})
+      root.getSpatialStructure = () => Promise.resolve(node(root))
+      return {root, facc, crown4, crown6}
+    }
+
+    beforeEach(() => {
+      useStoreMock.getState.mockReturnValue({elementTypesMap: [], selectedElements: []})
+    })
+
+    afterEach(() => {
+      useStoreMock.getState.mockReturnValue({elementTypesMap: []})
+    })
+
+    it('adopts loader-hidden elements, so their NavTree eyes read hidden', async () => {
+      const iso = makeIsolator()
+      const {root, facc} = makeSceneGraph()
+      await iso.setModel(root)
+      expect(iso.visualElementsIds).toEqual([0, 1, 2, 3, 4, 5, 6])
+      expect(iso.hiddenIds).toEqual([2])
+      expect(useStoreMock.setState).toHaveBeenCalledWith({hiddenElements: {2: true}})
+      expect(useStoreMock.setState).toHaveBeenLastCalledWith({sceneGraphDefaultsSeeded: true})
+      expect(facc.visible).toBe(false)
+    })
+
+    it('does not reseed over the user\'s hidden state when the same model is set up again', async () => {
+      // A viewer re-init (theme change) reloads the model; CadView#onViewer
+      // then reapplies the store's hiddenElements, which must still be the user's.
+      const {root, facc} = makeSceneGraph()
+      useStoreMock.getState.mockReturnValue({
+        elementTypesMap: [], selectedElements: [], sceneGraphDefaultsSeeded: true,
+      })
+      useStoreMock.setState.mockClear()
+      const iso = makeIsolator()
+      await iso.setModel(root)
+      expect(iso.hiddenIds).toEqual([])
+      expect(useStoreMock.setState).not.toHaveBeenCalled()
+      // Everything shows until CadView reapplies the user's hides.
+      expect(facc.visible).toBe(true)
+    })
+
+    it('hides one element in place: the model stays in the scene and its siblings stay shown', async () => {
+      const scene = new Group()
+      const pickable = []
+      const iso = makeIsolator({scene, pickable})
+      const {root, crown4, crown6} = makeSceneGraph()
+      scene.add(root)
+      pickable.push(root)
+      await iso.setModel(root)
+      // What the NavTree eye does: the element and its subtree.
+      iso.hideElementsById(iso.flattenChildren(3))
+      expect(root.parent).toBe(scene)
+      expect(pickable).toEqual([root])
+      expect(crown4.visible).toBe(false)
+      expect(crown6.visible).toBe(true)
+      iso.unHideElementsById(iso.flattenChildren(3))
+      expect(crown4.visible).toBe(true)
+      // The loader-hidden overlay is still hidden until asked for.
+      expect(iso.hiddenIds).toEqual([2])
+    })
+
+    it('shows a loader-hidden overlay from its eye, and Show All shows everything', async () => {
+      const iso = makeIsolator()
+      const {root, facc} = makeSceneGraph()
+      await iso.setModel(root)
+      iso.unHideElementsById(iso.flattenChildren(2))
+      expect(facc.visible).toBe(true)
+      iso.hideElementsById(iso.flattenChildren(2))
+      expect(facc.visible).toBe(false)
+      iso.unHideAllElements()
+      expect(facc.visible).toBe(true)
+    })
+
+    it('does not isolate an empty selection, which would blank the model', async () => {
+      const iso = makeIsolator()
+      const {root, crown4, crown6} = makeSceneGraph()
+      await iso.setModel(root)
+      iso.viewer.getSelectedIds.mockReturnValue([])
+      iso.isolateSelectedElements()
+      expect(iso.tempIsolationModeOn).toBe(false)
+      expect([crown4.visible, crown6.visible]).toEqual([true, true])
+    })
+
+    it('does not isolate a selection that is all hidden, which would blank the model', async () => {
+      const iso = makeIsolator()
+      const {root, crown4, crown6} = makeSceneGraph()
+      await iso.setModel(root)
+      // Hide the selected crown (the loader-hidden facc stays hidden too).
+      iso.viewer.getSelectedIds.mockReturnValue([4])
+      iso.hideSelectedElements()
+      expect(crown4.visible).toBe(false)
+      iso.isolateSelectedElements()
+      expect(iso.tempIsolationModeOn).toBe(false)
+      expect([crown4.visible, crown6.visible]).toEqual([false, true])
+    })
+
+    it('isolates in place and restores the hides on reset', async () => {
+      const iso = makeIsolator()
+      const {root, facc, crown4, crown6} = makeSceneGraph()
+      await iso.setModel(root)
+      iso.viewer.getSelectedIds.mockReturnValue([4])
+      iso.isolateSelectedElements()
+      expect([crown4.visible, crown6.visible, facc.visible]).toEqual([true, false, false])
+      expect(iso.isolationOutlineEffect.setSelection).toHaveBeenLastCalledWith([crown4])
+      iso.resetTempIsolation()
+      expect([crown4.visible, crown6.visible, facc.visible]).toEqual([true, true, false])
+    })
+  })
 })

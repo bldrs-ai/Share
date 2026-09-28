@@ -818,3 +818,19 @@ describe('viewer/ShareViewer highlightIfcItem — batched hover', () => {
     expect(hoverPainted(model)).toEqual([true, true, true])
   })
 })
+
+
+// Scene-graph models (ADF, OBJ, …) lack `expressIdPicking`, so setSelection
+// skips the subset highlight; but the logical selection must still reach
+// `getSelectedIds`, which the isolator's H and I read.
+describe('viewer/ShareViewer setSelection on a model without expressIdPicking', () => {
+  it('still records the selection for getSelectedIds', async () => {
+    const model = new Group()
+    model.capabilities = {expressIdPicking: false}
+    const viewer = makeResolverViewer(model)
+    viewer._selectedExpressIds = []
+    await ShareViewer.prototype.setSelection.call(viewer, 0, [5])
+    // `getSelectedIds` is a class field returning a copy of this array.
+    expect(viewer._selectedExpressIds).toEqual([5])
+  })
+})

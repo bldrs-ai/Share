@@ -33,6 +33,7 @@ import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
 import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
 import {getBrowser} from '../connections/registry'
+import modelIdentity from '../routes/modelIdentity'
 import useStore from '../store/useStore'
 import {expandedIdsForSelection, getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {areDefinedAndNotNull, assertDefined} from '../utils/assert'
@@ -306,6 +307,12 @@ export default function CadView({
     const isAuthSettledBeforeLoad = needsGithubAuth ?
       await waitForAuthSettled(AUTH_SETTLE_GRACE_MS) :
       true
+
+    // Hidden state belongs to one model: a different path drops it, a viewer
+    // re-init of the same path (a theme change) keeps it for the reapply after
+    // the load. Before the load, since `loadModel` hands the model to the
+    // isolator, whose `setModel` may seed it (scene-graph loader defaults).
+    useStore.getState().claimHiddenElementsForModel(modelIdentity(modelPath, installPrefix))
 
     let tmpModelRef
     let isOOM = false
