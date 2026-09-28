@@ -222,4 +222,60 @@ describeMobileAndDesktop('ADF crown picking', () => {
       }
     }).toEqual({hiddenCrowns: ['Tooth_07_crown'], facc: true})
   })
+
+  // Isolate (I) and hide (H) act on the selection. For scene-graph models the
+  // viewer used to drop it (no `expressIdPicking`), so I isolated nothing and
+  // blanked the model. Select through the real NavTree, then use the keys.
+  test('I isolates and H hides the tooth selected in the NavTree', async ({page}) => {
+    await setupVirtualPathIntercept(page, ADF_PATH, ADF_FIXTURE)
+    await page.goto(ADF_PATH)
+    await waitForModelReady(page)
+
+    const panel = page.getByTestId('NavTreePanel')
+    if (!await panel.isVisible()) {
+      await page.getByTestId('control-button-navigation').click()
+    }
+    await expect(panel).toBeVisible()
+    const row = (label: string) => panel.locator(`[data-node-label="${label}"]`)
+    for (const label of ['ADF (PM.adf)', 'Upper Jaw', 'teeth', 'Tooth_07']) {
+      if (await row(label).getAttribute('data-is-expanded') === 'false') {
+        await row(label).getByTestId('NavTreeNodeToggle').click()
+      }
+    }
+    await row('Tooth_07_crown').getByTestId('NavTreeNodeLabel').click()
+    await expect(row('Tooth_07_crown')).toHaveAttribute('data-is-selected', 'true')
+
+    const shownCrowns = () => page.evaluate(() => {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const w = window as any
+      const out: string[] = []
+      ;(w.store ?? w.useStore).getState().model.traverse((obj: any) => {
+        if (obj.name.endsWith('_crown')) {
+          let visible = true
+          for (let o = obj; o; o = o.parent) {
+            visible = visible && o.visible
+          }
+          if (visible) {
+            out.push(obj.name)
+          }
+        }
+      })
+      return out
+      /* eslint-enable @typescript-eslint/no-explicit-any */
+    })
+    const all = await shownCrowns()
+    expect(all.length).toBeGreaterThan(1)
+
+    // The shortcuts listen on the canvas.
+    const canvas = page.locator('canvas').first()
+    await canvas.focus()
+    await page.keyboard.press('KeyI')
+    await expect.poll(shownCrowns).toEqual(['Tooth_07_crown'])
+    await page.keyboard.press('KeyI')
+    await expect.poll(async () => (await shownCrowns()).length).toBe(all.length)
+
+    await canvas.focus()
+    await page.keyboard.press('KeyH')
+    await expect.poll(shownCrowns).toEqual(all.filter((name) => name !== 'Tooth_07_crown'))
+  })
 })

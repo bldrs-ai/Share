@@ -1551,6 +1551,16 @@ describe('viewer/three/IfcIsolator', () => {
       expect(facc.visible).toBe(true)
     })
 
+    it('does not isolate an empty selection, which would blank the model', async () => {
+      const iso = makeIsolator()
+      const {root, crown4, crown6} = makeSceneGraph()
+      await iso.setModel(root)
+      iso.viewer.getSelectedIds.mockReturnValue([])
+      iso.isolateSelectedElements()
+      expect(iso.tempIsolationModeOn).toBe(false)
+      expect([crown4.visible, crown6.visible]).toEqual([true, true])
+    })
+
     it('isolates in place and restores the hides on reset', async () => {
       const iso = makeIsolator()
       const {root, facc, crown4, crown6} = makeSceneGraph()

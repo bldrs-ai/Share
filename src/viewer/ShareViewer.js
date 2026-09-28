@@ -898,11 +898,16 @@ export class ShareViewer {
    */
   async setSelection(modelID, expressIds, focusSelection) {
     const model = this._modelById(modelID)
+    // Record the logical selection before the capability check: `getSelectedIds`
+    // feeds the isolator's H (hide) and I (isolate), which must see what is
+    // selected on scene-graph models (ADF, OBJ, …) too. Those lack
+    // `expressIdPicking`, so the subset highlight below doesn't apply to them;
+    // the canvas pick outlines their meshes itself.
+    this._selectedExpressIds = expressIds
     if (!modelHasCapability(model, 'expressIdPicking')) {
       debug().warn('setSelection: model does not support expressIdPicking')
       return
     }
-    this._selectedExpressIds = expressIds
     const toBeSelected = this._selectedExpressIds.filter((id) => this.isolator.canBePickedInScene(id))
     if (typeof focusSelection === 'undefined') {
       // if not specified, only focus on item if it was the first one to be selected
