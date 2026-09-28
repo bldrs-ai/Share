@@ -1499,7 +1499,7 @@ describe('viewer/three/IfcIsolator', () => {
       expect(iso.visualElementsIds).toEqual([0, 1, 2, 3, 4, 5, 6])
       expect(iso.hiddenIds).toEqual([2])
       expect(useStoreMock.setState).toHaveBeenCalledWith({hiddenElements: {2: true}})
-      expect(useStoreMock.setState).toHaveBeenLastCalledWith({sceneGraphSeededFor: `${root.name}|7`})
+      expect(useStoreMock.setState).toHaveBeenLastCalledWith({sceneGraphDefaultsSeeded: true})
       expect(facc.visible).toBe(false)
     })
 
@@ -1508,7 +1508,7 @@ describe('viewer/three/IfcIsolator', () => {
       // then reapplies the store's hiddenElements, which must still be the user's.
       const {root, facc} = makeSceneGraph()
       useStoreMock.getState.mockReturnValue({
-        elementTypesMap: [], selectedElements: [], sceneGraphSeededFor: `${root.name}|7`,
+        elementTypesMap: [], selectedElements: [], sceneGraphDefaultsSeeded: true,
       })
       useStoreMock.setState.mockClear()
       const iso = makeIsolator()

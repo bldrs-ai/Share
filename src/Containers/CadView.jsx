@@ -307,6 +307,13 @@ export default function CadView({
       await waitForAuthSettled(AUTH_SETTLE_GRACE_MS) :
       true
 
+    // Hidden state belongs to one model: a different path drops it, a viewer
+    // re-init of the same path (a theme change) keeps it for the reapply after
+    // the load. Before the load, since `loadModel` hands the model to the
+    // isolator, whose `setModel` may seed it (scene-graph loader defaults).
+    useStore.getState().claimHiddenElementsForModel(
+      modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath))
+
     let tmpModelRef
     let isOOM = false
     try {
