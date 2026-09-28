@@ -100,6 +100,9 @@ describeMobileAndDesktop('ViewCube', () => {
     await page.getByTestId('view-cube-canvas').locator('canvas').click({position: TOP_FACE_CLICK})
     await expect.poll(() => viewDirError(page, {x: 0, y: 1, z: 0}), {timeout: SETTLE_TIMEOUT_MS})
       .toBeLessThan(DIR_TOLERANCE)
+    // A real pointer click snaps; it must not also open the views menu, which
+    // is reserved for screen-reader activation (click with detail 0).
+    await expect(page.getByRole('menu')).toHaveCount(0)
 
     await widget.getByRole('button', {name: 'Close view cube'}).click()
     await expect(widget).toHaveCount(0)
@@ -131,7 +134,7 @@ describeMobileAndDesktop('ViewCube', () => {
     await expect(widget).toBeVisible()
   })
 
-  test('keyboard: Enter on the focused cube opens its views, Enter picks Front', async ({page}) => {
+  test('keyboard and screen-reader activation open the cube views menu', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
 
@@ -156,5 +159,14 @@ describeMobileAndDesktop('ViewCube', () => {
     await expect.poll(() => viewDirError(page, {x: 0, y: 0, z: 1}), {timeout: SETTLE_TIMEOUT_MS})
       .toBeLessThan(DIR_TOLERANCE)
     await expect(page.getByRole('menu')).toHaveCount(0)
+
+    // Screen-reader activation (a mobile double-tap) arrives as a synthesized
+    // click with detail 0 and no key event. dispatchEvent sends exactly that,
+    // so it has to open the same menu.
+    await page.getByRole('button', {name: /^View cube\./}).dispatchEvent('click')
+    await expect(page.getByRole('menuitem', {name: 'Top view'})).toBeVisible()
+    await page.getByRole('menuitem', {name: 'Top view'}).click()
+    await expect.poll(() => viewDirError(page, {x: 0, y: 1, z: 0}), {timeout: SETTLE_TIMEOUT_MS})
+      .toBeLessThan(DIR_TOLERANCE)
   })
 })

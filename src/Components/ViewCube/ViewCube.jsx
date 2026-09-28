@@ -328,6 +328,23 @@ export default function ViewCube() {
   }
 
   /**
+   * Assistive-technology activation. A screen reader's double-tap (or its
+   * activate command) synthesizes a `click` with no key event, so keydown
+   * alone misses it. Pointer clicks also land here, but they already
+   * snapped via the canvas's pointerup. `detail` (the click count) is 0 only
+   * for synthesized activations, so only those open the menu.
+   *
+   * @param {object} event The click event
+   */
+  const onCubeClick = (event) => {
+    if (event.detail !== 0) {
+      return
+    }
+    const rect = event.currentTarget.getBoundingClientRect()
+    setMenuAnchor({top: rect.top + (rect.height / 2), left: rect.left + (rect.width / 2)})
+  }
+
+  /**
    * Snap to a standard face view picked from the menu.
    *
    * @param {Vector3} direction Unit direction of the face
@@ -394,6 +411,7 @@ export default function ViewCube() {
         ref={mountRef}
         onContextMenu={openMenu}
         onKeyDown={onCubeKeyDown}
+        onClick={onCubeClick}
         tabIndex={0}
         role='button'
         aria-label='View cube. Press Enter for standard views'
