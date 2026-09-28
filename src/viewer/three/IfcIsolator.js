@@ -2,6 +2,12 @@ import {ShareViewer} from '../ShareViewer'
 import {unsortedArraysAreEqual, arrayRemove} from '../../utils/arrays'
 import {clearBatchedSelection} from '../ifc/batchedHighlight'
 import {eachBatch, isBatchedModel} from '../ifc/batchedModel'
+import {
+  applySceneGraphVisibility,
+  initiallyHiddenIds,
+  isSceneGraphModel,
+  sceneGraphElementIds,
+} from './sceneGraphVisibility'
 import {MeshLambertMaterial, DoubleSide, Mesh} from 'three'
 import useStore from '../../store/useStore'
 import {BlendFunction} from 'postprocessing'
@@ -108,6 +114,27 @@ export default class IfcIsolator {
    */
   async setModel(ifcModel) {
     this.ifcModel = ifcModel
+    // Scene-graph models (ADF, OBJ, third-party GLB, …): elements are the
+    // Object3Ds, hidden and isolated through their own `visible`
+    // (sceneGraphVisibility.js). Their placeholder per-vertex `expressID`
+    // (an `Int8Array(1)` serial) is not an element list, so read the objects.
+    if (isSceneGraphModel(ifcModel)) {
+      this.visualElementsIds = sceneGraphElementIds(ifcModel)
+      this.collectSpatialElementsId(await this._getSpatialStructure())
+      // Adopt what the loader left hidden as hidden elements, with their
+      // subtrees as a NavTree eye would hide them, so the eyes tell the truth.
+      const seeded = new Set()
+      for (const id of initiallyHiddenIds(ifcModel)) {
+        for (const each of this.flattenChildren(id)) {
+          seeded.add(each)
+        }
+      }
+      this.hiddenIds = [...seeded]
+      this.hiddenOccurrences.clear()
+      this._syncHiddenStore()
+      applySceneGraphVisibility(ifcModel, {hiddenIds: this.hiddenIds})
+      return
+    }
     const ids = new Set()
     // BatchedMesh render path (`?feature=batchedMesh`): element IDs aren't a
     // per-vertex attribute — they live in each batch's `instanceParents`
@@ -352,11 +379,12 @@ export default class IfcIsolator {
    */
   initHideOperationsSubset(includedIds, removeModel = true) {
     const batched = this._isBatchedModel()
+    const sceneGraph = this._isSceneGraphModel()
     if (removeModel) {
-      // The batched path masks visibility on the model itself, so it must stay
-      // in the scene (and in `pickableModels`) — detaching it would leave an
-      // empty viewport.
-      if (!batched) {
+      // The batched and scene-graph paths mask visibility on the model itself,
+      // so it must stay in the scene (and in `pickableModels`) — detaching it
+      // would leave an empty viewport.
+      if (!batched && !sceneGraph) {
         this._removeSubsetFromScene(this.ifcModel)
       }
       this.viewer.selector?.clearSelection()
@@ -374,6 +402,12 @@ export default class IfcIsolator {
     // the pool here so the subset is what the user actually sees.
     if (typeof this.viewer._clearPreselectionForAllModels === 'function') {
       this.viewer._clearPreselectionForAllModels()
+    }
+    if (sceneGraph) {
+      // Same redundancy as the batched path: visibility is re-derived from
+      // `hiddenIds`. Scene-graph models have no per-occurrence hides.
+      applySceneGraphVisibility(this.ifcModel, {hiddenIds: this.hiddenIds})
+      return
     }
     if (batched) {
       // `includedIds` is redundant here: every caller passes
@@ -435,6 +469,19 @@ export default class IfcIsolator {
 
 
   /**
+   * True for a scene-graph model (sceneGraphVisibility.js): no batches, no
+   * `createSubset`, elements are Object3Ds. Hide and isolate set `visible`
+   * on them in place, like the batched path masks instances in place.
+   *
+   * @return {boolean}
+   * @private
+   */
+  _isSceneGraphModel() {
+    return isSceneGraphModel(this.ifcModel)
+  }
+
+
+  /**
    * Put the source model back on screen after hide / isolate ended.
    *
    * On the subset paths that means re-attaching the model the hide/isolate
@@ -447,6 +494,10 @@ export default class IfcIsolator {
    * @private
    */
   _restoreModelToScene() {
+    if (this._isSceneGraphModel()) {
+      applySceneGraphVisibility(this.ifcModel, {hiddenIds: this.hiddenIds})
+      return
+    }
     if (this._isBatchedModel()) {
       this._applyBatchedVisibility()
       return
@@ -686,7 +737,8 @@ export default class IfcIsolator {
    */
   initTemporaryIsolationSubset(includedIds) {
     const batched = this._isBatchedModel()
-    if (!batched) {
+    const sceneGraph = this._isSceneGraphModel()
+    if (!batched && !sceneGraph) {
       this._removeSubsetFromScene(this.ifcModel)
     }
     // Same hover-pool cleanup reasoning as in `initHideOperationsSubset`.
@@ -695,6 +747,13 @@ export default class IfcIsolator {
     // than wrong), but keeping the two paths symmetric avoids drift.
     if (typeof this.viewer._clearPreselectionForAllModels === 'function') {
       this.viewer._clearPreselectionForAllModels()
+    }
+    if (sceneGraph) {
+      // Isolate in place, like the batched path; `includedIds` explicitly for
+      // the same BotChat reason given there. Outline the isolated meshes.
+      this.isolationOutlineEffect.setSelection(applySceneGraphVisibility(
+        this.ifcModel, {hiddenIds: this.hiddenIds, isolatedIds: includedIds}))
+      return
     }
     if (batched) {
       // Isolate in place (Share#1806) — see the class doc. `includedIds` is
@@ -980,6 +1039,12 @@ export default class IfcIsolator {
    *
    */
   toggleRevealHiddenElements() {
+    // The reveal ghost is a `createSubset` in the hidden material, which a
+    // scene-graph model can't build; there it stays off.
+    if (this._isSceneGraphModel()) {
+      this.revealHiddenElementsMode = false
+      return
+    }
     if (this.revealHiddenElementsMode) {
       this.revealHiddenElementsMode = false
       // Reveal subsets aren't added to `pickableModels` (the

@@ -135,4 +135,68 @@ describeMobileAndDesktop('ADF crown picking', () => {
     // crown (`/PM.adf/<jaw>/…/<crown>`), before any query or hash.
     await expect(page).toHaveURL(new RegExp(`/PM\\.adf(?:/\\d+)*/${hit.crownId}(?:[?#]|$)`))
   })
+
+  // Each NavTree element hides on its own. ADF is a scene-graph model (no
+  // `createSubset`); hide used to detach the whole model and then throw, so
+  // one tooth's eye blanked the scene. See viewer/three/sceneGraphVisibility.js.
+  test('a NavTree eye hides one tooth, and the landmark curves start hidden but can be shown', async ({page}) => {
+    await setupVirtualPathIntercept(page, ADF_PATH, ADF_FIXTURE)
+    await page.goto(ADF_PATH)
+    await waitForModelReady(page)
+
+    const panel = page.getByTestId('NavTreePanel')
+    if (!await panel.isVisible()) {
+      await page.getByTestId('control-button-navigation').click()
+    }
+    await expect(panel).toBeVisible()
+    const row = (label: string) => panel.locator(`[data-node-label="${label}"]`)
+    const expand = async (label: string) => {
+      if (await row(label).getAttribute('data-is-expanded') === 'false') {
+        await row(label).getByTestId('NavTreeNodeToggle').click()
+      }
+    }
+    const shown = () => page.evaluate(() => {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const w = window as any
+      const model = (w.store ?? w.useStore).getState().model
+      const out: Record<string, boolean> = {inScene: model.parent !== null}
+      model.traverse((obj: any) => {
+        if (obj.name.endsWith('_crown') || obj.name === 'facc') {
+          let visible = true
+          for (let o = obj; o; o = o.parent) {
+            visible = visible && o.visible
+          }
+          // `facc` exists per jaw; the upper jaw's is the one expanded here.
+          out[obj.name === 'facc' ? `facc:${obj.parent.name}` : obj.name] = visible
+        }
+      })
+      return out
+      /* eslint-enable @typescript-eslint/no-explicit-any */
+    })
+    const before = await shown()
+    const crownNames = Object.keys(before).filter((key) => key.endsWith('_crown'))
+    expect(crownNames.length).toBeGreaterThan(1)
+    expect(crownNames.every((name) => before[name])).toBe(true)
+
+    // The loader hides the landmark curves; their eye says so, and shows them.
+    // Checked first: the tree is virtualized, and on a phone the `facc` row
+    // scrolls out once the teeth are expanded below it.
+    await expand('ADF (PM.adf)')
+    await expand('Upper Jaw')
+    expect(before['facc:Upper Jaw']).toBe(false)
+    await row('facc').getByTestId('unhide-icon').click()
+    await expect.poll(async () => (await shown())['facc:Upper Jaw']).toBe(true)
+
+    for (const label of ['teeth', 'Tooth_07']) {
+      await expand(label)
+    }
+    await row('Tooth_07_crown').getByTestId('hide-icon').click()
+    await expect(row('Tooth_07_crown').getByTestId('unhide-icon')).toBeVisible()
+    const hidden = await shown()
+    expect(hidden.inScene, 'the model stays in the scene').toBe(true)
+    expect(crownNames.filter((name) => !hidden[name])).toEqual(['Tooth_07_crown'])
+
+    await row('Tooth_07_crown').getByTestId('unhide-icon').click()
+    await expect.poll(async () => (await shown())['Tooth_07_crown']).toBe(true)
+  })
 })

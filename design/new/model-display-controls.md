@@ -234,6 +234,17 @@ Three implementations:
 | `SceneGraphResidencyBackend` | Multi-node GLB, OBJ groups, BLD, STL/PDB/XYZ scenes | `Object3D.visible = false` | O(1) per node; trivial |
 | `MergedResidencyBackend` | **Cache-hit GLB from our IFC/STEP export** — one merged `Mesh` | index-buffer compaction over `IfcInstanceMap.instanceIdToTriangleIndices` | O(triangles) per apply — needs care |
 
+NavTree hide / isolate on scene-graph models already uses this primitive:
+`src/viewer/three/sceneGraphVisibility.js`, driven by `IfcIsolator` when a
+model has no batches, no `createSubset` and no per-vertex element IDs (ADF,
+OBJ, FBX, STL, third-party GLB). It sets each element's own `visible`, keeps
+the containers of an isolated element shown, and turns a hidden object's
+`raycast` off, since three's Raycaster ignores `visible`. A
+`SceneGraphResidencyBackend` should share that ownership rather than write
+`visible` blind; this is the same two-owners problem the batched path solves
+with its `setVisibleAt` mask. The reveal-hidden ghost has no scene-graph form
+yet: it is a `createSubset` in the hidden material, so it stays off there.
+
 The merged backend is the one that matters for ask 4 and the one with a real
 cost problem. `IfcInstanceMap` already stores per-instance triangle ranges
 (contiguous in emission order, materialized as index lists), so the data is
