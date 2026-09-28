@@ -1,7 +1,7 @@
 import {Page, expect, test} from '@playwright/test'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 import {setupVirtualPathIntercept, waitForModelReady} from '../tests/e2e/models'
-import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
+import {homepageSetup, pauseViewerRendering, setIsReturningUser} from '../tests/e2e/utils'
 
 
 /**
@@ -140,40 +140,8 @@ describeMobileAndDesktop('ADF crown picking', () => {
   // `createSubset`); hide used to detach the whole model and then throw, so
   // one tooth's eye blanked the scene. See viewer/three/sceneGraphVisibility.js.
   test('a NavTree eye hides one tooth, and the landmark curves start hidden but can be shown', async ({page}) => {
-    await setupVirtualPathIntercept(page, ADF_PATH, ADF_FIXTURE)
-    await page.goto(ADF_PATH)
-    await waitForModelReady(page)
-
-    const panel = page.getByTestId('NavTreePanel')
-    if (!await panel.isVisible()) {
-      await page.getByTestId('control-button-navigation').click()
-    }
-    await expect(panel).toBeVisible()
-    const row = (label: string) => panel.locator(`[data-node-label="${label}"]`)
-    const expand = async (label: string) => {
-      if (await row(label).getAttribute('data-is-expanded') === 'false') {
-        await row(label).getByTestId('NavTreeNodeToggle').click()
-      }
-    }
-    const shown = () => page.evaluate(() => {
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      const w = window as any
-      const model = (w.store ?? w.useStore).getState().model
-      const out: Record<string, boolean> = {inScene: model.parent !== null}
-      model.traverse((obj: any) => {
-        if (obj.name.endsWith('_crown') || obj.name === 'facc') {
-          let visible = true
-          for (let o = obj; o; o = o.parent) {
-            visible = visible && o.visible
-          }
-          // `facc` exists per jaw; the upper jaw's is the one expanded here.
-          out[obj.name === 'facc' ? `facc:${obj.parent.name}` : obj.name] = visible
-        }
-      })
-      return out
-      /* eslint-enable @typescript-eslint/no-explicit-any */
-    })
-    const before = await shown()
+    const {row, expand} = await loadAndOpenTree(page)
+    const before = await shownState(page)
     const crownNames = Object.keys(before).filter((key) => key.endsWith('_crown'))
     expect(crownNames.length).toBeGreaterThan(1)
     expect(crownNames.every((name) => before[name])).toBe(true)
@@ -181,29 +149,47 @@ describeMobileAndDesktop('ADF crown picking', () => {
     // The loader hides the landmark curves; their eye says so, and shows them.
     // Checked first: the tree is virtualized, and on a phone the `facc` row
     // scrolls out once the teeth are expanded below it.
-    await expand('ADF (PM.adf)')
     await expand('Upper Jaw')
     expect(before['facc:Upper Jaw']).toBe(false)
     await row('facc').getByTestId('unhide-icon').click()
-    await expect.poll(async () => (await shown())['facc:Upper Jaw']).toBe(true)
+    await expect.poll(async () => (await shownState(page))['facc:Upper Jaw']).toBe(true)
 
-    for (const label of ['teeth', 'Tooth_07']) {
-      await expand(label)
-    }
+    await expand('teeth')
+    await expand('Tooth_07')
     await row('Tooth_07_crown').getByTestId('hide-icon').click()
     await expect(row('Tooth_07_crown').getByTestId('unhide-icon')).toBeVisible()
-    const hidden = await shown()
+    const hidden = await shownState(page)
     expect(hidden.inScene, 'the model stays in the scene').toBe(true)
     expect(crownNames.filter((name) => !hidden[name])).toEqual(['Tooth_07_crown'])
 
-    // A theme change re-creates the viewer and reloads the model. The user's
-    // choices survive it: the tooth stays hidden and the curves stay shown,
-    // rather than the loader defaults being seeded back over them.
+    await row('Tooth_07_crown').getByTestId('unhide-icon').click()
+    await expect.poll(async () => (await shownState(page))['Tooth_07_crown']).toBe(true)
+  })
+
+  // A theme change re-creates the viewer and reloads the model. The user's
+  // choices survive it: a hidden tooth stays hidden and shown curves stay
+  // shown, rather than the loader defaults being seeded back over them.
+  test('a theme-change reload keeps what the user hid and showed', async ({page}) => {
+    // Two model loads, one of them after a viewer re-init.
+    const RELOAD_TEST_TIMEOUT_MS = 90_000
+    test.setTimeout(RELOAD_TEST_TIMEOUT_MS)
+    const {row, expand} = await loadAndOpenTree(page)
+    await expand('Upper Jaw')
+    await row('facc').getByTestId('unhide-icon').click()
+    await expand('teeth')
+    await expand('Tooth_07')
+    await row('Tooth_07_crown').getByTestId('hide-icon').click()
+    await expect(row('Tooth_07_crown').getByTestId('unhide-icon')).toBeVisible()
+    const before = await shownState(page)
+    const crownNames = Object.keys(before).filter((key) => key.endsWith('_crown'))
+
     await page.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const w = window as any
       w.__adfModelBeforeTheme = (w.store ?? w.useStore).getState().model
     })
+    // The NavTree drawer covers the Profile control on a phone.
+    await page.getByTestId('control-button-navigation').click()
     await page.getByTestId('control-button-profile').click()
     await page.getByTestId('control-button-profile-menu-item-theme-night').click()
     await page.keyboard.press('Escape')
@@ -215,7 +201,7 @@ describeMobileAndDesktop('ADF crown picking', () => {
     })
     await waitForModelReady(page)
     await expect.poll(async () => {
-      const after = await shown()
+      const after = await shownState(page)
       return {
         hiddenCrowns: crownNames.filter((name) => !after[name]),
         facc: after['facc:Upper Jaw'],
@@ -228,42 +214,17 @@ describeMobileAndDesktop('ADF crown picking', () => {
   // blanked the model, and Hide did nothing. Select through the real NavTree,
   // then use the element controls.
   test('Isolate and Hide act on the tooth selected in the NavTree', async ({page}) => {
-    await setupVirtualPathIntercept(page, ADF_PATH, ADF_FIXTURE)
-    await page.goto(ADF_PATH)
-    await waitForModelReady(page)
-
-    const panel = page.getByTestId('NavTreePanel')
-    if (!await panel.isVisible()) {
-      await page.getByTestId('control-button-navigation').click()
-    }
-    await expect(panel).toBeVisible()
-    const row = (label: string) => panel.locator(`[data-node-label="${label}"]`)
-    for (const label of ['ADF (PM.adf)', 'Upper Jaw', 'teeth', 'Tooth_07']) {
-      if (await row(label).getAttribute('data-is-expanded') === 'false') {
-        await row(label).getByTestId('NavTreeNodeToggle').click()
-      }
+    const {panel, row, expand} = await loadAndOpenTree(page)
+    for (const label of ['Upper Jaw', 'teeth', 'Tooth_07']) {
+      await expand(label)
     }
     await row('Tooth_07_crown').getByTestId('NavTreeNodeLabel').click()
     await expect(row('Tooth_07_crown')).toHaveAttribute('data-is-selected', 'true')
 
-    const shownCrowns = () => page.evaluate(() => {
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      const w = window as any
-      const out: string[] = []
-      ;(w.store ?? w.useStore).getState().model.traverse((obj: any) => {
-        if (obj.name.endsWith('_crown')) {
-          let visible = true
-          for (let o = obj; o; o = o.parent) {
-            visible = visible && o.visible
-          }
-          if (visible) {
-            out.push(obj.name)
-          }
-        }
-      })
-      return out
-      /* eslint-enable @typescript-eslint/no-explicit-any */
-    })
+    const shownCrowns = async () => {
+      const state = await shownState(page)
+      return Object.keys(state).filter((key) => key.endsWith('_crown') && state[key]).sort()
+    }
     const all = await shownCrowns()
     expect(all.length).toBeGreaterThan(1)
 
@@ -280,3 +241,61 @@ describeMobileAndDesktop('ADF crown picking', () => {
     await expect.poll(shownCrowns).toEqual(all.filter((name) => name !== 'Tooth_07_crown'))
   })
 })
+
+
+/**
+ * Load PM.adf, stop the viewer painting (these tests read `visible` flags,
+ * never pixels; headless CI's software GL otherwise makes each click take
+ * about a second, see `pauseViewerRendering`), and open the NavTree at its
+ * root.
+ *
+ * @param page Playwright page
+ * @return the tree panel, a row locator by label, and an idempotent expander
+ */
+async function loadAndOpenTree(page: Page) {
+  await setupVirtualPathIntercept(page, ADF_PATH, ADF_FIXTURE)
+  await page.goto(ADF_PATH)
+  await waitForModelReady(page)
+  await pauseViewerRendering(page)
+  const panel = page.getByTestId('NavTreePanel')
+  if (!await panel.isVisible()) {
+    await page.getByTestId('control-button-navigation').click()
+  }
+  await expect(panel).toBeVisible()
+  const row = (label: string) => panel.locator(`[data-node-label="${label}"]`)
+  const expand = async (label: string) => {
+    if (await row(label).getAttribute('data-is-expanded') === 'false') {
+      await row(label).getByTestId('NavTreeNodeToggle').click()
+    }
+  }
+  await expand('ADF (PM.adf)')
+  return {panel, row, expand}
+}
+
+
+/**
+ * Whether each crown, and each jaw's `facc` group (keyed `facc:<jaw>`), is
+ * drawn (it and every ancestor visible), and whether the model is in the scene.
+ *
+ * @param page Playwright page
+ * @return name → shown, plus `inScene`
+ */
+function shownState(page: Page): Promise<Record<string, boolean>> {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = window as any
+    const model = (w.store ?? w.useStore).getState().model
+    const out: Record<string, boolean> = {inScene: model.parent !== null}
+    model.traverse((obj: any) => {
+      if (obj.name.endsWith('_crown') || obj.name === 'facc') {
+        let visible = true
+        for (let o = obj; o; o = o.parent) {
+          visible = visible && o.visible
+        }
+        out[obj.name === 'facc' ? `facc:${obj.parent.name}` : obj.name] = visible
+      }
+    })
+    return out
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
