@@ -1152,14 +1152,10 @@ export default class IfcIsolator {
    */
   isolateSelectedElements() {
     const selection = this.viewer.getSelectedIds()
-    // Isolating nothing would only hide everything. (The check below caught
-    // this only while nothing was hidden, and a scene-graph model like ADF
-    // starts with its overlays hidden.)
-    if (selection.length === 0) {
-      return
-    }
-    const noChanges = unsortedArraysAreEqual(selection, this.hiddenIds)
-    if (noChanges) {
+    // Isolating nothing, or only hidden elements, would show nothing at all.
+    // (This used to be `selection` equal to `hiddenIds`, which misses both
+    // cases once anything else is hidden, as ADF's overlays are from load.)
+    if (selection.every((id) => this.hiddenIds.includes(id))) {
       return
     }
     this.tempIsolationModeOn = true
