@@ -130,4 +130,31 @@ describeMobileAndDesktop('ViewCube', () => {
     await page.keyboard.press('KeyI')
     await expect(widget).toBeVisible()
   })
+
+  test('keyboard: Enter on the focused cube opens its views, Enter picks Front', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+    await visitHomepageWaitForModel(page)
+
+    await page.getByTestId('control-button-view-cube').click()
+    const widget = page.getByTestId('view-cube')
+    await expect(widget).toBeVisible()
+    // Start away from Front so the keyboard pick has to move the camera.
+    await widget.getByRole('button', {name: 'Home (isometric)'}).click()
+    await expect.poll(() => viewDirError(page, {x: ISO, y: ISO, z: ISO}), {timeout: SETTLE_TIMEOUT_MS})
+      .toBeLessThan(DIR_TOLERANCE)
+
+    // Keyboard only from here: the cube is a focusable button whose menu
+    // opens focused on its first face view.
+    await page.getByRole('button', {name: /^View cube\./}).focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('menuitem', {name: 'Front view'})).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect.poll(() => viewDirError(page, {x: 0, y: 0, z: 1}), {timeout: SETTLE_TIMEOUT_MS})
+      .toBeLessThan(DIR_TOLERANCE)
+    await expect(page.getByRole('menu')).toHaveCount(0)
+  })
 })

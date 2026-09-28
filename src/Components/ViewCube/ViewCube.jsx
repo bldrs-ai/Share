@@ -17,6 +17,7 @@ import {
   WebGLRenderer,
 } from 'three'
 import Box from '@mui/material/Box'
+import Divider from '@mui/material/Divider'
 import IconButton from '@mui/material/IconButton'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
@@ -282,22 +283,58 @@ export default function ViewCube() {
     }
   }
 
-  /** Snap to a front-right-top isometric "home" view and fit the model. */
-  const goHome = () => {
+  /**
+   * Snap the main camera to look from `direction` and fit the model.
+   *
+   * @param {Vector3} direction Unit direction to place the camera along
+   */
+  const snapView = (direction) => {
     if (controlsRef.current) {
-      snapToDirection(controlsRef.current, ISO_DIRECTION.clone())
+      snapToDirection(controlsRef.current, direction.clone())
       fitModelToFrame()
     }
   }
 
+  /** Snap to a front-right-top isometric "home" view and fit the model. */
+  const goHome = () => {
+    snapView(ISO_DIRECTION)
+  }
+
   /**
-   * Open the position menu at the cursor (right-click on the cube).
+   * Open the views/position menu at the cursor (right-click on the cube).
    *
    * @param {object} event The context-menu event
    */
   const openMenu = (event) => {
     event.preventDefault()
     setMenuAnchor({top: event.clientY, left: event.clientX})
+  }
+
+  /**
+   * Keyboard access to the cube. Its face snaps are otherwise pointer-only
+   * (raycast picks on a canvas), so Enter, Space or the context-menu key open
+   * the same menu, anchored on the cube. The menu lists every face view as a
+   * labelled item.
+   *
+   * @param {object} event The keydown event
+   */
+  const onCubeKeyDown = (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'ContextMenu') {
+      return
+    }
+    event.preventDefault()
+    const rect = event.currentTarget.getBoundingClientRect()
+    setMenuAnchor({top: rect.top + (rect.height / 2), left: rect.left + (rect.width / 2)})
+  }
+
+  /**
+   * Snap to a standard face view picked from the menu.
+   *
+   * @param {Vector3} direction Unit direction of the face
+   */
+  const chooseView = (direction) => {
+    setMenuAnchor(null)
+    snapView(direction)
   }
 
   /**
@@ -356,6 +393,11 @@ export default function ViewCube() {
       <Box
         ref={mountRef}
         onContextMenu={openMenu}
+        onKeyDown={onCubeKeyDown}
+        tabIndex={0}
+        role='button'
+        aria-label='View cube. Press Enter for standard views'
+        aria-haspopup='menu'
         data-testid='view-cube-canvas'
         sx={{gridColumn: 2, gridRow: 2, lineHeight: 0}}
       />
@@ -382,7 +424,16 @@ export default function ViewCube() {
         onClose={() => setMenuAnchor(null)}
         anchorReference='anchorPosition'
         anchorPosition={menuAnchor || undefined}
+        // 'menu' (not the default 'selectedMenu') so keyboard focus lands on
+        // the first view rather than on the currently selected position.
+        variant='menu'
       >
+        {STANDARD_VIEWS.map(({label, direction}) => (
+          <MenuItem key={label} onClick={() => chooseView(direction)}>
+            {label}
+          </MenuItem>
+        ))}
+        <Divider/>
         {POSITION_OPTIONS.map(({key, label}) => (
           <MenuItem
             key={key}
@@ -645,6 +696,12 @@ const CHAMFER_GREY_HEX = 0xd8d8d8 // edge/corner bevel base color
 const FACE_BASE_HEX = 0xffffff // face texture shown untinted
 const FACE_HOVER_OPACITY = 0.6 // translucent green wash for a hovered face
 const ISO_DIRECTION = new Vector3(1, 1, 1).normalize()
+// Face views offered in the menu: the keyboard and assistive-technology
+// equivalent of clicking a cube face. Directions match CUBE_FACES.
+const STANDARD_VIEWS = CUBE_FACES.map(({n, label}) => ({
+  label: `${label.charAt(0)}${label.slice(1).toLowerCase()} view`,
+  direction: new Vector3(...n),
+}))
 
 const DEFAULT_POSITION = 'bottom-right'
 const VIEWCUBE_POSITION_KEY = 'bldrs-viewcube-position'
