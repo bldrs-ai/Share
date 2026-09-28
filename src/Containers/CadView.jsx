@@ -90,6 +90,7 @@ export default function CadView({
   const isAuthResolved = useStore((state) => state.isAuthResolved)
   const connections = useStore((state) => state.connections)
   const isViewCubeVisible = useStore((state) => state.isViewCubeVisible)
+  const isTempIsolationModeOn = useStore((state) => state.isTempIsolationModeOn)
   const customViewSettings = useStore((state) => state.customViewSettings)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
@@ -1537,7 +1538,12 @@ export default function CadView({
   return (
     <Box sx={{...absTop, left: 0, width: '100vw', height: isMobile ? `${vh}px` : '100vh', m: 0, p: 0}}>
       {<ViewerContainer/>}
-      {viewer && isViewCubeVisible && <ViewCube/>}
+      {/*
+        * Unmounted during isolation, matching its toolbar toggle in
+        * ElementsControl. The persisted visibility is left alone, so the
+        * cube comes back when isolation ends.
+        */}
+      {viewer && isViewCubeVisible && !isTempIsolationModeOn && <ViewCube/>}
       {viewer && (
         <RootLandscape
           pathPrefix={pathPrefix}

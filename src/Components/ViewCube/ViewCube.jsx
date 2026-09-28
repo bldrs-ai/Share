@@ -54,6 +54,7 @@ import debug from '../../utils/debug'
  */
 export default function ViewCube() {
   const viewer = useStore((state) => state.viewer)
+  const model = useStore((state) => state.model)
   const setIsViewCubeVisible = useStore((state) => state.setIsViewCubeVisible)
   // Right-drawer state so the widget can sit clear of any open drawer.
   const isNotesVisible = useStore((state) => state.isNotesVisible)
@@ -72,6 +73,9 @@ export default function ViewCube() {
   // Live handles so the ring buttons and fit calls can reach the viewer.
   const controlsRef = useRef(null)
   const contextRef = useRef(null)
+  // Read at click time, so a snap always frames the model currently loaded.
+  const modelRef = useRef(model)
+  modelRef.current = model
 
   useEffect(() => {
     const context = viewer?.context
@@ -240,6 +244,11 @@ export default function ViewCube() {
       contextRef.current = null
       disposeCube()
       renderer.dispose()
+      // dispose() frees Three's GPU resources but not the WebGL context
+      // itself. Without this, each hide/show leaves a context behind until
+      // the browser's context cap evicts the oldest one, which can be the
+      // main viewer's (same reason as Containers/viewer.js teardown).
+      renderer.forceContextLoss()
       if (renderer.domElement.parentNode === mount) {
         mount.removeChild(renderer.domElement)
       }
@@ -251,9 +260,13 @@ export default function ViewCube() {
    * call straight after `snapToDirection`: camera-controls' fitToSphere only
    * dollies/moves toward the *end* of the in-flight rotation, so the snap's
    * direction survives the fit.
+   *
+   * Frames the loaded model explicitly. The no-argument fallback frames the
+   * scene's last child, which can be a light target or clipping helper
+   * appended after the model (#1561).
    */
   const fitModelToFrame = () => {
-    contextRef.current?.fitModelToFrame?.()
+    contextRef.current?.fitModelToFrame?.(modelRef.current ?? null)
   }
 
   /**

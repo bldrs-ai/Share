@@ -1,5 +1,6 @@
 import {Page, expect, test} from '@playwright/test'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
+import {waitForModelReady} from '../../tests/e2e/models'
 import {homepageSetup, setIsReturningUser, visitHomepageWaitForModel} from '../../tests/e2e/utils'
 
 
@@ -25,6 +26,9 @@ const ISO = 1 / Math.sqrt(3)
 // face rhombus spans ~11..41px on the vertical centreline — so (48, 26)
 // lands in the middle of TOP, well clear of the chamfers around it.
 const TOP_FACE_CLICK = {x: 48, y: 26}
+// An IfcProduct in index.ifc under its root (81), the same element
+// IfcIsolator.spec.ts isolates.
+const ISOLATE_PATH = '/share/v/p/index.ifc/81/621'
 
 
 type Vec3 = {x: number, y: number, z: number}
@@ -100,5 +104,30 @@ describeMobileAndDesktop('ViewCube', () => {
     await widget.getByRole('button', {name: 'Close view cube'}).click()
     await expect(widget).toHaveCount(0)
     await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  test('an open cube is hidden while an element is isolated and returns after', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+    await page.goto(ISOLATE_PATH)
+    await waitForModelReady(page)
+
+    const widget = page.getByTestId('view-cube')
+    await page.getByTestId('control-button-view-cube').click()
+    await expect(widget).toBeVisible()
+
+    // Isolate via the real shortcut. Keys only reach setKeydownListeners
+    // while the viewer canvas has focus (shortcutKeys.js). Scoped to
+    // #viewer-container because the cube has a canvas of its own.
+    await page.locator('#viewer-container canvas').focus()
+    await page.keyboard.press('KeyI')
+    await expect(widget).toHaveCount(0)
+
+    await page.locator('#viewer-container canvas').focus()
+    await page.keyboard.press('KeyI')
+    await expect(widget).toBeVisible()
   })
 })
