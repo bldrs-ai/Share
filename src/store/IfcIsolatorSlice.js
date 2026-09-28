@@ -8,6 +8,10 @@
 export default function createIsolatorSlice(set, get) {
   return {
     hiddenElements: {},
+    // Which scene-graph model `hiddenElements` has had its loader defaults
+    // seeded for (IfcIsolator#setModel). A viewer re-init of the same model
+    // keeps the user's hidden state instead of re-seeding over it.
+    sceneGraphSeededFor: null,
     isolatedElements: {},
     isTempIsolationModeOn: false,
 

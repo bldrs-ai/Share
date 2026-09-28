@@ -1498,8 +1498,25 @@ describe('viewer/three/IfcIsolator', () => {
       await iso.setModel(root)
       expect(iso.visualElementsIds).toEqual([0, 1, 2, 3, 4, 5, 6])
       expect(iso.hiddenIds).toEqual([2])
-      expect(useStoreMock.setState).toHaveBeenLastCalledWith({hiddenElements: {2: true}})
+      expect(useStoreMock.setState).toHaveBeenCalledWith({hiddenElements: {2: true}})
+      expect(useStoreMock.setState).toHaveBeenLastCalledWith({sceneGraphSeededFor: `${root.name}|7`})
       expect(facc.visible).toBe(false)
+    })
+
+    it('does not reseed over the user\'s hidden state when the same model is set up again', async () => {
+      // A viewer re-init (theme change) reloads the model; CadView#onViewer
+      // then reapplies the store's hiddenElements, which must still be the user's.
+      const {root, facc} = makeSceneGraph()
+      useStoreMock.getState.mockReturnValue({
+        elementTypesMap: [], selectedElements: [], sceneGraphSeededFor: `${root.name}|7`,
+      })
+      useStoreMock.setState.mockClear()
+      const iso = makeIsolator()
+      await iso.setModel(root)
+      expect(iso.hiddenIds).toEqual([])
+      expect(useStoreMock.setState).not.toHaveBeenCalled()
+      // Everything shows until CadView reapplies the user's hides.
+      expect(facc.visible).toBe(true)
     })
 
     it('hides one element in place: the model stays in the scene and its siblings stay shown', async () => {

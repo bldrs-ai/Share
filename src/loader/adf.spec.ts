@@ -196,7 +196,30 @@ describeMobileAndDesktop('ADF crown picking', () => {
     expect(hidden.inScene, 'the model stays in the scene').toBe(true)
     expect(crownNames.filter((name) => !hidden[name])).toEqual(['Tooth_07_crown'])
 
-    await row('Tooth_07_crown').getByTestId('unhide-icon').click()
-    await expect.poll(async () => (await shown())['Tooth_07_crown']).toBe(true)
+    // A theme change re-creates the viewer and reloads the model. The user's
+    // choices survive it: the tooth stays hidden and the curves stay shown,
+    // rather than the loader defaults being seeded back over them.
+    await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const w = window as any
+      w.__adfModelBeforeTheme = (w.store ?? w.useStore).getState().model
+    })
+    await page.getByTestId('control-button-profile').click()
+    await page.getByTestId('control-button-profile-menu-item-theme-night').click()
+    await page.keyboard.press('Escape')
+    await page.waitForFunction(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const w = window as any
+      const model = (w.store ?? w.useStore).getState().model
+      return model && model !== w.__adfModelBeforeTheme
+    })
+    await waitForModelReady(page)
+    await expect.poll(async () => {
+      const after = await shown()
+      return {
+        hiddenCrowns: crownNames.filter((name) => !after[name]),
+        facc: after['facc:Upper Jaw'],
+      }
+    }).toEqual({hiddenCrowns: ['Tooth_07_crown'], facc: true})
   })
 })

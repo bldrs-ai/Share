@@ -121,17 +121,28 @@ export default class IfcIsolator {
     if (isSceneGraphModel(ifcModel)) {
       this.visualElementsIds = sceneGraphElementIds(ifcModel)
       this.collectSpatialElementsId(await this._getSpatialStructure())
+      this.hiddenOccurrences.clear()
       // Adopt what the loader left hidden as hidden elements, with their
       // subtrees as a NavTree eye would hide them, so the eyes tell the truth.
-      const seeded = new Set()
-      for (const id of initiallyHiddenIds(ifcModel)) {
-        for (const each of this.flattenChildren(id)) {
-          seeded.add(each)
+      // Only the first time this model is set up: `CadView#onViewer` reapplies
+      // the store's `hiddenElements` right after this, so on a viewer re-init
+      // (a theme change reloads the model) the user's hides, or a Show All,
+      // must survive rather than be reseeded over. The key is a heuristic
+      // identity (name and element count) for "the same model again".
+      const seededFor = `${ifcModel.name}|${this.visualElementsIds.length}`
+      if (useStore.getState().sceneGraphSeededFor === seededFor) {
+        this.hiddenIds = []
+      } else {
+        const seeded = new Set()
+        for (const id of initiallyHiddenIds(ifcModel)) {
+          for (const each of this.flattenChildren(id)) {
+            seeded.add(each)
+          }
         }
+        this.hiddenIds = [...seeded]
+        this._syncHiddenStore()
+        useStore.setState({sceneGraphSeededFor: seededFor})
       }
-      this.hiddenIds = [...seeded]
-      this.hiddenOccurrences.clear()
-      this._syncHiddenStore()
       applySceneGraphVisibility(ifcModel, {hiddenIds: this.hiddenIds})
       return
     }
