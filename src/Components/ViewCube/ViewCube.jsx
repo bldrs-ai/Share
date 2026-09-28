@@ -9,6 +9,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   OrthographicCamera,
+  Quaternion,
   Raycaster,
   Scene,
   Vector2,
@@ -44,9 +45,10 @@ import debug from '../../utils/debug'
  *
  * The cube is drawn in its own tiny Three.js scene (independent of the main
  * viewer): 6 face quads, 12 edge bevels and 8 corner triangles, each a
- * pickable sub-mesh carrying its own view direction.  The main camera is read
- * from `viewer.IFC.context` and driven via the camera-controls instance the
- * rest of Share already uses (see CameraControl.jsx).
+ * pickable sub-mesh carrying its own view direction.  The main camera and its
+ * camera-controls instance are reached through `viewer.context` (ThreeContext,
+ * the same seam CameraControl.jsx and MeshClipper use), never the legacy
+ * `viewer.IFC.context` it wraps.
  *
  * @return {ReactElement}
  */
@@ -72,8 +74,9 @@ export default function ViewCube() {
   const contextRef = useRef(null)
 
   useEffect(() => {
-    const context = viewer && viewer.IFC && viewer.IFC.context
-    if (!context || !context.ifcCamera) {
+    const context = viewer?.context
+    const cameraControls = context?.getCameraControls?.()
+    if (!cameraControls) {
       return undefined
     }
     const mount = mountRef.current
@@ -81,7 +84,6 @@ export default function ViewCube() {
       return undefined
     }
 
-    const cameraControls = context.ifcCamera.cameraControls
     controlsRef.current = cameraControls
     contextRef.current = context
 
@@ -102,15 +104,25 @@ export default function ViewCube() {
     scene.add(group)
 
     // --- Keep the cube oriented to match what the main camera sees ---
+    // The loop runs every frame but only draws when the orientation or the
+    // hover highlight changed, so an idle viewer costs a quaternion compare
+    // rather than a second WebGL draw per frame.
     let frameId = 0
+    let isDirty = true
+    const lastQuaternion = new Quaternion()
     const renderLoop = () => {
       const active = context.getCamera()
-      if (active) {
+      if (active && !active.quaternion.equals(lastQuaternion)) {
+        lastQuaternion.copy(active.quaternion)
         // Rotating the cube by the inverse of the camera rotation reproduces the
         // model's on-screen orientation inside the gizmo.
         group.quaternion.copy(active.quaternion).invert()
+        isDirty = true
       }
-      renderer.render(scene, camera)
+      if (isDirty) {
+        renderer.render(scene, camera)
+        isDirty = false
+      }
       frameId = requestAnimationFrame(renderLoop)
     }
     renderLoop()
@@ -157,6 +169,7 @@ export default function ViewCube() {
         }
       }
       hoveredMesh = mesh
+      isDirty = true
     }
 
     const snapFromPointer = (event) => {
@@ -233,13 +246,14 @@ export default function ViewCube() {
     }
   }, [viewer])
 
-  /** Fit the loaded model to the frame, preserving the current view direction. */
+  /**
+   * Fit the loaded model to the frame, preserving the view direction.  Safe to
+   * call straight after `snapToDirection`: camera-controls' fitToSphere only
+   * dollies/moves toward the *end* of the in-flight rotation, so the snap's
+   * direction survives the fit.
+   */
   const fitModelToFrame = () => {
-    const context = contextRef.current
-    const navMode = context && context.ifcCamera && context.ifcCamera.currentNavMode
-    if (navMode && typeof navMode.fitModelToFrame === 'function') {
-      navMode.fitModelToFrame()
-    }
+    contextRef.current?.fitModelToFrame?.()
   }
 
   /**
@@ -329,6 +343,7 @@ export default function ViewCube() {
       <Box
         ref={mountRef}
         onContextMenu={openMenu}
+        data-testid='view-cube-canvas'
         sx={{gridColumn: 2, gridRow: 2, lineHeight: 0}}
       />
       <RingButton
