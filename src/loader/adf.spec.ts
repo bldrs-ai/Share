@@ -223,10 +223,11 @@ describeMobileAndDesktop('ADF crown picking', () => {
     }).toEqual({hiddenCrowns: ['Tooth_07_crown'], facc: true})
   })
 
-  // Isolate (I) and hide (H) act on the selection. For scene-graph models the
-  // viewer used to drop it (no `expressIdPicking`), so I isolated nothing and
-  // blanked the model. Select through the real NavTree, then use the keys.
-  test('I isolates and H hides the tooth selected in the NavTree', async ({page}) => {
+  // Isolate and Hide act on the selection. For scene-graph models the viewer
+  // used to drop it (no `expressIdPicking`), so Isolate isolated nothing and
+  // blanked the model, and Hide did nothing. Select through the real NavTree,
+  // then use the element controls.
+  test('Isolate and Hide act on the tooth selected in the NavTree', async ({page}) => {
     await setupVirtualPathIntercept(page, ADF_PATH, ADF_FIXTURE)
     await page.goto(ADF_PATH)
     await waitForModelReady(page)
@@ -266,16 +267,16 @@ describeMobileAndDesktop('ADF crown picking', () => {
     const all = await shownCrowns()
     expect(all.length).toBeGreaterThan(1)
 
-    // The shortcuts listen on the canvas.
-    const canvas = page.locator('canvas').first()
-    await canvas.focus()
-    await page.keyboard.press('KeyI')
+    // The element controls (the I and H keys call the same isolator methods).
+    // Close the tree first: on a phone its drawer covers the controls.
+    await page.getByTestId('control-button-navigation').click()
+    await expect(panel).not.toBeVisible()
+    await page.getByTestId('Isolate').click()
     await expect.poll(shownCrowns).toEqual(['Tooth_07_crown'])
-    await page.keyboard.press('KeyI')
+    await page.getByTestId('Isolate').click()
     await expect.poll(async () => (await shownCrowns()).length).toBe(all.length)
 
-    await canvas.focus()
-    await page.keyboard.press('KeyH')
+    await page.getByTestId('Hide').click()
     await expect.poll(shownCrowns).toEqual(all.filter((name) => name !== 'Tooth_07_crown'))
   })
 })
