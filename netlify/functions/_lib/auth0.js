@@ -215,10 +215,11 @@ export function resetManagementApiTokenCache() {
 /**
  * Fetch (or reuse) an Auth0 Management API token via Client Credentials.
  *
- * Mirrors `record-load.js`'s private copy, which stays where it is: that
- * function is CommonJS (`require`/`exports.handler`) and this module is ESM,
- * so sharing would mean an interop wrapper for no behavioural gain. Keep the
- * two in lock-step if the token flow changes.
+ * Mirrors `record-load.js`'s private copy, which stays where it is: moving
+ * the quota gate onto this module would change a function that was only just
+ * converted from CommonJS to ESM (it failed to bundle on Netlify), and that
+ * conversion was deliberately syntax-only. Keep the two in lock-step if the
+ * token flow changes.
  *
  * @return {Promise<string>} Management API access token
  * @throws {ManagementApiError} `mgmt_config` when a credential env var is
