@@ -47,7 +47,7 @@ throw away.
 |---|---|---|
 | Auto-color | `src/viewer/ifc/productPalette.js` | `applyProductPalette(batches)` at assemble time, gated on `autoColorParts` (default on) |
 | Residency slider + priority metric | `src/Components/Residency/ResidencyControl.jsx`, `src/viewer/residency/ResidencyController.js` | Popover on the "eyeball" button in `ElementsControl`; BatchedMesh-only |
-| Hide / Isolate / Show-all | `src/Components/ElementsControl.jsx` + `IfcIsolator` | Store: `hiddenElements`, `isTempIsolationModeOn`; not URL-persisted (#1250) |
+| Hide / Isolate / Show-all | `src/Components/ElementsControl.jsx` + `IfcIsolator` | Store: `hiddenElements`, `isTempIsolationModeOn`; URL-persisted in `#d:` as `hide=`/`show=`/`iso=` (§6.3, #1250) |
 | Selection scopes | `NavTreeSlice` | `selectedElement`, `selectedElements` (expressIDs), `selectedInstanceIds` (synthetic per-`PlacedGeometry`), occurrence paths for STEP |
 | Subset construction | `batchedSubset.js`, `IfcInstanceMap`, `elementSubsets` | Three routes to "a `Mesh` covering these elements", one per model shape |
 | Hash tokens | `src/Components/*/hashState.js` | `c` camera, `cp` cut planes, `i`/`ic` notes, `m` placemark, `n` nav-tree, `p` properties, `s` search — `d` is free |
@@ -285,9 +285,11 @@ New prefix `d` (free — see §1 table), following the `cp:` convention
 #d:<term>[,<term>]*
 
 term      := global | scoped
-global    := color=auto|src | wire=0|1|edges | res=<pct>[.<metric>] | hide=<ids>
+global    := color=auto|src | wire=0|1|edges | res=<pct>[.<metric>]
+           | hide=<refs> | show=<refs> | iso=<refs>
+refs      := scopeRef[+scopeRef]*
 scoped    := <scopeRef>=<flags>
-scopeRef  := e<expressID> | o<occurrencePathKey> | m<meshIndex>
+scopeRef  := e<expressID> | o<occurrencePathKey> | n<namePath> | m<meshIndex>
 flags     := compact letters: c=a|s, w=0|1|e, r=<pct>, h=1
 ```
 
@@ -311,14 +313,60 @@ overrides are the same kind of object and should ride the same v0.1 view-state
 schema. **This epic should define the display-override schema so T2 Phase 4 can
 embed it verbatim**, and the URL token is then the compact projection of it.
 
-### 6.3 Relationship to #1250
+### 6.3 Hide and isolate (#1250) — landed
 
-view-200's remaining slice is URL-encoding `hiddenExpressIDs[]`. Hidden is an
-appearance axis on a scope; that's the same serializer, the same scope
-vocabulary, and the same size cap. Recommend one token carries both
-(`hide=`/`h=1` above), and #1250 becomes a slice of S6 rather than an
-independent issue. If they stay separate, the two parsers will drift on scope
-syntax the first time STEP occurrence paths need encoding.
+view-200's remaining slice was URL-encoding `hiddenExpressIDs[]`. Hidden is an
+appearance axis on a scope, so it rides the same token with the same scope
+vocabulary, rather than a parser of its own that would drift from this one the
+first time STEP occurrence paths needed encoding. Implemented in
+`src/viewer/visibilityRefs.js` (refs and the hidden-set diff) and
+`src/Components/Residency/visibilityHash.js` (the terms):
+
+```
+#d:hide=e1234+e5678                  IFC: two elements hidden
+#d:hide=o1020254.367733              STEP: one occurrence (a named body) hidden
+#d:hide=nUpper%20Jaw/teeth/Tooth_07  ADF: one tooth hidden
+#d:show=nUpper%20Jaw/facc            ADF: a default-hidden overlay shown
+#d:iso=e1234                         isolating one element
+#d:color=src,hide=e12,iso=e34        with the Display menu's terms
+```
+
+- **One ref vocabulary, three kinds.** `e<id>` for ids the file makes stable
+  (IFC; STEP product hides); `o<id>.<id>…` for a STEP occurrence — the ids the
+  selection permalink already writes for it (`occurrenceElementPathIds` minus
+  the root) and resolves back through the same `resolveElementPathOccurrence`;
+  `n<seg>/<seg>…` for scene-graph formats (ADF, OBJ, GLB, …), whose ids are
+  serials `convertToShareModel` hands out in traversal order. A name path is
+  the NavTree labels below the model root, each `encodeURIComponent`-escaped
+  (and `~`), with `~k` numbering same-named siblings (`Mesh`, `Mesh~2`) and
+  unnamed ones (`~1`). Lists join with `+`.
+- **Hidden is a diff against the loader's defaults, cascading down the tree.**
+  A node is predicted to follow its parent when the parent was moved off its
+  default, and its own default otherwise; `hide` / `show` refs are emitted only
+  where the actual state departs from that. The eye hiding a tooth is one ref
+  (its crown follows), "Show all" on an ADF is one `show` per overlay the
+  loader hid, the default state writes nothing, and decode runs the same walk,
+  so the round trip is exact for any hidden set (a child re-shown under a
+  hidden parent included). The defaults are `IfcIsolator.defaultHiddenIds`,
+  captured in `setModel`; empty for IFC and STEP.
+- **STEP occurrence hides are listed as they are**, not diffed: they are
+  instance masks keyed by NavTree node, not a tree state. `IfcIsolator` keeps
+  the path each was resolved from (`hiddenOccurrencePaths`), since instance
+  ids are per load.
+- **Writing and reading.** `VisibilityHashWriter` (mounted by `CadView`)
+  rewrites the terms on every `hiddenElements` / `isolatedElements` /
+  `isTempIsolationModeOn` change, once `isModelReady`; `CadView#onViewer`
+  applies a link's terms after its in-place hidden-state reapply and before
+  raising `isModelReady`. A link with none of these terms leaves visibility
+  alone, so a re-init keeps the user's state. Refs that don't resolve are
+  skipped and warned about. Every `#d:` writer goes through
+  `displayHash.mergeDisplayTerms`, which sets or drops only its own keys, so the
+  Display menu and the isolator don't clobber each other.
+- **Size cap.** Past 1500 characters of visibility terms the link carries none
+  of them, and the Share dialog says so, rather than a partial state that looks
+  complete.
+- **Not in the link:** reveal mode (R), and a type-group eye in the
+  element-types tree (its members are written individually).
 
 
 ## 7. Epic + stories
@@ -336,7 +384,7 @@ Sub-issues, all sharing the epic name per CLAUDE.md §"UI work" / conversational
 | S4 | Shading control | Shaded / Wireframe / Shaded+edges. Whole-model material fast-path only. | S3 |
 | S5 | Scoped application | Sub-tree / element / occurrence / mesh scopes; subset-overlay wireframe backend (§4); NavTree row affordance + selection-scoped menu. | S4 |
 | S6 | Residency backends | Backend interface; scene-graph + merged backends; ungate the control for GLB/OBJ/etc; drag-vs-commit. *(→ `view-130`, not `view-140` — it's the perf control.)* | S3 |
-| S7 | Permalink | `#d:` token, round-trip, size cap + degrade; absorbs #1250. **Landed model-scope first** (color + shading, then residency) ahead of S5 — model-scope axes can round-trip now, it's pure serialization (no scene-interaction risk), and it makes S1–S4 shareable. Residency joining the token is what forced its state out of `ResidencyControl`'s local `useState` and into the override stack (`{percent, metric}` on the `residency` axis), so the whole Display menu is now stack-backed; see `viewer/display/residencyMode.js` for why the stack — not the scene — is the authority on that one axis. The token grammar is forward-compatible: scoped terms (`e<id>=`/`o<key>=`/`m<idx>=`) and `hide=` widen the same `d:` token when S5 + the hidden-list land, no grammar change for what's written today. Size cap + degrade apply once scoped terms exist. | (model-scope) S4; (scoped) S5 |
+| S7 | Permalink | `#d:` token, round-trip, size cap + degrade; absorbs #1250. **Landed model-scope first** (color + shading, then residency) ahead of S5 — model-scope axes can round-trip now, it's pure serialization (no scene-interaction risk), and it makes S1–S4 shareable. Residency joining the token is what forced its state out of `ResidencyControl`'s local `useState` and into the override stack (`{percent, metric}` on the `residency` axis), so the whole Display menu is now stack-backed; see `viewer/display/residencyMode.js` for why the stack — not the scene — is the authority on that one axis. The token grammar is forward-compatible: scoped terms (`e<id>=`/`o<key>=`/`m<idx>=`) widen the same `d:` token when S5 lands, no grammar change for what's written today. The hidden list (#1250) has since landed in it as `hide=`/`show=`/`iso=` (§6.3), with its size cap + degrade. | (model-scope) S4; (scoped) S5 |
 | S8 | Docs | This doc's decisions folded back; roadmap rows; wiki Design:URLs `#d:` entry. | S7 |
 
 Sequencing note: S1 → S2 is worth landing on its own before the rest. It closes
