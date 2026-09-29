@@ -240,8 +240,9 @@ export function applyVisibilityHash(location, viewer, rootElement) {
   if (hidden.length > 0) {
     isolator.hideElementsById(hidden)
   }
-  for (const {nodeId, instanceIds, occurrencePath, solidExpressId} of occurrences) {
-    isolator.hideOccurrence(nodeId, instanceIds, {occurrencePath, solidExpressId})
+  // Together, so the view is rebuilt once rather than per ref.
+  if (occurrences.length > 0) {
+    isolator.hideOccurrences(occurrences)
   }
   if (isoOccurrences.length > 0) {
     isolator.isolateOccurrences(isoOccurrences)

@@ -236,7 +236,7 @@ describe('Components/Residency/visibilityHash', () => {
         resetTempIsolation: jest.fn(),
         unHideAllElements: jest.fn(),
         hideElementsById: jest.fn(),
-        hideOccurrence: jest.fn(),
+        hideOccurrences: jest.fn(),
         isolateElementsById: jest.fn(),
         isolateOccurrences: jest.fn(),
         ...state,
@@ -290,7 +290,8 @@ describe('Components/Residency/visibilityHash', () => {
       }
       expect(applyVisibilityHash(location, receiver, rootElement)).toEqual([])
       expect(receiver.isolator.hideElementsById).not.toHaveBeenCalled()
-      expect(receiver.isolator.hideOccurrence).toHaveBeenCalledWith(300, [7], occurrence)
+      expect(receiver.isolator.hideOccurrences).toHaveBeenCalledWith(
+        [{nodeId: 300, instanceIds: [7], ...occurrence}])
     })
 
     it('writes an isolated STEP occurrence as its path, and isolates it by that path', () => {

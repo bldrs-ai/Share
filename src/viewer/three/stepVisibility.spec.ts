@@ -161,6 +161,15 @@ describeMobileAndDesktop('IFC scene multi-select', () => {
     await page.reload()
     await waitForModelReady(page)
     await expect.poll(async () => (await selection(page)).anchors).toEqual([survivor])
+
+    // Shift-click the survivor away too: the selection empties and stays so,
+    // rather than the (stale) path bringing its element back when `#sel:` goes.
+    await pauseViewerRendering(page)
+    await shiftDoubleClick(page, second)
+    await expect.poll(() => hashToken(page, 'sel')).toBe(null)
+    // Let the location change the token's removal made run its course.
+    await page.waitForTimeout(SETTLE_MS)
+    expect((await selection(page)).anchors).toEqual([])
   })
 })
 
@@ -168,6 +177,8 @@ describeMobileAndDesktop('IFC scene multi-select', () => {
 // Tests that load the model two or three times.
 const TWO_LOADS_TIMEOUT_MS = 90_000
 const THREE_LOADS_TIMEOUT_MS = 120_000
+// Long enough for the effects a location change triggers to have run.
+const SETTLE_MS = 1000
 
 
 /**

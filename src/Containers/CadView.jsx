@@ -141,6 +141,8 @@ export default function CadView({
   // tests, multi-pane layouts — don't stomp each other.
   const previousThemeChangeCbRef = useRef(null)
   const stopModelEngagementRef = useRef(null)
+  // The path and tree the location watcher last selected from (see there).
+  const lastPathSelectionRef = useRef(null)
 
   // Two useEffects below can each trigger `onViewer()` — the
   // [viewer]-dep effect fires when `onModelPath` sets a new viewer, and the
@@ -1491,8 +1493,17 @@ export default function CadView({
         const isMultiBack = anchors.length > 1 &&
           !new URLSearchParams(window.location.search).has('q') &&
           selectionFitsLink(anchors, viewer)
-        selectElementBasedOnFilepath(parts[1], isMultiBack)
+        // Otherwise only a new path (or tree) selects. A hash-only change —
+        // a panel toggled, a hide, the `#sel:` token dropped as a shift-click
+        // emptied the selection — leaves the selection as it is: re-selecting
+        // the path's element then brought back one just deselected.
+        const isNewPath = lastPathSelectionRef.current?.pathname !== location.pathname ||
+          lastPathSelectionRef.current?.rootElement !== rootElement
+        if (isNewPath || isMultiBack) {
+          selectElementBasedOnFilepath(parts[1], isMultiBack)
+        }
       }
+      lastPathSelectionRef.current = {pathname: location.pathname, rootElement}
     }
   }, [location, model, rootElement])
 
