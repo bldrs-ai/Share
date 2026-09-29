@@ -144,6 +144,17 @@ describe('viewer/visibilityRefs', () => {
       expect(idOf(parseRef('nLower%20Jaw').segments)).toBeNull()
     })
 
+    it('addresses a node whose name ends in half an emoji', () => {
+      // A 200-code-unit name cap can cut a surrogate pair, and a lone
+      // surrogate makes encodeURIComponent throw.
+      const cut = 'Tooth \uD83E'
+      const root = node('scene', 0, [node(cut, 1), node(`${cut}\uDDB7`, 2)])
+      const {refOf, idOf} = sceneGraphNamePaths(root)
+      expect(refOf(1)).toBe('nTooth%20%EF%BF%BD')
+      expect(idOf(parseRef(refOf(1)).segments)).toBe(1)
+      expect(idOf(parseRef(refOf(2)).segments)).toBe(2)
+    })
+
     it('steps over untagged objects', () => {
       const wrapper = new Group()
       wrapper.add(node('Tooth', 2))

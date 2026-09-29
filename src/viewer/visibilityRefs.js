@@ -70,7 +70,7 @@ export function namePathRef(segments) {
  * @return {string}
  */
 function encodeSegment({name, ordinal}) {
-  const escaped = encodeURIComponent(name).replace(/~/g, '%7E')
+  const escaped = encodeURIComponent(wellFormed(name)).replace(/~/g, '%7E')
   return (name === '' || ordinal > 1) ? `${escaped}~${ordinal}` : escaped
 }
 
@@ -135,7 +135,25 @@ export function parseRef(text) {
  */
 function nodeLabel(obj) {
   const name = obj.Name?.value ?? obj.name
-  return typeof name === 'string' ? name : ''
+  return typeof name === 'string' ? wellFormed(name) : ''
+}
+
+
+// An unpaired UTF-16 surrogate: what's left of an emoji a code-unit
+// truncation cut in half (`sanitizeCachedTitle` caps names that way).
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g
+
+
+/**
+ * `encodeURIComponent` throws on a lone surrogate, so replace any with U+FFFD
+ * (`String#toWellFormed`, which not every supported browser has). Labels go
+ * through this on the lookup side too, so such a node still round-trips.
+ *
+ * @param {string} name
+ * @return {string}
+ */
+function wellFormed(name) {
+  return name.replace(LONE_SURROGATE, '\uFFFD')
 }
 
 
