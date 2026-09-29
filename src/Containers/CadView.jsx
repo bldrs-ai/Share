@@ -35,7 +35,12 @@ import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
 import {getBrowser} from '../connections/registry'
 import modelIdentity from '../routes/modelIdentity'
 import useStore from '../store/useStore'
-import {expandedIdsForSelection, getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {
+  expandedIdsForSelection,
+  getDescendantExpressIds,
+  getParentPathIdsForElement,
+  setupLookupAndParentLinks,
+} from '../utils/TreeUtils'
 import {areDefinedAndNotNull, assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
@@ -60,6 +65,8 @@ import {DEFAULT_LOOK} from '../viewer/looks'
 import ViewCube from '../Components/ViewCube/ViewCube'
 import {applyVisibilityHash} from '../Components/Residency/visibilityHash'
 import VisibilityHashWriter from '../Components/Residency/VisibilityHashWriter'
+import SelectionHashWriter from './SelectionHashWriter'
+import {readSelectionHash, resolveSelectionRefs} from './selectionHash'
 import RootLandscape from './RootLandscape'
 import ViewerContainer from './ViewerContainer'
 import {
@@ -404,6 +411,7 @@ export default function CadView({
     // which lets VisibilityHashWriter start rewriting the terms.
     if (viewer.isolator?.ifcModel) {
       applyVisibilityHash(window.location, viewer, useStore.getState().rootElement)
+      selectFromSelectionHash()
     }
 
     modelPath.title = tmpModelRef.name // maybe undefined
@@ -767,6 +775,31 @@ export default function CadView({
       // eslint-disable-next-line new-cap
       conwayApi.ReleaseEntityCache(0)
     }
+  }
+
+
+  /**
+   * Restore a link's multi-selection (`#sel:`, selectionHash.js) over the
+   * single one its path carries, as a shift-click selection would hold it:
+   * the rows as anchors, with their descendants for the scene highlight
+   * (`elementSelection`). Rows the tree doesn't have are dropped; nothing
+   * resolving leaves the path's selection.
+   */
+  function selectFromSelectionHash() {
+    const refs = readSelectionHash(window.location)
+    if (!refs) {
+      return
+    }
+    const anchors = resolveSelectionRefs(refs, viewer).filter((id) => elementsById[id])
+    if (anchors.length === 0) {
+      return
+    }
+    const ids = new Set()
+    for (const id of anchors) {
+      ids.add(id)
+      getDescendantExpressIds(elementsById[id]).forEach((descendant) => ids.add(descendant))
+    }
+    selectItemsInScene([...ids], false, [], null, null, anchors)
   }
 
 
@@ -1432,7 +1465,10 @@ export default function CadView({
       // for any model under such a directory.
       const parts = location.pathname.split(fileSuffixBoundaryRegex)
       const expectedPartCount = 2
-      if (parts.length === expectedPartCount && parts[1] !== '') {
+      // A `#sel:` multi-selection owns the selection; the path names just its
+      // first row, and re-selecting that here on every hash change would
+      // collapse the multi-selection to it.
+      if (parts.length === expectedPartCount && parts[1] !== '' && !readSelectionHash(window.location)) {
         selectElementBasedOnFilepath(parts[1])
       }
     }
@@ -1579,6 +1615,7 @@ export default function CadView({
     <Box sx={{...absTop, left: 0, width: '100vw', height: isMobile ? `${vh}px` : '100vh', m: 0, p: 0}}>
       {<ViewerContainer/>}
       <VisibilityHashWriter/>
+      <SelectionHashWriter/>
       {/*
         * Unmounted during isolation, matching its toolbar toggle in
         * ElementsControl. The persisted visibility is left alone, so the

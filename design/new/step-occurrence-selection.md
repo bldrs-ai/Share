@@ -332,6 +332,15 @@ order; BVH permutes only the index buffer, not the numbering).
   For STEP the row is the picked occurrence's node, not the geometry's PDS; a
   single occurrence selection is re-expressed as its row first, so it stays in
   the multi-selection. E2E: `src/viewer/three/stepVisibility.spec.ts`.
+- **Multi-selection in the permalink.** The path carries one element, so a
+  shared multi-selection reopened with only its first highlighted. A
+  `#sel:<ref>,<ref>…` token (`Containers/selectionHash.js`) now lists every
+  selected row in the `#d:` ref vocabulary — `e<id>` for IFC and STEP rows,
+  `n<name path>` for scene-graph formats — written by `SelectionHashWriter`
+  for two or more rows and restored by `CadView#onViewer` after the
+  hide / isolate terms. The path keeps the first row; the location watcher
+  leaves the selection alone while `#sel:` is present, since re-selecting the
+  path's element would collapse the multi-selection.
 
 ### Remaining (follow-up)
 

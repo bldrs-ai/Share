@@ -33,6 +33,11 @@ describeMobileAndDesktop('STEP hide / isolate / multi-select', () => {
     await expect(leaves.getByTestId('hide-icon')).toHaveCount(LEAF_COUNT)
     await leaves.nth(0).getByTestId('hide-icon').click()
     await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT - 1)
+    // The open NavTree's `n:` survives the `#d:` write beside it. (Writers used
+    // to re-serialize it as a bare `n`, and the next as `n:undefined`;
+    // location.test.js pins both.)
+    await expect.poll(() => hashToken(page, 'd')).toMatch(/^hide=/)
+    expect(hashToken(page, 'n')).toBe('')
     await leaves.nth(0).getByTestId('unhide-icon').click()
     await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT)
   })
@@ -68,9 +73,11 @@ describeMobileAndDesktop('STEP hide / isolate / multi-select', () => {
     await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT)
     await page.getByTestId('Hide').click()
     await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT - 2)
+    expect(page.url()).not.toContain('undefined')
   })
 
-  test('shift-double-clicking in the scene adds an occurrence to the selection', async ({page}) => {
+  test('shift-double-clicking in the scene adds an occurrence, and the link reopens both selected', async ({page}) => {
+    test.setTimeout(TWO_LOADS_TIMEOUT_MS)
     await loadStepTree(page)
     await closeTree(page)
     const [first, second] = await instancePoints(page, 2)
@@ -78,7 +85,15 @@ describeMobileAndDesktop('STEP hide / isolate / multi-select', () => {
     await expect.poll(async () => (await selection(page)).instances).toHaveLength(1)
     await shiftDoubleClick(page, second)
     await expect.poll(async () => (await selection(page)).anchors).toHaveLength(2)
-    expect((await selection(page)).instances).toHaveLength(2)
+    const selected = await selection(page)
+    expect(selected.instances).toHaveLength(2)
+    // The path names one element; the rest ride `#sel:`.
+    await expect.poll(() => hashToken(page, 'sel')).toMatch(/^e\d+,e\d+$/)
+
+    await page.reload()
+    await waitForModelReady(page)
+    await expect.poll(async () => (await selection(page)).anchors.slice().sort()).toEqual(selected.anchors.slice().sort())
+    expect((await selection(page)).instances.slice().sort()).toEqual(selected.instances.slice().sort())
   })
 })
 
@@ -89,7 +104,8 @@ describeMobileAndDesktop('IFC scene multi-select', () => {
     await setIsReturningUser(page.context())
   })
 
-  test('shift-double-clicking in the scene adds an element to the selection', async ({page}) => {
+  test('shift-double-clicking in the scene adds an element, and the link reopens both selected', async ({page}) => {
+    test.setTimeout(TWO_LOADS_TIMEOUT_MS)
     await page.goto(IFC_PATH)
     await waitForModelReady(page)
     await pauseViewerRendering(page)
@@ -99,6 +115,12 @@ describeMobileAndDesktop('IFC scene multi-select', () => {
     await expect.poll(async () => (await selection(page)).anchors).toHaveLength(1)
     await shiftDoubleClick(page, second)
     await expect.poll(async () => (await selection(page)).anchors).toHaveLength(2)
+    const {anchors} = await selection(page)
+    await expect.poll(() => hashToken(page, 'sel')).toBe(anchors.map((id) => `e${id}`).join(','))
+
+    await page.reload()
+    await waitForModelReady(page)
+    await expect.poll(async () => (await selection(page)).anchors.slice().sort()).toEqual(anchors.slice().sort())
   })
 })
 
@@ -250,6 +272,16 @@ async function instancePoints(page: Page, count: number): Promise<Array<{x: numb
  * @return the `#d:` token's terms, or null without one
  */
 function displayToken(page: Page): string | null {
-  const token = new URL(page.url()).hash.substring(1).split(';').find((part) => part.startsWith('d:'))
-  return token ? token.substring('d:'.length) : null
+  return hashToken(page, 'd')
+}
+
+
+/**
+ * @param page Playwright page
+ * @param name the token's prefix
+ * @return the token's value, or null without one
+ */
+function hashToken(page: Page, name: string): string | null {
+  const token = new URL(page.url()).hash.substring(1).split(';').find((part) => part.startsWith(`${name}:`))
+  return token ? token.substring(name.length + 1) : null
 }
