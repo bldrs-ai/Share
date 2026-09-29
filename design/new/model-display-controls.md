@@ -328,6 +328,7 @@ first time STEP occurrence paths needed encoding. Implemented in
 #d:hide=nUpper%20Jaw/teeth/Tooth_07  ADF: one tooth hidden
 #d:show=nUpper%20Jaw/facc            ADF: a default-hidden overlay shown
 #d:iso=e1234                         isolating one element
+#d:iso=o1020254.367733               isolating one STEP occurrence
 #d:color=src,hide=e12,iso=e34        with the Display menu's terms
 ```
 
@@ -349,8 +350,8 @@ first time STEP occurrence paths needed encoding. Implemented in
   so the round trip is exact for any hidden set (a child re-shown under a
   hidden parent included). The defaults are `IfcIsolator.defaultHiddenIds`,
   captured in `setModel`; empty for IFC and STEP.
-- **STEP occurrence hides are listed as they are**, not diffed: they are
-  instance masks keyed by NavTree node, not a tree state. `IfcIsolator` keeps
+- **STEP occurrence hides and isolation are listed as they are**, not
+  diffed: they are instance masks keyed by NavTree node, not a tree state. `IfcIsolator` keeps
   the path each was resolved from (`hiddenOccurrencePaths`), since instance
   ids are per load.
 - **Writing and reading.** `VisibilityHashWriter` (mounted by `CadView`)

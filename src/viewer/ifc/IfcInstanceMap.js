@@ -315,9 +315,14 @@ export class IfcInstanceMap {
    * from the still-visible parents minus the hidden occurrence's instances.
    * Empty/absent means "every instance of the parents" (today's behavior).
    *
+   * `opts.includeInstances` is the converse: keep only these instances of the
+   * parents. Isolating a STEP occurrence shows its own instances, not every
+   * reuse of the part (IfcIsolator#isolateOccurrences).
+   *
    * @param {Array<number>|Set<number>} parentExpressIds
    * @param {object} [opts]
    * @param {Set<number>} [opts.excludeInstances] instance ids to omit
+   * @param {Set<number>} [opts.includeInstances] the only instance ids to keep
    * @return {Mesh|null}
    */
   createSubsetMeshByParent(parentExpressIds, opts = {}) {
@@ -325,12 +330,13 @@ export class IfcInstanceMap {
     // per-instance build. Two-step rather than maintaining a parallel
     // parent→triangles table — keeps populator allocation small.
     const exclude = opts.excludeInstances
+    const include = opts.includeInstances
     const instanceIds = []
     for (const pid of parentExpressIds) {
       const ids = this.parentExpressIdToInstanceIds.get(pid)
       if (ids) {
         for (let i = 0; i < ids.length; i++) {
-          if (exclude && exclude.has(ids[i])) {
+          if ((exclude && exclude.has(ids[i])) || (include && !include.has(ids[i]))) {
             continue
           }
           instanceIds.push(ids[i])

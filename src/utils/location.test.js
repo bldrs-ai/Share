@@ -4,6 +4,7 @@ import {
   removeHashParams,
   getEncodedParam,
   parseGitHubPath,
+  setParamsToHash,
 } from './location'
 
 
@@ -164,4 +165,21 @@ test('parseGithubPath', () => {
   expect(result.branch).toEqual('spaced ref')
   // @ts-ignore
   expect(result.filePath).toEqual('spaced ifc.ifc')
+})
+
+
+// Regression: writing one set used to re-serialize the others through a
+// name→value map, which turned a bare `i` into `i:undefined` (addHashParams)
+// and an `n:` into a bare `n` (setParamsToHash) — and `getHashParams('n')`,
+// matching `n:`, then lost the open NavTree on reload.
+test('writing one set passes the others through as written', () => {
+  expect(setParamsToHash('#n:;i;c:1,2,3', 'd', {color: 'src'}, true)).toBe('#n:;i;c:1,2,3;d:color=src')
+  expect(setParamsToHash('#n:;d:wire=1;x:a:b', 'd', {color: 'src'}, true)).toBe('#n:;d:color=src;x:a:b')
+  const loc = newTestLocation()
+  loc.hash = '#n:;i;x:a:b'
+  addHashParams(loc, 'c', {x: 1})
+  expect(loc.hash).toBe('n:;i;x:a:b;c:1')
+  // (This double doesn't add the '#' a browser does.)
+  loc.hash = `#${loc.hash}`
+  expect(getHashParams(loc, 'n')).toBe('n:')
 })

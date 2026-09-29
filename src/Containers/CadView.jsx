@@ -35,7 +35,12 @@ import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
 import {getBrowser} from '../connections/registry'
 import modelIdentity from '../routes/modelIdentity'
 import useStore from '../store/useStore'
-import {expandedIdsForSelection, getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {
+  expandedIdsForSelection,
+  getDescendantExpressIds,
+  getParentPathIdsForElement,
+  setupLookupAndParentLinks,
+} from '../utils/TreeUtils'
 import {areDefinedAndNotNull, assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
@@ -50,6 +55,7 @@ import {
   occurrencePathsEqual,
   resolveElementPathOccurrence,
   resolvePickedOccurrenceNode,
+  selectedOccurrences,
   trimToTreeOccurrencePath,
 } from '../utils/occurrencePaths'
 import {isOutOfMemoryError} from '../utils/oom'
@@ -59,6 +65,8 @@ import {DEFAULT_LOOK} from '../viewer/looks'
 import ViewCube from '../Components/ViewCube/ViewCube'
 import {applyVisibilityHash} from '../Components/Residency/visibilityHash'
 import VisibilityHashWriter from '../Components/Residency/VisibilityHashWriter'
+import SelectionHashWriter from './SelectionHashWriter'
+import {readSelectionHash, resolveSelectionRefs, selectionFitsLink} from './selectionHash'
 import RootLandscape from './RootLandscape'
 import ViewerContainer from './ViewerContainer'
 import {
@@ -133,6 +141,8 @@ export default function CadView({
   // tests, multi-pane layouts — don't stomp each other.
   const previousThemeChangeCbRef = useRef(null)
   const stopModelEngagementRef = useRef(null)
+  // The path and tree the location watcher last selected from (see there).
+  const lastPathSelectionRef = useRef(null)
 
   // Two useEffects below can each trigger `onViewer()` — the
   // [viewer]-dep effect fires when `onModelPath` sets a new viewer, and the
@@ -401,7 +411,10 @@ export default function CadView({
     // kept the terms current. After onModel, which sets the NavTree root
     // that STEP occurrence refs resolve against; before setIsModelReady,
     // which lets VisibilityHashWriter start rewriting the terms.
+    // The selection goes first: isolating leaves the selection it finds
+    // unpainted, as it does live.
     if (viewer.isolator?.ifcModel) {
+      selectFromSelectionHash()
       applyVisibilityHash(window.location, viewer, useStore.getState().rootElement)
     }
 
@@ -770,6 +783,37 @@ export default function CadView({
 
 
   /**
+   * Restore a link's multi-selection (`#sel:`, selectionHash.js) over the
+   * single one its path carries, as a shift-click selection would hold it:
+   * the rows as anchors, with their descendants for the scene highlight
+   * (`elementSelection`). Rows the tree doesn't have are dropped; nothing
+   * resolving leaves the path's selection.
+   */
+  function selectFromSelectionHash() {
+    const refs = readSelectionHash(window.location)
+    if (!refs) {
+      return
+    }
+    const anchors = resolveSelectionRefs(refs, viewer).filter((id) => elementsById[id])
+    if (anchors.length === 0) {
+      return
+    }
+    // Already the selection (the token was written from it): leave it, with
+    // its per-instance highlight.
+    const current = new Set((useStore.getState().selectedAnchorIds ?? []).map(String))
+    if (current.size === anchors.length && anchors.every((id) => current.has(String(id)))) {
+      return
+    }
+    const ids = new Set()
+    for (const id of anchors) {
+      ids.add(id)
+      getDescendantExpressIds(elementsById[id]).forEach((descendant) => ids.add(descendant))
+    }
+    selectItemsInScene([...ids], false, [], null, null, anchors)
+  }
+
+
+  /**
    * Handle double click event on canvas.
    *
    * @param {Event} event - The double click event
@@ -807,16 +851,12 @@ export default function CadView({
       const outlineable = !mesh.isBatchedMesh && mesh.isMesh === true
       viewer.setHighlighted(outlineable ? [mesh] : null)
       // Per-instance picking path (Conway-direct):
-      //   no-shift = just this PlacedGeometry
-      //   shift     = the whole IFC element (every instance)
-      //
-      // Note this DISPLACES the legacy "Shift = add to multi-select"
-      // semantic in `elementSelection` when the model carries an
-      // instanceMap. Multi-select is rarely-used in the IFC workflow;
-      // per-instance picking is the primary improvement from the
-      // viewer-replacement work, so it wins the modifier slot. Models
-      // without an instanceMap (today's wit-three path, GLB cache hit)
-      // keep the legacy Shift behavior unchanged.
+      //   no-shift = just this PlacedGeometry (a STEP pick: its occurrence)
+      //   shift    = add it to (or drop it from) the selection, as a
+      //              shift-click does in the NavTree and on every other
+      //              model. Shift used to mean "the whole IFC element",
+      //              which left IFC and STEP the only models without
+      //              multi-select from the scene.
       // BatchedMesh render path (`?feature=batchedMesh` / demandGeometry):
       // the raycast sets `batchId` (the per-instance id); resolve it to the
       // parent IFC product, its global occurrence id (the batched "instance
@@ -903,8 +943,8 @@ export default function CadView({
    * + element-path permalink in the URL. The parent expressID is always the
    * "selection" so the properties panel / nav tree / search respond
    * normally; `instanceIds` only narrows what the scene highlight draws.
-   * Shift = the whole IFC element (every instance) → no per-instance
-   * restriction; no-shift = just this PlacedGeometry.
+   * No-shift = just this PlacedGeometry; shift = toggle the picked row in a
+   * multi-selection (`elementSelection`).
    *
    * STEP: the picked instance's occurrence path makes the NavTree highlight
    * the one occurrence, not every reuse of the part type (null on shift and
@@ -936,11 +976,9 @@ export default function CadView({
   function selectFromInstancePick({
     parentExpressId, instanceId, rawOccurrencePath, pickedGeometryId, isShiftKeyDown,
   }) {
-    const instanceIds = isShiftKeyDown ? [] : [instanceId]
-    const rawPath = isShiftKeyDown ? null : rawOccurrencePath
     const rootEltForPick = useStore.getState().rootElement
-    const occurrencePath = rawPath ?
-      trimToTreeOccurrencePath(rawPath, occurrencePathKeySetForTree(rootEltForPick)) :
+    const occurrencePath = rawOccurrencePath ?
+      trimToTreeOccurrencePath(rawOccurrencePath, occurrencePathKeySetForTree(rootEltForPick)) :
       null
     const {targetId, solidExpressId, transientGeometryId} = resolvePickedOccurrenceNode({
       rootNode: rootEltForPick,
@@ -949,10 +987,24 @@ export default function CadView({
       parentExpressId,
       instanceCountAtPath: (path) => occurrenceInstanceIds(path, false).length,
     })
+    if (isShiftKeyDown) {
+      // Multi-select: toggle the picked row's id, exactly as a shift-click on
+      // that NavTree row does. `selectItemsInScene` resolves a STEP
+      // multi-selection's rows back to their instances for the highlight.
+      // An anonymous piece has no row to add, so it doesn't join.
+      // A STEP part-level pick's target is its geometry's product id, which is
+      // no row; the row is the occurrence's own node.
+      const rowId = (occurrencePath && occurrencePath.length > 0) ?
+        (solidExpressId ?? occurrencePath[occurrencePath.length - 1]) : targetId
+      if (transientGeometryId === null) {
+        elementSelection(viewer, elementsById, selectItemsInScene, true, rowId)
+      }
+      return
+    }
     if (transientGeometryId !== null) {
       materializeTransientNode(occurrencePath, transientGeometryId)
     }
-    selectItemsInScene([targetId], true, instanceIds, occurrencePath, solidExpressId)
+    selectItemsInScene([targetId], true, [instanceId], occurrencePath, solidExpressId)
   }
 
 
@@ -1085,6 +1137,20 @@ export default function CadView({
       return
     }
     try {
+      // STEP, selected by row rather than by pick (a shift-click
+      // multi-selection, a search): the rows' ids are NAUOs and solids, which
+      // own no geometry, so without instances the scene highlighted nothing.
+      // Resolve the rows to their occurrences' instances. Empty for IFC.
+      if (instanceIds.length === 0 && occurrencePath === null && resultIDs.length > 0) {
+        const occurrences = selectedOccurrences({
+          rootNode: useStore.getState().rootElement,
+          anchorIds: anchorIds ?? resultIDs,
+        })
+        if (occurrences.length > 0) {
+          instanceIds = [...new Set(occurrences.flatMap(({occurrencePath: path, solidExpressId: solid}) =>
+            occurrenceInstanceIds(path, true, solid)))]
+        }
+      }
       // Update The Component state
       const resIds = resultIDs.map((id) => `${id}`)
       setSelectedElements(resIds)
@@ -1160,8 +1226,9 @@ export default function CadView({
    * Extracts the path to the element from the url and selects the element
    *
    * @param {string} filepath Part of the URL that is the file path, e.g. index.ifc/1/2/3/...
+   * @param {boolean} [force] select it even if it's already among the selected
    */
-  function selectElementBasedOnFilepath(filepath) {
+  function selectElementBasedOnFilepath(filepath, force = false) {
     // Normalize to the element path BELOW the model file. The two callers
     // pass different shapes: the location watcher passes the already-split
     // element path ('/120010/.../2867' — no file suffix, split is a no-op),
@@ -1253,7 +1320,7 @@ export default function CadView({
         (occurrencePathsEqual(occurrencePath, state.selectedOccurrencePath) &&
           state.selectedSolidExpressId === solidExpressId) :
         idSelected
-      if (alreadySelected) {
+      if (alreadySelected && !force) {
         return
       }
       // Mirror the NavTree occurrence-click funnel: resolve the path to the
@@ -1409,9 +1476,34 @@ export default function CadView({
       // for any model under such a directory.
       const parts = location.pathname.split(fileSuffixBoundaryRegex)
       const expectedPartCount = 2
-      if (parts.length === expectedPartCount && parts[1] !== '') {
-        selectElementBasedOnFilepath(parts[1])
+      // A `#sel:` token owns the selection (the path names just its first
+      // row), so a location carrying one applies it — which is also what makes
+      // Back and Forward through multi-selections restore them. Its writer
+      // keeps it in step with the selection, so it's a no-op for a change made
+      // here.
+      if (readSelectionHash(window.location)) {
+        selectFromSelectionHash()
+      } else if (parts.length === expectedPartCount && parts[1] !== '') {
+        // No token, yet several rows selected that would have written one (not
+        // a search, and not too many for a link): the location went Back to
+        // before the multi-selection, so the path's single element is the
+        // selection again. Forced, because that element is still among the
+        // selected and would otherwise be skipped.
+        const anchors = useStore.getState().selectedAnchorIds ?? []
+        const isMultiBack = anchors.length > 1 &&
+          !new URLSearchParams(window.location.search).has('q') &&
+          selectionFitsLink(anchors, viewer)
+        // Otherwise only a new path (or tree) selects. A hash-only change —
+        // a panel toggled, a hide, the `#sel:` token dropped as a shift-click
+        // emptied the selection — leaves the selection as it is: re-selecting
+        // the path's element then brought back one just deselected.
+        const isNewPath = lastPathSelectionRef.current?.pathname !== location.pathname ||
+          lastPathSelectionRef.current?.rootElement !== rootElement
+        if (isNewPath || isMultiBack) {
+          selectElementBasedOnFilepath(parts[1], isMultiBack)
+        }
       }
+      lastPathSelectionRef.current = {pathname: location.pathname, rootElement}
     }
   }, [location, model, rootElement])
 
@@ -1556,6 +1648,7 @@ export default function CadView({
     <Box sx={{...absTop, left: 0, width: '100vw', height: isMobile ? `${vh}px` : '100vh', m: 0, p: 0}}>
       {<ViewerContainer/>}
       <VisibilityHashWriter/>
+      <SelectionHashWriter/>
       {/*
         * Unmounted during isolation, matching its toolbar toggle in
         * ElementsControl. The persisted visibility is left alone, so the

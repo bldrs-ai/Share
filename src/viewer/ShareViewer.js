@@ -904,6 +904,11 @@ export class ShareViewer {
     // `expressIdPicking`, so the subset highlight below doesn't apply to them;
     // the canvas pick outlines their meshes itself.
     this._selectedExpressIds = expressIds
+    // Isolated, with the selection isolate unpainted: keep it so (a link that
+    // restores both would otherwise repaint it). The ids above still count.
+    if (this.isolator?.isSelectionPaintSuppressed?.()) {
+      return
+    }
     if (!modelHasCapability(model, 'expressIdPicking')) {
       debug().warn('setSelection: model does not support expressIdPicking')
       return
@@ -1022,6 +1027,9 @@ export class ShareViewer {
    * @param {number[]} instanceIds synthetic IfcInstanceMap IDs
    */
   setInstanceSelection(modelID, instanceIds) {
+    if (this.isolator?.isSelectionPaintSuppressed?.()) {
+      return
+    }
     const model = this._modelById(modelID)
     if (modelHasCapability(model, 'batchedPicking')) {
       // BatchedMesh render path: narrow the selection recolor to just the
