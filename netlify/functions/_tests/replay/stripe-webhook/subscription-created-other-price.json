@@ -44,6 +44,9 @@
           "$fixture": "auth0/user.json"
         }
       }
+    },
+    {
+      "$fixture": "exchanges/stripe-subscription-active.json"
     }
   ],
   "expect": {

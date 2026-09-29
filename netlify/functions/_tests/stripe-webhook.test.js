@@ -240,6 +240,33 @@ describe('stripe-webhook function', () => {
         expect(axios.patch.mock.calls[0][1].app_metadata.subscriptionStatus).toBe('freePendingReauth')
       })
 
+    // Overlapping deliveries: the subscription is cancelled between this
+    // invocation's first read and its write. The read-after-write corrects it.
+    it('re-reads after writing and corrects a write the subscription has since outrun', async () => {
+      const pro = subscription({items: {data: [{price: {id: ENV.SHARE_PRO_PRICE_ID}}]}})
+      mockUpstreams(pro)
+      mockStripeClient.subscriptions.retrieve
+        .mockResolvedValueOnce(pro)
+        .mockResolvedValueOnce({...pro, status: 'canceled'})
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.created'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res.statusCode).toBe(200)
+      expect(axios.patch.mock.calls.map((call) => call[1].app_metadata.subscriptionStatus))
+        .toEqual(['shareProPendingReauth', 'freePendingReauth'])
+    })
+
+    it('writes once when the subscription is unchanged on the re-read', async () => {
+      mockUpstreams(subscription({status: 'canceled'}))
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.deleted'))
+
+      await handler(webhookEvent())
+
+      expect(mockStripeClient.subscriptions.retrieve).toHaveBeenCalledTimes(2)
+      expect(axios.patch).toHaveBeenCalledTimes(1)
+    })
+
     it('looks the user up by the customer\'s email, URL-encoded', async () => {
       mockUpstreams(subscription({status: 'canceled'}))
       mockStripeClient.customers.retrieve.mockResolvedValue({id: CUSTOMER_ID, email: 'ada+pro@example.com'})
@@ -268,6 +295,10 @@ describe('stripe-webhook function', () => {
       ['Auth0 rejects the client secret (403, a config fault)', () => axios.post.mockRejectedValue(upstreamError(403))],
       ['the user search is rate-limited (429)', () => axios.get.mockRejectedValue(upstreamError(429))],
       ['the app_metadata write answers 502', () => axios.patch.mockRejectedValue(upstreamError(502))],
+      // A 400 Stripe marks retryable (e.g. a lock timeout) outlived the SDK's
+      // own retries; its directive beats the status.
+      ['Stripe answers 400 with Stripe-Should-Retry: true', () => mockStripeClient.customers.retrieve.mockRejectedValue(
+        Object.assign(stripeError(400), {headers: {'stripe-should-retry': 'true'}}))],
     ])('answers 500 so Stripe retries when %s', async (step, breakIt) => {
       mockUpstreams()
       breakIt()
@@ -284,6 +315,8 @@ describe('stripe-webhook function', () => {
     it.each([
       ['Stripe has no such subscription (404)', () => mockStripeClient.subscriptions.retrieve.mockRejectedValue(stripeError(404))],
       ['Stripe has no such customer (404)', () => mockStripeClient.customers.retrieve.mockRejectedValue(stripeError(404))],
+      ['Stripe answers 404 with Stripe-Should-Retry: false', () => mockStripeClient.customers.retrieve.mockRejectedValue(
+        Object.assign(stripeError(404), {headers: {'stripe-should-retry': 'false'}}))],
       ['Auth0 rejects the user search as malformed (400)', () => axios.get.mockRejectedValue(upstreamError(400))],
       ['Auth0 no longer has the user (404 on the write)', () => axios.patch.mockRejectedValue(upstreamError(404))],
       ['the customer has no email', () => mockStripeClient.customers.retrieve.mockResolvedValue({id: CUSTOMER_ID, email: null})],

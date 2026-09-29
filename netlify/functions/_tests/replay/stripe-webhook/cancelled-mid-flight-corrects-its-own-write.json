@@ -1,5 +1,5 @@
 {
-  "description": "A `created` delivered after its subscription was cancelled (a retry, or out-of-order delivery) writes the CURRENT state, freePendingReauth, instead of re-marking a cancelled user as Pro from its stale payload.",
+  "description": "Overlapping deliveries: this `created` reads the subscription while it is still active and writes shareProPendingReauth, but the subscription was cancelled meanwhile (and the `deleted` delivery may already have written). The read-after-write sees `canceled` and corrects the write to freePendingReauth, so the stale Pro write can't be the last word.",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -40,7 +40,7 @@
   },
   "exchanges": [
     {
-      "$fixture": "exchanges/stripe-subscription-canceled.json"
+      "$fixture": "exchanges/stripe-subscription-pro.json"
     },
     {
       "$fixture": "exchanges/stripe-customer.json"
@@ -55,9 +55,12 @@
       "request": {
         "method": "PATCH",
         "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        },
         "body": {
           "app_metadata": {
-            "subscriptionStatus": "freePendingReauth",
+            "subscriptionStatus": "shareProPendingReauth",
             "stripeCustomerId": "cus_Rreplay0001"
           }
         }
@@ -71,6 +74,27 @@
     },
     {
       "$fixture": "exchanges/stripe-subscription-canceled.json"
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        },
+        "body": {
+          "app_metadata": {
+            "subscriptionStatus": "freePendingReauth",
+            "stripeCustomerId": "cus_Rreplay0001"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json"
+        }
+      }
     }
   ],
   "expect": {

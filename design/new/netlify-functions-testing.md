@@ -153,7 +153,7 @@ So the status code is the retry policy:
 | Update written | 200 |
 | Permanent: no email on the customer, customer deleted, no Auth0 user for the email, unhandled event type | 200, reported to Sentry |
 | Permanent upstream answer: 400, 404, 410 or 422 from Stripe or Auth0 (e.g. Stripe's `resource_missing`) | 200, reported to Sentry |
-| Transient: network error, 408/409/429, any 5xx | **500**, so Stripe redelivers |
+| Transient: network error, 408/409/429, any 5xx, or any Stripe error carrying `Stripe-Should-Retry: true` (whatever its status, e.g. a 400 lock timeout that outlived the SDK's own retries) | **500**, so Stripe redelivers |
 | Credentials rejected: 401/403 from Stripe or Auth0 | **500**. A revoked key is a config fault someone will fix within Stripe's three-day window, and the retries then deliver what was missed. |
 | Missing signature | 400, not reported (probes and scanners) |
 | Bad signature | 400, reported |
@@ -175,6 +175,18 @@ same `freePendingReauth` the `deleted` did, instead of re-marking a
 cancelled user as Pro. Every delivery converges on the latest truth,
 whatever order they arrive in (replay scenario
 `created-after-cancellation-writes-current-state`).
+
+Deliveries can also **overlap**. A `created` invocation can read `active`,
+the `deleted` invocation then writes `freePendingReauth`, and the `created`
+one writes its stale `shareProPendingReauth` last. So after writing, the
+handler reads the subscription again and writes once more if the state has
+moved on. One correction is enough:
+- the only transition that can race the write is to "ended", and an ended
+  subscription never becomes active again;
+- Stripe cancels before it sends `deleted`, so whichever invocation writes
+  last re-reads after the cancellation, sees it, and corrects itself.
+
+Replay scenario: `cancelled-mid-flight-corrects-its-own-write`.
 
 ## Known gaps and follow-ups
 
