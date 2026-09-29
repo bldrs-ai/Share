@@ -105,7 +105,7 @@ describeMobileAndDesktop('IFC scene multi-select', () => {
   })
 
   test('shift-double-clicking in the scene adds an element, and the link reopens both selected', async ({page}) => {
-    test.setTimeout(TWO_LOADS_TIMEOUT_MS)
+    test.setTimeout(THREE_LOADS_TIMEOUT_MS)
     await page.goto(IFC_PATH)
     await waitForModelReady(page)
     await pauseViewerRendering(page)
@@ -121,12 +121,24 @@ describeMobileAndDesktop('IFC scene multi-select', () => {
     await page.reload()
     await waitForModelReady(page)
     await expect.poll(async () => (await selection(page)).anchors.slice().sort()).toEqual(anchors.slice().sort())
+
+    // Shift-click the path's own element away: the survivor stays selected,
+    // and in the link, rather than the path restoring the one just dropped.
+    await pauseViewerRendering(page)
+    await shiftDoubleClick(page, first)
+    const survivor = anchors.find((id) => id !== anchors[0])
+    await expect.poll(async () => (await selection(page)).anchors).toEqual([survivor])
+    await expect.poll(() => hashToken(page, 'sel')).toBe(`e${survivor}`)
+    await page.reload()
+    await waitForModelReady(page)
+    await expect.poll(async () => (await selection(page)).anchors).toEqual([survivor])
   })
 })
 
 
-// Each of these tests loads the model twice.
+// Tests that load the model two or three times.
 const TWO_LOADS_TIMEOUT_MS = 90_000
+const THREE_LOADS_TIMEOUT_MS = 120_000
 
 
 /**

@@ -18,9 +18,12 @@ import {elementRef, parseRef, sceneGraphNamePaths} from '../viewer/visibilityRef
  * row's NAUO id is stable in the file. (`selectItemsInScene` resolves the
  * rows back to their occurrences' instances for the highlight.)
  *
- * Written only for two or more rows; one row is the path's job. The path
+ * Written for two or more rows; one row is normally the path's job. The path
  * keeps naming the first pick, so a link still opens on something selected
- * where this token is dropped or doesn't resolve.
+ * where this token is dropped or doesn't resolve. A single row is written too
+ * when the path names a different element — a shift-click that dropped the
+ * path's own element from a multi-selection leaves the path on it — or the
+ * path would win and restore the element that was deselected.
  */
 
 
@@ -55,20 +58,24 @@ export function selectionRefs(anchorIds, viewer) {
 
 
 /**
- * Write the selection's rows to `#sel:`, or drop the token when there are
- * fewer than two (or too many to fit). A no-op until the isolator has a
- * model, so an incoming link's token isn't stripped before it was read.
+ * Write the selection's rows to `#sel:`, or drop the token when the path
+ * carries the selection (or it's too long to fit). A no-op until the isolator
+ * has a model, so an incoming link's token isn't stripped before it was read.
  *
  * @param {object} location window.location
  * @param {object} viewer ShareViewer
  * @param {Array<number|string>} anchorIds the selected rows
+ * @param {boolean} [pathNamesSelection] whether the URL path names a single
+ *   selection's row (then the token isn't needed for it)
  */
-export function writeSelectionHash(location, viewer, anchorIds) {
+export function writeSelectionHash(location, viewer, anchorIds, pathNamesSelection = true) {
   if (!viewer?.isolator?.ifcModel) {
     return
   }
-  const refs = (anchorIds?.length ?? 0) >= 2 ? selectionRefs(anchorIds, viewer) : []
-  if (refs.length < 2 || refs.join(',').length > SELECTION_MAX_CHARS) {
+  const count = anchorIds?.length ?? 0
+  const needed = count >= 2 || (count === 1 && !pathNamesSelection)
+  const refs = needed ? selectionRefs(anchorIds, viewer) : []
+  if (refs.length === 0 || refs.join(',').length > SELECTION_MAX_CHARS) {
     if (getHashParams(location, HASH_PREFIX_SELECTION)) {
       removeHashParams(location, HASH_PREFIX_SELECTION)
     }

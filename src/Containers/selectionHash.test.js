@@ -51,6 +51,16 @@ describe('Containers/selectionHash', () => {
     expect(readSelectionHash(location)).toBeNull()
   })
 
+  it('keeps a single row the path doesn\'t name', () => {
+    // A shift-click dropped the path's element from a multi-selection; the
+    // survivor has to stay in the link, or the path restores the dropped one.
+    const location = loc('#sel:e621,e396')
+    writeSelectionHash(location, viewerFor(), ['396'], false)
+    expect(readSelectionHash(location)).toEqual(['e396'])
+    writeSelectionHash(location, viewerFor(), ['396'], true)
+    expect(readSelectionHash(location)).toBeNull()
+  })
+
   it('writes scene-graph rows by NavTree name path', () => {
     const root = new Group()
     root.expressID = 0
