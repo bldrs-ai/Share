@@ -25,7 +25,12 @@
  * What it does NOT prove: that a handler works when invoked (the per-function
  * suites in `netlify/functions/_tests/` cover behaviour, with mocks), or
  * anything about Netlify's build image beyond the zip-it-and-ship-it version
- * installed here.
+ * installed here. Specifically, Netlify's buildbot runs its own auto-updated
+ * @netlify/build / zip-it-and-ship-it rather than this repo's (14.5.4);
+ * server-side zisi feature flags aren't passed (`zisi_pure_esm` would switch
+ * the output to ESM); an `AWS_LAMBDA_JS_RUNTIME` override in the Netlify UI
+ * is invisible here; and the child process runs on local Node, not Lambda's.
+ * bundleFunctions.mjs's header lists the same gaps from the bundling side.
  */
 import {execFileSync} from 'node:child_process'
 import fs from 'node:fs'
@@ -37,15 +42,17 @@ import {fileURLToPath} from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '../..')
 const FUNCTIONS_DIR = path.join(REPO_ROOT, 'netlify', 'functions')
+const PRO_MODULES_SRC_DIR = path.join(FUNCTIONS_DIR, '_pro-modules')
 const BUNDLE_SCRIPT = path.join(__dirname, 'bundleFunctions.mjs')
 const BUNDLE_TIMEOUT_MS = 120000
 const LOAD_TIMEOUT_MS = 30000
 
 // Every top-level file in the functions dir is a function to Netlify,
 // whatever its extension; subdirectories (`_lib`, `_tests`, `_pro-modules`)
-// carry no same-named entry file, so zip-it-and-ship-it skips them.
+// carry no same-named entry file, so zip-it-and-ship-it skips them. Dotfiles
+// (a macOS `.DS_Store`) aren't functions.
 const FUNCTION_NAMES = fs.readdirSync(FUNCTIONS_DIR, {withFileTypes: true})
-  .filter((entry) => entry.isFile())
+  .filter((entry) => entry.isFile() && !entry.name.startsWith('.'))
   .map((entry) => path.parse(entry.name).name)
 
 // Module-scope clients that throw at import without their credentials.
@@ -114,13 +121,36 @@ describe('netlify functions as deployed', () => {
 
   it('bundles outside any node_modules tree, so a missing file cannot resolve from the repo', () => {
     expect(FUNCTION_NAMES).toContain('record-load')
-    for (let dir = outDir; dir !== path.dirname(dir); dir = path.dirname(dir)) {
+    // Every ancestor up to and including the filesystem root: Node's lookup
+    // ends at `/node_modules`, so that one counts too.
+    let dir = outDir
+    for (;;) {
       expect(fs.existsSync(path.join(dir, 'node_modules')), `${dir}/node_modules exists`).toBe(false)
+      if (dir === path.dirname(dir)) {
+        break
+      }
+      dir = path.dirname(dir)
     }
   })
 
   it('keeps shipping the built pro modules beside the pro-module function', () => {
     expect(functionsConfig['pro-module'].included_files).toContain('netlify/functions/_pro-modules/*.js')
+    // The config only says what to include; check the files really landed.
+    // `_pro-modules/` is gitignored and populated by `yarn build-prod`, so a
+    // fresh checkout has none and only the config assertion above runs —
+    // there is nothing on disk to compare against, and failing would make
+    // the hook depend on a prior build. Where a build has run, each built
+    // module must be in the bundle, at the repo-relative path zip-it-and-ship-it
+    // 14.5.4 keeps (pro-module.js also tries the task-root-relative one).
+    const built = fs.existsSync(PRO_MODULES_SRC_DIR) ?
+      fs.readdirSync(PRO_MODULES_SRC_DIR).filter((name) => name.endsWith('.js')) :
+      []
+    const bundle = bundles.get('pro-module')
+    expect(bundle, 'no bundle for pro-module').toBeDefined()
+    for (const name of built) {
+      const shipped = path.join(bundle.path, 'netlify', 'functions', '_pro-modules', name)
+      expect(fs.existsSync(shipped), `${name} missing from the pro-module bundle (${shipped})`).toBe(true)
+    }
   })
 
   it.each(FUNCTION_NAMES)('%s is bundled with esbuild unless it is a v2 function', (name) => {
@@ -141,7 +171,9 @@ describe('netlify functions as deployed', () => {
       path.join(bundle.path, bundle.entryFilename), String(bundle.runtimeAPIVersion),
     ], {
       cwd: bundle.path,
-      env: {PATH: process.env.PATH, HOME: process.env.HOME, ...DUMMY_ENV},
+      // No HOME: Node's CommonJS resolver also searches `$HOME/.node_modules`,
+      // which is one more way to resolve a file the bundle doesn't hold.
+      env: {PATH: process.env.PATH, ...DUMMY_ENV},
       stdio: 'pipe',
       timeout: LOAD_TIMEOUT_MS,
     })

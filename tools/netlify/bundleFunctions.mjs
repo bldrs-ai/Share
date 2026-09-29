@@ -23,6 +23,18 @@ import {zipFunctions} from '@netlify/zip-it-and-ship-it'
  *    (checked by diffing an unzipped zip against it), without needing an
  *    `unzip` binary to read it back.
  *
+ * What it cannot mirror (so a green run here is necessary, not sufficient):
+ *  - Netlify's buildbot runs its own, auto-updated
+ *    `@netlify/build` / zip-it-and-ship-it, not the version in this repo's
+ *    package.json (14.5.4 when this was written); a bundler change on their
+ *    side lands without a commit here.
+ *  - Server-side zip-it-and-ship-it feature flags aren't passed (`featureFlags`
+ *    is left at its defaults). E.g. `zisi_pure_esm` would switch the output
+ *    from CommonJS to ESM, changing what a cold start resolves.
+ *  - An `AWS_LAMBDA_JS_RUNTIME` override set in the Netlify UI (it picks the
+ *    Node version the function targets) is invisible to a checkout.
+ *  - The load step runs on this machine's Node, not Lambda's.
+ *
  * Separate script rather than inline in the test because both packages are
  * ESM-only and depend on `#subpath` imports Jest's resolver can't follow.
  * Driven by tools/netlify/functionBundler.test.js, which loads each bundle.
