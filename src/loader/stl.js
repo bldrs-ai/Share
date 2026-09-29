@@ -1,6 +1,6 @@
 import {BufferGeometry, Group, Mesh} from 'three'
 import {mergeVertices} from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import {makeSurfaceMaterial} from '../viewer/lookMaterial'
+import {makeSurfaceMaterial, makeSurfaceVertexColors} from '../viewer/lookMaterial'
 
 
 // What an STL with no color of its own has always rendered as.
@@ -25,16 +25,26 @@ const UNTINTED = 0xffffff
  * SET means valid, BGR order) is not decoded by STLLoader and so still
  * renders in the default color. ASCII STL has no colors.
  *
- * Color space: nothing to do here, on purpose. The 5-bit and header values
- * are display (sRGB) values, and STLLoader stores them via
- * `color.setRGB(r, g, b, SRGBColorSpace)`, which — with
- * `ColorManagement.enabled`, set in ShareViewer.js and three's default —
- * converts to the linear working space. A `color` attribute is read by the
- * shader as already linear, so the attribute is correct as parsed; converting
- * again would darken it. That also makes it consistent with the hex default
- * above, which three likewise reads as sRGB. (Contrast `makeSurfaceColor` in
- * lookMaterial.js, where IFC's legacy path deliberately skips the conversion
- * with the look off — that is IFC's compatibility choice, not STL's.)
+ * Color space. The 5-bit and header values are display (sRGB) values, and
+ * STLLoader stores them converted to the linear working space
+ * (`color.setRGB(r, g, b, SRGBColorSpace)`, with `ColorManagement.enabled`
+ * set in ShareViewer.js). Whether linear is what the attribute should hold
+ * depends on the render pipeline, which `?feature=look` switches — the same
+ * split `makeSurfaceColor` makes for IFC colors — so it goes through
+ * `makeSurfaceVertexColors` (lookMaterial.js):
+ *  - look on: output is sRGB-encoded, so linear is right and the attribute
+ *    is used as parsed.
+ *  - look off (the default): the legacy pipeline writes the working space
+ *    straight to the screen (`outputColorSpace = LinearSRGBColorSpace`), so
+ *    a linear attribute displays gamma-darkened — the Saturn V red
+ *    (23, 6, 4)/31 showed R≈130 where the file means 189. The values are
+ *    converted back to sRGB, which that output then shows as authored, as
+ *    IFC's colors are with the look off.
+ * The uncolored default (`DEFAULT_STL_COLOR`) does not go through this: a hex
+ * is read as sRGB and converted to linear, so with the look off it displays
+ * darker than 0xabcdef. That is how every uncolored STL has always looked,
+ * and changing it is a separate decision from rendering file colors as
+ * authored.
  *
  * `hasColors` and `alpha` are plain properties on the input geometry and are
  * read BEFORE `mergeVertices`, which returns a fresh BufferGeometry without
@@ -49,14 +59,23 @@ export default function stlToThree(stlGeometry) {
   const hasColors = stlGeometry.hasColors === true &&
     !isAllBlack(stlGeometry.getAttribute('color'))
   if (stlGeometry.hasColors && !hasColors) {
-    // A COLOR= header over facets that all decode to black carries no
-    // information, and would turn a file that has always rendered blue-grey
+    // A COLOR= header over facets that all decode to black is far more
+    // likely an exporter writing the tag without colors than a black part,
+    // and honoring it would turn a file that has always rendered blue-grey
     // into a black silhouette. Drop the attribute so the merge and material
-    // are exactly the uncolored path's.
+    // are exactly the uncolored path's. Only the ALL-black case is caught: a
+    // partial misfire — bit-15 (header default) facets mixed with 0x0000
+    // facets — keeps its colors, and the 0x0000 facets render black, which
+    // is what Materialise's rules say they are.
     stlGeometry.deleteAttribute('color')
   }
   const alpha = stlGeometry.alpha
   stlGeometry = mergeVertices(stlGeometry)
+  if (hasColors) {
+    // After the merge: fewer vertices to convert, and the conversion is
+    // per-value, so it can't change which vertices the merge would unify.
+    makeSurfaceVertexColors(stlGeometry.getAttribute('color'))
+  }
   const mesh = new Mesh(
     stlGeometry,
     makeSurfaceMaterial(hasColors ? colorMaterialOpts(alpha) : {color: DEFAULT_STL_COLOR}),

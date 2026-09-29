@@ -21,7 +21,10 @@ import {homepageSetup, returningUserVisitsHomepageWaitForModel} from '../tests/e
  * `COLOR=` header, a color in each facet's attribute word), which
  * `loader/stl.js` renders. The color test drops a red cube and reads the pixel
  * under it: before the colors were wired, the cube rendered in Share's
- * default blue-grey, which this assertion rejects.
+ * default blue-grey, which this assertion rejects; and its channel ratios
+ * catch the colors reaching the default (look off) pipeline still
+ * linearized, which rendered the red darker and more saturated than
+ * authored (green/red 0.06 where the file says 0.26).
  */
 
 const TEST_TIMEOUT_MS = 60_000
@@ -44,6 +47,16 @@ const TETRAHEDRON: Array<Array<[number, number, number]>> = [
 ]
 
 type Triangle = Array<[number, number, number]>
+
+// After the camera fit a unit cube spans well over half the view; framed
+// for the demo model it's a few pixels. A quarter tells the two apart.
+const MIN_FRAMED_FRACTION = 0.25
+// How close, as a fraction of the orbit distance, the camera must be to
+// where its transition ends to count as arrived.
+const CAMERA_RESTING_TOLERANCE = 1e-4
+// Per-channel difference, 0..255, the cube's centre sample must show from
+// the backdrop beside it.
+const MIN_CUBE_CONTRAST = 24
 
 // A unit cube, two outward-facing triangles per face. Unlike the
 // tetrahedron, the centre of its bounds is inside it, so the pixel there is
@@ -68,6 +81,10 @@ const MATERIALISE_RED = 0x10D7
 // That file's header tag: `COLOR=` then Materialise's default RGBA, a dark
 // grey no facet here uses (bit 15 is clear on all of them).
 const MATERIALISE_DEFAULT_RGBA = [0x19, 0x19, 0x19, 0xff] // eslint-disable-line no-magic-numbers
+// Bounds on the rendered green/red ratio of MATERIALISE_RED, around the
+// authored 6/23 ≈ 0.26 and well clear of the linearized 0.06.
+const MIN_RED_GREEN_RATIO = 0.15
+const MAX_RED_GREEN_RATIO = 0.4
 const COLOR_HEADER = [...Array.from(new TextEncoder().encode('COLOR=')), ...MATERIALISE_DEFAULT_RGBA]
 
 
@@ -166,35 +183,99 @@ function loadedTriangleCount(page: Page): Promise<number> {
 }
 
 
+type Point = {x: number, y: number}
+
+/** Where the loaded model sits on screen, and whether the camera is still. */
+type Framing = {
+  centre: Point,
+  bounds: {left: number, right: number, top: number, bottom: number},
+  canvas: {left: number, top: number, width: number, height: number},
+  resting: boolean,
+}
+
+
 /**
- * Where the loaded model's bounds centre lands on the page, in CSS pixels,
- * or null while there is no model.
+ * Where the loaded model's bounds land on the page, in CSS pixels, and
+ * whether the camera has finished moving, or null while there is no model.
  *
  * @param page Playwright page
- * @return page coordinates of the projected centre
+ * @return the projected bounds centre and box, the canvas rect, and whether
+ *   the camera has settled
  */
-function modelCentreOnPage(page: Page): Promise<{x: number, y: number} | null> {
-  return page.evaluate(() => {
+function modelFraming(page: Page): Promise<Framing | null> {
+  return page.evaluate((RESTING_TOLERANCE) => {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const state = (window as any).store?.getState()
     const mesh = state?.model?.mesh
-    const camera = state?.viewer?.context?.getCamera?.()
+    const context = state?.viewer?.context
+    const camera = context?.getCamera?.()
+    const controls = context?.getCameraControls?.()
     const canvas = document.querySelector('canvas')
-    if (!mesh || !camera || !canvas) {
+    if (!mesh || !camera || !controls || !canvas) {
       return null
     }
     mesh.geometry.computeBoundingBox()
     mesh.updateMatrixWorld(true)
-    // three's Vector3, without importing three into the page.
-    const p = mesh.geometry.boundingBox.getCenter(camera.position.clone())
-      .applyMatrix4(mesh.matrixWorld).project(camera)
     const rect = canvas.getBoundingClientRect()
+    const box = mesh.geometry.boundingBox
+    // three's Vector3, without importing three into the page.
+    const toPage = (v: any) => {
+      const p = v.applyMatrix4(mesh.matrixWorld).project(camera)
+      return {
+        x: rect.left + (((p.x + 1) / 2) * rect.width),
+        y: rect.top + (((1 - p.y) / 2) * rect.height),
+      }
+    }
+    const corners = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => toPage(camera.position.clone().set(
+      (i & 1) ? box.max.x : box.min.x,
+      (i & 2) ? box.max.y : box.min.y,
+      (i & 4) ? box.max.z : box.min.z,
+    )))
     return {
-      x: rect.left + (((p.x + 1) / 2) * rect.width),
-      y: rect.top + (((1 - p.y) / 2) * rect.height),
+      centre: toPage(box.getCenter(camera.position.clone())),
+      bounds: {
+        left: Math.min(...corners.map((c) => c.x)),
+        right: Math.max(...corners.map((c) => c.x)),
+        top: Math.min(...corners.map((c) => c.y)),
+        bottom: Math.max(...corners.map((c) => c.y)),
+      },
+      canvas: {left: rect.left, top: rect.top, width: rect.width, height: rect.height},
+      // The fit animates (orbit-control.js `fitToSphere(sphere, true)`), and
+      // camera-controls' `getPosition()` is where that transition ENDS, so
+      // the camera has arrived when it's there. (Not `controls.active`: it
+      // only clears inside an `update()`, which Share doesn't call once the
+      // scene stops changing, so it can stay true on a still camera.)
+      resting: camera.position.distanceTo(controls.getPosition(camera.position.clone())) <
+        RESTING_TOLERANCE * Math.max(1, controls.distance),
     }
     /* eslint-enable @typescript-eslint/no-explicit-any */
-  })
+  }, CAMERA_RESTING_TOLERANCE)
+}
+
+
+/**
+ * A page point beside the model's projected bounds that the canvas itself
+ * is under — no UI on top — for a background sample.
+ *
+ * @param page Playwright page
+ * @param framing from modelFraming
+ * @return the point, or null if no side has room
+ */
+function backgroundPoint(page: Page, framing: Framing): Promise<Point | null> {
+  return page.evaluate(({bounds, centre, canvas}) => {
+    const margin = 24
+    const candidates = [
+      {x: bounds.right + margin, y: centre.y},
+      {x: bounds.left - margin, y: centre.y},
+      {x: centre.x, y: bounds.top - margin},
+      {x: centre.x, y: bounds.bottom + margin},
+    ]
+    const canvasEl = document.querySelector('canvas')
+    return candidates.find((p) =>
+      p.x > canvas.left && p.x < canvas.left + canvas.width &&
+      p.y > canvas.top && p.y < canvas.top + canvas.height &&
+      document.elementFromPoint(p.x, p.y) === canvasEl) ?? null
+  }, framing)
 }
 
 
@@ -235,11 +316,18 @@ async function renderedRgbAt(page: Page, point: {x: number, y: number}): Promise
 
 
 /**
- * Drop a cube and wait for the viewer to show it.
+ * Drop a cube and wait for the viewer to show it, framed and still.
+ *
+ * "Still" is three conditions, because each alone passes too early: the
+ * camera fit animates (`fitToSphere(sphere, true)`), so the camera must have
+ * reached where that transition ends; the fit may not have STARTED when the triangle count flips, so
+ * the cube must fill a fair part of the view (before the fit it is a speck
+ * framed for the demo model); and the projected centre and its color must
+ * then agree across two consecutive reads.
  *
  * @param page Playwright page
  * @param bytes the STL
- * @return the rendered color at the cube's centre, once it is drawn
+ * @return the rendered color at the cube's centre
  */
 async function dropCubeAndSample(page: Page, bytes: number[]): Promise<number[]> {
   // The demo model has far more triangles than the cube, so the poll below
@@ -250,18 +338,43 @@ async function dropCubeAndSample(page: Page, bytes: number[]): Promise<number[]>
   // settles races the page being torn down under the probe.
   await expect(page).toHaveURL(/\/share\/v\/new\/[0-9a-f-]+\.stl$/i, {timeout: LOAD_TIMEOUT_MS})
   await expect.poll(() => loadedTriangleCount(page), {timeout: LOAD_TIMEOUT_MS}).toBe(CUBE.length)
-  const centre = await modelCentreOnPage(page)
-  expect(centre).not.toBeNull()
-  // The camera fit animates, so sample until two reads agree rather than
-  // taking the first frame after load.
-  let previous: number[] = []
-  let rgb: number[] = []
+  let previous: {framing: Framing, rgb: number[]} | null = null
+  let latest: {framing: Framing, rgb: number[]} | null = null
   await expect.poll(async () => {
-    previous = rgb
-    rgb = await renderedRgbAt(page, centre as {x: number, y: number})
-    return rgb.join() === previous.join()
+    previous = latest
+    latest = null
+    const framing = await modelFraming(page)
+    if (!framing || !framing.resting) {
+      return false
+    }
+    const span = Math.max(framing.bounds.right - framing.bounds.left, framing.bounds.bottom - framing.bounds.top)
+    if (span < MIN_FRAMED_FRACTION * Math.min(framing.canvas.width, framing.canvas.height)) {
+      return false
+    }
+    latest = {framing, rgb: await renderedRgbAt(page, framing.centre)}
+    return previous !== null &&
+      Math.abs(previous.framing.centre.x - framing.centre.x) < 1 &&
+      Math.abs(previous.framing.centre.y - framing.centre.y) < 1 &&
+      previous.rgb.join() === latest.rgb.join()
   }, {timeout: LOAD_TIMEOUT_MS}).toBe(true)
-  return rgb
+  const settled = latest as unknown as {framing: Framing, rgb: number[]}
+  const beside = await backgroundPoint(page, settled.framing)
+  expect(beside, 'no uncovered canvas beside the cube to sample').not.toBeNull()
+  const background = await renderedRgbAt(page, beside as Point)
+  // The centre sample is the cube's only if it differs from what's around
+  // the cube; otherwise the caller's color assertions are about the backdrop.
+  expect(colorDistance(settled.rgb, background)).toBeGreaterThan(MIN_CUBE_CONTRAST)
+  return settled.rgb
+}
+
+
+/**
+ * @param a [r, g, b]
+ * @param b [r, g, b]
+ * @return the largest per-channel difference, 0..255
+ */
+function colorDistance(a: number[], b: number[]): number {
+  return Math.max(...a.map((c, i) => Math.abs(c - b[i])))
 }
 
 
@@ -310,6 +423,12 @@ describeMobileAndDesktop('Drop a binary STL', () => {
     // order; the default blue-grey (0xabcdef) has blue on top.
     expect(r).toBeGreaterThan(2 * g)
     expect(r).toBeGreaterThan(2 * b)
+    // And in the file's proportions. White light scales the channels alike,
+    // so their ratios survive it: 6/23 ≈ 0.26 for green over red as authored,
+    // but 0.06 if the sRGB values reach the legacy linear output still
+    // linearized (loader/stl.js, "Color space").
+    expect(g / r).toBeGreaterThan(MIN_RED_GREEN_RATIO)
+    expect(g / r).toBeLessThan(MAX_RED_GREEN_RATIO)
   })
 
   test('renders an STL with no colors in the default blue-grey', async ({page}) => {

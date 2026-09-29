@@ -85,7 +85,11 @@ Add a `case` returning the tuple
   tag, then a 5-bit RGB in each facet's attribute word) into a linear
   `color` attribute plus `geometry.hasColors`/`alpha`; `stl.js` turns
   that into `vertexColors` over a white base and leaves uncolored
-  files in the default blue-grey. The color-space reasoning and the
+  files in the default blue-grey. A loader's linear colors need
+  converting back to sRGB when `?feature=look` is off, or the legacy
+  linear output shows them gamma-darkened; `makeSurfaceVertexColors`
+  (lookMaterial.js) does that, as `makeSurfaceColor` does for IFC. The
+  color-space reasoning and the
   cases it declines (all-black facets, zero alpha, the VisCAM bit
   layout STLLoader doesn't read) are in its header.
 - Related extensions can share one arm when the loader sniffs the

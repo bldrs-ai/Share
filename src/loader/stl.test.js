@@ -40,6 +40,12 @@ const TWO_TRIANGLES = [
 const MATERIALISE_RED = 0x10D7
 // Bit 15 set → "use the header's default COLOR=".
 const USE_DEFAULT_COLOR = 0x8000
+// 16/31 on every channel: a mid-grey, where the sRGB and linear readings of
+// the same 5-bit value are far apart (0.516 vs 0.230).
+const MATERIALISE_MID_GREY = 16 | (16 << 5) | (16 << 10)
+// Decimal places an sRGB value survives STLLoader's linearization into a
+// float32 attribute and back: ~6e-6 is lost. A gamma mistake is off by ~0.3.
+const SRGB_ROUND_TRIP_PRECISION = 4
 // Materialise's default, as that same file's header carries it.
 const DEFAULT_RGBA = [0x19, 0x19, 0x19, 0xff]
 
@@ -119,7 +125,7 @@ function triangleColors(geometry) {
  */
 function expectRgbClose(actual, expected) {
   expect(actual.length).toBe(3)
-  actual.forEach((c, i) => expect(c).toBeCloseTo(expected[i], 5))
+  actual.forEach((c, i) => expect(c).toBeCloseTo(expected[i], SRGB_ROUND_TRIP_PRECISION))
 }
 
 
@@ -183,10 +189,10 @@ describe('loader/stl', () => {
       expect(material.transparent).toBe(false)
       expect(material.opacity).toBe(1)
 
-      // Stored linear: the 5-bit (and 8-bit) values are sRGB, and three
-      // treats a color attribute as already in the linear working space.
-      const red = [23 / 31, 6 / 31, 4 / 31].map(srgbToLinear)
-      const grey = DEFAULT_RGBA.slice(0, 3).map((b) => srgbToLinear(b / 255))
+      // The file's own values, with the look off (the default): the legacy
+      // output shows the attribute as-is. (Color space is pinned below.)
+      const red = [23 / 31, 6 / 31, 4 / 31]
+      const grey = DEFAULT_RGBA.slice(0, 3).map((b) => b / 255)
       const [first, second] = triangleColors(merged)
       first.forEach((rgb) => expectRgbClose(rgb, red))
       second.forEach((rgb) => expectRgbClose(rgb, grey))
@@ -232,6 +238,43 @@ describe('loader/stl', () => {
       expect(material.vertexColors).toBe(false)
       expect(material.color.getHex()).toBe(0xabcdef)
       expect(merged.getAttribute('color')).toBeUndefined()
+    })
+
+
+    describe('color space', () => {
+      const midGrey = 16 / 31
+
+      /**
+       * @return {number[]} every component of the merged color attribute
+       */
+      function midGreyComponents() {
+        const geometry = parseBinaryStl({
+          colorRgba: DEFAULT_RGBA,
+          attributes: [MATERIALISE_MID_GREY, MATERIALISE_MID_GREY],
+        })
+        const {array} = stlToThree(geometry).mesh.geometry.getAttribute('color')
+        expect(array.length).toBeGreaterThan(0)
+        return Array.from(array)
+      }
+
+
+      it('stores the authored sRGB values with the look off', () => {
+        // The legacy pipeline outputs linear-sRGB untouched, so the
+        // attribute must hold what the file says, not its linearization —
+        // otherwise 16/31 displays as 0.23.
+        midGreyComponents().forEach((c) => expect(c).toBeCloseTo(midGrey, SRGB_ROUND_TRIP_PRECISION))
+      })
+
+
+      it('stores linear values with ?feature=look', () => {
+        const originalUrl = window.location.href
+        window.history.pushState({}, '', '/?feature=look')
+        try {
+          midGreyComponents().forEach((c) => expect(c).toBeCloseTo(srgbToLinear(midGrey), 5))
+        } finally {
+          window.history.pushState({}, '', originalUrl)
+        }
+      })
     })
 
 
