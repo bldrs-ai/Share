@@ -645,6 +645,35 @@ describe('binary STL, recognized by its structure', () => {
     expect(analyzeHeader(headOf(file), {fileByteLength: file.byteLength})).toBe('stl')
   })
 
+  describe('when the free-form header starts with another format\'s signature', () => {
+    // The 80-byte header is anyone's to fill, so it can begin with bytes that
+    // are another format's magic. The size arithmetic is the stronger
+    // evidence, so it must be judged before any magic is believed.
+    it.each([
+      ['glTF (glb)', new TextEncoder().encode('glTF exported by some CAD tool')],
+      ['PXR-USDC (usdc)', new TextEncoder().encode('PXR-USDC part')],
+      ['AlignDataFile ( bin ) (adf)', new TextEncoder().encode('AlignDataFile ( bin ) part')],
+      ['a gzip member (1f 8b)', hexBytes('1f8b0800')],
+      ['PK\\x03\\x04 (zip)', hexBytes('504b0304')],
+    ])('types a binary STL whose header starts with %s as stl', (_label, header) => {
+      const file = binaryStl(header, TRIANGLES)
+      expect(analyzeHeader(headOf(file), {fileByteLength: file.byteLength})).toBe('stl')
+    })
+
+    it('still types a real GLB by its magic when its size does not satisfy the STL arithmetic', () => {
+      // The same stand-in the other GLB tests here use; the sniff reads only
+      // the magic, and this length is not 84 + 50n for any n.
+      const glb = new TextEncoder().encode('glTFand the chunks after it')
+      expect(analyzeHeader(headOf(glb), {fileByteLength: glb.byteLength})).toBe('glb')
+    })
+
+    it('still types a gzipped GLB as glb when its size does not satisfy the STL arithmetic', () => {
+      const glb = new TextEncoder().encode('glTFand the chunks after it')
+      const gz = gzipSync(glb)
+      expect(analyzeHeader(headOf(gz), {fileByteLength: gz.byteLength})).toBe('glb')
+    })
+  })
+
   it('does not call it binary STL when the count does not add up to the size', () => {
     // One byte over: the header is still the all-zero one that sniffs as
     // STL at the right length, so only the arithmetic is being tested.

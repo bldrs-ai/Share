@@ -292,6 +292,21 @@ export async function guessTypeFromNameOrFile(file) {
  * @return {string|null} type
  */
 export function analyzeHeader(headerBuffer, {isEnvelopeAllowed = true, fileByteLength} = {}) {
+  // Structure before magic. A binary STL's 80-byte header is free-form, so an
+  // exporter may begin it with anything — including "glTF", "PXR-USDC", gzip's
+  // 1f 8b or "PK\x03\x04" — and the magic checks below would then type or
+  // reject a valid STL by bytes that mean nothing there. The size check is
+  // the stronger evidence: it needs the uint32 at offset 80 to account for
+  // the whole file (`84 + 50 * n === size`). In text-based content those
+  // count bytes are printable ASCII (n >= 0x20202020, a 27 GB file); in the
+  // binary formats sniffed here (compressed gzip/zip streams, GLB and USDC
+  // payloads) it holds only by a ~2^-32 coincidence. It also runs before the
+  // text decode, which would judge the header by whatever the exporter wrote
+  // in it — nothing for an all-zero header, 'fbx' for one mentioning FBX,
+  // and only by luck 'stl' for one starting with "solid".
+  if (fileByteLength !== undefined && looksLikeBinaryStl(headerBuffer, fileByteLength)) {
+    return 'stl'
+  }
   // Check binary formats first (binary files won't decode properly as UTF-8)
   if (matchesMagic(headerBuffer, GLB_MAGIC)) {
     return 'glb'
@@ -336,14 +351,6 @@ export function analyzeHeader(headerBuffer, {isEnvelopeAllowed = true, fileByteL
       return 'sog'
     }
     return null
-  }
-  // After the magic checks, which are as certain as this one and cheaper,
-  // and before the text decode: a binary STL's header is free text, so
-  // `analyzeHeaderStr` would otherwise judge it by whatever the exporter
-  // wrote there — nothing at all for an all-zero header, 'fbx' for one
-  // mentioning FBX, and only by luck 'stl' for one that starts with "solid".
-  if (fileByteLength !== undefined && looksLikeBinaryStl(headerBuffer, fileByteLength)) {
-    return 'stl'
   }
 
   const decoder = new TextDecoder('utf-8')
