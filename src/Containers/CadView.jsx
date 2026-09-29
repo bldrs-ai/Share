@@ -57,6 +57,8 @@ import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
 import {DEFAULT_LOOK} from '../viewer/looks'
 import ViewCube from '../Components/ViewCube/ViewCube'
+import {applyVisibilityHash} from '../Components/Residency/visibilityHash'
+import VisibilityHashWriter from '../Components/Residency/VisibilityHashWriter'
 import RootLandscape from './RootLandscape'
 import ViewerContainer from './ViewerContainer'
 import {
@@ -393,6 +395,14 @@ export default function CadView({
     if (previouslyHiddenELements.length > 0) {
       viewer.isolator.unHideAllElements()
       viewer.isolator.hideElementsById(previouslyHiddenELements)
+    }
+    // A link's hide / isolate terms (`#d:hide=…,iso=…`) win over the above:
+    // on a cold load there is nothing above, and on a re-init the writer has
+    // kept the terms current. After onModel, which sets the NavTree root
+    // that STEP occurrence refs resolve against; before setIsModelReady,
+    // which lets VisibilityHashWriter start rewriting the terms.
+    if (viewer.isolator?.ifcModel) {
+      applyVisibilityHash(window.location, viewer, useStore.getState().rootElement)
     }
 
     modelPath.title = tmpModelRef.name // maybe undefined
@@ -1545,6 +1555,7 @@ export default function CadView({
   return (
     <Box sx={{...absTop, left: 0, width: '100vw', height: isMobile ? `${vh}px` : '100vh', m: 0, p: 0}}>
       {<ViewerContainer/>}
+      <VisibilityHashWriter/>
       {/*
         * Unmounted during isolation, matching its toolbar toggle in
         * ElementsControl. The persisted visibility is left alone, so the

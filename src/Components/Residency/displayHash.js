@@ -2,7 +2,7 @@ import {
   getHashParams,
   getObjectParams,
   removeHashParams,
-  setHashParams,
+  setParamsToHash,
 } from '../../utils/location'
 import {ColorMode} from '../../viewer/display/colorMode'
 import {
@@ -43,16 +43,73 @@ import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
  * ever written; `shaded` is the default and only `wire=1` is written; 100% +
  * occupancy is the default residency and neither half is written alone.
  *
+ * The token is shared: visibilityHash.js writes the hide / isolate terms
+ * (`hide=`, `show=`, `iso=`, #1250) into it too. Each writer owns its keys and
+ * goes through {@link mergeDisplayTerms}, which leaves every other key as it
+ * found it, so a Display-menu click doesn't drop the hidden list and a hide
+ * doesn't drop the colors.
+ *
  * FORWARD COMPAT (not yet emitted): §6.1's grammar also has scoped terms
- * (`e<id>=…`, `o<pathKey>=…`, `m<idx>=…`) and a `hide=` list (#1250). They
- * slot into the same `d:` token as extra comma-separated entries when S5 (the
- * scoped overrides) and the hidden-list work land — this module widens then,
- * no grammar change for what's written today.
+ * (`e<id>=…`, `o<pathKey>=…`, `m<idx>=…`). They slot into the same `d:` token
+ * as extra comma-separated entries when S5 (the scoped overrides) lands.
  */
 
 
 /** The prefix for the display-state token. */
 export const HASH_PREFIX_DISPLAY = 'd'
+
+
+// The order terms are written in, so a token reads the same whichever writer
+// touched it last. Keys a newer writer added follow these, as found.
+const TERM_ORDER = ['color', 'wire', 'res', 'hide', 'show', 'iso']
+
+// The keys `writeModelDisplayHash` owns.
+const MODEL_DISPLAY_KEYS = ['color', 'wire', 'res']
+
+
+/**
+ * Set or drop some of the `#d:` token's terms, keeping the rest. The token is
+ * removed once it has no terms, and the hash is only assigned when it
+ * actually changes (each assignment is a browser history entry).
+ *
+ * @param {object} location window.location
+ * @param {object} terms key → value string, or null / '' to drop the key
+ */
+export function mergeDisplayTerms(location, terms) {
+  const token = getHashParams(location, HASH_PREFIX_DISPLAY)
+  const next = {}
+  for (const [key, value] of Object.entries(token ? getObjectParams(token) : {})) {
+    // A bare key decodes to 0 and a bare number to an index; neither is a
+    // term any writer emits, and re-encoding either would change it.
+    if (typeof value === 'string' && !/^\d+$/.test(key)) {
+      next[key] = value
+    }
+  }
+  for (const [key, value] of Object.entries(terms)) {
+    if (typeof value === 'string' && value !== '') {
+      next[key] = value
+    } else {
+      delete next[key]
+    }
+  }
+  const rank = (key) => {
+    const i = TERM_ORDER.indexOf(key)
+    return i === -1 ? TERM_ORDER.length : i
+  }
+  const ordered = Object.fromEntries(
+    Object.entries(next).sort(([a], [b]) => rank(a) - rank(b)))
+  if (Object.keys(ordered).length === 0) {
+    if (token) {
+      removeHashParams(location, HASH_PREFIX_DISPLAY)
+    }
+    return
+  }
+  // includeNames: emit `k=v`, matching the cp: token shape.
+  const hash = setParamsToHash(location.hash, HASH_PREFIX_DISPLAY, ordered, true)
+  if (hash !== location.hash) {
+    location.hash = hash
+  }
+}
 
 
 /**
@@ -89,27 +146,21 @@ export function modelDisplayParams(appearance = {}) {
 
 
 /**
- * Write (or clear) the `#d:` token for the current model-scope display state.
- * Clears the whole token when everything is default, so the hash never
- * carries an empty `d:`.
+ * Write (or clear) the `#d:` token's model-scope display terms. The token
+ * goes once nothing is left in it, so the hash never carries an empty `d:`.
  *
  * @param {object} location window.location
  * @param {object} [appearance] `{color?, shading?, residency?}`
  */
 export function writeModelDisplayHash(location, appearance = {}) {
   const params = modelDisplayParams(appearance)
-  if (Object.keys(params).length === 0) {
-    removeHashParams(location, HASH_PREFIX_DISPLAY)
-  } else {
-    // setHashParams (remove-then-add), NOT addHashParams: add merges into
-    // the existing token, so an axis returning to its default (which stops
-    // being emitted) would survive from the previous write — e.g.
-    // Source+Wireframe -> Auto+Wireframe kept a stale `color=src` and the
-    // shared URL restored a different display than the sender saw. The
-    // whole token is the value; replace it. includeNames: emit `k=v`,
-    // matching the cp: token shape.
-    setHashParams(location, HASH_PREFIX_DISPLAY, params, true)
-  }
+  // Every model-display key is set or dropped, not merged: an axis returning
+  // to its default stops being emitted, and a merge would keep it from the
+  // previous write — Source+Wireframe -> Auto+Wireframe kept a stale
+  // `color=src` and the shared URL restored a different display than the
+  // sender saw. Only the other writers' keys (hide / show / iso) are kept.
+  mergeDisplayTerms(location, Object.fromEntries(
+    MODEL_DISPLAY_KEYS.map((key) => [key, params[key] ?? null])))
 }
 
 

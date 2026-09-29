@@ -35,7 +35,8 @@ export default function HideToggleButton({elementId, occurrencePath = null, geom
         // hide from the whole part occurrence to the one named body.
         viewer.isolator.hideOccurrence(
           elementId,
-          viewer.getInstanceIdsForOccurrencePath(0, occurrencePath, {geometryExpressId}))
+          viewer.getInstanceIdsForOccurrencePath(0, occurrencePath, {geometryExpressId}),
+          {occurrencePath, solidExpressId: geometryExpressId})
       } else {
         viewer.isolator.unHideOccurrence(elementId)
       }

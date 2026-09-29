@@ -1,5 +1,6 @@
 import {
   HASH_PREFIX_DISPLAY,
+  mergeDisplayTerms,
   modelDisplayParams,
   readModelDisplayHash,
   writeModelDisplayHash,
@@ -122,8 +123,8 @@ describe('#d: round-trip', () => {
   it('drops a stale axis when it returns to default while others stay set', () => {
     // Regression (Codex review on #1714): addHashParams MERGES into the
     // existing token, so Source+Wireframe -> Auto+Wireframe kept `color=src`
-    // and the shared URL restored the wrong display. The write must replace
-    // the whole token. Extended to all three axes — with residency in the
+    // and the shared URL restored the wrong display. The write must set or
+    // drop every one of its own keys. Extended to all three axes — with residency in the
     // token there are now two ways for a stale term to survive a write.
     const location = loc()
     const all = {color: SOURCE, shading: WIREFRAME, residency: {percent: 40, metric: MEMORY}}
@@ -197,5 +198,47 @@ describe('readModelDisplayHash tolerance', () => {
     // getObjectParams decodes a keyless term to the NUMBER 0; without the
     // typeof guard `#d:res` would hide the whole model.
     expect(readModelDisplayHash(loc('#d:res'))).toEqual({})
+  })
+})
+
+
+describe('sharing #d: with the hide / isolate terms', () => {
+  it('a display write keeps the visibility terms, and the reverse', () => {
+    const location = loc('#c:1,2,3,4,5,6')
+    mergeDisplayTerms(location, {hide: 'e12+e34', iso: 'e5'})
+    writeModelDisplayHash(location, appearance({color: SOURCE, shading: WIREFRAME}))
+    expect(location.hash).toBe('#c:1,2,3,4,5,6;d:color=src,wire=1,hide=e12+e34,iso=e5')
+    writeModelDisplayHash(location, appearance())
+    expect(location.hash).toBe('#c:1,2,3,4,5,6;d:hide=e12+e34,iso=e5')
+    writeModelDisplayHash(location, appearance({color: SOURCE}))
+    mergeDisplayTerms(location, {hide: null, show: '', iso: null})
+    expect(location.hash).toBe('#c:1,2,3,4,5,6;d:color=src')
+  })
+
+  it('keeps a key it doesn\'t know, after the ones it does', () => {
+    const location = loc('#d:future=1,hide=e1')
+    mergeDisplayTerms(location, {color: 'src'})
+    expect(location.hash).toBe('#d:color=src,hide=e1,future=1')
+  })
+
+  it('removes the token once it is empty, and leaves the hash alone when nothing changes', () => {
+    const location = loc('#c:1,2,3,4,5,6;d:hide=e1')
+    const writes = []
+    const spy = {
+      get hash() {
+        return location.hash
+      },
+      set hash(next) {
+        writes.push(next)
+        location.hash = next
+      },
+    }
+    mergeDisplayTerms(spy, {hide: 'e1'})
+    expect(writes).toEqual([])
+    mergeDisplayTerms(spy, {hide: null})
+    expect(location.hash).toBe('#c:1,2,3,4,5,6')
+    writes.length = 0
+    mergeDisplayTerms(spy, {hide: null})
+    expect(writes).toEqual([])
   })
 })

@@ -8,6 +8,7 @@ import {addCameraUrlParams} from '../Camera/CameraControl'
 import {removeCameraUrlParams} from '../Camera/hashState'
 import {addPlanesToHashState, removePlanesFromHashState} from '../CutPlane/hashState'
 import {HASH_PREFIX_DISPLAY, writeModelDisplayHash} from '../Residency/displayHash'
+import {writeVisibilityHash} from '../Residency/visibilityHash'
 import {resolvedAppearance} from '../../viewer/display/DisplayController'
 import {removeHashParams} from '../../utils/location'
 import {gtagEvent} from '../../privacy/analytics'
@@ -25,8 +26,8 @@ import {
  * clipboard.
  *
  * Each toggle owns one hash token: cut planes `cp:`, camera `c:`, and
- * display settings `d:` (the Display menu's color / shading / residency —
- * design/new/model-display-controls.md §6). They all follow the same shape:
+ * display settings `d:` (the Display menu's color / shading / residency, and
+ * what's hidden or isolated — design/new/model-display-controls.md §6). They all follow the same shape:
  * flip the state AND mutate `window.location` in the handler, because the URL
  * shown in the TextField and the QR code is read during render and
  * `window.location` isn't reactive.
@@ -41,6 +42,8 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const cameraControls = useStore((state) => state.cameraControls)
   const isCutPlaneActive = useStore((state) => state.isCutPlaneActive)
   const displayOverrides = useStore((state) => state.displayOverrides)
+  const hiddenElements = useStore((state) => state.hiddenElements)
+  const isolatedElements = useStore((state) => state.isolatedElements)
   const [isPlaneInUrl, setIsPlaneInUrl] = useState(false)
   const [isLinkCopied, setIsLinkCopied] = useState(false)
   const [isCameraInUrl, setIsCameraInUrl] = useState(true)
@@ -49,6 +52,9 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   // token is empty for a model nobody has touched, so leaving it on costs
   // the common share link nothing.
   const [isDisplayInUrl, setIsDisplayInUrl] = useState(true)
+  // False when the hidden / isolated state is past the link's size cap and
+  // was left out (visibilityHash's VISIBILITY_TERMS_MAX_CHARS).
+  const [isVisibilityInUrl, setIsVisibilityInUrl] = useState(true)
 
   const urlTextFieldRef = createRef()
   const location = useLocation()
@@ -85,14 +91,15 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       return
     }
     if (isDisplayInUrl) {
-      writeModelDisplayHash(window.location, appearance)
+      writeDisplayState()
     } else {
       removeHashParams(window.location, HASH_PREFIX_DISPLAY)
     }
     // `appearance` is a fresh object every render; the axis values inside it
     // are what matter, and they only move when the overrides or the model do.
+    // Hidden / isolated state is read off the isolator, and moves with these.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayOverrides, isDialogDisplayed, isDisplayInUrl, model])
+  }, [displayOverrides, hiddenElements, isolatedElements, isDialogDisplayed, isDisplayInUrl, model])
 
   // Track when share dialog is opened
   useEffect(() => {
@@ -104,6 +111,13 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       })
     }
   }, [isDialogDisplayed, model])
+
+
+  /** Write every `#d:` term: the Display menu's, then hide / isolate. */
+  function writeDisplayState() {
+    writeModelDisplayHash(window.location, appearance)
+    setIsVisibilityInUrl(writeVisibilityHash(window.location, viewer))
+  }
 
 
   const onCopy = () => {
@@ -137,7 +151,7 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       removeHashParams(window.location, HASH_PREFIX_DISPLAY)
     } else {
       setIsDisplayInUrl(true)
-      writeModelDisplayHash(window.location, appearance)
+      writeDisplayState()
     }
     if (isLinkCopied) {
       setIsLinkCopied(false)
@@ -244,6 +258,10 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               data-testid='toggle-display'
             />
           </Stack>
+          {isDisplayInUrl && !isVisibilityInUrl &&
+            <Typography variant='caption' data-testid='visibility-too-large'>
+              Too many hidden or isolated parts for a link; it opens with the model&apos;s default visibility.
+            </Typography>}
         </Stack>
       </Stack>
     </Dialog>

@@ -65,6 +65,14 @@ export default class IfcIsolator {
   // only the chosen occurrence disappears. Empty for IFC. See
   // design/new/step-occurrence-selection.md.
   hiddenOccurrences = new Map()
+  // The occurrence each `hiddenOccurrences` entry was resolved from, keyed the
+  // same: `{occurrencePath, solidExpressId}`. The permalink (visibilityHash)
+  // writes these, since instance ids are per load and don't round-trip.
+  hiddenOccurrencePaths = new Map()
+  // What the loader left hidden (scene-graph overlays, with their subtrees):
+  // the baseline the permalink's hidden-state diff is taken against. Empty
+  // for IFC and STEP.
+  defaultHiddenIds = []
   isolatedIds = []
   tempIsolationModeOn = false
   revealHiddenElementsMode = false
@@ -114,6 +122,7 @@ export default class IfcIsolator {
    */
   async setModel(ifcModel) {
     this.ifcModel = ifcModel
+    this.defaultHiddenIds = []
     // Scene-graph models (ADF, OBJ, third-party GLB, …): elements are the
     // Object3Ds, hidden and isolated through their own `visible`
     // (sceneGraphVisibility.js). Their placeholder per-vertex `expressID`
@@ -122,6 +131,7 @@ export default class IfcIsolator {
       this.visualElementsIds = sceneGraphElementIds(ifcModel)
       this.collectSpatialElementsId(await this._getSpatialStructure())
       this.hiddenOccurrences.clear()
+      this.hiddenOccurrencePaths.clear()
       // Adopt what the loader left hidden as hidden elements, with their
       // subtrees as a NavTree eye would hide them, so the eyes tell the truth.
       // Only once per model path: `CadView#onViewer` reapplies the store's
@@ -129,15 +139,16 @@ export default class IfcIsolator {
       // change reloads the model) the user's hides, or a Show All, must
       // survive rather than be reseeded over. `onViewer` clears the flag, with
       // the hidden state, when a different path loads.
+      const seeded = new Set()
+      for (const id of initiallyHiddenIds(ifcModel)) {
+        for (const each of this.flattenChildren(id)) {
+          seeded.add(each)
+        }
+      }
+      this.defaultHiddenIds = [...seeded]
       if (useStore.getState().sceneGraphDefaultsSeeded) {
         this.hiddenIds = []
       } else {
-        const seeded = new Set()
-        for (const id of initiallyHiddenIds(ifcModel)) {
-          for (const each of this.flattenChildren(id)) {
-            seeded.add(each)
-          }
-        }
         this.hiddenIds = [...seeded]
         this._syncHiddenStore()
         useStore.setState({sceneGraphDefaultsSeeded: true})
@@ -686,12 +697,21 @@ export default class IfcIsolator {
    *
    * @param {number} nodeId NAUO express id of the hidden occurrence node
    * @param {Array<number>} instanceIds synthetic instance ids to hide
+   * @param {object} [occurrence] `{occurrencePath, solidExpressId}` the
+   *   instances were resolved from, for the permalink. Without it the hide
+   *   works but isn't written to the link.
    */
-  hideOccurrence(nodeId, instanceIds) {
+  hideOccurrence(nodeId, instanceIds, occurrence = null) {
     if (this.tempIsolationModeOn || !Array.isArray(instanceIds) || instanceIds.length === 0) {
       return
     }
     this.hiddenOccurrences.set(nodeId, [...instanceIds])
+    if (Array.isArray(occurrence?.occurrencePath) && occurrence.occurrencePath.length > 0) {
+      this.hiddenOccurrencePaths.set(nodeId, {
+        occurrencePath: [...occurrence.occurrencePath],
+        solidExpressId: occurrence.solidExpressId ?? null,
+      })
+    }
     this._syncHiddenStore()
     const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes(el))
     this.initHideOperationsSubset(toBeShown)
@@ -711,6 +731,7 @@ export default class IfcIsolator {
       return
     }
     this.hiddenOccurrences.delete(nodeId)
+    this.hiddenOccurrencePaths.delete(nodeId)
     this._syncHiddenStore()
     if (this.hiddenIds.length === 0 && this.hiddenOccurrences.size === 0) {
       this.unHideAllElements()
@@ -834,7 +855,8 @@ export default class IfcIsolator {
         this.hideOccurrence(
           nodeId,
           this.viewer.getInstanceIdsForOccurrencePath(
-            0, occurrencePath, {geometryExpressId: solidExpressId}))
+            0, occurrencePath, {geometryExpressId: solidExpressId}),
+          {occurrencePath, solidExpressId})
       }
       return
     }
@@ -1030,6 +1052,7 @@ export default class IfcIsolator {
     // hides it is meant to drop. Order is irrelevant on the subset paths.
     this.hiddenIds = []
     this.hiddenOccurrences.clear()
+    this.hiddenOccurrencePaths.clear()
     this._restoreModelToScene()
     useStore.setState({hiddenElements: {}})
     // Rebuild the cyan selection visual from the preserved store
@@ -1151,20 +1174,29 @@ export default class IfcIsolator {
    *
    */
   isolateSelectedElements() {
-    const selection = this.viewer.getSelectedIds()
+    this.isolateElementsById(this.viewer.getSelectedIds())
+  }
+
+  /**
+   * Isolates the given elements. The selection's path, and a permalink's
+   * `iso=` term (visibilityHash).
+   *
+   * @param {Array<number>} ids element ids
+   */
+  isolateElementsById(ids) {
     // Isolating nothing, or only hidden elements, would show nothing at all.
     // (This used to be `selection` equal to `hiddenIds`, which misses both
     // cases once anything else is hidden, as ADF's overlays are from load.)
-    if (selection.every((id) => this.hiddenIds.includes(id))) {
+    if (ids.every((id) => this.hiddenIds.includes(id))) {
       return
     }
     this.tempIsolationModeOn = true
     useStore.setState({isTempIsolationModeOn: true})
-    this.isolatedIds = selection
+    this.isolatedIds = [...ids]
     const isolatedIdsObject = Object.fromEntries(
       this.isolatedIds.map((id) => [id, true]))
     useStore.setState({isolatedElements: isolatedIdsObject})
-    this.initTemporaryIsolationSubset(selection)
+    this.initTemporaryIsolationSubset(this.isolatedIds)
   }
 
   /**
