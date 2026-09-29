@@ -260,6 +260,15 @@ describe('Components/Residency/visibilityHash', () => {
       expect(receiver.isolator.isolateElementsById).toHaveBeenCalledWith([20])
     })
 
+    it('skips element ids the model doesn\'t have, rather than isolating nothing', () => {
+      const receiver = stubViewer()
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+      expect(applyVisibilityHash(loc('#d:hide=e3+e99,iso=e98'), receiver, null)).toEqual(['e99', 'e98'])
+      expect(receiver.isolator.hideElementsById).toHaveBeenCalledWith([3])
+      expect(receiver.isolator.isolateElementsById).not.toHaveBeenCalled()
+      warn.mockRestore()
+    })
+
     it('writes a STEP occurrence as its path, and hides it by that path', () => {
       const occurrence = {occurrencePath: [100, 200], solidExpressId: 300}
       const viewer = stubViewer({hiddenOccurrencePaths: new Map([[300, occurrence]])})

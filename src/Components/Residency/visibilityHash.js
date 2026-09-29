@@ -165,11 +165,19 @@ export function applyVisibilityHash(location, viewer, rootElement) {
     return []
   }
   const names = isolator._isSceneGraphModel() ? sceneGraphNamePaths(model) : null
+  // Every element the model has: rendered, or a node in its tree. A link to
+  // an edited revision can name an element that's gone, and isolating an id
+  // the model doesn't have shows nothing at all.
+  const known = new Set(isolator.visualElementsIds)
+  for (const [parent, children] of Object.entries(isolator.spatialStructure)) {
+    known.add(Number(parent))
+    children.forEach((child) => known.add(child))
+  }
   const unresolved = []
   const resolveId = (text) => {
     const ref = parseRef(text)
     const id = ref?.kind === 'e' ? ref.id : (ref?.kind === 'n' && names ? names.idOf(ref.segments) : null)
-    if (id === null || id === undefined) {
+    if (id === null || id === undefined || !known.has(id)) {
       unresolved.push(text)
       return null
     }
