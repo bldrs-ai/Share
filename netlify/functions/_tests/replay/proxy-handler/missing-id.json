@@ -1,0 +1,7 @@
+{
+  "description": "No file id: 400 without any upstream call (the deployed smoke probe sends exactly this).",
+  "env": {"NODE_ENV": "test"},
+  "request": {"method": "GET", "path": "/.netlify/functions/proxy-handler", "headers": {}},
+  "exchanges": [],
+  "expect": {"statusCode": 400}
+}

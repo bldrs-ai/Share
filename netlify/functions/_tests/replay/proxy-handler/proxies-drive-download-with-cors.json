@@ -1,0 +1,12 @@
+{
+  "description": "A Drive file is fetched server-side and returned with CORS for the calling origin.",
+  "env": {"NODE_ENV": "test"},
+  "request": {"method": "GET", "path": "/.netlify/functions/proxy-handler", "headers": {"origin": "https://bldrs.ai"}, "query": {"id": "1AbCdEfGhIjKlMnOpQrStUvWxYz"}},
+  "exchanges": [
+    {
+      "request": {"method": "GET", "url": "https://drive.usercontent.google.com/download?id=1AbCdEfGhIjKlMnOpQrStUvWxYz&export=download"},
+      "response": {"status": 200, "headers": {"content-type": "application/octet-stream"}, "text": "ISO-10303-21;\nHEADER;\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n"}
+    }
+  ],
+  "expect": {"statusCode": 200, "bodyIncludes": "ISO-10303-21;", "headers": {"access-control-allow-origin": "https://bldrs.ai"}}
+}

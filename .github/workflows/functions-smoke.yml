@@ -1,0 +1,126 @@
+name: functions-smoke
+
+# Smoke-tests the Netlify Functions of a LIVE deploy: one unauthenticated
+# request per function, each of which must get the answer the code gives
+# without credentials (401 / 400 / …) — which only happens if the bundle
+# loaded and the handler ran. Six functions, stripe-webhook among them,
+# answered 502 on every request for months before anyone noticed
+# (bldrs-ai/ops#33); every other check was green, because nothing ever
+# called a deployed function. The probes and what they accept are in
+# tools/netlify/smokeFunctions.mjs; its test keeps them in step with the
+# replay scenarios that pin the same answers on the source and the bundle.
+#
+# Three triggers:
+#  - `status`: Netlify posts a commit status per deploy preview
+#    (`netlify/<project>/deploy-preview`, `target_url` = the preview). On
+#    `success` the preview is live, so smoke it. Runs on drafts too — it is
+#    one short job with no install, and a draft's preview is exactly where a
+#    bundling fault shows up first.
+#  - `schedule`: hourly against production, in `--strict` mode (every secret
+#    set, so "not configured" is a failure too). A failure opens, or comments
+#    on, a "Deployed Netlify functions failing" issue.
+#  - `workflow_dispatch`: any base URL, e.g. right after a production deploy.
+#
+# `status` and `schedule` workflows always run from the DEFAULT branch's copy
+# of this file, so an edit here only takes effect once merged. That's also
+# why the job checks out the default branch rather than the commit the
+# status is for: the status event runs with this repo's token, and the
+# commit may be a fork's PR head. Only tools/netlify/ is checked out, and the
+# script needs no install.
+
+on:
+  status:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Deploy to smoke-test'
+        default: 'https://bldrs.ai'
+        required: true
+      strict:
+        description: 'Require the fully configured (production) answers'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# Netlify posts several statuses per deploy (pending, header rules, redirect
+# rules, …), each starting a run of this workflow whose jobs all skip. Keyed
+# on the URL alone, one of those would cancel a smoke run in flight, so the
+# group also carries the event, context and state: only a newer `success`
+# for the same preview (a later push to the same PR) replaces a run.
+concurrency:
+  group: >-
+    functions-smoke-${{ github.event_name }}-${{ github.event.context }}-${{ github.event.state }}-${{
+    github.event.target_url || github.event.inputs.base_url }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-preview:
+    if: >-
+      github.event_name == 'status' &&
+      github.event.state == 'success' &&
+      startsWith(github.event.context, 'netlify/') &&
+      endsWith(github.event.context, '/deploy-preview')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/netlify
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # target_url comes from the event, so it reaches the shell through env,
+      # never through ${{ }} interpolation into the script.
+      - name: Smoke ${{ github.event.context }}
+        env:
+          TARGET_URL: ${{ github.event.target_url }}
+        run: |
+          if [[ ! "$TARGET_URL" =~ ^https://deploy-preview-[0-9]+--[a-z0-9-]+\.netlify\.app/?$ ]]; then
+            echo "Not a Netlify deploy-preview URL: $TARGET_URL"; exit 1
+          fi
+          node tools/netlify/smokeFunctions.mjs "$TARGET_URL"
+
+  production:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/netlify
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Smoke
+        env:
+          BASE_URL: ${{ github.event.inputs.base_url || 'https://bldrs.ai' }}
+          STRICT: ${{ github.event_name == 'schedule' || github.event.inputs.strict == 'true' }}
+        run: |
+          # Actions runs bash with -o pipefail, so the step fails with the script.
+          node tools/netlify/smokeFunctions.mjs "$BASE_URL" $([[ "$STRICT" == true ]] && echo --strict) | tee smoke-report.md
+      # Only the scheduled run files an issue: a failed manual run is being
+      # watched by whoever started it. One open issue, commented on per
+      # failing run, rather than one issue per hour.
+      - name: Report failure
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title='Deployed Netlify functions failing'
+          body="$(printf 'The hourly smoke test of https://bldrs.ai failed: %s\n\n%s\n\nProbes and expectations: `tools/netlify/smokeFunctions.mjs`. Prior incident: bldrs-ai/ops#33.' "$RUN_URL" "$(cat smoke-report.md 2>/dev/null)")"
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" --json number --jq '.[0].number')"
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

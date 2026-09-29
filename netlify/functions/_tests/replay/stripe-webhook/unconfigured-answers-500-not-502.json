@@ -1,0 +1,7 @@
+{
+  "description": "A deploy context without Stripe credentials answers 500 'not configured'. The Stripe client used to be built at module scope, where Stripe(undefined) throws, so this context crashed on cold start with a bare 502.",
+  "env": {"NODE_ENV": "test"},
+  "request": {"method": "POST", "path": "/.netlify/functions/stripe-webhook", "headers": {}},
+  "exchanges": [],
+  "expect": {"statusCode": 500, "bodyIncludes": "not configured"}
+}

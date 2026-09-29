@@ -1,0 +1,16 @@
+{
+  "id": "evt_1QreplayDeleted0001",
+  "object": "event",
+  "api_version": "2025-01-27.acacia",
+  "created": 1761742100,
+  "data": {
+    "object": {
+      "$fixture": "stripe/subscription.json",
+      "$merge": {"status": "canceled", "canceled_at": 1761742100, "ended_at": 1761742100}
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {"id": null, "idempotency_key": null},
+  "type": "customer.subscription.deleted"
+}

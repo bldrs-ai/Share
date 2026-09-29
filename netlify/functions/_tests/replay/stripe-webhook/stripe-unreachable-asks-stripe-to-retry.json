@@ -1,0 +1,17 @@
+{
+  "description": "The customer lookup failing at the network level is transient too.",
+  "env": {"$fixture": "env/stripe.json"},
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/stripe-webhook",
+    "headers": {"content-type": "application/json; charset=utf-8"},
+    "sign": "stripe",
+    "body": {"$fixture": "stripe/event.subscription.created.json"}
+  },
+  "exchanges": [
+    {"request": {"method": "GET", "url": "https://api.stripe.com/v1/customers/cus_Rreplay0001"}, "response": {"networkError": true}},
+    {"request": {"method": "GET", "url": "https://api.stripe.com/v1/customers/cus_Rreplay0001"}, "response": {"networkError": true}},
+    {"request": {"method": "GET", "url": "https://api.stripe.com/v1/customers/cus_Rreplay0001"}, "response": {"networkError": true}}
+  ],
+  "expect": {"statusCode": 500, "bodyIncludes": "Stripe will retry"}
+}

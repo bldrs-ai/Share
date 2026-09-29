@@ -1,0 +1,13 @@
+{
+  "description": "A rotated-away or revoked refresh token maps to 401 so the client prompts a reconnect.",
+  "env": {"$fixture": "env/github-oauth.json"},
+  "request": {"method": "POST", "path": "/.netlify/functions/gh-oauth-refresh", "headers": {"authorization": "Bearer user-access-token"}, "body": {"refresh_token": "ghr_revoked"}},
+  "exchanges": [
+    {"$fixture": "exchanges/auth0-userinfo.json"},
+    {
+      "request": {"method": "POST", "url": "https://github.com/login/oauth/access_token"},
+      "response": {"status": 200, "json": {"error": "bad_refresh_token", "error_description": "The refresh token passed is incorrect or expired."}}
+    }
+  ],
+  "expect": {"statusCode": 401, "json": {"error": "bad_refresh_token"}}
+}

@@ -32,11 +32,14 @@
  * is invisible here; and the child process runs on local Node, not Lambda's.
  * bundleFunctions.mjs's header lists the same gaps from the bundling side.
  */
-import {execFileSync} from 'node:child_process'
+import {execFileSync, spawn} from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {fileURLToPath} from 'node:url'
+import {listScenarios} from './replay/scenario.mjs'
+import {replayAll} from './replay/replayAll.mjs'
+import {formatResults, smokeFunctions} from './smokeFunctions.mjs'
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -44,6 +47,7 @@ const REPO_ROOT = path.resolve(__dirname, '../..')
 const FUNCTIONS_DIR = path.join(REPO_ROOT, 'netlify', 'functions')
 const PRO_MODULES_SRC_DIR = path.join(FUNCTIONS_DIR, '_pro-modules')
 const BUNDLE_SCRIPT = path.join(__dirname, 'bundleFunctions.mjs')
+const SERVE_SCRIPT = path.join(__dirname, 'serveBundles.mjs')
 const BUNDLE_TIMEOUT_MS = 120000
 const LOAD_TIMEOUT_MS = 30000
 
@@ -55,11 +59,30 @@ const FUNCTION_NAMES = fs.readdirSync(FUNCTIONS_DIR, {withFileTypes: true})
   .filter((entry) => entry.isFile() && !entry.name.startsWith('.'))
   .map((entry) => path.parse(entry.name).name)
 
-// Module-scope clients that throw at import without their credentials.
-// The dummies only need to satisfy construction; nothing is called.
-const DUMMY_ENV = {
-  STRIPE_SECRET_KEY: 'sk_test_dummy',
+// Deliberately no credentials: a function must load in a deploy context
+// that lacks its secrets and answer "not configured", never crash on cold
+// start. stripe-webhook used to build its Stripe client at module scope, and
+// `Stripe(undefined)` throws, so this list once had to carry a dummy
+// STRIPE_SECRET_KEY — which is exactly the crash it was hiding.
+const LOAD_ENV = {
   NODE_ENV: 'test',
+}
+const REPLAY_TIMEOUT_MS = 180000
+const SERVE_TIMEOUT_MS = 30000
+
+// Every secret production has, so the smoke probes can be held to their
+// `--strict` answers. `.invalid` hosts (RFC 6761) guarantee a probe that
+// wrongly reaches upstream fails fast instead of touching a real service.
+const PRODUCTION_LIKE_ENV = {
+  NODE_ENV: 'production',
+  AUTH0_DOMAIN: 'auth0.invalid',
+  AUTH0_CLIENT_ID: 'smoke-client-id',
+  AUTH0_CLIENT_SECRET: 'smoke-client-secret',
+  STRIPE_SECRET_KEY: 'sk_test_smoke',
+  STRIPE_WEBHOOK_SECRET: 'whsec_smoke',
+  SHARE_PRO_PRICE_ID: 'price_smoke',
+  GH_OAUTH_CLIENT_ID: 'smoke-gh-client-id',
+  GH_OAUTH_CLIENT_SECRET: 'smoke-gh-client-secret',
 }
 
 // Runs inside the child. A v2 function's entry is Netlify's bootstrap, which
@@ -173,9 +196,91 @@ describe('netlify functions as deployed', () => {
       cwd: bundle.path,
       // No HOME: Node's CommonJS resolver also searches `$HOME/.node_modules`,
       // which is one more way to resolve a file the bundle doesn't hold.
-      env: {PATH: process.env.PATH, ...DUMMY_ENV},
+      env: {PATH: process.env.PATH, ...LOAD_ENV},
       stdio: 'pipe',
       timeout: LOAD_TIMEOUT_MS,
     })
   }, LOAD_TIMEOUT_MS)
+
+  // Loading proves the entry resolves; replaying proves the handler WORKS
+  // from the bundle — axios's http adapter, the Stripe SDK's client and
+  // Sentry's wrapper all run, which is where a file missing from the zip
+  // shows up at request time rather than import time. Same scenario files
+  // as netlify/functions/_tests/replaySource.test.js (the source-level run),
+  // so a scenario green there and red here is a packaging fault.
+  describe('replaying recorded traffic against the bundles', () => {
+    const scenarios = listScenarios()
+    let results
+
+    beforeAll(async () => {
+      results = await replayAll(scenarios.map((scenario) => {
+        const bundle = bundles.get(scenario.functionName)
+        if (!bundle) {
+          return {id: scenario.id, file: scenario.file, entry: '/nonexistent', loadMode: 'import'}
+        }
+        // A v2 bundle's entry is Netlify's streaming bootstrap, which needs
+        // the Lambda runtime; its handler is the bundled user module beside it.
+        const v2 = bundle.runtimeAPIVersion === 2
+        return {
+          id: scenario.id,
+          file: scenario.file,
+          entry: v2 ?
+            path.join(bundle.path, 'functions', `${scenario.functionName}.mjs`) :
+            path.join(bundle.path, bundle.entryFilename),
+          loadMode: v2 ? 'import' : 'require',
+          cwd: bundle.path,
+        }
+      }), {env: {PATH: process.env.PATH}})
+    }, REPLAY_TIMEOUT_MS)
+
+    it.each(scenarios.map((scenario) => scenario.id))('%s', (id) => {
+      expect(results.get(id).failures).toEqual([])
+    })
+  })
+
+  // The deployed smoke test (tools/netlify/smokeFunctions.mjs, run against
+  // every deploy preview and hourly against production) pointed at these
+  // bundles, served over HTTP the way the platform fronts them. Proves the
+  // smoke contract holds for what a deploy ships, in strict mode, before a
+  // deploy exists; smokeFunctions.test.js proves it fails when it should.
+  describe('smoke test against the bundles served over HTTP', () => {
+    let server
+    let baseUrl
+
+    beforeAll(async () => {
+      const summaryFile = path.join(outDir, 'bundles.json')
+      fs.writeFileSync(summaryFile, JSON.stringify({bundles: [...bundles.values()]}))
+      server = spawn(process.execPath, [SERVE_SCRIPT, summaryFile, '0'], {
+        cwd: outDir,
+        env: {PATH: process.env.PATH, ...PRODUCTION_LIKE_ENV},
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      const port = await new Promise((resolve, reject) => {
+        let stderr = ''
+        server.stderr.on('data', (chunk) => {
+          stderr += chunk
+        })
+        server.stdout.on('data', (chunk) => {
+          const m = String(chunk).match(/LISTENING (\d+)/)
+          if (m) {
+            resolve(Number(m[1]))
+          }
+        })
+        server.on('exit', (code) => reject(new Error(`serveBundles exited ${code}: ${stderr}`)))
+      })
+      baseUrl = `http://127.0.0.1:${port}`
+    }, SERVE_TIMEOUT_MS)
+
+    afterAll(() => {
+      if (server) {
+        server.kill()
+      }
+    })
+
+    it('every function answers its strict smoke probe', async () => {
+      const results = await smokeFunctions(baseUrl, {strict: true, retryDelayMs: 0})
+      expect(results.filter((r) => !r.ok), formatResults(results, baseUrl, true)).toEqual([])
+      expect(results.map((r) => r.name).sort()).toEqual([...bundles.keys()].sort())
+    }, SERVE_TIMEOUT_MS)
+  })
 })

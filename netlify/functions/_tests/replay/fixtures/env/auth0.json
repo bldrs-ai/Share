@@ -1,0 +1,6 @@
+{
+  "NODE_ENV": "test",
+  "AUTH0_DOMAIN": "bldrs-replay.us.auth0.com",
+  "AUTH0_CLIENT_ID": "replay-client-id",
+  "AUTH0_CLIENT_SECRET": "replay-client-secret"
+}

@@ -1,0 +1,22 @@
+{
+  "id": "evt_1QreplayInvoice0001",
+  "object": "event",
+  "api_version": "2025-01-27.acacia",
+  "created": 1759150003,
+  "data": {
+    "object": {
+      "id": "in_1Qreplay0001",
+      "object": "invoice",
+      "amount_paid": 900,
+      "currency": "usd",
+      "customer": "cus_Rreplay0001",
+      "customer_email": "ada@example.com",
+      "status": "paid",
+      "subscription": "sub_1QreplayStandard0001"
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {"id": null, "idempotency_key": null},
+  "type": "invoice.paid"
+}

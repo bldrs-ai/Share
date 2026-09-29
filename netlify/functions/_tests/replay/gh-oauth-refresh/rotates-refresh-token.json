@@ -1,0 +1,13 @@
+{
+  "description": "A refresh token is rotated for a fresh pair.",
+  "env": {"$fixture": "env/github-oauth.json"},
+  "request": {"method": "POST", "path": "/.netlify/functions/gh-oauth-refresh", "headers": {"authorization": "Bearer user-access-token"}, "body": {"refresh_token": "ghr_old"}},
+  "exchanges": [
+    {"$fixture": "exchanges/auth0-userinfo.json"},
+    {
+      "request": {"method": "POST", "url": "https://github.com/login/oauth/access_token", "body": {"client_id": "Iv1.replayclientid", "client_secret": "replay-gh-client-secret", "grant_type": "refresh_token", "refresh_token": "ghr_old"}},
+      "response": {"status": 200, "json": {"$fixture": "github/token.json"}}
+    }
+  ],
+  "expect": {"statusCode": 200, "json": {"refresh_token": "ghr_replayRefreshToken000000000000000000000000000000000000000000000000000000"}}
+}

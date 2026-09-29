@@ -1,0 +1,20 @@
+{
+  "description": "No Auth0 user with the customer's email is permanent: acknowledge (200) so Stripe stops, and write nothing.",
+  "env": {"$fixture": "env/stripe.json"},
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/stripe-webhook",
+    "headers": {"content-type": "application/json; charset=utf-8"},
+    "sign": "stripe",
+    "body": {"$fixture": "stripe/event.subscription.created.json"}
+  },
+  "exchanges": [
+    {"$fixture": "exchanges/stripe-customer.json"},
+    {"$fixture": "exchanges/auth0-mgmt-token.json"},
+    {
+      "request": {"method": "GET", "url": "https://bldrs-replay.us.auth0.com/api/v2/users-by-email?email=ada%40example.com"},
+      "response": {"status": 200, "json": []}
+    }
+  ],
+  "expect": {"statusCode": 200, "bodyIncludes": "not applied"}
+}

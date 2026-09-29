@@ -1,0 +1,7 @@
+{
+  "description": "A well-formed body without a bearer token: 401 (the deployed smoke probe sends exactly this).",
+  "env": {"$fixture": "env/auth0.json"},
+  "request": {"method": "POST", "path": "/.netlify/functions/record-export", "headers": {}, "body": {"key": "/share/v/p/index.ifc", "format": "glb", "bytes": 1}},
+  "exchanges": [],
+  "expect": {"statusCode": 401, "json": {"error": "missing_auth0_token"}}
+}

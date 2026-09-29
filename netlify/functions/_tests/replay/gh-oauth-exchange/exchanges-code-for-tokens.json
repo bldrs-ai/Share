@@ -1,0 +1,13 @@
+{
+  "description": "An Auth0-authenticated caller's code is swapped for GitHub tokens, with the client secret added server-side.",
+  "env": {"$fixture": "env/github-oauth.json"},
+  "request": {"method": "POST", "path": "/.netlify/functions/gh-oauth-exchange", "headers": {"authorization": "Bearer user-access-token", "content-type": "application/json"}, "body": {"code": "replay-auth-code", "redirect_uri": "https://bldrs.ai/auth/gh/callback.html"}},
+  "exchanges": [
+    {"$fixture": "exchanges/auth0-userinfo.json"},
+    {
+      "request": {"method": "POST", "url": "https://github.com/login/oauth/access_token", "headers": {"accept": "application/json"}, "body": {"client_id": "Iv1.replayclientid", "client_secret": "replay-gh-client-secret", "code": "replay-auth-code", "redirect_uri": "https://bldrs.ai/auth/gh/callback.html"}},
+      "response": {"status": 200, "json": {"$fixture": "github/token.json"}}
+    }
+  ],
+  "expect": {"statusCode": 200, "json": {"access_token": "ghu_replayAccessToken0000000000000000", "token_type": "bearer"}}
+}

@@ -1,0 +1,8 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "https://bldrs-replay.us.auth0.com/userinfo",
+    "headers": {"authorization": "Bearer user-access-token"}
+  },
+  "response": {"status": 200, "json": {"$fixture": "auth0/userinfo.json"}}
+}

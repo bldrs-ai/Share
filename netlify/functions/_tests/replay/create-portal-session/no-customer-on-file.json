@@ -1,0 +1,14 @@
+{
+  "description": "A signed-in user who never subscribed gets 404, and Stripe is never called.",
+  "env": {"$fixture": "env/stripe.json"},
+  "request": {"method": "POST", "path": "/.netlify/functions/create-portal-session", "headers": {"authorization": "Bearer user-access-token"}, "body": {}},
+  "exchanges": [
+    {"$fixture": "exchanges/auth0-userinfo.json"},
+    {"$fixture": "exchanges/auth0-mgmt-token.json"},
+    {
+      "request": {"method": "GET", "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347"},
+      "response": {"status": 200, "json": {"$fixture": "auth0/user.json"}}
+    }
+  ],
+  "expect": {"statusCode": 404, "json": {"error": "No subscription on file for this account"}}
+}

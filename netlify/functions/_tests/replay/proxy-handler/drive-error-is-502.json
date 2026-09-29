@@ -1,0 +1,12 @@
+{
+  "description": "Drive refusing the file is an upstream failure (502), not a pass-through of Drive's error page.",
+  "env": {"NODE_ENV": "test"},
+  "request": {"method": "GET", "path": "/.netlify/functions/proxy-handler", "headers": {"origin": "https://bldrs.ai"}, "query": {"id": "1MissingFile"}},
+  "exchanges": [
+    {
+      "request": {"method": "GET", "url": "https://drive.usercontent.google.com/download?id=1MissingFile&export=download"},
+      "response": {"status": 404, "headers": {"content-type": "text/html"}, "text": "<html>Not Found</html>"}
+    }
+  ],
+  "expect": {"statusCode": 502}
+}

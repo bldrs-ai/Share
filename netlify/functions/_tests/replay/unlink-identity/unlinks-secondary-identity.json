@@ -1,0 +1,14 @@
+{
+  "description": "The caller's own user id (from /userinfo) is the one unlinked from, whatever the body says.",
+  "env": {"$fixture": "env/auth0.json"},
+  "request": {"method": "POST", "path": "/.netlify/functions/unlink-identity", "headers": {"authorization": "Bearer user-access-token"}, "body": {"secondaryProvider": "github", "secondaryUserId": "17447690"}},
+  "exchanges": [
+    {"$fixture": "exchanges/auth0-userinfo.json"},
+    {"$fixture": "exchanges/auth0-mgmt-token.json"},
+    {
+      "request": {"method": "DELETE", "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347/identities/github/17447690", "headers": {"authorization": "Bearer mgmt-token-replay"}},
+      "response": {"status": 200, "json": {"$fixture": "auth0/identities-after-unlink.json"}}
+    }
+  ],
+  "expect": {"statusCode": 200, "json": {"unlinked": true, "identities": [{"provider": "google-oauth2"}]}}
+}

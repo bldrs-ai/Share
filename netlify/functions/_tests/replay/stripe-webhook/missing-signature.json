@@ -1,0 +1,17 @@
+{
+  "description": "No Stripe-Signature header at all (the deployed smoke probe sends exactly this).",
+  "env": {
+    "$fixture": "env/stripe.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/stripe-webhook",
+    "headers": {},
+    "body": {}
+  },
+  "exchanges": [],
+  "expect": {
+    "statusCode": 400,
+    "bodyIncludes": "missing Stripe-Signature"
+  }
+}
