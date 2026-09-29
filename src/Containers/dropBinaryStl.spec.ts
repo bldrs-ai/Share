@@ -210,7 +210,9 @@ function modelFraming(page: Page): Promise<Framing | null> {
     const context = state?.viewer?.context
     const camera = context?.getCamera?.()
     const controls = context?.getCameraControls?.()
-    const canvas = document.querySelector('canvas')
+    // The renderer's own canvas, not `querySelector('canvas')`: the ViewCube
+    // has a WebGL canvas of its own.
+    const canvas = context?.getRenderer?.()?.domElement
     if (!mesh || !camera || !controls || !canvas) {
       return null
     }
@@ -242,14 +244,33 @@ function modelFraming(page: Page): Promise<Framing | null> {
       canvas: {left: rect.left, top: rect.top, width: rect.width, height: rect.height},
       // The fit animates (orbit-control.js `fitToSphere(sphere, true)`), and
       // camera-controls' `getPosition()` is where that transition ENDS, so
-      // the camera has arrived when it's there. (Not `controls.active`: it
-      // only clears inside an `update()`, which Share doesn't call once the
-      // scene stops changing, so it can stay true on a still camera.)
+      // the camera has arrived when it's there. (Not `controls.active`: Share
+      // does call `cameraControls.update` every animation frame
+      // (context/context.js `render` -> camera/camera.js), but camera-controls'
+      // `_hasRested` only flips on a frame that was still moving with every
+      // delta under `restThreshold`; a move made without a transition never
+      // produces one, so `active` can stay true on a camera that has arrived.)
       resting: camera.position.distanceTo(controls.getPosition(camera.position.clone())) <
         RESTING_TOLERANCE * Math.max(1, controls.distance),
     }
     /* eslint-enable @typescript-eslint/no-explicit-any */
   }, CAMERA_RESTING_TOLERANCE)
+}
+
+
+/**
+ * Whether the renderer's canvas is the topmost element at a page point.
+ *
+ * @param page Playwright page
+ * @param point page point in CSS pixels
+ * @return true when nothing is drawn over the canvas there
+ */
+function isRendererCanvasAt(page: Page, point: Point): Promise<boolean> {
+  return page.evaluate(({x, y}) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const canvas = (window as any).store?.getState()?.viewer?.context?.getRenderer?.()?.domElement
+    return !!canvas && document.elementFromPoint(x, y) === canvas
+  }, point)
 }
 
 
@@ -270,7 +291,8 @@ function backgroundPoint(page: Page, framing: Framing): Promise<Point | null> {
       {x: centre.x, y: bounds.top - margin},
       {x: centre.x, y: bounds.bottom + margin},
     ]
-    const canvasEl = document.querySelector('canvas')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const canvasEl = (window as any).store?.getState()?.viewer?.context?.getRenderer?.()?.domElement
     return candidates.find((p) =>
       p.x > canvas.left && p.x < canvas.left + canvas.width &&
       p.y > canvas.top && p.y < canvas.top + canvas.height &&
@@ -358,6 +380,10 @@ async function dropCubeAndSample(page: Page, bytes: number[]): Promise<number[]>
       previous.rgb.join() === latest.rgb.join()
   }, {timeout: LOAD_TIMEOUT_MS}).toBe(true)
   const settled = latest as unknown as {framing: Framing, rgb: number[]}
+  // The colour checks are about the cube only if the canvas is what's under
+  // the centre sample: a UI overlay there would satisfy them by itself.
+  expect(await isRendererCanvasAt(page, settled.framing.centre),
+    'the renderer canvas is not the topmost element at the cube centre').toBe(true)
   const beside = await backgroundPoint(page, settled.framing)
   expect(beside, 'no uncovered canvas beside the cube to sample').not.toBeNull()
   const background = await renderedRgbAt(page, beside as Point)
