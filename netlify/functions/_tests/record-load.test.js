@@ -2,12 +2,12 @@
  * Tests for the record-load Netlify Function — the authoritative gate for
  * usage-quota counting (design/new/quotas.md).
  *
- * The first test is the one that would have caught the deploy break: the
- * function was written as CommonJS inside `netlify/`, whose package.json
- * declares `"type": "module"`, so Netlify's bundler refused it. Jest can't
- * see that itself (babel-jest happily transforms either syntax), so the
- * real-Node check lives in esmLoad.test.js; this file covers the handler's
- * request paths and the quota decisions once it is loaded.
+ * Covers the handler's request paths and quota decisions, with axios mocked.
+ * Whether the function loads at all is checked elsewhere, because Jest can't
+ * see it (babel-jest transforms either module syntax, and imports resolve
+ * against the repo's `node_modules`): esmLoad.test.js imports the source
+ * under real Node ESM, and tools/netlify/functionBundler.test.js loads the
+ * bundle Netlify would ship.
  *
  * In `_tests/` rather than beside its subject: Netlify bundles every
  * top-level `.js` under `netlify/functions/` AS a function, so a test file
@@ -33,6 +33,9 @@ jest.mock('@sentry/serverless', () => ({
 const SUB = 'google-oauth2|1234567890'
 const KEY = '/share/v/g/abc123'
 const FREE_LIMIT = 4
+const AUTH0_DOMAIN = 'bldrs.us.auth0.com.test'
+// `sub` carries a `|`, so this also pins that it's URL-encoded into the path.
+const USER_URL = `https://${AUTH0_DOMAIN}/api/v2/users/google-oauth2%7C1234567890`
 
 
 /**
@@ -81,7 +84,7 @@ function recentLoads(n) {
 describe('record-load function', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    process.env.AUTH0_DOMAIN = 'bldrs.us.auth0.com.test'
+    process.env.AUTH0_DOMAIN = AUTH0_DOMAIN
   })
 
   it('exports a handler function', () => {
@@ -111,10 +114,26 @@ describe('record-load function', () => {
 
     expect(res.statusCode).toBe(200)
     expect(JSON.parse(res.body)).toMatchObject({allowed: true, used: 1, limit: FREE_LIMIT, tier: 'free'})
+    // Read and written as the token's own user, with the Management token.
+    expect(axios.get).toHaveBeenCalledWith(USER_URL, {headers: {Authorization: 'Bearer mgmt-token'}})
     expect(axios.patch).toHaveBeenCalledTimes(1)
-    const {app_metadata: patched} = axios.patch.mock.calls[0][1]
+    const [patchUrl, patchBody, patchConfig] = axios.patch.mock.calls[0]
+    expect(patchUrl).toBe(USER_URL)
+    expect(patchConfig.headers.Authorization).toBe('Bearer mgmt-token')
+    const {app_metadata: patched} = patchBody
     expect(Object.keys(patched)).toEqual(['usageQuota'])
     expect(patched.usageQuota.loads).toEqual([{key: KEY, loadedAt: expect.any(String)}])
+  })
+
+  it('does not count a key twice, even at the limit', async () => {
+    const loads = [...recentLoads(FREE_LIMIT - 1), {key: KEY, loadedAt: new Date().toISOString()}]
+    mockAuth0({usageQuota: {loads}})
+
+    const res = await handler(getEvent())
+
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.body)).toMatchObject({allowed: true, used: FREE_LIMIT, alreadyCounted: true})
+    expect(axios.patch).not.toHaveBeenCalled()
   })
 
   it('returns 403 once a free user is at the limit', async () => {
