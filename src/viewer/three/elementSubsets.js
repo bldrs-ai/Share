@@ -409,6 +409,8 @@ export function attachElementSubsets(model, fallbackParent, defaults = {}) {
  * @param {object} [opts.material]
  * @param {Set<number>} [opts.excludeInstances] synthetic instance ids to omit
  *   (per-occurrence hide — see IfcInstanceMap.createSubsetMeshByParent)
+ * @param {Set<number>} [opts.includeInstances] the only instance ids to keep
+ *   (per-occurrence isolate)
  * @return {Mesh|null}
  */
 export function buildInstanceMapSubsetMesh(sourceMesh, parentIdSet, opts = {}) {
@@ -429,6 +431,8 @@ export function buildInstanceMapSubsetMesh(sourceMesh, parentIdSet, opts = {}) {
     // IfcInstanceMap.createSubsetMeshByParent). Absent for IFC / whole-element
     // hide, where the parent-level subset is exactly right.
     excludeInstances: opts.excludeInstances,
+    // Isolating STEP occurrences keeps just their instances.
+    includeInstances: opts.includeInstances,
     // Pickable. Isolation surfaces are click targets — the click
     // handler in CadView.jsx falls back to the per-vertex `expressID`
     // attribute branch when the picked mesh has no `instanceMap`
@@ -547,11 +551,13 @@ export function attachInstanceMapSubsets(model, fallbackParent, defaults = {}) {
       removePrevious = true,
       material = defaults.material,
       excludeInstances,
+      includeInstances,
     } = opts || {}
     if (removePrevious) {
       removeSubset(customID)
     }
-    const meshes = buildInstanceMapModelSubsets(model, ids ?? [], {material, excludeInstances})
+    const meshes = buildInstanceMapModelSubsets(
+      model, ids ?? [], {material, excludeInstances, includeInstances})
     if (meshes.length === 0) {
       return []
     }

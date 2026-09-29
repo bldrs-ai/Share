@@ -57,37 +57,13 @@ export function setParamsToHash(hashString, name, params = {}, includeNames = fa
     throw new Error('Invalid hash string: must start with "#"')
   }
 
-  const FEATURE_SEP = ';' // Define the separator if not already defined
   const existingHash = hashString.substring(1) // Remove the `#` prefix
-  const sets = existingHash.split(FEATURE_SEP)
-
-  /** @type {{[key: string]: string}} */
-  const setMap = {}
-
-  // Parse existing sets into a map
-  for (let i = 0; i < sets.length; i++) {
-    const set = sets[i]
-    if (!set) {
-      continue
-    }
-
-    const [setName, ...setValueParts] = set.split(':')
-    const setValue = setValueParts.join(':')
-    setMap[setName] = setValue
-  }
-
   // Serialize the new params or set the key with no value
   const encodedParams = params && Object.keys(params).length > 0 ?
     getEncodedParam(params, includeNames) :
     '' // Empty value for the key
-  setMap[name] = encodedParams
-
-  // Construct the new hash
-  const newHash = Object.entries(setMap)
-    .map(([key, value]) => (value ? `${key}:${value}` : key)) // Include only the key if value is empty
-    .join(FEATURE_SEP)
-
-  return `#${newHash}`
+  const newSet = encodedParams ? `${name}:${encodedParams}` : name
+  return `#${replaceHashSet(existingHash, name, newSet)}`
 }
 
 
@@ -131,32 +107,45 @@ export function addHashParams(location, name, params, includeNames = false) {
   }
 
   const encodedParams = getEncodedParam(objectGlobalParams, includeNames)
-  const sets = location.hash.substring(1).split(FEATURE_SEP)
-  /** @type {{[key: string]: string}} */
-  const setMap = {}
+  location.hash = replaceHashSet(location.hash.substring(1), name, `${name}:${encodedParams}`)
+}
 
-  for (let i = 0; i < sets.length; i++) {
-    const set = sets[i]
+
+/**
+ * Replace (or append) one named set in a hash string, passing every other set
+ * through exactly as written. Re-serializing the others through a name→value
+ * map changed them: a bare set (`n`) came back as `n:undefined` from one
+ * writer, and a `n:` came back as a bare `n` — which `getHashParams('n')`,
+ * matching on `n:`, no longer finds — from another. A set's name ends at its
+ * first `:` (values may contain more).
+ *
+ * @param {string} hashBody hash without the leading `#`
+ * @param {string} name the set to replace
+ * @param {string} newSet its full new text, e.g. `d:color=src`
+ * @return {string} the new hash body
+ */
+function replaceHashSet(hashBody, name, newSet) {
+  const out = []
+  let replaced = false
+  for (const set of hashBody.split(FEATURE_SEP)) {
     if (set === '') {
       continue
     }
-    const setParts = set.split(':')
-    const setName = setParts[0]
-    const setValue = setParts[1]
-    setMap[setName] = setValue
-  }
-
-  setMap[name] = encodedParams
-  let newHash = ''
-
-  for (const setKey in setMap) {
-    if (Object.prototype.hasOwnProperty.call(setMap, setKey)) {
-      const setValue = setMap[setKey]
-      newHash += `${newHash.length === 0 ? '' : FEATURE_SEP}${setKey}:${setValue}`
+    const colon = set.indexOf(':')
+    const setName = colon === -1 ? set : set.substring(0, colon)
+    if (setName === name) {
+      if (!replaced) {
+        out.push(newSet)
+        replaced = true
+      }
+      continue
     }
+    out.push(set)
   }
-
-  location.hash = newHash
+  if (!replaced) {
+    out.push(newSet)
+  }
+  return out.join(FEATURE_SEP)
 }
 
 

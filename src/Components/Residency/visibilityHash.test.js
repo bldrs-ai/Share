@@ -236,8 +236,9 @@ describe('Components/Residency/visibilityHash', () => {
         resetTempIsolation: jest.fn(),
         unHideAllElements: jest.fn(),
         hideElementsById: jest.fn(),
-        hideOccurrence: jest.fn(),
+        hideOccurrences: jest.fn(),
         isolateElementsById: jest.fn(),
+        isolateOccurrences: jest.fn(),
         ...state,
       }
       return {
@@ -271,7 +272,7 @@ describe('Components/Residency/visibilityHash', () => {
 
     it('writes a STEP occurrence as its path, and hides it by that path', () => {
       const occurrence = {occurrencePath: [100, 200], solidExpressId: 300}
-      const viewer = stubViewer({hiddenOccurrencePaths: new Map([[300, occurrence]])})
+      const viewer = stubViewer({hiddenOccurrencePaths: new Map([['100/200#300', {nodeId: 300, ...occurrence}]])})
       expect(visibilityRefs(viewer).hide).toEqual(['o100.200.300'])
       const location = loc()
       writeVisibilityHash(location, viewer)
@@ -289,7 +290,29 @@ describe('Components/Residency/visibilityHash', () => {
       }
       expect(applyVisibilityHash(location, receiver, rootElement)).toEqual([])
       expect(receiver.isolator.hideElementsById).not.toHaveBeenCalled()
-      expect(receiver.isolator.hideOccurrence).toHaveBeenCalledWith(300, [7], occurrence)
+      expect(receiver.isolator.hideOccurrences).toHaveBeenCalledWith(
+        [{nodeId: 300, instanceIds: [7], ...occurrence}])
+    })
+
+    it('writes an isolated STEP occurrence as its path, and isolates it by that path', () => {
+      const occurrence = {nodeId: 200, occurrencePath: [100, 200], solidExpressId: null}
+      const viewer = stubViewer({tempIsolationModeOn: true, isolatedIds: [200], isolatedOccurrences: [occurrence]})
+      // By id, the row's NAUO would be written, and isolate nothing on return.
+      expect(visibilityRefs(viewer).iso).toEqual(['o100.200'])
+      const location = loc()
+      writeVisibilityHash(location, viewer)
+      expect(location.hash).toBe('#d:iso=o100.200')
+
+      const receiver = stubViewer()
+      const rootElement = {expressID: 1, children: [{
+        expressID: 100, occurrencePath: [100], children: [
+          {expressID: 200, occurrencePath: [100, 200], children: []},
+        ],
+      }]}
+      expect(applyVisibilityHash(location, receiver, rootElement)).toEqual([])
+      expect(receiver.isolator.isolateElementsById).not.toHaveBeenCalled()
+      expect(receiver.isolator.isolateOccurrences).toHaveBeenCalledWith(
+        [expect.objectContaining({nodeId: 200, occurrencePath: [100, 200], solidExpressId: null})])
     })
 
     it('leaves the state out of the link past the size cap', () => {

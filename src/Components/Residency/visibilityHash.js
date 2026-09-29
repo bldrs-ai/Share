@@ -21,6 +21,7 @@ import {HASH_PREFIX_DISPLAY, mergeDisplayTerms} from './displayHash'
  *   #d:hide=nUpper%20Jaw/teeth/Tooth_07  ADF: one tooth hidden
  *   #d:show=nUpper%20Jaw/facc            ADF: a default-hidden overlay shown
  *   #d:iso=e1234                         isolating one element
+ *   #d:iso=o1020254.367733               isolating one STEP occurrence
  *   #d:color=src,hide=e12,iso=e34        with display terms
  *
  * Each term is a `+`-separated list of refs; visibilityRefs.js has the ref
@@ -68,12 +69,19 @@ export function visibilityRefs(viewer) {
   })
   refs.hide = hide.map(refOf)
   refs.show = show.map(refOf)
-  for (const {occurrencePath, solidExpressId} of isolator.hiddenOccurrencePaths.values()) {
-    // The root is the selection permalink's first id; this token has no root.
-    refs.hide.push(occurrenceRef(occurrenceElementPathIds(0, occurrencePath, solidExpressId).slice(1)))
+  // The root is the selection permalink's first id; this token has no root.
+  const occurrenceRefOf = ({occurrencePath, solidExpressId}) =>
+    occurrenceRef(occurrenceElementPathIds(0, occurrencePath, solidExpressId).slice(1))
+  for (const occurrence of isolator.hiddenOccurrencePaths.values()) {
+    if (occurrence.occurrencePath) {
+      refs.hide.push(occurrenceRefOf(occurrence))
+    }
   }
   if (isolator.tempIsolationModeOn) {
-    refs.iso = isolator.isolatedIds.map(refOf)
+    // STEP occurrences isolate by path, like their hides.
+    refs.iso = isolator.isolatedOccurrences ?
+      isolator.isolatedOccurrences.map(occurrenceRefOf) :
+      isolator.isolatedIds.map(refOf)
   }
   return refs
 }
@@ -201,7 +209,23 @@ export function applyVisibilityHash(location, viewer, rootElement) {
     }
   }
   const showIds = refs.show.map(resolveId).filter((id) => id !== null)
-  const isoIds = refs.iso.map(resolveId).filter((id) => id !== null)
+  const isoOccurrences = []
+  const isoIds = []
+  for (const text of refs.iso) {
+    if (text.startsWith('o')) {
+      const occurrence = resolveOccurrence(viewer, rootElement, parseRef(text))
+      if (occurrence) {
+        isoOccurrences.push(occurrence)
+      } else {
+        unresolved.push(text)
+      }
+      continue
+    }
+    const id = resolveId(text)
+    if (id !== null) {
+      isoIds.push(id)
+    }
+  }
   const hidden = applyHiddenDiff({
     childrenOf: isolator.spatialStructure,
     hide: hideIds,
@@ -216,10 +240,13 @@ export function applyVisibilityHash(location, viewer, rootElement) {
   if (hidden.length > 0) {
     isolator.hideElementsById(hidden)
   }
-  for (const {nodeId, instanceIds, occurrencePath, solidExpressId} of occurrences) {
-    isolator.hideOccurrence(nodeId, instanceIds, {occurrencePath, solidExpressId})
+  // Together, so the view is rebuilt once rather than per ref.
+  if (occurrences.length > 0) {
+    isolator.hideOccurrences(occurrences)
   }
-  if (isoIds.length > 0) {
+  if (isoOccurrences.length > 0) {
+    isolator.isolateOccurrences(isoOccurrences)
+  } else if (isoIds.length > 0) {
     isolator.isolateElementsById(isoIds)
   }
   if (unresolved.length > 0) {

@@ -8,6 +8,10 @@
 export default function createIsolatorSlice(set, get) {
   return {
     hiddenElements: {},
+    // The STEP occurrences hidden, by `occurrenceKey` (path + solid) → true:
+    // what an occurrence row's eye reads. `hiddenElements` has their row ids,
+    // which the copies of a reused sub-assembly share.
+    hiddenOccurrenceKeys: {},
     // The model path `hiddenElements` belongs to. `CadView#onViewer` clears
     // the hidden state when a different path loads, and keeps it across a
     // viewer re-init of the same path (a theme change reloads the model).
@@ -17,6 +21,9 @@ export default function createIsolatorSlice(set, get) {
     // with the path, so a re-init doesn't seed over the user's own state.
     sceneGraphDefaultsSeeded: false,
     isolatedElements: {},
+    // The STEP occurrences isolated, by `occurrenceKey` → true: what an
+    // occurrence row's isolation glasses read (see `hiddenOccurrenceKeys`).
+    isolatedOccurrenceKeys: {},
     isTempIsolationModeOn: false,
 
     updateHiddenStatus: (elementId, isHidden) =>
@@ -48,7 +55,8 @@ export default function createIsolatorSlice(set, get) {
      */
     claimHiddenElementsForModel: (modelPath) => set((state) => (
       state.hiddenElementsModelPath === modelPath ? {} :
-        {hiddenElements: {}, hiddenElementsModelPath: modelPath, sceneGraphDefaultsSeeded: false})),
+        {hiddenElements: {}, hiddenOccurrenceKeys: {}, hiddenElementsModelPath: modelPath,
+          sceneGraphDefaultsSeeded: false})),
     setIsolatedElements: (elements) => set(() => ({isolatedElements: elements})),
     setIsTempIsolationModeOn: (isOn) => set(() => ({isTempIsolationModeOn: isOn})),
   }

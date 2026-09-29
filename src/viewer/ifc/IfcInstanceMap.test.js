@@ -481,6 +481,19 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       const full = map.createSubsetMeshByParent([100], {excludeInstances: new Set()})
       expect(Array.from(full.geometry.getIndex().array)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8])
     })
+
+    it('keeps only includeInstances — the per-occurrence isolate', () => {
+      const geom = makeSixTriangleGeometry()
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1},
+        {parentExpressId: 100, triangleCount: 1},
+        {parentExpressId: 200, triangleCount: 1},
+      ], {geometry: geom})
+      const subset = map.createSubsetMeshByParent([100, 200], {includeInstances: new Set([1, 2])})
+      // Tris 1 and 2 only: one occurrence of 100, and 200.
+      expect(Array.from(subset.geometry.getIndex().array)).toEqual([3, 4, 5, 6, 7, 8])
+      expect(map.createSubsetMeshByParent([100], {includeInstances: new Set()})).toBeNull()
+    })
   })
 
 

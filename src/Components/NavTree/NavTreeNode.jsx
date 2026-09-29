@@ -54,6 +54,12 @@ export default function NavTreeNode({
         alignItems: 'flex-start', // Align items at the top for multiline labels
         backgroundColor: isSelected ? theme.palette.secondary.selected : 'transparent',
         cursor: 'pointer',
+        // Rows are controls, not text: shift-click multi-selects, and without
+        // this the browser also extends a text selection across the rows
+        // (which selection-triggered extensions, e.g. Google Translate, then
+        // pop up over). Copyable text stays in the Properties panel.
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
       }}
     >
       {/* Expand/Collapse Icon */}
