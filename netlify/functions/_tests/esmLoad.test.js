@@ -32,9 +32,10 @@ const FUNCTIONS_DIR = path.resolve(__dirname, '..')
 const LOAD_TIMEOUT_MS = 60000
 
 // Every top-level file is a function to Netlify, whatever its extension;
-// `_lib/`, `_tests/` and `_pro-modules/` are subdirectories.
+// `_lib/`, `_tests/` and `_pro-modules/` are subdirectories. Dotfiles (a
+// macOS `.DS_Store`) aren't functions.
 const functionFiles = readdirSync(FUNCTIONS_DIR, {withFileTypes: true})
-  .filter((entry) => entry.isFile())
+  .filter((entry) => entry.isFile() && !entry.name.startsWith('.'))
   .map((entry) => entry.name)
 
 // Module-scope clients that throw at import without their credentials.
