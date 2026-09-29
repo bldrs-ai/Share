@@ -105,6 +105,11 @@ The workflow runs:
 - **On each Netlify `deploy-preview` success status.** Both Netlify projects
   post one, with the preview URL as `target_url`. Drafts included, because a
   draft's preview is where a bundling fault first shows.
+  The result is posted back onto the PR's commit as its own status,
+  `functions-smoke/<project>`: pending while it runs, then success or
+  failure, linking the run. Without that, a `status` workflow's failure
+  shows only in the repository's Actions feed, since GitHub runs it against
+  the default branch, and the PR keeps Netlify's green deploy status.
 - **Hourly against `https://bldrs.ai` in strict mode.** A failure opens, or
   comments on, one "Deployed Netlify functions failing" issue.
 - **By hand** (`workflow_dispatch`, any URL), for example right after a production deploy.

@@ -13,7 +13,9 @@ name: functions-smoke
 # Three triggers:
 #  - `status`: Netlify posts a commit status per deploy preview
 #    (`netlify/<project>/deploy-preview`, `target_url` = the preview). On
-#    `success` the preview is live, so smoke it. Runs on drafts too — it is
+#    `success` the preview is live, so smoke it, and post the result back
+#    onto that commit as its own status (`functions-smoke/<project>`), where
+#    the PR shows it. Runs on drafts too — it is
 #    one short job with no install, and a draft's preview is exactly where a
 #    bundling fault shows up first.
 #  - `schedule`: hourly against production, in `--strict` mode (every secret
@@ -66,6 +68,23 @@ jobs:
       endsWith(github.event.context, '/deploy-preview')
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # statuses: write so the result lands ON THE PR'S COMMIT. A `status`
+    # workflow runs against the default branch, so its own pass/fail shows
+    # only in the repository's Actions feed — the PR would keep Netlify's
+    # green deploy status and a preview whose functions 502 could merge.
+    # The status this job posts starts another run of this workflow, whose
+    # context (`functions-smoke/…`) fails the `if` above, so it skips.
+    permissions:
+      contents: read
+      statuses: write
+    env:
+      # Event values reach the shell only through env, never through ${{ }}
+      # interpolation into a script.
+      TARGET_URL: ${{ github.event.target_url }}
+      NETLIFY_CONTEXT: ${{ github.event.context }}
+      COMMIT_SHA: ${{ github.event.sha }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -74,16 +93,34 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      # target_url comes from the event, so it reaches the shell through env,
-      # never through ${{ }} interpolation into the script.
-      - name: Smoke ${{ github.event.context }}
-        env:
-          TARGET_URL: ${{ github.event.target_url }}
+      # netlify/bldrs-share-prod/deploy-preview → functions-smoke/bldrs-share-prod
+      - name: Validate the event and mark the commit pending
         run: |
+          project="${NETLIFY_CONTEXT#netlify/}"; project="${project%/deploy-preview}"
+          if [[ ! "$project" =~ ^[a-z0-9-]+$ ]]; then echo "Unexpected context: $NETLIFY_CONTEXT"; exit 1; fi
+          if [[ ! "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then echo "Unexpected sha: $COMMIT_SHA"; exit 1; fi
           if [[ ! "$TARGET_URL" =~ ^https://deploy-preview-[0-9]+--[a-z0-9-]+\.netlify\.app/?$ ]]; then
             echo "Not a Netlify deploy-preview URL: $TARGET_URL"; exit 1
           fi
-          node tools/netlify/smokeFunctions.mjs "$TARGET_URL"
+          echo "STATUS_CONTEXT=functions-smoke/$project" >> "$GITHUB_ENV"
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$COMMIT_SHA" -f state=pending \
+            -f context="functions-smoke/$project" -f target_url="$RUN_URL" \
+            -f description="Probing the preview's Netlify functions" >/dev/null
+      - name: Smoke ${{ github.event.context }}
+        id: smoke
+        run: node tools/netlify/smokeFunctions.mjs "$TARGET_URL"
+      - name: Report the result on the commit
+        if: always() && env.STATUS_CONTEXT != ''
+        env:
+          OUTCOME: ${{ steps.smoke.outcome }}
+        run: |
+          if [[ "$OUTCOME" == success ]]; then
+            state=success; description='Every function answered its smoke probe'
+          else
+            state=failure; description='A deployed function did not answer as expected; see the run'
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$COMMIT_SHA" -f state="$state" \
+            -f context="$STATUS_CONTEXT" -f target_url="$RUN_URL" -f description="$description" >/dev/null
 
   production:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
