@@ -6,7 +6,7 @@ import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {disablePageReloadApprovalCheck} from './event'
 import {saveDnDFileToOpfsFallback} from './loader'
 import {trackAlert} from './alertTracking'
-import debug from './debug'
+import debug, {WARN} from './debug'
 
 
 // Mock all dependencies
@@ -21,6 +21,7 @@ jest.mock('./debug')
 
 const mockDebug = {
   log: jest.fn(),
+  warn: jest.fn(),
 }
 debug.mockReturnValue(mockDebug)
 
@@ -130,6 +131,11 @@ describe('dragAndDrop utility', () => {
       expect(mockSetAlert).toHaveBeenCalledWith(expectedMessage)
       expect(mockOnError).toHaveBeenCalledWith(expectedMessage)
       expect(mockNavigate).not.toHaveBeenCalled()
+      // And the console hears about it, at a level prod prints — naming the
+      // file, which the alert leaves out (test-models#69 had neither).
+      expect(debug).toHaveBeenCalledWith(WARN)
+      expect(mockDebug.warn).toHaveBeenCalledTimes(1)
+      expect(mockDebug.warn).toHaveBeenCalledWith(expect.stringContaining('"test.unknown" (1024 bytes)'))
     })
 
     it('should handle successful file upload with OPFS available', async () => {

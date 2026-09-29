@@ -38,6 +38,14 @@ one. Order matters: binary checks run before the UTF-8 decode, and
 within `analyzeHeaderStr` the more specific patterns must precede the
 loose numeric ones (OBJ/XYZ match nearly any numeric text).
 
+A format with no magic at all may still have a structural signature.
+Binary STL's 80-byte header is free text (all zeros, a part name,
+Materialise's `COLOR=`), so it is recognized by its triangle count
+accounting for the file to the byte — which needs the whole file's
+size, passed as `analyzeHeader`'s `fileByteLength` (from `File.size`,
+or a Range response's `Content-Range`). Without it that check is
+skipped (test-models#69).
+
 Be conservative. A sniff that is too broad silently swallows unrelated
 uploads: gating `usdz` on a bare `PK` zip signature would have
 classified every `.docx` and `.zip` as a model, turning a clean
