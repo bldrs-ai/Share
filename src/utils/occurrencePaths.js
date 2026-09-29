@@ -414,3 +414,21 @@ export function selectedOccurrences({rootNode, anchorIds, occurrencePath = null,
   }
   return out
 }
+
+
+/**
+ * One occurrence's identity, as a map key: its path plus, for a named body,
+ * the solid's id. A row id can't be the key: the duplicates of a reused
+ * sub-assembly share theirs, and each copy hides on its own.
+ *
+ * @param {Array<number>|null} occurrencePath
+ * @param {number|null} [solidExpressId]
+ * @param {number} [nodeId] the fallback for an occurrence hidden without its
+ *   path
+ * @return {string}
+ */
+export function occurrenceKey(occurrencePath, solidExpressId = null, nodeId = undefined) {
+  return Array.isArray(occurrencePath) && occurrencePath.length > 0 ?
+    `${occurrencePathKey(occurrencePath)}#${solidExpressId ?? ''}` :
+    `#${nodeId}`
+}

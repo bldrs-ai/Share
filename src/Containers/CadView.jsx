@@ -66,7 +66,7 @@ import ViewCube from '../Components/ViewCube/ViewCube'
 import {applyVisibilityHash} from '../Components/Residency/visibilityHash'
 import VisibilityHashWriter from '../Components/Residency/VisibilityHashWriter'
 import SelectionHashWriter from './SelectionHashWriter'
-import {readSelectionHash, resolveSelectionRefs} from './selectionHash'
+import {readSelectionHash, resolveSelectionRefs, selectionFitsLink} from './selectionHash'
 import RootLandscape from './RootLandscape'
 import ViewerContainer from './ViewerContainer'
 import {
@@ -796,6 +796,12 @@ export default function CadView({
     if (anchors.length === 0) {
       return
     }
+    // Already the selection (the token was written from it): leave it, with
+    // its per-instance highlight.
+    const current = new Set((useStore.getState().selectedAnchorIds ?? []).map(String))
+    if (current.size === anchors.length && anchors.every((id) => current.has(String(id)))) {
+      return
+    }
     const ids = new Set()
     for (const id of anchors) {
       ids.add(id)
@@ -1218,8 +1224,9 @@ export default function CadView({
    * Extracts the path to the element from the url and selects the element
    *
    * @param {string} filepath Part of the URL that is the file path, e.g. index.ifc/1/2/3/...
+   * @param {boolean} [force] select it even if it's already among the selected
    */
-  function selectElementBasedOnFilepath(filepath) {
+  function selectElementBasedOnFilepath(filepath, force = false) {
     // Normalize to the element path BELOW the model file. The two callers
     // pass different shapes: the location watcher passes the already-split
     // element path ('/120010/.../2867' — no file suffix, split is a no-op),
@@ -1311,7 +1318,7 @@ export default function CadView({
         (occurrencePathsEqual(occurrencePath, state.selectedOccurrencePath) &&
           state.selectedSolidExpressId === solidExpressId) :
         idSelected
-      if (alreadySelected) {
+      if (alreadySelected && !force) {
         return
       }
       // Mirror the NavTree occurrence-click funnel: resolve the path to the
@@ -1467,11 +1474,24 @@ export default function CadView({
       // for any model under such a directory.
       const parts = location.pathname.split(fileSuffixBoundaryRegex)
       const expectedPartCount = 2
-      // A `#sel:` multi-selection owns the selection; the path names just its
-      // first row, and re-selecting that here on every hash change would
-      // collapse the multi-selection to it.
-      if (parts.length === expectedPartCount && parts[1] !== '' && !readSelectionHash(window.location)) {
-        selectElementBasedOnFilepath(parts[1])
+      // A `#sel:` token owns the selection (the path names just its first
+      // row), so a location carrying one applies it — which is also what makes
+      // Back and Forward through multi-selections restore them. Its writer
+      // keeps it in step with the selection, so it's a no-op for a change made
+      // here.
+      if (readSelectionHash(window.location)) {
+        selectFromSelectionHash()
+      } else if (parts.length === expectedPartCount && parts[1] !== '') {
+        // No token, yet several rows selected that would have written one (not
+        // a search, and not too many for a link): the location went Back to
+        // before the multi-selection, so the path's single element is the
+        // selection again. Forced, because that element is still among the
+        // selected and would otherwise be skipped.
+        const anchors = useStore.getState().selectedAnchorIds ?? []
+        const isMultiBack = anchors.length > 1 &&
+          !new URLSearchParams(window.location.search).has('q') &&
+          selectionFitsLink(anchors, viewer)
+        selectElementBasedOnFilepath(parts[1], isMultiBack)
       }
     }
   }, [location, model, rootElement])

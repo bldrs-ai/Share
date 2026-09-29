@@ -78,6 +78,16 @@ function makeIsolator(overrides = {}) {
 }
 
 
+/**
+ * @param {IfcIsolator} iso
+ * @param {number} nodeId a NavTree row id
+ * @return {boolean} whether any occurrence under that row is hidden
+ */
+function hasHiddenRow(iso, nodeId) {
+  return [...iso.hiddenOccurrencePaths.values()].some((entry) => entry.nodeId === nodeId)
+}
+
+
 describe('viewer/three/IfcIsolator', () => {
   describe('canBePickedInScene', () => {
     it('returns true for an element that is not hidden', () => {
@@ -638,18 +648,19 @@ describe('viewer/three/IfcIsolator', () => {
 
       const useStore = require('../../store/useStore').default
       iso.hideOccurrence(6, [1])
-      expect(iso.hiddenOccurrences.has(6)).toBe(true)
+      expect(hasHiddenRow(iso, 6)).toBe(true)
       // Store keyed by the NAUO node id so the NavTree eye toggles.
-      expect(useStore.setState).toHaveBeenLastCalledWith({hiddenElements: {6: true}})
+      expect(useStore.setState).toHaveBeenLastCalledWith(
+        {hiddenElements: {6: true}, hiddenOccurrenceKeys: {'#6': true}})
       expect(scene.children).not.toContain(model) // full model swapped for reveal
       expect(countTriangles(iso, iso.unhiddenSubset)).toBe(2) // instances 0 + 2
 
       // Unhiding the only hidden occurrence restores the full model.
       iso.unHideOccurrence(6)
-      expect(iso.hiddenOccurrences.has(6)).toBe(false)
+      expect(hasHiddenRow(iso, 6)).toBe(false)
       expect(scene.children).toContain(model)
       expect(iso.unhiddenSubset).toBeNull()
-      expect(useStore.setState).toHaveBeenLastCalledWith({hiddenElements: {}})
+      expect(useStore.setState).toHaveBeenLastCalledWith({hiddenElements: {}, hiddenOccurrenceKeys: {}})
     })
 
     it('hideSelectedElements hides one body of a no-NAUO multibody product (conway#628)', () => {
@@ -699,15 +710,15 @@ describe('viewer/three/IfcIsolator', () => {
       try {
         iso.hideSelectedElements()
         // Keyed by the body's own express id so its NavTree eye toggles alone.
-        expect(iso.hiddenOccurrences.has(367891)).toBe(true)
-        expect(iso.hiddenOccurrences.get(367891)).toEqual([1])
+        expect(hasHiddenRow(iso, 367891)).toBe(true)
+        expect(iso.hiddenOccurrences.get('367891#367891')).toEqual([1])
         // Two of the three bodies remain — hiding by the shared parent id
         // would have left zero.
         expect(countTriangles(iso, iso.unhiddenSubset)).toBe(2)
 
         // Second H press unhides it: the full model comes back.
         iso.hideSelectedElements()
-        expect(iso.hiddenOccurrences.has(367891)).toBe(false)
+        expect(hasHiddenRow(iso, 367891)).toBe(false)
         expect(scene.children).toContain(model)
       } finally {
         useStore.getState.mockImplementation(origGetState)
@@ -751,16 +762,17 @@ describe('viewer/three/IfcIsolator', () => {
         // Store carries BOTH keys — the occurrence eye key survives the product
         // write (hideElementsById also writes selectedElements, so assert the
         // specific hiddenElements call rather than the last).
-        expect(useStore.setState).toHaveBeenCalledWith({hiddenElements: {200: true, 6: true}})
+        expect(useStore.setState).toHaveBeenCalledWith(
+          {hiddenElements: {200: true, 6: true}, hiddenOccurrenceKeys: {'#6': true}})
         // Reveal shows parent 100 instances 0 + 2 (200 hidden, instance 1 hidden).
         expect(countTriangles(iso, iso.unhiddenSubset)).toBe(2)
 
         // Unhide the product — the occurrence must stay hidden (not resurrected).
         useStore.setState.mockClear()
         iso.unHideElementsById([200])
-        expect(iso.hiddenOccurrences.has(6)).toBe(true)
+        expect(hasHiddenRow(iso, 6)).toBe(true)
         expect(scene.children).not.toContain(model) // still a reveal subset, not full model
-        expect(useStore.setState).toHaveBeenCalledWith({hiddenElements: {6: true}})
+        expect(useStore.setState).toHaveBeenCalledWith({hiddenElements: {6: true}, hiddenOccurrenceKeys: {'#6': true}})
         // 200 restored (inst 3) + 100's insts 0,2 — instance 1 still excluded.
         // 3 of the 4 total instances (not 4) proves the occurrence stayed hidden.
         expect(countTriangles(iso, iso.unhiddenSubset)).toBe(3)
@@ -1116,7 +1128,7 @@ describe('viewer/three/IfcIsolator', () => {
 
         iso.hideSelectedElements()
         expect(visibility(mesh)).toEqual([false, true, false, true])
-        expect([...iso.hiddenOccurrencePaths.keys()].sort()).toEqual([11, 20])
+        expect([...iso.hiddenOccurrencePaths.values()].map(({nodeId}) => nodeId).sort()).toEqual([11, 20])
         // H again brings them back.
         iso.hideSelectedElements()
         expect(visibility(mesh)).toEqual([true, true, true, true])
@@ -1141,7 +1153,7 @@ describe('viewer/three/IfcIsolator', () => {
         iso.hideSelectedElements()
         // Keyed by the shared id, each used to overwrite the last: one copy stayed.
         expect(visibility(mesh)).toEqual([false, false, true, true])
-        expect(iso.hiddenOccurrencePaths.get(50).map(({occurrencePath}) => occurrencePath.join('/')).sort())
+        expect([...iso.hiddenOccurrencePaths.values()].map(({occurrencePath}) => occurrencePath.join('/')).sort())
           .toEqual(['10/50', '20/50'])
         iso.hideSelectedElements()
         expect(visibility(mesh)).toEqual([true, true, true, true])
@@ -1162,6 +1174,25 @@ describe('viewer/three/IfcIsolator', () => {
         useStoreMock.getState.mockReturnValue({...useStoreMock.getState(), selectedElements})
         iso.resetTempIsolation()
         expect(iso.isSelectionPaintSuppressed()).toBe(false)
+      })
+
+      it('hides and shows each copy of a reused sub-assembly on its own eye', () => {
+        // Two copies of sub-assembly 50 (under 10 and under 20) share row id 50.
+        const {iso, mesh} = setupBatchedIsolator()
+        const first = {occurrencePath: [10, 50], solidExpressId: null}
+        const second = {occurrencePath: [20, 50], solidExpressId: null}
+        iso.hideOccurrence(50, [0], first)
+        iso.hideOccurrence(50, [1], second)
+        // Keyed by row id, the second eye read "hidden" already and showed the first.
+        expect(visibility(mesh)).toEqual([false, false, true, true])
+        expect(useStoreMock.setState).toHaveBeenLastCalledWith({
+          hiddenElements: {50: true}, hiddenOccurrenceKeys: {'10/50#': true, '20/50#': true},
+        })
+        iso.unHideOccurrence(50, first)
+        expect(visibility(mesh)).toEqual([true, false, true, true])
+        expect(useStoreMock.setState).toHaveBeenLastCalledWith({
+          hiddenElements: {50: true}, hiddenOccurrenceKeys: {'20/50#': true},
+        })
       })
 
       it('gives every row with geometry an eye, leaf occurrences included', () => {
@@ -1651,7 +1682,7 @@ describe('viewer/three/IfcIsolator', () => {
       await iso.setModel(root)
       expect(iso.visualElementsIds).toEqual([0, 1, 2, 3, 4, 5, 6])
       expect(iso.hiddenIds).toEqual([2])
-      expect(useStoreMock.setState).toHaveBeenCalledWith({hiddenElements: {2: true}})
+      expect(useStoreMock.setState).toHaveBeenCalledWith({hiddenElements: {2: true}, hiddenOccurrenceKeys: {}})
       expect(useStoreMock.setState).toHaveBeenLastCalledWith({sceneGraphDefaultsSeeded: true})
       expect(facc.visible).toBe(false)
     })

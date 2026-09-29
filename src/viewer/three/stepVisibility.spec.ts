@@ -141,6 +141,12 @@ describeMobileAndDesktop('IFC scene multi-select', () => {
     const {anchors} = await selection(page)
     await expect.poll(() => hashToken(page, 'sel')).toBe(anchors.map((id) => `e${id}`).join(','))
 
+    // Back and Forward through the multi-selection restore each state.
+    await page.goBack()
+    await expect.poll(async () => (await selection(page)).anchors).toEqual([anchors[0]])
+    await page.goForward()
+    await expect.poll(async () => (await selection(page)).anchors.slice().sort()).toEqual(anchors.slice().sort())
+
     await page.reload()
     await waitForModelReady(page)
     await expect.poll(async () => (await selection(page)).anchors.slice().sort()).toEqual(anchors.slice().sort())

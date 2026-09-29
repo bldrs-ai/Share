@@ -8,7 +8,7 @@ import {
   isSceneGraphModel,
   sceneGraphElementIds,
 } from './sceneGraphVisibility'
-import {occurrencePathKey, selectedOccurrences} from '../../utils/occurrencePaths'
+import {occurrenceKey, occurrencePathKey, selectedOccurrences} from '../../utils/occurrencePaths'
 import {MeshLambertMaterial, DoubleSide, Mesh} from 'three'
 import useStore from '../../store/useStore'
 import {BlendFunction} from 'postprocessing'
@@ -58,19 +58,20 @@ export default class IfcIsolator {
   visualElementsIds = []
   spatialStructure = {}
   hiddenIds = []
-  // STEP per-occurrence hides: nodeId (NAUO express id) → the synthetic
-  // IfcInstanceMap instance ids placed at that occurrence. Separate from
-  // `hiddenIds` (product-type / expressID hides) because a reused part's
-  // occurrences share one geometry-owner expressID — hiding by that id would
-  // hide every reuse. The reveal subset omits the union of these instances so
-  // only the chosen occurrence disappears. Empty for IFC. See
-  // design/new/step-occurrence-selection.md.
+  // STEP per-occurrence hides: occurrence key (`occurrenceKey`: path + solid)
+  // → the synthetic IfcInstanceMap instance ids placed at that occurrence.
+  // Separate from `hiddenIds` (product-type / expressID hides) because a
+  // reused part's occurrences share one geometry-owner expressID — hiding by
+  // that id would hide every reuse. Keyed by occurrence rather than by the
+  // row's NAUO id because a reused sub-assembly's copies share their row
+  // ids, and each copy hides on its own. The reveal subset omits the union of
+  // these instances so only the chosen occurrence disappears. Empty for IFC.
+  // See design/new/step-occurrence-selection.md.
   hiddenOccurrences = new Map()
-  // The occurrences each `hiddenOccurrences` entry was resolved from, keyed the
-  // same: a list of `{occurrencePath, solidExpressId}`. The permalink
-  // (visibilityHash) writes these, since instance ids are per load and don't
-  // round-trip. A list because the duplicates of a reused sub-assembly share
-  // their node ids, so one key can stand for several occurrences.
+  // The occurrence each `hiddenOccurrences` entry came from, keyed the same:
+  // `{nodeId, occurrencePath, solidExpressId}`. The row id for the store and
+  // the eyes; the path for the permalink (visibilityHash), since instance ids
+  // are per load and don't round-trip.
   hiddenOccurrencePaths = new Map()
   // What the loader left hidden (scene-graph overlays, with their subtrees):
   // the baseline the permalink's hidden-state diff is taken against. Empty
@@ -694,10 +695,15 @@ export default class IfcIsolator {
     for (const id of this.hiddenIds) {
       hiddenElements[id] = true
     }
-    for (const nodeId of this.hiddenOccurrences.keys()) {
+    // Per occurrence, for the rows' eyes (`hiddenOccurrenceKeys`); and the row
+    // id, for everything that reads hidden ids (a copy of a reused
+    // sub-assembly marks the id its copies share).
+    const hiddenOccurrenceKeys = {}
+    for (const [key, {nodeId}] of this.hiddenOccurrencePaths) {
+      hiddenOccurrenceKeys[key] = true
       hiddenElements[nodeId] = true
     }
-    useStore.setState({hiddenElements})
+    useStore.setState({hiddenElements, hiddenOccurrenceKeys})
   }
 
 
@@ -730,11 +736,10 @@ export default class IfcIsolator {
    * `hideOccurrence` for several occurrences at once — a multi-selection's
    * Hide — rebuilding the view once rather than per occurrence.
    *
-   * Occurrences sharing a node id — the duplicates of a reused sub-assembly,
-   * which a selection of one of their rows names together — merge under it:
-   * their instances union and every path is kept, rather than each
-   * overwriting the last. That id is also the one the rows' eyes and the
-   * store read, so they hide and show together.
+   * Each occurrence is its own entry, so the copies of a reused
+   * sub-assembly — which share their row ids, and which a selection of one
+   * of their rows names together — are each hidden, rather than each
+   * overwriting the last.
    *
    * @param {Array<object>} occurrences `{nodeId, instanceIds, occurrencePath?,
    *   solidExpressId?}`; entries with no instances are skipped
@@ -748,17 +753,14 @@ export default class IfcIsolator {
       if (!Array.isArray(instanceIds) || instanceIds.length === 0) {
         continue
       }
-      const instances = new Set(this.hiddenOccurrences.get(nodeId) ?? [])
-      instanceIds.forEach((id) => instances.add(id))
-      this.hiddenOccurrences.set(nodeId, [...instances])
-      if (Array.isArray(occurrencePath) && occurrencePath.length > 0) {
-        const paths = this.hiddenOccurrencePaths.get(nodeId) ?? []
-        const key = `${occurrencePathKey(occurrencePath)}#${solidExpressId ?? null}`
-        if (!paths.some((each) => `${occurrencePathKey(each.occurrencePath)}#${each.solidExpressId}` === key)) {
-          paths.push({occurrencePath: [...occurrencePath], solidExpressId: solidExpressId ?? null})
-        }
-        this.hiddenOccurrencePaths.set(nodeId, paths)
-      }
+      const hasPath = Array.isArray(occurrencePath) && occurrencePath.length > 0
+      const key = occurrenceKey(occurrencePath, solidExpressId, nodeId)
+      this.hiddenOccurrences.set(key, [...instanceIds])
+      this.hiddenOccurrencePaths.set(key, {
+        nodeId,
+        occurrencePath: hasPath ? [...occurrencePath] : null,
+        solidExpressId: solidExpressId ?? null,
+      })
       changed = true
     }
     if (!changed) {
@@ -773,29 +775,45 @@ export default class IfcIsolator {
 
 
   /**
-   * Reverse `hideOccurrence` for one node. Restores the full model when nothing
-   * remains hidden (product-type or occurrence), else rebuilds the reveal.
+   * Reverse `hideOccurrence`. Restores the full model when nothing remains
+   * hidden (product-type or occurrence), else rebuilds the reveal.
    *
    * @param {number} nodeId NAUO express id previously passed to `hideOccurrence`
+   * @param {object} [occurrence] `{occurrencePath, solidExpressId}`: show just
+   *   this occurrence. Without it, every occurrence hidden under `nodeId`.
    */
-  unHideOccurrence(nodeId) {
-    this.unHideOccurrences([nodeId])
+  unHideOccurrence(nodeId, occurrence = null) {
+    this.unHideOccurrences([occurrence ? {nodeId, ...occurrence} : {nodeId}])
   }
 
 
   /**
-   * `unHideOccurrence` for several nodes at once.
+   * `unHideOccurrence` for several at once. An entry with a path shows that
+   * one occurrence; one without shows every occurrence hidden under its row
+   * id.
    *
-   * @param {Array<number>} nodeIds
+   * @param {Array<object>} occurrences `{nodeId, occurrencePath?, solidExpressId?}`
    */
-  unHideOccurrences(nodeIds) {
-    const hidden = nodeIds.filter((nodeId) => this.hiddenOccurrences.has(nodeId))
+  unHideOccurrences(occurrences) {
+    const keys = new Set()
+    for (const {nodeId, occurrencePath, solidExpressId} of occurrences) {
+      if (Array.isArray(occurrencePath) && occurrencePath.length > 0) {
+        keys.add(occurrenceKey(occurrencePath, solidExpressId, nodeId))
+      } else {
+        for (const [key, entry] of this.hiddenOccurrencePaths) {
+          if (entry.nodeId === nodeId) {
+            keys.add(key)
+          }
+        }
+      }
+    }
+    const hidden = [...keys].filter((key) => this.hiddenOccurrences.has(key))
     if (this.tempIsolationModeOn || hidden.length === 0) {
       return
     }
-    for (const nodeId of hidden) {
-      this.hiddenOccurrences.delete(nodeId)
-      this.hiddenOccurrencePaths.delete(nodeId)
+    for (const key of hidden) {
+      this.hiddenOccurrences.delete(key)
+      this.hiddenOccurrencePaths.delete(key)
     }
     this._syncHiddenStore()
     if (this.hiddenIds.length === 0 && this.hiddenOccurrences.size === 0) {
@@ -1010,11 +1028,13 @@ export default class IfcIsolator {
     // occurrence is already hidden, they come back.
     const occurrences = this._selectionOccurrences()
     if (occurrences.length > 0) {
-      if (occurrences.every(({nodeId}) => this.hiddenOccurrences.has(nodeId))) {
-        this.unHideOccurrences(occurrences.map(({nodeId}) => nodeId))
+      const isHidden = ({nodeId, occurrencePath, solidExpressId}) =>
+        this.hiddenOccurrences.has(occurrenceKey(occurrencePath, solidExpressId, nodeId))
+      if (occurrences.every(isHidden)) {
+        this.unHideOccurrences(occurrences)
       } else {
         this.hideOccurrences(occurrences
-          .filter(({nodeId}) => !this.hiddenOccurrences.has(nodeId))
+          .filter((occurrence) => !isHidden(occurrence))
           .map((occurrence) => ({...occurrence, instanceIds: this._occurrenceInstanceIds(occurrence)})))
       }
       return
@@ -1213,7 +1233,7 @@ export default class IfcIsolator {
     this.hiddenOccurrences.clear()
     this.hiddenOccurrencePaths.clear()
     this._restoreModelToScene()
-    useStore.setState({hiddenElements: {}})
+    useStore.setState({hiddenElements: {}, hiddenOccurrenceKeys: {}})
     // Rebuild the cyan selection visual from the preserved store
     // state. `hideSelectedElements` cleared the visual but kept the
     // store side (for H-toggle semantics); the Show All button

@@ -1,5 +1,6 @@
 import React, {ReactElement} from 'react'
 import useStore from '../store/useStore'
+import {occurrenceKey} from '../utils/occurrencePaths'
 import IfcIsolator from '../viewer/three/IfcIsolator'
 import {Visibility as VisibilityIcon, VisibilityOff as VisibilityOffIcon} from '@mui/icons-material'
 import GlassesIcon from '../assets/icons/Glasses.svg'
@@ -16,7 +17,12 @@ import GlassesIcon from '../assets/icons/Glasses.svg'
  * @return {ReactElement}
  */
 export default function HideToggleButton({elementId, occurrencePath = null, geometryExpressId = null}) {
-  const isHidden = useStore((state) => state.hiddenElements[elementId])
+  // A STEP occurrence row reads its own occurrence's state: the copies of a
+  // reused sub-assembly share their row ids, and each hides on its own.
+  const isOccurrence = Array.isArray(occurrencePath) && occurrencePath.length > 0
+  const isHidden = useStore((state) => (isOccurrence ?
+    state.hiddenOccurrenceKeys?.[occurrenceKey(occurrencePath, geometryExpressId)] :
+    state.hiddenElements[elementId]))
   const updateHiddenStatus = useStore((state) => state.updateHiddenStatus)
   const isIsolated = useStore((state) => state.isolatedElements[elementId])
   const isTempIsolationModeOn = useStore((state) => state.isTempIsolationModeOn)
@@ -38,7 +44,7 @@ export default function HideToggleButton({elementId, occurrencePath = null, geom
           viewer.getInstanceIdsForOccurrencePath(0, occurrencePath, {geometryExpressId}),
           {occurrencePath, solidExpressId: geometryExpressId})
       } else {
-        viewer.isolator.unHideOccurrence(elementId)
+        viewer.isolator.unHideOccurrence(elementId, {occurrencePath, solidExpressId: geometryExpressId})
       }
       return
     }

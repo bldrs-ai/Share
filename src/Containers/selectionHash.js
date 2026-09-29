@@ -58,6 +58,16 @@ export function selectionRefs(anchorIds, viewer) {
 
 
 /**
+ * @param {Array<number|string>} anchorIds the selected rows
+ * @param {object} viewer ShareViewer
+ * @return {boolean} whether their `#sel:` token fits a link
+ */
+export function selectionFitsLink(anchorIds, viewer) {
+  return selectionRefs(anchorIds, viewer).join(',').length <= SELECTION_MAX_CHARS
+}
+
+
+/**
  * Write the selection's rows to `#sel:`, or drop the token when the path
  * carries the selection (or it's too long to fit). A no-op until the isolator
  * has a model, so an incoming link's token isn't stripped before it was read.
