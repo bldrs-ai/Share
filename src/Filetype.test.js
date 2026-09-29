@@ -1,3 +1,4 @@
+import axios from 'axios'
 import {gzipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {
   FilenameParseError,
@@ -5,6 +6,8 @@ import {
   analyzeHeaderStr,
   fileSuffixBoundaryRegex,
   getValidExtension,
+  guessType,
+  guessTypeFromFile,
   guessTypeFromNameOrFile,
   isExtensionSupported,
   pathSuffixSupported,
@@ -550,5 +553,177 @@ describe('guessTypeFromNameOrFile', () => {
 
   it('answers null when neither the name nor the header knows', async () => {
     expect(await guessTypeFromNameOrFile(fileOf(UNRECOGNIZABLE_BYTES, 'mystery'))).toBe(null)
+  })
+})
+
+
+describe('binary STL, recognized by its structure', () => {
+  // Binary STL has no magic: an 80-byte header anyone may fill with anything,
+  // a little-endian uint32 triangle count, then 50 bytes per triangle. The one
+  // reliable signature is that arithmetic adding up to the file's length, so
+  // the sniff needs the whole file's size, not just its head
+  // (bldrs-ai/test-models#69).
+  const STL_HEADER_BYTES = 80
+  const STL_COUNT_BYTES = 4
+  const STL_TRIANGLE_BYTES = 50
+  // The sniff window `guessTypeFromFile` reads.
+  const SNIFF_WINDOW_BYTES = 1024
+
+  // The first triangle of the test-models#69 Dodge Challenger export, as
+  // stored: normal, three vertices (float32 LE), attribute word. Real bytes
+  // rather than zeros, so the payload the text checks see is what an STL
+  // actually carries.
+  const REAL_TRIANGLE_HEX =
+    '3bc259bf24624a3d7901063f2fdddcc13d0a51426abcda41f628dec193983e42ac1cdc41' +
+    '5839dcc13d0a5142a8c6db410000'
+  const HEX_RADIX = 16
+  /**
+   * @param {string} hex
+   * @return {Uint8Array}
+   */
+  const hexBytes = (hex) => Uint8Array.from(hex.match(/../g), (h) => parseInt(h, HEX_RADIX))
+  const REAL_TRIANGLE = hexBytes(REAL_TRIANGLE_HEX)
+
+  /**
+   * @param {Uint8Array} header up to 80 bytes; the rest of the header is zero
+   * @param {number} triangleCount written at offset 80, and laid out after it
+   * @param {number} [extraBytes] trailing bytes past what the count accounts for
+   * @return {Uint8Array} a whole binary STL file
+   */
+  function binaryStl(header, triangleCount, extraBytes = 0) {
+    const bytes = new Uint8Array(
+      STL_HEADER_BYTES + STL_COUNT_BYTES + (triangleCount * STL_TRIANGLE_BYTES) + extraBytes)
+    bytes.set(header.subarray(0, STL_HEADER_BYTES))
+    new DataView(bytes.buffer).setUint32(STL_HEADER_BYTES, triangleCount, true)
+    for (let i = 0; i < triangleCount; i++) {
+      bytes.set(REAL_TRIANGLE, STL_HEADER_BYTES + STL_COUNT_BYTES + (i * STL_TRIANGLE_BYTES))
+    }
+    return bytes
+  }
+
+  /**
+   * What `guessTypeFromFile` hands `analyzeHeader`: the head of the file.
+   *
+   * @param {Uint8Array} file
+   * @return {ArrayBuffer}
+   */
+  function headOf(file) {
+    return file.slice(0, SNIFF_WINDOW_BYTES).buffer
+  }
+
+  // Header of the test-models#69 Dodge Challenger export: 80 zero bytes.
+  const ZERO_HEADER = new Uint8Array(STL_HEADER_BYTES)
+  // Header of the test-models#69 Saturn V parts: Materialise's colored
+  // binary STL, "COLOR=" followed by an RGBA quad, space-padded.
+  const MATERIALISE_HEADER = (() => {
+    const header = new Uint8Array(STL_HEADER_BYTES).fill(' '.charCodeAt(0))
+    const prefix = new TextEncoder().encode('STLB ATF 8.12.0.6 COLOR=')
+    header.set(prefix)
+    header.set(hexBytes('191919ff'), prefix.length)
+    return header
+  })()
+  // More triangles than fit in the sniff window, so the count can only be
+  // checked against the file's size, never against the head's.
+  const TRIANGLES = 40
+
+  it('detects a binary STL whose header is all zero bytes', () => {
+    const file = binaryStl(ZERO_HEADER, TRIANGLES)
+    expect(analyzeHeader(headOf(file), {fileByteLength: file.byteLength})).toBe('stl')
+  })
+
+  it('detects a Materialise colored binary STL', () => {
+    const file = binaryStl(MATERIALISE_HEADER, TRIANGLES)
+    expect(analyzeHeader(headOf(file), {fileByteLength: file.byteLength})).toBe('stl')
+  })
+
+  it('lets the structure win over the header text of a binary STL', () => {
+    // Exporters often start the binary header with "solid" and the part name,
+    // which is also how ASCII STL starts — and the text checks that run
+    // before `solid` would claim this one for FBX.
+    const header = new TextEncoder().encode('solid wheel, converted from FBX')
+    const file = binaryStl(header, TRIANGLES)
+    expect(analyzeHeader(headOf(file), {fileByteLength: file.byteLength})).toBe('stl')
+  })
+
+  describe('when the free-form header starts with another format\'s signature', () => {
+    // The 80-byte header is anyone's to fill, so it can begin with bytes that
+    // are another format's magic. The size arithmetic is the stronger
+    // evidence, so it must be judged before any magic is believed.
+    it.each([
+      ['glTF (glb)', new TextEncoder().encode('glTF exported by some CAD tool')],
+      ['PXR-USDC (usdc)', new TextEncoder().encode('PXR-USDC part')],
+      ['AlignDataFile ( bin ) (adf)', new TextEncoder().encode('AlignDataFile ( bin ) part')],
+      ['a gzip member (1f 8b)', hexBytes('1f8b0800')],
+      ['PK\\x03\\x04 (zip)', hexBytes('504b0304')],
+    ])('types a binary STL whose header starts with %s as stl', (_label, header) => {
+      const file = binaryStl(header, TRIANGLES)
+      expect(analyzeHeader(headOf(file), {fileByteLength: file.byteLength})).toBe('stl')
+    })
+
+    it('still types a real GLB by its magic when its size does not satisfy the STL arithmetic', () => {
+      // The same stand-in the other GLB tests here use; the sniff reads only
+      // the magic, and this length is not 84 + 50n for any n.
+      const glb = new TextEncoder().encode('glTFand the chunks after it')
+      expect(analyzeHeader(headOf(glb), {fileByteLength: glb.byteLength})).toBe('glb')
+    })
+
+    it('still types a gzipped GLB as glb when its size does not satisfy the STL arithmetic', () => {
+      const glb = new TextEncoder().encode('glTFand the chunks after it')
+      const gz = gzipSync(glb)
+      expect(analyzeHeader(headOf(gz), {fileByteLength: gz.byteLength})).toBe('glb')
+    })
+  })
+
+  it('does not call it binary STL when the count does not add up to the size', () => {
+    // One byte over: the header is still the all-zero one that sniffs as
+    // STL at the right length, so only the arithmetic is being tested.
+    const file = binaryStl(ZERO_HEADER, TRIANGLES, 1)
+    expect(analyzeHeader(headOf(file), {fileByteLength: file.byteLength})).toBe(null)
+  })
+
+  it('does not call a header-only file binary STL', () => {
+    // 84 bytes and a zero count does add up, but an STL with no triangles is
+    // nothing to render, and any 84-byte file ending in four zeros would
+    // match — stay unrecognized.
+    const file = binaryStl(ZERO_HEADER, 0)
+    expect(analyzeHeader(headOf(file), {fileByteLength: file.byteLength})).toBe(null)
+  })
+
+  it('still detects ASCII STL when the size is known', () => {
+    const file = new TextEncoder().encode(
+      'solid cube\n  facet normal 0 0 1\n    outer loop\n      vertex 0 0 0\n')
+    expect(analyzeHeader(headOf(file), {fileByteLength: file.byteLength})).toBe('stl')
+  })
+
+  it('detects a dropped binary STL, which is sniffed without its name', async () => {
+    // The drag-and-drop seam (`utils/dragAndDrop.js`) goes by the bytes
+    // alone, so this is the path test-models#69's files failed on.
+    const file = Object.assign(new Blob([binaryStl(ZERO_HEADER, TRIANGLES)]), {name: 'part.stl'})
+    expect(await guessTypeFromFile(file)).toBe('stl')
+  })
+
+  it('detects a binary STL behind an extension-less URL, sized by Content-Range', async () => {
+    const file = binaryStl(MATERIALISE_HEADER, TRIANGLES)
+    const get = jest.spyOn(axios, 'get').mockResolvedValue({
+      status: 206,
+      data: file.slice(0, SNIFF_WINDOW_BYTES + 1).buffer,
+      headers: {'content-range': `bytes 0-${SNIFF_WINDOW_BYTES}/${file.byteLength}`},
+    })
+    try {
+      expect(await guessType('https://example.com/download')).toBe('stl')
+    } finally {
+      get.mockRestore()
+    }
+  })
+
+  it('detects a binary STL behind a URL whose server ignores Range', async () => {
+    // A 200 is the whole file, so its own length is the file's.
+    const file = binaryStl(ZERO_HEADER, TRIANGLES)
+    const get = jest.spyOn(axios, 'get').mockResolvedValue({status: 200, data: file.buffer, headers: {}})
+    try {
+      expect(await guessType('https://example.com/download')).toBe('stl')
+    } finally {
+      get.mockRestore()
+    }
   })
 })
