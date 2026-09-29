@@ -6,7 +6,7 @@ import {disablePageReloadApprovalCheck} from './event'
 import {trackAlert} from './alertTracking'
 import {navigateToModel} from './navigate'
 import {saveDnDFileToOpfsFallback} from './loader'
-import debug from './debug'
+import debug, {WARN} from './debug'
 
 
 /**
@@ -75,6 +75,14 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
   const type = await guessTypeFromFile(uploadedFile)
   if (type === null) {
     const message = `File upload of unknown type: type(${uploadedFile.type}) size(${uploadedFile.size})`
+    // The alert is the user's signal; this is the console's, which had none —
+    // a rejected drop left nothing to go on when reported (test-models#69).
+    // It names the file, which the alert deliberately does not: the alert's
+    // text is also its Sentry grouping key (`trackAlert`), and a per-file
+    // name would split that family into one issue per upload. At WARN, the
+    // level prod logs at; a bare `debug()` is INFO and prints nothing there.
+    debug(WARN).warn(
+      `handleFileDrop: "${uploadedFile.name}" (${uploadedFile.size} bytes) is not a recognized model format`)
     trackAlert(message)
     setAlert(message)
     if (onError) {

@@ -215,11 +215,11 @@ export function resetManagementApiTokenCache() {
 /**
  * Fetch (or reuse) an Auth0 Management API token via Client Credentials.
  *
- * Mirrors `record-load.js`'s private copy, which stays where it is: moving
- * the quota gate onto this module would change a function that was only just
- * converted from CommonJS to ESM (it failed to bundle on Netlify), and that
- * conversion was deliberately syntax-only. Keep the two in lock-step if the
- * token flow changes.
+ * `record-load.js` carries its own copy of this flow (a separate module-scope
+ * cache, no env-var check, raw axios errors that its handler maps to 502).
+ * Nothing requires the duplication — folding the quota gate onto this module
+ * is a refactor that hasn't been done yet. Until it is, keep the two in
+ * lock-step if the token flow changes.
  *
  * @return {Promise<string>} Management API access token
  * @throws {ManagementApiError} `mgmt_config` when a credential env var is

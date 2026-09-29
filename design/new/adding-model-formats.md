@@ -38,6 +38,14 @@ one. Order matters: binary checks run before the UTF-8 decode, and
 within `analyzeHeaderStr` the more specific patterns must precede the
 loose numeric ones (OBJ/XYZ match nearly any numeric text).
 
+A format with no magic at all may still have a structural signature.
+Binary STL's 80-byte header is free text (all zeros, a part name,
+Materialise's `COLOR=`), so it is recognized by its triangle count
+accounting for the file to the byte — which needs the whole file's
+size, passed as `analyzeHeader`'s `fileByteLength` (from `File.size`,
+or a Range response's `Content-Range`). Without it that check is
+skipped (test-models#69).
+
 Be conservative. A sniff that is too broad silently swallows unrelated
 uploads: gating `usdz` on a bare `PK` zip signature would have
 classified every `.docx` and `.zip` as a model, turning a clean
@@ -72,6 +80,18 @@ Add a `case` returning the tuple
 - **`fixupCb`** — only if the loader returns something other than a
   renderable `Object3D` (see `stl.js`, `pdb.js`, `glb.js`). A loader
   returning a `Group` needs none.
+- **Colors the loader already decodes are the fixup's to render.**
+  STLLoader parses binary STL's Materialise colors (a `COLOR=` header
+  tag, then a 5-bit RGB in each facet's attribute word) into a linear
+  `color` attribute plus `geometry.hasColors`/`alpha`; `stl.js` turns
+  that into `vertexColors` over a white base and leaves uncolored
+  files in the default blue-grey. A loader's linear colors need
+  converting back to sRGB when `?feature=look` is off, or the legacy
+  linear output shows them gamma-darkened; `makeSurfaceVertexColors`
+  (lookMaterial.js) does that, as `makeSurfaceColor` does for IFC. The
+  color-space reasoning and the
+  cases it declines (all-black facets, zero alpha, the VisCAM bit
+  layout STLLoader doesn't read) are in its header.
 - Related extensions can share one arm when the loader sniffs the
   variant itself.
 - `readModel` calls `loader.parse(modelData, basePath)`. A loader whose

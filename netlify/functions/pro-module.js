@@ -58,12 +58,15 @@ const PRO_MODULES_DIR_NAME = '_pro-modules'
 
 
 // Where `included_files` land inside the deployed bundle, relative to the
-// task root — and the two bundlers disagree, which is why both spellings
-// are tried. esbuild (netlify.toml) strips the functions directory, so
-// `netlify/functions/_pro-modules/x.js` ships as `_pro-modules/x.js`; nft
-// keeps the repo-relative path. Both verified by unzipping local
-// `zip-it-and-ship-it netlify/functions` builds. The repo-relative spelling
-// is also what `netlify dev` sees, running with the repo root as `cwd`.
+// task root. Both spellings are tried because the layout has varied with the
+// bundler and isn't worth guessing wrong. With the current bundler (esbuild
+// via netlify.toml, zip-it-and-ship-it 14.5.4) the repo-relative
+// `netlify/functions/_pro-modules/x.js` is kept as-is — the second entry
+// below is the match, verified by bundling with
+// tools/netlify/bundleFunctions.mjs (functionBundler.test.js asserts it).
+// The task-root `_pro-modules/x.js` spelling is a fallback for a bundler
+// that strips the functions directory. The repo-relative spelling is also
+// what `netlify dev` sees, running with the repo root as `cwd`.
 const PRO_MODULES_RELATIVE_PATHS = [
   [PRO_MODULES_DIR_NAME],
   ['netlify', 'functions', PRO_MODULES_DIR_NAME],

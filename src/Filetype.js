@@ -199,7 +199,34 @@ export async function guessType(path) {
     responseType: 'arraybuffer',
   })
   const headerBuffer = response.data
-  return analyzeHeader(headerBuffer)
+  const fileByteLength = fileByteLengthOfRangeResponse(
+    response.status, response.headers?.['content-range'], headerBuffer)
+  return analyzeHeader(headerBuffer, {fileByteLength})
+}
+
+
+/**
+ * The size of the WHOLE file behind a `Range: bytes=0-N` response, which
+ * binary STL detection needs (`looksLikeBinaryStl`).
+ *
+ * A 206 states it after the slash of `Content-Range: bytes 0-N/TOTAL` — `*`
+ * when the server does not know it. A 200 means the server ignored the
+ * Range and sent the whole file, so its body's length is the answer. Anything
+ * else is undefined, which skips the structural STL check rather than
+ * guessing.
+ *
+ * @param {number} status HTTP status
+ * @param {string|undefined} contentRange the `Content-Range` header, if any
+ * @param {ArrayBuffer} body the response body
+ * @return {number|undefined}
+ */
+function fileByteLengthOfRangeResponse(status, contentRange, body) {
+  const total = typeof contentRange === 'string' ? /\/(\d+)\s*$/.exec(contentRange) : null
+  if (total !== null) {
+    return Number(total[1])
+  }
+  const HTTP_OK = 200
+  return status === HTTP_OK ? body?.byteLength : undefined
 }
 
 
@@ -216,7 +243,7 @@ export async function guessTypeFromFile(file) {
   const end = Math.min(file.size, headerLimit)
   const fileSlice = file.slice(start, end)
   const headerBuffer = await fileSlice.arrayBuffer()
-  return analyzeHeader(headerBuffer)
+  return analyzeHeader(headerBuffer, {fileByteLength: file.size})
 }
 
 
@@ -258,9 +285,28 @@ export async function guessTypeFromNameOrFile(file) {
  * @param {boolean} [options.isEnvelopeAllowed] Look INSIDE a gzip member for
  *   a model. False on the recursive call, so `.gz.gz` reads as unknown
  *   instead of unwrapping forever — one envelope is the whole feature.
+ * @param {number} [options.fileByteLength] Size of the whole file
+ *   `headerBuffer` is the head of. Binary STL can only be recognized with it
+ *   (`looksLikeBinaryStl`); left out — as for the inside of a gzip envelope,
+ *   whose inflated size is not known here — that check is skipped.
  * @return {string|null} type
  */
-export function analyzeHeader(headerBuffer, {isEnvelopeAllowed = true} = {}) {
+export function analyzeHeader(headerBuffer, {isEnvelopeAllowed = true, fileByteLength} = {}) {
+  // Structure before magic. A binary STL's 80-byte header is free-form, so an
+  // exporter may begin it with anything — including "glTF", "PXR-USDC", gzip's
+  // 1f 8b or "PK\x03\x04" — and the magic checks below would then type or
+  // reject a valid STL by bytes that mean nothing there. The size check is
+  // the stronger evidence: it needs the uint32 at offset 80 to account for
+  // the whole file (`84 + 50 * n === size`). In text-based content those
+  // count bytes are printable ASCII (n >= 0x20202020, a 27 GB file); in the
+  // binary formats sniffed here (compressed gzip/zip streams, GLB and USDC
+  // payloads) it holds only by a ~2^-32 coincidence. It also runs before the
+  // text decode, which would judge the header by whatever the exporter wrote
+  // in it — nothing for an all-zero header, 'fbx' for one mentioning FBX,
+  // and only by luck 'stl' for one starting with "solid".
+  if (fileByteLength !== undefined && looksLikeBinaryStl(headerBuffer, fileByteLength)) {
+    return 'stl'
+  }
   // Check binary formats first (binary files won't decode properly as UTF-8)
   if (matchesMagic(headerBuffer, GLB_MAGIC)) {
     return 'glb'
@@ -310,6 +356,47 @@ export function analyzeHeader(headerBuffer, {isEnvelopeAllowed = true} = {}) {
   const decoder = new TextDecoder('utf-8')
   const headerStr = decoder.decode(headerBuffer)
   return analyzeHeaderStr(headerStr)
+}
+
+
+// Binary STL layout: an 80-byte header, a little-endian uint32 triangle
+// count, then per triangle a normal and three vertices (12 float32s) and a
+// 2-byte attribute word.
+const STL_HEADER_BYTES = 80
+const STL_COUNT_BYTES = 4
+const STL_TRIANGLE_BYTES = 50
+
+
+/**
+ * True when the file is a binary STL, judged by its structure alone.
+ *
+ * Binary STL has no magic number: the 80-byte header is free-form, and
+ * exporters fill it with zeros, a part name, "solid ..." (which is how ASCII
+ * STL begins), or Materialise's `COLOR=` block. What every binary STL does
+ * have is a triangle count that accounts for the file to the byte:
+ * `84 + 50 * count === size`. That is the same test three's `STLLoader`
+ * makes first, so a file passing it here parses as binary there.
+ *
+ * Deliberately exact. `STLLoader` goes on to treat any file not starting
+ * with "solid" as binary, but as a sniff that would claim every unknown
+ * upload. So a padded or truncated binary STL still opens only where its
+ * `.stl` name is read (a URL, the Open dialog's `guessTypeFromNameOrFile`),
+ * not by drag-and-drop. ASCII STL cannot pass by accident: its count bytes
+ * are text, at least 0x09 each, which implies a file of 7.5 GB or more.
+ * A zero count is refused too — 84 bytes ending in four zeros is too weak a
+ * signal, and an STL with no triangles has nothing to show.
+ *
+ * @param {ArrayBuffer} headerBuffer the head of the file, at least 84 bytes
+ * @param {number} fileByteLength the whole file's size
+ * @return {boolean}
+ */
+function looksLikeBinaryStl(headerBuffer, fileByteLength) {
+  const countEnd = STL_HEADER_BYTES + STL_COUNT_BYTES
+  if (headerBuffer.byteLength < countEnd) {
+    return false
+  }
+  const triangleCount = new DataView(headerBuffer).getUint32(STL_HEADER_BYTES, true)
+  return triangleCount > 0 && countEnd + (triangleCount * STL_TRIANGLE_BYTES) === fileByteLength
 }
 
 
@@ -470,8 +557,9 @@ export function analyzeHeaderStr(header) {
   } else if (header.match(/\s*(HEADER|COMPND|ORIGX1)/)) { // matches IFC & STEP, so put after
     return 'pdb'
   } else if (header.startsWith('solid') || header.includes('VCG')) {
-    // TODO(pablo): binary STL is an arbitrary 80 byte header, followed by an
-    // int for number of triangles, and then triangle data, 50 bytes per
+    // ASCII STL, and the binary STLs whose free-form header happens to say
+    // so. Binary STL in general is recognized by its size, which a string
+    // cannot carry — see `analyzeHeader`'s `looksLikeBinaryStl`.
     return 'stl'
   } else if (header.match(/(^\s*(#.*|\s*)$)*(\s*-?\d+(\.\d+)?){3}\s*$/m)) {
     return 'xyz'
