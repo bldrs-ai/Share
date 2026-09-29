@@ -1,26 +1,56 @@
 {
-  "description": "A cancelled subscription marks the Auth0 user freePendingReauth.",
-  "env": {"$fixture": "env/stripe.json"},
+  "description": "A cancelled subscription (canceled in Stripe now) marks the Auth0 user freePendingReauth.",
+  "env": {
+    "$fixture": "env/stripe.json"
+  },
   "request": {
     "method": "POST",
     "path": "/.netlify/functions/stripe-webhook",
-    "headers": {"content-type": "application/json; charset=utf-8"},
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
     "sign": "stripe",
-    "body": {"$fixture": "stripe/event.subscription.deleted.json"}
+    "body": {
+      "$fixture": "stripe/event.subscription.deleted.json"
+    }
   },
   "exchanges": [
-    {"$fixture": "exchanges/stripe-customer.json"},
-    {"$fixture": "exchanges/auth0-mgmt-token.json"},
-    {"$fixture": "exchanges/auth0-users-by-email.json"},
+    {
+      "$fixture": "exchanges/stripe-subscription-canceled.json"
+    },
+    {
+      "$fixture": "exchanges/stripe-customer.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-users-by-email.json"
+    },
     {
       "request": {
         "method": "PATCH",
         "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
-        "headers": {"authorization": "Bearer mgmt-token-replay"},
-        "body": {"app_metadata": {"subscriptionStatus": "freePendingReauth", "stripeCustomerId": "cus_Rreplay0001"}}
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        },
+        "body": {
+          "app_metadata": {
+            "subscriptionStatus": "freePendingReauth",
+            "stripeCustomerId": "cus_Rreplay0001"
+          }
+        }
       },
-      "response": {"status": 200, "json": {"$fixture": "auth0/user.json"}}
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json"
+        }
+      }
     }
   ],
-  "expect": {"statusCode": 200, "bodyIncludes": "Success"}
+  "expect": {
+    "statusCode": 200,
+    "bodyIncludes": "Success"
+  }
 }

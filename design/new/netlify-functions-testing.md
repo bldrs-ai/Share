@@ -89,10 +89,17 @@ reported. A harness that passed vacuously would be worse than none.
 credentials. The answers are 401 for a missing bearer token and 400 for a
 missing Stripe signature or Drive id. Those need no secrets and touch no
 upstream, yet they only come back if the function started.
+- Every accepted answer is a status **and** a phrase only the handler says
+  (`missing_auth0_token`, `Missing file ID`, …), or for `pro-module`'s served
+  module, a JavaScript content type. A bare status isn't enough, because the
+  platform answers some statuses itself. Netlify's 404 for a function missing
+  from the deploy would otherwise pass as `pro-module`'s `module_not_built`.
 - A 502/503/504, or a Lambda `errorType` body, is a crash. It gets one retry
   after 5 s, so a single platform hiccup doesn't page anyone.
 - `--strict` (production) also rejects "not configured" answers, which a
-  preview missing secrets may legitimately give.
+  preview missing secrets may legitimately give. `functionBundler.test.js`
+  holds the real bundles to both modes: strict with every production secret
+  set, lenient with none.
 
 The workflow runs:
 - **On each Netlify `deploy-preview` success status.** Both Netlify projects
@@ -145,13 +152,29 @@ So the status code is the retry policy:
 |---|---|
 | Update written | 200 |
 | Permanent: no email on the customer, customer deleted, no Auth0 user for the email, unhandled event type | 200, reported to Sentry |
-| Transient: Stripe or Auth0 unreachable or erroring at any step | **500**, so Stripe redelivers (the PATCH is idempotent) |
+| Permanent upstream answer: 400, 404, 410 or 422 from Stripe or Auth0 (e.g. Stripe's `resource_missing`) | 200, reported to Sentry |
+| Transient: network error, 408/409/429, any 5xx | **500**, so Stripe redelivers |
+| Credentials rejected: 401/403 from Stripe or Auth0 | **500**. A revoked key is a config fault someone will fix within Stripe's three-day window, and the retries then deliver what was missed. |
 | Missing signature | 400, not reported (probes and scanners) |
 | Bad signature | 400, reported |
 | Missing secret | 500 "not configured", naming the variable in the log |
 
-Before ops#33 the transient row answered 200 too. That turned every Auth0
-blip into a subscription update lost with no retry.
+Before ops#33 every failure answered 200. That turned each Auth0 blip into
+a subscription update lost with no retry.
+
+**Retries and ordering.** Stripe doesn't guarantee delivery order, and a
+retried delivery can arrive after later events. So the handler never trusts
+the event's payload for the status it writes. It fetches the subscription's
+*current* state (`GET /v1/subscriptions/{id}`) and writes what that maps to:
+- ended (`canceled`, `incomplete_expired`) → `freePendingReauth`;
+- otherwise, the Share Pro price → `shareProPendingReauth`;
+- otherwise, the Stripe status.
+
+A `created` retried after its subscription's `deleted` therefore writes the
+same `freePendingReauth` the `deleted` did, instead of re-marking a
+cancelled user as Pro. Every delivery converges on the latest truth,
+whatever order they arrive in (replay scenario
+`created-after-cancellation-writes-current-state`).
 
 ## Known gaps and follow-ups
 
@@ -161,10 +184,10 @@ blip into a subscription update lost with no retry.
 - **Subscription changes are not mirrored.** `customer.subscription.updated`
   (past_due, unpaid, plan changes) is acknowledged and ignored, so only
   creation and deletion reach Auth0. That's a product gap, not a test gap.
-- **Order is not guarded.** A retried `created` delivered after `deleted`
-  would re-mark a cancelled user. That was already possible under Stripe's
-  retry of 502s. After an outage, reconciling from current Stripe state
-  (ops#33) is safer than replaying events one at a time.
+- **One subscription per event.** The status written comes from the
+  event's own subscription. A customer with two subscriptions, one of them
+  cancelled, is marked by whichever event arrived last. That's pre-existing,
+  and rare while Share sells one plan.
 - **Two copies of the Management API token flow** remain (`record-load.js`,
   `stripe-webhook.js`, `create-portal-session.js`, `unlink-identity.js`
   versus `_lib/auth0.js`). The replays pin their outbound requests, so

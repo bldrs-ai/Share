@@ -7,20 +7,31 @@
  *   Headers: Stripe-Signature: t=…,v1=…
  *   Body:    the raw Stripe event JSON (signature is over these exact bytes)
  *
- *   customer.subscription.created → subscriptionStatus = 'shareProPendingReauth'
- *                                   (Share Pro price) or the Stripe status
- *   customer.subscription.deleted → subscriptionStatus = 'freePendingReauth'
+ * On `customer.subscription.created` and `.deleted`, the status written is
+ * derived from the subscription's CURRENT state, fetched from Stripe, not
+ * from the event payload:
+ *   ended (canceled / incomplete_expired) → 'freePendingReauth'
+ *   otherwise, Share Pro price             → 'shareProPendingReauth'
+ *   otherwise                              → the Stripe status
+ * Stripe doesn't guarantee delivery order, and a failed delivery is retried
+ * later — so a `created` retried after its subscription's `deleted` would,
+ * if it trusted its own payload, re-mark a cancelled user as Pro. Reading
+ * the current state makes every delivery write the same, latest truth, in
+ * whatever order they land.
  *
  * Response codes are chosen for what Stripe does with them, since Stripe
  * retries any non-2xx with backoff for up to three days
  * (https://docs.stripe.com/webhooks#retries):
  *   - 200 once the update is written, and also for PERMANENT conditions a
  *     retry can't fix — no email on the customer, no Auth0 user for that
- *     email, an event type we don't handle. Those go to Sentry instead.
- *   - 500 for TRANSIENT failures — Stripe or Auth0 unreachable or erroring.
- *     This used to return 200 for those too ("so Stripe doesn't retry
- *     indefinitely"), which turned every Auth0 blip into a silently lost
- *     subscription update. The PATCH is idempotent, so a retry is safe.
+ *     email, an event type we don't handle, or an upstream answering
+ *     400/404/410/422 (e.g. Stripe's `resource_missing`). Those go to Sentry.
+ *   - 500 for TRANSIENT failures — a network error, 429, 5xx, and also
+ *     401/403: a revoked Stripe key or Auth0 client secret is a config fault
+ *     that someone will fix, and Stripe's retries then deliver what was
+ *     missed. This used to return 200 for every failure ("so Stripe doesn't
+ *     retry indefinitely"), which turned each Auth0 blip into a silently
+ *     lost subscription update.
  *   - 400 for a missing or bad signature, 500 when unconfigured.
  *
  * The Stripe client is built per request rather than at module scope:
@@ -30,7 +41,8 @@
  *
  * Tests: netlify/functions/_tests/stripe-webhook.test.js (behaviour, mocked),
  * netlify/functions/_tests/replay/stripe-webhook/ (fixtures replayed against
- * the source and against the deployed bundle).
+ * the source and against the deployed bundle). Contract summary:
+ * design/new/netlify-functions-testing.md §"stripe-webhook's response contract".
  */
 
 import Stripe from 'stripe'
@@ -46,9 +58,20 @@ Sentry.AWSLambda.init({
 
 const HTTP_OK = 200
 const HTTP_BAD_REQUEST = 400
+const HTTP_NOT_FOUND = 404
+const HTTP_GONE = 410
+const HTTP_UNPROCESSABLE = 422
 const HTTP_INTERNAL_ERROR = 500
 
 const REQUIRED_ENV = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'AUTH0_DOMAIN', 'AUTH0_CLIENT_ID', 'AUTH0_CLIENT_SECRET']
+const HANDLED_EVENT_TYPES = new Set(['customer.subscription.created', 'customer.subscription.deleted'])
+// Stripe subscription statuses after which the subscription can never be
+// active again.
+const ENDED_SUBSCRIPTION_STATUSES = new Set(['canceled', 'incomplete_expired'])
+// Upstream answers that mean "this request will never succeed". Everything
+// else — no status at all (network), 401/403 (config), 408/409/429, 5xx —
+// is worth Stripe's retry. See the header for why 401/403 are retried.
+const PERMANENT_UPSTREAM_STATUSES = new Set([HTTP_BAD_REQUEST, HTTP_NOT_FOUND, HTTP_GONE, HTTP_UNPROCESSABLE])
 
 
 /**
@@ -72,10 +95,13 @@ async function getManagementApiToken() {
 
 
 /**
- * @param {object} subscription Stripe subscription object
- * @return {string} the subscriptionStatus to write for a new subscription
+ * @param {object} subscription Stripe subscription object, as it is now
+ * @return {string} the subscriptionStatus that state maps to
  */
-function statusForCreatedSubscription(subscription) {
+function statusForSubscription(subscription) {
+  if (ENDED_SUBSCRIPTION_STATUSES.has(subscription.status)) {
+    return 'freePendingReauth'
+  }
   const items = subscription.items && subscription.items.data
   const isPro = Array.isArray(items) &&
     items.some((item) => item.price && item.price.id === process.env.SHARE_PRO_PRICE_ID)
@@ -84,19 +110,34 @@ function statusForCreatedSubscription(subscription) {
 
 
 /**
- * Write `subscriptionStatus` (and the customer id) onto the Auth0 user whose
- * email matches the Stripe customer's.
+ * The HTTP status an upstream failure carried: axios puts it on
+ * `err.response.status`, the Stripe SDK on `err.statusCode`.
  *
- * Throws on transient failures (network, Stripe/Auth0 5xx) so the handler
- * can ask Stripe to retry. Returns `{permanent: reason}` for conditions a
- * retry won't change.
+ * @param {Error} err
+ * @return {?number} null for a failure with no response (network, timeout)
+ */
+function upstreamStatus(err) {
+  return (err && err.response && err.response.status) || (err && err.statusCode) || null
+}
+
+
+/**
+ * Write the subscription's current status (and the customer id) onto the
+ * Auth0 user whose email matches the Stripe customer's.
+ *
+ * Throws on upstream failures; the handler decides from the status whether
+ * Stripe should retry. Returns `{permanent: reason}` for conditions a retry
+ * won't change.
  *
  * @param {object} stripe Stripe client
- * @param {string} stripeCustomerId
- * @param {string} subscriptionStatus
- * @return {Promise<{updated: string}|{permanent: string}>}
+ * @param {string} subscriptionId
+ * @return {Promise<object>} `{updated: auth0UserId, subscriptionStatus}` or `{permanent: reason}`
  */
-async function writeSubscriptionStatus(stripe, stripeCustomerId, subscriptionStatus) {
+async function syncSubscription(stripe, subscriptionId) {
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+  const subscriptionStatus = statusForSubscription(subscription)
+  const stripeCustomerId = subscription.customer
+
   const customer = await stripe.customers.retrieve(stripeCustomerId)
   // A deleted customer comes back as {id, deleted: true} with no email.
   const customerEmail = customer && customer.email
@@ -126,7 +167,7 @@ async function writeSubscriptionStatus(stripe, stripeCustomerId, subscriptionSta
       },
     },
   )
-  return {updated: auth0UserId}
+  return {updated: auth0UserId, subscriptionStatus}
 }
 
 
@@ -161,32 +202,32 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
     return {statusCode: HTTP_BAD_REQUEST, body: `Webhook Error: ${err.message}`}
   }
 
-  // 2. Map the event to a status, or acknowledge and ignore it.
-  const subscription = stripeEvent.data && stripeEvent.data.object
-  let subscriptionStatus
-  if (stripeEvent.type === 'customer.subscription.created') {
-    subscriptionStatus = statusForCreatedSubscription(subscription)
-  } else if (stripeEvent.type === 'customer.subscription.deleted') {
-    subscriptionStatus = 'freePendingReauth'
-  } else {
+  // 2. Acknowledge and ignore anything but the subscription lifecycle.
+  if (!HANDLED_EVENT_TYPES.has(stripeEvent.type)) {
     // Type and id only: the full event carries the customer's email.
     Sentry.captureMessage(`stripe-webhook: unhandled event type ${stripeEvent.type} (${stripeEvent.id})`, 'info')
     return {statusCode: HTTP_OK, body: 'Ignored'}
   }
 
-  // 3. Write it to Auth0.
+  // 3. Write the subscription's current state to Auth0.
+  const label = `${stripeEvent.type} ${stripeEvent.id}`
   try {
-    const result = await writeSubscriptionStatus(stripe, subscription.customer, subscriptionStatus)
+    const result = await syncSubscription(stripe, stripeEvent.data.object.id)
     if (result.permanent) {
-      Sentry.captureException(new Error(`${result.permanent} (${stripeEvent.type} ${stripeEvent.id})`))
+      Sentry.captureException(new Error(`${result.permanent} (${label})`))
       return {statusCode: HTTP_OK, body: 'Acknowledged; not applied'}
     }
   } catch (err) {
-    // Transient: let Stripe retry. The status and id go to the function log
-    // so a failed delivery can be matched to its cause without Sentry.
-    const upstream = err.response ? ` (upstream ${err.response.status})` : ''
-    console.error(`stripe-webhook: ${stripeEvent.type} ${stripeEvent.id} failed${upstream}: ${err.message}`)
+    // The status and id go to the function log so a failed delivery can be
+    // matched to its cause without Sentry.
+    const status = upstreamStatus(err)
+    const upstream = status === null ? '' : ` (upstream ${status})`
     Sentry.captureException(err)
+    if (PERMANENT_UPSTREAM_STATUSES.has(status)) {
+      console.error(`stripe-webhook: ${label} not applied${upstream}, not retryable: ${err.message}`)
+      return {statusCode: HTTP_OK, body: 'Acknowledged; not applied'}
+    }
+    console.error(`stripe-webhook: ${label} failed${upstream}: ${err.message}`)
     return {statusCode: HTTP_INTERNAL_ERROR, body: 'Subscription update failed; Stripe will retry'}
   }
 

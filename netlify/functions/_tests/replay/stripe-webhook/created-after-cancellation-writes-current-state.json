@@ -1,5 +1,5 @@
 {
-  "description": "A new Share Pro subscription marks the Auth0 user shareProPendingReauth. The status comes from the subscription's current state in Stripe; the user is found by the customer's email.",
+  "description": "A `created` delivered after its subscription was cancelled (a retry, or out-of-order delivery) writes the CURRENT state, freePendingReauth, instead of re-marking a cancelled user as Pro from its stale payload.",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -40,7 +40,7 @@
   },
   "exchanges": [
     {
-      "$fixture": "exchanges/stripe-subscription-pro.json"
+      "$fixture": "exchanges/stripe-subscription-canceled.json"
     },
     {
       "$fixture": "exchanges/stripe-customer.json"
@@ -55,12 +55,9 @@
       "request": {
         "method": "PATCH",
         "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
-        "headers": {
-          "authorization": "Bearer mgmt-token-replay"
-        },
         "body": {
           "app_metadata": {
-            "subscriptionStatus": "shareProPendingReauth",
+            "subscriptionStatus": "freePendingReauth",
             "stripeCustomerId": "cus_Rreplay0001"
           }
         }

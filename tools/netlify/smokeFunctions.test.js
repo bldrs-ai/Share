@@ -27,6 +27,16 @@ const BASE = 'https://smoke.test'
 
 
 /**
+ * @param {string} name function name
+ * @return {{status: number, body: string}} the answer its strict probe wants
+ */
+function strictAnswer(name) {
+  const {status, body} = PROBES.find((p) => p.name === name).strict[0]
+  return {status, body}
+}
+
+
+/**
  * A fetch stand-in answering each function from `answers[name]`, which is a
  * `{status, body}` or a list of them consumed one per call (for retries).
  *
@@ -39,14 +49,14 @@ function fakeFetch(answers, fallback) {
   const impl = (url) => {
     const name = new URL(url).pathname.split('/').pop()
     calls[name] = (calls[name] || 0) + 1
-    let answer = answers[name] ?? fallback ?? {status: PROBES.find((p) => p.name === name).strict[0], body: ''}
+    let answer = answers[name] ?? fallback ?? strictAnswer(name)
     if (Array.isArray(answer)) {
       answer = answer[Math.min(calls[name], answer.length) - 1]
     }
     if (answer instanceof Error) {
       return Promise.reject(answer)
     }
-    return Promise.resolve(new Response(answer.body ?? '', {status: answer.status}))
+    return Promise.resolve(new Response(answer.body ?? '', {status: answer.status, headers: answer.headers}))
   }
   impl.calls = calls
   return impl
@@ -74,8 +84,18 @@ describe('smoke probes match tested behaviour', () => {
     // Credentials are exactly what a probe must not send.
     expect(Object.keys(scenario.request.headers || {}).map((h) => h.toLowerCase())).not.toContain('authorization')
     // Scenario env is fully configured, so its answer is the strict one.
-    expect(probe.strict).toContain(scenario.expect.statusCode)
+    expect(probe.strict.map((answer) => answer.status)).toContain(scenario.expect.statusCode)
     expect(probe.accept).toEqual(expect.arrayContaining(probe.strict))
+  })
+
+  // A bare status can come from the platform instead of the function (a 404
+  // for a function missing from the deploy), so every accepted answer must
+  // also name something only the handler says.
+  it.each(PROBES.map((p) => [p.name, p]))('%s: every accepted answer names the handler\'s own body or content type', (name, probe) => {
+    for (const answer of [...probe.accept, ...probe.strict]) {
+      expect(typeof answer.status).toBe('number')
+      expect(Boolean(answer.body) || Boolean(answer.contentType)).toBe(true)
+    }
   })
 })
 
@@ -106,12 +126,47 @@ describe('smokeFunctions', () => {
   })
 
   it('forgives a single transient 502', async () => {
-    const fetchImpl = fakeFetch({'record-load': [{status: 502, body: 'Bad Gateway'}, {status: 401, body: ''}]})
+    const fetchImpl = fakeFetch({'record-load': [{status: 502, body: 'Bad Gateway'}, strictAnswer('record-load')]})
 
     const results = await smokeFunctions(BASE, {fetchImpl, retryDelayMs: 0})
 
     expect(results.find((r) => r.name === 'record-load')).toMatchObject({ok: true, status: 401})
     expect(fetchImpl.calls['record-load']).toBe(2)
+  })
+
+  it('fails a function missing from the deploy, whose 404 is the platform\'s rather than the handler\'s', async () => {
+    const fetchImpl = fakeFetch({'pro-module': {status: 404, body: 'Function not found...'}})
+
+    const results = await smokeFunctions(BASE, {fetchImpl, retryDelayMs: 0})
+
+    expect(results.find((r) => r.name === 'pro-module')).toMatchObject({ok: false, status: 404})
+  })
+
+  it('accepts pro-module\'s own module_not_built 404 from an unconfigured preview', async () => {
+    const fetchImpl = fakeFetch({'pro-module': {status: 404, body: '{"error":"module_not_built"}'}})
+
+    const results = await smokeFunctions(BASE, {fetchImpl, retryDelayMs: 0})
+
+    expect(results.find((r) => r.name === 'pro-module').ok).toBe(true)
+  })
+
+  it('accepts served JavaScript from pro-module only with a JavaScript content type', async () => {
+    const js = {status: 200, body: 'export default 1', headers: {'content-type': 'text/javascript; charset=utf-8'}}
+    const html = {status: 200, body: '<!doctype html><title>Bldrs</title>', headers: {'content-type': 'text/html'}}
+
+    const served = await smokeFunctions(BASE, {fetchImpl: fakeFetch({'pro-module': js}), retryDelayMs: 0})
+    const spaShell = await smokeFunctions(BASE, {fetchImpl: fakeFetch({'pro-module': html}), retryDelayMs: 0})
+
+    expect(served.find((r) => r.name === 'pro-module').ok).toBe(true)
+    expect(spaShell.find((r) => r.name === 'pro-module').ok).toBe(false)
+  })
+
+  it('fails the right status with someone else\'s body', async () => {
+    const fetchImpl = fakeFetch({'unlink-identity': {status: 401, body: 'Unauthorized'}})
+
+    const results = await smokeFunctions(BASE, {fetchImpl, retryDelayMs: 0})
+
+    expect(results.find((r) => r.name === 'unlink-identity')).toMatchObject({ok: false, status: 401})
   })
 
   it('fails a Lambda error body even under an accepted status', async () => {
@@ -144,7 +199,8 @@ describe('smokeFunctions', () => {
       retryDelayMs: 0,
       fetchImpl: (url, init) => {
         seen.push(init.headers)
-        return Promise.resolve(new Response('', {status: PROBES.find((p) => url.pathname.endsWith(p.name)).strict[0]}))
+        const {status, body} = strictAnswer(url.pathname.split('/').pop())
+        return Promise.resolve(new Response(body, {status}))
       },
     })
     for (const headers of seen) {
@@ -167,8 +223,9 @@ describe('smokeFunctions.mjs CLI', () => {
         res.end('{"errorType":"Runtime.ImportModuleError","errorMessage":"Cannot find module"}')
         return
       }
-      res.writeHead(PROBES.find((p) => p.name === name).strict[0])
-      res.end()
+      const {status, body} = PROBES.find((p) => p.name === name).strict[0]
+      res.writeHead(status)
+      res.end(body)
     })
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
     baseUrl = `http://127.0.0.1:${server.address().port}`

@@ -240,10 +240,15 @@ describe('netlify functions as deployed', () => {
 
   // The deployed smoke test (tools/netlify/smokeFunctions.mjs, run against
   // every deploy preview and hourly against production) pointed at these
-  // bundles, served over HTTP the way the platform fronts them. Proves the
-  // smoke contract holds for what a deploy ships, in strict mode, before a
-  // deploy exists; smokeFunctions.test.js proves it fails when it should.
-  describe('smoke test against the bundles served over HTTP', () => {
+  // bundles, served over HTTP the way the platform fronts them — once with
+  // every production secret, held to the strict answers, and once with no
+  // secrets at all, where each function must still give one of its lenient
+  // (preview) answers rather than crash. smokeFunctions.test.js proves the
+  // smoke test fails when it should.
+  describe.each([
+    ['production-like env, strict', PRODUCTION_LIKE_ENV, true],
+    ['no secrets, lenient', LOAD_ENV, false],
+  ])('smoke test against the bundles served over HTTP (%s)', (label, env, strict) => {
     let server
     let baseUrl
 
@@ -252,7 +257,7 @@ describe('netlify functions as deployed', () => {
       fs.writeFileSync(summaryFile, JSON.stringify({bundles: [...bundles.values()]}))
       server = spawn(process.execPath, [SERVE_SCRIPT, summaryFile, '0'], {
         cwd: outDir,
-        env: {PATH: process.env.PATH, ...PRODUCTION_LIKE_ENV},
+        env: {PATH: process.env.PATH, ...env},
         stdio: ['ignore', 'pipe', 'pipe'],
       })
       const port = await new Promise((resolve, reject) => {
@@ -277,9 +282,9 @@ describe('netlify functions as deployed', () => {
       }
     })
 
-    it('every function answers its strict smoke probe', async () => {
-      const results = await smokeFunctions(baseUrl, {strict: true, retryDelayMs: 0})
-      expect(results.filter((r) => !r.ok), formatResults(results, baseUrl, true)).toEqual([])
+    it('every function gives an accepted answer to its smoke probe', async () => {
+      const results = await smokeFunctions(baseUrl, {strict, retryDelayMs: 0})
+      expect(results.filter((r) => !r.ok), formatResults(results, baseUrl, strict)).toEqual([])
       expect(results.map((r) => r.name).sort()).toEqual([...bundles.keys()].sort())
     }, SERVE_TIMEOUT_MS)
   })

@@ -33,10 +33,6 @@
  */
 
 
-// Hard failures regardless of mode: the platform answering for a function
-// that couldn't answer for itself. 502 from Netlify is an uncaught error or
-// a bundle that failed to load (`Runtime.ImportModuleError`); 503/504 are
-// timeouts and platform errors.
 const HTTP_OK = 200
 const HTTP_BAD_REQUEST = 400
 const HTTP_UNAUTHORIZED = 401
@@ -45,6 +41,10 @@ const HTTP_INTERNAL_ERROR = 500
 const HTTP_BAD_GATEWAY = 502
 const HTTP_SERVICE_UNAVAILABLE = 503
 const HTTP_GATEWAY_TIMEOUT = 504
+// Hard failures regardless of mode: the platform answering for a function
+// that couldn't answer for itself. 502 from Netlify is an uncaught error or
+// a bundle that failed to load (`Runtime.ImportModuleError`); 503/504 are
+// timeouts and platform errors.
 const CRASH_STATUSES = new Set([HTTP_BAD_GATEWAY, HTTP_SERVICE_UNAVAILABLE, HTTP_GATEWAY_TIMEOUT])
 const CRASH_BODY_PATTERN = /Runtime\.\w+Error|"errorType"|errorMessage/
 const REQUEST_TIMEOUT_MS = 20000
@@ -54,48 +54,70 @@ const EXCERPT_CHARS = 160
 // can't load fails twice.
 const RETRY_DELAY_MS = 5000
 
+// Each answer a probe accepts is a status AND something only the function's
+// own handler says — a phrase from its body, or (for pro-module's served
+// JavaScript) its content type. A bare status isn't enough: the platform
+// answers some statuses for itself, e.g. 404 for a function missing from
+// the deploy altogether, which would otherwise pass as pro-module's
+// `module_not_built`. smokeFunctions.test.js rejects a status-only answer.
+const MISSING_BEARER = {status: HTTP_UNAUTHORIZED, body: 'Missing or invalid Authorization header'}
+const MISSING_AUTH0_TOKEN = {status: HTTP_UNAUTHORIZED, body: 'missing_auth0_token'}
+const GH_OAUTH_NOT_CONFIGURED = {status: HTTP_INTERNAL_ERROR, body: 'GH_OAUTH_CLIENT_ID/SECRET not configured'}
+
 export const PROBES = [
   {
     name: 'create-portal-session',
     scenario: 'create-portal-session/unauthenticated',
     method: 'POST',
     body: {},
-    accept: [HTTP_UNAUTHORIZED],
-    strict: [HTTP_UNAUTHORIZED],
+    accept: [MISSING_BEARER],
+    strict: [MISSING_BEARER],
   },
   {
     name: 'gh-oauth-exchange',
     scenario: 'gh-oauth-exchange/unauthenticated',
     method: 'POST',
     body: {},
-    // Without AUTH0_DOMAIN the auth gate is bypassed (dev), and then the
-    // missing GH client secret answers 500 / the missing code 400.
-    accept: [HTTP_UNAUTHORIZED, HTTP_BAD_REQUEST, HTTP_INTERNAL_ERROR],
-    strict: [HTTP_UNAUTHORIZED],
+    // Without AUTH0_DOMAIN the auth gate is bypassed (dev), and then a
+    // missing GH client secret answers 500, or the missing code 400.
+    accept: [
+      MISSING_AUTH0_TOKEN,
+      GH_OAUTH_NOT_CONFIGURED,
+      {status: HTTP_BAD_REQUEST, body: 'code and redirect_uri are required'},
+    ],
+    strict: [MISSING_AUTH0_TOKEN],
   },
   {
     name: 'gh-oauth-refresh',
     scenario: 'gh-oauth-refresh/unauthenticated',
     method: 'POST',
     body: {},
-    accept: [HTTP_UNAUTHORIZED, HTTP_BAD_REQUEST, HTTP_INTERNAL_ERROR],
-    strict: [HTTP_UNAUTHORIZED],
+    accept: [
+      MISSING_AUTH0_TOKEN,
+      GH_OAUTH_NOT_CONFIGURED,
+      {status: HTTP_BAD_REQUEST, body: 'refresh_token is required'},
+    ],
+    strict: [MISSING_AUTH0_TOKEN],
   },
   {
     name: 'pro-module',
     scenario: 'pro-module/unauthenticated',
     method: 'GET',
     query: {name: 'glbExport'},
-    // Unconfigured dev bypass serves the module (200) or reports it unbuilt.
-    accept: [HTTP_UNAUTHORIZED, HTTP_OK, HTTP_NOT_FOUND],
-    strict: [HTTP_UNAUTHORIZED],
+    // Unconfigured dev bypass serves the module, or reports it unbuilt.
+    accept: [
+      MISSING_AUTH0_TOKEN,
+      {status: HTTP_OK, contentType: 'text/javascript'},
+      {status: HTTP_NOT_FOUND, body: 'module_not_built'},
+    ],
+    strict: [MISSING_AUTH0_TOKEN],
   },
   {
     name: 'proxy-handler',
     scenario: 'proxy-handler/missing-id',
     method: 'GET',
-    accept: [HTTP_BAD_REQUEST],
-    strict: [HTTP_BAD_REQUEST],
+    accept: [{status: HTTP_BAD_REQUEST, body: 'Missing file ID'}],
+    strict: [{status: HTTP_BAD_REQUEST, body: 'Missing file ID'}],
   },
   {
     name: 'record-export',
@@ -103,33 +125,38 @@ export const PROBES = [
     method: 'POST',
     body: {key: '/share/v/p/index.ifc', format: 'glb', bytes: 1},
     // Unconfigured dev bypass answers an empty history.
-    accept: [HTTP_UNAUTHORIZED, HTTP_OK],
-    strict: [HTTP_UNAUTHORIZED],
+    accept: [MISSING_AUTH0_TOKEN, {status: HTTP_OK, body: '"exports"'}],
+    strict: [MISSING_AUTH0_TOKEN],
   },
   {
     name: 'record-load',
     scenario: 'record-load/unauthenticated',
     method: 'POST',
     body: {key: '/share/v/p/index.ifc'},
-    accept: [HTTP_UNAUTHORIZED],
-    strict: [HTTP_UNAUTHORIZED],
+    accept: [MISSING_BEARER],
+    strict: [MISSING_BEARER],
   },
   {
     name: 'stripe-webhook',
     scenario: 'stripe-webhook/missing-signature',
     method: 'POST',
     body: {},
-    // 500 is "not configured": a preview context without Stripe secrets.
-    accept: [HTTP_BAD_REQUEST, HTTP_INTERNAL_ERROR],
-    strict: [HTTP_BAD_REQUEST],
+    // "Webhook Error" is in the missing-signature answer both before and
+    // after ops#33's rewrite, so the probe holds across that deploy. 500 is
+    // a preview context without Stripe secrets.
+    accept: [
+      {status: HTTP_BAD_REQUEST, body: 'Webhook Error'},
+      {status: HTTP_INTERNAL_ERROR, body: 'Stripe webhook not configured'},
+    ],
+    strict: [{status: HTTP_BAD_REQUEST, body: 'Webhook Error'}],
   },
   {
     name: 'unlink-identity',
     scenario: 'unlink-identity/unauthenticated',
     method: 'POST',
     body: {secondaryProvider: 'github', secondaryUserId: '17447690'},
-    accept: [HTTP_UNAUTHORIZED],
-    strict: [HTTP_UNAUTHORIZED],
+    accept: [MISSING_BEARER],
+    strict: [MISSING_BEARER],
   },
 ]
 
@@ -191,11 +218,24 @@ async function runProbe(base, probe, strict, fetchImpl) {
     return {name: probe.name, ok: false, retryable: true, status: res.status, ms,
       detail: `function did not run (platform error): ${excerpt}`}
   }
-  if (!expected.includes(res.status)) {
+  const contentType = res.headers.get('content-type') || ''
+  const matched = expected.some((want) => want.status === res.status &&
+    (want.body === undefined || body.includes(want.body)) &&
+    (want.contentType === undefined || contentType.includes(want.contentType)))
+  if (!matched) {
     return {name: probe.name, ok: false, retryable: false, status: res.status, ms,
-      detail: `expected ${expected.join(' or ')}${strict ? ' (strict)' : ''}: ${excerpt}`}
+      detail: `expected ${expected.map(describeAnswer).join(' or ')}${strict ? ' (strict)' : ''}, got: ${excerpt}`}
   }
   return {name: probe.name, ok: true, retryable: false, status: res.status, ms, detail: ''}
+}
+
+
+/**
+ * @param {object} answer a PROBES `accept` / `strict` entry
+ * @return {string} e.g. `401 "missing_auth0_token"`
+ */
+function describeAnswer(answer) {
+  return `${answer.status} ${answer.body === undefined ? answer.contentType : JSON.stringify(answer.body)}`
 }
 
 

@@ -1,19 +1,42 @@
 {
   "description": "An Auth0 outage is transient: answer 500 so Stripe redelivers, instead of acknowledging an update that was never written.",
-  "env": {"$fixture": "env/stripe.json"},
+  "env": {
+    "$fixture": "env/stripe.json"
+  },
   "request": {
     "method": "POST",
     "path": "/.netlify/functions/stripe-webhook",
-    "headers": {"content-type": "application/json; charset=utf-8"},
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
     "sign": "stripe",
-    "body": {"$fixture": "stripe/event.subscription.deleted.json"}
+    "body": {
+      "$fixture": "stripe/event.subscription.deleted.json"
+    }
   },
   "exchanges": [
-    {"$fixture": "exchanges/stripe-customer.json"},
     {
-      "request": {"method": "POST", "url": "https://bldrs-replay.us.auth0.com/oauth/token"},
-      "response": {"status": 503, "json": {"error": "temporarily_unavailable", "error_description": "Service Unavailable"}}
+      "$fixture": "exchanges/stripe-subscription-canceled.json"
+    },
+    {
+      "$fixture": "exchanges/stripe-customer.json"
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://bldrs-replay.us.auth0.com/oauth/token"
+      },
+      "response": {
+        "status": 503,
+        "json": {
+          "error": "temporarily_unavailable",
+          "error_description": "Service Unavailable"
+        }
+      }
     }
   ],
-  "expect": {"statusCode": 500, "bodyIncludes": "Stripe will retry"}
+  "expect": {
+    "statusCode": 500,
+    "bodyIncludes": "Stripe will retry"
+  }
 }
