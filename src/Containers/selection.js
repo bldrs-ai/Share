@@ -34,15 +34,26 @@ export function elementSelection(viewer, elementsById, selectItemsInScene, isShi
   }
   const descendantIds = getDescendantExpressIds(selectedElt)
   let updateNav = false
-  const selectedInViewer = new Set(viewer.getSelectedIds())
+  let selectedInViewer = new Set(viewer.getSelectedIds())
   // Anchors are the ids the user actually clicked. The viewer set also
   // carries their descendants, because a container's geometry lives in
   // its children and must highlight in the scene — but treating that
   // whole set as "the selection" made every child row look selected in
   // NavTree, and left Properties and the breadcrumb showing whichever
   // descendant happened to land last in the set.
-  const anchors = new Set(
+  let anchors = new Set(
     (useStore.getState().selectedAnchorIds || []).map(Number).filter(Number.isFinite))
+  // A single STEP occurrence selection is keyed by its occurrence path, and
+  // after a scene pick by the geometry's shared product_definition_shape id,
+  // which is no tree row. A multi-selection is rows, so re-express it as its
+  // row before adding to it, or the first pick drops out of the highlight.
+  const {selectedOccurrencePath: path, selectedSolidExpressId: solid} = useStore.getState()
+  if (isShiftKeyDown && Array.isArray(path) && path.length > 0) {
+    const row = Number(solid ?? path[path.length - 1])
+    const rowElt = elementsById[row]
+    selectedInViewer = new Set([row, ...(rowElt ? getDescendantExpressIds(rowElt) : [])])
+    anchors = new Set([row])
+  }
   if (isShiftKeyDown) {
     if (selectedInViewer.has(expressId)) {
       const descendantIdsToRemove = getDescendantExpressIds(selectedElt)

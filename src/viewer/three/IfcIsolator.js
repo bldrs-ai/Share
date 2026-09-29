@@ -8,6 +8,7 @@ import {
   isSceneGraphModel,
   sceneGraphElementIds,
 } from './sceneGraphVisibility'
+import {occurrencePathKey, selectedOccurrences} from '../../utils/occurrencePaths'
 import {MeshLambertMaterial, DoubleSide, Mesh} from 'three'
 import useStore from '../../store/useStore'
 import {BlendFunction} from 'postprocessing'
@@ -74,6 +75,11 @@ export default class IfcIsolator {
   // for IFC and STEP.
   defaultHiddenIds = []
   isolatedIds = []
+  // Isolating STEP occurrences (isolateOccurrences): the instances shown, and
+  // the occurrences they came from (for the permalink). Null otherwise, when
+  // isolation is by element id (`isolatedIds`).
+  isolatedInstanceIds = null
+  isolatedOccurrences = null
   tempIsolationModeOn = false
   revealHiddenElementsMode = false
   hiddenMaterial = null
@@ -123,6 +129,8 @@ export default class IfcIsolator {
   async setModel(ifcModel) {
     this.ifcModel = ifcModel
     this.defaultHiddenIds = []
+    this._occurrenceKeyed = null
+    this._hideableOccurrences = new Map()
     // Scene-graph models (ADF, OBJ, third-party GLB, …): elements are the
     // Object3Ds, hidden and isolated through their own `visible`
     // (sceneGraphVisibility.js). Their placeholder per-vertex `expressID`
@@ -560,9 +568,12 @@ export default class IfcIsolator {
   _applyBatchedVisibility(opts = {}) {
     const hiddenParents = new Set(this.hiddenIds)
     const hiddenInstances = this._hiddenInstanceIdSet()
-    const explicitIsolation = Array.isArray(opts.isolatedIds)
+    const explicitIsolation = Array.isArray(opts.isolatedIds) || opts.isolatedInstances instanceof Set
     const isolating = explicitIsolation || this.tempIsolationModeOn
-    const isolatedParents = isolating ?
+    // Isolating STEP occurrences keeps instances, not whole parents.
+    const isolatedInstances = isolating ?
+      (explicitIsolation ? (opts.isolatedInstances ?? null) : this.isolatedInstanceIds) : null
+    const isolatedParents = isolating && !isolatedInstances ?
       new Set(explicitIsolation ? opts.isolatedIds : this.isolatedIds) : null
     const masking = isolating || hiddenParents.size > 0 || hiddenInstances.size > 0
     eachBatch(this.ifcModel, (mesh) => {
@@ -578,8 +589,11 @@ export default class IfcIsolator {
       const occurrenceIds = mesh.instanceOccurrenceIds
       for (let batchId = 0; batchId < parents.length; batchId++) {
         const parent = parents[batchId]
+        const isolated = !isolating || (isolatedInstances ?
+          Boolean(occurrenceIds && isolatedInstances.has(occurrenceIds[batchId])) :
+          isolatedParents.has(parent))
         const allowed =
-          (!isolating || isolatedParents.has(parent)) &&
+          isolated &&
           !hiddenParents.has(parent) &&
           !(occurrenceIds && hiddenInstances.has(occurrenceIds[batchId]))
         mask.allow[batchId] = allowed ? 1 : 0
@@ -702,15 +716,37 @@ export default class IfcIsolator {
    *   works but isn't written to the link.
    */
   hideOccurrence(nodeId, instanceIds, occurrence = null) {
-    if (this.tempIsolationModeOn || !Array.isArray(instanceIds) || instanceIds.length === 0) {
+    this.hideOccurrences([{nodeId, instanceIds, ...(occurrence ?? {})}])
+  }
+
+
+  /**
+   * `hideOccurrence` for several occurrences at once — a multi-selection's
+   * Hide — rebuilding the view once rather than per occurrence.
+   *
+   * @param {Array<object>} occurrences `{nodeId, instanceIds, occurrencePath?,
+   *   solidExpressId?}`; entries with no instances are skipped
+   */
+  hideOccurrences(occurrences) {
+    if (this.tempIsolationModeOn) {
       return
     }
-    this.hiddenOccurrences.set(nodeId, [...instanceIds])
-    if (Array.isArray(occurrence?.occurrencePath) && occurrence.occurrencePath.length > 0) {
-      this.hiddenOccurrencePaths.set(nodeId, {
-        occurrencePath: [...occurrence.occurrencePath],
-        solidExpressId: occurrence.solidExpressId ?? null,
-      })
+    let changed = false
+    for (const {nodeId, instanceIds, occurrencePath, solidExpressId} of occurrences) {
+      if (!Array.isArray(instanceIds) || instanceIds.length === 0) {
+        continue
+      }
+      this.hiddenOccurrences.set(nodeId, [...instanceIds])
+      if (Array.isArray(occurrencePath) && occurrencePath.length > 0) {
+        this.hiddenOccurrencePaths.set(nodeId, {
+          occurrencePath: [...occurrencePath],
+          solidExpressId: solidExpressId ?? null,
+        })
+      }
+      changed = true
+    }
+    if (!changed) {
+      return
     }
     this._syncHiddenStore()
     const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes(el))
@@ -727,11 +763,24 @@ export default class IfcIsolator {
    * @param {number} nodeId NAUO express id previously passed to `hideOccurrence`
    */
   unHideOccurrence(nodeId) {
-    if (this.tempIsolationModeOn || !this.hiddenOccurrences.has(nodeId)) {
+    this.unHideOccurrences([nodeId])
+  }
+
+
+  /**
+   * `unHideOccurrence` for several nodes at once.
+   *
+   * @param {Array<number>} nodeIds
+   */
+  unHideOccurrences(nodeIds) {
+    const hidden = nodeIds.filter((nodeId) => this.hiddenOccurrences.has(nodeId))
+    if (this.tempIsolationModeOn || hidden.length === 0) {
       return
     }
-    this.hiddenOccurrences.delete(nodeId)
-    this.hiddenOccurrencePaths.delete(nodeId)
+    for (const nodeId of hidden) {
+      this.hiddenOccurrences.delete(nodeId)
+      this.hiddenOccurrencePaths.delete(nodeId)
+    }
     this._syncHiddenStore()
     if (this.hiddenIds.length === 0 && this.hiddenOccurrences.size === 0) {
       this.unHideAllElements()
@@ -764,9 +813,11 @@ export default class IfcIsolator {
   /**
    * Initializes temporary isolation subset
    *
-   * @param {Array} includedIds element ids included in the subset
+   * @param {Array|null} includedIds element ids included in the subset
+   * @param {Set<number>|null} [isolatedInstances] instead, the only instances
+   *   shown (isolating STEP occurrences)
    */
-  initTemporaryIsolationSubset(includedIds) {
+  initTemporaryIsolationSubset(includedIds, isolatedInstances = null) {
     const batched = this._isBatchedModel()
     const sceneGraph = this._isSceneGraphModel()
     if (!batched && !sceneGraph) {
@@ -801,7 +852,7 @@ export default class IfcIsolator {
       // repaints from it via `_rebuildSelectionVisualFromStore`, so a click
       // made while isolated still highlights normally.
       this._clearSelectionVisualOnly()
-      this._applyBatchedVisibility({isolatedIds: includedIds})
+      this._applyBatchedVisibility(isolatedInstances ? {isolatedInstances} : {isolatedIds: includedIds})
       // No subset Mesh exists to outline. Point the effect at the batch meshes
       // themselves: only the isolated instances are visible on them now, so the
       // outline pass's mask traces exactly the isolated geometry.
@@ -813,10 +864,12 @@ export default class IfcIsolator {
     this.isolationSubset = this.ifcModel.createSubset({
       modelID: 0,
       scene: this.context.getScene(),
-      ids: includedIds,
+      // Every parent, filtered down to the isolated instances.
+      ids: isolatedInstances ? this.visualElementsIds : includedIds,
       applyBVH: true,
       removePrevious: true,
       customID: this.subsetCustomId,
+      ...(isolatedInstances ? {includeInstances: isolatedInstances} : {}),
     })
     this._addSubsetToScene(this.isolationSubset)
     // OutlineEffect.setSelection takes an array of Object3Ds. The
@@ -827,6 +880,99 @@ export default class IfcIsolator {
   }
 
   /**
+   * True when the model's geometry is keyed by STEP occurrence path: its
+   * batches or instance maps carry an occurrence-path index. Then the tree's
+   * ids (NAUOs, solids) own no geometry themselves, and hide / isolate / the
+   * NavTree eye go through `getInstanceIdsForOccurrencePath`. Cached per model.
+   *
+   * @return {boolean}
+   * @private
+   */
+  _isOccurrenceKeyed() {
+    if (this._occurrenceKeyed === null || this._occurrenceKeyed === undefined) {
+      let keyed = false
+      if (typeof this.ifcModel?.traverse === 'function' &&
+          typeof this.viewer.getInstanceIdsForOccurrencePath === 'function') {
+        this.ifcModel.traverse((obj) => {
+          const index = obj.occurrencePathToBatchIds ?? obj.instanceMap?.occurrencePathToInstanceIds
+          if (index?.size > 0) {
+            keyed = true
+          }
+        })
+      }
+      this._occurrenceKeyed = keyed
+    }
+    return this._occurrenceKeyed
+  }
+
+
+  /**
+   * The STEP occurrences the current selection names (`selectedOccurrences`):
+   * the funnel's exact occurrence for a single selection, the selected rows'
+   * occurrences for a multi-selection on an occurrence-keyed model. Empty for
+   * IFC and scene-graph models.
+   *
+   * @return {Array<object>} `{nodeId, occurrencePath, solidExpressId}`
+   * @private
+   */
+  _selectionOccurrences() {
+    if (typeof this.viewer.getInstanceIdsForOccurrencePath !== 'function') {
+      return []
+    }
+    const state = useStore.getState()
+    const path = state.selectedOccurrencePath
+    const single = Array.isArray(path) && path.length > 0
+    if (!single && !this._isOccurrenceKeyed()) {
+      return []
+    }
+    const anchors = (state.selectedAnchorIds?.length > 0) ? state.selectedAnchorIds : state.selectedElements
+    return selectedOccurrences({
+      rootNode: state.rootElement,
+      anchorIds: anchors ?? [],
+      occurrencePath: single ? path : null,
+      solidExpressId: state.selectedSolidExpressId ?? null,
+    })
+  }
+
+
+  /**
+   * @param {object} occurrence `{occurrencePath, solidExpressId}`
+   * @return {Array<number>} its instances, and its descendants'
+   * @private
+   */
+  _occurrenceInstanceIds({occurrencePath, solidExpressId}) {
+    return this.viewer.getInstanceIdsForOccurrencePath(
+      0, occurrencePath, {geometryExpressId: solidExpressId ?? null})
+  }
+
+
+  /**
+   * Whether a NavTree row for this occurrence gets an eye: true when the path
+   * resolves to geometry. The tree's `canBeHidden` test reads element ids,
+   * which a STEP occurrence row's NAUO id never is, so most rows — every
+   * leaf part — had no eye. Cached per model; rows re-render often.
+   *
+   * @param {Array<number>} occurrencePath
+   * @param {number|null} [solidExpressId] a named body's own id
+   * @return {boolean}
+   */
+  canHideOccurrence(occurrencePath, solidExpressId = null) {
+    if (!Array.isArray(occurrencePath) || occurrencePath.length === 0 ||
+        typeof this.viewer.getInstanceIdsForOccurrencePath !== 'function') {
+      return false
+    }
+    this._hideableOccurrences ??= new Map()
+    const key = `${occurrencePathKey(occurrencePath)}#${solidExpressId}`
+    let hideable = this._hideableOccurrences.get(key)
+    if (hideable === undefined) {
+      hideable = this._occurrenceInstanceIds({occurrencePath, solidExpressId}).length > 0
+      this._hideableOccurrences.set(key, hideable)
+    }
+    return hideable
+  }
+
+
+  /**
    * Hides selected ifc elements
    *
    */
@@ -834,29 +980,23 @@ export default class IfcIsolator {
     if (this.tempIsolationModeOn) {
       return
     }
-    // STEP per-occurrence: when the current selection is a single occurrence of
-    // a reused part, hide just that occurrence's instances rather than every
-    // reuse (which product-type expressID hiding below would do — the reported
-    // "H hides both assemblies"). The occurrence path is set by the selection
-    // funnel on a per-occurrence pick / NavTree click; toggles on repeat H.
-    const occurrencePath = useStore.getState().selectedOccurrencePath
-    if (Array.isArray(occurrencePath) && occurrencePath.length > 0 &&
-        typeof this.viewer.getInstanceIdsForOccurrencePath === 'function') {
-      // Key the hide by the selected solid's own id (and filter the instances
-      // by it) so just that body disappears and its hidden-state stays
-      // separate from the whole part's — required where a body shares its
-      // part's occurrence path (pre-conway#628 solids, anonymous pieces), and
-      // the same id a #628 body's path ends with anyway.
-      const solidExpressId = useStore.getState().selectedSolidExpressId
-      const nodeId = solidExpressId ?? occurrencePath[occurrencePath.length - 1]
-      if (this.hiddenOccurrences.has(nodeId)) {
-        this.unHideOccurrence(nodeId)
+    // STEP per-occurrence: hide just the selected occurrences' instances rather
+    // than every reuse of their parts (which product-type expressID hiding
+    // below would do — the reported "H hides both assemblies"). A single
+    // occurrence is keyed by the selected solid's own id when a body is
+    // selected (and its instances filtered by it), so just that body
+    // disappears and its hidden-state stays separate from the whole part's —
+    // required where a body shares its part's occurrence path (pre-conway#628
+    // solids, anonymous pieces). Toggles on repeat H: when every selected
+    // occurrence is already hidden, they come back.
+    const occurrences = this._selectionOccurrences()
+    if (occurrences.length > 0) {
+      if (occurrences.every(({nodeId}) => this.hiddenOccurrences.has(nodeId))) {
+        this.unHideOccurrences(occurrences.map(({nodeId}) => nodeId))
       } else {
-        this.hideOccurrence(
-          nodeId,
-          this.viewer.getInstanceIdsForOccurrencePath(
-            0, occurrencePath, {geometryExpressId: solidExpressId}),
-          {occurrencePath, solidExpressId})
+        this.hideOccurrences(occurrences
+          .filter(({nodeId}) => !this.hiddenOccurrences.has(nodeId))
+          .map((occurrence) => ({...occurrence, instanceIds: this._occurrenceInstanceIds(occurrence)})))
       }
       return
     }
@@ -1090,7 +1230,7 @@ export default class IfcIsolator {
       this.revealedElementsSubset = null
     } else {
       let hidden = this.hiddenIds
-      if (this.tempIsolationModeOn) {
+      if (this.tempIsolationModeOn && !this.isolatedInstanceIds) {
         hidden = hidden.concat(this.visualElementsIds.filter((e) => !this.isolatedIds.includes(e)))
       }
       if (hidden.length === 0) {
@@ -1138,7 +1278,10 @@ export default class IfcIsolator {
    * @return {boolean} true if hidden, otherwise false
    */
   canBePickedInScene(elementId) {
-    if (this.tempIsolationModeOn) {
+    // Isolated by instance, only the isolated instances are drawn or hit by a
+    // ray, and none of them carries a tree row's id, so there is nothing
+    // to filter by id beyond what's hidden.
+    if (this.tempIsolationModeOn && !this.isolatedInstanceIds) {
       return !this.hiddenIds.includes(elementId) && this.isolatedIds.includes(elementId)
     }
     return !this.hiddenIds.includes(elementId)
@@ -1174,7 +1317,46 @@ export default class IfcIsolator {
    *
    */
   isolateSelectedElements() {
+    // STEP: isolate the selected occurrences' own instances. Their tree ids
+    // own no geometry, so isolating them by id showed nothing at all.
+    const occurrences = this._selectionOccurrences()
+    if (occurrences.length > 0) {
+      this.isolateOccurrences(occurrences)
+      return
+    }
     this.isolateElementsById(this.viewer.getSelectedIds())
+  }
+
+
+  /**
+   * Isolate STEP occurrences: show just their instances (and their
+   * descendants'), not every reuse of their parts. The selection's path, and
+   * a permalink's `iso=o…` terms (visibilityHash).
+   *
+   * @param {Array<object>} occurrences `{nodeId, occurrencePath, solidExpressId}`
+   */
+  isolateOccurrences(occurrences) {
+    const instanceIds = new Set()
+    for (const occurrence of occurrences) {
+      for (const id of this._occurrenceInstanceIds(occurrence)) {
+        instanceIds.add(id)
+      }
+    }
+    // As for element ids: isolating nothing, or only hidden instances, would
+    // show nothing at all.
+    const hidden = this._hiddenInstanceIdSet()
+    if ([...instanceIds].every((id) => hidden.has(id))) {
+      return
+    }
+    this.tempIsolationModeOn = true
+    useStore.setState({isTempIsolationModeOn: true})
+    this.isolatedIds = occurrences.map(({nodeId}) => nodeId)
+    this.isolatedInstanceIds = instanceIds
+    this.isolatedOccurrences = occurrences.map(({nodeId, occurrencePath, solidExpressId}) =>
+      ({nodeId, occurrencePath: [...occurrencePath], solidExpressId: solidExpressId ?? null}))
+    // Keyed by the rows' ids, so the NavTree shows their isolation glasses.
+    useStore.setState({isolatedElements: Object.fromEntries(this.isolatedIds.map((id) => [id, true]))})
+    this.initTemporaryIsolationSubset(null, instanceIds)
   }
 
   /**
@@ -1210,6 +1392,8 @@ export default class IfcIsolator {
     this.tempIsolationModeOn = false
     useStore.setState({isTempIsolationModeOn: false})
     this.isolatedIds = []
+    this.isolatedInstanceIds = null
+    this.isolatedOccurrences = null
     useStore.setState({isolatedElements: {}})
     this._removeSubsetFromScene(this.isolationSubset)
     this.isolationSubset = null

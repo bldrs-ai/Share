@@ -7,6 +7,7 @@ import {
   occurrencePathsEqual,
   resolveElementPathOccurrence,
   resolvePickedOccurrenceNode,
+  selectedOccurrences,
   trimToTreeOccurrencePath,
 } from './occurrencePaths'
 
@@ -327,6 +328,41 @@ describe('utils/occurrencePaths', () => {
       expect(trimToTreeOccurrencePath([10, 20, 30], new Set())).toEqual([10, 20, 30])
       expect(trimToTreeOccurrencePath([], treeKeys)).toBeNull()
       expect(trimToTreeOccurrencePath(null, treeKeys)).toBeNull()
+    })
+  })
+
+
+  describe('selectedOccurrences', () => {
+    // A reused sub-assembly (NAUO 20) placed twice: its duplicates share ids.
+    const tree = {expressID: 1, occurrencePath: [], children: [
+      {expressID: 10, occurrencePath: [10], children: [
+        {expressID: 20, occurrencePath: [10, 20], children: []},
+      ]},
+      {expressID: 11, occurrencePath: [11], children: [
+        {expressID: 20, occurrencePath: [11, 20], children: [
+          {expressID: 30, occurrencePath: [11, 20], ephemeral: true, children: []},
+        ]},
+      ]},
+    ]}
+
+    it('takes a single selection\'s exact occurrence, keyed like its NavTree eye', () => {
+      expect(selectedOccurrences({rootNode: tree, anchorIds: ['999'], occurrencePath: [11, 20]}))
+        .toEqual([{nodeId: 20, occurrencePath: [11, 20], solidExpressId: null}])
+      expect(selectedOccurrences({
+        rootNode: tree, anchorIds: [], occurrencePath: [11, 20], solidExpressId: 30,
+      })).toEqual([{nodeId: 30, occurrencePath: [11, 20], solidExpressId: 30}])
+    })
+
+    it('looks a multi-selection\'s rows up in the tree, every duplicate included', () => {
+      const found = selectedOccurrences({rootNode: tree, anchorIds: ['10', '20', '30']})
+      expect(found.map(({occurrencePath, solidExpressId}) => [occurrencePathKey(occurrencePath), solidExpressId])
+        .sort()).toEqual([['10', null], ['10/20', null], ['11/20', 30], ['11/20', null]].sort())
+    })
+
+    it('finds nothing on a tree without occurrences (IFC)', () => {
+      const ifc = {expressID: 1, children: [{expressID: 10, children: []}]}
+      expect(selectedOccurrences({rootNode: ifc, anchorIds: [10]})).toEqual([])
+      expect(selectedOccurrences({rootNode: null, anchorIds: [10]})).toEqual([])
     })
   })
 })

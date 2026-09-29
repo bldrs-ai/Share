@@ -306,11 +306,36 @@ order; BVH permutes only the index buffer, not the numbering).
   the element path — and the NavTree row highlight applies to assembly rows,
   not only leaves. E2E: `src/Components/NavTree/navTreePermalink.spec.ts`.
 
+- **Every operation on a selection goes through its occurrences.** A row's id
+  (NAUO, or a body's solid id) owns no geometry, so anything that took the
+  selection's ids straight to the geometry reached nothing. One resolver,
+  `occurrencePaths.selectedOccurrences`, turns a selection into occurrences:
+  the funnel's exact `selectedOccurrencePath` for a single selection, the
+  anchor rows looked up in the tree for a multi-selection (every duplicate of
+  a reused sub-assembly, which share NAUO ids). Its consumers:
+  - **Isolate** (`IfcIsolator.isolateOccurrences`) shows just those
+    occurrences' instances — `isolatedInstanceIds` on the batched mask,
+    `includeInstances` on the merged subset (the converse of the hide's
+    `excludeInstances`). It used to isolate the row ids and blank the model.
+    The permalink writes it as `#d:iso=o…` (model-display-controls §6.3).
+  - **Hide** of a multi-selection hides each occurrence (`hideOccurrences`),
+    and toggles back when all are hidden.
+  - **Highlight**: `selectItemsInScene` resolves a row-keyed selection (a
+    shift-click multi-selection, a search) to its instances, so it lights up.
+  - **The NavTree eye** (`IfcIsolator.canHideOccurrence`) goes on every row
+    whose path resolves to geometry. `canBeHidden` reads element ids, which a
+    leaf row's NAUO never is, so every leaf part — and every body row — had
+    none.
+- **Multi-select from the scene.** A shift-double-click on a Conway-direct
+  model now toggles the picked row in the selection (`elementSelection`, as a
+  NavTree shift-click does), where it used to mean "the whole IFC element".
+  For STEP the row is the picked occurrence's node, not the geometry's PDS; a
+  single occurrence selection is re-expressed as its row first, so it stays in
+  the multi-selection. E2E: `src/viewer/three/stepVisibility.spec.ts`.
+
 ### Remaining (follow-up)
 
-1. **Per-occurrence isolate.** Isolate (`I` / temp-isolation) still shows every
-   occurrence of the isolated part type — the same occurrence→instance
-   resolution the hide path now uses would make it per-occurrence too.
+1. ~~**Per-occurrence isolate.**~~ Done — see above.
 2. **Reveal-hidden ghosts skip occurrence hides.** The "reveal hidden" (ghost)
    overlay is built from `hiddenIds` (product-type) only, so a per-occurrence
    hide shows no cyan ghost. The hide itself is correct; only the ghost preview
@@ -335,7 +360,8 @@ order; BVH permutes only the index buffer, not the numbering).
    under that flag — a documented gap in `buildBatchedConwayModel`, not a
    regression (NAUO≠PDS meant a STEP node click highlighted nothing there
    before this work either).
-6. **No eye on a body row.** `IfcIsolator.canBeHidden` answers from
+6. ~~**No eye on a body row.**~~ Done (`canHideOccurrence`, above). Was:
+   `IfcIsolator.canBeHidden` answers from
    `visualElementsIds` (per-vertex expressIDs, i.e. the PDS) and the
    parent→children map, so a `type:'solid'` leaf is in neither and
    `NavTreeNode` renders no hide icon for it. The hide itself works — `H` on a
@@ -345,6 +371,6 @@ order; BVH permutes only the index buffer, not the numbering).
    visible on a model whose rows are *all* bodies.
 
 Each step degrades gracefully to today's type-level behavior when no occurrence
-path is present (IFC, single-occurrence parts). NavTree **shift-click** on an
-occurrence node also degrades to type-level accumulate (multi-select wins the
-modifier slot; per-occurrence highlight is single-selection only).
+path is present (IFC, single-occurrence parts). A **shift-click**
+multi-selection is keyed by rows rather than by occurrence path, so a row
+of a reused sub-assembly selects every duplicate of it (they share its id).

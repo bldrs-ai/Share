@@ -50,6 +50,7 @@ import {
   occurrencePathsEqual,
   resolveElementPathOccurrence,
   resolvePickedOccurrenceNode,
+  selectedOccurrences,
   trimToTreeOccurrencePath,
 } from '../utils/occurrencePaths'
 import {isOutOfMemoryError} from '../utils/oom'
@@ -807,16 +808,12 @@ export default function CadView({
       const outlineable = !mesh.isBatchedMesh && mesh.isMesh === true
       viewer.setHighlighted(outlineable ? [mesh] : null)
       // Per-instance picking path (Conway-direct):
-      //   no-shift = just this PlacedGeometry
-      //   shift     = the whole IFC element (every instance)
-      //
-      // Note this DISPLACES the legacy "Shift = add to multi-select"
-      // semantic in `elementSelection` when the model carries an
-      // instanceMap. Multi-select is rarely-used in the IFC workflow;
-      // per-instance picking is the primary improvement from the
-      // viewer-replacement work, so it wins the modifier slot. Models
-      // without an instanceMap (today's wit-three path, GLB cache hit)
-      // keep the legacy Shift behavior unchanged.
+      //   no-shift = just this PlacedGeometry (a STEP pick: its occurrence)
+      //   shift    = add it to (or drop it from) the selection, as a
+      //              shift-click does in the NavTree and on every other
+      //              model. Shift used to mean "the whole IFC element",
+      //              which left IFC and STEP the only models without
+      //              multi-select from the scene.
       // BatchedMesh render path (`?feature=batchedMesh` / demandGeometry):
       // the raycast sets `batchId` (the per-instance id); resolve it to the
       // parent IFC product, its global occurrence id (the batched "instance
@@ -903,8 +900,8 @@ export default function CadView({
    * + element-path permalink in the URL. The parent expressID is always the
    * "selection" so the properties panel / nav tree / search respond
    * normally; `instanceIds` only narrows what the scene highlight draws.
-   * Shift = the whole IFC element (every instance) → no per-instance
-   * restriction; no-shift = just this PlacedGeometry.
+   * No-shift = just this PlacedGeometry; shift = toggle the picked row in a
+   * multi-selection (`elementSelection`).
    *
    * STEP: the picked instance's occurrence path makes the NavTree highlight
    * the one occurrence, not every reuse of the part type (null on shift and
@@ -936,11 +933,9 @@ export default function CadView({
   function selectFromInstancePick({
     parentExpressId, instanceId, rawOccurrencePath, pickedGeometryId, isShiftKeyDown,
   }) {
-    const instanceIds = isShiftKeyDown ? [] : [instanceId]
-    const rawPath = isShiftKeyDown ? null : rawOccurrencePath
     const rootEltForPick = useStore.getState().rootElement
-    const occurrencePath = rawPath ?
-      trimToTreeOccurrencePath(rawPath, occurrencePathKeySetForTree(rootEltForPick)) :
+    const occurrencePath = rawOccurrencePath ?
+      trimToTreeOccurrencePath(rawOccurrencePath, occurrencePathKeySetForTree(rootEltForPick)) :
       null
     const {targetId, solidExpressId, transientGeometryId} = resolvePickedOccurrenceNode({
       rootNode: rootEltForPick,
@@ -949,10 +944,24 @@ export default function CadView({
       parentExpressId,
       instanceCountAtPath: (path) => occurrenceInstanceIds(path, false).length,
     })
+    if (isShiftKeyDown) {
+      // Multi-select: toggle the picked row's id, exactly as a shift-click on
+      // that NavTree row does. `selectItemsInScene` resolves a STEP
+      // multi-selection's rows back to their instances for the highlight.
+      // An anonymous piece has no row to add, so it doesn't join.
+      // A STEP part-level pick's target is its geometry's product id, which is
+      // no row; the row is the occurrence's own node.
+      const rowId = (occurrencePath && occurrencePath.length > 0) ?
+        (solidExpressId ?? occurrencePath[occurrencePath.length - 1]) : targetId
+      if (transientGeometryId === null) {
+        elementSelection(viewer, elementsById, selectItemsInScene, true, rowId)
+      }
+      return
+    }
     if (transientGeometryId !== null) {
       materializeTransientNode(occurrencePath, transientGeometryId)
     }
-    selectItemsInScene([targetId], true, instanceIds, occurrencePath, solidExpressId)
+    selectItemsInScene([targetId], true, [instanceId], occurrencePath, solidExpressId)
   }
 
 
@@ -1085,6 +1094,20 @@ export default function CadView({
       return
     }
     try {
+      // STEP, selected by row rather than by pick (a shift-click
+      // multi-selection, a search): the rows' ids are NAUOs and solids, which
+      // own no geometry, so without instances the scene highlighted nothing.
+      // Resolve the rows to their occurrences' instances. Empty for IFC.
+      if (instanceIds.length === 0 && occurrencePath === null && resultIDs.length > 0) {
+        const occurrences = selectedOccurrences({
+          rootNode: useStore.getState().rootElement,
+          anchorIds: anchorIds ?? resultIDs,
+        })
+        if (occurrences.length > 0) {
+          instanceIds = [...new Set(occurrences.flatMap(({occurrencePath: path, solidExpressId: solid}) =>
+            occurrenceInstanceIds(path, true, solid)))]
+        }
+      }
       // Update The Component state
       const resIds = resultIDs.map((id) => `${id}`)
       setSelectedElements(resIds)

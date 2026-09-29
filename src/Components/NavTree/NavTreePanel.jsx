@@ -568,6 +568,13 @@ const RenderRow = ({index, style, data}) => {
     // (occurrencePath, geometry id) identity — the isolator's canBeHidden
     // list is built from the spatial tree, which never contains them.
     hasHideIcon = true
+  } else if (Array.isArray(node.occurrencePath) && node.occurrencePath.length > 0 &&
+      typeof viewer.isolator.canHideOccurrence === 'function') {
+    // STEP occurrence rows hide through their path (HideToggleButton), so the
+    // eye goes wherever that resolves to geometry. `canBeHidden` reads element
+    // ids, which a NAUO row id never is, and left every leaf part eyeless.
+    hasHideIcon = viewer.isolator.canHideOccurrence(
+      node.occurrencePath, node.ephemeral === true ? Number(node.expressID) : null)
   } else if (node.expressID) {
     hasHideIcon = viewer.isolator.canBeHidden(node.expressID)
   }

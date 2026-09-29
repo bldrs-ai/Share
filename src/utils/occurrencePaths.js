@@ -352,3 +352,65 @@ export function trimToTreeOccurrencePath(path, treeKeys) {
   }
   return null
 }
+
+
+/**
+ * The STEP occurrences a selection names, for the operations that act on
+ * geometry — highlight, hide, isolate. A tree node's id is its NAUO (or, for
+ * a named body, the solid's) express id, which never owns geometry: the
+ * geometry is keyed by the shared product_definition_shape, so those ids have
+ * to be resolved through each node's occurrence path
+ * (`ShareViewer.getInstanceIdsForOccurrencePath`).
+ *
+ * A single selection carries its exact occurrence (`occurrencePath` /
+ * `solidExpressId`, from the selection funnel). A multi-selection doesn't — a
+ * shift-click adds ids, the way it does for IFC — so its anchors are looked up
+ * in the tree, taking every node with that id: the duplicates of a reused
+ * sub-assembly share NAUO ids, and the tree can't tell which was meant.
+ *
+ * Empty for IFC and scene-graph trees, whose nodes carry no occurrence path.
+ *
+ * @param {object} args
+ * @param {object|null} args.rootNode spatial-structure root element
+ * @param {Array<number|string>} args.anchorIds the ids the user selected
+ * @param {Array<number>|null} [args.occurrencePath] the single selection's path
+ * @param {number|null} [args.solidExpressId] the single selection's solid
+ * @return {Array<object>} `{nodeId, occurrencePath, solidExpressId}`, one per
+ *   occurrence (solidExpressId null unless a named body is meant)
+ */
+export function selectedOccurrences({rootNode, anchorIds, occurrencePath = null, solidExpressId = null}) {
+  if (Array.isArray(occurrencePath) && occurrencePath.length > 0) {
+    return [{
+      nodeId: solidExpressId ?? occurrencePath[occurrencePath.length - 1],
+      occurrencePath,
+      solidExpressId: solidExpressId ?? null,
+    }]
+  }
+  const wanted = new Set((anchorIds ?? []).map(Number).filter(Number.isFinite))
+  if (!rootNode || wanted.size === 0 || !(occurrencePathKeySetForTree(rootNode)?.size > 0)) {
+    return []
+  }
+  const out = []
+  const seen = new Set()
+  const stack = [rootNode]
+  while (stack.length > 0) {
+    const node = stack.pop()
+    const id = Number(node.expressID)
+    if (wanted.has(id) && Array.isArray(node.occurrencePath) && node.occurrencePath.length > 0) {
+      const solid = node.ephemeral === true ? id : null
+      const key = `${occurrencePathKey(node.occurrencePath)}#${solid}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        out.push({nodeId: id, occurrencePath: node.occurrencePath, solidExpressId: solid})
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) {
+        if (child && typeof child === 'object') {
+          stack.push(child)
+        }
+      }
+    }
+  }
+  return out
+}
