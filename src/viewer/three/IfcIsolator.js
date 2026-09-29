@@ -66,9 +66,11 @@ export default class IfcIsolator {
   // only the chosen occurrence disappears. Empty for IFC. See
   // design/new/step-occurrence-selection.md.
   hiddenOccurrences = new Map()
-  // The occurrence each `hiddenOccurrences` entry was resolved from, keyed the
-  // same: `{occurrencePath, solidExpressId}`. The permalink (visibilityHash)
-  // writes these, since instance ids are per load and don't round-trip.
+  // The occurrences each `hiddenOccurrences` entry was resolved from, keyed the
+  // same: a list of `{occurrencePath, solidExpressId}`. The permalink
+  // (visibilityHash) writes these, since instance ids are per load and don't
+  // round-trip. A list because the duplicates of a reused sub-assembly share
+  // their node ids, so one key can stand for several occurrences.
   hiddenOccurrencePaths = new Map()
   // What the loader left hidden (scene-graph overlays, with their subtrees):
   // the baseline the permalink's hidden-state diff is taken against. Empty
@@ -724,6 +726,12 @@ export default class IfcIsolator {
    * `hideOccurrence` for several occurrences at once — a multi-selection's
    * Hide — rebuilding the view once rather than per occurrence.
    *
+   * Occurrences sharing a node id — the duplicates of a reused sub-assembly,
+   * which a selection of one of their rows names together — merge under it:
+   * their instances union and every path is kept, rather than each
+   * overwriting the last. That id is also the one the rows' eyes and the
+   * store read, so they hide and show together.
+   *
    * @param {Array<object>} occurrences `{nodeId, instanceIds, occurrencePath?,
    *   solidExpressId?}`; entries with no instances are skipped
    */
@@ -736,12 +744,16 @@ export default class IfcIsolator {
       if (!Array.isArray(instanceIds) || instanceIds.length === 0) {
         continue
       }
-      this.hiddenOccurrences.set(nodeId, [...instanceIds])
+      const instances = new Set(this.hiddenOccurrences.get(nodeId) ?? [])
+      instanceIds.forEach((id) => instances.add(id))
+      this.hiddenOccurrences.set(nodeId, [...instances])
       if (Array.isArray(occurrencePath) && occurrencePath.length > 0) {
-        this.hiddenOccurrencePaths.set(nodeId, {
-          occurrencePath: [...occurrencePath],
-          solidExpressId: solidExpressId ?? null,
-        })
+        const paths = this.hiddenOccurrencePaths.get(nodeId) ?? []
+        const key = `${occurrencePathKey(occurrencePath)}#${solidExpressId ?? null}`
+        if (!paths.some((each) => `${occurrencePathKey(each.occurrencePath)}#${each.solidExpressId}` === key)) {
+          paths.push({occurrencePath: [...occurrencePath], solidExpressId: solidExpressId ?? null})
+        }
+        this.hiddenOccurrencePaths.set(nodeId, paths)
       }
       changed = true
     }

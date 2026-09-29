@@ -272,7 +272,7 @@ describe('Components/Residency/visibilityHash', () => {
 
     it('writes a STEP occurrence as its path, and hides it by that path', () => {
       const occurrence = {occurrencePath: [100, 200], solidExpressId: 300}
-      const viewer = stubViewer({hiddenOccurrencePaths: new Map([[300, occurrence]])})
+      const viewer = stubViewer({hiddenOccurrencePaths: new Map([[300, [occurrence]]])})
       expect(visibilityRefs(viewer).hide).toEqual(['o100.200.300'])
       const location = loc()
       writeVisibilityHash(location, viewer)

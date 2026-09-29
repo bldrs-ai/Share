@@ -72,8 +72,8 @@ export function visibilityRefs(viewer) {
   // The root is the selection permalink's first id; this token has no root.
   const occurrenceRefOf = ({occurrencePath, solidExpressId}) =>
     occurrenceRef(occurrenceElementPathIds(0, occurrencePath, solidExpressId).slice(1))
-  for (const occurrence of isolator.hiddenOccurrencePaths.values()) {
-    refs.hide.push(occurrenceRefOf(occurrence))
+  for (const occurrences of isolator.hiddenOccurrencePaths.values()) {
+    refs.hide.push(...occurrences.map(occurrenceRefOf))
   }
   if (isolator.tempIsolationModeOn) {
     // STEP occurrences isolate by path, like their hides.

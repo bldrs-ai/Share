@@ -1123,6 +1123,30 @@ describe('viewer/three/IfcIsolator', () => {
         expect(iso.hiddenOccurrences.size).toBe(0)
       })
 
+      it('hides every duplicate of a reused sub-assembly its row names, keeping each path', () => {
+        // Sub-assembly 50 placed under both 10 and 20: its two copies share
+        // the row id, so a selection of it names both occurrences.
+        const {iso, mesh} = setupBatchedIsolator()
+        mesh.occurrencePathToBatchIds = new Map([['10/50', [0]], ['20/50', [1]]])
+        const byPath = {'10/50': [0], '20/50': [1]}
+        iso.viewer.getInstanceIdsForOccurrencePath = jest.fn((modelId, path) => byPath[path.join('/')] ?? [])
+        useStoreMock.getState.mockReturnValue({
+          elementTypesMap: [], selectedElements: ['50'], selectedAnchorIds: ['50'],
+          selectedOccurrencePath: null, selectedSolidExpressId: null,
+          rootElement: {expressID: 1, children: [
+            {expressID: 10, occurrencePath: [10], children: [{expressID: 50, occurrencePath: [10, 50], children: []}]},
+            {expressID: 20, occurrencePath: [20], children: [{expressID: 50, occurrencePath: [20, 50], children: []}]},
+          ]},
+        })
+        iso.hideSelectedElements()
+        // Keyed by the shared id, each used to overwrite the last: one copy stayed.
+        expect(visibility(mesh)).toEqual([false, false, true, true])
+        expect(iso.hiddenOccurrencePaths.get(50).map(({occurrencePath}) => occurrencePath.join('/')).sort())
+          .toEqual(['10/50', '20/50'])
+        iso.hideSelectedElements()
+        expect(visibility(mesh)).toEqual([true, true, true, true])
+      })
+
       it('gives every row with geometry an eye, leaf occurrences included', () => {
         const {iso} = setupStep()
         // `canBeHidden` reads element ids; a leaf row's NAUO id is none.
