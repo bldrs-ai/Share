@@ -26,8 +26,8 @@
  *   { loads: [{ key, loadedAt }, ...] }
  */
 
-const axios = require('axios')
-const Sentry = require('@sentry/serverless')
+import axios from 'axios'
+import * as Sentry from '@sentry/serverless'
 
 
 Sentry.AWSLambda.init({
@@ -244,7 +244,7 @@ function buildResponse(allowed, used, tier, alreadyCounted, loads) {
   return body
 }
 
-exports.handler = Sentry.AWSLambda.wrapHandler(async (event) => {
+export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   if (event.httpMethod !== 'POST') {
     return {statusCode: HTTP_METHOD_NOT_ALLOWED, body: 'Method Not Allowed'}
   }
