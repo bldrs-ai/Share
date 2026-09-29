@@ -80,6 +80,14 @@ Add a `case` returning the tuple
 - **`fixupCb`** — only if the loader returns something other than a
   renderable `Object3D` (see `stl.js`, `pdb.js`, `glb.js`). A loader
   returning a `Group` needs none.
+- **Colors the loader already decodes are the fixup's to render.**
+  STLLoader parses binary STL's Materialise colors (a `COLOR=` header
+  tag, then a 5-bit RGB in each facet's attribute word) into a linear
+  `color` attribute plus `geometry.hasColors`/`alpha`; `stl.js` turns
+  that into `vertexColors` over a white base and leaves uncolored
+  files in the default blue-grey. The color-space reasoning and the
+  cases it declines (all-black facets, zero alpha, the VisCAM bit
+  layout STLLoader doesn't read) are in its header.
 - Related extensions can share one arm when the loader sniffs the
   variant itself.
 - `readModel` calls `loader.parse(modelData, basePath)`. A loader whose
