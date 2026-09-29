@@ -127,13 +127,15 @@ arm — the envelope comes off at the upload seam, and a second seam in
    Safari, Android Chrome) with real Auth0 accounts per tier, against the
    §8 checklist; the real Management API path for `record-export`
    (including whether the `https://bldrs.ai/app_metadata` JWT claim carries
-   `exports` at all — an Auth0 Action outside this repo); flipping `export`
-   to `isActive: true`; and the site-wide esbuild-bundling decision for
-   every other ESM Netlify function that imports axios
-   (`gh-oauth-exchange`, `gh-oauth-refresh`, `unlink-identity`,
-   `create-portal-session`, `stripe-webhook`), which shares the same latent
-   nft cold-start crash #1837 fixed locally for `pro-module` and
-   `record-export`. Desktop smoke on the deploy preview (14 Sep) found
+   `exports` at all — an Auth0 Action outside this repo); and flipping
+   `export` to `isActive: true`. (The site-wide esbuild-bundling decision
+   for every other ESM Netlify function that imports axios —
+   `gh-oauth-exchange`, `gh-oauth-refresh`, `unlink-identity`,
+   `create-portal-session`, `stripe-webhook`, which shared the latent nft
+   cold-start crash #1837 fixed for `pro-module` and `record-export` — is
+   decided: every v1 function bundles with esbuild via `netlify.toml`
+   `[functions]`, PR #1887, enforced by `tools/netlify/functionBundler.test.js`.)
+   Desktop smoke on the deploy preview (14 Sep) found
    export working end to end with None/Meshopt/Draco all opening in Share
    and the three.js editor; the two findings it produced became their own
    issues (#1844 picking on a re-opened Bldrs GLB, #1843 portable export)
@@ -941,10 +943,15 @@ builds: one `esbuild.build` per entry under `src/export/pro/*.entry.js`,
 (no source leak), `outfile: netlify/functions/_pro-modules/<name>.js`.
 `netlify.toml` declares `[functions."pro-module"] included_files =
 ["netlify/functions/_pro-modules/*.js"]` so the bundler ships the files with
-the function — at `<task root>/_pro-modules/<name>.js`, the functions
-directory stripped, under the esbuild bundler the function is configured
-with (`node_bundler = "esbuild"`; nft keeps the repo-relative path, and the
-function tries both). esbuild rather than Netlify's default nft because nft
+the function. Where they land depends on the bundler, so the function
+tries both `<task root>/_pro-modules/<name>.js` and
+`<task root>/netlify/functions/_pro-modules/<name>.js`. Under the esbuild
+bundler the function is configured with (`node_bundler = "esbuild"`),
+zip-it-and-ship-it 14.5.4 keeps the repo-relative
+`netlify/functions/_pro-modules/` path (verified by bundling with
+`tools/netlify/bundleFunctions.mjs`; `functionBundler.test.js` asserts it),
+so the second candidate is the one that matches today; the first is a
+fallback for a bundler that strips the functions directory. esbuild rather than Netlify's default nft because nft
 transpiles an ESM function to CommonJS and then ships only what it traced
 from the ESM import graph: `import axios` becomes `require('axios')`, which
 resolves to `dist/node/axios.cjs`, which is not in the zip, and the function
