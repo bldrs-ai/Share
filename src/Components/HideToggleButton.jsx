@@ -24,7 +24,13 @@ export default function HideToggleButton({elementId, occurrencePath = null, geom
     state.hiddenOccurrenceKeys?.[occurrenceKey(occurrencePath, geometryExpressId)] :
     state.hiddenElements[elementId]))
   const updateHiddenStatus = useStore((state) => state.updateHiddenStatus)
-  const isIsolated = useStore((state) => state.isolatedElements[elementId])
+  // Likewise for isolation, when it was by occurrence (else by row id).
+  const isIsolated = useStore((state) => {
+    const byOccurrence = state.isolatedOccurrenceKeys ?? {}
+    return isOccurrence && Object.keys(byOccurrence).length > 0 ?
+      byOccurrence[occurrenceKey(occurrencePath, geometryExpressId)] :
+      state.isolatedElements[elementId]
+  })
   const isTempIsolationModeOn = useStore((state) => state.isTempIsolationModeOn)
   const viewer = useStore((state) => state.viewer)
 

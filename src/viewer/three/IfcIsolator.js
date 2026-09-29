@@ -901,12 +901,16 @@ export default class IfcIsolator {
     this.isolationSubset = this.ifcModel.createSubset({
       modelID: 0,
       scene: this.context.getScene(),
-      // Every parent, filtered down to the isolated instances.
-      ids: isolatedInstances ? this.visualElementsIds : includedIds,
+      // Every shown parent, filtered down to the isolated instances, less any
+      // hidden ones: hides hold while isolating, as the batched mask composes
+      // them (an isolated assembly keeps its hidden child hidden).
+      ids: isolatedInstances ?
+        this.visualElementsIds.filter((id) => !this.hiddenIds.includes(id)) : includedIds,
       applyBVH: true,
       removePrevious: true,
       customID: this.subsetCustomId,
-      ...(isolatedInstances ? {includeInstances: isolatedInstances} : {}),
+      ...(isolatedInstances ?
+        {includeInstances: isolatedInstances, excludeInstances: this._hiddenInstanceIdSet()} : {}),
     })
     this._addSubsetToScene(this.isolationSubset)
     // OutlineEffect.setSelection takes an array of Object3Ds. The
@@ -1411,8 +1415,14 @@ export default class IfcIsolator {
     this.isolatedInstanceIds = instanceIds
     this.isolatedOccurrences = occurrences.map(({nodeId, occurrencePath, solidExpressId}) =>
       ({nodeId, occurrencePath: [...occurrencePath], solidExpressId: solidExpressId ?? null}))
-    // Keyed by the rows' ids, so the NavTree shows their isolation glasses.
-    useStore.setState({isolatedElements: Object.fromEntries(this.isolatedIds.map((id) => [id, true]))})
+    // The rows' ids, for everything that reads isolated ids; and each
+    // occurrence's key, for its row's isolation glasses (the copies of a
+    // reused sub-assembly share their row ids, and only one may be isolated).
+    useStore.setState({
+      isolatedElements: Object.fromEntries(this.isolatedIds.map((id) => [id, true])),
+      isolatedOccurrenceKeys: Object.fromEntries(this.isolatedOccurrences.map(
+        ({nodeId, occurrencePath, solidExpressId}) => [occurrenceKey(occurrencePath, solidExpressId, nodeId), true])),
+    })
     this.initTemporaryIsolationSubset(null, instanceIds)
   }
 
@@ -1434,7 +1444,7 @@ export default class IfcIsolator {
     this.isolatedIds = [...ids]
     const isolatedIdsObject = Object.fromEntries(
       this.isolatedIds.map((id) => [id, true]))
-    useStore.setState({isolatedElements: isolatedIdsObject})
+    useStore.setState({isolatedElements: isolatedIdsObject, isolatedOccurrenceKeys: {}})
     this.initTemporaryIsolationSubset(this.isolatedIds)
   }
 
@@ -1452,7 +1462,7 @@ export default class IfcIsolator {
     this._isolatedSelection = null
     this.isolatedInstanceIds = null
     this.isolatedOccurrences = null
-    useStore.setState({isolatedElements: {}})
+    useStore.setState({isolatedElements: {}, isolatedOccurrenceKeys: {}})
     this._removeSubsetFromScene(this.isolationSubset)
     this.isolationSubset = null
     // Rebuild the hide reveal (which subtracts occurrence-hidden instances) when

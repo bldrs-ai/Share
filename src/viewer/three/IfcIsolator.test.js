@@ -1111,7 +1111,9 @@ describe('viewer/three/IfcIsolator', () => {
         iso.isolateSelectedElements()
         expect(visibility(mesh)).toEqual([false, true, false, false])
         expect(iso.isolatedOccurrences).toEqual([{nodeId: 12, occurrencePath: [10, 12], solidExpressId: null}])
-        expect(useStoreMock.setState).toHaveBeenCalledWith({isolatedElements: {12: true}})
+        // Glasses on this occurrence's row only: its copies share row id 12.
+        expect(useStoreMock.setState).toHaveBeenCalledWith(
+          {isolatedElements: {12: true}, isolatedOccurrenceKeys: {'10/12#': true}})
         // Picking stays open on the isolated geometry, whose product id is no row.
         expect(iso.canBePickedInScene(100)).toBe(true)
         iso.resetTempIsolation()
@@ -1215,10 +1217,15 @@ describe('viewer/three/IfcIsolator', () => {
         root.createSubset = jest.fn(() => [])
         iso.ifcModel = root
         iso.visualElementsIds = [100, 200]
-        iso.viewer.getInstanceIdsForOccurrencePath = jest.fn(() => [5])
+        iso.viewer.getInstanceIdsForOccurrencePath = jest.fn(() => [5, 6])
+        // A hidden child occurrence (instance 6) and a hidden product (200)
+        // stay hidden while isolating, as on the batched path.
+        iso.hideOccurrence(12, [6], {occurrencePath: [10, 11, 12]})
+        iso.hiddenIds = [200]
         iso.isolateOccurrences([{nodeId: 11, occurrencePath: [10, 11], solidExpressId: null}])
-        expect(root.createSubset).toHaveBeenCalledWith(
-          expect.objectContaining({ids: [100, 200], includeInstances: new Set([5])}))
+        expect(root.createSubset).toHaveBeenLastCalledWith(expect.objectContaining({
+          ids: [100], includeInstances: new Set([5, 6]), excludeInstances: new Set([6]),
+        }))
         expect(iso.tempIsolationModeOn).toBe(true)
       })
 

@@ -21,6 +21,9 @@ export default function createIsolatorSlice(set, get) {
     // with the path, so a re-init doesn't seed over the user's own state.
     sceneGraphDefaultsSeeded: false,
     isolatedElements: {},
+    // The STEP occurrences isolated, by `occurrenceKey` → true: what an
+    // occurrence row's isolation glasses read (see `hiddenOccurrenceKeys`).
+    isolatedOccurrenceKeys: {},
     isTempIsolationModeOn: false,
 
     updateHiddenStatus: (elementId, isHidden) =>
