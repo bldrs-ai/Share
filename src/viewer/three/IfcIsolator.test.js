@@ -1147,6 +1147,23 @@ describe('viewer/three/IfcIsolator', () => {
         expect(visibility(mesh)).toEqual([true, true, true, true])
       })
 
+      it('leaves the selection it isolated unpainted until the selection changes', () => {
+        const selectedElements = ['11', '20']
+        const {iso} = setupStep({selectedElements, selectedAnchorIds: selectedElements})
+        iso.viewer.getSelectedIds = jest.fn(() => [11, 20])
+        expect(iso.isSelectionPaintSuppressed()).toBe(false)
+        iso.isolateSelectedElements()
+        // The viewer's later repaint of this same selection (a link restoring
+        // it) is held off...
+        expect(iso.isSelectionPaintSuppressed()).toBe(true)
+        // ...but a new selection paints, isolated or not.
+        useStoreMock.getState.mockReturnValue({...useStoreMock.getState(), selectedElements: ['11']})
+        expect(iso.isSelectionPaintSuppressed()).toBe(false)
+        useStoreMock.getState.mockReturnValue({...useStoreMock.getState(), selectedElements})
+        iso.resetTempIsolation()
+        expect(iso.isSelectionPaintSuppressed()).toBe(false)
+      })
+
       it('gives every row with geometry an eye, leaf occurrences included', () => {
         const {iso} = setupStep()
         // `canBeHidden` reads element ids; a leaf row's NAUO id is none.

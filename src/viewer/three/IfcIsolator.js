@@ -82,6 +82,10 @@ export default class IfcIsolator {
   // isolation is by element id (`isolatedIds`).
   isolatedInstanceIds = null
   isolatedOccurrences = null
+  // The store's `selectedElements` when isolating dropped the selection's
+  // paint (batched path), so it stays dropped until the selection changes
+  // (`isSelectionPaintSuppressed`).
+  _isolatedSelection = null
   tempIsolationModeOn = false
   revealHiddenElementsMode = false
   hiddenMaterial = null
@@ -864,6 +868,9 @@ export default class IfcIsolator {
       // repaints from it via `_rebuildSelectionVisualFromStore`, so a click
       // made while isolated still highlights normally.
       this._clearSelectionVisualOnly()
+      if (this.tempIsolationModeOn) {
+        this._isolatedSelection = useStore.getState().selectedElements ?? null
+      }
       this._applyBatchedVisibility(isolatedInstances ? {isolatedInstances} : {isolatedIds: includedIds})
       // No subset Mesh exists to outline. Point the effect at the batch meshes
       // themselves: only the isolated instances are visible on them now, so the
@@ -1284,6 +1291,24 @@ export default class IfcIsolator {
   }
 
   /**
+   * Whether the viewer should leave the selection unpainted: isolating (on
+   * the batched path) drops the selection's cyan so the isolated parts show
+   * their own colours (Share#1806), and that holds until the selection
+   * changes — a click made while isolated still highlights. Without this, a
+   * link that restores a selection and its isolation painted the cyan back:
+   * the selection effect runs after the isolate, not before it as it does
+   * live. Keyed by the store's `selectedElements` array, which every
+   * selection replaces.
+   *
+   * @return {boolean}
+   */
+  isSelectionPaintSuppressed() {
+    return this.tempIsolationModeOn && this._isolatedSelection !== null &&
+      useStore.getState().selectedElements === this._isolatedSelection
+  }
+
+
+  /**
    * Checks whether a certain element can be picked in scene or not
    *
    * @param {number} elementId the element id
@@ -1404,6 +1429,7 @@ export default class IfcIsolator {
     this.tempIsolationModeOn = false
     useStore.setState({isTempIsolationModeOn: false})
     this.isolatedIds = []
+    this._isolatedSelection = null
     this.isolatedInstanceIds = null
     this.isolatedOccurrences = null
     useStore.setState({isolatedElements: {}})

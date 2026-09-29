@@ -409,9 +409,11 @@ export default function CadView({
     // kept the terms current. After onModel, which sets the NavTree root
     // that STEP occurrence refs resolve against; before setIsModelReady,
     // which lets VisibilityHashWriter start rewriting the terms.
+    // The selection goes first: isolating leaves the selection it finds
+    // unpainted, as it does live.
     if (viewer.isolator?.ifcModel) {
-      applyVisibilityHash(window.location, viewer, useStore.getState().rootElement)
       selectFromSelectionHash()
+      applyVisibilityHash(window.location, viewer, useStore.getState().rootElement)
     }
 
     modelPath.title = tmpModelRef.name // maybe undefined

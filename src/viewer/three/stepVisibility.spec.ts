@@ -76,6 +76,29 @@ describeMobileAndDesktop('STEP hide / isolate / multi-select', () => {
     expect(page.url()).not.toContain('undefined')
   })
 
+  test('a link to an isolated multi-selection reopens it isolated and unpainted, as it was left', async ({page}) => {
+    test.setTimeout(TWO_LOADS_TIMEOUT_MS)
+    const {leaves} = await loadStepTree(page)
+    await leaves.nth(0).getByTestId('NavTreeNodeLabel').click()
+    await leaves.nth(1).getByTestId('NavTreeNodeLabel').click({modifiers: ['Shift']})
+    await expect.poll(() => paintedInstances(page)).toBe(2)
+    await closeTree(page)
+    // Isolate drops the selection's cyan, so the parts show their own colours.
+    await page.getByTestId('Isolate').click()
+    await expect.poll(() => visibleInstances(page)).toBe(2)
+    expect(await paintedInstances(page)).toBe(0)
+
+    await page.reload()
+    await waitForModelReady(page)
+    await expect.poll(() => visibleInstances(page)).toBe(2)
+    // Wait for the viewer to have taken the restored selection (it records
+    // the ids just before it would paint), so "unpainted" isn't just "not yet".
+    await expect.poll(() => page.evaluate(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).useStore.getState().viewer.getSelectedIds().length)).toBeGreaterThanOrEqual(2)
+    expect(await paintedInstances(page)).toBe(0)
+  })
+
   test('shift-double-clicking in the scene adds an occurrence, and the link reopens both selected', async ({page}) => {
     test.setTimeout(TWO_LOADS_TIMEOUT_MS)
     await loadStepTree(page)
@@ -206,6 +229,23 @@ function selection(page: Page): Promise<{anchors: string[], instances: number[]}
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const state = (window as any).useStore.getState()
     return {anchors: state.selectedAnchorIds ?? [], instances: state.selectedInstanceIds ?? []}
+  })
+}
+
+
+/**
+ * @param page Playwright page
+ * @return how many batched instances carry the selection's paint
+ */
+function paintedInstances(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    let painted = 0
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    ;(window as any).useStore.getState().viewer.isolator.ifcModel.traverse((obj: any) => {
+      painted += obj.userData?.batchedHighlight?.selSet?.size ?? 0
+    })
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    return painted
   })
 }
 
