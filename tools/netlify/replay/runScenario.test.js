@@ -51,6 +51,7 @@ const CASES = [
     'header authorization'],
   ['env is the scenario\'s own', {env: {WHO: 'someone-else'}}, 'body.from: expected "replay", got "someone-else"'],
   ['handler throws', {request: {...BASE.request, query: {throw: '1'}}}, 'handler threw: Error: boom'],
+  ['handler returns nothing', {request: {...BASE.request, query: {nothing: '1'}}}, 'handler returned no response'],
 ]
 
 

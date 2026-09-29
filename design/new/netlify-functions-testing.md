@@ -153,7 +153,8 @@ So the status code is the retry policy:
 | Update written | 200 |
 | Permanent: no email on the customer, customer deleted, no Auth0 user for the email, unhandled event type | 200, reported to Sentry |
 | Permanent upstream answer: 400, 404, 410 or 422 from Stripe or Auth0 (e.g. Stripe's `resource_missing`) | 200, reported to Sentry |
-| Transient: network error, 408/409/429, any 5xx, or any Stripe error carrying `Stripe-Should-Retry: true` (whatever its status, e.g. a 400 lock timeout that outlived the SDK's own retries) | **500**, so Stripe redelivers |
+| Transient: network error, 408/409/429, any 5xx | **500**, so Stripe redelivers |
+| A Stripe error carrying `Stripe-Should-Retry` | That header decides over the status: `true` (e.g. a 400 lock timeout that outlived the SDK's own retries) → **500**; `false` (e.g. most Stripe 500s) → 200, reported. stripe-node gives the header the same precedence. |
 | Credentials rejected: 401/403 from Stripe or Auth0 | **500**. A revoked key is a config fault someone will fix within Stripe's three-day window, and the retries then deliver what was missed. |
 | Missing signature | 400, not reported (probes and scanners) |
 | Bad signature | 400, reported |

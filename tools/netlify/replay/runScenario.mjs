@@ -97,6 +97,10 @@ server.close()
 
 if (response) {
   failures.push(...responseMismatches(response, scenario.expect))
+} else if (!failures.some((f) => f.startsWith('handler threw'))) {
+  // Netlify turns a v1 handler resolving to nothing into an error, so a
+  // missing response must fail rather than skip the response checks.
+  failures.push(`handler returned no response (${JSON.stringify(response)})`)
 }
 for (const missed of exchanges.slice(nextExchange)) {
   failures.push(`outbound ${missed.request.method} ${missed.request.url}: expected but never made`)

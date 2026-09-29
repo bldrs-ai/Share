@@ -315,8 +315,11 @@ describe('stripe-webhook function', () => {
     it.each([
       ['Stripe has no such subscription (404)', () => mockStripeClient.subscriptions.retrieve.mockRejectedValue(stripeError(404))],
       ['Stripe has no such customer (404)', () => mockStripeClient.customers.retrieve.mockRejectedValue(stripeError(404))],
-      ['Stripe answers 404 with Stripe-Should-Retry: false', () => mockStripeClient.customers.retrieve.mockRejectedValue(
-        Object.assign(stripeError(404), {headers: {'stripe-should-retry': 'false'}}))],
+      // Stripe's explicit no-retry beats a status we'd otherwise retry.
+      ['Stripe answers 500 with Stripe-Should-Retry: false', () => mockStripeClient.customers.retrieve.mockRejectedValue(
+        Object.assign(stripeError(500), {headers: {'stripe-should-retry': 'false'}}))],
+      ['Stripe answers 409 with Stripe-Should-Retry: false', () => mockStripeClient.subscriptions.retrieve.mockRejectedValue(
+        Object.assign(stripeError(409), {headers: {'stripe-should-retry': 'false'}}))],
       ['Auth0 rejects the user search as malformed (400)', () => axios.get.mockRejectedValue(upstreamError(400))],
       ['Auth0 no longer has the user (404 on the write)', () => axios.patch.mockRejectedValue(upstreamError(404))],
       ['the customer has no email', () => mockStripeClient.customers.retrieve.mockResolvedValue({id: CUSTOMER_ID, email: null})],

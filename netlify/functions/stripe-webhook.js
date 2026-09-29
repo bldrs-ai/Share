@@ -38,10 +38,11 @@
  *   - 500 for TRANSIENT failures — a network error, 429, 5xx, and also
  *     401/403: a revoked Stripe key or Auth0 client secret is a config fault
  *     that someone will fix, and Stripe's retries then deliver what was
- *     missed. Also any Stripe error carrying `Stripe-Should-Retry: true`,
- *     whatever its status (e.g. a 400 lock timeout): stripe-node honours
- *     that header over the status for its own retries, and so do we once
- *     its retries run out. This used to return 200 for every failure ("so Stripe doesn't
+ *     missed.
+ *   - A Stripe error's `Stripe-Should-Retry` header, when present, decides
+ *     over its status either way: `true` (e.g. a 400 lock timeout) → 500,
+ *     `false` (e.g. most Stripe 500s) → 200. stripe-node gives the header
+ *     the same precedence for its own retries. This used to return 200 for every failure ("so Stripe doesn't
  *     retry indefinitely"), which turned each Auth0 blip into a silently
  *     lost subscription update.
  *   - 400 for a missing or bad signature, 500 when unconfigured.
@@ -141,11 +142,16 @@ function upstreamStatus(err) {
  * @return {boolean}
  */
 function isPermanentFailure(err) {
-  // Stripe's explicit directive beats the status, as it does in stripe-node's
-  // own retry logic (RequestSender._shouldRetry). The SDK keeps the
-  // response headers on the error.
-  if (err && err.headers && err.headers['stripe-should-retry'] === 'true') {
+  // Stripe's explicit directive beats the status either way, as it does in
+  // stripe-node's own retry logic (RequestSender._shouldRetry checks it
+  // before the 409 and 5xx branches, and notes most Stripe 500s carry
+  // `false`). The SDK keeps the response headers on the error.
+  const directive = err && err.headers && err.headers['stripe-should-retry']
+  if (directive === 'true') {
     return false
+  }
+  if (directive === 'false') {
+    return true
   }
   return PERMANENT_UPSTREAM_STATUSES.has(upstreamStatus(err))
 }
