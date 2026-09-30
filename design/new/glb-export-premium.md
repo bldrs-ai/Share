@@ -874,6 +874,10 @@ Browser coverage: `Components/Share/exportCollapsed.spec.ts` double-clicks a
 COLLAPSED element and asserts store, NavTree and URL selection on the cache hit
 and on each Export codec reopened (desktop + mobile), verified red against the
 pre-fix Draco export; `batchedGlbCache.spec.ts` covers MISS → OPFS → HIT parity.
+The same spec exports Draco from `index.ifc` — hybrid under the collapse (five
+rows merged, one instanced node kept) — reads each primitive's method byte to
+prove the file was spliced (SEQUENTIAL under the collapsed node, EDGEBREAKER
+under the instanced one), then double-clicks one element of each kind.
 
 ### 1.2 Where a download can be located from
 

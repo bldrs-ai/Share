@@ -1,9 +1,11 @@
+import {readFile} from 'node:fs/promises'
 import {Page, expect, test} from '@playwright/test'
 import {
   EXPORT_MODEL_PATH,
   EXPORT_FLAGS,
   EXPORT_TEST_TIMEOUT_MS,
   dismissLoadSnackbar,
+  glbJsonChunk,
   loadModelAndWaitForArtifact,
   openExportTab,
   reopenLocalGlb,
@@ -53,22 +55,27 @@ import {
 const CODECS = ['none', 'meshopt', 'draco'] as const
 
 
+/** Which elements a double-click may aim at. */
+type ElementKind = 'collapsed' | 'instanced' | 'any'
+
+
 /**
  * Double-click an element in the scene and wait for it to be selected.
  *
- * Aims at a COLLAPSED element when `collapsedOnly` (one whose batch geometry
- * id is a synthesised range — `batchedGeometryRanges.js#BATCHED_GEOMETRY_
- * RANGE_IDS`), by projecting its bounds' centre to the canvas. Candidates are
- * tried in turn because the one in front at that pixel may be a different
- * element; the assertion is that SOME collapsed element, clicked, selects
- * itself. Broken picking selects none of them.
+ * Aims at a COLLAPSED element for `'collapsed'` (one whose batch geometry id
+ * is a synthesised range — `batchedGeometryRanges.js#BATCHED_GEOMETRY_
+ * RANGE_IDS`), at one that is NOT for `'instanced'`, by projecting its bounds'
+ * centre to the canvas. Candidates are tried in turn because the one in front
+ * at that pixel may be a different element; the assertion is that SOME
+ * element of that kind, clicked, selects itself. Broken picking selects none
+ * of them.
  *
  * @param page Playwright page
- * @param collapsedOnly aim only at collapsed elements
+ * @param kind which elements to aim at
  * @return the parent expressID that got selected
  */
-async function doubleClickSelectsAnElement(page: Page, collapsedOnly: boolean): Promise<number> {
-  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate((onlyRanges) => {
+async function doubleClickSelectsAnElement(page: Page, kind: ElementKind): Promise<number> {
+  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate((aimAt) => {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const w = window as any
     const state = (w.store ?? w.useStore).getState()
@@ -86,7 +93,8 @@ async function doubleClickSelectsAnElement(page: Page, collapsedOnly: boolean): 
       const Matrix4 = mesh.matrixWorld.constructor
       for (let batchId = 0; batchId < mesh.instanceParents.length; batchId++) {
         const geometryId = mesh.getGeometryIdAt(batchId)
-        if (onlyRanges && !mesh.bldrsGeometryRangeIds?.has(geometryId)) {
+        const isRange = Boolean(mesh.bldrsGeometryRangeIds?.has(geometryId))
+        if ((aimAt === 'collapsed' && !isRange) || (aimAt === 'instanced' && isRange)) {
           continue
         }
         const box = new Box3()
@@ -114,7 +122,7 @@ async function doubleClickSelectsAnElement(page: Page, collapsedOnly: boolean): 
     }
     return out
     /* eslint-enable @typescript-eslint/no-explicit-any */
-  }, collapsedOnly)
+  }, kind)
   expect(candidates.length, 'there must be an element of the kind under test on screen')
     .toBeGreaterThan(0)
 
@@ -171,6 +179,46 @@ async function exportWith(page: Page, mode: string, name: string): Promise<strin
 }
 
 
+/** A Draco bitstream's method byte: 'DRACO', major, minor, encoder type, METHOD. */
+const DRACO_METHOD_BYTE = 8
+const DRACO_SEQUENTIAL = 0
+const DRACO_EDGEBREAKER = 1
+const GLB_HEADER_BYTES = 12
+const GLB_CHUNK_HEADER_BYTES = 8
+
+
+/**
+ * The Draco method each node kind of an exported file was encoded with, read
+ * off every primitive's bitstream header — what the file actually holds, not
+ * what the encoder was asked for.
+ *
+ * @param bytes one exported GLB
+ * @return the methods seen under collapsed nodes and under instanced ones
+ */
+function dracoMethodsByNodeKind(bytes: Buffer): {collapsed: Set<number>; instanced: Set<number>} {
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const json: any = glbJsonChunk(bytes)
+  const jsonLength = bytes.readUInt32LE(GLB_HEADER_BYTES)
+  const binStart = GLB_HEADER_BYTES + GLB_CHUNK_HEADER_BYTES + jsonLength + GLB_CHUNK_HEADER_BYTES
+  const methodsOf = (meshIndex: number) => json.meshes[meshIndex].primitives.map((primitive: any) => {
+    const view = json.bufferViews[primitive.extensions.KHR_draco_mesh_compression.bufferView]
+    const at = binStart + (view.byteOffset ?? 0)
+    expect(bytes.subarray(at, at + 5).toString('latin1')).toBe('DRACO')
+    return bytes[at + DRACO_METHOD_BYTE]
+  })
+  const out = {collapsed: new Set<number>(), instanced: new Set<number>()}
+  for (const node of json.nodes ?? []) {
+    if (!Number.isInteger(node.mesh) || !Number.isInteger(node.extras?.bldrsTableNode)) {
+      continue
+    }
+    const kind = node.extensions?.EXT_mesh_gpu_instancing ? 'instanced' : 'collapsed'
+    methodsOf(node.mesh).forEach((method: number) => out[kind].add(method))
+  }
+  return out
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+}
+
+
 describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)', () => {
   test.beforeEach(async ({page}) => {
     await homepageSetup(page)
@@ -197,7 +245,7 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     await waitForGlbLog(glbLogs, 'cache HIT', EXPORT_TEST_TIMEOUT_MS)
     await waitForGlbLog(glbLogs, 'collapsed table(s)', EXPORT_TEST_TIMEOUT_MS)
     await dismissLoadSnackbar(page)
-    await doubleClickSelectsAnElement(page, true)
+    await doubleClickSelectsAnElement(page, 'collapsed')
     await expectNavTreeFollowsSelection(page)
 
     // Every codec's download, reopened the way a user brings a file back.
@@ -224,10 +272,67 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
         const hydrated = glbLogs.find((l) => l.includes('collapsed table(s)')) ?? ''
         expect(Number(/(\d+) collapsed table/.exec(hydrated)?.[1]), `${mode}: collapsed tables hydrated`)
           .toBeGreaterThan(0)
-        await doubleClickSelectsAnElement(page, true)
+        await doubleClickSelectsAnElement(page, 'collapsed')
         await expectNavTreeFollowsSelection(page)
       })
     }
+  })
+
+  test('a hybrid Draco export is spliced, and both kinds of element reopen selectable', async ({page}) => {
+    // `index.ifc` under the collapse is HYBRID — five single-placement
+    // elements merge into one primitive while one shape placed twice stays an
+    // instanced node — which is the file shape the per-primitive Draco method
+    // exists for (`export/dracoMethodSplice.js`): the collapsed primitive must
+    // be SEQUENTIAL for its rows to survive, the instanced one should be
+    // EDGEBREAKER like it is with the collapse off. That takes two encoder
+    // writes joined into one file, so this is the browser test of the join:
+    // the method bytes prove the file went through it, and a double-click on
+    // each kind proves nothing it rewrote broke decode, the witness or picking.
+    // Verified red against a broken join: an un-swapped collapsed payload is
+    // refused by the witness, an un-re-laid BIN never finishes loading. The two
+    // methods happen to agree on this small model's accessor counts and index
+    // type, so the checks on copying those live in `dracoMethodSplice.test.js`.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page, 'glbCollapse')
+    const writer = glbLogs.find((l) => l.includes('batched writer: collapsed')) ?? ''
+    const [, rows, kept] = /collapsed (\d+) single-placement.*; (\d+) instanced node/.exec(writer) ?? []
+    expect(Number(rows), 'collapsed rows in the artifact').toBeGreaterThan(0)
+    expect(Number(kept), 'instanced nodes kept beside them').toBeGreaterThan(0)
+
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    await waitForCodecSizing(page)
+    const path = await exportWith(page, 'draco', 'hybrid')
+    await page.keyboard.press('Escape')
+
+    // One file, two methods: a single-write encode (either method) fails here.
+    const methods = dracoMethodsByNodeKind(await readFile(path))
+    expect([...methods.collapsed], 'collapsed primitives: SEQUENTIAL').toEqual([DRACO_SEQUENTIAL])
+    expect([...methods.instanced], 'instanced primitives: EDGEBREAKER').toEqual([DRACO_EDGEBREAKER])
+
+    resetGlbLogs(glbLogs)
+    await reopenLocalGlb(page, path)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    await waitForGlbLog(glbLogs, 'hydrated instance-table', EXPORT_TEST_TIMEOUT_MS)
+    const hydrated = glbLogs.find((l) => l.includes('collapsed table(s)')) ?? ''
+    expect(Number(/(\d+) collapsed table/.exec(hydrated)?.[1]), 'collapsed tables hydrated')
+      .toBeGreaterThan(0)
+    const collapsed = await doubleClickSelectsAnElement(page, 'collapsed')
+    await expectNavTreeFollowsSelection(page)
+    // On the mobile form factor the NavTree panel covers the canvas, so the
+    // second pick would land on it; close it before aiming again.
+    await page.getByTestId('control-button-navigation').click()
+    await expect(page.getByTestId('NavTreePanel')).toBeHidden()
+    const instanced = await doubleClickSelectsAnElement(page, 'instanced')
+    await expectNavTreeFollowsSelection(page)
+    expect(instanced, 'the second pick is a different element').not.toBe(collapsed)
   })
 
   test('baseline: an un-collapsed Draco export reopens with selection', async ({page}) => {
@@ -248,7 +353,7 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     await waitForModelReady(page)
     await dismissLoadSnackbar(page)
     await waitForGlbLog(glbLogs, 'hydrated instance-table', EXPORT_TEST_TIMEOUT_MS)
-    await doubleClickSelectsAnElement(page, false)
+    await doubleClickSelectsAnElement(page, 'any')
     await expectNavTreeFollowsSelection(page)
   })
 })
