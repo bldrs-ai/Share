@@ -21,7 +21,8 @@ become the epic's sub-issues; §8 the cross-browser smoke checklist.
 
 *Updated 2026-09-16, after #1837/#1851/#1852 landed, the #1855 container
 gzip (§1.1a), today's byte-attribution measurement on #1831, and the
-`.glb.gz` round trip (§4.7), which reverses a decision §4.3 used to record.*
+`.glb.gz` round trip (§4.7), which reverses a decision §4.3 used to record.
+§1.1d was updated 2026-09-30 when `glbCollapse` went default-on.*
 
 **Where things stand:** the feature described in §1–§6 below is fully built
 and ships behind `?feature=export` (default **off**). Export lives in the
@@ -148,9 +149,10 @@ arm — the envelope comes off at the upload seam, and a second seam in
    JSON chunk after the write — merged bufferViews, dropped glTF-default
    fields, shortest-round-trip float32 bounds, identity instancing attributes
    omitted — **landed**, §1.1c; accessor-count reduction via mesh collapse
-   deferred there, reader proven in §1.1d, and the **writer landed behind
-   the default-off `glbCollapse`** (#1871, §1.1d) — 7.4× on a DSA-shaped
-   proxy, its rollout still owed), #1857 (deferred — ~2.7% of a
+   deferred there, reader proven in §1.1d, and the **writer landed and is
+   now default-on behind `glbCollapse`** (#1871, §1.1d) — 7.4× on a
+   DSA-shaped proxy, −86.7% raw on real DSA2; the kill switch is
+   `?feature=disableGlbCollapse`), #1857 (deferred — ~2.7% of a
    Draco'd export, not the headline it was thought to be), #1853
    (decimation, deprioritised — it attacks the ~1.2 MB geometry term on
    Snowdon, not the container), S5
@@ -649,7 +651,7 @@ entry's reserved block, and ranges deliberately share one. Neither is on the
 cache-hit path; the batch is stamped `bldrsHasGeometryRanges` so a caller can
 assert it.
 
-**The writer (#1871), behind the default-off `glbCollapse`.**
+**The writer (#1871), `glbCollapse`, default-on.**
 `src/loader/glbCollapse.js` plans and bakes; `glbBatchedExport.js` emits.
 Every group with exactly ONE placement is binned by source colour, each
 element's placement is baked into its vertices in double precision, the bin
@@ -763,8 +765,8 @@ in jest (Node, not the browser).
 proposed. `BLDRS_GLB_COLLAPSED_SCHEMA_VERSION` (`0.24.0-batched-collapsed2` since the STEP part-type bump,
 derived from the batched slot; `2` since the canary became rotation-invariant,
 so previews' first-canary artifacts re-parse rather than hit and refuse). Bumping the batched slot would have
-re-parsed every model for every user to change nothing for the flag-off
-majority; sharing it would have broken rollback, since an older build
+re-parsed every model for every user to change nothing for a session with
+the flag off; sharing it would have broken rollback, since an older build
 meeting v2 tables keeps the undecorated model on every cache hit forever
 (a hit never rewrites). With the slot in the filename neither end meets the
 other's bytes, and `?feature=disableGlbCollapse` finds the un-collapsed
@@ -861,19 +863,58 @@ triangles by — which is a reader and witness change, not an encoder one.
 Until then, a collapsed model with a few large single-placement parts beside
 many instanced ones (Right_Hand's shape) pays for it in its Draco download.
 
-**Still owed before `glbCollapse` flips on** (#1871 stays the tracker):
+**Default-on (#1871).** `glbCollapse` is `isActive: true` in
+`FeatureFlags.js`; it shipped default-off first. From the flip, the OPFS
+artifact every user writes, and what Export downloads, is the collapsed one
+(`0.24.0-batched-collapsed2`; users who held a batched artifact re-parse once
+into the new slot, like any schema move). What the flip was gated on, all of
+it recorded on #1871:
 
-1. ~~**Real-model numbers**~~ — taken, above; the stored-size growth they
-   showed is accepted. The Draco growth left on collapsed primitives is the
-   open question they raised.
-2. **Third-party viewers** — the three.js editor and 3dviewer.net on a
-   collapsed download and on its portable rewrite. Validator-clean is
-   necessary, not sufficient.
+1. **Real-model numbers** — taken (the table above); the stored-size growth
+   they showed is accepted by the owner.
+2. **Third-party viewers** — the owner opened collapsed exports of Arty_Z7
+   (STEP) and Momentum (IFC) in the three.js editor and 3dviewer.net, names
+   and clicking intact. DSA2's crash in the editor was traced to the PORTABLE
+   export (every element's POSITION/NORMAL interleaved in one shared
+   bufferView, which `InterleavedBuffer.toJSON` copies once per geometry), not
+   to the collapse: an un-collapsed portable DSA hangs the same way, and the
+   collapse is what makes DSA's none and Draco downloads open in 3dviewer.net
+   at all, since a fully collapsed file carries no `EXT_mesh_gpu_instancing`.
+   The portable layout fix and the large-file viewer slowness are tracked
+   outside the flag (#1900).
+3. **#1898, the Draco method per primitive** — merged; it removed the growth
+   on instanced parts beside a collapsed node (Right_Hand +252.7% → +128.1%).
+4. **The Draco row-tag follow-up** — tags each vertex with its row so the
+   collapsed primitives can use EDGEBREAKER too, closing the growth that is
+   left. This PR is held in draft until that one merges.
+
+**Why the default is safe to flip.** A misaligned range table presents as the
+wrong element under a click, not as a crash, so the flip rests on what refuses
+one and on how it reverts:
+
+- the range canary refuses a misaligned table, rather than hydrating it: exact
+  on a lossless artifact, a lossy witness on a Draco one (a refusal falls back
+  to the plain GLTFLoader model);
+- collapsed artifacts live in their own slot, so neither layout ever half-reads
+  the other's bytes.
+
+**The kill switch.** `?feature=disableGlbCollapse` puts one session back on
+the un-collapsed batched slot for read and write; flipping `disableGlbCollapse`
+to `isActive: true` in `FeatureFlags.js` does it for everyone. Either finds
+the un-collapsed artifacts still on disk, so it costs no re-parse, and hydration
+is not gated on the flag, so a collapsed download still opens in a session that
+has it off. The un-collapsed path stays under test on its own terms: the specs
+that mean it name `disableGlbCollapse` (`batchedGlbCache.spec.ts`, the baseline
+in `exportCollapsed.spec.ts`) instead of relying on the default, and
+`glbCompress.defaults.test.js` pins the shipped defaults against the real flag
+table.
 
 Browser coverage: `Components/Share/exportCollapsed.spec.ts` double-clicks a
 COLLAPSED element and asserts store, NavTree and URL selection on the cache hit
 and on each Export codec reopened (desktop + mobile), verified red against the
-pre-fix Draco export; `batchedGlbCache.spec.ts` covers MISS → OPFS → HIT parity.
+pre-fix Draco export; `batchedGlbCache.spec.ts` covers MISS → OPFS → HIT parity,
+for the default (collapsed slot asserted with no flag in the URL), for
+`glbCollapse` named explicitly, and for `disableGlbCollapse`.
 The same spec exports Draco from `index.ifc` — hybrid under the collapse (five
 rows merged, one instanced node kept) — reads each primitive's method byte to
 prove the file was spliced (SEQUENTIAL under the collapsed node, EDGEBREAKER

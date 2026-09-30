@@ -95,7 +95,9 @@ export async function setSubscriptionTier(page: Page, tier: 'sharePro' | 'free')
  *
  * @param page Playwright page
  * @param extraFlags more `?feature=` names, comma-joined onto
- *   `EXPORT_FLAGS` — e.g. `glbCollapse` to export the collapsed artifact
+ *   `EXPORT_FLAGS`. With none, the artifact is the default one, which is
+ *   COLLAPSED since `glbCollapse` went default-on (#1871); pass
+ *   `disableGlbCollapse` to export the un-collapsed layout instead
  */
 export async function loadModelAndWaitForArtifact(page: Page, extraFlags = '') {
   const glbLogs = captureGlbLogs(page)

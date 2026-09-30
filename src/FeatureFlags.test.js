@@ -42,6 +42,15 @@ describe('FeatureFlags', () => {
     expect(conwayDirect.isActive).toBe(true)
   })
 
+  it('declares glbCollapse active by default, with disableGlbCollapse as its off-switch', () => {
+    // share-140 #1871. `?feature=` can only turn flags ON, so the off-switch
+    // is the only per-session way back to un-collapsed artifacts.
+    const glbCollapse = flags.find((f) => f.name === 'glbCollapse')
+    const disable = flags.find((f) => f.name === 'disableGlbCollapse')
+    expect(glbCollapse?.isActive).toBe(true)
+    expect(disable?.isActive).toBe(false)
+  })
+
   describe('isFeatureEnabled', () => {
     it('returns false for unknown name', () => {
       expect(isFeatureEnabled('not-a-flag')).toBe(false)

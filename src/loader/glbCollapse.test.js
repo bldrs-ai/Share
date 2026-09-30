@@ -245,8 +245,10 @@ describe('collapsed batched artifact (#1871)', () => {
   })
 
   it('leaves the artifact byte-identical when collapse is off', async () => {
-    // The default-off promise, at the byte level: today's writer output does
-    // not move, so nobody's cached artifact goes stale because this shipped.
+    // The writer's own `collapse` option defaults to false (the caller reads
+    // the flag), and what it emits then is the pre-collapse v1 output at the
+    // byte level: the `disableGlbCollapse` kill switch lands on exactly the
+    // artifacts users already have, so rolling back never strands them.
     const {model} = liveHybridModel()
     const plain = await exportBatchedModelAsInstancedGlb(model)
     const explicit = await exportBatchedModelAsInstancedGlb(model, {collapse: false})

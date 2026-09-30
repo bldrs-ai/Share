@@ -154,7 +154,7 @@ export function isGlbBatchedActive() {
 
 /**
  * Whether the batched writer collapses single-placement nodes into merged,
- * range-addressed primitives (`glbCollapse`, default-off, #1871), unless this
+ * range-addressed primitives (`glbCollapse`, default-on, #1871), unless this
  * session opted out via `disableGlbCollapse`. Implies the batched layout: a
  * collapse is a shape OF that layout, so it is inert whenever
  * {@link isGlbBatchedActive} is false.

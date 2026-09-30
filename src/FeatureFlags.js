@@ -238,23 +238,37 @@ export const flags = [
   // merged primitive per source colour, addressed by per-element index
   // ranges in `BLDRS_instance_tables` v2 (share-140 #1871,
   // glb-export-premium.md §1.1d). ~7× off the JSON chunk on a DSA-shaped
-  // model, ~6% on a Snowdon-shaped one.
+  // model, ~6% on a Snowdon-shaped one; real-model numbers are on #1871.
   //
-  // Default-OFF, and deliberately so: `glbBatched` is default-on, so this
-  // changes the OPFS artifact every user gets, and a misaligned range table
-  // presents as the WRONG ELEMENT under a click rather than as a crash. The
-  // range canary refuses such a table, but the first release still rides a
-  // flag. Collapsed artifacts live in their own slot
-  // (glbCacheKey#BLDRS_GLB_COLLAPSED_SCHEMA_VERSION), so turning this on or
-  // off never half-reads the other layout, and turning it OFF finds the
-  // un-collapsed artifacts still on disk — rollback costs no re-parse.
+  // Default-ON (it shipped default-off first). It changes the OPFS artifact
+  // every user gets and what Export downloads, and a misaligned range table
+  // presents as the WRONG ELEMENT under a click rather than as a crash, so
+  // the flip is safe only because of what refuses and what reverts:
+  //  - The range canary refuses a misaligned table instead of hydrating it:
+  //    exact on a lossless artifact, a lossy witness on a Draco one. A
+  //    refused table falls back to the plain GLTFLoader model, never to a
+  //    mis-addressed one.
+  //  - Collapsed artifacts live in their own OPFS slot
+  //    (glbCacheKey#BLDRS_GLB_COLLAPSED_SCHEMA_VERSION), so neither layout
+  //    ever half-reads the other, and the un-collapsed artifacts are still
+  //    on disk when collapse is turned off: rollback costs no re-parse.
+  // Reversible: `?feature=disableGlbCollapse` (below) puts one session back
+  // on the batched slot for read and write, and flipping THAT flag to true
+  // is the prod kill switch. Users who had the batched artifact first
+  // re-parse once into the collapsed slot, the same one-time cost as any
+  // schema move.
   // The reader hydrates a collapsed table whatever this flag says: a user
   // may open a collapsed Export download in a session that has it off.
   // Only meaningful with `glbBatched` active (`glbCompress#isGlbCollapseActive`).
-  {name: 'glbCollapse', isActive: false},
-  // OFF-switch for `glbCollapse`, same shape as `disableGlbBatched`: inert
-  // while `glbCollapse` is default-off, and the per-session escape hatch
-  // (`?feature=disableGlbCollapse`) plus prod kill switch once it flips on.
+  {name: 'glbCollapse', isActive: true},
+  // OFF-switch for `glbCollapse`, same inverted shape as `disableGlbBatched`
+  // (`?feature=` can only turn flags ON, so a default-on behavior needs an
+  // off-flag to stay reversible). Live now that `glbCollapse` is default-on:
+  // `?feature=disableGlbCollapse` is the per-session escape hatch and
+  // flipping this to true is the prod-wide kill switch. Load-bearing for
+  // tests too: it is the only way to exercise the un-collapsed batched
+  // layout end to end (`batchedGlbCache.spec.ts`), so a spec that means that
+  // path names it rather than relying on the default.
   {name: 'disableGlbCollapse', isActive: false},
   // Diagnostic OFF-switch for the full-screen loading overlay
   // (Components/LoadingBackdrop.jsx). The overlay is a dimmer that sits

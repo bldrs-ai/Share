@@ -179,15 +179,18 @@ describe('loader/glbCompress', () => {
       expect(slots.size).toBe(5)
     })
 
+    // These mock the flag state outright; what the flags DEFAULT to is pinned
+    // against the real FeatureFlags in `glbCompress.defaults.test.js`.
     it('selects the collapsed slot when glbCollapse is on', () => {
       mockIsFeatureEnabled.mockImplementation((n) => n === 'glbBatched' || n === 'glbCollapse')
       expect(activeArtifactSpec())
         .toEqual({schemaVer: BLDRS_GLB_COLLAPSED_SCHEMA_VERSION, mode: null})
     })
 
-    it('leaves the batched slot alone while glbCollapse is off (its default)', () => {
-      // The rollout promise: with the flag off NOTHING about today's slot
-      // moves, so shipping this code re-parses no one's models.
+    it('leaves the batched slot alone while glbCollapse is off', () => {
+      // The rollback promise: with collapse off the batched slot is what is
+      // read, so the un-collapsed artifacts still on disk hit without a
+      // re-parse.
       mockIsFeatureEnabled.mockImplementation((n) => n === 'glbBatched')
       expect(activeArtifactSpec().schemaVer).toBe(BLDRS_GLB_BATCHED_SCHEMA_VERSION)
       expect(isGlbCollapseActive()).toBe(false)
