@@ -293,23 +293,28 @@ Each write is followed by the same read-after-write as the webhook, so the
 sweep can't overwrite a newer webhook delivery.
 
 Before demoting, the sweep checks the user's **other** Stripe customers (by
-email). If one is entitled — a resubscribe under a new customer — the user
-keeps PRO and is **relinked** to it (`relink` in the summary). Without that,
-the demote pass demoted a paying user while the promote pass skipped them
-for being PRO. Guards (Codex, rounds 2 and 3 on #1891):
-- each PRO user is re-read from the **primary store** first: the search
-  index lags it by seconds either way, and a user demoted moments ago who
-  has since resubscribed (webhook lost) is promoted by their demote item;
-- a same-email customer already linked to a **different** Auth0 user is
-  that user's and is never a relink target — identities that share an email
-  but were never linked must not take each other's customer, because
-  `create-portal-session` opens whatever customer `stripeCustomerId` names.
-  Ownership is checked through `users-by-email` (primary store, so a link
-  made seconds ago counts) and then the search (for an owner with a
-  different email, which only the index can find);
-- the relink goes through the same `settleUser` loop as any write, so it is
-  confirmed from Auth0's stored value and becomes a (confirmed) demotion if
-  the new customer lapsed in between.
+email). If one is entitled — most likely a resubscribe whose webhook was
+lost — the user **keeps PRO and is reported** as unverifiable
+(`entitled_under_unlinked_customer`) for a human to look at. The sweep
+**never relinks on email alone**: nothing authoritative says who owns a
+customer found only by email, and a wrong relink hands over the real
+owner's billing portal (`create-portal-session` opens whatever customer
+`stripeCustomerId` names). Codex, rounds 2–4 on #1891, walked this down:
+checking ownership through `users-by-email` (primary store) catches a
+same-email owner, but an owner with a *different* email who linked within
+the search index's lag is invisible to both lookups. So the relink is gone
+rather than guarded. A same-email customer another user is seen to own is
+theirs and doesn't keep this user PRO.
+
+Each PRO user is re-read from the **primary store** first: the search
+index lags it by seconds either way, and a user demoted moments ago who
+has since resubscribed (webhook lost) is promoted by their demote item.
+Every write goes through the same `settleUser` loop as the webhook's.
+
+A promote item can still move a FREE user's link off a lapsed customer onto
+the entitled one it found them by — the same email-based first link the
+webhook makes when it first sees a customer, and the case the sweep exists
+to repair (`relink` entries come only from there).
 
 **Report first.** `RECONCILE_MODE` defaults to report. The sweep logs what it
 would change as one JSON line (Auth0 user ids and Stripe customer ids, never
@@ -381,6 +386,11 @@ access until the sweep demotes them, and only in apply mode (ops#34).
 - **Same-email identities that were never linked** still resolve to Auth0's
   first `users-by-email` result when none is linked to the customer, and
   nothing filters on `email_verified`. Unchanged from before ops#34.
+- **Customer ownership has no authoritative source.** A customer is linked
+  to a user by email the first time the webhook (or a promote item) sees
+  it. Setting the Auth0 user id on the Stripe customer at checkout (the
+  pricing table's `client-reference-id`, copied to customer metadata)
+  would make ownership checkable, and would let the sweep relink safely.
 - **Duplicate copies of the Management API token flow** remain
   (`record-load.js`, `create-portal-session.js`, `unlink-identity.js` versus
   `_lib/auth0.js`; `stripe-webhook.js` now uses `_lib/auth0.js`). The replays pin their outbound requests, so

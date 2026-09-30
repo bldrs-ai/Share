@@ -1,5 +1,5 @@
 {
-  "description": "A Pro user whose linked customer lapsed but who pays under a NEW customer with the same email (a resubscribe): read from the primary store, the would-be demotion finds the entitled customer \u2014 owned by no other user, checked through users-by-email and the search \u2014 and relinks instead; the relink is confirmed from Auth0's stored value, and the promote item for the new customer skips the user as the demote item's. Without the email check the sweep demoted a paying user while the promote pass skipped them.",
+  "description": "A Pro user whose linked customer lapsed but who pays under ANOTHER customer with the same email (most likely a resubscribe whose webhook was lost): the sweep neither demotes nor relinks them. Nothing authoritative says who owns a customer found only by email (Codex, round 4 on #1891), so the user stays PRO and is reported as unverifiable for a human; the promote item for that customer skips the user as the demote item's.",
   "exchangeOrder": "any",
   "env": {
     "$fixture": "env/stripe.json",
@@ -218,89 +218,6 @@
     },
     {
       "request": {
-        "method": "PATCH",
-        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/auth0%7Cstale0002",
-        "headers": {
-          "authorization": "Bearer mgmt-token-replay"
-        },
-        "body": {
-          "app_metadata": {
-            "stripeCustomerId": "cus_Rnew0004"
-          }
-        }
-      },
-      "response": {
-        "status": 200,
-        "json": {
-          "user_id": "auth0|stale0002"
-        }
-      }
-    },
-    {
-      "request": {
-        "method": "GET",
-        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/auth0%7Cstale0002",
-        "headers": {
-          "authorization": "Bearer mgmt-token-replay"
-        }
-      },
-      "response": {
-        "status": 200,
-        "json": {
-          "user_id": "auth0|stale0002",
-          "app_metadata": {
-            "subscriptionStatus": "sharePro",
-            "stripeCustomerId": "cus_Rnew0004"
-          }
-        }
-      }
-    },
-    {
-      "request": {
-        "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rnew0004&status=all&limit=100",
-        "headers": {
-          "authorization": "Bearer sk_test_replay"
-        }
-      },
-      "response": {
-        "status": 200,
-        "json": {
-          "object": "list",
-          "data": [
-            {
-              "$fixture": "stripe/subscription.json",
-              "$merge": {
-                "items": {
-                  "data": [
-                    {
-                      "id": "si_Rreplay0001",
-                      "object": "subscription_item",
-                      "quantity": 1,
-                      "subscription": "sub_1QreplayStandard0001",
-                      "price": {
-                        "id": "price_1QreplayPro0001",
-                        "object": "price",
-                        "type": "recurring",
-                        "unit_amount": 1900,
-                        "currency": "usd"
-                      }
-                    }
-                  ]
-                },
-                "id": "sub_for_cus_Rnew0004",
-                "customer": "cus_Rnew0004",
-                "status": "active"
-              }
-            }
-          ],
-          "has_more": false,
-          "url": "/v1/subscriptions"
-        }
-      }
-    },
-    {
-      "request": {
         "method": "GET",
         "url": "https://api.stripe.com/v1/subscriptions?price=price_1QreplayPro0001&limit=100",
         "headers": {
@@ -401,14 +318,14 @@
       "mode": "apply",
       "demote": [],
       "promote": [],
-      "relink": [
+      "relink": [],
+      "unverifiable": [
         {
           "user": "auth0|stale0002",
-          "from": "cus_Rstale0002",
-          "to": "cus_Rnew0004"
+          "customer": "cus_Rnew0004",
+          "reason": "entitled_under_unlinked_customer"
         }
       ],
-      "unverifiable": [],
       "errors": [],
       "scanned": {
         "proUsers": 1,

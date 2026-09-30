@@ -312,7 +312,10 @@ describe('reconcile-subscriptions', () => {
   })
 
   describe('items', () => {
-    it('relinks, rather than demotes, a Pro user paying under another customer with their email', async () => {
+    // Codex round 4 on #1891: nothing authoritative says who owns a customer
+    // found only by email, so the sweep never relinks on it — a paying user
+    // stays PRO and goes to a human instead.
+    it('keeps a Pro user paying under another same-email customer PRO, and reports it without relinking', async () => {
       mockWorld({
         proUsers: [proUser(1)],
         customersByEmail: {'u1@example.com': ['cus_1', 'cus_new']},
@@ -322,8 +325,25 @@ describe('reconcile-subscriptions', () => {
       const {summary} = await sweep()
 
       expect(summary.demote).toEqual([])
-      expect(summary.relink).toEqual([{user: 'auth0|u1', from: 'cus_1', to: 'cus_new'}])
-      expect(patches()).toEqual([['auth0|u1', {stripeCustomerId: 'cus_new'}]])
+      expect(summary.relink).toEqual([])
+      expect(summary.unverifiable).toEqual([{user: 'auth0|u1', customer: 'cus_new', reason: 'entitled_under_unlinked_customer'}])
+      expect(axios.patch).not.toHaveBeenCalled()
+      expect(Sentry.captureMessage).toHaveBeenCalledWith(expect.any(String), 'warning')
+    })
+
+    it('promotes a free user found by the paying customer\'s email, moving the link off their lapsed customer', async () => {
+      mockWorld({
+        pricePages: [[proSub('cus_new')]],
+        subsByCustomer: {cus_old: [proSub('cus_old', 'canceled')], cus_new: [proSub('cus_new')]},
+        usersByEmail: {'cus_new@example.com': [
+          {user_id: 'auth0|free', app_metadata: {subscriptionStatus: 'freePendingReauth', stripeCustomerId: 'cus_old'}},
+        ]},
+      })
+
+      const {summary} = await sweep()
+
+      expect(summary.promote).toEqual([{user: 'auth0|free', customer: 'cus_new'}])
+      expect(patches()).toEqual([['auth0|free', {subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: 'cus_new'}]])
     })
 
     // Codex on #1891 (round 2): identities sharing an email but never linked
@@ -345,31 +365,6 @@ describe('reconcile-subscriptions', () => {
       expect(patches().every(([, metadata]) => metadata.stripeCustomerId !== 'cus_theirs')).toBe(true)
     })
 
-    it('demotes after all when the relinked customer lapsed before the confirming read', async () => {
-      mockWorld({proUsers: [proUser(1)], customersByEmail: {'u1@example.com': ['cus_new']}})
-      let newReads = 0
-      const inner = mockStripeClient.subscriptions.list.getMockImplementation()
-      mockStripeClient.subscriptions.list.mockImplementation((params) => {
-        if (params.customer === 'cus_new') {
-          return Promise.resolve({object: 'list', data: ++newReads === 1 ? [proSub('cus_new')] : [], has_more: false})
-        }
-        return inner(params)
-      })
-
-      const {summary} = await sweep()
-
-      expect(summary.relink).toEqual([{user: 'auth0|u1', from: 'cus_1', to: 'cus_new'}])
-      // Both customers lapsed, so the link stays where the relink put it.
-      expect(summary.demote).toEqual([{user: 'auth0|u1', customer: 'cus_new'}])
-      expect(patches().map(([, metadata]) => metadata)).toEqual([
-        {stripeCustomerId: 'cus_new'},
-        {subscriptionStatus: 'freePendingReauth', stripeCustomerId: 'cus_new'},
-      ])
-    })
-
-    // Codex round 3 on #1891: the search index lags, so an empty search is
-    // no proof nobody owns the customer. A same-email owner shows up in
-    // users-by-email, which reads the primary store.
     it('sees a same-email owner through users-by-email while the search index lags', async () => {
       mockWorld({
         proUsers: [proUser(1)],
@@ -403,20 +398,6 @@ describe('reconcile-subscriptions', () => {
 
       expect(summary.promote).toEqual([{user: 'auth0|u1', customer: 'cus_1'}])
       expect(patches()).toEqual([['auth0|u1', {subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: 'cus_1'}]])
-    })
-
-    it('reports a relink without writing it in report mode', async () => {
-      process.env.RECONCILE_MODE = 'report'
-      mockWorld({
-        proUsers: [proUser(1)],
-        customersByEmail: {'u1@example.com': ['cus_new']},
-        subsByCustomer: {cus_new: [proSub('cus_new')]},
-      })
-
-      const {summary} = await sweep()
-
-      expect(summary.relink).toHaveLength(1)
-      expect(axios.patch).not.toHaveBeenCalled()
     })
 
     it('corrects a demotion when the confirming read shows the customer entitled again', async () => {

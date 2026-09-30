@@ -19,8 +19,10 @@
  *      whose Stripe customer is not entitled → 'freePendingReauth'. Each is
  *      re-read from the primary store first (the search index lags). Before
  *      demoting, the user's other Stripe customers (same email, owned by no
- *      other user) are checked: if one is entitled — a resubscribe under a
- *      new customer — the user keeps PRO and is RELINKED to it instead.
+ *      other user seen) are checked: if one is entitled — most likely a
+ *      resubscribe under a new customer — the user keeps PRO and is reported
+ *      as unverifiable for a human. The sweep never relinks on email alone:
+ *      nothing authoritative says who owns that customer.
  *      A PRO user with no `stripeCustomerId` is reported as unverifiable and
  *      never demoted: that is how a manual (comped) grant looks, and
  *      revoking it silently would be worse than reporting it.
@@ -297,24 +299,32 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
           return
         }
         const own = await entitlementAcross(stripe, [linked], proPriceId)
-        const others = []
         if (!own.entitled) {
-          // Only for would-be demotions: the check that tells a lapsed user
-          // from one who resubscribed under a new customer (whom the promote
-          // pass would skip, being PRO). A same-email customer another user
-          // owns is theirs, not this one's.
+          // Before demoting: is this user paying under ANOTHER customer with
+          // their email — a resubscribe whose webhook was lost? If so, keep
+          // them PRO and report it; never relink here. Nothing authoritative
+          // says who owns a customer found only by email: an owner with a
+          // different email, linked within the search index's lag, is
+          // invisible to both lookups (Codex, round 4 on #1891), and a wrong
+          // relink hands over that owner's billing portal. A customer
+          // another user is seen to own is theirs and doesn't count.
+          const others = []
           for (const id of await customerIdsForEmail(stripe, indexed.email)) {
             if (id !== linked && !(await isLinkedElsewhere(id, userId, indexed.email))) {
               others.push(id)
             }
           }
+          const elsewhere = await entitlementAcross(stripe, others, proPriceId)
+          if (elsewhere.entitled) {
+            summary.unverifiable.push({user: userId, customer: elsewhere.customer, reason: 'entitled_under_unlinked_customer'})
+            return
+          }
         }
-        const reading = own.entitled || others.length === 0 ? own : await entitlementAcross(stripe, others, proPriceId)
         const {changes} = await settleUser({
           userId,
           stored,
-          reading,
-          read: (current) => entitlementAcross(stripe, [current.stripeCustomerId, linked, ...others], proPriceId),
+          reading: own,
+          read: (current) => entitlementAcross(stripe, [current.stripeCustomerId, linked], proPriceId),
           link: (r, current) => linkFor(r, current.stripeCustomerId, linked),
           retryDelaysMs: NO_INLINE_RETRIES,
           dryRun: !apply,
