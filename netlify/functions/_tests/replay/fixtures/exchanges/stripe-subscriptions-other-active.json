@@ -1,0 +1,22 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0001&status=all&limit=100",
+    "headers": {
+      "authorization": "Bearer sk_test_replay"
+    }
+  },
+  "response": {
+    "status": 200,
+    "json": {
+      "object": "list",
+      "data": [
+        {
+          "$fixture": "stripe/subscription.json"
+        }
+      ],
+      "has_more": false,
+      "url": "/v1/subscriptions"
+    }
+  }
+}

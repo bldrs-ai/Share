@@ -1,0 +1,163 @@
+{
+  "description": "Auth0 and Stripe agree: the one Pro user is entitled, and the one entitled customer is already linked to them, so no lookup or write happens.",
+  "exchangeOrder": "any",
+  "env": {
+    "$fixture": "env/stripe.json",
+    "$merge": {
+      "RECONCILE_MODE": "apply"
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/reconcile-subscriptions",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "next_run": "2026-10-01T04:17:00.000Z"
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users?q=app_metadata.subscriptionStatus%3A%28sharePro+OR+shareProPendingReauth%29&search_engine=v3&per_page=50&page=0",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": [
+          {
+            "$fixture": "auth0/user.json",
+            "$merge": {
+              "app_metadata": {
+                "subscriptionStatus": "sharePro",
+                "stripeCustomerId": "cus_Rreplay0001"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "user_id": "google-oauth2|103547991597142817347",
+          "app_metadata": {
+            "subscriptionStatus": "sharePro",
+            "stripeCustomerId": "cus_Rreplay0001"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0001&status=all&limit=100",
+        "headers": {
+          "authorization": "Bearer sk_test_replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "object": "list",
+          "data": [
+            {
+              "$fixture": "stripe/subscription.json",
+              "$merge": {
+                "items": {
+                  "data": [
+                    {
+                      "id": "si_Rreplay0001",
+                      "object": "subscription_item",
+                      "quantity": 1,
+                      "subscription": "sub_1QreplayStandard0001",
+                      "price": {
+                        "id": "price_1QreplayPro0001",
+                        "object": "price",
+                        "type": "recurring",
+                        "unit_amount": 1900,
+                        "currency": "usd"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "has_more": false,
+          "url": "/v1/subscriptions"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.stripe.com/v1/subscriptions?price=price_1QreplayPro0001&limit=100",
+        "headers": {
+          "authorization": "Bearer sk_test_replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "object": "list",
+          "data": [
+            {
+              "$fixture": "stripe/subscription.json",
+              "$merge": {
+                "items": {
+                  "data": [
+                    {
+                      "id": "si_Rreplay0001",
+                      "object": "subscription_item",
+                      "quantity": 1,
+                      "subscription": "sub_1QreplayStandard0001",
+                      "price": {
+                        "id": "price_1QreplayPro0001",
+                        "object": "price",
+                        "type": "recurring",
+                        "unit_amount": 1900,
+                        "currency": "usd"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "has_more": false,
+          "url": "/v1/subscriptions"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "json": {
+      "mode": "apply",
+      "demote": [],
+      "promote": [],
+      "unverifiable": [],
+      "errors": [],
+      "relink": [],
+      "skipped": 0,
+      "inFlight": 0,
+      "truncated": false
+    }
+  }
+}

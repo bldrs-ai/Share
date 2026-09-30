@@ -39,7 +39,7 @@ import path from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {listScenarios} from './replay/scenario.mjs'
 import {replayAll} from './replay/replayAll.mjs'
-import {formatResults, smokeFunctions} from './smokeFunctions.mjs'
+import {UNPROBED_FUNCTIONS, formatResults, smokeFunctions} from './smokeFunctions.mjs'
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -285,7 +285,8 @@ describe('netlify functions as deployed', () => {
     it('every function gives an accepted answer to its smoke probe', async () => {
       const results = await smokeFunctions(baseUrl, {strict, retryDelayMs: 0})
       expect(results.filter((r) => !r.ok), formatResults(results, baseUrl, strict)).toEqual([])
-      expect(results.map((r) => r.name).sort()).toEqual([...bundles.keys()].sort())
+      expect(results.map((r) => r.name).sort())
+        .toEqual([...bundles.keys()].filter((name) => !(name in UNPROBED_FUNCTIONS)).sort())
     }, SERVE_TIMEOUT_MS)
   })
 })

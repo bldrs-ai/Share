@@ -1,0 +1,21 @@
+{
+  "id": "evt_1QreplayUpdated0001",
+  "object": "event",
+  "api_version": "2025-01-27.acacia",
+  "created": 1761742000,
+  "data": {
+    "object": {
+      "$fixture": "stripe/subscription.json"
+    },
+    "previous_attributes": {
+      "current_period_end": 1761742000
+    }
+  },
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": null,
+    "idempotency_key": null
+  },
+  "type": "customer.subscription.updated"
+}

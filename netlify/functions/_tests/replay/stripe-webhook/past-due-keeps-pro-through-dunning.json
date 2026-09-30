@@ -1,5 +1,5 @@
 {
-  "description": "Stripe unreachable at the network level (the SDK retries once itself) is transient: 500, so Stripe redelivers.",
+  "description": "past_due is Stripe's dunning window: a Pro user keeps Pro, and nothing is written.",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -12,7 +12,7 @@
     },
     "sign": "stripe",
     "body": {
-      "$fixture": "stripe/event.subscription.created.json"
+      "$fixture": "stripe/event.subscription.updated.json"
     }
   },
   "exchanges": [
@@ -44,26 +44,11 @@
       }
     },
     {
-      "request": {
-        "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0001&status=all&limit=100"
-      },
-      "response": {
-        "networkError": true
-      }
-    },
-    {
-      "request": {
-        "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0001&status=all&limit=100"
-      },
-      "response": {
-        "networkError": true
-      }
+      "$fixture": "exchanges/stripe-subscriptions-pro-past-due.json"
     }
   ],
   "expect": {
-    "statusCode": 500,
-    "bodyIncludes": "Stripe will retry"
+    "statusCode": 200,
+    "bodyIncludes": "Success"
   }
 }

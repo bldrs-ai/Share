@@ -1,0 +1,44 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0001&status=all&limit=100",
+    "headers": {
+      "authorization": "Bearer sk_test_replay"
+    }
+  },
+  "response": {
+    "status": 200,
+    "json": {
+      "object": "list",
+      "data": [
+        {
+          "$fixture": "stripe/subscription.json",
+          "$merge": {
+            "items": {
+              "data": [
+                {
+                  "id": "si_Rreplay0001",
+                  "object": "subscription_item",
+                  "quantity": 1,
+                  "subscription": "sub_1QreplayStandard0001",
+                  "price": {
+                    "id": "price_1QreplayPro0001",
+                    "object": "price",
+                    "type": "recurring",
+                    "unit_amount": 1900,
+                    "currency": "usd"
+                  }
+                }
+              ]
+            },
+            "status": "canceled",
+            "canceled_at": 1761742100,
+            "ended_at": 1761742100
+          }
+        }
+      ],
+      "has_more": false,
+      "url": "/v1/subscriptions"
+    }
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "description": "Stripe unreachable at the network level (the SDK retries once itself) is transient: 500, so Stripe redelivers.",
+  "description": "A renewal (customer.subscription.updated, still active) for a user already sharePro writes nothing, instead of sending a paying user back through the reauth modal.",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -12,7 +12,7 @@
     },
     "sign": "stripe",
     "body": {
-      "$fixture": "stripe/event.subscription.created.json"
+      "$fixture": "stripe/event.subscription.updated.json"
     }
   },
   "exchanges": [
@@ -44,26 +44,11 @@
       }
     },
     {
-      "request": {
-        "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0001&status=all&limit=100"
-      },
-      "response": {
-        "networkError": true
-      }
-    },
-    {
-      "request": {
-        "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0001&status=all&limit=100"
-      },
-      "response": {
-        "networkError": true
-      }
+      "$fixture": "exchanges/stripe-subscriptions-pro-active.json"
     }
   ],
   "expect": {
-    "statusCode": 500,
-    "bodyIncludes": "Stripe will retry"
+    "statusCode": 200,
+    "bodyIncludes": "Success"
   }
 }

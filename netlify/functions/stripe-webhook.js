@@ -7,50 +7,62 @@
  *   Headers: Stripe-Signature: t=…,v1=…
  *   Body:    the raw Stripe event JSON (signature is over these exact bytes)
  *
- * On `customer.subscription.created` and `.deleted`, the status written is
- * derived from the subscription's CURRENT state, fetched from Stripe, not
- * from the event payload:
- *   ended (canceled / incomplete_expired) → 'freePendingReauth'
- *   otherwise, Share Pro price             → 'shareProPendingReauth'
- *   otherwise                              → the Stripe status
- * Stripe doesn't guarantee delivery order, and a failed delivery is retried
- * later — so a `created` retried after its subscription's `deleted` would,
- * if it trusted its own payload, re-mark a cancelled user as Pro. Reading
- * the current state makes every delivery write the same, latest truth, in
- * whatever order they land.
+ * On `customer.subscription.created`, `.updated` and `.deleted`, the handler
+ * never trusts the event payload for entitlement. It finds the Auth0 user
+ * for the event's customer (by linked `stripeCustomerId`, then by email),
+ * lists the subscriptions of that customer — and of the customer the user
+ * is linked to, if different — as they are NOW, and asks the shared rule in
+ * `_lib/subscriptions.js` whether the user is entitled to Share Pro (a
+ * Pro-price subscription that is active / trialing / past_due). Auth0 is
+ * written only when that changes the user's tier: FREE→PRO writes
+ * 'shareProPendingReauth', PRO→FREE writes 'freePendingReauth', anything
+ * else writes nothing (besides moving `stripeCustomerId` to an entitled
+ * customer, or setting a missing one). So:
+ *  - a `created` retried after its subscription's `deleted`, or delivered
+ *    out of order, writes the same, latest truth;
+ *  - a renewal (`updated`) for a paying user writes nothing, rather than
+ *    re-triggering the reauth modal;
+ *  - an `incomplete` Pro subscription (first payment pending or failed) is
+ *    not Pro. Its activation or expiry arrives as `updated`, so the Stripe
+ *    endpoint MUST be subscribed to `customer.subscription.updated` (main
+ *    before ops#34 handled only created/deleted);
+ *  - a late event for a user's OLD customer can't demote them while the
+ *    customer they're linked to now is entitled.
  *
  * Deliveries can also overlap: a `created` invocation reads `active`, the
- * `deleted` invocation writes 'freePendingReauth', then the `created` one
- * writes its stale 'shareProPendingReauth' last. So after writing, the
- * handler reads the subscription again and, if its state has moved on,
- * writes once more. That closes the race because an ended subscription
- * never becomes active again: whichever invocation writes last re-reads
- * after the cancellation happened (Stripe cancels before it sends
- * `deleted`), sees it, and corrects its own write.
+ * `deleted` invocation reads `canceled` and demotes (or finds nothing to
+ * demote yet), then the `created` one writes its stale PRO last. So every
+ * write, tier or link, is confirmed (`settleUser`): re-read Auth0's stored
+ * value, then Stripe, and write again until nothing disagrees — retried
+ * inline with a short backoff (bldrs-ai/ops#34). Entitlement can flip back
+ * and forth (`unpaid` → `active`, a resubscribe) and another delivery can
+ * write in between (a tier, or a relink), which is why it loops from the
+ * stored value rather than correcting once. Whatever still slips through (Stripe
+ * and Auth0 down for Stripe's whole retry window) is caught by the daily
+ * `reconcile-subscriptions` sweep.
  *
  * Response codes are chosen for what Stripe does with them, since Stripe
  * retries any non-2xx with backoff for up to three days
  * (https://docs.stripe.com/webhooks#retries):
- *   - 200 once the update is written, and also for PERMANENT conditions a
- *     retry can't fix — no email on the customer, no Auth0 user for that
- *     email, an event type we don't handle, or an upstream answering
- *     400/404/410/422 (e.g. Stripe's `resource_missing`). Those go to Sentry.
- *   - 500 for TRANSIENT failures — a network error, 429, 5xx, and also
- *     401/403: a revoked Stripe key or Auth0 client secret is a config fault
- *     that someone will fix, and Stripe's retries then deliver what was
- *     missed.
- *   - A Stripe error's `Stripe-Should-Retry` header, when present, decides
- *     over its status either way: `true` (e.g. a 400 lock timeout) → 500,
- *     `false` (e.g. most Stripe 500s) → 200. stripe-node gives the header
- *     the same precedence for its own retries. This used to return 200 for every failure ("so Stripe doesn't
- *     retry indefinitely"), which turned each Auth0 blip into a silently
- *     lost subscription update.
+ *   - 200 once the update is written (or none is needed), and also for
+ *     PERMANENT conditions a retry can't fix — no linked user and no email
+ *     on the customer, no Auth0 user for that email, an event type we don't
+ *     handle, or an upstream answering 400/404/410/422 BEFORE anything was
+ *     written. Those go to Sentry.
+ *   - 500 for any failure after a tier write, whatever the status (except a
+ *     404 on the Auth0 user): the write may be stale and unconfirmed, and a
+ *     redelivery recomputes from Stripe, so retrying is always safe.
+ *   - 500 for TRANSIENT failures — a network error, 408/409/429, 5xx, and
+ *     401/403 (a revoked key is a config fault someone will fix within
+ *     Stripe's retry window).
+ *   - A Stripe error's `Stripe-Should-Retry` header decides over its status
+ *     either way, as it does in stripe-node's own retries.
  *   - 400 for a missing or bad signature, 500 when unconfigured.
  *
  * The Stripe client is built per request rather than at module scope:
  * `Stripe(undefined)` throws, so a module-scope client made the function
- * crash on cold start (a bare 502, before Sentry is up) in any deploy
- * context without STRIPE_SECRET_KEY — the same failure class as bldrs-ai/ops#33.
+ * crash on cold start in any deploy context without STRIPE_SECRET_KEY — the
+ * same failure class as bldrs-ai/ops#33.
  *
  * Tests: netlify/functions/_tests/stripe-webhook.test.js (behaviour, mocked),
  * netlify/functions/_tests/replay/stripe-webhook/ (fixtures replayed against
@@ -59,8 +71,16 @@
  */
 
 import Stripe from 'stripe'
-import axios from 'axios'
 import * as Sentry from '@sentry/serverless'
+import {
+  STRIPE_CLIENT_OPTIONS,
+  entitlementAcross,
+  findAuth0UserForCustomer,
+  isPermanentFailure,
+  linkFor,
+  settleUser,
+  upstreamStatus,
+} from './_lib/subscriptions.js'
 
 
 Sentry.AWSLambda.init({
@@ -71,160 +91,51 @@ Sentry.AWSLambda.init({
 
 const HTTP_OK = 200
 const HTTP_BAD_REQUEST = 400
-const HTTP_NOT_FOUND = 404
-const HTTP_GONE = 410
-const HTTP_UNPROCESSABLE = 422
 const HTTP_INTERNAL_ERROR = 500
 
-const REQUIRED_ENV = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'AUTH0_DOMAIN', 'AUTH0_CLIENT_ID', 'AUTH0_CLIENT_SECRET']
-const HANDLED_EVENT_TYPES = new Set(['customer.subscription.created', 'customer.subscription.deleted'])
-// Stripe subscription statuses after which the subscription can never be
-// active again.
-const ENDED_SUBSCRIPTION_STATUSES = new Set(['canceled', 'incomplete_expired'])
-// Upstream answers that mean "this request will never succeed". Everything
-// else — no status at all (network), 401/403 (config), 408/409/429, 5xx —
-// is worth Stripe's retry. See the header for why 401/403 are retried, and
-// isPermanentFailure for the Stripe-Should-Retry override.
-const PERMANENT_UPSTREAM_STATUSES = new Set([HTTP_BAD_REQUEST, HTTP_NOT_FOUND, HTTP_GONE, HTTP_UNPROCESSABLE])
+const REQUIRED_ENV = [
+  'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'SHARE_PRO_PRICE_ID',
+  'AUTH0_DOMAIN', 'AUTH0_CLIENT_ID', 'AUTH0_CLIENT_SECRET',
+]
+const HANDLED_EVENT_TYPES = new Set([
+  'customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted',
+])
+// Inline retries for the confirming reads and writes (ops#34): short, so a
+// blip is absorbed within the delivery instead of leaving a stale PRO in
+// place until Stripe's next redelivery, hours later.
+const CORRECTION_RETRY_DELAYS_MS = [250, 1000] // eslint-disable-line no-magic-numbers
 
 
 /**
- * Fetch an Auth0 Management API token via Client Credentials flow.
- *
- * @return {Promise<string>} Short-lived Management API token
- */
-async function getManagementApiToken() {
-  const response = await axios.post(
-    `https://${process.env.AUTH0_DOMAIN}/oauth/token`,
-    {
-      client_id: process.env.AUTH0_CLIENT_ID,
-      client_secret: process.env.AUTH0_CLIENT_SECRET,
-      audience: `https://${process.env.AUTH0_DOMAIN}/api/v2/`,
-      grant_type: 'client_credentials',
-    },
-    {headers: {'Content-Type': 'application/json'}},
-  )
-  return response.data.access_token
-}
-
-
-/**
- * @param {object} subscription Stripe subscription object, as it is now
- * @return {string} the subscriptionStatus that state maps to
- */
-function statusForSubscription(subscription) {
-  if (ENDED_SUBSCRIPTION_STATUSES.has(subscription.status)) {
-    return 'freePendingReauth'
-  }
-  const items = subscription.items && subscription.items.data
-  const isPro = Array.isArray(items) &&
-    items.some((item) => item.price && item.price.id === process.env.SHARE_PRO_PRICE_ID)
-  return isPro ? 'shareProPendingReauth' : subscription.status
-}
-
-
-/**
- * The HTTP status an upstream failure carried: axios puts it on
- * `err.response.status`, the Stripe SDK on `err.statusCode`.
- *
- * @param {Error} err
- * @return {?number} null for a failure with no response (network, timeout)
- */
-function upstreamStatus(err) {
-  return (err && err.response && err.response.status) || (err && err.statusCode) || null
-}
-
-
-/**
- * Whether Stripe could never accept this delivery, so retrying it is futile.
- *
- * @param {Error} err
- * @return {boolean}
- */
-function isPermanentFailure(err) {
-  // Stripe's explicit directive beats the status either way, as it does in
-  // stripe-node's own retry logic (RequestSender._shouldRetry checks it
-  // before the 409 and 5xx branches, and notes most Stripe 500s carry
-  // `false`). The SDK keeps the response headers on the error.
-  const directive = err && err.headers && err.headers['stripe-should-retry']
-  if (directive === 'true') {
-    return false
-  }
-  if (directive === 'false') {
-    return true
-  }
-  return PERMANENT_UPSTREAM_STATUSES.has(upstreamStatus(err))
-}
-
-
-/**
- * @param {string} mgmtToken
- * @param {string} auth0UserId
- * @param {object} appMetadata keys to merge (Auth0 PATCH is a shallow merge)
- * @return {Promise<void>}
- */
-async function patchAppMetadata(mgmtToken, auth0UserId, appMetadata) {
-  await axios.patch(
-    `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(auth0UserId)}`,
-    {app_metadata: appMetadata},
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${mgmtToken}`,
-      },
-    },
-  )
-}
-
-
-/**
- * Write the subscription's current status (and the customer id) onto the
- * Auth0 user whose email matches the Stripe customer's, then re-read the
- * subscription and correct the write if an overlapping delivery changed it
- * meanwhile (see the header).
+ * Bring the Auth0 user for this Stripe customer to the tier and link their
+ * subscriptions call for NOW, confirmed against what Auth0 then stores (see
+ * the header).
  *
  * Throws on upstream failures; the handler decides from the error whether
  * Stripe should retry. Returns `{permanent: reason}` for conditions a retry
  * won't change.
  *
  * @param {object} stripe Stripe client
- * @param {string} subscriptionId
- * @return {Promise<object>} `{updated: auth0UserId, subscriptionStatus}` or `{permanent: reason}`
+ * @param {string} stripeCustomerId the event's customer
+ * @return {Promise<object>} `{auth0UserId, status}` or `{permanent: reason}`
  */
-async function syncSubscription(stripe, subscriptionId) {
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-  const stripeCustomerId = subscription.customer
-
-  const customer = await stripe.customers.retrieve(stripeCustomerId)
-  // A deleted customer comes back as {id, deleted: true} with no email.
-  const customerEmail = customer && customer.email
-  if (!customerEmail) {
-    return {permanent: `No email found on Stripe customer ${stripeCustomerId}`}
+async function syncCustomer(stripe, stripeCustomerId) {
+  const proPriceId = process.env.SHARE_PRO_PRICE_ID
+  const {user, reason} = await findAuth0UserForCustomer(stripe, stripeCustomerId)
+  if (!user) {
+    return {permanent: reason}
   }
-
-  const mgmtToken = await getManagementApiToken()
-  const auth0UserResp = await axios.get(
-    `https://${process.env.AUTH0_DOMAIN}/api/v2/users-by-email?email=${encodeURIComponent(customerEmail)}`,
-    {headers: {Authorization: `Bearer ${mgmtToken}`}},
-  )
-  const users = auth0UserResp.data
-  if (!Array.isArray(users) || users.length === 0) {
-    return {permanent: `No Auth0 user found for Stripe customer ${stripeCustomerId}`}
-  }
-  // Assume the first returned user is correct.
-  const auth0UserId = users[0].user_id
-
-  let subscriptionStatus = statusForSubscription(subscription)
-  await patchAppMetadata(mgmtToken, auth0UserId, {subscriptionStatus, stripeCustomerId})
-
-  // Read-after-write: one correction suffices, because the only transition
-  // that can race this write (to ended) is final.
-  const settled = statusForSubscription(await stripe.subscriptions.retrieve(subscriptionId))
-  if (settled !== subscriptionStatus) {
-    subscriptionStatus = settled
-    await patchAppMetadata(mgmtToken, auth0UserId, {subscriptionStatus, stripeCustomerId})
-  }
-  return {updated: auth0UserId, subscriptionStatus}
+  // From the STORED link each round, listed first: while the linked
+  // customer is entitled the link stays put, and a relink written by an
+  // overlapping delivery is read back rather than overwritten.
+  const {status} = await settleUser({
+    userId: user.user_id,
+    stored: user.app_metadata || {},
+    read: (stored) => entitlementAcross(stripe, [stored.stripeCustomerId, stripeCustomerId], proPriceId),
+    link: (reading, stored) => linkFor(reading, stored.stripeCustomerId, stripeCustomerId),
+    retryDelaysMs: CORRECTION_RETRY_DELAYS_MS,
+  })
+  return {auth0UserId: user.user_id, status}
 }
 
 
@@ -250,7 +161,7 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   const rawBody = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64') : (event.body || '')
 
   // eslint-disable-next-line new-cap -- `stripe` SDK ships as a factory function
-  const stripe = Stripe(process.env.STRIPE_SECRET_KEY)
+  const stripe = Stripe(process.env.STRIPE_SECRET_KEY, STRIPE_CLIENT_OPTIONS)
   let stripeEvent
   try {
     stripeEvent = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET)
@@ -266,10 +177,12 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
     return {statusCode: HTTP_OK, body: 'Ignored'}
   }
 
-  // 3. Write the subscription's current state to Auth0.
+  // 3. Bring Auth0 to what the customer's subscriptions entitle them to now.
+  // The customer id is the one field of the payload that is trusted: it
+  // never changes for a subscription.
   const label = `${stripeEvent.type} ${stripeEvent.id}`
   try {
-    const result = await syncSubscription(stripe, stripeEvent.data.object.id)
+    const result = await syncCustomer(stripe, stripeEvent.data.object.customer)
     if (result.permanent) {
       Sentry.captureException(new Error(`${result.permanent} (${label})`))
       return {statusCode: HTTP_OK, body: 'Acknowledged; not applied'}
@@ -280,7 +193,7 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
     const status = upstreamStatus(err)
     const upstream = status === null ? '' : ` (upstream ${status})`
     Sentry.captureException(err)
-    if (isPermanentFailure(err)) {
+    if (!err.retryRequired && isPermanentFailure(err)) {
       console.error(`stripe-webhook: ${label} not applied${upstream}, not retryable: ${err.message}`)
       return {statusCode: HTTP_OK, body: 'Acknowledged; not applied'}
     }

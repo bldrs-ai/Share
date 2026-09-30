@@ -18,6 +18,9 @@ cypress/e2e/logs
 tools/playwright-report
 tools/test-results
 test-results
+# CI's heavy-spec pass (test-flows.yml, tools/playwrightSpecSets.js)
+test-results-heavy
+playwright-report-heavy
 .cache
 
 /coverage
