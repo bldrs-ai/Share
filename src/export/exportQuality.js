@@ -170,7 +170,7 @@
 //     exposed — and since `quantizationBits` MERGES with the library's
 //     defaults, the guard `exportQuality.test.js` can give is that no rung
 //     ever names that bucket.
-//   - The Draco `method`. Derived from `needsTriangleOrder`, never from
+//   - The Draco `method`. Derived from `triangleOrderedMeshes`, never from
 //     quality: SEQUENTIAL is what preserves the triangle order
 //     `BLDRS_face_ids` indexes identity by, and a rung that "also picks
 //     edgebreaker for smaller files" would silently break re-import picking.

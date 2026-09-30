@@ -31,6 +31,7 @@ import {loadDracoDecoder, loadDracoEncoder} from '../loader/glbCompress'
 import {stripGlbBldrs} from '../loader/glbStrip'
 import {injectGlbExtensions, parseGlb} from '../loader/injectGlbExtensions'
 import {WITNESSED_PAYLOAD, addLossyWitnesses} from './collapsedWitness'
+import {spliceDracoPayloads} from './dracoMethodSplice'
 import {
   QUALITY_DEFAULT,
   formatMaxShift,
@@ -117,7 +118,7 @@ export async function compressExportGlb(glbBytes, mode, quality = QUALITY_DEFAUL
     // is already orphaned and never reaches the output. Saving a
     // parse/serialise round trip of a possibly-hundreds-of-MB file is the
     // reason to rely on that rather than strip first.
-    withoutMetadata = await transformGlb(glbBytes, mode, needsTriangleOrder(json), sourceCodecs, quality)
+    withoutMetadata = await transformGlb(glbBytes, mode, triangleOrderedMeshes(json), sourceCodecs, quality)
   } catch (e) {
     // A codec that cannot take this geometry is not an export failure — the
     // user still gets their model, uncompressed, at the size the panel then
@@ -228,16 +229,17 @@ function withLossyWitness(json, bin, payloads, quality) {
  *
  * @param {Uint8Array} glbBytes
  * @param {string} mode `COMPRESSION_MESHOPT` or `COMPRESSION_DRACO`
- * @param {boolean} preserveTriangleOrder Keep input triangle order, at some
- *   cost in ratio, because per-triangle Bldrs identity depends on it. It
- *   selects DRACO's `sequential` method; the Meshopt arm below never reorders
- *   in the first place, so nothing there is conditional on it
+ * @param {Set<number>} orderedMeshes Meshes whose primitives must keep their
+ *   input triangle order, at some cost in ratio, because Bldrs identity is
+ *   indexed by it (`triangleOrderedMeshes`). It selects DRACO's `sequential`
+ *   method for those primitives only; the Meshopt arm below never reorders in
+ *   the first place, so nothing there is conditional on it
  * @param {Array<string>} sourceCodecs Codecs the input already declares
  *   (`sourceCodecsOf`)
  * @param {string} quality One of `exportQuality.js`'s `QUALITY_LEVELS`
  * @return {Promise<Uint8Array>} the compressed GLB
  */
-async function transformGlb(glbBytes, mode, preserveTriangleOrder, sourceCodecs = [], quality = QUALITY_DEFAULT) {
+async function transformGlb(glbBytes, mode, orderedMeshes, sourceCodecs = [], quality = QUALITY_DEFAULT) {
   const {Logger, WebIO} = await import('@gltf-transform/core')
   const {ALL_EXTENSIONS, EXTMeshoptCompression, KHRDracoMeshCompression} =
     await import('@gltf-transform/extensions')
@@ -285,33 +287,73 @@ async function transformGlb(glbBytes, mode, preserveTriangleOrder, sourceCodecs 
   }
   const settings = qualitySettings(quality)
   if (mode === COMPRESSION_DRACO) {
-    doc.createExtension(KHRDracoMeshCompression)
-      .setRequired(true)
-      .setEncoderOptions({
-        // `method` is DERIVED and is the one option quality may not touch: a
-        // rung that picked EDGEBREAKER on a `BLDRS_face_ids` artifact for the
-        // better ratio would silently break re-import picking (#1848 §4.2).
-        // Spread order matters for the same reason — the settings go in
-        // first so nothing in the table can override it.
-        ...settings.draco,
-        method: preserveTriangleOrder ?
-          KHRDracoMeshCompression.EncoderMethod.SEQUENTIAL :
-          KHRDracoMeshCompression.EncoderMethod.EDGEBREAKER,
-      })
-  } else {
-    doc.createExtension(EXTMeshoptCompression)
-      .setRequired(true)
-      // FILTER is the −39.1% (measured) that Balanced buys: positions stay
-      // bit-exact and only NORMAL/TANGENT are rewritten, octahedrally, as
-      // normalized BYTE. QUANTIZE — what shipped through #1842, and what Best
-      // still asks for — is entirely lossless.
-      .setEncoderOptions({
-        method: settings.isMeshoptFiltered ?
-          EXTMeshoptCompression.EncoderMethod.FILTER :
-          EXTMeshoptCompression.EncoderMethod.QUANTIZE,
-      })
+    const draco = doc.createExtension(KHRDracoMeshCompression).setRequired(true)
+    const {EDGEBREAKER, SEQUENTIAL} = KHRDracoMeshCompression.EncoderMethod
+    const encode = async (method) => {
+      // `method` is DERIVED and is the one option quality may not touch: a
+      // rung that picked EDGEBREAKER on a `BLDRS_face_ids` artifact for the
+      // better ratio would silently break re-import picking (#1848 §4.2).
+      // Spread order matters for the same reason — the settings go in first
+      // so nothing in the table can override it.
+      draco.setEncoderOptions({...settings.draco, method})
+      return new Uint8Array(await io.writeBinary(doc))
+    }
+    const meshes = doc.getRoot().listMeshes()
+    if (orderedMeshes.size === 0) {
+      return await encode(EDGEBREAKER)
+    }
+    if (meshes.every((mesh, i) => orderedMeshes.has(i) || mesh.listPrimitives().length === 0)) {
+      return await encode(SEQUENTIAL)
+    }
+    // A hybrid: some primitives need their triangle order and the rest do
+    // not. The library's method is document-wide, so write twice and splice
+    // (`dracoMethodSplice.js`, which says why nothing lighter is available).
+    // The read built `listMeshes()` in the file's mesh order, which is what
+    // makes `orderedMeshes` — indices into the source JSON — valid here and
+    // in both writes.
+    const full = await encode(EDGEBREAKER)
+    keepOnlyMeshes(meshes, orderedMeshes)
+    return spliceDracoPayloads(full, await encode(SEQUENTIAL), orderedMeshes)
   }
+  doc.createExtension(EXTMeshoptCompression)
+    .setRequired(true)
+    // FILTER is the −39.1% (measured) that Balanced buys: positions stay
+    // bit-exact and only NORMAL/TANGENT are rewritten, octahedrally, as
+    // normalized BYTE. QUANTIZE — what shipped through #1842, and what Best
+    // still asks for — is entirely lossless.
+    .setEncoderOptions({
+      method: settings.isMeshoptFiltered ?
+        EXTMeshoptCompression.EncoderMethod.FILTER :
+        EXTMeshoptCompression.EncoderMethod.QUANTIZE,
+    })
   return new Uint8Array(await io.writeBinary(doc))
+}
+
+
+/**
+ * Dispose every primitive outside `keep`, and the accessors only it used, so
+ * the next write encodes (and carries) just the kept meshes' primitives. The
+ * meshes themselves stay, so indices into the mesh list are unchanged.
+ *
+ * @param {Array<object>} meshes the document's `listMeshes()`
+ * @param {Set<number>} keep indices of the meshes whose primitives survive
+ */
+function keepOnlyMeshes(meshes, keep) {
+  meshes.forEach((mesh, i) => {
+    if (keep.has(i)) {
+      return
+    }
+    for (const primitive of mesh.listPrimitives()) {
+      const accessors = [primitive.getIndices(), ...primitive.listAttributes()]
+      primitive.dispose()
+      for (const accessor of accessors) {
+        // The Root is always a parent; anything more is another user.
+        if (accessor && accessor.listParents().length === 1) {
+          accessor.dispose()
+        }
+      }
+    }
+  })
 }
 
 
@@ -380,58 +422,59 @@ function sourceCodecsOf(json) {
 
 
 /**
- * Whether this document's identity is indexed by triangle position, and so
- * must not be reordered by a codec.
+ * Which meshes' identity is indexed by triangle position, and so must not be
+ * reordered by a codec.
  *
- * Two shapes carry it: the merged layout's `BLDRS_face_ids` (per-triangle
- * arrays the reader realigns after decompression) and the per-vertex
- * `_EXPRESSID` / `_INSTANCEID` attributes it was projected from. The
- * batched-native layout has neither — its identity is per-instance, in
+ * Two shapes make it the whole FILE: the merged layout's `BLDRS_face_ids`
+ * (per-triangle arrays the reader realigns after decompression) and the
+ * per-vertex `_EXPRESSID` / `_INSTANCEID` attributes it was projected from.
+ * The batched-native layout has neither — its identity is per-instance, in
  * `BLDRS_instance_tables` — which is why the default artifact compresses with
  * the better-ratio settings.
  *
+ * One shape makes it a MESH: a collapsed node's (share-140 #1871). Its table's
+ * rows are contiguous TRIANGLE runs in one primitive. Draco merges coincident
+ * vertices whatever the method, so the rows' vertex ranges do not survive it —
+ * but their triangle runs do under SEQUENTIAL, and that is what the reader
+ * rebuilds each row from. EDGEBREAKER reorders triangles across rows, which
+ * nothing can undo. Measured: 200 one-triangle rows, 600 vertices in, 202 out
+ * either way; triangle order kept by sequential, scrambled by edgebreaker.
+ * The genuinely instanced nodes beside it need none of that, and until this
+ * was per mesh they paid for it anyway — a collapsed STEP artifact with 25
+ * instanced nodes and four collapsed elements came out of Draco 3.5× the size
+ * of its un-collapsed twin.
+ *
  * @param {object} json Parsed glTF JSON
- * @return {boolean}
+ * @return {Set<number>} indices into `json.meshes`; every one of them when
+ *   the whole file is order-sensitive
  */
-function needsTriangleOrder(json) {
-  if (json?.extensions?.BLDRS_face_ids) {
-    return true
+function triangleOrderedMeshes(json) {
+  const meshes = json?.meshes || []
+  const hasPerVertexIds = meshes.some((mesh) => (mesh?.primitives || []).some((primitive) => {
+    const attributes = primitive?.attributes
+    return attributes && ('_EXPRESSID' in attributes || '_INSTANCEID' in attributes)
+  }))
+  if (json?.extensions?.BLDRS_face_ids || hasPerVertexIds) {
+    return new Set(meshes.map((_, i) => i))
   }
-  // A collapsed table's rows are contiguous TRIANGLE runs in one primitive
-  // (share-140 #1871). Draco merges coincident vertices whatever the method,
-  // so the rows' vertex ranges do not survive it — but their triangle runs do
-  // under SEQUENTIAL, and that is what the reader rebuilds each row from.
-  // EDGEBREAKER reorders triangles across rows, which nothing can undo.
-  // Measured: 200 one-triangle rows, 600 vertices in, 202 out either way;
-  // triangle order kept by sequential, scrambled by edgebreaker.
-  if (hasCollapsedNode(json)) {
-    return true
-  }
-  for (const mesh of json?.meshes || []) {
-    for (const primitive of mesh?.primitives || []) {
-      const attributes = primitive?.attributes
-      if (attributes && ('_EXPRESSID' in attributes || '_INSTANCEID' in attributes)) {
-        return true
-      }
-    }
-  }
-  return false
+  return new Set((json?.nodes || []).filter(isCollapsedNode).map((node) => node.mesh))
 }
 
 
 /**
- * Whether this file carries a collapsed batched node: stamped with a table
- * index, holding a mesh, and neither instanced nor a portable per-row node.
+ * Whether a node is a collapsed batched node: stamped with a table index,
+ * holding a mesh, and neither instanced nor a portable per-row node. A
+ * portable row is its own primitive, rebuilt whole, so its triangle order
+ * is free for the codec to choose.
  *
- * @param {object} json Parsed glTF JSON
+ * @param {object} node a glTF node
  * @return {boolean}
  */
-function hasCollapsedNode(json) {
-  return (json?.nodes || []).some((node) =>
-    Number.isInteger(node?.extras?.bldrsTableNode) &&
+function isCollapsedNode(node) {
+  return Number.isInteger(node?.extras?.bldrsTableNode) &&
     Number.isInteger(node.mesh) &&
     !node.extensions?.EXT_mesh_gpu_instancing &&
-    !Number.isInteger(node.extras.bldrsInstance))
+    !Number.isInteger(node.extras.bldrsInstance)
 }
 
 

@@ -12,7 +12,7 @@ import {
   Vector3,
 } from 'three'
 import {Logger, WebIO} from '@gltf-transform/core'
-import {KHRDracoMeshCompression} from '@gltf-transform/extensions'
+import {EXTMeshGPUInstancing, KHRDracoMeshCompression} from '@gltf-transform/extensions'
 import * as pako from 'pako'
 import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
@@ -78,15 +78,22 @@ beforeAll(() => {
  * well clear of it, sharing its table (same colour, single placement) — the
  * shape where one row's Draco step dwarfs its neighbours'.
  *
+ * With `shape`, that geometry follows as one genuinely instanced part,
+ * placed twice past the strip's end — the hybrid a real artifact is.
+ *
  * @param {boolean} [slab]
+ * @param {?BufferGeometry} [shape]
  * @return {{model: BatchedMesh, centres: Array<Vector3>}} model + a point
- *   inside each element, in model space
+ *   inside each strip element, in model space
  */
-function stripModel(slab = false) {
-  const count = ELEMENTS + (slab ? 1 : 0)
-  const mesh = new BatchedMesh(count, count * 3, count * 3)
+function stripModel(slab = false, shape = null) {
+  const rows = ELEMENTS + (slab ? 1 : 0)
+  const count = rows + (shape ? 2 : 0)
+  const mesh = new BatchedMesh(count,
+    (rows * 3) + (shape?.getAttribute('position').count ?? 0),
+    (rows * 3) + (shape?.getIndex().count ?? 0))
   const centres = []
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < rows; i++) {
     const x = Math.floor(i / 2) * EDGE
     const up = i % 2 === 1
     const corners = i === ELEMENTS ? SLAB_CORNERS : up ?
@@ -105,11 +112,88 @@ function stripModel(slab = false) {
     }
     centres.push(centre.divideScalar(3).add(new Vector3(OFFSET, OFFSET, 0)))
   }
+  if (shape) {
+    const shapeId = mesh.addGeometry(shape)
+    for (const x of [OFFSET + 50, OFFSET + 60]) {
+      mesh.setMatrixAt(mesh.addInstance(shapeId), new Matrix4().makeTranslation(x, OFFSET, 0))
+    }
+  }
   mesh.instanceParents = Array.from({length: count}, (_, i) => 1000 + i)
   mesh.instanceOccurrenceIds = Array.from({length: count}, (_, i) => i)
   mesh.instanceOccurrencePaths = Array.from({length: count}, (_, i) => [7, i])
   mesh.instanceSourceColors = Array.from({length: count}, () => ({x: 0.8, y: 0.8, z: 0.8, w: 1}))
   return {model: mesh, centres}
+}
+
+
+/**
+ * `stripModel`'s rows beside one genuinely instanced shape: a 4 × 4 grid of
+ * quads placed twice, well clear of the strip. The strip collapses into one
+ * merged primitive; the shape stays an `EXT_mesh_gpu_instancing` node.
+ *
+ * @return {{model: BatchedMesh, centres: Array<Vector3>, shapeIndexCount: number}}
+ */
+function hybridModel() {
+  const cells = 4
+  const positions = []
+  const indices = []
+  for (let y = 0; y <= cells; y++) {
+    for (let x = 0; x <= cells; x++) {
+      positions.push(x, y, 0)
+    }
+  }
+  for (let y = 0; y < cells; y++) {
+    for (let x = 0; x < cells; x++) {
+      const a = (y * (cells + 1)) + x
+      indices.push(a, a + 1, a + cells + 1, a + 1, a + cells + 2, a + cells + 1)
+    }
+  }
+  const shape = new BufferGeometry()
+  shape.setAttribute('position', new BufferAttribute(new Float32Array(positions), 3))
+  shape.setAttribute('normal', new BufferAttribute(
+    new Float32Array(positions.length).map((_, i) => (i % 3 === 2 ? 1 : 0)), 3))
+  shape.setIndex(new BufferAttribute(new Uint32Array(indices), 1))
+  return {...stripModel(false, shape), shapeIndexCount: indices.length}
+}
+
+
+/** A Draco bitstream's method byte: 'DRACO', major, minor, encoder type, METHOD. */
+const DRACO_METHOD_BYTE = 8
+const DRACO_SEQUENTIAL = 0
+const DRACO_EDGEBREAKER = 1
+
+
+/**
+ * The encoded Draco payloads of one mesh's primitives.
+ *
+ * @param {object} json
+ * @param {Uint8Array} bin
+ * @param {number} meshIndex
+ * @return {Array<Uint8Array>}
+ */
+function dracoPayloadsOf(json, bin, meshIndex) {
+  return json.meshes[meshIndex].primitives.map((primitive) => {
+    const view = json.bufferViews[primitive.extensions.KHR_draco_mesh_compression.bufferView]
+    const at = view.byteOffset ?? 0
+    return bin.slice(at, at + view.byteLength)
+  })
+}
+
+
+/**
+ * The Draco method each of one mesh's primitives was encoded with, read off
+ * the bitstream header rather than inferred from sizes.
+ *
+ * @param {object} json
+ * @param {Uint8Array} bin
+ * @param {number} meshIndex
+ * @return {Array<number>} `DRACO_SEQUENTIAL` / `DRACO_EDGEBREAKER` per primitive
+ */
+function dracoMethodsOf(json, bin, meshIndex) {
+  return dracoPayloadsOf(json, bin, meshIndex).map((payload) => {
+    expect(new TextDecoder().decode(payload.subarray(0, 5))).toBe('DRACO')
+    return payload[DRACO_METHOD_BYTE]
+  })
 }
 
 
@@ -124,7 +208,7 @@ function stripModel(slab = false) {
 async function loadLikeGltfLoader(bytes) {
   const io = new WebIO()
     .setLogger(new Logger(Logger.Verbosity.SILENT))
-    .registerExtensions([KHRDracoMeshCompression])
+    .registerExtensions([KHRDracoMeshCompression, EXTMeshGPUInstancing])
     .registerDependencies({'draco3d.decoder': await loadDracoDecoder()})
   const doc = await io.readBinary(bytes)
   const build = (node) => {
@@ -305,6 +389,74 @@ describe('collapsed artifact through a Draco export', () => {
       }
       c.divideScalar(3).add(merged.position)
       expect(c.distanceTo(centres[t])).toBeLessThan(0.01)
+    }
+  }, TIMEOUT_MS)
+})
+
+
+describe('hybrid artifact through a Draco export', () => {
+  // The collapsed primitive needs SEQUENTIAL; the instanced one beside it
+  // does not, and used to get it anyway because the method was chosen per
+  // FILE — measured on a real STEP model with four collapsed elements beside
+  // 25 instanced nodes, the Draco export grew 3.5× when the collapse was
+  // switched on. Verified red with `transformGlb` reverted to one
+  // file-wide method: the instanced primitive comes back SEQUENTIAL and its
+  // payload stops matching the collapse-off one.
+  let hybrid
+  let draco
+
+  beforeAll(async () => {
+    hybrid = hybridModel()
+    draco = await compressExportGlb(await batchedArtifactBytes(hybrid.model, {collapse: true}), COMPRESSION_DRACO)
+  }, TIMEOUT_MS)
+
+  it('encodes the collapsed primitive SEQUENTIALLY and the instanced one with EDGEBREAKER', () => {
+    const {json, bin} = parseGlb(draco.withMetadata)
+    const collapsed = json.nodes.filter((node) =>
+      Number.isInteger(node.extras?.bldrsTableNode) && !node.extensions?.EXT_mesh_gpu_instancing)
+    const instanced = json.nodes.filter((node) => node.extensions?.EXT_mesh_gpu_instancing)
+
+    expect(draco.mode).toBe(COMPRESSION_DRACO)
+    expect(collapsed).toHaveLength(1)
+    expect(instanced).toHaveLength(1)
+    expect(dracoMethodsOf(json, bin, collapsed[0].mesh)).toEqual([DRACO_SEQUENTIAL])
+    expect(dracoMethodsOf(json, bin, instanced[0].mesh)).toEqual([DRACO_EDGEBREAKER])
+  })
+
+  it('ships the instanced primitive byte-for-byte as the collapse-off export does', async () => {
+    // Per-primitive quantization makes each payload independent of its
+    // neighbours, so "the method it would have had" is checkable exactly.
+    const off = await compressExportGlb(await batchedArtifactBytes(hybridModel().model), COMPRESSION_DRACO)
+    const shared = (bytes) => {
+      const {json, bin} = parseGlb(bytes)
+      const node = json.nodes.find((n) =>
+        json.accessors[n.extensions?.EXT_mesh_gpu_instancing?.attributes?.TRANSLATION]?.count === 2)
+      return dracoPayloadsOf(json, bin, node.mesh)
+    }
+
+    expect(shared(draco.withMetadata)).toEqual(shared(off.withMetadata))
+  }, TIMEOUT_MS)
+
+  it('decodes both halves, the collapsed rows still in triangle order', async () => {
+    // The splice rewrites accessor counts and moves every view after a
+    // replaced payload; a slip there fails the real decoder here.
+    const scene = await loadLikeGltfLoader(draco.withMetadata)
+    const meshes = []
+    scene.traverse((obj) => obj.isMesh && meshes.push(obj))
+    const merged = meshes.find((mesh) => mesh.geometry.getIndex().count === ELEMENTS * 3)
+
+    expect(meshes).toHaveLength(2)
+    expect(merged).toBeDefined()
+    expect(meshes.find((mesh) => mesh !== merged).geometry.getIndex().count).toBe(hybrid.shapeIndexCount)
+    const position = merged.geometry.getAttribute('position')
+    const index = merged.geometry.getIndex()
+    for (let t = 0; t < ELEMENTS; t++) {
+      const c = new Vector3()
+      for (let k = 0; k < 3; k++) {
+        c.add(new Vector3().fromBufferAttribute(position, index.getX((t * 3) + k)))
+      }
+      c.divideScalar(3).add(merged.position)
+      expect(c.distanceTo(hybrid.centres[t])).toBeLessThan(0.01)
     }
   }, TIMEOUT_MS)
 })
