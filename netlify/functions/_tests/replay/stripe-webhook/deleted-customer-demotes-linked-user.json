@@ -1,5 +1,5 @@
 {
-  "description": "The cancellation of a Pro user's only subscription writes freePendingReauth.",
+  "description": "A deleted Stripe customer has no email left, but its user is found by the linked stripeCustomerId, so the cancellation still demotes them (the email-only lookup acknowledged it and left them Pro).",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -23,7 +23,14 @@
       "$fixture": "exchanges/auth0-search-by-customer-pro.json"
     },
     {
-      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
+      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json",
+      "$merge": {
+        "response": {
+          "json": {
+            "data": []
+          }
+        }
+      }
     },
     {
       "request": {
@@ -47,7 +54,14 @@
       }
     },
     {
-      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
+      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json",
+      "$merge": {
+        "response": {
+          "json": {
+            "data": []
+          }
+        }
+      }
     }
   ],
   "expect": {

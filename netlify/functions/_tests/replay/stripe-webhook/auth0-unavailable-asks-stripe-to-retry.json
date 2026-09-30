@@ -17,12 +17,6 @@
   },
   "exchanges": [
     {
-      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
-    },
-    {
-      "$fixture": "exchanges/stripe-customer.json"
-    },
-    {
       "request": {
         "method": "POST",
         "url": "https://bldrs-replay.us.auth0.com/oauth/token"

@@ -1,5 +1,6 @@
 {
   "description": "Report mode (the default): a Pro user whose only subscription is canceled is listed to demote, a paying customer whose Auth0 user was never marked is listed to promote (found by email, since no user carries the customer id), a Pro user with no Stripe customer (a comped grant) is reported, and nothing is written.",
+  "exchangeOrder": "any",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -95,7 +96,31 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions?price=price_1QreplayPro0001&status=all&limit=100",
+        "url": "https://api.stripe.com/v1/customers?email=grace%40example.com&limit=10",
+        "headers": {
+          "authorization": "Bearer sk_test_replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "object": "list",
+          "data": [
+            {
+              "id": "cus_Rstale0002",
+              "object": "customer",
+              "email": "grace@example.com"
+            }
+          ],
+          "has_more": false,
+          "url": "/v1/customers"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.stripe.com/v1/subscriptions?price=price_1QreplayPro0001&limit=100",
         "headers": {
           "authorization": "Bearer sk_test_replay"
         }
@@ -125,33 +150,6 @@
                     }
                   ]
                 }
-              }
-            },
-            {
-              "$fixture": "stripe/subscription.json",
-              "$merge": {
-                "items": {
-                  "data": [
-                    {
-                      "id": "si_Rreplay0001",
-                      "object": "subscription_item",
-                      "quantity": 1,
-                      "subscription": "sub_1QreplayStandard0001",
-                      "price": {
-                        "id": "price_1QreplayPro0001",
-                        "object": "price",
-                        "type": "recurring",
-                        "unit_amount": 1900,
-                        "currency": "usd"
-                      }
-                    }
-                  ]
-                },
-                "id": "sub_1QreplayStale0002",
-                "customer": "cus_Rstale0002",
-                "status": "canceled",
-                "canceled_at": 1761742100,
-                "ended_at": 1761742100
               }
             }
           ],
@@ -203,7 +201,14 @@
         }
       ],
       "errors": [],
-      "truncated": false
+      "truncated": false,
+      "relink": [],
+      "scanned": {
+        "proUsers": 2,
+        "entitledCustomers": 1
+      },
+      "skipped": 0,
+      "inFlight": 0
     }
   }
 }

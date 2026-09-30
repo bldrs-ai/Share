@@ -26,6 +26,8 @@ const EXCHANGE = {
   },
   response: {status: 200, json: {v: 42}},
 }
+const ALSO = {request: {method: 'GET', url: 'https://upstream.test/also'}, response: {status: 200, json: {}}}
+const TWO_CALLS = {method: 'GET', path: '/.netlify/functions/echo', headers: {}, query: {also: '1'}}
 const BASE = {
   env: {WHO: 'replay'},
   request: {method: 'GET', path: '/.netlify/functions/echo', headers: {}},
@@ -52,6 +54,18 @@ const CASES = [
   ['env is the scenario\'s own', {env: {WHO: 'someone-else'}}, 'body.from: expected "replay", got "someone-else"'],
   ['handler throws', {request: {...BASE.request, query: {throw: '1'}}}, 'handler threw: Error: boom'],
   ['handler returns nothing', {request: {...BASE.request, query: {nothing: '1'}}}, 'handler returned no response'],
+  ['calls in listed order pass', {request: TWO_CALLS, exchanges: [EXCHANGE, ALSO]}, null],
+  ['strict order rejects calls out of order', {request: TWO_CALLS, exchanges: [ALSO, EXCHANGE]},
+    'outbound #1 (POST https://upstream.test/thing): expected GET https://upstream.test/also'],
+  ['exchangeOrder any accepts calls out of order', {request: TWO_CALLS, exchangeOrder: 'any', exchanges: [ALSO, EXCHANGE]}, null],
+  ['exchangeOrder any still rejects an unlisted call', {request: TWO_CALLS, exchangeOrder: 'any', exchanges: [EXCHANGE]},
+    'outbound #2 (GET https://upstream.test/also): not in the scenario'],
+  ['exchangeOrder any still reports a call never made', {request: TWO_CALLS, exchangeOrder: 'any', exchanges: [ALSO, EXCHANGE, ALSO]},
+    'outbound GET https://upstream.test/also: expected but never made'],
+  ['exchangeOrder any still checks bodies', {
+    request: TWO_CALLS, exchangeOrder: 'any',
+    exchanges: [ALSO, {...EXCHANGE, request: {...EXCHANGE.request, body: {n: 2}}}],
+  }, 'body.n: expected 2, got 1'],
 ]
 
 

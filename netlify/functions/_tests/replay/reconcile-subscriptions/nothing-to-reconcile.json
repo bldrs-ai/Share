@@ -1,5 +1,6 @@
 {
   "description": "Auth0 and Stripe agree: the one Pro user is entitled, and the one entitled customer is already linked to them, so no lookup or write happens.",
+  "exchangeOrder": "any",
   "env": {
     "$fixture": "env/stripe.json",
     "$merge": {
@@ -87,7 +88,7 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions?price=price_1QreplayPro0001&status=all&limit=100",
+        "url": "https://api.stripe.com/v1/subscriptions?price=price_1QreplayPro0001&limit=100",
         "headers": {
           "authorization": "Bearer sk_test_replay"
         }
@@ -133,7 +134,11 @@
       "demote": [],
       "promote": [],
       "unverifiable": [],
-      "errors": []
+      "errors": [],
+      "relink": [],
+      "skipped": 0,
+      "inFlight": 0,
+      "truncated": false
     }
   }
 }

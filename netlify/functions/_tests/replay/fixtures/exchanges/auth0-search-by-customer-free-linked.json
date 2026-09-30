@@ -1,0 +1,23 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "https://bldrs-replay.us.auth0.com/api/v2/users?q=app_metadata.stripeCustomerId%3A%22cus_Rreplay0001%22&search_engine=v3&per_page=50&page=0",
+    "headers": {
+      "authorization": "Bearer mgmt-token-replay"
+    }
+  },
+  "response": {
+    "status": 200,
+    "json": [
+      {
+        "$fixture": "auth0/user.json",
+        "$merge": {
+          "app_metadata": {
+            "subscriptionStatus": "freePendingReauth",
+            "stripeCustomerId": "cus_Rreplay0001"
+          }
+        }
+      }
+    ]
+  }
+}

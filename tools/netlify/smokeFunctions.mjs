@@ -54,12 +54,6 @@ const EXCERPT_CHARS = 160
 // can't load fails twice.
 const RETRY_DELAY_MS = 5000
 
-// Each answer a probe accepts is a status AND something only the function's
-// own handler says — a phrase from its body, or (for pro-module's served
-// JavaScript) its content type. A bare status isn't enough: the platform
-// answers some statuses for itself, e.g. 404 for a function missing from
-// the deploy altogether, which would otherwise pass as pro-module's
-// `module_not_built`. smokeFunctions.test.js rejects a status-only answer.
 // Functions the smoke test deliberately doesn't probe, each with the reason.
 // Scheduled functions: Netlify doesn't serve them over HTTP in production,
 // so there is nothing to request. smokeFunctions.test.js checks each entry is
@@ -69,6 +63,12 @@ export const UNPROBED_FUNCTIONS = {
   'reconcile-subscriptions': 'scheduled (netlify.toml); not reachable over HTTP in production',
 }
 
+// Each answer a probe accepts is a status AND something only the function's
+// own handler says — a phrase from its body, or (for pro-module's served
+// JavaScript) its content type. A bare status isn't enough: the platform
+// answers some statuses for itself, e.g. 404 for a function missing from
+// the deploy altogether, which would otherwise pass as pro-module's
+// `module_not_built`. smokeFunctions.test.js rejects a status-only answer.
 const MISSING_BEARER = {status: HTTP_UNAUTHORIZED, body: 'Missing or invalid Authorization header'}
 const MISSING_AUTH0_TOKEN = {status: HTTP_UNAUTHORIZED, body: 'missing_auth0_token'}
 const GH_OAUTH_NOT_CONFIGURED = {status: HTTP_INTERNAL_ERROR, body: 'GH_OAUTH_CLIENT_ID/SECRET not configured'}

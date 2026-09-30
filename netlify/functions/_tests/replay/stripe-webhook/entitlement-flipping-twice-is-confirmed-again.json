@@ -1,5 +1,5 @@
 {
-  "description": "Overlapping deliveries: this created reads the subscription while it is still active and promotes, but it was cancelled meanwhile. The read-after-write sees canceled and corrects to freePendingReauth. A final read confirms the correction.",
+  "description": "Entitlement is not monotone: the promote's confirming read sees the subscription canceled and corrects, and the next read sees it active again (a resubscribe). The loop writes until a read after its last write agrees.",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -77,7 +77,31 @@
       }
     },
     {
-      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
+      "$fixture": "exchanges/stripe-subscriptions-pro-active.json"
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        },
+        "body": {
+          "app_metadata": {
+            "subscriptionStatus": "shareProPendingReauth",
+            "stripeCustomerId": "cus_Rreplay0001"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json"
+        }
+      }
+    },
+    {
+      "$fixture": "exchanges/stripe-subscriptions-pro-active.json"
     }
   ],
   "expect": {

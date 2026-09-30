@@ -1,0 +1,62 @@
+{
+  "description": "A late deleted for the user's OLD customer, while they pay under the customer they're linked to now: entitlement is read across both, so nothing is written \u2014 no demotion, and the link stays on the paying customer.",
+  "env": {
+    "$fixture": "env/stripe.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/stripe-webhook",
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "user-agent": "Stripe/1.0 (+https://stripe.com/docs/webhooks)"
+    },
+    "sign": "stripe",
+    "body": {
+      "$fixture": "stripe/event.subscription.deleted.json"
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-search-by-customer-none.json"
+    },
+    {
+      "$fixture": "exchanges/stripe-customer.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-users-by-email.json",
+      "$merge": {
+        "response": {
+          "json": [
+            {
+              "$fixture": "auth0/user.json",
+              "$merge": {
+                "app_metadata": {
+                  "subscriptionStatus": "sharePro",
+                  "stripeCustomerId": "cus_Rreplay0002"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
+    },
+    {
+      "$fixture": "exchanges/stripe-subscriptions-pro-active.json",
+      "$merge": {
+        "request": {
+          "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0002&status=all&limit=100"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "bodyIncludes": "Success"
+  }
+}

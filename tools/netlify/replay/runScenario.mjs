@@ -56,17 +56,27 @@ for (const name of Object.keys(process.env)) {
 Object.assign(process.env, scenario.env || {})
 
 const exchanges = scenario.exchanges || []
-let nextExchange = 0
+// 'strict' (default): calls must arrive in the listed order. 'any': for a
+// function that works on several items concurrently, where the interleaving
+// across items is timing-dependent — each call takes the first unused
+// exchange with its method and URL, so calls to the SAME URL (a read, then
+// its read-after-write) are still consumed in the listed order.
+const anyOrder = scenario.exchangeOrder === 'any'
+const used = new Set()
 const server = setupServer(http.all('*', async ({request}) => {
   const call = {method: request.method, url: request.url, body: await readBody(request)}
   calls.push(call)
-  const exchange = exchanges[nextExchange]
+  const index = anyOrder ?
+    exchanges.findIndex((candidate, i) => !used.has(i) &&
+      candidate.request.method === call.method && candidate.request.url === call.url) :
+    exchanges.findIndex((candidate, i) => !used.has(i))
+  const exchange = index === -1 ? undefined : exchanges[index]
   const label = `outbound #${calls.length} (${call.method} ${call.url})`
   if (!exchange) {
     failures.push(`${label}: not in the scenario`)
     return HttpResponse.text('no such exchange in the replay scenario', {status: NO_EXCHANGE_STATUS})
   }
-  nextExchange++
+  used.add(index)
   const want = exchange.request
   if (want.method !== call.method || want.url !== call.url) {
     failures.push(`${label}: expected ${want.method} ${want.url}`)
@@ -102,7 +112,7 @@ if (response) {
   // missing response must fail rather than skip the response checks.
   failures.push(`handler returned no response (${JSON.stringify(response)})`)
 }
-for (const missed of exchanges.slice(nextExchange)) {
+for (const missed of exchanges.filter((candidate, i) => !used.has(i))) {
   failures.push(`outbound ${missed.request.method} ${missed.request.url}: expected but never made`)
 }
 

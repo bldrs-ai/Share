@@ -148,7 +148,7 @@ export async function verifyAuth0Bearer(event) {
  */
 export class ManagementApiError extends Error {
   /**
-   * @param {'mgmt_config'|'mgmt_token'|'user_lookup'|'user_patch'} step
+   * @param {'mgmt_config'|'mgmt_token'|'user_lookup'|'user_patch'|'user_search'|'users_by_email'} step
    * @param {object} [detail]
    * @param {Error} [detail.cause] The axios error, when a request was made
    * @param {Array<string>} [detail.missing] Unset env var names (`mgmt_config`)
@@ -319,4 +319,63 @@ export async function patchUserAppMetadata(sub, patch) {
   } catch (err) {
     throw new ManagementApiError('user_patch', {cause: err})
   }
+}
+
+
+// The two lookups below serve the subscription paths (stripe-webhook, the
+// reconcile sweep), which run against a deadline — Netlify's 10 s for the
+// webhook, the sweep's own budget — so they carry a timeout that the older
+// helpers above don't.
+const MGMT_LOOKUP_TIMEOUT_MS = 5000
+
+
+/**
+ * One page of a Management API user search (search engine v3).
+ *
+ * The search index lags writes by a few seconds, so a user linked moments
+ * ago may not match yet; callers that need read-your-writes fall back to
+ * `getUsersByEmail`, which reads the primary store.
+ *
+ * @param {string} query Lucene query
+ * @param {number} page 0-based
+ * @param {number} perPage
+ * @return {Promise<Array<object>>} users on that page
+ * @throws {ManagementApiError} the token step's errors, or `user_search`
+ */
+export async function searchUsers(query, page, perPage) {
+  const mgmtToken = await getManagementApiToken()
+  const params = new URLSearchParams({q: query, search_engine: 'v3', per_page: String(perPage), page: String(page)})
+  let resp
+  try {
+    resp = await axios.get(
+      `https://${process.env.AUTH0_DOMAIN}/api/v2/users?${params}`,
+      {headers: {Authorization: `Bearer ${mgmtToken}`}, timeout: MGMT_LOOKUP_TIMEOUT_MS},
+    )
+  } catch (err) {
+    throw new ManagementApiError('user_search', {cause: err})
+  }
+  return Array.isArray(resp.data) ? resp.data : []
+}
+
+
+/**
+ * Every Auth0 user with this email, one per identity that isn't linked.
+ * Auth0 doesn't document the order.
+ *
+ * @param {string} email
+ * @return {Promise<Array<object>>}
+ * @throws {ManagementApiError} the token step's errors, or `users_by_email`
+ */
+export async function getUsersByEmail(email) {
+  const mgmtToken = await getManagementApiToken()
+  let resp
+  try {
+    resp = await axios.get(
+      `https://${process.env.AUTH0_DOMAIN}/api/v2/users-by-email?email=${encodeURIComponent(email)}`,
+      {headers: {Authorization: `Bearer ${mgmtToken}`}, timeout: MGMT_LOOKUP_TIMEOUT_MS},
+    )
+  } catch (err) {
+    throw new ManagementApiError('users_by_email', {cause: err})
+  }
+  return Array.isArray(resp.data) ? resp.data : []
 }

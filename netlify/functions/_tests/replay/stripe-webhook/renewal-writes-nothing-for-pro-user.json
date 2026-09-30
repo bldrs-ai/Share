@@ -17,16 +17,13 @@
   },
   "exchanges": [
     {
-      "$fixture": "exchanges/stripe-subscriptions-pro-active.json"
-    },
-    {
-      "$fixture": "exchanges/stripe-customer.json"
-    },
-    {
       "$fixture": "exchanges/auth0-mgmt-token.json"
     },
     {
-      "$fixture": "exchanges/auth0-users-by-email-pro.json"
+      "$fixture": "exchanges/auth0-search-by-customer-pro.json"
+    },
+    {
+      "$fixture": "exchanges/stripe-subscriptions-pro-active.json"
     }
   ],
   "expect": {

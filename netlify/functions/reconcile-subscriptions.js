@@ -16,7 +16,10 @@
  * the events:
  *
  *   1. DEMOTE: Auth0 users marked PRO (`sharePro` / `shareProPendingReauth`)
- *      whose Stripe customer is not entitled → 'freePendingReauth'.
+ *      whose Stripe customer is not entitled → 'freePendingReauth'. Before
+ *      demoting, the user's other Stripe customers (same email) are checked:
+ *      if one is entitled — a resubscribe under a new customer — the user
+ *      keeps PRO and is RELINKED to it instead.
  *      A PRO user with no `stripeCustomerId` is reported as unverifiable and
  *      never demoted: that is how a manual (comped) grant looks, and
  *      revoking it silently would be worse than reporting it.
@@ -33,9 +36,17 @@
  *     been read and looks right.
  *
  * Every item is independent: one customer's failure is recorded in the
- * summary's `errors` and the sweep goes on. Items run a few at a time under
- * a 25 s budget (Netlify stops scheduled functions at 30 s); items not
- * started in time are counted in `skipped` and the run is marked
+ * summary's `errors` and the sweep goes on. Netlify stops a scheduled
+ * function at 30 s, cold start included, so the run keeps two deadlines:
+ *   - at 20 s it stops STARTING work: both discovery lists (fetched
+ *     concurrently) stop paging, and no queued item starts. Demote and
+ *     promote items share ONE queue, alternating, so a long demote list
+ *     can't starve promotion day after day;
+ *   - at 26 s it stops WAITING: items still in flight (every upstream call
+ *     has a 5 s timeout, but an item makes several) are counted in
+ *     `inFlight` and the summary goes out anyway, rather than Netlify
+ *     killing the run with no summary at all.
+ * Items never started are counted in `skipped`; any cut-short run is marked
  * `truncated`. The summary names Auth0 user ids and Stripe customer ids,
  * never emails.
  *
@@ -47,15 +58,19 @@
  */
 
 import Stripe from 'stripe'
-import axios from 'axios'
 import * as Sentry from '@sentry/serverless'
-import {getManagementApiToken, patchUserAppMetadata} from './_lib/auth0.js'
+import {patchUserAppMetadata} from './_lib/auth0.js'
 import {
-  FREE_PENDING_STATUS,
-  PRO_PENDING_STATUS,
-  isCustomerEntitled,
+  CUSTOMER_ID_PATTERN,
+  STRIPE_CLIENT_OPTIONS,
+  customerIdsForEmail,
+  entitlementAcross,
+  findAuth0UserForCustomer,
   isEntitlingSubscription,
   isProInAuth0,
+  linkFor,
+  searchAuth0Users,
+  writeAndConfirm,
 } from './_lib/subscriptions.js'
 
 
@@ -68,73 +83,19 @@ Sentry.AWSLambda.init({
 const HTTP_OK = 200
 const HTTP_INTERNAL_ERROR = 500
 const REQUIRED_ENV = ['STRIPE_SECRET_KEY', 'SHARE_PRO_PRICE_ID', 'AUTH0_DOMAIN', 'AUTH0_CLIENT_ID', 'AUTH0_CLIENT_SECRET']
-const AUTH0_PAGE_SIZE = 50
-// Auth0's user search returns at most 1000 results per query; far above
-// Share's Pro user count, but a sweep that stops there must say so.
-const AUTH0_SEARCH_LIMIT = 1000
 const STRIPE_PAGE_SIZE = 100
 const PRO_USERS_QUERY = 'app_metadata.subscriptionStatus:(sharePro OR shareProPendingReauth)'
-// Stripe customer ids are interpolated into a Lucene query; anything else is
-// refused rather than escaped.
-const CUSTOMER_ID_PATTERN = /^cus_[A-Za-z0-9]+$/
-// Netlify stops a scheduled function after 30 s. Items run a few at a time,
-// and none starts after this budget: the rest are counted as skipped and the
-// run is marked truncated (a Sentry warning) rather than cut off silently
-// mid-sweep. Tomorrow's run starts over, so a persistently truncated sweep
-// is the signal to page it.
-const TIME_BUDGET_MS = 25000
+// The two deadlines in the header, from the start of the handler. A
+// truncated run is a Sentry warning. Tomorrow's run starts from the top in
+// the same order, so it does NOT pick up where this one stopped: a sweep
+// truncated day after day has outgrown one invocation and needs a
+// continuation point.
+const START_BUDGET_MS = 20000
+const WAIT_BUDGET_MS = 26000
 const CONCURRENCY = 4
-
-
-/**
- * Every Auth0 user matching a search query, page by page.
- *
- * @param {string} query Lucene query for search engine v3
- * @return {Promise<{users: Array<object>, truncated: boolean}>}
- */
-async function searchAuth0Users(query) {
-  const users = []
-  for (let page = 0; page * AUTH0_PAGE_SIZE < AUTH0_SEARCH_LIMIT; page++) {
-    const mgmtToken = await getManagementApiToken()
-    const params = new URLSearchParams({q: query, search_engine: 'v3', per_page: String(AUTH0_PAGE_SIZE), page: String(page)})
-    const resp = await axios.get(
-      `https://${process.env.AUTH0_DOMAIN}/api/v2/users?${params}`,
-      {headers: {Authorization: `Bearer ${mgmtToken}`}},
-    )
-    const batch = Array.isArray(resp.data) ? resp.data : []
-    users.push(...batch)
-    if (batch.length < AUTH0_PAGE_SIZE) {
-      return {users, truncated: false}
-    }
-  }
-  return {users, truncated: true}
-}
-
-
-/**
- * The Auth0 user for a Stripe customer: by linked `stripeCustomerId`, else
- * by the customer's email.
- *
- * @param {object} stripe
- * @param {string} customerId
- * @return {Promise<?object>}
- */
-async function findUserForCustomer(stripe, customerId) {
-  const {users: linked} = await searchAuth0Users(`app_metadata.stripeCustomerId:"${customerId}"`)
-  if (linked.length > 0) {
-    return linked[0]
-  }
-  const customer = await stripe.customers.retrieve(customerId)
-  if (!customer || !customer.email) {
-    return null
-  }
-  const mgmtToken = await getManagementApiToken()
-  const resp = await axios.get(
-    `https://${process.env.AUTH0_DOMAIN}/api/v2/users-by-email?email=${encodeURIComponent(customer.email)}`,
-    {headers: {Authorization: `Bearer ${mgmtToken}`}},
-  )
-  return Array.isArray(resp.data) && resp.data.length > 0 ? resp.data[0] : null
-}
+// A sweep item makes its calls in sequence and records its own failures, so
+// no inline retries: tomorrow's run is the retry.
+const NO_INLINE_RETRIES = []
 
 
 /**
@@ -142,13 +103,20 @@ async function findUserForCustomer(stripe, customerId) {
  *
  * @param {object} stripe
  * @param {string} proPriceId
- * @return {Promise<Array<string>>} customer ids, each once
+ * @param {number} deadline epoch ms; no page is requested after it
+ * @return {Promise<{customers: Array<string>, truncated: boolean}>} ids each once
  */
-async function entitledCustomerIds(stripe, proPriceId) {
+async function entitledCustomerIds(stripe, proPriceId, deadline) {
   const customers = new Set()
   let startingAfter
   for (;;) {
-    const params = {price: proPriceId, status: 'all', limit: STRIPE_PAGE_SIZE}
+    if (Date.now() >= deadline) {
+      return {customers: [...customers], truncated: true}
+    }
+    // No `status`: Stripe then lists every subscription but the canceled
+    // ones, which covers all three entitling statuses without paging through
+    // every subscription that ever ended.
+    const params = {price: proPriceId, limit: STRIPE_PAGE_SIZE}
     if (startingAfter) {
       params.starting_after = startingAfter
     }
@@ -159,7 +127,7 @@ async function entitledCustomerIds(stripe, proPriceId) {
       }
     }
     if (!page.has_more || page.data.length === 0) {
-      return [...customers]
+      return {customers: [...customers], truncated: false}
     }
     startingAfter = page.data[page.data.length - 1].id
   }
@@ -167,53 +135,82 @@ async function entitledCustomerIds(stripe, proPriceId) {
 
 
 /**
- * Write a tier change, then re-read Stripe and undo it if the customer's
- * entitlement moved meanwhile — the sweep can race a live webhook delivery
- * (the customer resubscribes between this sweep's read and its write), and
- * the same read-after-write the webhook uses keeps the later truth.
+ * `promise`'s outcome, or `{settled: false}` if `until` comes first. The
+ * promise keeps running; this only stops waiting for it.
  *
- * @param {object} stripe
- * @param {string} proPriceId
- * @param {string} userId
- * @param {string} customerId
- * @param {boolean} entitled what the sweep read before writing
- * @return {Promise<void>}
+ * @param {Promise} promise
+ * @param {number} until epoch ms
+ * @return {Promise<{settled: boolean, value: *}>} rejects if `promise` does
+ *   in time
  */
-async function writeTier(stripe, proPriceId, userId, customerId, entitled) {
-  const statusFor = (isEntitled) => (isEntitled ? PRO_PENDING_STATUS : FREE_PENDING_STATUS)
-  await patchUserAppMetadata(userId, {subscriptionStatus: statusFor(entitled), stripeCustomerId: customerId})
-  const settled = await isCustomerEntitled(stripe, customerId, proPriceId)
-  if (settled !== entitled) {
-    await patchUserAppMetadata(userId, {subscriptionStatus: statusFor(settled), stripeCustomerId: customerId})
+async function settleBy(promise, until) {
+  let timer
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve({settled: false, value: undefined}), Math.max(0, until - Date.now()))
+  })
+  try {
+    return await Promise.race([promise.then((value) => ({settled: true, value})), timeout])
+  } finally {
+    clearTimeout(timer)
   }
 }
 
 
 /**
  * Run `fn` over `items`, `concurrency` at a time, starting none once
- * `deadline` has passed.
+ * `startBy` has passed, and waiting for none past `waitUntil`.
  *
  * @param {Array} items
  * @param {number} concurrency
- * @param {number} deadline epoch ms
- * @param {Function} fn async, one item
- * @return {Promise<number>} how many items were skipped for time
+ * @param {number} startBy epoch ms
+ * @param {number} waitUntil epoch ms
+ * @param {Function} fn async, one item; must not throw
+ * @return {Promise<{skipped: number, inFlight: number}>} items never started,
+ *   and items still running when it stopped waiting
  */
-async function runLimited(items, concurrency, deadline, fn) {
+async function runLimited(items, concurrency, startBy, waitUntil, fn) {
   let next = 0
   let skipped = 0
+  let inFlight = 0
   const worker = async () => {
     while (next < items.length) {
       const item = items[next++]
-      if (Date.now() >= deadline) {
+      if (Date.now() >= startBy) {
         skipped++
         continue
       }
-      await fn(item)
+      inFlight++
+      try {
+        await fn(item)
+      } finally {
+        inFlight--
+      }
     }
   }
-  await Promise.all(Array.from({length: Math.min(concurrency, items.length)}, worker))
-  return skipped
+  await settleBy(Promise.all(Array.from({length: Math.min(concurrency, items.length)}, worker)), waitUntil)
+  // Anything the workers hadn't reached yet was never started either.
+  return {skipped: skipped + (items.length - next), inFlight}
+}
+
+
+/**
+ * `a` and `b` alternated, then the longer one's remainder.
+ *
+ * @param {Array} a
+ * @param {Array} b
+ * @return {Array}
+ */
+function interleave(a, b) {
+  const out = []
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if (i < a.length) {
+      out.push(a[i])
+    }
+    if (i < b.length) {
+      out.push(b[i])
+    }
+  }
+  return out
 }
 
 
@@ -239,50 +236,85 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
   const apply = process.env.RECONCILE_MODE === 'apply'
   const proPriceId = process.env.SHARE_PRO_PRICE_ID
   // eslint-disable-next-line new-cap -- `stripe` SDK ships as a factory function
-  const stripe = Stripe(process.env.STRIPE_SECRET_KEY)
+  const stripe = Stripe(process.env.STRIPE_SECRET_KEY, STRIPE_CLIENT_OPTIONS)
+  // `demote` / `promote` / `relink` list what the sweep found (and, in
+  // apply mode, attempted); a write that failed is ALSO in `errors`.
+  // `scanned` separates "nothing to do" from "the queries matched nothing".
   const summary = {
-    mode: apply ? 'apply' : 'report', demote: [], promote: [], unverifiable: [], errors: [], truncated: false, skipped: 0,
+    mode: apply ? 'apply' : 'report', demote: [], promote: [], relink: [], unverifiable: [], errors: [],
+    scanned: {proUsers: 0, entitledCustomers: 0}, truncated: false, skipped: 0, inFlight: 0,
   }
-  const deadline = Date.now() + TIME_BUDGET_MS
+  const startedAt = Date.now()
+  const startBy = startedAt + START_BUDGET_MS
+  const waitUntil = startedAt + WAIT_BUDGET_MS
 
   try {
-    const {users: proUsers, truncated} = await searchAuth0Users(PRO_USERS_QUERY)
-    summary.truncated = truncated
-    // Built before either pass runs, so step 2 can skip customers step 1 owns.
+    // Discovery, concurrently, so neither list waits out the budget on the
+    // other.
+    const discovery = await settleBy(Promise.all([
+      searchAuth0Users(PRO_USERS_QUERY, startBy),
+      entitledCustomerIds(stripe, proPriceId, startBy),
+    ]), waitUntil)
+    if (!discovery.settled) {
+      throw new Error('discovery did not finish within the time budget')
+    }
+    const [proSearch, entitled] = discovery.value
+    const proUsers = proSearch.users
+    summary.scanned = {proUsers: proUsers.length, entitledCustomers: entitled.customers.length}
+    summary.truncated = proSearch.truncated || entitled.truncated
     const proUserIds = new Set(proUsers.map((user) => user.user_id))
     const proCustomerIds = new Set(proUsers.map((user) => user.app_metadata && user.app_metadata.stripeCustomerId).filter(Boolean))
 
-    // 1. DEMOTE: PRO in Auth0, not entitled in Stripe.
-    summary.skipped += await runLimited(proUsers, CONCURRENCY, deadline, async (user) => {
-      const customerId = user.app_metadata && user.app_metadata.stripeCustomerId
-      if (!customerId) {
+    // 1. DEMOTE: PRO in Auth0, not entitled in Stripe under any of the
+    // user's customers.
+    const demote = async (user) => {
+      const linked = user.app_metadata && user.app_metadata.stripeCustomerId
+      if (!linked) {
         summary.unverifiable.push({user: user.user_id, reason: 'pro_without_stripe_customer'})
         return
       }
       try {
-        if (await isCustomerEntitled(stripe, customerId, proPriceId)) {
+        let reading = await entitlementAcross(stripe, [linked], proPriceId)
+        let others = []
+        if (!reading.entitled) {
+          // Only for would-be demotions: one more Stripe call, and the one
+          // that tells a lapsed user from one who resubscribed under a new
+          // customer (who the promote pass would skip, being PRO).
+          others = (await customerIdsForEmail(stripe, user.email)).filter((id) => id !== linked)
+          reading = await entitlementAcross(stripe, others, proPriceId)
+        }
+        if (reading.entitled) {
+          if (reading.customer !== linked) {
+            summary.relink.push({user: user.user_id, from: linked, to: reading.customer})
+            if (apply) {
+              await patchUserAppMetadata(user.user_id, {stripeCustomerId: reading.customer})
+            }
+          }
           return
         }
-        summary.demote.push({user: user.user_id, customer: customerId})
+        summary.demote.push({user: user.user_id, customer: linked})
         if (apply) {
-          await writeTier(stripe, proPriceId, user.user_id, customerId, false)
+          await writeAndConfirm({
+            userId: user.user_id,
+            reading,
+            read: () => entitlementAcross(stripe, [linked, ...others], proPriceId),
+            link: (r) => linkFor(r, linked, linked),
+            retryDelaysMs: NO_INLINE_RETRIES,
+          })
         }
       } catch (err) {
-        summary.errors.push({user: user.user_id, customer: customerId, error: describeError(err)})
+        summary.errors.push({user: user.user_id, customer: linked, error: describeError(err)})
       }
-    })
+    }
 
-    // 2. PROMOTE: entitled in Stripe, not PRO in Auth0. Customers already
-    // linked to a PRO user were settled by step 1: no lookup needed.
-    const candidates = Date.now() >= deadline ? [] :
-      (await entitledCustomerIds(stripe, proPriceId)).filter((customerId) => !proCustomerIds.has(customerId))
-    summary.skipped += await runLimited(candidates, CONCURRENCY, deadline, async (customerId) => {
+    // 2. PROMOTE: entitled in Stripe, not PRO in Auth0.
+    const promote = async (customerId) => {
       if (!CUSTOMER_ID_PATTERN.test(customerId)) {
         summary.unverifiable.push({customer: String(customerId), reason: 'unexpected_customer_id'})
         return
       }
       try {
-        const user = await findUserForCustomer(stripe, customerId)
+        const {user} = await findAuth0UserForCustomer(stripe, customerId)
         if (!user) {
           summary.unverifiable.push({customer: customerId, reason: 'no_auth0_user'})
           return
@@ -291,15 +323,36 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
         if (proUserIds.has(user.user_id) || isProInAuth0(appMetadata.subscriptionStatus)) {
           return
         }
+        const linked = appMetadata.stripeCustomerId || null
         summary.promote.push({user: user.user_id, customer: customerId})
         if (apply) {
-          await writeTier(stripe, proPriceId, user.user_id, customerId, true)
+          await writeAndConfirm({
+            userId: user.user_id,
+            reading: {entitled: true, customer: customerId},
+            read: () => entitlementAcross(stripe, [customerId, linked], proPriceId),
+            link: (r) => linkFor(r, linked, customerId),
+            retryDelaysMs: NO_INLINE_RETRIES,
+          })
         }
       } catch (err) {
         summary.errors.push({customer: customerId, error: describeError(err)})
       }
-    })
-    if (summary.skipped > 0 || Date.now() >= deadline) {
+    }
+
+    // Customers already linked to a PRO user are settled by their demote
+    // item: no promote lookup needed. The two passes share one queue,
+    // alternating, so when the budget runs out both have made progress and
+    // `skipped` counts every discovered item that wasn't started. A promote
+    // item never writes to a user the PRO search returned, so the two kinds
+    // don't race each other.
+    const tasks = interleave(
+      proUsers.map((user) => () => demote(user)),
+      entitled.customers.filter((customerId) => !proCustomerIds.has(customerId)).map((customerId) => () => promote(customerId)),
+    )
+    const run = await runLimited(tasks, CONCURRENCY, startBy, waitUntil, (task) => task())
+    summary.skipped = run.skipped
+    summary.inFlight = run.inFlight
+    if (run.skipped > 0 || run.inFlight > 0) {
       summary.truncated = true
     }
   } catch (err) {

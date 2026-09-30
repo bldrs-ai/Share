@@ -1,5 +1,5 @@
 {
-  "description": "Stripe unreachable at the network level (the SDK retries twice itself) is transient: 500, so Stripe redelivers.",
+  "description": "Stripe unreachable at the network level (the SDK retries once itself) is transient: 500, so Stripe redelivers.",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -17,13 +17,10 @@
   },
   "exchanges": [
     {
-      "request": {
-        "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0001&status=all&limit=100"
-      },
-      "response": {
-        "networkError": true
-      }
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-search-by-customer-pro.json"
     },
     {
       "request": {

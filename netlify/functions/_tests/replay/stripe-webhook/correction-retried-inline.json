@@ -1,5 +1,5 @@
 {
-  "description": "The corrective write hits a transient Auth0 503 and is retried inline, so the stale PRO doesn't stand until Stripe's next redelivery hours later (ops#34).",
+  "description": "The corrective write hits a transient Auth0 503 and is retried inline, so the stale PRO doesn't stand until Stripe's next redelivery hours later (ops#34). A final read confirms the correction.",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -17,16 +17,19 @@
   },
   "exchanges": [
     {
-      "$fixture": "exchanges/stripe-subscriptions-pro-active.json"
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-search-by-customer-none.json"
     },
     {
       "$fixture": "exchanges/stripe-customer.json"
     },
     {
-      "$fixture": "exchanges/auth0-mgmt-token.json"
+      "$fixture": "exchanges/auth0-users-by-email.json"
     },
     {
-      "$fixture": "exchanges/auth0-users-by-email.json"
+      "$fixture": "exchanges/stripe-subscriptions-pro-active.json"
     },
     {
       "request": {
@@ -95,6 +98,9 @@
           "$fixture": "auth0/user.json"
         }
       }
+    },
+    {
+      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
     }
   ],
   "expect": {
