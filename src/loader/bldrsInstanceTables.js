@@ -313,17 +313,22 @@ export function rangeCanaryOf(geometry, table) {
  * The exact canary cannot survive Draco by construction: positions are
  * quantized, and Draco also MERGES coincident vertices across elements —
  * measured on a DSA-shaped strip, 600 vertices come back as 202 — so neither
- * the float bits nor the per-row vertex ranges exist any more. What does
- * survive, provided the export encodes SEQUENTIALLY
- * (`export/glbCompression.js#triangleOrderedMeshes`), is triangle ORDER and
- * therefore each row's index COUNT: row r's triangles are still the r-th
- * contiguous run. So the reader rebuilds each row's vertex block from its
- * triangles (`instancedGlbToBatchedModel.js#rebuildLossyCollapsed`), and
- * this witness checks the result:
+ * the float bits nor the per-row vertex ranges exist any more. EDGEBREAKER
+ * also reorders triangles across rows and DROPS every zero-area one. So the
+ * export tags each vertex of a collapsed primitive with its row (the ROW TAG
+ * below), which Draco carries losslessly and which stops it merging vertices
+ * of different rows; the reader groups triangles by that tag and rebuilds each
+ * row's vertex block from them
+ * (`instancedGlbToBatchedModel.js#regroupByRowTag`), and this witness checks
+ * the result:
  *
- * - `identity` — an EXACT hash of every row's identity and index count,
- *   neither of which a codec touches. Binds rows to identities the way the
- *   exact canary does.
+ * - `identity` — an EXACT hash of every row's identity and index count.
+ *   Binds rows to identities the way the exact canary does. The count is of
+ *   the triangles the file actually carries: for a row-tagged file that is
+ *   the source's minus its zero-area triangles, which the export removes
+ *   itself before encoding (`export/collapsedWitness.js`) so that what it
+ *   witnesses is exactly what Draco keeps. The reader hashes the counts it
+ *   regrouped, so a triangle lost or gained in any row refuses the table.
  * - `stats` — per row, nine numbers over its triangle CORNERS: the mean, the
  *   min and the max of each axis. Over corners rather than vertices because
  *   that is invariant under the vertex merging and re-indexing above. The
@@ -349,7 +354,60 @@ export function rangeCanaryOf(geometry, table) {
  * the same corner mean. The floor on that tolerance is the uint16 grid over
  * the table's span (1.5 mm on a 100 m table), which for a portable file's
  * small per-row primitives is the binding term, not Draco's.
+ *
+ * TWO LAYOUTS CARRY IT. What is described above is the row-tagged one, which
+ * every Draco export of a collapsed primitive writes today, encoded
+ * EDGEBREAKER. The first Draco exports of collapsed artifacts (#1872, #1898)
+ * carried no tag and relied on SEQUENTIAL instead, which keeps triangle order
+ * and every triangle, so a row was the r-th contiguous triangle run and its
+ * count was the table's own. Those files still open: the reader takes the
+ * run path whenever the decoded primitive has no tag, and the export still
+ * writes that layout for the one file shape a tag cannot serve (a row whose
+ * every triangle has zero area, which EDGEBREAKER would erase outright).
  */
+
+/**
+ * The ROW TAG: the glTF attribute a Draco export puts on each collapsed
+ * primitive, holding every vertex's table row. `_`-prefixed as glTF requires
+ * of an application-specific semantic, so any other viewer ignores it.
+ *
+ * Integer-typed on purpose. Draco encodes an integer attribute losslessly —
+ * quantization only ever applies to FLOAT ones, which is also why
+ * `exportQuality.js` must never name GENERIC in `quantizationBits` — and
+ * three's DRACOLoader decodes it into the accessor's own array type. A row
+ * number through a float attribute is exactly what came back corrupted for
+ * `_EXPRESSID` (594 of 600 wrong at the 12-bit GENERIC default).
+ *
+ * UNSIGNED_SHORT, as SCALAR when the table's rows fit in 16 bits and as VEC2
+ * (low half, high half) when they do not: glTF forbids UNSIGNED_INT on a
+ * vertex attribute (the validator's MESH_PRIMITIVE_ATTRIBUTES_ACCESSOR_
+ * UNSIGNED_INT is an error, not a warning), so the wide case is split rather
+ * than widened.
+ */
+export const ROW_TAG_SEMANTIC = '_BLDRS_ROW'
+
+/**
+ * The name three gives {@link ROW_TAG_SEMANTIC} on a decoded geometry:
+ * GLTFLoader lowercases any semantic it has no mapping for.
+ */
+export const ROW_TAG_ATTRIBUTE = ROW_TAG_SEMANTIC.toLowerCase()
+
+/** Rows a SCALAR row tag can name; past it, the tag is a VEC2. */
+export const ROW_TAG_SCALAR_ROWS = 0x10000
+
+
+/**
+ * The row a vertex's tag names.
+ *
+ * @param {object} tag the decoded {@link ROW_TAG_ATTRIBUTE} (itemSize 1 or 2)
+ * @param {number} vertex
+ * @return {number}
+ */
+export function rowOfTag(tag, vertex) {
+  return tag.itemSize === 2 ?
+    tag.getX(vertex) + (tag.getY(vertex) * ROW_TAG_SCALAR_ROWS) :
+    tag.getX(vertex)
+}
 
 /** The codec extension whose presence on a primitive means lossy positions. */
 export const LOSSY_POSITION_CODEC = 'KHR_draco_mesh_compression'
@@ -365,14 +423,18 @@ export const WITNESS_STATS_PER_ROW = 3 * COMPONENTS_PER_POSITION
  * Exact hash of each row's identity and index count.
  *
  * @param {object} table collapsed table (parsed shape) with `ranges`
+ * @param {function(number): number} [indexCountOf] row -> the index count to
+ *   hash. The table's own by default, which is what a SEQUENTIAL (untagged)
+ *   file carries; a row-tagged file's are the triangles it actually holds
+ *   (see "THE LOSSY WITNESS")
  * @return {number} uint32
  */
-export function rowIdentityCanary(table) {
+export function rowIdentityCanary(table, indexCountOf = (row) => table.ranges[row].indexCount) {
   const hasher = makeWordHash()
-  table.ranges.forEach(({indexCount}, row) => {
+  for (let row = 0; row < table.ranges.length; row++) {
     identityWords(tableRowIdentity(table, row), hasher.word)
-    hasher.word(indexCount)
-  })
+    hasher.word(indexCountOf(row))
+  }
   return hasher.digest()
 }
 
@@ -417,9 +479,11 @@ export function rowWitnessStats(rowCount, cornerCountOf, cornerAt) {
  * @param {object} table collapsed table with `ranges` + identity arrays
  * @param {Float64Array} stats from {@link rowWitnessStats}
  * @param {number} positionBits the Draco POSITION quantization bits
+ * @param {function(number): number} [indexCountOf] as in
+ *   {@link rowIdentityCanary}: what each row carries in the encoded file
  * @return {object} JSON-serializable witness
  */
-export function buildLossyWitness(table, stats, positionBits) {
+export function buildLossyWitness(table, stats, positionBits, indexCountOf) {
   const min = [Infinity, Infinity, Infinity]
   const max = [-Infinity, -Infinity, -Infinity]
   for (let i = 0; i < stats.length; i++) {
@@ -434,7 +498,7 @@ export function buildLossyWitness(table, stats, positionBits) {
     q[i] = span > 0 ? Math.round(((stats[i] - min[c]) / span) * WITNESS_GRID) : 0
   }
   return {
-    identity: rowIdentityCanary(table),
+    identity: rowIdentityCanary(table, indexCountOf),
     positionBits,
     min,
     max,
@@ -458,16 +522,18 @@ export function dracoStep(extent, positionBits) {
 /**
  * Whether a rebuilt collapsed table matches its lossy witness.
  *
- * @param {object} table parsed collapsed table carrying `witness`, with
- *   `ranges` describing the REBUILT geometry
+ * @param {object} table parsed collapsed table carrying `witness`
  * @param {Float64Array} stats the rebuilt rows' {@link rowWitnessStats}
  * @param {function(number): number} extentOf row -> the largest axis extent
  *   of the primitive that row was decoded from
+ * @param {function(number): number} [indexCountOf] row -> its index count as
+ *   REBUILT from the decoded file; the table's own by default (see
+ *   {@link rowIdentityCanary})
  * @return {boolean}
  */
-export function matchesLossyWitness(table, stats, extentOf) {
+export function matchesLossyWitness(table, stats, extentOf, indexCountOf) {
   const {witness} = table
-  if (!witness || rowIdentityCanary(table) !== witness.identity) {
+  if (!witness || rowIdentityCanary(table, indexCountOf) !== witness.identity) {
     return false
   }
   const stored = witness.statsQ

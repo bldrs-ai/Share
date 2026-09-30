@@ -17,6 +17,9 @@ import path from 'node:path'
 import {captureException} from '@sentry/react'
 import {Document, Logger, WebIO} from '@gltf-transform/core'
 import {EXTMeshGPUInstancing, EXTMeshoptCompression, KHRDracoMeshCompression} from '@gltf-transform/extensions'
+import {BatchedMesh, Matrix4} from 'three'
+import {ROW_TAG_SEMANTIC} from '../loader/bldrsInstanceTables'
+import {batchedArtifactBytes, triangleGeometry} from '../loader/glbArtifact.fixture'
 import {isBldrsExtension} from '../loader/glbArtifactSize'
 import {loadDracoDecoder} from '../loader/glbCompress'
 import {parseGlb} from '../loader/injectGlbExtensions'
@@ -682,6 +685,59 @@ describe('export/glbCompression', () => {
     }, TIMEOUT_MS)
   })
 
+  describe('a collapsed artifact (share-140 #1871)', () => {
+    // Forty single-placement elements, each its own shape so each is its own
+    // group, which is what the writer collapses into one merged primitive.
+    const ELEMENTS = 40
+    let collapsed
+
+    beforeAll(async () => {
+      installDracoEncoder()
+      installDracoDecoder()
+      const mesh = new BatchedMesh(ELEMENTS, ELEMENTS * 3, ELEMENTS * 3)
+      for (let i = 0; i < ELEMENTS; i++) {
+        mesh.setMatrixAt(
+          mesh.addInstance(mesh.addGeometry(triangleGeometry(1 + (i / 100)))),
+          new Matrix4().makeTranslation(i, 0, 0))
+      }
+      mesh.instanceParents = Array.from({length: ELEMENTS}, (_, i) => 100 + i)
+      mesh.instanceOccurrenceIds = Array.from({length: ELEMENTS}, (_, i) => i)
+      mesh.instanceSourceColors = Array.from({length: ELEMENTS}, () => ({x: 0.8, y: 0.8, z: 0.8, w: 1}))
+      collapsed = await batchedArtifactBytes(mesh, {collapse: true})
+    }, TIMEOUT_MS)
+
+    it('encodes EDGEBREAKER, with every vertex\'s row back exact, at every rung', async () => {
+      // The row tag is GENERIC to Draco, like `_EXPRESSID` above, and rides
+      // on the same two facts: UNSIGNED_SHORT, and no rung naming GENERIC.
+      // Every row is one triangle of three distinct corners, so the decoded
+      // tags, sorted, must be each row exactly three times — a quantized or
+      // float-coerced tag cannot produce that list. Read off the
+      // without-metadata side on purpose: the tag rides in the geometry, so
+      // it is in both files from the one encode.
+      const expected = Array.from({length: ELEMENTS * 3}, (_, i) => Math.floor(i / 3))
+      for (const quality of [QUALITY_BEST, QUALITY_BALANCED, QUALITY_SMALLEST]) {
+        const out = await compressExportGlb(collapsed, COMPRESSION_DRACO, quality)
+        const tags = await attributeOf(out.withoutMetadata, ROW_TAG_SEMANTIC, COMPRESSION_DRACO)
+
+        expect(dracoMethodOf(out.withoutMetadata)).toBe(DRACO_EDGEBREAKER)
+        expect(tags).toBeInstanceOf(Uint16Array)
+        expect([...tags].sort((a, b) => a - b)).toEqual(expected)
+      }
+    }, TIMEOUT_MS)
+
+    it('adds no tag and keeps SEQUENTIAL when the layout is triangle-ordered', async () => {
+      // The merged layout's per-triangle identity outranks the collapse: a
+      // file carrying `BLDRS_face_ids` is SEQUENTIAL whole, and is not
+      // tagged, since its rows (if any) are not what identity hangs on.
+      const out = await compressExportGlb(
+        withBldrsPayload(collapsed, 'BLDRS_face_ids'), COMPRESSION_DRACO)
+      const {json} = parseGlb(out.withoutMetadata)
+
+      expect(dracoMethodOf(out.withoutMetadata)).toBe(DRACO_SEQUENTIAL)
+      expect(json.meshes[0].primitives[0].attributes[ROW_TAG_SEMANTIC]).toBeUndefined()
+    }, TIMEOUT_MS)
+  })
+
   describe('compressionFidelityCaption', () => {
     // The sentence under the size line. It is a promise about the user's own
     // model, so it is derived from that model's bounds — and it says two
@@ -858,6 +914,26 @@ describe('export/glbCompression', () => {
     })
   })
 })
+
+
+/** A Draco bitstream's method byte: 'DRACO', major, minor, encoder type, METHOD. */
+const DRACO_METHOD_BYTE = 8
+const DRACO_SEQUENTIAL = 0
+const DRACO_EDGEBREAKER = 1
+
+
+/**
+ * The method the first primitive's Draco payload was encoded with, read off
+ * its bitstream header.
+ *
+ * @param {Uint8Array} glbBytes a DRACO-compressed GLB
+ * @return {number} `DRACO_SEQUENTIAL` or `DRACO_EDGEBREAKER`
+ */
+function dracoMethodOf(glbBytes) {
+  const {json, bin} = parseGlb(glbBytes)
+  const {bufferView} = json.meshes[0].primitives[0].extensions.KHR_draco_mesh_compression
+  return bin[(json.bufferViews[bufferView].byteOffset ?? 0) + DRACO_METHOD_BYTE]
+}
 
 
 /**

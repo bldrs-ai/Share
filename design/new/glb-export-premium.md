@@ -701,13 +701,14 @@ refused until that, while the tiny jest fixtures never triggered it.
 Draco download of DSA and of Right_Hand rendered perfectly and could not be
 selected). Measured on a DSA-shaped strip through the real codec: Draco MERGES
 coincident vertices across elements whatever the method (600 → 202), so no row's
-vertex range survives; EDGEBREAKER also reorders triangles across rows, while
-SEQUENTIAL keeps them in order. So:
+vertex range survives; EDGEBREAKER also reorders triangles across rows and
+DROPS every zero-area triangle (two corners at one position), while SEQUENTIAL
+keeps triangles in order and keeps them all. So:
 
-- the export encodes collapsed PRIMITIVES sequentially, and every other
-  primitive exactly as it would have been with the collapse off
-  (`glbCompression.js#triangleOrderedMeshes`; see "Draco's method is per
-  primitive" below — it was per file until #1871's real-model pass);
+- the export **tags every vertex of a collapsed primitive with its row**
+  (`_BLDRS_ROW`, `bldrsInstanceTables.js#ROW_TAG_SEMANTIC`) and encodes the
+  whole file EDGEBREAKER — see "The row tag" below. (#1872 and #1898 encoded
+  collapsed primitives SEQUENTIAL instead; those files still open, below);
 - it writes a **lossy witness** into the Draco file's tables only
   (`export/collapsedWitness.js`), after re-verifying the SOURCE's exact canary —
   an exact hash of each row's identity and index count, plus each row's
@@ -720,44 +721,98 @@ SEQUENTIAL keeps them in order. So:
   neighbours swap;
 - the reader, for a table whose primitive declares `KHR_draco_mesh_compression`
   (`bldrsInstanceTables.js#markLossyTables`), rebuilds each row's vertex block
-  from its triangle run and checks the witness
-  (`instancedGlbToBatchedModel.js#rebuildLossyCollapsed`); the portable split
-  and its re-hydration do the same.
+  from that row's triangles and checks the witness
+  (`instancedGlbToBatchedModel.js#rebuildLossyCollapsed`) — found by the row
+  tag where the primitive has one (`regroupByRowTag`), by contiguous triangle
+  run where it does not (`rebuildFromTriangleRuns`); the portable split and
+  its re-hydration do the same.
 
 The OPFS artifact and every lossless file keep the exact canary and pay nothing
-for this. What the witness cannot see: two rows that agree on all nine numbers
+for this — and the OPFS artifact is never Draco-compressed in the first place:
+`glbExport.js` writes every batched artifact, collapsed or not, with mode null.
+What the witness cannot see: two rows that agree on all nine numbers
 within their tolerance swapping identities. The floor on that tolerance is the
 uint16 grid over the table's span (1.5 mm on a 100 m table). A table that fails either check now also raises a
 WARNING in the load report ("shown without picking or selection") instead of an
 info line, so the fallback is no longer silent.
 
-**Draco's method is per primitive** (`export/dracoMethodSplice.js`). The
-first cut chose the method per FILE, so one collapsed node sent every
-genuinely instanced primitive beside it through SEQUENTIAL as well — on a
-STEP model with four collapsed elements beside 25 instanced nodes the Draco
-export grew 3.5× when the collapse was switched on. `@gltf-transform` 4.3.0
-cannot express a per-primitive method: `setEncoderOptions` is document-wide
-and the per-primitive encode is module-private, with the options copied
-before the primitive is in scope. Reaching inside the write (wrapping the
-draco3d module to recognise a primitive by its index array's identity, or
-re-implementing `prewrite`) would hang the export on private internals of a
-pinned dependency, so a hybrid is written TWICE from one document and joined
-at the raw-GLB level, in the same post-pass style as the payload detach and
-re-attach around it: the whole document with EDGEBREAKER (the structure the
-result keeps), then the same document with every unordered primitive
-disposed, SEQUENTIAL; each ordered primitive's payload, counts and index type
-are then taken from the second write and the BIN is re-laid. A file that is
-all one kind (fully collapsed, nothing collapsed, or `BLDRS_face_ids`) still
-takes a single write. Two things make the join sound: Draco quantizes each
-primitive on its own grid (`quantizationVolume: 'mesh'`, the only volume
-`exportQuality.js` exposes), so a primitive's payload does not depend on its
-neighbours — the instanced shape in `collapsedDraco.test.js`'s hybrid ships
-byte-for-byte as it does from the collapse-off export — and the writer emits
-meshes in document order, emptied or not, so mesh i primitive j names the
-same primitive in both writes; the splice throws when that fails to hold,
-and the codec-failure path takes it. The cost is encoding the collapsed
-primitives twice: Snowdon's collapsed Draco export went from 6.3 s to 8.8 s
-in jest (Node, not the browser).
+**The row tag: EDGEBREAKER for collapsed primitives.** Until it, a collapsed
+primitive had to be SEQUENTIAL, because its rows were found by triangle
+position, and SEQUENTIAL payloads of the collapsed primitives were 3.6–3.9×
+what EDGEBREAKER made of the same geometry on the real models below. #1898
+kept that cost off the instanced primitives beside them by encoding each
+primitive with its own method — two writes of one document, spliced at the
+raw-GLB level (`dracoMethodSplice.js`), because `@gltf-transform` 4.3.0's
+method is document-wide — but the collapsed primitives still paid it.
+
+The tag moves a row's identity from triangle POSITION to the vertices
+themselves. `planCollapsedDraco` (export side) gives each verified merged
+primitive a `_BLDRS_ROW` attribute: each vertex's table row, UNSIGNED_SHORT
+SCALAR while the table has at most 65,536 rows and a VEC2 (low half, high
+half) past that. Three facts make it sound:
+
+- **It is exact.** Draco encodes integer attributes losslessly — quantization
+  only ever applies to FLOAT ones — which is the same property `_EXPRESSID`
+  rests on (600/600 exact as Uint32, 594/600 corrupted as Float32), so the
+  rule that no quality rung names GENERIC in `quantizationBits` covers the tag
+  too. Three's DRACOLoader decodes it into the accessor's own array type.
+  UNSIGNED_INT is not an option: glTF forbids it on a vertex attribute, and
+  gltf-validator's `MESH_PRIMITIVE_ATTRIBUTES_ACCESSOR_UNSIGNED_INT` is an
+  error — hence the VEC2 for wide tables rather than a Uint32 tag.
+- **It stops the cross-row merge.** Draco deduplicates a point only when every
+  attribute agrees, so vertices of different rows stay apart (the 60-row
+  strip decodes to 180 vertices tagged, 62 untagged).
+- **It survives reordering.** EDGEBREAKER's triangle order no longer matters:
+  the reader groups triangles by their corners' tag (all three must agree, or
+  the table is refused), stably, then rebuilds each row as a contiguous
+  vertex block in first-use order, re-derives the ranges and drops the tag
+  from the geometry. What reaches `addGeometryRanges` has exactly the shape
+  it always had, so `batchedGeometryRanges.js`, picking, residency and the
+  palette cannot tell a tagged file from any other. No identity table is
+  used as a geometry key anywhere on this path — the #1870 rule above holds
+  unchanged: the rebuilt ranges are registered as range ids like every other
+  collapsed table's.
+
+**Zero-area triangles are the one thing EDGEBREAKER changes that the tag does
+not undo**, and real collapsed rows carry them: 619 of Snowdon's 5,235 rows,
+70 of dental_clinic's 1,165, both of Right_Hand's collapsed rows. Measured
+through the codec, EDGEBREAKER drops a triangle when two corners share an
+index or merely a position (compared bit for bit — a corner at −0 beside one
+at +0 survives), and keeps collinear and sub-quantum ones. So the export drops
+exactly those triangles itself before encoding, with the vertices only they
+used (an EDGEBREAKER file carries no vertex no face uses, so a left-over one
+could widen the encoder's quantization grid past what the decoded primitive
+spans, and the reader's per-row tolerance with it), and the witness hashes the
+index counts the file actually carries. The reader hashes the counts it
+regrouped, so a triangle lost or gained anywhere refuses the table. A zero-area
+triangle draws nothing and a ray cannot hit it, so the element loses nothing
+visible. The one shape this cannot serve is a row with NO triangle of non-zero
+area — EDGEBREAKER would erase the element — and for it the export writes the
+whole file SEQUENTIAL and untagged, the layout #1872 wrote. None of the four
+real models has such a row.
+
+**One method per file again**, so the splice is gone: EDGEBREAKER everywhere,
+except the merged layout (`BLDRS_face_ids`, `_EXPRESSID` / `_INSTANCEID`),
+which stays SEQUENTIAL, and the zero-area fallback above. The instanced
+primitive of a hybrid still ships byte for byte as it does from the
+collapse-off export (per-primitive quantization, `quantizationVolume:
+'mesh'`), which `collapsedDraco.test.js` pins.
+
+**Backward compatibility.** A Draco export written by #1872 or #1898 carries no
+tag. The reader takes the triangle-run path for any lossy collapsed primitive
+without one — the same code those files were written against — and
+`collapsedDraco.test.js` opens a checked-in #1898 export
+(`src/export/fixtures/collapsedDracoSequential.glb`) and picks every row of it.
+The #1898 exports of the four real models, re-opened through the new reader,
+hydrate every collapsed table as well.
+
+**What the tag costs** is next to nothing: tagged EDGEBREAKER collapsed payloads
+against untagged EDGEBREAKER ones on the same primitives — Snowdon 2,617,644 vs
+2,607,324 B (+0.4%), dental_clinic 180,219 vs 178,574, Right_Hand 256,975 vs
+256,662. It rides in the geometry, so the "Include Bldrs metadata: off" file
+carries it too: that file and the with-metadata one come from one encode, and
+the tag cannot be taken back out of a Draco bitstream. Any other viewer
+ignores a `_`-prefixed attribute.
 
 **Its own OPFS slot, not a bump** — a deliberate change from what #1871
 proposed. `BLDRS_GLB_COLLAPSED_SCHEMA_VERSION` (`0.24.0-batched-collapsed2` since the STEP part-type bump,
@@ -839,45 +894,65 @@ replace — the raw win is real and the gzip layer takes some of it back.
 per model) is the price of the raw-size wins, which are what the download,
 the upload and the parse pay for.
 
-Draco export (the Export tab's figure, metadata included), before and after
-the method became per primitive:
+Draco export (the Export tab's figure, metadata included) — collapse off, and
+collapsed through each of the three Draco layouts it has had:
 
-| model | collapse off | collapsed, per-file method | collapsed, per-primitive |
-|---|---:|---:|---:|
-| DSA2 | 23,563,888 | 1,084,260 (−95.4%) | 1,084,260 (−95.4%) — fully collapsed, one write |
-| Snowdon | 17,155,320 | 19,972,016 (+16.4%) | 18,828,500 (+9.8%) |
-| dental_clinic | 4,243,248 | 3,755,580 (−11.5%) | 3,652,196 (−13.9%) |
-| Right_Hand | 559,068 | 1,971,820 (+252.7%) | 1,275,264 (+128.1%) |
+| model | collapse off | collapsed, per-file method (#1872) | per-primitive, spliced (#1898) | row-tagged, EDGEBREAKER |
+|---|---:|---:|---:|---:|
+| DSA2 | 23,563,888 | 1,084,260 (−95.4%) | 1,084,260 (−95.4%) | **683,564 (−97.1%)** |
+| Snowdon | 17,155,320 | 19,972,016 (+16.4%) | 18,828,500 (+9.8%) | **11,950,672 (−30.3%)** |
+| dental_clinic | 4,243,248 | 3,755,580 (−11.5%) | 3,652,196 (−13.9%) | **3,129,336 (−26.3%)** |
+| Right_Hand | 559,068 | 1,971,820 (+252.7%) | 1,275,264 (+128.1%) | **552,500 (−1.2%)** |
 
-**What is left of the Draco growth is SEQUENTIAL itself**, on the collapsed
-primitives only: their payloads under SEQUENTIAL are 3.6–3.9× what
-EDGEBREAKER would make of the same primitives (Snowdon 9,498,356 vs
-2,607,324 B; dental_clinic 703,661 vs 178,574; Right_Hand 979,872 vs
-256,662), and with the collapse off those same elements went through
-EDGEBREAKER as their own nodes. Closing it means a Draco export whose
-collapsed rows survive EDGEBREAKER — per-row primitives for the Draco file
-(the portable split's shape), or a per-vertex row attribute the reader groups
-triangles by — which is a reader and witness change, not an encoder one.
-Until then, a collapsed model with a few large single-placement parts beside
-many instanced ones (Right_Hand's shape) pays for it in its Draco download.
+The collapsed primitives' own payloads, SEQUENTIAL → tagged EDGEBREAKER:
+Snowdon 9,498,356 → 2,617,644 B; dental_clinic 703,661 → 180,219; Right_Hand
+979,872 → 256,975; DSA2 534,379 → 133,599. So the Draco growth the collapse used
+to cost is gone on every model: each collapsed Draco export is now smaller than
+its collapse-off one. Figures from the same artifacts the browser run lifted
+out of OPFS, compressed through `compressExportGlb` (the Export tab's own
+function, whose "before" figures reproduce the #1898 column to the byte);
+`gltf-validator` 2.0.0-dev.3.10 on all eight new Draco files: **0 errors, 0
+warnings**, the same infos as the #1898 files (unsupported `BLDRS_*`
+extensions, unused objects), and no message of any severity names the tag.
+Every collapsed row of all four models re-opens with its own triangles: the
+per-row triangle count equals the source's non-zero-area count and the per-row
+bounds agree to within the Draco step (3 mm on Snowdon at 14 bits).
+
+Export time on Snowdon, collapsed (jest, Node, not the browser): 8.8 s →
+7.9 s on a quiet machine; interleaved runs on a loaded one, 13.9 / 14.7 /
+14.1 s before against 13.8 / 13.6 / 13.5 s after. EDGEBREAKER is the slower
+encoder, but the second write the splice needed is gone.
 
 **Still owed before `glbCollapse` flips on** (#1871 stays the tracker):
 
 1. ~~**Real-model numbers**~~ — taken, above; the stored-size growth they
-   showed is accepted. The Draco growth left on collapsed primitives is the
-   open question they raised.
+   showed is accepted, and the Draco growth they showed is closed by the row
+   tag.
 2. **Third-party viewers** — the three.js editor and 3dviewer.net on a
    collapsed download and on its portable rewrite. Validator-clean is
    necessary, not sufficient.
+3. **Portable Draco exports refuse any row with a zero-area triangle** — found
+   while measuring the row tag, and older than it. The portable rewrite makes
+   every row its own primitive, which the Draco export has always encoded
+   EDGEBREAKER, so those triangles are dropped; the portable reader then
+   requires each row's decoded index count to equal the table's, and refuses
+   the table. Reproduced in jest; on the real models that is 619 Snowdon rows
+   and 70 dental_clinic rows, so their portable Draco downloads open without
+   selection. The fix is the one the merged primitive now has — drop the
+   zero-area triangles before encoding and hash the counts the file carries —
+   and was left out of the row-tag change, which kept portable exports as
+   they were.
 
 Browser coverage: `Components/Share/exportCollapsed.spec.ts` double-clicks a
 COLLAPSED element and asserts store, NavTree and URL selection on the cache hit
 and on each Export codec reopened (desktop + mobile), verified red against the
 pre-fix Draco export; `batchedGlbCache.spec.ts` covers MISS → OPFS → HIT parity.
 The same spec exports Draco from `index.ifc` — hybrid under the collapse (five
-rows merged, one instanced node kept) — reads each primitive's method byte to
-prove the file was spliced (SEQUENTIAL under the collapsed node, EDGEBREAKER
-under the instanced one), then double-clicks one element of each kind.
+rows merged, one instanced node kept) — reads each primitive's method byte
+(EDGEBREAKER under both kinds of node), checks the collapsed primitive carries
+the row tag and the instanced one does not, waits for the reader's `regrouped`
+line so an untagged fallback cannot pass, then double-clicks one element of
+each kind.
 
 ### 1.2 Where a download can be located from
 
@@ -1321,7 +1396,7 @@ on the large-site/small-part models it would be sold on — `'mesh'` stays);
 `quantizationBits.GENERIC` (safe today only because `_EXPRESSID`/`_INSTANCEID`
 are `Uint32Array` and take Draco's integer path, where bits are ignored; the
 same attribute typed FLOAT came back corrupted at the pinned 12-bit default);
-the Draco `method`, which stays derived from `triangleOrderedMeshes`; and raw bit
+the Draco `method`, which stays derived from the layout (`glbCompression.js#planDraco`); and raw bit
 spinners.
 
 The caption under the size line says what the rung costs **this** model.

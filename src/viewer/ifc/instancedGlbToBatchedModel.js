@@ -12,8 +12,10 @@ import {addGeometryRanges} from './batchedGeometryRanges'
 import {attachBatchedSubsets} from './batchedSubset'
 import {decorateBatchMeshes} from './buildBatchedConwayModel'
 import {
+  ROW_TAG_ATTRIBUTE,
   matchesLossyWitness,
   rangeCanaryOf,
+  rowOfTag,
   rowWitnessStats,
 } from '../../loader/bldrsInstanceTables'
 import {glbInfo, glbVerbose} from '../../loader/glbLog'
@@ -169,19 +171,14 @@ function joinNodesToTables(gltfModel, tables) {
     }
     if (tables[i].lossyGeometry) {
       // Draco: the merged primitive's vertices were merged and quantized, so
-      // rebuild each row from its triangle run and check the lossy witness
-      // (`bldrsInstanceTables.js`, "THE LOSSY WITNESS"). The runs must still
-      // tile the index buffer: a codec that dropped or added a triangle has
-      // shifted every run after it.
-      const last = tables[i].ranges[tables[i].ranges.length - 1]
-      if (last.indexStart + last.indexCount !== sources[i].geometry.getIndex?.()?.count) {
-        glbInfo('reader: lossy collapsed triangle runs do not tile their primitive; refusing')
-        return null
-      }
-      const rebuilt = rebuildLossyCollapsed(tables[i], (r) => ({
-        geometry: sources[i].geometry,
-        indexStart: tables[i].ranges[r].indexStart,
-      }))
+      // rebuild each row from its own triangles and check the lossy witness
+      // (`bldrsInstanceTables.js`, "THE LOSSY WITNESS"). Which triangles are
+      // a row's depends on the file: a row-tagged one says so per vertex, an
+      // untagged (SEQUENTIAL, #1872/#1898) one by position in the index.
+      const geometry = sources[i].geometry
+      const rebuilt = geometry.getAttribute?.(ROW_TAG_ATTRIBUTE) ?
+        regroupByRowTag(tables[i], geometry) :
+        rebuildFromTriangleRuns(tables[i], geometry)
       if (!rebuilt) {
         return null
       }
@@ -195,61 +192,153 @@ function joinNodesToTables(gltfModel, tables) {
 
 
 /**
+ * Rows of a row-tagged Draco primitive (`bldrsInstanceTables.js#
+ * ROW_TAG_SEMANTIC`), which EDGEBREAKER encoded: triangles in whatever order
+ * the codec chose, rows interleaved, zero-area triangles gone.
+ *
+ * Each triangle's row is its corners' tag, and all three must agree — the
+ * export tags a triangle's corners from the one row whose vertices they are,
+ * and Draco cannot merge vertices whose tags differ, so a disagreement means
+ * the tags do not belong to this geometry, and the table is refused rather
+ * than a triangle guessed into a row. Triangles are then grouped by row,
+ * STABLY (a row's triangles keep their decoded order), and the result goes
+ * through the same rebuild as an untagged file: each row a fresh contiguous
+ * vertex block in first-use order, ranges re-derived, checked against the
+ * witness. What comes out is the shape `addGeometryRanges` has always been
+ * given, so nothing downstream knows the file was tagged.
+ *
+ * The tag is deleted from the decoded geometry once read: the rebuilt geometry
+ * never had it, and the decoded one is what stays on screen should the table
+ * be refused, where it would only be one more attribute to upload.
+ *
+ * @param {object} table parsed collapsed table (row count, `witness`)
+ * @param {BufferGeometry} geometry the decoded merged primitive
+ * @return {?{geometry: BufferGeometry, ranges: Array<object>}} or null
+ */
+function regroupByRowTag(table, geometry) {
+  const tag = geometry.getAttribute(ROW_TAG_ATTRIBUTE)
+  geometry.deleteAttribute(ROW_TAG_ATTRIBUTE)
+  const index = geometry.getIndex?.()
+  const rowCount = table.ranges.length
+  if (!index || index.count % 3 !== 0 || (tag.itemSize !== 1 && tag.itemSize !== 2)) {
+    return null
+  }
+  const triangleRows = new Uint32Array(index.count / 3)
+  const counts = new Uint32Array(rowCount)
+  for (let t = 0; t < triangleRows.length; t++) {
+    const row = rowOfTag(tag, index.getX(t * 3))
+    if (row >= rowCount || rowOfTag(tag, index.getX((t * 3) + 1)) !== row ||
+        rowOfTag(tag, index.getX((t * 3) + 2)) !== row) {
+      glbInfo('reader: a row-tagged triangle spans rows or names no row; refusing')
+      return null
+    }
+    triangleRows[t] = row
+    counts[row] += 3
+  }
+  const starts = new Uint32Array(rowCount)
+  for (let r = 1; r < rowCount; r++) {
+    starts[r] = starts[r - 1] + counts[r - 1]
+  }
+  const grouped = new Uint32Array(index.count)
+  const cursor = starts.slice()
+  for (let t = 0; t < triangleRows.length; t++) {
+    const row = triangleRows[t]
+    for (let k = 0; k < 3; k++) {
+      grouped[cursor[row]++] = index.getX((t * 3) + k)
+    }
+  }
+  glbVerbose(`reader: regrouped ${triangleRows.length} row-tagged triangle(s) into ${rowCount} row(s)`)
+  return rebuildLossyCollapsed(table, (r) => ({
+    geometry,
+    count: counts[r],
+    pointAt: (i) => grouped[starts[r] + i],
+  }))
+}
+
+
+/**
+ * Rows of an untagged Draco primitive — what the first Draco exports of
+ * collapsed artifacts wrote (#1872, #1898), SEQUENTIAL so triangle order and
+ * count survive: row r is the r-th contiguous triangle run, with the table's
+ * own index count. The runs must tile the index buffer exactly, since a codec
+ * that dropped or added a triangle has shifted every run after it.
+ *
+ * @param {object} table parsed collapsed table
+ * @param {BufferGeometry} geometry the decoded merged primitive
+ * @return {?{geometry: BufferGeometry, ranges: Array<object>}} or null
+ */
+function rebuildFromTriangleRuns(table, geometry) {
+  const {ranges} = table
+  const last = ranges[ranges.length - 1]
+  const index = geometry.getIndex?.()
+  if (!index || !last || last.indexStart + last.indexCount !== index.count) {
+    glbInfo('reader: lossy collapsed triangle runs do not tile their primitive; refusing')
+    return null
+  }
+  return rebuildLossyCollapsed(table, (r) => ({
+    geometry,
+    count: ranges[r].indexCount,
+    pointAt: (i) => index.getX(ranges[r].indexStart + i),
+  }))
+}
+
+
+/**
  * Rebuild a lossy collapsed table's geometry row by row from its TRIANGLES,
  * then check it against the table's lossy witness.
  *
- * Only triangle order and each row's index count survive a (sequential)
- * Draco encode; the vertices do not, because Draco merges coincident ones
- * across rows. So each row's corners are gathered from its own triangle run,
- * given a fresh contiguous vertex block (first-use order), and the ranges are
- * re-derived for that block. The result tiles by construction, which is what
- * `addGeometryRanges` needs, and it is witnessed by the export's identity hash
- * and per-row corner stats rather than the exact canary Draco made unreachable.
+ * Draco merges coincident vertices (across rows, in an untagged file) and
+ * quantizes them, so no row's vertex range survives it; only which triangles
+ * are the row's does. So each row's corners are gathered from its own
+ * triangles, given a fresh contiguous vertex block (first-use order), and the
+ * ranges are re-derived for that block. The result tiles by construction,
+ * which is what `addGeometryRanges` needs, and it is witnessed by the export's
+ * identity hash and per-row corner stats rather than the exact canary Draco
+ * made unreachable.
  *
- * @param {object} table parsed collapsed table: `ranges` (for the row count
- *   and each row's index count), `witness`
- * @param {function(number): {geometry: object, indexStart: number}} rowAt
- *   where row r's triangle run lives
+ * @param {object} table parsed collapsed table: `ranges` (for the row
+ *   count, and each row's index count where the file keeps it), `witness`
+ * @param {function(number): object} rowAt row r's triangles, as `{geometry,
+ *   count, pointAt}`: the decoded geometry they index, how many corners, and
+ *   `(corner) => vertex` in that geometry
  * @return {?{geometry: BufferGeometry, ranges: Array<object>}} or null when
- *   the table has no witness, a count disagrees, or the witness refuses it
+ *   the table has no witness, a row is out of bounds, or the witness refuses
  */
 function rebuildLossyCollapsed(table, rowAt) {
   if (!table.witness) {
     glbInfo('reader: lossy collapsed table carries no witness; refusing')
     return null
   }
-  const {ranges} = table
-  let vertexTotal = 0
-  let indexTotal = 0
-  for (let r = 0; r < ranges.length; r++) {
-    const {geometry, indexStart} = rowAt(r)
+  const rowCount = table.ranges.length
+  const rows = new Array(rowCount)
+  let cornerTotal = 0
+  for (let r = 0; r < rowCount; r++) {
+    rows[r] = rowAt(r)
+    const {geometry, count} = rows[r]
     const index = geometry?.getIndex?.()
-    if (!index || !geometry.getAttribute('position') ||
-        indexStart + ranges[r].indexCount > index.count) {
+    const position = geometry?.getAttribute?.('position')
+    if (!index || !position || !Number.isInteger(count) || count > index.count) {
       return null
     }
-    vertexTotal += ranges[r].indexCount
-    indexTotal += ranges[r].indexCount
+    cornerTotal += count
   }
   // Worst case every corner is its own vertex; trimmed below.
-  const positions = new Float32Array(vertexTotal * 3)
-  const normals = new Float32Array(vertexTotal * 3)
-  const indices = new Uint32Array(indexTotal)
+  const positions = new Float32Array(cornerTotal * 3)
+  const normals = new Float32Array(cornerTotal * 3)
+  const indices = new Uint32Array(cornerTotal)
   const rebuiltRanges = []
   let hasNormals = true
   let vertexCursor = 0
   let indexCursor = 0
-  for (let r = 0; r < ranges.length; r++) {
-    const {geometry, indexStart} = rowAt(r)
-    const index = geometry.getIndex()
+  for (let r = 0; r < rowCount; r++) {
+    const {geometry, count, pointAt} = rows[r]
     const position = geometry.getAttribute('position')
     const normal = geometry.getAttribute('normal')
     hasNormals = hasNormals && Boolean(normal)
     const local = new Map()
     const vertexStart = vertexCursor
-    const {indexCount} = ranges[r]
-    for (let i = 0; i < indexCount; i++) {
-      const point = index.getX(indexStart + i)
+    for (let i = 0; i < count; i++) {
+      const point = pointAt(i)
       let v = local.get(point)
       if (v === undefined) {
         v = vertexCursor - vertexStart
@@ -269,28 +358,31 @@ function rebuildLossyCollapsed(table, rowAt) {
     }
     rebuiltRanges.push({
       vertexStart, vertexCount: vertexCursor - vertexStart,
-      indexStart: indexCursor, indexCount,
+      indexStart: indexCursor, indexCount: count,
     })
-    indexCursor += indexCount
+    indexCursor += count
   }
   // The witness's stats are over each row's triangle corners, read here from
-  // the DECODED geometry — so they see exactly what will be drawn.
-  const stats = rowWitnessStats(ranges.length, (r) => ranges[r].indexCount, (r, i, c) => {
-    const {geometry, indexStart} = rowAt(r)
-    return geometry.getAttribute('position').getComponent(geometry.getIndex().getX(indexStart + i), c)
-  })
+  // the DECODED geometry — so they see exactly what will be drawn. Mean, min
+  // and max do not depend on the order corners come in, which is why the
+  // same witness serves a SEQUENTIAL file's runs and a tagged file's groups.
+  const stats = rowWitnessStats(rowCount, (r) => rows[r].count, (r, i, c) =>
+    rows[r].geometry.getAttribute('position').getComponent(rows[r].pointAt(i), c))
   // Each row's tolerance follows the primitive it was decoded from, which is
   // the grid Draco quantized it on: shared for the merged artifact, one per
   // row for its portable rewrite.
   const extents = new Map()
   const extentOf = (r) => {
-    const {geometry} = rowAt(r)
+    const {geometry} = rows[r]
     if (!extents.has(geometry)) {
       extents.set(geometry, largestExtent(geometry.getAttribute('position')))
     }
     return extents.get(geometry)
   }
-  if (!matchesLossyWitness(table, stats, extentOf)) {
+  // The identity hash takes the counts rebuilt here, not the table's: they
+  // are the table's own for an untagged file (checked above, or by the
+  // caller), and for a tagged one the export hashed what it encoded.
+  if (!matchesLossyWitness(table, stats, extentOf, (r) => rows[r].count)) {
     glbInfo('reader: lossy collapsed table does not match its witness; refusing')
     return null
   }
@@ -598,7 +690,11 @@ function remergeCollapsedRows(rows, table, toModelSpace) {
     if (rows.some((row, r) => row.geometry?.getIndex?.()?.count !== table.ranges[r].indexCount)) {
       return null
     }
-    const rebuilt = rebuildLossyCollapsed(table, (r) => ({geometry: rows[r].geometry, indexStart: 0}))
+    const rebuilt = rebuildLossyCollapsed(table, (r) => ({
+      geometry: rows[r].geometry,
+      count: table.ranges[r].indexCount,
+      pointAt: (i) => rows[r].geometry.getIndex().getX(i),
+    }))
     return rebuilt && {...rebuilt, getMatrixAt: matrixOfRow}
   }
   const {ranges} = table
