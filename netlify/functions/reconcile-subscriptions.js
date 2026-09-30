@@ -67,6 +67,7 @@ import {
   entitlementAcross,
   findAuth0UserForCustomer,
   isEntitlingSubscription,
+  isLinkedElsewhere,
   isProInAuth0,
   linkFor,
   searchAuth0Users,
@@ -267,7 +268,7 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
 
     // 1. DEMOTE: PRO in Auth0, not entitled in Stripe under any of the
     // user's customers.
-    const demote = async (user) => {
+    const demoteItem = async (user) => {
       const linked = user.app_metadata && user.app_metadata.stripeCustomerId
       if (!linked) {
         summary.unverifiable.push({user: user.user_id, reason: 'pro_without_stripe_customer'})
@@ -275,32 +276,41 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
       }
       try {
         let reading = await entitlementAcross(stripe, [linked], proPriceId)
-        let others = []
+        const others = []
         if (!reading.entitled) {
-          // Only for would-be demotions: one more Stripe call, and the one
-          // that tells a lapsed user from one who resubscribed under a new
-          // customer (who the promote pass would skip, being PRO).
-          others = (await customerIdsForEmail(stripe, user.email)).filter((id) => id !== linked)
-          reading = await entitlementAcross(stripe, others, proPriceId)
-        }
-        if (reading.entitled) {
-          if (reading.customer !== linked) {
-            summary.relink.push({user: user.user_id, from: linked, to: reading.customer})
-            if (apply) {
-              await patchUserAppMetadata(user.user_id, {stripeCustomerId: reading.customer})
+          // Only for would-be demotions: the check that tells a lapsed user
+          // from one who resubscribed under a new customer (whom the promote
+          // pass would skip, being PRO). A same-email customer already
+          // linked to a DIFFERENT user is that user's, not this one's.
+          for (const id of await customerIdsForEmail(stripe, user.email)) {
+            if (id !== linked && !(await isLinkedElsewhere(id, user.user_id))) {
+              others.push(id)
             }
           }
+          reading = await entitlementAcross(stripe, others, proPriceId)
+        }
+        const read = () => entitlementAcross(stripe, [linked, ...others], proPriceId)
+        const demote = (r) => {
+          summary.demote.push({user: user.user_id, customer: linked})
+          return apply ? writeAndConfirm({
+            userId: user.user_id, reading: r, read, link: (x) => linkFor(x, linked, linked), retryDelaysMs: NO_INLINE_RETRIES,
+          }) : null
+        }
+        if (!reading.entitled) {
+          await demote(reading)
           return
         }
-        summary.demote.push({user: user.user_id, customer: linked})
-        if (apply) {
-          await writeAndConfirm({
-            userId: user.user_id,
-            reading,
-            read: () => entitlementAcross(stripe, [linked, ...others], proPriceId),
-            link: (r) => linkFor(r, linked, linked),
-            retryDelaysMs: NO_INLINE_RETRIES,
-          })
+        if (reading.customer !== linked) {
+          summary.relink.push({user: user.user_id, from: linked, to: reading.customer})
+          if (apply) {
+            await patchUserAppMetadata(user.user_id, {stripeCustomerId: reading.customer})
+            // Confirm, like a tier write: if the new customer lapsed between
+            // the read and the relink, this is a demotion after all.
+            const fresh = await read()
+            if (!fresh.entitled) {
+              await demote(fresh)
+            }
+          }
         }
       } catch (err) {
         summary.errors.push({user: user.user_id, customer: linked, error: describeError(err)})
@@ -346,7 +356,7 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
     // item never writes to a user the PRO search returned, so the two kinds
     // don't race each other.
     const tasks = interleave(
-      proUsers.map((user) => () => demote(user)),
+      proUsers.map((user) => () => demoteItem(user)),
       entitled.customers.filter((customerId) => !proCustomerIds.has(customerId)).map((customerId) => () => promote(customerId)),
     )
     const run = await runLimited(tasks, CONCURRENCY, startBy, waitUntil, (task) => task())

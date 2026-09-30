@@ -23,6 +23,27 @@
       "$fixture": "exchanges/auth0-search-by-customer-pro.json"
     },
     {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "subscriptionStatus": "sharePro",
+              "stripeCustomerId": "cus_Rreplay0001"
+            }
+          }
+        }
+      }
+    },
+    {
       "$fixture": "exchanges/stripe-subscriptions-pro-past-due.json"
     }
   ],

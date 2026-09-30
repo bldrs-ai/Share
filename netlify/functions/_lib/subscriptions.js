@@ -35,11 +35,12 @@
  *    resubscribed under a new Stripe customer is not demoted by a late event
  *    for the old one, and the link moves only to an entitled customer
  *    (`linkFor`), so "Manage subscription" never opens an empty portal.
- *  - Every tier write is confirmed (`writeAndConfirm`): re-read Stripe, and
- *    if entitlement moved, write again, until a read taken after the latest
- *    write agrees with it. Entitlement is not monotone — `unpaid`, `paused`
- *    and `incomplete` can all return to `active`, and a customer can
- *    resubscribe — so a single correction is not enough; see
+ *  - Every tier write is confirmed (`writeAndConfirm`): read Auth0's actual
+ *    value, then Stripe, and write again until the two agree. Entitlement is
+ *    not monotone — `unpaid`, `paused` and `incomplete` can all return to
+ *    `active`, and a customer can resubscribe — and several invocations can
+ *    write the same user, so neither a single correction nor a comparison
+ *    with this invocation's own last write is enough; see
  *    design/new/netlify-functions-testing.md §"Retries and ordering".
  *
  * Also here: the upstream-failure classification both callers use to decide
@@ -47,7 +48,7 @@
  * retry for the confirming reads and writes.
  */
 
-import {getUsersByEmail, patchUserAppMetadata, searchUsers} from './auth0.js'
+import {getUserAppMetadata, getUsersByEmail, patchUserAppMetadata, searchUsers} from './auth0.js'
 
 
 export const PRO_AUTH0_STATUSES = new Set(['sharePro', 'shareProPendingReauth'])
@@ -277,7 +278,10 @@ export async function findAuth0UserForCustomer(stripe, customerId) {
   if (CUSTOMER_ID_PATTERN.test(customerId)) {
     const linked = await searchUsers(`app_metadata.stripeCustomerId:"${customerId}"`, 0, AUTH0_SEARCH_PAGE_SIZE)
     if (linked.length > 0) {
-      return {user: linked[0], reason: null}
+      // The search index lags writes, so its app_metadata can predate
+      // another invocation's tier write; decide from the primary store.
+      const appMetadata = await getUserAppMetadata(linked[0].user_id)
+      return {user: {...linked[0], app_metadata: appMetadata}, reason: null}
     }
   }
   const customer = await stripe.customers.retrieve(customerId)
@@ -289,6 +293,26 @@ export async function findAuth0UserForCustomer(stripe, customerId) {
   const user = users.find((candidate) => candidate.app_metadata && candidate.app_metadata.stripeCustomerId === customerId) ||
     users[0] || null
   return {user, reason: user ? null : `No Auth0 user found for Stripe customer ${customerId}`}
+}
+
+
+/**
+ * Whether a Stripe customer is linked to some Auth0 user other than this
+ * one. Before relinking a user to a customer found only by email: two
+ * identities that share an email but were never linked must not take each
+ * other's customer — `create-portal-session` opens whatever customer
+ * `stripeCustomerId` names.
+ *
+ * @param {string} customerId
+ * @param {string} userId
+ * @return {Promise<boolean>} true also for an id that can't be queried safely
+ */
+export async function isLinkedElsewhere(customerId, userId) {
+  if (!CUSTOMER_ID_PATTERN.test(customerId)) {
+    return true
+  }
+  const linked = await searchUsers(`app_metadata.stripeCustomerId:"${customerId}"`, 0, AUTH0_SEARCH_PAGE_SIZE)
+  return linked.some((user) => user.user_id !== userId)
 }
 
 
@@ -318,11 +342,17 @@ function pendingStatusFor(entitled) {
 
 
 /**
- * Write the tier a reading calls for, then confirm it: re-read, and while
- * the fresh reading disagrees with what was last written, write that
- * instead. Ends once a read taken AFTER the latest write agrees with it —
- * so whichever of several overlapping writers writes last also reads last,
- * and its write is the current truth (see the module header).
+ * Write the tier a reading calls for, then confirm it: read the user's
+ * ACTUAL `subscriptionStatus` from Auth0, then Stripe, and while their tiers
+ * disagree, write what Stripe now says. Ends once they agree.
+ *
+ * Comparing Auth0 itself, not this invocation's own last write, is what
+ * makes overlapping invocations safe: another invocation's write can land
+ * between this one's write and its reads, and only the stored value shows
+ * it (Codex on #1891). Auth0 is read before Stripe, so when they agree, any
+ * later change to either is someone else's to confirm: another invocation's
+ * write is followed by its own confirming reads, and a Stripe change sends
+ * a new event (and is swept daily).
  *
  * Failure after the first write can leave a stale tier in Auth0, so every
  * such failure is marked `retryRequired` — the webhook answers 500 whatever
@@ -335,23 +365,23 @@ function pendingStatusFor(entitled) {
  * @param {Function} args.read async, returns a fresh reading
  * @param {Function} args.link reading → stripeCustomerId to write
  * @param {Array<number>} args.retryDelaysMs inline retries per read / write
- * @return {Promise<string>} the subscriptionStatus finally written
+ * @return {Promise<string>} the subscriptionStatus Auth0 holds once confirmed
  */
 export async function writeAndConfirm({userId, reading, read, link, retryDelaysMs}) {
   const write = (r) => patchUserAppMetadata(userId, {subscriptionStatus: pendingStatusFor(r.entitled), stripeCustomerId: link(r)})
   await write(reading)
-  let written = reading
   try {
     for (let round = 0; round < MAX_CONFIRM_ROUNDS; round++) {
+      const stored = await retryTransient(() => getUserAppMetadata(userId), retryDelaysMs)
       const fresh = await retryTransient(read, retryDelaysMs)
-      if (fresh.entitled === written.entitled) {
-        return pendingStatusFor(written.entitled)
+      if (isProInAuth0(stored.subscriptionStatus) === fresh.entitled) {
+        return stored.subscriptionStatus
       }
-      written = fresh
       await retryTransient(() => write(fresh), retryDelaysMs)
     }
   } catch (err) {
-    if (!(err.step === 'user_patch' && err.upstreamStatus === HTTP_NOT_FOUND)) {
+    const userGone = (err.step === 'user_patch' || err.step === 'user_lookup') && err.upstreamStatus === HTTP_NOT_FOUND
+    if (!userGone) {
       err.retryRequired = true
     }
     throw err

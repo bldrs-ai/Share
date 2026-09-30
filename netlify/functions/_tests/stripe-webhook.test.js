@@ -112,7 +112,8 @@ function webhookEvent(overrides = {}) {
  * now; `otherCustomers` maps any other customer id to its subscriptions.
  * `appMetadata` is the Auth0 user's: the search by stripeCustomerId finds
  * the user only when it's linked to the event's customer, as Auth0 would;
- * users-by-email always does.
+ * users-by-email always does. `GET /users/{id}` answers what Auth0 would
+ * store: `appMetadata` with every PATCH sent so far merged over it.
  *
  * @param {object} [options]
  * @param {Array<object>} [options.subscriptions]
@@ -125,10 +126,25 @@ function mockUpstreams({subscriptions = [proSubscription()], otherCustomers = {}
   mockStripeClient.customers.retrieve.mockResolvedValue({id: CUSTOMER_ID, email: 'ada@example.com'})
   axios.post.mockResolvedValue({data: {access_token: 'mgmt-token', expires_in: 86400}})
   const user = {user_id: USER_ID, app_metadata: appMetadata}
-  axios.get.mockImplementation((url) => Promise.resolve({
-    data: url.includes('/users-by-email') || appMetadata.stripeCustomerId === CUSTOMER_ID ? [user] : [],
-  }))
+  axios.get.mockImplementation((url) => {
+    if (url.startsWith(USER_URL)) {
+      return Promise.resolve({data: {user_id: USER_ID, app_metadata: storedAppMetadata(appMetadata)}})
+    }
+    return Promise.resolve({
+      data: url.includes('/users-by-email') || appMetadata.stripeCustomerId === CUSTOMER_ID ? [user] : [],
+    })
+  })
   axios.patch.mockResolvedValue({data: {}})
+}
+
+
+/**
+ * @param {object} initial the user's app_metadata before this delivery
+ * @return {object} initial with every PATCH so far merged over it, as
+ *   Auth0's shallow merge would store it
+ */
+function storedAppMetadata(initial) {
+  return axios.patch.mock.calls.reduce((stored, [, body]) => ({...stored, ...body.app_metadata}), {...initial})
 }
 
 
@@ -350,10 +366,14 @@ describe('stripe-webhook function', () => {
 
     it('among users sharing the email, picks the one linked to this customer (search index not caught up)', async () => {
       mockUpstreams()
-      axios.get.mockImplementation((url) => Promise.resolve({data: url.includes('/users-by-email') ? [
-        {user_id: 'github|7', app_metadata: {}},
-        {user_id: USER_ID, app_metadata: {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID}},
-      ] : []}))
+      const linkedMetadata = {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID}
+      axios.get.mockImplementation((url) => {
+        if (url.startsWith(USER_URL)) {
+          return Promise.resolve({data: {user_id: USER_ID, app_metadata: storedAppMetadata(linkedMetadata)}})
+        }
+        return Promise.resolve({data: url.includes('/users-by-email') ?
+          [{user_id: 'github|7', app_metadata: {}}, {user_id: USER_ID, app_metadata: linkedMetadata}] : []})
+      })
       mockStripeClient.subscriptions.list.mockResolvedValue(page([proSubscription({status: 'canceled'})]))
       mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.deleted'))
 
@@ -539,6 +559,42 @@ describe('stripe-webhook function', () => {
 
       expect(res.statusCode).toBe(500)
       expect(patches()[0].subscriptionStatus).toBe('shareProPendingReauth')
+    })
+
+    // Codex on #1891 (round 2): an invocation whose Stripe re-read matches
+    // its OWN last write can still be wrong — another invocation's write may
+    // have landed in between. Only Auth0's stored value shows that.
+    it('keeps going while Auth0\'s stored value disagrees, even when Stripe matches this invocation\'s own write', async () => {
+      mockUpstreams({appMetadata: {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID}})
+      mockStripeClient.subscriptions.list.mockResolvedValue(page([proSubscription({status: 'canceled'})]))
+      // Right after this invocation demotes, an overlapping one's PRO lands:
+      // read 1 is the lookup's, read 2 the first confirming read.
+      let userReads = 0
+      const route = axios.get.getMockImplementation()
+      const theirs = {subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: CUSTOMER_ID}
+      axios.get.mockImplementation((url) => (url.startsWith(USER_URL) && ++userReads === 2 ?
+        Promise.resolve({data: {user_id: USER_ID, app_metadata: theirs}}) : route(url)))
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.deleted'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res).toEqual({statusCode: 200, body: 'Success'})
+      expect(patches().map((m) => m.subscriptionStatus)).toEqual(['freePendingReauth', 'freePendingReauth'])
+    })
+
+    it('decides from Auth0\'s primary store, not the search index\'s lagging copy', async () => {
+      mockUpstreams({appMetadata: {subscriptionStatus: 'freePendingReauth', stripeCustomerId: CUSTOMER_ID}})
+      const route = axios.get.getMockImplementation()
+      // The index still says FREE; the user was promoted seconds ago.
+      axios.get.mockImplementation((url) => (url.startsWith(USER_URL) ?
+        Promise.resolve({data: {user_id: USER_ID, app_metadata: {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID}}}) :
+        route(url)))
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.updated'))
+
+      await handler(webhookEvent())
+
+      // Entitled and already PRO: nothing to write, no reauth modal.
+      expect(axios.patch).not.toHaveBeenCalled()
     })
 
     it('acknowledges a correction that finds the Auth0 user gone (404): no retry can fix it', async () => {

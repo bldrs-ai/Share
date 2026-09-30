@@ -219,9 +219,16 @@ and applies the rule above. Consequences:
 Deliveries can also **overlap**. A `created` invocation can read `active`,
 the `deleted` invocation then demotes (or finds nothing to demote yet), and
 the `created` one writes its stale PRO last. So every tier write is
-**confirmed** (`writeAndConfirm`): re-read, and while the fresh reading
-disagrees with what was last written, write that instead, until a read taken
-after the latest write agrees with it.
+**confirmed** (`writeAndConfirm`): read the user's **stored** status from
+Auth0, then Stripe, and while their tiers disagree, write what Stripe now
+says. It compares with Auth0's stored value, not with this invocation's own
+last write, because another invocation's write can land in between — only
+the stored value shows it (Codex, round 2 on #1891). Auth0 is read before
+Stripe, so once they agree, any later change to either is someone else's to
+confirm: another invocation's write is followed by its own confirming
+reads, and a Stripe change sends a new event. Users found by the search
+index get their `app_metadata` re-read from the primary store
+(`GET /users/{id}`) before any decision, since the index lags writes.
 
 Why a loop and not one correction: entitlement is **not monotone**. `unpaid`,
 `paused` and `incomplete` can all return to `active`, and a customer can
@@ -229,9 +236,9 @@ resubscribe. A single correction can itself go stale — an invocation
 corrects to PRO after an invoice is paid, its write is delayed by a retry,
 the user cancels meanwhile and the `deleted` invocation finds the user still
 FREE and writes nothing, then the delayed PRO lands last. The loop closes
-that: whichever invocation writes last also reads last, and only stops once
-that read agrees. It gives up after three corrections (each needs a real
-state change in Stripe within a second or two) and answers 500.
+that: it only stops once Auth0 and Stripe agree, read after its own last
+write. It gives up after three corrections (each needs a real state change
+within a second or two) and answers 500.
 
 The confirming reads and writes are **retried inline** (after 250 ms, then
 1 s) before the handler falls back to a 500 and Stripe's redelivery. A
@@ -244,7 +251,8 @@ stale. Replays: `cancelled-mid-flight-corrects-its-own-write`,
 `entitlement-flipping-twice-is-confirmed-again`,
 `confirming-read-refused-still-asks-stripe-to-retry`,
 `deleted-customer-demotes-linked-user`,
-`old-customer-event-keeps-pro-under-new-customer`.
+`old-customer-event-keeps-pro-under-new-customer`,
+`overlapping-write-seen-in-auth0-is-corrected`.
 
 **Timeouts.** Both subscription functions build the Stripe client with a
 5 s timeout and one network retry (`STRIPE_CLIENT_OPTIONS`), instead of
@@ -282,7 +290,13 @@ Before demoting, the sweep checks the user's **other** Stripe customers (by
 email). If one is entitled — a resubscribe under a new customer — the user
 keeps PRO and is **relinked** to it (`relink` in the summary). Without that,
 the demote pass demoted a paying user while the promote pass skipped them
-for being PRO.
+for being PRO. Two guards (Codex, round 2 on #1891):
+- a same-email customer already linked to a **different** Auth0 user is
+  that user's and is never a relink target. Identities that share an email
+  but were never linked must not take each other's customer, because
+  `create-portal-session` opens whatever customer `stripeCustomerId` names;
+- the relink is confirmed by a fresh read, and becomes a (confirmed)
+  demotion if the new customer lapsed in between.
 
 **Report first.** `RECONCILE_MODE` defaults to report. The sweep logs what it
 would change as one JSON line (Auth0 user ids and Stripe customer ids, never

@@ -1,5 +1,5 @@
 {
-  "description": "Overlapping deliveries: this created reads the subscription while it is still active and promotes, but it was cancelled meanwhile. The read-after-write sees canceled and corrects to freePendingReauth. A final read confirms the correction.",
+  "description": "Overlapping writers (Codex on #1891): this deleted demotes, then an overlapping invocation's PRO lands before the confirming read. Stripe still matches THIS invocation's write, but Auth0's stored value doesn't, so it writes again and confirms against the stored value.",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -12,7 +12,7 @@
     },
     "sign": "stripe",
     "body": {
-      "$fixture": "stripe/event.subscription.created.json"
+      "$fixture": "stripe/event.subscription.deleted.json"
     }
   },
   "exchanges": [
@@ -20,16 +20,31 @@
       "$fixture": "exchanges/auth0-mgmt-token.json"
     },
     {
-      "$fixture": "exchanges/auth0-search-by-customer-none.json"
+      "$fixture": "exchanges/auth0-search-by-customer-pro.json"
     },
     {
-      "$fixture": "exchanges/stripe-customer.json"
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "subscriptionStatus": "sharePro",
+              "stripeCustomerId": "cus_Rreplay0001"
+            }
+          }
+        }
+      }
     },
     {
-      "$fixture": "exchanges/auth0-users-by-email.json"
-    },
-    {
-      "$fixture": "exchanges/stripe-subscriptions-pro-active.json"
+      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
     },
     {
       "request": {
@@ -40,7 +55,7 @@
         },
         "body": {
           "app_metadata": {
-            "subscriptionStatus": "shareProPendingReauth",
+            "subscriptionStatus": "freePendingReauth",
             "stripeCustomerId": "cus_Rreplay0001"
           }
         }

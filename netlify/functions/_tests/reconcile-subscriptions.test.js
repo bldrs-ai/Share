@@ -77,8 +77,22 @@ function mockWorld({
 } = {}) {
   axios.post.mockResolvedValue({data: {access_token: 'mgmt-token', expires_in: 86400}})
   axios.patch.mockResolvedValue({data: {}})
+  const initialMetadata = {}
+  for (const user of [...proUsers, ...Object.values(usersByEmail).flat(), ...Object.values(linkedUsers)]) {
+    initialMetadata[user.user_id] = user.app_metadata || {}
+  }
   axios.get.mockImplementation((url) => {
     const parsed = new URL(url)
+    const userPath = parsed.pathname.match(/\/api\/v2\/users\/(.+)$/)
+    if (userPath) {
+      // What Auth0 would store: the user's app_metadata with every PATCH to
+      // it so far merged over it.
+      const userId = decodeURIComponent(userPath[1])
+      const stored = axios.patch.mock.calls
+        .filter(([patchUrl]) => patchUrl === url)
+        .reduce((metadata, [, body]) => ({...metadata, ...body.app_metadata}), {...initialMetadata[userId]})
+      return Promise.resolve({data: {user_id: userId, app_metadata: stored}})
+    }
     if (parsed.pathname.endsWith('/users-by-email')) {
       return Promise.resolve({data: usersByEmail[parsed.searchParams.get('email')] || []})
     }
@@ -306,6 +320,46 @@ describe('reconcile-subscriptions', () => {
       expect(summary.demote).toEqual([])
       expect(summary.relink).toEqual([{user: 'auth0|u1', from: 'cus_1', to: 'cus_new'}])
       expect(patches()).toEqual([['auth0|u1', {stripeCustomerId: 'cus_new'}]])
+    })
+
+    // Codex on #1891 (round 2): identities sharing an email but never linked
+    // must not take each other's customer (and its billing portal).
+    it('does not relink to a same-email customer already linked to another user, and demotes', async () => {
+      mockWorld({
+        proUsers: [proUser(1)],
+        customersByEmail: {'u1@example.com': ['cus_1', 'cus_theirs']},
+        subsByCustomer: {cus_theirs: [proSub('cus_theirs')]},
+        linkedUsers: {
+          cus_theirs: {user_id: 'github|other', app_metadata: {subscriptionStatus: 'sharePro', stripeCustomerId: 'cus_theirs'}},
+        },
+      })
+
+      const {summary} = await sweep()
+
+      expect(summary.relink).toEqual([])
+      expect(summary.demote).toEqual([{user: 'auth0|u1', customer: 'cus_1'}])
+      expect(patches().every(([, metadata]) => metadata.stripeCustomerId !== 'cus_theirs')).toBe(true)
+    })
+
+    it('demotes after all when the relinked customer lapsed before the confirming read', async () => {
+      mockWorld({proUsers: [proUser(1)], customersByEmail: {'u1@example.com': ['cus_new']}})
+      let newReads = 0
+      const inner = mockStripeClient.subscriptions.list.getMockImplementation()
+      mockStripeClient.subscriptions.list.mockImplementation((params) => {
+        if (params.customer === 'cus_new') {
+          return Promise.resolve({object: 'list', data: ++newReads === 1 ? [proSub('cus_new')] : [], has_more: false})
+        }
+        return inner(params)
+      })
+
+      const {summary} = await sweep()
+
+      expect(summary.relink).toEqual([{user: 'auth0|u1', from: 'cus_1', to: 'cus_new'}])
+      expect(summary.demote).toEqual([{user: 'auth0|u1', customer: 'cus_1'}])
+      expect(patches().map(([, metadata]) => metadata)).toEqual([
+        {stripeCustomerId: 'cus_new'},
+        {subscriptionStatus: 'freePendingReauth', stripeCustomerId: 'cus_1'},
+      ])
     })
 
     it('reports a relink without writing it in report mode', async () => {
