@@ -1,4 +1,6 @@
+import {captureMessage} from '@sentry/react'
 import {stepSchemaName} from '../Filetype'
+import {loadFailureCaptureContext} from './loadProgress'
 
 
 /**
@@ -18,18 +20,93 @@ import {stepSchemaName} from '../Filetype'
  * footer for a documented, intended limitation.
  *
  * Handled like the OOM and NeedsReconnect alerts in CadView: its own dialog
- * text, and kept out of Sentry's error stream, because an unsupported schema
- * is an expected outcome and not a code defect.
+ * text, and kept out of Sentry's ERROR stream, because an unsupported schema
+ * is an expected outcome and not a code defect. It is still counted there,
+ * as an `info` message ({@link reportUnsupportedSchema}), because how often
+ * users hit it is what ranks the IFC 4.3 work (Share#1879).
  */
 export class UnsupportedSchemaError extends Error {
   /**
    * @param {string} schema the file's FILE_SCHEMA value, e.g. 'IFC4X3_RC2'
+   * @param {number} [sizeBytes] the refused file's size, when known
    */
-  constructor(schema) {
+  constructor(schema, sizeBytes) {
     super(`This model is ${schema} (IFC 4.3). Share can open some IFC 4.3 ` +
       'models, but not this one yet.')
     this.name = 'UnsupportedSchemaError'
     this.schema = schema
+    this.sizeBytes = sizeBytes
+  }
+}
+
+
+/**
+ * Count one refusal in Sentry, to rank the IFC 4.3 work
+ * (bldrs-ai/conway#716) by how often users actually hit it (Share#1879).
+ *
+ * A message at level `info`, never an exception: this is demand, not a
+ * defect, and must not count toward crash-free rates or read as an engine
+ * bug in triage. One issue per schema spelling (the fingerprint), so the
+ * issue list reads as a ranking — `IFC4X3_RC2` vs `IFC4X3_ADD2` — with
+ * Sentry's own event and user counts on each.
+ *
+ * The load context (`load.phase` tag, `load` context with the report) is
+ * the same a failed load's exception gets, so an event can be traced back
+ * to the file without user contact — but attached to this event only, never
+ * to the session's scope.
+ *
+ * What it does not carry yet is WHICH 4.3 features caused the refusal
+ * (alignments, spirals, sectioned solids, …) — the thing that maps a
+ * refusal onto a #716 phase. conway computes those reasons but does not
+ * hand them to Share; bldrs-ai/conway#720 tracks exposing them, and they
+ * belong on this event as a tag when it lands.
+ *
+ * @param {UnsupportedSchemaError} err the refusal
+ * @param {object|null} routeResult the route the model was opened from
+ *   (src/routes/routes.ts#RouteResult)
+ */
+export function reportUnsupportedSchema(err, routeResult) {
+  try {
+    // The load context goes on THIS event only: applying it to the scope
+    // (attachLoadFailureContext) would leave the refused model's load
+    // details on every later event in the session.
+    const load = loadFailureCaptureContext()
+    const tags = {
+      ...load.tags,
+      schema: err.schema,
+      model_source: modelSourceOf(routeResult),
+    }
+    if (Number.isFinite(err.sizeBytes)) {
+      tags.model_size_mb = Math.round(err.sizeBytes / BYTES_PER_MB)
+    }
+    captureMessage(`Unsupported IFC schema: ${err.schema}`, {
+      level: 'info',
+      fingerprint: ['unsupported-schema', err.schema],
+      tags,
+      contexts: load.contexts,
+    })
+  } catch (_) {
+    // Reporting is best-effort; the user already has the dialog.
+  }
+}
+
+
+/**
+ * Where the refused model came from, as a low-cardinality Sentry tag.
+ *
+ * @param {object|null} routeResult
+ * @return {string} 'upload' | 'hosted' | 'github' | 'google' | 'url' | 'unknown'
+ */
+export function modelSourceOf(routeResult) {
+  switch (routeResult?.kind) {
+    case 'file':
+      return routeResult.isUploadedFile || isUploadRoute(routeResult.originalUrl) ? 'upload' : 'hosted'
+    case 'provider':
+      return typeof routeResult.provider === 'string' ? routeResult.provider : 'provider'
+    case 'url':
+      return 'url'
+    default:
+      return 'unknown'
   }
 }
 
@@ -40,6 +117,7 @@ export class UnsupportedSchemaError extends Error {
  * section, which on any real model ends well inside this.
  */
 const BYTES_PER_KIB = 1024
+const BYTES_PER_MB = BYTES_PER_KIB * BYTES_PER_KIB
 const HEADER_SNIFF_KIB = 64
 const HEADER_SNIFF_BYTES = HEADER_SNIFF_KIB * BYTES_PER_KIB
 
@@ -177,7 +255,8 @@ export async function openModelFailure(modelID, source, refused) {
     // Unreadable header: still a refusal, just an unnamed one.
   }
   return new UnsupportedSchemaError(
-    schema !== null && /^IFC4X3/i.test(schema) ? schema : 'IFC4X3')
+    schema !== null && /^IFC4X3/i.test(schema) ? schema : 'IFC4X3',
+    sourceSize(source))
 }
 
 
@@ -204,4 +283,45 @@ async function headerText(source) {
   // latin1 so a stray non-UTF-8 byte in FILE_DESCRIPTION cannot throw; the
   // schema name itself is ASCII.
   return new TextDecoder('latin1').decode(bytes)
+}
+
+
+/**
+ * Is this an upload route (`/share/v/new/…`), whatever the install prefix?
+ *
+ * routes.ts#processFile sets `isUploadedFile` with a `startsWith('/share/v/new')`
+ * test, which misses GitHub Pages-style installs served under a prefix
+ * (`/Share/share/v/new/…`) — analytics.js#isRealModelOpen documents the
+ * same gap. Matching the segment anywhere in the path keeps those uploads
+ * from being tagged `hosted` (codex review of Share#1899).
+ *
+ * @param {URL|string|undefined} originalUrl
+ * @return {boolean}
+ */
+function isUploadRoute(originalUrl) {
+  if (originalUrl === undefined || originalUrl === null) {
+    return false
+  }
+  let pathname
+  try {
+    pathname = new URL(String(originalUrl), 'http://localhost').pathname
+  } catch (_) {
+    return false
+  }
+  return /\/share\/v\/new(\/|$)/.test(pathname)
+}
+
+
+/**
+ * @param {ArrayBuffer|Uint8Array|Blob} source
+ * @return {number|undefined} its size in bytes, when it has one
+ */
+function sourceSize(source) {
+  if (typeof source?.byteLength === 'number') {
+    return source.byteLength
+  }
+  if (typeof source?.size === 'number') {
+    return source.size
+  }
+  return undefined
 }
