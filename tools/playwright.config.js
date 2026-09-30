@@ -1,4 +1,5 @@
 import {defineConfig, devices} from '@playwright/test'
+import {resolveSpecSet} from './playwrightSpecSets'
 import {runGetPortPlease} from './utils'
 
 
@@ -14,12 +15,16 @@ const url = `http://localhost:${port}`
 console.warn('Using test server:', url, serveOnly ? '(serve-only)' : '')
 const serveOnlyTimeoutMs = 30_000
 const fullBuildTimeoutMs = 180_000
+// CI runs each shard as a `light` pass then a `heavy` pass so the slow
+// share-140 export specs spread over every shard instead of all landing in
+// one (#1892). Unset locally: all specs. See tools/playwrightSpecSets.js.
+const specSet = resolveSpecSet(process.env.PW_SPEC_SET)
 
 export default defineConfig({
   // Look for test files in the "src" directory, relative to this configuration file.
   testDir: '../src',
 
-  testMatch: [
+  testMatch: specSet.testMatch ?? [
     '**/*.spec.ts',
   ],
 
@@ -28,6 +33,7 @@ export default defineConfig({
   // against this (Conway) build, where its assertions are meaningless.
   testIgnore: [
     '**/*.webifc.spec.ts',
+    ...specSet.testIgnore,
   ],
 
   // Run all tests in parallel.
@@ -35,8 +41,9 @@ export default defineConfig({
 
   retries: isCI ? 1 : 0,
 
-  // Local default. CI overrides to `--workers=2 --shard=N/4` on free
-  // ubuntu-24.04 (16 GB); see test-flows.yml.
+  // Local default. CI overrides to `--workers=2 --shard=N/4` (twice per
+  // shard, once per PW_SPEC_SET) on free ubuntu-24.04 (16 GB); see
+  // test-flows.yml.
   workers: 4,
 
   // Reporter to use
