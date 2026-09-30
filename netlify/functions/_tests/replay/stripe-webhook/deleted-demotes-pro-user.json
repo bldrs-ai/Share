@@ -1,5 +1,5 @@
 {
-  "description": "A cancelled subscription (canceled in Stripe now) marks the Auth0 user freePendingReauth.",
+  "description": "The cancellation of a Pro user's only subscription writes freePendingReauth.",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -7,7 +7,8 @@
     "method": "POST",
     "path": "/.netlify/functions/stripe-webhook",
     "headers": {
-      "content-type": "application/json; charset=utf-8"
+      "content-type": "application/json; charset=utf-8",
+      "user-agent": "Stripe/1.0 (+https://stripe.com/docs/webhooks)"
     },
     "sign": "stripe",
     "body": {
@@ -16,7 +17,7 @@
   },
   "exchanges": [
     {
-      "$fixture": "exchanges/stripe-subscription-canceled.json"
+      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
     },
     {
       "$fixture": "exchanges/stripe-customer.json"
@@ -25,7 +26,7 @@
       "$fixture": "exchanges/auth0-mgmt-token.json"
     },
     {
-      "$fixture": "exchanges/auth0-users-by-email.json"
+      "$fixture": "exchanges/auth0-users-by-email-pro.json"
     },
     {
       "request": {
@@ -49,7 +50,7 @@
       }
     },
     {
-      "$fixture": "exchanges/stripe-subscription-canceled.json"
+      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
     }
   ],
   "expect": {

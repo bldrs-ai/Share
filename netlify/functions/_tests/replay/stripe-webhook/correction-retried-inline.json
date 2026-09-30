@@ -1,5 +1,5 @@
 {
-  "description": "Overlapping deliveries: this created reads the subscription while it is still active and promotes, but it was cancelled meanwhile. The read-after-write sees canceled and corrects to freePendingReauth.",
+  "description": "The corrective write hits a transient Auth0 503 and is retried inline, so the stale PRO doesn't stand until Stripe's next redelivery hours later (ops#34).",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -51,6 +51,29 @@
     },
     {
       "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        },
+        "body": {
+          "app_metadata": {
+            "subscriptionStatus": "freePendingReauth",
+            "stripeCustomerId": "cus_Rreplay0001"
+          }
+        }
+      },
+      "response": {
+        "status": 503,
+        "json": {
+          "statusCode": 503,
+          "error": "Service Unavailable",
+          "message": "Auth0 is unavailable"
+        }
+      }
     },
     {
       "request": {

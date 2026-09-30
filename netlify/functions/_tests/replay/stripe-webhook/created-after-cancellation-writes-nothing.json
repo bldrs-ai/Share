@@ -1,5 +1,5 @@
 {
-  "description": "An Auth0 outage before anything is written is transient: answer 500 so Stripe redelivers.",
+  "description": "A created delivered after its subscription was cancelled (a retry, or out of order) finds the subscription canceled and the user already demoted, so writes nothing: the stale payload can't re-mark a cancelled user Pro (ops#34).",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -12,7 +12,7 @@
     },
     "sign": "stripe",
     "body": {
-      "$fixture": "stripe/event.subscription.deleted.json"
+      "$fixture": "stripe/event.subscription.created.json"
     }
   },
   "exchanges": [
@@ -23,21 +23,14 @@
       "$fixture": "exchanges/stripe-customer.json"
     },
     {
-      "request": {
-        "method": "POST",
-        "url": "https://bldrs-replay.us.auth0.com/oauth/token"
-      },
-      "response": {
-        "status": 503,
-        "json": {
-          "error": "temporarily_unavailable",
-          "error_description": "Service Unavailable"
-        }
-      }
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-users-by-email-free-linked.json"
     }
   ],
   "expect": {
-    "statusCode": 500,
-    "bodyIncludes": "Stripe will retry"
+    "statusCode": 200,
+    "bodyIncludes": "Success"
   }
 }

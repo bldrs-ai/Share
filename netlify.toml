@@ -85,6 +85,15 @@
 [functions."pro-module"]
   included_files = ["netlify/functions/_pro-modules/*.js"]
 
+# Daily Stripe → Auth0 subscription reconciliation (bldrs-ai/ops#34): demotes
+# Auth0 users marked Pro whose Stripe subscriptions no longer entitle them,
+# and promotes paying customers the webhook never marked. Report-only unless
+# RECONCILE_MODE=apply is set in the Netlify UI; see the function's header and
+# design/new/netlify-functions-testing.md §"Subscription reconciliation".
+# 04:17 UTC: off the hour, away from the busiest traffic.
+[functions."reconcile-subscriptions"]
+  schedule = "17 4 * * *"
+
 # COOP same-origin-allow-popups lets Google Identity Services deliver OAuth
 # tokens via postMessage without nulling window.opener in the cross-origin
 # popup. COEP is intentionally omitted (docs.google.com/picker sends

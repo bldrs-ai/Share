@@ -7,7 +7,8 @@
     "method": "POST",
     "path": "/.netlify/functions/stripe-webhook",
     "headers": {
-      "content-type": "application/json; charset=utf-8"
+      "content-type": "application/json; charset=utf-8",
+      "user-agent": "Stripe/1.0 (+https://stripe.com/docs/webhooks)"
     },
     "sign": "stripe",
     "body": {
@@ -18,7 +19,7 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions/sub_1QreplayStandard0001"
+        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0001&status=all&limit=100"
       },
       "response": {
         "networkError": true
@@ -27,7 +28,7 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions/sub_1QreplayStandard0001"
+        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0001&status=all&limit=100"
       },
       "response": {
         "networkError": true
@@ -36,7 +37,7 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions/sub_1QreplayStandard0001"
+        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0001&status=all&limit=100"
       },
       "response": {
         "networkError": true

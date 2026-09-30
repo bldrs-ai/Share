@@ -5,10 +5,11 @@
  * The end-to-end conversations (real Stripe signatures, recorded payloads,
  * against source and bundle) are replay scenarios in
  * `replay/stripe-webhook/`. This suite mocks the Stripe SDK and axios to pin
- * the branches those don't reach: a failure at each step, the retry
- * contract (which upstream statuses get a 5xx so Stripe redelivers), status
- * taken from the subscription's current state rather than the payload,
- * deleted customers, raw-body handling, and what reaches Sentry.
+ * what those don't enumerate: every Stripe status against the entitlement
+ * rule, every Auth0 tier against the write-only-on-tier-change rule
+ * (bldrs-ai/ops#34), the read-after-write correction and its inline retry,
+ * the retry contract (which failures get a 5xx so Stripe redelivers), raw-body
+ * handling, and what reaches Sentry.
  *
  * In `_tests/` rather than beside its subject: Netlify bundles every
  * top-level `.js` under `netlify/functions/` AS a function.
@@ -17,6 +18,7 @@
 import axios from 'axios'
 import * as Sentry from '@sentry/serverless'
 import Stripe from 'stripe'
+import {resetManagementApiTokenCache} from '../_lib/auth0.js'
 import {handler} from '../stripe-webhook.js'
 
 
@@ -29,10 +31,11 @@ jest.mock('@sentry/serverless', () => ({
   },
   captureMessage: jest.fn(),
   captureException: jest.fn(),
+  setUser: jest.fn(),
 }))
 const mockStripeClient = {
   webhooks: {constructEvent: jest.fn()},
-  subscriptions: {retrieve: jest.fn()},
+  subscriptions: {list: jest.fn()},
   customers: {retrieve: jest.fn()},
 }
 jest.mock('stripe', () => ({
@@ -43,41 +46,47 @@ jest.mock('stripe', () => ({
 const ENV = {
   STRIPE_SECRET_KEY: 'sk_test_unit',
   STRIPE_WEBHOOK_SECRET: 'whsec_unit',
+  SHARE_PRO_PRICE_ID: 'price_pro',
   AUTH0_DOMAIN: 'bldrs.test.auth0.com',
   AUTH0_CLIENT_ID: 'client-id',
   AUTH0_CLIENT_SECRET: 'client-secret-value',
-  SHARE_PRO_PRICE_ID: 'price_pro',
 }
 const CUSTOMER_ID = 'cus_unit'
-const SUBSCRIPTION_ID = 'sub_unit'
 const USER_ID = 'google-oauth2|42'
 const USER_URL = `https://${ENV.AUTH0_DOMAIN}/api/v2/users/google-oauth2%7C42`
 const RAW_BODY = '{"id":"evt_unit"}'
+// The correction's inline retries wait 250 ms then 1 s.
+const CORRECTION_RETRY_TIMEOUT_MS = 10000
 
 
 /**
  * @param {object} [overrides]
- * @return {object} a Stripe subscription
+ * @return {object} a Stripe subscription carrying the Pro price
  */
-function subscription(overrides = {}) {
-  return {id: SUBSCRIPTION_ID, customer: CUSTOMER_ID, status: 'active', items: {data: []}, ...overrides}
+function proSubscription(overrides = {}) {
+  return {id: 'sub_unit', customer: CUSTOMER_ID, status: 'active', items: {data: [{price: {id: ENV.SHARE_PRO_PRICE_ID}}]}, ...overrides}
 }
 
 
 /**
- * The event's payload is deliberately a stale, Pro, active copy: the
- * handler must decide from `subscriptions.retrieve` (the current state),
- * so a test that passes only because the payload agreed can't exist.
+ * @param {Array<object>} subscriptions
+ * @return {object} a Stripe list page
+ */
+function page(subscriptions) {
+  return {object: 'list', data: subscriptions, has_more: false}
+}
+
+
+/**
+ * The payload is deliberately a stale, Pro, active copy: the handler must
+ * decide from `subscriptions.list` (the customer's subscriptions now), so a
+ * test that passes only because the payload agreed can't exist.
  *
  * @param {string} type
  * @return {object} what constructEvent returns
  */
 function stripeEvent(type) {
-  return {
-    id: 'evt_unit',
-    type,
-    data: {object: subscription({items: {data: [{price: {id: ENV.SHARE_PRO_PRICE_ID}}]}})},
-  }
+  return {id: 'evt_unit', type, data: {object: proSubscription()}}
 }
 
 
@@ -97,16 +106,25 @@ function webhookEvent(overrides = {}) {
 
 
 /**
- * Wire the happy path through Stripe and Auth0.
+ * Wire Stripe and Auth0. `subscriptions` is what the customer holds now;
+ * `appMetadata` is the Auth0 user's.
  *
- * @param {object} [current] the subscription's current state in Stripe
+ * @param {object} [options]
+ * @param {Array<object>} [options.subscriptions]
+ * @param {object} [options.appMetadata]
  */
-function mockUpstreams(current = subscription()) {
-  mockStripeClient.subscriptions.retrieve.mockResolvedValue(current)
+function mockUpstreams({subscriptions = [proSubscription()], appMetadata = {}} = {}) {
+  mockStripeClient.subscriptions.list.mockResolvedValue(page(subscriptions))
   mockStripeClient.customers.retrieve.mockResolvedValue({id: CUSTOMER_ID, email: 'ada@example.com'})
-  axios.post.mockResolvedValue({data: {access_token: 'mgmt-token'}})
-  axios.get.mockResolvedValue({data: [{user_id: USER_ID}]})
+  axios.post.mockResolvedValue({data: {access_token: 'mgmt-token', expires_in: 86400}})
+  axios.get.mockResolvedValue({data: [{user_id: USER_ID, app_metadata: appMetadata}]})
   axios.patch.mockResolvedValue({data: {}})
+}
+
+
+/** @return {Array<object>} the app_metadata of every Auth0 PATCH, in order */
+function patches() {
+  return axios.patch.mock.calls.map((call) => call[1].app_metadata)
 }
 
 
@@ -121,10 +139,11 @@ function upstreamError(status) {
 
 /**
  * @param {number} statusCode
+ * @param {object} [headers]
  * @return {Error} shaped like a Stripe SDK error
  */
-function stripeError(statusCode) {
-  return Object.assign(new Error(`Stripe answered ${statusCode}`), {type: 'StripeInvalidRequestError', statusCode})
+function stripeError(statusCode, headers) {
+  return Object.assign(new Error(`Stripe answered ${statusCode}`), {type: 'StripeInvalidRequestError', statusCode, headers})
 }
 
 
@@ -133,6 +152,7 @@ describe('stripe-webhook function', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    resetManagementApiTokenCache()
     process.env = {...savedEnv, ...ENV}
     jest.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -143,20 +163,19 @@ describe('stripe-webhook function', () => {
   })
 
   describe('configuration', () => {
-    it.each(Object.keys(ENV).filter((name) => name !== 'SHARE_PRO_PRICE_ID'))(
-      'answers 500 "not configured" without %s, naming it but no secret value', async (name) => {
-        delete process.env[name]
+    it.each(Object.keys(ENV))('answers 500 "not configured" without %s, naming it but no secret value', async (name) => {
+      delete process.env[name]
 
-        const res = await handler(webhookEvent())
+      const res = await handler(webhookEvent())
 
-        expect(res).toEqual({statusCode: 500, body: 'Stripe webhook not configured'})
-        expect(Stripe).not.toHaveBeenCalled()
-        const logged = console.error.mock.calls.flat().join(' ')
-        expect(logged).toContain(name)
-        for (const value of Object.values(ENV)) {
-          expect(logged).not.toContain(value)
-        }
-      })
+      expect(res).toEqual({statusCode: 500, body: 'Stripe webhook not configured'})
+      expect(Stripe).not.toHaveBeenCalled()
+      const logged = console.error.mock.calls.flat().join(' ')
+      expect(logged).toContain(name)
+      for (const value of Object.values(ENV)) {
+        expect(logged).not.toContain(value)
+      }
+    })
   })
 
   describe('signature', () => {
@@ -202,75 +221,67 @@ describe('stripe-webhook function', () => {
     })
   })
 
-  describe('status written to Auth0', () => {
-    it('marks Share Pro when the Pro price is any of the current subscription\'s items', async () => {
-      mockUpstreams(subscription({items: {data: [{price: {id: 'price_addon'}}, {price: {id: ENV.SHARE_PRO_PRICE_ID}}]}}))
-      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.created'))
+  describe('entitlement comes from the customer\'s subscriptions now', () => {
+    it.each(['customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted'])(
+      'handles %s by listing all of the customer\'s subscriptions', async (type) => {
+        mockUpstreams()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent(type))
 
-      const res = await handler(webhookEvent())
+        const res = await handler(webhookEvent())
 
-      expect(res.statusCode).toBe(200)
-      expect(mockStripeClient.subscriptions.retrieve).toHaveBeenCalledWith(SUBSCRIPTION_ID)
-      expect(axios.patch).toHaveBeenCalledWith(
-        USER_URL,
-        {app_metadata: {subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: CUSTOMER_ID}},
-        {headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer mgmt-token'}},
-      )
-    })
+        expect(res.statusCode).toBe(200)
+        expect(mockStripeClient.subscriptions.list).toHaveBeenCalledWith({customer: CUSTOMER_ID, status: 'all', limit: 100})
+      })
 
-    it('writes Stripe\'s own status for a non-Pro subscription, and tolerates missing items', async () => {
-      mockUpstreams(subscription({status: 'trialing', items: undefined}))
-      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.created'))
+    it.each(['active', 'trialing', 'past_due'])('treats a Pro subscription that is %s as entitling', async (status) => {
+      mockUpstreams({subscriptions: [proSubscription({status})]})
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.updated'))
 
       await handler(webhookEvent())
 
-      expect(axios.patch.mock.calls[0][1].app_metadata.subscriptionStatus).toBe('trialing')
+      expect(patches()[0]).toEqual({subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: CUSTOMER_ID})
     })
 
-    // Delivery order isn't guaranteed and failed deliveries are retried
-    // later, so the payload of a `created` may describe a subscription that
-    // has since been cancelled. The current state wins.
-    it.each(['canceled', 'incomplete_expired'])(
-      'writes freePendingReauth for a `created` whose subscription is now %s, whatever its payload says', async (status) => {
-        mockUpstreams(subscription({status, items: {data: [{price: {id: ENV.SHARE_PRO_PRICE_ID}}]}}))
-        mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.created'))
+    // ops#34: `incomplete` (first payment pending or failed) used to map to
+    // shareProPendingReauth like any non-ended Pro subscription.
+    it.each(['incomplete', 'incomplete_expired', 'unpaid', 'paused', 'canceled'])(
+      'does not treat a Pro subscription that is %s as entitling', async (status) => {
+        mockUpstreams({
+          subscriptions: [proSubscription({status})],
+          appMetadata: {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID},
+        })
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.updated'))
 
         await handler(webhookEvent())
 
-        expect(axios.patch.mock.calls[0][1].app_metadata.subscriptionStatus).toBe('freePendingReauth')
+        expect(patches()[0]).toEqual({subscriptionStatus: 'freePendingReauth', stripeCustomerId: CUSTOMER_ID})
       })
 
-    // Overlapping deliveries: the subscription is cancelled between this
-    // invocation's first read and its write. The read-after-write corrects it.
-    it('re-reads after writing and corrects a write the subscription has since outrun', async () => {
-      const pro = subscription({items: {data: [{price: {id: ENV.SHARE_PRO_PRICE_ID}}]}})
-      mockUpstreams(pro)
-      mockStripeClient.subscriptions.retrieve
-        .mockResolvedValueOnce(pro)
-        .mockResolvedValueOnce({...pro, status: 'canceled'})
-      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.created'))
-
-      const res = await handler(webhookEvent())
-
-      expect(res.statusCode).toBe(200)
-      expect(axios.patch.mock.calls.map((call) => call[1].app_metadata.subscriptionStatus))
-        .toEqual(['shareProPendingReauth', 'freePendingReauth'])
-    })
-
-    it('writes once when the subscription is unchanged on the re-read', async () => {
-      mockUpstreams(subscription({status: 'canceled'}))
+    it('finds the Pro price on any item, and on any of several subscriptions', async () => {
+      mockUpstreams({subscriptions: [
+        proSubscription({status: 'canceled'}),
+        proSubscription({id: 'sub_two', items: {data: [{price: {id: 'price_addon'}}, {price: {id: ENV.SHARE_PRO_PRICE_ID}}]}}),
+      ], appMetadata: {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID}})
       mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.deleted'))
 
       await handler(webhookEvent())
 
-      expect(mockStripeClient.subscriptions.retrieve).toHaveBeenCalledTimes(2)
-      expect(axios.patch).toHaveBeenCalledTimes(1)
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it('does not treat another price as entitling', async () => {
+      mockUpstreams({subscriptions: [proSubscription({items: {data: [{price: {id: 'price_other'}}]}})]})
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.created'))
+
+      await handler(webhookEvent())
+
+      expect(patches()).toEqual([{stripeCustomerId: CUSTOMER_ID}])
     })
 
     it('looks the user up by the customer\'s email, URL-encoded', async () => {
-      mockUpstreams(subscription({status: 'canceled'}))
+      mockUpstreams()
       mockStripeClient.customers.retrieve.mockResolvedValue({id: CUSTOMER_ID, email: 'ada+pro@example.com'})
-      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.deleted'))
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.created'))
 
       await handler(webhookEvent())
 
@@ -278,27 +289,120 @@ describe('stripe-webhook function', () => {
         `https://${ENV.AUTH0_DOMAIN}/api/v2/users-by-email?email=ada%2Bpro%40example.com`,
         {headers: {Authorization: 'Bearer mgmt-token'}},
       )
-      expect(axios.patch.mock.calls[0][1].app_metadata.subscriptionStatus).toBe('freePendingReauth')
+      expect(axios.patch.mock.calls[0][0]).toBe(USER_URL)
     })
+  })
+
+  // Auth0 is written only when the tier changes (ops#34): a renewal must not
+  // bounce a paying user back through the reauth modal.
+  describe('writes only on a tier change', () => {
+    it.each([
+      ['a free user becomes entitled', true, {}, [{subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: CUSTOMER_ID}]],
+      ['a freePendingReauth user becomes entitled', true, {subscriptionStatus: 'freePendingReauth', stripeCustomerId: CUSTOMER_ID},
+        [{subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: CUSTOMER_ID}]],
+      ['a sharePro user stays entitled', true, {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID}, []],
+      ['a shareProPendingReauth user stays entitled', true,
+        {subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: CUSTOMER_ID}, []],
+      ['a sharePro user loses entitlement', false, {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID},
+        [{subscriptionStatus: 'freePendingReauth', stripeCustomerId: CUSTOMER_ID}]],
+      ['a linked free user stays free', false, {subscriptionStatus: 'freePendingReauth', stripeCustomerId: CUSTOMER_ID}, []],
+      ['an unlinked free user stays free (only the customer is linked)', false, {}, [{stripeCustomerId: CUSTOMER_ID}]],
+    ])('when %s', async (label, entitled, appMetadata, expected) => {
+      mockUpstreams({subscriptions: [proSubscription({status: entitled ? 'active' : 'canceled'})], appMetadata})
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.updated'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res).toEqual({statusCode: 200, body: 'Success'})
+      expect(patches()).toEqual(expected)
+    })
+  })
+
+  describe('read-after-write correction', () => {
+    it('corrects a promotion the subscription outran (cancelled mid-flight)', async () => {
+      mockUpstreams()
+      mockStripeClient.subscriptions.list
+        .mockResolvedValueOnce(page([proSubscription()]))
+        .mockResolvedValueOnce(page([proSubscription({status: 'canceled'})]))
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.created'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res.statusCode).toBe(200)
+      expect(patches().map((m) => m.subscriptionStatus)).toEqual(['shareProPendingReauth', 'freePendingReauth'])
+    })
+
+    it('re-reads only after a tier-changing write', async () => {
+      mockUpstreams({appMetadata: {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID}})
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.updated'))
+
+      await handler(webhookEvent())
+
+      expect(mockStripeClient.subscriptions.list).toHaveBeenCalledTimes(1)
+    })
+
+    it('retries a transiently failing correction inline', async () => {
+      mockUpstreams()
+      mockStripeClient.subscriptions.list
+        .mockResolvedValueOnce(page([proSubscription()]))
+        .mockResolvedValueOnce(page([proSubscription({status: 'canceled'})]))
+      axios.patch
+        .mockResolvedValueOnce({data: {}})
+        .mockRejectedValueOnce(upstreamError(503))
+        .mockResolvedValueOnce({data: {}})
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.created'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res.statusCode).toBe(200)
+      expect(patches().map((m) => m.subscriptionStatus))
+        .toEqual(['shareProPendingReauth', 'freePendingReauth', 'freePendingReauth'])
+    }, CORRECTION_RETRY_TIMEOUT_MS)
+
+    it('retries a transiently failing re-read inline', async () => {
+      mockUpstreams()
+      mockStripeClient.subscriptions.list
+        .mockResolvedValueOnce(page([proSubscription()]))
+        .mockRejectedValueOnce(stripeError(503))
+        .mockResolvedValueOnce(page([proSubscription({status: 'canceled'})]))
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.created'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res.statusCode).toBe(200)
+      expect(patches().map((m) => m.subscriptionStatus)).toEqual(['shareProPendingReauth', 'freePendingReauth'])
+    }, CORRECTION_RETRY_TIMEOUT_MS)
+
+    it('asks Stripe to retry once the correction\'s inline retries run out', async () => {
+      mockUpstreams()
+      mockStripeClient.subscriptions.list
+        .mockResolvedValueOnce(page([proSubscription()]))
+        .mockResolvedValueOnce(page([proSubscription({status: 'canceled'})]))
+      axios.patch.mockResolvedValueOnce({data: {}}).mockRejectedValue(upstreamError(503))
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.created'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res.statusCode).toBe(500)
+      // One promotion, then the correction tried three times.
+      expect(axios.patch).toHaveBeenCalledTimes(4)
+    }, CORRECTION_RETRY_TIMEOUT_MS)
   })
 
   // Stripe redelivers any non-2xx for up to three days; a 200 ends it. So a
   // failure Stripe can't fix by retrying must be 200, and one it can, 5xx.
   describe('retry contract', () => {
     it.each([
-      ['the subscription lookup fails at the network', () => mockStripeClient.subscriptions.retrieve.mockRejectedValue(
+      ['the subscription list fails at the network', () => mockStripeClient.subscriptions.list.mockRejectedValue(
         Object.assign(new Error('socket hang up'), {type: 'StripeConnectionError'}))],
       ['the customer lookup answers 500', () => mockStripeClient.customers.retrieve.mockRejectedValue(stripeError(500))],
-      ['Stripe rejects the API key (401, a config fault)',
-        () => mockStripeClient.subscriptions.retrieve.mockRejectedValue(stripeError(401))],
+      ['Stripe rejects the API key (401, a config fault)', () => mockStripeClient.subscriptions.list.mockRejectedValue(stripeError(401))],
       ['the Management API token answers 503', () => axios.post.mockRejectedValue(upstreamError(503))],
       ['Auth0 rejects the client secret (403, a config fault)', () => axios.post.mockRejectedValue(upstreamError(403))],
       ['the user search is rate-limited (429)', () => axios.get.mockRejectedValue(upstreamError(429))],
       ['the app_metadata write answers 502', () => axios.patch.mockRejectedValue(upstreamError(502))],
-      // A 400 Stripe marks retryable (e.g. a lock timeout) outlived the SDK's
-      // own retries; its directive beats the status.
       ['Stripe answers 400 with Stripe-Should-Retry: true', () => mockStripeClient.customers.retrieve.mockRejectedValue(
-        Object.assign(stripeError(400), {headers: {'stripe-should-retry': 'true'}}))],
+        stripeError(400, {'stripe-should-retry': 'true'}))],
     ])('answers 500 so Stripe retries when %s', async (step, breakIt) => {
       mockUpstreams()
       breakIt()
@@ -313,13 +417,11 @@ describe('stripe-webhook function', () => {
     })
 
     it.each([
-      ['Stripe has no such subscription (404)', () => mockStripeClient.subscriptions.retrieve.mockRejectedValue(stripeError(404))],
       ['Stripe has no such customer (404)', () => mockStripeClient.customers.retrieve.mockRejectedValue(stripeError(404))],
-      // Stripe's explicit no-retry beats a status we'd otherwise retry.
       ['Stripe answers 500 with Stripe-Should-Retry: false', () => mockStripeClient.customers.retrieve.mockRejectedValue(
-        Object.assign(stripeError(500), {headers: {'stripe-should-retry': 'false'}}))],
-      ['Stripe answers 409 with Stripe-Should-Retry: false', () => mockStripeClient.subscriptions.retrieve.mockRejectedValue(
-        Object.assign(stripeError(409), {headers: {'stripe-should-retry': 'false'}}))],
+        stripeError(500, {'stripe-should-retry': 'false'}))],
+      ['Stripe answers 409 with Stripe-Should-Retry: false', () => mockStripeClient.subscriptions.list.mockRejectedValue(
+        stripeError(409, {'stripe-should-retry': 'false'}))],
       ['Auth0 rejects the user search as malformed (400)', () => axios.get.mockRejectedValue(upstreamError(400))],
       ['Auth0 no longer has the user (404 on the write)', () => axios.patch.mockRejectedValue(upstreamError(404))],
       ['the customer has no email', () => mockStripeClient.customers.retrieve.mockResolvedValue({id: CUSTOMER_ID, email: null})],
@@ -344,7 +446,7 @@ describe('stripe-webhook function', () => {
       const res = await handler(webhookEvent())
 
       expect(res.statusCode).toBe(200)
-      expect(mockStripeClient.subscriptions.retrieve).not.toHaveBeenCalled()
+      expect(mockStripeClient.subscriptions.list).not.toHaveBeenCalled()
       const [message] = Sentry.captureMessage.mock.calls[0]
       expect(message).toContain('invoice.paid')
       expect(message).toContain('evt_invoice')

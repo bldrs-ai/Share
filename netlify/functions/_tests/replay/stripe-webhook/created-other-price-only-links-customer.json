@@ -1,5 +1,5 @@
 {
-  "description": "A new Share Pro subscription marks the Auth0 user shareProPendingReauth. The status comes from the subscription's current state in Stripe; the user is found by the customer's email.",
+  "description": "A subscription to any other price leaves a free user free: nothing but the Stripe customer id is written (create-portal-session reads it).",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -12,35 +12,12 @@
     },
     "sign": "stripe",
     "body": {
-      "$fixture": "stripe/event.subscription.created.json",
-      "$merge": {
-        "data": {
-          "object": {
-            "items": {
-              "data": [
-                {
-                  "id": "si_Rreplay0001",
-                  "object": "subscription_item",
-                  "quantity": 1,
-                  "subscription": "sub_1QreplayStandard0001",
-                  "price": {
-                    "id": "price_1QreplayPro0001",
-                    "object": "price",
-                    "type": "recurring",
-                    "unit_amount": 1900,
-                    "currency": "usd"
-                  }
-                }
-              ]
-            }
-          }
-        }
-      }
+      "$fixture": "stripe/event.subscription.created.json"
     }
   },
   "exchanges": [
     {
-      "$fixture": "exchanges/stripe-subscription-pro.json"
+      "$fixture": "exchanges/stripe-subscriptions-other-active.json"
     },
     {
       "$fixture": "exchanges/stripe-customer.json"
@@ -60,7 +37,6 @@
         },
         "body": {
           "app_metadata": {
-            "subscriptionStatus": "shareProPendingReauth",
             "stripeCustomerId": "cus_Rreplay0001"
           }
         }
@@ -71,9 +47,6 @@
           "$fixture": "auth0/user.json"
         }
       }
-    },
-    {
-      "$fixture": "exchanges/stripe-subscription-pro.json"
     }
   ],
   "expect": {

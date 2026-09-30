@@ -1,5 +1,5 @@
 {
-  "description": "Overlapping deliveries: this created reads the subscription while it is still active and promotes, but it was cancelled meanwhile. The read-after-write sees canceled and corrects to freePendingReauth.",
+  "description": "A Pro subscription whose first payment hasn't succeeded (incomplete) doesn't make the user Pro (ops#34).",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -17,7 +17,7 @@
   },
   "exchanges": [
     {
-      "$fixture": "exchanges/stripe-subscriptions-pro-active.json"
+      "$fixture": "exchanges/stripe-subscriptions-pro-incomplete.json"
     },
     {
       "$fixture": "exchanges/stripe-customer.json"
@@ -37,31 +37,6 @@
         },
         "body": {
           "app_metadata": {
-            "subscriptionStatus": "shareProPendingReauth",
-            "stripeCustomerId": "cus_Rreplay0001"
-          }
-        }
-      },
-      "response": {
-        "status": 200,
-        "json": {
-          "$fixture": "auth0/user.json"
-        }
-      }
-    },
-    {
-      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
-    },
-    {
-      "request": {
-        "method": "PATCH",
-        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
-        "headers": {
-          "authorization": "Bearer mgmt-token-replay"
-        },
-        "body": {
-          "app_metadata": {
-            "subscriptionStatus": "freePendingReauth",
             "stripeCustomerId": "cus_Rreplay0001"
           }
         }

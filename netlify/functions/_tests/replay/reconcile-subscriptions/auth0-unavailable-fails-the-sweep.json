@@ -1,0 +1,39 @@
+{
+  "description": "If the Management API token can't be had, the sweep is incomplete: 500 sweep_failed, not a quiet empty report.",
+  "env": {
+    "$fixture": "env/stripe.json",
+    "$merge": {
+      "RECONCILE_MODE": "apply"
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/reconcile-subscriptions",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "next_run": "2026-10-01T04:17:00.000Z"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://bldrs-replay.us.auth0.com/oauth/token"
+      },
+      "response": {
+        "status": 503,
+        "json": {
+          "error": "temporarily_unavailable"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 500,
+    "json": {
+      "error": "sweep_failed"
+    }
+  }
+}

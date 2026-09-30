@@ -60,6 +60,15 @@ const RETRY_DELAY_MS = 5000
 // answers some statuses for itself, e.g. 404 for a function missing from
 // the deploy altogether, which would otherwise pass as pro-module's
 // `module_not_built`. smokeFunctions.test.js rejects a status-only answer.
+// Functions the smoke test deliberately doesn't probe, each with the reason.
+// Scheduled functions: Netlify doesn't serve them over HTTP in production,
+// so there is nothing to request. smokeFunctions.test.js checks each entry is
+// really scheduled in netlify.toml, so a plain function can't hide here; the
+// replay scenarios cover these against the source and the bundle instead.
+export const UNPROBED_FUNCTIONS = {
+  'reconcile-subscriptions': 'scheduled (netlify.toml); not reachable over HTTP in production',
+}
+
 const MISSING_BEARER = {status: HTTP_UNAUTHORIZED, body: 'Missing or invalid Authorization header'}
 const MISSING_AUTH0_TOKEN = {status: HTTP_UNAUTHORIZED, body: 'missing_auth0_token'}
 const GH_OAUTH_NOT_CONFIGURED = {status: HTTP_INTERNAL_ERROR, body: 'GH_OAUTH_CLIENT_ID/SECRET not configured'}

@@ -1,5 +1,5 @@
 {
-  "description": "No Auth0 user with the customer's email is permanent: acknowledge (200) so Stripe stops, and write nothing.",
+  "description": "past_due is Stripe's dunning window: a Pro user keeps Pro, and nothing is written.",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -12,12 +12,12 @@
     },
     "sign": "stripe",
     "body": {
-      "$fixture": "stripe/event.subscription.created.json"
+      "$fixture": "stripe/event.subscription.updated.json"
     }
   },
   "exchanges": [
     {
-      "$fixture": "exchanges/stripe-subscriptions-pro-active.json"
+      "$fixture": "exchanges/stripe-subscriptions-pro-past-due.json"
     },
     {
       "$fixture": "exchanges/stripe-customer.json"
@@ -26,18 +26,11 @@
       "$fixture": "exchanges/auth0-mgmt-token.json"
     },
     {
-      "request": {
-        "method": "GET",
-        "url": "https://bldrs-replay.us.auth0.com/api/v2/users-by-email?email=ada%40example.com"
-      },
-      "response": {
-        "status": 200,
-        "json": []
-      }
+      "$fixture": "exchanges/auth0-users-by-email-pro.json"
     }
   ],
   "expect": {
     "statusCode": 200,
-    "bodyIncludes": "not applied"
+    "bodyIncludes": "Success"
   }
 }
