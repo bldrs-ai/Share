@@ -315,7 +315,7 @@ export function rangeCanaryOf(geometry, table) {
  * measured on a DSA-shaped strip, 600 vertices come back as 202 — so neither
  * the float bits nor the per-row vertex ranges exist any more. What does
  * survive, provided the export encodes SEQUENTIALLY
- * (`export/glbCompression.js#needsTriangleOrder`), is triangle ORDER and
+ * (`export/glbCompression.js#triangleOrderedMeshes`), is triangle ORDER and
  * therefore each row's index COUNT: row r's triangles are still the r-th
  * contiguous run. So the reader rebuilds each row's vertex block from its
  * triangles (`instancedGlbToBatchedModel.js#rebuildLossyCollapsed`), and
