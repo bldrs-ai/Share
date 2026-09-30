@@ -1,4 +1,5 @@
 import {expect, test} from '@playwright/test'
+import {describeMobileAndDesktop} from './tests/e2e/formFactor'
 import {homepageSetup} from './tests/e2e/utils'
 
 
@@ -16,19 +17,24 @@ import {homepageSetup} from './tests/e2e/utils'
 //
 // Analytics (gtag) is intentionally unaffected; it lives in the index.html
 // stub + src/index/ga.js and never needed this script.
-test('AdSense script is not requested on page load', async ({page}) => {
-  await homepageSetup(page)
-  const adRequests: string[] = []
-  page.on('request', (req) => {
-    const url = req.url()
-    if (url.includes('googlesyndication.com') || url.includes('adsbygoogle')) {
-      adRequests.push(url)
-    }
+//
+// Both form factors, per the desktop+mobile E2E rule (CLAUDE.md): Auto ads
+// chooses its formats per viewport, so an ad regression can be layout-specific.
+describeMobileAndDesktop('AdSense', () => {
+  test('AdSense script is not requested on page load', async ({page}) => {
+    await homepageSetup(page)
+    const adRequests: string[] = []
+    page.on('request', (req) => {
+      const url = req.url()
+      if (url.includes('googlesyndication.com') || url.includes('adsbygoogle')) {
+        adRequests.push(url)
+      }
+    })
+    await page.goto('/')
+    // `load` covers async <script> tags in the document, which is where the
+    // AdSense tag lived.
+    await page.waitForLoadState('load')
+    expect(adRequests).toEqual([])
+    expect(await page.locator('ins.adsbygoogle').count()).toBe(0)
   })
-  await page.goto('/')
-  // `load` covers async <script> tags in the document, which is where the
-  // AdSense tag lived.
-  await page.waitForLoadState('load')
-  expect(adRequests).toEqual([])
-  expect(await page.locator('ins.adsbygoogle').count()).toBe(0)
 })
