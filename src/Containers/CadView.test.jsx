@@ -622,7 +622,7 @@ describe('CadView', () => {
     expect(captureExceptionSpy).not.toHaveBeenCalledWith(oomErr)
   })
 
-  it('sets an unsupportedSchema alert, and does not report to Sentry, when conway refuses an IFC4X3 model', async () => {
+  it('alerts on a refused IFC4X3 model, and counts it in Sentry as info rather than an error', async () => {
     const schemaErr = new UnsupportedSchemaError('IFC4X3_RC2')
     jest.spyOn(Loader, 'load').mockImplementation(() => {
       throw schemaErr
@@ -630,6 +630,7 @@ describe('CadView', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {})
     const Sentry = require('@sentry/react')
     const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const captureMessageSpy = jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
@@ -643,6 +644,10 @@ describe('CadView', () => {
     // A deliberate schema refusal (bldrs-ai/conway#713) is a documented limit
     // already explained to the user, not a defect — same reasoning as OOM.
     expect(captureExceptionSpy).not.toHaveBeenCalledWith(schemaErr)
+    // …but it is counted, to rank the IFC 4.3 work (Share#1879).
+    expect(captureMessageSpy).toHaveBeenCalledWith(
+      'Unsupported IFC schema: IFC4X3_RC2',
+      expect.objectContaining({level: 'info', fingerprint: ['unsupported-schema', 'IFC4X3_RC2']}))
   })
 
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing

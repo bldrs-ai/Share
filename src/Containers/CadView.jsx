@@ -31,7 +31,7 @@ import {
 } from '../loader/loadProgress'
 import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
-import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
+import {UnsupportedSchemaError, reportUnsupportedSchema} from '../loader/unsupportedSchema'
 import {getBrowser} from '../connections/registry'
 import modelIdentity from '../routes/modelIdentity'
 import useStore from '../store/useStore'
@@ -348,6 +348,10 @@ export default function CadView({
         // or the engine is broken. Say what happened in the user's terms
         // instead of the raw "OpenModel returned -1".
         setAlert({type: 'unsupportedSchema', message: e.message})
+        // Counted, not reported as a defect: an info-level message grouped
+        // by schema, to rank the IFC 4.3 work (Share#1879). The
+        // captureException below stays skipped for it.
+        reportUnsupportedSchema(e, modelPath)
       } else if (e instanceof NeedsReconnectError) {
         // Deep-link / reload landed on a Drive route with a stale token, and
         // GIS couldn't escalate to a popup outside a user gesture. Surface a
