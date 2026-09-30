@@ -85,9 +85,10 @@
       loader.setAttribute('src', pathPrefix + '/index.js')
       document.body.appendChild(loader)
     </script>
-    <!-- AdSense site verification. Body-after-bundle placement so MSW takes control before the script's network requests fire in dev/test. design/new/ads.md captures why Auto ads stay OFF and which routes may carry ad slots. -->
-    <script async
-            src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2372655610709687"
-            crossorigin="anonymous"></script>
+    <!-- No AdSense tag, on purpose. adsbygoogle.js serves Auto ads on its own
+         (no <ins> needed) whenever the dashboard allows it, so shipping the tag
+         is shipping ads. Analytics is the gtag stub above + src/index/ga.js and
+         does not depend on it. Guarded by src/AdSense.spec.ts; before
+         re-adding, read design/new/ads.md §"Incident: unintended Auto ads". -->
   </body>
 </html>
