@@ -67,16 +67,27 @@ function bldrsDescriptors(
  * is asserted with a bound rather than exactly. See the call site.
  *
  * @param json the parsed JSON chunk of an exported file
+ * @param except one extension to leave out of the sum (see {@link WITNESSED_TABLES})
  * @return total byteLength of the views the Bldrs extensions name
  */
-function bldrsPayloadBytes(json: ReturnType<typeof glbJsonChunk>): number {
+function bldrsPayloadBytes(json: ReturnType<typeof glbJsonChunk>, except?: string): number {
   const views = json.bufferViews ?? []
   return Object.entries(bldrsDescriptors(json))
+    .filter(([name]) => name !== except)
     .reduce((total, [, extension]) => {
       const view = extension.bufferView === undefined ? null : views[extension.bufferView]
       return total + (view?.byteLength ?? 0)
     }, 0)
 }
+
+
+// The one payload a Draco export legitimately changes: on a COLLAPSED artifact
+// (the default, #1871) the codec cannot keep the range canary exact, so the
+// export re-writes `BLDRS_instance_tables` with a lossy witness added
+// (`export/collapsedWitness.js`). Meshopt is lossless and leaves it alone.
+// Everything else stays byte-exact across every codec, which is what the
+// assertions below keep pinning; this one is pinned separately, to grow.
+const WITNESSED_TABLES = 'BLDRS_instance_tables'
 
 
 /**
@@ -332,6 +343,8 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await exportButton.click()
     const uncompressedJson = glbJsonChunk(await readFile(await (await uncompressedDownload).path()))
     const uncompressedPayloadBytes = bldrsPayloadBytes(uncompressedJson)
+    const tablesBytes = (json: ReturnType<typeof glbJsonChunk>) =>
+      bldrsPayloadBytes(json) - bldrsPayloadBytes(json, WITNESSED_TABLES)
     const uncompressedDescriptors = bldrsDescriptors(uncompressedJson)
     expect(uncompressedPayloadBytes).toBeGreaterThan(0)
     // Guards the per-codec descriptor comparison below against passing
@@ -369,8 +382,18 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       // pass through untouched and are re-added by arithmetic (#1842). THIS
       // half is exact — a codec that re-encoded or re-compressed them would
       // move it.
-      expect(bldrsPayloadBytes(json), `${codec.mode} must not re-encode the payloads`)
-        .toBe(uncompressedPayloadBytes)
+      // The instance tables are the exception for Draco alone, pinned below.
+      expect(bldrsPayloadBytes(json, WITNESSED_TABLES), `${codec.mode} must not re-encode the payloads`)
+        .toBe(uncompressedPayloadBytes - tablesBytes(uncompressedJson))
+      const witnessBytes = tablesBytes(json) - tablesBytes(uncompressedJson)
+      if (codec.mode === 'draco') {
+        // The default artifact is collapsed, so the Draco file must carry the
+        // witness — without it the reader refuses the table and picking is
+        // lost on reopen (exportCollapsed.spec.ts performs the pick itself).
+        expect(witnessBytes, 'draco adds a lossy witness to the collapsed tables').toBeGreaterThan(0)
+      } else {
+        expect(witnessBytes, `${codec.mode} leaves the instance tables exact`).toBe(0)
+      }
 
       // Also exact: every descriptor survives the codec unchanged APART from
       // the bufferView index it names. This is what makes the bound below
@@ -388,16 +411,20 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       // What is left to differ is the INDEX WIDTH, and nothing else: since
       // #1862 merges the geometry views this artifact carries 3 bufferViews
       // uncompressed against 15 Draco'd, so three single-digit indices become
-      // double-digit. Measured on this model: 4,476 B against 4,480 B, every
-      // byte of it in `extensions`, with the payloads identical at 4,068 B.
+      // double-digit. Measured when this was written: 4,476 B against 4,480 B,
+      // every byte of it in `extensions`, with the payloads identical. (Since
+      // the collapse went default-on, Draco's payloads differ by the witness
+      // alone, which is added to the bound for that reason.)
       // Bound it by the EXACT width difference these descriptors cost rather
       // than by the width they could cost, plus the most two independently
       // 4-byte-padded JSON chunks can differ by.
+      // …plus the witness bytes, which are metadata too and so move the
+      // toggle's worth by exactly what they weigh.
       const indexWidthDelta = Math.abs(
         JSON.stringify(codecDescriptors).length - JSON.stringify(uncompressedDescriptors).length)
       expect(Math.abs(codecMetadataBytes - uncompressedMetadataBytes),
         `${codec.mode} moved the metadata toggle's worth beyond its index width`)
-        .toBeLessThanOrEqual(indexWidthDelta + GLB_CHUNK_PADDING_SLACK_BYTES)
+        .toBeLessThanOrEqual(indexWidthDelta + GLB_CHUNK_PADDING_SLACK_BYTES + witnessBytes)
 
       expect(json.extensionsUsed).toContain(codec.extension)
       expect(json.extensionsRequired).toContain(codec.extension)
