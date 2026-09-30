@@ -20,6 +20,20 @@
  * it (`BLDRS_GLB_BATCHED_SCHEMA_VERSION` below) — deliberately, since that
  * is the slot most users actually read. Nothing extra to do here; the note
  * exists so the coupling is visible from where the bump gets written.
+ * 0.24.0 — retires STEP artifacts whose `BLDRS_element_properties` part
+ *         rows carry no entity type. conway's `AP214Properties.
+ *         getItemProperties` answered a spatial-tree node (a NAUO
+ *         occurrence, or the product definition of a single-part file)
+ *         with `{expressID, Name}` alone until bldrs-ai/conway#721 added
+ *         `type` (`NEXT_ASSEMBLY_USAGE_OCCURRENCE`, …), and the capture
+ *         stores those rows verbatim. The Properties panel builds its Type
+ *         row from that field (`itemProperties.jsx#entityTypeName`), so a
+ *         cache hit on an older artifact shows every picked part WITHOUT a
+ *         Type row indefinitely, while a cache-miss user sees it. Not a
+ *         geometry change, but the same failure shape and remedy as
+ *         0.23.0: a baked engine output that nothing in the key
+ *         identifies. IFC artifacts are unaffected in content and pay one
+ *         re-parse.
  * 0.23.0 — retires artifacts whose STEP b-spline faces were baked by an
  *         engine that could not tessellate them. THREE conway releases
  *         since 0.22.0 changed baked STEP geometry and none bumped this
@@ -291,7 +305,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.23.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.24.0'
 
 
 /**

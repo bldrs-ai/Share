@@ -20,6 +20,13 @@ import {clearOpfs, homepageSetup, setIsReturningUser} from '../../tests/e2e/util
  *
  * The expectation is read off the artifact's own spatial tree (the leaf's
  * Name), not hard-coded, so it names whichever part the pick landed on.
+ *
+ * The Type row rides on the same record: conway's tree-node identity rows
+ * carried only `{expressID, Name}` until bldrs-ai/conway#721 added the
+ * node's STEP entity type, which the capture stores verbatim. It is
+ * hard-coded, unlike the Name: every assembly part AS1 can pick is placed
+ * by a NEXT_ASSEMBLY_USAGE_OCCURRENCE, and the cached tree carries no type
+ * to read it from.
  */
 const AS1_PATH = '/share/v/gh/bldrs-ai/test-models/main/step/nist/as1-colorless.stp'
 const FLAGS = '?feature=glbVerbose'
@@ -154,7 +161,7 @@ describeMobileAndDesktop('View 100: STEP Properties on a cache-hit GLB', () => {
     await clearOpfs(page)
   })
 
-  test('double-clicking a part shows that part in Properties', async ({page}) => {
+  test('double-clicking a part shows that part, and its type, in Properties', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
     await loadCacheHit(page)
 
@@ -169,6 +176,8 @@ describeMobileAndDesktop('View 100: STEP Properties on a cache-hit GLB', () => {
     await expect(panel).not.toContainText('Please select an element')
     await expect(panel.locator('tr').filter({hasText: 'Express Id'})).toContainText(`${leaf}`)
     await expect(panel.locator('tr').filter({hasText: 'Name'}).first()).toContainText(name)
+    await expect(panel.locator('tr').filter({hasText: 'Type'}).first())
+      .toContainText('NEXT_ASSEMBLY_USAGE_OCCURRENCE')
   })
 
   test('a part with no cached record keeps the empty state, not a parent\'s properties', async ({page}) => {
