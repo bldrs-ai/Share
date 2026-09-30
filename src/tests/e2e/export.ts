@@ -463,25 +463,24 @@ export async function reopenLocalGlb(page: Page, path: string) {
   // The dialog opens on whichever tab it last showed (Google, for a signed-in
   // user); Browse lives on Local.
   await page.getByRole('tab', {name: 'Local'}).click()
-  // Bounded and retried: in CI the chooser event has twice failed to arrive
-  // after this click (#1872, shard 2), and an unbounded `waitForEvent` then
-  // sat on the whole test budget — 4 and 8 minutes — before failing, which
-  // pushed the shard past its 15-minute job limit. A click that lands while
-  // the freshly shown tab is still settling is the likely miss; clicking
-  // again is what a user would do.
+  // Bounded, and not retried. In CI the chooser event has failed to arrive
+  // after this click (#1872, #1890, shard 2), and an unbounded `waitForEvent`
+  // then sat on the whole test budget — 4 and 8 minutes — before failing,
+  // which pushed the shard past its 15-minute job limit. The miss we could
+  // reproduce is the app's, not the click's: the loader detached its file
+  // input in the same turn it clicked it, so a GC before Playwright resolved
+  // the chooser's node dropped the event — every time, with a GC forced
+  // after the click (`utils/loader.js#holdUntilPicked`, pinned by
+  // `Open/browseFileChooser.spec.ts`). Were it to miss again anyway, a second
+  // click is no remedy: Browse closes the dialog, so there is no button left
+  // to click, and the retry this replaced sat out the test budget waiting for
+  // one. Fail in 15 s instead.
   const browse = page.getByTestId('button_open_file')
   await expect(browse).toBeVisible()
   const CHOOSER_WAIT_MS = 15_000
-  const MAX_CLICKS = 3
-  let chooser = null
-  for (let attempt = 0; attempt < MAX_CLICKS && !chooser; attempt++) {
-    const waiting = page.waitForEvent('filechooser', {timeout: CHOOSER_WAIT_MS})
-    await browse.click()
-    chooser = await waiting.catch(() => null)
-  }
-  if (!chooser) {
-    throw new Error(`the Open dialog's Browse button opened no file chooser in ${MAX_CLICKS} clicks`)
-  }
+  const waiting = page.waitForEvent('filechooser', {timeout: CHOOSER_WAIT_MS})
+  await browse.click()
+  const chooser = await waiting
   await chooser.setFiles(path)
   await expect(page).toHaveURL(/\/share\/v\/new\/.+\.glb/, {timeout: EXPORT_TEST_TIMEOUT_MS})
   await expect(page.getByTestId('LoadStatusOk')).toBeVisible({timeout: EXPORT_TEST_TIMEOUT_MS})

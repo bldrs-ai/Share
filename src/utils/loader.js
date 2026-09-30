@@ -9,6 +9,43 @@ import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 
 
+// The file input of the pick in flight, held until the pick settles.
+//
+// Both loaders below create their `<input type=file>`, click it and detach it
+// in one synchronous turn, so once the click handler returns nothing
+// references the element — and the chooser outlives that turn by however long
+// the user (or the browser automation) takes. A GC in that window collects
+// the input: Playwright resolves the chooser's DOM node by id when it hears
+// the chooser open, finds it gone, and drops the `filechooser` event without
+// a word (playwright-core `crPage.js#_onFileChooserOpened`), which is the
+// Browse click that "opened no file chooser" in shard 2 (`tests/e2e/export.ts`
+// #reopenLocalGlb). With a GC forced after the click the Open dialog lost
+// 20 of 20 choosers; holding the input here, none.
+//
+// One slot, not a set: a new pick replaces whatever an older one left behind,
+// so an input whose chooser never reports back (no `cancel` event in older
+// browsers) is kept alive until the next Browse at most.
+let pendingPickInput = null
+
+
+/**
+ * Keep `fileInput` reachable until its chooser settles — `change` for a pick,
+ * `cancel` for a dismissal.
+ *
+ * @param {HTMLInputElement} fileInput
+ */
+function holdUntilPicked(fileInput) {
+  pendingPickInput = fileInput
+  const release = () => {
+    if (pendingPickInput === fileInput) {
+      pendingPickInput = null
+    }
+  }
+  fileInput.addEventListener('change', release)
+  fileInput.addEventListener('cancel', release)
+}
+
+
 /**
  * Upload a local file for display.
  *
@@ -37,6 +74,7 @@ export function loadLocalFileFallback(onLoad, testingSkipAutoRemove = false) {
     false,
   )
   viewerContainer.appendChild(fileInput)
+  holdUntilPicked(fileInput)
   fileInput.click()
   if (!testingSkipAutoRemove) {
     viewerContainer.removeChild(fileInput)
@@ -159,6 +197,7 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
   )
 
   viewerContainer.appendChild(fileInput)
+  holdUntilPicked(fileInput)
   fileInput.click()
   if (!testingSkipAutoRemove) {
     viewerContainer.removeChild(fileInput)

@@ -518,24 +518,16 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await page.keyboard.press('Escape')
 
     for (const {mode, path} of downloads) {
-      await page.getByTestId('control-button-open').click()
-      // The dialog opens on whichever tab it last showed (Google, for a
-      // signed-in user); Browse lives on Local.
-      await page.getByRole('tab', {name: 'Local'}).click()
-      const chooser = page.waitForEvent('filechooser')
-      await page.getByTestId('button_open_file').click()
-      await (await chooser).setFiles(path)
-
       // The upload lands under `/v/new/` and loads from OPFS; the load
       // report's OK is a fresh signal per load (the first one was
       // dismissed above), so it can't be the previous model's.
-      await expect(page).toHaveURL(/\/share\/v\/new\/.+\.glb/, {timeout: EXPORT_TEST_TIMEOUT_MS})
-      await expect(page.getByTestId('LoadStatusOk'), `${mode} export should load`)
-        .toBeVisible({timeout: EXPORT_TEST_TIMEOUT_MS})
-      await expect(page.getByText(/Loader error|Unhandled error in parse|DRACOLoader|setMeshoptDecoder/))
-        .toHaveCount(0)
-      await waitForModelReady(page)
-      await dismissLoadSnackbar(page)
+      await test.step(`${mode} export opens`, async () => {
+        await reopenLocalGlb(page, path)
+        await expect(page.getByText(/Loader error|Unhandled error in parse|DRACOLoader|setMeshoptDecoder/))
+          .toHaveCount(0)
+        await waitForModelReady(page)
+        await dismissLoadSnackbar(page)
+      })
     }
   })
 
@@ -581,16 +573,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await (await downloadPromise).saveAs(savedPath)
     await page.keyboard.press('Escape')
 
-    await page.getByTestId('control-button-open').click()
-    // The dialog opens on whichever tab it last showed (Google, for a
-    // signed-in user); Browse lives on Local.
-    await page.getByRole('tab', {name: 'Local'}).click()
-    const chooser = page.waitForEvent('filechooser')
-    await page.getByTestId('button_open_file').click()
-    await (await chooser).setFiles(savedPath)
-
-    await expect(page).toHaveURL(/\/share\/v\/new\/.+\.glb/, {timeout: EXPORT_TEST_TIMEOUT_MS})
-    await expect(page.getByTestId('LoadStatusOk')).toBeVisible({timeout: EXPORT_TEST_TIMEOUT_MS})
+    await reopenLocalGlb(page, savedPath)
     await waitForModelReady(page)
     await dismissLoadSnackbar(page)
 
