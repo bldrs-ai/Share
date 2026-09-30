@@ -1,6 +1,6 @@
 # Ads on bldrs.ai — design
 
-**Status:** Phase 1 (activation) shipped in #1526, then caused an incident — see §"Incident: unintended Auto ads". Parent epic: #1524.
+**Status:** Phase 1 (activation) shipped in #1526, then caused an incident — see §"Incident: unintended Auto ads". **Phase 1b (containment) done 2026-09: the `adsbygoogle.js` tag is removed from `public/index.html`, so no route loads it**, and `src/AdSense.spec.ts` now asserts it is *not* requested. Analytics (gtag/GA4) is untouched. Parent epic: #1524.
 
 This doc holds the durable design context for ad-supported revenue on bldrs.ai — constraints, route policy, test rules, phase arc. Tactical impl notes for each phase live in the linked issues, not here.
 
@@ -32,7 +32,7 @@ There is no "verification-only" build of the script. The snippet for verificatio
   - Because the safeguard lives outside the repo, the repo's only reliable defense is **not loading the script on routes that must stay ad-free**. Treat the dashboard toggle as a second layer, not the first.
 - **Viewer routes never carry `<ins>` slots.** Specifically `/`, `/share/*`, and any model-editing UI. Slots are limited to text-heavy routes (`/about`, `/privacy`, `/tos`, `/blog/*`).
 - **Tests stay hermetic.** No live ad traffic during Jest or Playwright runs. See "Test hermeticity" below.
-- **Consent matches GTM today.** The AdSense script loads unconditionally on every page. (`googletagmanager.com/gtag/js` used to as well, but is now injected only on prod hosts by `src/index/ga.js` — analytics hygiene, not consent.) The existing `isAnalyticsAllowed` cookie (`src/privacy/analytics.js:6`) gates *gtag event calls*, not script loading — mirror that for ads. A future iteration can gate the script itself if EU consent rules force it; `isAnalyticsAllowed` is the foothold.
+- **Consent matches GTM (when the tag returns).** While it shipped, the AdSense script loaded unconditionally on every page. (`googletagmanager.com/gtag/js` used to as well, but is now injected only on prod hosts by `src/index/ga.js` — analytics hygiene, not consent.) The existing `isAnalyticsAllowed` cookie (`src/privacy/analytics.js:6`) gates *gtag event calls*, not script loading — mirror that for ads. A future iteration can gate the script itself if EU consent rules force it; `isAnalyticsAllowed` is the foothold.
 
 
 ## Incident: unintended Auto ads (2026-05 → 2026-07)
@@ -46,6 +46,8 @@ There is no "verification-only" build of the script. The snippet for verificatio
 - `AdSense.spec.ts` asserts the script is *requested*. That stayed true throughout; the test was never designed to detect rendered ads.
 - The "no visible ads on `/`, `/share/...`" item in #1526 was an unchecked manual post-deploy box. The PR merged ~20 min after opening, before `playwright-run` finished, so that verification never ran.
 - Ads only begin after Google approves the site — days after merge. There is nothing observable at merge time, which makes this class of bug invisible to normal PR review.
+
+**Recurrence (2026-09).** Auto ads was disabled in the console, yet an ad was seen serving on prod again. That is rule 3 below in action: with the tag live, the dashboard is the only gate, and it did not hold. The tag was removed from `public/index.html` (Phase 1b), making the repo — not the dashboard — the thing that keeps ads off. Note there is no tracking-only mode to fall back to: the script *is* the ad server. Site traffic reporting comes from GA4 (the gtag stub in `index.html` + `src/index/ga.js`) and Search Console, neither of which needs AdSense.
 
 **Rules that follow from this.**
 
@@ -140,8 +142,8 @@ If the billboard ships, viewability is the thing to think about early — a bill
 | Phase | Goal | Tracking |
 |---|---|---|
 | 1. Activation | Load `adsbygoogle.js` so AdSense verifies the site. | #1523 — shipped in #1526, caused the Auto ads incident |
-| 1b. Containment | Stop serving ads on ad-free routes. Auto ads off in dashboard; consider removing the tag until Phase 2 so the repo enforces the policy. | TBD |
-| 2. Manual slots | Place `<ins>` units on allowed text routes. | TBD |
+| 1b. Containment | Stop serving ads on ad-free routes. Auto ads off in dashboard *and* the tag removed from `index.html`, so the repo enforces the policy. `AdSense.spec.ts` asserts the script is not requested. | Done 2026-09 |
+| 2. Manual slots | Place `<ins>` units on allowed text routes. Re-adding the tag must be scoped to those routes only (not the SPA-wide `index.html`), and must invert `AdSense.spec.ts` for them while keeping it for viewer routes. | TBD |
 | 3. Layout/responsiveness | Ad sizes that respect mobile vs desktop split. | TBD |
 | 4. Consent gating | Gate script load on `isAnalyticsAllowed` if required. | TBD |
 | 5. Plaza billboard | In-scene placement via direct-sold / in-game inventory. Never AdSense creative. | TBD |
