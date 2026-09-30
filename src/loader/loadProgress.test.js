@@ -21,6 +21,7 @@ import {
   getCompletedLoadStats,
   isModelInfoProgress,
   isStructuredProgress,
+  loadFailureCaptureContext,
   reportEngineVersion,
   reportFramingExclusion,
   reportGeometryStats,
@@ -413,6 +414,26 @@ describe('loadProgress', () => {
         fileInfo: 'index.ifc',
         report: expect.stringContaining('Share v'),
       }))
+    })
+
+    // The per-event counterpart (Share#1899): the same tags and context,
+    // returned for one capture's own context and NOT written to the
+    // session scope, where they would ride along on every later event.
+    it('hands back the failure context for one event without touching the scope', () => {
+      beginLoadProgress({fileInfo: 'road.ifc'})
+      reportLoadProgress({phase: 'dataParse', completed: 1, total: 4, elapsedMs: 10})
+      endLoadProgress()
+      setTag.mockClear()
+      setContext.mockClear()
+      const {tags, contexts} = loadFailureCaptureContext()
+      expect(tags).toEqual({'load.phase': 'dataParse'})
+      expect(contexts.load).toEqual(expect.objectContaining({
+        phase: 'dataParse',
+        fileInfo: 'road.ifc',
+        report: expect.stringContaining('Share v'),
+      }))
+      expect(setTag).not.toHaveBeenCalled()
+      expect(setContext).not.toHaveBeenCalled()
     })
 
     /*

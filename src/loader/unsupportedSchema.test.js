@@ -1,5 +1,5 @@
 import {captureMessage} from '@sentry/react'
-import {attachLoadFailureContext} from './loadProgress'
+import {loadFailureCaptureContext} from './loadProgress'
 import {
   UnsupportedSchemaError,
   beginOpenAttempt,
@@ -11,7 +11,9 @@ import {
 
 
 jest.mock('@sentry/react', () => ({captureMessage: jest.fn()}))
-jest.mock('./loadProgress', () => ({attachLoadFailureContext: jest.fn()}))
+jest.mock('./loadProgress', () => ({
+  loadFailureCaptureContext: jest.fn(() => ({tags: {}, contexts: {}})),
+}))
 
 
 /**
@@ -171,15 +173,19 @@ describe('loader/unsupportedSchema — reportUnsupportedSchema (Share#1879)', ()
   it('counts a refusal as an info message, one issue per schema, with source and size tags', () => {
     const KIB = 1024
     const MB = KIB * KIB
+    const loadContext = {load: {phase: 'dataParse', report: 'Share v…'}}
+    loadFailureCaptureContext.mockReturnValueOnce({tags: {'load.phase': 'dataParse'}, contexts: loadContext})
     reportUnsupportedSchema(
       new UnsupportedSchemaError('IFC4X3_RC2', 3 * MB),
       {kind: 'provider', provider: 'github'})
-    expect(attachLoadFailureContext).toHaveBeenCalledTimes(1)
     expect(captureMessage).toHaveBeenCalledTimes(1)
+    // The load context rides on this event's own capture context, not on
+    // the session scope (codex review of Share#1899).
     expect(captureMessage).toHaveBeenCalledWith('Unsupported IFC schema: IFC4X3_RC2', {
       level: 'info',
       fingerprint: ['unsupported-schema', 'IFC4X3_RC2'],
-      tags: {schema: 'IFC4X3_RC2', model_source: 'github', model_size_mb: 3},
+      tags: {'load.phase': 'dataParse', 'schema': 'IFC4X3_RC2', 'model_source': 'github', 'model_size_mb': 3},
+      contexts: loadContext,
     })
   })
 

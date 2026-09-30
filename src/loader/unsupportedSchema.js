@@ -1,6 +1,6 @@
 import {captureMessage} from '@sentry/react'
 import {stepSchemaName} from '../Filetype'
-import {attachLoadFailureContext} from './loadProgress'
+import {loadFailureCaptureContext} from './loadProgress'
 
 
 /**
@@ -51,8 +51,9 @@ export class UnsupportedSchemaError extends Error {
  * Sentry's own event and user counts on each.
  *
  * The load context (`load.phase` tag, `load` context with the report) is
- * attached the same way a failed load's exception gets it, so an event can
- * be traced back to the file without user contact.
+ * the same a failed load's exception gets, so an event can be traced back
+ * to the file without user contact — but attached to this event only, never
+ * to the session's scope.
  *
  * What it does not carry yet is WHICH 4.3 features caused the refusal
  * (alignments, spirals, sectioned solids, …) — the thing that maps a
@@ -66,8 +67,12 @@ export class UnsupportedSchemaError extends Error {
  */
 export function reportUnsupportedSchema(err, routeResult) {
   try {
-    attachLoadFailureContext()
+    // The load context goes on THIS event only: applying it to the scope
+    // (attachLoadFailureContext) would leave the refused model's load
+    // details on every later event in the session.
+    const load = loadFailureCaptureContext()
     const tags = {
+      ...load.tags,
       schema: err.schema,
       model_source: modelSourceOf(routeResult),
     }
@@ -78,6 +83,7 @@ export function reportUnsupportedSchema(err, routeResult) {
       level: 'info',
       fingerprint: ['unsupported-schema', err.schema],
       tags,
+      contexts: load.contexts,
     })
   } catch (_) {
     // Reporting is best-effort; the user already has the dialog.
