@@ -154,6 +154,14 @@ export default function CadView({
   // fire end-to-end → double load. This in-flight ref dedupes overlapping
   // calls; whichever effect tick wins, the other skips.
   const onViewerInFlightRef = useRef(false)
+  // The model a schema refusal was last counted in Sentry for
+  // (unsupportedSchema.js#reportUnsupportedSchema). The auth-state effect
+  // below can re-run onViewer for the SAME route after a refusal —
+  // isViewerLoaded stays false on failure — and each re-run would count
+  // the refusal again, inflating the demand numbers the report exists for
+  // (codex review of Share#1899). Cleared when the model path changes, so a
+  // new open of any model is counted once.
+  const reportedRefusalRef = useRef(null)
 
   // IFCSlice
   const model = useStore((state) => state.model)
@@ -351,7 +359,11 @@ export default function CadView({
         // Counted, not reported as a defect: an info-level message grouped
         // by schema, to rank the IFC 4.3 work (Share#1879). The
         // captureException below stays skipped for it.
-        reportUnsupportedSchema(e, modelPath)
+        const refusalKey = modelIdentity(modelPath, installPrefix)
+        if (reportedRefusalRef.current !== refusalKey) {
+          reportedRefusalRef.current = refusalKey
+          reportUnsupportedSchema(e, modelPath)
+        }
       } else if (e instanceof NeedsReconnectError) {
         // Deep-link / reload landed on a Drive route with a stale token, and
         // GIS couldn't escalate to a popup outside a user gesture. Surface a
@@ -1439,6 +1451,7 @@ export default function CadView({
   // programmatic navigation (e.g. clicking element links).
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath, modelPath:', modelPath)
+    reportedRefusalRef.current = null
     onModelPath()
   }, [modelPath, customViewSettings])
 

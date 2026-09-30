@@ -207,9 +207,26 @@ describe('loader/unsupportedSchema — modelSourceOf', () => {
   it('classifies each route kind', () => {
     expect(modelSourceOf({kind: 'file', isUploadedFile: true})).toBe('upload')
     expect(modelSourceOf({kind: 'file', isUploadedFile: false})).toBe('hosted')
+    expect(modelSourceOf({
+      kind: 'file', isUploadedFile: false, originalUrl: new URL('https://bldrs.ai/share/v/p/index.ifc'),
+    })).toBe('hosted')
     expect(modelSourceOf({kind: 'provider', provider: 'google'})).toBe('google')
     expect(modelSourceOf({kind: 'provider'})).toBe('provider')
     expect(modelSourceOf({kind: 'url'})).toBe('url')
     expect(modelSourceOf(null)).toBe('unknown')
+  })
+})
+
+
+// routes.ts#processFile's upload test is `startsWith('/share/v/new')`, so
+// on a GitHub Pages-style install under a prefix an upload arrives with
+// isUploadedFile false (codex review of Share#1899).
+describe('loader/unsupportedSchema — uploads under an install prefix', () => {
+  it('still classifies them as uploads', () => {
+    expect(modelSourceOf({
+      kind: 'file',
+      isUploadedFile: false,
+      originalUrl: new URL('https://bldrs-ai.github.io/Share/share/v/new/0b4c2f.ifc'),
+    })).toBe('upload')
   })
 })

@@ -100,7 +100,7 @@ export function reportUnsupportedSchema(err, routeResult) {
 export function modelSourceOf(routeResult) {
   switch (routeResult?.kind) {
     case 'file':
-      return routeResult.isUploadedFile ? 'upload' : 'hosted'
+      return routeResult.isUploadedFile || isUploadRoute(routeResult.originalUrl) ? 'upload' : 'hosted'
     case 'provider':
       return typeof routeResult.provider === 'string' ? routeResult.provider : 'provider'
     case 'url':
@@ -283,6 +283,32 @@ async function headerText(source) {
   // latin1 so a stray non-UTF-8 byte in FILE_DESCRIPTION cannot throw; the
   // schema name itself is ASCII.
   return new TextDecoder('latin1').decode(bytes)
+}
+
+
+/**
+ * Is this an upload route (`/share/v/new/…`), whatever the install prefix?
+ *
+ * routes.ts#processFile sets `isUploadedFile` with a `startsWith('/share/v/new')`
+ * test, which misses GitHub Pages-style installs served under a prefix
+ * (`/Share/share/v/new/…`) — analytics.js#isRealModelOpen documents the
+ * same gap. Matching the segment anywhere in the path keeps those uploads
+ * from being tagged `hosted` (codex review of Share#1899).
+ *
+ * @param {URL|string|undefined} originalUrl
+ * @return {boolean}
+ */
+function isUploadRoute(originalUrl) {
+  if (originalUrl === undefined || originalUrl === null) {
+    return false
+  }
+  let pathname
+  try {
+    pathname = new URL(String(originalUrl), 'http://localhost').pathname
+  } catch (_) {
+    return false
+  }
+  return /\/share\/v\/new(\/|$)/.test(pathname)
 }
 
 

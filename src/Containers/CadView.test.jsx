@@ -650,6 +650,35 @@ describe('CadView', () => {
       expect.objectContaining({level: 'info', fingerprint: ['unsupported-schema', 'IFC4X3_RC2']}))
   })
 
+  // The auth-state effect re-runs onViewer for the same route after a
+  // refusal (isViewerLoaded stays false on failure). Each re-run is refused
+  // again, but must not be counted again: the counts are the demand signal
+  // (codex review of Share#1899).
+  it('counts a refused model once, even when an auth change reloads it', async () => {
+    const schemaErr = new UnsupportedSchemaError('IFC4X3_RC2')
+    const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw schemaErr
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const captureMessageSpy = jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(result.current.alert?.type).toBe('unsupportedSchema'))
+    const loadsBefore = loadSpy.mock.calls.length
+    await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+    await actAsyncFlush()
+    // The reload really happened, so the single count below is the dedupe
+    // at work and not a reload that never ran.
+    await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+    const refusalReports = captureMessageSpy.mock.calls
+      .filter(([title]) => title === 'Unsupported IFC schema: IFC4X3_RC2')
+    expect(refusalReports).toHaveLength(1)
+  })
+
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing
   /*
   import {__getShareViewerMockSingleton} from '../../__mocks__/shareViewerTestHarness'
