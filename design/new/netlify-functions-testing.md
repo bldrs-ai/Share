@@ -155,9 +155,10 @@ So the status code is the retry policy:
 
 | Condition | Answer |
 |---|---|
-| Update written | 200 |
-| Permanent: no email on the customer, customer deleted, no Auth0 user for the email, unhandled event type | 200, reported to Sentry |
-| Permanent upstream answer: 400, 404, 410 or 422 from Stripe or Auth0 (e.g. Stripe's `resource_missing`) | 200, reported to Sentry |
+| Update written and confirmed, or none needed (tier unchanged) | 200 |
+| Permanent: no user linked to the customer and no email on it (e.g. deleted), no Auth0 user for the email, unhandled event type | 200, reported to Sentry |
+| Permanent upstream answer **before anything was written**: 400, 404, 410 or 422 from Stripe or Auth0 (e.g. Stripe's `resource_missing`) | 200, reported to Sentry |
+| **Any** failure after a tier write — the confirming read or correction, whatever the status, `Stripe-Should-Retry: false` included — or entitlement still moving after three corrections | **500**. The write may be stale and is unconfirmed, and a redelivery recomputes from Stripe, so retrying is always safe. The one exception is a 404 on the Auth0 user (deleted): 200. |
 | Transient: network error, 408/409/429, any 5xx | **500**, so Stripe redelivers |
 | A Stripe error carrying `Stripe-Should-Retry` | That header decides over the status: `true` (e.g. a 400 lock timeout that outlived the SDK's own retries) → **500**; `false` (e.g. most Stripe 500s) → 200, reported. stripe-node gives the header the same precedence. |
 | Credentials rejected: 401/403 from Stripe or Auth0 | **500**. A revoked key is a config fault someone will fix within Stripe's three-day window, and the retries then deliver what was missed. |
@@ -168,45 +169,241 @@ So the status code is the retry policy:
 Before ops#33 every failure answered 200. That turned each Auth0 blip into
 a subscription update lost with no retry.
 
+**Entitlement, and when Auth0 is written** (`_lib/subscriptions.js`, shared
+with the reconciliation sweep below; bldrs-ai/ops#34):
+- A customer is **entitled** when any of their subscriptions carries the Share
+  Pro price in status `active`, `trialing` or `past_due`. `past_due` is Stripe's
+  dunning window: a card retry is pending, and Stripe moves the subscription
+  to `canceled` or `unpaid` if it fails. `incomplete` (first payment never
+  succeeded), `incomplete_expired`, `unpaid`, `paused` and `canceled` are not
+  entitling.
+- Auth0 has two **tiers**. PRO is `sharePro` or `shareProPendingReauth`; FREE is
+  anything else, including unset.
+- Auth0 is written **only when the tier changes**:
+  - FREE→PRO writes `shareProPendingReauth`;
+  - PRO→FREE writes `freePendingReauth`;
+  - otherwise only `stripeCustomerId` is kept right (below).
+
+  So a renewal (`customer.subscription.updated`) for a `sharePro` user writes
+  nothing, instead of sending a paying user back through the reauth modal.
+- **Which user, and which customers speak for them.** The user is found by
+  linked `app_metadata.stripeCustomerId` first — that survives an email
+  change in the billing portal, and a deleted customer, which has no email
+  left — then by the customer's email, preferring among same-email users the
+  one already linked to this customer (the search index lags writes by a few
+  seconds). Entitlement is then read across the customer the user is linked
+  to — **first** — and the event's customer, so a late event for a user's
+  old customer can't demote them while they pay under a new one. The link
+  moves only to an entitled customer, and not at all while the linked one
+  is entitled (`linkFor`): a user is never relinked to a customer with
+  nothing to manage in the billing portal, and two deliveries for two live
+  customers don't fight over the link.
+- **Deploy prerequisite: the Stripe endpoint must be subscribed to
+  `customer.subscription.updated`.** Before ops#34 the webhook handled only
+  `created` and `deleted`. Checkout (Share's pricing table) can create a
+  subscription `incomplete` — 3-D Secure, an async payment method — and
+  since `incomplete` is no longer Pro, its activation arrives only as
+  `updated`. Without that event a new payer waits for the daily sweep, and
+  only in apply mode. Demotion for `unpaid` and `paused` depends on it too.
+
 **Retries and ordering.** Stripe doesn't guarantee delivery order, and a
 retried delivery can arrive after later events. So the handler never trusts
-the event's payload for the status it writes. It fetches the subscription's
-*current* state (`GET /v1/subscriptions/{id}`) and writes what that maps to:
-- ended (`canceled`, `incomplete_expired`) → `freePendingReauth`;
-- otherwise, the Share Pro price → `shareProPendingReauth`;
-- otherwise, the Stripe status.
-
-A `created` retried after its subscription's `deleted` therefore writes the
-same `freePendingReauth` the `deleted` did, instead of re-marking a
-cancelled user as Pro. Every delivery converges on the latest truth,
-whatever order they arrive in (replay scenario
-`created-after-cancellation-writes-current-state`).
+the event's payload for entitlement. It lists **all** of the customer's
+subscriptions as they are now (`GET /v1/subscriptions?customer=…&status=all`)
+and applies the rule above. Consequences:
+- A `created` retried after its subscription's `deleted` finds it canceled and
+  writes nothing, because the user is already FREE (replay
+  `created-after-cancellation-writes-nothing`).
+- A customer who cancels one of two Pro subscriptions stays entitled.
+- An `incomplete` Pro subscription never marks the user Pro. Its later expiry
+  arrives as `customer.subscription.updated`, which is handled.
 
 Deliveries can also **overlap**. A `created` invocation can read `active`,
-the `deleted` invocation then writes `freePendingReauth`, and the `created`
-one writes its stale `shareProPendingReauth` last. So after writing, the
-handler reads the subscription again and writes once more if the state has
-moved on. One correction is enough:
-- the only transition that can race the write is to "ended", and an ended
-  subscription never becomes active again;
-- Stripe cancels before it sends `deleted`, so whichever invocation writes
-  last re-reads after the cancellation, sees it, and corrects itself.
+the `deleted` invocation then demotes (or finds nothing to demote yet), and
+the `created` one writes its stale PRO last. So every write — tier **or
+link** — goes through one loop (`settleUser`): starting from the user's
+app_metadata **as Auth0 stores it**, read Stripe for the customers that
+speak for the user given that stored link, write whatever disagrees, re-read
+Auth0, and repeat until a round needs no write. Everything — entitlement,
+and which customer to link — is derived from the stored value each round,
+never from values captured before another invocation wrote, because
+Auth0's PATCH is last-write-wins and another delivery's write (a tier, or a
+relink to a customer this one never saw) can land in between (Codex,
+rounds 2 and 3 on #1891). A patch carries **only what differs**: Auth0's
+PATCH is a shallow merge, so a link left out is left alone, and a stale
+invocation's tier write landing last can't clobber an overlapping relink.
+Auth0 is read before Stripe each round, so once
+a round agrees, any later change to either is someone else's to confirm:
+another invocation's write is followed by its own rounds, and a Stripe
+change sends a new event. Users found by the search index get their
+`app_metadata` re-read from the primary store (`GET /users/{id}`) before
+any decision, since the index lags writes.
 
-Replay scenario: `cancelled-mid-flight-corrects-its-own-write`.
+Why a loop and not one correction: entitlement is **not monotone**. `unpaid`,
+`paused` and `incomplete` can all return to `active`, and a customer can
+resubscribe. A single correction can itself go stale — an invocation
+corrects to PRO after an invoice is paid, its write is delayed by a retry,
+the user cancels meanwhile and the `deleted` invocation finds the user still
+FREE and writes nothing, then the delayed PRO lands last. The loop closes
+that: it only stops once Auth0 and Stripe agree, read after its own last
+write. It gives up after three corrections (each needs a real state change
+within a second or two) and answers 500.
+
+The confirming reads and writes are **retried inline** (after 250 ms, then
+1 s) before the handler falls back to a 500 and Stripe's redelivery. A
+transient blip therefore doesn't leave a stale PRO standing for the hours
+until Stripe's next attempt. Once a tier write has happened, every failure
+answers 500 — even one that would be acknowledged before any write, such as
+a Stripe 500 with `Stripe-Should-Retry: false` — because the write may be
+stale. Replays: `cancelled-mid-flight-corrects-its-own-write`,
+`correction-retried-inline`, `correction-exhausted-asks-stripe-to-retry`,
+`entitlement-flipping-twice-is-confirmed-again`,
+`confirming-read-refused-still-asks-stripe-to-retry`,
+`deleted-customer-demotes-linked-user`,
+`old-customer-event-keeps-pro-under-new-customer`,
+`overlapping-write-seen-in-auth0-is-corrected`.
+
+**Timeouts.** Both subscription functions build the Stripe client with a
+5 s timeout and one network retry (`STRIPE_CLIENT_OPTIONS`), instead of
+stripe-node's 80 s and two, and the Auth0 lookups they use carry a 5 s
+timeout. The webhook still can't be strictly bounded under Netlify's 10 s
+sync limit when several calls are slow at once; a function timeout is a
+non-2xx, so Stripe redelivers, which is safe — it just arrives without a log
+line.
+
+## Subscription reconciliation
+
+`netlify/functions/reconcile-subscriptions.js` runs daily at 04:17 UTC, as
+scheduled in `netlify.toml`. It uses the same rules to make Auth0 agree with
+Stripe, whatever happened to the events. It catches what the webhook can't:
+- Stripe or Auth0 unavailable for Stripe's whole three-day redelivery window
+  (ops#34);
+- updates lost wholesale, as during ops#33, when the webhook couldn't start at
+  all for months.
+
+It works in two directions:
+1. **Demote.** An Auth0 user marked PRO whose Stripe customer isn't entitled
+   gets `freePendingReauth`. A PRO user with **no** `stripeCustomerId` is
+   reported as unverifiable and never demoted, because that is what a manual
+   (comped) grant looks like.
+2. **Promote.** A Stripe customer with an entitling Pro subscription whose
+   Auth0 user isn't PRO gets `shareProPendingReauth`, with the customer linked.
+   The user is found by `stripeCustomerId`, falling back to the customer's
+   email. The fallback matters for exactly the customers whose first webhook
+   was lost.
+
+Each write is followed by the same read-after-write as the webhook, so the
+sweep can't overwrite a newer webhook delivery.
+
+Before demoting, the sweep checks the user's **other** Stripe customers (by
+email). If one is entitled — most likely a resubscribe whose webhook was
+lost — the user **keeps PRO and is reported** as unverifiable
+(`entitled_under_unlinked_customer`) for a human to look at. The sweep
+**never relinks on email alone**: nothing authoritative says who owns a
+customer found only by email, and a wrong relink hands over the real
+owner's billing portal (`create-portal-session` opens whatever customer
+`stripeCustomerId` names). Codex, rounds 2–4 on #1891, walked this down:
+checking ownership through `users-by-email` (primary store) catches a
+same-email owner, but an owner with a *different* email who linked within
+the search index's lag is invisible to both lookups. So the relink is gone
+rather than guarded. A same-email customer another user is seen to own is
+theirs and doesn't keep this user PRO.
+
+Each PRO user is re-read from the **primary store** first: the search
+index lags it by seconds either way, and a user demoted moments ago who
+has since resubscribed (webhook lost) is promoted by their demote item.
+Every write goes through the same `settleUser` loop as the webhook's.
+
+A promote item can still move a FREE user's link off a lapsed customer onto
+the entitled one it found them by — the same email-based first link the
+webhook makes when it first sees a customer, and the case the sweep exists
+to repair (`relink` entries come only from there).
+
+**Report first.** `RECONCILE_MODE` defaults to report. The sweep logs what it
+would change as one JSON line (Auth0 user ids and Stripe customer ids, never
+emails) and sends a Sentry warning when there are discrepancies. The line
+also carries `scanned` counts, so a query that silently matched nothing
+doesn't look like a clean run. Entries in `demote` / `promote` / `relink`
+are what the sweep found; in apply mode a write that failed is also in
+`errors`. Set `RECONCILE_MODE=apply` in the Netlify UI once a report run has
+been read and looks right, **in the production context only**: whether
+Netlify serves scheduled functions over HTTP on deploy previews isn't
+verified, and a preview with production secrets and apply mode would let
+anyone with the URL run an apply sweep. Item failures are collected and
+reported without stopping the sweep. A failure of the sweep itself (the
+token, a discovery page) returns 500 and goes to Sentry as an error.
+
+**Time budget.** Netlify stops a scheduled function after about 30 s, cold
+start included, so the sweep keeps two deadlines from the start of the
+handler:
+- **20 s: stop starting work.** Both discovery lists (the Auth0 PRO search
+  and Stripe's Pro-price subscriptions, fetched concurrently) stop paging,
+  and no queued item starts. The demote and promote items share **one**
+  queue, alternating, four at a time, so a long demote list can't starve
+  promotion (Codex on #1891).
+- **26 s: stop waiting.** Items still in flight are counted in `inFlight`
+  and the summary goes out anyway. Every upstream call has a 5 s timeout,
+  but an item makes several in sequence.
+
+Items never started are counted in `skipped`; any cut-short run, including
+one that hit Auth0's 1000-result search cap, reports `truncated: true` and
+sends a Sentry warning. The Pro-price list is fetched without `status`, so
+Stripe leaves out canceled subscriptions rather than paging through every
+subscription that ever ended. Tomorrow's run starts from the top in the same
+order, so it does **not** pick up where a truncated run stopped: a sweep
+truncated day after day has outgrown one invocation and needs a continuation
+point. Its replay scenarios use `"exchangeOrder": "any"`, since the order
+across concurrent items is timing-dependent.
+
+Netlify doesn't serve scheduled functions over HTTP in production, so the
+live smoke test leaves this one out. It's listed in
+`smokeFunctions.mjs#UNPROBED_FUNCTIONS`, and a test checks that each entry
+really is scheduled. Its replays run against both the source and the bundle.
+
+**Out of this repo: the Auth0 promotion step.** Something outside the repo,
+presumably an Auth0 Action, promotes `shareProPendingReauth` to `sharePro`
+after the user reauthenticates. `pro-module`, `record-export` and the quota
+tier honour only `sharePro`. That step should confirm, against Stripe, that
+the user's `stripeCustomerId` holds an entitling Pro subscription before
+promoting. With that check in place, a stale `shareProPendingReauth` that
+slips past the webhook can't become paid access. It does **not** cover a
+lost demotion: a user already `sharePro` whose demotion was lost keeps paid
+access until the sweep demotes them, and only in apply mode (ops#34).
 
 ## Known gaps and follow-ups
 
 - **Alerting is a GitHub issue.** There is no pager. Load failures happen
   before Sentry initialises, so the live smoke test is the only detector.
   Alerting on Netlify's function 5xx rate would be a second one.
-- **Subscription changes are not mirrored.** `customer.subscription.updated`
-  (past_due, unpaid, plan changes) is acknowledged and ignored, so only
-  creation and deletion reach Auth0. That's a product gap, not a test gap.
-- **One subscription per event.** The status written comes from the
-  event's own subscription. A customer with two subscriptions, one of them
-  cancelled, is marked by whichever event arrived last. That's pre-existing,
-  and rare while Share sells one plan.
-- **Two copies of the Management API token flow** remain (`record-load.js`,
-  `stripe-webhook.js`, `create-portal-session.js`, `unlink-identity.js`
-  versus `_lib/auth0.js`). The replays pin their outbound requests, so
+- **The Auth0 promotion step is unverified.** See §"Subscription
+  reconciliation": the Action that turns `shareProPendingReauth` into
+  `sharePro` isn't in this repo, and nothing here can check that it consults
+  Stripe.
+- **The sweep isn't probed live.** A scheduled function that fails to load
+  shows up only as the absence of its daily Sentry and log line.
+- **The Stripe endpoint's event list is unverified.** Nothing here can see
+  whether the webhook endpoint is subscribed to
+  `customer.subscription.updated` (§"stripe-webhook's response contract").
+- **The sweep has no continuation point.** Fine at Share's size; a sweep
+  truncated day after day needs one, or a rotating start.
+- **Same-email identities that were never linked** still resolve to Auth0's
+  first `users-by-email` result when none is linked to the customer, and
+  nothing filters on `email_verified`. Unchanged from before ops#34.
+- **Auth0 `app_metadata` has no compare-and-set.** Concurrent deliveries
+  for one user can't be serialized, only made to converge: every write is
+  confirmed from the stored value and carries only what differs. Five
+  review passes on #1891 each found a narrower interleaving, which is what
+  a lock-free design against a last-write-wins store looks like. A residual
+  race leaves at worst a wrong tier until the next daily sweep (apply
+  mode) repairs it from Stripe. Real serialization — a per-customer lock
+  (e.g. a Netlify Blobs entry with a conditional write), or processing
+  events for one customer one at a time — would close it.
+- **Customer ownership has no authoritative source.** A customer is linked
+  to a user by email the first time the webhook (or a promote item) sees
+  it. Setting the Auth0 user id on the Stripe customer at checkout (the
+  pricing table's `client-reference-id`, copied to customer metadata)
+  would make ownership checkable, and would let the sweep relink safely.
+- **Duplicate copies of the Management API token flow** remain
+  (`record-load.js`, `create-portal-session.js`, `unlink-identity.js` versus
+  `_lib/auth0.js`; `stripe-webhook.js` now uses `_lib/auth0.js`). The replays pin their outbound requests, so
   folding them together is now a refactor with a safety net.

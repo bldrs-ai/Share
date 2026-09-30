@@ -24,6 +24,7 @@ One directory per function, named exactly like the function, with one
     "body": {"key": "…"},                                   // object → JSON; string → sent as-is
     "sign": "stripe"                                        // optional: add a fresh Stripe-Signature
   },
+  "exchangeOrder": "any",                                   // optional; default "strict"
   "exchanges": [                                            // every outbound call, IN ORDER
     {
       "request": {
@@ -53,6 +54,13 @@ The replay fails if:
 - the function makes a call the scenario doesn't list;
 - a listed call is never made;
 - a call goes out in a different order.
+
+**`exchangeOrder: "any"`** relaxes only the last rule, for a function that
+works on several items concurrently (`reconcile-subscriptions`), where the
+interleaving across items depends on timing. Each call then takes the first
+unused exchange with its method and URL, so calls to the same URL (a read,
+then its read-after-write) are still consumed in the listed order. Leave it
+out wherever order is part of what the scenario proves.
 
 **`$fixture`.** `{"$fixture": "stripe/customer.json"}` anywhere is replaced
 by that file from `fixtures/`, resolved recursively.

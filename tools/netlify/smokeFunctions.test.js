@@ -16,13 +16,14 @@ import http from 'node:http'
 import path from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {listScenarios, loadScenario} from './replay/scenario.mjs'
-import {PROBES, smokeFunctions} from './smokeFunctions.mjs'
+import {PROBES, UNPROBED_FUNCTIONS, smokeFunctions} from './smokeFunctions.mjs'
 
 
 /* eslint-disable no-magic-numbers */
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const FUNCTIONS_DIR = path.resolve(__dirname, '../../netlify/functions')
 const SMOKE_SCRIPT = path.join(__dirname, 'smokeFunctions.mjs')
+const NETLIFY_TOML = path.resolve(__dirname, '../../netlify.toml')
 const BASE = 'https://smoke.test'
 
 
@@ -67,11 +68,22 @@ describe('smoke probes match tested behaviour', () => {
   const scenarioIds = new Set(listScenarios().map((s) => s.id))
   const scenarioFile = (id) => listScenarios().find((s) => s.id === id).file
 
-  it('probes every function', () => {
+  it('probes every function that is reachable over HTTP', () => {
     const functionNames = fs.readdirSync(FUNCTIONS_DIR, {withFileTypes: true})
       .filter((entry) => entry.isFile() && !entry.name.startsWith('.'))
       .map((entry) => path.parse(entry.name).name)
-    expect(PROBES.map((p) => p.name).sort()).toEqual(functionNames.sort())
+    const probed = PROBES.map((p) => p.name)
+    expect([...probed, ...Object.keys(UNPROBED_FUNCTIONS)].sort()).toEqual(functionNames.sort())
+    expect(probed.filter((name) => name in UNPROBED_FUNCTIONS)).toEqual([])
+  })
+
+  // An exemption is only for a function Netlify won't serve over HTTP; a
+  // plain function listed here would ship with no deployed check at all.
+  it.each(Object.keys(UNPROBED_FUNCTIONS))('%s, left unprobed, is scheduled in netlify.toml', (name) => {
+    const toml = fs.readFileSync(NETLIFY_TOML, 'utf8')
+    const block = toml.split(/\n(?=\[)/).find((section) => section.startsWith(`[functions."${name}"]`))
+    expect(block).toBeDefined()
+    expect(block).toMatch(/^\s*schedule\s*=\s*"[^"]+"/m)
   })
 
   it.each(PROBES.map((p) => [p.name, p]))('%s: sends its replay scenario\'s request, accepts its answer', (name, probe) => {

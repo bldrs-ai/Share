@@ -54,6 +54,15 @@ const EXCERPT_CHARS = 160
 // can't load fails twice.
 const RETRY_DELAY_MS = 5000
 
+// Functions the smoke test deliberately doesn't probe, each with the reason.
+// Scheduled functions: Netlify doesn't serve them over HTTP in production,
+// so there is nothing to request. smokeFunctions.test.js checks each entry is
+// really scheduled in netlify.toml, so a plain function can't hide here; the
+// replay scenarios cover these against the source and the bundle instead.
+export const UNPROBED_FUNCTIONS = {
+  'reconcile-subscriptions': 'scheduled (netlify.toml); not reachable over HTTP in production',
+}
+
 // Each answer a probe accepts is a status AND something only the function's
 // own handler says — a phrase from its body, or (for pro-module's served
 // JavaScript) its content type. A bare status isn't enough: the platform

@@ -1,5 +1,5 @@
 {
-  "description": "A cancelled subscription (canceled in Stripe now) marks the Auth0 user freePendingReauth.",
+  "description": "A customer with a canceled and a live Pro subscription stays entitled: entitlement is read from all of the customer's subscriptions, not the event's one.",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -7,7 +7,8 @@
     "method": "POST",
     "path": "/.netlify/functions/stripe-webhook",
     "headers": {
-      "content-type": "application/json; charset=utf-8"
+      "content-type": "application/json; charset=utf-8",
+      "user-agent": "Stripe/1.0 (+https://stripe.com/docs/webhooks)"
     },
     "sign": "stripe",
     "body": {
@@ -16,40 +17,34 @@
   },
   "exchanges": [
     {
-      "$fixture": "exchanges/stripe-subscription-canceled.json"
-    },
-    {
-      "$fixture": "exchanges/stripe-customer.json"
-    },
-    {
       "$fixture": "exchanges/auth0-mgmt-token.json"
     },
     {
-      "$fixture": "exchanges/auth0-users-by-email.json"
+      "$fixture": "exchanges/auth0-search-by-customer-pro.json"
     },
     {
       "request": {
-        "method": "PATCH",
+        "method": "GET",
         "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
         "headers": {
           "authorization": "Bearer mgmt-token-replay"
-        },
-        "body": {
-          "app_metadata": {
-            "subscriptionStatus": "freePendingReauth",
-            "stripeCustomerId": "cus_Rreplay0001"
-          }
         }
       },
       "response": {
         "status": 200,
         "json": {
-          "$fixture": "auth0/user.json"
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "subscriptionStatus": "sharePro",
+              "stripeCustomerId": "cus_Rreplay0001"
+            }
+          }
         }
       }
     },
     {
-      "$fixture": "exchanges/stripe-subscription-canceled.json"
+      "$fixture": "exchanges/stripe-subscriptions-pro-canceled-and-active.json"
     }
   ],
   "expect": {

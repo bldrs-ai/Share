@@ -1,0 +1,23 @@
+{
+  "description": "Without its secrets the sweep answers 500 not_configured, naming what's missing, instead of crashing.",
+  "env": {
+    "NODE_ENV": "test"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/reconcile-subscriptions",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "next_run": "2026-10-01T04:17:00.000Z"
+    }
+  },
+  "exchanges": [],
+  "expect": {
+    "statusCode": 500,
+    "json": {
+      "error": "not_configured"
+    }
+  }
+}

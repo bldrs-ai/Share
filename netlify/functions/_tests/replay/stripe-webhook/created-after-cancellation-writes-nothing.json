@@ -1,5 +1,5 @@
 {
-  "description": "Stripe unreachable at the network level (the SDK retries once itself) is transient: 500, so Stripe redelivers.",
+  "description": "A created delivered after its subscription was cancelled (a retry, or out of order) finds the subscription canceled and the user already demoted, so writes nothing: the stale payload can't re-mark a cancelled user Pro (ops#34).",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -20,7 +20,7 @@
       "$fixture": "exchanges/auth0-mgmt-token.json"
     },
     {
-      "$fixture": "exchanges/auth0-search-by-customer-pro.json"
+      "$fixture": "exchanges/auth0-search-by-customer-free-linked.json"
     },
     {
       "request": {
@@ -36,7 +36,7 @@
           "$fixture": "auth0/user.json",
           "$merge": {
             "app_metadata": {
-              "subscriptionStatus": "sharePro",
+              "subscriptionStatus": "freePendingReauth",
               "stripeCustomerId": "cus_Rreplay0001"
             }
           }
@@ -44,26 +44,11 @@
       }
     },
     {
-      "request": {
-        "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0001&status=all&limit=100"
-      },
-      "response": {
-        "networkError": true
-      }
-    },
-    {
-      "request": {
-        "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0001&status=all&limit=100"
-      },
-      "response": {
-        "networkError": true
-      }
+      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
     }
   ],
   "expect": {
-    "statusCode": 500,
-    "bodyIncludes": "Stripe will retry"
+    "statusCode": 200,
+    "bodyIncludes": "Success"
   }
 }
