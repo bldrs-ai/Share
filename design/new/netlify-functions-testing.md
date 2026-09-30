@@ -246,6 +246,14 @@ looks right. Item failures are collected and reported without stopping the
 sweep. A failure of the sweep itself (the token, a list page) returns 500 and
 goes to Sentry as an error.
 
+**Time budget.** Netlify stops a scheduled function after about 30 s. The
+sweep works through each pass four items at a time and starts no new item
+after 25 s (`TIME_BUDGET_MS`, `CONCURRENCY`). Items it never started are
+counted in `skipped`, and the run reports `truncated: true`, which also
+covers an Auth0 search that hit its 1000-result cap. A truncated run gets a
+Sentry warning, and the next day's run picks up what it missed. A run
+that is truncated every day means the sweep has outgrown one invocation.
+
 Netlify doesn't serve scheduled functions over HTTP in production, so the
 live smoke test leaves this one out. It's listed in
 `smokeFunctions.mjs#UNPROBED_FUNCTIONS`, and a test checks that each entry

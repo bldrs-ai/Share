@@ -33,8 +33,11 @@
  *     been read and looks right.
  *
  * Every item is independent: one customer's failure is recorded in the
- * summary's `errors` and the sweep goes on. The summary names Auth0 user ids
- * and Stripe customer ids, never emails.
+ * summary's `errors` and the sweep goes on. Items run a few at a time under
+ * a 25 s budget (Netlify stops scheduled functions at 30 s); items not
+ * started in time are counted in `skipped` and the run is marked
+ * `truncated`. The summary names Auth0 user ids and Stripe customer ids,
+ * never emails.
  *
  * NOT covered by the deployed smoke test (tools/netlify/smokeFunctions.mjs):
  * Netlify doesn't serve scheduled functions over HTTP in production, so
@@ -74,6 +77,13 @@ const PRO_USERS_QUERY = 'app_metadata.subscriptionStatus:(sharePro OR shareProPe
 // Stripe customer ids are interpolated into a Lucene query; anything else is
 // refused rather than escaped.
 const CUSTOMER_ID_PATTERN = /^cus_[A-Za-z0-9]+$/
+// Netlify stops a scheduled function after 30 s. Items run a few at a time,
+// and none starts after this budget: the rest are counted as skipped and the
+// run is marked truncated (a Sentry warning) rather than cut off silently
+// mid-sweep. Tomorrow's run starts over, so a persistently truncated sweep
+// is the signal to page it.
+const TIME_BUDGET_MS = 25000
+const CONCURRENCY = 4
 
 
 /**
@@ -180,6 +190,34 @@ async function writeTier(stripe, proPriceId, userId, customerId, entitled) {
 
 
 /**
+ * Run `fn` over `items`, `concurrency` at a time, starting none once
+ * `deadline` has passed.
+ *
+ * @param {Array} items
+ * @param {number} concurrency
+ * @param {number} deadline epoch ms
+ * @param {Function} fn async, one item
+ * @return {Promise<number>} how many items were skipped for time
+ */
+async function runLimited(items, concurrency, deadline, fn) {
+  let next = 0
+  let skipped = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const item = items[next++]
+      if (Date.now() >= deadline) {
+        skipped++
+        continue
+      }
+      await fn(item)
+    }
+  }
+  await Promise.all(Array.from({length: Math.min(concurrency, items.length)}, worker))
+  return skipped
+}
+
+
+/**
  * @param {Error} err
  * @return {string} a log-safe one-liner
  */
@@ -202,27 +240,28 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
   const proPriceId = process.env.SHARE_PRO_PRICE_ID
   // eslint-disable-next-line new-cap -- `stripe` SDK ships as a factory function
   const stripe = Stripe(process.env.STRIPE_SECRET_KEY)
-  const summary = {mode: apply ? 'apply' : 'report', demote: [], promote: [], unverifiable: [], errors: [], truncated: false}
+  const summary = {
+    mode: apply ? 'apply' : 'report', demote: [], promote: [], unverifiable: [], errors: [], truncated: false, skipped: 0,
+  }
+  const deadline = Date.now() + TIME_BUDGET_MS
 
   try {
-    // 1. DEMOTE: PRO in Auth0, not entitled in Stripe.
     const {users: proUsers, truncated} = await searchAuth0Users(PRO_USERS_QUERY)
     summary.truncated = truncated
-    const proUserIds = new Set()
-    const proCustomerIds = new Set()
-    for (const user of proUsers) {
-      proUserIds.add(user.user_id)
+    // Built before either pass runs, so step 2 can skip customers step 1 owns.
+    const proUserIds = new Set(proUsers.map((user) => user.user_id))
+    const proCustomerIds = new Set(proUsers.map((user) => user.app_metadata && user.app_metadata.stripeCustomerId).filter(Boolean))
+
+    // 1. DEMOTE: PRO in Auth0, not entitled in Stripe.
+    summary.skipped += await runLimited(proUsers, CONCURRENCY, deadline, async (user) => {
       const customerId = user.app_metadata && user.app_metadata.stripeCustomerId
-      if (customerId) {
-        proCustomerIds.add(customerId)
-      }
       if (!customerId) {
         summary.unverifiable.push({user: user.user_id, reason: 'pro_without_stripe_customer'})
-        continue
+        return
       }
       try {
         if (await isCustomerEntitled(stripe, customerId, proPriceId)) {
-          continue
+          return
         }
         summary.demote.push({user: user.user_id, customer: customerId})
         if (apply) {
@@ -231,28 +270,26 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
       } catch (err) {
         summary.errors.push({user: user.user_id, customer: customerId, error: describeError(err)})
       }
-    }
+    })
 
-    // 2. PROMOTE: entitled in Stripe, not PRO in Auth0.
-    for (const customerId of await entitledCustomerIds(stripe, proPriceId)) {
-      // Already linked to a PRO user (and entitled, or step 1 demoted it):
-      // no lookup needed.
-      if (proCustomerIds.has(customerId)) {
-        continue
-      }
+    // 2. PROMOTE: entitled in Stripe, not PRO in Auth0. Customers already
+    // linked to a PRO user were settled by step 1: no lookup needed.
+    const candidates = Date.now() >= deadline ? [] :
+      (await entitledCustomerIds(stripe, proPriceId)).filter((customerId) => !proCustomerIds.has(customerId))
+    summary.skipped += await runLimited(candidates, CONCURRENCY, deadline, async (customerId) => {
       if (!CUSTOMER_ID_PATTERN.test(customerId)) {
         summary.unverifiable.push({customer: String(customerId), reason: 'unexpected_customer_id'})
-        continue
+        return
       }
       try {
         const user = await findUserForCustomer(stripe, customerId)
         if (!user) {
           summary.unverifiable.push({customer: customerId, reason: 'no_auth0_user'})
-          continue
+          return
         }
         const appMetadata = user.app_metadata || {}
         if (proUserIds.has(user.user_id) || isProInAuth0(appMetadata.subscriptionStatus)) {
-          continue
+          return
         }
         summary.promote.push({user: user.user_id, customer: customerId})
         if (apply) {
@@ -261,6 +298,9 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
       } catch (err) {
         summary.errors.push({customer: customerId, error: describeError(err)})
       }
+    })
+    if (summary.skipped > 0 || Date.now() >= deadline) {
+      summary.truncated = true
     }
   } catch (err) {
     // A failure outside any one item (the token, a search page, a Stripe
