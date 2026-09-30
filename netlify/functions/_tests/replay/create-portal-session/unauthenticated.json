@@ -1,0 +1,16 @@
+{
+  "description": "No bearer token: 401 before any upstream call (the deployed smoke probe sends exactly this).",
+  "env": {
+    "$fixture": "env/stripe.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/create-portal-session",
+    "headers": {},
+    "body": {}
+  },
+  "exchanges": [],
+  "expect": {
+    "statusCode": 401
+  }
+}

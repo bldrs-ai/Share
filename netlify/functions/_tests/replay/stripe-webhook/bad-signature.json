@@ -1,0 +1,12 @@
+{
+  "description": "A forged signature is rejected before anything is looked up.",
+  "env": {"$fixture": "env/stripe.json"},
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/stripe-webhook",
+    "headers": {"content-type": "application/json; charset=utf-8", "stripe-signature": "t=1759150002,v1=0000000000000000000000000000000000000000000000000000000000000000"},
+    "body": {"$fixture": "stripe/event.subscription.deleted.json"}
+  },
+  "exchanges": [],
+  "expect": {"statusCode": 400, "bodyIncludes": "Webhook Error"}
+}

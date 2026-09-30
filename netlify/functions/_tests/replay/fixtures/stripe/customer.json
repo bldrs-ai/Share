@@ -1,0 +1,22 @@
+{
+  "id": "cus_Rreplay0001",
+  "object": "customer",
+  "address": null,
+  "balance": 0,
+  "created": 1759149900,
+  "currency": "usd",
+  "default_source": null,
+  "delinquent": false,
+  "description": null,
+  "email": "ada@example.com",
+  "invoice_prefix": "REPLAY01",
+  "invoice_settings": {"custom_fields": null, "default_payment_method": "pm_1Qreplay0001", "footer": null, "rendering_options": null},
+  "livemode": false,
+  "metadata": {},
+  "name": "Ada Lovelace",
+  "phone": null,
+  "preferred_locales": ["en-US"],
+  "shipping": null,
+  "tax_exempt": "none",
+  "test_clock": null
+}

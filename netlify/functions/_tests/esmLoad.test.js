@@ -38,10 +38,12 @@ const functionFiles = readdirSync(FUNCTIONS_DIR, {withFileTypes: true})
   .filter((entry) => entry.isFile() && !entry.name.startsWith('.'))
   .map((entry) => entry.name)
 
-// Module-scope clients that throw at import without their credentials.
-// The dummies only need to satisfy construction; nothing is called.
-const DUMMY_ENV = {
-  STRIPE_SECRET_KEY: 'sk_test_dummy',
+// No credentials, and nothing inherited from the shell (a developer's own
+// STRIPE_SECRET_KEY would mask the crash): every function must import in a
+// deploy context that lacks its secrets. See the same list in
+// tools/netlify/functionBundler.test.js for the crash it once hid.
+const LOAD_ENV = {
+  PATH: process.env.PATH,
   NODE_ENV: 'test',
 }
 
@@ -69,7 +71,7 @@ describe('netlify functions load as ESM', () => {
     // execFileSync throws on non-zero exit, surfacing stderr (the
     // "require is not defined in ES module scope" text) in the failure.
     execFileSync(process.execPath, ['--input-type=module', '-e', script], {
-      env: {...process.env, ...DUMMY_ENV},
+      env: LOAD_ENV,
       stdio: 'pipe',
       timeout: LOAD_TIMEOUT_MS,
     })

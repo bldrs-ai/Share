@@ -1,0 +1,6 @@
+{
+  "access_token": "mgmt-token-replay",
+  "scope": "read:users update:users delete:users",
+  "expires_in": 86400,
+  "token_type": "Bearer"
+}

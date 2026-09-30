@@ -1,0 +1,9 @@
+{
+  "NODE_ENV": "test",
+  "AUTH0_DOMAIN": "bldrs-replay.us.auth0.com",
+  "AUTH0_CLIENT_ID": "replay-client-id",
+  "AUTH0_CLIENT_SECRET": "replay-client-secret",
+  "STRIPE_SECRET_KEY": "sk_test_replay",
+  "STRIPE_WEBHOOK_SECRET": "whsec_replay",
+  "SHARE_PRO_PRICE_ID": "price_1QreplayPro0001"
+}

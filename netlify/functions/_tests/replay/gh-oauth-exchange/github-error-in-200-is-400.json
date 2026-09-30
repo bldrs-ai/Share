@@ -1,0 +1,13 @@
+{
+  "description": "GitHub reports a bad code as HTTP 200 with an error field; the function must not pass that off as success.",
+  "env": {"$fixture": "env/github-oauth.json"},
+  "request": {"method": "POST", "path": "/.netlify/functions/gh-oauth-exchange", "headers": {"authorization": "Bearer user-access-token"}, "body": {"code": "stale-code", "redirect_uri": "https://bldrs.ai/auth/gh/callback.html"}},
+  "exchanges": [
+    {"$fixture": "exchanges/auth0-userinfo.json"},
+    {
+      "request": {"method": "POST", "url": "https://github.com/login/oauth/access_token"},
+      "response": {"status": 200, "json": {"error": "bad_verification_code", "error_description": "The code passed is incorrect or expired.", "error_uri": "https://docs.github.com/apps/managing-oauth-apps/troubleshooting-oauth-app-access-token-request-errors/#bad-verification-code"}}
+    }
+  ],
+  "expect": {"statusCode": 400, "json": {"error": "bad_verification_code"}}
+}

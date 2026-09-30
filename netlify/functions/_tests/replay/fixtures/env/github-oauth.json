@@ -1,0 +1,6 @@
+{
+  "NODE_ENV": "test",
+  "AUTH0_DOMAIN": "bldrs-replay.us.auth0.com",
+  "GH_OAUTH_CLIENT_ID": "Iv1.replayclientid",
+  "GH_OAUTH_CLIENT_SECRET": "replay-gh-client-secret"
+}

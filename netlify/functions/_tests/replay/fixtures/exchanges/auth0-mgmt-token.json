@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "https://bldrs-replay.us.auth0.com/oauth/token",
+    "body": {
+      "client_id": "replay-client-id",
+      "client_secret": "replay-client-secret",
+      "audience": "https://bldrs-replay.us.auth0.com/api/v2/",
+      "grant_type": "client_credentials"
+    }
+  },
+  "response": {"status": 200, "json": {"$fixture": "auth0/mgmt-token.json"}}
+}

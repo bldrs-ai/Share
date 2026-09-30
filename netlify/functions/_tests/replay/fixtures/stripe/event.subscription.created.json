@@ -1,0 +1,11 @@
+{
+  "id": "evt_1QreplayCreated0001",
+  "object": "event",
+  "api_version": "2025-01-27.acacia",
+  "created": 1759150002,
+  "data": {"object": {"$fixture": "stripe/subscription.json"}},
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {"id": "req_replay0001", "idempotency_key": "replay-0001"},
+  "type": "customer.subscription.created"
+}

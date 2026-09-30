@@ -1,0 +1,18 @@
+{
+  "description": "No bearer token: 401 before any upstream call (the deployed smoke probe sends exactly this).",
+  "env": {
+    "$fixture": "env/auth0.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/record-load",
+    "headers": {},
+    "body": {
+      "key": "/share/v/p/index.ifc"
+    }
+  },
+  "exchanges": [],
+  "expect": {
+    "statusCode": 401
+  }
+}

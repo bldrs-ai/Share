@@ -1,0 +1,15 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "https://api.stripe.com/v1/subscriptions/sub_1QreplayStandard0001",
+    "headers": {
+      "authorization": "Bearer sk_test_replay"
+    }
+  },
+  "response": {
+    "status": 200,
+    "json": {
+      "$fixture": "stripe/subscription.json"
+    }
+  }
+}

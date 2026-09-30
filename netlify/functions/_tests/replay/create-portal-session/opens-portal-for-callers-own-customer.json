@@ -1,0 +1,18 @@
+{
+  "description": "The Stripe customer comes from the caller's own Auth0 app_metadata (never the request), and the portal URL goes back.",
+  "env": {"$fixture": "env/stripe.json"},
+  "request": {"method": "POST", "path": "/.netlify/functions/create-portal-session", "headers": {"authorization": "Bearer user-access-token", "content-type": "application/json"}, "body": {"customerId": "cus_SomeoneElse"}},
+  "exchanges": [
+    {"$fixture": "exchanges/auth0-userinfo.json"},
+    {"$fixture": "exchanges/auth0-mgmt-token.json"},
+    {
+      "request": {"method": "GET", "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347", "headers": {"authorization": "Bearer mgmt-token-replay"}},
+      "response": {"status": 200, "json": {"$fixture": "auth0/user.json", "$merge": {"app_metadata": {"subscriptionStatus": "sharePro", "stripeCustomerId": "cus_Rreplay0001"}}}}
+    },
+    {
+      "request": {"method": "POST", "url": "https://api.stripe.com/v1/billing_portal/sessions", "headers": {"authorization": "Bearer sk_test_replay"}, "body": {"customer": "cus_Rreplay0001", "return_url": "https://bldrs.ai/"}},
+      "response": {"status": 200, "json": {"$fixture": "stripe/billing_portal.session.json"}}
+    }
+  ],
+  "expect": {"statusCode": 200, "json": {"url": "https://billing.stripe.com/p/session/test_replay0001"}}
+}

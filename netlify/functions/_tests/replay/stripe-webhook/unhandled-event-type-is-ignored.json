@@ -1,0 +1,13 @@
+{
+  "description": "Events we don't subscribe to logic for are acknowledged without any outbound call.",
+  "env": {"$fixture": "env/stripe.json"},
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/stripe-webhook",
+    "headers": {"content-type": "application/json; charset=utf-8"},
+    "sign": "stripe",
+    "body": {"$fixture": "stripe/event.invoice.paid.json"}
+  },
+  "exchanges": [],
+  "expect": {"statusCode": 200, "bodyIncludes": "Ignored"}
+}

@@ -1,0 +1,7 @@
+{
+  "description": "Without an Auth0 token nobody reaches GitHub (the deployed smoke probe sends exactly this).",
+  "env": {"$fixture": "env/github-oauth.json"},
+  "request": {"method": "POST", "path": "/.netlify/functions/gh-oauth-refresh", "headers": {}, "body": {}},
+  "exchanges": [],
+  "expect": {"statusCode": 401, "json": {"error": "missing_auth0_token"}}
+}

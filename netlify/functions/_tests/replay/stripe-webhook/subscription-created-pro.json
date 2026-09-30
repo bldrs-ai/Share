@@ -1,0 +1,83 @@
+{
+  "description": "A new Share Pro subscription marks the Auth0 user shareProPendingReauth. The status comes from the subscription's current state in Stripe; the user is found by the customer's email.",
+  "env": {
+    "$fixture": "env/stripe.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/stripe-webhook",
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "user-agent": "Stripe/1.0 (+https://stripe.com/docs/webhooks)"
+    },
+    "sign": "stripe",
+    "body": {
+      "$fixture": "stripe/event.subscription.created.json",
+      "$merge": {
+        "data": {
+          "object": {
+            "items": {
+              "data": [
+                {
+                  "id": "si_Rreplay0001",
+                  "object": "subscription_item",
+                  "quantity": 1,
+                  "subscription": "sub_1QreplayStandard0001",
+                  "price": {
+                    "id": "price_1QreplayPro0001",
+                    "object": "price",
+                    "type": "recurring",
+                    "unit_amount": 1900,
+                    "currency": "usd"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/stripe-subscription-pro.json"
+    },
+    {
+      "$fixture": "exchanges/stripe-customer.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-users-by-email.json"
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        },
+        "body": {
+          "app_metadata": {
+            "subscriptionStatus": "shareProPendingReauth",
+            "stripeCustomerId": "cus_Rreplay0001"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json"
+        }
+      }
+    },
+    {
+      "$fixture": "exchanges/stripe-subscription-pro.json"
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "bodyIncludes": "Success"
+  }
+}

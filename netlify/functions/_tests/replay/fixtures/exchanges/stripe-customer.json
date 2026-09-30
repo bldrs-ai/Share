@@ -1,0 +1,8 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "https://api.stripe.com/v1/customers/cus_Rreplay0001",
+    "headers": {"authorization": "Bearer sk_test_replay"}
+  },
+  "response": {"status": 200, "json": {"$fixture": "stripe/customer.json"}}
+}

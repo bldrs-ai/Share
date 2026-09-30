@@ -1,0 +1,17 @@
+{
+  "user_id": "google-oauth2|103547991597142817347",
+  "email": "ada@example.com",
+  "email_verified": true,
+  "name": "Ada Lovelace",
+  "nickname": "ada",
+  "picture": "https://lh3.googleusercontent.com/a/replay",
+  "created_at": "2025-03-01T10:00:00.000Z",
+  "updated_at": "2026-09-29T12:00:00.000Z",
+  "identities": [
+    {"provider": "google-oauth2", "user_id": "103547991597142817347", "connection": "google-oauth2", "isSocial": true},
+    {"provider": "github", "user_id": "17447690", "connection": "github", "isSocial": true}
+  ],
+  "app_metadata": {},
+  "last_login": "2026-09-29T12:00:00.000Z",
+  "logins_count": 42
+}
