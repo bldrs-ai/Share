@@ -361,7 +361,12 @@ function pendingStatusFor(entitled) {
 
 /**
  * The app_metadata patch that brings `stored` to what `reading` says, or
- * null when nothing disagrees. A tier change always carries the link too.
+ * null when nothing disagrees. Only what differs goes in: Auth0's PATCH is a
+ * shallow merge, so a link left out is a link left alone. Re-sending an
+ * unchanged link would let this invocation's stale copy, landing last,
+ * clobber a relink an overlapping delivery wrote meanwhile — and its
+ * confirming read would then see only the restored, lapsed customer
+ * (Codex on #1891).
  *
  * @param {object} stored app_metadata as Auth0 holds it
  * @param {{entitled: boolean}} reading
@@ -372,7 +377,6 @@ function patchFor(stored, reading, wantLink) {
   const patch = {}
   if (isProInAuth0(stored.subscriptionStatus) !== reading.entitled) {
     patch.subscriptionStatus = pendingStatusFor(reading.entitled)
-    patch.stripeCustomerId = wantLink
   }
   if ((stored.stripeCustomerId || null) !== wantLink) {
     patch.stripeCustomerId = wantLink
@@ -384,15 +388,17 @@ function patchFor(stored, reading, wantLink) {
 /**
  * @param {object} stored
  * @param {object} patch from `patchFor`
- * @return {{tier: ?string, from: ?string, to: string}} `tier` is 'promote',
- *   'demote' or null (a relink alone); from/to are the link
+ * @return {{tier: ?string, from: ?string, to: ?string}} `tier` is 'promote',
+ *   'demote' or null (a relink alone); from/to are the link before and
+ *   after (equal when the patch leaves it alone)
  */
 function describeChange(stored, patch) {
   let tier = null
   if (patch.subscriptionStatus) {
     tier = patch.subscriptionStatus === PRO_PENDING_STATUS ? 'promote' : 'demote'
   }
-  return {tier, from: stored.stripeCustomerId || null, to: patch.stripeCustomerId}
+  const from = stored.stripeCustomerId || null
+  return {tier, from, to: patch.stripeCustomerId || from}
 }
 
 

@@ -62,8 +62,7 @@
         },
         "body": {
           "app_metadata": {
-            "subscriptionStatus": "freePendingReauth",
-            "stripeCustomerId": "cus_Rreplay0001"
+            "subscriptionStatus": "freePendingReauth"
           }
         }
       },

@@ -229,7 +229,10 @@ and which customer to link — is derived from the stored value each round,
 never from values captured before another invocation wrote, because
 Auth0's PATCH is last-write-wins and another delivery's write (a tier, or a
 relink to a customer this one never saw) can land in between (Codex,
-rounds 2 and 3 on #1891). Auth0 is read before Stripe each round, so once
+rounds 2 and 3 on #1891). A patch carries **only what differs**: Auth0's
+PATCH is a shallow merge, so a link left out is left alone, and a stale
+invocation's tier write landing last can't clobber an overlapping relink.
+Auth0 is read before Stripe each round, so once
 a round agrees, any later change to either is someone else's to confirm:
 another invocation's write is followed by its own rounds, and a Stripe
 change sends a new event. Users found by the search index get their
@@ -386,6 +389,15 @@ access until the sweep demotes them, and only in apply mode (ops#34).
 - **Same-email identities that were never linked** still resolve to Auth0's
   first `users-by-email` result when none is linked to the customer, and
   nothing filters on `email_verified`. Unchanged from before ops#34.
+- **Auth0 `app_metadata` has no compare-and-set.** Concurrent deliveries
+  for one user can't be serialized, only made to converge: every write is
+  confirmed from the stored value and carries only what differs. Five
+  review passes on #1891 each found a narrower interleaving, which is what
+  a lock-free design against a last-write-wins store looks like. A residual
+  race leaves at worst a wrong tier until the next daily sweep (apply
+  mode) repairs it from Stripe. Real serialization — a per-customer lock
+  (e.g. a Netlify Blobs entry with a conditional write), or processing
+  events for one customer one at a time — would close it.
 - **Customer ownership has no authoritative source.** A customer is linked
   to a user by email the first time the webhook (or a promote item) sees
   it. Setting the Auth0 user id on the Stripe customer at checkout (the

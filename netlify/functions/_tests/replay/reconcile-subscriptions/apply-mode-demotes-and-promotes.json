@@ -166,8 +166,7 @@
         },
         "body": {
           "app_metadata": {
-            "subscriptionStatus": "freePendingReauth",
-            "stripeCustomerId": "cus_Rstale0002"
+            "subscriptionStatus": "freePendingReauth"
           }
         }
       },

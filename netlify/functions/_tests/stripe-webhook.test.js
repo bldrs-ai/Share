@@ -295,7 +295,8 @@ describe('stripe-webhook function', () => {
 
         await handler(webhookEvent())
 
-        expect(patches()[0]).toEqual({subscriptionStatus: 'freePendingReauth', stripeCustomerId: CUSTOMER_ID})
+        // Already linked to this customer: only the tier goes in the patch.
+        expect(patches()[0]).toEqual({subscriptionStatus: 'freePendingReauth'})
       })
 
     it('finds the Pro price on any item, and on any of several subscriptions', async () => {
@@ -361,7 +362,7 @@ describe('stripe-webhook function', () => {
       expect(axios.get.mock.calls[0][0]).toBe(
         `https://${ENV.AUTH0_DOMAIN}/api/v2/users?q=app_metadata.stripeCustomerId%3A%22cus_unit%22&search_engine=v3&per_page=50&page=0`)
       expect(mockStripeClient.customers.retrieve).not.toHaveBeenCalled()
-      expect(patches()[0]).toEqual({subscriptionStatus: 'freePendingReauth', stripeCustomerId: CUSTOMER_ID})
+      expect(patches()[0]).toEqual({subscriptionStatus: 'freePendingReauth'})
     })
 
     it('among users sharing the email, picks the one linked to this customer (search index not caught up)', async () => {
@@ -448,6 +449,37 @@ describe('stripe-webhook function', () => {
       ])
     })
 
+    // Codex on #1891 (ready-for-review pass): a tier patch that re-sent this
+    // invocation's unchanged, stale link would clobber an overlapping
+    // delivery's relink when it lands last. Left out, the relink survives
+    // Auth0's shallow merge and the confirming read sees the paying customer.
+    it('leaves an unchanged link out of a tier write, so a concurrent relink survives and is honoured', async () => {
+      mockUpstreams({
+        subscriptions: [proSubscription({status: 'canceled'})],
+        otherCustomers: {cus_new: [proSubscription({customer: 'cus_new'})]},
+        appMetadata: {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID},
+      })
+      // An overlapping activation relinked the user to cus_new just before
+      // this delivery's demotion landed: Auth0 holds that relink with this
+      // delivery's patches merged over it.
+      const relinked = {subscriptionStatus: 'sharePro', stripeCustomerId: 'cus_new'}
+      const route = axios.get.getMockImplementation()
+      let userReads = 0
+      axios.get.mockImplementation((url) => {
+        if (url.startsWith(USER_URL) && ++userReads > 1) {
+          return Promise.resolve({data: {user_id: USER_ID, app_metadata: storedAppMetadata(relinked)}})
+        }
+        return route(url)
+      })
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.deleted'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res).toEqual({statusCode: 200, body: 'Success'})
+      expect(patches()[0]).toEqual({subscriptionStatus: 'freePendingReauth'})
+      expect(storedAppMetadata(relinked)).toEqual({subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: 'cus_new'})
+    })
+
     it('keeps the link on the old customer when neither is entitled', async () => {
       mockUpstreams({
         subscriptions: [proSubscription({status: 'incomplete'})],
@@ -468,12 +500,12 @@ describe('stripe-webhook function', () => {
     it.each([
       ['a free user becomes entitled', true, {}, [{subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: CUSTOMER_ID}]],
       ['a freePendingReauth user becomes entitled', true, {subscriptionStatus: 'freePendingReauth', stripeCustomerId: CUSTOMER_ID},
-        [{subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: CUSTOMER_ID}]],
+        [{subscriptionStatus: 'shareProPendingReauth'}]],
       ['a sharePro user stays entitled', true, {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID}, []],
       ['a shareProPendingReauth user stays entitled', true,
         {subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: CUSTOMER_ID}, []],
       ['a sharePro user loses entitlement', false, {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID},
-        [{subscriptionStatus: 'freePendingReauth', stripeCustomerId: CUSTOMER_ID}]],
+        [{subscriptionStatus: 'freePendingReauth'}]],
       ['a linked free user stays free', false, {subscriptionStatus: 'freePendingReauth', stripeCustomerId: CUSTOMER_ID}, []],
       ['an unlinked free user stays free (only the customer is linked)', false, {}, [{stripeCustomerId: CUSTOMER_ID}]],
     ])('when %s', async (label, entitled, appMetadata, expected) => {

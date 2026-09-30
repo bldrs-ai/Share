@@ -62,7 +62,7 @@
 
 import Stripe from 'stripe'
 import * as Sentry from '@sentry/serverless'
-import {getUserAppMetadata} from './_lib/auth0.js'
+import {getUser} from './_lib/auth0.js'
 import {
   CUSTOMER_ID_PATTERN,
   STRIPE_CLIENT_OPTIONS,
@@ -290,7 +290,11 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
     const demoteItem = async (indexed) => {
       const userId = indexed.user_id
       try {
-        const stored = await getUserAppMetadata(userId)
+        // The whole user, not just app_metadata: the email the alternate-
+        // customer check uses can be stale in the index too (Codex on #1891).
+        const user = await getUser(userId)
+        const stored = user.app_metadata || {}
+        const email = user.email || indexed.email
         const linked = stored.stripeCustomerId
         if (!linked) {
           if (isProInAuth0(stored.subscriptionStatus)) {
@@ -309,8 +313,8 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
           // relink hands over that owner's billing portal. A customer
           // another user is seen to own is theirs and doesn't count.
           const others = []
-          for (const id of await customerIdsForEmail(stripe, indexed.email)) {
-            if (id !== linked && !(await isLinkedElsewhere(id, userId, indexed.email))) {
+          for (const id of await customerIdsForEmail(stripe, email)) {
+            if (id !== linked && !(await isLinkedElsewhere(id, userId, email))) {
               others.push(id)
             }
           }

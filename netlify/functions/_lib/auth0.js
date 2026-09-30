@@ -379,3 +379,27 @@ export async function getUsersByEmail(email) {
   }
   return Array.isArray(resp.data) ? resp.data : []
 }
+
+
+/**
+ * A whole Auth0 user from the primary store — `app_metadata` AND profile
+ * fields such as `email`, which the search index can hold stale copies of
+ * too.
+ *
+ * @param {string} sub Auth0 user_id
+ * @return {Promise<object>} the user object
+ * @throws {ManagementApiError} the token step's errors, or `user_lookup`
+ */
+export async function getUser(sub) {
+  const mgmtToken = await getManagementApiToken()
+  let resp
+  try {
+    resp = await axios.get(
+      `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(sub)}`,
+      {headers: {Authorization: `Bearer ${mgmtToken}`}, timeout: MGMT_LOOKUP_TIMEOUT_MS},
+    )
+  } catch (err) {
+    throw new ManagementApiError('user_lookup', {cause: err})
+  }
+  return resp.data || {}
+}

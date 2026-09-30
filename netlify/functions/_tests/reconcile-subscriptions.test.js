@@ -73,10 +73,12 @@ function proUser(i) {
  * @param {object} [world.customersByEmail] email → Stripe customer ids
  * @param {object} [world.storedMetadata] user id → app_metadata in the
  *   primary store, where it differs from what the search index returned
+ * @param {object} [world.storedEmails] user id → email in the primary store,
+ *   where it differs from the index's
  */
 function mockWorld({
   proUsers = [], pricePages = [[]], subsByCustomer = {}, usersByEmail = {}, linkedUsers = {}, customersByEmail = {},
-  storedMetadata = {},
+  storedMetadata = {}, storedEmails = {},
 } = {}) {
   axios.post.mockResolvedValue({data: {access_token: 'mgmt-token', expires_in: 86400}})
   axios.patch.mockResolvedValue({data: {}})
@@ -95,7 +97,7 @@ function mockWorld({
       const stored = axios.patch.mock.calls
         .filter(([patchUrl]) => patchUrl === url)
         .reduce((metadata, [, body]) => ({...metadata, ...body.app_metadata}), {...initialMetadata[userId]})
-      return Promise.resolve({data: {user_id: userId, app_metadata: stored}})
+      return Promise.resolve({data: {user_id: userId, email: storedEmails[userId], app_metadata: stored}})
     }
     if (parsed.pathname.endsWith('/users-by-email')) {
       return Promise.resolve({data: usersByEmail[parsed.searchParams.get('email')] || []})
@@ -331,6 +333,23 @@ describe('reconcile-subscriptions', () => {
       expect(Sentry.captureMessage).toHaveBeenCalledWith(expect.any(String), 'warning')
     })
 
+    // Codex on #1891 (ready-for-review pass): the index's copy of the email
+    // can be stale too, so the alternate-customer check uses the primary
+    // store's.
+    it('checks alternate customers under the primary store\'s email, not the index\'s stale copy', async () => {
+      mockWorld({
+        proUsers: [proUser(1)],
+        storedEmails: {'auth0|u1': 'u1-new@example.com'},
+        customersByEmail: {'u1-new@example.com': ['cus_new']},
+        subsByCustomer: {cus_new: [proSub('cus_new')]},
+      })
+
+      const {summary} = await sweep()
+
+      expect(summary.demote).toEqual([])
+      expect(summary.unverifiable).toEqual([{user: 'auth0|u1', customer: 'cus_new', reason: 'entitled_under_unlinked_customer'}])
+    })
+
     it('promotes a free user found by the paying customer\'s email, moving the link off their lapsed customer', async () => {
       mockWorld({
         pricePages: [[proSub('cus_new')]],
@@ -397,7 +416,7 @@ describe('reconcile-subscriptions', () => {
       const {summary} = await sweep()
 
       expect(summary.promote).toEqual([{user: 'auth0|u1', customer: 'cus_1'}])
-      expect(patches()).toEqual([['auth0|u1', {subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: 'cus_1'}]])
+      expect(patches()).toEqual([['auth0|u1', {subscriptionStatus: 'shareProPendingReauth'}]])
     })
 
     it('corrects a demotion when the confirming read shows the customer entitled again', async () => {
