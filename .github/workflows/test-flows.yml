@@ -153,7 +153,9 @@ jobs:
     name: playwright-shard ${{ matrix.shard }}/4
     # Headroom on a quarter of the suite plus a tiny Playwright npm
     # install. The margin is for the degraded case — a failure drags a
-    # 30 s timeout plus a retry.
+    # 30 s timeout plus a retry. With the light/heavy split below, each
+    # shard's two passes were estimated at 5.5-8.5 min of test time from
+    # the per-test durations of run 36732113798 (#1892).
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -188,8 +190,34 @@ jobs:
       # 2 workers on 4 vCPU matches Playwright's vCPU/2 heuristic and the
       # density that stayed green when RAM was the limit. Do not bump this
       # without re-measuring: four SwiftShader heaps on four cores contend.
-      - name: Run Playwright tests
+      #
+      # Two passes, same --shard=N/4, so every shard gets a quarter of the
+      # slow share-140 export specs instead of shard 2 getting all of them.
+      # Playwright 1.56.1 shards by test COUNT in file order, not duration
+      # (lib/runner/testGroups.js#filterForShard), and those specs run
+      # 11 s - 1.6 min per test next to each other in file order: one
+      # unsplit pass had shard 2 at 11-14.5 min vs 4.5-7 min for the rest,
+      # cancelled twice at the 15-min limit (#1892). The heavy list and
+      # why the two sets together are exactly the full suite:
+      # tools/playwrightSpecSets.js.
+      #
+      # The heavy pass writes its own report and output dirs: Playwright
+      # wipes `test-results` (outputDir) and the HTML report folder at the
+      # start of every run, so sharing them would delete the light pass's
+      # traces. `!cancelled()` runs it even when the light pass fails, so a
+      # red shard still reports on every test it owns; the job fails if
+      # either pass does.
+      - name: Run Playwright tests (light specs)
+        env:
+          PW_SPEC_SET: light
         run: npx playwright test --config=tools/playwright.config.js --reporter=github,list,html --workers=2 --shard=${{ matrix.shard }}/4
+
+      - name: Run Playwright tests (heavy specs)
+        if: ${{ !cancelled() }}
+        env:
+          PW_SPEC_SET: heavy
+          PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report-heavy
+        run: npx playwright test --config=tools/playwright.config.js --reporter=github,list,html --workers=2 --shard=${{ matrix.shard }}/4 --output=test-results-heavy
 
       # Always upload the HTML report (handy to debug failures)
       - name: Upload Playwright HTML report
@@ -197,7 +225,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ matrix.shard }}
-          path: playwright-report
+          path: |
+            playwright-report
+            playwright-report-heavy
           retention-days: 7
           if-no-files-found: warn
 
@@ -207,7 +237,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces-${{ matrix.shard }}
-          path: test-results
+          path: |
+            test-results
+            test-results-heavy
           retention-days: 7
           if-no-files-found: warn
         # Ensure you have trace: 'on-first-retry' (or similar) in playwright.config.ts

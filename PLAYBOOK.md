@@ -188,7 +188,13 @@ warning) and you can fall back to `--workers=1`.
 Each shard still runs `--workers=2` (the density that stayed green on
 the old 8 GB larger runner; packing 4 SwiftShader Chromiums onto 4
 cores contends). The suite is split `--shard=1/4` … `4/4` so eight
-Chromiums run across four free machines. One `playwright-build` job
+Chromiums run across four free machines. Each shard runs twice with the
+same `--shard`: `PW_SPEC_SET=light`, then `PW_SPEC_SET=heavy` (the
+share-140 export specs listed in `tools/playwrightSpecSets.js`).
+Playwright shards by test count in file order, not duration, so without
+the split those slow specs all landed in shard 2 (#1892). A new spec
+whose tests routinely take close to a minute each belongs on that list.
+One `playwright-build` job
 produces `docs/` as `yarn test-flows-build` left it; shards set
 `PLAYWRIGHT_SERVE_ONLY=true`, install `@playwright/test@1.56.1` plus
 `http-server`, and run `npx http-server` inside `docs/` (no Share
