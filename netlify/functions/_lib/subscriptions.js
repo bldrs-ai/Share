@@ -29,18 +29,22 @@
  *    reauth modal every billing period.
  *
  *  - Entitlement is decided across the customers that can speak for a user:
- *    the one an event or sweep item is about, plus the one the user is
- *    linked to (`app_metadata.stripeCustomerId`), plus — in the sweep, before
- *    demoting — any other customer with the user's email. A user who
- *    resubscribed under a new Stripe customer is not demoted by a late event
- *    for the old one, and the link moves only to an entitled customer
- *    (`linkFor`), so "Manage subscription" never opens an empty portal.
- *  - Every tier write is confirmed (`writeAndConfirm`): read Auth0's actual
- *    value, then Stripe, and write again until the two agree. Entitlement is
- *    not monotone — `unpaid`, `paused` and `incomplete` can all return to
+ *    the one the user is linked to (`app_metadata.stripeCustomerId`) FIRST,
+ *    then the one an event or sweep item is about, plus — in the sweep,
+ *    before demoting — any other customer with the user's email that no
+ *    other user owns. A user who resubscribed under a new Stripe customer is
+ *    not demoted by a late event for the old one; the link moves only to an
+ *    entitled customer, and stays put while the linked one is entitled
+ *    (`linkFor`), so "Manage subscription" never opens an empty portal and
+ *    two writers never fight over which of two live customers to link.
+ *  - Every write — tier or link — goes through one loop (`settleUser`): from
+ *    Auth0's STORED app_metadata, read Stripe, write whatever disagrees,
+ *    re-read Auth0, repeat until nothing disagrees. Entitlement is not
+ *    monotone — `unpaid`, `paused` and `incomplete` can all return to
  *    `active`, and a customer can resubscribe — and several invocations can
- *    write the same user, so neither a single correction nor a comparison
- *    with this invocation's own last write is enough; see
+ *    write the same user (Auth0's PATCH is last-write-wins, link included),
+ *    so the loop derives both entitlement and link from what Auth0 holds
+ *    now, never from values captured before another writer's write; see
  *    design/new/netlify-functions-testing.md §"Retries and ordering".
  *
  * Also here: the upstream-failure classification both callers use to decide
@@ -222,7 +226,9 @@ export async function entitlementAcross(stripe, customerIds, proPriceId) {
  * The `stripeCustomerId` a user should be linked to after a reading: the
  * entitled customer if there is one, else whatever the user is already
  * linked to, else the customer this event or item is about. The link never
- * moves to a customer with no Pro subscription while it points at one.
+ * moves to a customer with no Pro subscription while it points at one; and
+ * since readings list the linked customer first, it doesn't move while the
+ * linked customer is itself entitled.
  *
  * @param {{customer: ?string}} reading from `entitlementAcross`
  * @param {?string} linked the user's current stripeCustomerId
@@ -303,16 +309,28 @@ export async function findAuth0UserForCustomer(stripe, customerId) {
  * other's customer — `create-portal-session` opens whatever customer
  * `stripeCustomerId` names.
  *
+ * The customer was found by this user's email, so any other identity that
+ * could own it through that email is in `users-by-email`, which reads the
+ * primary store — checked first, so a link made seconds ago is seen (the
+ * search index lags; Codex on #1891). The search then catches an owner
+ * whose email differs; only such an owner linked within the index's lag can
+ * slip past.
+ *
  * @param {string} customerId
  * @param {string} userId
+ * @param {?string} email the user's, which found this customer
  * @return {Promise<boolean>} true also for an id that can't be queried safely
  */
-export async function isLinkedElsewhere(customerId, userId) {
+export async function isLinkedElsewhere(customerId, userId, email) {
   if (!CUSTOMER_ID_PATTERN.test(customerId)) {
     return true
   }
-  const linked = await searchUsers(`app_metadata.stripeCustomerId:"${customerId}"`, 0, AUTH0_SEARCH_PAGE_SIZE)
-  return linked.some((user) => user.user_id !== userId)
+  const ownedBy = (users) => users.some((user) => user.user_id !== userId &&
+    user.app_metadata && user.app_metadata.stripeCustomerId === customerId)
+  if (email && ownedBy(await getUsersByEmail(email))) {
+    return true
+  }
+  return ownedBy(await searchUsers(`app_metadata.stripeCustomerId:"${customerId}"`, 0, AUTH0_SEARCH_PAGE_SIZE))
 }
 
 
@@ -342,51 +360,105 @@ function pendingStatusFor(entitled) {
 
 
 /**
- * Write the tier a reading calls for, then confirm it: read the user's
- * ACTUAL `subscriptionStatus` from Auth0, then Stripe, and while their tiers
- * disagree, write what Stripe now says. Ends once they agree.
+ * The app_metadata patch that brings `stored` to what `reading` says, or
+ * null when nothing disagrees. A tier change always carries the link too.
  *
- * Comparing Auth0 itself, not this invocation's own last write, is what
- * makes overlapping invocations safe: another invocation's write can land
- * between this one's write and its reads, and only the stored value shows
- * it (Codex on #1891). Auth0 is read before Stripe, so when they agree, any
- * later change to either is someone else's to confirm: another invocation's
- * write is followed by its own confirming reads, and a Stripe change sends
- * a new event (and is swept daily).
+ * @param {object} stored app_metadata as Auth0 holds it
+ * @param {{entitled: boolean}} reading
+ * @param {string} wantLink from `linkFor`
+ * @return {?object}
+ */
+function patchFor(stored, reading, wantLink) {
+  const patch = {}
+  if (isProInAuth0(stored.subscriptionStatus) !== reading.entitled) {
+    patch.subscriptionStatus = pendingStatusFor(reading.entitled)
+    patch.stripeCustomerId = wantLink
+  }
+  if ((stored.stripeCustomerId || null) !== wantLink) {
+    patch.stripeCustomerId = wantLink
+  }
+  return Object.keys(patch).length > 0 ? patch : null
+}
+
+
+/**
+ * @param {object} stored
+ * @param {object} patch from `patchFor`
+ * @return {{tier: ?string, from: ?string, to: string}} `tier` is 'promote',
+ *   'demote' or null (a relink alone); from/to are the link
+ */
+function describeChange(stored, patch) {
+  let tier = null
+  if (patch.subscriptionStatus) {
+    tier = patch.subscriptionStatus === PRO_PENDING_STATUS ? 'promote' : 'demote'
+  }
+  return {tier, from: stored.stripeCustomerId || null, to: patch.stripeCustomerId}
+}
+
+
+/**
+ * Bring one Auth0 user to what Stripe says, and confirm it. Each round
+ * starts from the user's app_metadata AS AUTH0 STORES IT: read Stripe for
+ * the customers that speak for the user given that stored link, write
+ * whatever disagrees (tier, link, or both), re-read Auth0, and go again.
+ * Ends when a round needs no write.
  *
- * Failure after the first write can leave a stale tier in Auth0, so every
+ * Deriving everything from the stored value, rather than from values this
+ * invocation captured earlier, is what makes overlapping writers safe
+ * (Codex on #1891): another invocation's write — a tier, or a relink to a
+ * customer this one never saw — lands between rounds and is read back.
+ * Auth0 is read before Stripe each round, so when a round agrees, any later
+ * change to either is someone else's to confirm: another invocation's write
+ * is followed by its own rounds, and a Stripe change sends a new event (and
+ * is swept daily).
+ *
+ * Failure after the first write can leave a stale value in Auth0, so every
  * such failure is marked `retryRequired` — the webhook answers 500 whatever
  * the upstream status — except a 404 on the Auth0 user, which a retry can't
- * fix.
+ * fix. Before any write, failures are left for the caller to classify.
  *
  * @param {object} args
  * @param {string} args.userId Auth0 user_id
- * @param {{entitled: boolean, customer: ?string}} args.reading what was read
- * @param {Function} args.read async, returns a fresh reading
- * @param {Function} args.link reading → stripeCustomerId to write
- * @param {Array<number>} args.retryDelaysMs inline retries per read / write
- * @return {Promise<string>} the subscriptionStatus Auth0 holds once confirmed
+ * @param {object} args.stored app_metadata as last read from the primary store
+ * @param {Function} args.read async (stored) → `entitlementAcross` reading,
+ *   the stored link listed first
+ * @param {Function} args.link (reading, stored) → stripeCustomerId to hold
+ * @param {Array<number>} args.retryDelaysMs inline retries once written
+ * @param {object} [args.reading] a reading already taken from `stored`
+ * @param {boolean} [args.dryRun] report the first change, write nothing
+ * @return {Promise<{changes: Array<object>, status: ?string}>} every write
+ *   made (the one that would be, in a dry run), and the stored status once
+ *   settled
  */
-export async function writeAndConfirm({userId, reading, read, link, retryDelaysMs}) {
-  const write = (r) => patchUserAppMetadata(userId, {subscriptionStatus: pendingStatusFor(r.entitled), stripeCustomerId: link(r)})
-  await write(reading)
+export async function settleUser({userId, stored, read, link, retryDelaysMs, reading = null, dryRun = false}) {
+  const changes = []
+  let current = stored || {}
+  let next = reading
   try {
-    for (let round = 0; round < MAX_CONFIRM_ROUNDS; round++) {
-      const stored = await retryTransient(() => getUserAppMetadata(userId), retryDelaysMs)
-      const fresh = await retryTransient(read, retryDelaysMs)
-      if (isProInAuth0(stored.subscriptionStatus) === fresh.entitled) {
-        return stored.subscriptionStatus
+    for (let round = 0; ; round++) {
+      const wrote = changes.length > 0
+      const snapshot = current
+      const fresh = next || await (wrote ? retryTransient(() => read(snapshot), retryDelaysMs) : read(snapshot))
+      next = null
+      const patch = patchFor(current, fresh, link(fresh, current))
+      if (!patch) {
+        return {changes, status: current.subscriptionStatus || null}
       }
-      await retryTransient(() => write(fresh), retryDelaysMs)
+      if (dryRun) {
+        return {changes: [describeChange(current, patch)], status: current.subscriptionStatus || null}
+      }
+      if (round > MAX_CONFIRM_ROUNDS) {
+        throw new Error(`Entitlement for ${userId} still changing after ${MAX_CONFIRM_ROUNDS} corrections`)
+      }
+      await (wrote ? retryTransient(() => patchUserAppMetadata(userId, patch), retryDelaysMs) : patchUserAppMetadata(userId, patch))
+      changes.push(describeChange(current, patch))
+      current = await retryTransient(() => getUserAppMetadata(userId), retryDelaysMs)
     }
   } catch (err) {
     const userGone = (err.step === 'user_patch' || err.step === 'user_lookup') && err.upstreamStatus === HTTP_NOT_FOUND
-    if (!userGone) {
+    if (changes.length > 0 && !userGone) {
       err.retryRequired = true
     }
     throw err
   }
-  const err = new Error(`Entitlement for ${userId} still changing after ${MAX_CONFIRM_ROUNDS} corrections`)
-  err.retryRequired = true
-  throw err
 }

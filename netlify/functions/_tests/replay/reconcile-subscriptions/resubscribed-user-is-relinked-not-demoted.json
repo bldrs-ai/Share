@@ -1,5 +1,5 @@
 {
-  "description": "A Pro user whose linked customer lapsed but who pays under a NEW customer with the same email (a resubscribe): the would-be demotion finds the entitled customer and relinks instead, and the promote item for the new customer skips them as already Pro. Without the email check the sweep demoted a paying user while the promote pass skipped them. The new customer is checked to be linked to no other user first, and the relink is confirmed by a fresh read.",
+  "description": "A Pro user whose linked customer lapsed but who pays under a NEW customer with the same email (a resubscribe): read from the primary store, the would-be demotion finds the entitled customer \u2014 owned by no other user, checked through users-by-email and the search \u2014 and relinks instead; the relink is confirmed from Auth0's stored value, and the promote item for the new customer skips the user as the demote item's. Without the email check the sweep demoted a paying user while the promote pass skipped them.",
   "exchangeOrder": "any",
   "env": {
     "$fixture": "env/stripe.json",
@@ -41,6 +41,25 @@
             }
           }
         ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/auth0%7Cstale0002",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "user_id": "auth0|stale0002",
+          "app_metadata": {
+            "subscriptionStatus": "sharePro",
+            "stripeCustomerId": "cus_Rstale0002"
+          }
+        }
       }
     },
     {
@@ -121,6 +140,41 @@
     {
       "request": {
         "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users-by-email?email=grace%40example.com",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": [
+          {
+            "user_id": "auth0|stale0002",
+            "email": "grace@example.com",
+            "app_metadata": {
+              "subscriptionStatus": "sharePro",
+              "stripeCustomerId": "cus_Rstale0002"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users?q=app_metadata.stripeCustomerId%3A%22cus_Rnew0004%22&search_engine=v3&per_page=50&page=0",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
         "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rnew0004&status=all&limit=100",
         "headers": {
           "authorization": "Bearer sk_test_replay"
@@ -179,6 +233,69 @@
         "status": 200,
         "json": {
           "user_id": "auth0|stale0002"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/auth0%7Cstale0002",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "user_id": "auth0|stale0002",
+          "app_metadata": {
+            "subscriptionStatus": "sharePro",
+            "stripeCustomerId": "cus_Rnew0004"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rnew0004&status=all&limit=100",
+        "headers": {
+          "authorization": "Bearer sk_test_replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "object": "list",
+          "data": [
+            {
+              "$fixture": "stripe/subscription.json",
+              "$merge": {
+                "items": {
+                  "data": [
+                    {
+                      "id": "si_Rreplay0001",
+                      "object": "subscription_item",
+                      "quantity": 1,
+                      "subscription": "sub_1QreplayStandard0001",
+                      "price": {
+                        "id": "price_1QreplayPro0001",
+                        "object": "price",
+                        "type": "recurring",
+                        "unit_amount": 1900,
+                        "currency": "usd"
+                      }
+                    }
+                  ]
+                },
+                "id": "sub_for_cus_Rnew0004",
+                "customer": "cus_Rnew0004",
+                "status": "active"
+              }
+            }
+          ],
+          "has_more": false,
+          "url": "/v1/subscriptions"
         }
       }
     },
@@ -275,109 +392,6 @@
             }
           }
         ]
-      }
-    },
-    {
-      "request": {
-        "method": "GET",
-        "url": "https://bldrs-replay.us.auth0.com/api/v2/users?q=app_metadata.stripeCustomerId%3A%22cus_Rnew0004%22&search_engine=v3&per_page=50&page=0",
-        "headers": {
-          "authorization": "Bearer mgmt-token-replay"
-        }
-      },
-      "response": {
-        "status": 200,
-        "json": []
-      }
-    },
-    {
-      "request": {
-        "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rstale0002&status=all&limit=100",
-        "headers": {
-          "authorization": "Bearer sk_test_replay"
-        }
-      },
-      "response": {
-        "status": 200,
-        "json": {
-          "object": "list",
-          "data": [
-            {
-              "$fixture": "stripe/subscription.json",
-              "$merge": {
-                "items": {
-                  "data": [
-                    {
-                      "id": "si_Rreplay0001",
-                      "object": "subscription_item",
-                      "quantity": 1,
-                      "subscription": "sub_1QreplayStandard0001",
-                      "price": {
-                        "id": "price_1QreplayPro0001",
-                        "object": "price",
-                        "type": "recurring",
-                        "unit_amount": 1900,
-                        "currency": "usd"
-                      }
-                    }
-                  ]
-                },
-                "id": "sub_for_cus_Rstale0002",
-                "customer": "cus_Rstale0002",
-                "status": "canceled",
-                "canceled_at": 1761742100,
-                "ended_at": 1761742100
-              }
-            }
-          ],
-          "has_more": false,
-          "url": "/v1/subscriptions"
-        }
-      }
-    },
-    {
-      "request": {
-        "method": "GET",
-        "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rnew0004&status=all&limit=100",
-        "headers": {
-          "authorization": "Bearer sk_test_replay"
-        }
-      },
-      "response": {
-        "status": 200,
-        "json": {
-          "object": "list",
-          "data": [
-            {
-              "$fixture": "stripe/subscription.json",
-              "$merge": {
-                "items": {
-                  "data": [
-                    {
-                      "id": "si_Rreplay0001",
-                      "object": "subscription_item",
-                      "quantity": 1,
-                      "subscription": "sub_1QreplayStandard0001",
-                      "price": {
-                        "id": "price_1QreplayPro0001",
-                        "object": "price",
-                        "type": "recurring",
-                        "unit_amount": 1900,
-                        "currency": "usd"
-                      }
-                    }
-                  ]
-                },
-                "id": "sub_for_cus_Rnew0004",
-                "customer": "cus_Rnew0004",
-                "status": "active"
-              }
-            }
-          ],
-          "has_more": false,
-          "url": "/v1/subscriptions"
-        }
       }
     }
   ],

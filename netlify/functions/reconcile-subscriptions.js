@@ -16,10 +16,11 @@
  * the events:
  *
  *   1. DEMOTE: Auth0 users marked PRO (`sharePro` / `shareProPendingReauth`)
- *      whose Stripe customer is not entitled → 'freePendingReauth'. Before
- *      demoting, the user's other Stripe customers (same email) are checked:
- *      if one is entitled — a resubscribe under a new customer — the user
- *      keeps PRO and is RELINKED to it instead.
+ *      whose Stripe customer is not entitled → 'freePendingReauth'. Each is
+ *      re-read from the primary store first (the search index lags). Before
+ *      demoting, the user's other Stripe customers (same email, owned by no
+ *      other user) are checked: if one is entitled — a resubscribe under a
+ *      new customer — the user keeps PRO and is RELINKED to it instead.
  *      A PRO user with no `stripeCustomerId` is reported as unverifiable and
  *      never demoted: that is how a manual (comped) grant looks, and
  *      revoking it silently would be worse than reporting it.
@@ -59,7 +60,7 @@
 
 import Stripe from 'stripe'
 import * as Sentry from '@sentry/serverless'
-import {patchUserAppMetadata} from './_lib/auth0.js'
+import {getUserAppMetadata} from './_lib/auth0.js'
 import {
   CUSTOMER_ID_PATTERN,
   STRIPE_CLIENT_OPTIONS,
@@ -71,7 +72,7 @@ import {
   isProInAuth0,
   linkFor,
   searchAuth0Users,
-  writeAndConfirm,
+  settleUser,
 } from './_lib/subscriptions.js'
 
 
@@ -266,98 +267,111 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
     const proUserIds = new Set(proUsers.map((user) => user.user_id))
     const proCustomerIds = new Set(proUsers.map((user) => user.app_metadata && user.app_metadata.stripeCustomerId).filter(Boolean))
 
-    // 1. DEMOTE: PRO in Auth0, not entitled in Stripe under any of the
-    // user's customers.
-    const demoteItem = async (user) => {
-      const linked = user.app_metadata && user.app_metadata.stripeCustomerId
-      if (!linked) {
-        summary.unverifiable.push({user: user.user_id, reason: 'pro_without_stripe_customer'})
-        return
-      }
-      try {
-        let reading = await entitlementAcross(stripe, [linked], proPriceId)
-        const others = []
-        if (!reading.entitled) {
-          // Only for would-be demotions: the check that tells a lapsed user
-          // from one who resubscribed under a new customer (whom the promote
-          // pass would skip, being PRO). A same-email customer already
-          // linked to a DIFFERENT user is that user's, not this one's.
-          for (const id of await customerIdsForEmail(stripe, user.email)) {
-            if (id !== linked && !(await isLinkedElsewhere(id, user.user_id))) {
-              others.push(id)
-            }
-          }
-          reading = await entitlementAcross(stripe, others, proPriceId)
+    // Every change settleUser made (in report mode: would make first),
+    // filed under the summary list it belongs to.
+    const record = (userId, changes) => {
+      for (const change of changes) {
+        if (change.tier === 'demote') {
+          summary.demote.push({user: userId, customer: change.to})
+        } else if (change.tier === 'promote') {
+          summary.promote.push({user: userId, customer: change.to})
+        } else {
+          summary.relink.push({user: userId, from: change.from, to: change.to})
         }
-        const read = () => entitlementAcross(stripe, [linked, ...others], proPriceId)
-        const demote = (r) => {
-          summary.demote.push({user: user.user_id, customer: linked})
-          return apply ? writeAndConfirm({
-            userId: user.user_id, reading: r, read, link: (x) => linkFor(x, linked, linked), retryDelaysMs: NO_INLINE_RETRIES,
-          }) : null
-        }
-        if (!reading.entitled) {
-          await demote(reading)
-          return
-        }
-        if (reading.customer !== linked) {
-          summary.relink.push({user: user.user_id, from: linked, to: reading.customer})
-          if (apply) {
-            await patchUserAppMetadata(user.user_id, {stripeCustomerId: reading.customer})
-            // Confirm, like a tier write: if the new customer lapsed between
-            // the read and the relink, this is a demotion after all.
-            const fresh = await read()
-            if (!fresh.entitled) {
-              await demote(fresh)
-            }
-          }
-        }
-      } catch (err) {
-        summary.errors.push({user: user.user_id, customer: linked, error: describeError(err)})
       }
     }
 
-    // 2. PROMOTE: entitled in Stripe, not PRO in Auth0.
-    const promote = async (customerId) => {
+    // 1. DEMOTE: PRO in the search index. Decided from the primary store —
+    // the index lags it by seconds either way (a user demoted moments ago is
+    // still listed PRO, and may have resubscribed since; Codex on #1891) —
+    // and across all of the user's customers.
+    const demoteItem = async (indexed) => {
+      const userId = indexed.user_id
+      try {
+        const stored = await getUserAppMetadata(userId)
+        const linked = stored.stripeCustomerId
+        if (!linked) {
+          if (isProInAuth0(stored.subscriptionStatus)) {
+            summary.unverifiable.push({user: userId, reason: 'pro_without_stripe_customer'})
+          }
+          return
+        }
+        const own = await entitlementAcross(stripe, [linked], proPriceId)
+        const others = []
+        if (!own.entitled) {
+          // Only for would-be demotions: the check that tells a lapsed user
+          // from one who resubscribed under a new customer (whom the promote
+          // pass would skip, being PRO). A same-email customer another user
+          // owns is theirs, not this one's.
+          for (const id of await customerIdsForEmail(stripe, indexed.email)) {
+            if (id !== linked && !(await isLinkedElsewhere(id, userId, indexed.email))) {
+              others.push(id)
+            }
+          }
+        }
+        const reading = own.entitled || others.length === 0 ? own : await entitlementAcross(stripe, others, proPriceId)
+        const {changes} = await settleUser({
+          userId,
+          stored,
+          reading,
+          read: (current) => entitlementAcross(stripe, [current.stripeCustomerId, linked, ...others], proPriceId),
+          link: (r, current) => linkFor(r, current.stripeCustomerId, linked),
+          retryDelaysMs: NO_INLINE_RETRIES,
+          dryRun: !apply,
+        })
+        record(userId, changes)
+      } catch (err) {
+        summary.errors.push({user: userId, customer: (indexed.app_metadata || {}).stripeCustomerId, error: describeError(err)})
+      }
+    }
+
+    // 2. PROMOTE: entitled in Stripe, and no user the PRO search returned
+    // (those are their demote item's to settle).
+    const promoteItem = async (customerId) => {
       if (!CUSTOMER_ID_PATTERN.test(customerId)) {
         summary.unverifiable.push({customer: String(customerId), reason: 'unexpected_customer_id'})
         return
       }
       try {
+        // Found by linked customer (re-read from the primary store) or by
+        // email (which reads it): either way `app_metadata` is current.
         const {user} = await findAuth0UserForCustomer(stripe, customerId)
         if (!user) {
           summary.unverifiable.push({customer: customerId, reason: 'no_auth0_user'})
           return
         }
-        const appMetadata = user.app_metadata || {}
-        if (proUserIds.has(user.user_id) || isProInAuth0(appMetadata.subscriptionStatus)) {
+        if (proUserIds.has(user.user_id)) {
           return
         }
-        const linked = appMetadata.stripeCustomerId || null
-        summary.promote.push({user: user.user_id, customer: customerId})
-        if (apply) {
-          await writeAndConfirm({
-            userId: user.user_id,
-            reading: {entitled: true, customer: customerId},
-            read: () => entitlementAcross(stripe, [customerId, linked], proPriceId),
-            link: (r) => linkFor(r, linked, customerId),
-            retryDelaysMs: NO_INLINE_RETRIES,
-          })
-        }
+        const stored = user.app_metadata || {}
+        // Discovery just saw this customer entitled; with no other link to
+        // consider that's the reading, without a second Stripe call.
+        const reading = !stored.stripeCustomerId || stored.stripeCustomerId === customerId ?
+          {entitled: true, customer: customerId} : null
+        const {changes} = await settleUser({
+          userId: user.user_id,
+          stored,
+          reading,
+          read: (current) => entitlementAcross(stripe, [current.stripeCustomerId, customerId], proPriceId),
+          link: (r, current) => linkFor(r, current.stripeCustomerId, customerId),
+          retryDelaysMs: NO_INLINE_RETRIES,
+          dryRun: !apply,
+        })
+        record(user.user_id, changes)
       } catch (err) {
         summary.errors.push({customer: customerId, error: describeError(err)})
       }
     }
 
     // Customers already linked to a PRO user are settled by their demote
-    // item: no promote lookup needed. The two passes share one queue,
-    // alternating, so when the budget runs out both have made progress and
-    // `skipped` counts every discovered item that wasn't started. A promote
-    // item never writes to a user the PRO search returned, so the two kinds
-    // don't race each other.
+    // item, which reads that user from the primary store: no promote lookup
+    // needed. The two passes share one queue, alternating, so when the
+    // budget runs out both have made progress and `skipped` counts every
+    // discovered item that wasn't started. A promote item never writes to a
+    // user the PRO search returned, so the two kinds don't race each other.
     const tasks = interleave(
       proUsers.map((user) => () => demoteItem(user)),
-      entitled.customers.filter((customerId) => !proCustomerIds.has(customerId)).map((customerId) => () => promote(customerId)),
+      entitled.customers.filter((customerId) => !proCustomerIds.has(customerId)).map((customerId) => () => promoteItem(customerId)),
     )
     const run = await runLimited(tasks, CONCURRENCY, startBy, waitUntil, (task) => task())
     summary.skipped = run.skipped

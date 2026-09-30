@@ -1,5 +1,5 @@
 {
-  "description": "A late deleted for the user's OLD customer, while they pay under the customer they're linked to now: entitlement is read across both, so nothing is written \u2014 no demotion, and the link stays on the paying customer.",
+  "description": "A late deleted for the user's OLD customer, while they pay under the customer they're linked to now: the linked customer is read first and is entitled, so nothing is written \u2014 no demotion, and the link stays on the paying customer.",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -42,9 +42,6 @@
           ]
         }
       }
-    },
-    {
-      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
     },
     {
       "$fixture": "exchanges/stripe-subscriptions-pro-active.json",

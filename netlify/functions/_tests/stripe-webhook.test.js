@@ -409,6 +409,45 @@ describe('stripe-webhook function', () => {
       expect(patches()).toEqual([{stripeCustomerId: CUSTOMER_ID}])
     })
 
+    it('keeps the link on the linked customer while it is entitled, so two live customers can\'t flip-flop it', async () => {
+      mockUpstreams({
+        otherCustomers: {cus_linked: [proSubscription({customer: 'cus_linked'})]},
+        appMetadata: {subscriptionStatus: 'sharePro', stripeCustomerId: 'cus_linked'},
+      })
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.created'))
+
+      await handler(webhookEvent())
+
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    // Codex round 3 on #1891: this delivery relinks to the new customer, and
+    // an overlapping cancellation for the old one then writes FREE with the
+    // OLD link (Auth0's PATCH is last-write-wins). Reading the stored value
+    // back — link included — is what repairs it.
+    it('confirms a relink too, and repairs a concurrent write that clobbered it', async () => {
+      mockUpstreams({
+        otherCustomers: {cus_old: [proSubscription({customer: 'cus_old', status: 'canceled'})]},
+        appMetadata: {subscriptionStatus: 'sharePro', stripeCustomerId: 'cus_old'},
+      })
+      let userReads = 0
+      const route = axios.get.getMockImplementation()
+      const clobbered = {subscriptionStatus: 'freePendingReauth', stripeCustomerId: 'cus_old'}
+      // Read 1 is the lookup's (by email: not linked to cus_unit yet), so the
+      // first GET /users/{id} is the confirming read after the relink.
+      axios.get.mockImplementation((url) => (url.startsWith(USER_URL) && ++userReads === 1 ?
+        Promise.resolve({data: {user_id: USER_ID, app_metadata: clobbered}}) : route(url)))
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(stripeEvent('customer.subscription.created'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res).toEqual({statusCode: 200, body: 'Success'})
+      expect(patches()).toEqual([
+        {stripeCustomerId: CUSTOMER_ID},
+        {subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: CUSTOMER_ID},
+      ])
+    })
+
     it('keeps the link on the old customer when neither is entitled', async () => {
       mockUpstreams({
         subscriptions: [proSubscription({status: 'incomplete'})],

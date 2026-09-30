@@ -50,6 +50,43 @@
     {
       "request": {
         "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/auth0%7Cstale0002",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "user_id": "auth0|stale0002",
+          "app_metadata": {
+            "subscriptionStatus": "sharePro",
+            "stripeCustomerId": "cus_Rstale0002"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/auth0%7Ccomped0003",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "user_id": "auth0|comped0003",
+          "app_metadata": {
+            "subscriptionStatus": "sharePro"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
         "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rstale0002&status=all&limit=100",
         "headers": {
           "authorization": "Bearer sk_test_replay"

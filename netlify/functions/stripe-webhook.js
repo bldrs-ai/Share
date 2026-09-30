@@ -32,11 +32,12 @@
  * Deliveries can also overlap: a `created` invocation reads `active`, the
  * `deleted` invocation reads `canceled` and demotes (or finds nothing to
  * demote yet), then the `created` one writes its stale PRO last. So every
- * tier write is confirmed (`writeAndConfirm`): re-read, re-write while the
- * reading moved, until a read after the latest write agrees with it —
- * retried inline with a short backoff (bldrs-ai/ops#34). Entitlement can
- * flip back and forth (`unpaid` → `active`, a resubscribe), which is why it
- * loops rather than correcting once. Whatever still slips through (Stripe
+ * write, tier or link, is confirmed (`settleUser`): re-read Auth0's stored
+ * value, then Stripe, and write again until nothing disagrees — retried
+ * inline with a short backoff (bldrs-ai/ops#34). Entitlement can flip back
+ * and forth (`unpaid` → `active`, a resubscribe) and another delivery can
+ * write in between (a tier, or a relink), which is why it loops from the
+ * stored value rather than correcting once. Whatever still slips through (Stripe
  * and Auth0 down for Stripe's whole retry window) is caught by the daily
  * `reconcile-subscriptions` sweep.
  *
@@ -71,16 +72,14 @@
 
 import Stripe from 'stripe'
 import * as Sentry from '@sentry/serverless'
-import {patchUserAppMetadata} from './_lib/auth0.js'
 import {
   STRIPE_CLIENT_OPTIONS,
   entitlementAcross,
   findAuth0UserForCustomer,
   isPermanentFailure,
   linkFor,
-  statusTransition,
+  settleUser,
   upstreamStatus,
-  writeAndConfirm,
 } from './_lib/subscriptions.js'
 
 
@@ -108,9 +107,9 @@ const CORRECTION_RETRY_DELAYS_MS = [250, 1000] // eslint-disable-line no-magic-n
 
 
 /**
- * Bring the Auth0 user for this Stripe customer to the tier their
- * subscriptions entitle them to NOW, confirming any tier write against a
- * fresh read (see the header).
+ * Bring the Auth0 user for this Stripe customer to the tier and link their
+ * subscriptions call for NOW, confirmed against what Auth0 then stores (see
+ * the header).
  *
  * Throws on upstream failures; the handler decides from the error whether
  * Stripe should retry. Returns `{permanent: reason}` for conditions a retry
@@ -118,7 +117,7 @@ const CORRECTION_RETRY_DELAYS_MS = [250, 1000] // eslint-disable-line no-magic-n
  *
  * @param {object} stripe Stripe client
  * @param {string} stripeCustomerId the event's customer
- * @return {Promise<object>} `{auth0UserId, written}` or `{permanent: reason}`
+ * @return {Promise<object>} `{auth0UserId, status}` or `{permanent: reason}`
  */
 async function syncCustomer(stripe, stripeCustomerId) {
   const proPriceId = process.env.SHARE_PRO_PRICE_ID
@@ -126,29 +125,17 @@ async function syncCustomer(stripe, stripeCustomerId) {
   if (!user) {
     return {permanent: reason}
   }
-  const appMetadata = user.app_metadata || {}
-  const linked = appMetadata.stripeCustomerId || null
-  // The event's customer first, so it's the one linked when both are
-  // entitled: it's the customer that just changed.
-  const read = () => entitlementAcross(stripe, [stripeCustomerId, linked], proPriceId)
-  const link = (reading) => linkFor(reading, linked, stripeCustomerId)
-  const reading = await read()
-  const subscriptionStatus = statusTransition(reading.entitled, appMetadata.subscriptionStatus)
-
-  if (subscriptionStatus === null) {
-    // Tier already right. Still keep the link right: create-portal-session
-    // reads stripeCustomerId, and a lost earlier delivery may never have
-    // written it.
-    if (linked !== link(reading)) {
-      await patchUserAppMetadata(user.user_id, {stripeCustomerId: link(reading)})
-    }
-    return {auth0UserId: user.user_id, written: null}
-  }
-
-  const written = await writeAndConfirm({
-    userId: user.user_id, reading, read, link, retryDelaysMs: CORRECTION_RETRY_DELAYS_MS,
+  // From the STORED link each round, listed first: while the linked
+  // customer is entitled the link stays put, and a relink written by an
+  // overlapping delivery is read back rather than overwritten.
+  const {status} = await settleUser({
+    userId: user.user_id,
+    stored: user.app_metadata || {},
+    read: (stored) => entitlementAcross(stripe, [stored.stripeCustomerId, stripeCustomerId], proPriceId),
+    link: (reading, stored) => linkFor(reading, stored.stripeCustomerId, stripeCustomerId),
+    retryDelaysMs: CORRECTION_RETRY_DELAYS_MS,
   })
-  return {auth0UserId: user.user_id, written}
+  return {auth0UserId: user.user_id, status}
 }
 
 

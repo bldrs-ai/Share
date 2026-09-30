@@ -71,9 +71,12 @@ function proUser(i) {
  * @param {object} [world.usersByEmail] email → Auth0 users
  * @param {object} [world.linkedUsers] customer id → the Auth0 user linked to it
  * @param {object} [world.customersByEmail] email → Stripe customer ids
+ * @param {object} [world.storedMetadata] user id → app_metadata in the
+ *   primary store, where it differs from what the search index returned
  */
 function mockWorld({
   proUsers = [], pricePages = [[]], subsByCustomer = {}, usersByEmail = {}, linkedUsers = {}, customersByEmail = {},
+  storedMetadata = {},
 } = {}) {
   axios.post.mockResolvedValue({data: {access_token: 'mgmt-token', expires_in: 86400}})
   axios.patch.mockResolvedValue({data: {}})
@@ -81,6 +84,7 @@ function mockWorld({
   for (const user of [...proUsers, ...Object.values(usersByEmail).flat(), ...Object.values(linkedUsers)]) {
     initialMetadata[user.user_id] = user.app_metadata || {}
   }
+  Object.assign(initialMetadata, storedMetadata)
   axios.get.mockImplementation((url) => {
     const parsed = new URL(url)
     const userPath = parsed.pathname.match(/\/api\/v2\/users\/(.+)$/)
@@ -355,11 +359,50 @@ describe('reconcile-subscriptions', () => {
       const {summary} = await sweep()
 
       expect(summary.relink).toEqual([{user: 'auth0|u1', from: 'cus_1', to: 'cus_new'}])
-      expect(summary.demote).toEqual([{user: 'auth0|u1', customer: 'cus_1'}])
+      // Both customers lapsed, so the link stays where the relink put it.
+      expect(summary.demote).toEqual([{user: 'auth0|u1', customer: 'cus_new'}])
       expect(patches().map(([, metadata]) => metadata)).toEqual([
         {stripeCustomerId: 'cus_new'},
-        {subscriptionStatus: 'freePendingReauth', stripeCustomerId: 'cus_1'},
+        {subscriptionStatus: 'freePendingReauth', stripeCustomerId: 'cus_new'},
       ])
+    })
+
+    // Codex round 3 on #1891: the search index lags, so an empty search is
+    // no proof nobody owns the customer. A same-email owner shows up in
+    // users-by-email, which reads the primary store.
+    it('sees a same-email owner through users-by-email while the search index lags', async () => {
+      mockWorld({
+        proUsers: [proUser(1)],
+        customersByEmail: {'u1@example.com': ['cus_theirs']},
+        subsByCustomer: {cus_theirs: [proSub('cus_theirs')]},
+        usersByEmail: {'u1@example.com': [
+          proUser(1),
+          {user_id: 'github|other', app_metadata: {subscriptionStatus: 'sharePro', stripeCustomerId: 'cus_theirs'}},
+        ]},
+        // No linkedUsers: the search hasn't indexed github|other's link yet.
+      })
+
+      const {summary} = await sweep()
+
+      expect(summary.relink).toEqual([])
+      expect(summary.demote).toEqual([{user: 'auth0|u1', customer: 'cus_1'}])
+    })
+
+    // Codex round 3 on #1891: a user demoted moments ago can still be PRO in
+    // the index; if they've resubscribed and that webhook was lost, the
+    // demote item — reading the primary store — is what promotes them.
+    it('promotes a user the index still lists PRO but the primary store shows demoted, when entitled', async () => {
+      mockWorld({
+        proUsers: [proUser(1)],
+        storedMetadata: {'auth0|u1': {subscriptionStatus: 'freePendingReauth', stripeCustomerId: 'cus_1'}},
+        subsByCustomer: {cus_1: [proSub('cus_1')]},
+        pricePages: [[proSub('cus_1')]],
+      })
+
+      const {summary} = await sweep()
+
+      expect(summary.promote).toEqual([{user: 'auth0|u1', customer: 'cus_1'}])
+      expect(patches()).toEqual([['auth0|u1', {subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: 'cus_1'}]])
     })
 
     it('reports a relink without writing it in report mode', async () => {

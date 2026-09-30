@@ -1,5 +1,5 @@
 {
-  "description": "A subscription to any other price leaves a free user free: nothing but the Stripe customer id is written (create-portal-session reads it).",
+  "description": "A subscription to any other price leaves a free user free: nothing but the Stripe customer id is written (create-portal-session reads it). The link write is confirmed like any other: Auth0 re-read, then Stripe.",
   "env": {
     "$fixture": "env/stripe.json"
   },
@@ -50,6 +50,29 @@
           "$fixture": "auth0/user.json"
         }
       }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "stripeCustomerId": "cus_Rreplay0001"
+            }
+          }
+        }
+      }
+    },
+    {
+      "$fixture": "exchanges/stripe-subscriptions-other-active.json"
     }
   ],
   "expect": {

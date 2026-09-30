@@ -191,11 +191,13 @@ with the reconciliation sweep below; bldrs-ai/ops#34):
   change in the billing portal, and a deleted customer, which has no email
   left — then by the customer's email, preferring among same-email users the
   one already linked to this customer (the search index lags writes by a few
-  seconds). Entitlement is then read across the event's customer **and** the
-  customer the user is linked to, so a late event for a user's old customer
-  can't demote them while they pay under a new one. The link moves only to
-  an entitled customer (`linkFor`): a user is never relinked to a customer
-  with nothing to manage in the billing portal.
+  seconds). Entitlement is then read across the customer the user is linked
+  to — **first** — and the event's customer, so a late event for a user's
+  old customer can't demote them while they pay under a new one. The link
+  moves only to an entitled customer, and not at all while the linked one
+  is entitled (`linkFor`): a user is never relinked to a customer with
+  nothing to manage in the billing portal, and two deliveries for two live
+  customers don't fight over the link.
 - **Deploy prerequisite: the Stripe endpoint must be subscribed to
   `customer.subscription.updated`.** Before ops#34 the webhook handled only
   `created` and `deleted`. Checkout (Share's pricing table) can create a
@@ -218,17 +220,21 @@ and applies the rule above. Consequences:
 
 Deliveries can also **overlap**. A `created` invocation can read `active`,
 the `deleted` invocation then demotes (or finds nothing to demote yet), and
-the `created` one writes its stale PRO last. So every tier write is
-**confirmed** (`writeAndConfirm`): read the user's **stored** status from
-Auth0, then Stripe, and while their tiers disagree, write what Stripe now
-says. It compares with Auth0's stored value, not with this invocation's own
-last write, because another invocation's write can land in between — only
-the stored value shows it (Codex, round 2 on #1891). Auth0 is read before
-Stripe, so once they agree, any later change to either is someone else's to
-confirm: another invocation's write is followed by its own confirming
-reads, and a Stripe change sends a new event. Users found by the search
-index get their `app_metadata` re-read from the primary store
-(`GET /users/{id}`) before any decision, since the index lags writes.
+the `created` one writes its stale PRO last. So every write — tier **or
+link** — goes through one loop (`settleUser`): starting from the user's
+app_metadata **as Auth0 stores it**, read Stripe for the customers that
+speak for the user given that stored link, write whatever disagrees, re-read
+Auth0, and repeat until a round needs no write. Everything — entitlement,
+and which customer to link — is derived from the stored value each round,
+never from values captured before another invocation wrote, because
+Auth0's PATCH is last-write-wins and another delivery's write (a tier, or a
+relink to a customer this one never saw) can land in between (Codex,
+rounds 2 and 3 on #1891). Auth0 is read before Stripe each round, so once
+a round agrees, any later change to either is someone else's to confirm:
+another invocation's write is followed by its own rounds, and a Stripe
+change sends a new event. Users found by the search index get their
+`app_metadata` re-read from the primary store (`GET /users/{id}`) before
+any decision, since the index lags writes.
 
 Why a loop and not one correction: entitlement is **not monotone**. `unpaid`,
 `paused` and `incomplete` can all return to `active`, and a customer can
@@ -290,13 +296,20 @@ Before demoting, the sweep checks the user's **other** Stripe customers (by
 email). If one is entitled — a resubscribe under a new customer — the user
 keeps PRO and is **relinked** to it (`relink` in the summary). Without that,
 the demote pass demoted a paying user while the promote pass skipped them
-for being PRO. Two guards (Codex, round 2 on #1891):
+for being PRO. Guards (Codex, rounds 2 and 3 on #1891):
+- each PRO user is re-read from the **primary store** first: the search
+  index lags it by seconds either way, and a user demoted moments ago who
+  has since resubscribed (webhook lost) is promoted by their demote item;
 - a same-email customer already linked to a **different** Auth0 user is
-  that user's and is never a relink target. Identities that share an email
+  that user's and is never a relink target — identities that share an email
   but were never linked must not take each other's customer, because
-  `create-portal-session` opens whatever customer `stripeCustomerId` names;
-- the relink is confirmed by a fresh read, and becomes a (confirmed)
-  demotion if the new customer lapsed in between.
+  `create-portal-session` opens whatever customer `stripeCustomerId` names.
+  Ownership is checked through `users-by-email` (primary store, so a link
+  made seconds ago counts) and then the search (for an owner with a
+  different email, which only the index can find);
+- the relink goes through the same `settleUser` loop as any write, so it is
+  confirmed from Auth0's stored value and becomes a (confirmed) demotion if
+  the new customer lapsed in between.
 
 **Report first.** `RECONCILE_MODE` defaults to report. The sweep logs what it
 would change as one JSON line (Auth0 user ids and Stripe customer ids, never

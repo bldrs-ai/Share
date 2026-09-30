@@ -47,6 +47,25 @@
     {
       "request": {
         "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "user_id": "google-oauth2|103547991597142817347",
+          "app_metadata": {
+            "subscriptionStatus": "sharePro",
+            "stripeCustomerId": "cus_Rreplay0001"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
         "url": "https://api.stripe.com/v1/subscriptions?customer=cus_Rreplay0001&status=all&limit=100",
         "headers": {
           "authorization": "Bearer sk_test_replay"
