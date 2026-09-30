@@ -760,7 +760,7 @@ primitives twice: Snowdon's collapsed Draco export went from 6.3 s to 8.8 s
 in jest (Node, not the browser).
 
 **Its own OPFS slot, not a bump** — a deliberate change from what #1871
-proposed. `BLDRS_GLB_COLLAPSED_SCHEMA_VERSION` (`0.23.0-batched-collapsed2` since #1873,
+proposed. `BLDRS_GLB_COLLAPSED_SCHEMA_VERSION` (`0.24.0-batched-collapsed2` since the STEP part-type bump,
 derived from the batched slot; `2` since the canary became rotation-invariant,
 so previews' first-canary artifacts re-parse rather than hit and refuse). Bumping the batched slot would have
 re-parsed every model for every user to change nothing for the flag-off
