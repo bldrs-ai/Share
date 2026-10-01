@@ -3,7 +3,13 @@ import React from 'react'
 import {act, fireEvent, render, renderHook, screen, within} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
-import {artifactPositionRange, artifactSizes, retainOnlyCompressedExports} from '../../export/artifactSizes'
+import {
+  artifactPositionRange,
+  artifactSizes,
+  retainOnlyCompressedExports,
+  uncompressedSizes,
+} from '../../export/artifactSizes'
+import {AUTO_MEASURE_MAX_BYTES} from '../../export/codecSizes'
 import useCodecSizes from '../../export/useCodecSizes'
 import {gtagEvent} from '../../privacy/analytics'
 import useStore from '../../store/useStore'
@@ -23,6 +29,8 @@ jest.mock('../../export/artifactSizes', () => ({
   artifactSizes: jest.fn(),
   artifactPositionRange: jest.fn(),
   retainOnlyCompressedExports: jest.fn(),
+  // The header read the large-artifact gate decides on (#1904 review).
+  uncompressedSizes: jest.fn(),
 }))
 jest.mock('../Profile/subscriptionNav', () => ({goToSubscription: jest.fn()}))
 // The background codec sweep runs three encoders off OPFS; its ordering,
@@ -155,6 +163,10 @@ describe('ExportSection', () => {
     // outside a test's `act` lands its state update where React can't see it.
     // The caption's own test resolves it.
     artifactPositionRange.mockReturnValue(new Promise(() => {}))
+    // Under the auto-measure threshold unless a test says otherwise, so the
+    // Portable estimate runs on open as it does for every model but a huge
+    // one.
+    uncompressedSizes.mockResolvedValue({withMetadata: WITH_METADATA_BYTES, withoutMetadata: WITHOUT_METADATA_BYTES})
     useCodecSizes.mockReturnValue(NO_CODEC_SIZES)
     // jsdom has no `CompressionStream`, and the gzip row is hidden without
     // one — so without this the control under test would simply not be in the
@@ -254,6 +266,9 @@ describe('ExportSection', () => {
 
     const portable = getByTestId('export-portable').querySelector('input')
     expect(portable.checked).toBe(true)
+    // One header read decides the large-artifact gate first (below); this
+    // model is under it.
+    await act(async () => {})
     // The first estimate the panel asks for is already the portable file's:
     // the size line and the codec sweep measure what the default downloads.
     expect(artifactSizes).toHaveBeenCalledWith(expect.objectContaining(ARTIFACT), 'none', true, 'balanced', false)
@@ -323,6 +338,7 @@ describe('ExportSection', () => {
 
     // Back on: pending again until the rewrite's figure lands.
     fireEvent.click(getByTestId('export-portable').querySelector('input'))
+    await act(async () => {})
 
     expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', true, 'balanced', false)
     expect(queryByTestId('export-size')).toBeNull()
@@ -834,6 +850,94 @@ describe('ExportSection', () => {
 
       expect(mockRun).toHaveBeenLastCalledWith(
         'glb', {stripBldrsMetadata: false, compression: 'draco', quality: 'smallest', portable: true, gzip: false})
+    })
+  })
+
+  describe('an artifact over the auto-measure threshold (#1904 review)', () => {
+    // The Portable estimate reads the WHOLE artifact off OPFS and rewrites it
+    // (`export/artifactSizes.js`), where the native one is a header read. With
+    // Portable the default, opening the tab on a 400 MB model would have run
+    // that rewrite unasked — the very cost the codec sweep's threshold exists
+    // to hold back until the user clicks "Calculate sizes" (`codecSizes.js#
+    // shouldAutoMeasure`). So the size line waits on the same consent.
+    const LARGE_BYTES = AUTO_MEASURE_MAX_BYTES + 1
+    const startSweep = jest.fn()
+
+    beforeEach(() => {
+      uncompressedSizes.mockResolvedValue({withMetadata: LARGE_BYTES, withoutMetadata: LARGE_BYTES - 1})
+      artifactSizes.mockImplementation((artifact, mode, isPortable) => Promise.resolve(isPortable ?
+        {withMetadata: LARGE_BYTES + 7, withoutMetadata: LARGE_BYTES + 6, metadataBytes: 1} :
+        {withMetadata: LARGE_BYTES, withoutMetadata: LARGE_BYTES - 1, metadataBytes: 1}))
+      // The sweep parks itself over the threshold (`useCodecSizes.js`).
+      useCodecSizes.mockReturnValue({...NO_CODEC_SIZES, isPaused: true, start: startSweep})
+    })
+
+    /**
+     * @return {boolean} whether any estimate asked for the Portable file
+     */
+    function portableEstimateRan() {
+      return artifactSizes.mock.calls.some(([, , isPortable]) => isPortable === true)
+    }
+
+    it('opens Portable but does not rewrite the artifact until asked', async () => {
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+
+      expect(getByTestId('export-portable').querySelector('input').checked).toBe(true)
+      expect(portableEstimateRan()).toBe(false)
+      // Not a wrong number: no figure, and the sweep's own way to get one.
+      expect(queryByTestId('export-size')).toBeNull()
+      expect(getByTestId('export-size-unmeasured')).toHaveTextContent('Not measured')
+
+      // Portable stays selected for the export itself, which is the user's
+      // own click and pays for the rewrite then.
+      fireEvent.click(getByTestId('export-glb-button'))
+      expect(mockRun).toHaveBeenLastCalledWith(
+        'glb', {stripBldrsMetadata: false, compression: 'none', quality: 'balanced', portable: true, gzip: false})
+      expect(portableEstimateRan()).toBe(false)
+
+      fireEvent.click(getByTestId('export-size-calculate'))
+      await act(async () => {})
+
+      expect(portableEstimateRan()).toBe(true)
+      expect(startSweep).toHaveBeenCalledTimes(1)
+      expect(queryByTestId('export-size-unmeasured')).toBeNull()
+      expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(LARGE_BYTES + 7))
+    })
+
+    it('takes the sweep\'s "Calculate sizes" as the same consent', async () => {
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+      expect(portableEstimateRan()).toBe(false)
+
+      fireEvent.click(getByTestId('export-codec-sizes-start'))
+      await act(async () => {})
+
+      expect(startSweep).toHaveBeenCalledTimes(1)
+      expect(portableEstimateRan()).toBe(true)
+      expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(LARGE_BYTES + 7))
+    })
+
+    it('toggling Portable off and on reads the header, never the rewrite', async () => {
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await act(async () => {})
+      const toggle = getByTestId('export-portable').querySelector('input')
+
+      fireEvent.click(toggle)
+      await act(async () => {})
+      // Native: the cheap header figure, exactly as before Portable was the
+      // default.
+      expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', false, 'balanced', false)
+      expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(LARGE_BYTES))
+
+      fireEvent.click(toggle)
+      await act(async () => {})
+      expect(portableEstimateRan()).toBe(false)
+      expect(queryByTestId('export-size')).toBeNull()
+      expect(getByTestId('export-size-unmeasured')).toBeInTheDocument()
     })
   })
 

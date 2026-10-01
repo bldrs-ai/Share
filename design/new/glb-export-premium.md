@@ -1717,7 +1717,18 @@ promises *more* viewers, not every one: a codec — which the background sweep
 may select on its own — still needs its decoder wherever the file is opened,
 and 3dviewer.net refuses `EXT_meshopt_compression` outright, so the first
 draft's "open in any glTF viewer" was untrue whenever a codec was on (codex on
-#1904). Codec support is the Compression row's to state. Nothing persists the choice — every visit starts
+#1904). Codec support is the Compression row's to state.
+
+*Large artifacts wait for consent.* The native estimate the tab used to open
+on is a header read; the portable one reads the whole artifact and rewrites
+it. So over the sweep's own threshold (`codecSizes.js#shouldAutoMeasure`,
+50 MiB) the size line does not run it on open: it says *Not measured* beside
+the same *Calculate sizes* the parked sweep shows, and either button runs
+both (codex on #1904 caught the default flip turning "open the tab" into a
+full rewrite of a 400 MB model). Portable stays selected — the export pays
+for the rewrite when the user asks for the file — and a codec or gzip the
+user picks runs at once, as before, since picking one is its own consent.
+Nothing persists the choice — every visit starts
 portable — and the size line and the background codec sweep both measure at
 the toggle's state (they already keyed on it), so the codec auto-selected on
 open is decided on the portable bytes the default click downloads. A

@@ -2,8 +2,13 @@ import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {Box, Button, Chip, MenuItem, Select, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {artifactPositionRange, artifactSizes, retainOnlyCompressedExports} from '../../export/artifactSizes'
-import {codecToSelect} from '../../export/codecSizes'
+import {
+  artifactPositionRange,
+  artifactSizes,
+  retainOnlyCompressedExports,
+  uncompressedSizes,
+} from '../../export/artifactSizes'
+import {codecToSelect, shouldAutoMeasure} from '../../export/codecSizes'
 import {
   QUALITY_DEFAULT,
   QUALITY_LABELS,
@@ -157,17 +162,53 @@ export default function ExportSection() {
   // mounted with, and the store publishes a fresh slot per load.
   const artifactRef = useRef(glbArtifact)
   artifactRef.current = glbArtifact
+  // The artifact the user has asked to have measured ("Calculate sizes", in
+  // the sweep's row or on the size line), so consent lapses with a new load
+  // rather than carrying over to a model nobody asked about. An artifact
+  // rather than a boolean so no reset effect has to race the size effect.
+  const [consentedArtifact, setConsentedArtifact] = useState(null)
+  const isSizingConsented = consentedArtifact !== null && consentedArtifact === glbArtifact
 
   useEffect(() => {
     let isStale = false
     setEstimate(null)
     setIsEstimating(true)
-    artifactSizes(glbArtifact, compression, isPortable, quality, isGzipped).then((read) => {
-      if (!isStale) {
-        setEstimate({compression, isPortable, quality, isGzipped, sizes: read})
-        setIsEstimating(false)
-      }
-    })
+    // Portable with nothing else selected is the panel's DEFAULT state, and
+    // its estimate is no header read: it reads the whole artifact off OPFS
+    // and rewrites it (`export/artifactSizes.js`). Opening the tab used to
+    // cost a header read; with Portable on by default it would cost a full
+    // rewrite on every model, a 400 MB one included — exactly what the codec
+    // sweep's threshold holds back until the user clicks "Calculate sizes"
+    // (`codecSizes.js#shouldAutoMeasure`, codex on #1904). So over that same
+    // threshold this waits for the same click. A codec or gzip the user
+    // picks is a click of its own and runs as it always has; and none of this
+    // touches the EXPORT, which keeps Portable and pays for the rewrite when
+    // the user asks for the file. The threshold reads the header, which the
+    // sweep has already cached for this artifact.
+    const estimateNow = () => {
+      artifactSizes(glbArtifact, compression, isPortable, quality, isGzipped).then((read) => {
+        if (!isStale) {
+          setEstimate({compression, isPortable, quality, isGzipped, sizes: read})
+          setIsEstimating(false)
+        }
+      })
+    }
+    const isDefaultPortable = isPortable && compression === COMPRESSION_NONE && !isGzipped
+    if (!isDefaultPortable || isSizingConsented) {
+      estimateNow()
+    } else {
+      uncompressedSizes(glbArtifact).then((header) => {
+        if (isStale) {
+          return
+        }
+        if (header && !shouldAutoMeasure(header.withMetadata)) {
+          setEstimate({compression, isPortable, quality, isGzipped, sizes: null, isUnmeasured: true})
+          setIsEstimating(false)
+        } else {
+          estimateNow()
+        }
+      })
+    }
     // The read above POPULATES a compressed cell for the codec on screen —
     // two whole copies of the export. Nothing is claimed for it here; the
     // reconcile below states which cells should exist at all, and this one is
@@ -175,7 +216,7 @@ export default function ExportSection() {
     return () => {
       isStale = true
     }
-  }, [glbArtifact, compression, isPortable, quality, isGzipped])
+  }, [glbArtifact, compression, isPortable, quality, isGzipped, isSizingConsented])
 
   useEffect(() => {
     let isStale = false
@@ -354,6 +395,14 @@ export default function ExportSection() {
       `the file keeps ${COMPRESSION_LABELS[sizes.compression] || sizes.compression}`
     fallbackCaption = `${COMPRESSION_LABELS[compression]} isn't available in this browser — ${actual}`
   }
+
+  // One consent for both figures that wait on it: the codec sweep's and the
+  // size line's (above). Either button grants it.
+  const onCalculateSizes = () => {
+    setConsentedArtifact(glbArtifact)
+    startSizing()
+  }
+  const isUnmeasured = Boolean(estimate?.isUnmeasured) && !isEstimating
 
   const onExportClick = async () => {
     await run(
@@ -571,7 +620,7 @@ export default function ExportSection() {
            <Button
              size='small'
              sx={{textTransform: 'none'}}
-             onClick={startSizing}
+             onClick={onCalculateSizes}
              data-testid='export-codec-sizes-start'
            >
              Calculate sizes
@@ -668,7 +717,7 @@ export default function ExportSection() {
           to. Its `data-bytes` is the raw count the label rounds, so a test
           can compare it with the downloaded file byte for byte rather than
           through "12.4 MB". */}
-      {(downloadBytes !== null || isPendingEstimate) &&
+      {(downloadBytes !== null || isPendingEstimate || isUnmeasured) &&
        <Stack
          direction='row'
          justifyContent='space-between'
@@ -699,7 +748,22 @@ export default function ExportSection() {
               {fallbackCaption}
             </Typography>}
          </Box>
-         {isPendingEstimate ?
+         {isUnmeasured &&
+          // Over the auto-measure threshold, Portable's figure waits for
+          // consent (above) — so no number rather than the wrong one, and the
+          // sweep's own button beside it.
+          <Stack direction='row' alignItems='center' gap={1} data-testid='export-size-unmeasured'>
+            <Typography variant='body2' color='text.secondary'>Not measured</Typography>
+            <Button
+              size='small'
+              sx={{textTransform: 'none'}}
+              onClick={onCalculateSizes}
+              data-testid='export-size-calculate'
+            >
+              Calculate sizes
+            </Button>
+          </Stack>}
+         {!isUnmeasured && (isPendingEstimate ?
            <Typography variant='body2' color='text.secondary' data-testid='export-size-pending'>
              Estimating…
            </Typography> :
@@ -710,7 +774,7 @@ export default function ExportSection() {
              data-estimate-key={displayedEstimateKey}
            >
              {formatBytes(downloadBytes)}
-           </Typography>}
+           </Typography>)}
        </Stack>}
       {/* The action goes LAST, after everything that configures it, and
           centred — the Pro chip for free users rides beside it (#1838).
