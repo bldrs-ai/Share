@@ -67,6 +67,8 @@ const EDGE = 0.37
 const SLAB_CORNERS = [[-40000, -40000, 0], [-20000, -40000, 0], [-40000, -20000, 0]]
 /** How far past its row `gridRowsModel`'s zero-area triangle reaches. */
 const FAR_CORNER = 5000
+/** Where `withExpressIdMesh` puts its one triangle: far from every pick target. */
+const EXPRESS_ID_MESH_AT = [-500, -500, 0]
 /** `gridRowsModel({sliver})`: how far the sliver row reaches in +y. */
 const SLIVER_REACH = 50
 /**
@@ -1035,6 +1037,100 @@ describe('a collapsed Draco file exported again (codex P1 on #1903)', () => {
       await expectEveryRowPicks(source, (await compressExportGlb(source.bytes, COMPRESSION_NONE)).withMetadata)
     }, TIMEOUT_MS)
   }
+})
+
+
+/**
+ * `bytes` with one more mesh, of one triangle, carrying a per-vertex
+ * `_EXPRESSID` — the merged layout's identity attribute, whose triangle
+ * order is load-bearing, so its presence anywhere puts the whole Draco
+ * export on SEQUENTIAL (`glbCompression.js#isTriangleOrderedLayout`). Placed
+ * `EXPRESS_ID_MESH_AT` off, clear of every pick target. Appended at the raw
+ * GLB level so the `BLDRS_*` payloads ride along untouched; the new accessors
+ * are plain, so this works on a Draco file too.
+ *
+ * @param {Uint8Array} bytes a GLB
+ * @return {Uint8Array} the same GLB plus the `_EXPRESSID` mesh
+ */
+function withExpressIdMesh(bytes) {
+  const {json, bin} = parseGlb(bytes)
+  const at = Math.ceil(bin.byteLength / 4) * 4
+  const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])
+  const ids = new Uint32Array([7, 7, 7])
+  const indices = new Uint16Array([0, 1, 2, 0])
+  const grown = new Uint8Array(at + positions.byteLength + ids.byteLength + indices.byteLength)
+  grown.set(bin)
+  grown.set(new Uint8Array(positions.buffer), at)
+  grown.set(new Uint8Array(ids.buffer), at + positions.byteLength)
+  grown.set(new Uint8Array(indices.buffer), at + positions.byteLength + ids.byteLength)
+  json.buffers[0].byteLength = grown.byteLength
+  const view = (byteOffset, byteLength, target) => {
+    json.bufferViews.push({buffer: 0, byteOffset, byteLength, target})
+    return json.bufferViews.length - 1
+  }
+  const accessor = (entry) => {
+    json.accessors.push(entry)
+    return json.accessors.length - 1
+  }
+  const ARRAY_BUFFER = 34962
+  const ELEMENT_ARRAY_BUFFER = 34963
+  const position = accessor({bufferView: view(at, positions.byteLength, ARRAY_BUFFER),
+    componentType: 5126, count: 3, type: 'VEC3', min: [0, 0, 0], max: [1, 1, 0]})
+  const expressId = accessor({bufferView: view(at + positions.byteLength, ids.byteLength, ARRAY_BUFFER),
+    componentType: 5125, count: 3, type: 'SCALAR'})
+  const index = accessor({bufferView: view(at + positions.byteLength + ids.byteLength, 6, ELEMENT_ARRAY_BUFFER),
+    componentType: 5123, count: 3, type: 'SCALAR'})
+  json.meshes.push({primitives: [{attributes: {POSITION: position, _EXPRESSID: expressId}, indices: index}]})
+  json.nodes.push({mesh: json.meshes.length - 1, translation: EXPRESS_ID_MESH_AT})
+  json.scenes[json.scene ?? 0].nodes.push(json.nodes.length - 1)
+  return serializeGlb(json, grown)
+}
+
+
+describe('a collapsed table beside a triangle-ordered mesh (codex P2 on #1903)', () => {
+  // `_EXPRESSID` (or `BLDRS_face_ids`) anywhere in the file makes the Draco
+  // export SEQUENTIAL. The collapsed tables beside it are still quantized,
+  // so the reader still needs their lossy witness — SEQUENTIAL decides the
+  // method, not whether the rows are vouched for. Share's own writer never
+  // puts the two layouts in one file (`glbExport.js` captures face_ids only
+  // when the batched-native writer declined), so this is a user-assembled
+  // file; before #1903 the witness was added whatever the layout.
+  it('witnesses the collapsed table, unstripped, and every collapsed row picks', async () => {
+    const strip = stripModel()
+    const source = withExpressIdMesh(await batchedArtifactBytes(strip.model, {collapse: true}))
+    const bytes = (await compressExportGlb(source, COMPRESSION_DRACO)).withMetadata
+    const {json, bin} = parseGlb(bytes)
+    const collapsed = json.nodes.find((node) =>
+      Number.isInteger(node.extras?.bldrsTableNode) && !node.extensions?.EXT_mesh_gpu_instancing)
+
+    expect(dracoMethodsOf(json, bin, collapsed.mesh)).toEqual([DRACO_SEQUENTIAL])
+    expect(rawTables(bytes).nodes.some((node) => node.witness)).toBe(true)
+    expect(json.meshes[collapsed.mesh].primitives[0].attributes[ROW_TAG_SEMANTIC]).toBeUndefined()
+    const model = hydrateBatchedModelFromInstancedGlb(await loadLikeGltfLoader(bytes))
+    expect(model).not.toBeNull()
+    strip.centres.forEach((centre, i) => {
+      expect(pickParent(model, centre)).toBe(1000 + i)
+    })
+  }, TIMEOUT_MS)
+
+  it('keeps an already-compressed source\'s own witness through the same re-export', async () => {
+    // The P1 path with the same neighbour: the tagged Draco file cannot be
+    // verified, so its witness and tag are what carry it, SEQUENTIAL.
+    const strip = stripModel()
+    const tagged = (await compressExportGlb(
+      await batchedArtifactBytes(strip.model, {collapse: true}), COMPRESSION_DRACO)).withMetadata
+    const bytes = (await compressExportGlb(withExpressIdMesh(tagged), COMPRESSION_DRACO)).withMetadata
+    const {json, bin} = parseGlb(bytes)
+    const collapsed = json.nodes.find((node) =>
+      Number.isInteger(node.extras?.bldrsTableNode) && !node.extensions?.EXT_mesh_gpu_instancing)
+
+    expect(dracoMethodsOf(json, bin, collapsed.mesh)).toEqual([DRACO_SEQUENTIAL])
+    const model = hydrateBatchedModelFromInstancedGlb(await loadLikeGltfLoader(bytes))
+    expect(model).not.toBeNull()
+    strip.centres.forEach((centre, i) => {
+      expect(pickParent(model, centre)).toBe(1000 + i)
+    })
+  }, TIMEOUT_MS)
 })
 
 

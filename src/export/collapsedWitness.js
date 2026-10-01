@@ -62,9 +62,10 @@ const UINT32_BYTES = 4
  * them too.
  *
  * It is SEQUENTIAL, with nothing stripped, no new tags and the witness taken
- * over every triangle, in the two cases stripping cannot serve: some verified
+ * over every triangle, in the cases stripping cannot serve: some verified
  * row has NO triangle of non-zero area, so EDGEBREAKER would erase the
- * element; or some collapsed table does not verify at all (below). That is
+ * element; some collapsed table does not verify at all (below); or the
+ * caller says the file is SEQUENTIAL anyway (`forceSequential`). That is
  * the layout the first Draco exports of collapsed artifacts used (#1872),
  * which the reader still opens, so falling back to it costs ratio, not
  * selection. One file, one method, whichever shape the row is in.
@@ -74,13 +75,17 @@ const UINT32_BYTES = 4
  * @param {object} rawPayload the decoded `BLDRS_instance_tables` JSON
  * @param {number} positionBits the Draco POSITION quantization bits the
  *   export will use
+ * @param {boolean} [forceSequential] the file is SEQUENTIAL whatever its
+ *   collapsed tables hold — another mesh's triangle order is load-bearing
+ *   (`glbCompression.js#isTriangleOrderedLayout`) — so plan the SEQUENTIAL
+ *   branch: nothing stripped or tagged, every verified table still witnessed
  * @return {?{sequential: boolean, meshPlans: Map<number, object>, payload: ?object}}
  *   null when the payload has no collapsed table. `meshPlans` maps a source
  *   mesh index to what `glbCompression.js#applyMeshPlan` does to its one
  *   primitive ({@link planMerged}, {@link planPerRow}); `payload` is a copy
  *   of `rawPayload` with witnesses added, or null when no table verified
  */
-export function planCollapsedDraco(json, bin, rawPayload, positionBits) {
+export function planCollapsedDraco(json, bin, rawPayload, positionBits, forceSequential = false) {
   const tables = parseInstanceTablesExtensionData(rawPayload)
   if (!tables || !bin || !tables.some((table) => Array.isArray(table.ranges))) {
     return null
@@ -119,7 +124,7 @@ export function planCollapsedDraco(json, bin, rawPayload, positionBits) {
   // made zero-area is dropped from under a witness that counted it.
   // Verifying such a source would mean running the reader's lossy rebuild
   // here; nothing in the app hands the export one today, so it falls back.
-  const sequential = unverified > 0 || verified.some(({kept}) => kept.hasEmptyRow)
+  const sequential = forceSequential || unverified > 0 || verified.some(({kept}) => kept.hasEmptyRow)
   const meshPlans = new Map()
   const out = {...rawPayload, nodes: rawPayload.nodes.map((node) => ({...node}))}
   for (const {t, table, view, rows, kept} of verified) {
@@ -141,7 +146,9 @@ export function planCollapsedDraco(json, bin, rawPayload, positionBits) {
     out.nodes[t].witness = buildLossyWitness(table, stats, positionBits, (r) => kept.corners[r].length)
   }
   if (sequential) {
-    glbInfo('export: a collapsed table cannot be stripped (unverified, or a row with no ' +
+    glbInfo(forceSequential ?
+      'export: another mesh orders its triangles; Draco stays SEQUENTIAL, collapsed tables witnessed unstripped' :
+      'export: a collapsed table cannot be stripped (unverified, or a row with no ' +
       'triangle of non-zero area); Draco stays SEQUENTIAL, nothing new tagged')
   }
   return {sequential, meshPlans, payload: verified.length > 0 ? out : null}

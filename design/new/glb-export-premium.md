@@ -807,7 +807,11 @@ triangle used, measured (`collapsedDraco.test.js` puts one 5 km out).
 
 **One method per file again**, so the splice is gone: EDGEBREAKER everywhere,
 except the merged layout (`BLDRS_face_ids`, `_EXPRESSID` / `_INSTANCEID`),
-which stays SEQUENTIAL, and the zero-area fallback above. The instanced
+which stays SEQUENTIAL, and the zero-area fallback above. A file holding
+both a merged-layout mesh and collapsed tables (user-assembled: `glbExport.js`
+writes face_ids only when the batched-native writer declined) is SEQUENTIAL
+too, and its collapsed tables are still witnessed, unstripped and untagged —
+they are quantized all the same (codex P2 on #1903). The instanced
 primitive of a hybrid still ships byte for byte as it does from the
 collapse-off export (per-primitive quantization, `quantizationVolume:
 'mesh'`), which `collapsedDraco.test.js` pins.

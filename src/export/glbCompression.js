@@ -183,6 +183,9 @@ export async function compressExportGlb(glbBytes, mode, quality = QUALITY_DEFAUL
  * twice and spliced to keep that cost off its instanced primitives
  * (design/new/glb-export-premium.md §1.1d has both histories).
  *
+ * Either way the collapsed tables are planned: a SEQUENTIAL file still needs
+ * their lossy witnesses, so the triangle-ordered case only fixes the method.
+ *
  * A tables payload that cannot be decoded or planned is kept as it was: the
  * file still renders, and its collapsed tables are refused on read exactly as
  * they were before any of this existed.
@@ -194,9 +197,14 @@ export async function compressExportGlb(glbBytes, mode, quality = QUALITY_DEFAUL
  * @return {{sequential: boolean, meshPlans: Map<number, object>, payloads: Array<object>}}
  */
 function planDraco(json, bin, payloads, quality) {
-  if (isTriangleOrderedLayout(json)) {
-    return {sequential: true, meshPlans: new Map(), payloads}
-  }
+  // The ordered layout decides the METHOD, not whether collapsed tables are
+  // vouched for: a collapsed table beside a `_EXPRESSID` / face_ids mesh is
+  // quantized like any other, and without a witness its reader refuses it
+  // (codex P2 on #1903; Share's own writer never puts the two in one file,
+  // but #1898 witnessed them whatever the layout). So the plan still runs,
+  // told to stay SEQUENTIAL — unstripped, untagged, witness over every
+  // triangle.
+  const ordered = isTriangleOrderedLayout(json)
   let plan = null
   const planned = payloads.map((payload) => {
     if (payload.name !== WITNESSED_PAYLOAD || !payload.compressed) {
@@ -205,7 +213,7 @@ function planDraco(json, bin, payloads, quality) {
     try {
       const raw = JSON.parse(pako.ungzip(payload.bytes, {to: 'string'}))
       const bits = qualitySettings(quality).draco.quantizationBits.POSITION
-      plan = planCollapsedDraco(json, bin, raw, bits)
+      plan = planCollapsedDraco(json, bin, raw, bits, ordered)
       return plan?.payload ?
         {...payload, bytes: pako.gzip(JSON.stringify(plan.payload))} :
         payload
@@ -216,7 +224,7 @@ function planDraco(json, bin, payloads, quality) {
     }
   })
   return {
-    sequential: Boolean(plan?.sequential),
+    sequential: ordered || Boolean(plan?.sequential),
     meshPlans: plan?.meshPlans ?? new Map(),
     payloads: planned,
   }
