@@ -1,10 +1,10 @@
 import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from './dragAndDrop'
 import {guessTypeFromFile} from '../Filetype'
-import {saveDnDFileToOpfs} from '../OPFS/utils'
+import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
+import {NO_OPFS_LOCAL_FILE_ALERT, noOpfsLocalFileAlert} from '../OPFS/messages'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {disablePageReloadApprovalCheck} from './event'
-import {saveDnDFileToOpfsFallback} from './loader'
 import {trackAlert} from './alertTracking'
 import debug, {WARN} from './debug'
 
@@ -15,7 +15,6 @@ jest.mock('../OPFS/utils')
 jest.mock('../connections/persistence')
 jest.mock('../loader/gzipEnvelope')
 jest.mock('./event')
-jest.mock('./loader')
 jest.mock('./alertTracking')
 jest.mock('./debug')
 
@@ -167,15 +166,11 @@ describe('dragAndDrop utility', () => {
       expect(mockDebug.log).toHaveBeenCalledWith('handleFileDrop: navigate to:', mockFileName)
     })
 
-    it('should handle successful file upload with OPFS fallback', async () => {
-      const mockFile = {name: 'test.ifc', type: 'application/octet-stream', size: 1024}
-      const mockType = 'ifc'
-      const mockFileName = 'generated-filename.ifc'
-      mockEvent.dataTransfer.files = [mockFile]
-      guessTypeFromFile.mockResolvedValue(mockType)
-      saveDnDFileToOpfsFallback.mockImplementation((file, onWritten) => {
-        onWritten(mockFileName)
-      })
+    // Without OPFS there is nowhere for the file to survive navigateToModel's
+    // full page load, so say so rather than navigate to a load that fails (#1906).
+    it('alerts and stops, storing nothing, when OPFS is unavailable', async () => {
+      mockEvent.dataTransfer.files = [{name: 'test.ifc', type: 'application/octet-stream', size: 1024}]
+      guessTypeFromFile.mockResolvedValue('ifc')
 
       await handleFileDrop(
         mockEvent,
@@ -187,11 +182,39 @@ describe('dragAndDrop utility', () => {
         mockOnError,
       )
 
-      expect(guessTypeFromFile).toHaveBeenCalledWith(mockFile)
-      expect(saveDnDFileToOpfsFallback).toHaveBeenCalledWith(mockFile, expect.any(Function))
-      expect(disablePageReloadApprovalCheck).toHaveBeenCalled()
-      expect(mockNavigate).toHaveBeenCalledWith('/prefix/v/new/generated-filename.ifc')
-      expect(mockOnSuccess).toHaveBeenCalledWith(mockFileName)
+      expect(mockSetAlert).toHaveBeenCalledWith(noOpfsLocalFileAlert())
+      // AlertDialog counts it (analytics only); counting here too doubled it.
+      expect(trackAlert).not.toHaveBeenCalled()
+      expect(mockOnError).toHaveBeenCalledWith(NO_OPFS_LOCAL_FILE_ALERT)
+      expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
+      expect(mockNavigate).not.toHaveBeenCalled()
+      expect(addRecentFileEntry).not.toHaveBeenCalled()
+      expect(mockOnSuccess).not.toHaveBeenCalled()
+    })
+
+    // `null` is the store before BaseRoutes' probe resolves: "not known yet",
+    // which must not read as "unavailable".
+    it('asks for OPFS itself when the store has not resolved it yet', async () => {
+      mockEvent.dataTransfer.files = [{name: 'test.ifc', type: 'application/octet-stream', size: 1024}]
+      guessTypeFromFile.mockResolvedValue('ifc')
+      checkOPFSAvailability.mockResolvedValue(true)
+
+      await handleFileDrop(mockEvent, mockNavigate, '/prefix', null, mockSetAlert)
+
+      expect(checkOPFSAvailability).toHaveBeenCalled()
+      expect(saveDnDFileToOpfs).toHaveBeenCalled()
+      expect(mockSetAlert).not.toHaveBeenCalled()
+    })
+
+    it('alerts when the store has not resolved OPFS and the probe says no', async () => {
+      mockEvent.dataTransfer.files = [{name: 'test.ifc', type: 'application/octet-stream', size: 1024}]
+      guessTypeFromFile.mockResolvedValue('ifc')
+      checkOPFSAvailability.mockResolvedValue(false)
+
+      await handleFileDrop(mockEvent, mockNavigate, '/prefix', null, mockSetAlert)
+
+      expect(mockSetAlert).toHaveBeenCalledWith(noOpfsLocalFileAlert())
+      expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
     })
 
     it('records the file in recent history after successful drop', async () => {

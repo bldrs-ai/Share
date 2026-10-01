@@ -1,6 +1,9 @@
 import {
   addRecentFileEntry,
+  clearRecentFilesBySource,
+  loadAllRecentFiles,
   loadRecentFilesBySource,
+  removeRecentFileEntries,
   updateRecentFileLastModified,
   updateRecentFileModelTitle,
 } from './persistence'
@@ -68,5 +71,41 @@ describe('updateRecentFileModelTitle', () => {
     updateRecentFileModelTitle('non-existent-id', 'My Model')
     const [entry] = loadRecentFilesBySource('github')
     expect(entry.modelTitle).toBeUndefined()
+  })
+})
+
+
+describe('removeRecentFileEntries', () => {
+  beforeEach(() => localStorage.clear())
+
+  const local = (id: string) => ({id, source: 'local' as const, name: id, lastModifiedUtc: null})
+
+  it('removes only the listed ids of the given source', () => {
+    addRecentFileEntry(local('a.ifc'))
+    addRecentFileEntry(local('b.ifc'))
+    addRecentFileEntry(GITHUB_ENTRY)
+    removeRecentFileEntries('local', ['a.ifc'])
+    expect(loadRecentFilesBySource('local').map((f) => f.id)).toEqual(['b.ifc'])
+    expect(loadRecentFilesBySource('github')).toHaveLength(1)
+  })
+
+  it('leaves an entry of another source with the same id alone', () => {
+    addRecentFileEntry({...GITHUB_ENTRY, id: 'same'})
+    addRecentFileEntry(local('same'))
+    removeRecentFileEntries('local', ['same'])
+    expect(loadAllRecentFiles()).toEqual([expect.objectContaining({id: 'same', source: 'github'})])
+  })
+})
+
+
+describe('clearRecentFilesBySource', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('drops every entry of that source and keeps the rest', () => {
+    addRecentFileEntry({id: 'a.ifc', source: 'local', name: 'a.ifc', lastModifiedUtc: null})
+    addRecentFileEntry(GITHUB_ENTRY)
+    clearRecentFilesBySource('local')
+    expect(loadRecentFilesBySource('local')).toEqual([])
+    expect(loadRecentFilesBySource('github')).toHaveLength(1)
   })
 })

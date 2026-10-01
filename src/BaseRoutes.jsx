@@ -8,6 +8,7 @@ import {APP_METADATA_CLAIM} from './Auth0/appMetadata'
 import PopupAuth from './Components/Auth/PopupAuth'
 import PopupCallback from './Components/Auth/PopupCallback'
 import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
+import pruneMissingLocalRecents from './connections/pruneLocalRecents'
 import ShareRoutes from './ShareRoutes'
 import Styles from './Styles'
 import About from './pages/About'
@@ -133,6 +134,10 @@ export default function BaseRoutes({testElt = null}) {
 
       if (available) {
         setUpGlobalDebugFunctions()
+        // Fire-and-forget: a handful of handle lookups, off the load path.
+        // The Open dialog re-runs it when shown, so a sweep still in flight
+        // here can't leave a dead row on screen.
+        pruneMissingLocalRecents()
       }
 
       setIsOpfsAvailable(available)

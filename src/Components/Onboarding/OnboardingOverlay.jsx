@@ -77,7 +77,10 @@ export default function OnboardingOverlay({isVisible, onClose}) {
       isOpfsAvailable,
       setAlert,
       () => onClose(true), // onSuccess callback - close overlay and skip help dialog
-      undefined,
+      // onError: close the overlay so the alert handleFileDrop raised (no
+      // OPFS, unknown type, ...) isn't hidden under its zIndex 9999, same as
+      // onExceeded below (codex review on #1905).
+      () => onClose(false),
       // Same quota gate as ViewerContainer's dropzone — a first-visit drop
       // through the overlay is still a /v/new/ private load and must count.
       {
