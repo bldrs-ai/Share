@@ -3,12 +3,16 @@ import {BufferAttribute, BufferGeometry} from 'three'
 import {
   INSTANCE_TABLES_VERSION,
   INSTANCE_TABLES_VERSION_UNCOLLAPSED,
+  ROW_TAG_SCALAR_ROWS,
   buildInstanceTablesExtensionData,
   buildLossyWitness,
   makeRangeCanary,
   matchesLossyWitness,
+  packRowTag,
   parseInstanceTablesExtensionData,
   rangeCanaryOf,
+  rowOfTag,
+  rowTagItemSize,
   rowWitnessStats,
 } from './bldrsInstanceTables'
 
@@ -233,6 +237,29 @@ describe('loader/bldrsInstanceTables', () => {
     })
   })
 
+
+  describe('the row tag', () => {
+    it('is SCALAR through 65,536 rows and VEC2 past them', () => {
+      expect(rowTagItemSize(1)).toBe(1)
+      expect(rowTagItemSize(ROW_TAG_SCALAR_ROWS)).toBe(1)
+      expect(rowTagItemSize(ROW_TAG_SCALAR_ROWS + 1)).toBe(2)
+    })
+
+    it('packs and unpacks every row exactly, either width', () => {
+      // The rows either side of each 16-bit boundary, where a half that is
+      // dropped, swapped or off by one shows; the largest a Uint32 table
+      // could name, for the VEC2 high half's ceiling.
+      const rows = [0, 1, 65534, 65535, 65536, 65537, 131071, 131072, 0xffffffff - 1]
+      for (const itemSize of [1, 2]) {
+        const fits = itemSize === 1 ? rows.filter((r) => r < ROW_TAG_SCALAR_ROWS) : rows
+        const array = new Uint16Array(fits.length * itemSize)
+        fits.forEach((row, v) => packRowTag(array, v, row, itemSize))
+        const tag = new BufferAttribute(array, itemSize)
+
+        expect(fits.map((_, v) => rowOfTag(tag, v))).toEqual(fits)
+      }
+    })
+  })
 
   describe('the lossy witness', () => {
     const POSITION_BITS = 14

@@ -1,28 +1,35 @@
-// Writing the lossy witness into a Draco export of a collapsed artifact
-// (share-140 #1871 follow-up). The witness itself, and why it exists, is
-// documented in `loader/bldrsInstanceTables.js` ("THE LOSSY WITNESS"); this
-// module is the export-time half that computes it from the file's own bytes.
+// Writing the lossy witness into a Draco export of a collapsed artifact, and
+// planning the row tag that lets that export use EDGEBREAKER (share-140 #1871
+// follow-ups). The witness itself, the tag, and why each exists are
+// documented in `loader/bldrsInstanceTables.js` ("THE LOSSY WITNESS",
+// `ROW_TAG_SEMANTIC`); this module is the export-time half that computes both
+// from the file's own bytes. `glbCompression.js#transformGlb` applies the
+// planned tags to the document it encodes.
 //
 // It runs on the SOURCE — the uncompressed GLB about to go into the Draco
 // encoder — and it only vouches for what it has checked: each collapsed
 // table's EXACT canary is re-derived from the source first, and a table whose
-// source does not verify gets no witness. The reader then refuses that table
-// on the Draco file, exactly as it would have refused it on the source,
-// rather than the export laundering a misaligned table into one that passes a
-// tolerant check.
+// source does not verify gets neither a tag nor a witness. The reader then
+// refuses that table on the Draco file, exactly as it would have refused it on
+// the source, rather than the export laundering a misaligned table into one
+// that passes a tolerant check.
 //
 // Two source shapes carry collapsed tables, and both are handled because the
 // Export tab's Portable toggle runs BEFORE the codec (`glbPortable.js`,
 // "Ordering: portable → codec → strip"):
 // - the collapsed artifact: one merged primitive per table, rows addressed by
-//   the table's ranges;
+//   the table's ranges. This is the shape that gets the row tag;
 // - its portable rewrite: one primitive per row, on nodes stamped with
-//   `bldrsInstance`.
+//   `bldrsInstance`. Each row is already its own primitive, so it needs no
+//   tag — but it is EDGEBREAKER too, so it loses its zero-area triangles the
+//   same way and is stripped and witnessed the same way.
 import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
   buildLossyWitness,
   makeRangeCanary,
+  packRowTag,
   parseInstanceTablesExtensionData,
+  rowTagItemSize,
   rowWitnessStats,
   tableRowIdentity,
 } from '../loader/bldrsInstanceTables'
@@ -38,26 +45,56 @@ const UINT32_BYTES = 4
 
 
 /**
- * Add a lossy witness to every verifiable collapsed table in a tables
- * payload.
+ * Plan a Draco export's collapsed tables: which primitives lose their
+ * zero-area triangles (and which of those also get a row tag), which Draco
+ * method the file takes, and the tables payload with a lossy witness added to
+ * every verifiable collapsed table.
+ *
+ * The method is EDGEBREAKER, and every collapsed primitive of a verified
+ * table is stripped of its zero-area triangles first — EDGEBREAKER drops
+ * those itself (measured: 202 triangles in, 200 out, the two degenerate ones
+ * gone whether their corners share an index or only a position), so the
+ * export removes them and witnesses exactly what the encoder will keep. Both
+ * shapes a collapsed table comes in get that: the merged primitive, which
+ * also gets the row tag because its rows share it, and a portable file's
+ * per-row primitives, which need no tag (each IS one row) but are
+ * EDGEBREAKER all the same and lost the same triangles until this applied to
+ * them too.
+ *
+ * It is SEQUENTIAL, with nothing stripped, no new tags and the witness taken
+ * over every triangle, in the cases stripping cannot serve: some verified
+ * row has NO triangle of non-zero area, so EDGEBREAKER would erase the
+ * element; some collapsed table does not verify at all (below); or the
+ * caller says the file is SEQUENTIAL anyway (`forceSequential`). That is
+ * the layout the first Draco exports of collapsed artifacts used (#1872),
+ * which the reader still opens, so falling back to it costs ratio, not
+ * selection. One file, one method, whichever shape the row is in.
  *
  * @param {object} json the source GLB's JSON
  * @param {Uint8Array} bin its BIN chunk
  * @param {object} rawPayload the decoded `BLDRS_instance_tables` JSON
  * @param {number} positionBits the Draco POSITION quantization bits the
  *   export will use
- * @return {?object} a copy of `rawPayload` with witnesses added, or null when
- *   there is nothing collapsed to witness
+ * @param {boolean} [forceSequential] the file is SEQUENTIAL whatever its
+ *   collapsed tables hold — another mesh's triangle order is load-bearing
+ *   (`glbCompression.js#isTriangleOrderedLayout`) — so plan the SEQUENTIAL
+ *   branch: nothing stripped or tagged, every verified table still witnessed
+ * @return {?{sequential: boolean, meshPlans: Map<number, object>, payload: ?object}}
+ *   null when the payload has no collapsed table. `meshPlans` maps a source
+ *   mesh index to what `glbCompression.js#applyMeshPlan` does to its one
+ *   primitive ({@link planMerged}, {@link planPerRow}); `payload` is a copy
+ *   of `rawPayload` with witnesses added (and any it already carried widened
+ *   for this encode's quantization), or null when it changed nothing
  */
-export function addLossyWitnesses(json, bin, rawPayload, positionBits) {
+export function planCollapsedDraco(json, bin, rawPayload, positionBits, forceSequential = false) {
   const tables = parseInstanceTablesExtensionData(rawPayload)
   if (!tables || !bin || !tables.some((table) => Array.isArray(table.ranges))) {
     return null
   }
   const dv = new DataView(bin.buffer, bin.byteOffset, bin.byteLength)
   const rowsByTable = collectRows(json, tables)
-  const out = {...rawPayload, nodes: rawPayload.nodes.map((node) => ({...node}))}
-  let witnessed = 0
+  const verified = []
+  let unverified = 0
   tables.forEach((table, t) => {
     if (!Array.isArray(table.ranges)) {
       return
@@ -65,16 +102,206 @@ export function addLossyWitnesses(json, bin, rawPayload, positionBits) {
     const rows = rowsByTable.get(t)
     const view = rows && rowReader(json, dv, table, rows)
     if (!view || exactCanary(table, view) !== table.canary) {
-      glbInfo(`export: collapsed table ${t} does not verify on the source; no lossy witness`)
+      glbInfo(`export: collapsed table ${t} does not verify on the source; no new lossy witness`)
+      unverified++
       return
     }
-    const stats = rowWitnessStats(
-      table.count, (r) => view.indexCountOf(r),
-      (r, i, c) => view.cornerAt(r, i, c))
-    out.nodes[t].witness = buildLossyWitness(table, stats, positionBits)
-    witnessed++
+    const kept = keptTriangles(table, view)
+    if (!kept) {
+      glbInfo(`export: collapsed table ${t} indexes outside its rows; no new lossy witness`)
+      unverified++
+      return
+    }
+    verified.push({t, table, view, rows, kept})
   })
-  return witnessed > 0 ? out : null
+  // A table the plan cannot verify is one it can neither strip nor tag — and
+  // the commonest such source is not a broken file but a collapsed Draco
+  // export handed back to the export (codex P1 on #1903): Draco quantized
+  // its geometry, so the exact canary cannot pass by construction. Its rows
+  // live in what it already carries — triangle runs if it predates the tag,
+  // its own tag (which rides through the re-encode as a plain attribute) if
+  // not — and in its own witness, which is kept as it is. SEQUENTIAL keeps
+  // both true: runs stay in order, and no triangle the first quantization
+  // made zero-area is dropped from under a witness that counted it.
+  // Verifying such a source would mean running the reader's lossy rebuild
+  // here. Nothing in the app hands the export one: both export paths
+  // (`artifactSizes.js#runRewrite`, `pro/glbExport.js`) read the OPFS
+  // artifact, and `glbExport.js` writes every batched artifact — the only
+  // kind with collapsed tables — with mode null. So it falls back.
+  const sequential = forceSequential || unverified > 0 || verified.some(({kept}) => kept.hasEmptyRow)
+  const meshPlans = new Map()
+  const out = {...rawPayload, nodes: rawPayload.nodes.map((node) => ({...node}))}
+  // A retained witness was taken at ITS encode's POSITION bits, and this
+  // encode quantizes the decoded positions again, at `positionBits`. The
+  // reader allows each row one step at the witness's bits (`bldrsInstance
+  // Tables.js#matchesLossyWitness`), so carry it at one bit under the
+  // coarser of the two: that step is at least twice the coarser step, which
+  // covers the error the witness already allowed plus this encode's half
+  // step (Draco rounds to the nearest grid point). That is a bound, so it
+  // holds however many times a file goes round; on the jest cases the
+  // coarser rung's own bits already pass, and the extra bit is the margin
+  // for grids that do not line up. Codex on #1903: kept at 14 bits through
+  // a `smallest` (12-bit) re-encode, the witness refused every row.
+  let carried = 0
+  tables.forEach((table, t) => {
+    const witness = out.nodes[t]?.witness
+    if (Array.isArray(table.ranges) && !verified.some((v) => v.t === t) &&
+        Number.isInteger(witness?.positionBits)) {
+      out.nodes[t].witness = {
+        ...witness,
+        positionBits: Math.max(1, Math.min(witness.positionBits, positionBits) - 1),
+      }
+      carried++
+    }
+  })
+  for (const {t, table, view, rows, kept} of verified) {
+    if (sequential) {
+      const stats = rowWitnessStats(
+        table.count, (r) => view.indexCountOf(r),
+        (r, i, c) => view.cornerAt(r, i, c))
+      out.nodes[t].witness = buildLossyWitness(table, stats, positionBits)
+      continue
+    }
+    if (rows.merged) {
+      meshPlans.set(rows.mesh, planMerged(table, kept))
+    } else {
+      planPerRow(view, kept).forEach((plan, r) => meshPlans.set(rows.meshes[r], plan))
+    }
+    const stats = rowWitnessStats(
+      table.count, (r) => kept.corners[r].length,
+      (r, i, c) => view.positionAt(r, kept.corners[r][i], c))
+    out.nodes[t].witness = buildLossyWitness(table, stats, positionBits, (r) => kept.corners[r].length)
+  }
+  if (sequential) {
+    glbInfo(forceSequential ?
+      'export: another mesh orders its triangles; Draco stays SEQUENTIAL, collapsed tables witnessed unstripped' :
+      'export: a collapsed table cannot be stripped (unverified, or a row with no ' +
+      'triangle of non-zero area); Draco stays SEQUENTIAL, nothing new tagged')
+  }
+  return {sequential, meshPlans, payload: verified.length > 0 || carried > 0 ? out : null}
+}
+
+
+/**
+ * Each row's triangles that survive EDGEBREAKER: every one with non-zero
+ * area, in source order, as row-local corner vertices.
+ *
+ * Zero area means two corners at the SAME position, compared as Draco's
+ * attribute deduplication compares it — bit for bit, so -0 and +0 differ
+ * (measured: a triangle with one corner at x = -0 beside one at +0 survives
+ * EDGEBREAKER). Collinear and sub-quantum triangles are kept by the encoder,
+ * measured too, so they are kept here. Real collapsed rows do carry
+ * zero-area triangles (hundreds of rows on a large IFC model), which is why
+ * this is not an edge case.
+ *
+ * @param {object} table verified collapsed table
+ * @param {object} view from `rowReader`, either shape
+ * @return {?{corners: Array<Uint32Array>, hasEmptyRow: boolean}} or null
+ *   when a row indexes outside its own vertices
+ */
+function keptTriangles(table, view) {
+  const corners = new Array(table.count)
+  for (let r = 0; r < table.count; r++) {
+    const vertexCount = view.vertexCountOf(r)
+    const indexCount = view.indexCountOf(r)
+    const same = (a, b) => a === b || (
+      Object.is(view.positionAt(r, a, 0), view.positionAt(r, b, 0)) &&
+      Object.is(view.positionAt(r, a, 1), view.positionAt(r, b, 1)) &&
+      Object.is(view.positionAt(r, a, 2), view.positionAt(r, b, 2)))
+    const row = []
+    for (let i = 0; i + 2 < indexCount; i += 3) {
+      const a = view.localIndexAt(r, i)
+      const b = view.localIndexAt(r, i + 1)
+      const c = view.localIndexAt(r, i + 2)
+      if (a >= vertexCount || b >= vertexCount || c >= vertexCount) {
+        return null
+      }
+      if (!same(a, b) && !same(b, c) && !same(a, c)) {
+        row.push(a, b, c)
+      }
+    }
+    corners[r] = Uint32Array.from(row)
+  }
+  return {corners, hasEmptyRow: corners.some((row) => row.length === 0)}
+}
+
+
+/**
+ * The plan for a merged primitive: its kept triangles, the vertices they use
+ * (ascending, so each row's stay contiguous) — dropping the ones only
+ * zero-area triangles used — and each kept vertex's row tag.
+ *
+ * Vertices only zero-area triangles used are dropped with them, here and in
+ * {@link planPerRow}. Draco's EDGEBREAKER does not encode a vertex no face
+ * uses, so leaving them in would let one widen the quantization grid the
+ * encoder sets while the decoded primitive — the extent the reader takes each
+ * row's tolerance from — no longer contains it.
+ *
+ * @param {object} table verified merged table
+ * @param {object} kept from {@link keptTriangles}
+ * @return {object} `{sourceVertexCount, vertices, indices, rows, itemSize}`
+ */
+function planMerged(table, kept) {
+  const {ranges} = table
+  const last = ranges[ranges.length - 1]
+  const plan = compact(last.vertexStart + last.vertexCount,
+    kept.corners.map((row, r) => row.map((v) => ranges[r].vertexStart + v)))
+  const itemSize = rowTagItemSize(ranges.length)
+  const rows = new Uint16Array(plan.vertices.length * itemSize)
+  let r = 0
+  plan.vertices.forEach((v, k) => {
+    while (v >= ranges[r].vertexStart + ranges[r].vertexCount) {
+      r++
+    }
+    packRowTag(rows, k, r, itemSize)
+  })
+  return {...plan, rows, itemSize}
+}
+
+
+/**
+ * The plans for a portable file's per-row primitives: each row's own kept
+ * triangles and the vertices they use. No tag — the row IS the primitive.
+ *
+ * @param {object} view from `rowReader`, per-row shape
+ * @param {object} kept from {@link keptTriangles}
+ * @return {Array<object>} per row, `{sourceVertexCount, vertices, indices}`
+ */
+function planPerRow(view, kept) {
+  return kept.corners.map((row, r) => compact(view.vertexCountOf(r), [row]))
+}
+
+
+/**
+ * Renumber the vertices some triangles use, ascending, dropping the rest.
+ *
+ * @param {number} vertexCount the primitive's vertex count
+ * @param {Array<Uint32Array>} triangleRuns corner vertices, three per triangle
+ * @return {{sourceVertexCount: number, vertices: Uint32Array, indices: Uint32Array}}
+ */
+function compact(vertexCount, triangleRuns) {
+  const used = new Uint8Array(vertexCount)
+  for (const run of triangleRuns) {
+    for (const v of run) {
+      used[v] = 1
+    }
+  }
+  const renumber = new Int32Array(vertexCount).fill(-1)
+  const vertices = []
+  for (let v = 0; v < vertexCount; v++) {
+    if (used[v]) {
+      renumber[v] = vertices.length
+      vertices.push(v)
+    }
+  }
+  const indices = new Uint32Array(triangleRuns.reduce((n, run) => n + run.length, 0))
+  let at = 0
+  for (const run of triangleRuns) {
+    for (const v of run) {
+      indices[at++] = renumber[v]
+    }
+  }
+  return {sourceVertexCount: vertexCount, vertices: Uint32Array.from(vertices), indices}
 }
 
 
@@ -84,8 +311,8 @@ export function addLossyWitnesses(json, bin, rawPayload, positionBits) {
  *
  * @param {object} json
  * @param {Array<object>} tables parsed
- * @return {Map<number, object>} table index -> `{merged: primitive}` or
- *   `{perRow: Array<primitive>}`
+ * @return {Map<number, object>} table index -> `{merged: primitive, mesh:
+ *   index}` or `{perRow: Array<primitive>, meshes: Array<index>}`
  */
 function collectRows(json, tables) {
   const found = new Map()
@@ -97,13 +324,17 @@ function collectRows(json, tables) {
     }
     const row = node.extras.bldrsInstance
     if (Number.isInteger(row)) {
-      const entry = found.get(t) ?? {perRow: new Array(tables[t].count).fill(null)}
+      const entry = found.get(t) ?? {
+        perRow: new Array(tables[t].count).fill(null),
+        meshes: new Array(tables[t].count).fill(null),
+      }
       if (entry.perRow) {
         entry.perRow[row] = primitive
+        entry.meshes[row] = node.mesh
         found.set(t, entry)
       }
     } else {
-      found.set(t, {merged: primitive})
+      found.set(t, {merged: primitive, mesh: node.mesh})
     }
   }
   return found

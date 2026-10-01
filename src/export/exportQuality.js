@@ -169,11 +169,14 @@
 //     typed FLOAT came back corrupted at the pinned 12-bit default. Not
 //     exposed — and since `quantizationBits` MERGES with the library's
 //     defaults, the guard `exportQuality.test.js` can give is that no rung
-//     ever names that bucket.
-//   - The Draco `method`. Derived from `triangleOrderedMeshes`, never from
-//     quality: SEQUENTIAL is what preserves the triangle order
-//     `BLDRS_face_ids` indexes identity by, and a rung that "also picks
-//     edgebreaker for smaller files" would silently break re-import picking.
+//     ever names that bucket. The collapsed layout's row tag
+//     (`loader/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`) is GENERIC too and
+//     rests on the same two facts: typed UNSIGNED_SHORT, never quantized.
+//   - The Draco `method`. Derived from the layout
+//     (`glbCompression.js#planDraco`), never from quality: SEQUENTIAL is what
+//     preserves the triangle order `BLDRS_face_ids` indexes identity by, and
+//     a rung that "also picks edgebreaker for smaller files" would silently
+//     break re-import picking.
 //   - Anything at all for MESHOPT below `FILTER`. `EXTMeshoptCompression`'s
 //     entire encoder surface in the pinned `@gltf-transform` 4.3.0 is
 //     `{method: QUANTIZE | FILTER}` — the filter each attribute gets and the
