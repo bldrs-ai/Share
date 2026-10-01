@@ -10,7 +10,7 @@ import {
 } from '../../connections/persistence'
 import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
-import {loadLocalFileFallback} from '../../utils/loader'
+import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
 import {navigateToModel} from '../../utils/navigate'
 import useStore from '../../store/useStore'
 import OpenModelDialog from './OpenModelDialog'
@@ -54,7 +54,6 @@ jest.mock('../Connections/GoogleDriveTab', () => function MockGoogleDriveTab({on
 jest.mock('../Connections/GitHubTab', () => function MockGitHubTab() {
   return <div data-testid='mock-github-tab'/>
 })
-jest.mock('../../OPFS/utils', () => ({checkOPFSAvailability: jest.fn().mockReturnValue(false)}))
 jest.mock('../../utils/navigate', () => ({navigateToModel: jest.fn()}))
 jest.mock('../../utils/loader', () => ({loadLocalFile: jest.fn(), loadLocalFileFallback: jest.fn()}))
 
@@ -327,12 +326,14 @@ describe('OpenModelDialog — Local tab', () => {
       // The store defaults currentTab to 1 (GitHub); Local is index 0.
       useStore.getState().setCurrentTab(0)
       useStore.getState().setAppPrefix('/share')
+      useStore.setState({isOpfsAvailable: true})
     })
   })
 
   afterEach(() => {
     act(() => {
       useStore.getState().setAppPrefix(null)
+      useStore.setState({isOpfsAvailable: null})
     })
   })
 
@@ -394,7 +395,7 @@ describe('OpenModelDialog — Local tab', () => {
 
   it('records the picked filename as display name and the storage id as nav target', async () => {
     const lastModified = Date.now()
-    loadLocalFileFallback.mockImplementation((onLoad) => onLoad(STORAGE_ID, lastModified, 'box.ifc'))
+    loadLocalFile.mockImplementation((onLoad) => onLoad(STORAGE_ID, lastModified, 'box.ifc'))
     renderLocalTab([])
     fireEvent.click(screen.getByTestId('button_open_file'))
     await waitFor(() => {
@@ -410,8 +411,23 @@ describe('OpenModelDialog — Local tab', () => {
     expect(setPendingModelNameUpdate).toHaveBeenCalledWith(STORAGE_ID)
   })
 
+  // `isOpfsAvailable` used to be `checkOPFSAvailability()`'s unawaited
+  // Promise — always truthy — so the fallback branch was unreachable.
+  it('uses the no-OPFS fallback when the store says OPFS is unavailable', async () => {
+    act(() => useStore.setState({isOpfsAvailable: false}))
+    loadLocalFileFallback.mockImplementation((onLoad) => onLoad('blob-uuid', Date.now(), 'box.ifc'))
+    renderLocalTab([])
+    fireEvent.click(screen.getByTestId('button_open_file'))
+    await waitFor(() => {
+      expect(navigateToModel).toHaveBeenCalledWith('/share/v/new/blob-uuid', mockNavigate)
+    })
+    expect(loadLocalFile).not.toHaveBeenCalled()
+    // Nothing was stored, so there is nothing for a recent to reopen.
+    expect(addRecentFileEntry).not.toHaveBeenCalled()
+  })
+
   it('falls back to the storage id as display name when the picker gives no filename', async () => {
-    loadLocalFileFallback.mockImplementation((onLoad) => onLoad(STORAGE_ID, null))
+    loadLocalFile.mockImplementation((onLoad) => onLoad(STORAGE_ID, null))
     renderLocalTab([])
     fireEvent.click(screen.getByTestId('button_open_file'))
     await waitFor(() => {

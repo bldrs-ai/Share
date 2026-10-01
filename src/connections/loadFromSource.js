@@ -94,7 +94,8 @@ async function writeAndOpen(download, fallbackName, provider, connection, onLoad
   const filename = download.filename || fallbackName
 
   // Try to write to OPFS (matches the local file upload pattern)
-  if (checkOPFSAvailability()) {
+  // Awaited: it's async, and an unawaited Promise is always truthy.
+  if (await checkOPFSAvailability()) {
     const blobUrl = URL.createObjectURL(blob)
     const dotParts = filename.split('.')
     if (dotParts.length <= 1) {

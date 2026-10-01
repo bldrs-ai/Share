@@ -1,7 +1,6 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {Box, Button, Divider, Slide, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {checkOPFSAvailability} from '../../OPFS/utils'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
@@ -53,7 +52,17 @@ export default function OpenModelDialog({
   const setCurrentTab = useStore((state) => state.setCurrentTab)
   const currentTab = useStore((state) => state.currentTab)
   const setAlert = useStore((state) => state.setAlert)
-  const isOpfsAvailable = checkOPFSAvailability()
+  // The store's resolved answer (BaseRoutes awaits the probe at startup), not
+  // `checkOPFSAvailability()` called here: that is async, so its Promise was
+  // always truthy and the no-OPFS fallback below never ran. Awaiting it in
+  // `openFile` instead would put a hop before `fileInput.click()`, which
+  // Safari can refuse once the click's user activation is spent.
+  //
+  // The fallback is reachable now but still does not open the file: it hands
+  // `/v/new/` a page-lifetime blob URL, and `navigateToModel` does a full
+  // page load, which ends that page. Drag-and-drop's fallback has the same
+  // problem; both need the File held across an in-app navigation instead.
+  const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const isMobile = useIsMobile()
   const {tier, record, check, hasCapacity} = useQuota()
 
@@ -280,6 +289,11 @@ export default function OpenModelDialog({
       }
       disablePageReloadApprovalCheck()
       navigateToModel(sharePath, navigate)
+      // Without OPFS the id is a page-lifetime blob URL's, not a stored
+      // upload, so a recent would point at nothing after a reload.
+      if (!isOpfsAvailable) {
+        return
+      }
       addRecentFileEntry({
         id: storageId,
         source: 'local',
