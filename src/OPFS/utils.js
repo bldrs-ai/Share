@@ -557,26 +557,29 @@ export function saveDnDFileToOpfs(file, type, callback) {
  * would queue this cheap probe behind whatever it is busy with — a
  * multi-hundred-MB GLB cache write can hold it for seconds.
  *
- * Only answers false when OPFS says the entry is definitively absent.
- * `NotFoundError` / `TypeMismatchError` are the missing cases; `TypeError`
- * is what an id that is not a legal entry name (e.g. one with a `/`) throws,
- * and such an id can never load either. Anything else — OPFS itself
- * unavailable, a `SecurityError` — rejects, so a caller deciding whether to
- * delete user data can tell "gone" from "couldn't look".
+ * Only answers false when OPFS says the entry is definitively absent:
+ * `NotFoundError`, or `TypeMismatchError` (a file where the folder should
+ * be). An id that isn't a legal entry name (empty, `.`/`..`, or containing a
+ * path separator) can never have been written, so it's answered false up
+ * front, without a lookup. Anything else — OPFS itself unavailable, a
+ * `SecurityError`, a `TypeError` from the API — rejects, so a caller
+ * deciding whether to delete user data can tell "gone" from "couldn't look".
  *
  * @param {string} storageId `<blob-uuid>.<ext>`
  * @return {Promise<boolean>}
  */
 export async function doesUploadExistInOPFS(storageId) {
   const root = await navigator.storage.getDirectory()
+  if (typeof storageId !== 'string' || storageId === '' || storageId === '.' ||
+      storageId === '..' || /[/\\]/.test(storageId)) {
+    return false
+  }
   try {
     const folder = await root.getDirectoryHandle(storageId)
     await folder.getFileHandle(storageId)
     return true
   } catch (err) {
-    if (err instanceof TypeError ||
-        err?.name === 'NotFoundError' ||
-        err?.name === 'TypeMismatchError') {
+    if (err?.name === 'NotFoundError' || err?.name === 'TypeMismatchError') {
       return false
     }
     throw err

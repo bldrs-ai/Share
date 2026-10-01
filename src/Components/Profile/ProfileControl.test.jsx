@@ -40,6 +40,10 @@ describe('ProfileControl', () => {
       mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
     })
 
+    // Restored here, not at the end of a test, so a failing assertion can't
+    // leak the console.error spy into later tests.
+    afterEach(() => jest.restoreAllMocks())
+
     /** Open the profile menu and click Clear Local Cache. */
     async function clickClearLocalCache() {
       const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
@@ -61,7 +65,6 @@ describe('ProfileControl', () => {
       jest.spyOn(console, 'error').mockImplementation(() => {})
       await clickClearLocalCache()
       expect(loadAllRecentFiles().map((f) => f.source)).toEqual(['github', 'local'])
-      console.error.mockRestore()
     })
   })
 

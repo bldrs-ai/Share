@@ -779,9 +779,27 @@ describe('OPFS Test Suite', () => {
       expect(await doesUploadExistInOPFS('a.ifc')).toBe(false)
     })
 
-    it('is false for an id that is not a legal entry name', async () => {
-      mockRoot(jest.fn().mockRejectedValue(new TypeError('Name is not allowed.')))
-      expect(await doesUploadExistInOPFS('a/b.ifc')).toBe(false)
+    it('is false, without a lookup, for an id that is not a legal entry name', async () => {
+      const getDirectoryHandle = jest.fn()
+      mockRoot(getDirectoryHandle)
+      for (const id of ['', '.', '..', 'a/b.ifc', 'a\\b.ifc']) {
+        expect(await doesUploadExistInOPFS(id)).toBe(false)
+      }
+      expect(getDirectoryHandle).not.toHaveBeenCalled()
+    })
+
+    // A TypeError from the lookup itself isn't a definitive "absent", and
+    // answering false would delete the recent.
+    it('rejects on a TypeError from the lookup rather than answering false', async () => {
+      mockRoot(jest.fn().mockRejectedValue(new TypeError('unexpected')))
+      await expect(doesUploadExistInOPFS('a.ifc')).rejects.toThrow('unexpected')
+    })
+
+    it('rejects when OPFS itself is missing (getDirectory throws)', async () => {
+      global.navigator.storage = {getDirectory: () => {
+        throw new TypeError('navigator.storage.getDirectory is not a function')
+      }}
+      await expect(doesUploadExistInOPFS('a.ifc')).rejects.toThrow(TypeError)
     })
 
     it('rejects when it could not look, rather than answering false', async () => {

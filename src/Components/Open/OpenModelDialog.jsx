@@ -1,7 +1,7 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {Box, Button, Divider, Slide, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {NO_OPFS_LOCAL_FILE_ALERT} from '../../OPFS/messages'
+import {noOpfsLocalFileAlert} from '../../OPFS/messages'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
 import {loadLocalFile} from '../../utils/loader'
@@ -15,7 +15,6 @@ import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToModel} from '../../utils/navigate'
-import {trackAlert} from '../../utils/alertTracking'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import useExistInFeature from '../../hooks/useExistInFeature'
@@ -89,6 +88,13 @@ export default function OpenModelDialog({
     // upload is gone (see pruneLocalRecents.js for how they drift apart).
     // Startup already ran this sweep; re-running here covers a dialog
     // opened before that finished, and costs a few handle lookups.
+    // Known-unavailable OPFS would only make every probe reject (and log);
+    // `null` still sweeps, since the probe just keeps what it can't check.
+    // Read at open time rather than as a dep: re-running this effect when
+    // the startup probe resolves would reset the dialog under the user.
+    if (useStore.getState().isOpfsAvailable === false) {
+      return undefined
+    }
     let isCurrent = true
     pruneMissingLocalRecents()
       .then((removed) => {
@@ -271,10 +277,9 @@ export default function OpenModelDialog({
     // resolves, and that means "not known yet", not "unavailable". Browse is
     // disabled while it's `null` (below), so this only fires on a real no.
     if (isOpfsAvailable === false) {
-      // Tracked so #1906's priority can follow how often this is hit.
-      trackAlert(NO_OPFS_LOCAL_FILE_ALERT)
+      // AlertDialog counts it (analytics only); see noOpfsLocalFileAlert.
       setIsDialogDisplayed(false)
-      setAlert(NO_OPFS_LOCAL_FILE_ALERT)
+      setAlert(noOpfsLocalFileAlert())
       return
     }
     if (!hasCapacity) {

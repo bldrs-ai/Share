@@ -46,9 +46,10 @@ export default function AlertDialog({onClose}) {
     if (typeof alert !== 'object') {
       return
     }
-    if (alert.type === 'unsupportedSchema') {
+    if (alert.type === 'unsupportedSchema' || alert.type === 'noOpfs') {
       // Expected outcome, not a defect: analytics only, never Sentry
-      // (alertTracking.js#trackAlertEvent).
+      // (alertTracking.js#trackAlertEvent). `noOpfs` is a browser without
+      // OPFS opening a local file (OPFS/messages.js, #1906).
       trackAlertEvent(alert.message)
     } else if (alert.type === 'oom' || alert.type === 'needsReconnect') {
       trackAlert(alert.message, alert)
@@ -68,6 +69,7 @@ export default function AlertDialog({onClose}) {
   const isOom = alert && typeof alert === 'object' && alert.type === 'oom'
   const isNeedsReconnect = alert && typeof alert === 'object' && alert.type === 'needsReconnect'
   const isUnsupportedSchema = alert && typeof alert === 'object' && alert.type === 'unsupportedSchema'
+  const isNoOpfs = alert && typeof alert === 'object' && alert.type === 'noOpfs'
 
   const refresh = () => {
     try {
@@ -117,13 +119,16 @@ export default function AlertDialog({onClose}) {
     headerText = 'Reconnect required'
   } else if (isUnsupportedSchema) {
     headerText = 'Not supported yet'
+  } else if (isNoOpfs) {
+    headerText = 'Not available here'
   } else {
     headerText = 'Error'
   }
 
-  // No "contact us" footer for an unsupported schema: it is a known,
-  // documented limit, so there is nothing for support to diagnose.
-  const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema
+  // No "contact us" footer for an unsupported schema or a browser without
+  // OPFS: both are known, documented limits, so there is nothing for support
+  // to diagnose.
+  const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema && !isNoOpfs
   return (
     <Dialog
       headerText={headerText}
@@ -164,7 +169,7 @@ function createAlertReport(a) {
   if (typeof a === 'string') {
     return a
   } else if (typeof a === 'object') {
-    if (a && (a.type === 'oom' || a.type === 'needsReconnect' || a.type === 'unsupportedSchema')) {
+    if (a && (a.type === 'oom' || a.type === 'needsReconnect' || a.type === 'unsupportedSchema' || a.type === 'noOpfs')) {
       return a.message
     } else if (a instanceof NotFoundError) {
       return displayPathAlert(a)

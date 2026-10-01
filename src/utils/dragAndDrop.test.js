@@ -2,7 +2,7 @@ import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from './dragAndD
 import {guessTypeFromFile} from '../Filetype'
 import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
-import {NO_OPFS_LOCAL_FILE_ALERT} from '../OPFS/messages'
+import {NO_OPFS_LOCAL_FILE_ALERT, noOpfsLocalFileAlert} from '../OPFS/messages'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {disablePageReloadApprovalCheck} from './event'
 import {trackAlert} from './alertTracking'
@@ -182,8 +182,9 @@ describe('dragAndDrop utility', () => {
         mockOnError,
       )
 
-      expect(mockSetAlert).toHaveBeenCalledWith(NO_OPFS_LOCAL_FILE_ALERT)
-      expect(trackAlert).toHaveBeenCalledWith(NO_OPFS_LOCAL_FILE_ALERT)
+      expect(mockSetAlert).toHaveBeenCalledWith(noOpfsLocalFileAlert())
+      // AlertDialog counts it (analytics only); counting here too doubled it.
+      expect(trackAlert).not.toHaveBeenCalled()
       expect(mockOnError).toHaveBeenCalledWith(NO_OPFS_LOCAL_FILE_ALERT)
       expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
       expect(mockNavigate).not.toHaveBeenCalled()
@@ -212,7 +213,7 @@ describe('dragAndDrop utility', () => {
 
       await handleFileDrop(mockEvent, mockNavigate, '/prefix', null, mockSetAlert)
 
-      expect(mockSetAlert).toHaveBeenCalledWith(NO_OPFS_LOCAL_FILE_ALERT)
+      expect(mockSetAlert).toHaveBeenCalledWith(noOpfsLocalFileAlert())
       expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
     })
 

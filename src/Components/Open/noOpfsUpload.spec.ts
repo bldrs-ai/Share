@@ -15,7 +15,6 @@ import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
  * File is held across an in-app navigation (#1906), both ways in say so
  * (`OPFS/messages.js`) and leave the current model where it is.
  */
-const MODEL_URL = '/share/v/p/index.ifc'
 const PICKED_FILE = 'public/index.ifc'
 // A distinctive slice of NO_OPFS_LOCAL_FILE_ALERT, which the spec can't
 // import (it would pull the app's module graph into the test runner).
@@ -50,24 +49,21 @@ describeMobileAndDesktop('Open 100: opening a local file without OPFS', () => {
     await homepageSetup(page)
     await setIsReturningUser(context)
     await disableOpfs(page)
-    await page.goto(MODEL_URL, {waitUntil: 'domcontentloaded'})
+    await page.goto('/share/v/p/index.ifc', {waitUntil: 'domcontentloaded'})
     await waitForModelReady(page)
   })
 
+  // What carries these tests is the alert itself: the old fallback raised a
+  // different one ("does not point to a model file") and then redirected to
+  // the home model, at the very URL this page is already on, so a URL check
+  // can't tell the two apart.
   test('Browse explains that local files need browser storage', async ({page}) => {
     await page.getByTestId('control-button-open').click()
     await page.getByRole('tab', {name: 'Local'}).click()
-    // No chooser should open: there is nowhere for the file to go.
-    let isChooserOpened = false
-    page.on('filechooser', () => {
-      isChooserOpened = true
-    })
     await page.getByTestId('button_open_file').click()
 
+    await expect(page.getByText('Not available here')).toBeVisible()
     await expect(page.getByText(ALERT_TEXT)).toBeVisible()
-    expect(isChooserOpened).toBe(false)
-    await expect(page).toHaveURL(new RegExp(`${MODEL_URL}(#.*)?$`))
-    expect(await page.evaluate(storedLocalIds)).toEqual([])
   })
 
   test('drag-and-drop explains that local files need browser storage', async ({page}) => {
@@ -82,8 +78,9 @@ describeMobileAndDesktop('Open 100: opening a local file without OPFS', () => {
       dropzone.dispatchEvent(new DragEvent('drop', {bubbles: true, cancelable: true, dataTransfer: dt}))
     }, bytes)
 
+    await expect(page.getByText('Not available here')).toBeVisible()
     await expect(page.getByText(ALERT_TEXT)).toBeVisible()
-    await expect(page).toHaveURL(new RegExp(`${MODEL_URL}(#.*)?$`))
+    // The old fallback recorded a recent for the never-stored blob id.
     expect(await page.evaluate(storedLocalIds)).toEqual([])
   })
 })

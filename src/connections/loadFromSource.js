@@ -147,7 +147,12 @@ async function writeAndOpen(download, fallbackName, provider, connection, onLoad
     URL.revokeObjectURL(blobUrl)
   }
 
-  // Fallback: use blob URL directly (no OPFS)
+  // Fallback: use blob URL directly (no OPFS). This cannot actually open
+  // the file: `/v/new/` navigation is a full page load, which ends the blob
+  // URL with the page that minted it. The Open dialog and drag-and-drop
+  // replaced the same fallback with NO_OPFS_LOCAL_FILE_ALERT
+  // (OPFS/messages.js); nothing imports this module today, so it's left as
+  // is until #1906 decides how a no-OPFS open should work.
   let tmpUrl = URL.createObjectURL(blob)
   const parts = tmpUrl.split('/')
   tmpUrl = parts[parts.length - 1]

@@ -1,5 +1,5 @@
 import {guessTypeFromFile} from '../Filetype'
-import {NO_OPFS_LOCAL_FILE_ALERT} from '../OPFS/messages'
+import {NO_OPFS_LOCAL_FILE_ALERT, noOpfsLocalFileAlert} from '../OPFS/messages'
 import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
@@ -52,9 +52,8 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
   // so ask directly rather than guess.
   const hasOpfs = isOpfsAvailable === null ? await checkOPFSAvailability() : isOpfsAvailable
   if (!hasOpfs) {
-    // Tracked so #1906's priority can follow how often this is hit.
-    trackAlert(NO_OPFS_LOCAL_FILE_ALERT)
-    setAlert(NO_OPFS_LOCAL_FILE_ALERT)
+    // AlertDialog counts it (analytics only); see noOpfsLocalFileAlert.
+    setAlert(noOpfsLocalFileAlert())
     if (onError) {
       onError(NO_OPFS_LOCAL_FILE_ALERT)
     }

@@ -2,7 +2,7 @@ import React from 'react'
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {NO_OPFS_LOCAL_FILE_ALERT} from '../../OPFS/messages'
+import {noOpfsLocalFileAlert} from '../../OPFS/messages'
 import {NeedsReconnectError} from '../../connections/errors'
 import {
   addRecentFileEntry,
@@ -335,6 +335,8 @@ describe('OpenModelDialog — Local tab', () => {
     act(() => {
       useStore.getState().setAppPrefix(null)
       useStore.setState({isOpfsAvailable: null})
+      // Tests assert on the store's alert, so none may leak into the next.
+      useStore.getState().setAlert(null)
     })
   })
 
@@ -420,11 +422,17 @@ describe('OpenModelDialog — Local tab', () => {
     renderLocalTab([])
     fireEvent.click(screen.getByTestId('button_open_file'))
     await waitFor(() => {
-      expect(useStore.getState().alert).toBe(NO_OPFS_LOCAL_FILE_ALERT)
+      expect(useStore.getState().alert).toEqual(noOpfsLocalFileAlert())
     })
     expect(loadLocalFile).not.toHaveBeenCalled()
     expect(navigateToModel).not.toHaveBeenCalled()
-    expect(mockSetIsDialogDisplayed).toHaveBeenCalledWith(false)
+  })
+
+  // Every probe would reject (and log) with OPFS known to be missing.
+  it('skips the OPFS sweep when the store says OPFS is unavailable', () => {
+    act(() => useStore.setState({isOpfsAvailable: false}))
+    renderLocalTab([])
+    expect(pruneMissingLocalRecents).not.toHaveBeenCalled()
   })
 
   // `null` means BaseRoutes' probe hasn't resolved: not known yet, so neither

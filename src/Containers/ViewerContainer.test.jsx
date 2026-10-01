@@ -33,7 +33,7 @@ jest.mock('../OPFS/utils', () => ({saveDnDFileToOpfs: jest.fn()}))
 // We'll import the real dependencies from the mocks above
 import {guessTypeFromFile} from '../Filetype'
 import {saveDnDFileToOpfs} from '../OPFS/utils'
-import {NO_OPFS_LOCAL_FILE_ALERT} from '../OPFS/messages'
+import {noOpfsLocalFileAlert} from '../OPFS/messages'
 
 
 describe('ViewerContainer', () => {
@@ -210,7 +210,7 @@ describe('ViewerContainer', () => {
     dropzone.dispatchEvent(mockEvent)
 
     await waitFor(() => {
-      expect(mockSetAlert).toHaveBeenCalledWith(NO_OPFS_LOCAL_FILE_ALERT)
+      expect(mockSetAlert).toHaveBeenCalledWith(noOpfsLocalFileAlert())
     })
     expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
     expect(mockNavigate).not.toHaveBeenCalled()
