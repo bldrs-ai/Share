@@ -82,21 +82,27 @@ async function exportWith(page: Page, mode: string, name: string): Promise<strin
 
 /** A Draco bitstream's method byte: 'DRACO', major, minor, encoder type, METHOD. */
 const DRACO_METHOD_BYTE = 8
-const DRACO_SEQUENTIAL = 0
 const DRACO_EDGEBREAKER = 1
+/** The row tag's glTF semantic (`loader/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`). */
+const ROW_TAG_SEMANTIC = '_BLDRS_ROW'
 const GLB_HEADER_BYTES = 12
 const GLB_CHUNK_HEADER_BYTES = 8
+
+
+/** What one node kind's primitives hold in an exported Draco file. */
+type DracoKind = {methods: Set<number>; primitives: number; tagged: number}
 
 
 /**
  * The Draco method each node kind of an exported file was encoded with, read
  * off every primitive's bitstream header — what the file actually holds, not
- * what the encoder was asked for.
+ * what the encoder was asked for — and how many of its primitives carry the
+ * row tag, in both the glTF attributes and the Draco extension's.
  *
  * @param bytes one exported GLB
- * @return the methods seen under collapsed nodes and under instanced ones
+ * @return per kind, the methods seen, the primitive count and the tagged count
  */
-function dracoMethodsByNodeKind(bytes: Buffer): {collapsed: Set<number>; instanced: Set<number>} {
+function dracoByNodeKind(bytes: Buffer): {collapsed: DracoKind; instanced: DracoKind} {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const json: any = glbJsonChunk(bytes)
   const jsonLength = bytes.readUInt32LE(GLB_HEADER_BYTES)
@@ -107,13 +113,21 @@ function dracoMethodsByNodeKind(bytes: Buffer): {collapsed: Set<number>; instanc
     expect(bytes.subarray(at, at + 5).toString('latin1')).toBe('DRACO')
     return bytes[at + DRACO_METHOD_BYTE]
   })
-  const out = {collapsed: new Set<number>(), instanced: new Set<number>()}
+  const kinds = () => ({methods: new Set<number>(), primitives: 0, tagged: 0})
+  const out = {collapsed: kinds(), instanced: kinds()}
   for (const node of json.nodes ?? []) {
     if (!Number.isInteger(node.mesh) || !Number.isInteger(node.extras?.bldrsTableNode)) {
       continue
     }
-    const kind = node.extensions?.EXT_mesh_gpu_instancing ? 'instanced' : 'collapsed'
-    methodsOf(node.mesh).forEach((method: number) => out[kind].add(method))
+    const kind = out[node.extensions?.EXT_mesh_gpu_instancing ? 'instanced' : 'collapsed']
+    methodsOf(node.mesh).forEach((method: number) => kind.methods.add(method))
+    for (const primitive of json.meshes[node.mesh].primitives) {
+      kind.primitives++
+      if (ROW_TAG_SEMANTIC in primitive.attributes &&
+          ROW_TAG_SEMANTIC in primitive.extensions.KHR_draco_mesh_compression.attributes) {
+        kind.tagged++
+      }
+    }
   }
   return out
   /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -183,20 +197,17 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     }
   })
 
-  test('a hybrid Draco export is spliced, and both kinds of element reopen selectable', async ({page}) => {
+  test('a hybrid Draco export is one EDGEBREAKER write, and both kinds of element reopen selectable', async ({page}) => {
     // `index.ifc` under the collapse is HYBRID — five single-placement
     // elements merge into one primitive while one shape placed twice stays an
-    // instanced node — which is the file shape the per-primitive Draco method
-    // exists for (`export/dracoMethodSplice.js`): the collapsed primitive must
-    // be SEQUENTIAL for its rows to survive, the instanced one should be
-    // EDGEBREAKER like it is with the collapse off. That takes two encoder
-    // writes joined into one file, so this is the browser test of the join:
-    // the method bytes prove the file went through it, and a double-click on
-    // each kind proves nothing it rewrote broke decode, the witness or picking.
-    // Verified red against a broken join: an un-swapped collapsed payload is
-    // refused by the witness, an un-re-laid BIN never finishes loading. The two
-    // methods happen to agree on this small model's accessor counts and index
-    // type, so the checks on copying those live in `dracoMethodSplice.test.js`.
+    // instanced node. Every primitive is EDGEBREAKER, the collapsed one
+    // carrying the per-vertex row tag its reader regroups triangles by
+    // (`loader/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`), so this is the
+    // browser test of the tag through three's own DRACOLoader: the method
+    // bytes and the attribute prove the file is the tagged layout, the
+    // `regrouped` log proves the reader took the tag path rather than the
+    // untagged one, and a double-click on each kind proves the rows it rebuilt
+    // are the elements they claim to be.
     test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
     const glbLogs = captureGlbLogs(page)
@@ -220,10 +231,12 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     const path = await exportWith(page, 'draco', 'hybrid')
     await page.keyboard.press('Escape')
 
-    // One file, two methods: a single-write encode (either method) fails here.
-    const methods = dracoMethodsByNodeKind(await readFile(path))
-    expect([...methods.collapsed], 'collapsed primitives: SEQUENTIAL').toEqual([DRACO_SEQUENTIAL])
-    expect([...methods.instanced], 'instanced primitives: EDGEBREAKER').toEqual([DRACO_EDGEBREAKER])
+    const kinds = dracoByNodeKind(await readFile(path))
+    expect([...kinds.collapsed.methods], 'collapsed primitives: EDGEBREAKER').toEqual([DRACO_EDGEBREAKER])
+    expect([...kinds.instanced.methods], 'instanced primitives: EDGEBREAKER').toEqual([DRACO_EDGEBREAKER])
+    expect(kinds.collapsed.primitives, 'collapsed primitives in the file').toBeGreaterThan(0)
+    expect(kinds.collapsed.tagged, 'every collapsed primitive row-tagged').toBe(kinds.collapsed.primitives)
+    expect(kinds.instanced.tagged, 'no instanced primitive row-tagged').toBe(0)
 
     resetGlbLogs(glbLogs)
     await reopenLocalGlb(page, path)
@@ -233,6 +246,8 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     const hydrated = glbLogs.find((l) => l.includes('collapsed table(s)')) ?? ''
     expect(Number(/(\d+) collapsed table/.exec(hydrated)?.[1]), 'collapsed tables hydrated')
       .toBeGreaterThan(0)
+    expect(glbLogs.some((l) => /regrouped [1-9]\d* row-tagged triangle/.test(l)),
+      'the reader regrouped by the row tag').toBe(true)
     const collapsed = await doubleClickSelectsAnElement(page, 'collapsed')
     await expectNavTreeFollowsSelection(page)
     // On the mobile form factor the NavTree panel covers the canvas, so the
