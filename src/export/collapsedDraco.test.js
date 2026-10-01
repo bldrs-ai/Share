@@ -67,6 +67,15 @@ const EDGE = 0.37
 const SLAB_CORNERS = [[-40000, -40000, 0], [-20000, -40000, 0], [-40000, -20000, 0]]
 /** How far past its row `gridRowsModel`'s zero-area triangle reaches. */
 const FAR_CORNER = 5000
+/** `gridRowsModel({sliver})`: how far the sliver row reaches in +y. */
+const SLIVER_REACH = 50
+/**
+ * The sliver's two close corners, apart in x: several float32 steps where the
+ * strip sits (so it is not zero-area to the export, which compares bits) and
+ * a fraction of the sliver row's own Draco step (`SLIVER_REACH` / 16383 ≈
+ * 3 mm at 14 bits), so the first quantization puts both on one grid point.
+ */
+const SLIVER_GAP = 0.001
 /**
  * A Draco file written before the row tag (#1898's code, commit fdd0e24):
  * `hybridModel()` below, collapsed, through that build's
@@ -190,12 +199,20 @@ function hybridModel() {
  * under a metre, and the row is refused. With `allZeroArea`, element 7
  * carries NOTHING else, so EDGEBREAKER would erase it.
  *
+ * With `sliver`, element 9 also carries a triangle reaching `SLIVER_REACH`
+ * in +y, which widens that row's Draco grid, and a sliver — two corners
+ * `SLIVER_GAP` apart — that the export keeps (its corners differ) and the
+ * first Draco encode keeps (EDGEBREAKER drops only corners that are equal
+ * on the way in) but decodes as zero-area: its two close corners land on one
+ * grid point. A second EDGEBREAKER encode of that decoded file would drop it.
+ *
  * @param {object} [options]
  * @param {boolean} [options.zeroArea]
  * @param {boolean} [options.allZeroArea]
+ * @param {boolean} [options.sliver]
  * @return {{model: BatchedMesh, centres: Array<Vector3>}}
  */
-function gridRowsModel({zeroArea = false, allZeroArea = false} = {}) {
+function gridRowsModel({zeroArea = false, allZeroArea = false, sliver = false} = {}) {
   const rows = 12
   const geometries = []
   for (let i = 0; i < rows; i++) {
@@ -214,6 +231,14 @@ function gridRowsModel({zeroArea = false, allZeroArea = false} = {}) {
       const p = [(i * 2 * EDGE) + 0.1, 0.1, 0]
       positions.push(...p, ...p, p[0] + (i === 4 ? FAR_CORNER : 0.2), 0.1, 0)
       indices.push(at, at + 1, at + 2)
+    }
+    if (sliver && i === 9) {
+      const at = positions.length / 3
+      const x = i * 2 * EDGE
+      positions.push(
+        x, EDGE, 0, x + EDGE, EDGE, 0, x, SLIVER_REACH, 0,
+        x + 0.1, 0.1, 0, x + 0.1 + SLIVER_GAP, 0.1, 0, x + 0.2, 0.2, 0)
+      indices.push(at, at + 1, at + 2, at + 3, at + 4, at + 5)
     }
     const geometry = new BufferGeometry()
     geometry.setAttribute('position', new BufferAttribute(new Float32Array(positions), 3))
@@ -863,86 +888,157 @@ describe('a table too wide for a SCALAR row tag', () => {
 })
 
 
+/**
+ * @param {object} strip from `stripModel` or `gridRowsModel`
+ * @return {Promise<Uint8Array>} its collapsed artifact, portable, then Draco
+ */
+async function portableDraco(strip) {
+  const tree = {
+    expressID: 1, type: 'PRODUCT', Name: {value: 'Strip'},
+    children: strip.model.instanceParents.map((id, i) => ({
+      expressID: id, type: 'PRODUCT', Name: {value: `E${i}`},
+      occurrencePath: strip.model.instanceOccurrencePaths[i], children: [],
+    })),
+  }
+  const withTree = injectGlbExtensions(await batchedArtifactBytes(strip.model, {collapse: true}),
+    [{name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: tree, compress: true}], null, null).bytes
+  const portable = rewriteGlbPortable(withTree)
+  return (await compressExportGlb(portable.bytes, COMPRESSION_DRACO)).withMetadata
+}
+
+
+/**
+ * How many of a decoded geometry's triangles have two corners at one
+ * position, bit for bit — the ones EDGEBREAKER drops on the way in.
+ *
+ * @param {BufferGeometry} geometry
+ * @return {number}
+ */
+function zeroAreaTriangles(geometry) {
+  const position = geometry.getAttribute('position')
+  const index = geometry.getIndex()
+  const same = (a, b) => [0, 1, 2].every((c) =>
+    Object.is(position.getComponent(a, c), position.getComponent(b, c)))
+  let count = 0
+  for (let t = 0; t < index.count; t += 3) {
+    const [a, b, c] = [index.getX(t), index.getX(t + 1), index.getX(t + 2)]
+    if (same(a, b) || same(b, c) || same(a, c)) {
+      count++
+    }
+  }
+  return count
+}
+
+
 describe('a collapsed Draco file exported again (codex P1 on #1903)', () => {
   // `compressExportGlb` takes already-compressed sources (`transformGlb`
   // decodes them first), and a collapsed Draco file is one whose geometry
   // the export cannot verify against the exact canary: Draco quantized it.
   // Untagged, its rows exist only as triangle runs, which EDGEBREAKER would
-  // scramble; tagged, its rows may hold triangles the first quantization
-  // made zero-area, which EDGEBREAKER would drop. So an unverifiable
-  // collapsed table keeps the whole file SEQUENTIAL — whatever tag it
-  // already carries rides through the re-encode — and keeps its witness.
-  // (No path in the app hands the export such a source today: a reopened
-  // .glb publishes no artifact, and the cache never compresses a batched
-  // one. The function promises it all the same.)
-  let tagged
-  let sequential
-  let centres
+  // scramble; tagged or portable, its rows may hold triangles the first
+  // quantization made zero-area, which EDGEBREAKER would drop from under a
+  // witness that counted them. So an unverifiable collapsed table keeps the
+  // whole file SEQUENTIAL — whatever tag it already carries rides through
+  // the re-encode — and keeps its witness. (No path in the app hands the
+  // export such a source today: a reopened .glb publishes no artifact, and
+  // the cache never compresses a batched one. The function promises it all
+  // the same.)
+  //
+  // Each source is one shape a collapsed Draco file comes in. The two sliver
+  // sources are what make the user-visible failure reachable for a TAGGED
+  // file: the hybrid's rows have no triangle the first quantization
+  // collapses, so a second EDGEBREAKER encode of it still regroups, and only
+  // its method byte would tell the difference.
+  const FIXTURE = 'the pre-tag SEQUENTIAL fixture'
+  const TAGGED = 'a tagged export'
+  const TAGGED_SLIVER = 'a tagged export whose row decodes a zero-area sliver'
+  const PORTABLE_SLIVER = 'a portable export whose row decodes a zero-area sliver'
+  /** name -> `{bytes, targets: Array<[Vector3, number]>}`: each target a point and the parent it picks */
+  const sources = new Map()
 
   beforeAll(async () => {
     const hybrid = hybridModel()
-    centres = hybrid.centres
-    tagged = (await compressExportGlb(
-      await batchedArtifactBytes(hybrid.model, {collapse: true}), COMPRESSION_DRACO)).withMetadata
-    sequential = new Uint8Array(readFileSync(SEQUENTIAL_FIXTURE))
+    const hybridTargets = [
+      ...hybrid.centres.map((centre, i) => [centre, 1000 + i]),
+      [new Vector3(OFFSET + 52, OFFSET + 2, 0), 1000 + ELEMENTS],
+    ]
+    const sliver = gridRowsModel({sliver: true})
+    const sliverTargets = sliver.centres.map((centre, i) => [centre, 2000 + i])
+    sources.set(FIXTURE, {targets: hybridTargets,
+      bytes: new Uint8Array(readFileSync(SEQUENTIAL_FIXTURE))})
+    sources.set(TAGGED, {targets: hybridTargets,
+      bytes: (await compressExportGlb(
+        await batchedArtifactBytes(hybrid.model, {collapse: true}), COMPRESSION_DRACO)).withMetadata})
+    sources.set(TAGGED_SLIVER, {targets: sliverTargets,
+      bytes: (await compressExportGlb(
+        await batchedArtifactBytes(sliver.model, {collapse: true}), COMPRESSION_DRACO)).withMetadata})
+    sources.set(PORTABLE_SLIVER, {targets: sliverTargets,
+      bytes: await portableDraco(sliver)})
   }, TIMEOUT_MS)
 
   /**
+   * @param {object} source a value of `sources`
    * @param {Uint8Array} bytes reopened and checked
    */
-  async function expectEveryRowPicks(bytes) {
+  async function expectEveryRowPicks(source, bytes) {
     const model = hydrateBatchedModelFromInstancedGlb(await loadLikeGltfLoader(bytes))
     expect(model).not.toBeNull()
-    centres.forEach((centre, i) => {
-      expect(pickParent(model, centre)).toBe(1000 + i)
-    })
-    expect(pickParent(model, new Vector3(OFFSET + 52, OFFSET + 2, 0))).toBe(1000 + ELEMENTS)
+    for (const [point, parent] of source.targets) {
+      expect(pickParent(model, point)).toBe(parent)
+    }
   }
 
-  for (const [name, source] of [['the pre-tag SEQUENTIAL fixture', () => sequential], ['a tagged export', () => tagged]]) {
-    it(`re-exports ${name} through Draco with every row still selectable`, async () => {
-      const again = (await compressExportGlb(source(), COMPRESSION_DRACO)).withMetadata
-      const {json, bin} = parseGlb(again)
-      const collapsed = json.nodes.find((node) =>
-        Number.isInteger(node.extras?.bldrsTableNode) && !node.extensions?.EXT_mesh_gpu_instancing)
+  it('starts the sliver sources with a triangle only the first quantization made zero-area', async () => {
+    // The precondition the sliver sources exist for: if a Draco change ever
+    // stopped collapsing the sliver, the Draco re-exports below would pass
+    // without exercising anything. Exactly one such triangle: the sliver.
+    for (const name of [TAGGED_SLIVER, PORTABLE_SLIVER]) {
+      const source = sources.get(name)
+      const scene = await loadLikeGltfLoader(source.bytes)
+      let zeroArea = 0
+      scene.traverse((obj) => {
+        if (obj.isMesh) {
+          zeroArea += zeroAreaTriangles(obj.geometry)
+        }
+      })
+      expect(zeroArea).toBe(1)
+      await expectEveryRowPicks(source, source.bytes)
+    }
+  }, TIMEOUT_MS)
 
-      expect(dracoMethodsOf(json, bin, collapsed.mesh)).toEqual([DRACO_SEQUENTIAL])
-      await expectEveryRowPicks(again)
+  for (const label of [FIXTURE, TAGGED, TAGGED_SLIVER, PORTABLE_SLIVER]) {
+    it(`re-exports ${label} through Draco, SEQUENTIAL, with every row still selectable`, async () => {
+      const source = sources.get(label)
+      const again = (await compressExportGlb(source.bytes, COMPRESSION_DRACO)).withMetadata
+      const {json, bin} = parseGlb(again)
+      const collapsedMeshes = json.nodes
+        .filter((node) => Number.isInteger(node.mesh) && !node.extensions?.EXT_mesh_gpu_instancing)
+        .map((node) => node.mesh)
+
+      expect(collapsedMeshes.length).toBeGreaterThan(0)
+      for (const mesh of collapsedMeshes) {
+        expect(dracoMethodsOf(json, bin, mesh)).toEqual([DRACO_SEQUENTIAL])
+      }
+      await expectEveryRowPicks(source, again)
     }, TIMEOUT_MS)
 
-    it(`re-exports ${name} through Meshopt with every row still selectable`, async () => {
+    it(`re-exports ${label} through Meshopt with every row still selectable`, async () => {
       // Lossless from here on, but the geometry is still the Draco-decoded
       // one, so it is the witness — not the exact canary — that can vouch
       // for it (`bldrsInstanceTables.js#markLossyTables`).
-      await expectEveryRowPicks((await compressExportGlb(source(), COMPRESSION_MESHOPT)).withMetadata)
+      const source = sources.get(label)
+      await expectEveryRowPicks(source, (await compressExportGlb(source.bytes, COMPRESSION_MESHOPT)).withMetadata)
     }, TIMEOUT_MS)
 
-    it(`hands ${name} back untouched with no codec`, async () => {
-      await expectEveryRowPicks((await compressExportGlb(source(), COMPRESSION_NONE)).withMetadata)
+    it(`hands ${label} back untouched with no codec`, async () => {
+      const source = sources.get(label)
+      await expectEveryRowPicks(source, (await compressExportGlb(source.bytes, COMPRESSION_NONE)).withMetadata)
     }, TIMEOUT_MS)
   }
 })
 
 
 describe('portable collapsed artifact through a Draco export', () => {
-  /**
-   * @param {object} strip from `stripModel`
-   * @return {Promise<Uint8Array>} its collapsed artifact, portable, then Draco
-   */
-  async function portableDraco(strip) {
-    const tree = {
-      expressID: 1, type: 'PRODUCT', Name: {value: 'Strip'},
-      children: strip.model.instanceParents.map((id, i) => ({
-        expressID: id, type: 'PRODUCT', Name: {value: `E${i}`},
-        occurrencePath: strip.model.instanceOccurrencePaths[i], children: [],
-      })),
-    }
-    const withTree = injectGlbExtensions(await batchedArtifactBytes(strip.model, {collapse: true}),
-      [{name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: tree, compress: true}], null, null).bytes
-    const portable = rewriteGlbPortable(withTree)
-    return (await compressExportGlb(portable.bytes, COMPRESSION_DRACO)).withMetadata
-  }
-
   it('re-opens pickable, and carries no row tag (each row is its own primitive)', async () => {
     const strip = stripModel()
     const bytes = await portableDraco(strip)

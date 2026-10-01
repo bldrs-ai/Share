@@ -840,7 +840,19 @@ cannot verify keeps the whole file SEQUENTIAL with nothing new stripped or
 tagged, which keeps runs in order and drops no triangle the first quantization
 made zero-area from under a witness that counted it. Verifying such a source
 instead (building the plan after decode) would mean running the reader's
-lossy rebuild at export time. The Meshopt re-export of one needed a reader
+lossy rebuild at export time. Both failures are pinned in
+`collapsedDraco.test.js` through the real codec, for the merged and the
+portable shape: the #1898 fixture's runs reorder, and a row carrying a sliver
+— two corners a millimetre apart, a fraction of that row's Draco step, so the
+first encode keeps it and the decode collapses it — loses it to a second
+EDGEBREAKER encode and is refused. The hybrid tagged file has no such
+triangle, which is why the sliver sources exist: re-encoded EDGEBREAKER it
+still reopens. On the real models the fallback holds and costs what
+SEQUENTIAL always cost: the row-tagged Draco files of dental_clinic and
+Snowdon, exported through Draco again, reopen with every collapsed row
+(1,165 / 5,235) at 3,754,024 and 19,600,144 B against 3,129,336 and
+11,950,672 B the first time; their portable Draco files likewise, at
+5,061,324 and 26,171,720 B. The Meshopt re-export of one needed a reader
 change: a table carrying a witness is now read as lossy whatever codec its
 primitives declare (`markLossyTables`), since only a Draco export writes one
 and the positions it vouches for are the quantized ones. None of this is a
