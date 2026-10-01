@@ -25,7 +25,7 @@ import {
   rowOfTag,
 } from '../loader/bldrsInstanceTables'
 import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from '../loader/bldrsSpatialTree'
-import {batchedArtifactBytes} from '../loader/glbArtifact.fixture'
+import {batchedArtifactBytes, interleavedLegacyArtifact} from '../loader/glbArtifact.fixture'
 import {loadDracoDecoder} from '../loader/glbCompress'
 import {injectGlbExtensions, parseGlb, serializeGlb} from '../loader/injectGlbExtensions'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
@@ -893,9 +893,13 @@ describe('a table too wide for a SCALAR row tag', () => {
 
 /**
  * @param {object} strip from `stripModel` or `gridRowsModel`
+ * @param {object} [options]
+ * @param {boolean} [options.legacy] start from the INTERLEAVED artifact users'
+ *   caches still hold (`interleavedLegacyArtifact`), so the portable rewrite
+ *   has to de-interleave as well as split
  * @return {Promise<Uint8Array>} its collapsed artifact, portable, then Draco
  */
-async function portableDraco(strip) {
+async function portableDraco(strip, {legacy = false} = {}) {
   const tree = {
     expressID: 1, type: 'PRODUCT', Name: {value: 'Strip'},
     children: strip.model.instanceParents.map((id, i) => ({
@@ -903,9 +907,13 @@ async function portableDraco(strip) {
       occurrencePath: strip.model.instanceOccurrencePaths[i], children: [],
     })),
   }
-  const withTree = injectGlbExtensions(await batchedArtifactBytes(strip.model, {collapse: true}),
+  const artifact = await batchedArtifactBytes(strip.model, {collapse: true})
+  const withTree = injectGlbExtensions(legacy ? interleavedLegacyArtifact(artifact) : artifact,
     [{name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: tree, compress: true}], null, null).bytes
   const portable = rewriteGlbPortable(withTree)
+  // The legacy input's whole point is that the rewrite de-interleaves it;
+  // an input it left alone would make the caller's case the planar one again.
+  expect(portable.stats.deinterleavedAccessors > 0).toBe(legacy)
   return (await compressExportGlb(portable.bytes, COMPRESSION_DRACO)).withMetadata
 }
 
@@ -1189,6 +1197,29 @@ describe('portable collapsed artifact through a Draco export', () => {
 
     expect(rowNodes).toHaveLength(12)
     expect(rowNodes.every((node) => dracoMethodsOf(json, bin, node.mesh)[0] === DRACO_EDGEBREAKER)).toBe(true)
+    expect(triangles).toBe(12 * 4)
+    const model = hydrateBatchedModelFromInstancedGlb(await loadLikeGltfLoader(bytes))
+    expect(model).not.toBeNull()
+    grid.centres.forEach((centre, i) => {
+      expect(pickParent(model, centre)).toBe(2000 + i)
+    })
+  }, TIMEOUT_MS)
+
+  it('re-opens pickable from a legacy interleaved artifact, zero-area row and all', async () => {
+    // The two portable passes composed: the de-interleave (#1831; cached
+    // artifacts were written with POSITION+NORMAL interleaved in one shared
+    // view, which the split windows onto) and the export's zero-area strip on
+    // each portable row (#1903). The strip has to read the de-interleaved
+    // vertices, and the reader's per-row counts have to match what Draco then
+    // decodes — a mis-copied or mis-strided row fails a pick here.
+    const grid = gridRowsModel({zeroArea: true})
+    const bytes = await portableDraco(grid, {legacy: true})
+    const {json} = parseGlb(bytes)
+    const rowNodes = json.nodes.filter((node) => Number.isInteger(node.extras?.bldrsInstance))
+    const triangles = rowNodes.reduce((n, node) =>
+      n + (json.accessors[json.meshes[node.mesh].primitives[0].indices].count / 3), 0)
+
+    expect(rowNodes).toHaveLength(12)
     expect(triangles).toBe(12 * 4)
     const model = hydrateBatchedModelFromInstancedGlb(await loadLikeGltfLoader(bytes))
     expect(model).not.toBeNull()
