@@ -83,7 +83,8 @@ const UINT32_BYTES = 4
  *   null when the payload has no collapsed table. `meshPlans` maps a source
  *   mesh index to what `glbCompression.js#applyMeshPlan` does to its one
  *   primitive ({@link planMerged}, {@link planPerRow}); `payload` is a copy
- *   of `rawPayload` with witnesses added, or null when no table verified
+ *   of `rawPayload` with witnesses added (and any it already carried widened
+ *   for this encode's quantization), or null when it changed nothing
  */
 export function planCollapsedDraco(json, bin, rawPayload, positionBits, forceSequential = false) {
   const tables = parseInstanceTablesExtensionData(rawPayload)
@@ -123,10 +124,36 @@ export function planCollapsedDraco(json, bin, rawPayload, positionBits, forceSeq
   // both true: runs stay in order, and no triangle the first quantization
   // made zero-area is dropped from under a witness that counted it.
   // Verifying such a source would mean running the reader's lossy rebuild
-  // here; nothing in the app hands the export one today, so it falls back.
+  // here. Nothing in the app hands the export one: both export paths
+  // (`artifactSizes.js#runRewrite`, `pro/glbExport.js`) read the OPFS
+  // artifact, and `glbExport.js` writes every batched artifact — the only
+  // kind with collapsed tables — with mode null. So it falls back.
   const sequential = forceSequential || unverified > 0 || verified.some(({kept}) => kept.hasEmptyRow)
   const meshPlans = new Map()
   const out = {...rawPayload, nodes: rawPayload.nodes.map((node) => ({...node}))}
+  // A retained witness was taken at ITS encode's POSITION bits, and this
+  // encode quantizes the decoded positions again, at `positionBits`. The
+  // reader allows each row one step at the witness's bits (`bldrsInstance
+  // Tables.js#matchesLossyWitness`), so carry it at one bit under the
+  // coarser of the two: that step is at least twice the coarser step, which
+  // covers the error the witness already allowed plus this encode's half
+  // step (Draco rounds to the nearest grid point). That is a bound, so it
+  // holds however many times a file goes round; on the jest cases the
+  // coarser rung's own bits already pass, and the extra bit is the margin
+  // for grids that do not line up. Codex on #1903: kept at 14 bits through
+  // a `smallest` (12-bit) re-encode, the witness refused every row.
+  let carried = 0
+  tables.forEach((table, t) => {
+    const witness = out.nodes[t]?.witness
+    if (Array.isArray(table.ranges) && !verified.some((v) => v.t === t) &&
+        Number.isInteger(witness?.positionBits)) {
+      out.nodes[t].witness = {
+        ...witness,
+        positionBits: Math.max(1, Math.min(witness.positionBits, positionBits) - 1),
+      }
+      carried++
+    }
+  })
   for (const {t, table, view, rows, kept} of verified) {
     if (sequential) {
       const stats = rowWitnessStats(
@@ -151,7 +178,7 @@ export function planCollapsedDraco(json, bin, rawPayload, positionBits, forceSeq
       'export: a collapsed table cannot be stripped (unverified, or a row with no ' +
       'triangle of non-zero area); Draco stays SEQUENTIAL, nothing new tagged')
   }
-  return {sequential, meshPlans, payload: verified.length > 0 ? out : null}
+  return {sequential, meshPlans, payload: verified.length > 0 || carried > 0 ? out : null}
 }
 
 

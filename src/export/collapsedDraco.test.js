@@ -29,6 +29,7 @@ import {batchedArtifactBytes} from '../loader/glbArtifact.fixture'
 import {loadDracoDecoder} from '../loader/glbCompress'
 import {injectGlbExtensions, parseGlb, serializeGlb} from '../loader/injectGlbExtensions'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
+import {QUALITY_BALANCED, QUALITY_SMALLEST} from './exportQuality'
 import {COMPRESSION_DRACO, COMPRESSION_MESHOPT, COMPRESSION_NONE, compressExportGlb} from './glbCompression'
 import {rewriteGlbPortable} from './glbPortable'
 
@@ -1008,6 +1009,17 @@ describe('a collapsed Draco file exported again (codex P1 on #1903)', () => {
     }
   }, TIMEOUT_MS)
 
+  it('re-exports a coarse-rung tagged export through Draco at a FINER rung, every row selectable', async () => {
+    // The other direction: the first encode at 12 bits, the second at 14.
+    // The coarser first step dominates, so the carried witness must not
+    // tighten to the finer rung's bits.
+    const hybrid = hybridModel()
+    const coarse = (await compressExportGlb(await batchedArtifactBytes(hybrid.model, {collapse: true}),
+      COMPRESSION_DRACO, QUALITY_SMALLEST)).withMetadata
+    await expectEveryRowPicks(sources.get(TAGGED),
+      (await compressExportGlb(coarse, COMPRESSION_DRACO, QUALITY_BALANCED)).withMetadata)
+  }, TIMEOUT_MS)
+
   for (const label of [FIXTURE, TAGGED, TAGGED_SLIVER, PORTABLE_SLIVER]) {
     it(`re-exports ${label} through Draco, SEQUENTIAL, with every row still selectable`, async () => {
       const source = sources.get(label)
@@ -1022,6 +1034,18 @@ describe('a collapsed Draco file exported again (codex P1 on #1903)', () => {
         expect(dracoMethodsOf(json, bin, mesh)).toEqual([DRACO_SEQUENTIAL])
       }
       await expectEveryRowPicks(source, again)
+    }, TIMEOUT_MS)
+
+    it(`re-exports ${label} through Draco at a COARSER rung with every row still selectable`, async () => {
+      // Codex on #1903. The retained witness was taken at the first encode's
+      // POSITION bits (14, the default rung); `smallest` re-quantizes at 12,
+      // four times the step, so a witness that still claimed 14 bits held
+      // every row to a quarter of the error it now carries and refused them
+      // all. A carried witness's bits now cover both quantizations
+      // (`collapsedWitness.js#planCollapsedDraco`).
+      const source = sources.get(label)
+      await expectEveryRowPicks(source,
+        (await compressExportGlb(source.bytes, COMPRESSION_DRACO, QUALITY_SMALLEST)).withMetadata)
     }, TIMEOUT_MS)
 
     it(`re-exports ${label} through Meshopt with every row still selectable`, async () => {

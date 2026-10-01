@@ -860,8 +860,12 @@ Snowdon, exported through Draco again, reopen with every collapsed row
 change: a table carrying a witness is now read as lossy whatever codec its
 primitives declare (`markLossyTables`), since only a Draco export writes one
 and the positions it vouches for are the quantized ones. None of this is a
-path the app takes today — a reopened `.glb` publishes no artifact, and the
-cache never compresses a batched one — but the function promises it. Still
+path the app takes today — both export paths read the OPFS artifact, a
+reopened `.glb` publishes no artifact, and the cache never compresses a
+batched one — but the function promises it. A retained witness is carried
+at one bit under the coarser of its own and the new encode's POSITION bits,
+whose step covers both quantizations; kept as it was, a `smallest` re-export
+of a default-rung file refused every row (codex on #1903). Still
 refused: the PORTABLE rewrite of a collapsed Draco file, because the rewrite
 works on JSON and BIN and cannot split a Draco-compressed primitive, so it
 leaves the collapsed node whole and the portable join then finds its rows
