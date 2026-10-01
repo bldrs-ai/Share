@@ -842,7 +842,11 @@ identity hash hold it to the encoded one. The empty-row fallback is shared: a
 row of either shape with nothing of non-zero area sends the whole file
 SEQUENTIAL. Stripping the vertices with the triangles matters here as much as
 for the merged primitive — Draco sets its grid from a vertex only a dropped
-triangle used, measured (`collapsedDraco.test.js` puts one 5 km out).
+triangle used, measured (`collapsedDraco.test.js` puts one 5 km out). A
+portable primitive that holds SEVERAL rows of one element (#1900, §4.3) is a
+small merged primitive and is planned as one: stripped AND row-tagged, the tag
+naming table rows, and the reader checks each piece's tags against the run
+its node names.
 
 **One method per file again**, so the splice is gone: EDGEBREAKER everywhere,
 except the merged layout (`BLDRS_face_ids`, `_EXPRESSID` / `_INSTANCEID`),
@@ -936,7 +940,8 @@ only the range path marks range ids, and that mark is what keeps
 then witnesses the portable file too. Shape detection now checks the
 portable row stamp first: a portable export of a collapsed artifact still
 carries tables with `ranges`, and the table test alone routed it to the
-wrong join.
+wrong join. The split is per ELEMENT, not per row, since #1900: rows that
+share their identity become one mesh (§4.3, "One node per element").
 
 **Audit of the rule**, surface by surface: `ResidencyController`'s use
 counts and `robustBounds`' box cache key on the batch's own geometry id,
@@ -1051,8 +1056,9 @@ it recorded on #1871:
    collapse is what makes DSA's none and Draco downloads open in 3dviewer.net
    at all, since a fully collapsed file carries no `EXT_mesh_gpu_instancing`.
    The interleaving is fixed by #1904 (planar vertex layout, §4.3, with
-   Portable the export default); the large-file viewer slowness is tracked
-   outside the flag (#1900).
+   Portable the export default); the large-file viewer slowness was tracked
+   outside the flag (#1900) and is fixed for elements of many rows by the
+   per-element split (§4.3, "One node per element, not per row").
 3. **#1898, the Draco method per primitive** — merged; it removed the growth
    on instanced parts beside a collapsed node (Right_Hand +252.7% → +128.1%).
 4. **#1903, the row tag** — merged; each vertex of a collapsed Draco primitive
@@ -1748,6 +1754,91 @@ an artifact from the current writer, which asks gltf-transform for
 nothing moved. Codecs: Draco stores no vertex views at all, and Meshopt
 re-lays the file per mesh (quantised normals padded to a 4-byte stride, but
 one view per mesh, so the cost is bounded to the mesh).
+
+**One node per element, not per row** (#1900). A collapsed table's ROW is one
+representation item, and one element can own many: a STEP part exported from
+a mesh is often thousands of unnamed single-face shells under one product
+(past conway's 32-unnamed-solid ceiling they get no identity of their own, so
+every one has the part's parent and occurrence path), and an IFC element with
+several items of one colour has a row per item. The split used to give every
+row its own node and mesh — 28,674 of them for one such part, which is what
+made its portable file crawl in the three.js editor and 3dviewer.net while the
+collapsed (non-portable) file of the same part opened at once. Now
+`glbPortable.js#splitCollapsedNodes` cuts per ELEMENT: a maximal run of
+consecutive rows with the same parent and the same occurrence path
+(`identityRuns`) becomes one mesh — one window onto the merged views, nothing
+copied — on one node, stamped `bldrsInstance` (its first row) plus
+`bldrsRowCount`. Distinct elements keep a node each, exactly as before, and a
+one-row element's stamp is byte-for-byte the old one. Three decisions:
+
+- **The identity is parent + occurrence path, not the whole row identity.**
+  That pair is what Share selects by (a pick names the parent; a STEP
+  occurrence resolves by path, and a named STEP body carries its own last
+  path segment). `occurrenceIds` is distinct for every row and `geometryIds`
+  names the representation item, so grouping on either would group nothing.
+  And it is still not a geometry-equality key (§1.1d's rule): rows are
+  concatenated, never deduplicated.
+- **Runs, not every row of an identity.** A run is contiguous in the merged
+  buffers and in the table, so its stamp is two integers and its mesh a
+  window. The writer bins an element's rows back to back; on the four real
+  models every multi-row identity was one run. One that were not would come
+  out as one node per run — correct, merely less merged.
+- **No new range metadata.** Where one row ends inside a grouped primitive is
+  already in the table: `ranges` holds every row's vertex and index counts,
+  and the rewrite makes a piece's indices relative to its first vertex, so
+  `instancedGlbToBatchedModel.js#remergeCollapsedRows` puts each piece back at
+  its first row's starts and the exact canary witnesses the result exactly as
+  it did per row. A reader that predates the count sees rows uncovered and
+  refuses the table — fail-soft to the plain model, never a mis-join.
+
+Draco: a grouped primitive is a small merged one, so the export plans it like
+the merged artifact's (`collapsedWitness.js#planPiece`) — zero-area strip and
+`_BLDRS_ROW` tags naming TABLE rows — and the reader regroups it by tag,
+refusing a tag outside the run its node names
+(`groupTrianglesByRowTag`); a one-row element keeps the untagged per-row plan,
+and the SEQUENTIAL fallback reads a piece's rows as triangle runs in row order.
+
+One fix rode along because the round trip exposed it: the re-merge built its
+normals as Float32, while Meshopt stores them as normalized Int8 and every
+instanced geometry beside them keeps that format — `BatchedMesh` takes one
+format per attribute and threw, so a portable Meshopt download of any model
+with both instanced and collapsed parts failed to open in Share (on `main`
+before this, too). The re-merge now keeps the pieces' own storage.
+
+Measured on the same four real artifacts as above, portable export through
+each codec (Node, `rewriteGlbPortable` then `compressExportGlb`; viewers are
+the investigation's Playwright drivers against local builds of the three.js
+editor r184 and 3dviewer.net master, headless Chromium, no GPU). Editor:
+import → object added, then autosave; 3dviewer: open → loaded, median frame
+while orbiting, one pick. 3dviewer refuses every Meshopt file
+(`EXT_meshopt_compression` is unsupported there), before and after.
+
+| model, codec | bytes before → after | nodes / meshes before → after | editor ms (import, autosave) before → after | 3dviewer ms (load, orbit, pick) before → after |
+|---|---:|---:|---:|---:|
+| 28,674-row STEP part, None | 18,447,760 → 2,559,360 | 28,676 / 28,674 → 3 / 1 | 5,214, 911 → 74, 152 | 4,100, 160, 5,105 → 306, 0, 24 |
+| — Meshopt | 36,359,612 → 939,240 | same | 3,012, 1,505 → 80, 141 | refused |
+| — Draco | 23,253,236 → 683,692 | same | 3,528, 632 → 182, 167 | 4,870, 137, 4,734 → 386, 0, 22 |
+| large IFC4 building, None | 52,727,980 → 51,091,424 | 24,864 / 7,220 → 21,977 / 4,527 | 1,148, 1,101 → 947, 1,129 | 5,415, 196, 271 → 5,224, 175, 251 |
+| — Meshopt | 31,132,980 → 27,730,724 | same | 1,157, 1,020 → 991, 959 | refused |
+| — Draco | 20,132,744 → 17,761,080 | same | 1,376, 1,195 → 1,264, 1,117 | 6,092, 198, 339 → 5,826, 182, 270 |
+| small IFC clinic, None | 7,569,660 → 7,561,232 | 4,078 / 1,439 → 4,053 / 1,426 | 353, 296 → 458, 237 | 1,055, 26, 97 → 1,043, 23, 104 |
+| — Meshopt | 5,936,604 → 5,919,416 | same | 434, 203 → 447, 201 | refused |
+| — Draco | 4,528,776 → 4,519,192 | same | 566, 206 → 489, 215 | 1,191, 22, 116 → 1,135, 26, 92 |
+| STEP assembly (226 parts), all codecs | byte-identical | 239 / 29, unchanged | within noise | within noise |
+
+What changed off the 28,674-row part is exactly the multi-row elements: the
+building's 693 of them (3,386 rows) lose 2,693 meshes and 2,887 nodes, the
+clinic's 13 (26 rows) lose 13 meshes and 25 nodes, and the assembly has none,
+so its three files are the same bytes. Timings on those three are within the
+drivers' run-to-run noise. Reopened in Share, every one of the twelve files
+hydrates with every row its own range — 28,674 / 5,235 / 1,165 / 4 collapsed
+rows — each row's triangles equal to the source artifact's (Draco within its
+step) and a sampled pick on each landing on its element; Khronos
+`gltf-validator` 2.0.0-dev.3.10 reports 0 errors and 0 warnings on every None
+and Draco file. Every Meshopt file, before and after alike, reports
+`MESH_PRIMITIVE_ATTRIBUTES_ACCESSOR_INVALID_FORMAT` on its Int8 normals,
+because the FILTER encode does not declare `KHR_mesh_quantization` — a
+separate, pre-existing codec issue this change neither causes nor fixes.
 
 **The default.** Portable is **on** when the Export tab opens (#1831). The
 file a user downloads is one they mean to open somewhere, the native shape is

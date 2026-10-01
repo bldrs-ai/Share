@@ -15,6 +15,7 @@ import {
   glbJsonChunk,
   loadModelAndWaitForArtifact,
   openExportTab,
+  openLocalFile,
   reopenLocalGlb,
   routeProModule,
   selectCompression,
@@ -207,6 +208,12 @@ const COMPRESSION_CODECS = [
 const GLB_CHUNK_PADDING_SLACK_BYTES = 3
 
 const SPATIAL_CHAIN = ['Bldrs', 'Build', 'Every', 'Thing']
+
+// One STEP part whose body is 80 unnamed single-triangle shells — an 8 × 5
+// grid of quads, each triangle its own `shell_based_surface_model` — written
+// for this spec in the shape a mesh-to-STEP export takes.
+const SHELLS_FIXTURE = 'src/tests/fixtures/sameIdentityShells.step'
+const SHELLS_FIXTURE_ROWS = 80
 const LEAF_LABEL = 'Together'
 
 
@@ -881,6 +888,61 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // selected in the store, the NavTree and the URL.
     await doubleClickSelectsAnElement(page, 'any')
     await expectNavTreeFollowsSelection(page)
+  })
+
+  test('the default export of a part made of many shells reopens with every shell pickable', async ({page}) => {
+    // #1900. A STEP part whose body is many unnamed shells — 80 single-
+    // triangle `shell_based_surface_model`s under one product, past conway's
+    // ceiling for giving unnamed solids identities of their own — collapses
+    // to 80 rows that are all ONE element: same parent, same occurrence path.
+    // The portable export used to give each row its own node and mesh, which
+    // is what made a 28,674-row part crawl in other viewers; it now gives the
+    // part one. The user's actions, untouched defaults throughout: open the
+    // file, Export, open the download back, double-click a shell.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+
+    await routeProModule(page)
+    // Any model first, for the flags (`export`, `glbVerbose`) the session
+    // keeps across the Open dialog's navigation.
+    await loadModelAndWaitForArtifact(page)
+    resetGlbLogs(glbLogs)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await waitForGlbLog(glbLogs, 'writer: wrote', EXPORT_TEST_TIMEOUT_MS)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+    await expect(page.getByTestId('export-portable').locator('input')).toBeChecked()
+    await waitForCodecSizing(page)
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    const download = await downloadPromise
+    const savedPath = test.info().outputPath('shells-default.glb')
+    await download.saveAs(savedPath)
+
+    // One node holds every shell, stamped with the run it covers; no node
+    // per shell.
+    const json = glbJsonChunk(await readFile(savedPath))
+    const stamped = (json.nodes ?? []).filter((node) => Number.isInteger(node.extras?.bldrsTableNode))
+    expect(stamped).toHaveLength(1)
+    expect(stamped[0].extras?.bldrsRowCount).toBe(SHELLS_FIXTURE_ROWS)
+
+    await page.keyboard.press('Escape')
+    resetGlbLogs(glbLogs)
+    await reopenLocalGlb(page, savedPath)
+    await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    // Hydrated back into the decorated BatchedMesh, every shell its own
+    // range — not the plain-GLTF fallback, which picks nothing.
+    await waitForGlbLog(glbLogs, `${SHELLS_FIXTURE_ROWS} instance(s), 1 collapsed table(s)`, EXPORT_TEST_TIMEOUT_MS)
+    await doubleClickSelectsAnElement(page, 'collapsed')
   })
 
   test('a Pro user picks a Quality rung, and the panel says what it costs', async ({page}) => {

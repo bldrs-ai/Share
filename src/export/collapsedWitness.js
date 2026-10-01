@@ -19,10 +19,13 @@
 // "Ordering: portable → codec → strip"):
 // - the collapsed artifact: one merged primitive per table, rows addressed by
 //   the table's ranges. This is the shape that gets the row tag;
-// - its portable rewrite: one primitive per row, on nodes stamped with
-//   `bldrsInstance`. Each row is already its own primitive, so it needs no
-//   tag — but it is EDGEBREAKER too, so it loses its zero-area triangles the
-//   same way and is stripped and witnessed the same way.
+// - its portable rewrite: one primitive per ELEMENT, on nodes stamped with
+//   `bldrsInstance` (its first row) and, for an element of several rows,
+//   `bldrsRowCount` (#1900). A one-row element is already its own primitive,
+//   so it needs no tag — but it is EDGEBREAKER too, so it loses its zero-area
+//   triangles the same way and is stripped and witnessed the same way. A
+//   several-row element's primitive is a small merged one: its rows share it,
+//   so it is tagged exactly as the merged primitive is.
 import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
   buildLossyWitness,
@@ -57,9 +60,10 @@ const UINT32_BYTES = 4
  * export removes them and witnesses exactly what the encoder will keep. Both
  * shapes a collapsed table comes in get that: the merged primitive, which
  * also gets the row tag because its rows share it, and a portable file's
- * per-row primitives, which need no tag (each IS one row) but are
- * EDGEBREAKER all the same and lost the same triangles until this applied to
- * them too.
+ * per-element primitives — a one-row element's needs no tag (it IS one row)
+ * but is EDGEBREAKER all the same and lost the same triangles until this
+ * applied to it too, and a several-row element's (#1900) is tagged as the
+ * merged one is, for the same reason.
  *
  * It is SEQUENTIAL, with nothing stripped, no new tags and the witness taken
  * over every triangle, in the cases stripping cannot serve: some verified
@@ -82,7 +86,7 @@ const UINT32_BYTES = 4
  * @return {?{sequential: boolean, meshPlans: Map<number, object>, payload: ?object}}
  *   null when the payload has no collapsed table. `meshPlans` maps a source
  *   mesh index to what `glbCompression.js#applyMeshPlan` does to its one
- *   primitive ({@link planMerged}, {@link planPerRow}); `payload` is a copy
+ *   primitive ({@link planMerged}, {@link planPiece}); `payload` is a copy
  *   of `rawPayload` with witnesses added (and any it already carried widened
  *   for this encode's quantization), or null when it changed nothing
  */
@@ -165,7 +169,9 @@ export function planCollapsedDraco(json, bin, rawPayload, positionBits, forceSeq
     if (rows.merged) {
       meshPlans.set(rows.mesh, planMerged(table, kept))
     } else {
-      planPerRow(view, kept).forEach((plan, r) => meshPlans.set(rows.meshes[r], plan))
+      for (const piece of rows.pieces) {
+        meshPlans.set(piece.mesh, planPiece(table, view, kept, piece))
+      }
     }
     const stats = rowWitnessStats(
       table.count, (r) => kept.corners[r].length,
@@ -232,7 +238,7 @@ function keptTriangles(table, view) {
  * zero-area triangles used — and each kept vertex's row tag.
  *
  * Vertices only zero-area triangles used are dropped with them, here and in
- * {@link planPerRow}. Draco's EDGEBREAKER does not encode a vertex no face
+ * {@link planPiece}. Draco's EDGEBREAKER does not encode a vertex no face
  * uses, so leaving them in would let one widen the quantization grid the
  * encoder sets while the decoded primitive — the extent the reader takes each
  * row's tolerance from — no longer contains it.
@@ -243,14 +249,36 @@ function keptTriangles(table, view) {
  */
 function planMerged(table, kept) {
   const {ranges} = table
-  const last = ranges[ranges.length - 1]
-  const plan = compact(last.vertexStart + last.vertexCount,
-    kept.corners.map((row, r) => row.map((v) => ranges[r].vertexStart + v)))
+  return planTagged(table, kept, 0, ranges.length, (r) => ranges[r].vertexStart)
+}
+
+
+/**
+ * The tagged plan for a primitive holding rows `firstRow` ..
+ * `firstRow + rowCount - 1` back to back — the merged artifact's (every row)
+ * or a grouped portable element's (its run). Each kept vertex's tag is its
+ * TABLE row, so the reader checks a piece's tags against the run its node
+ * names (`instancedGlbToBatchedModel.js#groupTrianglesByRowTag`).
+ *
+ * @param {object} table verified collapsed table
+ * @param {object} kept from {@link keptTriangles}
+ * @param {number} firstRow
+ * @param {number} rowCount
+ * @param {function(number): number} vertexStartOf table row → its first
+ *   vertex in this primitive
+ * @return {object} `{sourceVertexCount, vertices, indices, rows, itemSize}`
+ */
+function planTagged(table, kept, firstRow, rowCount, vertexStartOf) {
+  const {ranges} = table
+  const lastRow = firstRow + rowCount - 1
+  const plan = compact(vertexStartOf(lastRow) + ranges[lastRow].vertexCount,
+    Array.from({length: rowCount}, (_, k) =>
+      kept.corners[firstRow + k].map((v) => vertexStartOf(firstRow + k) + v)))
   const itemSize = rowTagItemSize(ranges.length)
   const rows = new Uint16Array(plan.vertices.length * itemSize)
-  let r = 0
+  let r = firstRow
   plan.vertices.forEach((v, k) => {
-    while (v >= ranges[r].vertexStart + ranges[r].vertexCount) {
+    while (v >= vertexStartOf(r) + ranges[r].vertexCount) {
       r++
     }
     packRowTag(rows, k, r, itemSize)
@@ -260,15 +288,26 @@ function planMerged(table, kept) {
 
 
 /**
- * The plans for a portable file's per-row primitives: each row's own kept
- * triangles and the vertices they use. No tag — the row IS the primitive.
+ * The plan for one portable piece. A one-row piece gets its own kept
+ * triangles and the vertices they use, and no tag — the row IS the
+ * primitive, the plan every portable row had before grouping. A several-row
+ * piece is tagged like the merged primitive: EDGEBREAKER reorders triangles
+ * across its rows and would merge their shared-position vertices, and the tag
+ * is what undoes both.
  *
- * @param {object} view from `rowReader`, per-row shape
+ * @param {object} table verified collapsed table
+ * @param {object} view from `rowReader`, piece shape
  * @param {object} kept from {@link keptTriangles}
- * @return {Array<object>} per row, `{sourceVertexCount, vertices, indices}`
+ * @param {object} piece `{firstRow, rowCount}`
+ * @return {object} `{sourceVertexCount, vertices, indices}`, plus
+ *   `{rows, itemSize}` for a several-row piece
  */
-function planPerRow(view, kept) {
-  return kept.corners.map((row, r) => compact(view.vertexCountOf(r), [row]))
+function planPiece(table, view, kept, piece) {
+  const {firstRow, rowCount} = piece
+  if (rowCount === 1) {
+    return compact(view.vertexCountOf(firstRow), [kept.corners[firstRow]])
+  }
+  return planTagged(table, kept, firstRow, rowCount, (r) => view.pieceVertexStartOf(r))
 }
 
 
@@ -307,12 +346,19 @@ function compact(vertexCount, triangleRuns) {
 
 /**
  * Where each collapsed table's rows live in this file: its one merged node,
- * or one portable node per row.
+ * or one portable node per element — a piece holding one row, or a run of
+ * an element's rows (`bldrsRowCount`).
+ *
+ * A piece that overlaps another, or runs past the table, marks its row
+ * `null` rather than being trusted, so `rowReader` finds the table
+ * incomplete and the plan leaves it unverified — the outcome the reader
+ * would come to on the same file.
  *
  * @param {object} json
  * @param {Array<object>} tables parsed
  * @return {Map<number, object>} table index -> `{merged: primitive, mesh:
- *   index}` or `{perRow: Array<primitive>, meshes: Array<index>}`
+ *   index}` or `{pieces: Array<object>, pieceOfRow: Array<?object>}`, each
+ *   piece `{primitive, mesh, firstRow, rowCount}`
  */
 function collectRows(json, tables) {
   const found = new Map()
@@ -324,17 +370,29 @@ function collectRows(json, tables) {
     }
     const row = node.extras.bldrsInstance
     if (Number.isInteger(row)) {
-      const entry = found.get(t) ?? {
-        perRow: new Array(tables[t].count).fill(null),
-        meshes: new Array(tables[t].count).fill(null),
+      const count = tables[t].count
+      const entry = found.get(t) ?? {pieces: [], pieceOfRow: new Array(count).fill(undefined)}
+      if (!entry.pieces) {
+        continue
       }
-      if (entry.perRow) {
-        entry.perRow[row] = primitive
-        entry.meshes[row] = node.mesh
-        found.set(t, entry)
+      const rowCount = node.extras.bldrsRowCount ?? 1
+      const piece = {primitive, mesh: node.mesh, firstRow: row, rowCount}
+      const fits = row >= 0 && Number.isInteger(rowCount) && rowCount >= 1 && row + rowCount <= count
+      for (let r = row; fits && r < row + rowCount; r++) {
+        entry.pieceOfRow[r] = entry.pieceOfRow[r] === undefined ? piece : null
       }
+      if (!fits && row >= 0 && row < count) {
+        entry.pieceOfRow[row] = null
+      }
+      entry.pieces.push(piece)
+      found.set(t, entry)
     } else {
       found.set(t, {merged: primitive, mesh: node.mesh})
+    }
+  }
+  for (const entry of found.values()) {
+    if (entry.pieces) {
+      entry.pieces.sort((a, b) => a.firstRow - b.firstRow)
     }
   }
   return found
@@ -373,16 +431,57 @@ function rowReader(json, dv, table, rows) {
       cornerAt: (r, i, c) => merged.position.at(merged.index.at(ranges[r].indexStart + i), c),
     }
   }
-  const perRow = rows.perRow.map((primitive) => (primitive ? read(primitive) : null))
-  if (perRow.some((row) => row === null)) {
-    return null
+  // Per piece, its reader; per row, where it starts inside its piece. A
+  // one-row piece's counts are its accessors' own, which is all it ever was.
+  // A run's rows divide where the table's counts say — the same counts the
+  // rewrite cut it by — and the run's accessors must hold exactly their sum,
+  // or this is not the piece that was cut and the table stays unverified.
+  // Any misplaced boundary that sum cannot see, the exact canary then can.
+  const {ranges} = table
+  const readers = new Map()
+  const vertexStart = new Array(table.count)
+  const indexStart = new Array(table.count)
+  const vertexCount = new Array(table.count)
+  const indexCount = new Array(table.count)
+  for (let r = 0; r < table.count; r++) {
+    const piece = rows.pieceOfRow[r]
+    if (!piece) {
+      return null
+    }
+    if (!readers.has(piece)) {
+      const reader = read(piece.primitive)
+      if (!reader) {
+        return null
+      }
+      readers.set(piece, reader)
+    }
+    const reader = readers.get(piece)
+    if (piece.rowCount === 1) {
+      vertexStart[r] = 0
+      indexStart[r] = 0
+      vertexCount[r] = reader.position.count
+      indexCount[r] = reader.index.count
+      continue
+    }
+    const first = ranges[piece.firstRow]
+    vertexStart[r] = ranges[r].vertexStart - first.vertexStart
+    indexStart[r] = ranges[r].indexStart - first.indexStart
+    vertexCount[r] = ranges[r].vertexCount
+    indexCount[r] = ranges[r].indexCount
+    if (r === piece.firstRow + piece.rowCount - 1 &&
+        (vertexStart[r] + vertexCount[r] !== reader.position.count ||
+         indexStart[r] + indexCount[r] !== reader.index.count)) {
+      return null
+    }
   }
+  const of = (r) => readers.get(rows.pieceOfRow[r])
   return {
-    vertexCountOf: (r) => perRow[r].position.count,
-    indexCountOf: (r) => perRow[r].index.count,
-    positionAt: (r, v, c) => perRow[r].position.at(v, c),
-    localIndexAt: (r, i) => perRow[r].index.at(i),
-    cornerAt: (r, i, c) => perRow[r].position.at(perRow[r].index.at(i), c),
+    vertexCountOf: (r) => vertexCount[r],
+    indexCountOf: (r) => indexCount[r],
+    positionAt: (r, v, c) => of(r).position.at(vertexStart[r] + v, c),
+    localIndexAt: (r, i) => of(r).index.at(indexStart[r] + i) - vertexStart[r],
+    cornerAt: (r, i, c) => of(r).position.at(of(r).index.at(indexStart[r] + i), c),
+    pieceVertexStartOf: (r) => vertexStart[r],
   }
 }
 

@@ -354,11 +354,13 @@ async function transformGlb(glbBytes, mode, draco, sourceCodecs = [], quality = 
 /**
  * Apply a collapsed primitive's plan (`collapsedWitness.js#planCollapsedDraco`):
  * drop the triangles it dropped (zero-area ones, which EDGEBREAKER would drop
- * anyway) and the vertices only they used, and — for a merged primitive —
- * add each kept vertex's row as an integer attribute
+ * anyway) and the vertices only they used, and — for a primitive several
+ * rows share — add each kept vertex's row as an integer attribute
  * (`loader/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`). Every attribute is
  * compacted the same way, so vertex k of every accessor is still one vertex.
- * A portable file's per-row primitives get the same strip and no tag.
+ * Rows share the merged artifact's primitive, and a portable file's primitive
+ * for an element of several rows (#1900); a portable one-row element's gets
+ * the same strip and no tag.
  *
  * The plan was made from the SOURCE bytes, so a primitive whose vertex count
  * disagrees with it is not the one planned — a programming error, thrown so
@@ -368,7 +370,7 @@ async function transformGlb(glbBytes, mode, draco, sourceCodecs = [], quality = 
  * @param {object} doc the `@gltf-transform` document
  * @param {object} mesh the collapsed mesh (one primitive, by construction)
  * @param {object} plan `{sourceVertexCount, vertices, indices}`, plus
- *   `{rows, itemSize}` for a merged primitive
+ *   `{rows, itemSize}` for a primitive several rows share
  */
 function applyMeshPlan(doc, mesh, plan) {
   const primitives = mesh?.listPrimitives() ?? []

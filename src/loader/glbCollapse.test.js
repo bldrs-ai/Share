@@ -5,6 +5,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   Matrix4,
+  PropertyBinding,
   Quaternion,
   Raycaster,
   Vector3,
@@ -567,6 +568,242 @@ describe('portable export of a collapsed artifact (#1871)', () => {
     expect(json.extensionsUsed ?? []).not.toContain('EXT_mesh_gpu_instancing')
     expect(isPortableRewritable(json)).toBe(true)
   })
+})
+
+
+describe('portable export groups an element\'s collapsed rows (#1900)', () => {
+  /**
+   * Rows that are ONE element, beside rows that are not.
+   *
+   * A row is one representation item, and an element can own many: a STEP
+   * part whose body is a pile of unnamed shells has one row per shell, all
+   * with the part's parent and occurrence path. So beside one instanced shape
+   * (placed twice, which must stay instanced) the single placements here are:
+   *
+   * - A — four grey rows of parent 501, path [10]: one element of four;
+   * - B — one grey row of parent 502, path [11];
+   * - C — two grey rows of parent 503, path [12];
+   * - D — one grey row of parent 503 too, but path [13]: the next row after
+   *   C, so only the path tells the two elements apart;
+   * - F — one RED row with A's identity: the same element in another colour,
+   *   so another collapsed table.
+   *
+   * Every shape is distinct (content dedup would fold equal ones into an
+   * instanced node, #1859), and each sits in its own x-slot so no ray is
+   * ambiguous. With `withPaths` false the model is path-less, IFC-style: then
+   * parent alone is the identity, and C and D are one element of three rows.
+   *
+   * @param {object} [opts]
+   * @param {boolean} [opts.withPaths]
+   * @return {{model: BatchedMesh, pickPoints: Array<Vector3>}}
+   */
+  function liveGroupedModel({withPaths = true} = {}) {
+    const layout = [
+      {parent: 401, path: [1], color: GREY, shared: true},
+      {parent: 402, path: [2], color: GREY, shared: true},
+      ...[2, 3, 4, 5].map((size) => ({parent: 501, path: [10], color: GREY, size})),
+      {parent: 502, path: [11], color: GREY, size: 6},
+      {parent: 503, path: [12], color: GREY, size: 7},
+      {parent: 503, path: [12], color: GREY, size: 8},
+      {parent: 503, path: [13], color: GREY, size: 9},
+      {parent: 501, path: [10], color: RED, size: 2.5},
+    ]
+    const mesh = new BatchedMesh(layout.length, layout.length * 3, layout.length * 3)
+    const shared = mesh.addGeometry(triangleGeometry(1))
+    const pickPoints = []
+    layout.forEach(({shared: isShared, size}, slot) => {
+      const geometryId = isShared ? shared : mesh.addGeometry(triangleGeometry(size))
+      mesh.setMatrixAt(mesh.addInstance(geometryId), placement(slot))
+      pickPoints.push(new Vector3(0.3, 0.3, 0).applyMatrix4(placement(slot)))
+    })
+    mesh.instanceParents = layout.map(({parent}) => parent)
+    mesh.instanceOccurrenceIds = layout.map((_, i) => i)
+    mesh.instanceGeometryIds = layout.map((_, i) => 700 + i)
+    if (withPaths) {
+      mesh.instanceOccurrencePaths = layout.map(({path}) => path)
+    }
+    mesh.instanceSourceColors = layout.map(({color}) => ({...color}))
+    return {model: mesh, pickPoints}
+  }
+
+  /** Occurrence ids of the rows that make up each grouped element. */
+  const ELEMENT_A = [2, 3, 4, 5]
+  const ELEMENT_C = [7, 8]
+
+  /**
+   * @param {boolean} withPaths
+   * @return {object} a tree naming every element, joined the way the model is
+   */
+  function treeFor(withPaths) {
+    const named = withPaths ?
+      [[401, [1]], [402, [2]], [501, [10]], [502, [11]], [503, [12]], [503, [13]]] :
+      [[401], [402], [501], [502], [503]]
+    return {
+      expressID: 1, type: 'PRODUCT', Name: {value: 'Assembly'},
+      children: named.map(([id, path]) => ({
+        expressID: id, type: 'PRODUCT',
+        Name: {value: path ? `Part ${id} at ${path[0]}` : `Part ${id}`},
+        ...(path ? {occurrencePath: path} : {}),
+        children: [],
+      })),
+    }
+  }
+
+  /**
+   * @param {boolean} collapse
+   * @param {object} [opts]
+   * @param {boolean} [opts.withPaths]
+   * @return {Promise<Uint8Array>} the artifact with its tree injected
+   */
+  async function artifact(collapse, {withPaths = true} = {}) {
+    const bytes = await batchedArtifactBytes(liveGroupedModel({withPaths}).model, {collapse})
+    return injectGlbExtensions(bytes,
+      [{name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: treeFor(withPaths), compress: true}],
+      null, null).bytes
+  }
+
+  /**
+   * @param {object} json portable glTF JSON
+   * @param {string} name a tree node's name
+   * @return {Array<object>} the mesh-bearing nodes of that element: the node
+   *   itself, or its placement children
+   */
+  function placementsOf(json, name) {
+    const node = json.nodes.find((n) => n.name === name)
+    return Number.isInteger(node.mesh) ? [node] : node.children.map((i) => json.nodes[i])
+  }
+
+  it('gives each element ONE mesh holding all its rows, and every other element its own', async () => {
+    const portable = rewriteGlbPortable(await artifact(true))
+    expect(portable.stats.unassignedInstances).toBe(0)
+    expect(portable.stats.groupedRows).toBe(ELEMENT_A.length + ELEMENT_C.length)
+    const {json} = parseGlb(portable.bytes)
+    const vertexCountOf = (node) => json.accessors[json.meshes[node.mesh].primitives[0].attributes.POSITION].count
+
+    // A: its four grey rows in one mesh (12 vertices), stamped with its first
+    // row and its row count; its red row is the same element in another
+    // table, so another placement of the same named node.
+    const a = placementsOf(json, 'Part 501 at 10')
+    expect(a).toHaveLength(2)
+    const aGrey = a.find((node) => node.extras.bldrsRowCount === ELEMENT_A.length)
+    expect(aGrey).toBeDefined()
+    expect(vertexCountOf(aGrey)).toBe(ELEMENT_A.length * 3)
+    expect(vertexCountOf(a.find((node) => node !== aGrey))).toBe(3)
+    // C: two rows, one mesh. D: same parent, the very next row, but another
+    // path — another element, with its own mesh and the one-row stamp.
+    const [c] = placementsOf(json, 'Part 503 at 12')
+    expect(c.extras.bldrsRowCount).toBe(ELEMENT_C.length)
+    expect(vertexCountOf(c)).toBe(ELEMENT_C.length * 3)
+    const [d] = placementsOf(json, 'Part 503 at 13')
+    expect(d.mesh).not.toBe(c.mesh)
+    expect(d.extras.bldrsRowCount).toBeUndefined()
+    expect(vertexCountOf(d)).toBe(3)
+    const [b] = placementsOf(json, 'Part 502 at 11')
+    expect(b.extras.bldrsRowCount).toBeUndefined()
+
+    // Five collapsed meshes (A grey, A red, B, C, D) where per-row splitting
+    // made nine, and the one instanced mesh both its placements share.
+    const meshes = new Set(json.nodes.filter((n) => Number.isInteger(n.mesh)).map((n) => n.mesh))
+    expect(meshes.size).toBe(6)
+    // A grouped element's bounds are the element's, spanning all its rows —
+    // what a third-party viewer frames and outlines on a click.
+    const bounds = json.accessors[json.meshes[aGrey.mesh].primitives[0].attributes.POSITION]
+    expect(bounds.max[0] - bounds.min[0]).toBeGreaterThan(3 * SPACING)
+  })
+
+  it('groups on parent alone when the model carries no occurrence paths', async () => {
+    // IFC-shaped: no paths, so C's two rows and D's one are all parent 503 —
+    // one element of three rows. With paths (above) they are two.
+    const {json} = parseGlb(rewriteGlbPortable(await artifact(true, {withPaths: false})).bytes)
+    const [c] = placementsOf(json, 'Part 503')
+    expect(c.extras.bldrsRowCount).toBe(3)
+  })
+
+  it('opens in a third-party viewer as one named object per element', async () => {
+    // What three's GLTFLoader builds with no Bldrs plugin — the three.js
+    // editor's outliner, 3dviewer.net's tree.
+    const loader = new GLTFLoader()
+    const bytes = rewriteGlbPortable(await artifact(true)).bytes
+    const gltf = await new Promise((resolve, reject) => {
+      loader.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), '', resolve, reject)
+    })
+    const meshes = []
+    gltf.scene.traverse((obj) => obj.isMesh && meshes.push(obj))
+    // 2 instanced placements + A grey + A red + B + C + D.
+    expect(meshes).toHaveLength(7)
+    // GLTFLoader sanitises node names for animation binding (spaces become
+    // underscores), so look them up the same way.
+    const named = (name) => gltf.scene.getObjectByName(PropertyBinding.sanitizeNodeName(name))
+    expect(named('Part 503 at 12').isMesh).toBe(true)
+    expect(named('Part 503 at 13').isMesh).toBe(true)
+  }, TIMEOUT_MS)
+
+  it('hydrates to the same model as the un-collapsed file, every row picking itself', async () => {
+    const reference = await parseAndHydrate(rewriteGlbPortable(await artifact(false)).bytes)
+    const hydrated = await parseAndHydrate(rewriteGlbPortable(await artifact(true)).bytes)
+
+    expect(hydrated).not.toBeNull()
+    expect(hydrated.capabilities.batchedPicking).toBe(true)
+    // Every ROW comes back as its own instance with its own identity —
+    // grouping is a property of the file's node graph, not of the model.
+    expect(identities(hydrated)).toEqual(identities(reference))
+    const want = modelSpaceTriangles(reference)
+    for (const [occurrence, flat] of modelSpaceTriangles(hydrated)) {
+      expect(vertexSet(flat)).toEqual(vertexSet(want.get(occurrence)))
+    }
+    liveGroupedModel().pickPoints.forEach((point, occurrence) => {
+      expect(pickOccurrence(hydrated, point)).toBe(occurrence)
+    })
+  }, TIMEOUT_MS)
+
+  it('refuses a grouped file whose rows were swapped inside the element', async () => {
+    // The canary's job, inside a group: swap the vertices of A's first two
+    // rows in the portable file. Both are three vertices, so the piece's
+    // counts and every index still fit — only the canary can see that row 2's
+    // identity now sits on row 3's triangle.
+    const portable = rewriteGlbPortable(await artifact(true)).bytes
+    const {json, bin} = parseGlb(portable)
+    const [aGrey] = placementsOf(json, 'Part 501 at 10').filter((n) => n.extras.bldrsRowCount)
+    const accessor = json.accessors[json.meshes[aGrey.mesh].primitives[0].attributes.POSITION]
+    const view = json.bufferViews[accessor.bufferView]
+    const stride = view.byteStride ?? 12
+    const base = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+    const tampered = bin.slice()
+    for (let v = 0; v < 3; v++) {
+      const a = tampered.slice(base + (v * stride), base + (v * stride) + 12)
+      tampered.set(tampered.slice(base + ((v + 3) * stride), base + ((v + 3) * stride) + 12),
+        base + (v * stride))
+      tampered.set(a, base + ((v + 3) * stride))
+    }
+
+    expect(await parseAndHydrate(portable)).not.toBeNull()
+    expect(await parseAndHydrate(serializeGlb(json, tampered))).toBeNull()
+  }, TIMEOUT_MS)
+
+  it('refuses a grouped node whose row count leaves a row uncovered', async () => {
+    const {json, bin} = parseGlb(rewriteGlbPortable(await artifact(true)).bytes)
+    const [c] = placementsOf(json, 'Part 503 at 12')
+    c.extras.bldrsRowCount = 1
+
+    expect(await parseAndHydrate(serializeGlb(json, bin))).toBeNull()
+  }, TIMEOUT_MS)
+
+  it('reopens a grouped Meshopt export of a hybrid, every row picking itself', async () => {
+    // Meshopt stores normals as normalized Int8, and the instanced shape
+    // beside the collapsed rows keeps them that way; the re-merged rows have
+    // to match it, or `BatchedMesh` refuses the second format and the whole
+    // model fails to open.
+    const portable = rewriteGlbPortable(await artifact(true)).bytes
+    const compressed = await compressExportGlb(portable, COMPRESSION_MESHOPT)
+    expect(compressed.mode).toBe(COMPRESSION_MESHOPT)
+
+    const hydrated = await parseAndHydrate(compressed.withMetadata, true)
+
+    expect(hydrated).not.toBeNull()
+    liveGroupedModel().pickPoints.forEach((point, occurrence) => {
+      expect(pickOccurrence(hydrated, point)).toBe(occurrence)
+    })
+  }, TIMEOUT_MS)
 })
 
 
