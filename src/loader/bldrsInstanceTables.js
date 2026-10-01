@@ -397,6 +397,34 @@ export const ROW_TAG_SCALAR_ROWS = 0x10000
 
 
 /**
+ * How many UNSIGNED_SHORT components a table of `rowCount` rows needs per
+ * vertex: one (SCALAR) while every row number fits in 16 bits, else two (VEC2).
+ *
+ * @param {number} rowCount
+ * @return {number} 1 or 2
+ */
+export function rowTagItemSize(rowCount) {
+  return rowCount <= ROW_TAG_SCALAR_ROWS ? 1 : 2
+}
+
+
+/**
+ * Write one vertex's row into a tag array — the inverse of {@link rowOfTag}.
+ *
+ * @param {Uint16Array} array the tag, `itemSize` components per vertex
+ * @param {number} vertex
+ * @param {number} row
+ * @param {number} itemSize from {@link rowTagItemSize}
+ */
+export function packRowTag(array, vertex, row, itemSize) {
+  array[vertex * itemSize] = row % ROW_TAG_SCALAR_ROWS
+  if (itemSize === 2) {
+    array[(vertex * itemSize) + 1] = Math.floor(row / ROW_TAG_SCALAR_ROWS)
+  }
+}
+
+
+/**
  * The row a vertex's tag names.
  *
  * @param {object} tag the decoded {@link ROW_TAG_ATTRIBUTE} (itemSize 1 or 2)
@@ -860,6 +888,13 @@ export class BldrsInstanceTablesReader {
  * because three's GLTFLoader decodes Draco transparently and keeps no trace
  * of it on the geometry.
  *
+ * A table carrying a witness is lossy too, whatever codec its primitives
+ * declare now: only a Draco export writes one (`export/collapsedWitness.js`),
+ * so its geometry has been quantized at least once, and a later lossless
+ * re-encode (a Draco download exported again as Meshopt) carries those
+ * quantized positions forward, against which the exact canary can never
+ * pass. The witness was taken over the same triangles, so it still holds.
+ *
  * @param {object} json the file's glTF JSON
  * @param {Array<object>} tables parsed tables, mutated
  */
@@ -868,6 +903,11 @@ export function markLossyTables(json, tables) {
     const table = tables[node?.extras?.bldrsTableNode]
     const primitives = json.meshes?.[node.mesh]?.primitives || []
     if (table && primitives.some((p) => p?.extensions?.[LOSSY_POSITION_CODEC])) {
+      table.lossyGeometry = true
+    }
+  }
+  for (const table of tables) {
+    if (table.witness) {
       table.lossyGeometry = true
     }
   }

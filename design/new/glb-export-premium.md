@@ -791,6 +791,20 @@ area — EDGEBREAKER would erase the element — and for it the export writes th
 whole file SEQUENTIAL and untagged, the layout #1872 wrote. None of the four
 real models has such a row.
 
+**The portable rewrite's rows get the same strip.** Each is its own primitive,
+so it needs no tag, but it is EDGEBREAKER too and lost the same triangles —
+and until this the portable reader demanded the TABLE's index count of each
+decoded row, so every portable Draco download with a zero-area triangle in any
+collapsed row was refused outright: Snowdon's, dental_clinic's and
+Right_Hand's opened without selection. The export now strips each row's
+primitive the same way, the witness hashes the kept counts, and
+`remergeCollapsedRows` takes each row's DECODED count and lets the witness's
+identity hash hold it to the encoded one. The empty-row fallback is shared: a
+row of either shape with nothing of non-zero area sends the whole file
+SEQUENTIAL. Stripping the vertices with the triangles matters here as much as
+for the merged primitive — Draco sets its grid from a vertex only a dropped
+triangle used, measured (`collapsedDraco.test.js` puts one 5 km out).
+
 **One method per file again**, so the splice is gone: EDGEBREAKER everywhere,
 except the merged layout (`BLDRS_face_ids`, `_EXPRESSID` / `_INSTANCEID`),
 which stays SEQUENTIAL, and the zero-area fallback above. The instanced
@@ -811,8 +825,31 @@ against untagged EDGEBREAKER ones on the same primitives — Snowdon 2,617,644 v
 2,607,324 B (+0.4%), dental_clinic 180,219 vs 178,574, Right_Hand 256,975 vs
 256,662. It rides in the geometry, so the "Include Bldrs metadata: off" file
 carries it too: that file and the with-metadata one come from one encode, and
-the tag cannot be taken back out of a Draco bitstream. Any other viewer
-ignores a `_`-prefixed attribute.
+the tag cannot be taken back out of a Draco bitstream. Leaving it out of the
+metadata-off file would take a second encode of every collapsed export — the
+cost the splice was removed for — to save under half a percent, so it stays.
+Any other viewer ignores a `_`-prefixed attribute.
+
+**A collapsed Draco file exported again** (codex P1 on #1903). `compressExportGlb`
+accepts already-compressed sources, and a collapsed Draco file is one the plan
+cannot verify: its geometry was quantized, so the exact canary cannot pass by
+construction. Its rows live in what it already carries — triangle runs if it
+predates the tag, its own tag if not, which rides through the re-encode as a
+plain attribute — and in its own witness. So any collapsed table the plan
+cannot verify keeps the whole file SEQUENTIAL with nothing new stripped or
+tagged, which keeps runs in order and drops no triangle the first quantization
+made zero-area from under a witness that counted it. Verifying such a source
+instead (building the plan after decode) would mean running the reader's
+lossy rebuild at export time. The Meshopt re-export of one needed a reader
+change: a table carrying a witness is now read as lossy whatever codec its
+primitives declare (`markLossyTables`), since only a Draco export writes one
+and the positions it vouches for are the quantized ones. None of this is a
+path the app takes today — a reopened `.glb` publishes no artifact, and the
+cache never compresses a batched one — but the function promises it. Still
+refused: the PORTABLE rewrite of a collapsed Draco file, because the rewrite
+works on JSON and BIN and cannot split a Draco-compressed primitive, so it
+leaves the collapsed node whole and the portable join then finds its rows
+uncovered.
 
 **Its own OPFS slot, not a bump** — a deliberate change from what #1871
 proposed. `BLDRS_GLB_COLLAPSED_SCHEMA_VERSION` (`0.24.0-batched-collapsed2` since the STEP part-type bump,
@@ -925,6 +962,13 @@ Every collapsed row of all four models re-opens with its own triangles: the
 per-row triangle count equals the source's non-zero-area count and the per-row
 bounds agree to within the Draco step (3 mm on Snowdon at 14 bits).
 
+Portable Draco (the Export tab's portable None download, then Draco through
+`compressExportGlb`), reopened: before the portable strip, Snowdon (20,133,004
+B), dental_clinic (4,528,776) and Right_Hand (593,392) were refused and only
+DSA2 hydrated; after it all four hydrate every collapsed row (5,235 / 1,165 /
+4 / 28,674), at 20,132,744 / 4,528,776 / 593,396 / 23,253,236 B, validator
+clean.
+
 Export time on Snowdon, collapsed (jest, Node, not the browser): 8.8 s →
 7.9 s on a quiet machine; interleaved runs on a loaded one, 13.9 / 14.7 /
 14.1 s before against 13.8 / 13.6 / 13.5 s after. EDGEBREAKER is the slower
@@ -938,17 +982,6 @@ encoder, but the second write the splice needed is gone.
 2. **Third-party viewers** — the three.js editor and 3dviewer.net on a
    collapsed download and on its portable rewrite. Validator-clean is
    necessary, not sufficient.
-3. **Portable Draco exports refuse any row with a zero-area triangle** — found
-   while measuring the row tag, and older than it. The portable rewrite makes
-   every row its own primitive, which the Draco export has always encoded
-   EDGEBREAKER, so those triangles are dropped; the portable reader then
-   requires each row's decoded index count to equal the table's, and refuses
-   the table. Reproduced in jest; on the real models that is 619 Snowdon rows
-   and 70 dental_clinic rows, so their portable Draco downloads open without
-   selection. The fix is the one the merged primitive now has — drop the
-   zero-area triangles before encoding and hash the counts the file carries —
-   and was left out of the row-tag change, which kept portable exports as
-   they were.
 
 Browser coverage: `Components/Share/exportCollapsed.spec.ts` double-clicks a
 COLLAPSED element and asserts store, NavTree and URL selection on the cache hit

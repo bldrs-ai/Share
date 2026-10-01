@@ -14,7 +14,7 @@ import {
   Vector3,
 } from 'three'
 import {Logger, WebIO} from '@gltf-transform/core'
-import {EXTMeshGPUInstancing, KHRDracoMeshCompression} from '@gltf-transform/extensions'
+import {EXTMeshGPUInstancing, EXTMeshoptCompression, KHRDracoMeshCompression} from '@gltf-transform/extensions'
 import * as pako from 'pako'
 import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
@@ -22,13 +22,14 @@ import {
   ROW_TAG_SEMANTIC,
   markLossyTables,
   parseInstanceTablesExtensionData,
+  rowOfTag,
 } from '../loader/bldrsInstanceTables'
 import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from '../loader/bldrsSpatialTree'
 import {batchedArtifactBytes} from '../loader/glbArtifact.fixture'
 import {loadDracoDecoder} from '../loader/glbCompress'
 import {injectGlbExtensions, parseGlb, serializeGlb} from '../loader/injectGlbExtensions'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
-import {COMPRESSION_DRACO, COMPRESSION_MESHOPT, compressExportGlb} from './glbCompression'
+import {COMPRESSION_DRACO, COMPRESSION_MESHOPT, COMPRESSION_NONE, compressExportGlb} from './glbCompression'
 import {rewriteGlbPortable} from './glbPortable'
 
 
@@ -64,6 +65,8 @@ const OFFSET = 1000
 const EDGE = 0.37
 /** `stripModel(true)`'s slab: counter-clockwise from +z, like the strip. */
 const SLAB_CORNERS = [[-40000, -40000, 0], [-20000, -40000, 0], [-40000, -20000, 0]]
+/** How far past its row `gridRowsModel`'s zero-area triangle reaches. */
+const FAR_CORNER = 5000
 /**
  * A Draco file written before the row tag (#1898's code, commit fdd0e24):
  * `hybridModel()` below, collapsed, through that build's
@@ -179,11 +182,13 @@ function hybridModel() {
  * mirrored, which the writer bakes by reversing winding. With `zeroArea`,
  * element 4 also carries a triangle of zero area (two corners at one
  * position, through separate vertices) — the kind real collapsed rows carry
- * and EDGEBREAKER drops — whose third corner lies 50 m past the strip, so
- * a vertex only that triangle uses would widen Draco's quantization grid
- * well past what the decoded primitive spans (the export drops it with the
- * triangle). With `allZeroArea`, element 7 carries NOTHING else, so
- * EDGEBREAKER would erase it.
+ * and EDGEBREAKER drops — whose third corner lies `FAR_CORNER` past the
+ * strip. A vertex only that triangle uses still sets Draco's quantization
+ * grid even though EDGEBREAKER drops the triangle (measured: the decoded row
+ * moves), so unless the export drops it too, the grid is 5 km wide while the
+ * decoded primitive — the extent the reader takes the tolerance from — is
+ * under a metre, and the row is refused. With `allZeroArea`, element 7
+ * carries NOTHING else, so EDGEBREAKER would erase it.
  *
  * @param {object} [options]
  * @param {boolean} [options.zeroArea]
@@ -207,7 +212,7 @@ function gridRowsModel({zeroArea = false, allZeroArea = false} = {}) {
     if ((zeroArea && i === 4) || (allZeroArea && i === 7)) {
       const at = positions.length / 3
       const p = [(i * 2 * EDGE) + 0.1, 0.1, 0]
-      positions.push(...p, ...p, p[0] + 50, 0.1, 0)
+      positions.push(...p, ...p, p[0] + (i === 4 ? FAR_CORNER : 0.2), 0.1, 0)
       indices.push(at, at + 1, at + 2)
     }
     const geometry = new BufferGeometry()
@@ -280,35 +285,45 @@ function dracoMethodsOf(json, bin, meshIndex) {
 
 /**
  * The scene three's GLTFLoader would build from `bytes`, decoded with the
- * real Draco decoder: nodes nested as in the file, TRS applied, extras on
+ * real Draco (or Meshopt) decoder: nodes nested as in the file, TRS applied, extras on
  * userData, the tables payload parsed and marked lossy from the file's JSON.
  *
- * @param {Uint8Array} bytes one GLB, possibly Draco-compressed
+ * @param {Uint8Array} bytes one GLB, possibly Draco- or Meshopt-compressed
  * @return {Promise<Group>} scene
  */
 async function loadLikeGltfLoader(bytes) {
+  const {MeshoptDecoder} = await import('meshoptimizer/decoder')
+  await MeshoptDecoder.ready
   const io = new WebIO()
     .setLogger(new Logger(Logger.Verbosity.SILENT))
-    .registerExtensions([KHRDracoMeshCompression, EXTMeshGPUInstancing])
-    .registerDependencies({'draco3d.decoder': await loadDracoDecoder()})
+    .registerExtensions([KHRDracoMeshCompression, EXTMeshoptCompression, EXTMeshGPUInstancing])
+    .registerDependencies({'draco3d.decoder': await loadDracoDecoder(), 'meshopt.decoder': MeshoptDecoder})
   const doc = await io.readBinary(bytes)
+  // One geometry per glTF mesh, shared by every node that uses it, as
+  // GLTFLoader caches it — the portable join checks a table's placements
+  // share one.
+  const geometries = new Map()
   const build = (node) => {
     let object = new Group()
     const mesh = node.getMesh()
     if (mesh) {
       const primitive = mesh.listPrimitives()[0]
-      const geometry = new BufferGeometry()
-      geometry.setAttribute('position',
-        new BufferAttribute(primitive.getAttribute('POSITION').getArray(), 3))
-      const normal = primitive.getAttribute('NORMAL')
-      if (normal) {
-        geometry.setAttribute('normal', new BufferAttribute(normal.getArray(), 3))
+      const geometry = geometries.get(mesh) ?? new BufferGeometry()
+      const isShared = geometries.has(mesh)
+      geometries.set(mesh, geometry)
+      if (!isShared) {
+        geometry.setAttribute('position',
+          new BufferAttribute(primitive.getAttribute('POSITION').getArray(), 3))
+        const normal = primitive.getAttribute('NORMAL')
+        if (normal) {
+          geometry.setAttribute('normal', new BufferAttribute(normal.getArray(), 3))
+        }
+        const tag = primitive.getAttribute(ROW_TAG_SEMANTIC)
+        if (tag) {
+          geometry.setAttribute(ROW_TAG_ATTRIBUTE, new BufferAttribute(tag.getArray(), tag.getElementSize()))
+        }
+        geometry.setIndex(new BufferAttribute(primitive.getIndices().getArray(), 1))
       }
-      const tag = primitive.getAttribute(ROW_TAG_SEMANTIC)
-      if (tag) {
-        geometry.setAttribute(ROW_TAG_ATTRIBUTE, new BufferAttribute(tag.getArray(), tag.getElementSize()))
-      }
-      geometry.setIndex(new BufferAttribute(primitive.getIndices().getArray(), 1))
       // GLTFLoader builds an InstancedMesh for an `EXT_mesh_gpu_instancing`
       // node, one matrix per TRANSLATION entry; the hybrid's instanced half
       // only joins its table as one.
@@ -796,6 +811,119 @@ describe('a Draco export written before the row tag still opens', () => {
 })
 
 
+describe('a table too wide for a SCALAR row tag', () => {
+  // 65,540 one-triangle rows, one past the 16-bit row numbers a SCALAR tag
+  // can hold (and three more, so the high half is 1 on more than one row),
+  // through the real encoder and decoder: the tag must be a VEC2, every
+  // vertex's row must come back whole, and the table must reopen.
+  const WIDE = 65540
+
+  it('tags as VEC2, and every row past 65,535 reopens on its own triangle', async () => {
+    const mesh = new BatchedMesh(WIDE, WIDE * 3, WIDE * 3)
+    const corner = new Float32Array([0, 0, 0, EDGE, 0, 0, 0, EDGE, 0])
+    const normal = new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1])
+    for (let i = 0; i < WIDE; i++) {
+      // A distinct shape per element (its own scale), so each is its own
+      // single-placement group and collapses; laid out on a 256-wide grid.
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new BufferAttribute(corner.map((v) => v * (1 + (i / WIDE))), 3))
+      geometry.setAttribute('normal', new BufferAttribute(normal, 3))
+      geometry.setIndex(new BufferAttribute(new Uint32Array([0, 1, 2]), 1))
+      mesh.setMatrixAt(mesh.addInstance(mesh.addGeometry(geometry)),
+        new Matrix4().makeTranslation((i % 256) * 2 * EDGE, Math.floor(i / 256) * 2 * EDGE, 0))
+    }
+    mesh.instanceParents = Array.from({length: WIDE}, (_, i) => 100000 + i)
+    mesh.instanceOccurrenceIds = Array.from({length: WIDE}, (_, i) => i)
+    mesh.instanceSourceColors = Array.from({length: WIDE}, () => ({x: 0.8, y: 0.8, z: 0.8, w: 1}))
+    const bytes = (await compressExportGlb(
+      await batchedArtifactBytes(mesh, {collapse: true}), COMPRESSION_DRACO)).withMetadata
+    const {json, bin} = parseGlb(bytes)
+    const primitive = json.meshes[0].primitives[0]
+
+    expect(dracoMethodsOf(json, bin, 0)).toEqual([DRACO_EDGEBREAKER])
+    expect(json.accessors[primitive.attributes[ROW_TAG_SEMANTIC]]).toMatchObject({componentType: 5123, type: 'VEC2'})
+    const scene = await loadLikeGltfLoader(bytes)
+    const tag = scene.children.find((obj) => obj.isMesh).geometry.getAttribute(ROW_TAG_ATTRIBUTE)
+    expect(tag.itemSize).toBe(2)
+    const perRow = new Uint8Array(WIDE)
+    for (let v = 0; v < tag.count; v++) {
+      perRow[rowOfTag(tag, v)]++
+    }
+    expect(perRow.every((n) => n === 3)).toBe(true)
+    const model = hydrateBatchedModelFromInstancedGlb(scene)
+    expect(model).not.toBeNull()
+    // Rows either side of the boundary, where a dropped or swapped high half
+    // would land a pick on the wrong element.
+    for (const row of [0, 65535, 65536, WIDE - 1]) {
+      const x = ((row % 256) * 2 * EDGE) + (EDGE / 4)
+      const y = (Math.floor(row / 256) * 2 * EDGE) + (EDGE / 4)
+      expect(pickParent(model, new Vector3(x, y, 0))).toBe(100000 + row)
+    }
+  }, TIMEOUT_MS * 5)
+})
+
+
+describe('a collapsed Draco file exported again (codex P1 on #1903)', () => {
+  // `compressExportGlb` takes already-compressed sources (`transformGlb`
+  // decodes them first), and a collapsed Draco file is one whose geometry
+  // the export cannot verify against the exact canary: Draco quantized it.
+  // Untagged, its rows exist only as triangle runs, which EDGEBREAKER would
+  // scramble; tagged, its rows may hold triangles the first quantization
+  // made zero-area, which EDGEBREAKER would drop. So an unverifiable
+  // collapsed table keeps the whole file SEQUENTIAL — whatever tag it
+  // already carries rides through the re-encode — and keeps its witness.
+  // (No path in the app hands the export such a source today: a reopened
+  // .glb publishes no artifact, and the cache never compresses a batched
+  // one. The function promises it all the same.)
+  let tagged
+  let sequential
+  let centres
+
+  beforeAll(async () => {
+    const hybrid = hybridModel()
+    centres = hybrid.centres
+    tagged = (await compressExportGlb(
+      await batchedArtifactBytes(hybrid.model, {collapse: true}), COMPRESSION_DRACO)).withMetadata
+    sequential = new Uint8Array(readFileSync(SEQUENTIAL_FIXTURE))
+  }, TIMEOUT_MS)
+
+  /**
+   * @param {Uint8Array} bytes reopened and checked
+   */
+  async function expectEveryRowPicks(bytes) {
+    const model = hydrateBatchedModelFromInstancedGlb(await loadLikeGltfLoader(bytes))
+    expect(model).not.toBeNull()
+    centres.forEach((centre, i) => {
+      expect(pickParent(model, centre)).toBe(1000 + i)
+    })
+    expect(pickParent(model, new Vector3(OFFSET + 52, OFFSET + 2, 0))).toBe(1000 + ELEMENTS)
+  }
+
+  for (const [name, source] of [['the pre-tag SEQUENTIAL fixture', () => sequential], ['a tagged export', () => tagged]]) {
+    it(`re-exports ${name} through Draco with every row still selectable`, async () => {
+      const again = (await compressExportGlb(source(), COMPRESSION_DRACO)).withMetadata
+      const {json, bin} = parseGlb(again)
+      const collapsed = json.nodes.find((node) =>
+        Number.isInteger(node.extras?.bldrsTableNode) && !node.extensions?.EXT_mesh_gpu_instancing)
+
+      expect(dracoMethodsOf(json, bin, collapsed.mesh)).toEqual([DRACO_SEQUENTIAL])
+      await expectEveryRowPicks(again)
+    }, TIMEOUT_MS)
+
+    it(`re-exports ${name} through Meshopt with every row still selectable`, async () => {
+      // Lossless from here on, but the geometry is still the Draco-decoded
+      // one, so it is the witness — not the exact canary — that can vouch
+      // for it (`bldrsInstanceTables.js#markLossyTables`).
+      await expectEveryRowPicks((await compressExportGlb(source(), COMPRESSION_MESHOPT)).withMetadata)
+    }, TIMEOUT_MS)
+
+    it(`hands ${name} back untouched with no codec`, async () => {
+      await expectEveryRowPicks((await compressExportGlb(source(), COMPRESSION_NONE)).withMetadata)
+    }, TIMEOUT_MS)
+  }
+})
+
+
 describe('portable collapsed artifact through a Draco export', () => {
   /**
    * @param {object} strip from `stripModel`
@@ -805,7 +933,8 @@ describe('portable collapsed artifact through a Draco export', () => {
     const tree = {
       expressID: 1, type: 'PRODUCT', Name: {value: 'Strip'},
       children: strip.model.instanceParents.map((id, i) => ({
-        expressID: id, type: 'PRODUCT', Name: {value: `E${i}`}, occurrencePath: [7, i], children: [],
+        expressID: id, type: 'PRODUCT', Name: {value: `E${i}`},
+        occurrencePath: strip.model.instanceOccurrencePaths[i], children: [],
       })),
     }
     const withTree = injectGlbExtensions(await batchedArtifactBytes(strip.model, {collapse: true}),
@@ -826,6 +955,44 @@ describe('portable collapsed artifact through a Draco export', () => {
     strip.centres.forEach((centre, i) => {
       expect(pickParent(model, centre)).toBe(1000 + i)
     })
+  }, TIMEOUT_MS)
+
+  it('re-opens pickable when a row carries a zero-area triangle', async () => {
+    // Each portable row is its own primitive, encoded EDGEBREAKER, which
+    // drops the zero-area triangle in element 4 — so before the export
+    // stripped portable rows too, that row decoded one triangle short of the
+    // count the reader demanded and the whole table was refused (Snowdon and
+    // dental_clinic both have such rows: their portable Draco downloads opened
+    // without selection). The file now carries exactly the stripped count.
+    const grid = gridRowsModel({zeroArea: true})
+    const bytes = await portableDraco(grid)
+    const {json, bin} = parseGlb(bytes)
+    const rowNodes = json.nodes.filter((node) => Number.isInteger(node.extras?.bldrsInstance))
+    const triangles = rowNodes.reduce((n, node) =>
+      n + (json.accessors[json.meshes[node.mesh].primitives[0].indices].count / 3), 0)
+
+    expect(rowNodes).toHaveLength(12)
+    expect(rowNodes.every((node) => dracoMethodsOf(json, bin, node.mesh)[0] === DRACO_EDGEBREAKER)).toBe(true)
+    expect(triangles).toBe(12 * 4)
+    const model = hydrateBatchedModelFromInstancedGlb(await loadLikeGltfLoader(bytes))
+    expect(model).not.toBeNull()
+    grid.centres.forEach((centre, i) => {
+      expect(pickParent(model, centre)).toBe(2000 + i)
+    })
+  }, TIMEOUT_MS)
+
+  it('falls back to SEQUENTIAL, unstripped, when a portable row has no triangle of non-zero area', async () => {
+    // The same fallback, for the same reason, as the merged primitive's: one
+    // method per file, and EDGEBREAKER would erase element 7.
+    const empty = gridRowsModel({allZeroArea: true})
+    const bytes = await portableDraco(empty)
+    const {json, bin} = parseGlb(bytes)
+    const rowNodes = json.nodes.filter((node) => Number.isInteger(node.extras?.bldrsInstance))
+
+    expect(rowNodes.every((node) => dracoMethodsOf(json, bin, node.mesh)[0] === DRACO_SEQUENTIAL)).toBe(true)
+    const model = hydrateBatchedModelFromInstancedGlb(await loadLikeGltfLoader(bytes))
+    expect(model).not.toBeNull()
+    expect(pickParent(model, empty.centres[3])).toBe(2003)
   }, TIMEOUT_MS)
 
   it('holds each row to its OWN primitive\'s Draco step, not a slab\'s', async () => {

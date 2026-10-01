@@ -21,13 +21,15 @@
 //   the table's ranges. This is the shape that gets the row tag;
 // - its portable rewrite: one primitive per row, on nodes stamped with
 //   `bldrsInstance`. Each row is already its own primitive, so it needs no
-//   tag and is witnessed as it always was.
+//   tag — but it is EDGEBREAKER too, so it loses its zero-area triangles the
+//   same way and is stripped and witnessed the same way.
 import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
-  ROW_TAG_SCALAR_ROWS,
   buildLossyWitness,
   makeRangeCanary,
+  packRowTag,
   parseInstanceTablesExtensionData,
+  rowTagItemSize,
   rowWitnessStats,
   tableRowIdentity,
 } from '../loader/bldrsInstanceTables'
@@ -43,30 +45,40 @@ const UINT32_BYTES = 4
 
 
 /**
- * Plan a Draco export's collapsed tables: which merged primitives get a row
- * tag, which Draco method the file takes, and the tables payload with a lossy
- * witness added to every verifiable collapsed table.
+ * Plan a Draco export's collapsed tables: which primitives lose their
+ * zero-area triangles (and which of those also get a row tag), which Draco
+ * method the file takes, and the tables payload with a lossy witness added to
+ * every verifiable collapsed table.
  *
- * The method is EDGEBREAKER, with every verified merged primitive row-tagged
- * and stripped of its zero-area triangles — EDGEBREAKER drops those itself
- * (measured: 202 triangles in, 200 out, the two degenerate ones gone whether
- * their corners share an index or only a position), so the export removes
- * them first and witnesses exactly what the encoder will keep. It is
- * SEQUENTIAL, with no tags and the witness taken over every triangle, in the
- * one case a tag cannot serve: some verified row has NO triangle of non-zero
- * area, so EDGEBREAKER would erase the element. That is the layout the first
- * Draco exports of collapsed artifacts used (#1872), which the reader still
- * opens by triangle runs, so falling back to it costs ratio, not selection.
+ * The method is EDGEBREAKER, and every collapsed primitive of a verified
+ * table is stripped of its zero-area triangles first — EDGEBREAKER drops
+ * those itself (measured: 202 triangles in, 200 out, the two degenerate ones
+ * gone whether their corners share an index or only a position), so the
+ * export removes them and witnesses exactly what the encoder will keep. Both
+ * shapes a collapsed table comes in get that: the merged primitive, which
+ * also gets the row tag because its rows share it, and a portable file's
+ * per-row primitives, which need no tag (each IS one row) but are
+ * EDGEBREAKER all the same and lost the same triangles until this applied to
+ * them too.
+ *
+ * It is SEQUENTIAL, with nothing stripped, no new tags and the witness taken
+ * over every triangle, in the two cases stripping cannot serve: some verified
+ * row has NO triangle of non-zero area, so EDGEBREAKER would erase the
+ * element; or some collapsed table does not verify at all (below). That is
+ * the layout the first Draco exports of collapsed artifacts used (#1872),
+ * which the reader still opens, so falling back to it costs ratio, not
+ * selection. One file, one method, whichever shape the row is in.
  *
  * @param {object} json the source GLB's JSON
  * @param {Uint8Array} bin its BIN chunk
  * @param {object} rawPayload the decoded `BLDRS_instance_tables` JSON
  * @param {number} positionBits the Draco POSITION quantization bits the
  *   export will use
- * @return {?{sequential: boolean, rowTags: Map<number, object>, payload: ?object}}
- *   null when the payload has no collapsed table. `rowTags` maps a source
- *   mesh index to its tag ({@link planRowTag}); `payload` is a copy of
- *   `rawPayload` with witnesses added, or null when no table verified
+ * @return {?{sequential: boolean, meshPlans: Map<number, object>, payload: ?object}}
+ *   null when the payload has no collapsed table. `meshPlans` maps a source
+ *   mesh index to what `glbCompression.js#applyMeshPlan` does to its one
+ *   primitive ({@link planMerged}, {@link planPerRow}); `payload` is a copy
+ *   of `rawPayload` with witnesses added, or null when no table verified
  */
 export function planCollapsedDraco(json, bin, rawPayload, positionBits) {
   const tables = parseInstanceTablesExtensionData(rawPayload)
@@ -76,6 +88,7 @@ export function planCollapsedDraco(json, bin, rawPayload, positionBits) {
   const dv = new DataView(bin.buffer, bin.byteOffset, bin.byteLength)
   const rowsByTable = collectRows(json, tables)
   const verified = []
+  let unverified = 0
   tables.forEach((table, t) => {
     if (!Array.isArray(table.ranges)) {
       return
@@ -83,45 +96,61 @@ export function planCollapsedDraco(json, bin, rawPayload, positionBits) {
     const rows = rowsByTable.get(t)
     const view = rows && rowReader(json, dv, table, rows)
     if (!view || exactCanary(table, view) !== table.canary) {
-      glbInfo(`export: collapsed table ${t} does not verify on the source; no lossy witness`)
+      glbInfo(`export: collapsed table ${t} does not verify on the source; no new lossy witness`)
+      unverified++
       return
     }
-    const tag = rows.merged ? planRowTag(table, view) : null
-    if (rows.merged && !tag) {
-      glbInfo(`export: collapsed table ${t} indexes outside its rows; no lossy witness`)
+    const kept = keptTriangles(table, view)
+    if (!kept) {
+      glbInfo(`export: collapsed table ${t} indexes outside its rows; no new lossy witness`)
+      unverified++
       return
     }
-    verified.push({t, table, view, mesh: rows.mesh, tag})
+    verified.push({t, table, view, rows, kept})
   })
-  const sequential = verified.some(({tag}) => tag?.hasEmptyRow)
-  const rowTags = new Map()
+  // A table the plan cannot verify is one it can neither strip nor tag — and
+  // the commonest such source is not a broken file but a collapsed Draco
+  // export handed back to the export (codex P1 on #1903): Draco quantized
+  // its geometry, so the exact canary cannot pass by construction. Its rows
+  // live in what it already carries — triangle runs if it predates the tag,
+  // its own tag (which rides through the re-encode as a plain attribute) if
+  // not — and in its own witness, which is kept as it is. SEQUENTIAL keeps
+  // both true: runs stay in order, and no triangle the first quantization
+  // made zero-area is dropped from under a witness that counted it.
+  // Verifying such a source would mean running the reader's lossy rebuild
+  // here; nothing in the app hands the export one today, so it falls back.
+  const sequential = unverified > 0 || verified.some(({kept}) => kept.hasEmptyRow)
+  const meshPlans = new Map()
   const out = {...rawPayload, nodes: rawPayload.nodes.map((node) => ({...node}))}
-  for (const {t, table, view, mesh, tag} of verified) {
-    if (tag && !sequential) {
-      rowTags.set(mesh, tag)
-      const stats = rowWitnessStats(
-        table.count, (r) => tag.indexCounts[r],
-        (r, i, c) => tag.cornerAt(r, i, c))
-      out.nodes[t].witness = buildLossyWitness(table, stats, positionBits, (r) => tag.indexCounts[r])
-    } else {
+  for (const {t, table, view, rows, kept} of verified) {
+    if (sequential) {
       const stats = rowWitnessStats(
         table.count, (r) => view.indexCountOf(r),
         (r, i, c) => view.cornerAt(r, i, c))
       out.nodes[t].witness = buildLossyWitness(table, stats, positionBits)
+      continue
     }
+    if (rows.merged) {
+      meshPlans.set(rows.mesh, planMerged(table, kept))
+    } else {
+      planPerRow(view, kept).forEach((plan, r) => meshPlans.set(rows.meshes[r], plan))
+    }
+    const stats = rowWitnessStats(
+      table.count, (r) => kept.corners[r].length,
+      (r, i, c) => view.positionAt(r, kept.corners[r][i], c))
+    out.nodes[t].witness = buildLossyWitness(table, stats, positionBits, (r) => kept.corners[r].length)
   }
   if (sequential) {
-    glbInfo('export: a collapsed row has no triangle of non-zero area; Draco stays SEQUENTIAL, untagged')
+    glbInfo('export: a collapsed table cannot be stripped (unverified, or a row with no ' +
+      'triangle of non-zero area); Draco stays SEQUENTIAL, nothing new tagged')
   }
-  return {sequential, rowTags, payload: verified.length > 0 ? out : null}
+  return {sequential, meshPlans, payload: verified.length > 0 ? out : null}
 }
 
 
 /**
- * The row tag for one verified merged table: which of the merged primitive's
- * triangles survive (every one with non-zero area, in source order), the
- * vertices they use (ascending, so each row's stay contiguous), and each
- * kept vertex's row.
+ * Each row's triangles that survive EDGEBREAKER: every one with non-zero
+ * area, in source order, as row-local corner vertices.
  *
  * Zero area means two corners at the SAME position, compared as Draco's
  * attribute deduplication compares it — bit for bit, so -0 and +0 differ
@@ -131,31 +160,21 @@ export function planCollapsedDraco(json, bin, rawPayload, positionBits) {
  * zero-area triangles (hundreds of rows on a large IFC model), which is why
  * this is not an edge case.
  *
- * Vertices only zero-area triangles used are dropped with them. Draco's
- * EDGEBREAKER does not encode a vertex no face uses, so leaving them in would
- * let one widen the quantization grid the encoder sets while the decoded
- * primitive — the extent the reader takes each row's tolerance from — no
- * longer contains it.
- *
  * @param {object} table verified collapsed table
- * @param {object} view from `rowReader`, over its merged primitive
- * @return {?object} `{sourceVertexCount, vertices, indices, rows, itemSize,
- *   indexCounts, cornerAt, hasEmptyRow}`, or null when a row indexes outside its own
- *   vertex range
+ * @param {object} view from `rowReader`, either shape
+ * @return {?{corners: Array<Uint32Array>, hasEmptyRow: boolean}} or null
+ *   when a row indexes outside its own vertices
  */
-function planRowTag(table, view) {
-  const {ranges} = table
-  const last = ranges[ranges.length - 1]
-  const vertexTotal = last.vertexStart + last.vertexCount
-  const used = new Uint8Array(vertexTotal)
-  const keptTriangles = []
-  const indexCounts = new Uint32Array(ranges.length)
-  const same = (r, a, b) => a === b || (
-    Object.is(view.positionAt(r, a, 0), view.positionAt(r, b, 0)) &&
-    Object.is(view.positionAt(r, a, 1), view.positionAt(r, b, 1)) &&
-    Object.is(view.positionAt(r, a, 2), view.positionAt(r, b, 2)))
-  for (let r = 0; r < ranges.length; r++) {
-    const {vertexStart, vertexCount, indexCount} = ranges[r]
+function keptTriangles(table, view) {
+  const corners = new Array(table.count)
+  for (let r = 0; r < table.count; r++) {
+    const vertexCount = view.vertexCountOf(r)
+    const indexCount = view.indexCountOf(r)
+    const same = (a, b) => a === b || (
+      Object.is(view.positionAt(r, a, 0), view.positionAt(r, b, 0)) &&
+      Object.is(view.positionAt(r, a, 1), view.positionAt(r, b, 1)) &&
+      Object.is(view.positionAt(r, a, 2), view.positionAt(r, b, 2)))
+    const row = []
     for (let i = 0; i + 2 < indexCount; i += 3) {
       const a = view.localIndexAt(r, i)
       const b = view.localIndexAt(r, i + 1)
@@ -163,61 +182,92 @@ function planRowTag(table, view) {
       if (a >= vertexCount || b >= vertexCount || c >= vertexCount) {
         return null
       }
-      if (same(r, a, b) || same(r, b, c) || same(r, a, c)) {
-        continue
+      if (!same(a, b) && !same(b, c) && !same(a, c)) {
+        row.push(a, b, c)
       }
-      keptTriangles.push(r, vertexStart + a, vertexStart + b, vertexStart + c)
-      used[vertexStart + a] = used[vertexStart + b] = used[vertexStart + c] = 1
-      indexCounts[r] += 3
+    }
+    corners[r] = Uint32Array.from(row)
+  }
+  return {corners, hasEmptyRow: corners.some((row) => row.length === 0)}
+}
+
+
+/**
+ * The plan for a merged primitive: its kept triangles, the vertices they use
+ * (ascending, so each row's stay contiguous) — dropping the ones only
+ * zero-area triangles used — and each kept vertex's row tag.
+ *
+ * Vertices only zero-area triangles used are dropped with them, here and in
+ * {@link planPerRow}. Draco's EDGEBREAKER does not encode a vertex no face
+ * uses, so leaving them in would let one widen the quantization grid the
+ * encoder sets while the decoded primitive — the extent the reader takes each
+ * row's tolerance from — no longer contains it.
+ *
+ * @param {object} table verified merged table
+ * @param {object} kept from {@link keptTriangles}
+ * @return {object} `{sourceVertexCount, vertices, indices, rows, itemSize}`
+ */
+function planMerged(table, kept) {
+  const {ranges} = table
+  const last = ranges[ranges.length - 1]
+  const plan = compact(last.vertexStart + last.vertexCount,
+    kept.corners.map((row, r) => row.map((v) => ranges[r].vertexStart + v)))
+  const itemSize = rowTagItemSize(ranges.length)
+  const rows = new Uint16Array(plan.vertices.length * itemSize)
+  let r = 0
+  plan.vertices.forEach((v, k) => {
+    while (v >= ranges[r].vertexStart + ranges[r].vertexCount) {
+      r++
+    }
+    packRowTag(rows, k, r, itemSize)
+  })
+  return {...plan, rows, itemSize}
+}
+
+
+/**
+ * The plans for a portable file's per-row primitives: each row's own kept
+ * triangles and the vertices they use. No tag — the row IS the primitive.
+ *
+ * @param {object} view from `rowReader`, per-row shape
+ * @param {object} kept from {@link keptTriangles}
+ * @return {Array<object>} per row, `{sourceVertexCount, vertices, indices}`
+ */
+function planPerRow(view, kept) {
+  return kept.corners.map((row, r) => compact(view.vertexCountOf(r), [row]))
+}
+
+
+/**
+ * Renumber the vertices some triangles use, ascending, dropping the rest.
+ *
+ * @param {number} vertexCount the primitive's vertex count
+ * @param {Array<Uint32Array>} triangleRuns corner vertices, three per triangle
+ * @return {{sourceVertexCount: number, vertices: Uint32Array, indices: Uint32Array}}
+ */
+function compact(vertexCount, triangleRuns) {
+  const used = new Uint8Array(vertexCount)
+  for (const run of triangleRuns) {
+    for (const v of run) {
+      used[v] = 1
     }
   }
-  const renumber = new Int32Array(vertexTotal).fill(-1)
+  const renumber = new Int32Array(vertexCount).fill(-1)
   const vertices = []
-  for (let v = 0; v < vertexTotal; v++) {
+  for (let v = 0; v < vertexCount; v++) {
     if (used[v]) {
       renumber[v] = vertices.length
       vertices.push(v)
     }
   }
-  const itemSize = ranges.length <= ROW_TAG_SCALAR_ROWS ? 1 : 2
-  const rows = new Uint16Array(vertices.length * itemSize)
-  let r = 0
-  vertices.forEach((v, k) => {
-    while (v >= ranges[r].vertexStart + ranges[r].vertexCount) {
-      r++
-    }
-    rows[k * itemSize] = r % ROW_TAG_SCALAR_ROWS
-    if (itemSize === 2) {
-      rows[(k * itemSize) + 1] = Math.floor(r / ROW_TAG_SCALAR_ROWS)
-    }
-  })
-  const indices = new Uint32Array((keptTriangles.length / 4) * 3)
-  // Each row's kept corners as ABSOLUTE source vertices, for the witness.
-  const cornerStarts = new Uint32Array(ranges.length + 1)
-  for (let row = 0; row < ranges.length; row++) {
-    cornerStarts[row + 1] = cornerStarts[row] + indexCounts[row]
-  }
-  const corners = new Uint32Array(indices.length)
-  for (let k = 0, i = 0; k < keptTriangles.length; k += 4, i += 3) {
-    for (let j = 0; j < 3; j++) {
-      corners[i + j] = keptTriangles[k + 1 + j]
-      indices[i + j] = renumber[keptTriangles[k + 1 + j]]
+  const indices = new Uint32Array(triangleRuns.reduce((n, run) => n + run.length, 0))
+  let at = 0
+  for (const run of triangleRuns) {
+    for (const v of run) {
+      indices[at++] = renumber[v]
     }
   }
-  return {
-    sourceVertexCount: vertexTotal,
-    vertices: Uint32Array.from(vertices),
-    indices,
-    rows,
-    itemSize,
-    indexCounts,
-    // `positionAt` takes a row-local vertex; the corners are absolute.
-    cornerAt: (row, i, c) => {
-      const v = corners[cornerStarts[row] + i]
-      return view.positionAt(row, v - ranges[row].vertexStart, c)
-    },
-    hasEmptyRow: indexCounts.some((count) => count === 0),
-  }
+  return {sourceVertexCount: vertexCount, vertices: Uint32Array.from(vertices), indices}
 }
 
 
@@ -228,7 +278,7 @@ function planRowTag(table, view) {
  * @param {object} json
  * @param {Array<object>} tables parsed
  * @return {Map<number, object>} table index -> `{merged: primitive, mesh:
- *   index}` or `{perRow: Array<primitive>}`
+ *   index}` or `{perRow: Array<primitive>, meshes: Array<index>}`
  */
 function collectRows(json, tables) {
   const found = new Map()
@@ -240,9 +290,13 @@ function collectRows(json, tables) {
     }
     const row = node.extras.bldrsInstance
     if (Number.isInteger(row)) {
-      const entry = found.get(t) ?? {perRow: new Array(tables[t].count).fill(null)}
+      const entry = found.get(t) ?? {
+        perRow: new Array(tables[t].count).fill(null),
+        meshes: new Array(tables[t].count).fill(null),
+      }
       if (entry.perRow) {
         entry.perRow[row] = primitive
+        entry.meshes[row] = node.mesh
         found.set(t, entry)
       }
     } else {

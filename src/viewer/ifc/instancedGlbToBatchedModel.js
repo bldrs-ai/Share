@@ -684,15 +684,20 @@ function remergeCollapsedRows(rows, table, toModelSpace) {
     // Each row is its own Draco primitive, with its own merged and quantized
     // vertices, so rebuild from each row's triangles — the whole index — and
     // check the lossy witness, as the instanced join does for a merged one.
-    // Every triangle of a row's own primitive is that row's, so its index
-    // count must match the table's exactly — a surplus would otherwise ride
-    // along unchecked past the rebuild's prefix walk.
-    if (rows.some((row, r) => row.geometry?.getIndex?.()?.count !== table.ranges[r].indexCount)) {
+    // The count is the one DECODED, not the table's: the export strips each
+    // row's zero-area triangles before EDGEBREAKER would (`collapsedWitness.
+    // js#planCollapsedDraco`) and hashes what it kept, so the witness's
+    // identity hash is what holds a row to its count. Every triangle of the
+    // row's primitive is in it, so nothing rides along unhashed.
+    if (rows.some((row) => {
+      const count = row.geometry?.getIndex?.()?.count
+      return !Number.isInteger(count) || count === 0 || count % 3 !== 0
+    })) {
       return null
     }
     const rebuilt = rebuildLossyCollapsed(table, (r) => ({
       geometry: rows[r].geometry,
-      count: table.ranges[r].indexCount,
+      count: rows[r].geometry.getIndex().count,
       pointAt: (i) => rows[r].geometry.getIndex().getX(i),
     }))
     return rebuilt && {...rebuilt, getMatrixAt: matrixOfRow}

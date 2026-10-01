@@ -191,11 +191,11 @@ export async function compressExportGlb(glbBytes, mode, quality = QUALITY_DEFAUL
  * @param {Uint8Array} bin its BIN chunk
  * @param {Array<object>} payloads from `detachBldrsPayloads`
  * @param {string} quality the rung the encode will use, for its POSITION bits
- * @return {{sequential: boolean, rowTags: Map<number, object>, payloads: Array<object>}}
+ * @return {{sequential: boolean, meshPlans: Map<number, object>, payloads: Array<object>}}
  */
 function planDraco(json, bin, payloads, quality) {
   if (isTriangleOrderedLayout(json)) {
-    return {sequential: true, rowTags: new Map(), payloads}
+    return {sequential: true, meshPlans: new Map(), payloads}
   }
   let plan = null
   const planned = payloads.map((payload) => {
@@ -217,7 +217,7 @@ function planDraco(json, bin, payloads, quality) {
   })
   return {
     sequential: Boolean(plan?.sequential),
-    rowTags: plan?.rowTags ?? new Map(),
+    meshPlans: plan?.meshPlans ?? new Map(),
     payloads: planned,
   }
 }
@@ -255,7 +255,7 @@ function planDraco(json, bin, payloads, quality) {
  *
  * @param {Uint8Array} glbBytes
  * @param {string} mode `COMPRESSION_MESHOPT` or `COMPRESSION_DRACO`
- * @param {?object} draco Draco only: `planDraco`'s method and row tags. The
+ * @param {?object} draco Draco only: `planDraco`'s method and mesh plans. The
  *   Meshopt arm below never reorders in the first place, so nothing there is
  *   conditional on layout
  * @param {Array<string>} sourceCodecs Codecs the input already declares
@@ -314,8 +314,8 @@ async function transformGlb(glbBytes, mode, draco, sourceCodecs = [], quality = 
     // The read built `listMeshes()` in the file's mesh order, which is what
     // makes the plan's mesh indices — into the source JSON — valid here.
     const meshes = doc.getRoot().listMeshes()
-    for (const [meshIndex, tag] of draco.rowTags) {
-      applyRowTag(doc, meshes[meshIndex], tag)
+    for (const [meshIndex, plan] of draco.meshPlans) {
+      applyMeshPlan(doc, meshes[meshIndex], plan)
     }
     const {EDGEBREAKER, SEQUENTIAL} = KHRDracoMeshCompression.EncoderMethod
     // `method` is DERIVED and is the one option quality may not touch: a
@@ -344,35 +344,38 @@ async function transformGlb(glbBytes, mode, draco, sourceCodecs = [], quality = 
 
 
 /**
- * Give a collapsed mesh's merged primitive its row tag
- * (`loader/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`): drop the triangles the
- * plan dropped and the vertices only they used, and add each kept vertex's
- * row as an integer attribute. Every attribute is compacted the same way, so
- * vertex k of every accessor is still one vertex.
+ * Apply a collapsed primitive's plan (`collapsedWitness.js#planCollapsedDraco`):
+ * drop the triangles it dropped (zero-area ones, which EDGEBREAKER would drop
+ * anyway) and the vertices only they used, and — for a merged primitive —
+ * add each kept vertex's row as an integer attribute
+ * (`loader/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`). Every attribute is
+ * compacted the same way, so vertex k of every accessor is still one vertex.
+ * A portable file's per-row primitives get the same strip and no tag.
  *
  * The plan was made from the SOURCE bytes, so a primitive whose vertex count
  * disagrees with it is not the one planned — a programming error, thrown so
  * the codec-failure path hands back the uncompressed file rather than a
- * Draco one tagged against the wrong vertices.
+ * Draco one stripped against the wrong vertices.
  *
  * @param {object} doc the `@gltf-transform` document
  * @param {object} mesh the collapsed mesh (one primitive, by construction)
- * @param {object} tag from `collapsedWitness.js#planRowTag`
+ * @param {object} plan `{sourceVertexCount, vertices, indices}`, plus
+ *   `{rows, itemSize}` for a merged primitive
  */
-function applyRowTag(doc, mesh, tag) {
+function applyMeshPlan(doc, mesh, plan) {
   const primitives = mesh?.listPrimitives() ?? []
   const primitive = primitives[0]
   const position = primitive?.getAttribute('POSITION')
-  if (primitives.length !== 1 || !position || position.getCount() !== tag.sourceVertexCount) {
-    throw new Error('glbCompression: row tag does not match the collapsed primitive it was planned for')
+  if (primitives.length !== 1 || !position || position.getCount() !== plan.sourceVertexCount) {
+    throw new Error('glbCompression: plan does not match the collapsed primitive it was made for')
   }
   const replaced = []
   for (const semantic of primitive.listSemantics()) {
     const accessor = primitive.getAttribute(semantic)
     const size = accessor.getElementSize()
     const source = accessor.getArray()
-    const compacted = new source.constructor(tag.vertices.length * size)
-    tag.vertices.forEach((v, k) => {
+    const compacted = new source.constructor(plan.vertices.length * size)
+    plan.vertices.forEach((v, k) => {
       compacted.set(source.subarray(v * size, (v + 1) * size), k * size)
     })
     primitive.setAttribute(semantic, doc.createAccessor()
@@ -388,13 +391,15 @@ function applyRowTag(doc, mesh, tag) {
   const INDEX16_VERTICES = 0xffff
   primitive.setIndices(doc.createAccessor()
     .setType('SCALAR')
-    .setArray(tag.vertices.length <= INDEX16_VERTICES ? Uint16Array.from(tag.indices) : tag.indices)
+    .setArray(plan.vertices.length <= INDEX16_VERTICES ? Uint16Array.from(plan.indices) : plan.indices)
     .setBuffer(indices.getBuffer()))
   replaced.push(indices)
-  primitive.setAttribute(ROW_TAG_SEMANTIC, doc.createAccessor()
-    .setType(tag.itemSize === 1 ? 'SCALAR' : 'VEC2')
-    .setArray(tag.rows)
-    .setBuffer(position.getBuffer()))
+  if (plan.rows) {
+    primitive.setAttribute(ROW_TAG_SEMANTIC, doc.createAccessor()
+      .setType(plan.itemSize === 1 ? 'SCALAR' : 'VEC2')
+      .setArray(plan.rows)
+      .setBuffer(position.getBuffer()))
+  }
   for (const accessor of replaced) {
     // The Root is always a parent; anything more is another user.
     if (accessor.listParents().length === 1) {
