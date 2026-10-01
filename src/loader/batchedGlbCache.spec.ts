@@ -54,6 +54,14 @@ import {clearOpfs, homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
  * So nothing in this URL changes behavior, which is what makes it an
  * acceptance test for the shipped default rather than for a configuration no
  * user is in.
+ *
+ * That default is now the COLLAPSED artifact (`glbCollapse` went default-on in
+ * share-140 #1871), so the first test below also asserts the collapsed slot
+ * and the range-path hydrate with no collapse flag in the URL — it is the one
+ * that goes red if the default is flipped back. The other two name their
+ * flag explicitly: `glbCollapse` (now redundant, kept so it stays the same
+ * test if the default ever moves) and `disableGlbCollapse` for the
+ * un-collapsed layout, which is the kill switch's own end-to-end check.
  */
 const AS1_PATH = '/share/v/gh/bldrs-ai/test-models/main/step/nist/as1-colorless.stp'
 const FLAGS = '?feature=glbVerbose'
@@ -243,6 +251,17 @@ describeMobileAndDesktop('Batched-native GLB cache', () => {
     // the writer fell through to `batchedModelToMergedMesh` and everything
     // below would be asserting the OLD artifact shape.
     expect(glbLogs.some((l) => l.includes('batched writer:'))).toBe(true)
+    // The default is the COLLAPSED artifact, in its own slot (#1871). Both
+    // halves matter: the writer ran in collapse mode AND found single-placement
+    // parts to collapse (this fixture has them — the test below asserts the
+    // same under the explicit flag), and the bytes landed where the collapsed
+    // reader looks. Verified red with `glbCollapse` back to `isActive: false`.
+    const defaultCollapsedLine = glbLogs.find((l) => l.includes('batched writer: collapsed'))
+    expect(defaultCollapsedLine, 'default writer runs in collapse mode').toBeDefined()
+    expect(Number(/collapsed (\d+) single-placement/.exec(defaultCollapsedLine ?? '')?.[1]))
+      .toBeGreaterThan(0)
+    expect(glbLogs.some((l) => l.includes('-batched-collapsed2.glb')),
+      'default writes the collapsed slot').toBe(true)
 
     const missState = await sceneState(page)
     expect(missState.batched).toBe(true)
@@ -268,6 +287,10 @@ describeMobileAndDesktop('Batched-native GLB cache', () => {
     // console events reach the Node-side buffer asynchronously over CDP with
     // no flush barrier, so a synchronous read here is a flake by construction.
     await waitForGlbLog(glbLogs, 'hydrated instance-table', CACHE_TIMEOUT_MS)
+    // …and the HIT found it there and hydrated it through the range path.
+    const defaultHydrated = glbLogs.find((l) => l.includes('reader: hydrated instanced artifact'))
+    expect(Number(/(\d+) collapsed table/.exec(defaultHydrated ?? '')?.[1]),
+      'default HIT hydrates collapsed tables').toBeGreaterThan(0)
 
     // Risk check 2: numeric parity. Same batched shape, same instance
     // count, same per-instance colors — which for this colorless fixture
@@ -289,10 +312,12 @@ describeMobileAndDesktop('Batched-native GLB cache', () => {
   })
 
   test('with glbCollapse: MISS writes the collapsed artifact; HIT puts every element back', async ({page}) => {
-    // share-140 #1871, behind the default-off `glbCollapse`. The flag is named
-    // here because the behaviour is NOT the default yet — the opposite of the
-    // test above, which deliberately names nothing. `glbVerbose` as there:
-    // both discriminants below are verbose lines.
+    // share-140 #1871. `glbCollapse` is default-on now, so naming it here is
+    // redundant with the test above (which names nothing and asserts the same
+    // slot); it stays so this test keeps meaning "collapse on" if the default
+    // ever moves, and because it adds what that one does not — per-element
+    // geometry centres across the cache boundary. `glbVerbose` as there: both
+    // discriminants below are verbose lines.
     test.setTimeout(TEST_TIMEOUT_MS)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
     const glbLogs = captureGlbLogs(page)
@@ -343,5 +368,43 @@ describeMobileAndDesktop('Batched-native GLB cache', () => {
 
     await page.getByTestId('control-button-residency').click()
     await expect(page.getByTestId('color-mode-group')).toBeVisible()
+  })
+
+  test('with disableGlbCollapse: the un-collapsed batched artifact, in its own slot', async ({page}) => {
+    // The kill switch, end to end (#1871). `glbCollapse` is default-on, so the
+    // un-collapsed layout is reachable only by naming the off-switch; this is
+    // the path a user lands on if `?feature=disableGlbCollapse` is used, or
+    // if `disableGlbCollapse` is flipped on in FeatureFlags as the prod kill
+    // switch. Nothing about it may need the collapsed reader.
+    test.setTimeout(TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+    const flags = '?feature=glbVerbose,disableGlbCollapse'
+    await setupVirtualPathIntercept(page, AS1_PATH, '')
+
+    await page.goto(`${AS1_PATH}${flags}`, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page, MODEL_READY_TIMEOUT_MS)
+    await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT_MS)
+    // Batched-native (not the merged bake), but NOT collapsed, and written to
+    // the batched slot rather than the collapsed one.
+    expect(glbLogs.some((l) => l.includes('batched writer:'))).toBe(true)
+    expect(glbLogs.some((l) => l.includes('batched writer: collapsed'))).toBe(false)
+    expect(glbLogs.some((l) => l.includes('-batched-collapsed2.glb'))).toBe(false)
+    expect(glbLogs.some((l) => l.includes('-batched.glb'))).toBe(true)
+    const missState = await sceneState(page)
+    expect(distinctColors(missState)).toBeGreaterThan(1)
+
+    resetGlbLogs(glbLogs)
+    await page.goto(`${AS1_PATH}${flags}`, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page, MODEL_READY_TIMEOUT_MS)
+    await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT_MS)
+    await waitForGlbLog(glbLogs, 'hydrated instance-table', CACHE_TIMEOUT_MS)
+    const hydratedLine = glbLogs.find((l) => l.includes('reader: hydrated instanced artifact'))
+    expect(Number(/(\d+) collapsed table/.exec(hydratedLine ?? '')?.[1])).toBe(0)
+
+    const hitState = await sceneState(page)
+    expect(hitState.instances).toBe(missState.instances)
+    expect(hitState.withOccurrencePath).toBe(hitState.instances)
+    expect(hitState.colorByInstance).toEqual(missState.colorByInstance)
   })
 })

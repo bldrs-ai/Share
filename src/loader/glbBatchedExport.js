@@ -39,11 +39,13 @@ import {slimGlbBytes} from './glbSlim'
  * merged bake's convention (the mesh's own transform is ignored on both
  * paths).
  *
- * Collapse mode (`glbCollapse`, default-off, #1871): single-placement groups
- * are merged per colour into range-addressed primitives instead of each
- * getting a node — `glbCollapse.js` has the why and the rules. The rest of
- * this writer is unchanged by it; collapsed nodes are simply a second kind
- * of node in the same scene, joined to their tables the same way.
+ * Collapse mode (`glbCollapse`, #1871; default-on, but this function's own
+ * `collapse` option still defaults to false and the caller passes the flag):
+ * single-placement groups are merged per colour into range-addressed
+ * primitives instead of each getting a node — `glbCollapse.js` has the why
+ * and the rules. The rest of this writer is unchanged by it; collapsed nodes
+ * are simply a second kind of node in the same scene, joined to their tables
+ * the same way.
  *
  * Fail-soft contract: returns null whenever the model can't round-trip
  * faithfully — a matrix that TRS decomposition can't represent (shear), a

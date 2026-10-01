@@ -55,6 +55,12 @@ import {
  *
  * The collapse-OFF Draco export rides along as the baseline, so a regression
  * in the shared pick path is distinguishable from one in the collapse.
+ *
+ * `glbCollapse` is default-on now, so the `glbCollapse` the collapsed tests
+ * pass is redundant; it stays so they keep naming what they test. The
+ * baseline is the one that MUST name its layout, now with
+ * `disableGlbCollapse`: the default would silently make it a second collapsed
+ * test and stop it being a baseline at all.
  */
 
 
@@ -263,7 +269,10 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
     const glbLogs = captureGlbLogs(page)
     await routeProModule(page)
-    await loadModelAndWaitForArtifact(page)
+    // Explicit: the default is the collapsed artifact (#1871).
+    await loadModelAndWaitForArtifact(page, 'disableGlbCollapse')
+    // A baseline that quietly collapsed would be a second collapsed test.
+    expect(glbLogs.some((l) => l.includes('batched writer: collapsed'))).toBe(false)
     await setSubscriptionTier(page, 'sharePro')
     await auth0Login(page)
     await openExportTab(page)
@@ -281,6 +290,9 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     await waitForModelReady(page)
     await dismissLoadSnackbar(page)
     await waitForGlbLog(glbLogs, 'hydrated instance-table', EXPORT_TEST_TIMEOUT_MS)
+    const hydrated = glbLogs.find((l) => l.includes('collapsed table(s)')) ?? ''
+    expect(Number(/(\d+) collapsed table/.exec(hydrated)?.[1]), 'no collapsed tables in the baseline')
+      .toBe(0)
     await doubleClickSelectsAnElement(page, 'any')
     await expectNavTreeFollowsSelection(page)
   })

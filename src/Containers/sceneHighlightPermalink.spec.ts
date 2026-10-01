@@ -226,7 +226,10 @@ describeMobileAndDesktop('Element-path permalink on a digit-prefixed filename', 
   })
 
   // The same reload on the layout users actually get (view-140 S9,
-  // `glbBatched` default-on). No `?feature=` at all. The merged leg above
+  // `glbBatched` default-on, and since #1871 `glbCollapse` too, so this is
+  // the COLLAPSED layout unless the model has nothing single-placement to
+  // collapse — `exportCollapsed.spec.ts` and `batchedGlbCache.spec.ts` pin
+  // which slot and that the range path ran). No `?feature=` at all. The merged leg above
   // cannot cover this: its central assertion — per-mesh `IfcInstanceMap`s
   // present, per-triangle tables aligned with `geometry.index` — is about a
   // structure the batched artifact does not have. Here identity is
