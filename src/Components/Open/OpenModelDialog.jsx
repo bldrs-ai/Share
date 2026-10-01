@@ -1,9 +1,10 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {Box, Button, Divider, Slide, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {NO_OPFS_LOCAL_FILE_ALERT} from '../../OPFS/messages'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
-import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
+import {loadLocalFile} from '../../utils/loader'
 import {NeedsReconnectError} from '../../connections/errors'
 import {
   addRecentFileEntry,
@@ -14,6 +15,7 @@ import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToModel} from '../../utils/navigate'
+import {trackAlert} from '../../utils/alertTracking'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import useExistInFeature from '../../hooks/useExistInFeature'
@@ -54,14 +56,9 @@ export default function OpenModelDialog({
   const setAlert = useStore((state) => state.setAlert)
   // The store's resolved answer (BaseRoutes awaits the probe at startup), not
   // `checkOPFSAvailability()` called here: that is async, so its Promise was
-  // always truthy and the no-OPFS fallback below never ran. Awaiting it in
-  // `openFile` instead would put a hop before `fileInput.click()`, which
+  // always truthy and the no-OPFS branch in `openFile` never ran. Awaiting it
+  // in `openFile` instead would put a hop before `fileInput.click()`, which
   // Safari can refuse once the click's user activation is spent.
-  //
-  // The fallback is reachable now but still does not open the file: it hands
-  // `/v/new/` a page-lifetime blob URL, and `navigateToModel` does a full
-  // page load, which ends that page. Drag-and-drop's fallback has the same
-  // problem; both need the File held across an in-app navigation instead.
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const isMobile = useIsMobile()
   const {tier, record, check, hasCapacity} = useQuota()
@@ -270,6 +267,13 @@ export default function OpenModelDialog({
   }
 
   const openFile = () => {
+    if (!isOpfsAvailable) {
+      // Tracked so #1906's priority can follow how often this is hit.
+      trackAlert(NO_OPFS_LOCAL_FILE_ALERT)
+      setIsDialogDisplayed(false)
+      setAlert(NO_OPFS_LOCAL_FILE_ALERT)
+      return
+    }
     if (!hasCapacity) {
       setShowQuotaDialog(true)
       return
@@ -289,11 +293,6 @@ export default function OpenModelDialog({
       }
       disablePageReloadApprovalCheck()
       navigateToModel(sharePath, navigate)
-      // Without OPFS the id is a page-lifetime blob URL's, not a stored
-      // upload, so a recent would point at nothing after a reload.
-      if (!isOpfsAvailable) {
-        return
-      }
       addRecentFileEntry({
         id: storageId,
         source: 'local',
@@ -306,14 +305,10 @@ export default function OpenModelDialog({
       })
       setPendingModelNameUpdate(storageId)
     }
-    if (isOpfsAvailable) {
-      // The dialog closes on pick, so a file that cannot be opened at all —
-      // a `.glb.gz` in a browser with no `DecompressionStream`, a name and a
-      // header that between them name no format — has no other way to say so.
-      loadLocalFile(onLoad, false, false, (message) => setAlert(message))
-    } else {
-      loadLocalFileFallback(onLoad, false)
-    }
+    // The dialog closes on pick, so a file that cannot be opened at all —
+    // a `.glb.gz` in a browser with no `DecompressionStream`, a name and a
+    // header that between them name no format — has no other way to say so.
+    loadLocalFile(onLoad, false, false, (message) => setAlert(message))
     setIsDialogDisplayed(false)
   }
 

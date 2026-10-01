@@ -1,11 +1,11 @@
 import {guessTypeFromFile} from '../Filetype'
+import {NO_OPFS_LOCAL_FILE_ALERT} from '../OPFS/messages'
 import {saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {disablePageReloadApprovalCheck} from './event'
 import {trackAlert} from './alertTracking'
 import {navigateToModel} from './navigate'
-import {saveDnDFileToOpfsFallback} from './loader'
 import debug, {WARN} from './debug'
 
 
@@ -42,6 +42,16 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     setAlert(message)
     if (onError) {
       onError(message)
+    }
+    return
+  }
+
+  if (!isOpfsAvailable) {
+    // Tracked so #1906's priority can follow how often this is hit.
+    trackAlert(NO_OPFS_LOCAL_FILE_ALERT)
+    setAlert(NO_OPFS_LOCAL_FILE_ALERT)
+    if (onError) {
+      onError(NO_OPFS_LOCAL_FILE_ALERT)
     }
     return
   }
@@ -108,31 +118,23 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     disablePageReloadApprovalCheck()
     debug().log('handleFileDrop: navigate to:', fileName)
     navigateToModel(key, navigate)
-    // Without OPFS nothing was stored — `fileName` is a revoked blob URL's
-    // id — so a recent would point at nothing once this page is gone.
-    if (isOpfsAvailable) {
-      addRecentFileEntry({
-        id: fileName,
-        source: 'local',
-        name: uploadedFile.name,
-        // Epoch ms, matching RecentFileEntry and RecentFilesList's
-        // `Date.now() - utcMs` arithmetic — an ISO string here rendered
-        // as "NaNm ago" in the Last-modified column (#1682).
-        lastModifiedUtc: uploadedFile.lastModified || null,
-        sharePath: key,
-      })
-      setPendingModelNameUpdate(fileName)
-    }
+    addRecentFileEntry({
+      id: fileName,
+      source: 'local',
+      name: uploadedFile.name,
+      // Epoch ms, matching RecentFileEntry and RecentFilesList's
+      // `Date.now() - utcMs` arithmetic — an ISO string here rendered
+      // as "NaNm ago" in the Last-modified column (#1682).
+      lastModifiedUtc: uploadedFile.lastModified || null,
+      sharePath: key,
+    })
+    setPendingModelNameUpdate(fileName)
     if (onSuccess) {
       onSuccess(fileName)
     }
   }
 
-  if (isOpfsAvailable) {
-    saveDnDFileToOpfs(uploadedFile, type, onWritten)
-  } else {
-    saveDnDFileToOpfsFallback(uploadedFile, onWritten)
-  }
+  saveDnDFileToOpfs(uploadedFile, type, onWritten)
 }
 
 

@@ -2,6 +2,7 @@ import React from 'react'
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {NO_OPFS_LOCAL_FILE_ALERT} from '../../OPFS/messages'
 import {NeedsReconnectError} from '../../connections/errors'
 import {
   addRecentFileEntry,
@@ -10,7 +11,7 @@ import {
 } from '../../connections/persistence'
 import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
-import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
+import {loadLocalFile} from '../../utils/loader'
 import {navigateToModel} from '../../utils/navigate'
 import useStore from '../../store/useStore'
 import OpenModelDialog from './OpenModelDialog'
@@ -55,7 +56,7 @@ jest.mock('../Connections/GitHubTab', () => function MockGitHubTab() {
   return <div data-testid='mock-github-tab'/>
 })
 jest.mock('../../utils/navigate', () => ({navigateToModel: jest.fn()}))
-jest.mock('../../utils/loader', () => ({loadLocalFile: jest.fn(), loadLocalFileFallback: jest.fn()}))
+jest.mock('../../utils/loader', () => ({loadLocalFile: jest.fn()}))
 
 
 const mockNavigate = jest.fn()
@@ -412,18 +413,18 @@ describe('OpenModelDialog — Local tab', () => {
   })
 
   // `isOpfsAvailable` used to be `checkOPFSAvailability()`'s unawaited
-  // Promise — always truthy — so the fallback branch was unreachable.
-  it('uses the no-OPFS fallback when the store says OPFS is unavailable', async () => {
+  // Promise — always truthy — so this branch was unreachable. Without OPFS
+  // the pick can't survive navigateToModel's full page load (#1906).
+  it('alerts instead of opening a picker when the store says OPFS is unavailable', async () => {
     act(() => useStore.setState({isOpfsAvailable: false}))
-    loadLocalFileFallback.mockImplementation((onLoad) => onLoad('blob-uuid', Date.now(), 'box.ifc'))
     renderLocalTab([])
     fireEvent.click(screen.getByTestId('button_open_file'))
     await waitFor(() => {
-      expect(navigateToModel).toHaveBeenCalledWith('/share/v/new/blob-uuid', mockNavigate)
+      expect(useStore.getState().alert).toBe(NO_OPFS_LOCAL_FILE_ALERT)
     })
     expect(loadLocalFile).not.toHaveBeenCalled()
-    // Nothing was stored, so there is nothing for a recent to reopen.
-    expect(addRecentFileEntry).not.toHaveBeenCalled()
+    expect(navigateToModel).not.toHaveBeenCalled()
+    expect(mockSetIsDialogDisplayed).toHaveBeenCalledWith(false)
   })
 
   it('falls back to the storage id as display name when the picker gives no filename', async () => {

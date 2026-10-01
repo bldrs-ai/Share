@@ -2,9 +2,9 @@ import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from './dragAndD
 import {guessTypeFromFile} from '../Filetype'
 import {saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
+import {NO_OPFS_LOCAL_FILE_ALERT} from '../OPFS/messages'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {disablePageReloadApprovalCheck} from './event'
-import {saveDnDFileToOpfsFallback} from './loader'
 import {trackAlert} from './alertTracking'
 import debug, {WARN} from './debug'
 
@@ -15,7 +15,6 @@ jest.mock('../OPFS/utils')
 jest.mock('../connections/persistence')
 jest.mock('../loader/gzipEnvelope')
 jest.mock('./event')
-jest.mock('./loader')
 jest.mock('./alertTracking')
 jest.mock('./debug')
 
@@ -167,15 +166,11 @@ describe('dragAndDrop utility', () => {
       expect(mockDebug.log).toHaveBeenCalledWith('handleFileDrop: navigate to:', mockFileName)
     })
 
-    it('should handle successful file upload with OPFS fallback', async () => {
-      const mockFile = {name: 'test.ifc', type: 'application/octet-stream', size: 1024}
-      const mockType = 'ifc'
-      const mockFileName = 'generated-filename.ifc'
-      mockEvent.dataTransfer.files = [mockFile]
-      guessTypeFromFile.mockResolvedValue(mockType)
-      saveDnDFileToOpfsFallback.mockImplementation((file, onWritten) => {
-        onWritten(mockFileName)
-      })
+    // Without OPFS there is nowhere for the file to survive navigateToModel's
+    // full page load, so say so rather than navigate to a load that fails (#1906).
+    it('alerts and stops, storing nothing, when OPFS is unavailable', async () => {
+      mockEvent.dataTransfer.files = [{name: 'test.ifc', type: 'application/octet-stream', size: 1024}]
+      guessTypeFromFile.mockResolvedValue('ifc')
 
       await handleFileDrop(
         mockEvent,
@@ -187,11 +182,13 @@ describe('dragAndDrop utility', () => {
         mockOnError,
       )
 
-      expect(guessTypeFromFile).toHaveBeenCalledWith(mockFile)
-      expect(saveDnDFileToOpfsFallback).toHaveBeenCalledWith(mockFile, expect.any(Function))
-      expect(disablePageReloadApprovalCheck).toHaveBeenCalled()
-      expect(mockNavigate).toHaveBeenCalledWith('/prefix/v/new/generated-filename.ifc')
-      expect(mockOnSuccess).toHaveBeenCalledWith(mockFileName)
+      expect(mockSetAlert).toHaveBeenCalledWith(NO_OPFS_LOCAL_FILE_ALERT)
+      expect(trackAlert).toHaveBeenCalledWith(NO_OPFS_LOCAL_FILE_ALERT)
+      expect(mockOnError).toHaveBeenCalledWith(NO_OPFS_LOCAL_FILE_ALERT)
+      expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
+      expect(mockNavigate).not.toHaveBeenCalled()
+      expect(addRecentFileEntry).not.toHaveBeenCalled()
+      expect(mockOnSuccess).not.toHaveBeenCalled()
     })
 
     it('records the file in recent history after successful drop', async () => {
@@ -250,20 +247,6 @@ describe('dragAndDrop utility', () => {
       expect(addRecentFileEntry).toHaveBeenCalledWith(
         expect.objectContaining({lastModifiedUtc: null}),
       )
-    })
-
-    // Without OPFS nothing is stored, so the recent could never reopen.
-    it('does not record a recent entry when OPFS is unavailable', async () => {
-      mockEvent.dataTransfer.files = [{name: 'model.ifc', type: 'application/octet-stream', size: 512}]
-      guessTypeFromFile.mockResolvedValue('ifc')
-      saveDnDFileToOpfsFallback.mockImplementation((file, onWritten) => onWritten('blob-uuid'))
-
-      await handleFileDrop(mockEvent, mockNavigate, '/prefix', false, mockSetAlert, mockOnSuccess)
-
-      expect(mockNavigate).toHaveBeenCalledWith('/prefix/v/new/blob-uuid')
-      expect(mockOnSuccess).toHaveBeenCalledWith('blob-uuid')
-      expect(addRecentFileEntry).not.toHaveBeenCalled()
-      expect(setPendingModelNameUpdate).not.toHaveBeenCalled()
     })
 
     it('does not record recent entry when file type is unknown', async () => {

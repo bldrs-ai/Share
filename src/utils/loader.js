@@ -5,7 +5,6 @@ import {
   opfsWriteModel,
 } from '../OPFS/OPFSService.js'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
-import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 
 
@@ -43,42 +42,6 @@ function holdUntilPicked(fileInput) {
   }
   fileInput.addEventListener('change', release)
   fileInput.addEventListener('cancel', release)
-}
-
-
-/**
- * Upload a local file for display.
- *
- * @param {Function} onLoad Called with (storageId, lastModifiedUtc, originalName)
- * @param {boolean} testingSkipAutoRemove
- */
-export function loadLocalFileFallback(onLoad, testingSkipAutoRemove = false) {
-  const viewerContainer = document.getElementById('viewer-container')
-  const fileInput = document.createElement('input')
-  fileInput.setAttribute('type', 'file')
-  fileInput.addEventListener(
-    'change',
-    (event) => {
-      debug().log('loader#loadLocalFile#event:', event)
-      const file = event.target.files[0]
-      const lastModifiedUtc = file.lastModified
-      const objectUrl = URL.createObjectURL(file)
-      debug().log('loader#loadLocalFile#event: url: ', objectUrl)
-      const parts = objectUrl.split('/')
-      const tmpUrl = parts[parts.length - 1]
-      URL.revokeObjectURL(objectUrl)
-      if (onLoad) {
-        onLoad(tmpUrl, lastModifiedUtc, file.name)
-      }
-    },
-    false,
-  )
-  viewerContainer.appendChild(fileInput)
-  holdUntilPicked(fileInput)
-  fileInput.click()
-  if (!testingSkipAutoRemove) {
-    viewerContainer.removeChild(fileInput)
-  }
 }
 
 
@@ -202,21 +165,4 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
   if (!testingSkipAutoRemove) {
     viewerContainer.removeChild(fileInput)
   }
-}
-
-
-/**
- * Upload a local file for display from Drag And Drop.
- *
- * @param {File} file
- * @param {Function} callback Not optional since all known flows require it.
- */
-export function saveDnDFileToOpfsFallback(file, callback) {
-  assertDefined(file, callback)
-  const objectUrl = URL.createObjectURL(file)
-  debug().log('utils/loader#saveDnDFileToOpfsAndNavFallback: url: ', objectUrl)
-  const parts = objectUrl.split('/')
-  const tmpUrl = parts[parts.length - 1]
-  URL.revokeObjectURL(objectUrl)
-  callback(tmpUrl)
 }

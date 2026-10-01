@@ -29,12 +29,11 @@ jest.mock('../store/useStore', () => {
 jest.mock('react-router-dom', () => ({useNavigate: jest.fn()}))
 jest.mock('../Filetype', () => ({guessTypeFromFile: jest.fn()}))
 jest.mock('../OPFS/utils', () => ({saveDnDFileToOpfs: jest.fn()}))
-jest.mock('../utils/loader', () => ({saveDnDFileToOpfsFallback: jest.fn()}))
 
 // We'll import the real dependencies from the mocks above
 import {guessTypeFromFile} from '../Filetype'
 import {saveDnDFileToOpfs} from '../OPFS/utils'
-import {saveDnDFileToOpfsFallback} from '../utils/loader'
+import {NO_OPFS_LOCAL_FILE_ALERT} from '../OPFS/messages'
 
 
 describe('ViewerContainer', () => {
@@ -183,16 +182,14 @@ describe('ViewerContainer', () => {
     })
   })
 
-  test('saves via fallback if recognized type and isOpfsAvailable = false', async () => {
-    // We'll temporarily make the store return "false" for isOpfsAvailable
-    // Easiest approach is to override the mock in the middle of the test
-    // or we can do a specialized mock implementation.
-    // We'll do a quick override:
+  // Without OPFS the drop can't survive navigateToModel's full page load
+  // (#1906), so the user gets an explanation instead of a failed load.
+  test('alerts instead of opening when isOpfsAvailable = false', async () => {
     useStore.mockImplementation((selector) => {
       const state = {
         appPrefix: '/app',
         isModelReady: true,
-        isOpfsAvailable: false, // now false
+        isOpfsAvailable: false,
         vh: 800,
         setAlert: mockSetAlert,
       }
@@ -200,9 +197,6 @@ describe('ViewerContainer', () => {
     })
 
     guessTypeFromFile.mockResolvedValueOnce('my-recognized-type')
-    saveDnDFileToOpfsFallback.mockImplementation((_file, onWritten) => {
-      onWritten('myFallbackFileName')
-    })
 
     render(<ViewerContainer/>)
     const dropzone = screen.getByTestId('cadview-dropzone')
@@ -216,9 +210,10 @@ describe('ViewerContainer', () => {
     dropzone.dispatchEvent(mockEvent)
 
     await waitFor(() => {
-      expect(saveDnDFileToOpfsFallback).toHaveBeenCalledTimes(1)
-      expect(mockNavigate).toHaveBeenCalledWith('/app/v/new/myFallbackFileName')
+      expect(mockSetAlert).toHaveBeenCalledWith(NO_OPFS_LOCAL_FILE_ALERT)
     })
+    expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
+    expect(mockNavigate).not.toHaveBeenCalled()
   })
 })
 
