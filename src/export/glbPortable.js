@@ -213,8 +213,9 @@ export function rewriteGlbPortable(glbBytes) {
   // bytes in place and the caller's buffer is not ours to change.
   const workingBin = bin ? bin.slice() : bin
   const splits = splitCollapsedNodes(json, workingBin, tables)
-  const instances = collectInstances(json, workingBin, tables, splits)
-  const {nodes, roots, stats} = buildPortableNodes(instances, spatialTree)
+  const joinsEmptyPath = hasSingleEmptyPathNode(spatialTree)
+  const instances = collectInstances(json, workingBin, tables, splits, joinsEmptyPath)
+  const {nodes, roots, stats} = buildPortableNodes(instances, spatialTree, joinsEmptyPath)
 
   const droppedAccessors = removeInstancingAccessors(json)
   json.nodes = nodes
@@ -431,10 +432,11 @@ function pad4(n) {
  * @param {?Array<object>} tables Parsed `BLDRS_instance_tables` nodes
  * @param {Map<number, Array<object>>} splits node index → `{mesh, firstRow,
  *   rowCount}` per element, from `splitCollapsedNodes`
+ * @param {boolean} joinsEmptyPath From `hasSingleEmptyPathNode`
  * @return {Array<object>} `{key, mesh, tableNode, instance, rowCount,
  *   translation, rotation, scale}`, one per instance
  */
-function collectInstances(json, bin, tables, splits) {
+function collectInstances(json, bin, tables, splits, joinsEmptyPath) {
   const instances = []
   for (const [nodeIndex, node] of json.nodes.entries()) {
     const tableIndex = node.extras.bldrsTableNode
@@ -446,7 +448,7 @@ function collectInstances(json, bin, tables, splits) {
         const keyed = splits.has(nodeIndex) ? table : null
         for (const {mesh, firstRow, rowCount} of pieces) {
           instances.push({
-            key: keyed ? elementKeyOf(keyed.parents[firstRow], keyed.occurrencePaths?.[firstRow]) : null,
+            key: keyed ? elementKeyOf(keyed.parents[firstRow], keyed.occurrencePaths?.[firstRow], joinsEmptyPath) : null,
             mesh,
             tableNode: tableIndex,
             instance: firstRow,
@@ -472,7 +474,7 @@ function collectInstances(json, bin, tables, splits) {
     const keyed = table && table.count === count ? table : null
     for (let j = 0; j < count; j++) {
       instances.push({
-        key: keyed ? elementKeyOf(keyed.parents[j], keyed.occurrencePaths?.[j]) : null,
+        key: keyed ? elementKeyOf(keyed.parents[j], keyed.occurrencePaths?.[j], joinsEmptyPath) : null,
         mesh: node.mesh,
         tableNode: tableIndex,
         instance: j,
@@ -884,9 +886,10 @@ function writeIndex(dv, at, bytes, value) {
  *
  * @param {Array<object>} instances From `collectInstances`
  * @param {?object} spatialTree The `BLDRS_spatial_tree` payload's root node
+ * @param {boolean} joinsEmptyPath From `hasSingleEmptyPathNode`
  * @return {{nodes: Array<object>, roots: Array<number>, stats: object}}
  */
-function buildPortableNodes(instances, spatialTree) {
+function buildPortableNodes(instances, spatialTree, joinsEmptyPath) {
   const byKey = new Map()
   for (const instance of instances) {
     if (instance.key === null) {
@@ -914,7 +917,7 @@ function buildPortableNodes(instances, spatialTree) {
         children.push(emit(child))
       }
     }
-    const key = elementKeyOf(treeNode.expressID, treeNode.occurrencePath)
+    const key = elementKeyOf(treeNode.expressID, treeNode.occurrencePath, joinsEmptyPath)
     const mine = byKey.get(key) || []
     // Consumed, so a tree that names the same key twice — a STEP part type
     // reused without an occurrence path to tell the copies apart — cannot
@@ -1088,14 +1091,73 @@ function hasAuthoredName(treeNode) {
 
 
 /**
+ * Whether the tree has exactly ONE node whose occurrence path is empty — the
+ * only case in which an empty path can be a join key (#1901).
+ *
+ * An empty path means "no NAUO above this", which Conway stamps on the root of
+ * a file's product structure, and on that root's own geometry. In a file with
+ * one top-level product that is exactly one tree node, and every row with an
+ * empty path belongs to it. A file with several disconnected top-level
+ * products is different: Conway gives EACH genuine root `occurrencePath: []`
+ * and wraps them in a synthetic `Model` node that carries `[]` too. Then the
+ * empty path names no one part, and the one thing that would tell the roots
+ * apart — which `product_definition` a row's `product_definition_shape` parent
+ * belongs to — is in neither the tree, the tables, nor the instance map
+ * (Conway keeps it internally and never serialises it). Joining on `''` there
+ * would hand the first root every root's geometry and export the rest empty,
+ * so those files keep the scalar-id join, which finds nothing and leaves the
+ * rows under `Unassigned`: unnamed, but never mislabelled.
+ *
+ * @param {?object} spatialTree The `BLDRS_spatial_tree` payload's root node
+ * @return {boolean}
+ */
+function hasSingleEmptyPathNode(spatialTree) {
+  let count = 0
+  const stack = spatialTree && spatialTree.expressID !== undefined ? [spatialTree] : []
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (Array.isArray(node.occurrencePath) && node.occurrencePath.length === 0) {
+      count++
+    }
+    for (const child of node.children || []) {
+      if (child && child.expressID !== undefined) {
+        stack.push(child)
+      }
+    }
+  }
+  return count === 1
+}
+
+
+/**
  * The key an instance and a tree node join on.
  *
+ * A STEP element is keyed by its occurrence path, which Share selects by too.
+ * The EMPTY path names the root part's own geometry, and it joins only when
+ * `joinsEmptyPath` says the tree has exactly one such node
+ * (`hasSingleEmptyPathNode`). It must not fall back to the scalar id the way
+ * a missing path does, because the two sides of the join carry DIFFERENT ids
+ * for it: a row's `parents[j]` is the geometry's owner, the
+ * `product_definition_shape`, while the tree root's `expressID` is the
+ * `product_definition` that shape describes. On a part with no assembly
+ * structure (every row's path is `[]`) the scalar keys never meet, and the
+ * whole part lands under `Unassigned` (#1901). Only an IFC element, a STEP
+ * table that carries no paths at all, or an empty path in a file with several
+ * roots, has no usable path and joins on the scalar id.
+ *
+ * Every other consumer of an occurrence path treats `[]` as "no occurrence"
+ * (`utils/occurrencePaths.js`, `ShareViewer#getOccurrenceInstanceIds`): that
+ * is right for picking, which names an occurrence, and wrong for this join,
+ * which names an element.
+ *
  * @param {number} expressID Parent IFC product expressID
- * @param {?Array<number>} occurrencePath STEP NAUO chain, absent for IFC
+ * @param {?Array<number>} occurrencePath STEP NAUO chain, `[]` for the root
+ *   part's own geometry, absent for IFC
+ * @param {boolean} joinsEmptyPath Whether `[]` is a key in this file
  * @return {string|number}
  */
-function elementKeyOf(expressID, occurrencePath) {
-  return Array.isArray(occurrencePath) && occurrencePath.length > 0 ?
+function elementKeyOf(expressID, occurrencePath, joinsEmptyPath) {
+  return Array.isArray(occurrencePath) && (occurrencePath.length > 0 || joinsEmptyPath) ?
     occurrencePath.join('/') :
     expressID
 }
