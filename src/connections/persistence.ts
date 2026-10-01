@@ -252,6 +252,38 @@ export function addRecentFileEntry(entry: RecentFileEntry): void {
 
 
 /**
+ * Remove the entries of one source whose ids are listed. Re-reads the store
+ * at call time rather than taking a snapshot, so an entry added while the
+ * caller was off doing async work (e.g. the OPFS existence sweep in
+ * `pruneLocalRecents.js`) is not clobbered.
+ *
+ * @param source The source the ids belong to.
+ * @param ids Entry ids to drop.
+ */
+export function removeRecentFileEntries(source: RecentFileSource, ids: string[]): void {
+  if (ids.length === 0) {
+    return
+  }
+  const drop = new Set(ids)
+  const store = loadStore()
+  store.files = store.files.filter((f) => !(f.source === source && drop.has(f.id)))
+  saveStore(store)
+}
+
+
+/**
+ * Remove every entry of one source.
+ *
+ * @param source The source to clear.
+ */
+export function clearRecentFilesBySource(source: RecentFileSource): void {
+  const store = loadStore()
+  store.files = store.files.filter((f) => f.source !== source)
+  saveStore(store)
+}
+
+
+/**
  * Update the modelTitle of a recent entry by id.
  * No-op if no matching entry exists.
  *

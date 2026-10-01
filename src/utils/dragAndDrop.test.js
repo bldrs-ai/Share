@@ -252,6 +252,20 @@ describe('dragAndDrop utility', () => {
       )
     })
 
+    // Without OPFS nothing is stored, so the recent could never reopen.
+    it('does not record a recent entry when OPFS is unavailable', async () => {
+      mockEvent.dataTransfer.files = [{name: 'model.ifc', type: 'application/octet-stream', size: 512}]
+      guessTypeFromFile.mockResolvedValue('ifc')
+      saveDnDFileToOpfsFallback.mockImplementation((file, onWritten) => onWritten('blob-uuid'))
+
+      await handleFileDrop(mockEvent, mockNavigate, '/prefix', false, mockSetAlert, mockOnSuccess)
+
+      expect(mockNavigate).toHaveBeenCalledWith('/prefix/v/new/blob-uuid')
+      expect(mockOnSuccess).toHaveBeenCalledWith('blob-uuid')
+      expect(addRecentFileEntry).not.toHaveBeenCalled()
+      expect(setPendingModelNameUpdate).not.toHaveBeenCalled()
+    })
+
     it('does not record recent entry when file type is unknown', async () => {
       mockEvent.dataTransfer.files = [{name: 'file.xyz', type: '', size: 100}]
       guessTypeFromFile.mockResolvedValue(null)

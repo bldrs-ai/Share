@@ -8,6 +8,7 @@ import {
   loadRecentFilesBySource,
   setPendingModelNameUpdate,
 } from '../../connections/persistence'
+import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
 import {loadLocalFileFallback} from '../../utils/loader'
 import {navigateToModel} from '../../utils/navigate'
@@ -17,6 +18,10 @@ import OpenModelDialog from './OpenModelDialog'
 
 jest.mock('../../Auth0/Auth0Proxy')
 jest.mock('../../connections/persistence')
+jest.mock('../../connections/pruneLocalRecents', () => ({
+  __esModule: true,
+  default: jest.fn().mockResolvedValue([]),
+}))
 jest.mock('../../connections/google-drive/index', () => {})
 jest.mock('../../connections/github/index', () => {})
 jest.mock('../../connections/registry')
@@ -361,6 +366,24 @@ describe('OpenModelDialog — Local tab', () => {
     await waitFor(() => {
       expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
     })
+  })
+
+  it('drops a recent whose upload the OPFS sweep finds missing', async () => {
+    const stale = {id: 'stale.ifc', source: 'local', name: 'gone.ifc'}
+    const live = {id: STORAGE_ID, source: 'local', name: 'box.ifc'}
+    // The dialog renders what's stored, then re-reads after the sweep
+    // removes something — model that as the store shrinking.
+    let stored = [stale, live]
+    pruneMissingLocalRecents.mockImplementationOnce(() => {
+      stored = [live]
+      return Promise.resolve(['stale.ifc'])
+    })
+    loadRecentFilesBySource.mockImplementation((source) => source === 'local' ? stored : [])
+    render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
+    await waitFor(() => {
+      expect(screen.queryByText('gone.ifc')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('box.ifc')).toBeInTheDocument()
   })
 
   it('shows the original filename in the recents row', () => {

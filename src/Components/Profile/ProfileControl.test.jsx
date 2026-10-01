@@ -1,9 +1,19 @@
 import React from 'react'
-import {act, fireEvent, render, within} from '@testing-library/react'
+import {act, fireEvent, render, waitFor, within} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
+import {clearOPFSCache} from '../../OPFS/utils'
 import {RouteThemeCtx} from '../../Share.fixture'
+import {addRecentFileEntry, loadAllRecentFiles} from '../../connections/persistence'
 import useStore from '../../store/useStore'
+import {reloadAfterCacheClear} from '../../utils/navigate'
 import LoginMenu from './ProfileControl'
+
+
+jest.mock('../../OPFS/utils', () => ({clearOPFSCache: jest.fn()}))
+jest.mock('../../utils/navigate', () => ({
+  ...jest.requireActual('../../utils/navigate'),
+  reloadAfterCacheClear: jest.fn(),
+}))
 
 
 describe('ProfileControl', () => {
@@ -19,6 +29,40 @@ describe('ProfileControl', () => {
     expect(Login).toBeInTheDocument()
     expect(JoinGithub).toBeInTheDocument()
     expect(BldrsWiki).toBeInTheDocument()
+  })
+
+
+  describe('Clear Local Cache', () => {
+    beforeEach(() => {
+      localStorage.clear()
+      addRecentFileEntry({id: 'up.ifc', source: 'local', name: 'up.ifc', lastModifiedUtc: null})
+      addRecentFileEntry({id: '/share/v/gh/o/r/main/m.ifc', source: 'github', name: 'm.ifc', lastModifiedUtc: null})
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    })
+
+    /** Open the profile menu and click Clear Local Cache. */
+    async function clickClearLocalCache() {
+      const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+      fireEvent.click(await findByTestId('control-button-profile'))
+      fireEvent.click(await findByTestId('clear-local-cache'))
+      await waitFor(() => expect(reloadAfterCacheClear).toHaveBeenCalled())
+    }
+
+    // Uploads live only in OPFS; their recents would otherwise survive the
+    // wipe and fail with "Folder <id> not found" when clicked.
+    it('drops local recents along with OPFS, keeping other sources', async () => {
+      clearOPFSCache.mockResolvedValue(true)
+      await clickClearLocalCache()
+      expect(loadAllRecentFiles().map((f) => f.source)).toEqual(['github'])
+    })
+
+    it('keeps local recents when the OPFS clear failed', async () => {
+      clearOPFSCache.mockRejectedValue(new Error('busy'))
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      await clickClearLocalCache()
+      expect(loadAllRecentFiles().map((f) => f.source)).toEqual(['github', 'local'])
+      console.error.mockRestore()
+    })
   })
 
 

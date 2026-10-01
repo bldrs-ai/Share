@@ -6,6 +6,7 @@ import {
   downloadToOPFS,
   downloadModel,
   doesFileExistInOPFS,
+  doesUploadExistInOPFS,
   deleteFileFromOPFS,
   checkOPFSAvailability,
   readModelByPathFromOPFS,
@@ -740,6 +741,52 @@ describe('OPFS Test Suite', () => {
 
       await expect(write).resolves.toBe(true)
       expect(sharedWorker.listenerCount()).toBe(0)
+    })
+  })
+
+  describe('doesUploadExistInOPFS', () => {
+    const originalStorage = global.navigator.storage
+
+    afterEach(() => {
+      global.navigator.storage = originalStorage
+    })
+
+    /**
+     * @param {Function} getDirectoryHandle Root's getDirectoryHandle
+     */
+    function mockRoot(getDirectoryHandle) {
+      global.navigator.storage = {getDirectory: jest.fn().mockResolvedValue({getDirectoryHandle})}
+    }
+
+    const domError = (name) => Object.assign(new Error(name), {name})
+
+    it('is true when the <id>/<id> file is there', async () => {
+      const getFileHandle = jest.fn().mockResolvedValue({})
+      const getDirectoryHandle = jest.fn().mockResolvedValue({getFileHandle})
+      mockRoot(getDirectoryHandle)
+      expect(await doesUploadExistInOPFS('a.ifc')).toBe(true)
+      expect(getDirectoryHandle).toHaveBeenCalledWith('a.ifc')
+      expect(getFileHandle).toHaveBeenCalledWith('a.ifc')
+    })
+
+    it('is false when the folder is missing', async () => {
+      mockRoot(jest.fn().mockRejectedValue(domError('NotFoundError')))
+      expect(await doesUploadExistInOPFS('a.ifc')).toBe(false)
+    })
+
+    it('is false when the folder is there but the file is not', async () => {
+      mockRoot(jest.fn().mockResolvedValue({getFileHandle: jest.fn().mockRejectedValue(domError('NotFoundError'))}))
+      expect(await doesUploadExistInOPFS('a.ifc')).toBe(false)
+    })
+
+    it('is false for an id that is not a legal entry name', async () => {
+      mockRoot(jest.fn().mockRejectedValue(new TypeError('Name is not allowed.')))
+      expect(await doesUploadExistInOPFS('a/b.ifc')).toBe(false)
+    })
+
+    it('rejects when it could not look, rather than answering false', async () => {
+      mockRoot(jest.fn().mockRejectedValue(domError('SecurityError')))
+      await expect(doesUploadExistInOPFS('a.ifc')).rejects.toThrow('SecurityError')
     })
   })
 })

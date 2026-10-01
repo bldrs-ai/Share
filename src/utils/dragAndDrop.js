@@ -108,17 +108,21 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     disablePageReloadApprovalCheck()
     debug().log('handleFileDrop: navigate to:', fileName)
     navigateToModel(key, navigate)
-    addRecentFileEntry({
-      id: fileName,
-      source: 'local',
-      name: uploadedFile.name,
-      // Epoch ms, matching RecentFileEntry and RecentFilesList's
-      // `Date.now() - utcMs` arithmetic — an ISO string here rendered
-      // as "NaNm ago" in the Last-modified column (#1682).
-      lastModifiedUtc: uploadedFile.lastModified || null,
-      sharePath: key,
-    })
-    setPendingModelNameUpdate(fileName)
+    // Without OPFS nothing was stored — `fileName` is a revoked blob URL's
+    // id — so a recent would point at nothing once this page is gone.
+    if (isOpfsAvailable) {
+      addRecentFileEntry({
+        id: fileName,
+        source: 'local',
+        name: uploadedFile.name,
+        // Epoch ms, matching RecentFileEntry and RecentFilesList's
+        // `Date.now() - utcMs` arithmetic — an ISO string here rendered
+        // as "NaNm ago" in the Last-modified column (#1682).
+        lastModifiedUtc: uploadedFile.lastModified || null,
+        sharePath: key,
+      })
+      setPendingModelNameUpdate(fileName)
+    }
     if (onSuccess) {
       onSuccess(fileName)
     }

@@ -546,6 +546,44 @@ export function saveDnDFileToOpfs(file, type, callback) {
 }
 
 /**
+ * Whether a local upload is still in OPFS, i.e. whether `/v/new/<storageId>`
+ * can load. Mirrors the layout `OPFS.worker.js` `writeModelToOPFS` writes and
+ * `readModelFromOPFS` reads: a root-level folder named `storageId` holding a
+ * file of the same name.
+ *
+ * Runs on the main thread, not through the worker: directory and file
+ * handle lookups are async-only APIs available outside workers (only sync
+ * access handles are worker-bound), and going through the shared worker
+ * would queue this cheap probe behind whatever it is busy with — a
+ * multi-hundred-MB GLB cache write can hold it for seconds.
+ *
+ * Only answers false when OPFS says the entry is definitively absent.
+ * `NotFoundError` / `TypeMismatchError` are the missing cases; `TypeError`
+ * is what an id that is not a legal entry name (e.g. one with a `/`) throws,
+ * and such an id can never load either. Anything else — OPFS itself
+ * unavailable, a `SecurityError` — rejects, so a caller deciding whether to
+ * delete user data can tell "gone" from "couldn't look".
+ *
+ * @param {string} storageId `<blob-uuid>.<ext>`
+ * @return {Promise<boolean>}
+ */
+export async function doesUploadExistInOPFS(storageId) {
+  const root = await navigator.storage.getDirectory()
+  try {
+    const folder = await root.getDirectoryHandle(storageId)
+    await folder.getFileHandle(storageId)
+    return true
+  } catch (err) {
+    if (err instanceof TypeError ||
+        err?.name === 'NotFoundError' ||
+        err?.name === 'TypeMismatchError') {
+      return false
+    }
+    throw err
+  }
+}
+
+/**
  * Checks if OPFS is available on the browser
  * // TODO: [https://bugs.webkit.org/show_bug.cgi?id=251460].
  * And we should also enumerate what methods we use and check

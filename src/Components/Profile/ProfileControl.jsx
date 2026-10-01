@@ -36,6 +36,7 @@ import {
   CleaningServicesOutlined as CleaningServicesOutlinedIcon,
 } from '@mui/icons-material'
 import {clearOPFSCache} from '../../OPFS/utils'
+import {clearRecentFilesBySource} from '../../connections/persistence'
 import {reloadAfterCacheClear} from '../../utils/navigate'
 
 
@@ -312,6 +313,10 @@ export default function ProfileControl() {
             onCloseMenu()
             try {
               await clearOPFSCache()
+              // Uploads exist only in OPFS, so their recents now point at
+              // nothing. Only on success: if the clear failed the uploads
+              // may still be there (the startup sweep catches a partial).
+              clearRecentFilesBySource('local')
             } catch (err) {
               console.error('Clear OPFS cache failed (reloading anyway)', err)
               captureException(err)

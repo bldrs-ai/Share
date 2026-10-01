@@ -11,6 +11,7 @@ import {
   loadRecentFilesBySource,
   setPendingModelNameUpdate,
 } from '../../connections/persistence'
+import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToModel} from '../../utils/navigate'
@@ -70,12 +71,28 @@ export default function OpenModelDialog({
   const [githubBrowserConnection, setGithubBrowserConnection] = useState(null)
 
   useEffect(() => {
-    if (isDialogDisplayed) {
-      setLocalRecents(loadRecentFilesBySource('local'))
-      setGithubRecents(loadRecentFilesBySource('github'))
-      setShowGithubBrowser(false)
-      setGithubBrowserToken(null)
-      setGithubBrowserConnection(null)
+    if (!isDialogDisplayed) {
+      return undefined
+    }
+    setLocalRecents(loadRecentFilesBySource('local'))
+    setGithubRecents(loadRecentFilesBySource('github'))
+    setShowGithubBrowser(false)
+    setGithubBrowserToken(null)
+    setGithubBrowserConnection(null)
+    // Show what's stored right away, then drop any local row whose OPFS
+    // upload is gone (see pruneLocalRecents.js for how they drift apart).
+    // Startup already ran this sweep; re-running here covers a dialog
+    // opened before that finished, and costs a few handle lookups.
+    let isCurrent = true
+    pruneMissingLocalRecents()
+      .then((removed) => {
+        if (isCurrent && removed.length > 0) {
+          setLocalRecents(loadRecentFilesBySource('local'))
+        }
+      })
+      .catch(() => {/* the sweep keeps entries it can't check; nothing to do */})
+    return () => {
+      isCurrent = false
     }
   }, [isDialogDisplayed])
 
