@@ -284,6 +284,11 @@ describe('ExportSection', () => {
     // Not a promise about EVERY viewer: a codec the sweep auto-selects still
     // needs its decoder wherever the file is opened (codex on #1904).
     expect(help).not.toHaveTextContent(/any glTF viewer/)
+    // The row's own caption made the same everywhere-promise ("opens
+    // anywhere"); it now names what Portable changes, like the line above.
+    const row = getByTestId('export-portable').closest('.MuiStack-root')
+    expect(row).toHaveTextContent('named nodes, no instancing')
+    expect(row).not.toHaveTextContent(/anywhere/)
     expect(help).toHaveTextContent('Turn off to keep instancing')
     // Under the toggle's row, not inside it: the row keeps its one-phrase
     // caption, and the trade-off gets the full width of the dialog.

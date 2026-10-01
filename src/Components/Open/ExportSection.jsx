@@ -464,7 +464,7 @@ export default function ExportSection() {
       >
         <Box>
           <Typography variant='body2'>Portable</Typography>
-          <Typography variant='caption' color='text.secondary'>named nodes, opens anywhere</Typography>
+          <Typography variant='caption' color='text.secondary'>named nodes, no instancing</Typography>
         </Box>
         <Toggle
           onChange={() => setIsPortable(!isPortable)}
