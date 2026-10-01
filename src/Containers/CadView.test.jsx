@@ -622,7 +622,7 @@ describe('CadView', () => {
     expect(captureExceptionSpy).not.toHaveBeenCalledWith(oomErr)
   })
 
-  it('sets an unsupportedSchema alert, and does not report to Sentry, when conway refuses an IFC4X3 model', async () => {
+  it('alerts on a refused IFC4X3 model, and counts it in Sentry as info rather than an error', async () => {
     const schemaErr = new UnsupportedSchemaError('IFC4X3_RC2')
     jest.spyOn(Loader, 'load').mockImplementation(() => {
       throw schemaErr
@@ -630,6 +630,7 @@ describe('CadView', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {})
     const Sentry = require('@sentry/react')
     const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const captureMessageSpy = jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
@@ -643,6 +644,39 @@ describe('CadView', () => {
     // A deliberate schema refusal (bldrs-ai/conway#713) is a documented limit
     // already explained to the user, not a defect — same reasoning as OOM.
     expect(captureExceptionSpy).not.toHaveBeenCalledWith(schemaErr)
+    // …but it is counted, to rank the IFC 4.3 work (Share#1879).
+    expect(captureMessageSpy).toHaveBeenCalledWith(
+      'Unsupported IFC schema: IFC4X3_RC2',
+      expect.objectContaining({level: 'info', fingerprint: ['unsupported-schema', 'IFC4X3_RC2']}))
+  })
+
+  // The auth-state effect re-runs onViewer for the same route after a
+  // refusal (isViewerLoaded stays false on failure). Each re-run is refused
+  // again, but must not be counted again: the counts are the demand signal
+  // (codex review of Share#1899).
+  it('counts a refused model once, even when an auth change reloads it', async () => {
+    const schemaErr = new UnsupportedSchemaError('IFC4X3_RC2')
+    const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw schemaErr
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const captureMessageSpy = jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(result.current.alert?.type).toBe('unsupportedSchema'))
+    const loadsBefore = loadSpy.mock.calls.length
+    await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+    await actAsyncFlush()
+    // The reload really happened, so the single count below is the dedupe
+    // at work and not a reload that never ran.
+    await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+    const refusalReports = captureMessageSpy.mock.calls
+      .filter(([title]) => title === 'Unsupported IFC schema: IFC4X3_RC2')
+    expect(refusalReports).toHaveLength(1)
   })
 
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing

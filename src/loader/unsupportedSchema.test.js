@@ -1,9 +1,19 @@
+import {captureMessage} from '@sentry/react'
+import {loadFailureCaptureContext} from './loadProgress'
 import {
   UnsupportedSchemaError,
   beginOpenAttempt,
   conwayRefusedSchema,
+  modelSourceOf,
   openModelFailure,
+  reportUnsupportedSchema,
 } from './unsupportedSchema'
+
+
+jest.mock('@sentry/react', () => ({captureMessage: jest.fn()}))
+jest.mock('./loadProgress', () => ({
+  loadFailureCaptureContext: jest.fn(() => ({tags: {}, contexts: {}})),
+}))
 
 
 /**
@@ -141,5 +151,82 @@ describe('loader/unsupportedSchema — conway refusal signal', () => {
     expect(conwayRefusedSchema({getStatistics: () => {
       throw new Error('boom')
     }}, {id: 7, before: undefined})).toBe(false)
+  })
+})
+
+
+describe('loader/unsupportedSchema — size of the refused file', () => {
+  it('records the source size on the error, for every source shape', async () => {
+    const data = bytes(part21('IFC4X3_RC2'))
+    expect((await openModelFailure(-1, data, true)).sizeBytes).toBe(data.byteLength)
+    expect((await openModelFailure(-1, data.buffer, true)).sizeBytes).toBe(data.byteLength)
+    expect((await openModelFailure(-1, new Blob([data]), true)).sizeBytes).toBe(data.byteLength)
+  })
+})
+
+
+describe('loader/unsupportedSchema — reportUnsupportedSchema (Share#1879)', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  // Demand, not a defect: an info message grouped per schema spelling, so
+  // the Sentry issue list reads as a ranking of the 4.3 flavours users hit.
+  it('counts a refusal as an info message, one issue per schema, with source and size tags', () => {
+    const KIB = 1024
+    const MB = KIB * KIB
+    const loadContext = {load: {phase: 'dataParse', report: 'Share v…'}}
+    loadFailureCaptureContext.mockReturnValueOnce({tags: {'load.phase': 'dataParse'}, contexts: loadContext})
+    reportUnsupportedSchema(
+      new UnsupportedSchemaError('IFC4X3_RC2', 3 * MB),
+      {kind: 'provider', provider: 'github'})
+    expect(captureMessage).toHaveBeenCalledTimes(1)
+    // The load context rides on this event's own capture context, not on
+    // the session scope (codex review of Share#1899).
+    expect(captureMessage).toHaveBeenCalledWith('Unsupported IFC schema: IFC4X3_RC2', {
+      level: 'info',
+      fingerprint: ['unsupported-schema', 'IFC4X3_RC2'],
+      tags: {'load.phase': 'dataParse', 'schema': 'IFC4X3_RC2', 'model_source': 'github', 'model_size_mb': 3},
+      contexts: loadContext,
+    })
+  })
+
+  it('omits the size tag when the size is unknown', () => {
+    reportUnsupportedSchema(new UnsupportedSchemaError('IFC4X3_ADD2'), null)
+    expect(captureMessage.mock.calls[0][1].tags).toEqual({schema: 'IFC4X3_ADD2', model_source: 'unknown'})
+  })
+
+  it('never throws into the load path, even if Sentry does', () => {
+    captureMessage.mockImplementationOnce(() => {
+      throw new Error('sentry down')
+    })
+    expect(() => reportUnsupportedSchema(new UnsupportedSchemaError('IFC4X3'), null)).not.toThrow()
+  })
+})
+
+
+describe('loader/unsupportedSchema — modelSourceOf', () => {
+  it('classifies each route kind', () => {
+    expect(modelSourceOf({kind: 'file', isUploadedFile: true})).toBe('upload')
+    expect(modelSourceOf({kind: 'file', isUploadedFile: false})).toBe('hosted')
+    expect(modelSourceOf({
+      kind: 'file', isUploadedFile: false, originalUrl: new URL('https://bldrs.ai/share/v/p/index.ifc'),
+    })).toBe('hosted')
+    expect(modelSourceOf({kind: 'provider', provider: 'google'})).toBe('google')
+    expect(modelSourceOf({kind: 'provider'})).toBe('provider')
+    expect(modelSourceOf({kind: 'url'})).toBe('url')
+    expect(modelSourceOf(null)).toBe('unknown')
+  })
+})
+
+
+// routes.ts#processFile's upload test is `startsWith('/share/v/new')`, so
+// on a GitHub Pages-style install under a prefix an upload arrives with
+// isUploadedFile false (codex review of Share#1899).
+describe('loader/unsupportedSchema — uploads under an install prefix', () => {
+  it('still classifies them as uploads', () => {
+    expect(modelSourceOf({
+      kind: 'file',
+      isUploadedFile: false,
+      originalUrl: new URL('https://bldrs-ai.github.io/Share/share/v/new/0b4c2f.ifc'),
+    })).toBe('upload')
   })
 })

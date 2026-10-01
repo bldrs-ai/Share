@@ -547,19 +547,36 @@ class LoadProgressReporter {
    * phase and diagnosable without user contact.
    */
   applySentryLoadState() {
+    const {tags, contexts} = this.sentryLoadState()
+    setTag('load.phase', tags['load.phase'])
+    setContext('load', contexts.load)
+  }
+
+  /**
+   * The `load.*` tags + `load` context {@link applySentryLoadState} stamps,
+   * without stamping them — for an event that should carry them and leave
+   * the session's scope alone (loadFailureCaptureContext).
+   *
+   * @return {{tags: object, contexts: object}}
+   */
+  sentryLoadState() {
     const event = this.lastEvent
     const elapsedMs = Date.now() - this.startTime
-    setTag('load.phase', typeof event?.phase === 'string' ? event.phase : 'unknown')
-    setContext('load', {
-      phase: event?.phase,
-      completed: event?.completed,
-      total: event?.total,
-      unit: event?.unit,
-      elapsedMs: event?.elapsedMs ?? elapsedMs,
-      memoryMb: event?.memoryMb,
-      fileInfo: this.fileInfo,
-      report: this.lines.join('\n'),
-    })
+    return {
+      tags: {'load.phase': typeof event?.phase === 'string' ? event.phase : 'unknown'},
+      contexts: {
+        load: {
+          phase: event?.phase,
+          completed: event?.completed,
+          total: event?.total,
+          unit: event?.unit,
+          elapsedMs: event?.elapsedMs ?? elapsedMs,
+          memoryMb: event?.memoryMb,
+          fileInfo: this.fileInfo,
+          report: this.lines.join('\n'),
+        },
+      },
+    }
   }
 
   /**
@@ -1124,6 +1141,29 @@ export function reportSourceInfo(line) {
   if (activeReporter && !activeReporter.ended && line) {
     activeReporter.addReportLine(line)
   }
+}
+
+
+/**
+ * The active load's `load.*` tags and `load` context, for ONE event's
+ * capture context — the non-sticky counterpart of
+ * {@link attachLoadFailureContext}. `setTag`/`setContext` write the
+ * session's persistent scope, so a load's context applied that way rides
+ * along on every later, unrelated event in the SPA session; passing it as
+ * a capture context attaches it to the one event only (codex review of
+ * Share#1899).
+ *
+ * @return {{tags: object, contexts: object}} empty when no load is active
+ */
+export function loadFailureCaptureContext() {
+  if (activeReporter) {
+    try {
+      return activeReporter.sentryLoadState()
+    } catch (e) {
+      debug().log('loadProgress#loadFailureCaptureContext: ', e)
+    }
+  }
+  return {tags: {}, contexts: {}}
 }
 
 
