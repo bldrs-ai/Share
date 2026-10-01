@@ -2,14 +2,16 @@ import React from 'react'
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {noOpfsLocalFileAlert} from '../../OPFS/messages'
 import {NeedsReconnectError} from '../../connections/errors'
 import {
   addRecentFileEntry,
   loadRecentFilesBySource,
   setPendingModelNameUpdate,
 } from '../../connections/persistence'
+import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
-import {loadLocalFileFallback} from '../../utils/loader'
+import {loadLocalFile} from '../../utils/loader'
 import {navigateToModel} from '../../utils/navigate'
 import useStore from '../../store/useStore'
 import OpenModelDialog from './OpenModelDialog'
@@ -17,6 +19,10 @@ import OpenModelDialog from './OpenModelDialog'
 
 jest.mock('../../Auth0/Auth0Proxy')
 jest.mock('../../connections/persistence')
+jest.mock('../../connections/pruneLocalRecents', () => ({
+  __esModule: true,
+  default: jest.fn().mockResolvedValue([]),
+}))
 jest.mock('../../connections/google-drive/index', () => {})
 jest.mock('../../connections/github/index', () => {})
 jest.mock('../../connections/registry')
@@ -49,9 +55,8 @@ jest.mock('../Connections/GoogleDriveTab', () => function MockGoogleDriveTab({on
 jest.mock('../Connections/GitHubTab', () => function MockGitHubTab() {
   return <div data-testid='mock-github-tab'/>
 })
-jest.mock('../../OPFS/utils', () => ({checkOPFSAvailability: jest.fn().mockReturnValue(false)}))
 jest.mock('../../utils/navigate', () => ({navigateToModel: jest.fn()}))
-jest.mock('../../utils/loader', () => ({loadLocalFile: jest.fn(), loadLocalFileFallback: jest.fn()}))
+jest.mock('../../utils/loader', () => ({loadLocalFile: jest.fn()}))
 
 
 const mockNavigate = jest.fn()
@@ -322,12 +327,16 @@ describe('OpenModelDialog — Local tab', () => {
       // The store defaults currentTab to 1 (GitHub); Local is index 0.
       useStore.getState().setCurrentTab(0)
       useStore.getState().setAppPrefix('/share')
+      useStore.setState({isOpfsAvailable: true})
     })
   })
 
   afterEach(() => {
     act(() => {
       useStore.getState().setAppPrefix(null)
+      useStore.setState({isOpfsAvailable: null})
+      // Tests assert on the store's alert, so none may leak into the next.
+      useStore.getState().setAlert(null)
     })
   })
 
@@ -363,6 +372,24 @@ describe('OpenModelDialog — Local tab', () => {
     })
   })
 
+  it('drops a recent whose upload the OPFS sweep finds missing', async () => {
+    const stale = {id: 'stale.ifc', source: 'local', name: 'gone.ifc'}
+    const live = {id: STORAGE_ID, source: 'local', name: 'box.ifc'}
+    // The dialog renders what's stored, then re-reads after the sweep
+    // removes something — model that as the store shrinking.
+    let stored = [stale, live]
+    pruneMissingLocalRecents.mockImplementationOnce(() => {
+      stored = [live]
+      return Promise.resolve(['stale.ifc'])
+    })
+    loadRecentFilesBySource.mockImplementation((source) => source === 'local' ? stored : [])
+    render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
+    await waitFor(() => {
+      expect(screen.queryByText('gone.ifc')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('box.ifc')).toBeInTheDocument()
+  })
+
   it('shows the original filename in the recents row', () => {
     renderLocalTab([{id: STORAGE_ID, source: 'local', name: 'box.ifc'}])
     expect(screen.getByText('box.ifc')).toBeInTheDocument()
@@ -371,7 +398,7 @@ describe('OpenModelDialog — Local tab', () => {
 
   it('records the picked filename as display name and the storage id as nav target', async () => {
     const lastModified = Date.now()
-    loadLocalFileFallback.mockImplementation((onLoad) => onLoad(STORAGE_ID, lastModified, 'box.ifc'))
+    loadLocalFile.mockImplementation((onLoad) => onLoad(STORAGE_ID, lastModified, 'box.ifc'))
     renderLocalTab([])
     fireEvent.click(screen.getByTestId('button_open_file'))
     await waitFor(() => {
@@ -387,8 +414,40 @@ describe('OpenModelDialog — Local tab', () => {
     expect(setPendingModelNameUpdate).toHaveBeenCalledWith(STORAGE_ID)
   })
 
+  // `isOpfsAvailable` used to be `checkOPFSAvailability()`'s unawaited
+  // Promise — always truthy — so this branch was unreachable. Without OPFS
+  // the pick can't survive navigateToModel's full page load (#1906).
+  it('alerts instead of opening a picker when the store says OPFS is unavailable', async () => {
+    act(() => useStore.setState({isOpfsAvailable: false}))
+    renderLocalTab([])
+    fireEvent.click(screen.getByTestId('button_open_file'))
+    await waitFor(() => {
+      expect(useStore.getState().alert).toEqual(noOpfsLocalFileAlert())
+    })
+    expect(loadLocalFile).not.toHaveBeenCalled()
+    expect(navigateToModel).not.toHaveBeenCalled()
+  })
+
+  // Every probe would reject (and log) with OPFS known to be missing.
+  it('skips the OPFS sweep when the store says OPFS is unavailable', () => {
+    act(() => useStore.setState({isOpfsAvailable: false}))
+    renderLocalTab([])
+    expect(pruneMissingLocalRecents).not.toHaveBeenCalled()
+  })
+
+  // `null` means BaseRoutes' probe hasn't resolved: not known yet, so neither
+  // path can be chosen, and awaiting the probe in the click would spend the
+  // user activation Safari needs for the chooser.
+  it('disables Browse until the store has resolved OPFS availability', () => {
+    act(() => useStore.setState({isOpfsAvailable: null}))
+    renderLocalTab([])
+    expect(screen.getByTestId('button_open_file')).toBeDisabled()
+    act(() => useStore.setState({isOpfsAvailable: true}))
+    expect(screen.getByTestId('button_open_file')).toBeEnabled()
+  })
+
   it('falls back to the storage id as display name when the picker gives no filename', async () => {
-    loadLocalFileFallback.mockImplementation((onLoad) => onLoad(STORAGE_ID, null))
+    loadLocalFile.mockImplementation((onLoad) => onLoad(STORAGE_ID, null))
     renderLocalTab([])
     fireEvent.click(screen.getByTestId('button_open_file'))
     await waitFor(() => {

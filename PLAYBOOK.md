@@ -58,20 +58,31 @@ a 404 which serves `docs/404.html`, which redirects to `/?/the/path`. `docs/inde
 
 **Simulating local file opens**: `window.location.assign` is unforgeable in Chrome — overriding it
 silently fails and navigation still occurs. To test the "recently opened local file" flow without a
-full DnD pipeline:
+full DnD pipeline, seed both halves of an upload: the bytes in OPFS at `<id>/<id>` (where
+`writeModelToOPFS` puts them) and the recent in localStorage. A recent alone is no longer enough —
+the Open dialog and startup both drop local recents whose upload is missing from OPFS
+(`connections/pruneLocalRecents.js`, #1548), so a localStorage-only row vanishes when the dialog
+opens:
 ```ts
-await page.evaluate(() => {
+await page.evaluate(async (id) => {
+  const root = await navigator.storage.getDirectory()
+  const folder = await root.getDirectoryHandle(id, {create: true})
+  const writable = await (await folder.getFileHandle(id, {create: true})).createWritable()
+  await writable.write('ISO-10303-21;')
+  await writable.close()
   localStorage.setItem('bldrs:recent-files', JSON.stringify({
     version: 1,
-    files: [{id: 'model.ifc', source: 'local', name: 'model.ifc', lastModifiedUtc: null}],
+    files: [{id, source: 'local', name: 'model.ifc', lastModifiedUtc: null}],
   }))
-})
+}, 'ADD77535-D1B6-49A9-915B-41343B08BF83.ifc')
 ```
 The `OpenModelDialog` reads `loadRecentFilesBySource('local')` from localStorage whenever the dialog
-opens (`isDialogDisplayed` → true), so the entry is visible immediately without a page reload.
+opens (`isDialogDisplayed` → true), so the entry is visible immediately without a page reload. See
+`src/Components/Open/OpenModelDialog.spec.ts` for a worked example.
 
 **OPFS in tests**: on since #1779, so a spec exercises the same OPFS path as production —
-`saveDnDFileToOpfs` runs rather than `saveDnDFileToOpfsFallback`, and the GLB cache round-trip
+`saveDnDFileToOpfs` runs (the no-OPFS blob fallback was removed in #1905; without OPFS, local
+opens now show `NO_OPFS_LOCAL_FILE_ALERT`, see #1906), and the GLB cache round-trip
 (writer → OPFS → reader) is reachable at all. That round-trip is what the cache-hit specs guard;
 without OPFS they could only ever have tested a live parse.
 

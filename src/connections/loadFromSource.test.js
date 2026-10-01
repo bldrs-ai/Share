@@ -5,7 +5,7 @@ import {getBrowser, getProvider} from './registry'
 
 
 jest.mock('./registry')
-jest.mock('../OPFS/utils', () => ({checkOPFSAvailability: jest.fn().mockReturnValue(false)}))
+jest.mock('../OPFS/utils', () => ({checkOPFSAvailability: jest.fn().mockResolvedValue(false)}))
 jest.mock('../OPFS/OPFSService.js', () => ({
   initializeWorker: jest.fn(),
   nextRequestId: jest.fn(),
@@ -77,6 +77,15 @@ describe('loadFromSource', () => {
       await loadFileFromSource(mockConnection, mockSource, mockFile, onLoad)
 
       expect(onLoad).toHaveBeenCalledWith(FAKE_BLOB_ID)
+    })
+
+    // `checkOPFSAvailability` is async; unawaited, its Promise read as
+    // "available" and every load tried the worker first.
+    it('skips the OPFS worker when OPFS is unavailable', async () => {
+      await loadFileFromSource(mockConnection, mockSource, mockFile, jest.fn())
+
+      expect(checkOPFSAvailability).toHaveBeenCalled()
+      expect(initializeWorker).not.toHaveBeenCalled()
     })
 
     it('returns modifiedAt from the download result', async () => {
@@ -176,7 +185,7 @@ describe('loadFromSource', () => {
 
     beforeEach(() => {
       worker = makeSharedWorker()
-      checkOPFSAvailability.mockReturnValue(true)
+      checkOPFSAvailability.mockResolvedValue(true)
       initializeWorker.mockReturnValue(worker)
       let n = 0
       // A real incrementing id. The automock returns `undefined` for every
@@ -192,7 +201,7 @@ describe('loadFromSource', () => {
     })
 
     afterEach(() => {
-      checkOPFSAvailability.mockReturnValue(false)
+      checkOPFSAvailability.mockResolvedValue(false)
     })
 
     it('ignores another request\'s error and still completes its own write', async () => {

@@ -1,11 +1,11 @@
 import {guessTypeFromFile} from '../Filetype'
-import {saveDnDFileToOpfs} from '../OPFS/utils'
+import {NO_OPFS_LOCAL_FILE_ALERT, noOpfsLocalFileAlert} from '../OPFS/messages'
+import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {disablePageReloadApprovalCheck} from './event'
 import {trackAlert} from './alertTracking'
 import {navigateToModel} from './navigate'
-import {saveDnDFileToOpfsFallback} from './loader'
 import debug, {WARN} from './debug'
 
 
@@ -15,7 +15,8 @@ import debug, {WARN} from './debug'
  * @param {DragEvent} event The drop event
  * @param {Function} navigate React Router navigate function
  * @param {string} appPrefix App prefix for navigation
- * @param {boolean} isOpfsAvailable Whether OPFS is available
+ * @param {boolean|null} isOpfsAvailable Whether OPFS is available; `null`
+ *   while the startup probe is still running, in which case it is asked here
  * @param {Function} setAlert Function to set alert messages
  * @param {Function} [onSuccess] Optional callback when file is successfully processed
  * @param {Function} [onError] Optional callback when an error occurs
@@ -42,6 +43,19 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     setAlert(message)
     if (onError) {
       onError(message)
+    }
+    return
+  }
+
+  // `null` is the store's "probe not resolved yet" (BaseRoutes sets it at
+  // startup), not "unavailable". A drop has no user-activation constraint,
+  // so ask directly rather than guess.
+  const hasOpfs = isOpfsAvailable === null ? await checkOPFSAvailability() : isOpfsAvailable
+  if (!hasOpfs) {
+    // AlertDialog counts it (analytics only); see noOpfsLocalFileAlert.
+    setAlert(noOpfsLocalFileAlert())
+    if (onError) {
+      onError(NO_OPFS_LOCAL_FILE_ALERT)
     }
     return
   }
@@ -124,11 +138,7 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     }
   }
 
-  if (isOpfsAvailable) {
-    saveDnDFileToOpfs(uploadedFile, type, onWritten)
-  } else {
-    saveDnDFileToOpfsFallback(uploadedFile, onWritten)
-  }
+  saveDnDFileToOpfs(uploadedFile, type, onWritten)
 }
 
 

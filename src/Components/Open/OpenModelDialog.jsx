@@ -1,16 +1,17 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {Box, Button, Divider, Slide, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {checkOPFSAvailability} from '../../OPFS/utils'
+import {noOpfsLocalFileAlert} from '../../OPFS/messages'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
-import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
+import {loadLocalFile} from '../../utils/loader'
 import {NeedsReconnectError} from '../../connections/errors'
 import {
   addRecentFileEntry,
   loadRecentFilesBySource,
   setPendingModelNameUpdate,
 } from '../../connections/persistence'
+import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToModel} from '../../utils/navigate'
@@ -52,7 +53,12 @@ export default function OpenModelDialog({
   const setCurrentTab = useStore((state) => state.setCurrentTab)
   const currentTab = useStore((state) => state.currentTab)
   const setAlert = useStore((state) => state.setAlert)
-  const isOpfsAvailable = checkOPFSAvailability()
+  // The store's resolved answer (BaseRoutes awaits the probe at startup), not
+  // `checkOPFSAvailability()` called here: that is async, so its Promise was
+  // always truthy and the no-OPFS branch in `openFile` never ran. Awaiting it
+  // in `openFile` instead would put a hop before `fileInput.click()`, which
+  // Safari can refuse once the click's user activation is spent.
+  const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const isMobile = useIsMobile()
   const {tier, record, check, hasCapacity} = useQuota()
 
@@ -70,12 +76,35 @@ export default function OpenModelDialog({
   const [githubBrowserConnection, setGithubBrowserConnection] = useState(null)
 
   useEffect(() => {
-    if (isDialogDisplayed) {
-      setLocalRecents(loadRecentFilesBySource('local'))
-      setGithubRecents(loadRecentFilesBySource('github'))
-      setShowGithubBrowser(false)
-      setGithubBrowserToken(null)
-      setGithubBrowserConnection(null)
+    if (!isDialogDisplayed) {
+      return undefined
+    }
+    setLocalRecents(loadRecentFilesBySource('local'))
+    setGithubRecents(loadRecentFilesBySource('github'))
+    setShowGithubBrowser(false)
+    setGithubBrowserToken(null)
+    setGithubBrowserConnection(null)
+    // Show what's stored right away, then drop any local row whose OPFS
+    // upload is gone (see pruneLocalRecents.js for how they drift apart).
+    // Startup already ran this sweep; re-running here covers a dialog
+    // opened before that finished, and costs a few handle lookups.
+    // Known-unavailable OPFS would only make every probe reject (and log);
+    // `null` still sweeps, since the probe just keeps what it can't check.
+    // Read at open time rather than as a dep: re-running this effect when
+    // the startup probe resolves would reset the dialog under the user.
+    if (useStore.getState().isOpfsAvailable === false) {
+      return undefined
+    }
+    let isCurrent = true
+    pruneMissingLocalRecents()
+      .then((removed) => {
+        if (isCurrent && removed.length > 0) {
+          setLocalRecents(loadRecentFilesBySource('local'))
+        }
+      })
+      .catch(() => {/* the sweep keeps entries it can't check; nothing to do */})
+    return () => {
+      isCurrent = false
     }
   }, [isDialogDisplayed])
 
@@ -244,6 +273,15 @@ export default function OpenModelDialog({
   }
 
   const openFile = () => {
+    // `false`, not falsy: the store holds `null` until BaseRoutes' probe
+    // resolves, and that means "not known yet", not "unavailable". Browse is
+    // disabled while it's `null` (below), so this only fires on a real no.
+    if (isOpfsAvailable === false) {
+      // AlertDialog counts it (analytics only); see noOpfsLocalFileAlert.
+      setIsDialogDisplayed(false)
+      setAlert(noOpfsLocalFileAlert())
+      return
+    }
     if (!hasCapacity) {
       setShowQuotaDialog(true)
       return
@@ -275,14 +313,10 @@ export default function OpenModelDialog({
       })
       setPendingModelNameUpdate(storageId)
     }
-    if (isOpfsAvailable) {
-      // The dialog closes on pick, so a file that cannot be opened at all —
-      // a `.glb.gz` in a browser with no `DecompressionStream`, a name and a
-      // header that between them name no format — has no other way to say so.
-      loadLocalFile(onLoad, false, false, (message) => setAlert(message))
-    } else {
-      loadLocalFileFallback(onLoad, false)
-    }
+    // The dialog closes on pick, so a file that cannot be opened at all —
+    // a `.glb.gz` in a browser with no `DecompressionStream`, a name and a
+    // header that between them name no format — has no other way to say so.
+    loadLocalFile(onLoad, false, false, (message) => setAlert(message))
     setIsDialogDisplayed(false)
   }
 
@@ -378,6 +412,11 @@ export default function OpenModelDialog({
               onBrowse={openFile}
               browseButtonLabel='Browse'
               browseButtonTestId='button_open_file'
+              // Until the OPFS probe resolves we can't pick a path, and
+              // awaiting it in the click would spend the user activation
+              // Safari needs for the file chooser. It resolves within the
+              // first moments of startup.
+              disabled={isOpfsAvailable === null}
             />
             {!isMobile &&
                 <Stack spacing={1} sx={{mt: 4}}>

@@ -1,6 +1,7 @@
 import React from 'react'
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {StoreRouteThemeCtx} from '../Share.fixture'
+import {NO_OPFS_LOCAL_FILE_ALERT, noOpfsLocalFileAlert} from '../OPFS/messages'
 import {getProvider} from '../connections/registry'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
@@ -229,6 +230,63 @@ describe('AlertDialog — unsupportedSchema alert type', () => {
     })
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
     expect(trackAlertEvent).toHaveBeenCalledWith('Not displayable yet.')
+    expect(trackAlert).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('AlertDialog — noOpfs alert type', () => {
+  const onClose = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  it('explains the limit under its own header, without the Discord footer', () => {
+    act(() => {
+      useStore.getState().setAlert(noOpfsLocalFileAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('Not available here')).toBeInTheDocument()
+    expect(screen.queryByText('Error')).not.toBeInTheDocument()
+    expect(screen.getByText(/needs browser storage/)).toBeInTheDocument()
+    expect(screen.queryByText(/Discord/i)).not.toBeInTheDocument()
+  })
+
+  // The model on screen is still good: dismissing must not reach onClose,
+  // which AlertDialogAndSnackbar wires to navToDefault (codex review, #1905).
+  it('dismisses with OK without calling onClose, so the current model stays', () => {
+    act(() => {
+      useStore.getState().setAlert(noOpfsLocalFileAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByText('OK'))
+    expect(useStore.getState().alert).toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('dismisses with the close button without calling onClose', () => {
+    act(() => {
+      useStore.getState().setAlert(noOpfsLocalFileAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByTestId(/^button-close-dialog/))
+    expect(useStore.getState().alert).toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  // An expected environment condition (#1906), counted once and kept out of
+  // Sentry; callers used to trackAlert it as well, which double-counted.
+  it('counts the alert once, in analytics only', () => {
+    act(() => {
+      useStore.getState().setAlert(noOpfsLocalFileAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(trackAlertEvent).toHaveBeenCalledTimes(1)
+    expect(trackAlertEvent).toHaveBeenCalledWith(NO_OPFS_LOCAL_FILE_ALERT)
     expect(trackAlert).not.toHaveBeenCalled()
   })
 })

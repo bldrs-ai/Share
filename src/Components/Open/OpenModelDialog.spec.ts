@@ -59,11 +59,19 @@ describe('Open 100: Open model dialog', () => {
     const STORAGE_ID = 'ADD77535-D1B6-49A9-915B-41343B08BF83.ifc'
 
     /**
-     * Simulate a completed file drop by writing a recent file entry to
-     * localStorage, mirroring what handleFileDrop does via
-     * addRecentFileEntry after saving to OPFS.
+     * Simulate a completed file drop: write the upload into OPFS where
+     * `writeModelToOPFS` puts it (`<id>/<id>` at the root) and record the
+     * recent entry in localStorage, mirroring what handleFileDrop does via
+     * addRecentFileEntry after the write. Both halves matter — the Open
+     * dialog drops a local recent whose upload isn't in OPFS.
      */
-    const seedRecent = (storageId: string) => {
+    const seedRecent = async (storageId: string) => {
+      const root = await navigator.storage.getDirectory()
+      const folder = await root.getDirectoryHandle(storageId, {create: true})
+      const file = await folder.getFileHandle(storageId, {create: true})
+      const writable = await file.createWritable()
+      await writable.write('ISO-10303-21;')
+      await writable.close()
       const entry = {
         id: storageId,
         source: 'local',

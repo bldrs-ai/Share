@@ -1,7 +1,7 @@
 import {DecompressionStream as NodeDecompressionStream} from 'node:stream/web'
 import {gzipSync} from 'node:zlib'
 import {opfsWriteModel} from '../OPFS/OPFSService.js'
-import {loadLocalFile, loadLocalFileFallback, saveDnDFileToOpfsFallback} from './loader'
+import {loadLocalFile} from './loader'
 
 
 // The OPFS worker is a real shared worker in the browser; what matters here
@@ -177,55 +177,5 @@ describe('loadLocalFile', () => {
     loadLocalFile(jest.fn(), false, true)
     const inputElement = document.querySelector('input[type="file"]')
     expect(inputElement).toBeNull()
-  })
-})
-
-
-describe('loadLocalFileFallback', () => {
-  beforeEach(() => {
-    document.body.innerHTML = `<div id="viewer-container"></div>`
-    URL.createObjectURL = jest.fn(() => 'testId')
-    URL.revokeObjectURL = jest.fn()
-  })
-
-  afterEach(() => {
-    jest.restoreAllMocks()
-  })
-
-  it('revokes the object URL after extracting the blob id', () => {
-    const onLoad = jest.fn()
-    loadLocalFileFallback(onLoad, true)
-
-    const inputElement = document.querySelector('input[type="file"]')
-    Object.defineProperty(inputElement, 'files', {value: [new File(['dummy'], 'test.ifc')]})
-    inputElement.dispatchEvent(new Event('change', {bubbles: true}))
-
-    expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('testId')
-    expect(onLoad).toHaveBeenCalledWith('testId', expect.any(Number), 'test.ifc')
-  })
-})
-
-
-describe('saveDnDFileToOpfsFallback', () => {
-  beforeEach(() => {
-    URL.createObjectURL = jest.fn(() => 'http://localhost/blob/abc123')
-    URL.revokeObjectURL = jest.fn()
-  })
-
-  afterEach(() => {
-    jest.restoreAllMocks()
-  })
-
-  it('revokes the object URL before invoking the callback', () => {
-    let revokeCalledBeforeCallback = false
-    const callback = jest.fn(() => {
-      revokeCalledBeforeCallback = URL.revokeObjectURL.mock.calls.length > 0
-    })
-    saveDnDFileToOpfsFallback(new File(['dummy'], 'test.ifc'), callback)
-
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('http://localhost/blob/abc123')
-    expect(callback).toHaveBeenCalledWith('abc123')
-    expect(revokeCalledBeforeCallback).toBe(true)
   })
 })
