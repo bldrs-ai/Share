@@ -769,9 +769,15 @@ const MSG_LOGIN_TO_EXPORT = 'Log in to export this model as a GLB'
 // now that the round trip closes. Short enough to stay on one line at 390px
 // beside the toggle.
 const MSG_GZIP_CAPTION = 'gzip — saves a .glb.gz, reopens in Share'
-// Owner's wording (#1831). What turning Portable OFF buys and what it costs,
-// since ON is now the default: instancing stores a repeated part once, and
+// Owner's wording (#1831), less its first draft's "open in any glTF viewer":
+// with a codec selected — and the background sweep may select one on its own
+// — the portable file still needs that codec's decoder, and 3dviewer.net
+// refuses `EXT_meshopt_compression` outright (codex on #1904). So it says what
+// Portable itself changes and no more; codec support is the Compression
+// row's caption to make. What turning Portable OFF buys and costs, since ON
+// is now the default: instancing stores a repeated part once, and
 // `EXT_mesh_gpu_instancing` is a required extension some viewers refuse.
 const MSG_PORTABLE_HELP =
-  'Portable files open in any glTF viewer. Turn off to keep instancing: repeated parts are ' +
-  'stored once, which can make very large models much smaller, but some viewers don\'t support it.'
+  'Portable files leave out instancing, so more glTF viewers can open them. Turn off to keep ' +
+  'instancing: repeated parts are stored once, which can make very large models much smaller, ' +
+  'but some viewers don\'t support it.'

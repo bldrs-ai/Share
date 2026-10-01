@@ -280,7 +280,10 @@ describe('ExportSection', () => {
     const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
     const help = getByTestId('export-portable-help')
-    expect(help).toHaveTextContent(/^Portable files open in any glTF viewer\./)
+    expect(help).toHaveTextContent(/^Portable files leave out instancing, so more glTF viewers can open them\./)
+    // Not a promise about EVERY viewer: a codec the sweep auto-selects still
+    // needs its decoder wherever the file is opened (codex on #1904).
+    expect(help).not.toHaveTextContent(/any glTF viewer/)
     expect(help).toHaveTextContent('Turn off to keep instancing')
     // Under the toggle's row, not inside it: the row keeps its one-phrase
     // caption, and the trade-off gets the full width of the dialog.

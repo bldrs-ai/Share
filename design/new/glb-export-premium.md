@@ -1710,9 +1710,14 @@ refused outright where `EXT_mesh_gpu_instancing` is not implemented
 both shapes back to the same pickable model (#1849) — so nothing is lost for
 Share. The price is the JSON measured above, which is why the choice stays a
 toggle and the helper text under it says what turning it off buys: "Portable
-files open in any glTF viewer. Turn off to keep instancing: repeated parts
-are stored once, which can make very large models much smaller, but some
-viewers don't support it." Nothing persists the choice — every visit starts
+files leave out instancing, so more glTF viewers can open them. Turn off to
+keep instancing: repeated parts are stored once, which can make very large
+models much smaller, but some viewers don't support it." It deliberately
+promises *more* viewers, not every one: a codec — which the background sweep
+may select on its own — still needs its decoder wherever the file is opened,
+and 3dviewer.net refuses `EXT_meshopt_compression` outright, so the first
+draft's "open in any glTF viewer" was untrue whenever a codec was on (codex on
+#1904). Codec support is the Compression row's to state. Nothing persists the choice — every visit starts
 portable — and the size line and the background codec sweep both measure at
 the toggle's state (they already keyed on it), so the codec auto-selected on
 open is decided on the portable bytes the default click downloads. A

@@ -811,7 +811,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
 
     await expect(page.getByTestId('export-portable').locator('input')).toBeChecked()
     // The trade-off is on screen under the toggle, not only in a tooltip.
-    await expect(page.getByTestId('export-portable-help')).toContainText('open in any glTF viewer')
+    await expect(page.getByTestId('export-portable-help')).toContainText('more glTF viewers can open them')
     await expect(page.getByTestId('export-portable-help')).toBeVisible()
     await expectNoHorizontalScroll(page)
 
