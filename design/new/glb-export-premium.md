@@ -910,7 +910,14 @@ Snowdon 9,498,356 → 2,617,644 B; dental_clinic 703,661 → 180,219; Right_Hand
 to cost is gone on every model: each collapsed Draco export is now smaller than
 its collapse-off one. Figures from the same artifacts the browser run lifted
 out of OPFS, compressed through `compressExportGlb` (the Export tab's own
-function, whose "before" figures reproduce the #1898 column to the byte);
+function, whose "before" figures reproduce the #1898 column to the byte). The
+browser harness re-run on this build reads the same Draco figures off the
+Export tab for Snowdon and dental_clinic, and 552,644 (Right_Hand) and 683,588
+(DSA2). Those two are STEP models whose artifacts, written by this build into
+the `0.24.0` slot (#1895's STEP part-type bump), are 144 and 24 bytes larger
+than the `0.23.0` ones lifted for the baseline: the Export tab's None figure
+differs by exactly the same amounts, so the difference is in the artifact,
+not the encode;
 `gltf-validator` 2.0.0-dev.3.10 on all eight new Draco files: **0 errors, 0
 warnings**, the same infos as the #1898 files (unsupported `BLDRS_*`
 extensions, unused objects), and no message of any severity names the tag.
