@@ -3,10 +3,17 @@ import React from 'react'
 import {act, fireEvent, render, renderHook, screen, within} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
-import {artifactPositionRange, artifactSizes, retainOnlyCompressedExports} from '../../export/artifactSizes'
+import {
+  artifactPositionRange,
+  artifactSizes,
+  retainOnlyCompressedExports,
+  uncompressedSizes,
+} from '../../export/artifactSizes'
+import {AUTO_MEASURE_MAX_BYTES} from '../../export/codecSizes'
 import useCodecSizes from '../../export/useCodecSizes'
 import {gtagEvent} from '../../privacy/analytics'
 import useStore from '../../store/useStore'
+import {actAsyncFlush} from '../../utils/tests'
 import {goToSubscription} from '../Profile/subscriptionNav'
 import ExportSection from './ExportSection'
 
@@ -23,6 +30,8 @@ jest.mock('../../export/artifactSizes', () => ({
   artifactSizes: jest.fn(),
   artifactPositionRange: jest.fn(),
   retainOnlyCompressedExports: jest.fn(),
+  // The header read the large-artifact gate decides on (#1904 review).
+  uncompressedSizes: jest.fn(),
 }))
 jest.mock('../Profile/subscriptionNav', () => ({goToSubscription: jest.fn()}))
 // The background codec sweep runs three encoders off OPFS; its ordering,
@@ -155,6 +164,10 @@ describe('ExportSection', () => {
     // outside a test's `act` lands its state update where React can't see it.
     // The caption's own test resolves it.
     artifactPositionRange.mockReturnValue(new Promise(() => {}))
+    // Under the auto-measure threshold unless a test says otherwise, so the
+    // Portable estimate runs on open as it does for every model but a huge
+    // one.
+    uncompressedSizes.mockResolvedValue({withMetadata: WITH_METADATA_BYTES, withoutMetadata: WITHOUT_METADATA_BYTES})
     useCodecSizes.mockReturnValue(NO_CODEC_SIZES)
     // jsdom has no `CompressionStream`, and the gzip row is hidden without
     // one — so without this the control under test would simply not be in the
@@ -170,6 +183,9 @@ describe('ExportSection', () => {
     // during the teardown lands its state update outside `act`. Park it.
     artifactSizes.mockReturnValue(new Promise(() => {}))
     artifactPositionRange.mockReturnValue(new Promise(() => {}))
+    // The header read the large-artifact gate decides on, too: Portable is
+    // the default, so the teardown's re-run reaches it before `artifactSizes`.
+    uncompressedSizes.mockReturnValue(new Promise(() => {}))
     await setStore(null, null)
   })
 
@@ -234,36 +250,76 @@ describe('ExportSection', () => {
 
     fireEvent.click(getByTestId('export-glb-button'))
     expect(mockRun).toHaveBeenCalledWith(
-      'glb', {stripBldrsMetadata: false, compression: 'none', quality: 'balanced', portable: false, gzip: false})
+      'glb', {stripBldrsMetadata: false, compression: 'none', quality: 'balanced', portable: true, gzip: false})
 
     // Off means "strip", which is the option the pro module acts on.
     fireEvent.click(toggle)
     fireEvent.click(getByTestId('export-glb-button'))
     expect(mockRun).toHaveBeenLastCalledWith(
-      'glb', {stripBldrsMetadata: true, compression: 'none', quality: 'balanced', portable: false, gzip: false})
+      'glb', {stripBldrsMetadata: true, compression: 'none', quality: 'balanced', portable: true, gzip: false})
   })
 
-  it('carries the Portable toggle into the export, off by default', async () => {
-    // #1843. Off by default: the batched-native shape is the smaller file and
-    // the one Share itself reads best, and the rewrite costs ~100 B of JSON
-    // per instance that no codec compresses.
+  it('carries the Portable toggle into the export, on by default', async () => {
+    // #1831: on by default. A downloaded file is one the user means to open
+    // somewhere, and the batched-native shape is refused by viewers without
+    // EXT_mesh_gpu_instancing and a flat `mesh_N` list in the rest; Share
+    // reads both back to the same pickable model (#1849). Off stays one click
+    // away for the instance-heavy model where instancing is most of the win.
     await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
     const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
     const portable = getByTestId('export-portable').querySelector('input')
-    expect(portable.checked).toBe(false)
+    expect(portable.checked).toBe(true)
+    // One header read decides the large-artifact gate first (below); this
+    // model is under it. No UI transition to wait on — the line reads
+    // "Estimating…" either side of it — so drain the read itself.
+    await actAsyncFlush()
+    // The first estimate the panel asks for is already the portable file's:
+    // the size line and the codec sweep measure what the default downloads.
+    expect(artifactSizes).toHaveBeenCalledWith(expect.objectContaining(ARTIFACT), 'none', true, 'balanced', false)
+    expect(artifactSizes).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), false,
+      expect.anything(), expect.anything())
+    expect(useCodecSizes).toHaveBeenLastCalledWith(
+      expect.objectContaining(ARTIFACT), expect.objectContaining({isPortable: true}))
+
+    fireEvent.click(getByTestId('export-glb-button'))
+    expect(mockRun).toHaveBeenLastCalledWith(
+      'glb', {stripBldrsMetadata: false, compression: 'none', quality: 'balanced', portable: true, gzip: false})
 
     fireEvent.click(portable)
     fireEvent.click(getByTestId('export-glb-button'))
 
     expect(mockRun).toHaveBeenLastCalledWith(
-      'glb', {stripBldrsMetadata: false, compression: 'none', quality: 'balanced', portable: true, gzip: false})
+      'glb', {stripBldrsMetadata: false, compression: 'none', quality: 'balanced', portable: false, gzip: false})
+    expect(useCodecSizes).toHaveBeenLastCalledWith(
+      expect.objectContaining(ARTIFACT), expect.objectContaining({isPortable: false}))
+  })
+
+  it('says what turning Portable off trades, under the toggle', async () => {
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+    const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+    const help = getByTestId('export-portable-help')
+    expect(help).toHaveTextContent(/^Portable files leave out instancing, so more glTF viewers can open them\./)
+    // Not a promise about EVERY viewer: a codec the sweep auto-selects still
+    // needs its decoder wherever the file is opened (codex on #1904).
+    expect(help).not.toHaveTextContent(/any glTF viewer/)
+    // The row's own caption made the same everywhere-promise ("opens
+    // anywhere"); it now names what Portable changes, like the line above.
+    const row = getByTestId('export-portable').closest('.MuiStack-root')
+    expect(row).toHaveTextContent('named nodes, no instancing')
+    expect(row).not.toHaveTextContent(/anywhere/)
+    expect(help).toHaveTextContent('Turn off to keep instancing')
+    // Under the toggle's row, not inside it: the row keeps its one-phrase
+    // caption, and the trade-off gets the full width of the dialog.
+    expect(getByTestId('export-portable').closest('.MuiStack-root')).not.toContainElement(help)
   })
 
   it('re-estimates for Portable even at compression None, saying so while it runs', async () => {
     // Portable + None is NOT the cheap header read: the rewrite has to read
     // the whole artifact out of OPFS and re-serialise it, so the line goes
-    // through "Estimating…" exactly as a codec does (#1843).
+    // through "Estimating…" exactly as a codec does (#1843) — and since
+    // Portable is the default, that is how the panel OPENS.
     artifactSizes.mockImplementation((artifact, mode, isPortable) => (isPortable ?
       new Promise((resolve) => {
         resolveMeshoptSizes = resolve
@@ -277,9 +333,19 @@ describe('ExportSection', () => {
     const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
     await act(async () => {})
 
+    expect(queryByTestId('export-size')).toBeNull()
+    expect(getByTestId('export-size-pending')).toHaveTextContent('Estimating…')
+
+    // Off: the native file's header read, instant.
+    fireEvent.click(getByTestId('export-portable').querySelector('input'))
+    await act(async () => {})
     expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(WITH_METADATA_BYTES))
 
+    // Back on: pending again until the rewrite's figure lands.
     fireEvent.click(getByTestId('export-portable').querySelector('input'))
+    // The gate's header read, then the estimate it lets through; "Estimating…"
+    // shows throughout, so there is no transition to await instead.
+    await actAsyncFlush()
 
     expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', true, 'balanced', false)
     expect(queryByTestId('export-size')).toBeNull()
@@ -324,7 +390,7 @@ describe('ExportSection', () => {
     fireEvent.click(getByTestId('export-glb-button'))
 
     expect(mockRun).toHaveBeenLastCalledWith(
-      'glb', {stripBldrsMetadata: false, compression: 'draco', quality: 'balanced', portable: false, gzip: false})
+      'glb', {stripBldrsMetadata: false, compression: 'draco', quality: 'balanced', portable: true, gzip: false})
   })
 
   it('re-estimates when the compression choice changes, saying so while it runs', async () => {
@@ -332,7 +398,7 @@ describe('ExportSection', () => {
     // seconds on a real model. The line has to say the number is coming
     // rather than showing the previous codec's figure, which is a promise
     // about a file the next click would not produce (#1842).
-    artifactSizes.mockImplementation((artifact, mode, isPortable) => (mode === 'none' && !isPortable ?
+    artifactSizes.mockImplementation((artifact, mode, isPortable) => (mode === 'none' ?
       Promise.resolve({
         withMetadata: WITH_METADATA_BYTES,
         withoutMetadata: WITHOUT_METADATA_BYTES,
@@ -349,7 +415,7 @@ describe('ExportSection', () => {
 
     chooseCompression('meshopt')
 
-    expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'meshopt', false, 'balanced', false)
+    expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'meshopt', true, 'balanced', false)
     expect(queryByTestId('export-size')).toBeNull()
     expect(getByTestId('export-size-pending')).toHaveTextContent('Estimating…')
 
@@ -382,7 +448,7 @@ describe('ExportSection', () => {
     // count cannot stand in for it: the Draco estimate settled here weighs
     // exactly what None did, which is what an unavailable encoder produces
     // (#1842) and what a Portable pass-through produces (#1843).
-    artifactSizes.mockImplementation((artifact, mode, isPortable) => (mode === 'none' && !isPortable ?
+    artifactSizes.mockImplementation((artifact, mode, isPortable) => (mode === 'none' ?
       Promise.resolve({
         withMetadata: WITH_METADATA_BYTES,
         withoutMetadata: WITHOUT_METADATA_BYTES,
@@ -395,7 +461,7 @@ describe('ExportSection', () => {
     const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
     await act(async () => {})
 
-    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|none|balanced|plain|meta')
+    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'portable|none|balanced|plain|meta')
 
     chooseCompression('draco')
     await act(async () => {
@@ -411,7 +477,7 @@ describe('ExportSection', () => {
     })
 
     expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(WITH_METADATA_BYTES))
-    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|draco|balanced|plain|meta')
+    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'portable|draco|balanced|plain|meta')
 
     // The metadata half moves without a re-estimate — one run produced both
     // figures — so it has to be part of the key or the key would name two
@@ -419,7 +485,7 @@ describe('ExportSection', () => {
     fireEvent.click(getByTestId('export-include-metadata').querySelector('input'))
 
     expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(WITHOUT_METADATA_BYTES))
-    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'native|draco|balanced|plain|nometa')
+    expect(getByTestId('export-size')).toHaveAttribute('data-estimate-key', 'portable|draco|balanced|plain|nometa')
   })
 
   it('names the fallback when the chosen codec is not available here', async () => {
@@ -676,16 +742,16 @@ describe('ExportSection', () => {
 
       expect(getByTestId('export-quality-caption')).toHaveTextContent('parts may move up to 1.2 mm')
       expect(getByTestId('export-size'))
-        .toHaveAttribute('data-estimate-key', 'native|draco|balanced|plain|meta')
+        .toHaveAttribute('data-estimate-key', 'portable|draco|balanced|plain|meta')
 
       chooseQuality('smallest')
       await act(async () => {})
 
       expect(getByTestId('export-quality-caption')).toHaveTextContent('parts may move up to 4.7 mm')
       expect(artifactSizes)
-        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'smallest', false)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', true, 'smallest', false)
       expect(getByTestId('export-size'))
-        .toHaveAttribute('data-estimate-key', 'native|draco|smallest|plain|meta')
+        .toHaveAttribute('data-estimate-key', 'portable|draco|smallest|plain|meta')
     })
 
     it('says outright that the coarse rung does not reach Meshopt', async () => {
@@ -724,18 +790,18 @@ describe('ExportSection', () => {
       chooseCompression('draco')
       await act(async () => {})
       expect(artifactSizes)
-        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'balanced', false)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', true, 'balanced', false)
 
       chooseQuality('smallest')
       await act(async () => {})
 
       expect(artifactSizes)
-        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', false, 'smallest', false)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'draco', true, 'smallest', false)
       // …and the figure on the line says which rung it is for, so a test that
       // waits for it cannot read the previous rung's number
       // (`tests/e2e/exportEstimate.ts`).
       expect(getByTestId('export-size'))
-        .toHaveAttribute('data-estimate-key', 'native|draco|smallest|plain|meta')
+        .toHaveAttribute('data-estimate-key', 'portable|draco|smallest|plain|meta')
     })
 
     it('captions what the rung costs, in millimetres off this model', async () => {
@@ -790,7 +856,94 @@ describe('ExportSection', () => {
       fireEvent.click(getByTestId('export-glb-button'))
 
       expect(mockRun).toHaveBeenLastCalledWith(
-        'glb', {stripBldrsMetadata: false, compression: 'draco', quality: 'smallest', portable: false, gzip: false})
+        'glb', {stripBldrsMetadata: false, compression: 'draco', quality: 'smallest', portable: true, gzip: false})
+    })
+  })
+
+  describe('an artifact over the auto-measure threshold (#1904 review)', () => {
+    // The Portable estimate reads the WHOLE artifact off OPFS and rewrites it
+    // (`export/artifactSizes.js`), where the native one is a header read. With
+    // Portable the default, opening the tab on a 400 MB model would have run
+    // that rewrite unasked — the very cost the codec sweep's threshold exists
+    // to hold back until the user clicks "Calculate sizes" (`codecSizes.js#
+    // shouldAutoMeasure`). So the size line waits on the same consent.
+    const LARGE_BYTES = AUTO_MEASURE_MAX_BYTES + 1
+    const startSweep = jest.fn()
+
+    beforeEach(() => {
+      uncompressedSizes.mockResolvedValue({withMetadata: LARGE_BYTES, withoutMetadata: LARGE_BYTES - 1})
+      artifactSizes.mockImplementation((artifact, mode, isPortable) => Promise.resolve(isPortable ?
+        {withMetadata: LARGE_BYTES + 7, withoutMetadata: LARGE_BYTES + 6, metadataBytes: 1} :
+        {withMetadata: LARGE_BYTES, withoutMetadata: LARGE_BYTES - 1, metadataBytes: 1}))
+      // The sweep parks itself over the threshold (`useCodecSizes.js`).
+      useCodecSizes.mockReturnValue({...NO_CODEC_SIZES, isPaused: true, start: startSweep})
+    })
+
+    /**
+     * @return {boolean} whether any estimate asked for the Portable file
+     */
+    function portableEstimateRan() {
+      return artifactSizes.mock.calls.some(([, , isPortable]) => isPortable === true)
+    }
+
+    it('opens Portable but does not rewrite the artifact until asked', async () => {
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {findByTestId, getByTestId, queryByTestId} =
+        render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+      // The gate's own outcome is the transition to wait on.
+      expect(await findByTestId('export-size-unmeasured')).toBeInTheDocument()
+      expect(getByTestId('export-portable').querySelector('input').checked).toBe(true)
+      expect(portableEstimateRan()).toBe(false)
+      // Not a wrong number: no figure, and the sweep's own way to get one.
+      expect(queryByTestId('export-size')).toBeNull()
+      expect(getByTestId('export-size-unmeasured')).toHaveTextContent('Not measured')
+
+      // Portable stays selected for the export itself, which is the user's
+      // own click and pays for the rewrite then.
+      fireEvent.click(getByTestId('export-glb-button'))
+      expect(mockRun).toHaveBeenLastCalledWith(
+        'glb', {stripBldrsMetadata: false, compression: 'none', quality: 'balanced', portable: true, gzip: false})
+      expect(portableEstimateRan()).toBe(false)
+
+      fireEvent.click(getByTestId('export-size-calculate'))
+
+      expect(await findByTestId('export-size')).toHaveAttribute('data-bytes', String(LARGE_BYTES + 7))
+      expect(portableEstimateRan()).toBe(true)
+      expect(startSweep).toHaveBeenCalledTimes(1)
+      expect(queryByTestId('export-size-unmeasured')).toBeNull()
+    })
+
+    it('takes the sweep\'s "Calculate sizes" as the same consent', async () => {
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {findByTestId, getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await findByTestId('export-size-unmeasured')
+      expect(portableEstimateRan()).toBe(false)
+
+      fireEvent.click(getByTestId('export-codec-sizes-start'))
+
+      expect(await findByTestId('export-size')).toHaveAttribute('data-bytes', String(LARGE_BYTES + 7))
+      expect(startSweep).toHaveBeenCalledTimes(1)
+      expect(portableEstimateRan()).toBe(true)
+    })
+
+    it('toggling Portable off and on reads the header, never the rewrite', async () => {
+      await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+      const {findByTestId, getByTestId, queryByTestId} =
+        render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await findByTestId('export-size-unmeasured')
+      const toggle = getByTestId('export-portable').querySelector('input')
+
+      fireEvent.click(toggle)
+      // Native: the cheap header figure, exactly as before Portable was the
+      // default.
+      expect(await findByTestId('export-size')).toHaveAttribute('data-bytes', String(LARGE_BYTES))
+      expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', false, 'balanced', false)
+
+      fireEvent.click(toggle)
+      expect(await findByTestId('export-size-unmeasured')).toBeInTheDocument()
+      expect(portableEstimateRan()).toBe(false)
+      expect(queryByTestId('export-size')).toBeNull()
     })
   })
 
@@ -832,7 +985,7 @@ describe('ExportSection', () => {
       // …and that selection is what the button exports.
       fireEvent.click(getByTestId('export-glb-button'))
       expect(mockRun).toHaveBeenLastCalledWith(
-        'glb', {stripBldrsMetadata: false, compression: 'draco', quality: 'balanced', portable: false, gzip: false})
+        'glb', {stripBldrsMetadata: false, compression: 'draco', quality: 'balanced', portable: true, gzip: false})
     })
 
     it('leaves the selection alone until every figure is in', async () => {
@@ -941,6 +1094,10 @@ describe('ExportSection', () => {
       expect(queryByTestId('export-codec-sizes-stop')).toBeNull()
 
       fireEvent.click(getByTestId('export-codec-sizes-start'))
+      // The click is also consent for the size line's own estimate (#1904
+      // review), which re-runs off it; drain that rather than leave it to
+      // land after the test.
+      await actAsyncFlush()
 
       expect(start).toHaveBeenCalled()
     })
@@ -996,6 +1153,10 @@ describe('ExportSection', () => {
       expect(getByTestId('export-codec-sizes-status')).toHaveTextContent('Codec sizing stopped')
 
       fireEvent.click(getByTestId('export-codec-sizes-start'))
+      // The click is also consent for the size line's own estimate (#1904
+      // review), which re-runs off it; drain that rather than leave it to
+      // land after the test.
+      await actAsyncFlush()
 
       expect(start).toHaveBeenCalled()
     })
@@ -1026,12 +1187,12 @@ describe('ExportSection', () => {
         chooseCompression('draco')
         await act(async () => {})
 
-        expect(lastKept()).toEqual([{mode: 'draco', isPortable: false, quality: 'balanced'}])
+        expect(lastKept()).toEqual([{mode: 'draco', isPortable: true, quality: 'balanced'}])
 
         chooseQuality('smallest')
         await act(async () => {})
 
-        expect(lastKept()).toEqual([{mode: 'draco', isPortable: false, quality: 'smallest'}])
+        expect(lastKept()).toEqual([{mode: 'draco', isPortable: true, quality: 'smallest'}])
       })
 
       it('keeps the sweep\'s winner only while it is about to be selected', async () => {
@@ -1047,13 +1208,13 @@ describe('ExportSection', () => {
 
         // Draco wins and the panel has switched to it.
         expect(screen.getByTestId('export-compression')).toHaveTextContent('Draco')
-        expect(lastKept()).toEqual([{mode: 'draco', isPortable: false, quality: 'balanced'}])
+        expect(lastKept()).toEqual([{mode: 'draco', isPortable: true, quality: 'balanced'}])
         // …and while the selection was still `none`, Draco was already being
         // kept beside it rather than swept up before the switch landed.
         expect(retainOnlyCompressedExports.mock.calls.map(([, kept]) => kept))
           .toContainEqual([
-            {mode: 'none', isPortable: false, quality: 'balanced'},
-            {mode: 'draco', isPortable: false, quality: 'balanced'},
+            {mode: 'none', isPortable: true, quality: 'balanced'},
+            {mode: 'draco', isPortable: true, quality: 'balanced'},
           ])
       })
 
@@ -1071,7 +1232,7 @@ describe('ExportSection', () => {
         chooseCompression('meshopt')
         await act(async () => {})
 
-        expect(lastKept()).toEqual([{mode: 'meshopt', isPortable: false, quality: 'balanced'}])
+        expect(lastKept()).toEqual([{mode: 'meshopt', isPortable: true, quality: 'balanced'}])
       })
 
       it('leaves the cache alone while a sweep is running', async () => {
@@ -1166,7 +1327,7 @@ describe('ExportSection', () => {
       const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
       await act(async () => {})
       expect(artifactSizes)
-        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', false, 'balanced', false)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', true, 'balanced', false)
 
       artifactSizes.mockReturnValue(new Promise((resolve) => {
         resolveGzipped = resolve
@@ -1175,7 +1336,7 @@ describe('ExportSection', () => {
       await act(async () => {})
 
       expect(artifactSizes)
-        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', false, 'balanced', true)
+        .toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', true, 'balanced', true)
       expect(getByTestId('export-size-pending')).toBeInTheDocument()
       expect(queryByTestId('export-size')).toBeNull()
 
@@ -1196,7 +1357,7 @@ describe('ExportSection', () => {
       expect(getByTestId('export-size'))
         .toHaveAttribute('data-bytes', String(GZIPPED_WITH_METADATA_BYTES))
       expect(getByTestId('export-size'))
-        .toHaveAttribute('data-estimate-key', 'native|none|balanced|gzip|meta')
+        .toHaveAttribute('data-estimate-key', 'portable|none|balanced|gzip|meta')
     })
 
     it('carries the choice into the export', async () => {
@@ -1211,7 +1372,7 @@ describe('ExportSection', () => {
 
       expect(mockRun).toHaveBeenLastCalledWith(
         'glb',
-        {stripBldrsMetadata: false, compression: 'none', quality: 'balanced', portable: false, gzip: true})
+        {stripBldrsMetadata: false, compression: 'none', quality: 'balanced', portable: true, gzip: true})
     })
 
     it('re-runs the codec sweep, because gzip can reorder the codecs', async () => {

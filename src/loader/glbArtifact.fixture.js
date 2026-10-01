@@ -23,8 +23,9 @@ import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
   buildInstanceTablesExtensionData,
 } from './bldrsInstanceTables'
+import {dropBufferViews, referencedBufferViews} from './glbArtifactSize'
 import {exportBatchedModelAsInstancedGlb} from './glbBatchedExport'
-import {injectGlbExtensions, parseGlb, serializeGlb} from './injectGlbExtensions'
+import {injectGlbExtensions, parseGlb, repackGlbBin, serializeGlb} from './injectGlbExtensions'
 
 
 const GREY = {x: 0.8, y: 0.8, z: 0.8, w: 1}
@@ -125,6 +126,64 @@ export async function batchedArtifactBytes(model, opts = {}) {
   return bytes
 }
 
+
+/**
+ * Re-lay a batched artifact's vertex data the way every artifact written
+ * before the writer went `VertexLayout.SEPARATE` holds it — and so the way
+ * users' OPFS caches still hold it, since no schema bump retired them: each
+ * primitive's POSITION and NORMAL interleaved, every primitive in ONE shared
+ * bufferView at `byteStride: 24` (gltf-transform's INTERLEAVED default, then
+ * `glbSlim`'s per-class merge, #1864). That shared strided view is what three's
+ * `InterleavedBuffer.toJSON` serialises whole once per geometry, so the
+ * portable rewrite has to undo it; this is the input that proves it does.
+ *
+ * Every accessor keeps addressing the same element bytes; only the views
+ * move. Accessors two primitives share (one shape in two colours) are laid
+ * out once.
+ *
+ * @param {Uint8Array} glbBytes a batched artifact, BLDRS payloads and all
+ * @return {Uint8Array} the same artifact, interleaved
+ */
+export function interleavedLegacyArtifact(glbBytes) {
+  const {json, bin} = parseGlb(glbBytes)
+  const blocks = []
+  const seen = new Set()
+  let byteLength = 0
+  for (const mesh of json.meshes) {
+    for (const primitive of mesh.primitives) {
+      const {POSITION: position, NORMAL: normal} = primitive.attributes
+      if (seen.has(position)) {
+        continue
+      }
+      seen.add(position)
+      blocks.push({position, normal, offset: byteLength})
+      byteLength += json.accessors[position].count * 24
+    }
+  }
+  const start = Math.ceil(bin.byteLength / 4) * 4
+  const out = new Uint8Array(start + byteLength)
+  out.set(bin)
+  const viewIndex = json.bufferViews.length
+  const elementAt = (accessor, e) => {
+    const view = json.bufferViews[accessor.bufferView]
+    const at = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0) + (e * (view.byteStride || 12))
+    return bin.subarray(at, at + 12)
+  }
+  for (const {position, normal, offset} of blocks) {
+    const [p, n] = [json.accessors[position], json.accessors[normal]]
+    for (let e = 0; e < p.count; e++) {
+      out.set(elementAt(p, e), start + offset + (e * 24))
+      out.set(elementAt(n, e), start + offset + (e * 24) + 12)
+    }
+    Object.assign(p, {bufferView: viewIndex, byteOffset: offset})
+    Object.assign(n, {bufferView: viewIndex, byteOffset: offset + 12})
+  }
+  json.bufferViews.push({buffer: 0, byteOffset: start, byteLength, byteStride: 24, target: 34962})
+  const referenced = referencedBufferViews(json)
+  const orphans = new Set(json.bufferViews.map((_, i) => i).filter((i) => !referenced.has(i)))
+  const {binPlan, binByteLength} = dropBufferViews(json, orphans)
+  return serializeGlb(json, repackGlbBin(out, binPlan, binByteLength))
+}
 
 // A hand-assembled merged-layout GLB. The batched writer above can produce
 // its own bytes through `exportBatchedModelAsInstancedGlb` (gltf-transform,

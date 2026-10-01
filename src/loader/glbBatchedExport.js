@@ -454,11 +454,25 @@ export async function exportBatchedModelAsInstancedGlb(model, {collapse = false}
     })
   }
 
-  const {WebIO} = await import('@gltf-transform/core')
+  const {VertexLayout, WebIO} = await import('@gltf-transform/core')
+  // SEPARATE, not the library's INTERLEAVED default: each attribute is
+  // written tightly packed (`byteStride` = its element size), and `glbSlim`
+  // below then merges every such view into ONE shared vertex view. Under
+  // INTERLEAVED the merge produced one `byteStride: 24` view holding every
+  // mesh's POSITION+NORMAL, which three's `GLTFLoader` reads as an
+  // `InterleavedBufferAttribute` per mesh over that whole view — and
+  // `InterleavedBuffer.toJSON` serialises the entire view once per geometry.
+  // The three.js editor autosaves by `toJSON` on every import, so a DSA-sized
+  // export (28,674 instanced meshes) hung it past a 3 GB heap. Same bytes,
+  // same view count either way; see design/new/glb-export-premium.md §1.1c.
+  // Artifacts already in OPFS stay interleaved (no schema bump — both are
+  // plain glTF to every reader); the portable rewrite de-interleaves them on
+  // the way out (`export/glbPortable.js#deinterleaveVertexAttributes`).
   const io = new WebIO().registerExtensions([EXTMeshGPUInstancing])
-  // gltf-transform lays out one bufferView per mesh and spells every float
-  // bound at double precision; `slimGlbBytes` re-expresses both without
-  // moving a byte of geometry (Share#1862). It runs HERE and not in
+    .setVertexLayout(VertexLayout.SEPARATE)
+  // gltf-transform lays out one bufferView per accessor and spells every
+  // float bound at double precision; `slimGlbBytes` re-expresses both
+  // without moving a byte of geometry (Share#1862). It runs HERE and not in
   // `glbExport.js` so that the pass only ever sees this writer's output —
   // before `injectGlbExtensions` appends BLDRS_* payload views of its own.
   const {bytes, stats} = slimGlbBytes(await io.writeBinary(doc))

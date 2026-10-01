@@ -10,7 +10,10 @@ import {
   openExportTab,
   reopenLocalGlb,
   routeProModule,
+  doubleClickSelectsAnElement,
+  expectNavTreeFollowsSelection,
   selectCompression,
+  setPortable,
   setSubscriptionTier,
   waitForCodecSizing,
 } from '../../tests/e2e/export'
@@ -33,7 +36,10 @@ import {
  * every way a collapsed model reaches the viewer:
  *
  * - the OPFS cache HIT (the collapsed slot, hydrated through ranges);
- * - an Export download reopened, once per codec — None, Meshopt, Draco.
+ * - an Export download reopened, once per codec — None, Meshopt, Draco —
+ *   with Portable explicitly OFF: the subject is the batched-native file,
+ *   whose collapsed nodes Portable would split (`glbPortable.js`), and since
+ *   #1831 Portable is the default.
  *
  * Why it exists: the first cut of #1871 passed every unit test and the cache
  * E2E, and the owner's first smoke still found a Draco export of DSA that
@@ -61,111 +67,6 @@ import {
 const CODECS = ['none', 'meshopt', 'draco'] as const
 
 
-/** Which elements a double-click may aim at. */
-type ElementKind = 'collapsed' | 'instanced' | 'any'
-
-
-/**
- * Double-click an element in the scene and wait for it to be selected.
- *
- * Aims at a COLLAPSED element for `'collapsed'` (one whose batch geometry id
- * is a synthesised range — `batchedGeometryRanges.js#BATCHED_GEOMETRY_
- * RANGE_IDS`), at one that is NOT for `'instanced'`, by projecting its bounds'
- * centre to the canvas. Candidates are tried in turn because the one in front
- * at that pixel may be a different element; the assertion is that SOME
- * element of that kind, clicked, selects itself. Broken picking selects none
- * of them.
- *
- * @param page Playwright page
- * @param kind which elements to aim at
- * @return the parent expressID that got selected
- */
-async function doubleClickSelectsAnElement(page: Page, kind: ElementKind): Promise<number> {
-  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate((aimAt) => {
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    const w = window as any
-    const state = (w.store ?? w.useStore).getState()
-    const camera = state.viewer.context.getCamera()
-    const canvas = document.querySelector('canvas') as HTMLCanvasElement
-    const rect = canvas.getBoundingClientRect()
-    const out: Array<{parent: number; x: number; y: number}> = []
-    const visit = (mesh: any) => {
-      if (!mesh?.isBatchedMesh || !mesh.instanceParents) {
-        return
-      }
-      mesh.updateMatrixWorld(true)
-      mesh.computeBoundingBox()
-      const Box3 = mesh.boundingBox.constructor
-      const Matrix4 = mesh.matrixWorld.constructor
-      for (let batchId = 0; batchId < mesh.instanceParents.length; batchId++) {
-        const geometryId = mesh.getGeometryIdAt(batchId)
-        const isRange = Boolean(mesh.bldrsGeometryRangeIds?.has(geometryId))
-        if ((aimAt === 'collapsed' && !isRange) || (aimAt === 'instanced' && isRange)) {
-          continue
-        }
-        const box = new Box3()
-        const matrix = new Matrix4()
-        mesh.getBoundingBoxAt(geometryId, box)
-        mesh.getMatrixAt(batchId, matrix)
-        const centre = box.applyMatrix4(matrix.premultiply(mesh.matrixWorld))
-          .getCenter(mesh.boundingBox.min.clone()).project(camera)
-        // Inside the viewport, off its very edge (normalised device coords).
-        const ON_SCREEN = 0.95
-        if (Math.abs(centre.x) < ON_SCREEN && Math.abs(centre.y) < ON_SCREEN) {
-          out.push({
-            parent: mesh.instanceParents[batchId],
-            x: rect.left + (((centre.x + 1) / 2) * rect.width),
-            y: rect.top + (((1 - centre.y) / 2) * rect.height),
-          })
-        }
-      }
-    }
-    const model = state.model
-    if (model?.traverse) {
-      model.traverse(visit)
-    } else {
-      visit(model)
-    }
-    return out
-    /* eslint-enable @typescript-eslint/no-explicit-any */
-  }, kind)
-  expect(candidates.length, 'there must be an element of the kind under test on screen')
-    .toBeGreaterThan(0)
-
-  const MAX_TRIES = 8
-  for (const {parent, x, y} of candidates.slice(0, MAX_TRIES)) {
-    await page.mouse.dblclick(x, y)
-    const selected = await page.waitForFunction((id) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const w = window as any
-      return ((w.store ?? w.useStore).getState().selectedElements ?? []).includes(`${id}`)
-    }, parent, {timeout: 3000}).then(() => true, () => false)
-    if (selected) {
-      return parent
-    }
-  }
-  throw new Error('double-click selected none of the elements it was aimed at')
-}
-
-
-/**
- * The rest of the user-visible selection: the NavTree row and the URL.
- *
- * @param page Playwright page
- */
-async function expectNavTreeFollowsSelection(page: Page) {
-  const panel = page.getByTestId('NavTreePanel')
-  if (!await panel.isVisible()) {
-    await page.getByTestId('control-button-navigation').click()
-  }
-  await expect(panel).toBeVisible()
-  await expect(page.locator('[data-is-selected="true"]').first()).toBeVisible()
-  // The element path follows the model file in the URL, before any query or
-  // hash (`/index.ifc/89/112/…/396?feature=…`).
-  await expect(page).toHaveURL(/\.(ifc|glb)(\/\d+)+(\?|#|$)/)
-}
-
-
 /**
  * Export the current model with `mode` and save it under a name the local
  * loader recognises.
@@ -187,21 +88,27 @@ async function exportWith(page: Page, mode: string, name: string): Promise<strin
 
 /** A Draco bitstream's method byte: 'DRACO', major, minor, encoder type, METHOD. */
 const DRACO_METHOD_BYTE = 8
-const DRACO_SEQUENTIAL = 0
 const DRACO_EDGEBREAKER = 1
+/** The row tag's glTF semantic (`loader/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`). */
+const ROW_TAG_SEMANTIC = '_BLDRS_ROW'
 const GLB_HEADER_BYTES = 12
 const GLB_CHUNK_HEADER_BYTES = 8
+
+
+/** What one node kind's primitives hold in an exported Draco file. */
+type DracoKind = {methods: Set<number>; primitives: number; tagged: number}
 
 
 /**
  * The Draco method each node kind of an exported file was encoded with, read
  * off every primitive's bitstream header — what the file actually holds, not
- * what the encoder was asked for.
+ * what the encoder was asked for — and how many of its primitives carry the
+ * row tag, in both the glTF attributes and the Draco extension's.
  *
  * @param bytes one exported GLB
- * @return the methods seen under collapsed nodes and under instanced ones
+ * @return per kind, the methods seen, the primitive count and the tagged count
  */
-function dracoMethodsByNodeKind(bytes: Buffer): {collapsed: Set<number>; instanced: Set<number>} {
+function dracoByNodeKind(bytes: Buffer): {collapsed: DracoKind; instanced: DracoKind} {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const json: any = glbJsonChunk(bytes)
   const jsonLength = bytes.readUInt32LE(GLB_HEADER_BYTES)
@@ -212,13 +119,21 @@ function dracoMethodsByNodeKind(bytes: Buffer): {collapsed: Set<number>; instanc
     expect(bytes.subarray(at, at + 5).toString('latin1')).toBe('DRACO')
     return bytes[at + DRACO_METHOD_BYTE]
   })
-  const out = {collapsed: new Set<number>(), instanced: new Set<number>()}
+  const kinds = () => ({methods: new Set<number>(), primitives: 0, tagged: 0})
+  const out = {collapsed: kinds(), instanced: kinds()}
   for (const node of json.nodes ?? []) {
     if (!Number.isInteger(node.mesh) || !Number.isInteger(node.extras?.bldrsTableNode)) {
       continue
     }
-    const kind = node.extensions?.EXT_mesh_gpu_instancing ? 'instanced' : 'collapsed'
-    methodsOf(node.mesh).forEach((method: number) => out[kind].add(method))
+    const kind = out[node.extensions?.EXT_mesh_gpu_instancing ? 'instanced' : 'collapsed']
+    methodsOf(node.mesh).forEach((method: number) => kind.methods.add(method))
+    for (const primitive of json.meshes[node.mesh].primitives) {
+      kind.primitives++
+      if (ROW_TAG_SEMANTIC in primitive.attributes &&
+          ROW_TAG_SEMANTIC in primitive.extensions.KHR_draco_mesh_compression.attributes) {
+        kind.tagged++
+      }
+    }
   }
   return out
   /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -259,6 +174,10 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     await auth0Login(page)
     await openExportTab(page)
     await dismissLoadSnackbar(page)
+    // The batched-native download: the collapsed ranges, their canary and
+    // the per-primitive Draco method all live in its instance tables and its
+    // EXT_mesh_gpu_instancing nodes, which Portable (the default) rewrites.
+    await setPortable(page, false)
     await waitForCodecSizing(page)
     const paths = []
     for (const mode of CODECS) {
@@ -284,20 +203,17 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     }
   })
 
-  test('a hybrid Draco export is spliced, and both kinds of element reopen selectable', async ({page}) => {
+  test('a hybrid Draco export is one EDGEBREAKER write, and both kinds of element reopen selectable', async ({page}) => {
     // `index.ifc` under the collapse is HYBRID — five single-placement
     // elements merge into one primitive while one shape placed twice stays an
-    // instanced node — which is the file shape the per-primitive Draco method
-    // exists for (`export/dracoMethodSplice.js`): the collapsed primitive must
-    // be SEQUENTIAL for its rows to survive, the instanced one should be
-    // EDGEBREAKER like it is with the collapse off. That takes two encoder
-    // writes joined into one file, so this is the browser test of the join:
-    // the method bytes prove the file went through it, and a double-click on
-    // each kind proves nothing it rewrote broke decode, the witness or picking.
-    // Verified red against a broken join: an un-swapped collapsed payload is
-    // refused by the witness, an un-re-laid BIN never finishes loading. The two
-    // methods happen to agree on this small model's accessor counts and index
-    // type, so the checks on copying those live in `dracoMethodSplice.test.js`.
+    // instanced node. Every primitive is EDGEBREAKER, the collapsed one
+    // carrying the per-vertex row tag its reader regroups triangles by
+    // (`loader/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`), so this is the
+    // browser test of the tag through three's own DRACOLoader: the method
+    // bytes and the attribute prove the file is the tagged layout, the
+    // `regrouped` log proves the reader took the tag path rather than the
+    // untagged one, and a double-click on each kind proves the rows it rebuilt
+    // are the elements they claim to be.
     test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
     const glbLogs = captureGlbLogs(page)
@@ -313,14 +229,20 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     await auth0Login(page)
     await openExportTab(page)
     await dismissLoadSnackbar(page)
+    // The batched-native download: the collapsed ranges, their canary and
+    // the per-primitive Draco method all live in its instance tables and its
+    // EXT_mesh_gpu_instancing nodes, which Portable (the default) rewrites.
+    await setPortable(page, false)
     await waitForCodecSizing(page)
     const path = await exportWith(page, 'draco', 'hybrid')
     await page.keyboard.press('Escape')
 
-    // One file, two methods: a single-write encode (either method) fails here.
-    const methods = dracoMethodsByNodeKind(await readFile(path))
-    expect([...methods.collapsed], 'collapsed primitives: SEQUENTIAL').toEqual([DRACO_SEQUENTIAL])
-    expect([...methods.instanced], 'instanced primitives: EDGEBREAKER').toEqual([DRACO_EDGEBREAKER])
+    const kinds = dracoByNodeKind(await readFile(path))
+    expect([...kinds.collapsed.methods], 'collapsed primitives: EDGEBREAKER').toEqual([DRACO_EDGEBREAKER])
+    expect([...kinds.instanced.methods], 'instanced primitives: EDGEBREAKER').toEqual([DRACO_EDGEBREAKER])
+    expect(kinds.collapsed.primitives, 'collapsed primitives in the file').toBeGreaterThan(0)
+    expect(kinds.collapsed.tagged, 'every collapsed primitive row-tagged').toBe(kinds.collapsed.primitives)
+    expect(kinds.instanced.tagged, 'no instanced primitive row-tagged').toBe(0)
 
     resetGlbLogs(glbLogs)
     await reopenLocalGlb(page, path)
@@ -330,6 +252,8 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     const hydrated = glbLogs.find((l) => l.includes('collapsed table(s)')) ?? ''
     expect(Number(/(\d+) collapsed table/.exec(hydrated)?.[1]), 'collapsed tables hydrated')
       .toBeGreaterThan(0)
+    expect(glbLogs.some((l) => /regrouped [1-9]\d* row-tagged triangle/.test(l)),
+      'the reader regrouped by the row tag').toBe(true)
     const collapsed = await doubleClickSelectsAnElement(page, 'collapsed')
     await expectNavTreeFollowsSelection(page)
     // On the mobile form factor the NavTree panel covers the canvas, so the
@@ -353,6 +277,10 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     await auth0Login(page)
     await openExportTab(page)
     await dismissLoadSnackbar(page)
+    // The batched-native download: the collapsed ranges, their canary and
+    // the per-primitive Draco method all live in its instance tables and its
+    // EXT_mesh_gpu_instancing nodes, which Portable (the default) rewrites.
+    await setPortable(page, false)
     await waitForCodecSizing(page)
     const path = await exportWith(page, 'draco', 'instanced')
     await page.keyboard.press('Escape')
