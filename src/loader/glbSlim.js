@@ -20,7 +20,11 @@ import {parseGlb, serializeGlb} from './injectGlbExtensions'
  *    view count tracks the mesh count: 28,679 views, 2,313,763 B of JSON.
  *    `VertexLayout.SEPARATE` is worse (two per mesh, measured), and the
  *    library exposes no cross-mesh packing knob — hence a pass over its
- *    output rather than a setting. Accessors are rebased onto the merged
+ *    output rather than a setting. (The batched writer now asks for SEPARATE
+ *    anyway, since #1831: every view is then `byteStride: 12`, so this merge
+ *    still yields ONE vertex view, but a planar one — the INTERLEAVED merge's
+ *    shared `byteStride: 24` view is what three.js serialises whole once per
+ *    geometry, `glbBatchedExport.js`.) Accessors are rebased onto the merged
  *    view, which is legal because nothing in glTF requires an accessor's
  *    `byteOffset` to be smaller than the view's `byteStride`; Khronos
  *    `gltf-validator` reports 0 errors and 0 warnings on the result, an issue

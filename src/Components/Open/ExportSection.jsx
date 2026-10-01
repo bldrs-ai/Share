@@ -88,12 +88,18 @@ export default function ExportSection() {
   // moves under the cursor because a later-arriving figure turned out smaller
   // is worse than a suboptimal default (#1850).
   const [isCodecUserChosen, setIsCodecUserChosen] = useState(false)
-  // Default OFF: the batched-native shape is smaller and is what Share itself
-  // reads best, and the rewrite trades JSON for portability — one node per
-  // placement, which on a big model is megabytes of names and transforms no
-  // codec compresses. It is the informed choice, so it is the opt-in one
-  // (#1843).
-  const [isPortable, setIsPortable] = useState(false)
+  // Default ON (owner decision, #1831): a file the user downloads is one they
+  // mean to open somewhere, and the batched-native shape is refused outright
+  // by viewers that don't implement `EXT_mesh_gpu_instancing` (3dviewer.net)
+  // and opens as a flat `mesh_N` list in the rest. Share reads both shapes
+  // back to the same pickable model (#1849), so nothing is lost for Share
+  // either. What it costs is JSON — one node per placement, ~100 B each
+  // (glb-export-premium.md §4.3) — which on an instance-heavy model can be
+  // most of the file; the helper text below says so, and turning it off is
+  // the informed choice. Not persisted anywhere: every visit starts portable,
+  // and a "Download again" row replays the options it recorded, so rows
+  // written while the default was off still reproduce their native file.
+  const [isPortable, setIsPortable] = useState(true)
   // Default Balanced, which for Meshopt means `FILTER`: −39.1% measured, with
   // positions bit-exact and only shading normals rounded. The reasoning, and
   // why a lossless rung still has to be reachable, is `exportQuality.js`
@@ -466,6 +472,19 @@ export default function ExportSection() {
           data-testid='export-portable'
         />
       </Stack>
+      {/* Under the toggle rather than in its caption: this is the one
+          default whose OFF side needs explaining — what instancing buys, and
+          where it stops opening — and the row caption has room for a phrase,
+          not a trade-off. */}
+      <Typography
+        variant='caption'
+        color='text.secondary'
+        component='p'
+        sx={{mt: '0.25em'}}
+        data-testid='export-portable-help'
+      >
+        {MSG_PORTABLE_HELP}
+      </Typography>
       {/* An exclusive three-way choice rather than two more switches: the
           codecs are alternatives, not independent options, and a group makes
           that unmistakable. `flexWrap` because at 390px the label and three
@@ -750,3 +769,9 @@ const MSG_LOGIN_TO_EXPORT = 'Log in to export this model as a GLB'
 // now that the round trip closes. Short enough to stay on one line at 390px
 // beside the toggle.
 const MSG_GZIP_CAPTION = 'gzip — saves a .glb.gz, reopens in Share'
+// Owner's wording (#1831). What turning Portable OFF buys and what it costs,
+// since ON is now the default: instancing stores a repeated part once, and
+// `EXT_mesh_gpu_instancing` is a required extension some viewers refuse.
+const MSG_PORTABLE_HELP =
+  'Portable files open in any glTF viewer. Turn off to keep instancing: repeated parts are ' +
+  'stored once, which can make very large models much smaller, but some viewers don\'t support it.'
