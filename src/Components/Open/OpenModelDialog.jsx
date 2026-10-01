@@ -267,7 +267,10 @@ export default function OpenModelDialog({
   }
 
   const openFile = () => {
-    if (!isOpfsAvailable) {
+    // `false`, not falsy: the store holds `null` until BaseRoutes' probe
+    // resolves, and that means "not known yet", not "unavailable". Browse is
+    // disabled while it's `null` (below), so this only fires on a real no.
+    if (isOpfsAvailable === false) {
       // Tracked so #1906's priority can follow how often this is hit.
       trackAlert(NO_OPFS_LOCAL_FILE_ALERT)
       setIsDialogDisplayed(false)
@@ -404,6 +407,11 @@ export default function OpenModelDialog({
               onBrowse={openFile}
               browseButtonLabel='Browse'
               browseButtonTestId='button_open_file'
+              // Until the OPFS probe resolves we can't pick a path, and
+              // awaiting it in the click would spend the user activation
+              // Safari needs for the file chooser. It resolves within the
+              // first moments of startup.
+              disabled={isOpfsAvailable === null}
             />
             {!isMobile &&
                 <Stack spacing={1} sx={{mt: 4}}>

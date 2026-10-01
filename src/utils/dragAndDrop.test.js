@@ -1,6 +1,6 @@
 import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from './dragAndDrop'
 import {guessTypeFromFile} from '../Filetype'
-import {saveDnDFileToOpfs} from '../OPFS/utils'
+import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {NO_OPFS_LOCAL_FILE_ALERT} from '../OPFS/messages'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
@@ -189,6 +189,31 @@ describe('dragAndDrop utility', () => {
       expect(mockNavigate).not.toHaveBeenCalled()
       expect(addRecentFileEntry).not.toHaveBeenCalled()
       expect(mockOnSuccess).not.toHaveBeenCalled()
+    })
+
+    // `null` is the store before BaseRoutes' probe resolves: "not known yet",
+    // which must not read as "unavailable".
+    it('asks for OPFS itself when the store has not resolved it yet', async () => {
+      mockEvent.dataTransfer.files = [{name: 'test.ifc', type: 'application/octet-stream', size: 1024}]
+      guessTypeFromFile.mockResolvedValue('ifc')
+      checkOPFSAvailability.mockResolvedValue(true)
+
+      await handleFileDrop(mockEvent, mockNavigate, '/prefix', null, mockSetAlert)
+
+      expect(checkOPFSAvailability).toHaveBeenCalled()
+      expect(saveDnDFileToOpfs).toHaveBeenCalled()
+      expect(mockSetAlert).not.toHaveBeenCalled()
+    })
+
+    it('alerts when the store has not resolved OPFS and the probe says no', async () => {
+      mockEvent.dataTransfer.files = [{name: 'test.ifc', type: 'application/octet-stream', size: 1024}]
+      guessTypeFromFile.mockResolvedValue('ifc')
+      checkOPFSAvailability.mockResolvedValue(false)
+
+      await handleFileDrop(mockEvent, mockNavigate, '/prefix', null, mockSetAlert)
+
+      expect(mockSetAlert).toHaveBeenCalledWith(NO_OPFS_LOCAL_FILE_ALERT)
+      expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
     })
 
     it('records the file in recent history after successful drop', async () => {

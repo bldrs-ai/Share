@@ -427,6 +427,17 @@ describe('OpenModelDialog — Local tab', () => {
     expect(mockSetIsDialogDisplayed).toHaveBeenCalledWith(false)
   })
 
+  // `null` means BaseRoutes' probe hasn't resolved: not known yet, so neither
+  // path can be chosen, and awaiting the probe in the click would spend the
+  // user activation Safari needs for the chooser.
+  it('disables Browse until the store has resolved OPFS availability', () => {
+    act(() => useStore.setState({isOpfsAvailable: null}))
+    renderLocalTab([])
+    expect(screen.getByTestId('button_open_file')).toBeDisabled()
+    act(() => useStore.setState({isOpfsAvailable: true}))
+    expect(screen.getByTestId('button_open_file')).toBeEnabled()
+  })
+
   it('falls back to the storage id as display name when the picker gives no filename', async () => {
     loadLocalFile.mockImplementation((onLoad) => onLoad(STORAGE_ID, null))
     renderLocalTab([])

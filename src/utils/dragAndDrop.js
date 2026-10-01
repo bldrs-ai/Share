@@ -1,6 +1,6 @@
 import {guessTypeFromFile} from '../Filetype'
 import {NO_OPFS_LOCAL_FILE_ALERT} from '../OPFS/messages'
-import {saveDnDFileToOpfs} from '../OPFS/utils'
+import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {disablePageReloadApprovalCheck} from './event'
@@ -15,7 +15,8 @@ import debug, {WARN} from './debug'
  * @param {DragEvent} event The drop event
  * @param {Function} navigate React Router navigate function
  * @param {string} appPrefix App prefix for navigation
- * @param {boolean} isOpfsAvailable Whether OPFS is available
+ * @param {boolean|null} isOpfsAvailable Whether OPFS is available; `null`
+ *   while the startup probe is still running, in which case it is asked here
  * @param {Function} setAlert Function to set alert messages
  * @param {Function} [onSuccess] Optional callback when file is successfully processed
  * @param {Function} [onError] Optional callback when an error occurs
@@ -46,7 +47,11 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     return
   }
 
-  if (!isOpfsAvailable) {
+  // `null` is the store's "probe not resolved yet" (BaseRoutes sets it at
+  // startup), not "unavailable". A drop has no user-activation constraint,
+  // so ask directly rather than guess.
+  const hasOpfs = isOpfsAvailable === null ? await checkOPFSAvailability() : isOpfsAvailable
+  if (!hasOpfs) {
     // Tracked so #1906's priority can follow how often this is hit.
     trackAlert(NO_OPFS_LOCAL_FILE_ALERT)
     setAlert(NO_OPFS_LOCAL_FILE_ALERT)
