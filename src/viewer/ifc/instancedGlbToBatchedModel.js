@@ -218,17 +218,50 @@ function joinNodesToTables(gltfModel, tables) {
 function regroupByRowTag(table, geometry) {
   const tag = geometry.getAttribute(ROW_TAG_ATTRIBUTE)
   geometry.deleteAttribute(ROW_TAG_ATTRIBUTE)
-  const index = geometry.getIndex?.()
-  const rowCount = table.ranges.length
+  const rows = groupTrianglesByRowTag(tag, geometry.getIndex?.(), 0, table.ranges.length)
+  if (!rows) {
+    return null
+  }
+  glbVerbose(`reader: regrouped ${geometry.getIndex().count / 3} row-tagged triangle(s) into ` +
+    `${table.ranges.length} row(s)`)
+  return rebuildLossyCollapsed(table, (r) => ({
+    geometry,
+    count: rows.counts[r],
+    pointAt: (i) => rows.grouped[rows.starts[r] + i],
+  }))
+}
+
+
+/**
+ * Group a row-tagged primitive's triangles by the row their corners name,
+ * stably — the step `regroupByRowTag` and a grouped portable piece
+ * (`portableLossyRows`) share.
+ *
+ * The primitive holds rows `firstRow` .. `firstRow + rowCount - 1` of its
+ * table: all of them for the merged artifact's primitive, one element's for a
+ * portable piece. A tag naming any other row, or a triangle whose corners
+ * disagree, refuses the primitive — the tags do not belong to this geometry,
+ * and no triangle is guessed into a row.
+ *
+ * @param {object} tag the decoded {@link ROW_TAG_ATTRIBUTE}
+ * @param {?object} index the primitive's index attribute
+ * @param {number} firstRow the first table row it holds
+ * @param {number} rowCount how many
+ * @return {?{counts: Uint32Array, starts: Uint32Array, grouped: Uint32Array}}
+ *   per held row (k = row - firstRow): its corner count, where its corners
+ *   start in `grouped`, and the vertex indices themselves; or null
+ */
+function groupTrianglesByRowTag(tag, index, firstRow, rowCount) {
   if (!index || index.count % 3 !== 0 || (tag.itemSize !== 1 && tag.itemSize !== 2)) {
     return null
   }
   const triangleRows = new Uint32Array(index.count / 3)
   const counts = new Uint32Array(rowCount)
+  const heldRowOf = (vertex) => rowOfTag(tag, vertex) - firstRow
   for (let t = 0; t < triangleRows.length; t++) {
-    const row = rowOfTag(tag, index.getX(t * 3))
-    if (row >= rowCount || rowOfTag(tag, index.getX((t * 3) + 1)) !== row ||
-        rowOfTag(tag, index.getX((t * 3) + 2)) !== row) {
+    const row = heldRowOf(index.getX(t * 3))
+    if (row < 0 || row >= rowCount || heldRowOf(index.getX((t * 3) + 1)) !== row ||
+        heldRowOf(index.getX((t * 3) + 2)) !== row) {
       glbInfo('reader: a row-tagged triangle spans rows or names no row; refusing')
       return null
     }
@@ -247,12 +280,7 @@ function regroupByRowTag(table, geometry) {
       grouped[cursor[row]++] = index.getX((t * 3) + k)
     }
   }
-  glbVerbose(`reader: regrouped ${triangleRows.length} row-tagged triangle(s) into ${rowCount} row(s)`)
-  return rebuildLossyCollapsed(table, (r) => ({
-    geometry,
-    count: counts[r],
-    pointAt: (i) => grouped[starts[r] + i],
-  }))
+  return {counts, starts, grouped}
 }
 
 
@@ -555,6 +583,13 @@ function detectArtifactShape(gltfModel, tables) {
  * is NOT that order: the rewrite emits nodes in spatial-tree order, and an
  * element the tree does not name lands under `Unassigned` at the end.
  *
+ * A node may also carry `extras.bldrsRowCount`: it then covers rows
+ * `bldrsInstance` .. `bldrsInstance + bldrsRowCount - 1` of a COLLAPSED table,
+ * the rows of one element the rewrite put in one mesh (#1900). Every row must
+ * still be covered exactly once, by a single piece or a run, or the file is
+ * refused; a count on an instanced table's node is refused outright, since
+ * one node cannot carry several placements' matrices.
+ *
  * The matrix is the node's WORLD matrix expressed in the model root's frame,
  * because portable nodes are nested (element under storey under project) and
  * a single-placement element carries its TRS on the element node itself
@@ -588,6 +623,10 @@ function joinPortableNodesToTables(gltfModel, tables) {
     toModelSpace.copy(gltfModel.matrixWorld).invert()
   }
 
+  // `slots[t][row]` is the PIECE covering that row: `{mesh, firstRow,
+  // rowCount}`. One row per piece except where the rewrite grouped an
+  // element's collapsed rows into one mesh (`bldrsRowCount`, #1900); then
+  // every row of the run points at the same piece.
   const slots = tables.map((table) => new Array(table.count).fill(null))
   let bad = false
   gltfModel.traverse?.((obj) => {
@@ -611,14 +650,26 @@ function joinPortableNodesToTables(gltfModel, tables) {
       return
     }
     const row = obj.userData?.bldrsInstance
-    if (!Number.isInteger(row) || row < 0 || row >= slots[index].length ||
-        slots[index][row] !== null) {
+    const rowCount = obj.userData?.bldrsRowCount ?? 1
+    // A grouped piece only exists for a collapsed table: an instanced table's
+    // rows share one geometry and differ by matrix, which one node cannot
+    // carry for several rows.
+    if (!Number.isInteger(row) || row < 0 || !Number.isInteger(rowCount) || rowCount < 1 ||
+        (rowCount > 1 && !isCollapsedTable(tables[index])) ||
+        row + rowCount > slots[index].length) {
       bad = true
       return
     }
-    slots[index][row] = obj
+    const piece = {mesh: obj, firstRow: row, rowCount}
+    for (let r = row; r < row + rowCount; r++) {
+      if (slots[index][r] !== null) {
+        bad = true
+        return
+      }
+      slots[index][r] = piece
+    }
   })
-  if (bad || slots.some((rows) => rows.some((mesh) => mesh === null))) {
+  if (bad || slots.some((rows) => rows.some((piece) => piece === null))) {
     return null
   }
 
@@ -629,15 +680,16 @@ function joinPortableNodesToTables(gltfModel, tables) {
   // node copies it makes for it — but it is the assumption that would render
   // the wrong shape rather than fail, so it is checked.
   const sources = []
-  for (const [t, rows] of slots.entries()) {
+  for (const [t, pieces] of slots.entries()) {
     if (isCollapsedTable(tables[t])) {
-      const source = remergeCollapsedRows(rows, tables[t], toModelSpace)
+      const source = remergeCollapsedRows(pieces, tables[t], toModelSpace)
       if (!source) {
         return null
       }
       sources.push(source)
       continue
     }
+    const rows = pieces.map(({mesh}) => mesh)
     // `?.` because a `count: 0` table has no row 0: `BldrsInstanceTablesReader`
     // admits that count (it rejects only a negative or non-integer one) and the
     // null-slot check above passes vacuously on the empty slot list, so this is
@@ -657,8 +709,9 @@ function joinPortableNodesToTables(gltfModel, tables) {
 
 /**
  * Rebuild a collapsed table's merged primitive from a portable file, where
- * the rewrite split it into one mesh per row (`glbPortable.js#
- * splitCollapsedNodes`).
+ * the rewrite split it into one mesh per ELEMENT (`glbPortable.js#
+ * splitCollapsedNodes`): a piece holding one row, or — for an element of
+ * several rows (#1900) — a run of them, back to back.
  *
  * Re-merged rather than added row by row, for the rule §1.1d states: a
  * collapsed element's placement is baked into its vertices, so two rows of
@@ -667,39 +720,31 @@ function joinPortableNodesToTables(gltfModel, tables) {
  * (`batchedGeometryRanges.js#BATCHED_GEOMETRY_RANGE_IDS`), which is what
  * keeps `batchedInstanceGeometry`'s per-pass cache from handing one row's
  * triangles to the other. Adding each row as its own geometry would skip that
- * mark and reintroduce the bug #1870's review caught.
+ * mark and reintroduce the bug #1870's review caught. The same holds inside a
+ * grouped piece: its rows go back to their own ranges, never one geometry for
+ * the element, so a pick still names the row it hit.
  *
  * Re-merging also lets the SAME canary witness the portable file: the split
- * keeps every row's vertex bytes and makes its indices local, so the
- * concatenation is the merged primitive the writer hashed.
+ * keeps every row's vertex bytes and makes each piece's indices relative to
+ * its first vertex, so placing each piece at its first row's starts restores
+ * the merged primitive the writer hashed. Where one piece's rows divide is
+ * not stored in the piece at all — the table's own ranges say it, and the
+ * canary refuses a piece whose rows do not divide there.
  *
- * @param {Array<object>} rows placement meshes, indexed by table row
+ * @param {Array<object>} slots per table row, the piece covering it:
+ *   `{mesh, firstRow, rowCount}`
  * @param {object} table parsed collapsed table
  * @param {Matrix4} toModelSpace inverse of the model root's world matrix
  * @return {?object} placement source carrying `ranges`, or null
  */
-function remergeCollapsedRows(rows, table, toModelSpace) {
-  const matrixOfRow = (i, target) => target.multiplyMatrices(toModelSpace, rows[i].matrixWorld)
+function remergeCollapsedRows(slots, table, toModelSpace) {
+  // Per ROW, not one matrix for the table as the instanced-file join uses:
+  // each piece is its own node here, and a tool is free to have moved one.
+  const matrixOfRow = (i, target) => target.multiplyMatrices(toModelSpace, slots[i].mesh.matrixWorld)
+  const pieces = slots.filter((piece, row) => piece.firstRow === row)
   if (table.lossyGeometry) {
-    // Each row is its own Draco primitive, with its own merged and quantized
-    // vertices, so rebuild from each row's triangles — the whole index — and
-    // check the lossy witness, as the instanced join does for a merged one.
-    // The count is the one DECODED, not the table's: the export strips each
-    // row's zero-area triangles before EDGEBREAKER would (`collapsedWitness.
-    // js#planCollapsedDraco`) and hashes what it kept, so the witness's
-    // identity hash is what holds a row to its count. Every triangle of the
-    // row's primitive is in it, so nothing rides along unhashed.
-    if (rows.some((row) => {
-      const count = row.geometry?.getIndex?.()?.count
-      return !Number.isInteger(count) || count === 0 || count % 3 !== 0
-    })) {
-      return null
-    }
-    const rebuilt = rebuildLossyCollapsed(table, (r) => ({
-      geometry: rows[r].geometry,
-      count: rows[r].geometry.getIndex().count,
-      pointAt: (i) => rows[r].geometry.getIndex().getX(i),
-    }))
+    const rowAt = portableLossyRows(pieces, table)
+    const rebuilt = rowAt && rebuildLossyCollapsed(table, rowAt)
     return rebuilt && {...rebuilt, getMatrixAt: matrixOfRow}
   }
   const {ranges} = table
@@ -709,16 +754,28 @@ function remergeCollapsedRows(rows, table, toModelSpace) {
   }
   const vertexTotal = last.vertexStart + last.vertexCount
   const positions = new Float32Array(vertexTotal * 3)
-  const normals = new Float32Array(vertexTotal * 3)
+  // In the pieces' OWN storage, not always float: a Meshopt export stores
+  // normals as normalized Int8 (its FILTER mode), GLTFLoader hands them back
+  // that way, and so does every instanced table's geometry beside this one.
+  // `BatchedMesh` takes one format per attribute for the whole batch and
+  // throws on the first geometry that differs — which, with a float re-merge,
+  // was every hybrid model's portable Meshopt export, refused at load. Written
+  // through `setXYZ`, which re-normalizes what `getX` de-normalized: exact for
+  // the integer formats glTF allows.
+  const firstNormal = pieces[0]?.mesh.geometry?.getAttribute?.('normal')
+  const NormalArray = firstNormal ? firstNormal.array.constructor : Float32Array
+  const isNormalized = Boolean(firstNormal?.normalized)
+  const normals = new BufferAttribute(new NormalArray(vertexTotal * 3), 3, isNormalized)
   const indices = new Uint32Array(last.indexStart + last.indexCount)
   let hasNormals = true
-  for (let r = 0; r < rows.length; r++) {
-    const geometry = rows[r].geometry
+  for (const {mesh, firstRow, rowCount} of pieces) {
+    const geometry = mesh.geometry
     const position = geometry?.getAttribute?.('position')
     const normal = geometry?.getAttribute?.('normal')
     const index = geometry?.getIndex?.()
-    const {vertexStart, vertexCount, indexStart, indexCount} = ranges[r]
-    if (!position || !index || position.count !== vertexCount || index.count !== indexCount) {
+    const {vertexStart, vertexCount, indexStart, indexCount} = spanOfRows(ranges, firstRow, rowCount)
+    if (!position || !index || position.count !== vertexCount || index.count !== indexCount ||
+        (normal && (normal.array.constructor !== NormalArray || normal.normalized !== isNormalized))) {
       return null
     }
     hasNormals = hasNormals && Boolean(normal)
@@ -728,9 +785,7 @@ function remergeCollapsedRows(rows, table, toModelSpace) {
       positions[at + 1] = position.getY(v)
       positions[at + 2] = position.getZ(v)
       if (normal) {
-        normals[at] = normal.getX(v)
-        normals[at + 1] = normal.getY(v)
-        normals[at + 2] = normal.getZ(v)
+        normals.setXYZ(vertexStart + v, normal.getX(v), normal.getY(v), normal.getZ(v))
       }
     }
     for (let i = 0; i < indexCount; i++) {
@@ -744,19 +799,111 @@ function remergeCollapsedRows(rows, table, toModelSpace) {
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new BufferAttribute(positions, 3))
   if (hasNormals) {
-    geometry.setAttribute('normal', new BufferAttribute(normals, 3))
+    geometry.setAttribute('normal', normals)
   }
   geometry.setIndex(new BufferAttribute(indices, 1))
   if (!isCollapsedGeometryWitnessed(geometry, table)) {
     return null
   }
+  return {geometry, ranges, getMatrixAt: matrixOfRow}
+}
+
+
+/**
+ * Where a run of consecutive rows sits in the merged primitive: from the
+ * first row's starts to the end of the last row. Contiguous by construction,
+ * since the ranges are prefix sums of the stored counts.
+ *
+ * @param {Array<object>} ranges the table's
+ * @param {number} firstRow
+ * @param {number} rowCount
+ * @return {{vertexStart: number, vertexCount: number, indexStart: number,
+ *   indexCount: number}}
+ */
+function spanOfRows(ranges, firstRow, rowCount) {
+  const first = ranges[firstRow]
+  const last = ranges[firstRow + rowCount - 1]
   return {
-    geometry,
-    ranges,
-    // Per ROW, not one matrix for the table as the instanced-file join uses:
-    // each row is its own node here, and a tool is free to have moved one.
-    getMatrixAt: (i, target) => target.multiplyMatrices(toModelSpace, rows[i].matrixWorld),
+    vertexStart: first.vertexStart,
+    vertexCount: last.vertexStart + last.vertexCount - first.vertexStart,
+    indexStart: first.indexStart,
+    indexCount: last.indexStart + last.indexCount - first.indexStart,
   }
+}
+
+
+/**
+ * Each row's triangles in a lossy (Draco) portable file, for
+ * `rebuildLossyCollapsed`: found in its piece by the piece's own layout.
+ *
+ * - **One row** — every triangle of the piece is the row's, at the DECODED
+ *   count, not the table's: the export strips each row's zero-area triangles
+ *   before EDGEBREAKER would (`collapsedWitness.js#planCollapsedDraco`) and
+ *   hashes what it kept, so the witness's identity hash is what holds a row
+ *   to its count. Every triangle of the primitive is in it, so nothing rides
+ *   along unhashed.
+ * - **Several rows, row-tagged** — what the export writes for a grouped
+ *   element (#1900): EDGEBREAKER reordered the triangles across its rows, and
+ *   each vertex's `_BLDRS_ROW` says whose it is, exactly as in the merged
+ *   artifact's primitive (`groupTrianglesByRowTag`). The tag names TABLE
+ *   rows, so a tag outside this piece's run refuses it.
+ * - **Several rows, untagged** — the SEQUENTIAL fallback, whose triangles are
+ *   in row order and complete: row r is the next run of the table's own index
+ *   count, and the runs must tile the piece exactly.
+ *
+ * The tag is dropped from the decoded geometry once read, as
+ * `regroupByRowTag` does.
+ *
+ * @param {Array<object>} pieces `{mesh, firstRow, rowCount}`, in row order,
+ *   covering the table
+ * @param {object} table parsed collapsed table
+ * @return {?function(number): object} row → `{geometry, count, pointAt}`,
+ *   or null when a piece cannot be read that way
+ */
+function portableLossyRows(pieces, table) {
+  const rows = new Array(table.ranges.length)
+  let regrouped = 0
+  for (const {mesh, firstRow, rowCount} of pieces) {
+    const geometry = mesh.geometry
+    const index = geometry?.getIndex?.()
+    if (!index || !Number.isInteger(index.count) || index.count === 0 || index.count % 3 !== 0) {
+      return null
+    }
+    const tag = geometry.getAttribute?.(ROW_TAG_ATTRIBUTE)
+    if (tag) {
+      geometry.deleteAttribute(ROW_TAG_ATTRIBUTE)
+      const grouped = groupTrianglesByRowTag(tag, index, firstRow, rowCount)
+      if (!grouped) {
+        return null
+      }
+      regrouped++
+      for (let k = 0; k < rowCount; k++) {
+        rows[firstRow + k] = {
+          geometry,
+          count: grouped.counts[k],
+          pointAt: (i) => grouped.grouped[grouped.starts[k] + i],
+        }
+      }
+    } else if (rowCount === 1) {
+      rows[firstRow] = {geometry, count: index.count, pointAt: (i) => index.getX(i)}
+    } else {
+      let start = 0
+      for (let k = 0; k < rowCount; k++) {
+        const at = start
+        const count = table.ranges[firstRow + k].indexCount
+        rows[firstRow + k] = {geometry, count, pointAt: (i) => index.getX(at + i)}
+        start += count
+      }
+      if (start !== index.count) {
+        glbInfo('reader: a grouped portable piece\'s triangle runs do not tile it; refusing')
+        return null
+      }
+    }
+  }
+  if (regrouped > 0) {
+    glbVerbose(`reader: regrouped ${regrouped} row-tagged portable piece(s)`)
+  }
+  return (r) => rows[r]
 }
 
 

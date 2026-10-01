@@ -1265,6 +1265,114 @@ describe('portable collapsed artifact through a Draco export', () => {
 })
 
 
+describe('a portable element of several collapsed rows through a Draco export (#1900)', () => {
+  // The strip, with every ROWS_PER_ELEMENT consecutive rows one element —
+  // one parent and one occurrence path, as a STEP part's unnamed shells are.
+  // The portable rewrite gives each element one primitive holding all its
+  // rows, so EDGEBREAKER sees what it sees in the merged artifact: rows that
+  // share a primitive, edge positions shared between them. Hence the tag.
+  const ROWS_PER_ELEMENT = 6
+  const elementOf = (row) => Math.floor(row / ROWS_PER_ELEMENT)
+  let strip
+  let bytes
+
+  beforeAll(async () => {
+    strip = stripModel()
+    strip.model.instanceParents = strip.model.instanceParents.map((_, i) => 3000 + elementOf(i))
+    strip.model.instanceOccurrencePaths = strip.model.instanceParents.map((_, i) => [8, elementOf(i)])
+    bytes = await portableDraco(strip)
+  }, TIMEOUT_MS)
+
+  /**
+   * @return {Array<object>} the file's grouped nodes
+   */
+  function groupedNodes() {
+    return parseGlb(bytes).json.nodes.filter((node) => node.extras?.bldrsRowCount)
+  }
+
+  it('gives each element one tagged primitive, encoded EDGEBREAKER', () => {
+    const {json, bin} = parseGlb(bytes)
+    const grouped = groupedNodes()
+
+    expect(grouped).toHaveLength(ELEMENTS / ROWS_PER_ELEMENT)
+    for (const node of grouped) {
+      expect(node.extras.bldrsRowCount).toBe(ROWS_PER_ELEMENT)
+      const [primitive] = json.meshes[node.mesh].primitives
+      expect(primitive.extensions.KHR_draco_mesh_compression.attributes[ROW_TAG_SEMANTIC]).toBeDefined()
+      expect(dracoMethodsOf(json, bin, node.mesh)).toEqual([DRACO_EDGEBREAKER])
+    }
+  })
+
+  it('reopens with every row on its own triangle, and each picks its element', async () => {
+    const model = hydrateBatchedModelFromInstancedGlb(await loadLikeGltfLoader(bytes))
+
+    expect(model).not.toBeNull()
+    // Per ROW, by occurrence id: grouping must not have let two rows of one
+    // element trade triangles, which a pick by parent alone could not see.
+    const index = model.geometry.getIndex()
+    const position = model.geometry.getAttribute('position')
+    const matrix = new Matrix4()
+    for (let batchId = 0; batchId < model.instanceParents.length; batchId++) {
+      const row = model.instanceOccurrenceIds[batchId]
+      const {indexStart, indexCount} = model.getGeometryRangeAt(model.getGeometryIdAt(batchId))
+      model.getMatrixAt(batchId, matrix)
+      expect(indexCount).toBe(3)
+      const triangle = [0, 1, 2].map((k) =>
+        new Vector3().fromBufferAttribute(position, index.getX(indexStart + k)).applyMatrix4(matrix))
+      // An odd row's index is [0, 2, 1] (`stripModel`), so that is its winding.
+      const [a, b, c] = stripCorners(row)
+      expect(sameTriangle(triangle, row % 2 === 1 ? [a, c, b] : [a, b, c], 0.001)).toBe(true)
+    }
+    strip.centres.forEach((centre, i) => {
+      expect(pickParent(model, centre)).toBe(3000 + elementOf(i))
+    })
+  }, TIMEOUT_MS)
+
+  it('refuses the file when two rows of one element have swapped tags', async () => {
+    // Rows 0 and 2 of the first element are the same triangle one EDGE apart.
+    // Every count and the identity hash still match — each row keeps three
+    // corners — so only the corner stats can see the swap.
+    const scene = await loadLikeGltfLoader(bytes)
+    let tag
+    scene.traverse((obj) => {
+      if (obj.isMesh && obj.userData.bldrsInstance === 0) {
+        tag = obj.geometry.getAttribute(ROW_TAG_ATTRIBUTE)
+      }
+    })
+    for (let v = 0; v < tag.count; v++) {
+      const row = rowOfTag(tag, v)
+      if (row === 0 || row === 2) {
+        tag.setX(v, 2 - row)
+      }
+    }
+
+    expect(hydrateBatchedModelFromInstancedGlb(scene)).toBeNull()
+  }, TIMEOUT_MS)
+
+  it('falls back to SEQUENTIAL triangle runs when a row has no triangle of non-zero area', async () => {
+    // The one shape the tag cannot serve: EDGEBREAKER would erase element 1's
+    // empty row. The whole file is SEQUENTIAL and untagged, and a grouped
+    // piece's rows are then its triangle runs, in row order.
+    const empty = gridRowsModel({allZeroArea: true})
+    empty.model.instanceParents = empty.model.instanceParents.map((_, i) => 4000 + Math.floor(i / 4))
+    empty.model.instanceOccurrencePaths = empty.model.instanceParents.map((_, i) => [9, Math.floor(i / 4)])
+    const sequential = await portableDraco(empty)
+    const {json, bin} = parseGlb(sequential)
+    const grouped = json.nodes.filter((node) => node.extras?.bldrsRowCount)
+
+    expect(grouped).toHaveLength(3)
+    for (const node of grouped) {
+      expect(dracoMethodsOf(json, bin, node.mesh)).toEqual([DRACO_SEQUENTIAL])
+      expect(ROW_TAG_SEMANTIC in json.meshes[node.mesh].primitives[0].attributes).toBe(false)
+    }
+    const model = hydrateBatchedModelFromInstancedGlb(await loadLikeGltfLoader(sequential))
+    expect(model).not.toBeNull()
+    expect(pickParent(model, empty.centres[3])).toBe(4000)
+    expect(pickParent(model, empty.centres[9])).toBe(4002)
+  }, TIMEOUT_MS)
+})
+
+
 describe('lossless exports are untouched by the lossy path', () => {
   it('writes no witness into a Meshopt export', async () => {
     const source = await batchedArtifactBytes(stripModel().model, {collapse: true})

@@ -471,6 +471,20 @@ export async function toggleGzip(page: Page): Promise<number> {
  * @param path the file on disk
  */
 export async function reopenLocalGlb(page: Page, path: string) {
+  await openLocalFile(page, path, /\/share\/v\/new\/.+\.glb/)
+}
+
+
+/**
+ * Open a file from disk through the Open dialog's Local tab — Browse, then
+ * the file chooser — and wait until it has loaded. What {@link reopenLocalGlb}
+ * does for a downloaded `.glb`, for any format the loader takes.
+ *
+ * @param page Playwright page
+ * @param path the file on disk
+ * @param urlPattern what the model URL becomes once the upload has routed
+ */
+export async function openLocalFile(page: Page, path: string, urlPattern: RegExp) {
   await page.getByTestId('control-button-open').click()
   // The dialog opens on whichever tab it last showed (Google, for a signed-in
   // user); Browse lives on Local.
@@ -494,7 +508,7 @@ export async function reopenLocalGlb(page: Page, path: string) {
   await browse.click()
   const chooser = await waiting
   await chooser.setFiles(path)
-  await expect(page).toHaveURL(/\/share\/v\/new\/.+\.glb/, {timeout: EXPORT_TEST_TIMEOUT_MS})
+  await expect(page).toHaveURL(urlPattern, {timeout: EXPORT_TEST_TIMEOUT_MS})
   await expect(page.getByTestId('LoadStatusOk')).toBeVisible({timeout: EXPORT_TEST_TIMEOUT_MS})
 }
 
@@ -518,7 +532,7 @@ function compressionLabel(mode: string): string {
 export function glbJsonChunk(bytes: Buffer): {
   extensionsUsed?: string[]
   extensionsRequired?: string[]
-  nodes?: Array<{name?: string; mesh?: number}>
+  nodes?: Array<{name?: string; mesh?: number; extras?: Record<string, unknown>}>
   meshes?: Array<{primitives: Array<{attributes: Record<string, number>}>}>
   accessors?: Array<{bufferView?: number; componentType: number; type: string}>
   bufferViews?: Array<{byteOffset?: number; byteLength: number; byteStride?: number}>

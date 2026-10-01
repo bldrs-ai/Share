@@ -43,7 +43,8 @@
 // Properties panel key off the root `BLDRS_*` extension entries and are
 // indifferent to the node graph, so they come back intact. Picking does too,
 // since #1849: every mesh-bearing node here is stamped with the `extras` that
-// hydration needs (`bldrsTableNode` + `bldrsInstance`), and
+// hydration needs (`bldrsTableNode` + `bldrsInstance`, and `bldrsRowCount` on
+// a node holding several rows of one element), and
 // `instancedGlbToBatchedModel.js#joinPortableNodesToTables` reads them back
 // into the same decorated BatchedMesh the batched-native artifact hydrates to
 // — so keep the stamp. Without it a portable file is permanently
@@ -62,6 +63,22 @@
 // vertices needs LOCAL; they are rewritten in place, on a copy of the BIN, so
 // nothing grows. Every element keeps the collapsed node's transform — the
 // group offset its vertices are relative to.
+//
+// **An element, not a row (#1900).** A table ROW is one representation item,
+// and one element can own many: a STEP part whose body is thousands of
+// unnamed shells has one row per shell, every one with the same parent and
+// occurrence path. Splitting per row gave such a part one node per triangle
+// (28,674 of them on the model that surfaced this), which is what made the
+// file slow in every third-party viewer and named nothing a user could tell
+// apart. So the split cuts per ELEMENT: a run of consecutive rows sharing
+// their identity (`identityRuns`) becomes one mesh on one node, its rows'
+// slices side by side in one primitive, stamped with its first row and its
+// row count (`applyInstance`). Rows of distinct elements keep a node each, as
+// before. The per-row boundaries inside a grouped primitive are not written
+// anywhere new: the table's own `ranges` already hold every row's vertex and
+// index counts, and a run is contiguous in them, so the first row and the
+// count are all a reader needs to slice it back
+// (`instancedGlbToBatchedModel.js#remergeCollapsedRows`).
 //
 // Design: design/new/glb-export-premium.md §4.3.
 import {reifyName} from '@bldrs-ai/ifclib'
@@ -170,7 +187,8 @@ export function isPortableRewritable(json) {
  * @param {Uint8Array} glbBytes One standalone GLB (the artifact's chunk 0)
  * @return {{bytes: Uint8Array, isChanged: boolean, stats: object}} `stats` is
  *   `{elementNodes, instanceNodes, unassignedInstances}`, plus
- *   `{droppedAccessors, droppedBufferViews}` when the rewrite ran
+ *   `{groupedRows, droppedAccessors, droppedBufferViews,
+ *   deinterleavedAccessors}` when the rewrite ran
  */
 export function rewriteGlbPortable(glbBytes) {
   const {json, bin} = parseGlb(glbBytes)
@@ -400,19 +418,21 @@ function pad4(n) {
  * placements under `Unassigned`. Losing the names is a smaller harm than
  * losing the file.
  *
- * A collapsed node contributes one instance per ROW, each on the per-element
- * mesh `splitCollapsedNodes` made for it and all at the node's own transform.
- * One that could not be split stays one placement of its merged mesh, keyed
- * to nothing: it renders right and lands under `Unassigned`, since a single
- * node cannot carry several elements' names.
+ * A collapsed node contributes one instance per ELEMENT — per run of rows
+ * `splitCollapsedNodes` gave a mesh of its own — keyed by its first row (every
+ * row of a run has the same identity, so any row would do) and all at the
+ * node's own transform. `instance` is that first row and `rowCount` how many
+ * rows the mesh holds. One that could not be split stays one placement of its
+ * merged mesh, keyed to nothing: it renders right and lands under
+ * `Unassigned`, since a single node cannot carry several elements' names.
  *
  * @param {object} json Parsed glTF JSON
  * @param {?Uint8Array} bin Its BIN chunk
  * @param {?Array<object>} tables Parsed `BLDRS_instance_tables` nodes
- * @param {Map<number, Array<number>>} splits node index → mesh per row, from
- *   `splitCollapsedNodes`
- * @return {Array<object>} `{key, mesh, tableNode, instance, translation,
- *   rotation, scale}`, one per instance
+ * @param {Map<number, Array<object>>} splits node index → `{mesh, firstRow,
+ *   rowCount}` per element, from `splitCollapsedNodes`
+ * @return {Array<object>} `{key, mesh, tableNode, instance, rowCount,
+ *   translation, rotation, scale}`, one per instance
  */
 function collectInstances(json, bin, tables, splits) {
   const instances = []
@@ -422,17 +442,20 @@ function collectInstances(json, bin, tables, splits) {
     if (!attributes) {
       if (Number.isInteger(node.mesh)) {
         const table = tables?.[tableIndex] ?? null
-        const meshes = splits.get(nodeIndex) ?? [node.mesh]
+        const pieces = splits.get(nodeIndex) ?? [{mesh: node.mesh, firstRow: 0, rowCount: 1}]
         const keyed = splits.has(nodeIndex) ? table : null
-        meshes.forEach((mesh, j) => instances.push({
-          key: keyed ? elementKeyOf(keyed.parents[j], keyed.occurrencePaths?.[j]) : null,
-          mesh,
-          tableNode: tableIndex,
-          instance: j,
-          translation: node.translation ?? IDENTITY_TRANSLATION,
-          rotation: node.rotation ?? IDENTITY_ROTATION,
-          scale: node.scale ?? IDENTITY_SCALE,
-        }))
+        for (const {mesh, firstRow, rowCount} of pieces) {
+          instances.push({
+            key: keyed ? elementKeyOf(keyed.parents[firstRow], keyed.occurrencePaths?.[firstRow]) : null,
+            mesh,
+            tableNode: tableIndex,
+            instance: firstRow,
+            rowCount,
+            translation: node.translation ?? IDENTITY_TRANSLATION,
+            rotation: node.rotation ?? IDENTITY_ROTATION,
+            scale: node.scale ?? IDENTITY_SCALE,
+          })
+        }
       }
       continue
     }
@@ -453,6 +476,7 @@ function collectInstances(json, bin, tables, splits) {
         mesh: node.mesh,
         tableNode: tableIndex,
         instance: j,
+        rowCount: 1,
         translation: translation ? sliceVec(translation, j, COMPONENTS_BY_TYPE.VEC3) : IDENTITY_TRANSLATION,
         rotation: rotation ? sliceVec(rotation, j, COMPONENTS_BY_TYPE.VEC4) : IDENTITY_ROTATION,
         scale: scale ? sliceVec(scale, j, COMPONENTS_BY_TYPE.VEC3) : IDENTITY_SCALE,
@@ -464,7 +488,8 @@ function collectInstances(json, bin, tables, splits) {
 
 
 /**
- * Split every collapsed node's merged primitive into one mesh per table row.
+ * Split every collapsed node's merged primitive into one mesh per element —
+ * per run of rows sharing an identity (`identityRuns`).
  *
  * A node is split only when every precondition holds — a table with ranges
  * that tile the primitive exactly, a single indexed primitive on the file's
@@ -473,14 +498,15 @@ function collectInstances(json, bin, tables, splits) {
  * Any doubt leaves the node whole: the file still renders correctly, and a
  * half-split node would not.
  *
- * Row 0 takes over the merged mesh and its accessors, re-pointed at its own
- * slice; rows 1..n get new ones appended. So no mesh or accessor is orphaned
- * and nothing needs re-indexing.
+ * The first element takes over the merged mesh and its accessors, re-pointed
+ * at its own slice; the rest get new ones appended. So no mesh or accessor is
+ * orphaned and nothing needs re-indexing.
  *
  * @param {object} json Parsed glTF JSON, mutated
  * @param {?Uint8Array} bin Its BIN chunk (a private copy), mutated
  * @param {?Array<object>} tables Parsed `BLDRS_instance_tables` nodes
- * @return {Map<number, Array<number>>} node index → mesh index per row
+ * @return {Map<number, Array<object>>} node index → `{mesh, firstRow,
+ *   rowCount}` per element, in row order
  */
 function splitCollapsedNodes(json, bin, tables) {
   const splits = new Map()
@@ -502,10 +528,73 @@ function splitCollapsedNodes(json, bin, tables) {
     }
     const plan = planSplit(json, bin, node, table, accessorUses)
     if (plan) {
-      splits.set(nodeIndex, applySplit(json, bin, node, table.ranges, plan))
+      splits.set(nodeIndex, applySplit(json, bin, node, table, plan))
     }
   }
   return splits
+}
+
+
+/**
+ * The table's rows cut into ELEMENTS: maximal runs of consecutive rows whose
+ * identity — parent and occurrence path — is the same.
+ *
+ * That pair is the identity a viewer selects by. Share picks a batched
+ * element by its parent (`ShareViewer#setSelection`) and resolves a STEP
+ * occurrence by its path (`getInstanceIdsForOccurrencePath`); a named STEP
+ * body carries its own last path segment (conway's identity-bearing solids),
+ * so it is already its own element here. The per-row ids are deliberately NOT
+ * part of it: `occurrenceIds` is a global emission index, distinct for every
+ * row, and `geometryIds` names the representation item — the very thing
+ * that differs between the rows of one multi-item element. Grouping on either
+ * would group nothing. Nor is any of this a geometry-EQUALITY key (#1870's
+ * rule, glb-export-premium.md §1.1d): the rows of a run are concatenated,
+ * never deduplicated, and every row keeps its own triangles.
+ *
+ * Runs, not every row of an identity wherever it sits: a run is contiguous in
+ * the merged buffers, so its mesh is one window onto them (nothing copied),
+ * and its rows are contiguous in the table, so its stamp is a first row and a
+ * count. The writer bins an element's rows back to back, and on the four real
+ * models measured for #1900 every multi-row identity was exactly one run; one
+ * that were not would come out as one node per run — still right, just not
+ * merged.
+ *
+ * @param {object} table parsed collapsed table
+ * @return {Array<{firstRow: number, rowCount: number}>} covering every row
+ *   once, in row order
+ */
+function identityRuns(table) {
+  const runs = []
+  for (let row = 0; row < table.count; row++) {
+    const run = runs[runs.length - 1]
+    if (run && sameIdentity(table, run.firstRow, row)) {
+      run.rowCount++
+    } else {
+      runs.push({firstRow: row, rowCount: 1})
+    }
+  }
+  return runs
+}
+
+
+/**
+ * @param {object} table parsed table
+ * @param {number} a row
+ * @param {number} b row
+ * @return {boolean} same parent, and the same occurrence path — compared
+ *   step by step, with no path and an empty one told apart, since the reader
+ *   resolves the two differently
+ */
+function sameIdentity(table, a, b) {
+  if (table.parents[a] !== table.parents[b]) {
+    return false
+  }
+  const pa = table.occurrencePaths?.[a]
+  const pb = table.occurrencePaths?.[b]
+  if (!Array.isArray(pa) || !Array.isArray(pb)) {
+    return !Array.isArray(pa) && !Array.isArray(pb)
+  }
+  return pa.length === pb.length && pa.every((step, i) => step === pb[i])
 }
 
 
@@ -605,32 +694,53 @@ function binRangeCanary(dv, table, position, positionView, indexBase, indexBytes
 
 
 /**
- * Carry out a planned split: indices rewritten to row-local in place, then
- * one mesh per row over windows onto the merged views.
+ * Carry out a planned split: indices rewritten to element-local in place,
+ * then one mesh per element over windows onto the merged views.
+ *
+ * An element's rows are back to back in the merged buffers (the ranges are
+ * prefix sums, `bldrsInstanceTables.js#parseRanges`), so its slice is the span
+ * from its first row's starts to the end of its last row, and its indices are
+ * made relative to that span's first vertex — for a one-row element exactly
+ * the row-local values this has always written. A row's indices then sit
+ * where they did, offset by the vertices of the rows before it in the
+ * element, which is the layout the hydration's re-merge and the codec plan
+ * both slice back out of the table's own counts.
  *
  * @param {object} json
  * @param {Uint8Array} bin
  * @param {object} node
- * @param {Array<object>} ranges
+ * @param {object} table the node's parsed collapsed table
  * @param {object} plan from `planSplit`
- * @return {Array<number>} mesh index per row
+ * @return {Array<object>} `{mesh, firstRow, rowCount}` per element
  */
-function applySplit(json, bin, node, ranges, plan) {
+function applySplit(json, bin, node, table, plan) {
+  const {ranges} = table
   const {primitive, index, indexBytes, base, dv} = plan
-  for (const {vertexStart, indexStart, indexCount} of ranges) {
+  const pieces = identityRuns(table).map(({firstRow, rowCount}) => {
+    const first = ranges[firstRow]
+    const last = ranges[firstRow + rowCount - 1]
+    return {
+      firstRow, rowCount,
+      vertexStart: first.vertexStart,
+      vertexCount: last.vertexStart + last.vertexCount - first.vertexStart,
+      indexStart: first.indexStart,
+      indexCount: last.indexStart + last.indexCount - first.indexStart,
+    }
+  })
+  for (const {vertexStart, indexStart, indexCount} of pieces) {
     for (let i = indexStart; i < indexStart + indexCount; i++) {
       const at = base + (i * indexBytes)
       writeIndex(dv, at, indexBytes, readIndex(dv, at, indexBytes) - vertexStart)
     }
   }
-  // Snapshot the merged accessors before row 0 overwrites them in place.
+  // Snapshot the merged accessors before the first element overwrites them
+  // in place.
   const mergedAttributes = Object.entries(primitive.attributes)
     .map(([name, accessorIndex]) => [name, accessorIndex, {...json.accessors[accessorIndex]}])
   const mergedIndex = {...index}
   const mergedMesh = {...json.meshes[node.mesh]}
 
-  const meshes = []
-  ranges.forEach(({vertexStart, vertexCount, indexStart, indexCount}, row) => {
+  return pieces.map(({firstRow, rowCount, vertexStart, vertexCount, indexStart, indexCount}, k) => {
     const attributes = {}
     for (const [name, accessorIndex, merged] of mergedAttributes) {
       const view = json.bufferViews[merged.bufferView]
@@ -638,24 +748,22 @@ function applySplit(json, bin, node, ranges, plan) {
       if (name === 'POSITION') {
         Object.assign(slice, floatBounds(bin, slice, view))
       }
-      attributes[name] = placeAccessor(json, row === 0 ? accessorIndex : null, slice)
+      attributes[name] = placeAccessor(json, k === 0 ? accessorIndex : null, slice)
     }
     const indexSlice = {...mergedIndex, count: indexCount}
     indexSlice.byteOffset = (mergedIndex.byteOffset ?? 0) + (indexStart * indexBytes)
     delete indexSlice.min
     delete indexSlice.max
-    const indices = placeAccessor(json, row === 0 ? primitive.indices : null, indexSlice)
-    const rowPrimitive = {...primitive, attributes, indices}
-    const mesh = {...mergedMesh, primitives: [rowPrimitive]}
-    if (row === 0) {
+    const indices = placeAccessor(json, k === 0 ? primitive.indices : null, indexSlice)
+    const piecePrimitive = {...primitive, attributes, indices}
+    const mesh = {...mergedMesh, primitives: [piecePrimitive]}
+    if (k === 0) {
       json.meshes[node.mesh] = mesh
-      meshes.push(node.mesh)
-    } else {
-      json.meshes.push(mesh)
-      meshes.push(json.meshes.length - 1)
+      return {mesh: node.mesh, firstRow, rowCount}
     }
+    json.meshes.push(mesh)
+    return {mesh: json.meshes.length - 1, firstRow, rowCount}
   })
-  return meshes
 }
 
 
@@ -859,6 +967,9 @@ function buildPortableNodes(instances, spatialTree) {
       elementNodes,
       instanceNodes: instances.length,
       unassignedInstances: orphaned.length,
+      // Collapsed rows that share a mesh with another row of their element,
+      // rather than having one each (`identityRuns`).
+      groupedRows: instances.reduce((n, {rowCount}) => n + (rowCount > 1 ? rowCount : 0), 0),
     },
   }
 }
@@ -890,6 +1001,16 @@ function applyInstance(node, instance) {
   // to its row in `BLDRS_instance_tables` — the source colour, the parent
   // expressID, the STEP occurrence path. See the module doc.
   node.extras = {bldrsTableNode: instance.tableNode, bldrsInstance: instance.instance}
+  // An element of several collapsed rows holds rows `bldrsInstance` ..
+  // `bldrsInstance + bldrsRowCount - 1` in one primitive (`applySplit`).
+  // Absent means one row, so every file written before grouping — and every
+  // one-row element now — carries exactly the stamp it always did. A reader
+  // that predates the count sees only the first row covered and refuses the
+  // table (`joinPortableNodesToTables`' totality check), so such a file falls
+  // back to the plain, un-pickable model there rather than mis-joining.
+  if (instance.rowCount > 1) {
+    node.extras.bldrsRowCount = instance.rowCount
+  }
 }
 
 
