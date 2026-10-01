@@ -215,6 +215,9 @@ const SPATIAL_CHAIN = ['Bldrs', 'Build', 'Every', 'Thing']
 const SHELLS_FIXTURE = 'src/tests/fixtures/sameIdentityShells.step'
 const SHELLS_FIXTURE_ROWS = 80
 const LEAF_LABEL = 'Together'
+// The fixture's one PRODUCT, and so the name its tree root and its portable
+// node carry.
+const SHELLS_PART_NAME = 'Shells'
 
 
 /**
@@ -890,7 +893,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expectNavTreeFollowsSelection(page)
   })
 
-  test('the default export of a part made of many shells reopens with every shell pickable', async ({page}) => {
+  test('the default export of a part made of many shells sits under its product, and reopens with every shell pickable', async ({page}) => {
     // #1900. A STEP part whose body is many unnamed shells — 80 single-
     // triangle `shell_based_surface_model`s under one product, past conway's
     // ceiling for giving unnamed solids identities of their own — collapses
@@ -933,6 +936,17 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     expect(stamped).toHaveLength(1)
     expect(stamped[0].extras?.bldrsRowCount).toBe(SHELLS_FIXTURE_ROWS)
 
+    // #1901: and that node IS the part. The rows are owned by the part's
+    // product_definition_shape while the tree's only node is the
+    // product_definition, so with an empty occurrence path the two ids never
+    // met and the shells hung off a synthetic `Unassigned` node, named by the
+    // shape's id, beside an empty node for the part. What a user sees in the
+    // three.js editor, 3dviewer.net, or Share's own scene graph.
+    const nodeNames = (json.nodes ?? []).map((node) => node.name)
+    expect(nodeNames).not.toContain('Unassigned')
+    expect(stamped[0].name).toBe(SHELLS_PART_NAME)
+    expect(nodeNames.filter((name) => name === SHELLS_PART_NAME)).toHaveLength(1)
+
     await page.keyboard.press('Escape')
     resetGlbLogs(glbLogs)
     await reopenLocalGlb(page, savedPath)
@@ -942,6 +956,12 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // Hydrated back into the decorated BatchedMesh, every shell its own
     // range — not the plain-GLTF fallback, which picks nothing.
     await waitForGlbLog(glbLogs, `${SHELLS_FIXTURE_ROWS} instance(s), 1 collapsed table(s)`, EXPORT_TEST_TIMEOUT_MS)
+
+    // The NavTree names the part, and has no `Unassigned` branch.
+    await page.getByTestId('control-button-navigation').click()
+    await expect(page.getByTestId('NavTreePanel')).toBeVisible()
+    await expect(page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)).toHaveCount(1)
+    await expect(page.locator('[data-node-label="Unassigned"]')).toHaveCount(0)
     await doubleClickSelectsAnElement(page, 'collapsed')
   })
 

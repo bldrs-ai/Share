@@ -951,7 +951,9 @@ function buildPortableNodes(instances, spatialTree) {
     (instance) => instance.key === null || byKey.has(instance.key))
   if (orphaned.length > 0) {
     const children = orphaned.map((instance) => {
-      const child = {name: instance.key === null ?
+      // `''` is the empty occurrence path's key (`elementKeyOf`): a root
+      // part's geometry with no tree to name it, which `#` alone would not.
+      const child = {name: instance.key === null || instance.key === '' ?
         `Instance #${instance.instance}` :
         `#${instance.key}`}
       applyInstance(child, instance)
@@ -1090,12 +1092,30 @@ function hasAuthoredName(treeNode) {
 /**
  * The key an instance and a tree node join on.
  *
+ * A STEP element is keyed by its occurrence path alone, and the EMPTY path is
+ * a real key (`''`): it names the root part's own geometry, the one element
+ * with no NAUO above it. It must not fall back to the scalar id the way a
+ * missing path does, because the two sides of the join carry DIFFERENT ids
+ * for it. A row's `parents[j]` is the geometry's owner, the
+ * `product_definition_shape`; the tree root's `expressID` is the
+ * `product_definition` that shape describes. On a part with no assembly
+ * structure (every row's path is `[]`) the scalar keys never meet, and the
+ * whole part lands under `Unassigned` (#1901). Only an IFC element, or a STEP
+ * table that carries no paths at all, has no path array and joins on the
+ * scalar id.
+ *
+ * Every other consumer of an occurrence path treats `[]` as "no occurrence"
+ * (`utils/occurrencePaths.js`, `ShareViewer#getOccurrenceInstanceIds`): that
+ * is right for picking, which names an occurrence, and wrong for this join,
+ * which names an element.
+ *
  * @param {number} expressID Parent IFC product expressID
- * @param {?Array<number>} occurrencePath STEP NAUO chain, absent for IFC
+ * @param {?Array<number>} occurrencePath STEP NAUO chain, `[]` for the root
+ *   part's own geometry, absent for IFC
  * @return {string|number}
  */
 function elementKeyOf(expressID, occurrencePath) {
-  return Array.isArray(occurrencePath) && occurrencePath.length > 0 ?
+  return Array.isArray(occurrencePath) ?
     occurrencePath.join('/') :
     expressID
 }

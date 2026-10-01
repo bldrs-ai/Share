@@ -922,6 +922,111 @@ describe('glbCollapse baking', () => {
 })
 
 
+describe('portable export of a STEP part with no assembly structure (#1901)', () => {
+  // A part that is one PRODUCT with no NAUO above it: every row's occurrence
+  // path is `[]`. The rows are owned by the product_definition_shape (#8, the
+  // `parents` value) and the tree's only node is the product_definition it
+  // describes (#7), so the two sides of the join never share a scalar id and
+  // the empty path is the only thing that names the element.
+  const PRODUCT_DEFINITION = 7
+  const SHAPE = 8
+  const ROW_SIZES = [2, 3, 4, 5, 6, 7]
+
+  /**
+   * @param {?Array<number>} path every row's occurrence path
+   * @return {{model: BatchedMesh, pickPoints: Array<Vector3>}}
+   */
+  function livePartModel(path = []) {
+    const mesh = new BatchedMesh(ROW_SIZES.length, ROW_SIZES.length * 3, ROW_SIZES.length * 3)
+    const pickPoints = []
+    ROW_SIZES.forEach((size, slot) => {
+      mesh.setMatrixAt(mesh.addInstance(mesh.addGeometry(triangleGeometry(size))), placement(slot))
+      pickPoints.push(new Vector3(0.3, 0.3, 0).applyMatrix4(placement(slot)))
+    })
+    mesh.instanceParents = ROW_SIZES.map(() => SHAPE)
+    mesh.instanceOccurrenceIds = ROW_SIZES.map((_, i) => i)
+    mesh.instanceGeometryIds = ROW_SIZES.map((_, i) => 700 + i)
+    if (path) {
+      mesh.instanceOccurrencePaths = ROW_SIZES.map(() => path)
+    }
+    mesh.instanceSourceColors = ROW_SIZES.map(() => ({...GREY}))
+    return {model: mesh, pickPoints}
+  }
+
+  /**
+   * @param {object} model batched model to write
+   * @param {object} [rootFields] extra fields on the tree's only node
+   * @return {Promise<Uint8Array>} the collapsed artifact with the tree injected
+   */
+  async function artifact(model, rootFields = {occurrencePath: []}) {
+    const tree = {
+      expressID: PRODUCT_DEFINITION, type: 'PRODUCT', Name: {value: 'Shells'}, children: [], ...rootFields,
+    }
+    return injectGlbExtensions(await batchedArtifactBytes(model, {collapse: true}),
+      [{name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: tree, compress: true}], null, null).bytes
+  }
+
+  it('files the part\'s rows under their product, not Unassigned', async () => {
+    const portable = rewriteGlbPortable(await artifact(livePartModel().model))
+    const {json} = parseGlb(portable.bytes)
+
+    expect(portable.stats.unassignedInstances).toBe(0)
+    expect(json.nodes.find((node) => node.name === 'Unassigned')).toBeUndefined()
+    // The product's own node carries the mesh: one node, every row.
+    const product = json.nodes.filter((node) => node.name === 'Shells')
+    expect(product).toHaveLength(1)
+    expect(Number.isInteger(product[0].mesh)).toBe(true)
+    expect(product[0].extras.bldrsRowCount).toBe(ROW_SIZES.length)
+  })
+
+  it('shows a third-party viewer one named object for the part', async () => {
+    const bytes = rewriteGlbPortable(await artifact(livePartModel().model)).bytes
+    const gltf = await new Promise((resolve, reject) => {
+      new GLTFLoader().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), '',
+        resolve, reject)
+    })
+    const names = []
+    gltf.scene.traverse((obj) => obj !== gltf.scene && names.push([obj.name, obj.isMesh]))
+    expect(names).toEqual([['Shells', true]])
+  }, TIMEOUT_MS)
+
+  it('reopens with every row still picking itself', async () => {
+    const {model, pickPoints} = livePartModel()
+    const hydrated = await parseAndHydrate(rewriteGlbPortable(await artifact(model)).bytes)
+
+    expect(hydrated).not.toBeNull()
+    // The empty path survives the round trip as an empty path: the reader
+    // resolves `[]` and "no path" differently, and the key must not have
+    // flattened one into the other.
+    expect(hydrated.instanceOccurrencePaths.every((p) => Array.isArray(p) && p.length === 0)).toBe(true)
+    pickPoints.forEach((point, occurrence) => {
+      expect(pickOccurrence(hydrated, point)).toBe(occurrence)
+    })
+  }, TIMEOUT_MS)
+
+  it('keeps a table with no occurrence paths joined on its scalar id', async () => {
+    // The IFC shape: no path array to key by, so the join stays the parent id
+    // — even against a tree node that carries an empty path, which names a
+    // different element than the parent id does.
+    const ifcLike = livePartModel(null).model
+    const joined = rewriteGlbPortable(await artifact(ifcLike, {expressID: SHAPE}))
+    expect(joined.stats.unassignedInstances).toBe(0)
+
+    const mismatched = rewriteGlbPortable(await artifact(ifcLike))
+    expect(mismatched.stats.unassignedInstances).toBe(1)
+  })
+
+  it('names a part\'s rows by position when no tree can name them', async () => {
+    // No tree at all: the rows still export, under `Unassigned`, and the
+    // empty path's key must not leak into a name that reads just "#".
+    const bytes = await batchedArtifactBytes(livePartModel().model, {collapse: true})
+    const {json} = parseGlb(rewriteGlbPortable(bytes).bytes)
+    const [unassigned] = json.nodes.filter((node) => node.name === 'Unassigned')
+    expect(unassigned.children.map((i) => json.nodes[i].name)).toEqual(['Instance #0'])
+  })
+})
+
+
 /**
  * A copy of the model's batch restricted to some of its instances — how a
  * test builds a model with nothing genuinely instanced out of the hybrid one.

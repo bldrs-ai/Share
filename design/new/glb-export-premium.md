@@ -1791,6 +1791,31 @@ one-row element's stamp is byte-for-byte the old one. Three decisions:
   it did per row. A reader that predates the count sees rows uncovered and
   refuses the table — fail-soft to the plain model, never a mis-join.
 
+**The empty occurrence path is a key** (#1901). The join between a collapsed
+row and the spatial tree is `glbPortable.js#elementKeyOf`: the occurrence path
+when the row has one, else the scalar parent id. A STEP part with no assembly
+structure — one PRODUCT, thousands of shells — has `[]` for every row's path,
+and the key used to treat `[]` as "no path". That fell back to the scalar id,
+which disagrees across the join: a row's parent is the geometry's owner, the
+`product_definition_shape`, while the tree's root is the `product_definition`
+it describes (`#8` against `#7` in the fixture, `#4` against `#5` in the real
+28,674-shell part). The scalar keys never met, so the part's one node stayed
+empty and its mesh landed on an `Unassigned` node, named by the shape's id —
+in the three.js editor, 3dviewer.net and Share's own scene graph (Share's
+NavTree is built from `BLDRS_spatial_tree`, not the node graph, so it never
+showed it). Now any path ARRAY keys by `path.join('/')`, `[]` included (`''`):
+the tree root carries `occurrencePath: []` too, so the two sides meet and the
+part's rows sit on the part's own node. Only a row with no path array at all
+— every IFC element, or a STEP table written without paths — joins on the
+scalar id, byte-for-byte as before; on the four real models only the STEP part
+changes (an `Unassigned` node and a `#4` node gone, its mesh on the product's
+node), and the STEP assembly and both IFC files rewrite to identical bytes.
+Every other reader of an occurrence path (`utils/occurrencePaths.js`,
+`ShareViewer#getOccurrenceInstanceIds`) still treats `[]` as "no occurrence",
+which is right for picking, which names an occurrence rather than an element,
+and this join is the one place that must tell the two apart (as `sameIdentity`
+already does for grouping).
+
 Draco: a grouped primitive is a small merged one, so the export plans it like
 the merged artifact's (`collapsedWitness.js#planPiece`) — zero-area strip and
 `_BLDRS_ROW` tags naming TABLE rows — and the reader regroups it by tag,
