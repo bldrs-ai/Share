@@ -184,6 +184,20 @@ describe('OnboardingOverlay', () => {
     expect(handleFileDrop).toBeDefined()
   })
 
+  // The overlay sits at zIndex 9999, above MUI's modal layer, so an alert
+  // handleFileDrop raises (no OPFS, unknown type, ...) would open underneath
+  // it unless the overlay closes first (codex review on #1905).
+  it('closes itself when the drop fails, so the alert is not hidden under it', async () => {
+    handleFileDrop.mockImplementation(
+      (event, navigate, appPrefix, isOpfsAvailable, setAlert, onSuccess, onError) => onError('no OPFS'))
+    const {getByTestId} = renderOverlay()
+    const overlay = await waitFor(() => getByTestId('onboarding-overlay'))
+
+    fireEvent.drop(overlay, {dataTransfer: {files: []}})
+
+    await waitFor(() => expect(mockOnClose).toHaveBeenCalledWith(false))
+  })
+
   it('should prevent default behavior on drag events', async () => {
     const {getByTestId} = renderOverlay()
     const overlay = await waitFor(() => getByTestId('onboarding-overlay'))

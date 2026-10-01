@@ -99,6 +99,13 @@ export default function AlertDialog({onClose}) {
     }
   }
 
+  // A no-OPFS alert reports an action that didn't start, so the model on
+  // screen is still good: clear the alert without onClose, which
+  // AlertDialogAndSnackbar wires to navToDefault for failed loads (codex
+  // review on #1905).
+  const onDismiss = () => setAlert(null)
+  const onCloseDialog = isNoOpfs ? onDismiss : onCloseInner
+
   let actionCb
   let actionTitle
   if (isOom) {
@@ -107,6 +114,9 @@ export default function AlertDialog({onClose}) {
   } else if (isNeedsReconnect) {
     actionCb = reconnect
     actionTitle = 'Reconnect'
+  } else if (isNoOpfs) {
+    actionCb = onDismiss
+    actionTitle = 'OK'
   } else {
     actionCb = onCloseInner
     actionTitle = 'Reset'
@@ -133,7 +143,7 @@ export default function AlertDialog({onClose}) {
     <Dialog
       headerText={headerText}
       isDialogDisplayed={alert !== null}
-      setIsDialogDisplayed={onCloseInner}
+      setIsDialogDisplayed={onCloseDialog}
       actionCb={actionCb}
       headerIcon={<ErrorOutlineIcon className='icon-share'/>}
       actionTitle={actionTitle}

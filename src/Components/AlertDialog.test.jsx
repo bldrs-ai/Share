@@ -256,6 +256,28 @@ describe('AlertDialog — noOpfs alert type', () => {
     expect(screen.queryByText(/Discord/i)).not.toBeInTheDocument()
   })
 
+  // The model on screen is still good: dismissing must not reach onClose,
+  // which AlertDialogAndSnackbar wires to navToDefault (codex review, #1905).
+  it('dismisses with OK without calling onClose, so the current model stays', () => {
+    act(() => {
+      useStore.getState().setAlert(noOpfsLocalFileAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByText('OK'))
+    expect(useStore.getState().alert).toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('dismisses with the close button without calling onClose', () => {
+    act(() => {
+      useStore.getState().setAlert(noOpfsLocalFileAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByTestId(/^button-close-dialog/))
+    expect(useStore.getState().alert).toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
   // An expected environment condition (#1906), counted once and kept out of
   // Sentry; callers used to trackAlert it as well, which double-counted.
   it('counts the alert once, in analytics only', () => {
