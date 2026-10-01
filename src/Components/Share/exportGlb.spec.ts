@@ -8,6 +8,8 @@ import {
   clickGate,
   disableDracoEncoder,
   dismissLoadSnackbar,
+  doubleClickSelectsAnElement,
+  expectNavTreeFollowsSelection,
   expectNoHorizontalScroll,
   expectSnackbarOnTop,
   glbJsonChunk,
@@ -17,17 +19,18 @@ import {
   routeProModule,
   selectCompression,
   selectQuality,
+  setPortable,
   setSubscriptionTier,
   smallestCodecIn,
   toggleGzip,
   toggleMetadata,
-  togglePortable,
   waitForCodecSizes,
   waitForCodecSizing,
   waitForEstimate,
   watchProModuleRequests,
 } from '../../tests/e2e/export'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
+import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {
   auth0Login,
@@ -76,6 +79,46 @@ function bldrsPayloadBytes(json: ReturnType<typeof glbJsonChunk>): number {
       const view = extension.bufferView === undefined ? null : views[extension.bufferView]
       return total + (view?.byteLength ?? 0)
     }, 0)
+}
+
+
+// Bytes per component, and components per element, for the glTF accessor
+// types a vertex attribute can use.
+const COMPONENT_BYTES: Record<number, number> = {5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4}
+const TYPE_COMPONENTS: Record<string, number> = {SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4}
+
+
+/**
+ * Assert every vertex attribute stored in a bufferView sits on one whose
+ * stride is its own element size, or that has none — planar, not
+ * interleaved. three's `GLTFLoader` reads anything else as an
+ * `InterleavedBufferAttribute`, and `InterleavedBuffer.toJSON` serialises the
+ * whole backing view once per geometry: the three.js editor's autosave hung
+ * on exactly that (glb-export-premium.md §4.3). For a codec-`none` file only;
+ * Draco attributes have no view, and Meshopt pads its quantised ones.
+ *
+ * @param json the parsed JSON chunk of an exported file
+ * @return how many attributes were checked, so a caller can assert it was not
+ *   none
+ */
+function expectNoInterleavedVertexViews(json: ReturnType<typeof glbJsonChunk>): number {
+  let checked = 0
+  for (const mesh of json.meshes ?? []) {
+    for (const primitive of mesh.primitives) {
+      for (const [name, index] of Object.entries(primitive.attributes)) {
+        const accessor = json.accessors?.[index]
+        if (accessor?.bufferView === undefined) {
+          continue
+        }
+        const elementBytes = COMPONENT_BYTES[accessor.componentType] * TYPE_COMPONENTS[accessor.type]
+        const stride = json.bufferViews?.[accessor.bufferView]?.byteStride ?? elementBytes
+        expect(stride, `${name} is interleaved`).toBe(elementBytes)
+        checked++
+      }
+    }
+  }
+  expect(checked, 'a vertex attribute to check').toBeGreaterThan(0)
+  return checked
 }
 
 
@@ -220,6 +263,10 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+    // The batched-native file: the size line's header read (#1841) and the
+    // metadata strip are its subject, and Portable (the default since #1831)
+    // takes the whole-file path instead.
+    await setPortable(page, false)
     await expect(exportButton).toHaveText('Export GLB')
 
     // Pin the codec before reading anything. Since #1850 the panel measures
@@ -308,6 +355,8 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+    // Batched-native: the view-count arithmetic below is this artifact's.
+    await setPortable(page, false)
 
     // Pin the codec before reading anything. Since #1850 the panel measures
     // every codec in the background and defaults to the smallest, so the
@@ -450,6 +499,9 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+    // Batched-native, the variant this fallback was written and verified
+    // against; the fallback itself is indifferent to the shape.
+    await setPortable(page, false)
 
     // Pin the codec before reading anything. Since #1850 the panel measures
     // every codec in the background and defaults to the smallest, so the
@@ -503,6 +555,9 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+    // Batched-native: the decoders are the subject. The default (portable)
+    // file's reopen has its own test below.
+    await setPortable(page, false)
 
     const downloads: Array<{mode: string; path: string}> = []
     for (const codec of COMPRESSION_CODECS) {
@@ -556,6 +611,8 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+    // Batched-native: #1844 is the native file's reopen.
+    await setPortable(page, false)
     // Pin the codec before reading anything. Since #1850 the panel measures
     // every codec in the background and defaults to the smallest, so the
     // selection is in motion for the first seconds the tab is open. Let the
@@ -610,7 +667,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
   })
 
   test('a portable .glb names its elements, and reopens as a pickable model', async ({page}) => {
-    // #1843: the default export IS the batched-native cache artifact, and its
+    // #1843: the native export IS the batched-native cache artifact, and its
     // `EXT_mesh_gpu_instancing` is `extensionsRequired` — so 3dviewer.net
     // refuses the file outright, and the three.js editor shows a flat list of
     // `mesh_N` where Share shows the named IFC hierarchy. Portable rewrites it
@@ -633,6 +690,10 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
 
+    // Native first, for the figure to compare against — then Portable. Both
+    // stated explicitly rather than read off the default, which is ON since
+    // #1831; the default's own download is the next test's subject.
+    await setPortable(page, false)
     // Pin the codec before reading anything. Since #1850 the panel measures
     // every codec in the background and defaults to the smallest, so the
     // selection is in motion for the first seconds the tab is open. Let the
@@ -641,22 +702,20 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await waitForCodecSizing(page)
     await selectCompression(page, 'none')
 
-    // Off by default: the batched-native shape is the smaller file and the one
-    // Share itself reads best.
     const portableToggle = page.getByTestId('export-portable').locator('input')
-    await expect(portableToggle).not.toBeChecked()
     const sizeLine = page.getByTestId('export-size')
     await expect(sizeLine).toBeVisible()
     const nativeBytes = await sizeBytes(sizeLine)
 
-    const portableBytes = await togglePortable(page)
+    await setPortable(page, true)
+    const portableBytes = await waitForEstimate(page)
     await expect(portableToggle).toBeChecked()
     expect(portableBytes).toBeGreaterThan(0)
     // One node per placement plus its name and TRS is JSON the batched shape
     // does not carry, and no codec compresses the JSON chunk. On `index.ifc`
     // that is a handful of elements; on a 100k-instance model it is ~100 B per
-    // instance net of the TRS accessors the rewrite reclaims, which is why the
-    // control is opt-in.
+    // instance net of the TRS accessors the rewrite reclaims — the trade the
+    // helper text under the toggle describes.
     expect(portableBytes).not.toBe(nativeBytes)
     // A third control row in the dialog is where a mobile layout regression
     // would show up as a sideways scroll rather than a missing element (#1838).
@@ -692,6 +751,10 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     expect(nodeNames).toContain(LEAF_LABEL)
     // Every element node is a real node, and the placements carry the meshes.
     expect((json.nodes ?? []).filter((node) => Number.isInteger(node.mesh)).length).toBeGreaterThan(0)
+    // …over vertex data three reads as plain BufferAttributes: no view with a
+    // stride wider than one element, which is what made the three.js editor's
+    // autosave serialise the whole shared view once per geometry (§4.3).
+    expectNoInterleavedVertexViews(json)
 
     // Back into Share. The nav tree survives — it hydrates from
     // `BLDRS_spatial_tree`, which is indifferent to the node graph — and since
@@ -726,6 +789,73 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
   })
 
+  test('the default export is portable, and reopens with selection working', async ({page}) => {
+    // #1831: Portable became the default. This is the user's own action with
+    // nothing touched — open the tab, let the panel settle, click Export —
+    // then the file back into Share, and a double-click in the scene. Every
+    // other export spec pins the toggle to the variant it is about; this one
+    // is about the default, so it must not.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+
+    await expect(page.getByTestId('export-portable').locator('input')).toBeChecked()
+    // The trade-off is on screen under the toggle, not only in a tooltip.
+    await expect(page.getByTestId('export-portable-help')).toContainText('more glTF viewers can open them')
+    await expect(page.getByTestId('export-portable-help')).toBeVisible()
+    await expectNoHorizontalScroll(page)
+
+    // The panel settles on its own — the sweep picks the codec — and the line
+    // then quotes the file the click produces.
+    await waitForCodecSizing(page)
+    const quotedBytes = await waitForEstimate(page)
+
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toBe('index.glb')
+    const savedPath = test.info().outputPath('index-default.glb')
+    await download.saveAs(savedPath)
+    const file = await readFile(savedPath)
+    expect(file.byteLength).toBe(quotedBytes)
+
+    // Portable: no instancing extension to refuse, and the NavTree's names on
+    // the nodes.
+    const json = glbJsonChunk(file)
+    expect(json.extensionsUsed ?? []).not.toContain('EXT_mesh_gpu_instancing')
+    expect(json.extensionsRequired ?? []).not.toContain('EXT_mesh_gpu_instancing')
+    const nodeNames = (json.nodes ?? []).map((node) => node.name)
+    for (const name of SPATIAL_CHAIN) {
+      expect(nodeNames, `the default export should name ${name}`).toContain(name)
+    }
+
+    await page.keyboard.press('Escape')
+    resetGlbLogs(glbLogs)
+    await reopenLocalGlb(page, savedPath)
+    await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    // Hydrated from the portable file's stamped nodes back into the decorated
+    // BatchedMesh — not the plain-GLTF fallback, which renders and picks
+    // nothing.
+    await waitForGlbLog(glbLogs, 'hydrated instance-table', EXPORT_TEST_TIMEOUT_MS)
+
+    // The user's action: double-click an element in the scene, and it is
+    // selected in the store, the NavTree and the URL.
+    await doubleClickSelectsAnElement(page, 'any')
+    await expectNavTreeFollowsSelection(page)
+  })
+
   test('a Pro user picks a Quality rung, and the panel says what it costs', async ({page}) => {
     // #1848. The rungs are encoder settings, so what only a browser can show
     // is that they reach the real wasm encoders and change the file the user
@@ -743,6 +873,9 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+    // Batched-native, as measured when the rungs were set; the rungs are
+    // encoder settings and indifferent to the shape.
+    await setPortable(page, false)
 
     // Pin the codec before reading anything. Since #1850 the panel measures
     // every codec in the background and defaults to the smallest, so the
@@ -834,6 +967,8 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+    // Batched-native, as #1854 measured it; gzip wraps either shape.
+    await setPortable(page, false)
 
     // No codec, which is the selection the measurement is about: gzip alone,
     // over a file nothing else has squeezed. Pinned after the sweep so the
@@ -907,6 +1042,8 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+    // Batched-native, as #1831's round trip was verified; gzip wraps either.
+    await setPortable(page, false)
 
     // Uncompressed + gzipped: the codecs are the sibling tests' subject, and
     // per-vertex picking ids do not survive them, which would make the
@@ -982,16 +1119,22 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
+    // Portable is the default (#1831), so what the sweep measures — and
+    // auto-selects on — is the portable file, the one the default click
+    // downloads. A sweep of the native file would pick a codec on bytes the
+    // user never gets.
+    await expect(page.getByTestId('export-portable').locator('input')).toBeChecked()
 
     // No interaction: opening the tab is the whole trigger.
     const codecSizes = await waitForCodecSizes(page)
     for (const mode of ['none', 'meshopt', 'draco']) {
       expect(codecSizes[mode], `${mode} should have a measured size`).toBeGreaterThan(0)
     }
-    // On `index.ifc` Draco wins — 13,084 B, against Meshopt's 21,480 and
-    // 17,244 uncompressed, measured through this very spec — but the assertion
-    // is about the RULE, not about this fixture: whichever option is smallest
-    // is the one selected.
+    // On `index.ifc`'s native file Draco won — 13,084 B, against Meshopt's
+    // 21,480 and 17,244 uncompressed, measured through this very spec before
+    // Portable became the default (#1831) — but the assertion is about the
+    // RULE, not about this fixture or shape: whichever option is smallest is
+    // the one selected.
     const smallest = smallestCodecIn(codecSizes)
     await expect(page.getByTestId('export-compression'))
       .toContainText(smallest.charAt(0).toUpperCase() + smallest.slice(1))
@@ -1008,13 +1151,14 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     const file = await readFile(await (await downloadPromise).path())
 
     expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
-    // …and so does the file. This is a CACHE HIT, not a re-encode: measured
-    // here, `index.ifc` comes out at 13,084 B under Draco against 21,480 under
-    // Meshopt and 17,244 uncompressed, and the winner's cell is precisely the
-    // one the sweep keeps (`export/codecSizes.js`). So what it pins is that
+    // …and so does the file. This is a CACHE HIT, not a re-encode: the
+    // winner's cell is precisely the one the sweep keeps
+    // (`export/codecSizes.js`). So what it pins is that
     // the panel hands over the bytes it measured — which is the point of
     // keeping the winner — and nothing about re-encoding.
     expect(file.byteLength).toBe(codecSizes[smallest])
+    // …and it is the portable file the sweep measured, not the native one.
+    expect(glbJsonChunk(file).extensionsUsed ?? []).not.toContain('EXT_mesh_gpu_instancing')
 
     // The other half, which the download above cannot reach on any fixture:
     // the sweep RELEASED Meshopt when Draco beat it, so picking it now runs

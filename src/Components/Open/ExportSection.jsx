@@ -2,8 +2,13 @@ import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {Box, Button, Chip, MenuItem, Select, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {artifactPositionRange, artifactSizes, retainOnlyCompressedExports} from '../../export/artifactSizes'
-import {codecToSelect} from '../../export/codecSizes'
+import {
+  artifactPositionRange,
+  artifactSizes,
+  retainOnlyCompressedExports,
+  uncompressedSizes,
+} from '../../export/artifactSizes'
+import {codecToSelect, shouldAutoMeasure} from '../../export/codecSizes'
 import {
   QUALITY_DEFAULT,
   QUALITY_LABELS,
@@ -88,12 +93,18 @@ export default function ExportSection() {
   // moves under the cursor because a later-arriving figure turned out smaller
   // is worse than a suboptimal default (#1850).
   const [isCodecUserChosen, setIsCodecUserChosen] = useState(false)
-  // Default OFF: the batched-native shape is smaller and is what Share itself
-  // reads best, and the rewrite trades JSON for portability — one node per
-  // placement, which on a big model is megabytes of names and transforms no
-  // codec compresses. It is the informed choice, so it is the opt-in one
-  // (#1843).
-  const [isPortable, setIsPortable] = useState(false)
+  // Default ON (owner decision, #1831): a file the user downloads is one they
+  // mean to open somewhere, and the batched-native shape is refused outright
+  // by viewers that don't implement `EXT_mesh_gpu_instancing` (3dviewer.net)
+  // and opens as a flat `mesh_N` list in the rest. Share reads both shapes
+  // back to the same pickable model (#1849), so nothing is lost for Share
+  // either. What it costs is JSON — one node per placement, ~100 B each
+  // (glb-export-premium.md §4.3) — which on an instance-heavy model can be
+  // most of the file; the helper text below says so, and turning it off is
+  // the informed choice. Not persisted anywhere: every visit starts portable,
+  // and a "Download again" row replays the options it recorded, so rows
+  // written while the default was off still reproduce their native file.
+  const [isPortable, setIsPortable] = useState(true)
   // Default Balanced, which for Meshopt means `FILTER`: −39.1% measured, with
   // positions bit-exact and only shading normals rounded. The reasoning, and
   // why a lossless rung still has to be reachable, is `exportQuality.js`
@@ -151,17 +162,53 @@ export default function ExportSection() {
   // mounted with, and the store publishes a fresh slot per load.
   const artifactRef = useRef(glbArtifact)
   artifactRef.current = glbArtifact
+  // The artifact the user has asked to have measured ("Calculate sizes", in
+  // the sweep's row or on the size line), so consent lapses with a new load
+  // rather than carrying over to a model nobody asked about. An artifact
+  // rather than a boolean so no reset effect has to race the size effect.
+  const [consentedArtifact, setConsentedArtifact] = useState(null)
+  const isSizingConsented = consentedArtifact !== null && consentedArtifact === glbArtifact
 
   useEffect(() => {
     let isStale = false
     setEstimate(null)
     setIsEstimating(true)
-    artifactSizes(glbArtifact, compression, isPortable, quality, isGzipped).then((read) => {
-      if (!isStale) {
-        setEstimate({compression, isPortable, quality, isGzipped, sizes: read})
-        setIsEstimating(false)
-      }
-    })
+    // Portable with nothing else selected is the panel's DEFAULT state, and
+    // its estimate is no header read: it reads the whole artifact off OPFS
+    // and rewrites it (`export/artifactSizes.js`). Opening the tab used to
+    // cost a header read; with Portable on by default it would cost a full
+    // rewrite on every model, a 400 MB one included — exactly what the codec
+    // sweep's threshold holds back until the user clicks "Calculate sizes"
+    // (`codecSizes.js#shouldAutoMeasure`, codex on #1904). So over that same
+    // threshold this waits for the same click. A codec or gzip the user
+    // picks is a click of its own and runs as it always has; and none of this
+    // touches the EXPORT, which keeps Portable and pays for the rewrite when
+    // the user asks for the file. The threshold reads the header, which the
+    // sweep has already cached for this artifact.
+    const estimateNow = () => {
+      artifactSizes(glbArtifact, compression, isPortable, quality, isGzipped).then((read) => {
+        if (!isStale) {
+          setEstimate({compression, isPortable, quality, isGzipped, sizes: read})
+          setIsEstimating(false)
+        }
+      })
+    }
+    const isDefaultPortable = isPortable && compression === COMPRESSION_NONE && !isGzipped
+    if (!isDefaultPortable || isSizingConsented) {
+      estimateNow()
+    } else {
+      uncompressedSizes(glbArtifact).then((header) => {
+        if (isStale) {
+          return
+        }
+        if (header && !shouldAutoMeasure(header.withMetadata)) {
+          setEstimate({compression, isPortable, quality, isGzipped, sizes: null, isUnmeasured: true})
+          setIsEstimating(false)
+        } else {
+          estimateNow()
+        }
+      })
+    }
     // The read above POPULATES a compressed cell for the codec on screen —
     // two whole copies of the export. Nothing is claimed for it here; the
     // reconcile below states which cells should exist at all, and this one is
@@ -169,7 +216,7 @@ export default function ExportSection() {
     return () => {
       isStale = true
     }
-  }, [glbArtifact, compression, isPortable, quality, isGzipped])
+  }, [glbArtifact, compression, isPortable, quality, isGzipped, isSizingConsented])
 
   useEffect(() => {
     let isStale = false
@@ -349,6 +396,14 @@ export default function ExportSection() {
     fallbackCaption = `${COMPRESSION_LABELS[compression]} isn't available in this browser — ${actual}`
   }
 
+  // One consent for both figures that wait on it: the codec sweep's and the
+  // size line's (above). Either button grants it.
+  const onCalculateSizes = () => {
+    setConsentedArtifact(glbArtifact)
+    startSizing()
+  }
+  const isUnmeasured = Boolean(estimate?.isUnmeasured) && !isEstimating
+
   const onExportClick = async () => {
     await run(
       'glb',
@@ -458,7 +513,7 @@ export default function ExportSection() {
       >
         <Box>
           <Typography variant='body2'>Portable</Typography>
-          <Typography variant='caption' color='text.secondary'>named nodes, opens anywhere</Typography>
+          <Typography variant='caption' color='text.secondary'>named nodes, no instancing</Typography>
         </Box>
         <Toggle
           onChange={() => setIsPortable(!isPortable)}
@@ -466,6 +521,19 @@ export default function ExportSection() {
           data-testid='export-portable'
         />
       </Stack>
+      {/* Under the toggle rather than in its caption: this is the one
+          default whose OFF side needs explaining — what instancing buys, and
+          where it stops opening — and the row caption has room for a phrase,
+          not a trade-off. */}
+      <Typography
+        variant='caption'
+        color='text.secondary'
+        component='p'
+        sx={{mt: '0.25em'}}
+        data-testid='export-portable-help'
+      >
+        {MSG_PORTABLE_HELP}
+      </Typography>
       {/* An exclusive three-way choice rather than two more switches: the
           codecs are alternatives, not independent options, and a group makes
           that unmistakable. `flexWrap` because at 390px the label and three
@@ -552,7 +620,7 @@ export default function ExportSection() {
            <Button
              size='small'
              sx={{textTransform: 'none'}}
-             onClick={startSizing}
+             onClick={onCalculateSizes}
              data-testid='export-codec-sizes-start'
            >
              Calculate sizes
@@ -649,7 +717,7 @@ export default function ExportSection() {
           to. Its `data-bytes` is the raw count the label rounds, so a test
           can compare it with the downloaded file byte for byte rather than
           through "12.4 MB". */}
-      {(downloadBytes !== null || isPendingEstimate) &&
+      {(downloadBytes !== null || isPendingEstimate || isUnmeasured) &&
        <Stack
          direction='row'
          justifyContent='space-between'
@@ -680,7 +748,22 @@ export default function ExportSection() {
               {fallbackCaption}
             </Typography>}
          </Box>
-         {isPendingEstimate ?
+         {isUnmeasured &&
+          // Over the auto-measure threshold, Portable's figure waits for
+          // consent (above) — so no number rather than the wrong one, and the
+          // sweep's own button beside it.
+          <Stack direction='row' alignItems='center' gap={1} data-testid='export-size-unmeasured'>
+            <Typography variant='body2' color='text.secondary'>Not measured</Typography>
+            <Button
+              size='small'
+              sx={{textTransform: 'none'}}
+              onClick={onCalculateSizes}
+              data-testid='export-size-calculate'
+            >
+              Calculate sizes
+            </Button>
+          </Stack>}
+         {!isUnmeasured && (isPendingEstimate ?
            <Typography variant='body2' color='text.secondary' data-testid='export-size-pending'>
              Estimating…
            </Typography> :
@@ -691,7 +774,7 @@ export default function ExportSection() {
              data-estimate-key={displayedEstimateKey}
            >
              {formatBytes(downloadBytes)}
-           </Typography>}
+           </Typography>)}
        </Stack>}
       {/* The action goes LAST, after everything that configures it, and
           centred — the Pro chip for free users rides beside it (#1838).
@@ -750,3 +833,15 @@ const MSG_LOGIN_TO_EXPORT = 'Log in to export this model as a GLB'
 // now that the round trip closes. Short enough to stay on one line at 390px
 // beside the toggle.
 const MSG_GZIP_CAPTION = 'gzip — saves a .glb.gz, reopens in Share'
+// Owner's wording (#1831), less its first draft's "open in any glTF viewer":
+// with a codec selected — and the background sweep may select one on its own
+// — the portable file still needs that codec's decoder, and 3dviewer.net
+// refuses `EXT_meshopt_compression` outright (codex on #1904). So it says what
+// Portable itself changes and no more; codec support is the Compression
+// row's caption to make. What turning Portable OFF buys and costs, since ON
+// is now the default: instancing stores a repeated part once, and
+// `EXT_mesh_gpu_instancing` is a required extension some viewers refuse.
+const MSG_PORTABLE_HELP =
+  'Portable files leave out instancing, so more glTF viewers can open them. Turn off to keep ' +
+  'instancing: repeated parts are stored once, which can make very large models much smaller, ' +
+  'but some viewers don\'t support it.'

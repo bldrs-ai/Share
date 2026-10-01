@@ -163,6 +163,31 @@ describe('loader/glbBatchedExport', () => {
     }
   })
 
+  it('writes vertex attributes tightly packed, in one view shared by every mesh', async () => {
+    // Not interleaved: a strided view shared across meshes is what three's
+    // `InterleavedBuffer.toJSON` serialises whole, once per geometry — the
+    // three.js editor's autosave hung past a 3 GB heap on a DSA-sized
+    // export (design/new/glb-export-premium.md §1.1c). Stride equal to the
+    // element size is what makes three build a plain BufferAttribute.
+    const result = await exportBatchedModelAsInstancedGlb(batchedDouble())
+    const {json} = parseGlb(result.bytes)
+    const vertexViews = new Set()
+    for (const mesh of json.meshes) {
+      for (const primitive of mesh.primitives) {
+        for (const index of Object.values(primitive.attributes)) {
+          const accessor = json.accessors[index]
+          expect(accessor.componentType).toBe(5126)
+          expect(json.bufferViews[accessor.bufferView].byteStride).toBe(12)
+          vertexViews.add(accessor.bufferView)
+        }
+      }
+    }
+    // Still one view for all of them — `glbSlim`'s merge, not a view per
+    // mesh (which also cures the editor but costs a view entry per mesh).
+    expect(json.meshes.length).toBeGreaterThan(1)
+    expect(vertexViews.size).toBe(1)
+  })
+
   it('keeps table colors verbatim while material colors are linearized', async () => {
     const result = await exportBatchedModelAsInstancedGlb(batchedDouble())
     const {json} = parseGlb(result.bytes)

@@ -26,7 +26,7 @@ gzip (§1.1a), today's byte-attribution measurement on #1831, and the
 **Where things stand:** the feature described in §1–§6 below is fully built
 and ships behind `?feature=export` (default **off**). Export lives in the
 Save dialog's Export tab: the Include Bldrs metadata toggle, Portable
-toggle, Compression dropdown (None / Meshopt / Draco), Quality rung,
+toggle (on by default since #1831), Compression dropdown (None / Meshopt / Draco), Quality rung,
 Compress download toggle, a Download size line that *is* the file, and a
 centred accent Export GLB action last. #1837 landed the pro-module
 pipeline, Download GLB, and export tracking; #1851 added portable export +
@@ -400,6 +400,43 @@ one untargeted view for the instancing accessors. So the view count tracks
 the mesh count. `VertexLayout.SEPARATE` was measured and is worse — two views
 per mesh — and the library exposes no cross-mesh packing knob, which is why
 this is a pass over its output rather than a setting.
+
+*Since #1831's portable-default change the writer asks for `SEPARATE` after
+all* — not for its own view count, which the pass below merges away either
+way (every SEPARATE view is `byteStride: 12`, so they all land in one class),
+but because the INTERLEAVED merge produced one `byteStride: 24` view shared by
+every mesh, and three.js serialises a shared strided view whole once per
+geometry. §4.3 "The vertex layout" has the cost model; here is what the
+switch did to the batched artifact itself, through the browser on the #1871
+models (cache MISS → OPFS, then the Export tab), against the run above:
+
+| model, collapse | raw `.glb` (None export) | stored container | Draco / Meshopt export |
+|---|---:|---:|---|
+| DSA2, off | 19,204,136 → 19,204,160 | 1,946,011 → 1,930,030 (−0.8%) | unchanged (±24 B) |
+| DSA2, on | 2,559,176 → 2,559,180 | 979,777 → 899,920 (−8.2%) | unchanged |
+| Snowdon, off | 51,552,264 → 51,552,268 | 20,290,090 → 19,663,053 (−3.1%) | unchanged |
+| Snowdon, on | 46,171,040 → 46,171,044 | 21,722,761 → 20,331,522 (−6.4%) | unchanged |
+| dental_clinic, off | 7,704,964 → 7,704,968 | 3,301,441 → 3,171,334 (−3.9%) | unchanged |
+| dental_clinic, on | 6,472,116 → 6,472,116 | 3,421,622 → 3,279,191 (−4.2%) | unchanged |
+| Right_Hand, off | 5,795,732 → 5,795,880 | 2,882,960 → 2,795,349 (−3.0%) | unchanged (±144 B) |
+| Right_Hand, on | 5,173,024 → 5,173,032 | 2,942,133 → 2,857,750 (−2.9%) | unchanged |
+
+The raw file is the same bytes re-laid; the stored container SHRINKS on every
+model, because all positions then all normals gzip better than the two
+interleaved — which also takes back part of the collapse's stored-size growth
+§1.1d accepted. The codec exports re-lay the file through gltf-transform, so
+they do not see the source layout at all. The 25-point double-click grid on
+the cache HIT selects exactly what it selected before, on all eight, and
+`gltf-validator` 2.0.0-dev.3.10 is clean (0 errors, 0 warnings) on all sixteen
+downloads. And the native None export of DSA2 — 28,674 `InstancedMesh`
+over the shared view, which hung the three.js editor like the portable one —
+now imports in 6.0 s and autosaves in 764 ms (314 MB heap).
+
+No schema bump: both layouts are plain glTF to every reader, so a cached
+interleaved artifact keeps hydrating and an older build reads a new one. The
+cost of not bumping is that an artifact already in a user's OPFS stays
+interleaved until it is re-parsed, and so does its NATIVE export; its
+portable export (the default) is de-interleaved on the way out regardless.
 
 **What the pass does** (`src/loader/glbSlim.js`, run inside
 `exportBatchedModelAsInstancedGlb` before `injectGlbExtensions`, which
@@ -1609,9 +1646,94 @@ one goes 5.4 MB → 15.4 MB, because 200 triangles is all the geometry there
 is). Meshopt on that same synthetic pair makes the point sharply: it takes the
 native file 5.4 MB → 2.5 MB and the portable one 15.4 MB → 15.5 MB — very
 slightly *larger*, since the codec cannot touch the JSON chunk and adds a
-per-bufferView extension entry to it. That is why the toggle is **off by
-default** and captioned as a choice rather than a recommendation. The rewrite
-itself is ~1.6 s for 100k instances.
+per-bufferView extension entry to it. That cost is why the toggle shipped
+**off by default** (#1843); it is **on by default since #1831** (owner
+decision, "The default" below), with the cost moved into helper text under
+the toggle. The rewrite itself is ~1.6 s for 100k instances.
+
+**The vertex layout: planar, never interleaved** (#1831). A portable file's
+vertex attributes come out one bufferView per attribute name — all POSITIONs,
+then all NORMALs — at `byteStride` equal to the element size (12), shared by
+every mesh (`glbPortable.js#deinterleaveVertexAttributes`). Until this, a
+portable export stored every element's POSITION and NORMAL **interleaved** at
+`byteStride: 24` in ONE view shared by all meshes: the batched writer's
+INTERLEAVED output after `glbSlim`'s one-view-per-class merge (§1.1c, #1864),
+and on a collapsed artifact the split's per-element windows onto its merged
+view (§1.1d). Valid glTF, validator-clean — and it crashed the three.js editor,
+which is the other viewer this export exists for.
+
+*The cost model.* three's `GLTFLoader` reads an accessor on a view whose
+stride is not its element size as an `InterleavedBufferAttribute`, backed by
+an `InterleavedBuffer` whose array sits over the WHOLE view.
+`InterleavedBuffer.toJSON` then serialises `Array.from(new
+Uint32Array(this.array.buffer))` — the entire backing view — and dedupes only
+within the one geometry being serialised. The editor autosaves `toJSON` of
+the scene on every import, so it pays **geometries × view bytes**: 28,674
+geometries over a 2 MB view is ~57 GB of JS arrays. With the stride equal to
+the element size, `GLTFLoader` builds a plain `BufferAttribute` over just the
+accessor's own elements, and `toJSON` copies those. Views may stay shared —
+the bound comes from the attribute type, not from the view — so one view per
+mesh, which also cures it, is not needed and would cost a view entry per
+mesh (+12.7% on DSA2's portable file, measured on a prototype).
+
+Measured in the three.js editor r184 (File › Import, autosave on; the
+investigation's Playwright driver, heap after the save), before and after:
+
+| portable export | geometries | before | after (load → autosave, heap) |
+|---|---:|---|---|
+| DSA2 (collapse off) | 28,674 | hung, heap past 3 GB | 6.1 s → 847 ms, 200 MB |
+| DSA2 (collapsed) | 28,674 | hung, heap past 3 GB | 5.0 s → 1,098 ms, 128 MB |
+| dental_clinic (collapsed) | 3,439 meshes | renderer crash (heap 3.4 GB) | 0.6 s → 358 ms, 64 MB |
+| Right_Hand (collapsed) | 226 meshes | 2.9–4.8 s autosave, `toJSON` 251 M chars | 0.1 s → 274 ms, 41 MB, 18.8 M chars |
+
+Size: the same bytes re-laid, so the files move by JSON only — DSA2
+19,633,932 → 19,603,132 B (−30,800: 57,348 accessors lose a `byteOffset`
+restated inside a 24-byte stride), Snowdon 54,977,140 → 54,972,264,
+dental_clinic 8,087,316 → 8,086,528, Right_Hand +60 B. Khronos
+`gltf-validator` 2.0.0-dev.3.10 on all eight (four models × collapse off/on):
+0 errors, 0 warnings, the same info profile as before. Rewrite time is within
+run-to-run noise on a shared, loaded machine (DSA2 in Node: 3.5–5.1 s after,
+3.6–3.8 s before).
+
+The de-interleave runs on whatever the artifact holds, because artifacts
+already in OPFS were written interleaved and a cache hit never rewrites one;
+an artifact from the current writer, which asks gltf-transform for
+`VertexLayout.SEPARATE` (§1.1c), is already planar and passes through with
+nothing moved. Codecs: Draco stores no vertex views at all, and Meshopt
+re-lays the file per mesh (quantised normals padded to a 4-byte stride, but
+one view per mesh, so the cost is bounded to the mesh).
+
+**The default.** Portable is **on** when the Export tab opens (#1831). The
+file a user downloads is one they mean to open somewhere, the native shape is
+refused outright where `EXT_mesh_gpu_instancing` is not implemented
+(3dviewer.net) and reads as a flat `mesh_N` list elsewhere, and Share reads
+both shapes back to the same pickable model (#1849) — so nothing is lost for
+Share. The price is the JSON measured above, which is why the choice stays a
+toggle and the helper text under it says what turning it off buys: "Portable
+files leave out instancing, so more glTF viewers can open them. Turn off to
+keep instancing: repeated parts are stored once, which can make very large
+models much smaller, but some viewers don't support it." It deliberately
+promises *more* viewers, not every one: a codec — which the background sweep
+may select on its own — still needs its decoder wherever the file is opened,
+and 3dviewer.net refuses `EXT_meshopt_compression` outright, so the first
+draft's "open in any glTF viewer" was untrue whenever a codec was on (codex on
+#1904). Codec support is the Compression row's to state.
+
+*Large artifacts wait for consent.* The native estimate the tab used to open
+on is a header read; the portable one reads the whole artifact and rewrites
+it. So over the sweep's own threshold (`codecSizes.js#shouldAutoMeasure`,
+50 MiB) the size line does not run it on open: it says *Not measured* beside
+the same *Calculate sizes* the parked sweep shows, and either button runs
+both (codex on #1904 caught the default flip turning "open the tab" into a
+full rewrite of a 400 MB model). Portable stays selected — the export pays
+for the rewrite when the user asks for the file — and a codec or gzip the
+user picks runs at once, as before, since picking one is its own consent.
+Nothing persists the choice — every visit starts
+portable — and the size line and the background codec sweep both measure at
+the toggle's state (they already keyed on it), so the codec auto-selected on
+open is decided on the portable bytes the default click downloads. A
+"Download again" row replays the options it recorded, so rows exported while
+the default was off still reproduce their native file.
 
 **Round trip back into Share, plainly:** the nav tree and Properties survive
 (they hydrate from the root `BLDRS_*` entries and are indifferent to the node
@@ -1636,7 +1758,8 @@ model.
 
 Options surfaced in the UI: *Include Bldrs metadata (properties, spatial
 tree)* — default **on** (it's their model; the toggle exists for onward
-sharing) — *Portable* — default **off** (see the measured cost above) —
+sharing) — *Portable* — default **on** since #1831 (see "The default"
+above) —
 *Compression: None / Meshopt / Draco* — default **None** (the
 file opens everywhere; the other two need the matching decoder registered in
 whatever the user opens it with) — and *Compress download* — default **off**
@@ -1674,7 +1797,8 @@ all-caps button on the #1837 preview read as disabled when it wasn't
 (#1838).
 
 The Export tab hosts `Open/ExportSection.jsx` — the metadata toggle, then the
-**Portable** toggle, then the **Compression type** choice, then the **Quality**
+**Portable** toggle (on by default, with a full-width line of helper text under
+it: the one control whose OFF side needs explaining, §4.3 "The default"), then the **Compression type** choice, then the **Quality**
 rung, then **Compress download**, then the **download size** for the state
 those five are in, then **Export GLB last and centred**, with the Pro chip for
 a free user riding beside it. That order is the order the choices compound in
@@ -2220,12 +2344,13 @@ Chrome — with a real Auth0 account in each of the three tiers:
    fetches a `<script>` and a sibling `.wasm` from `/static/js/draco/` at
    click time — a blocked or mis-served asset is a per-browser failure the
    others never see.
-5c. **Portable** on (codec None): the line says *Estimating…*, then settles at
-   a different figure; the download weighs exactly what it said; the file
-   opens in <https://3dviewer.net/>, which refuses the default export
-   (`Unsupported extension: EXT_mesh_gpu_instancing`), and the three.js editor
-   shows the nested, named hierarchy (Bldrs › Build › Every › Thing) instead
-   of `mesh_N`. Then Portable + Draco, to confirm the codec preserves the node
+5c. **Portable** — on when the tab opens (#1831) — at codec None: the line
+   says *Estimating…*, then settles; the download weighs exactly what it said;
+   the file opens in <https://3dviewer.net/>, which refuses the native export
+   (Portable off: `Unsupported extension: EXT_mesh_gpu_instancing`), and the
+   three.js editor shows the nested, named hierarchy (Bldrs › Build › Every ›
+   Thing) instead of `mesh_N` — and finishes its autosave (a large model's
+   portable file used to hang it; §4.3 "The vertex layout"). Then Portable + Draco, to confirm the codec preserves the node
    names. Reopening a portable export in Share shows the nav tree, renders
    palette-coloured, and picks: clicking a nav-tree row highlights in the
    scene and vice versa, exactly as the default export does (#1849).

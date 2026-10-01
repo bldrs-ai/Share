@@ -228,20 +228,30 @@ export async function selectCompression(page: Page, mode: string): Promise<numbe
 
 
 /**
- * Flip the Portable toggle and wait for the size line to settle on the figure
- * for it.
+ * Put the Portable toggle in the state a test means to exercise.
  *
- * Portable is not free even with no codec — the rewrite reads the whole
- * artifact off OPFS where the plain uncompressed estimate is a header read
- * (#1843) — so the line goes through "Estimating…" here just as it does for a
- * codec.
+ * Portable is ON by default (#1831), and a spec that silently rides the
+ * default tests whichever variant the default happens to be that month — the
+ * batched-native assertions below (instance tables, Draco method bytes,
+ * `EXT_mesh_gpu_instancing`) all went vacuous-or-red the day it flipped. So
+ * every export spec states the variant it is about, and this is how.
+ *
+ * Call it right after `openExportTab` and before `waitForCodecSizing`: the
+ * background sweep measures AT the Portable setting and restarts when it
+ * changes, and a codec the test then pins with `selectCompression` is never
+ * overridden by the restarted sweep. It does not wait for the size line —
+ * Portable re-estimates through the whole-file path even at codec `none`
+ * (#1843) — so a caller that wants the figure calls `waitForEstimate`.
  *
  * @param page Playwright page
- * @return the byte count the settled line carries
+ * @param isPortable the state to leave the toggle in
  */
-export async function togglePortable(page: Page): Promise<number> {
-  await page.getByTestId('export-portable').locator('input').click()
-  return await waitForEstimate(page)
+export async function setPortable(page: Page, isPortable: boolean) {
+  const toggle = page.getByTestId('export-portable').locator('input')
+  if (await toggle.isChecked() !== isPortable) {
+    await toggle.click()
+  }
+  await expect(toggle).toBeChecked({checked: isPortable})
 }
 
 
@@ -507,7 +517,9 @@ export function glbJsonChunk(bytes: Buffer): {
   extensionsUsed?: string[]
   extensionsRequired?: string[]
   nodes?: Array<{name?: string; mesh?: number}>
-  bufferViews?: Array<{byteOffset?: number; byteLength: number}>
+  meshes?: Array<{primitives: Array<{attributes: Record<string, number>}>}>
+  accessors?: Array<{bufferView?: number; componentType: number; type: string}>
+  bufferViews?: Array<{byteOffset?: number; byteLength: number; byteStride?: number}>
   extensions?: Record<string, {bufferView?: number}>
 } {
   const jsonByteLength = bytes.readUInt32LE(GLB_JSON_LENGTH_OFFSET)
@@ -587,4 +599,109 @@ export function watchProModuleRequests(page: Page): string[] {
     }
   })
   return urls
+}
+
+
+/** Which elements a double-click may aim at. */
+export type ElementKind = 'collapsed' | 'instanced' | 'any'
+
+
+/**
+ * Double-click an element in the scene and wait for it to be selected.
+ *
+ * Aims at a COLLAPSED element for `'collapsed'` (one whose batch geometry id
+ * is a synthesised range — `batchedGeometryRanges.js#BATCHED_GEOMETRY_
+ * RANGE_IDS`), at one that is NOT for `'instanced'`, by projecting its bounds'
+ * centre to the canvas. Candidates are tried in turn because the one in front
+ * at that pixel may be a different element; the assertion is that SOME
+ * element of that kind, clicked, selects itself. Broken picking selects none
+ * of them.
+ *
+ * @param page Playwright page
+ * @param kind which elements to aim at
+ * @return the parent expressID that got selected
+ */
+export async function doubleClickSelectsAnElement(page: Page, kind: ElementKind): Promise<number> {
+  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate((aimAt) => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = window as any
+    const state = (w.store ?? w.useStore).getState()
+    const camera = state.viewer.context.getCamera()
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement
+    const rect = canvas.getBoundingClientRect()
+    const out: Array<{parent: number; x: number; y: number}> = []
+    const visit = (mesh: any) => {
+      if (!mesh?.isBatchedMesh || !mesh.instanceParents) {
+        return
+      }
+      mesh.updateMatrixWorld(true)
+      mesh.computeBoundingBox()
+      const Box3 = mesh.boundingBox.constructor
+      const Matrix4 = mesh.matrixWorld.constructor
+      for (let batchId = 0; batchId < mesh.instanceParents.length; batchId++) {
+        const geometryId = mesh.getGeometryIdAt(batchId)
+        const isRange = Boolean(mesh.bldrsGeometryRangeIds?.has(geometryId))
+        if ((aimAt === 'collapsed' && !isRange) || (aimAt === 'instanced' && isRange)) {
+          continue
+        }
+        const box = new Box3()
+        const matrix = new Matrix4()
+        mesh.getBoundingBoxAt(geometryId, box)
+        mesh.getMatrixAt(batchId, matrix)
+        const centre = box.applyMatrix4(matrix.premultiply(mesh.matrixWorld))
+          .getCenter(mesh.boundingBox.min.clone()).project(camera)
+        // Inside the viewport, off its very edge (normalised device coords).
+        const ON_SCREEN = 0.95
+        if (Math.abs(centre.x) < ON_SCREEN && Math.abs(centre.y) < ON_SCREEN) {
+          out.push({
+            parent: mesh.instanceParents[batchId],
+            x: rect.left + (((centre.x + 1) / 2) * rect.width),
+            y: rect.top + (((1 - centre.y) / 2) * rect.height),
+          })
+        }
+      }
+    }
+    const model = state.model
+    if (model?.traverse) {
+      model.traverse(visit)
+    } else {
+      visit(model)
+    }
+    return out
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }, kind)
+  expect(candidates.length, 'there must be an element of the kind under test on screen')
+    .toBeGreaterThan(0)
+
+  const MAX_TRIES = 8
+  for (const {parent, x, y} of candidates.slice(0, MAX_TRIES)) {
+    await page.mouse.dblclick(x, y)
+    const selected = await page.waitForFunction((id) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const w = window as any
+      return ((w.store ?? w.useStore).getState().selectedElements ?? []).includes(`${id}`)
+    }, parent, {timeout: 3000}).then(() => true, () => false)
+    if (selected) {
+      return parent
+    }
+  }
+  throw new Error('double-click selected none of the elements it was aimed at')
+}
+
+
+/**
+ * The rest of the user-visible selection: the NavTree row and the URL.
+ *
+ * @param page Playwright page
+ */
+export async function expectNavTreeFollowsSelection(page: Page) {
+  const panel = page.getByTestId('NavTreePanel')
+  if (!await panel.isVisible()) {
+    await page.getByTestId('control-button-navigation').click()
+  }
+  await expect(panel).toBeVisible()
+  await expect(page.locator('[data-is-selected="true"]').first()).toBeVisible()
+  // The element path follows the model file in the URL, before any query or
+  // hash (`/index.ifc/89/112/…/396?feature=…`).
+  await expect(page).toHaveURL(/\.(ifc|glb)(\/\d+)+(\?|#|$)/)
 }

@@ -14,7 +14,7 @@ import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import {BldrsInstanceTablesReader, rangeCanaryOf} from './bldrsInstanceTables'
 import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from './bldrsSpatialTree'
 import {bakeCollapsedBin, planCollapse} from './glbCollapse'
-import {batchedArtifactBytes, triangleGeometry} from './glbArtifact.fixture'
+import {batchedArtifactBytes, interleavedLegacyArtifact, triangleGeometry} from './glbArtifact.fixture'
 import {exportBatchedModelAsInstancedGlb} from './glbBatchedExport'
 import {injectGlbExtensions, parseGlb, serializeGlb} from './injectGlbExtensions'
 import {COMPRESSION_MESHOPT, compressExportGlb} from '../export/glbCompression'
@@ -484,6 +484,42 @@ describe('portable export of a collapsed artifact (#1871)', () => {
     for (const [occurrence, flat] of modelSpaceTriangles(hydrated)) {
       expect(vertexSet(flat)).toEqual(vertexSet(want.get(occurrence)))
     }
+    liveHybridModel().pickPoints.forEach((point, occurrence) => {
+      expect(pickOccurrence(hydrated, point)).toBe(occurrence)
+    })
+  }, TIMEOUT_MS)
+
+  it('de-interleaves a legacy collapsed artifact, and it still re-merges and picks', async () => {
+    // Collapsed artifacts already in users' caches were written INTERLEAVED
+    // (every merged POSITION+NORMAL in one `byteStride: 24` view), and the
+    // split's per-element accessors are windows onto that view — the layout
+    // three's `InterleavedBuffer.toJSON` serialises whole once per geometry,
+    // which crashed the three.js editor on a 1,439-element export
+    // (glb-export-premium.md §4.3). The split, the canary it checks and the
+    // hydration's re-merge all have to survive the de-interleave after it.
+    const legacy = interleavedLegacyArtifact(await artifact(true))
+    const vertexViews = (json) => json.meshes.flatMap((mesh) => mesh.primitives.flatMap((primitive) =>
+      Object.values(primitive.attributes).map((index) =>
+        json.bufferViews[json.accessors[index].bufferView])))
+    // Non-vacuity: the input really is the strided layout.
+    expect(vertexViews(parseGlb(legacy).json).every((view) => view.byteStride === 24)).toBe(true)
+
+    const portable = rewriteGlbPortable(legacy)
+    // Every element split out and named — the canary passed on the strided
+    // input, so nothing fell back to one `Unassigned` placement.
+    expect(portable.stats.unassignedInstances).toBe(0)
+    const {json} = parseGlb(portable.bytes)
+    const views = vertexViews(json)
+    expect(views.length).toBeGreaterThan(5)
+    for (const view of views) {
+      expect(view.byteStride ?? 12).toBe(12)
+    }
+
+    const reference = await parseAndHydrate(rewriteGlbPortable(await artifact(false)).bytes)
+    const hydrated = await parseAndHydrate(portable.bytes)
+    expect(hydrated).not.toBeNull()
+    expect(hydrated.capabilities.batchedPicking).toBe(true)
+    expect(identities(hydrated)).toEqual(identities(reference))
     liveHybridModel().pickPoints.forEach((point, occurrence) => {
       expect(pickOccurrence(hydrated, point)).toBe(occurrence)
     })

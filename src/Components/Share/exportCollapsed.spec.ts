@@ -10,7 +10,10 @@ import {
   openExportTab,
   reopenLocalGlb,
   routeProModule,
+  doubleClickSelectsAnElement,
+  expectNavTreeFollowsSelection,
   selectCompression,
+  setPortable,
   setSubscriptionTier,
   waitForCodecSizing,
 } from '../../tests/e2e/export'
@@ -33,7 +36,10 @@ import {
  * every way a collapsed model reaches the viewer:
  *
  * - the OPFS cache HIT (the collapsed slot, hydrated through ranges);
- * - an Export download reopened, once per codec — None, Meshopt, Draco.
+ * - an Export download reopened, once per codec — None, Meshopt, Draco —
+ *   with Portable explicitly OFF: the subject is the batched-native file,
+ *   whose collapsed nodes Portable would split (`glbPortable.js`), and since
+ *   #1831 Portable is the default.
  *
  * Why it exists: the first cut of #1871 passed every unit test and the cache
  * E2E, and the owner's first smoke still found a Draco export of DSA that
@@ -53,111 +59,6 @@ import {
 
 
 const CODECS = ['none', 'meshopt', 'draco'] as const
-
-
-/** Which elements a double-click may aim at. */
-type ElementKind = 'collapsed' | 'instanced' | 'any'
-
-
-/**
- * Double-click an element in the scene and wait for it to be selected.
- *
- * Aims at a COLLAPSED element for `'collapsed'` (one whose batch geometry id
- * is a synthesised range — `batchedGeometryRanges.js#BATCHED_GEOMETRY_
- * RANGE_IDS`), at one that is NOT for `'instanced'`, by projecting its bounds'
- * centre to the canvas. Candidates are tried in turn because the one in front
- * at that pixel may be a different element; the assertion is that SOME
- * element of that kind, clicked, selects itself. Broken picking selects none
- * of them.
- *
- * @param page Playwright page
- * @param kind which elements to aim at
- * @return the parent expressID that got selected
- */
-async function doubleClickSelectsAnElement(page: Page, kind: ElementKind): Promise<number> {
-  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate((aimAt) => {
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    const w = window as any
-    const state = (w.store ?? w.useStore).getState()
-    const camera = state.viewer.context.getCamera()
-    const canvas = document.querySelector('canvas') as HTMLCanvasElement
-    const rect = canvas.getBoundingClientRect()
-    const out: Array<{parent: number; x: number; y: number}> = []
-    const visit = (mesh: any) => {
-      if (!mesh?.isBatchedMesh || !mesh.instanceParents) {
-        return
-      }
-      mesh.updateMatrixWorld(true)
-      mesh.computeBoundingBox()
-      const Box3 = mesh.boundingBox.constructor
-      const Matrix4 = mesh.matrixWorld.constructor
-      for (let batchId = 0; batchId < mesh.instanceParents.length; batchId++) {
-        const geometryId = mesh.getGeometryIdAt(batchId)
-        const isRange = Boolean(mesh.bldrsGeometryRangeIds?.has(geometryId))
-        if ((aimAt === 'collapsed' && !isRange) || (aimAt === 'instanced' && isRange)) {
-          continue
-        }
-        const box = new Box3()
-        const matrix = new Matrix4()
-        mesh.getBoundingBoxAt(geometryId, box)
-        mesh.getMatrixAt(batchId, matrix)
-        const centre = box.applyMatrix4(matrix.premultiply(mesh.matrixWorld))
-          .getCenter(mesh.boundingBox.min.clone()).project(camera)
-        // Inside the viewport, off its very edge (normalised device coords).
-        const ON_SCREEN = 0.95
-        if (Math.abs(centre.x) < ON_SCREEN && Math.abs(centre.y) < ON_SCREEN) {
-          out.push({
-            parent: mesh.instanceParents[batchId],
-            x: rect.left + (((centre.x + 1) / 2) * rect.width),
-            y: rect.top + (((1 - centre.y) / 2) * rect.height),
-          })
-        }
-      }
-    }
-    const model = state.model
-    if (model?.traverse) {
-      model.traverse(visit)
-    } else {
-      visit(model)
-    }
-    return out
-    /* eslint-enable @typescript-eslint/no-explicit-any */
-  }, kind)
-  expect(candidates.length, 'there must be an element of the kind under test on screen')
-    .toBeGreaterThan(0)
-
-  const MAX_TRIES = 8
-  for (const {parent, x, y} of candidates.slice(0, MAX_TRIES)) {
-    await page.mouse.dblclick(x, y)
-    const selected = await page.waitForFunction((id) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const w = window as any
-      return ((w.store ?? w.useStore).getState().selectedElements ?? []).includes(`${id}`)
-    }, parent, {timeout: 3000}).then(() => true, () => false)
-    if (selected) {
-      return parent
-    }
-  }
-  throw new Error('double-click selected none of the elements it was aimed at')
-}
-
-
-/**
- * The rest of the user-visible selection: the NavTree row and the URL.
- *
- * @param page Playwright page
- */
-async function expectNavTreeFollowsSelection(page: Page) {
-  const panel = page.getByTestId('NavTreePanel')
-  if (!await panel.isVisible()) {
-    await page.getByTestId('control-button-navigation').click()
-  }
-  await expect(panel).toBeVisible()
-  await expect(page.locator('[data-is-selected="true"]').first()).toBeVisible()
-  // The element path follows the model file in the URL, before any query or
-  // hash (`/index.ifc/89/112/…/396?feature=…`).
-  await expect(page).toHaveURL(/\.(ifc|glb)(\/\d+)+(\?|#|$)/)
-}
 
 
 /**
@@ -267,6 +168,10 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     await auth0Login(page)
     await openExportTab(page)
     await dismissLoadSnackbar(page)
+    // The batched-native download: the collapsed ranges, their canary and
+    // the per-primitive Draco method all live in its instance tables and its
+    // EXT_mesh_gpu_instancing nodes, which Portable (the default) rewrites.
+    await setPortable(page, false)
     await waitForCodecSizing(page)
     const paths = []
     for (const mode of CODECS) {
@@ -318,6 +223,10 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     await auth0Login(page)
     await openExportTab(page)
     await dismissLoadSnackbar(page)
+    // The batched-native download: the collapsed ranges, their canary and
+    // the per-primitive Draco method all live in its instance tables and its
+    // EXT_mesh_gpu_instancing nodes, which Portable (the default) rewrites.
+    await setPortable(page, false)
     await waitForCodecSizing(page)
     const path = await exportWith(page, 'draco', 'hybrid')
     await page.keyboard.press('Escape')
@@ -359,6 +268,10 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     await auth0Login(page)
     await openExportTab(page)
     await dismissLoadSnackbar(page)
+    // The batched-native download: the collapsed ranges, their canary and
+    // the per-primitive Draco method all live in its instance tables and its
+    // EXT_mesh_gpu_instancing nodes, which Portable (the default) rewrites.
+    await setPortable(page, false)
     await waitForCodecSizing(page)
     const path = await exportWith(page, 'draco', 'instanced')
     await page.keyboard.press('Escape')

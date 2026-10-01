@@ -25,7 +25,13 @@ import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
 } from '../loader/bldrsInstanceTables'
 import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from '../loader/bldrsSpatialTree'
-import {batchedArtifactBytes, liveBatchedModel, mergedGlbBytes} from '../loader/glbArtifact.fixture'
+import {
+  batchedArtifactBytes,
+  interleavedLegacyArtifact,
+  liveBatchedModel,
+  mergedGlbBytes,
+} from '../loader/glbArtifact.fixture'
+import {referencedBufferViews} from '../loader/glbArtifactSize'
 import {injectGlbExtensions, parseGlb} from '../loader/injectGlbExtensions'
 import {
   COMPRESSION_DRACO,
@@ -167,9 +173,9 @@ function nodeNamed(json, name) {
 
 
 // What one element of an accessor weighs, so the reader below can walk a
-// STRIDED view: the batched writer's positions and normals are interleaved
-// into one bufferView (`byteStride: 24`), and slicing the whole view would
-// compare a normal against a position.
+// STRIDED view: artifacts written before #1831 interleave positions and
+// normals into one bufferView (`byteStride: 24`, `interleavedLegacyArtifact`),
+// and slicing the whole view would compare a normal against a position.
 const COMPONENT_BYTES = {5125: 4, 5126: 4}
 const COMPONENT_COUNTS = {SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4}
 
@@ -441,7 +447,11 @@ describe('export/glbPortable', () => {
       // 100k-instance model, and nothing downstream prunes them.
       const before = parseGlb(source).json
       expect(json.accessors.length).toBeLessThan(before.accessors.length)
-      expect(json.bufferViews.length).toBeLessThan(before.bufferViews.length)
+      // Their views went too: nothing in the file is left unreferenced. (A
+      // view COUNT would not say this — the vertex de-interleave can add a
+      // view per attribute for every one it retires.)
+      expect(referencedBufferViews(json).size).toBe(json.bufferViews.length)
+      expect(result.stats.droppedBufferViews).toBeGreaterThan(0)
       expect(result.stats.droppedAccessors).toBe(before.accessors.length - json.accessors.length)
       expect(parseGlb(result.bytes).bin.byteLength).toBeLessThan(parseGlb(source).bin.byteLength)
     })
@@ -572,6 +582,128 @@ describe('export/glbPortable', () => {
       expect(positionOf('Wall A')).toEqual([1, 0, 0])
       expect(positionOf('Wall #12')).toEqual([2, 0, 0])
       expect(positionOf('Slab')).toEqual([0, 3, 0])
+    })
+  })
+
+  describe('the vertex layout it writes', () => {
+    // three's `GLTFLoader` reads an accessor on a strided view as an
+    // `InterleavedBufferAttribute`, and `InterleavedBuffer.toJSON` serialises
+    // the WHOLE backing view once per geometry. With every mesh's vertices in
+    // one shared strided view — the layout of every artifact written before
+    // the writer went SEPARATE, which users' caches still hold — anything that
+    // `toJSON`s the scene pays geometries × view bytes: the three.js editor's
+    // autosave hung past a 3 GB heap on a 28,674-element portable export
+    // (design/new/glb-export-premium.md §4.3). So the input here is that
+    // LEGACY layout, and the output must not carry it forward.
+    let legacy
+    let result
+    let json
+
+    /**
+     * @param {object} gltfJson
+     * @return {Array<{name: string, accessor: object, view: object, index: number}>}
+     *   every vertex attribute of every primitive
+     */
+    function vertexAttributes(gltfJson) {
+      return gltfJson.meshes.flatMap((mesh) => mesh.primitives.flatMap((primitive) =>
+        Object.entries(primitive.attributes).map(([name, index]) => {
+          const accessor = gltfJson.accessors[index]
+          return {name, index, accessor, view: gltfJson.bufferViews[accessor.bufferView]}
+        })))
+    }
+
+    /**
+     * @param {Uint8Array} bytes
+     * @return {Promise<object>} what three's GLTFLoader builds
+     */
+    async function parse(bytes) {
+      const ab = new ArrayBuffer(bytes.byteLength)
+      new Uint8Array(ab).set(bytes)
+      return await new Promise((resolve, reject) => {
+        new GLTFLoader().parse(ab, './', resolve, reject)
+      })
+    }
+
+    beforeAll(async () => {
+      legacy = interleavedLegacyArtifact(await artifactWithTree({mutateModel: asIfcModel}))
+      result = rewriteGlbPortable(legacy)
+      json = parseGlb(result.bytes).json
+    })
+
+    it('starts from a legacy artifact that really is interleaved', () => {
+      // Non-vacuity for everything below: an already-planar input would pass
+      // every assertion here with the de-interleave deleted.
+      const attributes = vertexAttributes(parseGlb(legacy).json)
+      expect(attributes.length).toBeGreaterThan(2)
+      for (const {view} of attributes) {
+        expect(view.byteStride).toBe(24)
+      }
+    })
+
+    it('writes every vertex attribute on a view whose stride is its element size', () => {
+      const attributes = vertexAttributes(json)
+      for (const {accessor, view} of attributes) {
+        expect(accessor.componentType).toBe(5126)
+        expect(view.byteStride ?? 12).toBe(12)
+      }
+      expect(result.stats.deinterleavedAccessors)
+        .toBe(new Set(vertexAttributes(parseGlb(legacy).json).map(({index}) => index)).size)
+    })
+
+    it('shares one view per attribute across meshes, rather than one per mesh', () => {
+      const viewsOf = (name) => new Set(vertexAttributes(json)
+        .filter((attribute) => attribute.name === name).map(({accessor}) => accessor.bufferView))
+      expect(json.meshes.length).toBeGreaterThan(1)
+      expect(viewsOf('POSITION').size).toBe(1)
+      expect(viewsOf('NORMAL').size).toBe(1)
+      expect([...viewsOf('POSITION')]).not.toEqual([...viewsOf('NORMAL')])
+    })
+
+    it('moves the vertex bytes without changing any of them', () => {
+      expect(geometryBytesByMesh(result.bytes)).toEqual(geometryBytesByMesh(legacy))
+      // Nothing duplicated: the interleaved view was retired, not kept beside
+      // its planar copy.
+      expect(parseGlb(result.bytes).bin.byteLength)
+        .toBeLessThanOrEqual(parseGlb(legacy).bin.byteLength)
+      expect(referencedBufferViews(json).size).toBe(json.bufferViews.length)
+    })
+
+    it('leaves an already-planar artifact\'s vertex views where they are', async () => {
+      // What the SEPARATE writer produces now: nothing to move.
+      const planar = rewriteGlbPortable(await artifactWithTree({mutateModel: asIfcModel}))
+      expect(planar.stats.deinterleavedAccessors).toBe(0)
+      expect(geometryBytesByMesh(planar.bytes)).toEqual(geometryBytesByMesh(result.bytes))
+    })
+
+    it('parses to plain BufferAttributes that serialise only their own vertices', async () => {
+      // The editor's cost model, run: `toJSON` on the scene, as its autosave
+      // does. The legacy file shows the cost, the portable one must not.
+      const sizes = (gltf) => {
+        const serialised = gltf.scene.toJSON()
+        return serialised.geometries.map((geometry) => ({
+          interleaved: Boolean(geometry.data.interleavedBuffers),
+          arrays: Object.values(geometry.data.arrayBuffers ?? {})
+            .reduce((total, words) => total + words.length, 0),
+        }))
+      }
+      expect(sizes(await parse(legacy)).every(({interleaved, arrays}) => interleaved && arrays > 0))
+        .toBe(true)
+
+      const gltf = await parse(result.bytes)
+      gltf.scene.traverse((object) => {
+        if (object.isMesh) {
+          expect(object.geometry.getAttribute('position').isInterleavedBufferAttribute).toBeFalsy()
+          expect(object.geometry.getAttribute('normal').isInterleavedBufferAttribute).toBeFalsy()
+        }
+      })
+      const serialised = gltf.scene.toJSON()
+      expect(serialised.geometries.length).toBeGreaterThan(1)
+      for (const geometry of serialised.geometries) {
+        expect(geometry.data.interleavedBuffers).toBeUndefined()
+        const {position} = geometry.data.attributes
+        // Its own three vertices, not the shared view.
+        expect(position.array).toHaveLength(9)
+      }
     })
   })
 

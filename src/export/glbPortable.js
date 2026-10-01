@@ -14,8 +14,15 @@
 // This module expands that into what a generic viewer expects: one node per
 // element, named and nested to mirror the spatial tree, each placement a
 // child node with its own TRS referencing the SHARED mesh. Nodes may share a
-// mesh, so nothing is duplicated except JSON — the geometry bufferViews are
-// copied byte for byte.
+// mesh, so nothing is duplicated except JSON — every geometry accessor
+// addresses the same bytes it did in the artifact.
+//
+// **Vertex attributes come out planar, never interleaved.** One bufferView
+// per attribute name, `byteStride` equal to the element size, shared by every
+// mesh (`deinterleaveVertexAttributes`). An interleaved view shared across
+// meshes is valid glTF, but three's `InterleavedBuffer.toJSON` serialises the
+// whole view once per geometry, and the three.js editor's autosave hung or
+// crashed on exactly the portable files this module used to write.
 //
 // **Raw glTF JSON, not a `@gltf-transform` Document.** The house pattern for
 // JSON-level surgery is already raw JSON (`glbArtifactSize.js#stripBldrsJson`,
@@ -91,6 +98,19 @@ const INDEX_COMPONENT_BYTES = {
   [GLTF_UNSIGNED_INT]: UINT32_BYTES,
 }
 const COMPONENTS_BY_TYPE = {SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4}
+const GLTF_BYTE = 5120
+const GLTF_SHORT = 5122
+// Every glTF accessor componentType, and its byte width.
+const COMPONENT_BYTES = {
+  [GLTF_BYTE]: 1,
+  [GLTF_UNSIGNED_BYTE]: 1,
+  [GLTF_SHORT]: UINT16_BYTES,
+  [GLTF_UNSIGNED_SHORT]: UINT16_BYTES,
+  [GLTF_UNSIGNED_INT]: UINT32_BYTES,
+  [GLTF_FLOAT]: BYTES_PER_FLOAT,
+}
+// bufferView.target for vertex attribute data.
+const GLTF_ARRAY_BUFFER = 34962
 // Nine significant digits round-trip a float32 exactly (24 bits of mantissa
 // need at most 9 decimal digits), so this shortens the JSON without changing
 // a single placement. `JSON.stringify` would otherwise write the full
@@ -185,6 +205,11 @@ export function rewriteGlbPortable(glbBytes) {
   }
   dropExtensionName(json, INSTANCING_EXTENSION_NAME)
 
+  // After the split, which windows onto the merged views at THEIR stride and
+  // so has to see them as they are; before the orphan sweep, which is what
+  // retires the interleaved views this leaves unreferenced.
+  const {bin: planarBin, deinterleavedAccessors} = deinterleaveVertexAttributes(json, workingBin)
+
   // Reclaim the TRS accessors' bytes. 40 B per instance — 4 MB on a
   // 100k-instance model — and nothing downstream would prune them:
   // `@gltf-transform` keeps an orphaned bufferView, and the strip only ever
@@ -192,7 +217,7 @@ export function rewriteGlbPortable(glbBytes) {
   const orphans = orphanedBufferViews(json)
   const {binPlan, binByteLength} = dropBufferViews(json, orphans)
 
-  const bytes = serializeGlb(json, repackGlbBin(workingBin, binPlan, binByteLength))
+  const bytes = serializeGlb(json, repackGlbBin(planarBin, binPlan, binByteLength))
   return {
     bytes,
     isChanged: true,
@@ -200,8 +225,162 @@ export function rewriteGlbPortable(glbBytes) {
       ...stats,
       droppedAccessors,
       droppedBufferViews: orphans.size,
+      deinterleavedAccessors,
     },
   }
+}
+
+
+/**
+ * Give every vertex attribute a tightly packed home: one bufferView per
+ * attribute name (all POSITIONs, then all NORMALs), `byteStride` equal to the
+ * element size, shared by every mesh.
+ *
+ * **Why a portable file must not be interleaved.** Artifacts written before
+ * the batched writer went `VertexLayout.SEPARATE` hold every mesh's POSITION
+ * and NORMAL interleaved at `byteStride: 24` in ONE bufferView — `glbSlim`'s
+ * one-view-per-class merge (#1864), and the collapsed split's windows onto
+ * it. three's `GLTFLoader` reads a strided accessor as an
+ * `InterleavedBufferAttribute` over that whole view, and
+ * `InterleavedBuffer.toJSON` serialises `new Uint32Array(this.array.buffer)`
+ * — the entire backing view, once per geometry, deduplicated only within that
+ * geometry. So anything that calls `toJSON` on the scene (the three.js
+ * editor's autosave, on every import) pays geometries × view bytes: a
+ * 28,674-element portable export hung the editor past a 3 GB heap, a
+ * 1,439-geometry one crashed its renderer, and a 29-geometry one took 4.8 s
+ * to autosave. With `byteStride` equal to the element size, three builds a
+ * plain `BufferAttribute` over just the accessor's own elements instead, and
+ * the same three files autosaved in 542, 214 and 282 ms
+ * (design/new/glb-export-premium.md §4.3, "The vertex layout").
+ *
+ * Views stay SHARED across meshes — one per attribute, not one per mesh.
+ * One-view-per-mesh also cures the editor (it bounds what `toJSON` can copy)
+ * but costs a bufferView entry per mesh, +12.7% on the same file.
+ *
+ * Copies only what is interleaved: an accessor already on a view whose
+ * stride is its element size (or that has no stride) is left where it is, so
+ * an artifact from the SEPARATE writer passes through with nothing moved.
+ * The interleaved views it empties are retired by the caller's orphan sweep.
+ *
+ * Skipped, and left interleaved, for anything it cannot move losslessly and
+ * the batched writer never emits: a sparse accessor, a view on another
+ * buffer or carrying an extension (a Meshopt view's bytes are not the
+ * accessor's), and an element size that is not a multiple of 4 — glTF pads
+ * such a vertex element to a 4-byte stride, which is interleaving again as
+ * far as three is concerned.
+ *
+ * @param {object} json Parsed glTF JSON, mutated
+ * @param {?Uint8Array} bin Its BIN chunk
+ * @return {{bin: ?Uint8Array, deinterleavedAccessors: number}} the BIN with
+ *   the packed views appended (the input itself when nothing moved)
+ */
+function deinterleaveVertexAttributes(json, bin) {
+  if (!bin) {
+    return {bin, deinterleavedAccessors: 0}
+  }
+  // name|elementBytes → accessor indices, in first-use order, each once.
+  const groups = new Map()
+  const seen = new Set()
+  const consider = (name, accessorIndex) => {
+    if (!Number.isInteger(accessorIndex) || seen.has(accessorIndex)) {
+      return
+    }
+    seen.add(accessorIndex)
+    const accessor = json.accessors?.[accessorIndex]
+    const view = json.bufferViews?.[accessor?.bufferView]
+    const elementBytes = accessor ? accessorElementBytes(accessor) : 0
+    if (!view || accessor.sparse || view.extensions || (view.buffer ?? 0) !== 0 ||
+        !elementBytes || elementBytes % UINT32_BYTES !== 0 ||
+        !view.byteStride || view.byteStride === elementBytes) {
+      return
+    }
+    const key = `${name}|${elementBytes}`
+    const group = groups.get(key)
+    if (group) {
+      group.accessors.push(accessorIndex)
+    } else {
+      groups.set(key, {elementBytes, accessors: [accessorIndex]})
+    }
+  }
+  for (const mesh of json.meshes || []) {
+    for (const primitive of mesh.primitives || []) {
+      for (const [name, index] of Object.entries(primitive.attributes || {})) {
+        consider(name, index)
+      }
+      for (const target of primitive.targets || []) {
+        for (const [name, index] of Object.entries(target)) {
+          consider(`target:${name}`, index)
+        }
+      }
+    }
+  }
+  if (groups.size === 0) {
+    return {bin, deinterleavedAccessors: 0}
+  }
+
+  // Appended after the existing bytes, 4-aligned; the caller's
+  // `dropBufferViews` compaction then lays every surviving view out afresh,
+  // so where these land here is only where they are copied FROM.
+  let end = pad4(bin.byteLength)
+  const layout = []
+  for (const {elementBytes, accessors} of groups.values()) {
+    const start = end
+    const offsets = []
+    for (const accessorIndex of accessors) {
+      offsets.push(end - start)
+      end += json.accessors[accessorIndex].count * elementBytes
+    }
+    layout.push({start, byteLength: end - start, elementBytes, accessors, offsets})
+    end = pad4(end)
+  }
+  const out = new Uint8Array(end)
+  out.set(bin)
+  let moved = 0
+  for (const {start, byteLength, elementBytes, accessors, offsets} of layout) {
+    const viewIndex = json.bufferViews.length
+    json.bufferViews.push({
+      buffer: 0, byteOffset: start, byteLength, byteStride: elementBytes, target: GLTF_ARRAY_BUFFER,
+    })
+    for (const [k, accessorIndex] of accessors.entries()) {
+      const accessor = json.accessors[accessorIndex]
+      const view = json.bufferViews[accessor.bufferView]
+      const from = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+      const to = start + offsets[k]
+      for (let e = 0; e < accessor.count; e++) {
+        const at = from + (e * view.byteStride)
+        out.set(bin.subarray(at, at + elementBytes), to + (e * elementBytes))
+      }
+      accessor.bufferView = viewIndex
+      if (offsets[k] === 0) {
+        delete accessor.byteOffset
+      } else {
+        accessor.byteOffset = offsets[k]
+      }
+      moved++
+    }
+  }
+  return {bin: out, deinterleavedAccessors: moved}
+}
+
+
+/**
+ * @param {object} accessor
+ * @return {number} bytes per element, or 0 for a type this module does not
+ *   size
+ */
+function accessorElementBytes(accessor) {
+  const componentBytes = COMPONENT_BYTES[accessor.componentType]
+  const components = COMPONENTS_BY_TYPE[accessor.type]
+  return componentBytes && components ? componentBytes * components : 0
+}
+
+
+/**
+ * @param {number} n
+ * @return {number} `n` rounded up to a multiple of 4
+ */
+function pad4(n) {
+  return Math.ceil(n / UINT32_BYTES) * UINT32_BYTES
 }
 
 
