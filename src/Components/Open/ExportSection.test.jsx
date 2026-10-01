@@ -13,6 +13,7 @@ import {AUTO_MEASURE_MAX_BYTES} from '../../export/codecSizes'
 import useCodecSizes from '../../export/useCodecSizes'
 import {gtagEvent} from '../../privacy/analytics'
 import useStore from '../../store/useStore'
+import {actAsyncFlush} from '../../utils/tests'
 import {goToSubscription} from '../Profile/subscriptionNav'
 import ExportSection from './ExportSection'
 
@@ -182,6 +183,9 @@ describe('ExportSection', () => {
     // during the teardown lands its state update outside `act`. Park it.
     artifactSizes.mockReturnValue(new Promise(() => {}))
     artifactPositionRange.mockReturnValue(new Promise(() => {}))
+    // The header read the large-artifact gate decides on, too: Portable is
+    // the default, so the teardown's re-run reaches it before `artifactSizes`.
+    uncompressedSizes.mockReturnValue(new Promise(() => {}))
     await setStore(null, null)
   })
 
@@ -267,8 +271,9 @@ describe('ExportSection', () => {
     const portable = getByTestId('export-portable').querySelector('input')
     expect(portable.checked).toBe(true)
     // One header read decides the large-artifact gate first (below); this
-    // model is under it.
-    await act(async () => {})
+    // model is under it. No UI transition to wait on — the line reads
+    // "Estimating…" either side of it — so drain the read itself.
+    await actAsyncFlush()
     // The first estimate the panel asks for is already the portable file's:
     // the size line and the codec sweep measure what the default downloads.
     expect(artifactSizes).toHaveBeenCalledWith(expect.objectContaining(ARTIFACT), 'none', true, 'balanced', false)
@@ -338,7 +343,9 @@ describe('ExportSection', () => {
 
     // Back on: pending again until the rewrite's figure lands.
     fireEvent.click(getByTestId('export-portable').querySelector('input'))
-    await act(async () => {})
+    // The gate's header read, then the estimate it lets through; "Estimating…"
+    // shows throughout, so there is no transition to await instead.
+    await actAsyncFlush()
 
     expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', true, 'balanced', false)
     expect(queryByTestId('export-size')).toBeNull()
@@ -881,9 +888,11 @@ describe('ExportSection', () => {
 
     it('opens Portable but does not rewrite the artifact until asked', async () => {
       await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
-      const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
-      await act(async () => {})
+      const {findByTestId, getByTestId, queryByTestId} =
+        render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
+      // The gate's own outcome is the transition to wait on.
+      expect(await findByTestId('export-size-unmeasured')).toBeInTheDocument()
       expect(getByTestId('export-portable').querySelector('input').checked).toBe(true)
       expect(portableEstimateRan()).toBe(false)
       // Not a wrong number: no figure, and the sweep's own way to get one.
@@ -898,46 +907,43 @@ describe('ExportSection', () => {
       expect(portableEstimateRan()).toBe(false)
 
       fireEvent.click(getByTestId('export-size-calculate'))
-      await act(async () => {})
 
+      expect(await findByTestId('export-size')).toHaveAttribute('data-bytes', String(LARGE_BYTES + 7))
       expect(portableEstimateRan()).toBe(true)
       expect(startSweep).toHaveBeenCalledTimes(1)
       expect(queryByTestId('export-size-unmeasured')).toBeNull()
-      expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(LARGE_BYTES + 7))
     })
 
     it('takes the sweep\'s "Calculate sizes" as the same consent', async () => {
       await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
-      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
-      await act(async () => {})
+      const {findByTestId, getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await findByTestId('export-size-unmeasured')
       expect(portableEstimateRan()).toBe(false)
 
       fireEvent.click(getByTestId('export-codec-sizes-start'))
-      await act(async () => {})
 
+      expect(await findByTestId('export-size')).toHaveAttribute('data-bytes', String(LARGE_BYTES + 7))
       expect(startSweep).toHaveBeenCalledTimes(1)
       expect(portableEstimateRan()).toBe(true)
-      expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(LARGE_BYTES + 7))
     })
 
     it('toggling Portable off and on reads the header, never the rewrite', async () => {
       await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
-      const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
-      await act(async () => {})
+      const {findByTestId, getByTestId, queryByTestId} =
+        render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      await findByTestId('export-size-unmeasured')
       const toggle = getByTestId('export-portable').querySelector('input')
 
       fireEvent.click(toggle)
-      await act(async () => {})
       // Native: the cheap header figure, exactly as before Portable was the
       // default.
+      expect(await findByTestId('export-size')).toHaveAttribute('data-bytes', String(LARGE_BYTES))
       expect(artifactSizes).toHaveBeenLastCalledWith(expect.objectContaining(ARTIFACT), 'none', false, 'balanced', false)
-      expect(getByTestId('export-size')).toHaveAttribute('data-bytes', String(LARGE_BYTES))
 
       fireEvent.click(toggle)
-      await act(async () => {})
+      expect(await findByTestId('export-size-unmeasured')).toBeInTheDocument()
       expect(portableEstimateRan()).toBe(false)
       expect(queryByTestId('export-size')).toBeNull()
-      expect(getByTestId('export-size-unmeasured')).toBeInTheDocument()
     })
   })
 
@@ -1088,6 +1094,10 @@ describe('ExportSection', () => {
       expect(queryByTestId('export-codec-sizes-stop')).toBeNull()
 
       fireEvent.click(getByTestId('export-codec-sizes-start'))
+      // The click is also consent for the size line's own estimate (#1904
+      // review), which re-runs off it; drain that rather than leave it to
+      // land after the test.
+      await actAsyncFlush()
 
       expect(start).toHaveBeenCalled()
     })
@@ -1143,6 +1153,10 @@ describe('ExportSection', () => {
       expect(getByTestId('export-codec-sizes-status')).toHaveTextContent('Codec sizing stopped')
 
       fireEvent.click(getByTestId('export-codec-sizes-start'))
+      // The click is also consent for the size line's own estimate (#1904
+      // review), which re-runs off it; drain that rather than leave it to
+      // land after the test.
+      await actAsyncFlush()
 
       expect(start).toHaveBeenCalled()
     })
