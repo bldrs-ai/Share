@@ -218,6 +218,11 @@ const LEAF_LABEL = 'Together'
 // The fixture's one PRODUCT, and so the name its tree root and its portable
 // node carry.
 const SHELLS_PART_NAME = 'Shells'
+// Two disconnected top-level parts, 80 unnamed shells each: Conway wraps them
+// in a synthetic `Model` node and gives the wrapper and both roots an empty
+// occurrence path (#1901, codex on #1908).
+const TWO_ROOT_FIXTURE = 'src/tests/fixtures/twoRootShells.step'
+const TWO_ROOT_PART_NAMES = ['Shells', 'Plates']
 
 
 /**
@@ -962,6 +967,69 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(page.getByTestId('NavTreePanel')).toBeVisible()
     await expect(page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)).toHaveCount(1)
     await expect(page.locator('[data-node-label="Unassigned"]')).toHaveCount(0)
+    await doubleClickSelectsAnElement(page, 'collapsed')
+  })
+
+  test('a file of several top-level parts never gives one part the shells of another', async ({page}) => {
+    // #1901 follow-up (codex on #1908). Two disconnected parts, each a body of
+    // 80 unnamed shells, so every row of both has an EMPTY occurrence path.
+    // Joining the rows to the tree on the empty path alone hands the first
+    // part all 160 rows and exports the second empty: the file opens and looks
+    // right, but names the wrong part. The user's actions are those of the
+    // single-part test above.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+
+    await routeProModule(page)
+    await loadModelAndWaitForArtifact(page)
+    resetGlbLogs(glbLogs)
+    await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await waitForGlbLog(glbLogs, 'writer: wrote', EXPORT_TEST_TIMEOUT_MS)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+    await expect(page.getByTestId('export-portable').locator('input')).toBeChecked()
+    await waitForCodecSizing(page)
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    const download = await downloadPromise
+    const savedPath = test.info().outputPath('two-root-default.glb')
+    await download.saveAs(savedPath)
+
+    const json = glbJsonChunk(await readFile(savedPath))
+    // The helper's node type predates the portable file's `children`.
+    type PortableNode = {name?: string; children?: Array<number>; extras?: {bldrsTableNode?: unknown; bldrsRowCount?: number}}
+    const nodes = (json.nodes ?? []) as Array<PortableNode>
+    const rowsOf = (node: PortableNode | undefined): number =>
+      Number.isInteger(node?.extras?.bldrsTableNode) ? (node?.extras?.bldrsRowCount ?? 1) : 0
+    // Every shell of both parts is in the file...
+    expect(nodes.reduce((rows, node) => rows + rowsOf(node), 0)).toBe(2 * SHELLS_FIXTURE_ROWS)
+    // ...and no part owns more than its own 80: the part a shell is filed
+    // under is a claim about it. The bug filed all 160 under the first part.
+    const ownedBy = (name: string) => {
+      const part = nodes.find((node) => node.name === name)
+      expect(part, `the file should name ${name}`).toBeDefined()
+      return [part, ...(part?.children ?? []).map((i) => nodes[i])]
+        .reduce((rows, node) => rows + rowsOf(node), 0)
+    }
+    for (const name of TWO_ROOT_PART_NAMES) {
+      expect(ownedBy(name), `${name} must not own the other part's shells`)
+        .toBeLessThanOrEqual(SHELLS_FIXTURE_ROWS)
+    }
+
+    await page.keyboard.press('Escape')
+    resetGlbLogs(glbLogs)
+    await reopenLocalGlb(page, savedPath)
+    await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    await waitForGlbLog(glbLogs, `${2 * SHELLS_FIXTURE_ROWS} instance(s), 1 collapsed table(s)`, EXPORT_TEST_TIMEOUT_MS)
     await doubleClickSelectsAnElement(page, 'collapsed')
   })
 

@@ -1016,13 +1016,72 @@ describe('portable export of a STEP part with no assembly structure (#1901)', ()
     expect(mismatched.stats.unassignedInstances).toBe(1)
   })
 
-  it('names a part\'s rows by position when no tree can name them', async () => {
-    // No tree at all: the rows still export, under `Unassigned`, and the
-    // empty path's key must not leak into a name that reads just "#".
+  describe('a file with several disconnected top-level parts', () => {
+    // Conway wraps the roots in a synthetic `Model` node and gives the wrapper
+    // AND every genuine root `occurrencePath: []`. Each root's rows are owned
+    // by its own product_definition_shape (8 and 3008 here), which nothing in
+    // the file links back to its product_definition (7 and 3007), so the empty
+    // path alone cannot say whose rows they are. Joining on it handed the first
+    // root every root's rows and exported the second empty (codex on #1908).
+    const SECOND_SHAPE = 3008
+    const SECOND_PRODUCT_DEFINITION = 3007
+    const SECOND_PART_NAME = 'Plates'
+
+    /** @return {object} the two-root tree, wrapped the way Conway wraps it */
+    function multiRootTree() {
+      const root = (expressID, name) => ({
+        expressID, type: 'product', Name: {value: name}, occurrencePath: [], droppedSolids: ROW_SIZES.length / 2,
+        children: [],
+      })
+      return {
+        expressID: 0, type: 'product_structure', Name: {value: 'Model'}, occurrencePath: [],
+        children: [root(PRODUCT_DEFINITION, 'Shells'), root(SECOND_PRODUCT_DEFINITION, SECOND_PART_NAME)],
+      }
+    }
+
+    /** @return {Promise<Uint8Array>} two parts of three rows each */
+    async function twoPartArtifact() {
+      const {model} = livePartModel()
+      model.instanceParents = ROW_SIZES.map((_, i) => (i < ROW_SIZES.length / 2 ? SHAPE : SECOND_SHAPE))
+      return injectGlbExtensions(await batchedArtifactBytes(model, {collapse: true}),
+        [{name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: multiRootTree(), compress: true}], null, null).bytes
+    }
+
+    it('never hands one root the rows of another', async () => {
+      const portable = rewriteGlbPortable(await twoPartArtifact())
+      const {json} = parseGlb(portable.bytes)
+
+      // The rows cannot be told apart by root, so both parts' rows stay
+      // together under `Unassigned` — and NEITHER root claims them. The
+      // mislabelled shape was `Shells` holding both parts' meshes and `Plates`
+      // empty.
+      for (const name of ['Shells', 'Plates', 'Model']) {
+        const node = json.nodes.find((n) => n.name === name)
+        expect(node.mesh).toBeUndefined()
+        expect((node.children ?? []).map((i) => json.nodes[i].name)).not.toContain('Shells #0')
+      }
+      expect(portable.stats.unassignedInstances).toBe(2)
+      const [unassigned] = json.nodes.filter((node) => node.name === 'Unassigned')
+      expect(unassigned.children.map((i) => json.nodes[i].extras.bldrsRowCount)).toEqual([3, 3])
+    })
+
+    it('still renders every row, and reopens with each picking itself', async () => {
+      const {pickPoints} = livePartModel()
+      const hydrated = await parseAndHydrate(rewriteGlbPortable(await twoPartArtifact()).bytes)
+      expect(hydrated).not.toBeNull()
+      pickPoints.forEach((point, occurrence) => {
+        expect(pickOccurrence(hydrated, point)).toBe(occurrence)
+      })
+    }, TIMEOUT_MS)
+  })
+
+  it('leaves the rows under Unassigned, named by their shape, when no tree can name them', async () => {
+    // No tree at all: the rows still export, as on any file the tree cannot
+    // join, and the empty path must not have turned the key into a bare `#`.
     const bytes = await batchedArtifactBytes(livePartModel().model, {collapse: true})
     const {json} = parseGlb(rewriteGlbPortable(bytes).bytes)
     const [unassigned] = json.nodes.filter((node) => node.name === 'Unassigned')
-    expect(unassigned.children.map((i) => json.nodes[i].name)).toEqual(['Instance #0'])
+    expect(unassigned.children.map((i) => json.nodes[i].name)).toEqual([`#${SHAPE}`])
   })
 })
 

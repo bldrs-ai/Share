@@ -1791,30 +1791,46 @@ one-row element's stamp is byte-for-byte the old one. Three decisions:
   it did per row. A reader that predates the count sees rows uncovered and
   refuses the table — fail-soft to the plain model, never a mis-join.
 
-**The empty occurrence path is a key** (#1901). The join between a collapsed
-row and the spatial tree is `glbPortable.js#elementKeyOf`: the occurrence path
-when the row has one, else the scalar parent id. A STEP part with no assembly
-structure — one PRODUCT, thousands of shells — has `[]` for every row's path,
-and the key used to treat `[]` as "no path". That fell back to the scalar id,
-which disagrees across the join: a row's parent is the geometry's owner, the
-`product_definition_shape`, while the tree's root is the `product_definition`
-it describes (`#8` against `#7` in the fixture, `#4` against `#5` in the real
-28,674-shell part). The scalar keys never met, so the part's one node stayed
-empty and its mesh landed on an `Unassigned` node, named by the shape's id —
-in the three.js editor, 3dviewer.net and Share's own scene graph (Share's
-NavTree is built from `BLDRS_spatial_tree`, not the node graph, so it never
-showed it). Now any path ARRAY keys by `path.join('/')`, `[]` included (`''`):
-the tree root carries `occurrencePath: []` too, so the two sides meet and the
-part's rows sit on the part's own node. Only a row with no path array at all
-— every IFC element, or a STEP table written without paths — joins on the
-scalar id, byte-for-byte as before; on the four real models only the STEP part
-changes (an `Unassigned` node and a `#4` node gone, its mesh on the product's
-node), and the STEP assembly and both IFC files rewrite to identical bytes.
-Every other reader of an occurrence path (`utils/occurrencePaths.js`,
-`ShareViewer#getOccurrenceInstanceIds`) still treats `[]` as "no occurrence",
-which is right for picking, which names an occurrence rather than an element,
-and this join is the one place that must tell the two apart (as `sameIdentity`
-already does for grouping).
+**The empty occurrence path is a key, in a file with one root** (#1901). The
+join between a collapsed row and the spatial tree is `glbPortable.js#elementKeyOf`:
+the occurrence path when the row has one, else the scalar parent id. A STEP part
+with no assembly structure — one PRODUCT, thousands of shells — has `[]` for
+every row's path, and the key used to treat `[]` as "no path". That fell back to
+the scalar id, which disagrees across the join: a row's parent is the geometry's
+owner, the `product_definition_shape`, while the tree's root is the
+`product_definition` it describes (`#8` against `#7` in the fixture, `#4`
+against `#5` in the real 28,674-shell part). The scalar keys never met, so the
+part's one node stayed empty and its mesh landed on an `Unassigned` node, named
+by the shape's id — in the three.js editor, 3dviewer.net and Share's own scene
+graph (Share's NavTree is built from `BLDRS_spatial_tree`, not the node graph,
+so it never showed it). The tree root carries `occurrencePath: []` too, so when
+it is the ONLY tree node with an empty path, `[]` joins as the key `''` and the
+part's rows sit on the part's own node.
+
+Only then. A file with several disconnected top-level products is wrapped by
+Conway in a synthetic `Model` node, and the wrapper AND every genuine root
+carry `occurrencePath: []`; each root's rows are owned by its own shape. The
+empty path then names no one part, and what would tell the roots apart — which
+`product_definition` a shape belongs to — is in none of the tree, the tables
+and the instance map (Conway resolves it internally and does not serialise it;
+`serializeNode` keeps neither `productDefinitionExpressID` nor the shape ids).
+Keying on `''` there handed the first root every root's rows and exported the
+others empty (codex on #1908), a mislabelled file, which is worse than an
+unlabelled one. So `hasSingleEmptyPathNode` gates the empty-path key on the
+tree having exactly one such node; with more, those files keep the scalar join
+and the rows stay under `Unassigned` as before. Naming them needs the
+shape→definition link written into the artifact (a Share-side capture at write
+time, or Conway exposing it on the tree node) — not done.
+
+A row with no path array at all — every IFC element, or a STEP table written
+without paths — joins on the scalar id, byte-for-byte as before. On the four
+real models only the single-root STEP part changes (an `Unassigned` node and a
+`#4` node gone, its mesh on the product's node); the STEP assembly and both IFC
+files rewrite to identical bytes. Every other reader of an occurrence path
+(`utils/occurrencePaths.js`, `ShareViewer#getOccurrenceInstanceIds`) still
+treats `[]` as "no occurrence", which is right for picking, which names an
+occurrence rather than an element; this join is the one place that must tell
+the two apart (as `sameIdentity` already does for grouping).
 
 Draco: a grouped primitive is a small merged one, so the export plans it like
 the merged artifact's (`collapsedWitness.js#planPiece`) — zero-area strip and
