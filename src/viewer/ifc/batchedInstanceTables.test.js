@@ -267,6 +267,67 @@ describe('viewer/ifc/batchedInstanceTables', () => {
       expect([0, 1, 3].map((b) => mesh.getVisibleAt(b))).toEqual([true, true, true])
     })
 
+    // The two residency cases above only prove the controller does not THROW
+    // across an edit. These prove it still rules on what the batch now holds:
+    // its per-instance records are a snapshot, and a recycled id (three reuses
+    // the lowest freed one, BatchedMesh.js:580-591) or an appended one is a
+    // different instance from anything in it.
+    it('residency: a controller that outlives a delete + paste evicts the instance on the recycled id', () => {
+      const mesh = decoratedStepBatch()
+      const residency = new ResidencyController(mesh)
+      // Residency hides everything, the old instance 2 included, and caches
+      // that belief per record.
+      residency.setTarget(0)
+      deleteBatchedInstance(mesh, 2)
+      const batchId = addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
+        parent: 400, occurrenceId: 9, occurrencePath: [40], color: PURPLE,
+      }, new Matrix4().makeTranslation(50, 0, 0))
+      expect(batchId).toBe(2)
+      // three issues the recycled id visible (BatchedMesh.js:571-575)...
+      expect(mesh.getVisibleAt(2)).toBe(true)
+
+      residency.setTarget(0)
+
+      // ...so a target of zero has to write it, not trust the deleted
+      // instance's cached "already hidden".
+      expect([0, 1, 2, 3].map((b) => mesh.getVisibleAt(b))).toEqual([false, false, false, false])
+      // And the record behind id 2 is the paste's, not the deleted part's
+      // (product 200 at x = 20).
+      const record = residency.instances.find((entry) => entry.index === 2)
+      expect(record.expressID).toBe(400)
+      expect(record.center.x).toBeCloseTo(50.5)
+      expect(residency.instanceCount).toBe(4)
+    })
+
+    it('residency: a controller built before a paste evicts and restores the appended instance', () => {
+      const mesh = decoratedStepBatch()
+      const residency = new ResidencyController(mesh)
+      const batchId = addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
+        parent: 400, occurrenceId: 9, occurrencePath: [40], color: PURPLE,
+      }, new Matrix4().makeTranslation(50, 0, 0))
+      expect(batchId).toBe(4)
+
+      residency.setTarget(0)
+
+      expect([0, 1, 2, 3, 4].map((b) => mesh.getVisibleAt(b)))
+        .toEqual([false, false, false, false, false])
+      expect(residency.instanceCount).toBe(5)
+      residency.setTarget(1)
+      expect([0, 1, 2, 3, 4].map((b) => mesh.getVisibleAt(b)))
+        .toEqual([true, true, true, true, true])
+    })
+
+    it('residency: an unedited batch keeps its records across slider ticks', () => {
+      // The revision check is the whole cost of the fix on the unedited path:
+      // the records are the construction-time ones, not rebuilt per tick.
+      const mesh = decoratedStepBatch()
+      const residency = new ResidencyController(mesh)
+      const records = residency.instances
+      residency.setTarget(0.5)
+      residency.setTarget(0)
+      expect(residency.instances).toBe(records)
+    })
+
     it('isolation subset: a deleted instance is never baked', () => {
       const mesh = decoratedStepBatch()
       deleteBatchedInstance(mesh, 2)

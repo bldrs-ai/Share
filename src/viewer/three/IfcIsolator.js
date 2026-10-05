@@ -662,7 +662,8 @@ export default class IfcIsolator {
    * the same model.
    *
    * @param {object} mesh a decorated BatchedMesh
-   * @return {object} `{base, allow, nativeSetVisibleAt, hadOwnSetVisibleAt}`
+   * @return {object} `{base, allow, nativeSetVisibleAt, hadOwnSetVisibleAt,
+   *   nativeAddInstance, hadOwnAddInstance}`
    * @private
    */
   _ensureBatchedMask(mesh) {
@@ -672,6 +673,7 @@ export default class IfcIsolator {
       return existing
     }
     const nativeSetVisibleAt = mesh.setVisibleAt
+    const nativeAddInstance = mesh.addInstance
     const mask = {
       base: new Uint8Array(0),
       allow: new Uint8Array(0),
@@ -679,6 +681,8 @@ export default class IfcIsolator {
       // Normally the prototype method; remembered so release restores the mesh
       // to the exact shape it had rather than leaving a stray own property.
       hadOwnSetVisibleAt: Object.prototype.hasOwnProperty.call(mesh, 'setVisibleAt'),
+      nativeAddInstance,
+      hadOwnAddInstance: Object.prototype.hasOwnProperty.call(mesh, 'addInstance'),
     }
     growBatchedMask(mesh, mask)
     mesh.userData.isolationMask = mask
@@ -691,6 +695,22 @@ export default class IfcIsolator {
       }
       mask.base[batchId] = visible ? 1 : 0
       return nativeSetVisibleAt.call(this, batchId, visible && mask.allow[batchId] === 1)
+    }
+    // `base` and `allow` describe whichever instance held an id when they
+    // were written, and three hands a freed id to the next `addInstance`
+    // (BatchedMesh.js:580-591; batchedInstanceTables `addBatchedInstance`).
+    // Left alone, a paste into a recycled id would inherit the deleted
+    // instance's residency eviction — replayed onto it by release — and its
+    // isolation verdict. So every id three issues while the mask is installed
+    // starts as an appended one does in `growBatchedMask`: three made it
+    // visible (BatchedMesh.js:571-575), and it is allowed until the isolator's
+    // next pass rules on it.
+    mesh.addInstance = function maskedAddInstance(geometryId) {
+      const batchId = nativeAddInstance.call(this, geometryId)
+      growBatchedMask(this, mask)
+      mask.base[batchId] = 1
+      mask.allow[batchId] = 1
+      return batchId
     }
     return mask
   }
@@ -713,6 +733,11 @@ export default class IfcIsolator {
       mesh.setVisibleAt = mask.nativeSetVisibleAt
     } else {
       delete mesh.setVisibleAt
+    }
+    if (mask.hadOwnAddInstance) {
+      mesh.addInstance = mask.nativeAddInstance
+    } else {
+      delete mesh.addInstance
     }
     forEachActiveInstance(mesh, (batchId) => {
       if (batchId < mask.base.length) {

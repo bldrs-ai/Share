@@ -151,10 +151,18 @@ Verified against `node_modules/three/src/objects/BatchedMesh.js` (three
 - **Every per-instance loop skips inactive ids:** highlight (`setLayer`,
   `paint`, `repaintBatchedColors`), colour mode and the palette, the isolator
   (`visualElementsIds`, the mask build, apply and release), residency (both
-  precompute walks, and `setVisible_` for a controller built before the
-  delete), the isolation subset, the merged conversion, and the occurrence
-  tables. In the occurrence tables a cleared row read as occurrence 0 and
-  overwrote that occurrence's path.
+  precompute walks), the isolation subset, the merged conversion, and the
+  occurrence tables. In the occurrence tables a cleared row read as occurrence
+  0 and overwrote that occurrence's path.
+- **Residency remeasures on a revision change.** A `ResidencyController` that
+  outlives an edit held a record per batch id taken at construction. A paste
+  into a recycled id kept the deleted instance's center, bytes, expressID and
+  cached `visible`, so an eviction to zero skipped it; an appended paste had no
+  record at all. The controller now remeasures a batch whose `tablesRevision`
+  moved, with each record's `visible` unknown so the next write goes through.
+  It does not read three's bit back, because under the isolation mask that bit
+  is residency's intent AND the isolator's verdict. An unedited batch costs one
+  comparison per tick.
 - **The batched export writes only live instances.** Before L0, one deleted id
   failed the whole batched export over to the merged slot. An edited model now
   round-trips batched and hydrates without the deleted instance.
@@ -164,9 +172,13 @@ Verified against `node_modules/three/src/objects/BatchedMesh.js` (three
   after one delete every pick and hover on that batch threw.
   `batchedRaycast.js#raycastActiveInstances`, installed by `ShareIfc.js`,
   answers "not visible" for inactive ids for the duration of the call.
-- **The isolation mask grows.** IfcIsolator's `base`/`allow` masks are indexed
-  by batch id and were sized once, so a paste past their end read as hidden
-  and was never restored. They now extend to the batch's id span.
+- **The isolation mask grows, and resets recycled ids.** IfcIsolator's
+  `base`/`allow` masks are indexed by batch id and were sized once, so a paste
+  past their end read as hidden and was never restored. They now extend to the
+  batch's id span. A paste into a recycled id inherited the deleted instance's
+  entries, so un-isolating replayed its residency eviction onto the paste.
+  While the mask is installed it also wraps `addInstance`, and every id three
+  issues starts visible and allowed, as an appended one does.
 - **`addGeometry` after load:** `src/viewer/ifc/batchedGeometryCapacity.js`.
   - No headroom is reserved at load. An unedited model keeps its exact-size
     buffers and its memory, and every byte of its output is unchanged.
