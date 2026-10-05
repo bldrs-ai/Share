@@ -378,6 +378,40 @@ export function findSoleRootNode(rootNode) {
 
 
 /**
+ * The root a ROOT-ONLY permalink names, or null.
+ *
+ * A pick of a root-level STEP placement writes an element path of just the
+ * root's id (`part.step/7`, #1909): occurrence paths omit the root and this
+ * selection has none. `CadView#selectElementBasedOnFilepath` otherwise reads
+ * only paths of two or more segments, so such a link restored nothing. This
+ * is the gate for the one-segment case, kept narrow so every other one-segment
+ * path stays ignored exactly as before:
+ *
+ *   - the segment is a whole-segment number (app-written paths are pure ids;
+ *     parseInt's prefix parsing would accept `12abc`),
+ *   - it is the root's id, and
+ *   - the root is the tree's sole empty-path node (`findSoleRootNode`), which
+ *     is what makes "the root's own geometry" mean one thing. Null for IFC
+ *     (no occurrence paths) and for several top-level products (the empty
+ *     path names no one part).
+ *
+ * @param {object|null|undefined} rootNode spatial-structure root element
+ * @param {Array<string>} parts the element path split on '/', below the model
+ *   file
+ * @return {object|null} `rootNode`, or null
+ */
+export function resolveRootOnlyElementPath(rootNode, parts) {
+  if (!rootNode || !Array.isArray(parts) || parts.length !== 1 || !/^\d+$/.test(parts[0])) {
+    return null
+  }
+  if (parseInt(parts[0], 10) !== rootNode.expressID) {
+    return null
+  }
+  return findSoleRootNode(rootNode) === rootNode ? rootNode : null
+}
+
+
+/**
  * Trim a geometry-side occurrence path to the deepest prefix the spatial tree
  * knows.
  *

@@ -8,6 +8,7 @@ import {
   occurrencePathsEqual,
   resolveElementPathOccurrence,
   resolvePickedOccurrenceNode,
+  resolveRootOnlyElementPath,
   selectedOccurrences,
   trimToTreeOccurrencePath,
 } from './occurrencePaths'
@@ -205,6 +206,53 @@ describe('utils/occurrencePaths', () => {
       const tree = {expressID: 7, occurrencePath: [], children: [null, 5]}
       expect(findSoleRootNode(tree)).toBe(tree)
       expect(findSoleRootNode(tree)).toBe(findSoleRootNode(tree))
+    })
+  })
+
+  describe('resolveRootOnlyElementPath', () => {
+    const onlyProduct = {expressID: 7, type: 'product', occurrencePath: [], children: []}
+
+    it('names the root for a path of just its id: the permalink a root-level pick writes (#1909)', () => {
+      expect(resolveRootOnlyElementPath(onlyProduct, ['7'])).toBe(onlyProduct)
+    })
+
+    it('also names the root of an assembly whose other nodes carry paths', () => {
+      const root = {expressID: 1, occurrencePath: [], children: [
+        {expressID: 10, occurrencePath: [10], children: []},
+      ]}
+      expect(resolveRootOnlyElementPath(root, ['1'])).toBe(root)
+    })
+
+    it('is null unless the one segment is a whole number equal to the root id', () => {
+      expect(resolveRootOnlyElementPath(onlyProduct, ['8'])).toBeNull()
+      expect(resolveRootOnlyElementPath(onlyProduct, ['7abc'])).toBeNull()
+      expect(resolveRootOnlyElementPath(onlyProduct, [''])).toBeNull()
+      expect(resolveRootOnlyElementPath(onlyProduct, ['07x'])).toBeNull()
+    })
+
+    it('is null for anything but exactly one segment: multi-segment paths keep their own branch', () => {
+      expect(resolveRootOnlyElementPath(onlyProduct, ['7', '10'])).toBeNull()
+      expect(resolveRootOnlyElementPath(onlyProduct, [])).toBeNull()
+      expect(resolveRootOnlyElementPath(onlyProduct, null)).toBeNull()
+    })
+
+    it('is null for IFC, which carries no occurrence paths: its single-segment paths stay ignored', () => {
+      const ifcRoot = {expressID: 1, children: [{expressID: 2, children: []}]}
+      expect(resolveRootOnlyElementPath(ifcRoot, ['1'])).toBeNull()
+    })
+
+    it('is null for several top-level products: the empty path names no one part', () => {
+      const wrapper = {expressID: -1, occurrencePath: [], children: [
+        {expressID: 7, occurrencePath: [], children: []},
+        {expressID: 17, occurrencePath: [], children: []},
+      ]}
+      expect(resolveRootOnlyElementPath(wrapper, ['-1'])).toBeNull()
+      expect(resolveRootOnlyElementPath(wrapper, ['7'])).toBeNull()
+    })
+
+    it('is null without a tree', () => {
+      expect(resolveRootOnlyElementPath(null, ['7'])).toBeNull()
+      expect(resolveRootOnlyElementPath(undefined, ['7'])).toBeNull()
     })
   })
 

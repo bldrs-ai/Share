@@ -706,6 +706,86 @@ export async function doubleClickSelectsAnElement(page: Page, kind: ElementKind)
 
 
 /**
+ * Double-click an instance of a MERGED mesh (the non-batched layout: one
+ * `Mesh` whose `instanceMap` says which triangles belong to which placement)
+ * and wait for it to be selected. What {@link doubleClickSelectsAnElement}
+ * does for the batched layout, whose candidates come from `BatchedMesh`
+ * tables a merged model does not have.
+ *
+ * Aims at the first triangle's centroid of instances spread across the
+ * model, because the one in front at a pixel may be another instance's; some
+ * click selecting itself is the assertion.
+ *
+ * @param page Playwright page
+ * @return the parent expressID that got selected
+ */
+export async function doubleClickSelectsAMergedInstance(page: Page): Promise<number> {
+  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = window as any
+    const state = (w.store ?? w.useStore).getState()
+    const camera = state.viewer.context.getCamera()
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement
+    const rect = canvas.getBoundingClientRect()
+    const out: Array<{parent: number; x: number; y: number}> = []
+    const MAX_PER_MESH = 24
+    const visit = (mesh: any) => {
+      const map = mesh?.isMesh && !mesh.isBatchedMesh ? mesh.instanceMap : null
+      if (!map || !mesh.geometry?.index) {
+        return
+      }
+      mesh.updateMatrixWorld(true)
+      const position = mesh.geometry.attributes.position
+      const index = mesh.geometry.index
+      const Vector3 = camera.position.constructor
+      const step = Math.max(1, Math.floor(map.instanceCount / MAX_PER_MESH))
+      for (let instanceId = 0; instanceId < map.instanceCount; instanceId += step) {
+        const triangle = map.instanceIdToTriangleIndices.get(instanceId)?.[0]
+        if (triangle === undefined) {
+          continue
+        }
+        const centre = new Vector3()
+        for (let corner = 0; corner < 3; corner++) {
+          centre.add(new Vector3().fromBufferAttribute(position, index.getX((triangle * 3) + corner)))
+        }
+        centre.divideScalar(3).applyMatrix4(mesh.matrixWorld).project(camera)
+        const ON_SCREEN = 0.95
+        if (Math.abs(centre.x) < ON_SCREEN && Math.abs(centre.y) < ON_SCREEN) {
+          out.push({
+            parent: map.getParentExpressIdByInstance(instanceId),
+            x: rect.left + (((centre.x + 1) / 2) * rect.width),
+            y: rect.top + (((1 - centre.y) / 2) * rect.height),
+          })
+        }
+      }
+    }
+    if (state.model?.traverse) {
+      state.model.traverse(visit)
+    } else {
+      visit(state.model)
+    }
+    return out
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+  expect(candidates.length, 'there must be a merged-mesh instance on screen').toBeGreaterThan(0)
+
+  const MAX_TRIES = 8
+  for (const {parent, x, y} of candidates.slice(0, MAX_TRIES)) {
+    await page.mouse.dblclick(x, y)
+    const selected = await page.waitForFunction((id) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const w = window as any
+      return ((w.store ?? w.useStore).getState().selectedElements ?? []).includes(`${id}`)
+    }, parent, {timeout: 3000}).then(() => true, () => false)
+    if (selected) {
+      return parent
+    }
+  }
+  throw new Error('double-click selected none of the merged instances it was aimed at')
+}
+
+
+/**
  * The NavTree row for a named product is highlighted as the selection.
  *
  * `expectNavTreeFollowsSelection` only asks that SOME row is selected, which

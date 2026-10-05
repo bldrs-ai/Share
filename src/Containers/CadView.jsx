@@ -56,6 +56,7 @@ import {
   occurrencePathsEqual,
   resolveElementPathOccurrence,
   resolvePickedOccurrenceNode,
+  resolveRootOnlyElementPath,
   selectedOccurrences,
   trimToTreeOccurrencePath,
 } from '../utils/occurrencePaths'
@@ -1284,6 +1285,16 @@ export default function CadView({
       filepath = filepath.substring(1)
     }
     const parts = filepath.split(/\//)
+    // A root-only path (`part.step/7`) is what a pick of a one-product STEP
+    // part's own geometry writes (#1909); the multi-segment branch below
+    // can't read it, having no occurrence path to resolve. Restore it as the
+    // pick selects: the root row as the anchor, the scene on the root's
+    // instances.
+    const rootOnly = resolveRootOnlyElementPath(useStore.getState().rootElement, parts)
+    if (rootOnly) {
+      selectRootOnlyElement(rootOnly, force)
+      return
+    }
     if (parts.length > 1) {
       debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
       // Whole-segment numeric only: app-written element paths are pure ids,
@@ -1372,6 +1383,34 @@ export default function CadView({
           occurrencePath, solidExpressId !== null ? false : hasChildren, solidExpressId) : []
       selectItemsInScene([targetId], false, instanceIds, occurrencePath, solidExpressId)
     }
+  }
+
+
+  /**
+   * Select the root product from a root-only permalink, as a scene pick of its
+   * own geometry does (`selectFromInstancePick`): the root row is the anchor,
+   * `selectedElements` carries the ids that own the geometry, and the scene
+   * narrows to the root-level instances. Does nothing when the model has no
+   * root-level geometry to select, which is how such a link behaved before.
+   *
+   * @param {object} rootRow the tree's root element
+   * @param {boolean} force select it even if it's already the anchor
+   */
+  function selectRootOnlyElement(rootRow, force) {
+    // The pick that wrote this URL has already selected it, narrowed to the
+    // one instance clicked; re-selecting would widen that to every root-level
+    // instance. The same self-induced navigation the multi-segment branch
+    // skips on.
+    const anchors = useStore.getState().selectedAnchorIds ?? []
+    if (!force && anchors.length === 1 && anchors[0] === `${rootRow.expressID}`) {
+      return
+    }
+    const {instanceIds, parentExpressIds} = typeof viewer.getRootLevelInstances === 'function' ?
+      viewer.getRootLevelInstances(0) : {instanceIds: [], parentExpressIds: []}
+    if (instanceIds.length === 0) {
+      return
+    }
+    selectItemsInScene(parentExpressIds, false, instanceIds, null, null, [rootRow.expressID])
   }
 
 

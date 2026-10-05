@@ -8,6 +8,7 @@ import {
   clickGate,
   disableDracoEncoder,
   dismissLoadSnackbar,
+  doubleClickSelectsAMergedInstance,
   doubleClickSelectsAnElement,
   expectNavTreeFollowsSelection,
   expectNoHorizontalScroll,
@@ -41,6 +42,98 @@ import {
   setIsReturningUser,
   setupAuthenticationIntercepts,
 } from '../../tests/e2e/utils'
+
+
+/**
+ * The selection the store holds: its anchor rows, how many scene instances it
+ * narrows to, and the tree root's id. Read from the store because the scene
+ * highlight itself is a canvas effect with no DOM to assert on.
+ *
+ * @param page Playwright page
+ * @return the anchors, the instance count and the root's express id
+ */
+function selectionState(page: Page) {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = window as any
+    const state = (w.store ?? w.useStore).getState()
+    return {
+      anchors: (state.selectedAnchorIds ?? []).map(String),
+      instanceCount: (state.selectedInstanceIds ?? []).length,
+      rootId: state.rootElement?.expressID as number,
+    }
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
+ * Open the NavTree, double-click a shell, and expect the product's row to be
+ * the selection (#1909). The model's `data-is-selected` count is zero first, so
+ * the row can only have come from the pick.
+ *
+ * @param page Playwright page
+ * @param isMerged the model is the merged layout, not a BatchedMesh
+ */
+async function pickShellAndExpectProductRow(page: Page, isMerged = false) {
+  await expect(page.locator('[data-is-selected="true"]')).toHaveCount(0)
+  const panel = page.getByTestId('NavTreePanel')
+  if (!await panel.isVisible()) {
+    await page.getByTestId('control-button-navigation').click()
+  }
+  await expect(page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)).toHaveCount(1)
+  await (isMerged ? doubleClickSelectsAMergedInstance(page) : doubleClickSelectsAnElement(page, 'any'))
+  await expectProductRowSelected(page, SHELLS_PART_NAME)
+  await expectNavTreeFollowsSelection(page)
+}
+
+
+/**
+ * Load a URL again and wait for it to be served from the artifact cache.
+ *
+ * @param page Playwright page
+ * @param glbLogs the page's captured `[glb]` lines
+ * @param opts `url` is what to load: the model's own URL, without the element
+ *   path a pick wrote, when omitted. `waitForWrite` is for the first reload
+ *   after a cache-miss load, whose artifact is written from an idle callback
+ *   well after the model is ready; a load that was itself a hit writes nothing.
+ */
+async function reloadFromCache(
+  page: Page, glbLogs: ReturnType<typeof captureGlbLogs>,
+  {url = '', waitForWrite = true}: {url?: string, waitForWrite?: boolean} = {},
+) {
+  if (waitForWrite) {
+    await waitForGlbLog(glbLogs, 'writer: wrote', EXPORT_TEST_TIMEOUT_MS)
+  }
+  resetGlbLogs(glbLogs)
+  const target = url || page.url().replace(/(\.(?:step|stp))(?:\/\d+)+/, '$1')
+  // A `goto` to the URL the page is already at is a same-document navigation,
+  // not a load.
+  if (target === page.url()) {
+    await page.reload({waitUntil: 'domcontentloaded'})
+  } else {
+    await page.goto(target, {waitUntil: 'domcontentloaded'})
+  }
+  await waitForModelReady(page)
+  await waitForGlbLog(glbLogs, 'cache HIT', EXPORT_TEST_TIMEOUT_MS)
+  await dismissLoadSnackbar(page)
+}
+
+
+/**
+ * After loading a root-only permalink: the product's row is selected, as the
+ * pick that wrote the link selected it, and the scene is on all of the
+ * product's own geometry (a link cannot say which shell was clicked).
+ *
+ * @param page Playwright page
+ */
+async function expectRootSelectedFromPermalink(page: Page) {
+  await expectProductRowSelected(page, SHELLS_PART_NAME)
+  const restored = await selectionState(page)
+  expect(restored.anchors).toEqual([`${restored.rootId}`])
+  expect(restored.instanceCount).toBeGreaterThan(1)
+  await expect(page).toHaveURL(/\.step\/\d+(\?|#|$)/)
+}
 
 
 /**
@@ -990,12 +1083,70 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
     await waitForModelReady(page)
     await dismissLoadSnackbar(page)
-    await page.getByTestId('control-button-navigation').click()
-    await expect(page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)).toHaveCount(1)
+    await pickShellAndExpectProductRow(page)
 
-    await doubleClickSelectsAnElement(page, 'any')
-    await expectProductRowSelected(page, SHELLS_PART_NAME)
-    await expectNavTreeFollowsSelection(page)
+    // And again from the cached artifact (the batched layout, hydrated from
+    // its per-batch tables). The model's own URL is reloaded, not the
+    // permalink the pick wrote, so the row can only light up through a pick.
+    await reloadFromCache(page, glbLogs)
+    await pickShellAndExpectProductRow(page)
+  })
+
+  test('a shell picked after reopening a part from the merged-layout cache highlights its product', async ({page}) => {
+    // #1909 (codex on #1910). `disableGlbBatched` is the merged cache-hit
+    // layout, the one a model the batched writer declines still takes: its
+    // picking is rebuilt by `Loader#restoreCacheHitPicking`, which reattaches
+    // the persisted occurrence table. A part like this one has `[]` for every
+    // instance in it, and the reattach skipped those, so the map no longer
+    // knew its instances were the root's: the pick highlighted nothing after a
+    // reopen, though it had on the first load. Then the link that pick wrote
+    // is loaded the same way, to cover its restore on this layout too.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 3)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+
+    await loadModelAndWaitForArtifact(page, 'disableGlbBatched')
+    resetGlbLogs(glbLogs)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    // A fresh parse is a BatchedMesh whatever the artifact layout; only the
+    // cache-hit model is the merged one.
+    await pickShellAndExpectProductRow(page)
+
+    await reloadFromCache(page, glbLogs)
+    await pickShellAndExpectProductRow(page, true)
+
+    const permalink = page.url()
+    expect(permalink).toMatch(/\.step\/\d+(\?|#|$)/)
+    await reloadFromCache(page, glbLogs, {url: permalink, waitForWrite: false})
+    await expectRootSelectedFromPermalink(page)
+  })
+
+  test('the permalink of a shell picked in a part reopens with its product selected', async ({page}) => {
+    // #1909 (codex on #1910): the pick writes the root's id alone as the
+    // element path, `part.step/7`. The permalink reader only took paths of
+    // two or more segments, so the link restored nothing. Loading it now
+    // selects what the pick does: the product's row, and the scene on the
+    // product's own geometry.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+
+    await loadModelAndWaitForArtifact(page)
+    resetGlbLogs(glbLogs)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    await pickShellAndExpectProductRow(page)
+    // One pick narrows the scene to one shell; the link must restore the
+    // whole product, since it cannot say which shell was clicked.
+    expect((await selectionState(page)).instanceCount).toBe(1)
+    const permalink = page.url()
+    expect(permalink).toMatch(/\.step\/\d+(\?|#|$)/)
+
+    await reloadFromCache(page, glbLogs, {url: permalink})
+    await expectRootSelectedFromPermalink(page)
   })
 
   test('a file of several top-level parts never gives one part the shells of another', async ({page}) => {

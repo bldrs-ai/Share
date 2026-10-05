@@ -387,6 +387,33 @@ order; BVH permutes only the index buffer, not the numbering).
    hide key on, so scene highlighting and `H` are unchanged. This is the same
    rule `glbPortable.js#hasSingleEmptyPathNode` applies to the export (#1908).
 
+   Two follow-ups from review, both on the same case:
+
+   - **Cache hit, merged layout.** The pick needs the map to know an instance's
+     path is *present and empty*. `attachOccurrencePaths` (the merged
+     cache-hit restore, `Loader#restoreCacheHitPicking`) used to skip every
+     `[]` entry, so a part made only of root-level placements came back with
+     no occurrence table and the pick lit no row after a reopen. It now keeps
+     `[]` in the per-instance table and still leaves it out of the reverse
+     `occurrencePathToInstanceIds` index, as the cache-miss populator does.
+     The default (batched) cache-hit layout was never affected: its
+     `instanceOccurrencePaths` keep the empty arrays. The merged layout is
+     reached with `?feature=disableGlbBatched`, or by a model the batched
+     writer declines.
+   - **The permalink.** The pick writes the root's id alone (`part.step/7`).
+     `selectElementBasedOnFilepath` only read paths of two or more segments,
+     so the link restored nothing. `resolveRootOnlyElementPath` now accepts a
+     single segment that is a whole number equal to the root's id, when the
+     root is the sole empty-path node (`findSoleRootNode`) — so IFC and
+     several-top-level-product links read exactly as before — and
+     `selectRootOnlyElement` selects what the pick does: the root row as the
+     anchor, `selectedElements` the ids that own the geometry, and the scene
+     on every root-level instance (`ShareViewer#getRootLevelInstances`; a link
+     cannot say which shell was clicked). A link whose model has no root-level
+     geometry stays ignored, as it was. The pick that wrote the URL is not
+     re-selected from it (its anchor is already the root), which would widen
+     the one-shell highlight.
+
    Still open: with several top-level products Conway wraps them in a synthetic
    `Model` node and gives the wrapper and each root `occurrencePath: []`, so
    the empty path names no one part and the pick stays unhighlighted (never
