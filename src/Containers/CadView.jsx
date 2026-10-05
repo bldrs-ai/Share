@@ -50,13 +50,17 @@ import {navWith} from '../utils/navigate'
 import {addProperties} from '../utils/objects'
 import {labelForGeometryId} from '../utils/geometryLabels'
 import {
+  findSoleRootNode,
   occurrenceElementPathIds,
   occurrencePathKey,
   occurrencePathKeySetForTree,
   occurrencePathsEqual,
   resolveElementPathOccurrence,
   resolvePickedOccurrenceNode,
+  resolveRootOnlyElementPath,
+  rootLevelSelectionForAnchors,
   selectedOccurrences,
+  toggleRootLevelInstanceSelection,
   trimToTreeOccurrencePath,
 } from '../utils/occurrencePaths'
 import {isOutOfMemoryError} from '../utils/oom'
@@ -900,6 +904,7 @@ export default function CadView({
           parentExpressId,
           instanceId,
           rawOccurrencePath: mesh.instanceOccurrencePaths?.[batchId] ?? null,
+          isRootLevel: mesh.instanceOccurrencePaths?.[batchId]?.length === 0,
           pickedGeometryId: mesh.instanceGeometryIds?.[batchId] ?? null,
           isShiftKeyDown: event.shiftKey,
         })
@@ -922,6 +927,7 @@ export default function CadView({
           parentExpressId,
           instanceId,
           rawOccurrencePath: mesh.instanceMap.getOccurrencePathByInstance?.(instanceId) ?? null,
+          isRootLevel: mesh.instanceMap.hasEmptyOccurrencePath?.(instanceId) ?? false,
           pickedGeometryId: mesh.instanceMap.getGeometryExpressIdByInstance?.(instanceId) ?? null,
           isShiftKeyDown: event.shiftKey,
         })
@@ -986,12 +992,15 @@ export default function CadView({
    * @param {number} pick.instanceId synthetic per-instance id (IfcInstanceMap
    *   id on the merged path; global occurrence id on the batched path)
    * @param {Array<number>|null} pick.rawOccurrencePath untrimmed STEP path
+   * @param {boolean} pick.isRootLevel the instance carries an occurrence path
+   *   and it is EMPTY (the root product's own geometry), as opposed to no
+   *   occurrence data at all (IFC, undecorated model)
    * @param {number|null} pick.pickedGeometryId the instance's own geometry
    *   (solid) express id
    * @param {boolean} pick.isShiftKeyDown
    */
   function selectFromInstancePick({
-    parentExpressId, instanceId, rawOccurrencePath, pickedGeometryId, isShiftKeyDown,
+    parentExpressId, instanceId, rawOccurrencePath, isRootLevel, pickedGeometryId, isShiftKeyDown,
   }) {
     const rootEltForPick = useStore.getState().rootElement
     const occurrencePath = rawOccurrencePath ?
@@ -1004,6 +1013,20 @@ export default function CadView({
       parentExpressId,
       instanceCountAtPath: (path) => occurrenceInstanceIds(path, false).length,
     })
+    // A root-level STEP placement (empty occurrence path) has no path to
+    // highlight a row by, and its owner id is the product_definition_shape
+    // where the row is the product_definition, so the NavTree matched nothing
+    // (#1909). In a one-product file the empty path names the root row
+    // exactly (`findSoleRootNode`), so hand that row to the funnel as the
+    // anchor: the row highlight, Properties, crumb and permalink follow
+    // anchors, while the scene keeps selecting by the owner id (hide, the
+    // per-instance narrowing). Several top-level products stay as they were.
+    // Resolved before the shift branch, which needs it too.
+    const rootRow = (isRootLevel && occurrencePath === null) ? findSoleRootNode(rootEltForPick) : null
+    if (isShiftKeyDown && rootRow) {
+      toggleRootLevelInstance(rootRow, targetId, instanceId)
+      return
+    }
     if (isShiftKeyDown) {
       // Multi-select: toggle the picked row's id, exactly as a shift-click on
       // that NavTree row does. `selectItemsInScene` resolves a STEP
@@ -1021,7 +1044,49 @@ export default function CadView({
     if (transientGeometryId !== null) {
       materializeTransientNode(occurrencePath, transientGeometryId)
     }
-    selectItemsInScene([targetId], true, [instanceId], occurrencePath, solidExpressId)
+    selectItemsInScene(
+      [targetId], true, [instanceId], occurrencePath, solidExpressId,
+      rootRow ? [rootRow.expressID] : null)
+  }
+
+
+  /**
+   * Shift-pick of a root-level STEP shell in a one-product file (#1909): add
+   * the clicked instance to the scene selection, or drop it if it is already
+   * in. The toggled unit is the INSTANCE. The row every such shell shares is
+   * the product's, so toggling it (what `elementSelection` does for any other
+   * row) would drop the product on the second shell, and the shell's owner id
+   * is no row at all, so the pick did nothing.
+   *
+   * The root row stays an anchor while any root-level instance is selected, and
+   * leaves with the last. Other rows already selected keep their anchors and
+   * instances; `selectedElements` only ever gains the owner ids, since the
+   * instance narrowing, not the owners, decides what is lit.
+   *
+   * @param {object} rootRow the tree's root element (the product's row)
+   * @param {number} ownerId the shell's owner (`product_definition_shape`)
+   * @param {number} instanceId the clicked instance
+   */
+  function toggleRootLevelInstance(rootRow, ownerId, instanceId) {
+    const state = useStore.getState()
+    const rootLevel = rootLevelInstances()
+    const path = state.selectedOccurrencePath
+    const occurrenceRow = (Array.isArray(path) && path.length > 0) ?
+      (state.selectedSolidExpressId ?? path[path.length - 1]) : null
+    const next = toggleRootLevelInstanceSelection({
+      occurrenceRow,
+      selection: {
+        elements: state.selectedElements,
+        anchors: state.selectedAnchorIds,
+        instances: state.selectedInstanceIds,
+      },
+      rootId: rootRow.expressID,
+      ownerId,
+      instanceId,
+      rootInstanceIds: rootLevel.instanceIds,
+      rootOwnerIds: rootLevel.parentExpressIds,
+    })
+    selectItemsInScene(next.elements, false, next.instances, null, null, next.anchors)
   }
 
 
@@ -1145,15 +1210,30 @@ export default function CadView({
    *   (`elementSelection` does). Null (the default) means every result is
    *   its own anchor. NavTree row highlight, Properties and the TopBar
    *   crumb follow the anchors; only the scene uses the expanded set.
+   * @param {boolean} keepRootNarrowing a shift-click: when the instances are
+   *   resolved from the anchors, keep the root-level instances already
+   *   selected rather than widen them to the whole product.
    */
   function selectItemsInScene(
     resultIDs, updateNavigation = true, instanceIds = [], occurrencePath = null,
-    solidExpressId = null, anchorIds = null) {
+    solidExpressId = null, anchorIds = null, keepRootNarrowing = false) {
     // NOTE: we might want to compare with previous selection to avoid unnecessary updates
     if (!viewer) {
       return
     }
     try {
+      // A shift-click that took the sole root's row out of the selection takes
+      // the root's own geometry with it: its owner ids are in the viewer's
+      // selected ids, not in the anchors, and would keep every root-level
+      // shell lit by id once the row is gone.
+      if (keepRootNarrowing) {
+        const root = findSoleRootNode(useStore.getState().rootElement)
+        const held = (useStore.getState().selectedAnchorIds ?? []).map(Number)
+        if (root && held.includes(root.expressID) && !(anchorIds ?? resultIDs).map(Number).includes(root.expressID)) {
+          const owners = new Set(rootLevelInstances().parentExpressIds.map(Number))
+          resultIDs = resultIDs.filter((id) => !owners.has(Number(id)))
+        }
+      }
       // STEP, selected by row rather than by pick (a shift-click
       // multi-selection, a search): the rows' ids are NAUOs and solids, which
       // own no geometry, so without instances the scene highlighted nothing.
@@ -1166,6 +1246,24 @@ export default function CadView({
         if (occurrences.length > 0) {
           instanceIds = [...new Set(occurrences.flatMap(({occurrencePath: path, solidExpressId: solid}) =>
             occurrenceInstanceIds(path, true, solid)))]
+        }
+        // The sole root product has an empty occurrence path, so the lookup
+        // above can't resolve it: its row means every root-level instance
+        // (#1909; `rootLevelSelectionForAnchors` has the rule).
+        const rootLevel = rootLevelInstances()
+        const root = rootLevelSelectionForAnchors({
+          rootNode: useStore.getState().rootElement,
+          anchorIds: anchorIds ?? resultIDs,
+          rootLevel,
+          current: {
+            anchors: useStore.getState().selectedAnchorIds,
+            instances: useStore.getState().selectedInstanceIds,
+          },
+          keepNarrowing: keepRootNarrowing,
+        })
+        if (root) {
+          instanceIds = [...new Set([...instanceIds, ...root.instanceIds])]
+          resultIDs = [...new Set([...resultIDs, ...root.ownerIds])]
         }
       }
       // Update The Component state
@@ -1183,7 +1281,11 @@ export default function CadView({
       setSelectedSolidExpressId(solidExpressId)
       // Sets the url to the first selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
-        const firstId = resultIDs.slice(0, 1)
+        // The row the selection is anchored on, when the caller named one:
+        // a scene pick's result id can be the geometry's owner, which is no
+        // row, while its anchor is (a root-level STEP pick, #1909).
+        const firstId = anchorIds !== null && anchorIds.length > 0 ?
+          anchorIds.slice(0, 1) : resultIDs.slice(0, 1)
         // STEP: build the element path from the occurrence path, prepending
         // the root id (occurrence paths omit the root). The elementsById
         // lookup can't do it: a reused sub-assembly's duplicated subtrees
@@ -1264,6 +1366,16 @@ export default function CadView({
       filepath = filepath.substring(1)
     }
     const parts = filepath.split(/\//)
+    // A root-only path (`part.step/7`) is what a pick of a one-product STEP
+    // part's own geometry writes (#1909); the multi-segment branch below
+    // can't read it, having no occurrence path to resolve. Restore it as the
+    // pick selects: the root row as the anchor, the scene on the root's
+    // instances.
+    const rootOnly = resolveRootOnlyElementPath(useStore.getState().rootElement, parts)
+    if (rootOnly) {
+      selectRootOnlyElement(rootOnly, force)
+      return
+    }
     if (parts.length > 1) {
       debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
       // Whole-segment numeric only: app-written element paths are pure ids,
@@ -1352,6 +1464,64 @@ export default function CadView({
           occurrencePath, solidExpressId !== null ? false : hasChildren, solidExpressId) : []
       selectItemsInScene([targetId], false, instanceIds, occurrencePath, solidExpressId)
     }
+  }
+
+
+  /**
+   * Select the root product from a root-only permalink, as a click on its row
+   * does: the root row is the anchor and the scene is on ALL its root-level
+   * instances (a link can't say which shell was clicked; see
+   * `rootLevelSelectionForAnchors`). Does nothing when the model has no
+   * root-level geometry to select, which is how such a link behaved before.
+   *
+   * @param {object} rootRow the tree's root element
+   * @param {boolean} force select it even if it's already the anchor
+   */
+  function selectRootOnlyElement(rootRow, force) {
+    const rootLevel = rootLevelInstances()
+    if (rootLevel.instanceIds.length === 0) {
+      return
+    }
+    // The pick that wrote this URL has already selected it, narrowed to the
+    // shell(s) clicked; re-selecting would widen that to every root-level
+    // instance. Only a root-level instance in the selection proves that: a
+    // row click on the root (anchor and URL, but no instances) comes through
+    // here too, and still needs its geometry.
+    const held = useStore.getState()
+    const anchors = held.selectedAnchorIds ?? []
+    const isSelectedAlready = anchors.length === 1 && anchors[0] === `${rootRow.expressID}` &&
+      (held.selectedInstanceIds ?? []).some((id) => rootLevel.instanceIds.includes(id))
+    if (!force && isSelectedAlready) {
+      return
+    }
+    // Resolved from the anchor, as for a click on the row: the whole product.
+    selectItemsInScene([rootRow.expressID], false, [], null, null, [rootRow.expressID])
+  }
+
+
+  /**
+   * The model's root-level instances (an empty path), the ids that own them,
+   * and the instances of every occurrence below the root; empty where the
+   * viewer can't say.
+   *
+   * @return {{instanceIds: Array<number>, parentExpressIds: Array<number>,
+   *   descendantInstanceIds: Array<number>}}
+   */
+  function rootLevelInstances() {
+    if (typeof viewer?.getRootLevelInstances !== 'function') {
+      return {instanceIds: [], parentExpressIds: [], descendantInstanceIds: []}
+    }
+    const rootLevel = viewer.getRootLevelInstances(0)
+    // The whole product is the root's own geometry and every occurrence below
+    // it. Only worth resolving when the root has geometry of its own.
+    const root = findSoleRootNode(useStore.getState().rootElement)
+    const descendantInstanceIds = (root && rootLevel.instanceIds.length > 0) ?
+      [...new Set((root.children ?? []).flatMap((child) =>
+        (Array.isArray(child.occurrencePath) && child.occurrencePath.length > 0) ?
+          occurrenceInstanceIds(child.occurrencePath, true, child.ephemeral === true ? child.expressID : null) :
+          []))] :
+      []
+    return {...rootLevel, descendantInstanceIds}
   }
 
 

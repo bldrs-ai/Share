@@ -216,6 +216,30 @@ export class IfcInstanceMap {
 
 
   /**
+   * True when the instance's occurrence path is present and EMPTY: the
+   * placement sits on the root product itself, with no NAUO above it.
+   *
+   * `getOccurrencePathByInstance` folds that case into `null` alongside "this
+   * model carries no occurrence data" (IFC, older artifacts), which is right
+   * for the callers that only want a disambiguating path. A caller that wants
+   * to say "this pick is the ROOT's" has to tell the two apart, because only
+   * the first is evidence the geometry belongs to the root. See
+   * `utils/occurrencePaths.js#findSoleRootNode`.
+   *
+   * @param {number} instanceId
+   * @return {boolean}
+   */
+  hasEmptyOccurrencePath(instanceId) {
+    const paths = this.instanceIdToOccurrencePath
+    if (!paths || instanceId < 0 || instanceId >= paths.length) {
+      return false
+    }
+    const path = paths[instanceId]
+    return Array.isArray(path) && path.length === 0
+  }
+
+
+  /**
    * Geometry express id (`PlacedGeometry.geometryExpressID`) for the given
    * synthetic instance ID. For STEP this is the solid's own express id —
    * the second half of the `(occurrencePath, solid expressID)` identity that
@@ -470,8 +494,10 @@ function buildSubsetMesh(sourceGeometry, ids, lookupTriangles, opts) {
  * Only instance ids actually present in this map (a cache-hit GLB is split
  * into per-material primitives, so each mesh owns a subset of the global
  * ids) get an entry, so the reverse `occurrencePathToInstanceIds` never
- * claims instances this mesh can't render. No-op when the map already has
- * occurrence tables, the global table is absent, or nothing matches
+ * claims instances this mesh can't render. Empty (root-level) paths are kept
+ * in the per-instance table but not indexed in the reverse map, as in the
+ * cache-miss populator. No-op when the map already has
+ * occurrence tables, the global table is absent, or no entry is an array
  * (IFC) — leaving the map's `null` tables so callers fall back to scalar
  * keying.
  *
@@ -494,11 +520,19 @@ export function attachOccurrencePaths(instanceMap, occurrencePathsByInstanceId) 
   // Walk only the instance ids this mesh actually holds triangles for.
   for (const inst of instanceMap.instanceIdToTriangleIndices.keys()) {
     const path = occurrencePathsByInstanceId[inst] ?? null
-    if (!Array.isArray(path) || path.length === 0) {
+    if (!Array.isArray(path)) {
       continue
     }
+    // An EMPTY path is data, not absence: it marks a root-level placement and
+    // is what `hasEmptyOccurrencePath` reads (#1909). Keep it in the
+    // per-instance table so a cache-hit map matches what the cache-miss
+    // populator builds, but leave it out of the reverse index below, where
+    // an empty key could not disambiguate anything.
     perInstance[inst] = path
     any = true
+    if (path.length === 0) {
+      continue
+    }
     const key = occurrencePathKey(path)
     const list = byPath.get(key)
     if (list) {

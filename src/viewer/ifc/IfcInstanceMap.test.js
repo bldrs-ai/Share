@@ -129,6 +129,21 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       expect(map.getOccurrencePathByInstance(1)).toEqual([3810, 1921, 1916])
     })
 
+    it('tells a root-level (empty) occurrence path from no occurrence data', () => {
+      // getOccurrencePathByInstance reads both as null; only the first is
+      // evidence the placement is the root product's own (#1909).
+      const step = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 6210, triangleCount: 1, occurrencePath: []},
+        {parentExpressId: 1915, triangleCount: 1, occurrencePath: [3810, 1921, 1916]},
+      ])
+      expect(step.hasEmptyOccurrencePath(0)).toBe(true)
+      expect(step.hasEmptyOccurrencePath(1)).toBe(false)
+      expect(step.hasEmptyOccurrencePath(2)).toBe(false)
+      expect(step.hasEmptyOccurrencePath(-1)).toBe(false)
+      const ifc = instanceMapFromOrderedPlacedRanges([{parentExpressId: 100, triangleCount: 1}])
+      expect(ifc.hasEmptyOccurrencePath(0)).toBe(false)
+    })
+
     it('leaves occurrence paths null for IFC ranges (no occurrencePath)', () => {
       const map = instanceMapFromOrderedPlacedRanges([
         {parentExpressId: 100, triangleCount: 1},
@@ -793,6 +808,42 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       expect(Array.from(map.getInstanceIdsByOccurrencePath([10, 20]))).toEqual([5])
       expect(map.getInstanceIdsByOccurrencePath([1])).toBeNull()
       expect(map.getOccurrencePathByInstance(5)).toEqual([10, 20])
+    })
+
+    it('keeps an empty (root-level) path in the per-instance table, out of the reverse index (#1909)', () => {
+      // A one-product STEP part is ALL root-level placements: every entry of
+      // the persisted table is []. The cache-miss populator keeps those so
+      // `hasEmptyOccurrencePath` can tell them from "no occurrence data"; the
+      // cache-hit restore used to skip them, leaving the tables null.
+      const map = instanceMapFromTriangleIds(
+        new Uint32Array([8, 8]), new Uint32Array([0, 1]))
+      attachOccurrencePaths(map, [[], []])
+      expect(map.instanceIdToOccurrencePath).toEqual([[], []])
+      expect(map.hasEmptyOccurrencePath(0)).toBe(true)
+      expect(map.hasEmptyOccurrencePath(1)).toBe(true)
+      // Still normalized to null for the callers that want a disambiguating
+      // path, and never indexed: an empty key disambiguates nothing.
+      expect(map.getOccurrencePathByInstance(0)).toBeNull()
+      expect(map.occurrencePathToInstanceIds.size).toBe(0)
+    })
+
+    it('mixes empty and non-empty paths: only the non-empty ones are indexed (#1909)', () => {
+      const map = instanceMapFromTriangleIds(
+        new Uint32Array([8, 9]), new Uint32Array([0, 1]))
+      attachOccurrencePaths(map, [[], [10, 20]])
+      expect(map.hasEmptyOccurrencePath(0)).toBe(true)
+      expect(map.hasEmptyOccurrencePath(1)).toBe(false)
+      expect(map.getOccurrencePathByInstance(1)).toEqual([10, 20])
+      expect(Array.from(map.occurrencePathToInstanceIds.keys())).toEqual(['10/20'])
+    })
+
+    it('still leaves the tables null when no entry is a path (IFC, all-null table)', () => {
+      const map = instanceMapFromTriangleIds(
+        new Uint32Array([100, 100]), new Uint32Array([0, 1]))
+      attachOccurrencePaths(map, [null, null])
+      expect(map.instanceIdToOccurrencePath).toBeNull()
+      expect(map.occurrencePathToInstanceIds).toBeNull()
+      expect(map.hasEmptyOccurrencePath(0)).toBe(false)
     })
 
     it('is a no-op for IFC (no matching paths) and when tables already exist', () => {

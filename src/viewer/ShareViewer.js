@@ -1204,6 +1204,55 @@ export class ShareViewer {
 
 
   /**
+   * The instances placed on the root product itself: those whose occurrence
+   * path is present and EMPTY, with the express ids that own them.
+   *
+   * `getInstanceIdsForOccurrencePath` cannot answer this, since an empty path
+   * is no key (the reverse index leaves it out). It is what restoring a
+   * root-only permalink needs (#1909): the same scene selection a pick of that
+   * geometry makes, `parentExpressIds` for `setSelection` and `instanceIds`
+   * for `setInstanceSelection`. Empty for IFC and any model without
+   * occurrence data. Which row they belong to is the caller's business
+   * (`findSoleRootNode`).
+   *
+   * @param {number} modelID
+   * @return {{instanceIds: number[], parentExpressIds: number[]}}
+   */
+  getRootLevelInstances(modelID) {
+    const instanceIds = []
+    const parentExpressIds = new Set()
+    const model = this._modelById(modelID)
+    if (!model || typeof model.traverse !== 'function') {
+      return {instanceIds, parentExpressIds: []}
+    }
+    model.traverse((obj) => {
+      // BatchedMesh render path: per-batch tables, instance id = global
+      // occurrence id (as in `getInstanceIdsForOccurrencePath`).
+      if (obj.isBatchedMesh && obj.instanceOccurrencePaths) {
+        for (let batchId = 0; batchId < obj.instanceOccurrencePaths.length; batchId++) {
+          if (obj.instanceOccurrencePaths[batchId]?.length === 0) {
+            instanceIds.push(obj.instanceOccurrenceIds[batchId])
+            parentExpressIds.add(obj.instanceParents[batchId])
+          }
+        }
+        return
+      }
+      const map = obj.isMesh ? obj.instanceMap : null
+      if (!map?.instanceIdToOccurrencePath) {
+        return
+      }
+      for (let instanceId = 0; instanceId < map.instanceIdToOccurrencePath.length; instanceId++) {
+        if (map.hasEmptyOccurrencePath(instanceId)) {
+          instanceIds.push(instanceId)
+          parentExpressIds.add(map.getParentExpressIdByInstance(instanceId))
+        }
+      }
+    })
+    return {instanceIds, parentExpressIds: [...parentExpressIds]}
+  }
+
+
+  /**
    * Enumerate the distinct geometry (solid/face piece) express ids placed
    * at — or under — a STEP occurrence path, across every child Mesh of the
    * model. This is the discovery half of anonymous-geometry addressing

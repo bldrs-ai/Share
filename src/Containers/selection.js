@@ -55,7 +55,10 @@ export function elementSelection(viewer, elementsById, selectItemsInScene, isShi
     anchors = new Set([row])
   }
   if (isShiftKeyDown) {
-    if (selectedInViewer.has(expressId)) {
+    // Selected means a viewer id OR an anchor: a scene pick of a STEP shell
+    // anchors on the root row while the viewer holds the shell's owner id, so
+    // the visibly selected row is in no viewer set (#1909).
+    if (selectedInViewer.has(expressId) || anchors.has(expressId)) {
       const descendantIdsToRemove = getDescendantExpressIds(selectedElt)
       descendantIdsToRemove.forEach((descendantId) => selectedInViewer.delete(descendantId))
       selectedInViewer.delete(expressId)
@@ -75,5 +78,8 @@ export function elementSelection(viewer, elementsById, selectItemsInScene, isShi
     anchors.add(expressId)
     updateNav = true
   }
-  selectItemsInScene(Array.from(selectedInViewer), updateNav, [], null, null, Array.from(anchors))
+  // The last argument: a shift-click keeps the root-level shells already
+  // picked (see `rootLevelSelectionForAnchors`); a plain click means the whole row.
+  selectItemsInScene(
+    Array.from(selectedInViewer), updateNav, [], null, null, Array.from(anchors), isShiftKeyDown)
 }

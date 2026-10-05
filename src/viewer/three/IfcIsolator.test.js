@@ -1161,6 +1161,62 @@ describe('viewer/three/IfcIsolator', () => {
         expect(visibility(mesh)).toEqual([true, true, true, true])
       })
 
+      describe('the whole root product (#1909)', () => {
+        // Root 1 with geometry of its own (batches 2 and 3, empty path) and a
+        // child occurrence (batches 0-1 under 10). A row click on the root
+        // selects all four; the root's empty path is no key for the occurrence
+        // lookup, so H and Isolate used to reach the owner ids only.
+        /**
+         * @param {Array<number>} selectedInstanceIds the selection's instances
+         * @return {object} setupBatchedIsolator's result, with the root's selection in the store
+         */
+        function setupRoot(selectedInstanceIds) {
+          const setup = setupBatchedIsolator()
+          const {iso, mesh} = setup
+          mesh.occurrencePathToBatchIds = new Map([['10', [0, 1]]])
+          iso.viewer.getInstanceIdsForOccurrencePath = jest.fn((modelId, path) => (path[0] === 10 ? [0, 1] : []))
+          iso.viewer.getRootLevelInstances = jest.fn(() => ({instanceIds: [2, 3], parentExpressIds: [100]}))
+          iso.viewer.getSelectedIds = jest.fn(() => [1, 100])
+          useStoreMock.getState.mockReturnValue({
+            elementTypesMap: [], selectedElements: ['1', '100'], selectedAnchorIds: ['1'],
+            selectedInstanceIds, selectedOccurrencePath: null, selectedSolidExpressId: null,
+            rootElement: {expressID: 1, occurrencePath: [], children: [
+              {expressID: 10, occurrencePath: [10], children: []},
+            ]},
+          })
+          return setup
+        }
+
+        it('hides the root-level geometry and every descendant, and H again brings them back', () => {
+          const {iso, mesh} = setupRoot([0, 1, 2, 3])
+          iso.hideSelectedElements()
+          expect(visibility(mesh)).toEqual([false, false, false, false])
+          iso.hideSelectedElements()
+          expect(visibility(mesh)).toEqual([true, true, true, true])
+          expect(iso.hiddenOccurrences.size).toBe(0)
+        })
+
+        it('isolates the whole product, and keeps the pathless root out of the link', () => {
+          const {iso} = setupRoot([0, 1, 2, 3])
+          iso.isolateSelectedElements()
+          expect([...iso.isolatedInstanceIds].sort()).toEqual([0, 1, 2, 3])
+          expect(iso.isolatedOccurrences).toEqual([])
+          expect(useStoreMock.setState).toHaveBeenCalledWith(
+            expect.objectContaining({isolatedOccurrenceKeys: {'#1': true}}))
+        })
+
+        it('a pick narrowed to some of the root-level geometry keeps the owner-id route', () => {
+          const {iso} = setupRoot([3])
+          expect(iso._selectionOccurrences()).toEqual([])
+        })
+
+        it('is no root occurrence when the selected row is not the root', () => {
+          const {iso} = setupRoot([0, 1, 2, 3])
+          useStoreMock.getState.mockReturnValue({...useStoreMock.getState(), selectedAnchorIds: ['10']})
+          expect(iso._selectionOccurrences().map(({nodeId}) => nodeId)).toEqual([10])
+        })
+      })
+
       it('leaves the selection it isolated unpainted until the selection changes', () => {
         const selectedElements = ['11', '20']
         const {iso} = setupStep({selectedElements, selectedAnchorIds: selectedElements})

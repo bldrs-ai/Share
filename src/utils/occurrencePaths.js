@@ -314,6 +314,222 @@ export function occurrencePathKeySetForTree(rootNode) {
 }
 
 
+const soleRootCache = new WeakMap()
+
+
+/**
+ * The tree's root product, when it is the only node with an EMPTY occurrence
+ * path; otherwise null.
+ *
+ * An empty path means "no NAUO above this". Conway gives it to the root of a
+ * file's product structure and to that root's own geometry, so in a file with
+ * ONE top-level product exactly one node has it and every empty-path
+ * placement belongs to that node. This is what lets a scene pick of such a
+ * placement name a NavTree row, which neither of the usual keys can (#1909):
+ * the pick reports the geometry's `product_definition_shape` while the row is
+ * the `product_definition`, and the empty path joins on nothing.
+ *
+ * A file with several disconnected top-level products is deliberately NOT
+ * resolved. Conway wraps them in a synthetic `Model` node and gives the
+ * wrapper and every genuine root `occurrencePath: []`, so the empty path names
+ * no one part. Telling them apart needs the shape-to-definition link, which
+ * the tree does not carry (it is the same gap as the multi-root half of
+ * #1901, and `glbPortable.js#hasSingleEmptyPathNode` draws the same line for
+ * the export). Returning null there leaves the pick at type level, as before:
+ * no row highlighted, never the wrong one.
+ *
+ * Ephemeral solid rows are counted like any other, so a tree that gives a
+ * solid its part's empty path (the pre-conway#628 shape) reads as ambiguous
+ * and degrades the same way.
+ *
+ * Memoized per root-node object, like `occurrencePathKeySetForTree`.
+ *
+ * @param {object|null|undefined} rootNode spatial-structure root element
+ * @return {object|null} the sole empty-path node, or null
+ */
+export function findSoleRootNode(rootNode) {
+  if (!rootNode || typeof rootNode !== 'object') {
+    return null
+  }
+  if (soleRootCache.has(rootNode)) {
+    return soleRootCache.get(rootNode)
+  }
+  let found = null
+  let count = 0
+  const stack = [rootNode]
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (Array.isArray(node.occurrencePath) && node.occurrencePath.length === 0) {
+      found = node
+      count++
+    }
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) {
+        if (child && typeof child === 'object') {
+          stack.push(child)
+        }
+      }
+    }
+  }
+  const sole = count === 1 ? found : null
+  soleRootCache.set(rootNode, sole)
+  return sole
+}
+
+
+/**
+ * The root a ROOT-ONLY permalink names, or null.
+ *
+ * A pick of a root-level STEP placement writes an element path of just the
+ * root's id (`part.step/7`, #1909): occurrence paths omit the root and this
+ * selection has none. `CadView#selectElementBasedOnFilepath` otherwise reads
+ * only paths of two or more segments, so such a link restored nothing. This
+ * is the gate for the one-segment case, kept narrow so every other one-segment
+ * path stays ignored exactly as before:
+ *
+ *   - the segment is a whole-segment number (app-written paths are pure ids;
+ *     parseInt's prefix parsing would accept `12abc`),
+ *   - it is the root's id, and
+ *   - the root is the tree's sole empty-path node (`findSoleRootNode`), which
+ *     is what makes "the root's own geometry" mean one thing. Null for IFC
+ *     (no occurrence paths) and for several top-level products (the empty
+ *     path names no one part).
+ *
+ * @param {object|null|undefined} rootNode spatial-structure root element
+ * @param {Array<string>} parts the element path split on '/', below the model
+ *   file
+ * @return {object|null} `rootNode`, or null
+ */
+export function resolveRootOnlyElementPath(rootNode, parts) {
+  if (!rootNode || !Array.isArray(parts) || parts.length !== 1 || !/^\d+$/.test(parts[0])) {
+    return null
+  }
+  if (parseInt(parts[0], 10) !== rootNode.expressID) {
+    return null
+  }
+  return findSoleRootNode(rootNode) === rootNode ? rootNode : null
+}
+
+
+/**
+ * The scene half of a selection that has the sole root product among its
+ * anchors: the instances to light and the ids that own the root's own geometry.
+ *
+ * The rule every way of selecting the root agrees on (#1909):
+ *   - a scene PICK narrows to the shell(s) clicked: `selectFromInstancePick`
+ *     and `toggleRootLevelInstanceSelection` name the instances themselves;
+ *   - a ROW click or a PERMALINK means the WHOLE product: the root-level
+ *     instances (its own geometry, whose empty path is no key for
+ *     `selectedOccurrences`) plus those of every descendant occurrence, which
+ *     the lookup would find by path but for the root being skipped. Leaving
+ *     the descendants out would narrow an assembly that has geometry of its
+ *     own to just that geometry.
+ * A shift-click on another row after shift-picking shells recomputes the
+ * instances from the anchors, which would widen the picked shells to the whole
+ * product (and drop them if the root were skipped), so `keepNarrowing` carries
+ * the product's instances already selected instead, so long as the root was
+ * already an anchor of the current selection. (A whole-product selection
+ * carries whole: all its instances are in that set.)
+ *
+ * Null when the root isn't among the anchors, isn't the sole empty-path node
+ * (`findSoleRootNode`: IFC, several top-level products), or has no root-level
+ * geometry. The last is a plain assembly: its root row selects what it always
+ * did, and this adds nothing.
+ *
+ * @param {object} args
+ * @param {object|null} args.rootNode spatial-structure root element
+ * @param {Array<number|string>} args.anchorIds the selection's anchor rows
+ * @param {object} args.rootLevel `{instanceIds, parentExpressIds,
+ *   descendantInstanceIds}`: the model's root-level instances and their owners
+ *   (`ShareViewer#getRootLevelInstances`), and the instances of every
+ *   descendant occurrence (optional)
+ * @param {{anchors: Array, instances: Array}} args.current the selection held now
+ * @param {boolean} [args.keepNarrowing] carry the selected instances of the product
+ * @return {{instanceIds: Array<number>, ownerIds: Array<number>}|null}
+ */
+export function rootLevelSelectionForAnchors({rootNode, anchorIds, rootLevel, current, keepNarrowing = false}) {
+  const root = findSoleRootNode(rootNode)
+  if (!root || !Array.isArray(anchorIds) || !anchorIds.map(Number).includes(root.expressID)) {
+    return null
+  }
+  if (!rootLevel || rootLevel.instanceIds.length === 0) {
+    return null
+  }
+  const wholeProduct = [...new Set([...rootLevel.instanceIds, ...(rootLevel.descendantInstanceIds ?? [])])]
+  if (keepNarrowing && Array.isArray(current?.anchors) &&
+      current.anchors.map(Number).includes(root.expressID)) {
+    const ofProduct = new Set(wholeProduct)
+    const rootInstances = new Set(rootLevel.instanceIds)
+    const narrowed = (current.instances ?? []).map(Number).filter((id) => ofProduct.has(id))
+    // Only a selection that holds some of the root's OWN geometry is a
+    // selection of the root; descendant instances alone belong to their rows.
+    if (narrowed.some((id) => rootInstances.has(id))) {
+      return {instanceIds: narrowed, ownerIds: rootLevel.parentExpressIds}
+    }
+  }
+  return {instanceIds: wholeProduct, ownerIds: rootLevel.parentExpressIds}
+}
+
+
+/**
+ * The selection after a shift-pick of one root-level STEP shell (#1909): the
+ * instance joins, or leaves if it is already in. Pure; `CadView` supplies the
+ * store's selection and the model's root-level instances.
+ *
+ * The unit toggled is the INSTANCE. Every such shell shares the product's row,
+ * so toggling the row (what a shift-click on any other row does) would drop the
+ * product on the second shell; and the shell's owner id (`ownerId`, the
+ * `product_definition_shape`) is no row, so it cannot be toggled at all. The
+ * root row is an anchor while any root-level instance is selected and leaves
+ * with the last, taking the root's owner ids with it. Everything else selected
+ * (other rows, their instances) is carried over untouched, and `elements` only
+ * gains owner ids otherwise, since the instance narrowing decides what is lit.
+ *
+ * @param {object} args
+ * @param {{elements: Array, anchors: Array, instances: Array}} args.selection
+ *   the current selection; ids as numbers or strings
+ * @param {number} args.rootId the tree root's express id (the product's row)
+ * @param {number} args.ownerId the picked shell's owner express id
+ * @param {number} args.instanceId the picked instance
+ * @param {Array<number>} args.rootInstanceIds every root-level instance
+ * @param {Array<number>} args.rootOwnerIds the express ids owning them
+ * @param {number|null} [args.occurrenceRow] the row of a single occurrence
+ *   selected by a scene pick, which replaces its owner anchor
+ * @return {{elements: Array<number>, anchors: Array<number>, instances: Array<number>}}
+ */
+export function toggleRootLevelInstanceSelection({
+  selection, rootId, ownerId, instanceId, rootInstanceIds, rootOwnerIds, occurrenceRow = null,
+}) {
+  const numbers = (list) => (Array.isArray(list) ? list.map(Number) : [])
+  let elements = numbers(selection.elements)
+  // A scene pick of a part's occurrence is anchored on the geometry's owner,
+  // which is no tree row: its row is `occurrenceRow` (the selection's path
+  // leaf, or its solid). Re-express it, as `elementSelection` does for a
+  // shift-click, or the pick would join the selection without its NavTree row
+  // and be dropped from the `#sel:` link, which only names rows.
+  let anchors = occurrenceRow === null ? numbers(selection.anchors) : [Number(occurrenceRow)]
+  let instances = numbers(selection.instances)
+  if (instances.includes(instanceId)) {
+    instances = instances.filter((id) => id !== instanceId)
+    const rootLevel = new Set(rootInstanceIds)
+    if (!instances.some((id) => rootLevel.has(id))) {
+      const owners = new Set(rootOwnerIds.map(Number))
+      anchors = anchors.filter((id) => id !== rootId)
+      elements = elements.filter((id) => !owners.has(id))
+    }
+  } else {
+    instances = [...instances, instanceId]
+    if (!anchors.includes(rootId)) {
+      anchors = [...anchors, rootId]
+    }
+    if (!elements.includes(Number(ownerId))) {
+      elements = [...elements, Number(ownerId)]
+    }
+  }
+  return {elements, anchors, instances}
+}
+
+
 /**
  * Trim a geometry-side occurrence path to the deepest prefix the spatial tree
  * knows.

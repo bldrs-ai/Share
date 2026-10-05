@@ -97,6 +97,13 @@ export function setupLookupAndParentLinks(rootElt, elementsById) {
   if (elementsById === undefined || elementsById === null) {
     throw new Error('Illegal argument: elementsById undefined')
   }
+  // `visitTree` reports children only, so the root is registered through its
+  // children's `parent`. A tree with NO children (a STEP part with no assembly
+  // structure) therefore never entered the table, and selecting its one row
+  // found nothing to select or to build the element-path URL from (#1909).
+  if (rootElt && rootElt.expressID !== undefined) {
+    elementsById[rootElt.expressID] = rootElt
+  }
   visitTree(rootElt, (elt, parent) => {
     elementsById[parent.expressID] = parent
     elementsById[elt.expressID] = elt

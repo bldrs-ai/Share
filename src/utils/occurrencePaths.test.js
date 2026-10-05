@@ -1,13 +1,17 @@
 /* eslint-disable no-magic-numbers */
 import {
   findNodeByOccurrencePath,
+  findSoleRootNode,
   occurrenceElementPathIds,
   occurrencePathKey,
   occurrencePathKeySetForTree,
   occurrencePathsEqual,
   resolveElementPathOccurrence,
   resolvePickedOccurrenceNode,
+  resolveRootOnlyElementPath,
+  rootLevelSelectionForAnchors,
   selectedOccurrences,
+  toggleRootLevelInstanceSelection,
   trimToTreeOccurrencePath,
 } from './occurrencePaths'
 
@@ -150,6 +154,241 @@ describe('utils/occurrencePaths', () => {
     it('returns an empty set for an IFC-style tree with no occurrence paths', () => {
       const ifcTree = {expressID: 1, children: [{expressID: 2, children: []}]}
       expect(occurrencePathKeySetForTree(ifcTree).size).toBe(0)
+    })
+  })
+
+  describe('findSoleRootNode', () => {
+    it('names the root of a one-product file: the DSA2 / sameIdentityShells shape (#1909)', () => {
+      // One PRODUCT, no assembly structure. The pick reports the
+      // product_definition_shape (#8); the row is the product_definition (#7).
+      const tree = {expressID: 7, type: 'product', occurrencePath: [], children: []}
+      expect(findSoleRootNode(tree)).toBe(tree)
+    })
+
+    it('names the root of an assembly, whose other nodes all carry a path', () => {
+      const root = {expressID: 1, occurrencePath: [], children: [
+        {expressID: 10, occurrencePath: [10], children: [
+          {expressID: 20, occurrencePath: [10, 20], children: []},
+        ]},
+      ]}
+      expect(findSoleRootNode(root)).toBe(root)
+    })
+
+    it('is null for several top-level products: the wrapper and each root are all empty-path', () => {
+      // Conway's synthetic `Model` node plus two genuine roots (twoRootShells.step).
+      // The empty path names no one part, so nothing may be guessed.
+      const tree = {expressID: -1, occurrencePath: [], children: [
+        {expressID: 7, occurrencePath: [], children: []},
+        {expressID: 17, occurrencePath: [], children: []},
+      ]}
+      expect(findSoleRootNode(tree)).toBeNull()
+    })
+
+    it('is null when a solid row shares the root\'s empty path: ambiguous, so unresolved', () => {
+      const tree = {expressID: 7, occurrencePath: [], children: [
+        {expressID: 250, occurrencePath: [], ephemeral: true, children: []},
+      ]}
+      expect(findSoleRootNode(tree)).toBeNull()
+    })
+
+    it('is null for IFC, whose nodes carry no occurrence path', () => {
+      const ifcTree = {expressID: 1, children: [{expressID: 2, children: []}]}
+      expect(findSoleRootNode(ifcTree)).toBeNull()
+    })
+
+    it('still finds the root of a no-NAUO multibody product, whose bodies carry their own id', () => {
+      const tree = makeNoNauoMultibodyTree()
+      expect(findSoleRootNode(tree)).toBe(tree)
+    })
+
+    it('tolerates a missing or malformed root, and memoizes per tree', () => {
+      expect(findSoleRootNode(null)).toBeNull()
+      expect(findSoleRootNode(undefined)).toBeNull()
+      expect(findSoleRootNode('tree')).toBeNull()
+      const tree = {expressID: 7, occurrencePath: [], children: [null, 5]}
+      expect(findSoleRootNode(tree)).toBe(tree)
+      expect(findSoleRootNode(tree)).toBe(findSoleRootNode(tree))
+    })
+  })
+
+  describe('resolveRootOnlyElementPath', () => {
+    const onlyProduct = {expressID: 7, type: 'product', occurrencePath: [], children: []}
+
+    it('names the root for a path of just its id: the permalink a root-level pick writes (#1909)', () => {
+      expect(resolveRootOnlyElementPath(onlyProduct, ['7'])).toBe(onlyProduct)
+    })
+
+    it('also names the root of an assembly whose other nodes carry paths', () => {
+      const root = {expressID: 1, occurrencePath: [], children: [
+        {expressID: 10, occurrencePath: [10], children: []},
+      ]}
+      expect(resolveRootOnlyElementPath(root, ['1'])).toBe(root)
+    })
+
+    it('is null unless the one segment is a whole number equal to the root id', () => {
+      expect(resolveRootOnlyElementPath(onlyProduct, ['8'])).toBeNull()
+      expect(resolveRootOnlyElementPath(onlyProduct, ['7abc'])).toBeNull()
+      expect(resolveRootOnlyElementPath(onlyProduct, [''])).toBeNull()
+      expect(resolveRootOnlyElementPath(onlyProduct, ['07x'])).toBeNull()
+    })
+
+    it('is null for anything but exactly one segment: multi-segment paths keep their own branch', () => {
+      expect(resolveRootOnlyElementPath(onlyProduct, ['7', '10'])).toBeNull()
+      expect(resolveRootOnlyElementPath(onlyProduct, [])).toBeNull()
+      expect(resolveRootOnlyElementPath(onlyProduct, null)).toBeNull()
+    })
+
+    it('is null for IFC, which carries no occurrence paths: its single-segment paths stay ignored', () => {
+      const ifcRoot = {expressID: 1, children: [{expressID: 2, children: []}]}
+      expect(resolveRootOnlyElementPath(ifcRoot, ['1'])).toBeNull()
+    })
+
+    it('is null for several top-level products: the empty path names no one part', () => {
+      const wrapper = {expressID: -1, occurrencePath: [], children: [
+        {expressID: 7, occurrencePath: [], children: []},
+        {expressID: 17, occurrencePath: [], children: []},
+      ]}
+      expect(resolveRootOnlyElementPath(wrapper, ['-1'])).toBeNull()
+      expect(resolveRootOnlyElementPath(wrapper, ['7'])).toBeNull()
+    })
+
+    it('is null without a tree', () => {
+      expect(resolveRootOnlyElementPath(null, ['7'])).toBeNull()
+      expect(resolveRootOnlyElementPath(undefined, ['7'])).toBeNull()
+    })
+  })
+
+  describe('rootLevelSelectionForAnchors', () => {
+    const root = {expressID: 7, occurrencePath: [], children: [
+      {expressID: 50, occurrencePath: [50], children: []},
+    ]}
+    const rootLevel = {instanceIds: [0, 1, 2, 3], parentExpressIds: [8]}
+    const resolve = (over) => rootLevelSelectionForAnchors({
+      rootNode: root, anchorIds: [7], rootLevel,
+      current: {anchors: [], instances: []}, ...over,
+    })
+
+    it('a row click or permalink on the root means every root-level instance (#1909)', () => {
+      expect(resolve({})).toEqual({instanceIds: [0, 1, 2, 3], ownerIds: [8]})
+      expect(resolve({anchorIds: ['7']})).toEqual({instanceIds: [0, 1, 2, 3], ownerIds: [8]})
+    })
+
+    describe('an assembly with geometry of its own', () => {
+      // Root-level instances 0..3, and two child occurrences' instances 10, 11
+      // (paths below the root, so selectedOccurrences would find them).
+      const assembly = {...rootLevel, descendantInstanceIds: [10, 11]}
+
+      it('a row click or permalink is the root-level instances plus every descendant occurrence (#1909)', () => {
+        expect(resolve({rootLevel: assembly}).instanceIds).toEqual([0, 1, 2, 3, 10, 11])
+        expect(resolve({rootLevel: assembly}).ownerIds).toEqual([8])
+      })
+
+      it('does not list an instance twice', () => {
+        expect(resolve({rootLevel: {...assembly, descendantInstanceIds: [10, 3, 10]}}).instanceIds)
+          .toEqual([0, 1, 2, 3, 10])
+      })
+
+      it('a plain click after a narrowed pick is the whole product again', () => {
+        const got = resolve({rootLevel: assembly, current: {anchors: [7], instances: [1]}, keepNarrowing: false})
+        expect(got.instanceIds).toEqual([0, 1, 2, 3, 10, 11])
+      })
+
+      it('a shift-click keeps the shells picked, and a whole-product selection whole', () => {
+        const picked = resolve({rootLevel: assembly, current: {anchors: [7], instances: [1, 3]}, keepNarrowing: true})
+        expect(picked.instanceIds).toEqual([1, 3])
+        const whole = resolve({
+          rootLevel: assembly, current: {anchors: [7], instances: [0, 1, 2, 3, 10, 11]}, keepNarrowing: true})
+        expect(whole.instanceIds).toEqual([0, 1, 2, 3, 10, 11])
+      })
+
+      it('descendant instances alone are not a selection of the root: it joins as the whole product', () => {
+        const got = resolve({rootLevel: assembly, current: {anchors: [50], instances: [10]}, keepNarrowing: true})
+        expect(got.instanceIds).toEqual([0, 1, 2, 3, 10, 11])
+      })
+    })
+
+    it('a plain click widens a narrowed pick to the whole product', () => {
+      expect(resolve({current: {anchors: [7], instances: [1]}, keepNarrowing: false}).instanceIds)
+        .toEqual([0, 1, 2, 3])
+    })
+
+    it('a shift-click keeps the root-level shells already picked, rather than widen or drop them', () => {
+      const kept = resolve({anchorIds: [50, 7], current: {anchors: [7], instances: [1, 3]}, keepNarrowing: true})
+      expect(kept).toEqual({instanceIds: [1, 3], ownerIds: [8]})
+    })
+
+    it('a shift-click that newly adds the root (not an anchor yet) means the whole product', () => {
+      expect(resolve({current: {anchors: [50], instances: [9]}, keepNarrowing: true}).instanceIds)
+        .toEqual([0, 1, 2, 3])
+    })
+
+    it('ignores instances selected for other rows when narrowing', () => {
+      expect(resolve({current: {anchors: [7, 50], instances: [9, 2]}, keepNarrowing: true}).instanceIds)
+        .toEqual([2])
+    })
+
+    it('is null without the root among the anchors, for IFC, several roots, or no root-level geometry', () => {
+      expect(resolve({anchorIds: [50]})).toBeNull()
+      expect(resolve({anchorIds: null})).toBeNull()
+      expect(resolve({rootNode: {expressID: 1, children: []}, anchorIds: [1]})).toBeNull()
+      const wrapper = {expressID: -1, occurrencePath: [], children: [{expressID: 7, occurrencePath: [], children: []}]}
+      expect(resolve({rootNode: wrapper, anchorIds: [-1]})).toBeNull()
+      expect(resolve({rootLevel: {instanceIds: [], parentExpressIds: []}})).toBeNull()
+      expect(resolve({rootLevel: null})).toBeNull()
+    })
+  })
+
+  describe('toggleRootLevelInstanceSelection', () => {
+    // sameIdentityShells in miniature: root row 7, owner 8, shells 0..3.
+    const common = {rootId: 7, ownerId: 8, rootInstanceIds: [0, 1, 2, 3], rootOwnerIds: [8]}
+    const shift = (selection, instanceId) =>
+      toggleRootLevelInstanceSelection({...common, selection, instanceId})
+
+    it('adds a shell to a plain pick without dropping the product or the first shell (#1909)', () => {
+      const picked = {elements: ['8'], anchors: ['7'], instances: [0]}
+      expect(shift(picked, 1)).toEqual({elements: [8], anchors: [7], instances: [0, 1]})
+    })
+
+    it('a second and third shell each join: the shared row is not toggled off', () => {
+      let selection = {elements: [8], anchors: [7], instances: [0]}
+      selection = shift(selection, 1)
+      selection = shift(selection, 2)
+      expect(selection).toEqual({elements: [8], anchors: [7], instances: [0, 1, 2]})
+    })
+
+    it('drops just the clicked shell, keeping the row while any shell is selected', () => {
+      expect(shift({elements: [8], anchors: [7], instances: [0, 1, 2]}, 1))
+        .toEqual({elements: [8], anchors: [7], instances: [0, 2]})
+    })
+
+    it('drops the row and its owners with the last shell', () => {
+      expect(shift({elements: [8], anchors: [7], instances: [2]}, 2))
+        .toEqual({elements: [], anchors: [], instances: []})
+    })
+
+    it('starts a selection from nothing, anchored on the root', () => {
+      expect(shift({elements: [], anchors: [], instances: []}, 3))
+        .toEqual({elements: [8], anchors: [7], instances: [3]})
+      expect(shift({elements: undefined, anchors: null, instances: undefined}, 3))
+        .toEqual({elements: [8], anchors: [7], instances: [3]})
+    })
+
+    it('re-expresses a picked occurrence as its row, so the shell joins WITH that row (#1909)', () => {
+      // A scene pick of a part's occurrence is anchored on the geometry's owner
+      // (1344, no tree row); its row is the path's leaf (1343).
+      const picked = {elements: ['1344'], anchors: ['1344'], instances: [0]}
+      const got = toggleRootLevelInstanceSelection({...common, selection: picked, instanceId: 2, occurrenceRow: 1343})
+      expect(got.anchors).toEqual([1343, 7])
+      expect(got.instances).toEqual([0, 2])
+      // Without the row, the owner stays as the anchor, as before.
+      expect(shift(picked, 2).anchors).toEqual([1344, 7])
+    })
+
+    it('carries other selected rows and their instances through, in both directions', () => {
+      const withRow = {elements: [50], anchors: [50], instances: [9]}
+      const added = shift(withRow, 0)
+      expect(added).toEqual({elements: [50, 8], anchors: [50, 7], instances: [9, 0]})
+      expect(shift(added, 0)).toEqual({elements: [50], anchors: [50], instances: [9]})
     })
   })
 

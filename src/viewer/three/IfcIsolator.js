@@ -8,7 +8,7 @@ import {
   isSceneGraphModel,
   sceneGraphElementIds,
 } from './sceneGraphVisibility'
-import {occurrenceKey, occurrencePathKey, selectedOccurrences} from '../../utils/occurrencePaths'
+import {findSoleRootNode, occurrenceKey, occurrencePathKey, selectedOccurrences} from '../../utils/occurrencePaths'
 import {MeshLambertMaterial, DoubleSide, Mesh} from 'three'
 import useStore from '../../store/useStore'
 import {BlendFunction} from 'postprocessing'
@@ -967,21 +967,72 @@ export default class IfcIsolator {
       return []
     }
     const anchors = (state.selectedAnchorIds?.length > 0) ? state.selectedAnchorIds : state.selectedElements
-    return selectedOccurrences({
+    const occurrences = selectedOccurrences({
       rootNode: state.rootElement,
       anchorIds: anchors ?? [],
       occurrencePath: single ? path : null,
       solidExpressId: state.selectedSolidExpressId ?? null,
     })
+    const root = single ? null : this._wholeRootOccurrence(state, anchors ?? [])
+    return root ? [...occurrences, root] : occurrences
   }
 
 
   /**
-   * @param {object} occurrence `{occurrencePath, solidExpressId}`
+   * The sole root product as an occurrence, when the selection is the WHOLE
+   * product (#1909): its row, with every root-level instance and every
+   * descendant occurrence's selected. The root's empty path is no key for
+   * `selectedOccurrences`, so without this H and Isolate fell back to the
+   * root's owner ids and left the highlighted children alone. A pick narrowed
+   * to some shells is not the whole product and keeps the owner-id route.
+   *
+   * It has no path of its own, so it carries its instances (see
+   * `_occurrenceInstanceIds`), and isn't written to the link.
+   *
+   * @param {object} state the store state
+   * @param {Array<number|string>} anchors the selection's anchor rows
+   * @return {object|null} `{nodeId, occurrencePath: [], solidExpressId, instanceIds}`
+   * @private
+   */
+  _wholeRootOccurrence(state, anchors) {
+    const root = findSoleRootNode(state.rootElement)
+    if (!root || !anchors.map(Number).includes(root.expressID) ||
+        typeof this.viewer.getRootLevelInstances !== 'function') {
+      return null
+    }
+    const rootLevel = this.viewer.getRootLevelInstances(0).instanceIds
+    const selected = new Set(state.selectedInstanceIds ?? [])
+    if (rootLevel.length === 0 || !rootLevel.every((id) => selected.has(id))) {
+      return null
+    }
+    const product = new Set(rootLevel)
+    for (const child of root.children ?? []) {
+      if (Array.isArray(child.occurrencePath) && child.occurrencePath.length > 0) {
+        this.viewer.getInstanceIdsForOccurrencePath(0, child.occurrencePath, {
+          geometryExpressId: child.ephemeral === true ? child.expressID : null,
+        }).forEach((id) => product.add(id))
+      }
+    }
+    return {
+      nodeId: root.expressID,
+      occurrencePath: [],
+      solidExpressId: null,
+      instanceIds: [...selected].filter((id) => product.has(id)),
+    }
+  }
+
+
+  /**
+   * @param {object} occurrence `{occurrencePath, solidExpressId}`, or the whole
+   *   root's `{instanceIds}`
    * @return {Array<number>} its instances, and its descendants'
    * @private
    */
-  _occurrenceInstanceIds({occurrencePath, solidExpressId}) {
+  _occurrenceInstanceIds({occurrencePath, solidExpressId, instanceIds}) {
+    // The sole root product carries its own (it has no path to resolve).
+    if (Array.isArray(instanceIds)) {
+      return instanceIds
+    }
     return this.viewer.getInstanceIdsForOccurrencePath(
       0, occurrencePath, {geometryExpressId: solidExpressId ?? null})
   }
@@ -1413,14 +1464,18 @@ export default class IfcIsolator {
     useStore.setState({isTempIsolationModeOn: true})
     this.isolatedIds = occurrences.map(({nodeId}) => nodeId)
     this.isolatedInstanceIds = instanceIds
-    this.isolatedOccurrences = occurrences.map(({nodeId, occurrencePath, solidExpressId}) =>
-      ({nodeId, occurrencePath: [...occurrencePath], solidExpressId: solidExpressId ?? null}))
+    // Pathless (the whole root product) can't be written to the link, so it
+    // stays out of the list the link is built from.
+    this.isolatedOccurrences = occurrences
+      .filter(({occurrencePath}) => occurrencePath.length > 0)
+      .map(({nodeId, occurrencePath, solidExpressId}) =>
+        ({nodeId, occurrencePath: [...occurrencePath], solidExpressId: solidExpressId ?? null}))
     // The rows' ids, for everything that reads isolated ids; and each
     // occurrence's key, for its row's isolation glasses (the copies of a
     // reused sub-assembly share their row ids, and only one may be isolated).
     useStore.setState({
       isolatedElements: Object.fromEntries(this.isolatedIds.map((id) => [id, true])),
-      isolatedOccurrenceKeys: Object.fromEntries(this.isolatedOccurrences.map(
+      isolatedOccurrenceKeys: Object.fromEntries(occurrences.map(
         ({nodeId, occurrencePath, solidExpressId}) => [occurrenceKey(occurrencePath, solidExpressId, nodeId), true])),
     })
     this.initTemporaryIsolationSubset(null, instanceIds)

@@ -8,20 +8,25 @@ import {
   clickGate,
   disableDracoEncoder,
   dismissLoadSnackbar,
+  doubleClickSelectsAMergedInstance,
   doubleClickSelectsAnElement,
   expectNavTreeFollowsSelection,
   expectNoHorizontalScroll,
+  expectProductRowSelected,
   expectSnackbarOnTop,
   glbJsonChunk,
   loadModelAndWaitForArtifact,
   openExportTab,
   openLocalFile,
   reopenLocalGlb,
+  selectedInstancesAndAnchors,
   routeProModule,
   selectCompression,
   selectQuality,
   setPortable,
   setSubscriptionTier,
+  shiftDoubleClickAnotherInstance,
+  shiftDoubleClickAt,
   smallestCodecIn,
   toggleGzip,
   toggleMetadata,
@@ -40,6 +45,162 @@ import {
   setIsReturningUser,
   setupAuthenticationIntercepts,
 } from '../../tests/e2e/utils'
+
+
+/**
+ * The selection the store holds: its anchor rows, how many scene instances it
+ * narrows to, and the tree root's id. Read from the store because the scene
+ * highlight itself is a canvas effect with no DOM to assert on.
+ *
+ * @param page Playwright page
+ * @return the anchors, the instance count and the root's express id
+ */
+function selectionState(page: Page) {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = window as any
+    const state = (w.store ?? w.useStore).getState()
+    return {
+      anchors: (state.selectedAnchorIds ?? []).map(String),
+      instanceCount: (state.selectedInstanceIds ?? []).length,
+      rootId: state.rootElement?.expressID as number,
+    }
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
+ * Open the NavTree, double-click a shell, and expect the product's row to be
+ * the selection (#1909). The model's `data-is-selected` count is zero first, so
+ * the row can only have come from the pick.
+ *
+ * @param page Playwright page
+ * @param isMerged the model is the merged layout, not a BatchedMesh
+ */
+async function pickShellAndExpectProductRow(page: Page, isMerged = false) {
+  await expect(page.locator('[data-is-selected="true"]')).toHaveCount(0)
+  const panel = page.getByTestId('NavTreePanel')
+  if (!await panel.isVisible()) {
+    await page.getByTestId('control-button-navigation').click()
+  }
+  await expect(page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)).toHaveCount(1)
+  await (isMerged ? doubleClickSelectsAMergedInstance(page) : doubleClickSelectsAnElement(page, 'any'))
+  await expectProductRowSelected(page, SHELLS_PART_NAME)
+  await expectNavTreeFollowsSelection(page)
+}
+
+
+/**
+ * Load a URL again and wait for it to be served from the artifact cache.
+ *
+ * @param page Playwright page
+ * @param glbLogs the page's captured `[glb]` lines
+ * @param opts `url` is what to load: the model's own URL, without the element
+ *   path a pick wrote, when omitted. `waitForWrite` is for the first reload
+ *   after a cache-miss load, whose artifact is written from an idle callback
+ *   well after the model is ready; a load that was itself a hit writes nothing.
+ */
+async function reloadFromCache(
+  page: Page, glbLogs: ReturnType<typeof captureGlbLogs>,
+  {url = '', waitForWrite = true}: {url?: string, waitForWrite?: boolean} = {},
+) {
+  if (waitForWrite) {
+    await waitForGlbLog(glbLogs, 'writer: wrote', EXPORT_TEST_TIMEOUT_MS)
+  }
+  resetGlbLogs(glbLogs)
+  const target = url || page.url().replace(/(\.(?:step|stp))(?:\/\d+)+/, '$1')
+  // A `goto` to the URL the page is already at is a same-document navigation,
+  // not a load.
+  if (target === page.url()) {
+    await page.reload({waitUntil: 'domcontentloaded'})
+  } else {
+    await page.goto(target, {waitUntil: 'domcontentloaded'})
+  }
+  await waitForModelReady(page)
+  await waitForGlbLog(glbLogs, 'cache HIT', EXPORT_TEST_TIMEOUT_MS)
+  await dismissLoadSnackbar(page)
+}
+
+
+/**
+ * After loading a root-only permalink: the product's row is selected, as the
+ * pick that wrote the link selected it, and the scene is on all of the
+ * product's own geometry (a link cannot say which shell was clicked).
+ *
+ * @param page Playwright page
+ */
+async function expectRootSelectedFromPermalink(page: Page) {
+  await expectProductRowSelected(page, SHELLS_PART_NAME)
+  const restored = await selectionState(page)
+  expect(restored.anchors).toEqual([`${restored.rootId}`])
+  expect(restored.instanceCount).toBeGreaterThan(1)
+  await expect(page).toHaveURL(/\.step\/\d+(\?|#|$)/)
+}
+
+
+/**
+ * The anchors of the selection that are no row of the NavTree: a geometry's
+ * owner id, which a scene pick leaves as its anchor, is none.
+ *
+ * @param page Playwright page
+ * @return the anchor ids with no tree node
+ */
+function anchorsNotInTree(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const state = ((window as any).store ?? (window as any).useStore).getState()
+    const ids = new Set<string>()
+    const walk = (node: any) => {
+      ids.add(String(node.expressID))
+      for (const child of node.children ?? []) {
+        walk(child)
+      }
+    }
+    walk(state.rootElement)
+    return (state.selectedAnchorIds ?? []).map(String).filter((id: string) => !ids.has(id))
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
+ * How many batched instances are drawn.
+ *
+ * @param page Playwright page
+ * @return the count of visible instances
+ */
+function visibleBatchedInstances(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    let visible = 0
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    ;((window as any).useStore.getState().viewer.isolator.ifcModel).traverse((obj: any) => {
+      if (obj.isBatchedMesh && obj.instanceParents) {
+        for (let batchId = 0; batchId < obj.instanceParents.length; batchId++) {
+          visible += obj.getVisibleAt(batchId) ? 1 : 0
+        }
+      }
+    })
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    return visible
+  })
+}
+
+
+/**
+ * How many instances the isolator is holding isolated.
+ *
+ * @param page Playwright page
+ * @return the count of isolated instances
+ */
+function isolatedInstanceCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const isolated = (window as any).useStore.getState().viewer.isolator.isolatedInstanceIds
+    return isolated ? isolated.size : 0
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
 
 
 /**
@@ -214,6 +375,17 @@ const SPATIAL_CHAIN = ['Bldrs', 'Build', 'Every', 'Thing']
 // for this spec in the shape a mesh-to-STEP export takes.
 const SHELLS_FIXTURE = 'src/tests/fixtures/sameIdentityShells.step'
 const SHELLS_FIXTURE_ROWS = 80
+// An assembly whose ROOT product has geometry of its own (40 shells, with empty
+// occurrence paths) beside two child occurrences of one part (1 shell each).
+const ASSEMBLY_FIXTURE = 'src/tests/fixtures/assemblyWithRootGeometry.step'
+const ASSEMBLY_ROOT_NAME = 'Assembly'
+// 40 root-level shells plus 2 occurrences x 1 shell.
+const ASSEMBLY_INSTANCES = 42
+// Parsing it takes longer than the shared model-ready default allows.
+const ASSEMBLY_READY_TIMEOUT_MS = 60_000
+// Long enough for a selection's follow-up effects (the URL it wrote, read back)
+// to have run, so an assertion after it isn't made before they could undo it.
+const SELECTION_SETTLE_MS = 500
 const LEAF_LABEL = 'Together'
 // The fixture's one PRODUCT, and so the name its tree root and its portable
 // node carry.
@@ -968,6 +1140,320 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)).toHaveCount(1)
     await expect(page.locator('[data-node-label="Unassigned"]')).toHaveCount(0)
     await doubleClickSelectsAnElement(page, 'collapsed')
+    // #1909: and the pick lands on that row. The shells' owner is the
+    // product_definition_shape, the row is the product_definition, and their
+    // occurrence path is empty, so nothing joined them and no row lit up.
+    await expectProductRowSelected(page, SHELLS_PART_NAME)
+    await expectNavTreeFollowsSelection(page)
+  })
+
+  test('a shell picked in a freshly opened part highlights its product in the NavTree', async ({page}) => {
+    // #1909, before any export is involved: the same part opened straight
+    // from the STEP file. The pick's owner is the product_definition_shape,
+    // the tree's only row is the product_definition, and the empty
+    // occurrence path joins neither, so this was broken on a first load too.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+
+    await loadModelAndWaitForArtifact(page)
+    resetGlbLogs(glbLogs)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    await pickShellAndExpectProductRow(page)
+
+    // And again from the cached artifact (the batched layout, hydrated from
+    // its per-batch tables). The model's own URL is reloaded, not the
+    // permalink the pick wrote, so the row can only light up through a pick.
+    await reloadFromCache(page, glbLogs)
+    await pickShellAndExpectProductRow(page)
+  })
+
+  test('a shell picked after reopening a part from the merged-layout cache highlights its product', async ({page}) => {
+    // #1909 (codex on #1910). `disableGlbBatched` is the merged cache-hit
+    // layout, the one a model the batched writer declines still takes: its
+    // picking is rebuilt by `Loader#restoreCacheHitPicking`, which reattaches
+    // the persisted occurrence table. A part like this one has `[]` for every
+    // instance in it, and the reattach skipped those, so the map no longer
+    // knew its instances were the root's: the pick highlighted nothing after a
+    // reopen, though it had on the first load. Then the link that pick wrote
+    // is loaded the same way, to cover its restore on this layout too.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 3)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+
+    await loadModelAndWaitForArtifact(page, 'disableGlbBatched')
+    resetGlbLogs(glbLogs)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    // A fresh parse is a BatchedMesh whatever the artifact layout; only the
+    // cache-hit model is the merged one.
+    await pickShellAndExpectProductRow(page)
+
+    await reloadFromCache(page, glbLogs)
+    await pickShellAndExpectProductRow(page, true)
+
+    const permalink = page.url()
+    expect(permalink).toMatch(/\.step\/\d+(\?|#|$)/)
+    await reloadFromCache(page, glbLogs, {url: permalink, waitForWrite: false})
+    await expectRootSelectedFromPermalink(page)
+  })
+
+  test('the permalink of a shell picked in a part reopens with its product selected', async ({page}) => {
+    // #1909 (codex on #1910): the pick writes the root's id alone as the
+    // element path, `part.step/7`. The permalink reader only took paths of
+    // two or more segments, so the link restored nothing. Loading it now
+    // selects what the pick does: the product's row, and the scene on the
+    // product's own geometry.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+
+    await loadModelAndWaitForArtifact(page)
+    resetGlbLogs(glbLogs)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    await pickShellAndExpectProductRow(page)
+    // One pick narrows the scene to one shell; the link must restore the
+    // whole product, since it cannot say which shell was clicked.
+    expect((await selectionState(page)).instanceCount).toBe(1)
+    const permalink = page.url()
+    expect(permalink).toMatch(/\.step\/\d+(\?|#|$)/)
+
+    await reloadFromCache(page, glbLogs, {url: permalink})
+    await expectRootSelectedFromPermalink(page)
+  })
+
+  test('shift-picking shells of a one-product part adds and drops each shell, not the product', async ({page}) => {
+    // #1909 (codex on #1910). A root-level shell's owner is the
+    // product_definition_shape, which is no tree row, so `elementSelection`
+    // found nothing for it and a shift-double-click did nothing at all. The
+    // row is the product's, shared by every shell: toggling the ROW would drop
+    // the product on the second shell. Each shift-pick toggles its own
+    // instance, and the product's row stays selected while any is.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await loadModelAndWaitForArtifact(page)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    await pickShellAndExpectProductRow(page)
+    const first = await selectedInstancesAndAnchors(page)
+    expect(first.instances).toHaveLength(1)
+
+    // A second shell joins. (Only the shells in front at a pixel can be hit,
+    // and on the mobile viewport that is two.)
+    const second = await shiftDoubleClickAnotherInstance(page, first.instances)
+    const both = await selectedInstancesAndAnchors(page)
+    expect(both.instances.sort()).toEqual([...first.instances, second.instanceId].sort())
+    expect(both.anchors).toEqual(first.anchors)
+    await expectProductRowSelected(page, SHELLS_PART_NAME)
+
+    // Shift-picking it again drops just it: not the product, and not both.
+    await shiftDoubleClickAt(page, second)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances).toEqual(first.instances)
+    await expectProductRowSelected(page, SHELLS_PART_NAME)
+  })
+
+  test('the product row means the whole product; a pick, the shells picked', async ({page}) => {
+    // #1909 (codex on #1910), one rule for every way of selecting the root of a
+    // one-product part. A scene PICK narrows to the shell(s) clicked. A ROW
+    // click means the whole product, as loading its permalink does.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await loadModelAndWaitForArtifact(page)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    await page.getByTestId('control-button-navigation').click()
+    const row = page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)
+    await expect(row).toHaveCount(1)
+    const everyShell = (await page.evaluate(() => {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const w = window as any
+      const meshes: any[] = []
+      ;((w.store ?? w.useStore).getState().model).traverse((m: any) => {
+        if (m.isBatchedMesh && m.instanceOccurrencePaths) {
+          meshes.push(m)
+        }
+      })
+      return meshes.flatMap((m) => m.instanceOccurrencePaths
+        .map((path: number[] | null, batchId: number) => (path?.length === 0 ? m.instanceOccurrenceIds[batchId] : -1))
+        .filter((id: number) => id >= 0))
+      /* eslint-enable @typescript-eslint/no-explicit-any */
+    })).length
+    expect(everyShell).toBeGreaterThan(2)
+
+    // A click on the row: the whole product, and it stays so once the URL the
+    // click wrote has been read back.
+    await row.click()
+    await expectProductRowSelected(page, SHELLS_PART_NAME)
+    await expect(page).toHaveURL(/\.step\/\d+(\?|#|$)/)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(everyShell)
+    await page.waitForTimeout(SELECTION_SETTLE_MS)
+    expect((await selectedInstancesAndAnchors(page)).instances).toHaveLength(everyShell)
+
+    // A pick narrows to the shell, and a second joins it.
+    await doubleClickSelectsAnElement(page, 'any')
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(1)
+    const picked = (await selectedInstancesAndAnchors(page)).instances
+    await shiftDoubleClickAnotherInstance(page, picked)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(2)
+    // (A shift-click on ANOTHER row keeps both shells: the assembly test below.)
+
+    // A plain click on the row after a pick is the whole product again.
+    await row.click()
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(everyShell)
+  })
+
+  test('the root row of an assembly with geometry of its own means the whole assembly', async ({page}) => {
+    // #1909 (codex on #1910). The root's own shells have an empty occurrence
+    // path, every child occurrence a non-empty one. A row click or a permalink
+    // on the root is the whole product: its own shells AND the children,
+    // not just the shells the empty path names. A pick still narrows.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await loadModelAndWaitForArtifact(page)
+    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+    await dismissLoadSnackbar(page)
+    // A pick of one of the root's own shells narrows to it. (Before the NavTree
+    // is open: on a phone it covers the part of the canvas the shells are in.)
+    await doubleClickSelectsAnElement(page, 'any', 'root')
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(1)
+    const shell = (await selectedInstancesAndAnchors(page)).instances
+
+    // A shift-click on a child's row then adds that occurrence and keeps the shell.
+    await page.getByTestId('control-button-navigation').click()
+    const root = page.locator(`[data-node-label="${ASSEMBLY_ROOT_NAME}"]`)
+    await expect(root).toHaveCount(1)
+    const modelUrl = page.url().replace(/(\.step)(?:\/\d+)+/, '$1')
+    await page.locator('[data-node-label="Widget"]').first().click({modifiers: ['Shift']})
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBeGreaterThan(1)
+    const mixed = (await selectedInstancesAndAnchors(page)).instances
+    expect(mixed).toEqual(expect.arrayContaining(shell))
+    expect(mixed.length).toBeLessThan(ASSEMBLY_INSTANCES)
+
+    // A click on the root row: the shells and the children, still so once the
+    // URL it wrote has been read back.
+    await root.click()
+    await expectProductRowSelected(page, ASSEMBLY_ROOT_NAME)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
+      .toBe(ASSEMBLY_INSTANCES)
+    await page.waitForTimeout(SELECTION_SETTLE_MS)
+    expect((await selectedInstancesAndAnchors(page)).instances).toHaveLength(ASSEMBLY_INSTANCES)
+    const permalink = page.url()
+    expect(permalink).toMatch(/\.step\/\d+(\?|#|$)/)
+
+    // The permalink the click wrote, loaded fresh: the whole assembly as well.
+    await page.goto(modelUrl, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(0)
+    await page.goto(permalink, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+    await expectProductRowSelected(page, ASSEMBLY_ROOT_NAME)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
+      .toBe(ASSEMBLY_INSTANCES)
+  })
+
+  test('a root shell shift-picked onto a picked child occurrence keeps that occurrence\'s row', async ({page}) => {
+    // #1909 (codex on #1910). A scene pick of a child occurrence is anchored on
+    // the geometry's owner (no tree row) and carries its row in the occurrence
+    // path. Shift-picking a root-level shell cleared that path while keeping
+    // the owner as the anchor: the child stayed lit, with no NavTree row and
+    // no place in the permalink. The row has to come across as the anchor.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await loadModelAndWaitForArtifact(page)
+    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+    await dismissLoadSnackbar(page)
+    await doubleClickSelectsAnElement(page, 'any', 'child')
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(1)
+    const child = (await selectedInstancesAndAnchors(page)).instances
+
+    // Without the row as the anchor, the `#sel:` link written from the two
+    // anchors drops the owner (it names rows only) and re-selects just the
+    // root: the whole product, so the shell never joins as one more instance.
+    await shiftDoubleClickAnotherInstance(page, child, 'root')
+    const both = await selectedInstancesAndAnchors(page)
+    expect(both.instances).toHaveLength(2)
+    expect(both.instances).toEqual(expect.arrayContaining(child))
+    // Every anchor is a row of the tree: the child's own, and the root's.
+    expect(await anchorsNotInTree(page)).toEqual([])
+    expect(both.anchors).toHaveLength(2)
+    await page.getByTestId('control-button-navigation').click()
+    await expect(page.locator('[data-is-selected="true"]')).toHaveCount(2)
+  })
+
+  test('shift-clicking the selected root row drops the product from the selection', async ({page}) => {
+    // #1909 (codex on #1910). After a shell pick the root row is an anchor, but
+    // the viewer's selected ids hold the shell's owner, not the row: the
+    // shift-click read that as "not selected yet" and added it again, so the
+    // row could not be toggled off. Same for a row click's whole product.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await loadModelAndWaitForArtifact(page)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    await pickShellAndExpectProductRow(page)
+    const row = page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)
+
+    await row.click({modifiers: ['Shift']})
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(0)
+    expect((await selectedInstancesAndAnchors(page)).anchors).toEqual([])
+    await expect(page.locator('[data-is-selected="true"]')).toHaveCount(0)
+
+    // The whole product from a row click goes the same way.
+    await row.click()
+    await expectProductRowSelected(page, SHELLS_PART_NAME)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
+      .toBe(SHELLS_FIXTURE_ROWS)
+    await row.click({modifiers: ['Shift']})
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(0)
+    await expect(page.locator('[data-is-selected="true"]')).toHaveCount(0)
+  })
+
+  test('Hide and Isolate on the root row of an assembly act on the whole assembly', async ({page}) => {
+    // #1909 (codex on #1910). The row click lights the root's shells and the
+    // children; hide and isolate resolve their targets from the anchors by
+    // path, which the root's empty path defeats, so they fell back to the
+    // root's owner ids and left the highlighted children alone.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await loadModelAndWaitForArtifact(page)
+    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+    await dismissLoadSnackbar(page)
+    await page.getByTestId('control-button-navigation').click()
+    await page.locator(`[data-node-label="${ASSEMBLY_ROOT_NAME}"]`).click()
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
+      .toBe(ASSEMBLY_INSTANCES)
+    // Out of the way of the controls on a phone.
+    await page.getByTestId('control-button-navigation').click()
+    await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
+
+    await page.getByTestId('Hide').click()
+    await expect.poll(() => visibleBatchedInstances(page)).toBe(0)
+    // Hiding again brings the whole assembly back.
+    await page.getByTestId('Hide').click()
+    await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
+
+    // Isolate shows the same whole assembly: nothing is left out, and the
+    // children are not hidden as "other" elements.
+    await page.getByTestId('Isolate').click()
+    await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
+    expect(await isolatedInstanceCount(page)).toBe(ASSEMBLY_INSTANCES)
   })
 
   test('a file of several top-level parts never gives one part the shells of another', async ({page}) => {

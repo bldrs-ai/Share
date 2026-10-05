@@ -1,3 +1,4 @@
+import useStore from '../store/useStore'
 import {elementSelection} from './selection'
 
 
@@ -27,7 +28,7 @@ describe('elementSelection', () => {
     const viewer = makeViewer()
     const selectItemsInScene = jest.fn()
     elementSelection(viewer, elementsById, selectItemsInScene, false, 3)
-    expect(selectItemsInScene).toHaveBeenCalledWith([3], true, [], null, null, [3])
+    expect(selectItemsInScene).toHaveBeenCalledWith([3], true, [], null, null, [3], false)
   })
 
   // The scene needs the descendants (a container's geometry lives in
@@ -60,14 +61,37 @@ describe('elementSelection', () => {
     const viewer = makeViewer([2]) // 2 already selected in the scene
     const selectItemsInScene = jest.fn()
     elementSelection(viewer, elementsById, selectItemsInScene, true, '2')
-    expect(selectItemsInScene).toHaveBeenCalledWith([], false, [], null, null, [])
+    expect(selectItemsInScene).toHaveBeenCalledWith([], false, [], null, null, [], true)
   })
 
   it('shift-clicking an unselected element adds it without updating navigation — string id', () => {
     const viewer = makeViewer([])
     const selectItemsInScene = jest.fn()
     elementSelection(viewer, elementsById, selectItemsInScene, true, '3')
-    expect(selectItemsInScene).toHaveBeenCalledWith([3], false, [], null, null, [3])
+    expect(selectItemsInScene).toHaveBeenCalledWith([3], false, [], null, null, [3], true)
+  })
+
+  // #1909: a shift-click keeps the root-level shells already shift-picked
+  // (the selection's resolver reads this flag); a plain click means the whole row.
+  it('tells the selection funnel whether a click was a shift-click', () => {
+    const shifted = jest.fn()
+    elementSelection(makeViewer([]), elementsById, shifted, true, 3)
+    expect(shifted.mock.calls[0][6]).toBe(true)
+    const plain = jest.fn()
+    elementSelection(makeViewer([]), elementsById, plain, false, 3)
+    expect(plain.mock.calls[0][6]).toBe(false)
+  })
+
+  // #1909: after a STEP scene pick the root row is an anchor while the
+  // viewer's ids hold the shell's owner, so the visibly selected row is in no
+  // viewer set. A shift-click on it must take it out, not add it again.
+  it('shift-clicking an anchored row the viewer does not hold removes it', () => {
+    const viewer = makeViewer([9]) // the geometry's owner, not the row
+    useStore.setState({selectedAnchorIds: ['3']})
+    const selectItemsInScene = jest.fn()
+    elementSelection(viewer, elementsById, selectItemsInScene, true, 3)
+    expect(selectItemsInScene).toHaveBeenCalledWith([9], false, [], null, null, [], true)
+    useStore.setState({selectedAnchorIds: []})
   })
 
   it('does nothing when the element cannot be picked in the scene', () => {

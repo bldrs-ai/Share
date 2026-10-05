@@ -151,12 +151,37 @@ export async function dismissLoadSnackbar(page: Page) {
  * the test then asserts is that the help opened, which only happens if the
  * handler ran.
  *
+ * But `force` skips the OTHER actionability checks too, and two of them
+ * matter here: that the element is stable, and that it receives the click at
+ * its centre. The gate sits in a dialog whose content is still settling (it
+ * was measured 16px lower a few frames earlier, and below the fold), and
+ * `toBeVisible` passes while it moves; a forced click then lands where the
+ * control was, and the help never opens. Idle that window is a few
+ * milliseconds, which is why it only failed (the mobile "free user" test,
+ * `gated-help` not found) when the machine was busy: reproduced at 4 to 6
+ * workers on 4 cores, not at 3. So wait for those two checks ourselves.
+ *
  * @param page Playwright page
  * @param testId the gate's testid, e.g. 'gated-save'
  */
 export async function clickGate(page: Page, testId: string) {
-  await expect(page.getByTestId(testId)).toHaveAttribute('aria-disabled', 'true')
-  await page.getByTestId(testId).click({force: true})
+  const gate = page.getByTestId(testId)
+  await expect(gate).toHaveAttribute('aria-disabled', 'true')
+  await expect.poll(() => gate.evaluate((el) => new Promise<boolean>((resolve) => {
+    // Where the click will land: Playwright scrolls the target into view first,
+    // and the gate can sit below the dialog's fold.
+    el.scrollIntoView({block: 'center'})
+    const before = el.getBoundingClientRect()
+    // Two frames on: has it moved, and does a click at its centre reach it?
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const after = el.getBoundingClientRect()
+      const isStill = before.x === after.x && before.y === after.y &&
+        before.width === after.width && before.height === after.height
+      const hit = document.elementFromPoint(after.x + (after.width / 2), after.y + (after.height / 2))
+      resolve(isStill && hit !== null && el.contains(hit))
+    }))
+  }))).toBe(true)
+  await gate.click({force: true})
 }
 
 
@@ -622,6 +647,10 @@ export function watchProModuleRequests(page: Page): string[] {
 export type ElementKind = 'collapsed' | 'instanced' | 'any'
 
 
+/** Whose geometry: the root product's own, a child occurrence's, or either. */
+export type PlacementLevel = 'root' | 'child' | 'any'
+
+
 /**
  * Double-click an element in the scene and wait for it to be selected.
  *
@@ -635,10 +664,13 @@ export type ElementKind = 'collapsed' | 'instanced' | 'any'
  *
  * @param page Playwright page
  * @param kind which elements to aim at
+ * @param level 'root' aims only at the root product's own geometry (empty
+ *   occurrence path), 'child' only at a child occurrence's
  * @return the parent expressID that got selected
  */
-export async function doubleClickSelectsAnElement(page: Page, kind: ElementKind): Promise<number> {
-  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate((aimAt) => {
+export async function doubleClickSelectsAnElement(
+  page: Page, kind: ElementKind, level: PlacementLevel = 'any'): Promise<number> {
+  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate(({aimAt, level: aimLevel}) => {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const w = window as any
     const state = (w.store ?? w.useStore).getState()
@@ -658,6 +690,12 @@ export async function doubleClickSelectsAnElement(page: Page, kind: ElementKind)
         const geometryId = mesh.getGeometryIdAt(batchId)
         const isRange = Boolean(mesh.bldrsGeometryRangeIds?.has(geometryId))
         if ((aimAt === 'collapsed' && !isRange) || (aimAt === 'instanced' && isRange)) {
+          continue
+        }
+        // The root product's own geometry has an empty occurrence path; a
+        // child occurrence's does not.
+        const pathLength = mesh.instanceOccurrencePaths?.[batchId]?.length
+        if ((aimLevel === 'root' && pathLength !== 0) || (aimLevel === 'child' && !(pathLength > 0))) {
           continue
         }
         const box = new Box3()
@@ -685,9 +723,91 @@ export async function doubleClickSelectsAnElement(page: Page, kind: ElementKind)
     }
     return out
     /* eslint-enable @typescript-eslint/no-explicit-any */
-  }, kind)
+  }, {aimAt: kind, level})
   expect(candidates.length, 'there must be an element of the kind under test on screen')
     .toBeGreaterThan(0)
+
+  const MAX_TRIES = 8
+  for (const {parent, x, y} of candidates.slice(0, MAX_TRIES)) {
+    await page.mouse.dblclick(x, y)
+    const selected = await page.waitForFunction(({id, isChild}) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const state = ((window as any).store ?? (window as any).useStore).getState()
+      // A child occurrence's pick selects its tree row, not the geometry's owner.
+      return isChild ? (state.selectedInstanceIds ?? []).length > 0 :
+        (state.selectedElements ?? []).includes(`${id}`)
+    }, {id: parent, isChild: level === 'child'}, {timeout: 3000}).then(() => true, () => false)
+    if (selected) {
+      return parent
+    }
+  }
+  throw new Error('double-click selected none of the elements it was aimed at')
+}
+
+
+/**
+ * Double-click an instance of a MERGED mesh (the non-batched layout: one
+ * `Mesh` whose `instanceMap` says which triangles belong to which placement)
+ * and wait for it to be selected. What {@link doubleClickSelectsAnElement}
+ * does for the batched layout, whose candidates come from `BatchedMesh`
+ * tables a merged model does not have.
+ *
+ * Aims at the first triangle's centroid of instances spread across the
+ * model, because the one in front at a pixel may be another instance's; some
+ * click selecting itself is the assertion.
+ *
+ * @param page Playwright page
+ * @return the parent expressID that got selected
+ */
+export async function doubleClickSelectsAMergedInstance(page: Page): Promise<number> {
+  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = window as any
+    const state = (w.store ?? w.useStore).getState()
+    const camera = state.viewer.context.getCamera()
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement
+    const rect = canvas.getBoundingClientRect()
+    const out: Array<{parent: number; x: number; y: number}> = []
+    const MAX_PER_MESH = 24
+    const visit = (mesh: any) => {
+      const map = mesh?.isMesh && !mesh.isBatchedMesh ? mesh.instanceMap : null
+      if (!map || !mesh.geometry?.index) {
+        return
+      }
+      mesh.updateMatrixWorld(true)
+      const position = mesh.geometry.attributes.position
+      const index = mesh.geometry.index
+      const Vector3 = camera.position.constructor
+      const step = Math.max(1, Math.floor(map.instanceCount / MAX_PER_MESH))
+      for (let instanceId = 0; instanceId < map.instanceCount; instanceId += step) {
+        const triangle = map.instanceIdToTriangleIndices.get(instanceId)?.[0]
+        if (triangle === undefined) {
+          continue
+        }
+        const centre = new Vector3()
+        for (let corner = 0; corner < 3; corner++) {
+          centre.add(new Vector3().fromBufferAttribute(position, index.getX((triangle * 3) + corner)))
+        }
+        centre.divideScalar(3).applyMatrix4(mesh.matrixWorld).project(camera)
+        const ON_SCREEN = 0.95
+        if (Math.abs(centre.x) < ON_SCREEN && Math.abs(centre.y) < ON_SCREEN) {
+          out.push({
+            parent: map.getParentExpressIdByInstance(instanceId),
+            x: rect.left + (((centre.x + 1) / 2) * rect.width),
+            y: rect.top + (((1 - centre.y) / 2) * rect.height),
+          })
+        }
+      }
+    }
+    if (state.model?.traverse) {
+      state.model.traverse(visit)
+    } else {
+      visit(state.model)
+    }
+    return out
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+  expect(candidates.length, 'there must be a merged-mesh instance on screen').toBeGreaterThan(0)
 
   const MAX_TRIES = 8
   for (const {parent, x, y} of candidates.slice(0, MAX_TRIES)) {
@@ -701,7 +821,165 @@ export async function doubleClickSelectsAnElement(page: Page, kind: ElementKind)
       return parent
     }
   }
-  throw new Error('double-click selected none of the elements it was aimed at')
+  throw new Error('double-click selected none of the merged instances it was aimed at')
+}
+
+
+/**
+ * The scene instances the selection narrows to (`selectedInstanceIds`) and its
+ * anchor rows, read from the store: the highlight itself is a canvas effect.
+ *
+ * @param page Playwright page
+ * @return the instance ids and the anchor row ids, as strings
+ */
+export function selectedInstancesAndAnchors(page: Page): Promise<{instances: number[], anchors: string[]}> {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const state = ((window as any).store ?? (window as any).useStore).getState()
+    return {
+      instances: (state.selectedInstanceIds ?? []).map(Number),
+      anchors: (state.selectedAnchorIds ?? []).map(String),
+    }
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
+ * Shift-double-click the scene at a point, as a user adds to or drops from a
+ * multi-selection.
+ *
+ * @param page Playwright page
+ * @param point canvas-relative to the viewport, as a candidate carries
+ */
+export async function shiftDoubleClickAt(page: Page, point: {x: number, y: number}) {
+  await page.keyboard.down('Shift')
+  try {
+    await page.mouse.dblclick(point.x, point.y)
+  } finally {
+    await page.keyboard.up('Shift')
+  }
+}
+
+
+/**
+ * Shift-double-click a batched instance that is NOT yet selected and wait for
+ * it to join the selection (one more instance than before). Candidates are
+ * tried in turn because the instance in front at a pixel may be one already
+ * selected, which would toggle it off instead; those are skipped by id.
+ *
+ * @param page Playwright page
+ * @param selected the instance ids already selected
+ * @param level whose geometry to aim at (the root product's own, a child's)
+ * @return the point clicked and the instance id that joined
+ */
+export async function shiftDoubleClickAnotherInstance(
+  page: Page, selected: number[], level: PlacementLevel = 'any'):
+    Promise<{x: number, y: number, instanceId: number}> {
+  const candidates: Array<{instanceId: number; x: number; y: number}> = await page.evaluate(({skip, aimLevel}) => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = window as any
+    const state = (w.store ?? w.useStore).getState()
+    const camera = state.viewer.context.getCamera()
+    const rect = (document.querySelector('canvas') as HTMLCanvasElement).getBoundingClientRect()
+    const out: Array<{instanceId: number; x: number; y: number}> = []
+    const visit = (mesh: any) => {
+      if (!mesh?.isBatchedMesh || !mesh.instanceParents || !mesh.instanceOccurrenceIds) {
+        return
+      }
+      mesh.updateMatrixWorld(true)
+      mesh.computeBoundingBox()
+      const Box3 = mesh.boundingBox.constructor
+      const Matrix4 = mesh.matrixWorld.constructor
+      for (let batchId = 0; batchId < mesh.instanceParents.length; batchId++) {
+        const instanceId = mesh.instanceOccurrenceIds[batchId]
+        const pathLength = mesh.instanceOccurrencePaths?.[batchId]?.length
+        if (skip.includes(instanceId) || (aimLevel === 'root' && pathLength !== 0) ||
+            (aimLevel === 'child' && !(pathLength > 0))) {
+          continue
+        }
+        const box = new Box3()
+        const matrix = new Matrix4()
+        mesh.getBoundingBoxAt(mesh.getGeometryIdAt(batchId), box)
+        mesh.getMatrixAt(batchId, matrix)
+        const centre = box.applyMatrix4(matrix.premultiply(mesh.matrixWorld))
+          .getCenter(mesh.boundingBox.min.clone()).project(camera)
+        const ON_SCREEN = 0.95
+        if (Math.abs(centre.x) < ON_SCREEN && Math.abs(centre.y) < ON_SCREEN) {
+          out.push({
+            instanceId,
+            x: rect.left + (((centre.x + 1) / 2) * rect.width),
+            y: rect.top + (((1 - centre.y) / 2) * rect.height),
+          })
+        }
+      }
+    }
+    if (state.model?.traverse) {
+      state.model.traverse(visit)
+    } else {
+      visit(state.model)
+    }
+    return out
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }, {skip: selected, aimLevel: level})
+  expect(candidates.length, 'there must be another instance on screen').toBeGreaterThan(0)
+
+  // Overlapping instances share a pixel, and the one in front takes the click:
+  // a second candidate there tells nothing new.
+  const seenPixels = new Set<string>()
+  const distinct = candidates.filter(({x, y}) => {
+    const key = `${Math.round(x)},${Math.round(y)}`
+    return !seenPixels.has(key) && seenPixels.add(key)
+  })
+  const MAX_TRIES = 12
+  const sameAsBefore = (now: number[]) =>
+    now.length === selected.length && selected.every((id) => now.includes(id))
+  for (const candidate of distinct.slice(0, MAX_TRIES)) {
+    await shiftDoubleClickAt(page, candidate)
+    // Settled when the selection has changed at all; the pick may have landed
+    // on a different (or an already selected) instance than the one aimed at.
+    const changed = await page.waitForFunction((before) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const w = window as any
+      const now = ((w.store ?? w.useStore).getState().selectedInstanceIds ?? []).map(Number)
+      return now.length !== before.length || before.some((id) => !now.includes(id))
+    }, selected, {timeout: 3000}).then(() => true, () => false)
+    if (!changed) {
+      continue
+    }
+    const now = (await selectedInstancesAndAnchors(page)).instances
+    const joined = now.filter((id) => !selected.includes(id))
+    if (now.length === selected.length + 1 && joined.length === 1) {
+      return {x: candidate.x, y: candidate.y, instanceId: joined[0]}
+    }
+    // It dropped one that was selected, or took more than one: put the
+    // selection back by toggling the same spot, then try the next.
+    await shiftDoubleClickAt(page, candidate)
+    await expect.poll(async () => sameAsBefore((await selectedInstancesAndAnchors(page)).instances)).toBe(true)
+  }
+  throw new Error('shift-double-click added none of the instances it was aimed at')
+}
+
+
+/**
+ * The NavTree row for a named product is highlighted as the selection.
+ *
+ * `expectNavTreeFollowsSelection` only asks that SOME row is selected, which
+ * is too weak to catch a pick that selects the wrong row; this names the row.
+ * A STEP pick reports the geometry's `product_definition_shape` while the row
+ * is the `product_definition`, so a part with no assembly structure got no
+ * highlight at all (#1909).
+ *
+ * @param page Playwright page
+ * @param label the row's label, as the NavTree shows it
+ */
+export async function expectProductRowSelected(page: Page, label: string) {
+  const panel = page.getByTestId('NavTreePanel')
+  if (!await panel.isVisible()) {
+    await page.getByTestId('control-button-navigation').click()
+  }
+  await expect(panel).toBeVisible()
+  await expect(page.locator(`[data-node-label="${label}"][data-is-selected="true"]`)).toHaveCount(1)
 }
 
 
@@ -719,5 +997,5 @@ export async function expectNavTreeFollowsSelection(page: Page) {
   await expect(page.locator('[data-is-selected="true"]').first()).toBeVisible()
   // The element path follows the model file in the URL, before any query or
   // hash (`/index.ifc/89/112/…/396?feature=…`).
-  await expect(page).toHaveURL(/\.(ifc|glb)(\/\d+)+(\?|#|$)/)
+  await expect(page).toHaveURL(/\.(ifc|glb|step|stp)(\/\d+)+(\?|#|$)/)
 }

@@ -360,10 +360,124 @@ order; BVH permutes only the index buffer, not the numbering).
    exactly. What remains is the sliver the body segment can't reach: a
    root-level product whose single solid makes it its own body, where the path
    is legitimately empty and `getOccurrencePathByInstance` still normalizes it
-   to `null`. Harmless with one root assembly (the common case); a file with
+   to `null`. The one-root file is closed (#1909, below); a file with
    several distinct single-solid products at the root still degrades to
    type-level there, and a real fix still needs a PDS→product-definition→node
    reverse map.
+
+   **One-root files (#1909).** The sliver was not harmless: a part with no
+   assembly structure (DSA2, `sameIdentityShells.step`) is *all* root-level
+   geometry, so a double-click on any of its shells highlighted no NavTree row.
+   The pick reports the `product_definition_shape` (`#8`), the tree's only row
+   is the `product_definition` (`#7`), and the empty path joins on neither.
+   It was the same on a first load as on a reopened export, portable or not:
+   nothing about it came from the cache. Assemblies were unaffected, because
+   every placement below the root carries a path.
+
+   Fix: `selectFromInstancePick` tells "the instance's path is present and
+   empty" (`IfcInstanceMap.hasEmptyOccurrencePath`, or a zero-length entry in
+   the batch's `instanceOccurrencePaths`) from "no occurrence data" (IFC, an
+   undecorated model), which `getOccurrencePathByInstance` conflates as
+   `null`. For the former, `findSoleRootNode` names the tree's root **when it
+   is the only node with an empty path** — exact, since an empty path means
+   "no NAUO above this" and in a one-product file that is the root alone — and
+   the pick passes that row as the selection's *anchor*. The anchor is what the
+   NavTree row highlight, Properties, the TopBar crumb and the `.step/<root>`
+   permalink follow, while `selectedElements` keeps the owner id the scene and
+   hide key on, so scene highlighting and `H` are unchanged. This is the same
+   rule `glbPortable.js#hasSingleEmptyPathNode` applies to the export (#1908).
+
+   **One rule for selecting the sole root.** Four paths select it, and they
+   agree on what is lit:
+
+   | path | the scene is on | how |
+   |---|---|---|
+   | scene **pick** | the shell clicked | `selectFromInstancePick` names the instance |
+   | scene **shift-pick** | the shells picked, each toggled on its own (a picked child occurrence keeps its row) | `toggleRootLevelInstanceSelection` |
+   | NavTree **row click** | the whole product: the root-level instances plus every descendant occurrence's; shift-click on the selected row drops it; Hide and Isolate act on all of it | the funnel resolves the root anchor: `rootLevelSelectionForAnchors` |
+   | **permalink** `part.step/<root>` | the whole product, the same | same resolver, via `selectRootOnlyElement` |
+
+   A **shift-click on another row** after shift-picking shells recomputes the
+   instances from the anchors; the root anchor then carries the shells already
+   picked (`keepNarrowing`, which `elementSelection` sets for shift-clicks only),
+   rather than widening them to the product or, as before, dropping them. A
+   plain click on the row after a pick is a row click: the whole product.
+   Whole means the descendants too: an assembly whose root has geometry of its
+   own (`assemblyWithRootGeometry.step`: 40 root-level shells, two child
+   occurrences, 42 instances) must not narrow to the root-level shells when its root row is
+   clicked, which `selectedOccurrences` would otherwise have found by path for
+   every row but the root's. A root with **no** root-level geometry (a plain
+   assembly such as AS1) is outside this: the resolver returns nothing and its
+   root row selects what it always did (measured on main: the row and its
+   descendants' ids, no instance lit).
+   Three more edges of the same rule:
+
+   - **A shift-pick of a root shell onto a picked child occurrence.** The
+     child's pick is anchored on its geometry's owner, which is no row; the
+     shell joins with the child's *row* (the path's leaf, or its solid) as the
+     anchor, as `elementSelection` re-expresses it for a shift-click. Left as
+     the owner, the `#sel:` link written from the two anchors dropped it and
+     re-selected just the root, the whole product.
+   - **A shift-click on the root row when it is already selected** takes it
+     out, whether it is an anchor of a shell pick (the viewer's ids hold the
+     shells' owner, not the row) or of a row click. Its owner ids go with it.
+   - **Hide (`H`) and Isolate on a whole-product selection** act on the whole
+     product: the root-level instances plus every descendant's. The root's empty
+     path gives `selectedOccurrences` nothing, so `IfcIsolator` adds the root
+     as a pathless occurrence carrying its selected instances. A pick narrowed
+     to some shells keeps the owner-id route. The pathless root is not written
+     to the `#d:` link (it has no path to write); its children's hides and
+     isolations still are.
+
+   The root's empty path is no key for `selectedOccurrences`/
+   `getInstanceIdsForOccurrencePath`, so every row-driven path needs the
+   resolver above; a path that selects the root's row and not its instances
+   leaves the row and URL selected with nothing lit (a NavTree row click did
+   exactly that). Only a root-level instance in the selection proves a URL came
+   from a pick, so reading `.step/<root>` back skips re-selecting only then.
+
+   Follow-ups from review, all on the same case:
+
+   - **Cache hit, merged layout.** The pick needs the map to know an instance's
+     path is *present and empty*. `attachOccurrencePaths` (the merged
+     cache-hit restore, `Loader#restoreCacheHitPicking`) used to skip every
+     `[]` entry, so a part made only of root-level placements came back with
+     no occurrence table and the pick lit no row after a reopen. It now keeps
+     `[]` in the per-instance table and still leaves it out of the reverse
+     `occurrencePathToInstanceIds` index, as the cache-miss populator does.
+     The default (batched) cache-hit layout was never affected: its
+     `instanceOccurrencePaths` keep the empty arrays. The merged layout is
+     reached with `?feature=disableGlbBatched`, or by a model the batched
+     writer declines.
+   - **The permalink.** The pick writes the root's id alone (`part.step/7`).
+     `selectElementBasedOnFilepath` only read paths of two or more segments,
+     so the link restored nothing. `resolveRootOnlyElementPath` now accepts a
+     single segment that is a whole number equal to the root's id, when the
+     root is the sole empty-path node (`findSoleRootNode`) — so IFC and
+     several-top-level-product links read exactly as before — and
+     `selectRootOnlyElement` selects what the pick does: the root row as the
+     anchor, `selectedElements` the ids that own the geometry, and the scene
+     on every root-level instance (`ShareViewer#getRootLevelInstances`; a link
+     cannot say which shell was clicked). A link whose model has no root-level
+     geometry stays ignored, as it was. The pick that wrote the URL is not
+     re-selected from it (its anchor is already the root), which would widen
+     the one-shell highlight.
+
+   - **Shift-pick.** A shift-double-click of a root-level shell used to do
+     nothing (its owner is no row, so `elementSelection` returned). Toggling
+     the product's row instead would drop the product on the second shell, as
+     every shell shares it. `toggleRootLevelInstanceSelection` toggles the
+     *instance*: it joins `selectedInstanceIds`, the root row stays an anchor
+     while any root-level instance is selected, and the last one out takes the
+     row and the root's owner ids with it. Other selected rows and their
+     instances are carried over. Assemblies, IFC and every placement below the
+     root keep the row toggle.
+
+   Still open: with several top-level products Conway wraps them in a synthetic
+   `Model` node and gives the wrapper and each root `occurrencePath: []`, so
+   the empty path names no one part and the pick stays unhighlighted (never
+   mis-highlighted). Telling the roots apart needs the shape-to-definition link
+   that the tree, the instance tables and the instance map do not carry.
 5. **`?feature=batchedMesh`.** The BatchedMesh render path builds no
    `IfcInstanceMap`, so per-occurrence (and all per-instance) selection no-ops
    under that flag — a documented gap in `buildBatchedConwayModel`, not a

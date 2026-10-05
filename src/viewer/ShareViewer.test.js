@@ -518,6 +518,39 @@ describe('viewer/ShareViewer getSelectedElementsProps', () => {
 })
 
 
+describe('viewer/ShareViewer getRootLevelInstances', () => {
+  it('lists the instances with an empty occurrence path and the ids that own them (#1909)', () => {
+    // A root-product placement (empty path) beside two placed under NAUOs.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 8, triangleCount: 1, occurrencePath: []},
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 20]},
+      {parentExpressId: 8, triangleCount: 1, occurrencePath: []},
+    ])
+    const found = ShareViewer.prototype.getRootLevelInstances.call(makeResolverViewer(mesh), 0)
+    expect(found.instanceIds).toEqual([0, 2])
+    expect(found.parentExpressIds).toEqual([8])
+  })
+
+  it('is empty for a model with no occurrence data (IFC) and for an unknown model', () => {
+    const ifc = makeOccurrenceMesh([{parentExpressId: 100, triangleCount: 1}])
+    expect(ShareViewer.prototype.getRootLevelInstances.call(makeResolverViewer(ifc), 0))
+      .toEqual({instanceIds: [], parentExpressIds: []})
+    expect(ShareViewer.prototype.getRootLevelInstances.call(makeResolverViewer(ifc), 3))
+      .toEqual({instanceIds: [], parentExpressIds: []})
+  })
+
+  it('reads the batched render path off its per-batch tables', () => {
+    const batched = new Mesh(new BufferGeometry())
+    batched.isBatchedMesh = true
+    batched.instanceOccurrencePaths = [[], [10], []]
+    batched.instanceOccurrenceIds = [40, 41, 42]
+    batched.instanceParents = [8, 100, 8]
+    const found = ShareViewer.prototype.getRootLevelInstances.call(makeResolverViewer(batched), 0)
+    expect(found).toEqual({instanceIds: [40, 42], parentExpressIds: [8]})
+  })
+})
+
+
 describe('viewer/ShareViewer getInstanceIdsForOccurrencePath', () => {
   it('resolves a leaf occurrence path to exactly its own instance(s)', () => {
     // One reused part-type (parent 100) placed at two occurrences; the paths
