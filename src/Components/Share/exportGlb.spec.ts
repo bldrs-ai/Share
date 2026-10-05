@@ -140,6 +140,70 @@ async function expectRootSelectedFromPermalink(page: Page) {
 
 
 /**
+ * The anchors of the selection that are no row of the NavTree: a geometry's
+ * owner id, which a scene pick leaves as its anchor, is none.
+ *
+ * @param page Playwright page
+ * @return the anchor ids with no tree node
+ */
+function anchorsNotInTree(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const state = ((window as any).store ?? (window as any).useStore).getState()
+    const ids = new Set<string>()
+    const walk = (node: any) => {
+      ids.add(String(node.expressID))
+      for (const child of node.children ?? []) {
+        walk(child)
+      }
+    }
+    walk(state.rootElement)
+    return (state.selectedAnchorIds ?? []).map(String).filter((id: string) => !ids.has(id))
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
+ * How many batched instances are drawn.
+ *
+ * @param page Playwright page
+ * @return the count of visible instances
+ */
+function visibleBatchedInstances(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    let visible = 0
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    ;((window as any).useStore.getState().viewer.isolator.ifcModel).traverse((obj: any) => {
+      if (obj.isBatchedMesh && obj.instanceParents) {
+        for (let batchId = 0; batchId < obj.instanceParents.length; batchId++) {
+          visible += obj.getVisibleAt(batchId) ? 1 : 0
+        }
+      }
+    })
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    return visible
+  })
+}
+
+
+/**
+ * How many instances the isolator is holding isolated.
+ *
+ * @param page Playwright page
+ * @return the count of isolated instances
+ */
+function isolatedInstanceCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const isolated = (window as any).useStore.getState().viewer.isolator.isolatedInstanceIds
+    return isolated ? isolated.size : 0
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
  * The `BLDRS_*` extension descriptors of a downloaded file.
  *
  * Each one names its payload by bufferView index and says how it is stored
@@ -312,11 +376,11 @@ const SPATIAL_CHAIN = ['Bldrs', 'Build', 'Every', 'Thing']
 const SHELLS_FIXTURE = 'src/tests/fixtures/sameIdentityShells.step'
 const SHELLS_FIXTURE_ROWS = 80
 // An assembly whose ROOT product has geometry of its own (40 shells, with empty
-// occurrence paths) beside two child occurrences of one part (2 shells each).
+// occurrence paths) beside two child occurrences of one part (1 shell each).
 const ASSEMBLY_FIXTURE = 'src/tests/fixtures/assemblyWithRootGeometry.step'
 const ASSEMBLY_ROOT_NAME = 'Assembly'
-// 40 root-level shells plus 2 occurrences x 2 shells.
-const ASSEMBLY_INSTANCES = 44
+// 40 root-level shells plus 2 occurrences x 1 shell.
+const ASSEMBLY_INSTANCES = 42
 // Parsing it takes longer than the shared model-ready default allows.
 const ASSEMBLY_READY_TIMEOUT_MS = 60_000
 // Long enough for a selection's follow-up effects (the URL it wrote, read back)
@@ -1198,8 +1262,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
   test('the product row means the whole product; a pick, the shells picked', async ({page}) => {
     // #1909 (codex on #1910), one rule for every way of selecting the root of a
     // one-product part. A scene PICK narrows to the shell(s) clicked. A ROW
-    // click means the whole product, as loading its permalink does. A
-    // shift-click on the row after shift-picking shells keeps the shells.
+    // click means the whole product, as loading its permalink does.
     test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
 
@@ -1235,19 +1298,13 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await page.waitForTimeout(SELECTION_SETTLE_MS)
     expect((await selectedInstancesAndAnchors(page)).instances).toHaveLength(everyShell)
 
-    // A pick narrows to the shell.
+    // A pick narrows to the shell, and a second joins it.
     await doubleClickSelectsAnElement(page, 'any')
     await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(1)
     const picked = (await selectedInstancesAndAnchors(page)).instances
-    const second = await shiftDoubleClickAnotherInstance(page, picked)
-
-    // A shift-click on the row keeps the two shells: not dropped, and not
-    // widened to the product.
-    await row.click({modifiers: ['Shift']})
-    await page.waitForTimeout(SELECTION_SETTLE_MS)
-    const kept = await selectedInstancesAndAnchors(page)
-    expect(kept.instances.sort()).toEqual([...picked, second.instanceId].sort())
-    await expectProductRowSelected(page, SHELLS_PART_NAME)
+    await shiftDoubleClickAnotherInstance(page, picked)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(2)
+    // (A shift-click on ANOTHER row keeps both shells: the assembly test below.)
 
     // A plain click on the row after a pick is the whole product again.
     await row.click()
@@ -1268,7 +1325,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     // A pick of one of the root's own shells narrows to it. (Before the NavTree
     // is open: on a phone it covers the part of the canvas the shells are in.)
-    await doubleClickSelectsAnElement(page, 'any', true)
+    await doubleClickSelectsAnElement(page, 'any', 'root')
     await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(1)
     const shell = (await selectedInstancesAndAnchors(page)).instances
 
@@ -1303,6 +1360,100 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expectProductRowSelected(page, ASSEMBLY_ROOT_NAME)
     await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
       .toBe(ASSEMBLY_INSTANCES)
+  })
+
+  test('a root shell shift-picked onto a picked child occurrence keeps that occurrence\'s row', async ({page}) => {
+    // #1909 (codex on #1910). A scene pick of a child occurrence is anchored on
+    // the geometry's owner (no tree row) and carries its row in the occurrence
+    // path. Shift-picking a root-level shell cleared that path while keeping
+    // the owner as the anchor: the child stayed lit, with no NavTree row and
+    // no place in the permalink. The row has to come across as the anchor.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await loadModelAndWaitForArtifact(page)
+    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+    await dismissLoadSnackbar(page)
+    await doubleClickSelectsAnElement(page, 'any', 'child')
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(1)
+    const child = (await selectedInstancesAndAnchors(page)).instances
+
+    // Without the row as the anchor, the `#sel:` link written from the two
+    // anchors drops the owner (it names rows only) and re-selects just the
+    // root: the whole product, so the shell never joins as one more instance.
+    await shiftDoubleClickAnotherInstance(page, child, 'root')
+    const both = await selectedInstancesAndAnchors(page)
+    expect(both.instances).toHaveLength(2)
+    expect(both.instances).toEqual(expect.arrayContaining(child))
+    // Every anchor is a row of the tree: the child's own, and the root's.
+    expect(await anchorsNotInTree(page)).toEqual([])
+    expect(both.anchors).toHaveLength(2)
+    await page.getByTestId('control-button-navigation').click()
+    await expect(page.locator('[data-is-selected="true"]')).toHaveCount(2)
+  })
+
+  test('shift-clicking the selected root row drops the product from the selection', async ({page}) => {
+    // #1909 (codex on #1910). After a shell pick the root row is an anchor, but
+    // the viewer's selected ids hold the shell's owner, not the row: the
+    // shift-click read that as "not selected yet" and added it again, so the
+    // row could not be toggled off. Same for a row click's whole product.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await loadModelAndWaitForArtifact(page)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    await pickShellAndExpectProductRow(page)
+    const row = page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)
+
+    await row.click({modifiers: ['Shift']})
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(0)
+    expect((await selectedInstancesAndAnchors(page)).anchors).toEqual([])
+    await expect(page.locator('[data-is-selected="true"]')).toHaveCount(0)
+
+    // The whole product from a row click goes the same way.
+    await row.click()
+    await expectProductRowSelected(page, SHELLS_PART_NAME)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
+      .toBe(SHELLS_FIXTURE_ROWS)
+    await row.click({modifiers: ['Shift']})
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(0)
+    await expect(page.locator('[data-is-selected="true"]')).toHaveCount(0)
+  })
+
+  test('Hide and Isolate on the root row of an assembly act on the whole assembly', async ({page}) => {
+    // #1909 (codex on #1910). The row click lights the root's shells and the
+    // children; hide and isolate resolve their targets from the anchors by
+    // path, which the root's empty path defeats, so they fell back to the
+    // root's owner ids and left the highlighted children alone.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await loadModelAndWaitForArtifact(page)
+    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+    await dismissLoadSnackbar(page)
+    await page.getByTestId('control-button-navigation').click()
+    await page.locator(`[data-node-label="${ASSEMBLY_ROOT_NAME}"]`).click()
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
+      .toBe(ASSEMBLY_INSTANCES)
+    // Out of the way of the controls on a phone.
+    await page.getByTestId('control-button-navigation').click()
+    await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
+
+    await page.getByTestId('Hide').click()
+    await expect.poll(() => visibleBatchedInstances(page)).toBe(0)
+    // Hiding again brings the whole assembly back.
+    await page.getByTestId('Hide').click()
+    await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
+
+    // Isolate shows the same whole assembly: nothing is left out, and the
+    // children are not hidden as "other" elements.
+    await page.getByTestId('Isolate').click()
+    await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
+    expect(await isolatedInstanceCount(page)).toBe(ASSEMBLY_INSTANCES)
   })
 
   test('a file of several top-level parts never gives one part the shells of another', async ({page}) => {

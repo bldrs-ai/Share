@@ -493,14 +493,21 @@ export function rootLevelSelectionForAnchors({rootNode, anchorIds, rootLevel, cu
  * @param {number} args.instanceId the picked instance
  * @param {Array<number>} args.rootInstanceIds every root-level instance
  * @param {Array<number>} args.rootOwnerIds the express ids owning them
+ * @param {number|null} [args.occurrenceRow] the row of a single occurrence
+ *   selected by a scene pick, which replaces its owner anchor
  * @return {{elements: Array<number>, anchors: Array<number>, instances: Array<number>}}
  */
 export function toggleRootLevelInstanceSelection({
-  selection, rootId, ownerId, instanceId, rootInstanceIds, rootOwnerIds,
+  selection, rootId, ownerId, instanceId, rootInstanceIds, rootOwnerIds, occurrenceRow = null,
 }) {
   const numbers = (list) => (Array.isArray(list) ? list.map(Number) : [])
   let elements = numbers(selection.elements)
-  let anchors = numbers(selection.anchors)
+  // A scene pick of a part's occurrence is anchored on the geometry's owner,
+  // which is no tree row: its row is `occurrenceRow` (the selection's path
+  // leaf, or its solid). Re-express it, as `elementSelection` does for a
+  // shift-click, or the pick would join the selection without its NavTree row
+  // and be dropped from the `#sel:` link, which only names rows.
+  let anchors = occurrenceRow === null ? numbers(selection.anchors) : [Number(occurrenceRow)]
   let instances = numbers(selection.instances)
   if (instances.includes(instanceId)) {
     instances = instances.filter((id) => id !== instanceId)

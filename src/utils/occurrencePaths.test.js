@@ -373,6 +373,17 @@ describe('utils/occurrencePaths', () => {
         .toEqual({elements: [8], anchors: [7], instances: [3]})
     })
 
+    it('re-expresses a picked occurrence as its row, so the shell joins WITH that row (#1909)', () => {
+      // A scene pick of a part's occurrence is anchored on the geometry's owner
+      // (1344, no tree row); its row is the path's leaf (1343).
+      const picked = {elements: ['1344'], anchors: ['1344'], instances: [0]}
+      const got = toggleRootLevelInstanceSelection({...common, selection: picked, instanceId: 2, occurrenceRow: 1343})
+      expect(got.anchors).toEqual([1343, 7])
+      expect(got.instances).toEqual([0, 2])
+      // Without the row, the owner stays as the anchor, as before.
+      expect(shift(picked, 2).anchors).toEqual([1344, 7])
+    })
+
     it('carries other selected rows and their instances through, in both directions', () => {
       const withRow = {elements: [50], anchors: [50], instances: [9]}
       const added = shift(withRow, 0)

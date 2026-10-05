@@ -647,6 +647,10 @@ export function watchProModuleRequests(page: Page): string[] {
 export type ElementKind = 'collapsed' | 'instanced' | 'any'
 
 
+/** Whose geometry: the root product's own, a child occurrence's, or either. */
+export type PlacementLevel = 'root' | 'child' | 'any'
+
+
 /**
  * Double-click an element in the scene and wait for it to be selected.
  *
@@ -660,13 +664,13 @@ export type ElementKind = 'collapsed' | 'instanced' | 'any'
  *
  * @param page Playwright page
  * @param kind which elements to aim at
- * @param onlyRootLevel aim only at the root product's own geometry (empty
- *   occurrence path), as opposed to a child occurrence's
+ * @param level 'root' aims only at the root product's own geometry (empty
+ *   occurrence path), 'child' only at a child occurrence's
  * @return the parent expressID that got selected
  */
 export async function doubleClickSelectsAnElement(
-  page: Page, kind: ElementKind, onlyRootLevel = false): Promise<number> {
-  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate(({aimAt, rootOnly}) => {
+  page: Page, kind: ElementKind, level: PlacementLevel = 'any'): Promise<number> {
+  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate(({aimAt, level: aimLevel}) => {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const w = window as any
     const state = (w.store ?? w.useStore).getState()
@@ -688,8 +692,10 @@ export async function doubleClickSelectsAnElement(
         if ((aimAt === 'collapsed' && !isRange) || (aimAt === 'instanced' && isRange)) {
           continue
         }
-        // Only the root product's own geometry (an empty occurrence path).
-        if (rootOnly && mesh.instanceOccurrencePaths?.[batchId]?.length !== 0) {
+        // The root product's own geometry has an empty occurrence path; a
+        // child occurrence's does not.
+        const pathLength = mesh.instanceOccurrencePaths?.[batchId]?.length
+        if ((aimLevel === 'root' && pathLength !== 0) || (aimLevel === 'child' && !(pathLength > 0))) {
           continue
         }
         const box = new Box3()
@@ -717,18 +723,20 @@ export async function doubleClickSelectsAnElement(
     }
     return out
     /* eslint-enable @typescript-eslint/no-explicit-any */
-  }, {aimAt: kind, rootOnly: onlyRootLevel})
+  }, {aimAt: kind, level})
   expect(candidates.length, 'there must be an element of the kind under test on screen')
     .toBeGreaterThan(0)
 
   const MAX_TRIES = 8
   for (const {parent, x, y} of candidates.slice(0, MAX_TRIES)) {
     await page.mouse.dblclick(x, y)
-    const selected = await page.waitForFunction((id) => {
+    const selected = await page.waitForFunction(({id, isChild}) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const w = window as any
-      return ((w.store ?? w.useStore).getState().selectedElements ?? []).includes(`${id}`)
-    }, parent, {timeout: 3000}).then(() => true, () => false)
+      const state = ((window as any).store ?? (window as any).useStore).getState()
+      // A child occurrence's pick selects its tree row, not the geometry's owner.
+      return isChild ? (state.selectedInstanceIds ?? []).length > 0 :
+        (state.selectedElements ?? []).includes(`${id}`)
+    }, {id: parent, isChild: level === 'child'}, {timeout: 3000}).then(() => true, () => false)
     if (selected) {
       return parent
     }
@@ -862,11 +870,13 @@ export async function shiftDoubleClickAt(page: Page, point: {x: number, y: numbe
  *
  * @param page Playwright page
  * @param selected the instance ids already selected
+ * @param level whose geometry to aim at (the root product's own, a child's)
  * @return the point clicked and the instance id that joined
  */
-export async function shiftDoubleClickAnotherInstance(page: Page, selected: number[]):
+export async function shiftDoubleClickAnotherInstance(
+  page: Page, selected: number[], level: PlacementLevel = 'any'):
     Promise<{x: number, y: number, instanceId: number}> {
-  const candidates: Array<{instanceId: number; x: number; y: number}> = await page.evaluate((skip) => {
+  const candidates: Array<{instanceId: number; x: number; y: number}> = await page.evaluate(({skip, aimLevel}) => {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const w = window as any
     const state = (w.store ?? w.useStore).getState()
@@ -883,7 +893,9 @@ export async function shiftDoubleClickAnotherInstance(page: Page, selected: numb
       const Matrix4 = mesh.matrixWorld.constructor
       for (let batchId = 0; batchId < mesh.instanceParents.length; batchId++) {
         const instanceId = mesh.instanceOccurrenceIds[batchId]
-        if (skip.includes(instanceId)) {
+        const pathLength = mesh.instanceOccurrencePaths?.[batchId]?.length
+        if (skip.includes(instanceId) || (aimLevel === 'root' && pathLength !== 0) ||
+            (aimLevel === 'child' && !(pathLength > 0))) {
           continue
         }
         const box = new Box3()
@@ -909,7 +921,7 @@ export async function shiftDoubleClickAnotherInstance(page: Page, selected: numb
     }
     return out
     /* eslint-enable @typescript-eslint/no-explicit-any */
-  }, selected)
+  }, {skip: selected, aimLevel: level})
   expect(candidates.length, 'there must be another instance on screen').toBeGreaterThan(0)
 
   // Overlapping instances share a pixel, and the one in front takes the click:

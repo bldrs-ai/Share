@@ -1,3 +1,4 @@
+import useStore from '../store/useStore'
 import {elementSelection} from './selection'
 
 
@@ -79,6 +80,18 @@ describe('elementSelection', () => {
     const plain = jest.fn()
     elementSelection(makeViewer([]), elementsById, plain, false, 3)
     expect(plain.mock.calls[0][6]).toBe(false)
+  })
+
+  // #1909: after a STEP scene pick the root row is an anchor while the
+  // viewer's ids hold the shell's owner, so the visibly selected row is in no
+  // viewer set. A shift-click on it must take it out, not add it again.
+  it('shift-clicking an anchored row the viewer does not hold removes it', () => {
+    const viewer = makeViewer([9]) // the geometry's owner, not the row
+    useStore.setState({selectedAnchorIds: ['3']})
+    const selectItemsInScene = jest.fn()
+    elementSelection(viewer, elementsById, selectItemsInScene, true, 3)
+    expect(selectItemsInScene).toHaveBeenCalledWith([9], false, [], null, null, [], true)
+    useStore.setState({selectedAnchorIds: []})
   })
 
   it('does nothing when the element cannot be picked in the scene', () => {

@@ -1069,7 +1069,11 @@ export default function CadView({
   function toggleRootLevelInstance(rootRow, ownerId, instanceId) {
     const state = useStore.getState()
     const rootLevel = rootLevelInstances()
+    const path = state.selectedOccurrencePath
+    const occurrenceRow = (Array.isArray(path) && path.length > 0) ?
+      (state.selectedSolidExpressId ?? path[path.length - 1]) : null
     const next = toggleRootLevelInstanceSelection({
+      occurrenceRow,
       selection: {
         elements: state.selectedElements,
         anchors: state.selectedAnchorIds,
@@ -1217,6 +1221,18 @@ export default function CadView({
       return
     }
     try {
+      // A shift-click that took the sole root's row out of the selection takes
+      // the root's own geometry with it: its owner ids are in the viewer's
+      // selected ids, not in the anchors, and would keep every root-level
+      // shell lit by id once the row is gone.
+      if (keepRootNarrowing) {
+        const root = findSoleRootNode(useStore.getState().rootElement)
+        const held = (useStore.getState().selectedAnchorIds ?? []).map(Number)
+        if (root && held.includes(root.expressID) && !(anchorIds ?? resultIDs).map(Number).includes(root.expressID)) {
+          const owners = new Set(rootLevelInstances().parentExpressIds.map(Number))
+          resultIDs = resultIDs.filter((id) => !owners.has(Number(id)))
+        }
+      }
       // STEP, selected by row rather than by pick (a shift-click
       // multi-selection, a search): the rows' ids are NAUOs and solids, which
       // own no geometry, so without instances the scene highlighted nothing.

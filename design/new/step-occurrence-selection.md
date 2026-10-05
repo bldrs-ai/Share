@@ -393,8 +393,8 @@ order; BVH permutes only the index buffer, not the numbering).
    | path | the scene is on | how |
    |---|---|---|
    | scene **pick** | the shell clicked | `selectFromInstancePick` names the instance |
-   | scene **shift-pick** | the shells picked, each toggled on its own | `toggleRootLevelInstanceSelection` |
-   | NavTree **row click** | the whole product: the root-level instances plus every descendant occurrence's | the funnel resolves the root anchor: `rootLevelSelectionForAnchors` |
+   | scene **shift-pick** | the shells picked, each toggled on its own (a picked child occurrence keeps its row) | `toggleRootLevelInstanceSelection` |
+   | NavTree **row click** | the whole product: the root-level instances plus every descendant occurrence's; shift-click on the selected row drops it; Hide and Isolate act on all of it | the funnel resolves the root anchor: `rootLevelSelectionForAnchors` |
    | **permalink** `part.step/<root>` | the whole product, the same | same resolver, via `selectRootOnlyElement` |
 
    A **shift-click on another row** after shift-picking shells recomputes the
@@ -404,12 +404,31 @@ order; BVH permutes only the index buffer, not the numbering).
    plain click on the row after a pick is a row click: the whole product.
    Whole means the descendants too: an assembly whose root has geometry of its
    own (`assemblyWithRootGeometry.step`: 40 root-level shells, two child
-   occurrences) must not narrow to the root-level shells when its root row is
+   occurrences, 42 instances) must not narrow to the root-level shells when its root row is
    clicked, which `selectedOccurrences` would otherwise have found by path for
    every row but the root's. A root with **no** root-level geometry (a plain
    assembly such as AS1) is outside this: the resolver returns nothing and its
    root row selects what it always did (measured on main: the row and its
    descendants' ids, no instance lit).
+   Three more edges of the same rule:
+
+   - **A shift-pick of a root shell onto a picked child occurrence.** The
+     child's pick is anchored on its geometry's owner, which is no row; the
+     shell joins with the child's *row* (the path's leaf, or its solid) as the
+     anchor, as `elementSelection` re-expresses it for a shift-click. Left as
+     the owner, the `#sel:` link written from the two anchors dropped it and
+     re-selected just the root, the whole product.
+   - **A shift-click on the root row when it is already selected** takes it
+     out, whether it is an anchor of a shell pick (the viewer's ids hold the
+     shells' owner, not the row) or of a row click. Its owner ids go with it.
+   - **Hide (`H`) and Isolate on a whole-product selection** act on the whole
+     product: the root-level instances plus every descendant's. The root's empty
+     path gives `selectedOccurrences` nothing, so `IfcIsolator` adds the root
+     as a pathless occurrence carrying its selected instances. A pick narrowed
+     to some shells keeps the owner-id route. The pathless root is not written
+     to the `#d:` link (it has no path to write); its children's hides and
+     isolations still are.
+
    The root's empty path is no key for `selectedOccurrences`/
    `getInstanceIdsForOccurrencePath`, so every row-driven path needs the
    resolver above; a path that selects the root's row and not its instances
