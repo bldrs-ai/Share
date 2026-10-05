@@ -387,7 +387,7 @@ order; BVH permutes only the index buffer, not the numbering).
    hide key on, so scene highlighting and `H` are unchanged. This is the same
    rule `glbPortable.js#hasSingleEmptyPathNode` applies to the export (#1908).
 
-   Two follow-ups from review, both on the same case:
+   Follow-ups from review, all on the same case:
 
    - **Cache hit, merged layout.** The pick needs the map to know an instance's
      path is *present and empty*. `attachOccurrencePaths` (the merged
@@ -413,6 +413,16 @@ order; BVH permutes only the index buffer, not the numbering).
      geometry stays ignored, as it was. The pick that wrote the URL is not
      re-selected from it (its anchor is already the root), which would widen
      the one-shell highlight.
+
+   - **Shift-pick.** A shift-double-click of a root-level shell used to do
+     nothing (its owner is no row, so `elementSelection` returned). Toggling
+     the product's row instead would drop the product on the second shell, as
+     every shell shares it. `toggleRootLevelInstanceSelection` toggles the
+     *instance*: it joins `selectedInstanceIds`, the root row stays an anchor
+     while any root-level instance is selected, and the last one out takes the
+     row and the root's owner ids with it. Other selected rows and their
+     instances are carried over. Assemblies, IFC and every placement below the
+     root keep the row toggle.
 
    Still open: with several top-level products Conway wraps them in a synthetic
    `Model` node and gives the wrapper and each root `occurrencePath: []`, so

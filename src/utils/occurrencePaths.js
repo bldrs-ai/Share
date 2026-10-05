@@ -412,6 +412,58 @@ export function resolveRootOnlyElementPath(rootNode, parts) {
 
 
 /**
+ * The selection after a shift-pick of one root-level STEP shell (#1909): the
+ * instance joins, or leaves if it is already in. Pure; `CadView` supplies the
+ * store's selection and the model's root-level instances.
+ *
+ * The unit toggled is the INSTANCE. Every such shell shares the product's row,
+ * so toggling the row (what a shift-click on any other row does) would drop the
+ * product on the second shell; and the shell's owner id (`ownerId`, the
+ * `product_definition_shape`) is no row, so it cannot be toggled at all. The
+ * root row is an anchor while any root-level instance is selected and leaves
+ * with the last, taking the root's owner ids with it. Everything else selected
+ * (other rows, their instances) is carried over untouched, and `elements` only
+ * gains owner ids otherwise, since the instance narrowing decides what is lit.
+ *
+ * @param {object} args
+ * @param {{elements: Array, anchors: Array, instances: Array}} args.selection
+ *   the current selection; ids as numbers or strings
+ * @param {number} args.rootId the tree root's express id (the product's row)
+ * @param {number} args.ownerId the picked shell's owner express id
+ * @param {number} args.instanceId the picked instance
+ * @param {Array<number>} args.rootInstanceIds every root-level instance
+ * @param {Array<number>} args.rootOwnerIds the express ids owning them
+ * @return {{elements: Array<number>, anchors: Array<number>, instances: Array<number>}}
+ */
+export function toggleRootLevelInstanceSelection({
+  selection, rootId, ownerId, instanceId, rootInstanceIds, rootOwnerIds,
+}) {
+  const numbers = (list) => (Array.isArray(list) ? list.map(Number) : [])
+  let elements = numbers(selection.elements)
+  let anchors = numbers(selection.anchors)
+  let instances = numbers(selection.instances)
+  if (instances.includes(instanceId)) {
+    instances = instances.filter((id) => id !== instanceId)
+    const rootLevel = new Set(rootInstanceIds)
+    if (!instances.some((id) => rootLevel.has(id))) {
+      const owners = new Set(rootOwnerIds.map(Number))
+      anchors = anchors.filter((id) => id !== rootId)
+      elements = elements.filter((id) => !owners.has(id))
+    }
+  } else {
+    instances = [...instances, instanceId]
+    if (!anchors.includes(rootId)) {
+      anchors = [...anchors, rootId]
+    }
+    if (!elements.includes(Number(ownerId))) {
+      elements = [...elements, Number(ownerId)]
+    }
+  }
+  return {elements, anchors, instances}
+}
+
+
+/**
  * Trim a geometry-side occurrence path to the deepest prefix the spatial tree
  * knows.
  *

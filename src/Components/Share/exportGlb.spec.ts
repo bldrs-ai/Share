@@ -19,11 +19,14 @@ import {
   openExportTab,
   openLocalFile,
   reopenLocalGlb,
+  selectedInstancesAndAnchors,
   routeProModule,
   selectCompression,
   selectQuality,
   setPortable,
   setSubscriptionTier,
+  shiftDoubleClickAnotherInstance,
+  shiftDoubleClickAt,
   smallestCodecIn,
   toggleGzip,
   toggleMetadata,
@@ -1147,6 +1150,38 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
 
     await reloadFromCache(page, glbLogs, {url: permalink})
     await expectRootSelectedFromPermalink(page)
+  })
+
+  test('shift-picking shells of a one-product part adds and drops each shell, not the product', async ({page}) => {
+    // #1909 (codex on #1910). A root-level shell's owner is the
+    // product_definition_shape, which is no tree row, so `elementSelection`
+    // found nothing for it and a shift-double-click did nothing at all. The
+    // row is the product's, shared by every shell: toggling the ROW would drop
+    // the product on the second shell. Each shift-pick toggles its own
+    // instance, and the product's row stays selected while any is.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await loadModelAndWaitForArtifact(page)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    await pickShellAndExpectProductRow(page)
+    const first = await selectedInstancesAndAnchors(page)
+    expect(first.instances).toHaveLength(1)
+
+    // A second shell joins. (Only the shells in front at a pixel can be hit,
+    // and on the mobile viewport that is two.)
+    const second = await shiftDoubleClickAnotherInstance(page, first.instances)
+    const both = await selectedInstancesAndAnchors(page)
+    expect(both.instances.sort()).toEqual([...first.instances, second.instanceId].sort())
+    expect(both.anchors).toEqual(first.anchors)
+    await expectProductRowSelected(page, SHELLS_PART_NAME)
+
+    // Shift-picking it again drops just it: not the product, and not both.
+    await shiftDoubleClickAt(page, second)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances).toEqual(first.instances)
+    await expectProductRowSelected(page, SHELLS_PART_NAME)
   })
 
   test('a file of several top-level parts never gives one part the shells of another', async ({page}) => {

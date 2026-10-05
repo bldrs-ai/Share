@@ -786,6 +786,138 @@ export async function doubleClickSelectsAMergedInstance(page: Page): Promise<num
 
 
 /**
+ * The scene instances the selection narrows to (`selectedInstanceIds`) and its
+ * anchor rows, read from the store: the highlight itself is a canvas effect.
+ *
+ * @param page Playwright page
+ * @return the instance ids and the anchor row ids, as strings
+ */
+export function selectedInstancesAndAnchors(page: Page): Promise<{instances: number[], anchors: string[]}> {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const state = ((window as any).store ?? (window as any).useStore).getState()
+    return {
+      instances: (state.selectedInstanceIds ?? []).map(Number),
+      anchors: (state.selectedAnchorIds ?? []).map(String),
+    }
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
+ * Shift-double-click the scene at a point, as a user adds to or drops from a
+ * multi-selection.
+ *
+ * @param page Playwright page
+ * @param point canvas-relative to the viewport, as a candidate carries
+ */
+export async function shiftDoubleClickAt(page: Page, point: {x: number, y: number}) {
+  await page.keyboard.down('Shift')
+  try {
+    await page.mouse.dblclick(point.x, point.y)
+  } finally {
+    await page.keyboard.up('Shift')
+  }
+}
+
+
+/**
+ * Shift-double-click a batched instance that is NOT yet selected and wait for
+ * it to join the selection (one more instance than before). Candidates are
+ * tried in turn because the instance in front at a pixel may be one already
+ * selected, which would toggle it off instead; those are skipped by id.
+ *
+ * @param page Playwright page
+ * @param selected the instance ids already selected
+ * @return the point clicked and the instance id that joined
+ */
+export async function shiftDoubleClickAnotherInstance(page: Page, selected: number[]):
+    Promise<{x: number, y: number, instanceId: number}> {
+  const candidates: Array<{instanceId: number; x: number; y: number}> = await page.evaluate((skip) => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = window as any
+    const state = (w.store ?? w.useStore).getState()
+    const camera = state.viewer.context.getCamera()
+    const rect = (document.querySelector('canvas') as HTMLCanvasElement).getBoundingClientRect()
+    const out: Array<{instanceId: number; x: number; y: number}> = []
+    const visit = (mesh: any) => {
+      if (!mesh?.isBatchedMesh || !mesh.instanceParents || !mesh.instanceOccurrenceIds) {
+        return
+      }
+      mesh.updateMatrixWorld(true)
+      mesh.computeBoundingBox()
+      const Box3 = mesh.boundingBox.constructor
+      const Matrix4 = mesh.matrixWorld.constructor
+      for (let batchId = 0; batchId < mesh.instanceParents.length; batchId++) {
+        const instanceId = mesh.instanceOccurrenceIds[batchId]
+        if (skip.includes(instanceId)) {
+          continue
+        }
+        const box = new Box3()
+        const matrix = new Matrix4()
+        mesh.getBoundingBoxAt(mesh.getGeometryIdAt(batchId), box)
+        mesh.getMatrixAt(batchId, matrix)
+        const centre = box.applyMatrix4(matrix.premultiply(mesh.matrixWorld))
+          .getCenter(mesh.boundingBox.min.clone()).project(camera)
+        const ON_SCREEN = 0.95
+        if (Math.abs(centre.x) < ON_SCREEN && Math.abs(centre.y) < ON_SCREEN) {
+          out.push({
+            instanceId,
+            x: rect.left + (((centre.x + 1) / 2) * rect.width),
+            y: rect.top + (((1 - centre.y) / 2) * rect.height),
+          })
+        }
+      }
+    }
+    if (state.model?.traverse) {
+      state.model.traverse(visit)
+    } else {
+      visit(state.model)
+    }
+    return out
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }, selected)
+  expect(candidates.length, 'there must be another instance on screen').toBeGreaterThan(0)
+
+  // Overlapping instances share a pixel, and the one in front takes the click:
+  // a second candidate there tells nothing new.
+  const seenPixels = new Set<string>()
+  const distinct = candidates.filter(({x, y}) => {
+    const key = `${Math.round(x)},${Math.round(y)}`
+    return !seenPixels.has(key) && seenPixels.add(key)
+  })
+  const MAX_TRIES = 12
+  const sameAsBefore = (now: number[]) =>
+    now.length === selected.length && selected.every((id) => now.includes(id))
+  for (const candidate of distinct.slice(0, MAX_TRIES)) {
+    await shiftDoubleClickAt(page, candidate)
+    // Settled when the selection has changed at all; the pick may have landed
+    // on a different (or an already selected) instance than the one aimed at.
+    const changed = await page.waitForFunction((before) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const w = window as any
+      const now = ((w.store ?? w.useStore).getState().selectedInstanceIds ?? []).map(Number)
+      return now.length !== before.length || before.some((id) => !now.includes(id))
+    }, selected, {timeout: 3000}).then(() => true, () => false)
+    if (!changed) {
+      continue
+    }
+    const now = (await selectedInstancesAndAnchors(page)).instances
+    const joined = now.filter((id) => !selected.includes(id))
+    if (now.length === selected.length + 1 && joined.length === 1) {
+      return {x: candidate.x, y: candidate.y, instanceId: joined[0]}
+    }
+    // It dropped one that was selected, or took more than one: put the
+    // selection back by toggling the same spot, then try the next.
+    await shiftDoubleClickAt(page, candidate)
+    await expect.poll(async () => sameAsBefore((await selectedInstancesAndAnchors(page)).instances)).toBe(true)
+  }
+  throw new Error('shift-double-click added none of the instances it was aimed at')
+}
+
+
+/**
  * The NavTree row for a named product is highlighted as the selection.
  *
  * `expectNavTreeFollowsSelection` only asks that SOME row is selected, which

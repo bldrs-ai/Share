@@ -10,6 +10,7 @@ import {
   resolvePickedOccurrenceNode,
   resolveRootOnlyElementPath,
   selectedOccurrences,
+  toggleRootLevelInstanceSelection,
   trimToTreeOccurrencePath,
 } from './occurrencePaths'
 
@@ -253,6 +254,49 @@ describe('utils/occurrencePaths', () => {
     it('is null without a tree', () => {
       expect(resolveRootOnlyElementPath(null, ['7'])).toBeNull()
       expect(resolveRootOnlyElementPath(undefined, ['7'])).toBeNull()
+    })
+  })
+
+  describe('toggleRootLevelInstanceSelection', () => {
+    // sameIdentityShells in miniature: root row 7, owner 8, shells 0..3.
+    const common = {rootId: 7, ownerId: 8, rootInstanceIds: [0, 1, 2, 3], rootOwnerIds: [8]}
+    const shift = (selection, instanceId) =>
+      toggleRootLevelInstanceSelection({...common, selection, instanceId})
+
+    it('adds a shell to a plain pick without dropping the product or the first shell (#1909)', () => {
+      const picked = {elements: ['8'], anchors: ['7'], instances: [0]}
+      expect(shift(picked, 1)).toEqual({elements: [8], anchors: [7], instances: [0, 1]})
+    })
+
+    it('a second and third shell each join: the shared row is not toggled off', () => {
+      let selection = {elements: [8], anchors: [7], instances: [0]}
+      selection = shift(selection, 1)
+      selection = shift(selection, 2)
+      expect(selection).toEqual({elements: [8], anchors: [7], instances: [0, 1, 2]})
+    })
+
+    it('drops just the clicked shell, keeping the row while any shell is selected', () => {
+      expect(shift({elements: [8], anchors: [7], instances: [0, 1, 2]}, 1))
+        .toEqual({elements: [8], anchors: [7], instances: [0, 2]})
+    })
+
+    it('drops the row and its owners with the last shell', () => {
+      expect(shift({elements: [8], anchors: [7], instances: [2]}, 2))
+        .toEqual({elements: [], anchors: [], instances: []})
+    })
+
+    it('starts a selection from nothing, anchored on the root', () => {
+      expect(shift({elements: [], anchors: [], instances: []}, 3))
+        .toEqual({elements: [8], anchors: [7], instances: [3]})
+      expect(shift({elements: undefined, anchors: null, instances: undefined}, 3))
+        .toEqual({elements: [8], anchors: [7], instances: [3]})
+    })
+
+    it('carries other selected rows and their instances through, in both directions', () => {
+      const withRow = {elements: [50], anchors: [50], instances: [9]}
+      const added = shift(withRow, 0)
+      expect(added).toEqual({elements: [50, 8], anchors: [50, 7], instances: [9, 0]})
+      expect(shift(added, 0)).toEqual({elements: [50], anchors: [50], instances: [9]})
     })
   })
 

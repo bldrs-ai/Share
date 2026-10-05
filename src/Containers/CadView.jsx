@@ -58,6 +58,7 @@ import {
   resolvePickedOccurrenceNode,
   resolveRootOnlyElementPath,
   selectedOccurrences,
+  toggleRootLevelInstanceSelection,
   trimToTreeOccurrencePath,
 } from '../utils/occurrencePaths'
 import {isOutOfMemoryError} from '../utils/oom'
@@ -1010,6 +1011,20 @@ export default function CadView({
       parentExpressId,
       instanceCountAtPath: (path) => occurrenceInstanceIds(path, false).length,
     })
+    // A root-level STEP placement (empty occurrence path) has no path to
+    // highlight a row by, and its owner id is the product_definition_shape
+    // where the row is the product_definition, so the NavTree matched nothing
+    // (#1909). In a one-product file the empty path names the root row
+    // exactly (`findSoleRootNode`), so hand that row to the funnel as the
+    // anchor: the row highlight, Properties, crumb and permalink follow
+    // anchors, while the scene keeps selecting by the owner id (hide, the
+    // per-instance narrowing). Several top-level products stay as they were.
+    // Resolved before the shift branch, which needs it too.
+    const rootRow = (isRootLevel && occurrencePath === null) ? findSoleRootNode(rootEltForPick) : null
+    if (isShiftKeyDown && rootRow) {
+      toggleRootLevelInstance(rootRow, targetId, instanceId)
+      return
+    }
     if (isShiftKeyDown) {
       // Multi-select: toggle the picked row's id, exactly as a shift-click on
       // that NavTree row does. `selectItemsInScene` resolves a STEP
@@ -1027,18 +1042,46 @@ export default function CadView({
     if (transientGeometryId !== null) {
       materializeTransientNode(occurrencePath, transientGeometryId)
     }
-    // A root-level STEP placement (empty occurrence path) has no path to
-    // highlight a row by, and its owner id is the product_definition_shape
-    // where the row is the product_definition, so the NavTree matched nothing
-    // (#1909). In a one-product file the empty path names the root row
-    // exactly (`findSoleRootNode`), so hand that row to the funnel as the
-    // anchor: the row highlight, Properties, crumb and permalink follow
-    // anchors, while the scene keeps selecting by the owner id (hide, the
-    // per-instance narrowing). Several top-level products stay as they were.
-    const rootRow = (isRootLevel && occurrencePath === null) ? findSoleRootNode(rootEltForPick) : null
     selectItemsInScene(
       [targetId], true, [instanceId], occurrencePath, solidExpressId,
       rootRow ? [rootRow.expressID] : null)
+  }
+
+
+  /**
+   * Shift-pick of a root-level STEP shell in a one-product file (#1909): add
+   * the clicked instance to the scene selection, or drop it if it is already
+   * in. The toggled unit is the INSTANCE. The row every such shell shares is
+   * the product's, so toggling it (what `elementSelection` does for any other
+   * row) would drop the product on the second shell, and the shell's owner id
+   * is no row at all, so the pick did nothing.
+   *
+   * The root row stays an anchor while any root-level instance is selected, and
+   * leaves with the last. Other rows already selected keep their anchors and
+   * instances; `selectedElements` only ever gains the owner ids, since the
+   * instance narrowing, not the owners, decides what is lit.
+   *
+   * @param {object} rootRow the tree's root element (the product's row)
+   * @param {number} ownerId the shell's owner (`product_definition_shape`)
+   * @param {number} instanceId the clicked instance
+   */
+  function toggleRootLevelInstance(rootRow, ownerId, instanceId) {
+    const state = useStore.getState()
+    const rootLevel = typeof viewer.getRootLevelInstances === 'function' ?
+      viewer.getRootLevelInstances(0) : {instanceIds: [], parentExpressIds: []}
+    const next = toggleRootLevelInstanceSelection({
+      selection: {
+        elements: state.selectedElements,
+        anchors: state.selectedAnchorIds,
+        instances: state.selectedInstanceIds,
+      },
+      rootId: rootRow.expressID,
+      ownerId,
+      instanceId,
+      rootInstanceIds: rootLevel.instanceIds,
+      rootOwnerIds: rootLevel.parentExpressIds,
+    })
+    selectItemsInScene(next.elements, false, next.instances, null, null, next.anchors)
   }
 
 
