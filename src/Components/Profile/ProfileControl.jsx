@@ -10,6 +10,7 @@ import {useTheme} from '@mui/material/styles'
 import {captureException} from '@sentry/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {getRenderMode, setRenderMode as saveRenderMode} from '../../privacy/preferences'
+import {trackSubscriptionFromToken} from '../../privacy/subscriptionTracking'
 import useStore from '../../store/useStore'
 import {Themes} from '../../theme/Theme'
 import {assertDefinedBoolean} from '../../utils/assert'
@@ -94,6 +95,22 @@ export default function ProfileControl() {
           .then((token) => {
             localStorage.removeItem('refreshAuth')
             setAccessToken(token)
+            // Every popup sign-in ends here — the reauth modal's included
+            // (BaseRoutes opens /popup-auth; PopupCallback sets refreshAuth).
+            // This token counts as FRESH for the subscription tracker even
+            // though it's read with cacheMode:'on': the popup shares the
+            // SDK's localstorage cache and, with the provider's default
+            // audience + this same scope, has just written its newly minted
+            // token under this exact cache key, so the claims are
+            // app_metadata as of the sign-in. That matters after a reauth:
+            // the now-settled status clears the tracker's marker, so a later
+            // lapse + resubscribe this browser never saw still counts.
+            // BaseRoutes' own fresh pass ran once at boot, before the reauth,
+            // and won't run again until a full page load.
+            // Like the popup `login` edge (useLoginTracking.js), this only
+            // happens where ProfileControl is mounted to hear the storage
+            // event; elsewhere the reset waits for the next full page load.
+            trackSubscriptionFromToken(token, {isFresh: true})
           })
           .catch((error) => {
             console.error('Error refreshing token:', error)

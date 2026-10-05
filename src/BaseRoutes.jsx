@@ -18,7 +18,7 @@ import Privacy from './pages/Privacy'
 import TOS from './pages/TOS'
 import BlogRoutes from './pages/blog/BlogRoutes'
 import {initializeOctoKitAuthenticated, initializeOctoKitUnauthenticated} from './net/github/OctokitExport'
-import {trackSubscriptionStatus} from './privacy/subscriptionTracking'
+import {trackSubscriptionFromToken} from './privacy/subscriptionTracking'
 import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
@@ -84,7 +84,11 @@ export default function BaseRoutes({testElt = null}) {
    * tracker reads it: a settled status on a fresh token resets its
    * per-user marker, one on a possibly-stale cached token must not
    * (subscriptionTracking.js). The cached pass passes it through `.then`
-   * as a single arg, so it defaults to false there.
+   * as a single arg, so it defaults to false there. The fresh pass runs once
+   * per page load, so it has usually already seen the pending status by the
+   * time the user completes the reauth modal's popup; the settled token that
+   * popup mints is reported fresh by ProfileControl's `refreshAuth` handler,
+   * which never comes through here.
    */
   const processAccessToken = useCallback((token, {isFresh = false} = {}) => {
     if (token === '') {
@@ -102,7 +106,7 @@ export default function BaseRoutes({testElt = null}) {
     // dedupes per user + status across passes, reloads and tabs.
     // Fire-and-forget: the cross-tab claim resolves asynchronously and
     // nothing below depends on it.
-    trackSubscriptionStatus(decodedToken.sub, appData?.subscriptionStatus, {isFresh})
+    trackSubscriptionFromToken(token, {isFresh})
 
     // Reauth-modal short circuits: show the modal and stop — leave
     // identity/token state as it was.

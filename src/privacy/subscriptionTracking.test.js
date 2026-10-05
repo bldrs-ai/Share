@@ -1,5 +1,9 @@
 import {installGatedFakeLocks, installRejectingLocks, uninstallFakeLocks} from './crossTabLock.fixture'
-import {_resetSubscriptionTrackingForTests, trackSubscriptionStatus} from './subscriptionTracking'
+import {
+  _resetSubscriptionTrackingForTests,
+  trackSubscriptionFromToken,
+  trackSubscriptionStatus,
+} from './subscriptionTracking'
 
 
 const MARKER_KEY = 'bldrs.ga.reportedSubscriptionStatus:u'
@@ -137,6 +141,41 @@ describe('trackSubscriptionStatus', () => {
       newPage()
       expect(await trackSubscriptionStatus('u', 'shareProPendingReauth')).toBe(false)
       expect(sentEvents()).toEqual(['subscription_started'])
+    })
+  })
+
+  describe('trackSubscriptionFromToken', () => {
+    /**
+     * An unsigned JWT the way Auth0 shapes it; jwtDecode reads, never verifies.
+     *
+     * @param {object} payload
+     * @return {string}
+     */
+    function jwt(payload) {
+      const base64url = (obj) => Buffer.from(JSON.stringify(obj), 'utf8').toString('base64url')
+      return `${base64url({alg: 'RS256', typ: 'JWT'})}.${base64url(payload)}.signature`
+    }
+
+    const tokenWith = (subscriptionStatus) =>
+      jwt({'sub': 'u', 'https://bldrs.ai/app_metadata': {subscriptionStatus}})
+
+    it('reads sub and the app_metadata claim\'s status from the token', async () => {
+      expect(await trackSubscriptionFromToken(tokenWith('shareProPendingReauth'))).toBe(true)
+      expect(localStorage.getItem(MARKER_KEY)).toBe('shareProPendingReauth')
+      expect(sentEvents()).toEqual(['subscription_started'])
+    })
+
+    it('passes isFresh through, so a fresh settled token clears the marker', async () => {
+      await trackSubscriptionFromToken(tokenWith('shareProPendingReauth'))
+      await trackSubscriptionFromToken(tokenWith('sharePro'))
+      expect(localStorage.getItem(MARKER_KEY)).toBe('shareProPendingReauth')
+      await trackSubscriptionFromToken(tokenWith('sharePro'), {isFresh: true})
+      expect(localStorage.getItem(MARKER_KEY)).toBeNull()
+    })
+
+    it('reports nothing for a token that isn\'t a JWT, rather than throwing', async () => {
+      expect(await trackSubscriptionFromToken('opaque-token', {isFresh: true})).toBe(false)
+      expect(window.gtag).not.toHaveBeenCalled()
     })
   })
 })

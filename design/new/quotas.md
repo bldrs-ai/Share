@@ -233,13 +233,22 @@ The parts that aren't obvious:
   - **The marker resets on a settled status from a fresh token.** The same
     pending status can be a new transition too: subscribe, reauth, lapse,
     resubscribe, where this browser never saw the lapse's
-    `freePendingReauth`. So when the fresh-claims pass (`cacheMode: 'off'`)
-    carries a settled status (`sharePro`, or any free status, unset
-    included), the marker is cleared and the next pending status counts.
+    `freePendingReauth`. So when a *fresh* token carries a settled status
+    (`sharePro`, or any free status, unset included), the marker is cleared
+    and the next pending status counts. Two tokens count as fresh. One is
+    BaseRoutes' fresh-claims pass (`cacheMode: 'off'`). The other is the
+    token `ProfileControl` reads when it hears `refreshAuth` after a popup
+    sign-in, which is how the reauth modal completes. That read uses
+    `cacheMode: 'on'`, but the popup has just written its newly minted token
+    to the shared localstorage cache under the same key, so its claims are
+    current. The fresh-claims pass alone isn't enough: it runs once per page
+    load, at boot, so it sees the pending status and not the reauth that
+    settles it. SPA navigations after that only use the cache.
     Settled statuses on the *cached* token are ignored. Every boot runs the
     cached pass first, and a stale cached token can still say free after
     the fresh one has gone pending, so clearing on it would count again on
-    every boot.
+    every boot. Both callers decode the token through
+    `trackSubscriptionFromToken`, so they read the same claim.
   - **Cross-tab claims are locked.** Two tabs processing the same pending
     token could both read the old marker before either writes. The
     read-compare-write-emit runs under a Web Lock named for the marker key,
@@ -248,7 +257,10 @@ The parts that aren't obvious:
     Locks API the claim runs unlocked and the race remains.
   - **Gaps.** If the user never completes the reauth between two
     transitions, nothing clears the marker, so a repeat of the same pending
-    status is still missed. The marker is also per-browser, so seeing the
+    status is still missed. The post-popup reset also needs `ProfileControl`
+    mounted to hear `refreshAuth`, as the popup `login` edge does
+    (`useLoginTracking.js`). Where it isn't mounted, the reset waits for the
+    next full page load. The marker is also per-browser, so seeing the
     pending state on two devices counts twice.
 
 GA4-admin follow-ups (Admin → Custom definitions / Key events). None of this

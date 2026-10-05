@@ -1,3 +1,5 @@
+import {jwtDecode} from 'jwt-decode'
+import {APP_METADATA_CLAIM} from '../Auth0/appMetadata'
 import {FUNNEL_EVENTS, gtagFunnelEvent} from './analytics'
 import {withCrossTabLock} from './crossTabLock'
 
@@ -44,15 +46,19 @@ const reportedThisPage = new Map()
  * never saw the freePendingReauth in between. So a settled status (sharePro,
  * or any free status, unset included: the server counts everything but the
  * two PRO values as FREE) clears the marker — but only when it comes from a
- * FRESH token (`isFresh`: BaseRoutes' cacheMode:'off' pass, whose claims
- * reflect app_metadata as of now). Settled statuses on the cached token are
+ * FRESH token (`isFresh`: one whose claims reflect app_metadata as of now —
+ * BaseRoutes' cacheMode:'off' pass, and the token ProfileControl reads right
+ * after a popup sign-in, which the popup has just minted; see
+ * trackSubscriptionFromToken). Settled statuses on the cached token are
  * ignored: a stale cached token can still carry one after the fresh token
  * has gone pending, and clearing on it would double-count on every boot,
  * since every boot runs the cached pass before the fresh one lands.
  *
  * What the fresh-only reset buys: a lapse + resubscribe this browser never
  * observed is counted, provided the user completed the reauth in between
- * (and this browser then loaded a fresh token showing it settled). Residual
+ * (and this browser then saw a fresh token showing it settled — the popup
+ * that completes the reauth yields one, as does any later full page load).
+ * Residual
  * gap: if the user never completes the reauth between two transitions, the
  * marker is never cleared and a repeat of the same pending status is still
  * suppressed. And the marker is per browser, so a user who sees the pending
@@ -67,8 +73,9 @@ const reportedThisPage = new Map()
  * @param {?string} userId Auth0 `sub` of the token's user
  * @param {?string} status app_metadata.subscriptionStatus
  * @param {object} [opts]
- * @param {boolean} [opts.isFresh] the token came from the fresh-claims pass
- *   (cacheMode:'off'), not the SDK cache
+ * @param {boolean} [opts.isFresh] the token's claims are current (the
+ *   fresh-claims pass, or a just-completed popup sign-in), not possibly-stale
+ *   SDK cache
  * @return {Promise<boolean>} true when an event was sent
  */
 export function trackSubscriptionStatus(userId, status, {isFresh = false} = {}) {
@@ -96,6 +103,33 @@ export function trackSubscriptionStatus(userId, status, {isFresh = false} = {}) 
     gtagFunnelEvent(eventName)
     return true
   })
+}
+
+
+/**
+ * trackSubscriptionStatus for an Auth0 access token: reads the user (`sub`)
+ * and app_metadata.subscriptionStatus (APP_METADATA_CLAIM, the same claim
+ * BaseRoutes reads) from the JWT. Shared by the two callers that hold a raw
+ * token — BaseRoutes#processAccessToken and ProfileControl's post-popup
+ * refresh — so they can't drift on which claim they read.
+ *
+ * A token that doesn't decode (the mock provider's, an opaque token from a
+ * misconfigured audience) reports nothing: funnel analytics must never
+ * break the auth path that called it.
+ *
+ * @param {string} token Auth0 access token
+ * @param {object} [opts]
+ * @param {boolean} [opts.isFresh] see trackSubscriptionStatus
+ * @return {Promise<boolean>} true when an event was sent
+ */
+export function trackSubscriptionFromToken(token, {isFresh = false} = {}) {
+  let claims
+  try {
+    claims = jwtDecode(token)
+  } catch {
+    return Promise.resolve(false)
+  }
+  return trackSubscriptionStatus(claims?.sub, claims?.[APP_METADATA_CLAIM]?.subscriptionStatus, {isFresh})
 }
 
 
