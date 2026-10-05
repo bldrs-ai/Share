@@ -26,7 +26,8 @@
  *      A PRO user with no `stripeCustomerId` is never demoted: that is how a
  *      manual (comped) grant looks, and revoking it silently would be worse
  *      than reporting it. One an admin has marked `"comped": true` in
- *      app_metadata is listed under `comped` and raises no Sentry warning;
+ *      app_metadata, with `sharePro`, is listed under `comped` and raises no
+ *      Sentry warning;
  *      an unmarked one is `unverifiable` and does, so an unexpected grant —
  *      or a bug that writes PRO without a link — still reaches someone.
  *   2. PROMOTE: Stripe customers with an entitling Share Pro subscription
@@ -304,8 +305,11 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
         if (!linked) {
           if (isProInAuth0(stored.subscriptionStatus)) {
             // Strictly `true`: the marker is set by hand in the Auth0
-            // dashboard, and a typo like "yes" should stay loud.
-            if (stored.comped === true) {
+            // dashboard, and a typo like "yes" should stay loud. And only
+            // with `sharePro`: pro-module and record-load grant paid access
+            // for nothing else, so a comp left at `shareProPendingReauth` is
+            // not a working comp yet and stays loud (Codex on #1911).
+            if (stored.comped === true && stored.subscriptionStatus === 'sharePro') {
               summary.comped.push(userId)
             } else {
               summary.unverifiable.push({user: userId, reason: 'pro_without_stripe_customer'})

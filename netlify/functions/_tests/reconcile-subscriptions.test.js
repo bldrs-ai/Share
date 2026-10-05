@@ -500,12 +500,15 @@ describe('reconcile-subscriptions', () => {
 
     // Unmarked, the same state may be a grant nobody meant or a bug that wrote
     // PRO without a link, so it stays loud. The marker must be exactly `true`.
+    // A comp still at shareProPendingReauth has no paid access yet (only
+    // `sharePro` gets it), so it isn't a settled comp either (Codex on #1911).
     it.each([
-      ['no marker', undefined],
-      ['the string "true"', 'true'],
-      ['false', false],
-    ])('keeps a Pro user without a Stripe customer loud when the comped marker is %s', async (label, comped) => {
-      mockWorld({proUsers: [{user_id: 'auth0|nolink', app_metadata: {subscriptionStatus: 'sharePro', comped}}]})
+      ['no marker', undefined, 'sharePro'],
+      ['the string "true"', 'true', 'sharePro'],
+      ['false', false, 'sharePro'],
+      ['true, but the status is shareProPendingReauth', true, 'shareProPendingReauth'],
+    ])('keeps a Pro user without a Stripe customer loud when the comped marker is %s', async (label, comped, subscriptionStatus) => {
+      mockWorld({proUsers: [{user_id: 'auth0|nolink', app_metadata: {subscriptionStatus, comped}}]})
 
       const {summary} = await sweep()
 
