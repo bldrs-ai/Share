@@ -1,6 +1,7 @@
 import {ShareViewer} from '../ShareViewer'
 import {unsortedArraysAreEqual, arrayRemove} from '../../utils/arrays'
 import {clearBatchedSelection} from '../ifc/batchedHighlight'
+import {forEachActiveInstance, instanceIdSpan, isActive} from '../ifc/batchedInstanceTables'
 import {eachBatch, isBatchedModel} from '../ifc/batchedModel'
 import {
   applySceneGraphVisibility,
@@ -15,6 +16,37 @@ import {BlendFunction} from 'postprocessing'
 import {isDefinedAndNotNull} from '../../utils/assert'
 import ThreeContext from './ThreeContext'
 
+
+/**
+ * Extend a batch's isolation mask to cover every id the batch now has.
+ *
+ * The mask is a pair of typed arrays indexed by batch id, so it has a
+ * length, and after create-300 an edit can issue ids past it (three appends
+ * a pasted instance when no id is free, BatchedMesh.js:580-591). New entries
+ * start as the instance currently is (`base`: live and visible → 1) and
+ * allowed (`allow` → 1) until the isolator's next pass rules on them; a
+ * deleted id gets 0/1 and is never read, because every reader goes through
+ * `forEachActiveInstance`.
+ *
+ * @param {object} mesh a decorated BatchedMesh
+ * @param {object} mask its `userData.isolationMask`
+ */
+function growBatchedMask(mesh, mask) {
+  const span = instanceIdSpan(mesh)
+  const from = mask.base.length
+  if (span <= from) {
+    return
+  }
+  const base = new Uint8Array(span)
+  base.set(mask.base)
+  const allow = new Uint8Array(span).fill(1)
+  allow.set(mask.allow)
+  for (let batchId = from; batchId < span; batchId++) {
+    base[batchId] = isActive(mesh, batchId) && mesh.getVisibleAt(batchId) ? 1 : 0
+  }
+  mask.base = base
+  mask.allow = allow
+}
 
 /**
  * Provides hiding, unhiding, isolation, and unisolation functionalities.
@@ -183,9 +215,10 @@ export default class IfcIsolator {
       ifcModel.traverse((obj) => {
         if (obj.isBatchedMesh && obj.instanceParents) {
           foundBatched = true
-          for (const id of obj.instanceParents) {
-            ids.add(id)
-          }
+          const parents = obj.instanceParents
+          forEachActiveInstance(obj, (batchId) => {
+            ids.add(parents[batchId])
+          })
         }
       })
     }
@@ -594,7 +627,9 @@ export default class IfcIsolator {
       const mask = this._ensureBatchedMask(mesh)
       const parents = mesh.instanceParents
       const occurrenceIds = mesh.instanceOccurrenceIds
-      for (let batchId = 0; batchId < parents.length; batchId++) {
+      // Live instances only: three's `setVisibleAt` throws on a deleted one
+      // (BatchedMesh.js:1162-1164; batchedInstanceTables).
+      forEachActiveInstance(mesh, (batchId) => {
         const parent = parents[batchId]
         const isolated = !isolating || (isolatedInstances ?
           Boolean(occurrenceIds && isolatedInstances.has(occurrenceIds[batchId])) :
@@ -607,7 +642,7 @@ export default class IfcIsolator {
         // Bypass the wrapper: this is the isolator's own write, and it must not
         // be mistaken for residency intent (which would overwrite `base`).
         mask.nativeSetVisibleAt.call(mesh, batchId, allowed && mask.base[batchId] === 1)
-      }
+      })
       // three's own `setVisibleAt` sets this; poke it too since we went around
       // it, so `BatchedMesh.onBeforeRender` rebuilds its multi-draw ranges and
       // the change repaints on the next frame (cf. shadingMode.js).
@@ -633,24 +668,27 @@ export default class IfcIsolator {
   _ensureBatchedMask(mesh) {
     const existing = mesh.userData.isolationMask
     if (existing) {
+      growBatchedMask(mesh, existing)
       return existing
-    }
-    const count = mesh.instanceParents.length
-    const base = new Uint8Array(count)
-    for (let batchId = 0; batchId < count; batchId++) {
-      base[batchId] = mesh.getVisibleAt(batchId) ? 1 : 0
     }
     const nativeSetVisibleAt = mesh.setVisibleAt
     const mask = {
-      base,
-      allow: new Uint8Array(count).fill(1),
+      base: new Uint8Array(0),
+      allow: new Uint8Array(0),
       nativeSetVisibleAt,
       // Normally the prototype method; remembered so release restores the mesh
       // to the exact shape it had rather than leaving a stray own property.
       hadOwnSetVisibleAt: Object.prototype.hasOwnProperty.call(mesh, 'setVisibleAt'),
     }
+    growBatchedMask(mesh, mask)
     mesh.userData.isolationMask = mask
     mesh.setVisibleAt = function maskedSetVisibleAt(batchId, visible) {
+      // An instance added after the mask was taken (create-300 paste) is
+      // past its end: extend it first, or the write to `base` would be
+      // dropped by the typed array and `allow` would read as "hidden".
+      if (batchId >= mask.base.length) {
+        growBatchedMask(this, mask)
+      }
       mask.base[batchId] = visible ? 1 : 0
       return nativeSetVisibleAt.call(this, batchId, visible && mask.allow[batchId] === 1)
     }
@@ -676,9 +714,11 @@ export default class IfcIsolator {
     } else {
       delete mesh.setVisibleAt
     }
-    for (let batchId = 0; batchId < mask.base.length; batchId++) {
-      mask.nativeSetVisibleAt.call(mesh, batchId, mask.base[batchId] === 1)
-    }
+    forEachActiveInstance(mesh, (batchId) => {
+      if (batchId < mask.base.length) {
+        mask.nativeSetVisibleAt.call(mesh, batchId, mask.base[batchId] === 1)
+      }
+    })
     mesh._visibilityChanged = true
   }
 

@@ -1,5 +1,6 @@
 import {Group} from 'three'
 import {isFeatureEnabled} from '../../FeatureFlags'
+import {buildOccurrencePathIndex} from './batchedInstanceTables'
 import {attachBatchedSubsets} from './batchedSubset'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 import {
@@ -7,7 +8,6 @@ import {
   makeConwayDirectIfcManager,
 } from './conwayDirectIfcLoader'
 import {applyProductPalette} from './productPalette'
-import {occurrencePathKey} from '../../utils/occurrencePaths'
 
 
 /**
@@ -57,38 +57,6 @@ export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opt
   const {batches, stats} =
     flatMeshToBatchedModel(capturedFlatMeshes, ifcAPI, modelID, {coordination: opts.coordination})
   return {model: assembleBatchedModel(batches, ifcAPI, modelID, opts), stats}
-}
-
-
-/**
- * Reverse index for the batched NavTree→scene join: occurrence-path key
- * (`occurrencePathKey`) → the batchIds placed at that exact path. Only
- * non-empty paths are indexed (an empty root path can't disambiguate
- * occurrences) — the same rule `instanceMapFromOrderedPlacedRanges` applies
- * on the merged path. Null in → null out (IFC / no occurrence data).
- *
- * @param {Array<Array<number>|null>|null} instanceOccurrencePaths
- * @return {Map<string, Array<number>>|null}
- */
-function buildOccurrencePathIndex(instanceOccurrencePaths) {
-  if (!instanceOccurrencePaths) {
-    return null
-  }
-  const byPath = new Map()
-  for (let batchId = 0; batchId < instanceOccurrencePaths.length; batchId++) {
-    const path = instanceOccurrencePaths[batchId]
-    if (!path || path.length === 0) {
-      continue
-    }
-    const key = occurrencePathKey(path)
-    const list = byPath.get(key)
-    if (list) {
-      list.push(batchId)
-    } else {
-      byPath.set(key, [batchId])
-    }
-  }
-  return byPath
 }
 
 
@@ -157,8 +125,7 @@ export function decorateBatchMeshes(batches) {
     // working — consumers treat a missing table as "no occurrence data".
     batch.mesh.instanceGeometryIds = batch.instanceGeometryIds ?? null
     batch.mesh.instanceOccurrencePaths = batch.instanceOccurrencePaths ?? null
-    batch.mesh.occurrencePathToBatchIds =
-      buildOccurrencePathIndex(batch.mesh.instanceOccurrencePaths)
+    batch.mesh.occurrencePathToBatchIds = buildOccurrencePathIndex(batch.mesh)
     batch.mesh.computeBoundingBox?.()
     batch.mesh.computeBoundingSphere?.()
     // Per-geometry BVH for the batch. `ShareIfc` patches

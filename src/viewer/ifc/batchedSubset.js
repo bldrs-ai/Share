@@ -7,6 +7,7 @@ import {
   Vector3,
 } from 'three'
 import {hasBatchedGeometry, makeInstanceGeometryReader} from './batchedInstanceGeometry'
+import {forEachActiveInstance} from './batchedInstanceTables'
 import {eachBatch} from './batchedModel'
 
 
@@ -94,23 +95,25 @@ export function buildBatchedSubsetMesh(mesh, idSet, opts = {}) {
   const selected = []
   let vertexTotal = 0
   let indexTotal = 0
-  for (let batchId = 0; batchId < parents.length; batchId++) {
+  // Live instances only: a deleted one's cleared row must not match an id,
+  // and three throws on its matrix (batchedInstanceTables).
+  forEachActiveInstance(mesh, (batchId) => {
     if (!idSet.has(parents[batchId])) {
-      continue
+      return
     }
     if (exclude !== null && exclude.has(occurrenceIds[batchId])) {
-      continue
+      return
     }
     const geom = geometryAt(mesh, batchId)
     const pos = geom?.attributes?.position
     const idx = geom?.index
     if (!pos || !idx) {
-      continue
+      return
     }
     selected.push(batchId)
     vertexTotal += pos.count
     indexTotal += idx.count
-  }
+  })
   if (vertexTotal === 0 || indexTotal === 0) {
     return null
   }

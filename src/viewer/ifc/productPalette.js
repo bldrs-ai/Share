@@ -1,4 +1,5 @@
 import {Vector4} from 'three'
+import {forEachActiveInstance} from './batchedInstanceTables'
 import {DEFAULT_COLOR} from './flatMeshToBatchedModel'
 
 
@@ -163,11 +164,17 @@ export function computePartPalette(units) {
       // presence means we can't prove the model is colorless. Bail.
       return null
     }
-    for (let i = 0; i < colors.length; i++) {
+    let colored = false
+    forEachUnitInstance(unit, (i) => {
       if (!isDefaultColor(colors[i])) {
-        return null
+        colored = true
+        return false
       }
       keys.push(partKey(unit, i))
+      return true
+    })
+    if (colored) {
+      return null
     }
   }
 
@@ -191,6 +198,29 @@ export function paletteUnit(source, colors = source.instanceColors) {
     colors,
     geometryIds: source.instanceGeometryIds,
     parents: source.instanceParents,
+    // Lets the classification skip deleted instances, whose rows are empty
+    // (batchedInstanceTables `clearRow`).
+    holder: source,
+  }
+}
+
+
+/**
+ * Visit each instance a palette unit describes: the live ones when the unit
+ * came from a batch or mesh, every row of a bare `{colors, ...}` unit.
+ *
+ * @param {object} unit {@link paletteUnit} shape
+ * @param {function(number): (boolean|void)} fn return `false` to stop
+ */
+function forEachUnitInstance(unit, fn) {
+  if (unit.holder) {
+    forEachActiveInstance(unit.holder, fn)
+    return
+  }
+  for (let i = 0; i < unit.colors.length; i++) {
+    if (fn(i) === false) {
+      return
+    }
   }
 }
 
@@ -209,12 +239,12 @@ export function writePaletteColors(target, palette, alphaFrom) {
     return
   }
   const unit = paletteUnit(target, alphaFrom)
-  for (let i = 0; i < alphaFrom.length; i++) {
+  forEachUnitInstance(unit, (i) => {
     const rgb = palette.get(partKey(unit, i))
     const alpha = alphaFrom[i].w
     target.instanceColors[i] = {x: rgb.x, y: rgb.y, z: rgb.z, w: alpha}
     mesh.setColorAt(i, _rgba.set(rgb.x, rgb.y, rgb.z, alpha))
-  }
+  })
 }
 
 

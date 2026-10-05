@@ -1,5 +1,11 @@
 import {BatchedMesh, Box3, DoubleSide, Group, Matrix4, Vector4} from 'three'
 import debug, {WARN} from '../../utils/debug'
+import {
+  allocateInstanceTables,
+  ensureInstanceCapacity,
+  exactInstanceTables,
+  writeRow,
+} from './batchedInstanceTables'
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
 import {
@@ -378,15 +384,19 @@ export class IncrementalBatchedBuilder {
       if (state === null || state.cursor === 0) {
         continue
       }
-      state.mesh.instanceParents = Uint32Array.from(state.instanceParents)
-      state.mesh.instanceOccurrenceIds = Uint32Array.from(state.instanceOccurrenceIds)
-      state.mesh.instanceGeometryIds = Uint32Array.from(state.instanceGeometryIds)
+      // The tables were grown ahead of the cursor (see appendPlacement_);
+      // hand the model exact-length copies, the shape the one-shot builder
+      // produces.
+      const tables = exactInstanceTables(state, state.cursor)
+      state.mesh.instanceParents = tables.instanceParents
+      state.mesh.instanceOccurrenceIds = tables.instanceOccurrenceIds
+      state.mesh.instanceGeometryIds = tables.instanceGeometryIds
       // Null (not an all-null array) for IFC — matches the one-shot
       // builder so consumers can cheaply skip occurrence lookups.
       state.mesh.instanceOccurrencePaths =
-        state.instanceOccurrencePaths.some((p) => p !== null) ?
-          state.instanceOccurrencePaths.slice() : null
-      state.mesh.instanceColors = state.instanceColors.slice()
+        tables.instanceOccurrencePaths.some((p) => p !== null) ?
+          tables.instanceOccurrencePaths : null
+      state.mesh.instanceColors = tables.instanceColors
       // The mesh has stopped growing, so its exact requirement is finally
       // known: release the reserved space nothing used (Share#1809).
       this.trimCapacity_(state)
@@ -537,6 +547,12 @@ export class IncrementalBatchedBuilder {
     const isTransparent = color.w < OPAQUE_ALPHA
     const state = this.ensureBatch_(isTransparent)
     this.ensureCapacity_(state, entry)
+    // Room in the pick tables for the row `addInstance` is about to issue
+    // (ids run densely from 0 here: nothing deletes during a load, so the id
+    // IS the cursor). Grown with the mesh rather than after it, for the same
+    // reason ensureCapacity_ runs first: the only allocations that can throw
+    // happen before anything is committed.
+    ensureInstanceCapacity(state, state.cursor + 1)
     this.seenPlacements.commit(placementToken)
 
     let geometryId = entry.idByBatch.get(state)
@@ -570,13 +586,15 @@ export class IncrementalBatchedBuilder {
     }
     state.mesh.setMatrixAt(batchId, matrix)
     state.mesh.setColorAt(batchId, this.scratchRgba.set(color.x, color.y, color.z, color.w))
-    state.instanceParents.push(parentExpressId)
-    state.instanceOccurrenceIds.push(this.occurrenceId)
-    // Per-occurrence identity (STEP): NAUO path + solid geometry id, so
-    // the batched consumers can narrow selection / hide to one occurrence.
-    state.instanceGeometryIds.push(geomExpressID)
-    state.instanceOccurrencePaths.push(occurrencePath)
-    state.instanceColors.push(color)
+    writeRow(state, batchId, {
+      parent: parentExpressId,
+      occurrenceId: this.occurrenceId,
+      // Per-occurrence identity (STEP): NAUO path + solid geometry id, so
+      // the batched consumers can narrow selection / hide to one occurrence.
+      geometryId: geomExpressID,
+      occurrencePath,
+      color,
+    })
     state.cursor++
     this.occurrenceId++
     this.totals.placements++
@@ -744,11 +762,9 @@ export class IncrementalBatchedBuilder {
       // lands a third of the way through sp-946MB, and charging it for
       // that whole prefix would over-reserve it by ~1.4x.
       startDone: this.pumpDone,
-      instanceParents: [],
-      instanceOccurrenceIds: [],
-      instanceGeometryIds: [],
-      instanceOccurrencePaths: [],
-      instanceColors: [],
+      // The pick tables, owned by batchedInstanceTables: allocated at the
+      // initial instance capacity, grown with the mesh, trimmed in finalize.
+      ...allocateInstanceTables(this.initialInstances),
     }
     this[key] = state
     this.root.add(mesh)

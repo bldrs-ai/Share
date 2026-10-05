@@ -6,6 +6,7 @@ import {
   Matrix4,
   Vector4,
 } from 'three'
+import {allocateInstanceTables, writeRow} from './batchedInstanceTables'
 import {conwayDirectWarn} from './conwayDirectLog'
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
@@ -679,12 +680,8 @@ function buildBatch(groups, transparent, coordOffset) {
   // moves (visible speckle/shimmer at soffits, rakes, ridges). The
   // transparent batch must still sort for blend correctness.
   mesh.sortObjects = transparent
-  const instanceParents = new Uint32Array(instanceCount)
-  const instanceOccurrenceIds = new Uint32Array(instanceCount)
-  const instanceGeometryIds = new Uint32Array(instanceCount)
-  const instanceOccurrencePaths = new Array(instanceCount)
+  const tables = allocateInstanceTables(instanceCount)
   let hasOccurrencePaths = false
-  const instanceColors = new Array(instanceCount)
   const matrix = new Matrix4()
   const rgba = new Vector4()
 
@@ -704,23 +701,24 @@ function buildBatch(groups, transparent, coordOffset) {
       // Vector4 carries alpha into the batch's RGBA colours texture.
       mesh.setColorAt(batchId, rgba.set(
         placement.color.x, placement.color.y, placement.color.z, placement.color.w))
-      instanceParents[batchId] = placement.parentExpressId
-      instanceOccurrenceIds[batchId] = placement.occurrenceId
-      instanceGeometryIds[batchId] = placement.geometryExpressId
-      instanceOccurrencePaths[batchId] = placement.occurrencePath
+      writeRow(tables, batchId, {
+        parent: placement.parentExpressId,
+        occurrenceId: placement.occurrenceId,
+        geometryId: placement.geometryExpressId,
+        occurrencePath: placement.occurrencePath,
+        color: placement.color,
+      })
       if (placement.occurrencePath) {
         hasOccurrencePaths = true
       }
-      instanceColors[batchId] = placement.color
     }
   }
   return {
     mesh, material, transparent,
-    instanceParents, instanceOccurrenceIds, instanceColors,
-    instanceGeometryIds,
+    ...tables,
     // Null (not an all-null array) for IFC so consumers can cheaply skip
     // occurrence lookups — mirrors the merged path's IfcInstanceMap.
-    instanceOccurrencePaths: hasOccurrencePaths ? instanceOccurrencePaths : null,
+    instanceOccurrencePaths: hasOccurrencePaths ? tables.instanceOccurrencePaths : null,
   }
 }
 

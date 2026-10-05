@@ -1,4 +1,5 @@
 import {Vector4} from 'three'
+import {forEachActiveInstance, isActive, tablesRevision} from './batchedInstanceTables'
 import {eachBatch} from './batchedModel'
 
 
@@ -51,20 +52,46 @@ const _rgba = new Vector4()
 function highlightState(mesh) {
   let state = mesh.userData.batchedHighlight
   if (!state) {
-    const parentIndex = new Map()
-    const parents = mesh.instanceParents
-    for (let b = 0; b < parents.length; b++) {
-      const list = parentIndex.get(parents[b])
-      if (list) {
-        list.push(b)
-      } else {
-        parentIndex.set(parents[b], [b])
-      }
+    state = {
+      selSet: new Set(), preSet: new Set(), selColor: undefined, preColor: undefined,
+      parentIndex: null, revision: -1,
     }
-    state = {selSet: new Set(), preSet: new Set(), selColor: undefined, preColor: undefined, parentIndex}
     mesh.userData.batchedHighlight = state
   }
+  // The indices are derived from the pick tables, so they are rebuilt when an
+  // edit has written or cleared a row since (batchedInstanceTables
+  // `tablesRevision`) — otherwise a deleted instance would stay reachable
+  // through them, and a pasted one never would be. An unedited model builds
+  // them once, as before.
+  const revision = tablesRevision(mesh)
+  if (state.revision !== revision) {
+    state.parentIndex = indexActiveInstances(mesh, mesh.instanceParents)
+    state.occurrenceIndex = undefined
+    state.revision = revision
+  }
   return state
+}
+
+
+/**
+ * Map each value of a per-instance table to the LIVE batchIds holding it.
+ *
+ * @param {object} mesh decorated BatchedMesh
+ * @param {Uint32Array|Array<number>} table `instanceParents` or
+ *   `instanceOccurrenceIds`
+ * @return {Map<number, Array<number>>}
+ */
+function indexActiveInstances(mesh, table) {
+  const index = new Map()
+  forEachActiveInstance(mesh, (b) => {
+    const list = index.get(table[b])
+    if (list) {
+      list.push(b)
+    } else {
+      index.set(table[b], [b])
+    }
+  })
+  return index
 }
 
 
@@ -82,17 +109,7 @@ function highlightState(mesh) {
  */
 function occurrenceIndexOf(mesh, state) {
   if (!state.occurrenceIndex) {
-    const occurrenceIndex = new Map()
-    const occIds = mesh.instanceOccurrenceIds
-    for (let b = 0; b < occIds.length; b++) {
-      const list = occurrenceIndex.get(occIds[b])
-      if (list) {
-        list.push(b)
-      } else {
-        occurrenceIndex.set(occIds[b], [b])
-      }
-    }
-    state.occurrenceIndex = occurrenceIndex
+    state.occurrenceIndex = indexActiveInstances(mesh, mesh.instanceOccurrenceIds)
   }
   return state.occurrenceIndex
 }
@@ -107,6 +124,11 @@ function occurrenceIndexOf(mesh, state) {
  * @param {number} batchId
  */
 function paint(mesh, batchId) {
+  // A layer set can still name an instance deleted since it was built, and
+  // `setColorAt` throws on one (BatchedMesh.js:1108-1110).
+  if (!isActive(mesh, batchId)) {
+    return
+  }
   const state = mesh.userData.batchedHighlight
   const orig = mesh.instanceColors?.[batchId]
   const a = orig?.w ?? 1
@@ -284,9 +306,9 @@ export function repaintBatchedColors(model) {
     if (!mesh.instanceColors || typeof mesh.setColorAt !== 'function') {
       return
     }
-    for (let batchId = 0; batchId < mesh.instanceColors.length; batchId++) {
+    forEachActiveInstance(mesh, (batchId) => {
       paint(mesh, batchId)
-    }
+    })
   })
 }
 
