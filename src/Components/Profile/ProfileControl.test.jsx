@@ -4,12 +4,17 @@ import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__m
 import {clearOPFSCache} from '../../OPFS/utils'
 import {RouteThemeCtx} from '../../Share.fixture'
 import {addRecentFileEntry, loadAllRecentFiles} from '../../connections/persistence'
+import {_resetSubscriptionTrackingForTests, trackSubscriptionFromToken} from '../../privacy/subscriptionTracking'
 import useStore from '../../store/useStore'
 import {reloadAfterCacheClear} from '../../utils/navigate'
 import LoginMenu from './ProfileControl'
+import {goToSubscription} from './subscriptionNav'
 
 
 jest.mock('../../OPFS/utils', () => ({clearOPFSCache: jest.fn()}))
+// The upgrade door itself (and its begin_checkout event) is pinned in
+// subscriptionNav.test.js; here only that the menu goes through it.
+jest.mock('./subscriptionNav', () => ({goToSubscription: jest.fn()}))
 jest.mock('../../utils/navigate', () => ({
   ...jest.requireActual('../../utils/navigate'),
   reloadAfterCacheClear: jest.fn(),
@@ -265,5 +270,94 @@ describe('ProfileControl', () => {
 
     expect(await findByTestId('upgrade-to-pro')).toBeInTheDocument()
     expect(queryByTestId('manage-subscription')).toBeNull()
+  })
+
+
+  it('sends "Upgrade to Pro" through goToSubscription as the profile entry point', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    act(() => {
+      useStore.getState().setAppMetadata({userEmail: 'free@test.com', stripeCustomerId: null, subscriptionStatus: 'free'})
+    })
+    const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+    fireEvent.click(await findByTestId('control-button-profile'))
+    fireEvent.click(await findByTestId('upgrade-to-pro'))
+    await waitFor(() => expect(goToSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({from: 'profile', userEmail: 'free@test.com', stripeCustomerId: null})))
+  })
+
+
+  // codex finding on #1912: BaseRoutes' fresh-claims pass runs once, at
+  // boot, and sees the pending status that opens the reauth modal. The reauth
+  // then completes through the popup → `refreshAuth` → this component's
+  // storage handler, and that token is the only fresh look at the now-settled
+  // status this page gets. Without reporting it, the marker survives and a
+  // later lapse + resubscribe (unseen here) is suppressed.
+  describe('refreshAuth after a popup sign-in reports the token as fresh', () => {
+    const MARKER_KEY = 'bldrs.ga.reportedSubscriptionStatus:github|1'
+
+    /**
+     * An unsigned JWT the way Auth0 shapes it; jwtDecode reads, never verifies.
+     *
+     * @param {string} subscriptionStatus
+     * @return {string}
+     */
+    function tokenWith(subscriptionStatus) {
+      const base64url = (obj) => Buffer.from(JSON.stringify(obj), 'utf8').toString('base64url')
+      const payload = {'sub': 'github|1', 'https://bldrs.ai/app_metadata': {subscriptionStatus}}
+      return `${base64url({alg: 'RS256', typ: 'JWT'})}.${base64url(payload)}.signature`
+    }
+
+    beforeEach(() => {
+      localStorage.clear()
+      _resetSubscriptionTrackingForTests()
+      window.gtag = jest.fn()
+      useStore.setState({accessToken: ''})
+    })
+
+    afterEach(() => {
+      delete window.gtag
+    })
+
+    /** @return {number} subscription_started events sent so far */
+    function startedCount() {
+      return window.gtag.mock.calls.filter(([kind, name]) => kind === 'event' && name === 'subscription_started').length
+    }
+
+    /**
+     * Boot (BaseRoutes' fresh pass reports the pending status), then complete
+     * the popup sign-in: ProfileControl hears `refreshAuth` and reads
+     * `tokenAfterPopup` from the SDK cache.
+     *
+     * @param {string} tokenAfterPopup
+     */
+    async function bootPendingThenPopup(tokenAfterPopup) {
+      await trackSubscriptionFromToken(tokenWith('shareProPendingReauth'), {isFresh: true})
+      expect(startedCount()).toBe(1)
+      const getToken = jest.fn(() => Promise.resolve(tokenAfterPopup))
+      mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently: getToken})
+      render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+      act(() => {
+        window.dispatchEvent(new StorageEvent('storage', {key: 'refreshAuth', newValue: 'true'}))
+      })
+      await waitFor(() => expect(useStore.getState().accessToken).toBe(tokenAfterPopup))
+      // The existing call is untouched: still served from the SDK cache.
+      expect(getToken).toHaveBeenCalledWith(expect.objectContaining({cacheMode: 'on'}))
+    }
+
+    it('a settled token clears the marker, so a later resubscribe counts again', async () => {
+      await bootPendingThenPopup(tokenWith('sharePro'))
+      await waitFor(() => expect(localStorage.getItem(MARKER_KEY)).toBeNull())
+      // Lapse + resubscribe happen elsewhere; a later page load's fresh pass
+      // sees shareProPendingReauth again.
+      _resetSubscriptionTrackingForTests()
+      expect(await trackSubscriptionFromToken(tokenWith('shareProPendingReauth'), {isFresh: true})).toBe(true)
+      expect(startedCount()).toBe(2)
+    })
+
+    it('a still-pending token doesn\'t report the transition twice', async () => {
+      await bootPendingThenPopup(tokenWith('shareProPendingReauth'))
+      expect(localStorage.getItem(MARKER_KEY)).toBe('shareProPendingReauth')
+      expect(startedCount()).toBe(1)
+    })
   })
 })

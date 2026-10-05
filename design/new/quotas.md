@@ -172,6 +172,132 @@ Summary only; the wiring lives in
 - Gated load sites: Drive picker + recents, local file + recents, GitHub recents
   + browser, sample chips, drag-and-drop.
 
+## Funnel analytics
+
+GA4 events that let the bizdev GA dashboard's funnel card (`bldrs-ai/bizdev`,
+`ga/static/index.html`) show **Visit → Model open → Hit a limit → Signed in →
+Upgrade click → Subscribed**, so there is a baseline before `quotas` flips on.
+The names live in one place, `FUNNEL_EVENTS` in `src/privacy/analytics.js`;
+the dashboard queries them verbatim, so rename both ends together or neither.
+Everything except `real_model_open` is sent through `gtagFunnelEvent`, which
+adds `open_cid` (the `cid.`-prefixed GA client id; left out when GA hasn't
+resolved one) so one client can be followed down the funnel. All of it sits
+behind the same analytics consent check as every other `gtagEvent`.
+
+| Step | Event | Params | Fires |
+|---|---|---|---|
+| Visit | `session_start` / `page_view` | — | GA4 sends these itself |
+| Model open | `real_model_open` | `content_id`, `content_type`, `stats_*`, `local_hour`, `open_cid` | `CadView` after a real (non-demo) load; see `analytics#isRealModelOpen` |
+| Hit a limit | `quota_limit_reached` | `tier` (`anonymous` \| `free`), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
+| Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown` | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
+| Upgrade click | `begin_checkout` (GA4 recommended) | `from`: `profile` \| `export` \| `quota`; `destination`: `checkout` \| `portal` | `goToSubscription` (`Profile/subscriptionNav.js`), which every upgrade CTA goes through |
+| Subscribed | `subscription_started` | — | `BaseRoutes#processAccessToken` on `shareProPendingReauth` (below) |
+| (lapsed) | `subscription_ended` | — | same, on `freePendingReauth` |
+
+The parts that aren't obvious:
+
+- **`login` is a completed sign-in, not an authenticated boot.** Most
+  authenticated page loads just restore the cached session (`cacheLocation:
+  'localstorage'`), and those don't count. A popup login is counted in the
+  opener, on its in-page signed-out → signed-in edge. A redirect login has no
+  such edge, so it's counted from the SDK's one `onRedirectCallback` call
+  (`Auth0ProviderWithHistory` → `markRedirectLogin`). The popup's own callback
+  is skipped, because the popup closes before its beacon can be relied on.
+  Other open tabs see the same edge (they all get the `refreshAuth` storage
+  event), so the first tab to report writes `sub|auth_time` (from the ID
+  token) to localStorage and the others skip it. Those tabs hear the event
+  at the same moment, so the read-compare-write-emit runs under a Web Lock
+  (`navigator.locks`, via `src/privacy/crossTabLock.js`); without one two
+  tabs could both read the old value and both emit. Where the Web Locks API
+  is missing the claim runs unlocked and that race remains. `method` comes
+  from the user id's connection prefix (`google-oauth2|`, `github|`,
+  `auth0|`). For a linked account that is the *primary* identity, not
+  necessarily the button the user pressed.
+  - **A sign-out forgets the reported sign-in.** `auth_time` alone can't
+    tell a sign-in apart from the one before a sign-out, because none of
+    the app's logouts end the Auth0 session: `ProfileControl` passes an
+    `openUrl` that only reloads the origin, `OpenModelDialog` passes
+    `openUrl: false`, and auth0-spa-js then clears only its local cache and
+    never visits `/v2/logout`. The next popup sign-in (no `prompt: 'login'`
+    unless a scope is being changed) completes from that live session and
+    its ID token carries the same `auth_time`. So whenever a tab settles
+    signed out — in place, or on a page load that comes up signed out, as
+    after `ProfileControl`'s reload — it clears the marker, under the same
+    Web Lock. A cached-session boot never passes through signed out, so it
+    never clears. Other tabs aren't told about a sign-out (the SDK doesn't
+    broadcast it): a tab still signed in in memory makes no edge for the
+    next sign-in, so it neither clears nor claims. The tabs that do claim
+    are signed out themselves and cleared on the way in, well before the
+    sign-in they then race on, so they still dedupe each other. Re-counting
+    one sign-in would take a tab that first settles signed out inside that
+    sign-in's completion window.
+- **No `sign_up`.** Nothing in the token reliably marks a brand-new account
+  (no `logins_count` or `created_at` claim; that would take an Auth0 Action).
+  "Sign up free" therefore reports as `login`.
+- **`begin_checkout` includes portal visits.** A known Stripe customer goes to
+  the billing portal instead of checkout. That might be a lapsed subscriber
+  resubscribing, or a current one managing billing, so `destination` keeps
+  them apart. For the strict "upgrade click" step, filter to
+  `destination = checkout`. `QuotaLimitDialog`'s Subscribe button used to set
+  its own `/subscribe/` URL; it now goes through `goToSubscription` too.
+- **`subscription_*` fires once per tier change.** One pending token is
+  processed on the cached and fresh-claims passes, again on every reload
+  until the reauth, and in every tab. `src/privacy/subscriptionTracking.js`
+  keeps the last pending status it reported for each user (Auth0 `sub`) in
+  localStorage, with an in-memory fallback when storage throws, and a repeat
+  of it doesn't report again. A *different* pending status always does,
+  because the server writes the two pending statuses strictly alternately,
+  one per tier change (`netlify/functions/_lib/subscriptions.js`).
+  - **The marker resets on a settled status from a fresh token.** The same
+    pending status can be a new transition too: subscribe, reauth, lapse,
+    resubscribe, where this browser never saw the lapse's
+    `freePendingReauth`. So when a *fresh* token carries a settled status
+    (`sharePro`, or any free status, unset included), the marker is cleared
+    and the next pending status counts. Two tokens count as fresh. One is
+    BaseRoutes' fresh-claims pass (`cacheMode: 'off'`). It starts only after
+    the boot's cached (`cacheMode: 'on'`) call has settled: auth0-spa-js
+    coalesces concurrent `getTokenSilently` calls on
+    `clientId::audience::scope`, without `cacheMode` in the key, so an `'off'`
+    call made while the `'on'` one is in flight just gets the cached token
+    back, which would be labeled fresh. It is chained after `isAuthResolved`
+    is set, so it still doesn't hold up the first model load, and it's
+    skipped when the cached call fails with `login_required` or
+    `invalid_grant`. The other is the
+    token `ProfileControl` reads when it hears `refreshAuth` after a popup
+    sign-in, which is how the reauth modal completes. That read uses
+    `cacheMode: 'on'`, but the popup has just written its newly minted token
+    to the shared localstorage cache under the same key, so its claims are
+    current. The fresh-claims pass alone isn't enough: it runs once per page
+    load, at boot, so it sees the pending status and not the reauth that
+    settles it. SPA navigations after that only use the cache.
+    Settled statuses on the *cached* token are ignored. Every boot runs the
+    cached pass first, and a stale cached token can still say free after
+    the fresh one has gone pending, so clearing on it would count again on
+    every boot. Both callers decode the token through
+    `trackSubscriptionFromToken`, so they read the same claim.
+  - **Cross-tab claims are locked.** Two tabs processing the same pending
+    token could both read the old marker before either writes. The
+    read-compare-write-emit runs under a Web Lock named for the marker key,
+    with the in-page guard set before the lock is requested, so this page's
+    own cached and fresh passes can't both queue a claim. Without the Web
+    Locks API the claim runs unlocked and the race remains.
+  - **Gaps.** If the user never completes the reauth between two
+    transitions, nothing clears the marker, so a repeat of the same pending
+    status is still missed. The post-popup reset also needs `ProfileControl`
+    mounted to hear `refreshAuth`, as the popup `login` edge does
+    (`useLoginTracking.js`). Where it isn't mounted, the reset waits for the
+    next full page load. The marker is also per-browser, so seeing the
+    pending state on two devices counts twice.
+
+GA4-admin follow-ups (Admin → Custom definitions / Key events). None of this
+has a backfill, so these only start accruing data once registered:
+
+- Register **event-scoped custom dimensions** for `method`, `tier`, `feature`,
+  `from` and `destination`. `open_cid` needs nothing new: GA4 keys an
+  event-scoped dimension by parameter name, not by event, so the one
+  registered for `real_model_open` applies to these events too.
+- Mark **`login`** and **`subscription_started`** as **key events**.
+
 ## Implementation map
 
 | Layer | Files | PR (branch) |

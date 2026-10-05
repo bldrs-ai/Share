@@ -3,11 +3,14 @@ import {render} from '@testing-library/react'
 import {MemoryRouter} from 'react-router-dom'
 import Auth0ProviderWithHistory from './Auth0ProviderWithHistory'
 import {Auth0Provider} from './Auth0ProviderProxy'
+import {markRedirectLogin} from './useLoginTracking'
 
 
 jest.mock('./Auth0ProviderProxy', () => ({
   Auth0Provider: jest.fn(({children}) => <div data-testid="auth0-provider-mock">{children}</div>),
 }))
+
+jest.mock('./useLoginTracking', () => ({markRedirectLogin: jest.fn()}))
 
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
@@ -190,5 +193,19 @@ describe('Auth0ProviderWithHistory', () => {
 
     expect(mockNavigate).toHaveBeenCalledWith(expect.anything(), {replace: true})
   })
-})
 
+  // The redirect sign-in's only signal for the `login` funnel event
+  // (useLoginTracking): the SDK calls onRedirectCallback once per success.
+  it('reports the completed redirect sign-in to login tracking', () => {
+    render(
+      <MemoryRouter>
+        <Auth0ProviderWithHistory>
+          <div>Test</div>
+        </Auth0ProviderWithHistory>
+      </MemoryRouter>,
+    )
+    expect(markRedirectLogin).not.toHaveBeenCalled()
+    Auth0Provider.mock.calls[0][0].onRedirectCallback({returnTo: '/share'})
+    expect(markRedirectLogin).toHaveBeenCalledTimes(1)
+  })
+})

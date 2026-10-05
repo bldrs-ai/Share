@@ -8,6 +8,7 @@ import {fileSuffixBoundaryRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
 import {
+  FUNNEL_EVENTS,
   LOCAL_HOUR_PARAM,
   OPEN_CID_PARAM,
   getLocalHour,
@@ -672,7 +673,7 @@ export default function CadView({
       // growth-strategy §2). This is their local hour, prefixed so gtag
       // keeps it in the text slot; see analytics#getLocalHour.
       eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
-      gtagEvent('real_model_open', eventParams)
+      gtagEvent(FUNNEL_EVENTS.REAL_MODEL_OPEN, eventParams)
       // Give a chip with non-zero errors/warnings a Sentry event to link
       // to (issue #1767). Gated on the very counts just assembled above,
       // because those are what colour the chip — for IFC/STEP they are
