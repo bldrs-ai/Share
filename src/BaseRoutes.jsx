@@ -5,6 +5,7 @@ import {Button, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, 
 import * as Sentry from '@sentry/react'
 import {useAuth0} from './Auth0/Auth0Proxy'
 import {APP_METADATA_CLAIM} from './Auth0/appMetadata'
+import useLoginTracking from './Auth0/useLoginTracking'
 import PopupAuth from './Components/Auth/PopupAuth'
 import PopupCallback from './Components/Auth/PopupCallback'
 import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
@@ -17,6 +18,7 @@ import Privacy from './pages/Privacy'
 import TOS from './pages/TOS'
 import BlogRoutes from './pages/blog/BlogRoutes'
 import {initializeOctoKitAuthenticated, initializeOctoKitUnauthenticated} from './net/github/OctokitExport'
+import {trackSubscriptionStatus} from './privacy/subscriptionTracking'
 import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
@@ -54,6 +56,10 @@ export default function BaseRoutes({testElt = null}) {
   const setIsOpfsAvailable = useStore((state) => state.setIsOpfsAvailable)
   const setAppMetadata = useStore((state) => state.setAppMetadata)
   const theme = useShareTheme()
+  // Here because BaseRoutes is the one component mounted under the Auth0
+  // provider on every route, so a sign-in completes into a mounted listener
+  // wherever the user is.
+  useLoginTracking()
 
   // State for reauthentication modal.
   const [reauthModalOpen, setReauthModalOpen] = useState(false)
@@ -83,6 +89,12 @@ export default function BaseRoutes({testElt = null}) {
 
     const decodedToken = jwtDecode(token)
     const appData = decodedToken[APP_METADATA_CLAIM]
+
+    // Funnel "Subscribed" / lapse events. Before the short circuits below,
+    // which these statuses always take. Safe to call on every pass: this
+    // function runs several times per token (see above), and the tracker
+    // dedupes per user + status across passes, reloads and tabs.
+    trackSubscriptionStatus(decodedToken.sub, appData?.subscriptionStatus)
 
     // Reauth-modal short circuits: show the modal and stop — leave
     // identity/token state as it was.

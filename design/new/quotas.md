@@ -172,6 +172,71 @@ Summary only; the wiring lives in
 - Gated load sites: Drive picker + recents, local file + recents, GitHub recents
   + browser, sample chips, drag-and-drop.
 
+## Funnel analytics
+
+GA4 events that let the bizdev GA dashboard's funnel card (`bldrs-ai/bizdev`,
+`ga/static/index.html`) show **Visit → Model open → Hit a limit → Signed in →
+Upgrade click → Subscribed**, so there is a baseline before `quotas` flips on.
+The names live in one place, `FUNNEL_EVENTS` in `src/privacy/analytics.js`;
+the dashboard queries them verbatim, so rename both ends together or neither.
+Everything except `real_model_open` is sent through `gtagFunnelEvent`, which
+adds `open_cid` (the `cid.`-prefixed GA client id; left out when GA hasn't
+resolved one) so one client can be followed down the funnel. All of it sits
+behind the same analytics consent check as every other `gtagEvent`.
+
+| Step | Event | Params | Fires |
+|---|---|---|---|
+| Visit | `session_start` / `page_view` | — | GA4 sends these itself |
+| Model open | `real_model_open` | `content_id`, `content_type`, `stats_*`, `local_hour`, `open_cid` | `CadView` after a real (non-demo) load; see `analytics#isRealModelOpen` |
+| Hit a limit | `quota_limit_reached` | `tier` (`anonymous` \| `free`), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
+| Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown` | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
+| Upgrade click | `begin_checkout` (GA4 recommended) | `from`: `profile` \| `export` \| `quota`; `destination`: `checkout` \| `portal` | `goToSubscription` (`Profile/subscriptionNav.js`), which every upgrade CTA goes through |
+| Subscribed | `subscription_started` | — | `BaseRoutes#processAccessToken` on `shareProPendingReauth` |
+| (lapsed) | `subscription_ended` | — | same, on `freePendingReauth` |
+
+The parts that aren't obvious:
+
+- **`login` is a completed sign-in, not an authenticated boot.** Most
+  authenticated page loads just restore the cached session (`cacheLocation:
+  'localstorage'`), and those don't count. A popup login is counted in the
+  opener, on its in-page signed-out → signed-in edge. A redirect login has no
+  such edge, so it's counted from the SDK's one `onRedirectCallback` call
+  (`Auth0ProviderWithHistory` → `markRedirectLogin`). The popup's own callback
+  is skipped, because the popup closes before its beacon can be relied on.
+  Other open tabs see the same edge (they all get the `refreshAuth` storage
+  event), so the first tab to report writes `sub|auth_time` (from the ID
+  token) to localStorage and the others skip it. `method` comes from the
+  user id's connection prefix (`google-oauth2|`, `github|`, `auth0|`). For a
+  linked account that is the *primary* identity, not necessarily the button
+  the user pressed.
+- **No `sign_up`.** Nothing in the token reliably marks a brand-new account
+  (no `logins_count` or `created_at` claim; that would take an Auth0 Action).
+  "Sign up free" therefore reports as `login`.
+- **`begin_checkout` includes portal visits.** A known Stripe customer goes to
+  the billing portal instead of checkout. That might be a lapsed subscriber
+  resubscribing, or a current one managing billing, so `destination` keeps
+  them apart. For the strict "upgrade click" step, filter to
+  `destination = checkout`. `QuotaLimitDialog`'s Subscribe button used to set
+  its own `/subscribe/` URL; it now goes through `goToSubscription` too.
+- **`subscription_*` fires once per tier change.** One pending token is
+  processed on the cached and fresh-claims passes, again on every reload
+  until the reauth, and in every tab. `src/privacy/subscriptionTracking.js`
+  keeps the last pending status it reported for each user (Auth0 `sub`) in
+  localStorage, with an in-memory fallback when storage throws, and only a
+  *different* pending status reports again. This works because the server
+  writes the two pending statuses strictly alternately, one per tier change
+  (`netlify/functions/_lib/subscriptions.js`). Gap: the marker is
+  per-browser, so seeing the pending state on two devices counts twice.
+
+GA4-admin follow-ups (Admin → Custom definitions / Key events). None of this
+has a backfill, so these only start accruing data once registered:
+
+- Register **event-scoped custom dimensions** for `method`, `tier`, `feature`,
+  `from` and `destination`. `open_cid` needs nothing new: GA4 keys an
+  event-scoped dimension by parameter name, not by event, so the one
+  registered for `real_model_open` applies to these events too.
+- Mark **`login`** and **`subscription_started`** as **key events**.
+
 ## Implementation map
 
 | Layer | Files | PR (branch) |

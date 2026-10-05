@@ -7,9 +7,13 @@ import {addRecentFileEntry, loadAllRecentFiles} from '../../connections/persiste
 import useStore from '../../store/useStore'
 import {reloadAfterCacheClear} from '../../utils/navigate'
 import LoginMenu from './ProfileControl'
+import {goToSubscription} from './subscriptionNav'
 
 
 jest.mock('../../OPFS/utils', () => ({clearOPFSCache: jest.fn()}))
+// The upgrade door itself (and its begin_checkout event) is pinned in
+// subscriptionNav.test.js; here only that the menu goes through it.
+jest.mock('./subscriptionNav', () => ({goToSubscription: jest.fn()}))
 jest.mock('../../utils/navigate', () => ({
   ...jest.requireActual('../../utils/navigate'),
   reloadAfterCacheClear: jest.fn(),
@@ -265,5 +269,18 @@ describe('ProfileControl', () => {
 
     expect(await findByTestId('upgrade-to-pro')).toBeInTheDocument()
     expect(queryByTestId('manage-subscription')).toBeNull()
+  })
+
+
+  it('sends "Upgrade to Pro" through goToSubscription as the profile entry point', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    act(() => {
+      useStore.getState().setAppMetadata({userEmail: 'free@test.com', stripeCustomerId: null, subscriptionStatus: 'free'})
+    })
+    const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+    fireEvent.click(await findByTestId('control-button-profile'))
+    fireEvent.click(await findByTestId('upgrade-to-pro'))
+    await waitFor(() => expect(goToSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({from: 'profile', userEmail: 'free@test.com', stripeCustomerId: null})))
   })
 })

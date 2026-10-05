@@ -12,6 +12,16 @@ export const LIMITS = {
   [TIERS.PAID]: Infinity,
 }
 
+/**
+ * What a quota limits, as reported in the `feature` param of the
+ * quota_limit_reached funnel event (analytics#FUNNEL_EVENTS). One today: the
+ * private model loads every tier above is counted in. A second metered
+ * feature gets its own value here so the dashboard can tell the walls apart.
+ */
+export const QUOTA_FEATURES = {
+  PRIVATE_LOAD: 'private_load',
+}
+
 /** Length of the rolling window for non-anonymous tiers, in days */
 export const ROLLING_WINDOW_DAYS = 30
 

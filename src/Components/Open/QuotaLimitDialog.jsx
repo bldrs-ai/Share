@@ -1,8 +1,12 @@
-import React, {ReactElement} from 'react'
+import React, {ReactElement, useEffect, useRef} from 'react'
 import {Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Link, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {LIMITS, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/quota'
+import {FUNNEL_EVENTS, gtagFunnelEvent} from '../../privacy/analytics'
+import {LIMITS, QUOTA_FEATURES, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/quota'
+import useStore from '../../store/useStore'
+import {useMock} from '../Profile/ProfileControl'
+import {goToSubscription} from '../Profile/subscriptionNav'
 
 
 /**
@@ -13,19 +17,58 @@ import {LIMITS, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/quota'
  * @property {string} tier One of TIERS.*
  * @property {boolean} isOpen Controls dialog visibility
  * @property {Function} onClose Called when the dialog should close
+ * @property {string} [feature] Which QUOTA_FEATURES limit was hit; the
+ *   `feature` param of the quota_limit_reached funnel event
  * @return {ReactElement}
  */
-export default function QuotaLimitDialog({tier, isOpen, onClose}) {
-  const {loginWithRedirect, user} = useAuth0()
+export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA_FEATURES.PRIVATE_LOAD}) {
+  const appMetadata = useStore((state) => state.appMetadata)
+  const {getAccessTokenSilently, loginWithRedirect, user} = useAuth0()
   const theme = useTheme()
+  // Whether the current showing has been reported. A ref rather than a
+  // dependency-driven fire because the event means "the dialog appeared",
+  // once per closed→open edge: StrictMode's double effect run and a tier
+  // change while open (sign-in in another tab) both re-run the effect
+  // without being a new showing. Refs survive StrictMode's simulated
+  // remount, so the second run sees `true`.
+  const reportedShowingRef = useRef(false)
 
-  const handleSubscribe = () => {
+  const isAnonymous = !tier || tier === TIERS.ANONYMOUS
+
+  useEffect(() => {
+    if (!isOpen) {
+      reportedShowingRef.current = false
+      return
+    }
+    if (reportedShowingRef.current) {
+      return
+    }
+    reportedShowingRef.current = true
+    // The funnel's "Hit a limit" step (analytics#FUNNEL_EVENTS). Fired from
+    // the dialog itself, not from the three mount sites' gates, so it counts
+    // what users actually saw — whatever decided to show it, and whether or
+    // not the `quotas` flag is what's enforcing. A missing tier is reported
+    // as anonymous, matching how the copy below reads it.
+    gtagFunnelEvent(FUNNEL_EVENTS.QUOTA_LIMIT_REACHED, {
+      tier: isAnonymous ? TIERS.ANONYMOUS : tier,
+      feature,
+    })
+  }, [isOpen, isAnonymous, tier, feature])
+
+  const handleSubscribe = async () => {
     onClose()
-    // Same URL shape as ProfileControl's onSubscriptionClick, so the
-    // subscribe page keeps the viewer's theme and prefills the email.
-    const themeParam = theme.palette.mode === 'light' ? 'light' : 'dark'
-    const email = user?.email ? `&userEmail=${encodeURIComponent(user.email)}` : ''
-    window.location.href = `/subscribe/?theme=${themeParam}${email}`
+    // Through the shared upgrade door rather than its own `/subscribe/` URL,
+    // so this CTA is counted as begin_checkout {from: 'quota'} like every
+    // other, and a lapsed subscriber (known Stripe customer) lands in the
+    // portal instead of being offered a second subscription.
+    await goToSubscription({
+      stripeCustomerId: appMetadata?.stripeCustomerId || null,
+      userEmail: appMetadata?.userEmail || user?.email || '',
+      isDay: theme.palette.mode === 'light',
+      getAccessTokenSilently,
+      useMock,
+      from: 'quota',
+    })
   }
 
   const handleSignUp = () => {
@@ -33,7 +76,6 @@ export default function QuotaLimitDialog({tier, isOpen, onClose}) {
     loginWithRedirect()
   }
 
-  const isAnonymous = !tier || tier === TIERS.ANONYMOUS
   const limitText = isAnonymous ?
     `${LIMITS[TIERS.ANONYMOUS]} private models (lifetime)` :
     `${LIMITS[TIERS.FREE]} private models in any rolling ${ROLLING_WINDOW_DAYS}-day window`

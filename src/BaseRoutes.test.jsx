@@ -7,6 +7,8 @@ import {
   mockedGoogleUserLoggedIn,
   mockedUserLoggedOut,
 } from './__mocks__/authentication'
+import {_resetGaClientIdForTests, setGaClientId} from './privacy/analytics'
+import {_resetSubscriptionTrackingForTests} from './privacy/subscriptionTracking'
 import {HelmetThemeCtx} from './Share.fixture'
 import BaseRoutes from './BaseRoutes'
 import useStore from './store/useStore'
@@ -222,5 +224,108 @@ describe('BaseRoutes - auth resolution', () => {
     await waitFor(() => {
       expect(screen.getByText('Reauthentication Required')).toBeInTheDocument()
     })
+  })
+})
+
+
+// Funnel "Subscribed" step (analytics#FUNNEL_EVENTS). processAccessToken runs
+// at least twice per page load (cached pass + fresh-claims pass) and again on
+// every reload until the user completes the reauth, so the event has to be
+// deduped rather than fired per pass.
+describe('BaseRoutes - subscription funnel events', () => {
+  beforeEach(() => {
+    for (const k of Object.keys(tokenClaims)) {
+      delete tokenClaims[k]
+    }
+    localStorage.clear()
+    _resetSubscriptionTrackingForTests()
+    _resetGaClientIdForTests()
+    window.gtag = jest.fn()
+    useStore.setState({isAuthResolved: false, accessToken: '', hasGithubIdentity: false, appMetadata: {}})
+  })
+
+  afterEach(() => {
+    delete window.gtag
+  })
+
+  /**
+   * @param {string} name
+   * @return {Array} gtag calls for that event so far
+   */
+  function eventsNamed(name) {
+    return window.gtag.mock.calls.filter(([kind, n]) => kind === 'event' && n === name)
+  }
+
+  /**
+   * One page load: mount BaseRoutes with every token pass returning `token`,
+   * and wait for both passes to have been processed.
+   *
+   * @param {string} token
+   */
+  async function pageLoad(token) {
+    const getToken = jest.fn().mockResolvedValue(token)
+    mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently: getToken})
+    const {unmount} = render(
+      <MemoryRouter initialEntries={['/about']}>
+        <HelmetThemeCtx>
+          <BaseRoutes/>
+        </HelmetThemeCtx>
+      </MemoryRouter>,
+    )
+    await waitFor(() => expect(getToken.mock.calls.map(([o]) => o.cacheMode)).toEqual(
+      expect.arrayContaining(['on', 'off'])))
+    await waitFor(() => expect(useStore.getState().isAuthResolved).toBe(true))
+    unmount()
+  }
+
+  it('subscription_started fires once per transition, across passes and reloads', async () => {
+    setGaClientId('111.222')
+    tokenClaims['pro-pending'] = {
+      'sub': 'github|1',
+      'https://bldrs.ai/app_metadata': {subscriptionStatus: 'shareProPendingReauth'},
+    }
+    await pageLoad('pro-pending')
+    expect(eventsNamed('subscription_started')).toEqual([
+      ['event', 'subscription_started', {open_cid: 'cid.111.222'}],
+    ])
+    // A reload before the reauth: a fresh page, same pending token.
+    _resetSubscriptionTrackingForTests()
+    await pageLoad('pro-pending')
+    expect(eventsNamed('subscription_started')).toHaveLength(1)
+    expect(eventsNamed('subscription_ended')).toHaveLength(0)
+  })
+
+  it('subscription_ended fires for freePendingReauth, and a later resubscribe counts again', async () => {
+    tokenClaims['free-pending'] = {
+      'sub': 'github|1',
+      'https://bldrs.ai/app_metadata': {subscriptionStatus: 'freePendingReauth'},
+    }
+    tokenClaims['pro-pending'] = {
+      'sub': 'github|1',
+      'https://bldrs.ai/app_metadata': {subscriptionStatus: 'shareProPendingReauth'},
+    }
+    await pageLoad('free-pending')
+    expect(eventsNamed('subscription_ended')).toEqual([['event', 'subscription_ended', {}]])
+    await pageLoad('pro-pending')
+    expect(eventsNamed('subscription_started')).toHaveLength(1)
+  })
+
+  it('dedupes per user: another account on this browser still counts', async () => {
+    for (const sub of ['github|1', 'github|2']) {
+      tokenClaims[sub] = {sub, 'https://bldrs.ai/app_metadata': {subscriptionStatus: 'shareProPendingReauth'}}
+      await pageLoad(sub)
+    }
+    expect(eventsNamed('subscription_started')).toHaveLength(2)
+  })
+
+  it('settled statuses send nothing', async () => {
+    tokenClaims['pro'] = {
+      'sub': 'github|1',
+      'https://bldrs.ai/app_metadata': {subscriptionStatus: 'sharePro'},
+      'https://bldrs.ai/identities': [{connection: 'github', provider: 'github', user_id: '1'}],
+    }
+    await pageLoad('pro')
+    expect(eventsNamed('subscription_started')).toHaveLength(0)
+    expect(eventsNamed('subscription_ended')).toHaveLength(0)
   })
 })

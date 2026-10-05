@@ -310,6 +310,59 @@ export function getOpenCid() {
 
 
 /*
+ * GA4 event names for the growth funnel
+ *
+ *   Visit → Model open → Hit a limit → Signed in → Upgrade click → Subscribed
+ *
+ * The consumer is the bizdev GA dashboard's funnel card
+ * (`bldrs-ai/bizdev`, ga/static/index.html), which queries these names
+ * verbatim — GA4 has no rename, so a renamed event here silently empties
+ * its funnel step from ship time on. Change both ends together, or not at
+ * all. "Visit" is GA4's automatic session_start/page_view and needs no
+ * constant.
+ *
+ * Params, and where each fires (design/new/quotas.md §"Funnel analytics"):
+ *   REAL_MODEL_OPEN      {content_id, content_type, stats_*, …}  CadView
+ *   QUOTA_LIMIT_REACHED  {tier, feature}  QuotaLimitDialog, once per showing
+ *   LOGIN                {method}  Auth0/useLoginTracking, once per
+ *                        completed sign-in, never on a cached-session boot
+ *   BEGIN_CHECKOUT       {from, destination}  Profile/subscriptionNav
+ *   SUBSCRIPTION_STARTED / SUBSCRIPTION_ENDED  {}  BaseRoutes'
+ *                        processAccessToken on the pendingReauth statuses,
+ *                        deduped per user + status (subscriptionTracking.js)
+ *
+ * All but REAL_MODEL_OPEN go out through gtagFunnelEvent, which attaches
+ * OPEN_CID_PARAM so the dashboard can follow one client down the funnel.
+ * The GA4-side registrations these need (custom dimensions, key events)
+ * are listed in the same design-doc section.
+ */
+export const FUNNEL_EVENTS = Object.freeze({
+  REAL_MODEL_OPEN: 'real_model_open',
+  QUOTA_LIMIT_REACHED: 'quota_limit_reached',
+  // GA4 recommended-event names, so `login` {method} and `begin_checkout`
+  // also land in GA4's own standard reports.
+  LOGIN: 'login',
+  BEGIN_CHECKOUT: 'begin_checkout',
+  SUBSCRIPTION_STARTED: 'subscription_started',
+  SUBSCRIPTION_ENDED: 'subscription_ended',
+})
+
+
+/**
+ * gtagEvent with the funnel's per-client join key attached: OPEN_CID_PARAM
+ * set to getOpenCid(), and omitted — never blank — when no client id has
+ * resolved, exactly as CadView does for real_model_open.
+ *
+ * @param {string} eventName one of FUNNEL_EVENTS
+ * @param {object} [parameters]
+ */
+export function gtagFunnelEvent(eventName, parameters = {}) {
+  const openCid = getOpenCid()
+  gtagEvent(eventName, openCid ? {...parameters, [OPEN_CID_PARAM]: openCid} : parameters)
+}
+
+
+/*
  * Name of the *Sentry tag* carrying the same client id. Identical to
  * OPEN_CID_PARAM on purpose: it is the same identifier, the bizdev
  * dashboard builds its Sentry search URL straight from the GA param

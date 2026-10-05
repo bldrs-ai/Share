@@ -648,7 +648,7 @@ describe('ExportSection', () => {
 
     fireEvent.click(getByTestId('gated-help-action'))
     expect(goToSubscription).toHaveBeenCalledWith(
-      expect.objectContaining({stripeCustomerId: null, userEmail: 'a@b.c'}))
+      expect.objectContaining({stripeCustomerId: null, userEmail: 'a@b.c', from: 'export'}))
     expect(mockRun).not.toHaveBeenCalled()
   })
 

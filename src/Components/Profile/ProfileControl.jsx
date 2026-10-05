@@ -149,7 +149,7 @@ export default function ProfileControl() {
 
   const onSubscriptionClick = async () => {
     onCloseMenu()
-    await goToSubscription({stripeCustomerId, userEmail, isDay, getAccessTokenSilently, useMock})
+    await goToSubscription({stripeCustomerId, userEmail, isDay, getAccessTokenSilently, useMock, from: 'profile'})
   }
 
 
