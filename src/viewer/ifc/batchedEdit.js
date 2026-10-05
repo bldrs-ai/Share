@@ -1,14 +1,15 @@
+import {captureException} from '@sentry/react'
 import {Vector4} from 'three'
 import {ensureGeometryCapacity} from './batchedGeometryCapacity'
 import {
-  clearRow,
+  editClearRow,
+  editWriteRow,
   ensureInstanceCapacity,
   forEachActiveInstance,
   hasInactiveInstances,
   instanceIdSpan,
-  writeRow,
 } from './batchedInstanceTables'
-import {eachBatch} from './batchedModel'
+import {eachBatch, modelBatchesOf} from './batchedModel'
 
 
 /**
@@ -33,13 +34,17 @@ import {eachBatch} from './batchedModel'
  *     the only calls in src that mutate a loaded batch. Load-time builders
  *     (which fill a batch before anything reads it) are the only other
  *     callers of three's mutators, and `batchedEditGuard.test.js` fails the
- *     build on a direct call anywhere else.
+ *     build on a direct call anywhere else. The tables' row writers refuse a
+ *     loaded batch at run time too (`batchedInstanceTables#writeRow`), so a
+ *     post-load row change cannot skip the notification either.
  *  2. **Push, not pull.** Every op bumps ONE per-batch revision
  *     ({@link batchEditRevision}) and then, synchronously and before it
  *     returns, tells every listener registered with {@link onBatchEdit} what
  *     changed. A consumer is therefore correct the moment the edit returns —
  *     not on its next call, which a caller-side dedup (ShareViewer's
- *     `_lastBatchedPreselectKey`) can postpone indefinitely.
+ *     `_lastBatchedPreselectKey`) can postpone indefinitely. A listener may
+ *     not edit in turn ({@link BatchEditReentryError}), and a listener that
+ *     throws is reported, not passed to the editor (see `commit`).
  *  3. **Identity columns are never defaulted.** An added instance must name
  *     its `parent`, `occurrenceId` and source `geometryId`; a missing one
  *     throws {@link BatchEditIdError} rather than borrowing id 0, which is a
@@ -84,6 +89,26 @@ export class BatchEditIdError extends TypeError {
 
 
 /**
+ * Thrown when a batch edit is started while edit listeners are being
+ * notified — a listener editing in response to an edit.
+ *
+ * Refused rather than allowed because the listeners after the editing one
+ * would then receive the OUTER change record describing a batch that no
+ * longer matches it: an `addInstance` event for an id the nested op already
+ * deleted, say, which the highlight would index as live and a later selection
+ * would `setColorAt` on, and three throws on. Nothing in L0–L2 needs a
+ * listener that edits; a consumer that wants a follow-up edit schedules it.
+ */
+export class BatchEditReentryError extends Error {
+  /** @param {string} message */
+  constructor(message) {
+    super(message)
+    this.name = 'BatchEditReentryError'
+  }
+}
+
+
+/**
  * Growth factor for three's own instance capacity when every id is in use.
  * Matches the side tables' (`batchedInstanceTables` TABLE_GROWTH): geometric
  * so a run of pastes costs amortised O(1), modest because post-load growth
@@ -112,9 +137,16 @@ const _rgba = new Vector4()
 const revisions = new WeakMap()
 const listeners = new WeakMap()
 const postLoadGeometry = new WeakMap()
-// Keyed by the MODEL root, because occurrence and source-geometry ids are
-// model-global (they cross the opaque / transparent split).
+// Keyed by the MODEL (`batchedModel#modelBatchesOf`), never by the object a
+// caller passed: occurrence and source-geometry ids are model-global — they
+// cross the opaque / transparent split — so minting for one batch must see
+// the other's ids, and the root and either batch must share one counter.
 const mints = new WeakMap()
+
+// Set while listeners run. Module-wide rather than per batch: a listener
+// editing ANY batch mid-notification is the hazard, and edits are
+// synchronous, so one flag covers every model.
+let notifying = false
 
 
 /**
@@ -183,11 +215,31 @@ export function batchEditListenerCount(mesh) {
 
 
 /**
+ * Refuse an edit started from inside an edit listener (see
+ * {@link BatchEditReentryError}). Called first by every op, before anything
+ * is changed.
+ */
+function refuseReentry() {
+  if (notifying) {
+    throw new BatchEditReentryError(
+      'batchedEdit: an edit listener tried to edit a batch while edits were being ' +
+      'reported; the edit was refused. Schedule a follow-up edit instead.')
+  }
+}
+
+
+/**
  * Bump the revision and deliver one change record.
  *
- * Every listener runs even if an earlier one throws, and the first error is
- * rethrown afterwards: the edit has already happened, so one consumer's bug
- * must not leave the others describing the batch as it was.
+ * **A listener that throws is reported, not rethrown.** By the time listeners
+ * run the edit has happened — the instance exists, the row is written — so
+ * throwing would leave the editor without the batch id it needs to record or
+ * undo the op, while the batch already holds it. L1 appends an op to the log
+ * when the edit call returns; an edit that changed the batch but threw would
+ * leave the log and the batch disagreeing about the model, which a replay
+ * cannot repair. Reporting keeps the two consistent and makes the failing
+ * consumer — now stale — visible: every listener still runs, and each error
+ * goes to the console and to Sentry, as the app's other non-fatal failures do.
  *
  * Instance edits also drop three's whole-batch bounds. three recomputes a
  * null `boundingSphere` / `boundingBox` itself the next time the renderer
@@ -211,18 +263,20 @@ function commit(mesh, events) {
     return
   }
   const change = {mesh, revision, events}
-  let firstError = null
-  // A snapshot, so a listener that unsubscribes (a consumer disposing
-  // itself in response) cannot skip the next one.
-  for (const listener of [...set]) {
-    try {
-      listener(change)
-    } catch (err) {
-      firstError ??= err
+  notifying = true
+  try {
+    // A snapshot, so a listener that unsubscribes (a consumer disposing
+    // itself in response) cannot skip the next one.
+    for (const listener of [...set]) {
+      try {
+        listener(change)
+      } catch (err) {
+        console.error('[batchedEdit] an edit listener failed; the edit stands', err)
+        captureException(err)
+      }
     }
-  }
-  if (firstError !== null) {
-    throw firstError
+  } finally {
+    notifying = false
   }
 }
 
@@ -277,7 +331,9 @@ function requireIds(row) {
  * @throws {BatchEditIdError} when an identity column or the color is missing
  */
 export function addBatchedInstance(mesh, geometryId, row, matrix) {
+  refuseReentry()
   requireIds(row)
+  const mint = mintOf(mesh)
   if (mesh.instanceCount >= mesh.maxInstanceCount) {
     const capacity = mesh.maxInstanceCount
     mesh.setInstanceCount(Math.max(
@@ -290,10 +346,14 @@ export function addBatchedInstance(mesh, geometryId, row, matrix) {
   const span = mesh._instanceInfo?.length ?? instanceIdSpan(mesh)
   ensureInstanceCapacity(mesh, mesh.instanceCount < span ? span : span + 1)
   const batchId = mesh.addInstance(geometryId)
+  // An id the caller chose rather than minted still moves the floor, so no
+  // later mint can hand it out again.
+  mint.occurrenceId = Math.max(mint.occurrenceId, row.occurrenceId + 1)
+  mint.geometryId = Math.max(mint.geometryId, row.geometryId + 1)
   const {color} = row
   const live = {x: color.x, y: color.y, z: color.z, w: color.w}
   const source = row.sourceColor ?? color
-  writeRow(mesh, batchId, {
+  editWriteRow(mesh, batchId, {
     ...row,
     color: live,
     sourceColor: {x: source.x, y: source.y, z: source.z, w: source.w},
@@ -315,6 +375,10 @@ export function addBatchedInstance(mesh, geometryId, row, matrix) {
  * @param {number} batchId a live instance
  */
 export function deleteBatchedInstance(mesh, batchId) {
+  refuseReentry()
+  // The model's mint floor is taken before the row goes, so the deleted
+  // instance's ids — the model maximum, possibly — are never minted again.
+  mintOf(mesh)
   // Read before three is told: three validates the id, and the tables are
   // only cleared once it has accepted the delete.
   const retired = {
@@ -323,7 +387,7 @@ export function deleteBatchedInstance(mesh, batchId) {
     geometryId: mesh.instanceGeometryIds?.[batchId] ?? null,
   }
   mesh.deleteInstance(batchId)
-  clearRow(mesh, batchId)
+  editClearRow(mesh, batchId)
   commit(mesh, [{kind: BatchEditKind.DELETE_INSTANCE, batchId, ...retired}])
 }
 
@@ -336,6 +400,8 @@ export function deleteBatchedInstance(mesh, batchId) {
  * @param {object} matrix THREE.Matrix4
  */
 export function setBatchedInstanceMatrix(mesh, batchId, matrix) {
+  refuseReentry()
+  mintOf(mesh)
   mesh.setMatrixAt(batchId, matrix)
   commit(mesh, [{kind: BatchEditKind.SET_MATRIX, batchId}])
 }
@@ -356,12 +422,16 @@ export function setBatchedInstanceMatrix(mesh, batchId, matrix) {
  * @throws {BatchEditIdError} when `sourceGeometryId` is missing
  */
 export function setBatchedInstanceGeometry(mesh, batchId, geometryId, sourceGeometryId) {
+  refuseReentry()
   if (!isIdValue(sourceGeometryId)) {
     throw new BatchEditIdError(
       `batchedEdit: setBatchedInstanceGeometry needs the source geometryId (got ${sourceGeometryId})`)
   }
+  // Floor first: the row's old source id may be the model's maximum.
+  const mint = mintOf(mesh)
   mesh.setGeometryIdAt(batchId, geometryId)
-  writeRow(mesh, batchId, {
+  mint.geometryId = Math.max(mint.geometryId, sourceGeometryId + 1)
+  editWriteRow(mesh, batchId, {
     parent: mesh.instanceParents[batchId],
     occurrenceId: mesh.instanceOccurrenceIds[batchId],
     geometryId: sourceGeometryId,
@@ -394,6 +464,8 @@ export function setBatchedInstanceGeometry(mesh, batchId, geometryId, sourceGeom
  * @return {number} the new geometry id
  */
 export function addBatchedGeometry(mesh, geometry) {
+  refuseReentry()
+  mintOf(mesh)
   const vertexCount = geometry.getAttribute('position').count
   const indexCount = geometry.getIndex()?.count ?? 0
   ensureGeometryCapacity(mesh, vertexCount, indexCount)
@@ -426,56 +498,74 @@ export function isPostLoadGeometry(mesh, geometryId) {
 
 
 /**
- * The model's mint: the next free occurrence and source-geometry ids,
- * recorded on first use.
+ * The model's mint: the next free occurrence and source-geometry ids.
  *
- * The floor is one past the largest id any batch row holds when the model
- * is first minted for — which bounds every id the load wrote, and every id
- * an earlier edit wrote, since both went through a row. It is computed on
- * demand rather than at load so an unedited model pays nothing for it, and
- * recorded thereafter so it only ever rises: deleting the instance that held
- * the maximum must not hand its id to the next created one.
+ * **One per model.** `object` may be the model root or any one of its
+ * batches; all resolve to the same mint (`batchedModel#modelBatchesOf`), whose
+ * floor is taken over every batch of the model.
+ *
+ * **The floor is taken at the model's first edit of any kind**, before that
+ * edit changes anything — every op here calls this first — or at the first
+ * mint, whichever comes first. At that point the rows are exactly what the
+ * load wrote, so the floor (one past the largest id in any row) bounds every
+ * id the model has ever held. Taking it later, over whatever rows are live
+ * then, would miss a deleted instance's ids: delete the instance holding the
+ * maximum occurrence id and the next mint would be that id again — and a
+ * paste carrying it would inherit any selection still naming it. It is not
+ * taken at load, so an unedited model pays nothing.
+ *
+ * After that the counters only rise: by minting, and by any explicit id an
+ * edit writes ({@link addBatchedInstance}, {@link setBatchedInstanceGeometry}),
+ * so a caller-chosen id is never minted again either.
  *
  * Ids are sequential, not a high fixed base: STEP occurrence ids index dense
  * arrays (`batchedToMergedMesh#batchedModelOccurrenceTables`), so a mint at
  * 2^31 would allocate a 2^31-long table.
  *
- * @param {object} model BatchedMesh or Group root — the same object every
- *   time; minting for one batch of a two-batch model would miss the other's
- *   ids
- * @return {object} `{occurrenceId, geometryId}` next values
+ * @param {object} object model root, or one of its batches
+ * @return {object} `{occurrenceId, geometryId}` next values, mutable
  */
-function mintOf(model) {
-  let mint = mints.get(model)
+function mintOf(object) {
+  const {key, meshes} = modelBatchesOf(object)
+  let mint = mints.get(key)
   if (mint) {
     return mint
   }
-  let occurrenceMax = -1
-  let geometryMax = -1
-  eachBatch(model, (mesh) => {
-    const occurrenceIds = mesh.instanceOccurrenceIds
-    const geometryIds = mesh.instanceGeometryIds
-    forEachActiveInstance(mesh, (batchId) => {
-      if (occurrenceIds) {
-        occurrenceMax = Math.max(occurrenceMax, occurrenceIds[batchId])
-      }
-      if (geometryIds) {
-        geometryMax = Math.max(geometryMax, geometryIds[batchId])
-      }
-    })
-  })
-  mint = {occurrenceId: occurrenceMax + 1, geometryId: geometryMax + 1}
-  mints.set(model, mint)
+  mint = {occurrenceId: 0, geometryId: 0}
+  for (const mesh of meshes) {
+    raiseFloor(mint, mesh)
+  }
+  mints.set(key, mint)
   return mint
 }
 
 
 /**
- * A fresh occurrence id for an instance an edit creates (a paste, a created
- * shape): above every occurrence id the model's batches held when it was
- * first minted for, and never handed out twice.
+ * Raise a mint past every id one batch's live rows hold.
  *
- * @param {object} model BatchedMesh or Group root
+ * @param {object} mint `{occurrenceId, geometryId}`, updated in place
+ * @param {object} mesh decorated BatchedMesh
+ */
+function raiseFloor(mint, mesh) {
+  const occurrenceIds = mesh.instanceOccurrenceIds
+  const geometryIds = mesh.instanceGeometryIds
+  forEachActiveInstance(mesh, (batchId) => {
+    if (occurrenceIds) {
+      mint.occurrenceId = Math.max(mint.occurrenceId, occurrenceIds[batchId] + 1)
+    }
+    if (geometryIds) {
+      mint.geometryId = Math.max(mint.geometryId, geometryIds[batchId] + 1)
+    }
+  })
+}
+
+
+/**
+ * A fresh occurrence id for an instance an edit creates (a paste, a created
+ * shape): above every occurrence id the model has held since load, in any of
+ * its batches, and never handed out twice ({@link mintOf}).
+ *
+ * @param {object} model the model root, or any one of its batches
  * @return {number}
  */
 export function mintOccurrenceId(model) {
@@ -488,7 +578,7 @@ export function mintOccurrenceId(model) {
  * existing shape keeps that shape's source id instead — sharing it is what
  * lets export write the shape once.
  *
- * @param {object} model BatchedMesh or Group root
+ * @param {object} model the model root, or any one of its batches
  * @return {number}
  */
 export function mintGeometryId(model) {

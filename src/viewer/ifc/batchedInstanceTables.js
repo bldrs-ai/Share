@@ -33,7 +33,10 @@ import {occurrencePathKey} from '../../utils/occurrencePaths'
  *  1. Loops go through {@link forEachActiveInstance}; nothing iterates the
  *     tables by length.
  *  2. Rows are written through {@link writeRow} and retired through
- *     {@link clearRow}, which also keep `occurrencePathToBatchIds` in step.
+ *     {@link clearRow} (builders) or their `edit*` twins (`batchedEdit.js`),
+ *     which also keep `occurrencePathToBatchIds` in step. The builders'
+ *     pair refuses a loaded batch, so a post-load row change cannot skip the
+ *     edit notification.
  *  3. Tables grow through {@link ensureInstanceCapacity}, never by an
  *     out-of-bounds write (a typed array silently drops one).
  *
@@ -361,7 +364,7 @@ function indexPath(index, path, batchId) {
  *   color, sourceColor}` — `sourceColor` defaults to `color` and is written
  *   only where an `instanceSourceColors` table exists
  */
-export function writeRow(holder, batchId, row) {
+function writeRowAt(holder, batchId, row) {
   if (!(batchId < tableLength(holder))) {
     throw new RangeError(
       `batchedInstanceTables: row ${batchId} is past the tables (${tableLength(holder)}); ` +
@@ -396,7 +399,7 @@ export function writeRow(holder, batchId, row) {
  * @param {object} holder decorated BatchedMesh or BatchHandle
  * @param {number} batchId
  */
-export function clearRow(holder, batchId) {
+function clearRowAt(holder, batchId) {
   if (!(batchId < tableLength(holder))) {
     return
   }
@@ -416,6 +419,80 @@ export function clearRow(holder, batchId) {
   if (holder.instanceSourceColors) {
     holder.instanceSourceColors[batchId] = null
   }
+}
+
+
+/**
+ * Refuse a write to a batch that is already a model's.
+ *
+ * A row write changes what an id names, and everything that derives state
+ * from a decorated batch (highlight, residency, the isolation mask) learns of
+ * such a change only through `batchedEdit`'s notification. A builder's
+ * tables, which nothing reads yet, are never a `BatchedMesh`, so this is
+ * exactly the line between load and edit.
+ *
+ * @param {object} holder
+ * @param {string} name the refused function, for the message
+ */
+function refuseLoadedBatch(holder, name) {
+  if (holder?.isBatchedMesh) {
+    throw new Error(
+      `batchedInstanceTables: ${name} on a loaded batch; edit it through batchedEdit.js ` +
+      'so its consumers are notified (design/new/model-edit.md §6.2)')
+  }
+}
+
+
+/**
+ * A builder's row write (see {@link writeRowAt}). Builders fill tables that
+ * no consumer reads yet; a loaded batch is refused.
+ *
+ * @param {object} holder BatchHandle or tables under construction
+ * @param {number} batchId
+ * @param {object} row see {@link writeRowAt}
+ */
+export function writeRow(holder, batchId, row) {
+  refuseLoadedBatch(holder, 'writeRow')
+  writeRowAt(holder, batchId, row)
+}
+
+
+/**
+ * A builder's row retirement (see {@link clearRowAt}); a loaded batch is
+ * refused.
+ *
+ * @param {object} holder BatchHandle or tables under construction
+ * @param {number} batchId
+ */
+export function clearRow(holder, batchId) {
+  refuseLoadedBatch(holder, 'clearRow')
+  clearRowAt(holder, batchId)
+}
+
+
+/**
+ * Row write on a LOADED batch. For `batchedEdit.js` only, which bumps the
+ * batch's revision and notifies its consumers around it;
+ * `batchedEditGuard.test.js` fails on a call anywhere else.
+ *
+ * @param {object} mesh decorated BatchedMesh
+ * @param {number} batchId
+ * @param {object} row see {@link writeRowAt}
+ */
+export function editWriteRow(mesh, batchId, row) {
+  writeRowAt(mesh, batchId, row)
+}
+
+
+/**
+ * Row retirement on a LOADED batch; for `batchedEdit.js` only, as
+ * {@link editWriteRow}.
+ *
+ * @param {object} mesh decorated BatchedMesh
+ * @param {number} batchId
+ */
+export function editClearRow(mesh, batchId) {
+  clearRowAt(mesh, batchId)
 }
 
 

@@ -1,6 +1,7 @@
 import {Group} from 'three'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {buildOccurrencePathIndex} from './batchedInstanceTables'
+import {linkBatchedModel} from './batchedModel'
 import {attachBatchedSubsets} from './batchedSubset'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 import {
@@ -138,6 +139,9 @@ export function decorateBatchMeshes(batches) {
     // mock and present only in the production prototype patch.
     batch.mesh.computeBoundsTree?.()
   }
+  // These batches are one model: an edit that mints a model-global id on one
+  // of them must see the others' ids too (batchedEdit `mintOccurrenceId`).
+  linkBatchedModel(batches.map((batch) => batch.mesh))
 }
 
 

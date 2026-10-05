@@ -159,25 +159,54 @@ Every op bumps the batch's **one** revision (`batchEditRevision`) and then,
 before it returns, calls every listener registered with
 `onBatchEdit(mesh, listener)` with `{mesh, revision, events}`. `events` is an
 ordered array, so a future bulk op can deliver one notification without
-changing the contract. All listeners run even if one throws; the first error
-is rethrown after. Instance ops also null three's whole-batch `boundingBox` /
+changing the contract. Instance ops also null three's whole-batch `boundingBox` /
 `boundingSphere`, which three recomputes the next time it culls, sorts or
 measures the batch. Keeping the load-time sphere would cull a paste placed
 outside it.
 
-`batchedEditGuard.test.js` scans src and fails on a call to any of three's
-batch mutators (`addInstance`, `deleteInstance`, `setMatrixAt`,
-`setGeometryIdAt`, `addGeometry`, `setGeometryAt`, `deleteGeometry`,
-`optimize`, `setInstanceCount`, `setGeometrySize`) outside `batchedEdit.js`
-and the load-time builders, which fill a batch before anything reads it. The
-allowlist is also checked for entries a file no longer uses.
+Two rules govern the listeners:
+
+- **A listener that throws is reported, not rethrown.** Every listener runs.
+  Each error goes to `console.error` (`[batchedEdit] an edit listener failed;
+  the edit stands`) and to Sentry, and the op returns normally. By then the
+  edit has happened. Throwing would leave the editor without the batch id of
+  an instance the batch already holds. For L1 it would also leave the op log
+  and the batch disagreeing, since the log appends an op when the edit call
+  returns.
+- **A listener may not edit.** An op started while listeners are being
+  notified throws `BatchEditReentryError` before it changes anything. A
+  nested edit would hand the later listeners a change record that no longer
+  matches the batch. In review, a listener that deleted each add left the
+  highlight indexing a deleted id, and the next selection threw.
+
+`batchedEditGuard.test.js` strips comments from every non-test file in src.
+It then fails on two things outside an allowlist:
+
+- **Any mention of a mutator's name.** That covers three's batch mutators
+  (`addInstance`, `deleteInstance`, `setMatrixAt`, `setGeometryIdAt`,
+  `addGeometry`, `setGeometryAt`, `deleteGeometry`, `optimize`,
+  `setInstanceCount`, `setGeometrySize`) and the side tables' writers. It
+  matches the name rather than a call shape, so destructuring, bracket
+  access, aliases, optional calls and calls split over lines are all caught.
+- **Any write to a side table.** That is an element store, a mutating
+  Map/array method, or replacing the table.
+
+The allowlist holds `batchedEdit.js`, the table owner, the load-time builders,
+decoration, and the two display-colour writers (colour is display state, not
+identity). Each entry is checked for still being used.
 
 `batchedInstanceTables.js` keeps the side tables: `isActive`,
-`forEachActiveInstance`, `ensureInstanceCapacity`, `writeRow`, `clearRow`. All
-three builders (one-shot, streaming, cache-hit hydration) write rows through
-it. `writeRow` writes every column, so a recycled id never inherits a stale
-row, and keeps `occurrencePathToBatchIds` in step. It no longer has a revision
-of its own; the edit revision replaces it.
+`forEachActiveInstance`, `ensureInstanceCapacity`, and the row writers.
+
+- All three builders write rows through `writeRow` / `clearRow`: one-shot,
+  streaming and cache-hit hydration. `writeRow` writes every column, so a
+  recycled id never inherits a stale row, and keeps
+  `occurrencePathToBatchIds` in step.
+- **Those two refuse a loaded `BatchedMesh` at run time**, so no code path
+  can change a loaded row without the notification. `batchedEdit.js` uses
+  their `editWriteRow` / `editClearRow` twins, which the guard confines to it.
+- The module no longer has a revision of its own; the edit revision replaces
+  it.
 
 #### Consumers subscribe; state is right when the edit returns
 
@@ -208,14 +237,28 @@ layer).
   Source geometry id 0 is a real dedup key, so two created shapes without
   one were read back as the same shape.
 - **Minting rule.** Created content takes its ids from
-  `mintOccurrenceId(model)` and `mintGeometryId(model)`. On first use per
-  model root, the mint records one past the largest id any batch row of the
-  model holds. It then only counts up, so deleting the instance that held
-  the maximum does not free its id. Ids are sequential, not a high fixed
-  base, because STEP occurrence ids index dense arrays. A paste of an
-  existing shape keeps that shape's source geometry id and mints only an
-  occurrence id. These are per-load ids, like `batchId`. The op log never
-  stores them (§5); a created element's stable ref is its `g<GlobalId>`.
+  `mintOccurrenceId` and `mintGeometryId`.
+  - **One mint per model.** It accepts the model root or any of its batches;
+    all resolve to the same mint. `decorateBatchMeshes` links a model's
+    batches (`batchedModel#linkBatchedModel` / `modelBatchesOf`), and the
+    floor is taken over all of them. Occurrence and source-geometry ids are
+    model-global, and a mint keyed by the batch it was called with handed the
+    opaque batch an id the glass batch held.
+  - **The floor is taken at the model's first edit of any kind,** before that
+    edit changes a row, or at the first mint if that comes earlier. The floor
+    is one past the largest id in any row. At that point the rows are what
+    the load wrote, so a later delete cannot lower it. A floor taken over
+    live rows after a delete re-minted the deleted maximum, and the paste
+    carrying it inherited any selection that still named it. The floor is not
+    taken at load, so an unedited model pays nothing.
+  - **The counters only rise:** by minting, and by any explicit id an edit
+    writes, so a caller-chosen id is never minted again either.
+  - Ids are sequential, not a high fixed base, because STEP occurrence ids
+    index dense arrays.
+  - A paste of an existing shape keeps that shape's source geometry id and
+    mints only an occurrence id.
+  - These are per-load ids, like `batchId`. The op log never stores them
+    (§5); a created element's stable ref is its `g<GlobalId>`.
 - **Post-load geometry never dedupes as source geometry.**
   `batchedInstanceGeometry#sourceKey` keys a geometry that
   `addBatchedGeometry` added per mesh, as it already did for collapsed range
@@ -306,6 +349,10 @@ Left to L2:
   the consumers.
 - **Moving an instance between the opaque and transparent batches** when an
   op crosses alpha 1.
+- **The reveal-hidden ghost overlay.** IfcIsolator's `revealedElementsSubset`
+  is baked from the batch when hidden elements are revealed, and it does not
+  follow edits. It needs an edit listener, or a rebuild after the op, once an
+  op can touch a hidden element.
 
 
 ## 7. Constraints

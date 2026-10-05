@@ -19,7 +19,9 @@ import {
 } from './batchedHighlight'
 import {addBatchedInstance, batchEditRevision, deleteBatchedInstance} from './batchedEdit'
 import {
+  allocateInstanceTables,
   clearRow,
+  editClearRow,
   ensureInstanceCapacity,
   forEachActiveInstance,
   hasInactiveInstances,
@@ -174,11 +176,23 @@ describe('viewer/ifc/batchedInstanceTables', () => {
     })
 
     it('refuses a row past the tables instead of losing it', () => {
+      const tables = allocateInstanceTables(4)
+      expect(() => writeRow(tables, 4, {parent: 1, color: RED})).toThrow(RangeError)
+      ensureInstanceCapacity(tables, 5)
+      writeRow(tables, 4, {parent: 1, color: RED})
+      expect(tables.instanceParents[4]).toBe(1)
+    })
+
+    it('refuses a builder\'s row write or retirement on a loaded batch', () => {
+      // A loaded batch changes only through batchedEdit, which notifies its
+      // consumers; a direct row write would leave the highlight indexing the
+      // old product (the round-5 probe P6).
       const mesh = decoratedStepBatch()
-      expect(() => writeRow(mesh, 4, {parent: 1, color: RED})).toThrow(RangeError)
-      ensureInstanceCapacity(mesh, 5)
-      writeRow(mesh, 4, {parent: 1, color: RED})
-      expect(mesh.instanceParents[4]).toBe(1)
+      const row = {parent: 200, occurrenceId: 3, geometryId: SHAPE_ID, color: RED}
+
+      expect(() => writeRow(mesh, 3, row)).toThrow(/batchedEdit/)
+      expect(() => clearRow(mesh, 3)).toThrow(/batchedEdit/)
+      expect(mesh.instanceParents[3]).toBe(300)
     })
 
     it('leaves absent tables absent when it grows the others', () => {
@@ -190,7 +204,7 @@ describe('viewer/ifc/batchedInstanceTables', () => {
       expect(mesh.instanceGeometryIds).toBeNull()
       expect(mesh.instanceParents.length).toBeGreaterThanOrEqual(10)
       expect(mesh.instanceColors.length).toBeGreaterThanOrEqual(10)
-      clearRow(mesh, 9)
+      editClearRow(mesh, 9)
       expect(mesh.instanceColors[9]).toBeNull()
     })
   })

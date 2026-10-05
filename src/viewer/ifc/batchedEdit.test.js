@@ -10,12 +10,15 @@ import {
   OrthographicCamera,
 } from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
+// Mocked below (jest hoists the mock above this import).
+import {captureException} from '@sentry/react'
 import {batchedArtifactBytes} from '../../loader/glbArtifact.fixture'
 import {BldrsInstanceTablesReader} from '../../loader/bldrsInstanceTables'
 import {robustBoundsFor} from '../three/robustBounds'
 import {ResidencyController} from '../residency/ResidencyController'
 import {
   BatchEditIdError,
+  BatchEditReentryError,
   BatchEditKind,
   addBatchedGeometry,
   addBatchedInstance,
@@ -29,7 +32,7 @@ import {
   setBatchedInstanceGeometry,
   setBatchedInstanceMatrix,
 } from './batchedEdit'
-import {applyBatchedSelection} from './batchedHighlight'
+import {applyBatchedInstanceSelection, applyBatchedSelection} from './batchedHighlight'
 import {instanceGeometryAt, makeInstanceGeometryReader} from './batchedInstanceGeometry'
 import {forEachActiveInstance} from './batchedInstanceTables'
 import {RED, SHAPE_ID, SPACING, decoratedStepBatch, unitTriangleApi} from './batchedModel.fixture'
@@ -83,11 +86,12 @@ function positions(geometry) {
  * @param {object} mesh decorated fixture batch
  * @param {number} parent
  * @param {number} x
+ * @param {number} [occurrenceId] defaults to a fresh one from the mint
  * @return {number} batch id
  */
-function paste(mesh, parent, x) {
+function paste(mesh, parent, x, occurrenceId = mintOccurrenceId(mesh)) {
   return addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
-    parent, occurrenceId: mintOccurrenceId(mesh), geometryId: SHAPE_ID, color: PURPLE,
+    parent, occurrenceId, geometryId: SHAPE_ID, color: PURPLE,
   }, new Matrix4().makeTranslation(x, 0, 0))
 }
 
@@ -130,10 +134,15 @@ describe('viewer/ifc/batchedEdit', () => {
       expect(batchedModelOccurrenceTables(mesh).occurrencePaths[0]).toEqual([10, 11])
     })
 
-    it('mints above every id the model held, across batches, and never twice', () => {
-      // Two batches: placement 1 is translucent, so it lands in the second.
+    /**
+     * A decorated two-batch model, as a load leaves it: occurrences 0 and 1
+     * opaque, occurrence 2 translucent (so it lands in the second batch).
+     *
+     * @return {{model: object, opaque: object, glass: object}}
+     */
+    function twoBatchModel() {
       const translucent = {...RED, w: 0.5}
-      const flatMeshes = [RED, translucent, RED].map((color, i) => ({
+      const flatMeshes = [RED, RED, translucent].map((color, i) => ({
         expressID: 100 + i,
         geometries: [{
           geometryExpressID: SHAPE_ID,
@@ -147,23 +156,72 @@ describe('viewer/ifc/batchedEdit', () => {
       expect(batches).toHaveLength(2)
       const model = new Group()
       batches.forEach((batch) => model.add(batch.mesh))
-      const held = batches.flatMap((batch) => Array.from(batch.mesh.instanceOccurrenceIds))
-      expect(Math.max(...held)).toBe(2)
-
-      const first = mintOccurrenceId(model)
-      // Deleting the instance that held the maximum must not free its id for
-      // reuse by the next mint.
       const opaque = batches.find((batch) => !batch.transparent).mesh
-      forEachActiveInstance(opaque, (batchId) => {
-        if (opaque.instanceOccurrenceIds[batchId] === 2) {
-          deleteBatchedInstance(opaque, batchId)
-        }
-      })
-      const second = mintOccurrenceId(model)
+      const glass = batches.find((batch) => batch.transparent).mesh
+      expect(Array.from(opaque.instanceOccurrenceIds)).toEqual([0, 1])
+      expect(Array.from(glass.instanceOccurrenceIds)).toEqual([2])
+      return {model, opaque, glass}
+    }
 
-      expect(first).toBe(3)
-      expect(second).toBe(4)
-      expect(mintGeometryId(model)).toBe(SHAPE_ID + 1)
+    it('mints one sequence per model, whichever batch or the root it is asked for', () => {
+      // Round 5, finding 2: the mint was keyed by the object passed, so the
+      // opaque batch minted 2 — the glass batch's occurrence.
+      const {model, opaque, glass} = twoBatchModel()
+
+      const minted = [mintOccurrenceId(opaque), mintOccurrenceId(glass), mintOccurrenceId(model)]
+
+      expect(minted).toEqual([3, 4, 5])
+      expect(mintGeometryId(glass)).toBe(SHAPE_ID + 1)
+      expect(mintGeometryId(opaque)).toBe(SHAPE_ID + 2)
+    })
+
+    it('never mints a deleted instance\'s occurrence id, even when no mint came first', () => {
+      // Round 5, finding 1 (probe P1): the floor was taken at the first mint,
+      // over live rows, after the delete had cleared the maximum. The paste
+      // then carried occurrence 3 — and the selection still naming it.
+      const mesh = decoratedStepBatch()
+      applyBatchedInstanceSelection(mesh, [3], {r: 0, g: 1, b: 1})
+      deleteBatchedInstance(mesh, 3)
+
+      const occurrenceId = mintOccurrenceId(mesh)
+      const batchId = paste(mesh, 300, 50, occurrenceId)
+
+      expect(occurrenceId).toBe(4)
+      expect(mesh.getColorAt(batchId, new Color()).toArray()).toEqual([0.5, 0, 0.5])
+    })
+
+    it('never mints a deleted instance\'s occurrence id in another batch of the model', () => {
+      const {model, glass} = twoBatchModel()
+      deleteBatchedInstance(glass, 0) // occurrence 2, the model maximum
+      expect(mintOccurrenceId(model)).toBe(3)
+    })
+
+    it('never mints a source geometry id whose every user was deleted', () => {
+      // Probe P1b: with all four users of SHAPE_ID gone the mint returned 0.
+      const mesh = decoratedStepBatch()
+      for (const batchId of [0, 1, 2, 3]) {
+        deleteBatchedInstance(mesh, batchId)
+      }
+      expect(mintGeometryId(mesh)).toBe(SHAPE_ID + 1)
+    })
+
+    it('never mints a source geometry id a re-shape took off the model', () => {
+      // The re-shape is the first edit, so the floor has to be taken before it
+      // rewrites the rows' source ids (here to 7, below SHAPE_ID).
+      const mesh = decoratedStepBatch()
+      const geometryId = mesh.getGeometryIdAt(0)
+      for (const batchId of [0, 1, 2, 3]) {
+        setBatchedInstanceGeometry(mesh, batchId, geometryId, 7)
+      }
+      expect(mintGeometryId(mesh)).toBe(SHAPE_ID + 1)
+    })
+
+    it('never mints an id an edit wrote explicitly', () => {
+      const mesh = decoratedStepBatch()
+      addBatchedInstance(mesh, mesh.getGeometryIdAt(0),
+        {parent: 500, occurrenceId: 40, geometryId: 2000, color: PURPLE}, new Matrix4())
+      expect(mintOccurrenceId(mesh)).toBe(41)
+      expect(mintGeometryId(mesh)).toBe(2001)
     })
   })
 
@@ -252,16 +310,75 @@ describe('viewer/ifc/batchedEdit', () => {
       expect(batchEditRevision(mesh)).toBe(5)
     })
 
-    it('delivers to every listener even when one throws, then rethrows', () => {
+    it('reports a throwing listener instead of orphaning the edit', () => {
+      // Round 5, finding 4: the throw reached the editor after the instance
+      // existed, so the caller never learned its batch id.
       const mesh = decoratedStepBatch()
       const after = jest.fn()
+      const bug = new Error('listener bug')
       onBatchEdit(mesh, () => {
-        throw new Error('listener bug')
+        throw bug
       })
       onBatchEdit(mesh, after)
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+      captureException.mockClear()
+      try {
+        const batchId = paste(mesh, 500, 50)
 
-      expect(() => deleteBatchedInstance(mesh, 3)).toThrow('listener bug')
-      expect(after).toHaveBeenCalledTimes(1)
+        expect(batchId).toBe(4)
+        expect(mesh.instanceParents[batchId]).toBe(500)
+        expect(after).toHaveBeenCalledTimes(1)
+        expect(consoleError).toHaveBeenCalledWith(
+          '[batchedEdit] an edit listener failed; the edit stands', bug)
+        expect(captureException).toHaveBeenCalledWith(bug)
+      } finally {
+        consoleError.mockRestore()
+      }
+    })
+
+    it('refuses an edit made from inside a listener, before it changes anything', () => {
+      // Round 5, finding 5: a nested edit made the later listeners' change
+      // record describe a batch that no longer matched it.
+      const mesh = decoratedStepBatch()
+      let refused = null
+      onBatchEdit(mesh, (change) => {
+        try {
+          deleteBatchedInstance(mesh, change.events[0].batchId)
+        } catch (err) {
+          refused = err
+        }
+      })
+
+      const batchId = paste(mesh, 500, 50)
+
+      expect(refused).toBeInstanceOf(BatchEditReentryError)
+      expect(refused.message).toMatch(/listener tried to edit/)
+      expect(mesh.instanceCount).toBe(5)
+      expect(mesh.instanceParents[batchId]).toBe(500)
+    })
+
+    it('keeps the highlight consistent when a listener tries to undo an add', () => {
+      // Probe P5b: an earlier listener deleted each add, so the highlight then
+      // indexed a deleted id as live, and selecting its occurrence threw.
+      const mesh = decoratedStepBatch()
+      onBatchEdit(mesh, (change) => {
+        deleteBatchedInstance(mesh, change.events[0].batchId)
+      })
+      applyBatchedInstanceSelection(mesh, [3], {r: 0, g: 1, b: 1})
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        const batchId = paste(mesh, 500, 50, 9)
+
+        expect(consoleError).toHaveBeenCalledWith(
+          '[batchedEdit] an edit listener failed; the edit stands', expect.any(BatchEditReentryError))
+        // The paste stands, indexed under its own occurrence and no other.
+        expect(() => applyBatchedInstanceSelection(mesh, [0], {r: 0, g: 1, b: 1})).not.toThrow()
+        expect(mesh.getColorAt(batchId, new Color()).toArray()).toEqual([0.5, 0, 0.5])
+        applyBatchedInstanceSelection(mesh, [9], {r: 0, g: 1, b: 1})
+        expect(mesh.getColorAt(batchId, new Color()).toArray()).toEqual([0, 1, 1])
+      } finally {
+        consoleError.mockRestore()
+      }
     })
 
     it('stops delivering after unsubscribe', () => {
@@ -349,12 +466,13 @@ describe('viewer/ifc/batchedEdit', () => {
       residency.setTarget(0)
       expect(batchEditListenerCount(mesh)).toBe(1)
 
+      const onEdit = jest.spyOn(residency, 'onBatchEdit_')
+
       residency.dispose()
+      paste(mesh, 500, 50)
 
       expect(batchEditListenerCount(mesh)).toBe(0)
-      // A disposed controller at target 0 must not hide what lands after it.
-      const batchId = paste(mesh, 500, 50)
-      expect(mesh.getVisibleAt(batchId)).toBe(true)
+      expect(onEdit).not.toHaveBeenCalled()
     })
 
     it('subscribes the highlight once per batch, however many highlight calls', () => {
