@@ -131,7 +131,8 @@ describe('useLoginTracking', () => {
     const tabB = mountWith(mockedUserLoggedOut)
     tabA(withClaims(FIRST_SIGN_IN))
     tabB(withClaims(FIRST_SIGN_IN))
-    await waitFor(() => expect(locks.requests).toEqual(['bldrs.ga.lastReportedLogin', 'bldrs.ga.lastReportedLogin']))
+    // Each tab's signed-out clear (forgetReportedLogin), then each tab's claim.
+    await waitFor(() => expect(locks.requests).toEqual(Array(4).fill('bldrs.ga.lastReportedLogin')))
     // Neither tab read-wrote the marker or emitted outside the lock.
     expect(loginEvents()).toHaveLength(0)
     expect(localStorage.getItem('bldrs.ga.lastReportedLogin')).toBeNull()
@@ -140,6 +141,68 @@ describe('useLoginTracking', () => {
     await waitFor(() => expect(localStorage.getItem('bldrs.ga.lastReportedLogin')).toBe(`${mockedUserLoggedIn.user.sub}|${FIRST_SIGN_IN}`))
     await flush()
     expect(loginEvents()).toHaveLength(1)
+  })
+
+  // codex finding on #1912. The app's logouts keep the Auth0 session
+  // (ProfileControl's openUrl only reloads; OpenModelDialog passes
+  // openUrl:false), so the popup sign-in after one is completed from it and
+  // its ID token carries the same auth_time as the sign-in before.
+  it('a sign-in after an in-page sign-out counts again, even with the same auth_time', async () => {
+    const step = mountWith(mockedUserLoggedOut)
+    step(withClaims(FIRST_SIGN_IN))
+    await waitFor(() => expect(loginEvents()).toHaveLength(1))
+    step(mockedUserLoggedOut)
+    step(withClaims(FIRST_SIGN_IN))
+    await waitFor(() => expect(loginEvents()).toHaveLength(2))
+    await flush()
+    expect(loginEvents()).toHaveLength(2)
+  })
+
+  // ProfileControl's logout reloads the page, so that sign-out reaches the
+  // hook as a page load that comes up signed out, not as an in-page edge.
+  it('a sign-in after a sign-out reload counts again, even with the same auth_time', async () => {
+    const beforeLogout = mountWith(mockedUserLoggedOut)
+    beforeLogout(withClaims(FIRST_SIGN_IN))
+    await waitFor(() => expect(loginEvents()).toHaveLength(1))
+    // The reloaded page: a new mount (fresh refs), localStorage kept.
+    const afterLogout = mountWith(LOADING)
+    afterLogout(mockedUserLoggedOut)
+    afterLogout(withClaims(FIRST_SIGN_IN))
+    await waitFor(() => expect(loginEvents()).toHaveLength(2))
+  })
+
+  it('a cached-session boot leaves the reported sign-in in place', async () => {
+    const signIn = mountWith(mockedUserLoggedOut)
+    signIn(withClaims(FIRST_SIGN_IN))
+    await waitFor(() => expect(loginEvents()).toHaveLength(1))
+    const marker = localStorage.getItem('bldrs.ga.lastReportedLogin')
+    expect(marker).toBe(`${mockedUserLoggedIn.user.sub}|${FIRST_SIGN_IN}`)
+    // Reload while signed in: loading, then straight to the cached session.
+    const reload = mountWith(LOADING)
+    reload(withClaims(FIRST_SIGN_IN))
+    await flush()
+    expect(localStorage.getItem('bldrs.ga.lastReportedLogin')).toBe(marker)
+    expect(loginEvents()).toHaveLength(1)
+  })
+
+  // The sign-out clear must not reopen the cross-tab dedupe: tabs that were
+  // signed out clear on the way in, before the sign-in they then race on.
+  it('after a sign-out, two signed-out tabs on the next sign-in still emit once', async () => {
+    const locks = installGatedFakeLocks()
+    const tabA = mountWith(mockedUserLoggedOut)
+    const tabB = mountWith(mockedUserLoggedOut)
+    locks.open()
+    tabA(withClaims(FIRST_SIGN_IN))
+    tabB(withClaims(FIRST_SIGN_IN))
+    await waitFor(() => expect(loginEvents()).toHaveLength(1))
+    // Sign out in both (in-page), then one sign-in, same auth_time.
+    tabA(mockedUserLoggedOut)
+    tabB(mockedUserLoggedOut)
+    tabA(withClaims(FIRST_SIGN_IN))
+    tabB(withClaims(FIRST_SIGN_IN))
+    await waitFor(() => expect(loginEvents()).toHaveLength(2))
+    await flush()
+    expect(loginEvents()).toHaveLength(2)
   })
 
   it('without navigator.locks, falls back to the unlocked claim', async () => {

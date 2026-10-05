@@ -200,19 +200,6 @@ export default function BaseRoutes({testElt = null}) {
         cacheMode: 'on',
         useRefreshTokens: true,
       }
-      getAccessTokenSilently(tokenFetchOpts)
-        .then(processAccessToken)
-        .catch((err) => {
-          if (err.error === 'invalid_grant') {
-            logout({returnTo: window.location.origin})
-          } else if (err.error !== 'login_required') {
-            throw err
-          }
-        })
-        .finally(() => {
-          setIsAuthResolved(true)
-        })
-
       // Background fresh-claims pass. Cached tokens carry JWT claims frozen
       // at mint time, so a boot that only reads the cache would miss
       // anything set server-side since: the Stripe webhook flipping
@@ -223,7 +210,10 @@ export default function BaseRoutes({testElt = null}) {
       // exactly what cacheMode:'off' used to do — but off the load-blocking
       // path: it doesn't gate isAuthResolved, and processAccessToken
       // re-applies whatever it learns when it lands.
-      if (!freshClaimsRequestedRef.current) {
+      const startFreshClaimsPass = () => {
+        if (freshClaimsRequestedRef.current) {
+          return
+        }
         freshClaimsRequestedRef.current = true
         getAccessTokenSilently({...tokenFetchOpts, cacheMode: 'off'})
           .then((token) => processAccessToken(token, {isFresh: true}))
@@ -231,11 +221,55 @@ export default function BaseRoutes({testElt = null}) {
             if (err.error === 'invalid_grant') {
               logout({returnTo: window.location.origin})
             }
-            // Anything else is non-fatal here: the cached-token pass above
+            // Anything else is non-fatal here: the cached-token pass
             // already established a working session; this pass only exists
             // to refresh claims.
           })
       }
+
+      // The fresh pass is started only once the cached call has SETTLED,
+      // never alongside it. auth0-spa-js (2.0.2, getTokenSilently)
+      // coalesces concurrent calls through one in-flight promise per key
+      // `${clientId}::${audience}::${scope}` — cacheMode is not part of the
+      // key — so a cacheMode:'off' call issued while this cacheMode:'on'
+      // call is pending just receives the cached token. That silently
+      // defeated the pass (no refresh grant, so no pendingReauth flip and
+      // no invalid_grant logout on boot) and made it report a cached token
+      // as `isFresh`. Don't "simplify" this back into a parallel call.
+      // The SDK drops the key in a .finally on that same promise, so by the
+      // time the handlers below run the key is free again.
+      //
+      // Chained after the .finally, so it can't delay isAuthResolved; and
+      // the cached pass is processed first, so the fresh claims are the
+      // ones left applied. Skipped when the cached call says the session
+      // is gone — login_required (signed out) or invalid_grant (logout
+      // already under way) — where a forced refresh could only fail the
+      // same way; the parallel call used to coalesce into that same
+      // failure, so this is the old net behavior. Any other error is
+      // rethrown as before and also skips it. The ref claim is inside
+      // startFreshClaimsPass, so a navigation re-run whose cached call
+      // succeeds can still start the page's one pass.
+      getAccessTokenSilently(tokenFetchOpts)
+        .then((token) => {
+          processAccessToken(token)
+          return true
+        })
+        .catch((err) => {
+          if (err.error === 'invalid_grant') {
+            logout({returnTo: window.location.origin})
+          } else if (err.error !== 'login_required') {
+            throw err
+          }
+          return false
+        })
+        .finally(() => {
+          setIsAuthResolved(true)
+        })
+        .then((isSessionLive) => {
+          if (isSessionLive) {
+            startFreshClaimsPass()
+          }
+        })
     }
   }, [
     appPrefix,

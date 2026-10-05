@@ -1,5 +1,5 @@
 import React from 'react'
-import {render, screen, waitFor} from '@testing-library/react'
+import {act, render, screen, waitFor} from '@testing-library/react'
 import {MemoryRouter} from 'react-router-dom'
 import {
   mockedUseAuth0,
@@ -8,7 +8,7 @@ import {
   mockedUserLoggedOut,
 } from './__mocks__/authentication'
 import {_resetGaClientIdForTests, setGaClientId} from './privacy/analytics'
-import {_resetSubscriptionTrackingForTests} from './privacy/subscriptionTracking'
+import * as subscriptionTracking from './privacy/subscriptionTracking'
 import {HelmetThemeCtx} from './Share.fixture'
 import BaseRoutes from './BaseRoutes'
 import useStore from './store/useStore'
@@ -30,6 +30,11 @@ jest.mock('jwt-decode', () => ({
 
 // Populated per-test to control what jwt-decode returns for a given token.
 const tokenClaims = {}
+
+
+// How long a test waits for a call that must NOT happen before asserting its
+// absence. Generous next to the microtask hops the auth chain takes.
+const WAIT_FOR_STRAY_CALL_MS = 50
 
 
 describe('BaseRoutes - Route Navigation Testing', () => {
@@ -162,12 +167,80 @@ describe('BaseRoutes - auth resolution', () => {
   })
 
   it('token fetch rejected with login_required: isAuthResolved still flips true', async () => {
+    const getToken = jest.fn().mockRejectedValue({error: 'login_required'})
     mockedUseAuth0.mockReturnValue({
       ...mockedUserLoggedIn,
-      getAccessTokenSilently: jest.fn().mockRejectedValue({error: 'login_required'}),
+      getAccessTokenSilently: getToken,
     })
     const state = await renderAndResolve()
     expect(state.accessToken).toBe('')
+    // Signed out as far as the SDK is concerned: a forced refresh could only
+    // fail the same way, so the fresh-claims pass is not started.
+    await act(() => new Promise((resolve) => setTimeout(resolve, WAIT_FOR_STRAY_CALL_MS)))
+    expect(getToken.mock.calls.map(([opts]) => opts.cacheMode)).toEqual(['on'])
+  })
+
+  // codex finding on #1912. auth0-spa-js coalesces concurrent
+  // getTokenSilently calls on clientId::audience::scope, cacheMode NOT
+  // included, so a cacheMode:'off' call made while the boot 'on' call is in
+  // flight just gets the cached token back. The fresh pass therefore has to
+  // wait for the cached call to settle — without holding up isAuthResolved.
+  it('fresh-claims pass starts only after the cached call settles, and is what gets processed as fresh', async () => {
+    const cachedToken = 'cached-jwt'
+    const freshToken = 'fresh-jwt'
+    const githubClaims = (subscriptionStatus) => ({
+      'sub': 'github|1',
+      'https://bldrs.ai/app_metadata': {subscriptionStatus},
+      'https://bldrs.ai/identities': [{connection: 'github', provider: 'github', user_id: '1'}],
+    })
+    tokenClaims[cachedToken] = githubClaims(null)
+    tokenClaims[freshToken] = githubClaims('sharePro')
+    const resolvers = {}
+    const getToken = jest.fn((opts) => new Promise((resolve) => {
+      resolvers[opts.cacheMode] = resolve
+    }))
+    const track = jest.spyOn(subscriptionTracking, 'trackSubscriptionFromToken')
+    mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently: getToken})
+    try {
+      render(
+        <MemoryRouter initialEntries={['/about']}>
+          <HelmetThemeCtx>
+            <BaseRoutes/>
+          </HelmetThemeCtx>
+        </MemoryRouter>,
+      )
+      const cacheModes = () => getToken.mock.calls.map(([opts]) => opts.cacheMode)
+      await waitFor(() => expect(cacheModes()).toEqual(['on']))
+      // Give a parallel 'off' call every chance to show up while 'on' is pending.
+      await act(() => new Promise((resolve) => setTimeout(resolve, WAIT_FOR_STRAY_CALL_MS)))
+      expect(cacheModes()).toEqual(['on'])
+      expect(useStore.getState().isAuthResolved).toBe(false)
+
+      await act(() => {
+        resolvers.on(cachedToken)
+        return Promise.resolve()
+      })
+      // Resolved on the cached token alone, with the fresh call issued but
+      // still pending: the fresh pass is not on the load-blocking path.
+      await waitFor(() => expect(useStore.getState().isAuthResolved).toBe(true))
+      await waitFor(() => expect(cacheModes()).toEqual(['on', 'off']))
+      expect(useStore.getState().accessToken).toBe(cachedToken)
+      expect(track.mock.calls).toEqual([[cachedToken, {isFresh: false}]])
+
+      await act(() => {
+        resolvers.off(freshToken)
+        return Promise.resolve()
+      })
+      await waitFor(() => expect(track.mock.calls).toEqual([
+        [cachedToken, {isFresh: false}],
+        [freshToken, {isFresh: true}],
+      ]))
+      // Processed after the cached token, so its claims are the ones left applied.
+      expect(useStore.getState().accessToken).toBe(freshToken)
+      expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'sharePro'})
+    } finally {
+      track.mockRestore()
+    }
   })
 
   // The boot path reads the SDK's token cache (cacheMode 'on') so model load
@@ -238,7 +311,7 @@ describe('BaseRoutes - subscription funnel events', () => {
       delete tokenClaims[k]
     }
     localStorage.clear()
-    _resetSubscriptionTrackingForTests()
+    subscriptionTracking._resetSubscriptionTrackingForTests()
     _resetGaClientIdForTests()
     window.gtag = jest.fn()
     useStore.setState({isAuthResolved: false, accessToken: '', hasGithubIdentity: false, appMetadata: {}})
@@ -266,7 +339,7 @@ describe('BaseRoutes - subscription funnel events', () => {
    * @param {string} [freshToken] defaults to the cached one
    */
   async function pageLoad(cachedToken, freshToken = cachedToken) {
-    _resetSubscriptionTrackingForTests()
+    subscriptionTracking._resetSubscriptionTrackingForTests()
     const getToken = jest.fn((opts) => Promise.resolve(opts.cacheMode === 'off' ? freshToken : cachedToken))
     mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently: getToken})
     const {unmount} = render(

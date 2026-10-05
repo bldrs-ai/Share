@@ -213,6 +213,24 @@ The parts that aren't obvious:
   from the user id's connection prefix (`google-oauth2|`, `github|`,
   `auth0|`). For a linked account that is the *primary* identity, not
   necessarily the button the user pressed.
+  - **A sign-out forgets the reported sign-in.** `auth_time` alone can't
+    tell a sign-in apart from the one before a sign-out, because none of
+    the app's logouts end the Auth0 session: `ProfileControl` passes an
+    `openUrl` that only reloads the origin, `OpenModelDialog` passes
+    `openUrl: false`, and auth0-spa-js then clears only its local cache and
+    never visits `/v2/logout`. The next popup sign-in (no `prompt: 'login'`
+    unless a scope is being changed) completes from that live session and
+    its ID token carries the same `auth_time`. So whenever a tab settles
+    signed out — in place, or on a page load that comes up signed out, as
+    after `ProfileControl`'s reload — it clears the marker, under the same
+    Web Lock. A cached-session boot never passes through signed out, so it
+    never clears. Other tabs aren't told about a sign-out (the SDK doesn't
+    broadcast it): a tab still signed in in memory makes no edge for the
+    next sign-in, so it neither clears nor claims. The tabs that do claim
+    are signed out themselves and cleared on the way in, well before the
+    sign-in they then race on, so they still dedupe each other. Re-counting
+    one sign-in would take a tab that first settles signed out inside that
+    sign-in's completion window.
 - **No `sign_up`.** Nothing in the token reliably marks a brand-new account
   (no `logins_count` or `created_at` claim; that would take an Auth0 Action).
   "Sign up free" therefore reports as `login`.
@@ -236,7 +254,15 @@ The parts that aren't obvious:
     `freePendingReauth`. So when a *fresh* token carries a settled status
     (`sharePro`, or any free status, unset included), the marker is cleared
     and the next pending status counts. Two tokens count as fresh. One is
-    BaseRoutes' fresh-claims pass (`cacheMode: 'off'`). The other is the
+    BaseRoutes' fresh-claims pass (`cacheMode: 'off'`). It starts only after
+    the boot's cached (`cacheMode: 'on'`) call has settled: auth0-spa-js
+    coalesces concurrent `getTokenSilently` calls on
+    `clientId::audience::scope`, without `cacheMode` in the key, so an `'off'`
+    call made while the `'on'` one is in flight just gets the cached token
+    back, which would be labeled fresh. It is chained after `isAuthResolved`
+    is set, so it still doesn't hold up the first model load, and it's
+    skipped when the cached call fails with `login_required` or
+    `invalid_grant`. The other is the
     token `ProfileControl` reads when it hears `refreshAuth` after a popup
     sign-in, which is how the reauth modal completes. That read uses
     `cacheMode: 'on'`, but the popup has just written its newly minted token

@@ -41,6 +41,32 @@ import {useAuth0} from './Auth0Proxy'
  * `user` strips it. Where it is unavailable (the mock provider has no
  * getIdTokenClaims) there is no cross-tab dedupe and the in-page edge alone
  * decides.
+ *
+ * `auth_time` alone does NOT tell two sign-ins apart across a sign-out: none
+ * of the app's own logouts end the Auth0 session. ProfileControl's passes a
+ * custom `openUrl` that just reloads the origin, and OpenModelDialog's
+ * passes `openUrl: false`; either way auth0-spa-js (2.0.2, `logout`) clears
+ * only its local cache and never visits /v2/logout. The next popup sign-in
+ * (PopupAuth sends `prompt: 'login'` only for an explicit scope change) is
+ * then completed from that live session — no credentials asked for — and its
+ * ID token carries the SAME auth_time, so a marker left from before the
+ * sign-out would swallow it. Hence forgetReportedLogin: entering a settled
+ * signed-out state clears the marker, so the next completed sign-in claims
+ * afresh. That covers both shapes a sign-out reaches this hook in — an
+ * in-page true → false (openUrl:false, the SDK's own local logout on a dead
+ * refresh token) and a page load that comes up signed out (ProfileControl's
+ * reload) — and never a cached-session boot, which is never signed out.
+ *
+ * Other tabs and a sign-out: the SDK does not broadcast logout, so a tab that
+ * was signed in stays signed in in memory (until it reloads) and never makes
+ * an in-page edge for the next sign-in — it neither clears nor claims. Only
+ * tabs that are themselves signed out claim, and they all cleared on the way
+ * into that state, which precedes the sign-in by at least the human time it
+ * takes to complete one; so the clear and the claims stay in that order in
+ * the lock's queue, and the claims still dedupe each other. (The one
+ * interleaving that could re-count — a tab first settling signed out just
+ * after another tab claimed, then making its own edge for that same sign-in —
+ * needs that tab to boot inside the sign-in's completion window.)
  */
 
 
@@ -108,7 +134,13 @@ export default function useLoginTracking() {
       return
     }
     if (!isAuthenticated) {
-      sawSignedOutRef.current = true
+      // Once per signed-out period, on the way in (the ref also keeps
+      // StrictMode's second run from repeating it). See the module comment
+      // for why a sign-out has to forget the reported sign-in.
+      if (!sawSignedOutRef.current) {
+        sawSignedOutRef.current = true
+        forgetReportedLogin()
+      }
       return
     }
     if (!user) {
@@ -181,6 +213,27 @@ function claimLogin(sub, authTime, method) {
     }
     gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method})
     return true
+  })
+}
+
+
+/**
+ * Drop the cross-tab marker of the last reported sign-in, so the next one is
+ * claimed even if it reuses the same Auth0 session (and so the same
+ * auth_time; see the module comment). Under the same Web Lock as claimLogin:
+ * a lock name's requests are granted in order, so this tab's clear always
+ * lands before its own later claim, and never in the middle of another tab's
+ * read-compare-write.
+ *
+ * @return {Promise<void>}
+ */
+function forgetReportedLogin() {
+  return withCrossTabLock(LAST_LOGIN_KEY, () => {
+    try {
+      localStorage.removeItem(LAST_LOGIN_KEY)
+    } catch {
+      // Storage unavailable: there is no marker to clear either.
+    }
   })
 }
 
