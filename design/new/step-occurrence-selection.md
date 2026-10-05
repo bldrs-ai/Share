@@ -360,10 +360,38 @@ order; BVH permutes only the index buffer, not the numbering).
    exactly. What remains is the sliver the body segment can't reach: a
    root-level product whose single solid makes it its own body, where the path
    is legitimately empty and `getOccurrencePathByInstance` still normalizes it
-   to `null`. Harmless with one root assembly (the common case); a file with
+   to `null`. The one-root file is closed (#1909, below); a file with
    several distinct single-solid products at the root still degrades to
    type-level there, and a real fix still needs a PDS→product-definition→node
    reverse map.
+
+   **One-root files (#1909).** The sliver was not harmless: a part with no
+   assembly structure (DSA2, `sameIdentityShells.step`) is *all* root-level
+   geometry, so a double-click on any of its shells highlighted no NavTree row.
+   The pick reports the `product_definition_shape` (`#8`), the tree's only row
+   is the `product_definition` (`#7`), and the empty path joins on neither.
+   It was the same on a first load as on a reopened export, portable or not:
+   nothing about it came from the cache. Assemblies were unaffected, because
+   every placement below the root carries a path.
+
+   Fix: `selectFromInstancePick` tells "the instance's path is present and
+   empty" (`IfcInstanceMap.hasEmptyOccurrencePath`, or a zero-length entry in
+   the batch's `instanceOccurrencePaths`) from "no occurrence data" (IFC, an
+   undecorated model), which `getOccurrencePathByInstance` conflates as
+   `null`. For the former, `findSoleRootNode` names the tree's root **when it
+   is the only node with an empty path** — exact, since an empty path means
+   "no NAUO above this" and in a one-product file that is the root alone — and
+   the pick passes that row as the selection's *anchor*. The anchor is what the
+   NavTree row highlight, Properties, the TopBar crumb and the `.step/<root>`
+   permalink follow, while `selectedElements` keeps the owner id the scene and
+   hide key on, so scene highlighting and `H` are unchanged. This is the same
+   rule `glbPortable.js#hasSingleEmptyPathNode` applies to the export (#1908).
+
+   Still open: with several top-level products Conway wraps them in a synthetic
+   `Model` node and gives the wrapper and each root `occurrencePath: []`, so
+   the empty path names no one part and the pick stays unhighlighted (never
+   mis-highlighted). Telling the roots apart needs the shape-to-definition link
+   that the tree, the instance tables and the instance map do not carry.
 5. **`?feature=batchedMesh`.** The BatchedMesh render path builds no
    `IfcInstanceMap`, so per-occurrence (and all per-instance) selection no-ops
    under that flag — a documented gap in `buildBatchedConwayModel`, not a

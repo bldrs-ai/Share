@@ -11,6 +11,7 @@ import {
   doubleClickSelectsAnElement,
   expectNavTreeFollowsSelection,
   expectNoHorizontalScroll,
+  expectProductRowSelected,
   expectSnackbarOnTop,
   glbJsonChunk,
   loadModelAndWaitForArtifact,
@@ -968,6 +969,33 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)).toHaveCount(1)
     await expect(page.locator('[data-node-label="Unassigned"]')).toHaveCount(0)
     await doubleClickSelectsAnElement(page, 'collapsed')
+    // #1909: and the pick lands on that row. The shells' owner is the
+    // product_definition_shape, the row is the product_definition, and their
+    // occurrence path is empty, so nothing joined them and no row lit up.
+    await expectProductRowSelected(page, SHELLS_PART_NAME)
+    await expectNavTreeFollowsSelection(page)
+  })
+
+  test('a shell picked in a freshly opened part highlights its product in the NavTree', async ({page}) => {
+    // #1909, before any export is involved: the same part opened straight
+    // from the STEP file. The pick's owner is the product_definition_shape,
+    // the tree's only row is the product_definition, and the empty
+    // occurrence path joins neither, so this was broken on a first load too.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+
+    await loadModelAndWaitForArtifact(page)
+    resetGlbLogs(glbLogs)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    await page.getByTestId('control-button-navigation').click()
+    await expect(page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)).toHaveCount(1)
+
+    await doubleClickSelectsAnElement(page, 'any')
+    await expectProductRowSelected(page, SHELLS_PART_NAME)
+    await expectNavTreeFollowsSelection(page)
   })
 
   test('a file of several top-level parts never gives one part the shells of another', async ({page}) => {

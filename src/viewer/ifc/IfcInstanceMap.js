@@ -216,6 +216,30 @@ export class IfcInstanceMap {
 
 
   /**
+   * True when the instance's occurrence path is present and EMPTY: the
+   * placement sits on the root product itself, with no NAUO above it.
+   *
+   * `getOccurrencePathByInstance` folds that case into `null` alongside "this
+   * model carries no occurrence data" (IFC, older artifacts), which is right
+   * for the callers that only want a disambiguating path. A caller that wants
+   * to say "this pick is the ROOT's" has to tell the two apart, because only
+   * the first is evidence the geometry belongs to the root. See
+   * `utils/occurrencePaths.js#findSoleRootNode`.
+   *
+   * @param {number} instanceId
+   * @return {boolean}
+   */
+  hasEmptyOccurrencePath(instanceId) {
+    const paths = this.instanceIdToOccurrencePath
+    if (!paths || instanceId < 0 || instanceId >= paths.length) {
+      return false
+    }
+    const path = paths[instanceId]
+    return Array.isArray(path) && path.length === 0
+  }
+
+
+  /**
    * Geometry express id (`PlacedGeometry.geometryExpressID`) for the given
    * synthetic instance ID. For STEP this is the solid's own express id —
    * the second half of the `(occurrencePath, solid expressID)` identity that

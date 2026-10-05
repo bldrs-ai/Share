@@ -1,6 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import {
   findNodeByOccurrencePath,
+  findSoleRootNode,
   occurrenceElementPathIds,
   occurrencePathKey,
   occurrencePathKeySetForTree,
@@ -150,6 +151,60 @@ describe('utils/occurrencePaths', () => {
     it('returns an empty set for an IFC-style tree with no occurrence paths', () => {
       const ifcTree = {expressID: 1, children: [{expressID: 2, children: []}]}
       expect(occurrencePathKeySetForTree(ifcTree).size).toBe(0)
+    })
+  })
+
+  describe('findSoleRootNode', () => {
+    it('names the root of a one-product file: the DSA2 / sameIdentityShells shape (#1909)', () => {
+      // One PRODUCT, no assembly structure. The pick reports the
+      // product_definition_shape (#8); the row is the product_definition (#7).
+      const tree = {expressID: 7, type: 'product', occurrencePath: [], children: []}
+      expect(findSoleRootNode(tree)).toBe(tree)
+    })
+
+    it('names the root of an assembly, whose other nodes all carry a path', () => {
+      const root = {expressID: 1, occurrencePath: [], children: [
+        {expressID: 10, occurrencePath: [10], children: [
+          {expressID: 20, occurrencePath: [10, 20], children: []},
+        ]},
+      ]}
+      expect(findSoleRootNode(root)).toBe(root)
+    })
+
+    it('is null for several top-level products: the wrapper and each root are all empty-path', () => {
+      // Conway's synthetic `Model` node plus two genuine roots (twoRootShells.step).
+      // The empty path names no one part, so nothing may be guessed.
+      const tree = {expressID: -1, occurrencePath: [], children: [
+        {expressID: 7, occurrencePath: [], children: []},
+        {expressID: 17, occurrencePath: [], children: []},
+      ]}
+      expect(findSoleRootNode(tree)).toBeNull()
+    })
+
+    it('is null when a solid row shares the root\'s empty path: ambiguous, so unresolved', () => {
+      const tree = {expressID: 7, occurrencePath: [], children: [
+        {expressID: 250, occurrencePath: [], ephemeral: true, children: []},
+      ]}
+      expect(findSoleRootNode(tree)).toBeNull()
+    })
+
+    it('is null for IFC, whose nodes carry no occurrence path', () => {
+      const ifcTree = {expressID: 1, children: [{expressID: 2, children: []}]}
+      expect(findSoleRootNode(ifcTree)).toBeNull()
+    })
+
+    it('still finds the root of a no-NAUO multibody product, whose bodies carry their own id', () => {
+      const tree = makeNoNauoMultibodyTree()
+      expect(findSoleRootNode(tree)).toBe(tree)
+    })
+
+    it('tolerates a missing or malformed root, and memoizes per tree', () => {
+      expect(findSoleRootNode(null)).toBeNull()
+      expect(findSoleRootNode(undefined)).toBeNull()
+      expect(findSoleRootNode('tree')).toBeNull()
+      const tree = {expressID: 7, occurrencePath: [], children: [null, 5]}
+      expect(findSoleRootNode(tree)).toBe(tree)
+      expect(findSoleRootNode(tree)).toBe(findSoleRootNode(tree))
     })
   })
 

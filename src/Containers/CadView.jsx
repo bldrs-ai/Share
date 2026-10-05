@@ -49,6 +49,7 @@ import {navWith} from '../utils/navigate'
 import {addProperties} from '../utils/objects'
 import {labelForGeometryId} from '../utils/geometryLabels'
 import {
+  findSoleRootNode,
   occurrenceElementPathIds,
   occurrencePathKey,
   occurrencePathKeySetForTree,
@@ -899,6 +900,7 @@ export default function CadView({
           parentExpressId,
           instanceId,
           rawOccurrencePath: mesh.instanceOccurrencePaths?.[batchId] ?? null,
+          isRootLevel: mesh.instanceOccurrencePaths?.[batchId]?.length === 0,
           pickedGeometryId: mesh.instanceGeometryIds?.[batchId] ?? null,
           isShiftKeyDown: event.shiftKey,
         })
@@ -921,6 +923,7 @@ export default function CadView({
           parentExpressId,
           instanceId,
           rawOccurrencePath: mesh.instanceMap.getOccurrencePathByInstance?.(instanceId) ?? null,
+          isRootLevel: mesh.instanceMap.hasEmptyOccurrencePath?.(instanceId) ?? false,
           pickedGeometryId: mesh.instanceMap.getGeometryExpressIdByInstance?.(instanceId) ?? null,
           isShiftKeyDown: event.shiftKey,
         })
@@ -985,12 +988,15 @@ export default function CadView({
    * @param {number} pick.instanceId synthetic per-instance id (IfcInstanceMap
    *   id on the merged path; global occurrence id on the batched path)
    * @param {Array<number>|null} pick.rawOccurrencePath untrimmed STEP path
+   * @param {boolean} pick.isRootLevel the instance carries an occurrence path
+   *   and it is EMPTY (the root product's own geometry), as opposed to no
+   *   occurrence data at all (IFC, undecorated model)
    * @param {number|null} pick.pickedGeometryId the instance's own geometry
    *   (solid) express id
    * @param {boolean} pick.isShiftKeyDown
    */
   function selectFromInstancePick({
-    parentExpressId, instanceId, rawOccurrencePath, pickedGeometryId, isShiftKeyDown,
+    parentExpressId, instanceId, rawOccurrencePath, isRootLevel, pickedGeometryId, isShiftKeyDown,
   }) {
     const rootEltForPick = useStore.getState().rootElement
     const occurrencePath = rawOccurrencePath ?
@@ -1020,7 +1026,18 @@ export default function CadView({
     if (transientGeometryId !== null) {
       materializeTransientNode(occurrencePath, transientGeometryId)
     }
-    selectItemsInScene([targetId], true, [instanceId], occurrencePath, solidExpressId)
+    // A root-level STEP placement (empty occurrence path) has no path to
+    // highlight a row by, and its owner id is the product_definition_shape
+    // where the row is the product_definition, so the NavTree matched nothing
+    // (#1909). In a one-product file the empty path names the root row
+    // exactly (`findSoleRootNode`), so hand that row to the funnel as the
+    // anchor: the row highlight, Properties, crumb and permalink follow
+    // anchors, while the scene keeps selecting by the owner id (hide, the
+    // per-instance narrowing). Several top-level products stay as they were.
+    const rootRow = (isRootLevel && occurrencePath === null) ? findSoleRootNode(rootEltForPick) : null
+    selectItemsInScene(
+      [targetId], true, [instanceId], occurrencePath, solidExpressId,
+      rootRow ? [rootRow.expressID] : null)
   }
 
 
@@ -1182,7 +1199,11 @@ export default function CadView({
       setSelectedSolidExpressId(solidExpressId)
       // Sets the url to the first selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
-        const firstId = resultIDs.slice(0, 1)
+        // The row the selection is anchored on, when the caller named one:
+        // a scene pick's result id can be the geometry's owner, which is no
+        // row, while its anchor is (a root-level STEP pick, #1909).
+        const firstId = anchorIds !== null && anchorIds.length > 0 ?
+          anchorIds.slice(0, 1) : resultIDs.slice(0, 1)
         // STEP: build the element path from the occurrence path, prepending
         // the root id (occurrence paths omit the root). The elementsById
         // lookup can't do it: a reused sub-assembly's duplicated subtrees

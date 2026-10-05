@@ -46,6 +46,17 @@ test('Test setupLookupAndParentLinks', () => {
 })
 
 
+test('setupLookupAndParentLinks registers the root of a tree with no children (#1909)', () => {
+  // visitTree only reports children, so a one-node tree (a STEP part with no
+  // assembly structure) used to leave the table empty.
+  const root = {expressID: 7, type: 'product', children: []}
+  const eltsById = {}
+  setupLookupAndParentLinks(root, eltsById)
+  expect(eltsById[7]).toBe(root)
+  expect(computeElementPathIds(root, (elt) => elt.expressID)).toEqual([7])
+})
+
+
 test('Test computeElementPathIds', () => {
   const tree = makeTestTree()
   const a = tree

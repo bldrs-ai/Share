@@ -314,6 +314,69 @@ export function occurrencePathKeySetForTree(rootNode) {
 }
 
 
+const soleRootCache = new WeakMap()
+
+
+/**
+ * The tree's root product, when it is the only node with an EMPTY occurrence
+ * path; otherwise null.
+ *
+ * An empty path means "no NAUO above this". Conway gives it to the root of a
+ * file's product structure and to that root's own geometry, so in a file with
+ * ONE top-level product exactly one node has it and every empty-path
+ * placement belongs to that node. This is what lets a scene pick of such a
+ * placement name a NavTree row, which neither of the usual keys can (#1909):
+ * the pick reports the geometry's `product_definition_shape` while the row is
+ * the `product_definition`, and the empty path joins on nothing.
+ *
+ * A file with several disconnected top-level products is deliberately NOT
+ * resolved. Conway wraps them in a synthetic `Model` node and gives the
+ * wrapper and every genuine root `occurrencePath: []`, so the empty path names
+ * no one part. Telling them apart needs the shape-to-definition link, which
+ * the tree does not carry (it is the same gap as the multi-root half of
+ * #1901, and `glbPortable.js#hasSingleEmptyPathNode` draws the same line for
+ * the export). Returning null there leaves the pick at type level, as before:
+ * no row highlighted, never the wrong one.
+ *
+ * Ephemeral solid rows are counted like any other, so a tree that gives a
+ * solid its part's empty path (the pre-conway#628 shape) reads as ambiguous
+ * and degrades the same way.
+ *
+ * Memoized per root-node object, like `occurrencePathKeySetForTree`.
+ *
+ * @param {object|null|undefined} rootNode spatial-structure root element
+ * @return {object|null} the sole empty-path node, or null
+ */
+export function findSoleRootNode(rootNode) {
+  if (!rootNode || typeof rootNode !== 'object') {
+    return null
+  }
+  if (soleRootCache.has(rootNode)) {
+    return soleRootCache.get(rootNode)
+  }
+  let found = null
+  let count = 0
+  const stack = [rootNode]
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (Array.isArray(node.occurrencePath) && node.occurrencePath.length === 0) {
+      found = node
+      count++
+    }
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) {
+        if (child && typeof child === 'object') {
+          stack.push(child)
+        }
+      }
+    }
+  }
+  const sole = count === 1 ? found : null
+  soleRootCache.set(rootNode, sole)
+  return sole
+}
+
+
 /**
  * Trim a geometry-side occurrence path to the deepest prefix the spatial tree
  * knows.

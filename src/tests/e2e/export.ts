@@ -706,6 +706,28 @@ export async function doubleClickSelectsAnElement(page: Page, kind: ElementKind)
 
 
 /**
+ * The NavTree row for a named product is highlighted as the selection.
+ *
+ * `expectNavTreeFollowsSelection` only asks that SOME row is selected, which
+ * is too weak to catch a pick that selects the wrong row; this names the row.
+ * A STEP pick reports the geometry's `product_definition_shape` while the row
+ * is the `product_definition`, so a part with no assembly structure got no
+ * highlight at all (#1909).
+ *
+ * @param page Playwright page
+ * @param label the row's label, as the NavTree shows it
+ */
+export async function expectProductRowSelected(page: Page, label: string) {
+  const panel = page.getByTestId('NavTreePanel')
+  if (!await panel.isVisible()) {
+    await page.getByTestId('control-button-navigation').click()
+  }
+  await expect(panel).toBeVisible()
+  await expect(page.locator(`[data-node-label="${label}"][data-is-selected="true"]`)).toHaveCount(1)
+}
+
+
+/**
  * The rest of the user-visible selection: the NavTree row and the URL.
  *
  * @param page Playwright page
@@ -719,5 +741,5 @@ export async function expectNavTreeFollowsSelection(page: Page) {
   await expect(page.locator('[data-is-selected="true"]').first()).toBeVisible()
   // The element path follows the model file in the URL, before any query or
   // hash (`/index.ifc/89/112/…/396?feature=…`).
-  await expect(page).toHaveURL(/\.(ifc|glb)(\/\d+)+(\?|#|$)/)
+  await expect(page).toHaveURL(/\.(ifc|glb|step|stp)(\/\d+)+(\?|#|$)/)
 }

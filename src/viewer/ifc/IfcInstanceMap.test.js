@@ -129,6 +129,21 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       expect(map.getOccurrencePathByInstance(1)).toEqual([3810, 1921, 1916])
     })
 
+    it('tells a root-level (empty) occurrence path from no occurrence data', () => {
+      // getOccurrencePathByInstance reads both as null; only the first is
+      // evidence the placement is the root product's own (#1909).
+      const step = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 6210, triangleCount: 1, occurrencePath: []},
+        {parentExpressId: 1915, triangleCount: 1, occurrencePath: [3810, 1921, 1916]},
+      ])
+      expect(step.hasEmptyOccurrencePath(0)).toBe(true)
+      expect(step.hasEmptyOccurrencePath(1)).toBe(false)
+      expect(step.hasEmptyOccurrencePath(2)).toBe(false)
+      expect(step.hasEmptyOccurrencePath(-1)).toBe(false)
+      const ifc = instanceMapFromOrderedPlacedRanges([{parentExpressId: 100, triangleCount: 1}])
+      expect(ifc.hasEmptyOccurrencePath(0)).toBe(false)
+    })
+
     it('leaves occurrence paths null for IFC ranges (no occurrencePath)', () => {
       const map = instanceMapFromOrderedPlacedRanges([
         {parentExpressId: 100, triangleCount: 1},
