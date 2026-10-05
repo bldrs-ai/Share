@@ -3,10 +3,15 @@ import {
   hasBatchedGeometry,
   instanceGeometryRangeAt,
 } from '../ifc/batchedInstanceGeometry'
+import {BatchEditKind, onBatchEdit} from '../ifc/batchedEdit'
+import {forEachActiveInstance} from '../ifc/batchedInstanceTables'
 
 
 /** Guard against division by zero when the eye sits on an instance. */
 const MIN_EYE_DISTANCE = 1e-6
+
+/** Byte weight per vertex for the MEMORY metric's amortized cost. */
+const BYTES_PER_VERTEX = 32
 
 /** Eviction-ordering metrics (design/new/demand-tiled-rendering.md §B2). */
 export const ResidencyMetric = Object.freeze({
@@ -33,13 +38,15 @@ export const ResidencyMetric = Object.freeze({
  *
  * The controller walks the model for BatchedMesh children carrying the
  * batched pick tables (`instanceParents`) and precomputes per-instance
- * centers/radii/amortized-bytes once; metric evaluation is a flat array
- * pass, cheap enough to run per slider tick.
+ * centers/radii/amortized-bytes; metric evaluation is a flat array pass,
+ * cheap enough to run per slider tick. Each batch's records are redone when
+ * an edit changes it (`batchedEdit#onBatchEdit`; `onBatchEdit_` below): a
+ * record names a batch id, and after a delete + paste that id can be a
+ * different instance, or a paste can hold an id no record names (create-300
+ * L0, #1915).
  *
- * Per-shape bounds and vertex counts come from the batch itself
- * (`getBoundingSphereAt` / `getGeometryRangeAt`), not from a retained table
- * of the source geometries — Share#1810 dropped that table, and this
- * precompute never needed the vertex data, only two numbers per shape.
+ * Per-shape bounds and vertex counts come from the batch itself; see
+ * {@link measureInstances}.
  */
 export class ResidencyController {
   /**
@@ -54,9 +61,13 @@ export class ResidencyController {
     this.getSelectionCenter = opts.getSelectionCenter ?? (() => null)
     this.metric = ResidencyMetric.OCCUPANCY
     this.target = 1
-    this.instances = []
+    // One entry per controlled batch: its records, whether an edit has
+    // outdated them, and its edit subscription. `instances_` / `totalBytes`
+    // are the flattened view the metric passes walk, recollected only when a
+    // batch is remeasured.
+    this.batches_ = []
+    this.instances_ = []
     this.totalBytes = 0
-    const scratchMatrix = new Matrix4()
     const meshes = []
     if (model?.isBatchedMesh) {
       meshes.push(model)
@@ -66,55 +77,40 @@ export class ResidencyController {
         meshes.push(child)
       }
     })
-    const BYTES_PER_VERTEX = 32
-    const scratchRange = {}
-    const scratchSphere = new Sphere()
     for (const mesh of meshes) {
       if (!hasBatchedGeometry(mesh) || typeof mesh.setVisibleAt !== 'function' ||
           typeof mesh.getBoundingSphereAt !== 'function') {
         continue
       }
-      // `instanceParents` sizes the walk now that there is no per-instance
-      // geometry table to iterate; it is the same length by construction
-      // (both builders push one entry per appended instance).
-      const instanceCount = mesh.instanceParents?.length ?? 0
-      // Amortize each shape's bytes over its instance count so a heavily
-      // shared shape is cheap per instance. Keyed by the batch's own
-      // geometry id, which is what "the same shape" means within one mesh —
-      // exactly the grouping the retained geometry objects gave by
-      // reference identity.
-      const geometryUses = new Map()
-      for (let index = 0; index < instanceCount; index++) {
-        const range = instanceGeometryRangeAt(mesh, index, scratchRange)
-        if (range === null) {
-          continue
-        }
-        geometryUses.set(range.geometryId, (geometryUses.get(range.geometryId) ?? 0) + 1)
+      // A batch without pick tables is not one the controller can name
+      // parts of; skip it as the length-0 walk this replaced did.
+      if (!mesh.instanceParents) {
+        continue
       }
-      for (let index = 0; index < instanceCount; index++) {
-        const range = instanceGeometryRangeAt(mesh, index, scratchRange)
-        // three computes (and caches on the batch) a per-geometry sphere
-        // over the shape's own index range. It is the source geometry's
-        // sphere for every shape whose vertices are all referenced — which
-        // is every shape Conway emits; a shape with orphan vertices gets
-        // the tighter, more correct sphere here rather than the source's.
-        if (range === null || !mesh.getBoundingSphereAt(range.geometryId, scratchSphere)) {
-          continue
+      // At construction every instance is taken to be showing, as it always
+      // has been: nothing residency-owned has hidden anything yet.
+      const batch = {mesh, stale: false, ...measureInstances(mesh, true)}
+      batch.unsubscribe = onBatchEdit(mesh, (change) => {
+        // A shape added with no instance on it changes no record.
+        if (change.events.some((event) => event.kind !== BatchEditKind.ADD_GEOMETRY)) {
+          this.onBatchEdit_(batch)
         }
-        mesh.getMatrixAt(index, scratchMatrix)
-        const center = new Vector3().copy(scratchSphere.center).applyMatrix4(scratchMatrix)
-        const scale = new Vector3().setFromMatrixScale(scratchMatrix)
-        const radius = scratchSphere.radius * Math.max(scale.x, scale.y, scale.z)
-        const bytes = (range.vertexCount * BYTES_PER_VERTEX) /
-          (geometryUses.get(range.geometryId) ?? 1)
-        this.instances.push({
-          mesh, index, center, radius, bytes,
-          expressID: mesh.instanceParents?.[index],
-          visible: true, score: 0,
-        })
-        this.totalBytes += bytes
-      }
+      })
+      this.batches_.push(batch)
     }
+    this.collect_()
+  }
+
+
+  /**
+   * The per-instance records, current with every batch's tables.
+   *
+   * @return {Array<object>} `{mesh, index, center, radius, bytes, expressID,
+   *   visible, score}`
+   */
+  get instances() {
+    this.remeasureStale_()
+    return this.instances_
   }
 
 
@@ -144,11 +140,12 @@ export class ResidencyController {
 
   /** Re-score, re-order, and apply visibility for the current target. */
   apply() {
-    if (this.instances.length === 0) {
+    const instances = this.instances
+    if (instances.length === 0) {
       return
     }
     this.score_()
-    const ordered = this.instances.slice().sort((a, b) => b.score - a.score)
+    const ordered = instances.slice().sort((a, b) => b.score - a.score)
     if (this.metric === ResidencyMetric.MEMORY) {
       // The slider maps to a byte budget: keep instances in score order
       // until the budget is spent.
@@ -170,24 +167,93 @@ export class ResidencyController {
   }
 
 
-  /** Restore every instance and drop references. */
+  /** Restore every instance, stop following edits and drop references. */
   dispose() {
     for (const instance of this.instances) {
       this.setVisible_(instance, true)
     }
-    this.instances = []
+    for (const batch of this.batches_) {
+      batch.unsubscribe()
+    }
+    this.batches_ = []
+    this.instances_ = []
+    this.totalBytes = 0
+  }
+
+
+  /**
+   * An edit changed one of the controlled batches.
+   *
+   * Identity, not just liveness, is what goes stale. three recycles the
+   * lowest freed id on `addInstance` (BatchedMesh.js:580-591), so after a
+   * delete + paste a record can name a live id that is a different instance
+   * — with the deleted one's center, bytes and expressID — and an appended
+   * paste has no record at all.
+   *
+   * While residency is evicting anything (target below 1) the current target
+   * is re-applied now, so a paste made at target 0 is hidden before the edit
+   * returns rather than at the next slider tick; that costs one slider tick
+   * per edit, and only while the slider is down. At target 1 nothing a record
+   * holds can change what is drawn — every instance is shown, and three
+   * issues a new one visible (BatchedMesh.js:571-575) — so the batch is only
+   * marked, and remeasured (O(batch)) on the next read instead of on every
+   * edit of a model nobody is evicting from.
+   *
+   * @param {object} batch one of `batches_`
+   * @private
+   */
+  onBatchEdit_(batch) {
+    batch.stale = true
+    if (this.target < 1) {
+      this.apply()
+    }
+  }
+
+
+  /**
+   * Remeasure every batch an edit has marked.
+   *
+   * A remeasured record's `visible` is unknown (null), not read back from
+   * the batch: while IfcIsolator's mask is installed, three's bit is
+   * residency's intent AND the isolator's verdict (IfcIsolator
+   * `_ensureBatchedMask`), so an instance isolation hides would read as
+   * "residency hid it" and a later eviction would be skipped — leaving the
+   * mask's `base` saying "show" for when isolation lifts. Unknown makes the
+   * next `setVisible_` write through, once per instance per edit.
+   *
+   * @private
+   */
+  remeasureStale_() {
+    let changed = false
+    for (const batch of this.batches_) {
+      if (batch.stale) {
+        Object.assign(batch, {stale: false}, measureInstances(batch.mesh, null))
+        changed = true
+      }
+    }
+    if (changed) {
+      this.collect_()
+    }
+  }
+
+
+  /** Flatten the batches' records into `instances_` and total their bytes. */
+  collect_() {
+    this.instances_ = this.batches_.flatMap((batch) => batch.records)
+    this.totalBytes = this.batches_.reduce((sum, batch) => sum + batch.bytes, 0)
   }
 
 
   /**
    * Evaluate the current metric into each instance's `score` (higher =
-   * kept longer).
+   * kept longer). Walks `instances_` directly: `apply`, the only caller,
+   * has just synced it.
    */
   score_() {
     const metric = this.metric
     if (metric === ResidencyMetric.MEMORY) {
       // Most parts per byte: cheap instances first.
-      for (const instance of this.instances) {
+      for (const instance of this.instances_) {
         instance.score = -instance.bytes
       }
       return
@@ -195,7 +261,7 @@ export class ResidencyController {
     if (metric === ResidencyMetric.DISTANCE) {
       const center = this.getSelectionCenter()
       if (center) {
-        for (const instance of this.instances) {
+        for (const instance of this.instances_) {
           instance.score = -instance.center.distanceTo(center)
         }
         return
@@ -204,7 +270,7 @@ export class ResidencyController {
     }
     const camera = this.getCamera()
     const eye = camera?.position ?? null
-    for (const instance of this.instances) {
+    for (const instance of this.instances_) {
       // Projected-size proxy: angular radius² ≈ (r / distance)².
       const distance = eye ? Math.max(instance.center.distanceTo(eye), MIN_EYE_DISTANCE) : 1
       const angular = instance.radius / distance
@@ -224,6 +290,72 @@ export class ResidencyController {
       return
     }
     instance.visible = visible
+    // Every record is live: callers reach here only through `instances`,
+    // which remeasures a batch an edit has marked and so drops the record of
+    // an instance deleted since (three's `setVisibleAt`
+    // throws on one, BatchedMesh.js:1162-1164).
     instance.mesh.setVisibleAt(instance.index, visible)
   }
+}
+
+
+/**
+ * Measure one batch's live instances: world-space center and radius for the
+ * OCCUPANCY / DISTANCE metrics, amortized bytes for MEMORY.
+ *
+ * Per-shape bounds and vertex counts come from the batch itself
+ * (`getBoundingSphereAt` / `getGeometryRangeAt`), not from a retained table
+ * of the source geometries — Share#1810 dropped that table, and this
+ * precompute never needed the vertex data, only two numbers per shape.
+ *
+ * @param {object} mesh a decorated BatchedMesh
+ * @param {boolean|null} visible the records' initial visibility belief;
+ *   null = unknown, so the controller's next write goes through
+ * @return {object} `{records, bytes}`
+ */
+function measureInstances(mesh, visible) {
+  const scratchMatrix = new Matrix4()
+  const scratchRange = {}
+  const scratchSphere = new Sphere()
+  const records = []
+  let bytesTotal = 0
+  // Amortize each shape's bytes over its instance count so a heavily
+  // shared shape is cheap per instance. Keyed by the batch's own
+  // geometry id, which is what "the same shape" means within one mesh —
+  // exactly the grouping the retained geometry objects gave by
+  // reference identity.
+  //
+  // Both walks visit live instances only (batchedInstanceTables): a
+  // deleted one has no geometry to count, and three throws on its matrix.
+  const geometryUses = new Map()
+  forEachActiveInstance(mesh, (index) => {
+    const range = instanceGeometryRangeAt(mesh, index, scratchRange)
+    if (range !== null) {
+      geometryUses.set(range.geometryId, (geometryUses.get(range.geometryId) ?? 0) + 1)
+    }
+  })
+  forEachActiveInstance(mesh, (index) => {
+    const range = instanceGeometryRangeAt(mesh, index, scratchRange)
+    // three computes (and caches on the batch) a per-geometry sphere
+    // over the shape's own index range. It is the source geometry's
+    // sphere for every shape whose vertices are all referenced — which
+    // is every shape Conway emits; a shape with orphan vertices gets
+    // the tighter, more correct sphere here rather than the source's.
+    if (range === null || !mesh.getBoundingSphereAt(range.geometryId, scratchSphere)) {
+      return
+    }
+    mesh.getMatrixAt(index, scratchMatrix)
+    const center = new Vector3().copy(scratchSphere.center).applyMatrix4(scratchMatrix)
+    const scale = new Vector3().setFromMatrixScale(scratchMatrix)
+    const radius = scratchSphere.radius * Math.max(scale.x, scale.y, scale.z)
+    const bytes = (range.vertexCount * BYTES_PER_VERTEX) /
+      (geometryUses.get(range.geometryId) ?? 1)
+    records.push({
+      mesh, index, center, radius, bytes,
+      expressID: mesh.instanceParents?.[index],
+      visible, score: 0,
+    })
+    bytesTotal += bytes
+  })
+  return {records, bytes: bytesTotal}
 }

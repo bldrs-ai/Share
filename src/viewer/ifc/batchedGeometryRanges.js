@@ -58,12 +58,22 @@
  * throw, and a linear scan of the index buffer is cheap next to the upload
  * that just happened.
  *
- * **Not compatible with `optimize()` or `setGeometrySize()`.** Both re-pack
- * geometry by moving `reservedVertexCount` / `reservedIndexCount` blocks
- * (BatchedMesh.js:886-962,1325-1378) and assume each entry owns its block.
- * Synthesised ranges deliberately share one block, so a re-pack would
- * scatter them. Neither is called on the cache-hit hydration path; a batch
- * carrying ranges is marked so callers can assert that.
+ * **Not compatible with `optimize()`.** It re-packs geometry by moving
+ * `reservedVertexCount` / `reservedIndexCount` blocks (BatchedMesh.js:878-970)
+ * and assumes each entry owns its block. Synthesised ranges deliberately
+ * share one block, so a re-pack would scatter them. Nothing calls it today; a
+ * batch carrying ranges is marked so a future caller (#1913's memory half)
+ * can refuse.
+ *
+ * **`setGeometrySize()` is a different case, and GROWING is safe.** It moves
+ * nothing: it reallocates the attributes and the index and copies the old
+ * contents across at the same offsets (BatchedMesh.js:1346-1378), so every
+ * range still addresses its own triangles. Its shrink check reads each
+ * entry's `vertexStart + reservedVertexCount`, which for a range is still
+ * inside the shared block — so a shrink below that block's end throws, as it
+ * should. Post-load `addGeometry` on a collapsed batch therefore goes through
+ * the ordinary growth path (`batchedGeometryCapacity.js`, create-300 L0) and
+ * lands after the shared block.
  */
 import {glbInfo} from '../../loader/glbLog'
 

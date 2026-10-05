@@ -51,6 +51,7 @@ jest.mock('./injectGlbExtensions', () => {
   }
 })
 
+import {Matrix4} from 'three'
 import {BLDRS_GLB_SCHEMA_VERSION, glbCacheKey} from './glbCacheKey'
 import useStore from '../store/useStore'
 import {beginGlbArtifactLoad, publishGlbArtifact} from './glbArtifactPublish'
@@ -61,6 +62,7 @@ import {
 } from '../viewer/ifc/appliedCoordination'
 import {parseGlb, serializeGlb} from './injectGlbExtensions'
 import {gitHubCacheKey} from './sourceCacheKey'
+import {deleteBatchedInstance, setBatchedInstanceMatrix} from '../viewer/ifc/batchedEdit'
 import {flatMeshToBatchedModel} from '../viewer/ifc/flatMeshToBatchedModel'
 
 
@@ -438,6 +440,27 @@ describe('loader/glbExport', () => {
       expect(exported.geometry.getAttribute('instanceID')).toBeDefined()
       expect(mockWriteGlbBytesToOPFS).toHaveBeenCalledTimes(1)
     })
+
+    // create-300 L0: the slot is keyed to the SOURCE, so a model edited after
+    // load must never be written into it (design/new/model-edit.md §7). The
+    // move is the case nothing guarded before L0 — it deletes no instance,
+    // so no writer ever declined over it.
+    for (const [label, edit] of [
+      ['moved', (mesh) => setBatchedInstanceMatrix(mesh, 0, new Matrix4().makeTranslation(5, 0, 0))],
+      ['deleted from', (mesh) => deleteBatchedInstance(mesh, 1)],
+    ]) {
+      it(`refuses to cache a batched model with an instance ${label} after load`, async () => {
+        const batchedMesh = buildDecoratedBatchedMesh()
+        mockExporterParse.mockImplementation((_input, onDone) => onDone(makeValidEmptyGlb().buffer))
+        edit(batchedMesh)
+
+        const ok = await exportAndCacheGlb({model: batchedMesh, ...ctx})
+
+        expect(ok).toBe(false)
+        expect(mockExporterParse).not.toHaveBeenCalled()
+        expect(mockWriteGlbBytesToOPFS).not.toHaveBeenCalled()
+      })
+    }
 
     it('persists STEP occurrence paths for a batched model (cache-hit scene highlight)', async () => {
       // Regression: a batched-first load (demandGeometry default) wrote a GLB

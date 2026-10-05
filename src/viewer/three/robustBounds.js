@@ -1,4 +1,5 @@
 import {Box3, Matrix4} from 'three'
+import {batchEditRevision} from '../ifc/batchedEdit'
 
 
 /**
@@ -215,6 +216,13 @@ export function robustBoundsFor(object) {
  * A cheap "has the geometry changed?" key: counts only, no per-instance
  * matrix or bounds math.
  *
+ * A batch also contributes its edit revision (`batchedEdit`), which every
+ * post-load add, delete, move and re-shape bumps. The instance count alone
+ * misses a delete + paste (same count, different extent) and any move. This
+ * reads the one revision rather than subscribing to edits: the bounds are
+ * computed on demand anyway, so a key that changes with every edit is already
+ * exact, and there is no listener to keep or release per cached object.
+ *
  * @param {object} object three.js Object3D
  * @return {string}
  */
@@ -222,10 +230,12 @@ function boundsFingerprint(object) {
   let elements = 0
   let vertices = 0
   let nodes = 0
+  let edits = 0
   object.traverse((node) => {
     nodes++
     if (node.isBatchedMesh) {
       elements += node.instanceCount
+      edits += batchEditRevision(node)
       return
     }
     if (node.isInstancedMesh) {
@@ -237,7 +247,7 @@ function boundsFingerprint(object) {
       vertices += position.count
     }
   })
-  return `${nodes}:${elements}:${vertices}`
+  return `${nodes}:${elements}:${vertices}:${edits}`
 }
 
 

@@ -1,4 +1,5 @@
 import {BufferAttribute, BufferGeometry} from 'three'
+import {isPostLoadGeometry} from './batchedEdit'
 import {BATCHED_GEOMETRY_RANGE_IDS} from './batchedGeometryRanges'
 
 
@@ -161,6 +162,16 @@ function rebuildGeometry(mesh, range) {
  * for its ordinary instances, so nothing that is still placement-independent
  * loses its cross-batch dedup.
  *
+ * **Nor does a geometry added after load** (`batchedEdit#addBatchedGeometry`,
+ * create-300). The source-id key is sound because the builders add exactly
+ * one batch geometry per source id; an edit can add a shape whose row carries
+ * any id at all, including one a source shape already uses, and the key
+ * would then hand that source shape's triangles to it — or one created
+ * shape's to the next. Created rows take minted ids
+ * (`batchedEdit#mintGeometryId`), but the key does not rely on the caller:
+ * a post-load geometry id is unique per batch by construction, so it keys
+ * per mesh, as a range id does.
+ *
  * @param {object} mesh a THREE.BatchedMesh
  * @param {number} batchId instance id
  * @param {number} geometryId the batch's own geometry id
@@ -169,7 +180,8 @@ function rebuildGeometry(mesh, range) {
 function sourceKey(mesh, batchId, geometryId) {
   const sourceIds = mesh.instanceGeometryIds
   const sourceId = sourceIds ? sourceIds[batchId] : undefined
-  if (sourceId === undefined || mesh[BATCHED_GEOMETRY_RANGE_IDS]?.has(geometryId)) {
+  if (sourceId === undefined || mesh[BATCHED_GEOMETRY_RANGE_IDS]?.has(geometryId) ||
+      isPostLoadGeometry(mesh, geometryId)) {
     return `${mesh.uuid}#${geometryId}`
   }
   return `src#${sourceId}`

@@ -47,6 +47,7 @@ import {
   validAppliedCoordination,
   validCoordinationOffset,
 } from '../viewer/ifc/appliedCoordination'
+import {modelHasPostLoadEdits} from '../viewer/ifc/batchedEdit'
 import {eachBatch} from '../viewer/ifc/batchedModel'
 import {
   batchedModelOccurrenceTables,
@@ -260,6 +261,20 @@ export async function exportAndCacheGlb({
     // evicts any empty artifact that already landed (tryLoadCachedGlb).
     if (!sceneHasRenderableGeometry(model)) {
       glbInfo('writer: skipped (no renderable geometry — refusing to cache an empty artifact)')
+      return false
+    }
+
+    // The slot is content-addressed to the SOURCE (`glbCacheKey`), so it may
+    // only ever hold what the source parses to: writing an edited model here
+    // would serve the edit to everyone who next opens the unedited file
+    // (design/new/model-edit.md §7). Before create-300 L0 this held by
+    // accident — one deleted instance made the batched writer decline and
+    // the bytes landed in the merged slot a batched reader never reads — and
+    // the writer runs at idle, after the model is already on screen, so an
+    // edit can land first. Checked here, the one place every cache write
+    // passes, rather than at the scheduling site.
+    if (isBatched && modelHasPostLoadEdits(model)) {
+      glbInfo('writer: skipped (model was edited after load — the cache slot belongs to the source)')
       return false
     }
 

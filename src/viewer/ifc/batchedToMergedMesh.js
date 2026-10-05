@@ -8,6 +8,7 @@ import {
   Vector3,
 } from 'three'
 import {hasBatchedGeometry, makeInstanceGeometryReader} from './batchedInstanceGeometry'
+import {forEachActiveInstance} from './batchedInstanceTables'
 import {eachBatch} from './batchedModel'
 import {makeSurfaceColor, makeSurfaceMaterial} from '../lookMaterial'
 
@@ -111,12 +112,12 @@ function collectInstanceEntries(model) {
     // that doc's S9), where reload returns a BatchedMesh and the snapshot +
     // control apply directly — rather than a throwaway merged-mesh recolor.
     const colors = mesh.instanceColors
-    for (let batchId = 0; batchId < parents.length; batchId++) {
+    forEachActiveInstance(mesh, (batchId) => {
       const geom = geometryAt(mesh, batchId)
       const pos = geom?.attributes?.position
       const idx = geom?.index
       if (!pos || !idx) {
-        continue
+        return
       }
       mesh.getMatrixAt(batchId, scratch)
       entries.push({
@@ -131,7 +132,7 @@ function collectInstanceEntries(model) {
         vertCount: pos.count,
         indexCount: idx.count,
       })
-    }
+    })
   })
   return entries
 }
@@ -293,11 +294,13 @@ export function batchedModelOccurrenceTables(model) {
     if (!occurrenceIds) {
       return
     }
-    for (let batchId = 0; batchId < occurrenceIds.length; batchId++) {
+    // Live rows only, here and below: a deleted instance's cleared row reads
+    // as occurrence 0 and would overwrite that occurrence's real path.
+    forEachActiveInstance(mesh, (batchId) => {
       if (occurrenceIds[batchId] > maxOccurrenceId) {
         maxOccurrenceId = occurrenceIds[batchId]
       }
-    }
+    })
     if (mesh.instanceOccurrencePaths) {
       hasPaths = true
     }
@@ -318,7 +321,7 @@ export function batchedModelOccurrenceTables(model) {
     }
     const paths = mesh.instanceOccurrencePaths
     const geometryIds = mesh.instanceGeometryIds
-    for (let batchId = 0; batchId < occurrenceIds.length; batchId++) {
+    forEachActiveInstance(mesh, (batchId) => {
       const occurrenceId = occurrenceIds[batchId]
       if (occurrencePaths && paths) {
         occurrencePaths[occurrenceId] = paths[batchId] ?? null
@@ -326,7 +329,7 @@ export function batchedModelOccurrenceTables(model) {
       if (geometryExpressIds && geometryIds) {
         geometryExpressIds[occurrenceId] = geometryIds[batchId] ?? null
       }
-    }
+    })
   })
   return {occurrencePaths, geometryExpressIds}
 }

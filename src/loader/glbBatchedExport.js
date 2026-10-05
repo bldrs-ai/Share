@@ -3,6 +3,7 @@ import {
   hasBatchedGeometry,
   makeInstanceGeometryReader,
 } from '../viewer/ifc/batchedInstanceGeometry'
+import {forEachActiveInstance} from '../viewer/ifc/batchedInstanceTables'
 import {eachBatch} from '../viewer/ifc/batchedModel'
 import {makeContentCache, makeGeometryInterner} from './contentKey'
 import {bakeCollapsedBin, planCollapse} from './glbCollapse'
@@ -135,19 +136,27 @@ function collectInstanceGroups(model, keepMatrices = false) {
       return
     }
     const scratch = new Matrix4()
-    for (let batchId = 0; batchId < mesh.instanceParents.length; batchId++) {
+    // Live instances only (batchedInstanceTables). A deleted instance has no
+    // geometry to read and three throws on its matrix — and before
+    // create-300 L0 (#1915) the null read here failed the WHOLE batched
+    // export over to the merged slot for the sake of one deleted part. It is
+    // simply not in the artifact now, so an edited model round-trips batched
+    // and hydrates without it. Skipping changes nothing for a batch with no
+    // deletions: the visit order is the dense loop's, so an unedited model's
+    // groups, tables and bytes are what they were.
+    forEachActiveInstance(mesh, (batchId) => {
       const geometry = internGeometry(geometryAt(mesh, batchId))
       const color = colors[batchId]
       if (!geometry || !color) {
         failed = true
-        return
+        return false
       }
       mesh.getMatrixAt(batchId, scratch)
       const trs = decomposeStrict(scratch)
       if (!trs) {
         glbVerbose('batched writer: non-TRS instance matrix; falling back to merged')
         failed = true
-        return
+        return false
       }
       // `uuid` of the INTERNED object — content identity, since the
       // interner returns the first object it saw with these bytes.
@@ -165,7 +174,8 @@ function collectInstanceGroups(model, keepMatrices = false) {
         geometryId: mesh.instanceGeometryIds ? mesh.instanceGeometryIds[batchId] : null,
         occurrencePath: mesh.instanceOccurrencePaths ? mesh.instanceOccurrencePaths[batchId] : null,
       })
-    }
+      return true
+    })
   })
   if (failed || groups.size === 0) {
     return null

@@ -139,6 +139,42 @@ describe('IncrementalBatchedBuilder', () => {
     }
   })
 
+  it('hands back exact-length tables of the one-shot builder\'s types, however they grew', () => {
+    // The tables are grown ahead of the cursor while streaming
+    // (batchedInstanceTables `ensureInstanceCapacity`) and trimmed at
+    // finalize. Start at one instance so every placement past the first
+    // grows them, and compare every table the decorated model reads — type,
+    // length and contents — against the one-shot build of the same stream.
+    const stream = [
+      flatMesh(1, [{geomExpressID: 999, color: OPAQUE}]),
+      flatMesh(2, [{geomExpressID: 999, color: OPAQUE}, {geomExpressID: 888, color: GLASS}]),
+      // Emitted in shape order: the one-shot builder lays a batch out shape
+      // by shape, the streaming one in arrival order, and the two agree
+      // row for row only when those coincide.
+      flatMesh(3, [{geomExpressID: 999, color: OPAQUE}, {geomExpressID: 888, color: OPAQUE}]),
+    ]
+    const oneShot = flatMeshToBatchedModel(stream, makeApi(shapes), 0)
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0, {initialInstances: 1})
+    for (const flat of stream) {
+      builder.appendBatch([flat])
+    }
+    const incremental = builder.finalize()
+
+    for (let where = 0; where < oneShot.batches.length; where++) {
+      const a = incremental.batches[where]
+      const b = oneShot.batches[where]
+      for (const key of ['instanceParents', 'instanceOccurrenceIds', 'instanceGeometryIds']) {
+        expect(a[key]).toBeInstanceOf(Uint32Array)
+        expect(a[key]).toEqual(b[key])
+      }
+      expect(Array.isArray(a.instanceColors)).toBe(true)
+      expect(a.instanceColors).toEqual(b.instanceColors)
+      // IFC-shaped stream: no occurrence paths, so null on both, not [null…].
+      expect(a.instanceOccurrencePaths).toBeNull()
+      expect(b.instanceOccurrencePaths).toBeNull()
+    }
+  })
+
   it('keeps culling off while streaming, and restores it at finalize', () => {
     // three caches BatchedMesh.boundingSphere the first time it culls and
     // never invalidates it when instances append. Computed on frame one,

@@ -1,4 +1,6 @@
 import {Vector4} from 'three'
+import {BatchEditKind, onBatchEdit} from './batchedEdit'
+import {forEachActiveInstance} from './batchedInstanceTables'
 import {eachBatch} from './batchedModel'
 
 
@@ -23,8 +25,9 @@ import {eachBatch} from './batchedModel'
  * removing either restores the layer beneath, ending at the instance's
  * original colour (kept in `mesh.instanceColors`, alpha included — so glass
  * stays glass). State lives in `mesh.userData.batchedHighlight` (layer sets +
- * colours + a one-time parent→batchIds index); isolate still uses the subset
- * path (`batchedSubset`) and is unaffected.
+ * the ids each layer was set with + colours + a parent→batchIds index, kept
+ * in step with edits by {@link applyBatchEdit}); isolate still uses the
+ * subset path (`batchedSubset`) and is unaffected.
  *
  * @see batchedSubset — the isolation-subset sibling.
  * @see design/new/viewer-replacement.md §3b.iv
@@ -45,26 +48,169 @@ const _rgba = new Vector4()
  * product's instances in O(matched) instead of scanning all N instances on
  * every hover/selection.
  *
+ * Creating the state subscribes it to the batch's edits
+ * (`batchedEdit#onBatchEdit`), so the indices and layers it holds follow
+ * every add and delete as it happens. The subscription is never removed and
+ * does not need to be: the state lives exactly as long as the mesh (it is on
+ * `mesh.userData`, created once), the listener closes over nothing but the
+ * two, and the registry holds it in a WeakMap keyed by the mesh — so it goes
+ * when the model does, and there is only ever one per batch.
+ *
  * @param {object} mesh BatchedMesh carrying `instanceParents`
- * @return {object} `{selSet, preSet, selColor, preColor, parentIndex}`
+ * @return {object} `{selSet, preSet, selIds, preIds, selByOccurrence,
+ *   preByOccurrence, selColor, preColor, parentIndex, occurrenceIndex}`
  */
 function highlightState(mesh) {
   let state = mesh.userData.batchedHighlight
   if (!state) {
-    const parentIndex = new Map()
-    const parents = mesh.instanceParents
-    for (let b = 0; b < parents.length; b++) {
-      const list = parentIndex.get(parents[b])
-      if (list) {
-        list.push(b)
-      } else {
-        parentIndex.set(parents[b], [b])
-      }
+    state = {
+      selSet: new Set(), preSet: new Set(),
+      // What each layer was set WITH — product or occurrence ids, both stable
+      // across edits — as opposed to the batch ids it resolved to. An added
+      // instance joins a layer by matching these.
+      selIds: new Set(), preIds: new Set(), selByOccurrence: false, preByOccurrence: false,
+      selColor: undefined, preColor: undefined,
+      parentIndex: indexActiveInstances(mesh, mesh.instanceParents),
+      occurrenceIndex: undefined,
     }
-    state = {selSet: new Set(), preSet: new Set(), selColor: undefined, preColor: undefined, parentIndex}
     mesh.userData.batchedHighlight = state
+    onBatchEdit(mesh, (change) => applyBatchEdit(mesh, state, change))
   }
   return state
+}
+
+
+/**
+ * Bring one batch's highlight state up to an edit, the moment it lands.
+ *
+ * The layer sets are keyed by batch id, and three hands a freed id to the
+ * next `addInstance` (BatchedMesh.js:580-591), so the id of a deleted
+ * instance must leave both layers and both indices when it goes — or a paste
+ * into that id would inherit its highlight on the next repaint. And
+ * `addBatchedInstance` paints a new instance in its own colour, so one that
+ * belongs to a layer (a paste of the selected product) is painted into it
+ * here: nothing else would repaint it until the next highlight call, which
+ * ShareViewer's hover dedup can postpone indefinitely.
+ *
+ * O(1) per event (plus the length of the one product's index list on a
+ * delete), so the cost is the same for a model with one instance or a
+ * million. Moves and re-shapes leave colour alone and need nothing.
+ *
+ * @param {object} mesh decorated BatchedMesh
+ * @param {object} state its highlight state
+ * @param {object} change `batchedEdit` change record
+ */
+function applyBatchEdit(mesh, state, change) {
+  for (const event of change.events) {
+    const {batchId} = event
+    if (event.kind === BatchEditKind.DELETE_INSTANCE) {
+      unindex(state.parentIndex, event.parent, batchId)
+      if (state.occurrenceIndex) {
+        unindex(state.occurrenceIndex, event.occurrenceId, batchId)
+      }
+      state.selSet.delete(batchId)
+      state.preSet.delete(batchId)
+    } else if (event.kind === BatchEditKind.ADD_INSTANCE) {
+      const parent = mesh.instanceParents[batchId]
+      const occurrenceId = mesh.instanceOccurrenceIds?.[batchId]
+      index(state.parentIndex, parent, batchId)
+      if (state.occurrenceIndex) {
+        index(state.occurrenceIndex, occurrenceId, batchId)
+      }
+      const inSel = state.selIds.has(state.selByOccurrence ? occurrenceId : parent)
+      const inPre = state.preIds.has(state.preByOccurrence ? occurrenceId : parent)
+      if (inSel) {
+        state.selSet.add(batchId)
+      }
+      if (inPre) {
+        state.preSet.add(batchId)
+      }
+      if (inSel || inPre) {
+        paint(mesh, batchId)
+      }
+    }
+  }
+}
+
+
+/**
+ * @param {Map<number, Array<number>>} map
+ * @param {number} key
+ * @param {number} batchId
+ */
+function index(map, key, batchId) {
+  const list = map.get(key)
+  if (list) {
+    list.push(batchId)
+  } else {
+    map.set(key, [batchId])
+  }
+}
+
+
+/**
+ * @param {Map<number, Array<number>>} map
+ * @param {number} key
+ * @param {number} batchId
+ */
+function unindex(map, key, batchId) {
+  const list = map.get(key)
+  if (!list) {
+    return
+  }
+  const at = list.indexOf(batchId)
+  if (at >= 0) {
+    list.splice(at, 1)
+  }
+  if (list.length === 0) {
+    map.delete(key)
+  }
+}
+
+
+/**
+ * The live batch ids a layer's ids name.
+ *
+ * @param {object} mesh decorated BatchedMesh
+ * @param {object} state its highlight state
+ * @param {Set<number>} ids parent product ids, or occurrence ids
+ * @param {boolean} byOccurrence whether `ids` are occurrence ids
+ * @return {Set<number>}
+ */
+function resolveLayer(mesh, state, ids, byOccurrence) {
+  const next = new Set()
+  if (ids.size === 0 || (byOccurrence && !mesh.instanceOccurrenceIds)) {
+    return next
+  }
+  // O(matched): walk the requested ids' batchIds via the index, not
+  // all N instances.
+  const byId = byOccurrence ? occurrenceIndexOf(mesh, state) : state.parentIndex
+  for (const id of ids) {
+    const list = byId.get(id)
+    if (list) {
+      for (const b of list) {
+        next.add(b)
+      }
+    }
+  }
+  return next
+}
+
+
+/**
+ * Map each value of a per-instance table to the LIVE batchIds holding it.
+ *
+ * @param {object} mesh decorated BatchedMesh
+ * @param {Uint32Array|Array<number>} table `instanceParents` or
+ *   `instanceOccurrenceIds`
+ * @return {Map<number, Array<number>>}
+ */
+function indexActiveInstances(mesh, table) {
+  const map = new Map()
+  forEachActiveInstance(mesh, (b) => {
+    index(map, table[b], b)
+  })
+  return map
 }
 
 
@@ -82,17 +228,7 @@ function highlightState(mesh) {
  */
 function occurrenceIndexOf(mesh, state) {
   if (!state.occurrenceIndex) {
-    const occurrenceIndex = new Map()
-    const occIds = mesh.instanceOccurrenceIds
-    for (let b = 0; b < occIds.length; b++) {
-      const list = occurrenceIndex.get(occIds[b])
-      if (list) {
-        list.push(b)
-      } else {
-        occurrenceIndex.set(occIds[b], [b])
-      }
-    }
-    state.occurrenceIndex = occurrenceIndex
+    state.occurrenceIndex = indexActiveInstances(mesh, mesh.instanceOccurrenceIds)
   }
   return state.occurrenceIndex
 }
@@ -107,6 +243,9 @@ function occurrenceIndexOf(mesh, state) {
  * @param {number} batchId
  */
 function paint(mesh, batchId) {
+  // Every id reaching here is live: `setColorAt` throws on a deleted one
+  // (BatchedMesh.js:1108-1110), and a delete takes its id out of both layers
+  // as it happens (`applyBatchEdit`), so neither set can name one.
   const state = mesh.userData.batchedHighlight
   const orig = mesh.instanceColors?.[batchId]
   const a = orig?.w ?? 1
@@ -140,6 +279,8 @@ function setLayer(model, matchIds, color, layer, byOccurrence = false) {
   const ids = matchIds instanceof Set ? matchIds : new Set(matchIds ?? [])
   const setKey = layer === 'pre' ? 'preSet' : 'selSet'
   const colorKey = layer === 'pre' ? 'preColor' : 'selColor'
+  const idsKey = layer === 'pre' ? 'preIds' : 'selIds'
+  const byOccurrenceKey = layer === 'pre' ? 'preByOccurrence' : 'selByOccurrence'
   eachBatch(model, (mesh) => {
     // `instanceColors` is required: paint() restores a cleared instance to
     // its original colour from it — without it, clearing would repaint every
@@ -152,20 +293,12 @@ function setLayer(model, matchIds, color, layer, byOccurrence = false) {
     }
     const state = highlightState(mesh)
     state[colorKey] = color ?? undefined
-    // O(matched): walk the requested ids' batchIds via the index, not
-    // all N instances.
-    const index = byOccurrence ? occurrenceIndexOf(mesh, state) : state.parentIndex
-    const next = new Set()
-    if (color && ids.size > 0) {
-      for (const id of ids) {
-        const list = index.get(id)
-        if (list) {
-          for (const b of list) {
-            next.add(b)
-          }
-        }
-      }
-    }
+    // Copied: the caller's Set is theirs to mutate, and these are what the
+    // layer is re-resolved from after an edit.
+    const layerIds = color ? new Set(ids) : new Set()
+    state[idsKey] = layerIds
+    state[byOccurrenceKey] = byOccurrence
+    const next = resolveLayer(mesh, state, layerIds, byOccurrence)
     const prev = state[setKey]
     state[setKey] = next
     // Repaint every instance whose membership in this layer changed; paint()
@@ -284,9 +417,9 @@ export function repaintBatchedColors(model) {
     if (!mesh.instanceColors || typeof mesh.setColorAt !== 'function') {
       return
     }
-    for (let batchId = 0; batchId < mesh.instanceColors.length; batchId++) {
+    forEachActiveInstance(mesh, (batchId) => {
       paint(mesh, batchId)
-    }
+    })
   })
 }
 

@@ -51,6 +51,7 @@ import {
 } from 'three-mesh-bvh'
 import {IfcAPI} from 'web-ifc'
 import ShareIfcManager from './ShareIfcManager'
+import {raycastActiveInstances} from './batchedRaycast'
 
 
 // Install three-mesh-bvh's accelerated raycasting globally. The fork's
@@ -77,9 +78,12 @@ Mesh.prototype.raycast = acceleratedRaycast
 // resolve a pick. When a batch has no bounds trees built it falls back to
 // three's native BatchedMesh raycast (also batchId-bearing), so the patch
 // is safe even on batches we never call `computeBoundsTree()` on.
+// `raycastActiveInstances` is that same call, made safe for a batch with a
+// deleted instance, which the library's walk would otherwise throw on
+// (create-300 L0, #1915 — see batchedRaycast.js).
 BatchedMesh.prototype.computeBoundsTree = computeBatchedBoundsTree
 BatchedMesh.prototype.disposeBoundsTree = disposeBatchedBoundsTree
-BatchedMesh.prototype.raycast = acceleratedRaycast
+BatchedMesh.prototype.raycast = raycastActiveInstances
 
 
 /**

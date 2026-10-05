@@ -9,6 +9,7 @@ import {
 } from 'three'
 import {makeSurfaceMaterial} from '../lookMaterial'
 import {addGeometryRanges} from './batchedGeometryRanges'
+import {allocateInstanceTables, writeRow} from './batchedInstanceTables'
 import {attachBatchedSubsets} from './batchedSubset'
 import {decorateBatchMeshes} from './buildBatchedConwayModel'
 import {
@@ -985,11 +986,7 @@ function buildPartition(pairs, transparent) {
   // insertion order, transparent sorts for blend correctness.
   mesh.sortObjects = transparent
 
-  const instanceParents = new Uint32Array(instanceCount)
-  const instanceOccurrenceIds = new Uint32Array(instanceCount)
-  const instanceGeometryIds = new Uint32Array(instanceCount)
-  const instanceOccurrencePaths = new Array(instanceCount)
-  const instanceColors = new Array(instanceCount)
+  const tables = allocateInstanceTables(instanceCount)
   let hasOccurrencePaths = false
   let hasGeometryIds = false
 
@@ -1022,31 +1019,33 @@ function buildPartition(pairs, transparent) {
       node.getMatrixAt(i, matrix)
       mesh.setMatrixAt(batchId, matrix)
       mesh.setColorAt(batchId, rgba.set(color.x, color.y, color.z, color.w))
-      instanceParents[batchId] = table.parents[i]
-      instanceOccurrenceIds[batchId] = table.occurrenceIds[i]
       if (table.geometryIds) {
         hasGeometryIds = true
-        instanceGeometryIds[batchId] = table.geometryIds[i]
       }
       const path = table.occurrencePaths ? table.occurrencePaths[i] : null
-      instanceOccurrencePaths[batchId] = Array.isArray(path) ? path : null
       if (Array.isArray(path)) {
         hasOccurrencePaths = true
       }
-      // Fresh objects per instance: these become the live `instanceColors`
-      // AND (via decorateBatchMeshes' snapshot) the source table — sharing
-      // one object per node would let a later per-instance write alias.
-      instanceColors[batchId] = {x: color.x, y: color.y, z: color.z, w: color.w}
+      writeRow(tables, batchId, {
+        parent: table.parents[i],
+        occurrenceId: table.occurrenceIds[i],
+        geometryId: table.geometryIds ? table.geometryIds[i] : 0,
+        occurrencePath: Array.isArray(path) ? path : null,
+        // Fresh objects per instance: these become the live `instanceColors`
+        // AND (via decorateBatchMeshes' snapshot) the source table — sharing
+        // one object per node would let a later per-instance write alias.
+        color: {x: color.x, y: color.y, z: color.z, w: color.w},
+      })
     }
   }
 
   return {
     mesh, material, transparent,
-    instanceParents, instanceOccurrenceIds, instanceColors,
+    ...tables,
     // Null (not zero-filled) when the artifact carried none, so the palette
     // keys fall back to parents exactly as on a table-less live build.
-    instanceGeometryIds: hasGeometryIds ? instanceGeometryIds : null,
-    instanceOccurrencePaths: hasOccurrencePaths ? instanceOccurrencePaths : null,
+    instanceGeometryIds: hasGeometryIds ? tables.instanceGeometryIds : null,
+    instanceOccurrencePaths: hasOccurrencePaths ? tables.instanceOccurrencePaths : null,
   }
 }
 

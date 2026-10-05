@@ -1,4 +1,5 @@
 import {Vector4} from 'three'
+import {forEachActiveInstance} from '../ifc/batchedInstanceTables'
 import {eachBatch} from '../ifc/batchedModel'
 import {repaintBatchedColors} from '../ifc/batchedHighlight'
 import {computePartPalette, paletteUnit, writePaletteColors} from '../ifc/productPalette'
@@ -93,16 +94,27 @@ export function hasAutoColor(model) {
  * @return {string} a {@link ColorMode}
  */
 export function activeColorMode(model) {
-  for (const mesh of revertibleMeshes(model)) {
-    const source = mesh.instanceSourceColors
-    const live = mesh.instanceColors
-    for (let i = 0; i < source.length; i++) {
-      if (live[i].x !== source[i].x || live[i].y !== source[i].y || live[i].z !== source[i].z) {
-        return ColorMode.AUTO
-      }
-    }
-  }
-  return ColorMode.SOURCE
+  return revertibleMeshes(model).some(showsOverride) ? ColorMode.AUTO : ColorMode.SOURCE
+}
+
+
+/**
+ * Whether any live instance of a mesh shows a color other than its source.
+ * Live only: a deleted instance's row is empty (batchedInstanceTables
+ * `clearRow`) and says nothing about which mode is showing.
+ *
+ * @param {object} mesh a revertible BatchedMesh
+ * @return {boolean}
+ */
+function showsOverride(mesh) {
+  const source = mesh.instanceSourceColors
+  const live = mesh.instanceColors
+  let differs = false
+  forEachActiveInstance(mesh, (i) => {
+    differs = live[i].x !== source[i].x || live[i].y !== source[i].y || live[i].z !== source[i].z
+    return !differs
+  })
+  return differs
 }
 
 
@@ -137,11 +149,11 @@ export function setColorMode(model, mode) {
       // Restore verbatim, alpha included. Fresh objects so the source
       // snapshot stays immutable no matter what a later override does to
       // the live table.
-      for (let i = 0; i < source.length; i++) {
+      forEachActiveInstance(mesh, (i) => {
         const {x, y, z, w} = source[i]
         mesh.instanceColors[i] = {x, y, z, w}
         mesh.setColorAt(i, _rgba.set(x, y, z, w))
-      }
+      })
     }
   }
 

@@ -8,6 +8,16 @@ import {batchedArtifactBytes, liveBatchedModel, triangleGeometry} from './glbArt
 import {injectGlbExtensions, parseGlb, serializeGlb} from './injectGlbExtensions'
 import {COMPRESSION_MESHOPT, compressExportGlb} from '../export/glbCompression'
 import {rewriteGlbPortable} from '../export/glbPortable'
+import {
+  addBatchedGeometry,
+  addBatchedInstance,
+  deleteBatchedInstance,
+  mintGeometryId,
+  mintOccurrenceId,
+} from '../viewer/ifc/batchedEdit'
+import {BATCHED_GEOMETRY_RANGES_FLAG} from '../viewer/ifc/batchedGeometryRanges'
+import {instanceGeometryAt} from '../viewer/ifc/batchedInstanceGeometry'
+import {forEachActiveInstance} from '../viewer/ifc/batchedInstanceTables'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {isDefaultColor} from '../viewer/ifc/productPalette'
 
@@ -66,6 +76,9 @@ const STEP_TREE = {
     {expressID: 20, type: 'PRODUCT', Name: {value: 'Plate'}, occurrencePath: [4], children: []},
   ],
 }
+
+/** The fixture's source grey, for rows the edit suites add. */
+const GREY_SOURCE = {x: 0.8, y: 0.8, z: 0.8, w: 1}
 
 // Instantiating the Meshopt wasm decoder on a loaded CI worker outruns jest's
 // default 5s.
@@ -470,4 +483,95 @@ describe('portable GLB round-trip (rewrite -> GLTFLoader -> hydrate, #1849)', ()
 
     expect(await parseAndHydrate(serializeGlb(json, bin))).toBeNull()
   })
+})
+
+
+// create-300 L0 (#1915): the artifact path for an EDITED batch. Before L0 a
+// single deleted instance made the batched writer decline the whole model
+// (its geometry read came back null), and the cache fell back to the merged
+// bake; these pin that an edited model now stays batched end to end, and
+// that the change is invisible to a model nobody edited.
+describe('batched-native GLB round-trip of an edited model (create-300 L0)', () => {
+  /**
+   * @param {object} model a decorated BatchedMesh
+   * @return {Array<number>} live instances' parents, sorted
+   */
+  function liveParents(model) {
+    const parents = []
+    forEachActiveInstance(model, (batchId) => {
+      parents.push(model.instanceParents[batchId])
+    })
+    return parents.sort((a, b) => a - b)
+  }
+
+  for (const collapse of [false, true]) {
+    const layout = collapse ? 'collapsed' : 'instanced'
+
+    it(`exports a model with a deleted instance BATCHED and hydrates it back without it (${layout})`,
+      async () => {
+        const live = liveBatchedModel()
+        // Nut B: the second placement of the shared part.
+        deleteBatchedInstance(live, 1)
+
+        // `batchedArtifactBytes` throws if the writer declines — the merged
+        // fallback — so getting bytes at all is the "exported batched" half.
+        const hydrated = await parseAndHydrate(await batchedArtifactBytes(live, {collapse}))
+
+        expect(hydrated).not.toBeNull()
+        expect(hydrated.isBatchedMesh).toBe(true)
+        expect(liveParents(hydrated)).toEqual([11, 20])
+        expect(hydrated.instanceCount).toBe(2)
+        expect(hydrated.instanceOccurrencePaths.filter(Boolean)).not.toContainEqual([3, 8])
+      }, TIMEOUT_MS)
+
+    it(`writes an add-then-delete model byte-identically to the unedited one (${layout})`,
+      async () => {
+        // The blast-radius check for the writer's skip: a batch whose only
+        // difference is a recycled hole and grown tables must serialise to the
+        // same bytes, so skipping inactive ids cannot have perturbed the visit
+        // order, the groups or the tables of everything else.
+        const edited = liveBatchedModel()
+        const pasted = addBatchedInstance(edited, edited.getGeometryIdAt(2), {
+          parent: 99, occurrenceId: 9, geometryId: 600, occurrencePath: [9], color: GREY_SOURCE,
+        }, new Matrix4().makeTranslation(7, 7, 0))
+        expect(pasted).toBe(3)
+        deleteBatchedInstance(edited, pasted)
+
+        const want = await batchedArtifactBytes(liveBatchedModel(), {collapse})
+        const got = await batchedArtifactBytes(edited, {collapse})
+
+        expect(got.byteLength).toBe(want.byteLength)
+        expect(Buffer.from(got).equals(Buffer.from(want))).toBe(true)
+      }, TIMEOUT_MS)
+  }
+
+  it('adds a shape to a hydrated COLLAPSED cache-hit batch', async () => {
+    const hydrated = await parseAndHydrate(
+      await batchedArtifactBytes(liveBatchedModel(), {collapse: true}))
+    // The premise: this really is the range-addressed layout, sized exactly.
+    expect(hydrated[BATCHED_GEOMETRY_RANGES_FLAG]).toBe(true)
+    expect(hydrated.unusedVertexCount).toBe(0)
+    const before = []
+    forEachActiveInstance(hydrated, (batchId) => {
+      before.push(Array.from(instanceGeometryAt(hydrated, batchId).getAttribute('position').array))
+    })
+
+    const geometryId = addBatchedGeometry(hydrated, triangleGeometry(5))
+    const batchId = addBatchedInstance(hydrated, geometryId, {
+      parent: 99,
+      occurrenceId: mintOccurrenceId(hydrated),
+      geometryId: mintGeometryId(hydrated),
+      color: GREY_SOURCE,
+    }, new Matrix4())
+
+    expect(Array.from(instanceGeometryAt(hydrated, batchId).getAttribute('position').array))
+      .toEqual([0, 0, 0, 5, 0, 0, 0, 5, 0])
+    const after = []
+    forEachActiveInstance(hydrated, (id) => {
+      if (id !== batchId) {
+        after.push(Array.from(instanceGeometryAt(hydrated, id).getAttribute('position').array))
+      }
+    })
+    expect(after).toEqual(before)
+  }, TIMEOUT_MS)
 })
