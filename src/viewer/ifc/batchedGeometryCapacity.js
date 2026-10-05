@@ -1,6 +1,8 @@
 /**
  * batchedGeometryCapacity — room for `addGeometry` on a batch that has
- * already finished loading (create-300 L0, #1915).
+ * already finished loading (create-300 L0, #1915). The add itself is
+ * `batchedEdit.js#addBatchedGeometry`, which calls
+ * {@link ensureGeometryCapacity} first.
  *
  * Every builder leaves a batch with no spare vertex or index space: the
  * one-shot builder and the cache-hit hydration size it exactly up front
@@ -73,7 +75,20 @@ function nextCapacity(capacity, used, need, minStep) {
 
 
 /**
- * Resize the batch buffers without three's shrink check (module doc).
+ * Resize the batch buffers without three's shrink check (module doc), all or
+ * nothing.
+ *
+ * three's `setGeometrySize` is not transactional. It disposes the old
+ * geometry, advances `_maxVertexCount` / `_maxIndexCount` and clears
+ * `_geometryInitialized` BEFORE `_initializeGeometry` allocates the new
+ * arrays (BatchedMesh.js:1346-1360) — and that allocation is exactly what
+ * fails on a large model (a RangeError from the ArrayBuffer constructor). Left
+ * as three leaves it, the batch would draw from an attribute-less geometry,
+ * claim capacity it does not have, and keep its bounds trees pointing at the
+ * old buffers. So every field the call touches is put back on a throw: the
+ * geometry object (still holding every byte — `dispose()` only drops the
+ * renderer's GPU copies, which three re-uploads the next time the geometry is
+ * drawn), the two max counts, the initialized flag and each tree's binding.
  *
  * @param {object} mesh THREE.BatchedMesh
  * @param {number} maxVertexCount strictly larger than the current capacity
@@ -82,11 +97,29 @@ function nextCapacity(capacity, used, need, minStep) {
 function growBuffers(mesh, maxVertexCount, maxIndexCount) {
   const geometryInfo = mesh._geometryInfo
   const before = mesh.geometry
+  const saved = {
+    maxVertexCount: mesh._maxVertexCount,
+    maxIndexCount: mesh._maxIndexCount,
+    geometryInitialized: mesh._geometryInitialized,
+  }
+  const trees = Array.isArray(mesh.boundsTrees) ? mesh.boundsTrees : []
+  const treeGeometries = trees.map((tree) => tree?.geometry)
   if (Array.isArray(geometryInfo)) {
     mesh._geometryInfo = []
   }
   try {
     mesh.setGeometrySize(maxVertexCount, maxIndexCount)
+  } catch (err) {
+    mesh.geometry = before
+    mesh._maxVertexCount = saved.maxVertexCount
+    mesh._maxIndexCount = saved.maxIndexCount
+    mesh._geometryInitialized = saved.geometryInitialized
+    trees.forEach((tree, i) => {
+      if (tree) {
+        tree.geometry = treeGeometries[i]
+      }
+    })
+    throw err
   } finally {
     mesh._geometryInfo = geometryInfo
   }
@@ -106,11 +139,9 @@ function growBuffers(mesh, maxVertexCount, maxIndexCount) {
   //   geometry while building (GeometryBVH.js:158-160) and the BVH raycast
   //   reads when a geometry has no tree (ExtensionUtilities.js:125-131).
   //   Carried over so that path finds the same state it did before.
-  if (Array.isArray(mesh.boundsTrees)) {
-    for (const tree of mesh.boundsTrees) {
-      if (tree) {
-        tree.geometry = mesh.geometry
-      }
+  for (const tree of trees) {
+    if (tree) {
+      tree.geometry = mesh.geometry
     }
   }
   if (before?.boundingBox && !mesh.geometry.boundingBox) {
@@ -144,31 +175,4 @@ export function ensureGeometryCapacity(mesh, vertexCount, indexCount) {
     nextCapacity(vertexCapacity, vertexCapacity - freeVertices, vertexCount, MIN_VERTEX_GROWTH),
     nextCapacity(indexCapacity, indexCapacity - freeIndices, indexCount, MIN_INDEX_GROWTH))
   return true
-}
-
-
-/**
- * Add a shape to a batch after load, growing it first when it is full.
- *
- * When the batch carries per-geometry bounds trees (every production batch:
- * `decorateBatchMeshes` builds them), the new id gets its own. Without one,
- * three-mesh-bvh raycasts the id by reading the batch geometry's
- * `boundingBox` (ExtensionUtilities.js:127), which a grown batch does not
- * necessarily have; and when the id is one three RECYCLED from a deleted
- * geometry (BatchedMesh.js:677-682), the old tree would answer for the new
- * triangles. Building it here closes both.
- *
- * @param {object} mesh THREE.BatchedMesh
- * @param {object} geometry indexed BufferGeometry with the batch's attributes
- * @return {number} the new geometry id
- */
-export function addBatchedGeometry(mesh, geometry) {
-  const vertexCount = geometry.getAttribute('position').count
-  const indexCount = geometry.getIndex()?.count ?? 0
-  ensureGeometryCapacity(mesh, vertexCount, indexCount)
-  const geometryId = mesh.addGeometry(geometry)
-  if (Array.isArray(mesh.boundsTrees) && typeof mesh.computeBoundsTree === 'function') {
-    mesh.computeBoundsTree(geometryId)
-  }
-  return geometryId
 }

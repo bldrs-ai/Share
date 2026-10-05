@@ -9,6 +9,7 @@ import {
 } from '../display/colorMode'
 import {ResidencyController} from '../residency/ResidencyController'
 import {
+  applyBatchedInstancePreselection,
   applyBatchedInstanceSelection,
   applyBatchedPreselection,
   applyBatchedSelection,
@@ -16,16 +17,14 @@ import {
   clearBatchedSelection,
   repaintBatchedColors,
 } from './batchedHighlight'
+import {addBatchedInstance, batchEditRevision, deleteBatchedInstance} from './batchedEdit'
 import {
-  addBatchedInstance,
   clearRow,
-  deleteBatchedInstance,
   ensureInstanceCapacity,
   forEachActiveInstance,
   hasInactiveInstances,
   instanceIdSpan,
   isActive,
-  tablesRevision,
   writeRow,
 } from './batchedInstanceTables'
 import {
@@ -33,6 +32,7 @@ import {
   GREEN,
   GREY,
   RED,
+  SHAPE_ID,
   SPACING,
   decoratedStepBatch,
   withBvhPrototypes,
@@ -107,7 +107,7 @@ describe('viewer/ifc/batchedInstanceTables', () => {
     it('retires a deleted row: columns emptied, path unindexed, revision bumped', () => {
       const mesh = decoratedStepBatch()
       expect(mesh.occurrencePathToBatchIds.get('20')).toEqual([2])
-      const before = tablesRevision(mesh)
+      const before = batchEditRevision(mesh)
 
       deleteBatchedInstance(mesh, 2)
 
@@ -118,7 +118,7 @@ describe('viewer/ifc/batchedInstanceTables', () => {
       // The NavTree→scene join must not resolve the deleted occurrence.
       expect(mesh.occurrencePathToBatchIds.has('20')).toBe(false)
       expect(mesh.occurrencePathToBatchIds.get('10/11')).toEqual([0])
-      expect(tablesRevision(mesh)).toBe(before + 1)
+      expect(batchEditRevision(mesh)).toBe(before + 1)
     })
 
     it('gives a paste into a recycled id a clean row, none of the deleted one\'s', () => {
@@ -220,7 +220,7 @@ describe('viewer/ifc/batchedInstanceTables', () => {
       applyBatchedSelection(mesh, [100])
       clearBatchedSelection(mesh)
       const batchId = addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
-        parent: 400, occurrenceId: 9, color: PURPLE,
+        parent: 400, occurrenceId: 9, geometryId: SHAPE_ID, color: PURPLE,
       }, new Matrix4().makeTranslation(50, 0, 0))
 
       applyBatchedSelection(mesh, [400], {r: 0, g: 1, b: 1})
@@ -230,10 +230,12 @@ describe('viewer/ifc/batchedInstanceTables', () => {
 
     // The layer sets hold batch ids. After a delete + paste the same id can be
     // a different instance (three recycles the lowest freed id,
-    // BatchedMesh.js:580-591), so membership has to be re-derived from what the
-    // caller selected — not carried over by id — before anything repaints.
+    // BatchedMesh.js:580-591). The highlight follows each edit as it lands
+    // (batchedEdit `onBatchEdit`), so every assertion here is made straight
+    // after the edit — no highlight call in between to bring it up to date.
     describe('highlight: a paste into a highlighted id', () => {
       const CYAN = {r: 0, g: 1, b: 1}
+      const CYAN_RGBA = [0, 1, 1, 1]
       const PURPLE_RGBA = [0.5, 0, 0.5, 1]
 
       /**
@@ -245,7 +247,7 @@ describe('viewer/ifc/batchedInstanceTables', () => {
       function recyclePlacement2(mesh) {
         deleteBatchedInstance(mesh, 2)
         const batchId = addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
-          parent: 400, occurrenceId: 9, occurrencePath: [40], color: PURPLE,
+          parent: 400, occurrenceId: 9, geometryId: SHAPE_ID, occurrencePath: [40], color: PURPLE,
         }, new Matrix4().makeTranslation(50, 0, 0))
         expect(batchId).toBe(2)
         return batchId
@@ -282,24 +284,32 @@ describe('viewer/ifc/batchedInstanceTables', () => {
         expect(drawnColor(mesh, batchId)).toEqual(PURPLE_RGBA)
       })
 
-      it('a paste of the selected product into its own freed id is lit after an unrelated hover', () => {
+      it('a paste of the selected product into its own freed id is lit the moment it lands', () => {
         // Same product, same id: the layer's membership is {2} before and
-        // after the edit, but `addBatchedInstance` reset the slot to the
-        // paste's own color, so a re-resolution that paints only what MOVED
-        // leaves it unlit.
+        // after, but `addBatchedInstance` paints the slot in the paste's own
+        // color. Nothing else will repaint it — ShareViewer's hover dedup
+        // (`_lastBatchedPreselectKey`) swallows the repeat hovers that would.
         const mesh = decoratedStepBatch()
         applyBatchedSelection(mesh, [200], CYAN)
         deleteBatchedInstance(mesh, 2)
         const batchId = addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
-          parent: 200, occurrenceId: 9, occurrencePath: [20], color: PURPLE,
+          parent: 200, occurrenceId: 9, geometryId: SHAPE_ID, occurrencePath: [20], color: PURPLE,
         }, new Matrix4().makeTranslation(50, 0, 0))
         expect(batchId).toBe(2)
+
+        expect(drawnColor(mesh, batchId)).toEqual(CYAN_RGBA)
+      })
+
+      it('a paste of the hovered occurrence\'s product does not join an occurrence layer', () => {
+        // The occurrence-keyed layer names occurrences, not products: a paste
+        // has a new occurrence id, so it stays its own color.
+        const mesh = decoratedStepBatch()
+        applyBatchedInstancePreselection(mesh, [3], {r: 1, g: 1, b: 0})
+        const batchId = addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
+          parent: 300, occurrenceId: 9, geometryId: SHAPE_ID, color: PURPLE,
+        }, new Matrix4().makeTranslation(50, 0, 0))
+
         expect(drawnColor(mesh, batchId)).toEqual(PURPLE_RGBA)
-
-        // A hover on product 300 is the first highlight call after the edit.
-        applyBatchedPreselection(mesh, [300], {r: 1, g: 1, b: 0})
-
-        expect(drawnColor(mesh, batchId)).toEqual([0, 1, 1, 1])
         expect(drawnColor(mesh, 3)).toEqual([1, 1, 0, 1])
       })
 
@@ -310,21 +320,22 @@ describe('viewer/ifc/batchedInstanceTables', () => {
         // Appended (id 4 — the free id 1 is reused first, so fill it with
         // another product before pasting 100 again).
         addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
-          parent: 300, occurrenceId: 8, color: BLUE,
+          parent: 300, occurrenceId: 8, geometryId: SHAPE_ID, color: BLUE,
         }, new Matrix4().makeTranslation(60, 0, 0))
         const pasted = addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
-          parent: 100, occurrenceId: 9, color: PURPLE,
+          parent: 100, occurrenceId: 9, geometryId: SHAPE_ID, color: PURPLE,
         }, new Matrix4().makeTranslation(50, 0, 0))
         expect(pasted).toBe(4)
-
-        repaintBatchedColors(mesh)
 
         // Selection is "product 100", so it covers 100's live instances now:
         // the survivor at 0 and the paste at 4 — and not the product-300
         // instance that took over id 1.
-        expect(drawnColor(mesh, 0)).toEqual([0, 1, 1, 1])
-        expect(drawnColor(mesh, 4)).toEqual([0, 1, 1, 1])
+        expect(drawnColor(mesh, 0)).toEqual(CYAN_RGBA)
+        expect(drawnColor(mesh, 4)).toEqual(CYAN_RGBA)
         expect(drawnColor(mesh, 1)).toEqual([0, 0, 1, 1])
+        // And clearing the selection lets go of the paste too.
+        clearBatchedSelection(mesh)
+        expect(drawnColor(mesh, 4)).toEqual(PURPLE_RGBA)
       })
     })
 
@@ -382,16 +393,14 @@ describe('viewer/ifc/batchedInstanceTables', () => {
       residency.setTarget(0)
       deleteBatchedInstance(mesh, 2)
       const batchId = addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
-        parent: 400, occurrenceId: 9, occurrencePath: [40], color: PURPLE,
+        parent: 400, occurrenceId: 9, geometryId: SHAPE_ID, occurrencePath: [40], color: PURPLE,
       }, new Matrix4().makeTranslation(50, 0, 0))
       expect(batchId).toBe(2)
-      // three issues the recycled id visible (BatchedMesh.js:571-575)...
-      expect(mesh.getVisibleAt(2)).toBe(true)
 
-      residency.setTarget(0)
-
-      // ...so a target of zero has to write it, not trust the deleted
-      // instance's cached "already hidden".
+      // three issues the recycled id visible (BatchedMesh.js:571-575), so the
+      // paste is hidden only if residency re-applied target 0 as the edit
+      // landed — not on the next slider tick — and wrote the id rather than
+      // trusting the deleted instance's cached "already hidden".
       expect([0, 1, 2, 3].map((b) => mesh.getVisibleAt(b))).toEqual([false, false, false, false])
       // And the record behind id 2 is the paste's, not the deleted part's
       // (product 200 at x = 20).
@@ -405,9 +414,11 @@ describe('viewer/ifc/batchedInstanceTables', () => {
       const mesh = decoratedStepBatch()
       const residency = new ResidencyController(mesh)
       const batchId = addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
-        parent: 400, occurrenceId: 9, occurrencePath: [40], color: PURPLE,
+        parent: 400, occurrenceId: 9, geometryId: SHAPE_ID, occurrencePath: [40], color: PURPLE,
       }, new Matrix4().makeTranslation(50, 0, 0))
       expect(batchId).toBe(4)
+      // At target 1 the paste shows, as three issued it.
+      expect(mesh.getVisibleAt(4)).toBe(true)
 
       residency.setTarget(0)
 
@@ -420,8 +431,8 @@ describe('viewer/ifc/batchedInstanceTables', () => {
     })
 
     it('residency: an unedited batch keeps its records across slider ticks', () => {
-      // The revision check is the whole cost of the fix on the unedited path:
-      // the records are the construction-time ones, not rebuilt per tick.
+      // Nothing marks an unedited batch stale, so the records are the
+      // construction-time ones, not rebuilt per tick.
       const mesh = decoratedStepBatch()
       const residency = new ResidencyController(mesh)
       const records = residency.instances

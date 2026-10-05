@@ -1,4 +1,3 @@
-import {Vector4} from 'three'
 import {occurrencePathKey} from '../../utils/occurrencePaths'
 
 
@@ -34,11 +33,15 @@ import {occurrencePathKey} from '../../utils/occurrencePaths'
  *  1. Loops go through {@link forEachActiveInstance}; nothing iterates the
  *     tables by length.
  *  2. Rows are written through {@link writeRow} and retired through
- *     {@link clearRow}, which also keep `occurrencePathToBatchIds` in step and
- *     bump {@link tablesRevision} so caches derived from the tables
- *     (`batchedHighlight`'s parent / occurrence indices) know to rebuild.
+ *     {@link clearRow}, which also keep `occurrencePathToBatchIds` in step.
  *  3. Tables grow through {@link ensureInstanceCapacity}, never by an
  *     out-of-bounds write (a typed array silently drops one).
+ *
+ * This module only keeps the tables. Changing what a LOADED batch holds —
+ * add, delete, move, re-shape — goes through `batchedEdit.js`, which calls
+ * the row writers here, bumps the batch's one edit revision and notifies the
+ * consumers that derive state from it. The builders call the row writers
+ * directly, on tables nothing reads yet.
  *
  * Point reads by an id three itself just handed back (a raycast's `batchId`)
  * stay direct table reads: three never reports an inactive instance from a
@@ -60,29 +63,12 @@ import {occurrencePathKey} from '../../utils/occurrencePaths'
 
 
 /**
- * Growth factor for a table (and, in {@link addBatchedInstance}, three's own
- * instance capacity) that has to make room for one more row after load.
- * Geometric so a run of pastes costs amortised O(1) copies per row, but
+ * Growth factor for a table that has to make room for one more row after
+ * load. Geometric so a run of pastes costs amortised O(1) copies per row, but
  * modest: post-load growth is edit-driven, and doubling the tables of a
  * 500k-instance model for one pasted part would be all waste.
  */
 const TABLE_GROWTH = 1.25
-
-/**
- * Smallest instance capacity increment when three's instance buffers have to
- * grow. Keeps a small model from re-allocating its matrix / colour textures
- * on every one of a burst of pastes.
- */
-const MIN_INSTANCE_GROWTH = 64
-
-
-const _rgba = new Vector4()
-
-
-// Per-mesh table revision, bumped by every row write / clear on a DECORATED
-// mesh. A WeakMap rather than a field so a hand-built test double, or a mesh
-// that was never edited, pays nothing and carries nothing extra.
-const revisions = new WeakMap()
 
 
 /**
@@ -201,32 +187,6 @@ export function forEachActiveInstance(holder, fn) {
     if (fn(batchId) === false) {
       return
     }
-  }
-}
-
-
-/**
- * Revision counter of a mesh's tables: 0 until the first post-decoration
- * {@link writeRow} / {@link clearRow}, then bumped by each. A cache built
- * from the tables records the revision it saw and rebuilds when it moves.
- *
- * @param {object} mesh decorated BatchedMesh
- * @return {number}
- */
-export function tablesRevision(mesh) {
-  return revisions.get(mesh) ?? 0
-}
-
-
-/**
- * Note a row change on a decorated mesh (no-op on a builder's handle: nothing
- * caches a handle's tables).
- *
- * @param {object} holder
- */
-function bumpRevision(holder) {
-  if (holder.isBatchedMesh) {
-    revisions.set(holder, tablesRevision(holder) + 1)
   }
 }
 
@@ -389,7 +349,7 @@ function indexPath(index, path, batchId) {
  * Objects are stored as given (the builders hand over conway's color objects
  * and the hydration fresh ones; copying here would change nothing they rely
  * on and cost an allocation per instance on load). On a decorated mesh the
- * path index is kept in step and the revision bumped.
+ * path index is kept in step.
  *
  * The holder must already be long enough (see {@link ensureInstanceCapacity}):
  * a typed array ignores an out-of-bounds write, so writing past the end would
@@ -425,7 +385,6 @@ export function writeRow(holder, batchId, row) {
   if (holder.instanceSourceColors) {
     holder.instanceSourceColors[batchId] = row.sourceColor ?? row.color ?? null
   }
-  bumpRevision(holder)
 }
 
 
@@ -457,7 +416,6 @@ export function clearRow(holder, batchId) {
   if (holder.instanceSourceColors) {
     holder.instanceSourceColors[batchId] = null
   }
-  bumpRevision(holder)
 }
 
 
@@ -481,78 +439,4 @@ export function buildOccurrencePathIndex(holder) {
     indexPath(byPath, paths[batchId], batchId)
   })
   return byPath
-}
-
-
-/**
- * Append one instance to a decorated batch after load, with a clean row.
- *
- * Grows three's instance capacity when every id is in use (`addInstance`
- * throws "Maximum item count reached" otherwise, BatchedMesh.js:565-569 —
- * and the builders size it exactly), then the tables, then writes the row.
- * three resets a new instance to identity and white (BatchedMesh.js:594-605);
- * the matrix and the row's color are applied here so the instance is drawn
- * as described from its first frame.
- *
- * NOT done here, because each is O(instances) and an edit batch should pay
- * it once, not per instance: the batch's `boundingBox` / `boundingSphere`
- * (frustum culling), and re-applying an active isolation mask. Both are the
- * edit layer's job (model-edit.md §L2).
- *
- * @param {object} mesh decorated BatchedMesh
- * @param {number} geometryId a live geometry id of this batch
- * @param {object} row see {@link writeRow}; `color` is required
- * @param {object} matrix THREE.Matrix4 instance transform
- * @return {number} the new batch id
- */
-export function addBatchedInstance(mesh, geometryId, row, matrix) {
-  if (mesh.instanceCount >= mesh.maxInstanceCount) {
-    const capacity = mesh.maxInstanceCount
-    mesh.setInstanceCount(Math.max(
-      capacity + MIN_INSTANCE_GROWTH, Math.ceil(capacity * TABLE_GROWTH)))
-  }
-  // Table room BEFORE three issues the id: an allocation failure must leave
-  // three and the tables agreeing, not an instance with no row behind it.
-  // three recycles a freed id before it appends (BatchedMesh.js:580-591), and
-  // `instanceCount` falls short of the id span exactly when one is free.
-  const span = instanceIdSpanOfBatch(mesh)
-  ensureInstanceCapacity(mesh, mesh.instanceCount < span ? span : span + 1)
-  const batchId = mesh.addInstance(geometryId)
-  const {color} = row
-  const live = {x: color.x, y: color.y, z: color.z, w: color.w}
-  const source = row.sourceColor ?? color
-  writeRow(mesh, batchId, {
-    ...row,
-    color: live,
-    sourceColor: {x: source.x, y: source.y, z: source.z, w: source.w},
-  })
-  mesh.setMatrixAt(batchId, matrix)
-  mesh.setColorAt(batchId, _rgba.set(live.x, live.y, live.z, live.w))
-  return batchId
-}
-
-
-/**
- * three's id space for a batch, ignoring the tables (which may be longer).
- *
- * @param {object} mesh
- * @return {number}
- */
-function instanceIdSpanOfBatch(mesh) {
-  return instanceInfoOf(mesh)?.length ?? tableLength(mesh)
-}
-
-
-/**
- * Delete one instance from a decorated batch and retire its row.
- *
- * `deleteInstance` frees no memory (it only flips `active`,
- * BatchedMesh.js:860-869); releasing geometry is #1913's memory half.
- *
- * @param {object} mesh decorated BatchedMesh
- * @param {number} batchId a live instance
- */
-export function deleteBatchedInstance(mesh, batchId) {
-  mesh.deleteInstance(batchId)
-  clearRow(mesh, batchId)
 }

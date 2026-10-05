@@ -1,6 +1,7 @@
 import {ShareViewer} from '../ShareViewer'
 import {unsortedArraysAreEqual, arrayRemove} from '../../utils/arrays'
 import {clearBatchedSelection} from '../ifc/batchedHighlight'
+import {BatchEditKind, onBatchEdit} from '../ifc/batchedEdit'
 import {forEachActiveInstance, instanceIdSpan, isActive} from '../ifc/batchedInstanceTables'
 import {eachBatch, isBatchedModel} from '../ifc/batchedModel'
 import {
@@ -24,9 +25,9 @@ import ThreeContext from './ThreeContext'
  * length, and after create-300 an edit can issue ids past it (three appends
  * a pasted instance when no id is free, BatchedMesh.js:580-591). New entries
  * start as the instance currently is (`base`: live and visible → 1) and
- * allowed (`allow` → 1) until the isolator's next pass rules on them; a
- * deleted id gets 0/1 and is never read, because every reader goes through
- * `forEachActiveInstance`.
+ * allowed (`allow` → 1) until something rules on them — for an added
+ * instance, {@link applyEditToMask} right after; a deleted id gets 0/1 and is
+ * never read, because every reader goes through `forEachActiveInstance`.
  *
  * @param {object} mesh a decorated BatchedMesh
  * @param {object} mask its `userData.isolationMask`
@@ -47,6 +48,52 @@ function growBatchedMask(mesh, mask) {
   mask.base = base
   mask.allow = allow
 }
+
+/**
+ * Keep an installed isolation mask true to an edit of its batch, the moment
+ * the edit lands (`batchedEdit#onBatchEdit`; subscribed for exactly as long
+ * as the mask is installed).
+ *
+ * `base` and `allow` describe whichever instance held an id when they were
+ * written, and three hands a freed id to the next `addInstance`
+ * (BatchedMesh.js:580-591). So:
+ *
+ *  - A delete forgets the id: `base` back to "shown" (three issues every id
+ *    visible, BatchedMesh.js:571-575) and `allow` to 1. Left alone, a paste
+ *    into the id would inherit the deleted instance's residency eviction —
+ *    replayed onto it by release — and its isolation verdict.
+ *  - An add is ruled on by the isolator's current filters (`mask.verdict`,
+ *    set by every `_applyBatchedVisibility` pass), so a paste made while
+ *    isolating shows or hides like its siblings without waiting for the
+ *    next pass. `base` is left as it is — "shown", or whatever residency has
+ *    already written for the new id if its own listener ran first.
+ *
+ * @param {object} mesh a decorated BatchedMesh
+ * @param {object} mask its `userData.isolationMask`
+ * @param {object} change `batchedEdit` change record
+ */
+function applyEditToMask(mesh, mask, change) {
+  let touched = false
+  for (const event of change.events) {
+    const {batchId} = event
+    if (event.kind === BatchEditKind.DELETE_INSTANCE) {
+      if (batchId < mask.base.length) {
+        mask.base[batchId] = 1
+        mask.allow[batchId] = 1
+      }
+    } else if (event.kind === BatchEditKind.ADD_INSTANCE) {
+      growBatchedMask(mesh, mask)
+      const allowed = mask.verdict(batchId)
+      mask.allow[batchId] = allowed ? 1 : 0
+      mask.nativeSetVisibleAt.call(mesh, batchId, allowed && mask.base[batchId] === 1)
+      touched = true
+    }
+  }
+  if (touched) {
+    mesh._visibilityChanged = true
+  }
+}
+
 
 /**
  * Provides hiding, unhiding, isolation, and unisolation functionalities.
@@ -625,19 +672,23 @@ export default class IfcIsolator {
         return
       }
       const mask = this._ensureBatchedMask(mesh)
-      const parents = mesh.instanceParents
-      const occurrenceIds = mesh.instanceOccurrenceIds
-      // Live instances only: three's `setVisibleAt` throws on a deleted one
-      // (BatchedMesh.js:1162-1164; batchedInstanceTables).
-      forEachActiveInstance(mesh, (batchId) => {
-        const parent = parents[batchId]
+      // The verdict reads the tables at call time, not a snapshot of them, so
+      // the mask's edit listener can rule on an instance added after this pass
+      // (`applyEditToMask`) with the filters this pass applied.
+      mask.verdict = (batchId) => {
+        const parent = mesh.instanceParents[batchId]
+        const occurrenceIds = mesh.instanceOccurrenceIds
         const isolated = !isolating || (isolatedInstances ?
           Boolean(occurrenceIds && isolatedInstances.has(occurrenceIds[batchId])) :
           isolatedParents.has(parent))
-        const allowed =
-          isolated &&
+        return isolated &&
           !hiddenParents.has(parent) &&
           !(occurrenceIds && hiddenInstances.has(occurrenceIds[batchId]))
+      }
+      // Live instances only: three's `setVisibleAt` throws on a deleted one
+      // (BatchedMesh.js:1162-1164; batchedInstanceTables).
+      forEachActiveInstance(mesh, (batchId) => {
+        const allowed = mask.verdict(batchId)
         mask.allow[batchId] = allowed ? 1 : 0
         // Bypass the wrapper: this is the isolator's own write, and it must not
         // be mistaken for residency intent (which would overwrite `base`).
@@ -661,9 +712,12 @@ export default class IfcIsolator {
    * `userData.batchedHighlight`) so it survives an isolator re-creation over
    * the same model.
    *
+   * Installing a mask subscribes it to the batch's edits
+   * ({@link applyEditToMask}); `_releaseBatchedMask` unsubscribes it.
+   *
    * @param {object} mesh a decorated BatchedMesh
-   * @return {object} `{base, allow, nativeSetVisibleAt, hadOwnSetVisibleAt,
-   *   nativeAddInstance, hadOwnAddInstance}`
+   * @return {object} `{base, allow, verdict, nativeSetVisibleAt,
+   *   hadOwnSetVisibleAt, unsubscribe}`
    * @private
    */
   _ensureBatchedMask(mesh) {
@@ -673,19 +727,21 @@ export default class IfcIsolator {
       return existing
     }
     const nativeSetVisibleAt = mesh.setVisibleAt
-    const nativeAddInstance = mesh.addInstance
     const mask = {
       base: new Uint8Array(0),
       allow: new Uint8Array(0),
+      // Replaced by every `_applyBatchedVisibility` pass before anything
+      // reads it; "allowed" until then, as a grown entry is.
+      verdict: () => true,
       nativeSetVisibleAt,
       // Normally the prototype method; remembered so release restores the mesh
       // to the exact shape it had rather than leaving a stray own property.
       hadOwnSetVisibleAt: Object.prototype.hasOwnProperty.call(mesh, 'setVisibleAt'),
-      nativeAddInstance,
-      hadOwnAddInstance: Object.prototype.hasOwnProperty.call(mesh, 'addInstance'),
+      unsubscribe: null,
     }
     growBatchedMask(mesh, mask)
     mesh.userData.isolationMask = mask
+    mask.unsubscribe = onBatchEdit(mesh, (change) => applyEditToMask(mesh, mask, change))
     mesh.setVisibleAt = function maskedSetVisibleAt(batchId, visible) {
       // An instance added after the mask was taken (create-300 paste) is
       // past its end: extend it first, or the write to `base` would be
@@ -695,22 +751,6 @@ export default class IfcIsolator {
       }
       mask.base[batchId] = visible ? 1 : 0
       return nativeSetVisibleAt.call(this, batchId, visible && mask.allow[batchId] === 1)
-    }
-    // `base` and `allow` describe whichever instance held an id when they
-    // were written, and three hands a freed id to the next `addInstance`
-    // (BatchedMesh.js:580-591; batchedInstanceTables `addBatchedInstance`).
-    // Left alone, a paste into a recycled id would inherit the deleted
-    // instance's residency eviction — replayed onto it by release — and its
-    // isolation verdict. So every id three issues while the mask is installed
-    // starts as an appended one does in `growBatchedMask`: three made it
-    // visible (BatchedMesh.js:571-575), and it is allowed until the isolator's
-    // next pass rules on it.
-    mesh.addInstance = function maskedAddInstance(geometryId) {
-      const batchId = nativeAddInstance.call(this, geometryId)
-      growBatchedMask(this, mask)
-      mask.base[batchId] = 1
-      mask.allow[batchId] = 1
-      return batchId
     }
     return mask
   }
@@ -729,15 +769,11 @@ export default class IfcIsolator {
       return
     }
     delete mesh.userData.isolationMask
+    mask.unsubscribe()
     if (mask.hadOwnSetVisibleAt) {
       mesh.setVisibleAt = mask.nativeSetVisibleAt
     } else {
       delete mesh.setVisibleAt
-    }
-    if (mask.hadOwnAddInstance) {
-      mesh.addInstance = mask.nativeAddInstance
-    } else {
-      delete mesh.addInstance
     }
     forEachActiveInstance(mesh, (batchId) => {
       if (batchId < mask.base.length) {

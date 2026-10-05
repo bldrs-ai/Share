@@ -1373,11 +1373,13 @@ describe('viewer/three/IfcIsolator', () => {
 
     // create-300 L0 (#1915). `visibility()` above walks every row with
     // `getVisibleAt`, which three throws on for a deleted id, so these read
-    // the live ids explicitly.
+    // the live ids explicitly. The mask follows each edit as it lands
+    // (batchedEdit `onBatchEdit`), so nothing here re-applies isolation by
+    // hand between an edit and its assertion.
     describe('around edits', () => {
-      let tables
+      let edit
       beforeAll(() => {
-        tables = require('../ifc/batchedInstanceTables')
+        edit = require('../ifc/batchedEdit')
       })
 
       /**
@@ -1389,9 +1391,23 @@ describe('viewer/three/IfcIsolator', () => {
         return ids.map((batchId) => mesh.getVisibleAt(batchId))
       }
 
+      /**
+       * Paste one instance of the fixture's shape (source id 999).
+       *
+       * @param {object} mesh BatchedMesh
+       * @param {number} parent product id
+       * @param {number} x translation
+       * @return {number} the paste's batch id
+       */
+      function paste(mesh, parent, x) {
+        return edit.addBatchedInstance(mesh, mesh.getGeometryIdAt(0),
+          {parent, occurrenceId: 4, geometryId: 999, color: {x: 1, y: 0, z: 0, w: 1}},
+          new Matrix4().makeTranslation(x, 0, 0))
+      }
+
       it('isolates, hides and restores around a deleted instance', () => {
         const {iso, mesh} = setupBatchedIsolator()
-        tables.deleteBatchedInstance(mesh, 2) // product 200
+        edit.deleteBatchedInstance(mesh, 2) // product 200
 
         iso.viewer.getSelectedIds = jest.fn(() => [100])
         expect(() => iso.isolateSelectedElements()).not.toThrow()
@@ -1402,27 +1418,33 @@ describe('viewer/three/IfcIsolator', () => {
         expect(mesh.userData.isolationMask).toBeUndefined()
       })
 
-      it('restores an instance pasted while isolated, past the mask\'s end', () => {
+      it('masks an instance pasted while isolated the moment it lands, past the mask\'s end', () => {
         const {iso, mesh} = setupBatchedIsolator()
         iso.viewer.getSelectedIds = jest.fn(() => [100])
         iso.isolateSelectedElements()
         expect(mesh.userData.isolationMask.base).toHaveLength(4)
 
         // A paste of product 300 while isolated: no id is free, so three
-        // appends it at 4 — one past the mask taken at isolate time.
-        const pasted = tables.addBatchedInstance(mesh, mesh.getGeometryIdAt(3),
-          {parent: 300, occurrenceId: 4, color: {x: 0, y: 0, z: 1, w: 1}},
-          new Matrix4().makeTranslation(40, 0, 0))
+        // appends it at 4 — one past the mask taken at isolate time. 300 is
+        // not isolated, so the paste is masked like its siblings.
+        const pasted = paste(mesh, 300, 40)
         expect(pasted).toBe(4)
-        // The edit layer re-applies isolation after a paste (model-edit.md
-        // §L2); 300 is not isolated, so the paste is masked like its siblings.
-        iso._applyBatchedVisibility()
         expect(visibleAt(mesh, [0, 1, 2, 3, 4])).toEqual([true, true, false, false, false])
 
         iso.resetTempIsolation()
 
         // Un-isolating hands the paste back visible, like everything else.
         expect(visibleAt(mesh, [0, 1, 2, 3, 4])).toEqual([true, true, true, true, true])
+      })
+
+      it('shows a paste of the isolated product the moment it lands', () => {
+        const {iso, mesh} = setupBatchedIsolator()
+        iso.viewer.getSelectedIds = jest.fn(() => [200])
+        iso.isolateSelectedElements()
+
+        const pasted = paste(mesh, 200, 40)
+
+        expect(visibleAt(mesh, [0, 1, 2, 3, pasted])).toEqual([false, false, true, false, true])
       })
 
       it('treats a paste into a recycled id as new, not as the deleted instance was', () => {
@@ -1432,37 +1454,29 @@ describe('viewer/three/IfcIsolator', () => {
         mesh.setVisibleAt(2, false)
         iso.viewer.getSelectedIds = jest.fn(() => [100])
         iso.isolateSelectedElements()
-        tables.deleteBatchedInstance(mesh, 2)
+        edit.deleteBatchedInstance(mesh, 2)
 
         // A paste of product 100: three recycles id 2 (BatchedMesh.js:580-591).
-        const pasted = tables.addBatchedInstance(mesh, mesh.getGeometryIdAt(0),
-          {parent: 100, occurrenceId: 4, color: {x: 1, y: 0, z: 0, w: 1}},
-          new Matrix4().makeTranslation(40, 0, 0))
+        // 100 is isolated, so the paste shows — unless the mask still carries
+        // the deleted instance's eviction for id 2.
+        const pasted = paste(mesh, 100, 40)
         expect(pasted).toBe(2)
-        // The edit layer re-applies isolation (model-edit.md §L2). 100 is
-        // isolated, so the paste shows — unless the mask still carries the
-        // deleted instance's eviction for id 2.
-        iso._applyBatchedVisibility()
         expect(visibleAt(mesh, [0, 1, 2, 3])).toEqual([true, true, true, false])
 
         iso.resetTempIsolation()
         expect(visibleAt(mesh, [0, 1, 2, 3])).toEqual([true, true, true, true])
-        expect(Object.prototype.hasOwnProperty.call(mesh, 'addInstance')).toBe(false)
       })
 
       it('residency remeasured after a paste still records an eviction isolation was hiding', () => {
-        // ResidencyController remeasures on a tables revision change. Its
-        // fresh records must not adopt three's bit as residency's own belief:
-        // under the mask that bit is base AND allow, so isolation's hide on id
-        // 2 would read as "already evicted" and the eviction below would never
-        // reach `base`.
+        // ResidencyController remeasures after an edit. Its fresh records must
+        // not adopt three's bit as residency's own belief: under the mask that
+        // bit is base AND allow, so isolation's hide on id 2 would read as
+        // "already evicted" and the eviction below would never reach `base`.
         const {iso, mesh} = setupBatchedIsolator()
         const residency = new ResidencyController(mesh)
         iso.viewer.getSelectedIds = jest.fn(() => [100])
         iso.isolateSelectedElements()
-        tables.addBatchedInstance(mesh, mesh.getGeometryIdAt(0),
-          {parent: 100, occurrenceId: 4, color: {x: 1, y: 0, z: 0, w: 1}},
-          new Matrix4().makeTranslation(40, 0, 0))
+        paste(mesh, 100, 40)
 
         residency.setTarget(0)
         iso.resetTempIsolation()
@@ -1470,22 +1484,47 @@ describe('viewer/three/IfcIsolator', () => {
         expect(visibleAt(mesh, [0, 1, 2, 3, 4])).toEqual([false, false, false, false, false])
       })
 
+      it.each([
+        ['residency listening first', true],
+        ['the mask listening first', false],
+      ])('residency at target 0 and isolation together rule on a paste (%s)', (_order, residencyFirst) => {
+        // Both listeners write the paste's bit. Residency's lands in `base`
+        // through the mask wrapper, the isolator's in `allow`; the result has
+        // to be base AND allow in either order, and release has to replay
+        // residency's eviction, not the isolator's "shown".
+        const {iso, mesh} = setupBatchedIsolator()
+        iso.viewer.getSelectedIds = jest.fn(() => [100])
+        let residency
+        if (residencyFirst) {
+          residency = new ResidencyController(mesh)
+          residency.setTarget(0)
+          iso.isolateSelectedElements()
+        } else {
+          iso.isolateSelectedElements()
+          residency = new ResidencyController(mesh)
+          residency.setTarget(0)
+        }
+
+        const pasted = paste(mesh, 100, 40)
+        expect(mesh.getVisibleAt(pasted)).toBe(false)
+
+        iso.resetTempIsolation()
+        expect(mesh.getVisibleAt(pasted)).toBe(false)
+        residency.setTarget(1)
+        expect(visibleAt(mesh, [0, 1, 2, 3, pasted])).toEqual([true, true, true, true, true])
+      })
+
       it('a paste of the isolated product into its own freed id is shown, not the old eviction', () => {
         // Same product into the same id: nothing about membership changes, so
-        // the reset has to come from the id being ISSUED (the `addInstance`
-        // wrapper), not from comparing who the id belongs to.
+        // the reset has to come from the DELETE forgetting the id.
         const {iso, mesh} = setupBatchedIsolator()
         mesh.setVisibleAt(1, false) // residency evicts product 100's second placement
         iso.viewer.getSelectedIds = jest.fn(() => [100])
         iso.isolateSelectedElements()
         expect(visibleAt(mesh, [0, 1, 2, 3])).toEqual([true, false, false, false])
-        tables.deleteBatchedInstance(mesh, 1)
-        const pasted = tables.addBatchedInstance(mesh, mesh.getGeometryIdAt(0),
-          {parent: 100, occurrenceId: 4, color: {x: 1, y: 0, z: 0, w: 1}},
-          new Matrix4().makeTranslation(40, 0, 0))
+        edit.deleteBatchedInstance(mesh, 1)
+        const pasted = paste(mesh, 100, 40)
         expect(pasted).toBe(1)
-
-        iso._applyBatchedVisibility()
 
         expect(visibleAt(mesh, [0, 1, 2, 3])).toEqual([true, true, false, false])
       })
@@ -1495,16 +1534,36 @@ describe('viewer/three/IfcIsolator', () => {
         mesh.setVisibleAt(2, false)
         iso.viewer.getSelectedIds = jest.fn(() => [100])
         iso.isolateSelectedElements()
-        tables.deleteBatchedInstance(mesh, 2)
-        const pasted = tables.addBatchedInstance(mesh, mesh.getGeometryIdAt(3),
-          {parent: 300, occurrenceId: 4, color: {x: 0, y: 0, z: 1, w: 1}},
-          new Matrix4().makeTranslation(40, 0, 0))
+        edit.deleteBatchedInstance(mesh, 2)
+        const pasted = paste(mesh, 300, 40)
         expect(pasted).toBe(2)
 
-        // No re-apply in between: release alone replays `base`.
         iso.resetTempIsolation()
 
         expect(visibleAt(mesh, [0, 1, 2, 3])).toEqual([true, true, true, true])
+      })
+
+      it('follows edits only while a mask is installed, and wraps nothing but setVisibleAt', () => {
+        const {iso, mesh} = setupBatchedIsolator()
+        iso.viewer.getSelectedIds = jest.fn(() => [100])
+        iso.isolateSelectedElements()
+        // Isolating also clears the selection highlight, whose state holds
+        // its own (mesh-lifetime) subscription; the mask's is the other one.
+        const withMask = edit.batchEditListenerCount(mesh)
+        expect(withMask).toBeGreaterThanOrEqual(1)
+        expect(Object.prototype.hasOwnProperty.call(mesh, 'addInstance')).toBe(false)
+        // A second pass reuses the mask and its one subscription.
+        iso._applyBatchedVisibility()
+        expect(edit.batchEditListenerCount(mesh)).toBe(withMask)
+
+        iso.resetTempIsolation()
+
+        expect(edit.batchEditListenerCount(mesh)).toBe(withMask - 1)
+        // With no mask, a paste is three's default: shown, and nothing writes
+        // a mask that is gone.
+        const pasted = paste(mesh, 300, 40)
+        expect(mesh.getVisibleAt(pasted)).toBe(true)
+        expect(mesh.userData.isolationMask).toBeUndefined()
       })
     })
 

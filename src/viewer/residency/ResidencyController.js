@@ -3,7 +3,8 @@ import {
   hasBatchedGeometry,
   instanceGeometryRangeAt,
 } from '../ifc/batchedInstanceGeometry'
-import {forEachActiveInstance, tablesRevision} from '../ifc/batchedInstanceTables'
+import {BatchEditKind, onBatchEdit} from '../ifc/batchedEdit'
+import {forEachActiveInstance} from '../ifc/batchedInstanceTables'
 
 
 /** Guard against division by zero when the eye sits on an instance. */
@@ -38,11 +39,11 @@ export const ResidencyMetric = Object.freeze({
  * The controller walks the model for BatchedMesh children carrying the
  * batched pick tables (`instanceParents`) and precomputes per-instance
  * centers/radii/amortized-bytes; metric evaluation is a flat array pass,
- * cheap enough to run per slider tick. The precompute is redone for a batch
- * only when an edit has moved its tables revision
- * (batchedInstanceTables `tablesRevision`): a record names a batch id, and
- * after a delete + paste that id can be a different instance, or a paste can
- * hold an id no record names (create-300 L0, #1915).
+ * cheap enough to run per slider tick. Each batch's records are redone when
+ * an edit changes it (`batchedEdit#onBatchEdit`; `onBatchEdit_` below): a
+ * record names a batch id, and after a delete + paste that id can be a
+ * different instance, or a paste can hold an id no record names (create-300
+ * L0, #1915).
  *
  * Per-shape bounds and vertex counts come from the batch itself; see
  * {@link measureInstances}.
@@ -60,9 +61,10 @@ export class ResidencyController {
     this.getSelectionCenter = opts.getSelectionCenter ?? (() => null)
     this.metric = ResidencyMetric.OCCUPANCY
     this.target = 1
-    // One entry per controlled batch: its records and the tables revision
-    // they were measured at. `instances_` / `totalBytes` are the flattened
-    // view the metric passes walk, recollected only when a batch is remeasured.
+    // One entry per controlled batch: its records, whether an edit has
+    // outdated them, and its edit subscription. `instances_` / `totalBytes`
+    // are the flattened view the metric passes walk, recollected only when a
+    // batch is remeasured.
     this.batches_ = []
     this.instances_ = []
     this.totalBytes = 0
@@ -87,11 +89,14 @@ export class ResidencyController {
       }
       // At construction every instance is taken to be showing, as it always
       // has been: nothing residency-owned has hidden anything yet.
-      this.batches_.push({
-        mesh,
-        revision: tablesRevision(mesh),
-        ...measureInstances(mesh, true),
+      const batch = {mesh, stale: false, ...measureInstances(mesh, true)}
+      batch.unsubscribe = onBatchEdit(mesh, (change) => {
+        // A shape added with no instance on it changes no record.
+        if (change.events.some((event) => event.kind !== BatchEditKind.ADD_GEOMETRY)) {
+          this.onBatchEdit_(batch)
+        }
       })
+      this.batches_.push(batch)
     }
     this.collect_()
   }
@@ -104,7 +109,7 @@ export class ResidencyController {
    *   visible, score}`
    */
   get instances() {
-    this.sync_()
+    this.remeasureStale_()
     return this.instances_
   }
 
@@ -162,10 +167,13 @@ export class ResidencyController {
   }
 
 
-  /** Restore every instance and drop references. */
+  /** Restore every instance, stop following edits and drop references. */
   dispose() {
     for (const instance of this.instances) {
       this.setVisible_(instance, true)
+    }
+    for (const batch of this.batches_) {
+      batch.unsubscribe()
     }
     this.batches_ = []
     this.instances_ = []
@@ -174,14 +182,36 @@ export class ResidencyController {
 
 
   /**
-   * Remeasure every batch an edit has touched since its records were taken.
+   * An edit changed one of the controlled batches.
    *
    * Identity, not just liveness, is what goes stale. three recycles the
    * lowest freed id on `addInstance` (BatchedMesh.js:580-591), so after a
    * delete + paste a record can name a live id that is a different instance
    * — with the deleted one's center, bytes and expressID — and an appended
-   * paste has no record at all. Every row change bumps the batch's
-   * `tablesRevision`; an unedited batch costs one comparison here.
+   * paste has no record at all.
+   *
+   * While residency is evicting anything (target below 1) the current target
+   * is re-applied now, so a paste made at target 0 is hidden before the edit
+   * returns rather than at the next slider tick; that costs one slider tick
+   * per edit, and only while the slider is down. At target 1 nothing a record
+   * holds can change what is drawn — every instance is shown, and three
+   * issues a new one visible (BatchedMesh.js:571-575) — so the batch is only
+   * marked, and remeasured (O(batch)) on the next read instead of on every
+   * edit of a model nobody is evicting from.
+   *
+   * @param {object} batch one of `batches_`
+   * @private
+   */
+  onBatchEdit_(batch) {
+    batch.stale = true
+    if (this.target < 1) {
+      this.apply()
+    }
+  }
+
+
+  /**
+   * Remeasure every batch an edit has marked.
    *
    * A remeasured record's `visible` is unknown (null), not read back from
    * the batch: while IfcIsolator's mask is installed, three's bit is
@@ -190,13 +220,14 @@ export class ResidencyController {
    * "residency hid it" and a later eviction would be skipped — leaving the
    * mask's `base` saying "show" for when isolation lifts. Unknown makes the
    * next `setVisible_` write through, once per instance per edit.
+   *
+   * @private
    */
-  sync_() {
+  remeasureStale_() {
     let changed = false
     for (const batch of this.batches_) {
-      const revision = tablesRevision(batch.mesh)
-      if (revision !== batch.revision) {
-        Object.assign(batch, {revision}, measureInstances(batch.mesh, null))
+      if (batch.stale) {
+        Object.assign(batch, {stale: false}, measureInstances(batch.mesh, null))
         changed = true
       }
     }
@@ -259,8 +290,9 @@ export class ResidencyController {
       return
     }
     instance.visible = visible
-    // Every record is live: callers reach here only after `sync_`, which
-    // drops the record of an instance deleted since (three's `setVisibleAt`
+    // Every record is live: callers reach here only through `instances`,
+    // which remeasures a batch an edit has marked and so drops the record of
+    // an instance deleted since (three's `setVisibleAt`
     // throws on one, BatchedMesh.js:1162-1164).
     instance.mesh.setVisibleAt(instance.index, visible)
   }

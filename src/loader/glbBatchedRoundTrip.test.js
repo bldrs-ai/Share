@@ -8,14 +8,16 @@ import {batchedArtifactBytes, liveBatchedModel, triangleGeometry} from './glbArt
 import {injectGlbExtensions, parseGlb, serializeGlb} from './injectGlbExtensions'
 import {COMPRESSION_MESHOPT, compressExportGlb} from '../export/glbCompression'
 import {rewriteGlbPortable} from '../export/glbPortable'
-import {addBatchedGeometry} from '../viewer/ifc/batchedGeometryCapacity'
-import {BATCHED_GEOMETRY_RANGES_FLAG} from '../viewer/ifc/batchedGeometryRanges'
-import {instanceGeometryAt} from '../viewer/ifc/batchedInstanceGeometry'
 import {
+  addBatchedGeometry,
   addBatchedInstance,
   deleteBatchedInstance,
-  forEachActiveInstance,
-} from '../viewer/ifc/batchedInstanceTables'
+  mintGeometryId,
+  mintOccurrenceId,
+} from '../viewer/ifc/batchedEdit'
+import {BATCHED_GEOMETRY_RANGES_FLAG} from '../viewer/ifc/batchedGeometryRanges'
+import {instanceGeometryAt} from '../viewer/ifc/batchedInstanceGeometry'
+import {forEachActiveInstance} from '../viewer/ifc/batchedInstanceTables'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {isDefaultColor} from '../viewer/ifc/productPalette'
 
@@ -555,8 +557,12 @@ describe('batched-native GLB round-trip of an edited model (create-300 L0)', () 
     })
 
     const geometryId = addBatchedGeometry(hydrated, triangleGeometry(5))
-    const batchId = addBatchedInstance(hydrated, geometryId, {parent: 99, color: GREY_SOURCE},
-      new Matrix4())
+    const batchId = addBatchedInstance(hydrated, geometryId, {
+      parent: 99,
+      occurrenceId: mintOccurrenceId(hydrated),
+      geometryId: mintGeometryId(hydrated),
+      color: GREY_SOURCE,
+    }, new Matrix4())
 
     expect(Array.from(instanceGeometryAt(hydrated, batchId).getAttribute('position').array))
       .toEqual([0, 0, 0, 5, 0, 0, 0, 5, 0])

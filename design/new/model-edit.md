@@ -137,60 +137,116 @@ Verified against `node_modules/three/src/objects/BatchedMesh.js` (three
 
 ### 6.2 What landed
 
-- **One owner for the side tables:** `src/viewer/ifc/batchedInstanceTables.js`.
-  It owns `instanceParents`, `instanceOccurrenceIds`, `instanceGeometryIds`,
-  `instanceOccurrencePaths`, `instanceColors`, `instanceSourceColors` and the
-  derived `occurrencePathToBatchIds`. Its API is `isActive`,
-  `forEachActiveInstance` (the active-id iterator), `ensureInstanceCapacity`,
-  `writeRow`, `clearRow` and `tablesRevision`, plus the L2-facing
-  `addBatchedInstance` / `deleteBatchedInstance`. All three builders (one-shot,
-  streaming, cache-hit hydration) write rows through it. `writeRow` writes every
-  column, so a recycled id never inherits a stale row. It also keeps the path
-  index in step and bumps a revision that derived caches rebuild on: the
-  highlight's indices and layers, and residency's records (below).
-- **Every per-instance loop skips inactive ids:** highlight (`setLayer`,
-  `paint`, `repaintBatchedColors`), colour mode and the palette, the isolator
-  (`visualElementsIds`, the mask build, apply and release), residency (both
-  precompute walks), the isolation subset, the merged conversion, and the
-  occurrence tables. In the occurrence tables a cleared row read as occurrence
-  0 and overwrote that occurrence's path.
-- **Highlight layers re-resolve on a revision change.** The selection and
-  hover layers are sets of batch ids, and a paste into a recycled id inherited
-  the deleted instance's membership. The next `paint` of that id, from a
-  repaint or from clearing a hover on the paste, drew the paste highlighted.
-  Each layer now also keeps the product or occurrence ids it was set with. When
-  the revision moves, both layers are re-resolved from those ids through the
-  rebuilt index. Every current member of either layer is repainted, and so is
-  every id that left one. Repainting only the ids whose membership changed is
-  not enough: a paste of the selected product into that product's freed id
-  leaves the membership unchanged, but `addBatchedInstance` has reset the slot
-  to the paste's own colour. A still-selected product's surviving instances
-  stay lit, and a paste of it joins them.
-- **Residency remeasures on a revision change.** A `ResidencyController` that
-  outlives an edit held a record per batch id taken at construction. A paste
-  into a recycled id kept the deleted instance's center, bytes, expressID and
-  cached `visible`, so an eviction to zero skipped it; an appended paste had no
-  record at all. The controller now remeasures a batch whose `tablesRevision`
-  moved, with each record's `visible` unknown so the next write goes through.
-  It does not read three's bit back, because under the isolation mask that bit
-  is residency's intent AND the isolator's verdict. An unedited batch costs one
-  comparison per tick.
+L0 went through four review rounds that each found one more cache keyed by
+batch id that an edit left stale: residency's records, then the highlight
+layers, then the same layers again when a paste kept its membership. Each
+round fixed one consumer with its own lazy check. The fifth version replaces
+those per-consumer checks with one mechanism, described here.
+
+#### One mutation API: `src/viewer/ifc/batchedEdit.js`
+
+Nothing in src changes what a loaded batch holds except through it:
+
+| Op | three call | Event |
+|---|---|---|
+| `addBatchedInstance(mesh, geometryId, row, matrix)` | `addInstance` (+ `setInstanceCount` when full) | `addInstance` |
+| `deleteBatchedInstance(mesh, batchId)` | `deleteInstance` | `deleteInstance`, with the retired row's `parent` / `occurrenceId` / `geometryId` |
+| `setBatchedInstanceMatrix(mesh, batchId, matrix)` | `setMatrixAt` | `setMatrix` |
+| `setBatchedInstanceGeometry(mesh, batchId, geometryId, sourceGeometryId)` | `setGeometryIdAt` | `setGeometry` |
+| `addBatchedGeometry(mesh, geometry)` | `addGeometry` (after `batchedGeometryCapacity` growth) | `addGeometry` |
+
+Every op bumps the batch's **one** revision (`batchEditRevision`) and then,
+before it returns, calls every listener registered with
+`onBatchEdit(mesh, listener)` with `{mesh, revision, events}`. `events` is an
+ordered array, so a future bulk op can deliver one notification without
+changing the contract. All listeners run even if one throws; the first error
+is rethrown after. Instance ops also null three's whole-batch `boundingBox` /
+`boundingSphere`, which three recomputes the next time it culls, sorts or
+measures the batch. Keeping the load-time sphere would cull a paste placed
+outside it.
+
+`batchedEditGuard.test.js` scans src and fails on a call to any of three's
+batch mutators (`addInstance`, `deleteInstance`, `setMatrixAt`,
+`setGeometryIdAt`, `addGeometry`, `setGeometryAt`, `deleteGeometry`,
+`optimize`, `setInstanceCount`, `setGeometrySize`) outside `batchedEdit.js`
+and the load-time builders, which fill a batch before anything reads it. The
+allowlist is also checked for entries a file no longer uses.
+
+`batchedInstanceTables.js` keeps the side tables: `isActive`,
+`forEachActiveInstance`, `ensureInstanceCapacity`, `writeRow`, `clearRow`. All
+three builders (one-shot, streaming, cache-hit hydration) write rows through
+it. `writeRow` writes every column, so a recycled id never inherits a stale
+row, and keeps `occurrencePathToBatchIds` in step. It no longer has a revision
+of its own; the edit revision replaces it.
+
+#### Consumers subscribe; state is right when the edit returns
+
+| Consumer | Subscribes | On an edit |
+|---|---|---|
+| Highlight (`batchedHighlight.js`) | when its state is created; the subscription has the mesh's lifetime | A delete drops the id from both layers and both indices. An add joins the indices, and joins a layer if its product (or, for an occurrence layer, its occurrence) is one the layer was set with; if it does, it is painted at once. O(1) per event. |
+| Residency (`ResidencyController`) | in the constructor; `dispose()` unsubscribes | Marks the batch's records stale. If the target is below 1 it re-applies now (one slider tick), so a paste made at target 0 is hidden before the edit returns. At target 1 nothing a record holds changes what is drawn, so the O(batch) remeasure waits for the next read. |
+| Isolation mask (`IfcIsolator`) | when the mask is installed; release unsubscribes | A delete resets the id's `base`/`allow`, so a paste into it does not inherit the deleted instance's eviction. An add is ruled on by `mask.verdict`, the filter the last isolation pass applied, so a paste made while isolating shows or hides with its siblings. |
+| Framing bounds (`robustBounds.js`) | does not subscribe | Its cache key includes the sum of the batches' edit revisions. Bounds are computed on demand anyway, so a key that moves with every edit is exact, and there is no listener to release per cached object. |
+
+Residency and the mask both write an added instance's bit. Residency's write
+goes through the mask's `setVisibleAt` wrapper into `base`; the isolator's goes
+into `allow`. The result is `base AND allow` whichever listener runs first, and
+a test covers both orders.
+
+Removed: the per-consumer revision compares in highlight
+(`reresolveLayers`) and residency (`sync_`), `repaintBatchedColors`'
+catch-up step, the isolator's `addInstance` wrapper, and the highlight's
+"skip a deleted id" guard in `paint` (a deleted id can no longer be in a
+layer).
+
+#### Ids for added instances
+
+- `addBatchedInstance` requires `parent`, `occurrenceId` and the source
+  `geometryId`, and throws `BatchEditIdError` if one is missing. The row
+  writer used to default them to 0. Occurrence 0 is a real occurrence, so a
+  paste without one erased its path from the cache-hit occurrence tables.
+  Source geometry id 0 is a real dedup key, so two created shapes without
+  one were read back as the same shape.
+- **Minting rule.** Created content takes its ids from
+  `mintOccurrenceId(model)` and `mintGeometryId(model)`. On first use per
+  model root, the mint records one past the largest id any batch row of the
+  model holds. It then only counts up, so deleting the instance that held
+  the maximum does not free its id. Ids are sequential, not a high fixed
+  base, because STEP occurrence ids index dense arrays. A paste of an
+  existing shape keeps that shape's source geometry id and mints only an
+  occurrence id. These are per-load ids, like `batchId`. The op log never
+  stores them (§5); a created element's stable ref is its `g<GlobalId>`.
+- **Post-load geometry never dedupes as source geometry.**
+  `batchedInstanceGeometry#sourceKey` keys a geometry that
+  `addBatchedGeometry` added per mesh, as it already did for collapsed range
+  ids. This holds even if a caller reuses a source id on the row.
+- `setBatchedInstanceGeometry` requires the new source id and moves the row's
+  `instanceGeometryIds` entry with it.
+
+#### Other L0 changes
+
+- **Every per-instance loop skips inactive ids:** highlight, colour mode and
+  the palette, the isolator (`visualElementsIds`, the mask build, apply and
+  release), residency (both precompute walks), the isolation subset, the
+  merged conversion, and the occurrence tables. In the occurrence tables a
+  cleared row read as occurrence 0 and overwrote that occurrence's path.
 - **The batched export writes only live instances.** Before L0, one deleted id
-  failed the whole batched export over to the merged slot. An edited model now
-  round-trips batched and hydrates without the deleted instance.
+  failed the whole batched export over to the merged slot.
+- **An edited model is never cached.** That merged fallback was also the only
+  thing keeping an edited model out of the source's OPFS slot. The writer
+  (`glbExport.js#exportAndCacheGlb`) now skips any batched model with
+  `modelHasPostLoadEdits`: a nonzero edit revision or an inactive instance.
+  The writer runs at idle, after the model is on screen, so an edit can land
+  before it does (§7).
 - **Raycast** (not in #1915's list). three-mesh-bvh 0.9.10's batched raycast
   walks every issued id and calls `getVisibleAt(i)`
   (`node_modules/three-mesh-bvh/src/utils/ExtensionUtilities.js:110-116`), so
   after one delete every pick and hover on that batch threw.
   `batchedRaycast.js#raycastActiveInstances`, installed by `ShareIfc.js`,
   answers "not visible" for inactive ids for the duration of the call.
-- **The isolation mask grows, and resets recycled ids.** IfcIsolator's
-  `base`/`allow` masks are indexed by batch id and were sized once, so a paste
-  past their end read as hidden and was never restored. They now extend to the
-  batch's id span. A paste into a recycled id inherited the deleted instance's
-  entries, so un-isolating replayed its residency eviction onto the paste.
-  While the mask is installed it also wraps `addInstance`, and every id three
-  issues starts visible and allowed, as an appended one does.
+- **The isolation mask grows.** IfcIsolator's `base`/`allow` masks are indexed
+  by batch id and were sized once, so a paste past their end read as hidden.
+  They now extend to the batch's id span.
 - **`addGeometry` after load:** `src/viewer/ifc/batchedGeometryCapacity.js`.
   - No headroom is reserved at load. An unedited model keeps its exact-size
     buffers and its memory, and every byte of its output is unchanged.
@@ -200,6 +256,11 @@ Verified against `node_modules/three/src/objects/BatchedMesh.js` (three
     for an empty list, which makes the shrink check's spread zero arguments on
     every engine. For a grow that check is vacuous anyway, and three still
     does the reallocation and copy.
+  - **Growth is all or nothing.** three disposes the old geometry and advances
+    the max counts before it allocates the new arrays, and that allocation is
+    what fails on a large model. On a throw, the geometry, both max counts,
+    `_geometryInitialized` and every bounds tree's binding are restored, and
+    the error is rethrown.
   - Bounds trees are rebound to the new buffer, and a new geometry id gets its
     own tree.
 
@@ -226,18 +287,25 @@ refuse or rebuild a batch flagged `bldrsHasGeometryRanges`.
 
 ### 6.4 Not in L0
 
-These are left to L2, because each is O(instances) and an edit batch should
-pay for it once rather than per op:
+Left to L2:
 
-- the batch's `boundingBox`/`boundingSphere` (frustum culling) after a
-  transform or paste;
-- re-applying an active isolation to a pasted instance;
-- re-issuing selection after a delete (the selection *store*, e.g. a
-  Properties panel still showing the deleted element; the batch's highlight
-  layers already follow the edit, §6.2).
-
-Moving an instance between the opaque and transparent batches, when an op
-crosses alpha 1, is also L2.
+- **Re-issuing selection after a delete.** This is the selection *store*,
+  e.g. a Properties panel still showing the deleted element. The batch's
+  highlight layers already follow the edit (§6.2).
+- **Product-level lists.** IfcIsolator's `visualElementsIds` is the product
+  list hide-all and isolate work from. It is built at load, so a created
+  *product* (not a paste of an existing one) has to be added to it by the
+  `create` op.
+- **Colour mode for an added instance.** The caller passes the instance's
+  live and source colours. Under the auto palette, a create op has to pass
+  the palette colour as the live one.
+- **Bulk ops.** Each op notifies once. While residency's target is below 1,
+  each notification costs one slider tick. A bulk paste should deliver one
+  notification with many events; the listener contract already takes an
+  event array, so that is an addition to `batchedEdit.js`, not a change for
+  the consumers.
+- **Moving an instance between the opaque and transparent batches** when an
+  op crosses alpha 1.
 
 
 ## 7. Constraints

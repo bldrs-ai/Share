@@ -8,10 +8,16 @@ import {
   Raycaster,
   Vector3,
 } from 'three'
-import {addBatchedGeometry, ensureGeometryCapacity} from './batchedGeometryCapacity'
+import {
+  addBatchedGeometry,
+  addBatchedInstance,
+  batchEditRevision,
+  mintGeometryId,
+  mintOccurrenceId,
+} from './batchedEdit'
+import {ensureGeometryCapacity} from './batchedGeometryCapacity'
 import {addGeometryRanges} from './batchedGeometryRanges'
 import {instanceGeometryAt} from './batchedInstanceGeometry'
-import {addBatchedInstance} from './batchedInstanceTables'
 import {
   SHAPE_ID,
   SPACING,
@@ -25,6 +31,21 @@ import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 
 
 const PURPLE = {x: 0.5, y: 0, z: 0.5, w: 1}
+
+
+/**
+ * The row of a created shape: fresh occurrence and source-geometry ids from
+ * the model's mint, as the edit layer will take them.
+ *
+ * @param {object} mesh the batch (here also the model root)
+ * @param {number} parent product id
+ * @return {object}
+ */
+function createdRow(mesh, parent) {
+  return {
+    parent, occurrenceId: mintOccurrenceId(mesh), geometryId: mintGeometryId(mesh), color: PURPLE,
+  }
+}
 
 
 /**
@@ -125,7 +146,7 @@ describe('viewer/ifc/batchedGeometryCapacity', () => {
       const before = positionsOf(mesh, 3)
 
       const geometryId = addBatchedGeometry(mesh, triangleAt(0, 2))
-      const batchId = addBatchedInstance(mesh, geometryId, {parent: 400, color: PURPLE},
+      const batchId = addBatchedInstance(mesh, geometryId, createdRow(mesh, 400),
         new Matrix4().makeTranslation(40, 0, 0))
 
       expect(positionsOf(mesh, batchId)).toEqual([0, 0, 0, 2, 0, 0, 0, 2, 0])
@@ -139,7 +160,7 @@ describe('viewer/ifc/batchedGeometryCapacity', () => {
       expect(mesh.unusedIndexCount).toBe(0)
 
       const geometryId = addBatchedGeometry(mesh, triangleAt(0, 3))
-      const batchId = addBatchedInstance(mesh, geometryId, {parent: 400, color: PURPLE},
+      const batchId = addBatchedInstance(mesh, geometryId, createdRow(mesh, 400),
         new Matrix4())
 
       expect(positionsOf(mesh, batchId)).toEqual([0, 0, 0, 3, 0, 0, 0, 3, 0])
@@ -177,6 +198,47 @@ describe('viewer/ifc/batchedGeometryCapacity', () => {
       }
       // The private list three's check reads was put back.
       expect(mesh._geometryInfo).toHaveLength(count + 1)
+    })
+
+    it('leaves the batch exactly as it was when growth fails to allocate', () => {
+      // three's setGeometrySize disposes the old geometry and advances the max
+      // counts BEFORE `_initializeGeometry` allocates the new arrays
+      // (BatchedMesh.js:1346-1360); that allocation is what runs out on a big
+      // model.
+      withBvhPrototypes(raycastActiveInstances, () => {
+        const mesh = decoratedStepBatch()
+        mesh.computeBoundsTree()
+        const before = mesh.geometry
+        const shapes = [0, 1, 2, 3].map((b) => positionsOf(mesh, b))
+        const counts = [mesh._maxVertexCount, mesh._maxIndexCount, mesh.unusedVertexCount]
+        const revision = batchEditRevision(mesh)
+        mesh._initializeGeometry = () => {
+          throw new RangeError('Array buffer allocation failed')
+        }
+
+        expect(() => addBatchedGeometry(mesh, triangleAt(0, 2))).toThrow(/allocation failed/)
+
+        expect(mesh.geometry).toBe(before)
+        expect(Object.keys(mesh.geometry.attributes).sort()).toEqual(['normal', 'position'])
+        expect([mesh._maxVertexCount, mesh._maxIndexCount, mesh.unusedVertexCount]).toEqual(counts)
+        expect(mesh._geometryInitialized).toBe(true)
+        expect(mesh._geometryInfo.length).toBeGreaterThan(0)
+        for (const tree of mesh.boundsTrees) {
+          expect(tree.geometry).toBe(before)
+        }
+        // Nothing was added, so nothing was reported.
+        expect(batchEditRevision(mesh)).toBe(revision)
+
+        // And the batch is still usable: with memory back, the same add works
+        // and every existing shape and pick survives it.
+        delete mesh._initializeGeometry
+        const geometryId = addBatchedGeometry(mesh, triangleAt(0, 2))
+        const batchId = addBatchedInstance(mesh, geometryId, createdRow(mesh, 400),
+          new Matrix4().makeTranslation(40, 0, 0))
+        expect(positionsOf(mesh, batchId)).toEqual([0, 0, 0, 2, 0, 0, 0, 2, 0])
+        expect([0, 1, 2, 3].map((b) => positionsOf(mesh, b))).toEqual(shapes)
+        expect(pickAt(mesh, 3 * SPACING)).toBe(3)
+      })
     })
   })
 
@@ -228,7 +290,7 @@ describe('viewer/ifc/batchedGeometryCapacity', () => {
         const treesBefore = [...mesh.boundsTrees]
 
         const geometryId = addBatchedGeometry(mesh, triangleAt(ELEMENTS * SPACING))
-        const added = addBatchedInstance(mesh, geometryId, {parent: 4, color: PURPLE},
+        const added = addBatchedInstance(mesh, geometryId, createdRow(mesh, 4),
           new Matrix4())
 
         // Growth reallocated the buffers (the batch was sized exactly)...
@@ -238,12 +300,13 @@ describe('viewer/ifc/batchedGeometryCapacity', () => {
         expect(batchIds.map((b) => positionsOf(mesh, b))).toEqual(shapesBefore)
         // The new shape was appended past the shared block, not into it.
         expect(mesh.getGeometryRangeAt(geometryId).vertexStart).toBe(ELEMENTS * 3)
-        // The existing trees now read the grown buffer (the old one is free to
-        // go), and the new id has a tree of its own.
-        expect(mesh.boundsTrees.slice(0, ELEMENTS)).toEqual(treesBefore)
-        for (const tree of treesBefore) {
+        // The existing trees are the same objects — growth did not rebuild
+        // them — now reading the grown buffer (the old one is free to go), and
+        // the new id has a tree of its own.
+        treesBefore.forEach((tree, k) => {
+          expect(mesh.boundsTrees[k]).toBe(tree)
           expect(tree.geometry).toBe(mesh.geometry)
-        }
+        })
         expect(mesh.boundsTrees[geometryId]).toBeTruthy()
         for (let k = 0; k < ELEMENTS; k++) {
           expect(pickAt(mesh, k * SPACING)).toBe(batchIds[k])
