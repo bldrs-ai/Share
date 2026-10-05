@@ -660,10 +660,13 @@ export type ElementKind = 'collapsed' | 'instanced' | 'any'
  *
  * @param page Playwright page
  * @param kind which elements to aim at
+ * @param onlyRootLevel aim only at the root product's own geometry (empty
+ *   occurrence path), as opposed to a child occurrence's
  * @return the parent expressID that got selected
  */
-export async function doubleClickSelectsAnElement(page: Page, kind: ElementKind): Promise<number> {
-  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate((aimAt) => {
+export async function doubleClickSelectsAnElement(
+  page: Page, kind: ElementKind, onlyRootLevel = false): Promise<number> {
+  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate(({aimAt, rootOnly}) => {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const w = window as any
     const state = (w.store ?? w.useStore).getState()
@@ -683,6 +686,10 @@ export async function doubleClickSelectsAnElement(page: Page, kind: ElementKind)
         const geometryId = mesh.getGeometryIdAt(batchId)
         const isRange = Boolean(mesh.bldrsGeometryRangeIds?.has(geometryId))
         if ((aimAt === 'collapsed' && !isRange) || (aimAt === 'instanced' && isRange)) {
+          continue
+        }
+        // Only the root product's own geometry (an empty occurrence path).
+        if (rootOnly && mesh.instanceOccurrencePaths?.[batchId]?.length !== 0) {
           continue
         }
         const box = new Box3()
@@ -710,7 +717,7 @@ export async function doubleClickSelectsAnElement(page: Page, kind: ElementKind)
     }
     return out
     /* eslint-enable @typescript-eslint/no-explicit-any */
-  }, kind)
+  }, {aimAt: kind, rootOnly: onlyRootLevel})
   expect(candidates.length, 'there must be an element of the kind under test on screen')
     .toBeGreaterThan(0)
 

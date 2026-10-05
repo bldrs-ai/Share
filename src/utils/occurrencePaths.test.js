@@ -273,6 +273,40 @@ describe('utils/occurrencePaths', () => {
       expect(resolve({anchorIds: ['7']})).toEqual({instanceIds: [0, 1, 2, 3], ownerIds: [8]})
     })
 
+    describe('an assembly with geometry of its own', () => {
+      // Root-level instances 0..3, and two child occurrences' instances 10, 11
+      // (paths below the root, so selectedOccurrences would find them).
+      const assembly = {...rootLevel, descendantInstanceIds: [10, 11]}
+
+      it('a row click or permalink is the root-level instances plus every descendant occurrence (#1909)', () => {
+        expect(resolve({rootLevel: assembly}).instanceIds).toEqual([0, 1, 2, 3, 10, 11])
+        expect(resolve({rootLevel: assembly}).ownerIds).toEqual([8])
+      })
+
+      it('does not list an instance twice', () => {
+        expect(resolve({rootLevel: {...assembly, descendantInstanceIds: [10, 3, 10]}}).instanceIds)
+          .toEqual([0, 1, 2, 3, 10])
+      })
+
+      it('a plain click after a narrowed pick is the whole product again', () => {
+        const got = resolve({rootLevel: assembly, current: {anchors: [7], instances: [1]}, keepNarrowing: false})
+        expect(got.instanceIds).toEqual([0, 1, 2, 3, 10, 11])
+      })
+
+      it('a shift-click keeps the shells picked, and a whole-product selection whole', () => {
+        const picked = resolve({rootLevel: assembly, current: {anchors: [7], instances: [1, 3]}, keepNarrowing: true})
+        expect(picked.instanceIds).toEqual([1, 3])
+        const whole = resolve({
+          rootLevel: assembly, current: {anchors: [7], instances: [0, 1, 2, 3, 10, 11]}, keepNarrowing: true})
+        expect(whole.instanceIds).toEqual([0, 1, 2, 3, 10, 11])
+      })
+
+      it('descendant instances alone are not a selection of the root: it joins as the whole product', () => {
+        const got = resolve({rootLevel: assembly, current: {anchors: [50], instances: [10]}, keepNarrowing: true})
+        expect(got.instanceIds).toEqual([0, 1, 2, 3, 10, 11])
+      })
+    })
+
     it('a plain click widens a narrowed pick to the whole product', () => {
       expect(resolve({current: {anchors: [7], instances: [1]}, keepNarrowing: false}).instanceIds)
         .toEqual([0, 1, 2, 3])

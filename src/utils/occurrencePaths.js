@@ -413,32 +413,38 @@ export function resolveRootOnlyElementPath(rootNode, parts) {
 
 /**
  * The scene half of a selection that has the sole root product among its
- * anchors: the root-level instances to light and the ids that own them.
+ * anchors: the instances to light and the ids that own the root's own geometry.
  *
  * The rule every way of selecting the root agrees on (#1909):
  *   - a scene PICK narrows to the shell(s) clicked: `selectFromInstancePick`
  *     and `toggleRootLevelInstanceSelection` name the instances themselves;
- *   - a ROW click or a PERMALINK means the whole product: this resolves the
- *     anchor to every root-level instance, the way `selectedOccurrences` does
- *     for any other row (its empty path is no key, so it can't).
+ *   - a ROW click or a PERMALINK means the WHOLE product: the root-level
+ *     instances (its own geometry, whose empty path is no key for
+ *     `selectedOccurrences`) plus those of every descendant occurrence, which
+ *     the lookup would find by path but for the root being skipped. Leaving
+ *     the descendants out would narrow an assembly that has geometry of its
+ *     own to just that geometry.
  * A shift-click on another row after shift-picking shells recomputes the
  * instances from the anchors, which would widen the picked shells to the whole
  * product (and drop them if the root were skipped), so `keepNarrowing` carries
- * the root-level instances already selected instead, so long as the root
- * was already an anchor of the current selection.
+ * the product's instances already selected instead, so long as the root was
+ * already an anchor of the current selection. (A whole-product selection
+ * carries whole: all its instances are in that set.)
  *
  * Null when the root isn't among the anchors, isn't the sole empty-path node
- * (`findSoleRootNode`: IFC, several top-level products), or the model has no
- * root-level geometry.
+ * (`findSoleRootNode`: IFC, several top-level products), or has no root-level
+ * geometry. The last is a plain assembly: its root row selects what it always
+ * did, and this adds nothing.
  *
  * @param {object} args
  * @param {object|null} args.rootNode spatial-structure root element
  * @param {Array<number|string>} args.anchorIds the selection's anchor rows
- * @param {{instanceIds: Array<number>, parentExpressIds: Array<number>}} args.rootLevel
- *   the model's root-level instances and their owners
- *   (`ShareViewer#getRootLevelInstances`)
+ * @param {object} args.rootLevel `{instanceIds, parentExpressIds,
+ *   descendantInstanceIds}`: the model's root-level instances and their owners
+ *   (`ShareViewer#getRootLevelInstances`), and the instances of every
+ *   descendant occurrence (optional)
  * @param {{anchors: Array, instances: Array}} args.current the selection held now
- * @param {boolean} [args.keepNarrowing] carry the selected root-level instances
+ * @param {boolean} [args.keepNarrowing] carry the selected instances of the product
  * @return {{instanceIds: Array<number>, ownerIds: Array<number>}|null}
  */
 export function rootLevelSelectionForAnchors({rootNode, anchorIds, rootLevel, current, keepNarrowing = false}) {
@@ -449,15 +455,19 @@ export function rootLevelSelectionForAnchors({rootNode, anchorIds, rootLevel, cu
   if (!rootLevel || rootLevel.instanceIds.length === 0) {
     return null
   }
+  const wholeProduct = [...new Set([...rootLevel.instanceIds, ...(rootLevel.descendantInstanceIds ?? [])])]
   if (keepNarrowing && Array.isArray(current?.anchors) &&
       current.anchors.map(Number).includes(root.expressID)) {
+    const ofProduct = new Set(wholeProduct)
     const rootInstances = new Set(rootLevel.instanceIds)
-    const narrowed = (current.instances ?? []).map(Number).filter((id) => rootInstances.has(id))
-    if (narrowed.length > 0) {
+    const narrowed = (current.instances ?? []).map(Number).filter((id) => ofProduct.has(id))
+    // Only a selection that holds some of the root's OWN geometry is a
+    // selection of the root; descendant instances alone belong to their rows.
+    if (narrowed.some((id) => rootInstances.has(id))) {
       return {instanceIds: narrowed, ownerIds: rootLevel.parentExpressIds}
     }
   }
-  return {instanceIds: rootLevel.instanceIds, ownerIds: rootLevel.parentExpressIds}
+  return {instanceIds: wholeProduct, ownerIds: rootLevel.parentExpressIds}
 }
 
 

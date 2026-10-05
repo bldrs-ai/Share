@@ -1483,14 +1483,28 @@ export default function CadView({
 
 
   /**
-   * The model's root-level instances (an empty path) and the ids that own
-   * them; empty where the viewer can't say.
+   * The model's root-level instances (an empty path), the ids that own them,
+   * and the instances of every occurrence below the root; empty where the
+   * viewer can't say.
    *
-   * @return {{instanceIds: Array<number>, parentExpressIds: Array<number>}}
+   * @return {{instanceIds: Array<number>, parentExpressIds: Array<number>,
+   *   descendantInstanceIds: Array<number>}}
    */
   function rootLevelInstances() {
-    return typeof viewer?.getRootLevelInstances === 'function' ?
-      viewer.getRootLevelInstances(0) : {instanceIds: [], parentExpressIds: []}
+    if (typeof viewer?.getRootLevelInstances !== 'function') {
+      return {instanceIds: [], parentExpressIds: [], descendantInstanceIds: []}
+    }
+    const rootLevel = viewer.getRootLevelInstances(0)
+    // The whole product is the root's own geometry and every occurrence below
+    // it. Only worth resolving when the root has geometry of its own.
+    const root = findSoleRootNode(useStore.getState().rootElement)
+    const descendantInstanceIds = (root && rootLevel.instanceIds.length > 0) ?
+      [...new Set((root.children ?? []).flatMap((child) =>
+        (Array.isArray(child.occurrencePath) && child.occurrencePath.length > 0) ?
+          occurrenceInstanceIds(child.occurrencePath, true, child.ephemeral === true ? child.expressID : null) :
+          []))] :
+      []
+    return {...rootLevel, descendantInstanceIds}
   }
 
 

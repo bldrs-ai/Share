@@ -311,6 +311,14 @@ const SPATIAL_CHAIN = ['Bldrs', 'Build', 'Every', 'Thing']
 // for this spec in the shape a mesh-to-STEP export takes.
 const SHELLS_FIXTURE = 'src/tests/fixtures/sameIdentityShells.step'
 const SHELLS_FIXTURE_ROWS = 80
+// An assembly whose ROOT product has geometry of its own (40 shells, with empty
+// occurrence paths) beside two child occurrences of one part (2 shells each).
+const ASSEMBLY_FIXTURE = 'src/tests/fixtures/assemblyWithRootGeometry.step'
+const ASSEMBLY_ROOT_NAME = 'Assembly'
+// 40 root-level shells plus 2 occurrences x 2 shells.
+const ASSEMBLY_INSTANCES = 44
+// Parsing it takes longer than the shared model-ready default allows.
+const ASSEMBLY_READY_TIMEOUT_MS = 60_000
 // Long enough for a selection's follow-up effects (the URL it wrote, read back)
 // to have run, so an assertion after it isn't made before they could undo it.
 const SELECTION_SETTLE_MS = 500
@@ -1244,6 +1252,57 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // A plain click on the row after a pick is the whole product again.
     await row.click()
     await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(everyShell)
+  })
+
+  test('the root row of an assembly with geometry of its own means the whole assembly', async ({page}) => {
+    // #1909 (codex on #1910). The root's own shells have an empty occurrence
+    // path, every child occurrence a non-empty one. A row click or a permalink
+    // on the root is the whole product: its own shells AND the children,
+    // not just the shells the empty path names. A pick still narrows.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await loadModelAndWaitForArtifact(page)
+    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+    await dismissLoadSnackbar(page)
+    // A pick of one of the root's own shells narrows to it. (Before the NavTree
+    // is open: on a phone it covers the part of the canvas the shells are in.)
+    await doubleClickSelectsAnElement(page, 'any', true)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(1)
+    const shell = (await selectedInstancesAndAnchors(page)).instances
+
+    // A shift-click on a child's row then adds that occurrence and keeps the shell.
+    await page.getByTestId('control-button-navigation').click()
+    const root = page.locator(`[data-node-label="${ASSEMBLY_ROOT_NAME}"]`)
+    await expect(root).toHaveCount(1)
+    const modelUrl = page.url().replace(/(\.step)(?:\/\d+)+/, '$1')
+    await page.locator('[data-node-label="Widget"]').first().click({modifiers: ['Shift']})
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBeGreaterThan(1)
+    const mixed = (await selectedInstancesAndAnchors(page)).instances
+    expect(mixed).toEqual(expect.arrayContaining(shell))
+    expect(mixed.length).toBeLessThan(ASSEMBLY_INSTANCES)
+
+    // A click on the root row: the shells and the children, still so once the
+    // URL it wrote has been read back.
+    await root.click()
+    await expectProductRowSelected(page, ASSEMBLY_ROOT_NAME)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
+      .toBe(ASSEMBLY_INSTANCES)
+    await page.waitForTimeout(SELECTION_SETTLE_MS)
+    expect((await selectedInstancesAndAnchors(page)).instances).toHaveLength(ASSEMBLY_INSTANCES)
+    const permalink = page.url()
+    expect(permalink).toMatch(/\.step\/\d+(\?|#|$)/)
+
+    // The permalink the click wrote, loaded fresh: the whole assembly as well.
+    await page.goto(modelUrl, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(0)
+    await page.goto(permalink, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+    await expectProductRowSelected(page, ASSEMBLY_ROOT_NAME)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
+      .toBe(ASSEMBLY_INSTANCES)
   })
 
   test('a file of several top-level parts never gives one part the shells of another', async ({page}) => {

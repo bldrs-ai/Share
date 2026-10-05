@@ -394,14 +394,22 @@ order; BVH permutes only the index buffer, not the numbering).
    |---|---|---|
    | scene **pick** | the shell clicked | `selectFromInstancePick` names the instance |
    | scene **shift-pick** | the shells picked, each toggled on its own | `toggleRootLevelInstanceSelection` |
-   | NavTree **row click** | the whole product (every root-level instance) | the funnel resolves the root anchor: `rootLevelSelectionForAnchors` |
-   | **permalink** `part.step/<root>` | the whole product | same resolver, via `selectRootOnlyElement` |
+   | NavTree **row click** | the whole product: the root-level instances plus every descendant occurrence's | the funnel resolves the root anchor: `rootLevelSelectionForAnchors` |
+   | **permalink** `part.step/<root>` | the whole product, the same | same resolver, via `selectRootOnlyElement` |
 
    A **shift-click on another row** after shift-picking shells recomputes the
    instances from the anchors; the root anchor then carries the shells already
    picked (`keepNarrowing`, which `elementSelection` sets for shift-clicks only),
    rather than widening them to the product or, as before, dropping them. A
    plain click on the row after a pick is a row click: the whole product.
+   Whole means the descendants too: an assembly whose root has geometry of its
+   own (`assemblyWithRootGeometry.step`: 40 root-level shells, two child
+   occurrences) must not narrow to the root-level shells when its root row is
+   clicked, which `selectedOccurrences` would otherwise have found by path for
+   every row but the root's. A root with **no** root-level geometry (a plain
+   assembly such as AS1) is outside this: the resolver returns nothing and its
+   root row selects what it always did (measured on main: the row and its
+   descendants' ids, no instance lit).
    The root's empty path is no key for `selectedOccurrences`/
    `getInstanceIdsForOccurrencePath`, so every row-driven path needs the
    resolver above; a path that selects the root's row and not its instances
