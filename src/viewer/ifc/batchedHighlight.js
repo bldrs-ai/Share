@@ -85,7 +85,8 @@ function highlightState(mesh) {
 
 /**
  * Re-derive both layers' batch ids from the ids they were set with, after an
- * edit, and repaint every instance whose membership moved.
+ * edit, and repaint every current member of either layer plus every id that
+ * left one.
  *
  * The layer sets are keyed by batch id, and an edit can change what an id
  * names: three hands a freed id to the next `addInstance`
@@ -104,22 +105,15 @@ function reresolveLayers(mesh, state) {
   const prevPre = state.preSet
   state.selSet = resolveLayer(mesh, state, state.selIds, state.selByOccurrence)
   state.preSet = resolveLayer(mesh, state, state.preIds, state.preByOccurrence)
-  // paint() resolves the layered colour from both current sets, so collect
-  // every id that moved in either before painting any.
-  const moved = new Set()
-  for (const [prev, next] of [[prevSel, state.selSet], [prevPre, state.preSet]]) {
-    for (const b of prev) {
-      if (!next.has(b)) {
-        moved.add(b)
-      }
-    }
-    for (const b of next) {
-      if (!prev.has(b)) {
-        moved.add(b)
-      }
-    }
-  }
-  for (const b of moved) {
+  // Not just the ids whose membership moved. An id can be a member before and
+  // after the edit and still need painting: a paste of the selected product
+  // into that product's freed id keeps the layer at {id}, but
+  // `addBatchedInstance` reset the slot to the paste's own colour. Membership
+  // says nothing about what the slot is showing, so repaint every member and
+  // every leaver. This runs once per edit, not per hover. paint() resolves
+  // from both current sets, so collect the ids before painting any.
+  const touched = new Set([...prevSel, ...prevPre, ...state.selSet, ...state.preSet])
+  for (const b of touched) {
     paint(mesh, b)
   }
 }

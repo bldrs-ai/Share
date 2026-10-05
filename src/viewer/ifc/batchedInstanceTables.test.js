@@ -282,6 +282,27 @@ describe('viewer/ifc/batchedInstanceTables', () => {
         expect(drawnColor(mesh, batchId)).toEqual(PURPLE_RGBA)
       })
 
+      it('a paste of the selected product into its own freed id is lit after an unrelated hover', () => {
+        // Same product, same id: the layer's membership is {2} before and
+        // after the edit, but `addBatchedInstance` reset the slot to the
+        // paste's own color, so a re-resolution that paints only what MOVED
+        // leaves it unlit.
+        const mesh = decoratedStepBatch()
+        applyBatchedSelection(mesh, [200], CYAN)
+        deleteBatchedInstance(mesh, 2)
+        const batchId = addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
+          parent: 200, occurrenceId: 9, occurrencePath: [20], color: PURPLE,
+        }, new Matrix4().makeTranslation(50, 0, 0))
+        expect(batchId).toBe(2)
+        expect(drawnColor(mesh, batchId)).toEqual(PURPLE_RGBA)
+
+        // A hover on product 300 is the first highlight call after the edit.
+        applyBatchedPreselection(mesh, [300], {r: 1, g: 1, b: 0})
+
+        expect(drawnColor(mesh, batchId)).toEqual([0, 1, 1, 1])
+        expect(drawnColor(mesh, 3)).toEqual([1, 1, 0, 1])
+      })
+
       it('a selected product keeps its surviving instances lit and gains a pasted one', () => {
         const mesh = decoratedStepBatch()
         applyBatchedSelection(mesh, [100], CYAN)

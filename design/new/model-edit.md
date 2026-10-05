@@ -160,9 +160,12 @@ Verified against `node_modules/three/src/objects/BatchedMesh.js` (three
   repaint or from clearing a hover on the paste, drew the paste highlighted.
   Each layer now also keeps the product or occurrence ids it was set with. When
   the revision moves, both layers are re-resolved from those ids through the
-  rebuilt index, and every instance whose membership changed is repainted. A
-  still-selected product's surviving instances stay lit, and a paste of it
-  joins them.
+  rebuilt index. Every current member of either layer is repainted, and so is
+  every id that left one. Repainting only the ids whose membership changed is
+  not enough: a paste of the selected product into that product's freed id
+  leaves the membership unchanged, but `addBatchedInstance` has reset the slot
+  to the paste's own colour. A still-selected product's surviving instances
+  stay lit, and a paste of it joins them.
 - **Residency remeasures on a revision change.** A `ResidencyController` that
   outlives an edit held a record per batch id taken at construction. A paste
   into a recycled id kept the deleted instance's center, bytes, expressID and

@@ -1470,6 +1470,26 @@ describe('viewer/three/IfcIsolator', () => {
         expect(visibleAt(mesh, [0, 1, 2, 3, 4])).toEqual([false, false, false, false, false])
       })
 
+      it('a paste of the isolated product into its own freed id is shown, not the old eviction', () => {
+        // Same product into the same id: nothing about membership changes, so
+        // the reset has to come from the id being ISSUED (the `addInstance`
+        // wrapper), not from comparing who the id belongs to.
+        const {iso, mesh} = setupBatchedIsolator()
+        mesh.setVisibleAt(1, false) // residency evicts product 100's second placement
+        iso.viewer.getSelectedIds = jest.fn(() => [100])
+        iso.isolateSelectedElements()
+        expect(visibleAt(mesh, [0, 1, 2, 3])).toEqual([true, false, false, false])
+        tables.deleteBatchedInstance(mesh, 1)
+        const pasted = tables.addBatchedInstance(mesh, mesh.getGeometryIdAt(0),
+          {parent: 100, occurrenceId: 4, color: {x: 1, y: 0, z: 0, w: 1}},
+          new Matrix4().makeTranslation(40, 0, 0))
+        expect(pasted).toBe(1)
+
+        iso._applyBatchedVisibility()
+
+        expect(visibleAt(mesh, [0, 1, 2, 3])).toEqual([true, true, false, false])
+      })
+
       it('un-isolating does not replay the deleted instance\'s eviction onto a paste', () => {
         const {iso, mesh} = setupBatchedIsolator()
         mesh.setVisibleAt(2, false)
