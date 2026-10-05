@@ -146,14 +146,23 @@ Verified against `node_modules/three/src/objects/BatchedMesh.js` (three
   `addBatchedInstance` / `deleteBatchedInstance`. All three builders (one-shot,
   streaming, cache-hit hydration) write rows through it. `writeRow` writes every
   column, so a recycled id never inherits a stale row. It also keeps the path
-  index in step and bumps a revision that derived caches (the highlight's
-  parent and occurrence indices) rebuild on.
+  index in step and bumps a revision that derived caches rebuild on: the
+  highlight's indices and layers, and residency's records (below).
 - **Every per-instance loop skips inactive ids:** highlight (`setLayer`,
   `paint`, `repaintBatchedColors`), colour mode and the palette, the isolator
   (`visualElementsIds`, the mask build, apply and release), residency (both
   precompute walks), the isolation subset, the merged conversion, and the
   occurrence tables. In the occurrence tables a cleared row read as occurrence
   0 and overwrote that occurrence's path.
+- **Highlight layers re-resolve on a revision change.** The selection and
+  hover layers are sets of batch ids, and a paste into a recycled id inherited
+  the deleted instance's membership. The next `paint` of that id, from a
+  repaint or from clearing a hover on the paste, drew the paste highlighted.
+  Each layer now also keeps the product or occurrence ids it was set with. When
+  the revision moves, both layers are re-resolved from those ids through the
+  rebuilt index, and every instance whose membership changed is repainted. A
+  still-selected product's surviving instances stay lit, and a paste of it
+  joins them.
 - **Residency remeasures on a revision change.** A `ResidencyController` that
   outlives an edit held a record per batch id taken at construction. A paste
   into a recycled id kept the deleted instance's center, bytes, expressID and
@@ -220,7 +229,9 @@ pay for it once rather than per op:
 - the batch's `boundingBox`/`boundingSphere` (frustum culling) after a
   transform or paste;
 - re-applying an active isolation to a pasted instance;
-- re-issuing selection after a delete.
+- re-issuing selection after a delete (the selection *store*, e.g. a
+  Properties panel still showing the deleted element; the batch's highlight
+  layers already follow the edit, §6.2).
 
 Moving an instance between the opaque and transparent batches, when an op
 crosses alpha 1, is also L2.

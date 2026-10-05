@@ -130,12 +130,20 @@ describe('setColorMode', () => {
     const mesh = colorlessMesh()
     // Instance 2 is selected: batchedHighlight state says "paint me cyan",
     // and the base-color rewrite must go under it, not over it.
+    // The full state shape `batchedHighlight` keeps, current with the tables
+    // (revision 0: nothing has edited this batch), so the repaint takes the
+    // layer as set rather than re-resolving it from `selIds`.
     mesh.userData.batchedHighlight = {
       selSet: new Set([2]),
       preSet: new Set(),
+      selIds: new Set([20]), // instance 2's product
+      preIds: new Set(),
+      selByOccurrence: false,
+      preByOccurrence: false,
       selColor: {r: 0, g: 0.8, b: 1},
       preColor: undefined,
-      parentIndex: new Map(),
+      parentIndex: new Map([[11, [0]], [12, [1]], [20, [2]]]),
+      revision: 0,
     }
 
     setColorMode(mesh, ColorMode.AUTO)

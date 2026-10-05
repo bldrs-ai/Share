@@ -10,7 +10,9 @@ import {
 import {ResidencyController} from '../residency/ResidencyController'
 import {
   applyBatchedInstanceSelection,
+  applyBatchedPreselection,
   applyBatchedSelection,
+  clearBatchedPreselection,
   clearBatchedSelection,
   repaintBatchedColors,
 } from './batchedHighlight'
@@ -224,6 +226,85 @@ describe('viewer/ifc/batchedInstanceTables', () => {
       applyBatchedSelection(mesh, [400], {r: 0, g: 1, b: 1})
 
       expect(drawnColor(mesh, batchId)).toEqual([0, 1, 1, 1])
+    })
+
+    // The layer sets hold batch ids. After a delete + paste the same id can be
+    // a different instance (three recycles the lowest freed id,
+    // BatchedMesh.js:580-591), so membership has to be re-derived from what the
+    // caller selected — not carried over by id — before anything repaints.
+    describe('highlight: a paste into a highlighted id', () => {
+      const CYAN = {r: 0, g: 1, b: 1}
+      const PURPLE_RGBA = [0.5, 0, 0.5, 1]
+
+      /**
+       * Delete instance 2 (product 200) and paste product 400 into its id.
+       *
+       * @param {object} mesh decorated batch
+       * @return {number} the paste's batch id
+       */
+      function recyclePlacement2(mesh) {
+        deleteBatchedInstance(mesh, 2)
+        const batchId = addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
+          parent: 400, occurrenceId: 9, occurrencePath: [40], color: PURPLE,
+        }, new Matrix4().makeTranslation(50, 0, 0))
+        expect(batchId).toBe(2)
+        return batchId
+      }
+
+      it('a repaint draws the paste in its own color, not the deleted part\'s selection', () => {
+        const mesh = decoratedStepBatch()
+        applyBatchedSelection(mesh, [200], CYAN)
+        const batchId = recyclePlacement2(mesh)
+
+        repaintBatchedColors(mesh)
+
+        expect(drawnColor(mesh, batchId)).toEqual(PURPLE_RGBA)
+      })
+
+      it('clearing a hover on the paste does not reveal the deleted part\'s selection', () => {
+        const mesh = decoratedStepBatch()
+        applyBatchedSelection(mesh, [200], CYAN)
+        const batchId = recyclePlacement2(mesh)
+
+        applyBatchedPreselection(mesh, [400], {r: 1, g: 1, b: 0})
+        clearBatchedPreselection(mesh)
+
+        expect(drawnColor(mesh, batchId)).toEqual(PURPLE_RGBA)
+      })
+
+      it('an occurrence selection does not follow its id onto the paste', () => {
+        const mesh = decoratedStepBatch()
+        applyBatchedInstanceSelection(mesh, [2], CYAN)
+        const batchId = recyclePlacement2(mesh)
+
+        repaintBatchedColors(mesh)
+
+        expect(drawnColor(mesh, batchId)).toEqual(PURPLE_RGBA)
+      })
+
+      it('a selected product keeps its surviving instances lit and gains a pasted one', () => {
+        const mesh = decoratedStepBatch()
+        applyBatchedSelection(mesh, [100], CYAN)
+        deleteBatchedInstance(mesh, 1)
+        // Appended (id 4 — the free id 1 is reused first, so fill it with
+        // another product before pasting 100 again).
+        addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
+          parent: 300, occurrenceId: 8, color: BLUE,
+        }, new Matrix4().makeTranslation(60, 0, 0))
+        const pasted = addBatchedInstance(mesh, mesh.getGeometryIdAt(0), {
+          parent: 100, occurrenceId: 9, color: PURPLE,
+        }, new Matrix4().makeTranslation(50, 0, 0))
+        expect(pasted).toBe(4)
+
+        repaintBatchedColors(mesh)
+
+        // Selection is "product 100", so it covers 100's live instances now:
+        // the survivor at 0 and the paste at 4 — and not the product-300
+        // instance that took over id 1.
+        expect(drawnColor(mesh, 0)).toEqual([0, 1, 1, 1])
+        expect(drawnColor(mesh, 4)).toEqual([0, 1, 1, 1])
+        expect(drawnColor(mesh, 1)).toEqual([0, 0, 1, 1])
+      })
     })
 
     it('color mode: toggles and reads the mode around the deleted instance', () => {
