@@ -387,6 +387,28 @@ order; BVH permutes only the index buffer, not the numbering).
    hide key on, so scene highlighting and `H` are unchanged. This is the same
    rule `glbPortable.js#hasSingleEmptyPathNode` applies to the export (#1908).
 
+   **One rule for selecting the sole root.** Four paths select it, and they
+   agree on what is lit:
+
+   | path | the scene is on | how |
+   |---|---|---|
+   | scene **pick** | the shell clicked | `selectFromInstancePick` names the instance |
+   | scene **shift-pick** | the shells picked, each toggled on its own | `toggleRootLevelInstanceSelection` |
+   | NavTree **row click** | the whole product (every root-level instance) | the funnel resolves the root anchor: `rootLevelSelectionForAnchors` |
+   | **permalink** `part.step/<root>` | the whole product | same resolver, via `selectRootOnlyElement` |
+
+   A **shift-click on another row** after shift-picking shells recomputes the
+   instances from the anchors; the root anchor then carries the shells already
+   picked (`keepNarrowing`, which `elementSelection` sets for shift-clicks only),
+   rather than widening them to the product or, as before, dropping them. A
+   plain click on the row after a pick is a row click: the whole product.
+   The root's empty path is no key for `selectedOccurrences`/
+   `getInstanceIdsForOccurrencePath`, so every row-driven path needs the
+   resolver above; a path that selects the root's row and not its instances
+   leaves the row and URL selected with nothing lit (a NavTree row click did
+   exactly that). Only a root-level instance in the selection proves a URL came
+   from a pick, so reading `.step/<root>` back skips re-selecting only then.
+
    Follow-ups from review, all on the same case:
 
    - **Cache hit, merged layout.** The pick needs the map to know an instance's

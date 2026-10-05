@@ -151,12 +151,37 @@ export async function dismissLoadSnackbar(page: Page) {
  * the test then asserts is that the help opened, which only happens if the
  * handler ran.
  *
+ * But `force` skips the OTHER actionability checks too, and two of them
+ * matter here: that the element is stable, and that it receives the click at
+ * its centre. The gate sits in a dialog whose content is still settling (it
+ * was measured 16px lower a few frames earlier, and below the fold), and
+ * `toBeVisible` passes while it moves; a forced click then lands where the
+ * control was, and the help never opens. Idle that window is a few
+ * milliseconds, which is why it only failed (the mobile "free user" test,
+ * `gated-help` not found) when the machine was busy: reproduced at 4 to 6
+ * workers on 4 cores, not at 3. So wait for those two checks ourselves.
+ *
  * @param page Playwright page
  * @param testId the gate's testid, e.g. 'gated-save'
  */
 export async function clickGate(page: Page, testId: string) {
-  await expect(page.getByTestId(testId)).toHaveAttribute('aria-disabled', 'true')
-  await page.getByTestId(testId).click({force: true})
+  const gate = page.getByTestId(testId)
+  await expect(gate).toHaveAttribute('aria-disabled', 'true')
+  await expect.poll(() => gate.evaluate((el) => new Promise<boolean>((resolve) => {
+    // Where the click will land: Playwright scrolls the target into view first,
+    // and the gate can sit below the dialog's fold.
+    el.scrollIntoView({block: 'center'})
+    const before = el.getBoundingClientRect()
+    // Two frames on: has it moved, and does a click at its centre reach it?
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const after = el.getBoundingClientRect()
+      const isStill = before.x === after.x && before.y === after.y &&
+        before.width === after.width && before.height === after.height
+      const hit = document.elementFromPoint(after.x + (after.width / 2), after.y + (after.height / 2))
+      resolve(isStill && hit !== null && el.contains(hit))
+    }))
+  }))).toBe(true)
+  await gate.click({force: true})
 }
 
 

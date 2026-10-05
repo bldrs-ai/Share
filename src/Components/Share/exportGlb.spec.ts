@@ -311,6 +311,9 @@ const SPATIAL_CHAIN = ['Bldrs', 'Build', 'Every', 'Thing']
 // for this spec in the shape a mesh-to-STEP export takes.
 const SHELLS_FIXTURE = 'src/tests/fixtures/sameIdentityShells.step'
 const SHELLS_FIXTURE_ROWS = 80
+// Long enough for a selection's follow-up effects (the URL it wrote, read back)
+// to have run, so an assertion after it isn't made before they could undo it.
+const SELECTION_SETTLE_MS = 500
 const LEAF_LABEL = 'Together'
 // The fixture's one PRODUCT, and so the name its tree root and its portable
 // node carry.
@@ -1182,6 +1185,65 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await shiftDoubleClickAt(page, second)
     await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances).toEqual(first.instances)
     await expectProductRowSelected(page, SHELLS_PART_NAME)
+  })
+
+  test('the product row means the whole product; a pick, the shells picked', async ({page}) => {
+    // #1909 (codex on #1910), one rule for every way of selecting the root of a
+    // one-product part. A scene PICK narrows to the shell(s) clicked. A ROW
+    // click means the whole product, as loading its permalink does. A
+    // shift-click on the row after shift-picking shells keeps the shells.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    await loadModelAndWaitForArtifact(page)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    await page.getByTestId('control-button-navigation').click()
+    const row = page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)
+    await expect(row).toHaveCount(1)
+    const everyShell = (await page.evaluate(() => {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const w = window as any
+      const meshes: any[] = []
+      ;((w.store ?? w.useStore).getState().model).traverse((m: any) => {
+        if (m.isBatchedMesh && m.instanceOccurrencePaths) {
+          meshes.push(m)
+        }
+      })
+      return meshes.flatMap((m) => m.instanceOccurrencePaths
+        .map((path: number[] | null, batchId: number) => (path?.length === 0 ? m.instanceOccurrenceIds[batchId] : -1))
+        .filter((id: number) => id >= 0))
+      /* eslint-enable @typescript-eslint/no-explicit-any */
+    })).length
+    expect(everyShell).toBeGreaterThan(2)
+
+    // A click on the row: the whole product, and it stays so once the URL the
+    // click wrote has been read back.
+    await row.click()
+    await expectProductRowSelected(page, SHELLS_PART_NAME)
+    await expect(page).toHaveURL(/\.step\/\d+(\?|#|$)/)
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(everyShell)
+    await page.waitForTimeout(SELECTION_SETTLE_MS)
+    expect((await selectedInstancesAndAnchors(page)).instances).toHaveLength(everyShell)
+
+    // A pick narrows to the shell.
+    await doubleClickSelectsAnElement(page, 'any')
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(1)
+    const picked = (await selectedInstancesAndAnchors(page)).instances
+    const second = await shiftDoubleClickAnotherInstance(page, picked)
+
+    // A shift-click on the row keeps the two shells: not dropped, and not
+    // widened to the product.
+    await row.click({modifiers: ['Shift']})
+    await page.waitForTimeout(SELECTION_SETTLE_MS)
+    const kept = await selectedInstancesAndAnchors(page)
+    expect(kept.instances.sort()).toEqual([...picked, second.instanceId].sort())
+    await expectProductRowSelected(page, SHELLS_PART_NAME)
+
+    // A plain click on the row after a pick is the whole product again.
+    await row.click()
+    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(everyShell)
   })
 
   test('a file of several top-level parts never gives one part the shells of another', async ({page}) => {

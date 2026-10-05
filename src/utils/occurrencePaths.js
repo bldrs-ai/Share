@@ -412,6 +412,56 @@ export function resolveRootOnlyElementPath(rootNode, parts) {
 
 
 /**
+ * The scene half of a selection that has the sole root product among its
+ * anchors: the root-level instances to light and the ids that own them.
+ *
+ * The rule every way of selecting the root agrees on (#1909):
+ *   - a scene PICK narrows to the shell(s) clicked: `selectFromInstancePick`
+ *     and `toggleRootLevelInstanceSelection` name the instances themselves;
+ *   - a ROW click or a PERMALINK means the whole product: this resolves the
+ *     anchor to every root-level instance, the way `selectedOccurrences` does
+ *     for any other row (its empty path is no key, so it can't).
+ * A shift-click on another row after shift-picking shells recomputes the
+ * instances from the anchors, which would widen the picked shells to the whole
+ * product (and drop them if the root were skipped), so `keepNarrowing` carries
+ * the root-level instances already selected instead, so long as the root
+ * was already an anchor of the current selection.
+ *
+ * Null when the root isn't among the anchors, isn't the sole empty-path node
+ * (`findSoleRootNode`: IFC, several top-level products), or the model has no
+ * root-level geometry.
+ *
+ * @param {object} args
+ * @param {object|null} args.rootNode spatial-structure root element
+ * @param {Array<number|string>} args.anchorIds the selection's anchor rows
+ * @param {{instanceIds: Array<number>, parentExpressIds: Array<number>}} args.rootLevel
+ *   the model's root-level instances and their owners
+ *   (`ShareViewer#getRootLevelInstances`)
+ * @param {{anchors: Array, instances: Array}} args.current the selection held now
+ * @param {boolean} [args.keepNarrowing] carry the selected root-level instances
+ * @return {{instanceIds: Array<number>, ownerIds: Array<number>}|null}
+ */
+export function rootLevelSelectionForAnchors({rootNode, anchorIds, rootLevel, current, keepNarrowing = false}) {
+  const root = findSoleRootNode(rootNode)
+  if (!root || !Array.isArray(anchorIds) || !anchorIds.map(Number).includes(root.expressID)) {
+    return null
+  }
+  if (!rootLevel || rootLevel.instanceIds.length === 0) {
+    return null
+  }
+  if (keepNarrowing && Array.isArray(current?.anchors) &&
+      current.anchors.map(Number).includes(root.expressID)) {
+    const rootInstances = new Set(rootLevel.instanceIds)
+    const narrowed = (current.instances ?? []).map(Number).filter((id) => rootInstances.has(id))
+    if (narrowed.length > 0) {
+      return {instanceIds: narrowed, ownerIds: rootLevel.parentExpressIds}
+    }
+  }
+  return {instanceIds: rootLevel.instanceIds, ownerIds: rootLevel.parentExpressIds}
+}
+
+
+/**
  * The selection after a shift-pick of one root-level STEP shell (#1909): the
  * instance joins, or leaves if it is already in. Pure; `CadView` supplies the
  * store's selection and the model's root-level instances.

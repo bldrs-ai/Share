@@ -57,6 +57,7 @@ import {
   resolveElementPathOccurrence,
   resolvePickedOccurrenceNode,
   resolveRootOnlyElementPath,
+  rootLevelSelectionForAnchors,
   selectedOccurrences,
   toggleRootLevelInstanceSelection,
   trimToTreeOccurrencePath,
@@ -1067,8 +1068,7 @@ export default function CadView({
    */
   function toggleRootLevelInstance(rootRow, ownerId, instanceId) {
     const state = useStore.getState()
-    const rootLevel = typeof viewer.getRootLevelInstances === 'function' ?
-      viewer.getRootLevelInstances(0) : {instanceIds: [], parentExpressIds: []}
+    const rootLevel = rootLevelInstances()
     const next = toggleRootLevelInstanceSelection({
       selection: {
         elements: state.selectedElements,
@@ -1205,10 +1205,13 @@ export default function CadView({
    *   (`elementSelection` does). Null (the default) means every result is
    *   its own anchor. NavTree row highlight, Properties and the TopBar
    *   crumb follow the anchors; only the scene uses the expanded set.
+   * @param {boolean} keepRootNarrowing a shift-click: when the instances are
+   *   resolved from the anchors, keep the root-level instances already
+   *   selected rather than widen them to the whole product.
    */
   function selectItemsInScene(
     resultIDs, updateNavigation = true, instanceIds = [], occurrencePath = null,
-    solidExpressId = null, anchorIds = null) {
+    solidExpressId = null, anchorIds = null, keepRootNarrowing = false) {
     // NOTE: we might want to compare with previous selection to avoid unnecessary updates
     if (!viewer) {
       return
@@ -1226,6 +1229,24 @@ export default function CadView({
         if (occurrences.length > 0) {
           instanceIds = [...new Set(occurrences.flatMap(({occurrencePath: path, solidExpressId: solid}) =>
             occurrenceInstanceIds(path, true, solid)))]
+        }
+        // The sole root product has an empty occurrence path, so the lookup
+        // above can't resolve it: its row means every root-level instance
+        // (#1909; `rootLevelSelectionForAnchors` has the rule).
+        const rootLevel = rootLevelInstances()
+        const root = rootLevelSelectionForAnchors({
+          rootNode: useStore.getState().rootElement,
+          anchorIds: anchorIds ?? resultIDs,
+          rootLevel,
+          current: {
+            anchors: useStore.getState().selectedAnchorIds,
+            instances: useStore.getState().selectedInstanceIds,
+          },
+          keepNarrowing: keepRootNarrowing,
+        })
+        if (root) {
+          instanceIds = [...new Set([...instanceIds, ...root.instanceIds])]
+          resultIDs = [...new Set([...resultIDs, ...root.ownerIds])]
         }
       }
       // Update The Component state
@@ -1430,30 +1451,46 @@ export default function CadView({
 
 
   /**
-   * Select the root product from a root-only permalink, as a scene pick of its
-   * own geometry does (`selectFromInstancePick`): the root row is the anchor,
-   * `selectedElements` carries the ids that own the geometry, and the scene
-   * narrows to the root-level instances. Does nothing when the model has no
+   * Select the root product from a root-only permalink, as a click on its row
+   * does: the root row is the anchor and the scene is on ALL its root-level
+   * instances (a link can't say which shell was clicked; see
+   * `rootLevelSelectionForAnchors`). Does nothing when the model has no
    * root-level geometry to select, which is how such a link behaved before.
    *
    * @param {object} rootRow the tree's root element
    * @param {boolean} force select it even if it's already the anchor
    */
   function selectRootOnlyElement(rootRow, force) {
+    const rootLevel = rootLevelInstances()
+    if (rootLevel.instanceIds.length === 0) {
+      return
+    }
     // The pick that wrote this URL has already selected it, narrowed to the
-    // one instance clicked; re-selecting would widen that to every root-level
-    // instance. The same self-induced navigation the multi-segment branch
-    // skips on.
-    const anchors = useStore.getState().selectedAnchorIds ?? []
-    if (!force && anchors.length === 1 && anchors[0] === `${rootRow.expressID}`) {
+    // shell(s) clicked; re-selecting would widen that to every root-level
+    // instance. Only a root-level instance in the selection proves that: a
+    // row click on the root (anchor and URL, but no instances) comes through
+    // here too, and still needs its geometry.
+    const held = useStore.getState()
+    const anchors = held.selectedAnchorIds ?? []
+    const isSelectedAlready = anchors.length === 1 && anchors[0] === `${rootRow.expressID}` &&
+      (held.selectedInstanceIds ?? []).some((id) => rootLevel.instanceIds.includes(id))
+    if (!force && isSelectedAlready) {
       return
     }
-    const {instanceIds, parentExpressIds} = typeof viewer.getRootLevelInstances === 'function' ?
+    // Resolved from the anchor, as for a click on the row: the whole product.
+    selectItemsInScene([rootRow.expressID], false, [], null, null, [rootRow.expressID])
+  }
+
+
+  /**
+   * The model's root-level instances (an empty path) and the ids that own
+   * them; empty where the viewer can't say.
+   *
+   * @return {{instanceIds: Array<number>, parentExpressIds: Array<number>}}
+   */
+  function rootLevelInstances() {
+    return typeof viewer?.getRootLevelInstances === 'function' ?
       viewer.getRootLevelInstances(0) : {instanceIds: [], parentExpressIds: []}
-    if (instanceIds.length === 0) {
-      return
-    }
-    selectItemsInScene(parentExpressIds, false, instanceIds, null, null, [rootRow.expressID])
   }
 
 

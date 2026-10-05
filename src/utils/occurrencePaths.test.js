@@ -9,6 +9,7 @@ import {
   resolveElementPathOccurrence,
   resolvePickedOccurrenceNode,
   resolveRootOnlyElementPath,
+  rootLevelSelectionForAnchors,
   selectedOccurrences,
   toggleRootLevelInstanceSelection,
   trimToTreeOccurrencePath,
@@ -254,6 +255,52 @@ describe('utils/occurrencePaths', () => {
     it('is null without a tree', () => {
       expect(resolveRootOnlyElementPath(null, ['7'])).toBeNull()
       expect(resolveRootOnlyElementPath(undefined, ['7'])).toBeNull()
+    })
+  })
+
+  describe('rootLevelSelectionForAnchors', () => {
+    const root = {expressID: 7, occurrencePath: [], children: [
+      {expressID: 50, occurrencePath: [50], children: []},
+    ]}
+    const rootLevel = {instanceIds: [0, 1, 2, 3], parentExpressIds: [8]}
+    const resolve = (over) => rootLevelSelectionForAnchors({
+      rootNode: root, anchorIds: [7], rootLevel,
+      current: {anchors: [], instances: []}, ...over,
+    })
+
+    it('a row click or permalink on the root means every root-level instance (#1909)', () => {
+      expect(resolve({})).toEqual({instanceIds: [0, 1, 2, 3], ownerIds: [8]})
+      expect(resolve({anchorIds: ['7']})).toEqual({instanceIds: [0, 1, 2, 3], ownerIds: [8]})
+    })
+
+    it('a plain click widens a narrowed pick to the whole product', () => {
+      expect(resolve({current: {anchors: [7], instances: [1]}, keepNarrowing: false}).instanceIds)
+        .toEqual([0, 1, 2, 3])
+    })
+
+    it('a shift-click keeps the root-level shells already picked, rather than widen or drop them', () => {
+      const kept = resolve({anchorIds: [50, 7], current: {anchors: [7], instances: [1, 3]}, keepNarrowing: true})
+      expect(kept).toEqual({instanceIds: [1, 3], ownerIds: [8]})
+    })
+
+    it('a shift-click that newly adds the root (not an anchor yet) means the whole product', () => {
+      expect(resolve({current: {anchors: [50], instances: [9]}, keepNarrowing: true}).instanceIds)
+        .toEqual([0, 1, 2, 3])
+    })
+
+    it('ignores instances selected for other rows when narrowing', () => {
+      expect(resolve({current: {anchors: [7, 50], instances: [9, 2]}, keepNarrowing: true}).instanceIds)
+        .toEqual([2])
+    })
+
+    it('is null without the root among the anchors, for IFC, several roots, or no root-level geometry', () => {
+      expect(resolve({anchorIds: [50]})).toBeNull()
+      expect(resolve({anchorIds: null})).toBeNull()
+      expect(resolve({rootNode: {expressID: 1, children: []}, anchorIds: [1]})).toBeNull()
+      const wrapper = {expressID: -1, occurrencePath: [], children: [{expressID: 7, occurrencePath: [], children: []}]}
+      expect(resolve({rootNode: wrapper, anchorIds: [-1]})).toBeNull()
+      expect(resolve({rootLevel: {instanceIds: [], parentExpressIds: []}})).toBeNull()
+      expect(resolve({rootLevel: null})).toBeNull()
     })
   })
 

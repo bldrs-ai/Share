@@ -75,5 +75,8 @@ export function elementSelection(viewer, elementsById, selectItemsInScene, isShi
     anchors.add(expressId)
     updateNav = true
   }
-  selectItemsInScene(Array.from(selectedInViewer), updateNav, [], null, null, Array.from(anchors))
+  // The last argument: a shift-click keeps the root-level shells already
+  // picked (see `rootLevelSelectionForAnchors`); a plain click means the whole row.
+  selectItemsInScene(
+    Array.from(selectedInViewer), updateNav, [], null, null, Array.from(anchors), isShiftKeyDown)
 }
