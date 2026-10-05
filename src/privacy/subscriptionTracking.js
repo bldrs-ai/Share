@@ -1,4 +1,5 @@
 import {FUNNEL_EVENTS, gtagFunnelEvent} from './analytics'
+import {withCrossTabLock} from './crossTabLock'
 
 
 /*
@@ -16,9 +17,12 @@ const EVENT_FOR_STATUS = {
 
 const MARKER_KEY_PREFIX = 'bldrs.ga.reportedSubscriptionStatus:'
 
-// Stand-in for localStorage when it throws (private mode, blocked site data),
-// so a page that can't persist the marker still reports at most once per
-// load rather than once per token it processes.
+// This page's own record of what it reported, checked synchronously before
+// any lock is requested. It is the in-page guard while a lock request is
+// pending (the cached and fresh passes can both be queued at once), and the
+// stand-in for localStorage when that throws (private mode, blocked site
+// data), so a page that can't persist the marker still reports at most once
+// per load rather than once per token it processes.
 const reportedThisPage = new Map()
 
 
@@ -30,34 +34,68 @@ const reportedThisPage = new Map()
  * many times before the reauth that clears it — BaseRoutes' cached-token
  * pass and its background fresh-claims pass on every page load, every
  * reload while the user ignores the reauth modal, and every open tab. So the
- * last status reported is remembered per user, in localStorage, and only a
- * different pending status reports again. Because the server writes the
- * two strictly alternately (a tier change each way), that is exactly one
- * event per real transition — the sharePro/free statuses in between are
- * deliberately not consulted, since a stale cached token can still carry
- * one after the fresh token has gone pending, and clearing on it would
- * double-count on every boot.
+ * last status reported is remembered per user, in localStorage, and a
+ * repeat of it is skipped. The server writes the two pending statuses
+ * strictly alternately (a tier change each way), so a *different* pending
+ * status is always a new transition.
  *
- * Known gap: the marker is per browser, so a user who sees the pending state
- * on two devices is counted on each.
+ * The same pending status can also be a new transition — subscribe, reauth
+ * (→ sharePro), lapse (freePendingReauth), resubscribe — when this browser
+ * never saw the freePendingReauth in between. So a settled status (sharePro,
+ * or any free status, unset included: the server counts everything but the
+ * two PRO values as FREE) clears the marker — but only when it comes from a
+ * FRESH token (`isFresh`: BaseRoutes' cacheMode:'off' pass, whose claims
+ * reflect app_metadata as of now). Settled statuses on the cached token are
+ * ignored: a stale cached token can still carry one after the fresh token
+ * has gone pending, and clearing on it would double-count on every boot,
+ * since every boot runs the cached pass before the fresh one lands.
+ *
+ * What the fresh-only reset buys: a lapse + resubscribe this browser never
+ * observed is counted, provided the user completed the reauth in between
+ * (and this browser then loaded a fresh token showing it settled). Residual
+ * gap: if the user never completes the reauth between two transitions, the
+ * marker is never cleared and a repeat of the same pending status is still
+ * suppressed. And the marker is per browser, so a user who sees the pending
+ * state on two devices is counted on each.
+ *
+ * Across tabs the read-check-write runs under a Web Lock named for the
+ * marker key (crossTabLock.js), so two tabs processing the same token can't
+ * both read the old marker and both emit. The in-page guard is set
+ * synchronously, before the lock is requested, so this page's own passes
+ * can't double-fire while the request is pending.
  *
  * @param {?string} userId Auth0 `sub` of the token's user
  * @param {?string} status app_metadata.subscriptionStatus
- * @return {boolean} true when an event was sent
+ * @param {object} [opts]
+ * @param {boolean} [opts.isFresh] the token came from the fresh-claims pass
+ *   (cacheMode:'off'), not the SDK cache
+ * @return {Promise<boolean>} true when an event was sent
  */
-export function trackSubscriptionStatus(userId, status) {
+export function trackSubscriptionStatus(userId, status, {isFresh = false} = {}) {
+  const key = `${MARKER_KEY_PREFIX}${userId || 'unknown'}`
   const eventName = EVENT_FOR_STATUS[status]
   if (!eventName) {
-    return false
+    if (!isFresh) {
+      return Promise.resolve(false)
+    }
+    reportedThisPage.delete(key)
+    return withCrossTabLock(key, () => {
+      removeMarker(key)
+      return false
+    })
   }
-  const key = `${MARKER_KEY_PREFIX}${userId || 'unknown'}`
-  if (reportedThisPage.get(key) === status || readMarker(key) === status) {
-    return false
+  if (reportedThisPage.get(key) === status) {
+    return Promise.resolve(false)
   }
   reportedThisPage.set(key, status)
-  writeMarker(key, status)
-  gtagFunnelEvent(eventName)
-  return true
+  return withCrossTabLock(key, () => {
+    if (readMarker(key) === status) {
+      return false
+    }
+    writeMarker(key, status)
+    gtagFunnelEvent(eventName)
+    return true
+  })
 }
 
 
@@ -83,6 +121,16 @@ function writeMarker(key, status) {
     localStorage.setItem(key, status)
   } catch {
     // reportedThisPage already holds it for this page.
+  }
+}
+
+
+/** @param {string} key */
+function removeMarker(key) {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // Nothing persisted to clear; reportedThisPage is already cleared.
   }
 }
 

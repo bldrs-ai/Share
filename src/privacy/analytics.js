@@ -329,7 +329,8 @@ export function getOpenCid() {
  *   BEGIN_CHECKOUT       {from, destination}  Profile/subscriptionNav
  *   SUBSCRIPTION_STARTED / SUBSCRIPTION_ENDED  {}  BaseRoutes'
  *                        processAccessToken on the pendingReauth statuses,
- *                        deduped per user + status (subscriptionTracking.js)
+ *                        deduped per user + status, reset by a settled
+ *                        status on a fresh token (subscriptionTracking.js)
  *
  * All but REAL_MODEL_OPEN go out through gtagFunnelEvent, which attaches
  * OPEN_CID_PARAM so the dashboard can follow one client down the funnel.

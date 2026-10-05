@@ -257,13 +257,17 @@ describe('BaseRoutes - subscription funnel events', () => {
   }
 
   /**
-   * One page load: mount BaseRoutes with every token pass returning `token`,
-   * and wait for both passes to have been processed.
+   * One page load: mount BaseRoutes with the cached-token pass returning
+   * `cachedToken` and the fresh-claims pass `freshToken`, and wait for both
+   * passes to have been processed. Each call is a new page, as a reload
+   * would be: the in-page guard is reset, localStorage is kept.
    *
-   * @param {string} token
+   * @param {string} cachedToken
+   * @param {string} [freshToken] defaults to the cached one
    */
-  async function pageLoad(token) {
-    const getToken = jest.fn().mockResolvedValue(token)
+  async function pageLoad(cachedToken, freshToken = cachedToken) {
+    _resetSubscriptionTrackingForTests()
+    const getToken = jest.fn((opts) => Promise.resolve(opts.cacheMode === 'off' ? freshToken : cachedToken))
     mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently: getToken})
     const {unmount} = render(
       <MemoryRouter initialEntries={['/about']}>
@@ -289,7 +293,6 @@ describe('BaseRoutes - subscription funnel events', () => {
       ['event', 'subscription_started', {open_cid: 'cid.111.222'}],
     ])
     // A reload before the reauth: a fresh page, same pending token.
-    _resetSubscriptionTrackingForTests()
     await pageLoad('pro-pending')
     expect(eventsNamed('subscription_started')).toHaveLength(1)
     expect(eventsNamed('subscription_ended')).toHaveLength(0)
@@ -307,6 +310,44 @@ describe('BaseRoutes - subscription funnel events', () => {
     await pageLoad('free-pending')
     expect(eventsNamed('subscription_ended')).toEqual([['event', 'subscription_ended', {}]])
     await pageLoad('pro-pending')
+    expect(eventsNamed('subscription_started')).toHaveLength(1)
+  })
+
+  // codex finding on #1912: subscribe → reauth → lapse → resubscribe, with
+  // the lapse's freePendingReauth never seen by this browser. The fresh
+  // sharePro seen after the reauth is what lets the resubscribe count.
+  it('a resubscribe after an unobserved lapse counts again, once the reauth was seen settled', async () => {
+    const claims = (subscriptionStatus) => ({
+      'sub': 'github|1',
+      'https://bldrs.ai/app_metadata': {subscriptionStatus},
+      'https://bldrs.ai/identities': [{connection: 'github', provider: 'github', user_id: '1'}],
+    })
+    tokenClaims['pro-pending'] = claims('shareProPendingReauth')
+    tokenClaims['pro'] = claims('sharePro')
+    await pageLoad('pro-pending')
+    // After the reauth: the cache may still hold the pending token, the
+    // fresh pass says sharePro.
+    await pageLoad('pro-pending', 'pro')
+    await pageLoad('pro')
+    // Lapse and resubscribe both happen elsewhere; this browser next sees
+    // the resubscribe's pending status.
+    await pageLoad('pro', 'pro-pending')
+    expect(eventsNamed('subscription_started')).toHaveLength(2)
+    expect(eventsNamed('subscription_ended')).toHaveLength(0)
+  })
+
+  // The reason the reset is fresh-only: every boot runs the cached pass
+  // first, and a stale cached token can say free while the fresh one says
+  // pending. Clearing on the cached token would re-count on every boot.
+  it('a settled cached token in front of a pending fresh one counts once over many boots', async () => {
+    tokenClaims['free'] = {'sub': 'github|1', 'https://bldrs.ai/app_metadata': {subscriptionStatus: null}}
+    tokenClaims['pro-pending'] = {
+      'sub': 'github|1',
+      'https://bldrs.ai/app_metadata': {subscriptionStatus: 'shareProPendingReauth'},
+    }
+    for (let boot = 0; boot < 3; boot++) {
+      await pageLoad('free', 'pro-pending')
+    }
     expect(eventsNamed('subscription_started')).toHaveLength(1)
   })
 

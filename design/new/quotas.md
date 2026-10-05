@@ -191,7 +191,7 @@ behind the same analytics consent check as every other `gtagEvent`.
 | Hit a limit | `quota_limit_reached` | `tier` (`anonymous` \| `free`), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
 | Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown` | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
 | Upgrade click | `begin_checkout` (GA4 recommended) | `from`: `profile` \| `export` \| `quota`; `destination`: `checkout` \| `portal` | `goToSubscription` (`Profile/subscriptionNav.js`), which every upgrade CTA goes through |
-| Subscribed | `subscription_started` | — | `BaseRoutes#processAccessToken` on `shareProPendingReauth` |
+| Subscribed | `subscription_started` | — | `BaseRoutes#processAccessToken` on `shareProPendingReauth` (below) |
 | (lapsed) | `subscription_ended` | — | same, on `freePendingReauth` |
 
 The parts that aren't obvious:
@@ -205,10 +205,14 @@ The parts that aren't obvious:
   is skipped, because the popup closes before its beacon can be relied on.
   Other open tabs see the same edge (they all get the `refreshAuth` storage
   event), so the first tab to report writes `sub|auth_time` (from the ID
-  token) to localStorage and the others skip it. `method` comes from the
-  user id's connection prefix (`google-oauth2|`, `github|`, `auth0|`). For a
-  linked account that is the *primary* identity, not necessarily the button
-  the user pressed.
+  token) to localStorage and the others skip it. Those tabs hear the event
+  at the same moment, so the read-compare-write-emit runs under a Web Lock
+  (`navigator.locks`, via `src/privacy/crossTabLock.js`); without one two
+  tabs could both read the old value and both emit. Where the Web Locks API
+  is missing the claim runs unlocked and that race remains. `method` comes
+  from the user id's connection prefix (`google-oauth2|`, `github|`,
+  `auth0|`). For a linked account that is the *primary* identity, not
+  necessarily the button the user pressed.
 - **No `sign_up`.** Nothing in the token reliably marks a brand-new account
   (no `logins_count` or `created_at` claim; that would take an Auth0 Action).
   "Sign up free" therefore reports as `login`.
@@ -222,11 +226,30 @@ The parts that aren't obvious:
   processed on the cached and fresh-claims passes, again on every reload
   until the reauth, and in every tab. `src/privacy/subscriptionTracking.js`
   keeps the last pending status it reported for each user (Auth0 `sub`) in
-  localStorage, with an in-memory fallback when storage throws, and only a
-  *different* pending status reports again. This works because the server
-  writes the two pending statuses strictly alternately, one per tier change
-  (`netlify/functions/_lib/subscriptions.js`). Gap: the marker is
-  per-browser, so seeing the pending state on two devices counts twice.
+  localStorage, with an in-memory fallback when storage throws, and a repeat
+  of it doesn't report again. A *different* pending status always does,
+  because the server writes the two pending statuses strictly alternately,
+  one per tier change (`netlify/functions/_lib/subscriptions.js`).
+  - **The marker resets on a settled status from a fresh token.** The same
+    pending status can be a new transition too: subscribe, reauth, lapse,
+    resubscribe, where this browser never saw the lapse's
+    `freePendingReauth`. So when the fresh-claims pass (`cacheMode: 'off'`)
+    carries a settled status (`sharePro`, or any free status, unset
+    included), the marker is cleared and the next pending status counts.
+    Settled statuses on the *cached* token are ignored. Every boot runs the
+    cached pass first, and a stale cached token can still say free after
+    the fresh one has gone pending, so clearing on it would count again on
+    every boot.
+  - **Cross-tab claims are locked.** Two tabs processing the same pending
+    token could both read the old marker before either writes. The
+    read-compare-write-emit runs under a Web Lock named for the marker key,
+    with the in-page guard set before the lock is requested, so this page's
+    own cached and fresh passes can't both queue a claim. Without the Web
+    Locks API the claim runs unlocked and the race remains.
+  - **Gaps.** If the user never completes the reauth between two
+    transitions, nothing clears the marker, so a repeat of the same pending
+    status is still missed. The marker is also per-browser, so seeing the
+    pending state on two devices counts twice.
 
 GA4-admin follow-ups (Admin → Custom definitions / Key events). None of this
 has a backfill, so these only start accruing data once registered:

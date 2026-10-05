@@ -79,8 +79,14 @@ export default function BaseRoutes({testElt = null}) {
    * the background fresh-claims pass; idempotent, so processing the same
    * token twice is harmless. useCallback (all deps are stable setters) so
    * the auth effect below can depend on it without re-firing per render.
+   *
+   * `isFresh` marks the fresh-claims pass's token. Only the subscription
+   * tracker reads it: a settled status on a fresh token resets its
+   * per-user marker, one on a possibly-stale cached token must not
+   * (subscriptionTracking.js). The cached pass passes it through `.then`
+   * as a single arg, so it defaults to false there.
    */
-  const processAccessToken = useCallback((token) => {
+  const processAccessToken = useCallback((token, {isFresh = false} = {}) => {
     if (token === '') {
       initializeOctoKitUnauthenticated()
       setAccessToken(token)
@@ -94,7 +100,9 @@ export default function BaseRoutes({testElt = null}) {
     // which these statuses always take. Safe to call on every pass: this
     // function runs several times per token (see above), and the tracker
     // dedupes per user + status across passes, reloads and tabs.
-    trackSubscriptionStatus(decodedToken.sub, appData?.subscriptionStatus)
+    // Fire-and-forget: the cross-tab claim resolves asynchronously and
+    // nothing below depends on it.
+    trackSubscriptionStatus(decodedToken.sub, appData?.subscriptionStatus, {isFresh})
 
     // Reauth-modal short circuits: show the modal and stop — leave
     // identity/token state as it was.
@@ -214,7 +222,7 @@ export default function BaseRoutes({testElt = null}) {
       if (!freshClaimsRequestedRef.current) {
         freshClaimsRequestedRef.current = true
         getAccessTokenSilently({...tokenFetchOpts, cacheMode: 'off'})
-          .then(processAccessToken)
+          .then((token) => processAccessToken(token, {isFresh: true}))
           .catch((err) => {
             if (err.error === 'invalid_grant') {
               logout({returnTo: window.location.origin})

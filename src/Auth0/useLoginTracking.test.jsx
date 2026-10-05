@@ -2,6 +2,7 @@ import {StrictMode} from 'react'
 import {renderHook, waitFor} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../__mocks__/authentication'
 import {_resetGaClientIdForTests, setGaClientId} from '../privacy/analytics'
+import {installGatedFakeLocks, uninstallFakeLocks} from '../privacy/crossTabLock.fixture'
 import useLoginTracking, {
   _resetLoginTrackingForTests,
   loginMethodFromSub,
@@ -25,6 +26,7 @@ describe('useLoginTracking', () => {
 
   afterEach(() => {
     delete window.gtag
+    uninstallFakeLocks()
   })
 
   /** @return {Array} gtag `login` calls so far */
@@ -94,11 +96,18 @@ describe('useLoginTracking', () => {
     expect(loginEvents()).toHaveLength(0)
   })
 
-  it('reports one sign-in once across tabs, keyed by the ID token auth_time', async () => {
-    const withClaims = (authTime) => ({
+  /**
+   * @param {number} authTime ID token auth_time
+   * @return {object} signed-in useAuth0 value whose ID token carries it
+   */
+  function withClaims(authTime) {
+    return {
       ...mockedUserLoggedIn,
       getIdTokenClaims: jest.fn().mockResolvedValue({sub: mockedUserLoggedIn.user.sub, auth_time: authTime}),
-    })
+    }
+  }
+
+  it('reports one sign-in once across tabs, keyed by the ID token auth_time', async () => {
     // Two tabs, both signed out, both hearing the popup's refreshAuth.
     const tabA = mountWith(mockedUserLoggedOut)
     const tabB = mountWith(mockedUserLoggedOut)
@@ -112,6 +121,36 @@ describe('useLoginTracking', () => {
     tabA(mockedUserLoggedOut)
     tabA(withClaims(SECOND_SIGN_IN))
     await waitFor(() => expect(loginEvents()).toHaveLength(2))
+  })
+
+  // The race the Web Lock closes: both tabs hear refreshAuth together, so
+  // both reach the claim before either has written LAST_LOGIN_KEY.
+  it('two tabs claiming the same sign-in concurrently emit once, inside the lock', async () => {
+    const locks = installGatedFakeLocks()
+    const tabA = mountWith(mockedUserLoggedOut)
+    const tabB = mountWith(mockedUserLoggedOut)
+    tabA(withClaims(FIRST_SIGN_IN))
+    tabB(withClaims(FIRST_SIGN_IN))
+    await waitFor(() => expect(locks.requests).toEqual(['bldrs.ga.lastReportedLogin', 'bldrs.ga.lastReportedLogin']))
+    // Neither tab read-wrote the marker or emitted outside the lock.
+    expect(loginEvents()).toHaveLength(0)
+    expect(localStorage.getItem('bldrs.ga.lastReportedLogin')).toBeNull()
+
+    locks.open()
+    await waitFor(() => expect(localStorage.getItem('bldrs.ga.lastReportedLogin')).toBe(`${mockedUserLoggedIn.user.sub}|${FIRST_SIGN_IN}`))
+    await flush()
+    expect(loginEvents()).toHaveLength(1)
+  })
+
+  it('without navigator.locks, falls back to the unlocked claim', async () => {
+    expect(navigator.locks).toBeUndefined()
+    const tabA = mountWith(mockedUserLoggedOut)
+    const tabB = mountWith(mockedUserLoggedOut)
+    tabA(withClaims(FIRST_SIGN_IN))
+    tabB(withClaims(FIRST_SIGN_IN))
+    await waitFor(() => expect(loginEvents()).toHaveLength(1))
+    await flush()
+    expect(loginEvents()).toHaveLength(1)
   })
 })
 

@@ -1,5 +1,6 @@
 import {useEffect, useRef} from 'react'
 import {FUNNEL_EVENTS, gtagFunnelEvent} from '../privacy/analytics'
+import {withCrossTabLock} from '../privacy/crossTabLock'
 import {useAuth0} from './Auth0Proxy'
 
 
@@ -33,7 +34,8 @@ import {useAuth0} from './Auth0Proxy'
  *
  * Every *other* open tab hears that same `refreshAuth` storage event and
  * makes the same edge, so the first tab to report records `sub|auth_time` in
- * localStorage and the rest skip it. `auth_time` (when the user last
+ * localStorage and the rest skip it — under a Web Lock, so "first" is
+ * well-defined even when the tabs race (claimLogin). `auth_time` (when the user last
  * actually authenticated, carried unchanged through refresh-token grants)
  * identifies one sign-in; it is read from the ID token because the SDK's
  * `user` strips it. Where it is unavailable (the mock provider has no
@@ -121,11 +123,7 @@ export default function useLoginTracking() {
     isRedirectLoginPending = false
     const sub = user.sub
     const method = loginMethodFromSub(sub)
-    readAuthTime(getIdTokenClaims).then((authTime) => {
-      if (claimLogin(sub, authTime)) {
-        gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method})
-      }
-    })
+    readAuthTime(getIdTokenClaims).then((authTime) => claimLogin(sub, authTime, method))
   }, [isLoading, isAuthenticated, user, getIdTokenClaims])
 }
 
@@ -148,26 +146,42 @@ async function readAuthTime(getIdTokenClaims) {
 
 
 /**
- * Claim the right to report this sign-in, across tabs.
+ * Claim the right to report this sign-in across tabs, and report it if won.
+ *
+ * The read-compare-write of LAST_LOGIN_KEY and the emit run under a Web Lock
+ * named for that key (privacy/crossTabLock.js): every tab hears the same
+ * `refreshAuth` storage event at about the same moment, so without it two
+ * tabs can both read the previous sign-in's id before either writes this
+ * one, and both emit. Where `navigator.locks` is missing the claim runs
+ * unlocked and synchronously, and that race remains. This tab's own
+ * double-fire guard is not here but in the hook (sawSignedOutRef /
+ * isRedirectLoginPending are cleared synchronously before this is reached).
  *
  * @param {?string} sub
  * @param {?number} authTime
- * @return {boolean} false when another tab (or an earlier pass) already did
+ * @param {string} method `login` event param
+ * @return {Promise<boolean>} false when another tab (or an earlier pass)
+ *   already reported this sign-in
  */
-function claimLogin(sub, authTime) {
+function claimLogin(sub, authTime, method) {
   if (authTime === null) {
-    return true
+    // No auth_time, no identity for the sign-in: nothing to dedupe on.
+    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method})
+    return Promise.resolve(true)
   }
   const id = `${sub}|${authTime}`
-  try {
-    if (localStorage.getItem(LAST_LOGIN_KEY) === id) {
-      return false
+  return withCrossTabLock(LAST_LOGIN_KEY, () => {
+    try {
+      if (localStorage.getItem(LAST_LOGIN_KEY) === id) {
+        return false
+      }
+      localStorage.setItem(LAST_LOGIN_KEY, id)
+    } catch {
+      // Storage unavailable: no cross-tab dedupe, the in-page edge decides.
     }
-    localStorage.setItem(LAST_LOGIN_KEY, id)
-  } catch {
-    // Storage unavailable: no cross-tab dedupe, the in-page edge decides.
-  }
-  return true
+    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method})
+    return true
+  })
 }
 
 
