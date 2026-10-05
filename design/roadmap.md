@@ -1,7 +1,7 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.7 — conversational-CAD epic plan folded in (`search-320`, `assist-*` scope)
-**Date:** 2026-07-27
+**Status:** Draft v0.8 — Create verb group + Track T12 (model edit substrate)
+**Date:** 2026-10-05
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022). PDF
 extract preserved in this commit's history; key Epic list inlined in §4.
@@ -135,6 +135,9 @@ B identity, C sharing, D subscribe+ads, E launch checklist); G = growth funnel
 | Assist | `assist-310` | Conversational agent panel, single-user (NEW) | ⬜ | AI | T10, T11 |
 | Assist | `assist-320` | AI-apps toolbelt: save/version/run + MCP (NEW) | ⬜ | AI | T11 |
 | Assist | `assist-400` | Multi-user channels + AI participation modes (NEW) | ⬜ | AI | T10 |
+| Create | `create-300` | Model edit substrate: CRUD over an op log (<a href="https://github.com/bldrs-ai/Share/issues/1914" target="_blank" rel="noopener noreferrer">#1914</a>) (NEW) | 🟡 | AI | T12 |
+| Create | `create-310` | Agent write tools (<a href="https://github.com/bldrs-ai/Share/issues/1919" target="_blank" rel="noopener noreferrer">#1919</a>) (NEW) | ⬜ | AI | T11, T12 |
+| Create | `create-320` | Generative model creation: engine selection (<a href="https://github.com/bldrs-ai/Share/issues/1920" target="_blank" rel="noopener noreferrer">#1920</a>) (NEW) | ⬜ | AI | T12 |
 
 ### 3.2 Tracks
 
@@ -151,6 +154,7 @@ B identity, C sharing, D subscribe+ads, E launch checklist); G = growth funnel
 | T9 | Growth funnel & SEO surfaces (NEW) | ⬜ | G | `grow-100`, `grow-200`, `grow-120` |
 | T10 | Agent runtime & conversation store (NEW) | ⬜ | AI (§7) | `assist-310`, `assist-400`, `search-310` |
 | T11 | App sandbox + MCP bridge (NEW) | ⬜ | AI (§7) | `assist-320`, `apps-300`, `apps-310` |
+| T12 | Model edit substrate (NEW) | 🟡 | AI (§7) | `create-300`, `create-310`, `create-320`, §7.4 AI.5 |
 
 
 ## 4. Normalized Epic catalogue
@@ -941,6 +945,34 @@ vision, architecture, and sequencing. Design doc to draft: `design/new/ai-worksp
   stubs behind `?feature=presence`.
 
 
+### 4.12 Create (NEW Epic group — editing and generating models)
+
+User changes the model, not just the view of it: delete, move, duplicate and
+create elements, by hand or through the agent, and generate new parts from a
+prompt. Built as an **op log over the immutable source** (Track T12), so it
+does not wait for an engine write path. Plan:
+`design/new/model-edit.md`.
+
+**Epic `create-300`: Model edit substrate — CRUD over an op log** 🟡 (NEW, <a href="https://github.com/bldrs-ai/Share/issues/1914" target="_blank" rel="noopener noreferrer">#1914</a>)
+- An edited model is its immutable source plus a serialized edit op log,
+  replayed on load — the display controls' "serialize a decision, not a scene
+  diff" (`view-140`). Every op is tagged view-state vs document-mutation.
+- Layers, one story each: L0 mutation-safe batches (<a href="https://github.com/bldrs-ai/Share/issues/1915" target="_blank" rel="noopener noreferrer">#1915</a>), L1 op log +
+  undo/redo (<a href="https://github.com/bldrs-ai/Share/issues/1916" target="_blank" rel="noopener noreferrer">#1916</a>), L2 apply backends (<a href="https://github.com/bldrs-ai/Share/issues/1917" target="_blank" rel="noopener noreferrer">#1917</a>), L3 persistence + replay
+  (<a href="https://github.com/bldrs-ai/Share/issues/1918" target="_blank" rel="noopener noreferrer">#1918</a>). Behind `?feature=edit`.
+
+**Epic `create-310`: Agent write tools** ⬜ (NEW, <a href="https://github.com/bldrs-ai/Share/issues/1919" target="_blank" rel="noopener noreferrer">#1919</a>)
+- Edit ops on the T11 tool surface: the agent writes `create-300` ops, never
+  scene code, so every agent action is undoable, persisted and reviewable like
+  a human edit. Preview-before-apply, permissioning, and retiring BotChat's
+  `new Function` path.
+
+**Epic `create-320`: Generative model creation — engine selection** ⬜ (NEW, <a href="https://github.com/bldrs-ai/Share/issues/1920" target="_blank" rel="noopener noreferrer">#1920</a>)
+- Text/prompt → model, landing through `create-300` `create` ops. Research
+  (<a href="https://github.com/bldrs-ai/Share/issues/1921" target="_blank" rel="noopener noreferrer">#1921</a>) recommends IFC-shaped extrusions first and embedded OpenSCAD
+  WASM second, not CADAM as an engine: `design/new/create-engine.md`.
+
+
 ## 5. Cross-cutting Tracks
 
 Each track has its own long-form design doc. This section is the one-paragraph
@@ -1118,6 +1150,22 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
 - **MVP impact:** None (pivot arc), except the #1386 repair which is
   independently worthwhile.
 - **Doc:** TBD — `design/new/ai-workspace.md` (sandbox/security section).
+
+
+### Track T12: Model edit substrate (NEW)
+
+- **What:** Editing a loaded model as an op log over its immutable source:
+  mutation-safe `BatchedMesh` batches (deleted and reused instance ids,
+  growable side tables, post-load geometry headroom), a pure-data op log with
+  undo/redo, apply backends per render path, and a persisted sidecar replayed
+  on load. IFC/STEP export of edits waits on a Conway writer; nothing else
+  does.
+- **Status:** In flight. Design doc landed; L0 (<a href="https://github.com/bldrs-ai/Share/issues/1915" target="_blank" rel="noopener noreferrer">#1915</a>) in review.
+- **Unblocks:** `create-300`, `create-310`, `create-320`, the §7.4 AI.5 editing
+  loop, and the CRUD half of <a href="https://github.com/bldrs-ai/Share/issues/1913" target="_blank" rel="noopener noreferrer">#1913</a>.
+- **MVP impact:** None (pivot arc), behind `?feature=edit`.
+- **Doc:** `design/new/model-edit.md`,
+  `design/new/create-engine.md`.
 
 
 ## 6. MVP plan
@@ -1431,7 +1479,10 @@ can't destabilise the launch may start earlier behind flags.
 - **AI.5 — Editing loop (north star).** Agent-driven model *modification*
   through the same MCP contract. Gated on the Conway write path (§7.2, §10);
   scope and staging live in `ai-workspace.md` + a Conway-side design doc once
-  the write path is scoped.
+  the write path is scoped. **Update (v0.8):** the Share-side substrate no
+  longer waits on Conway — edits are an op log over the immutable source
+  (Track T12, `create-300`..`create-320`); only IFC/STEP *export* of an edited
+  model still needs the writer.
 
 Each stage is a shippable, demoable increment; AI.2 is the earliest point at
 which the pivot is publicly visible.
@@ -1550,7 +1601,10 @@ without sign-off.
   doesn't. Biggest open technical question in the pivot: scope (parametric edits?
   property edits only at first? geometry?), where the edit log lives, and how
   round-tripping back to IFC/STEP works. Needs a Conway-side design doc; the
-  answer decides how soon the headline capability is honest.
+  answer decides how soon the headline capability is honest. **v0.8:** the edit
+  log is decided — an op log over the immutable source, Share-side
+  (`design/new/model-edit.md`), so editing itself no longer waits on this;
+  what remains is export. Scoping in `design/new/create-engine.md` Part B.
 - **AI pivot — conversation store.** `assist-400` needs shared, realtime-ish
   conversation state. Candidates: GitHub-issue-backed (Notes-style, free, slow),
   Firebase/Firestore (already floated for T2 Phase 6), or a purpose-built
@@ -1669,6 +1723,13 @@ search, inserted as pivot stage AI.1a), scope extensions recorded on the
 drawer level + permalink anchors, ChannelProvider abstraction), and the
 `assist-410` social-broadcast placeholder in §8. Epic tracking issues +
 sub-issues created per that doc's §8.
+
+
+**v0.8 (2026-10-05)** adds the **Create** verb group (§4.12) and Track T12
+(§5): `create-300` model edit substrate (<a href="https://github.com/bldrs-ai/Share/issues/1914" target="_blank" rel="noopener noreferrer">#1914</a>), `create-310` agent write
+tools (<a href="https://github.com/bldrs-ai/Share/issues/1919" target="_blank" rel="noopener noreferrer">#1919</a>), `create-320` generative creation (<a href="https://github.com/bldrs-ai/Share/issues/1920" target="_blank" rel="noopener noreferrer">#1920</a>), all new IDs in the
+300 band. The editing loop (§7.4 AI.5) no longer waits on Conway for anything
+but export.
 
 
 ## ID lineage
