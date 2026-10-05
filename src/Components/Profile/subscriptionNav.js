@@ -1,4 +1,5 @@
 import {captureException} from '@sentry/react'
+import {FUNNEL_EVENTS, gtagFunnelEvent} from '../../privacy/analytics'
 
 
 /**
@@ -24,6 +25,10 @@ import {captureException} from '@sentry/react'
  * @param {boolean} [args.useMock] Cypress/Playwright builds, where the
  *   `/subscribe/` page is an MSW stub that has to be written into the
  *   document rather than navigated to
+ * @param {string} [args.from] Which upgrade entry point was clicked
+ *   ('profile' | 'export' | 'quota'), reported as the `from` param of the
+ *   funnel's begin_checkout event. Every caller must name itself; 'unknown'
+ *   showing up in GA means one doesn't.
  * @return {Promise<void>}
  */
 export async function goToSubscription({
@@ -32,7 +37,24 @@ export async function goToSubscription({
   isDay,
   getAccessTokenSilently,
   useMock = false,
+  from = 'unknown',
 }) {
+  // The funnel's "Upgrade click" step (analytics#FUNNEL_EVENTS). Emitted
+  // here, the one door every upgrade CTA goes through, so each path counts
+  // exactly once and a new CTA can't be added uncounted. Both branches
+  // count: a known Stripe customer reaching the portal may be a lapsed
+  // subscriber resubscribing — but may also be a current one managing
+  // billing, so `destination` lets a report keep the two apart.
+  //
+  // `transport_type: 'beacon'` because both branches end in a full-page
+  // navigation (the checkout one immediately below), which would otherwise
+  // cancel a still-queued collect request — same reasoning as
+  // analytics#startModelEngagement's flush on pagehide.
+  gtagFunnelEvent(FUNNEL_EVENTS.BEGIN_CHECKOUT, {
+    from,
+    destination: stripeCustomerId ? 'portal' : 'checkout',
+    transport_type: 'beacon',
+  })
   if (stripeCustomerId) {
     try {
       const token = await getAccessTokenSilently({
@@ -65,7 +87,9 @@ export async function goToSubscription({
   }
 
   const themeParam = isDay ? 'light' : 'dark'
-  const subscribeUrl = `/subscribe/?theme=${themeParam}&userEmail=${userEmail}`
+  // Encoded: a `+` in an address would otherwise decode as a space on the
+  // subscribe page (URLSearchParams), prefilling the wrong email.
+  const subscribeUrl = `/subscribe/?theme=${themeParam}&userEmail=${encodeURIComponent(userEmail || '')}`
   if (useMock) {
     try {
       const res = await fetch(subscribeUrl)

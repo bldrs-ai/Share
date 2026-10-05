@@ -5,6 +5,7 @@ import {Button, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, 
 import * as Sentry from '@sentry/react'
 import {useAuth0} from './Auth0/Auth0Proxy'
 import {APP_METADATA_CLAIM} from './Auth0/appMetadata'
+import useLoginTracking from './Auth0/useLoginTracking'
 import PopupAuth from './Components/Auth/PopupAuth'
 import PopupCallback from './Components/Auth/PopupCallback'
 import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
@@ -17,6 +18,7 @@ import Privacy from './pages/Privacy'
 import TOS from './pages/TOS'
 import BlogRoutes from './pages/blog/BlogRoutes'
 import {initializeOctoKitAuthenticated, initializeOctoKitUnauthenticated} from './net/github/OctokitExport'
+import {trackSubscriptionFromToken} from './privacy/subscriptionTracking'
 import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
@@ -54,6 +56,10 @@ export default function BaseRoutes({testElt = null}) {
   const setIsOpfsAvailable = useStore((state) => state.setIsOpfsAvailable)
   const setAppMetadata = useStore((state) => state.setAppMetadata)
   const theme = useShareTheme()
+  // Here because BaseRoutes is the one component mounted under the Auth0
+  // provider on every route, so a sign-in completes into a mounted listener
+  // wherever the user is.
+  useLoginTracking()
 
   // State for reauthentication modal.
   const [reauthModalOpen, setReauthModalOpen] = useState(false)
@@ -73,8 +79,18 @@ export default function BaseRoutes({testElt = null}) {
    * the background fresh-claims pass; idempotent, so processing the same
    * token twice is harmless. useCallback (all deps are stable setters) so
    * the auth effect below can depend on it without re-firing per render.
+   *
+   * `isFresh` marks the fresh-claims pass's token. Only the subscription
+   * tracker reads it: a settled status on a fresh token resets its
+   * per-user marker, one on a possibly-stale cached token must not
+   * (subscriptionTracking.js). The cached pass passes it through `.then`
+   * as a single arg, so it defaults to false there. The fresh pass runs once
+   * per page load, so it has usually already seen the pending status by the
+   * time the user completes the reauth modal's popup; the settled token that
+   * popup mints is reported fresh by ProfileControl's `refreshAuth` handler,
+   * which never comes through here.
    */
-  const processAccessToken = useCallback((token) => {
+  const processAccessToken = useCallback((token, {isFresh = false} = {}) => {
     if (token === '') {
       initializeOctoKitUnauthenticated()
       setAccessToken(token)
@@ -83,6 +99,14 @@ export default function BaseRoutes({testElt = null}) {
 
     const decodedToken = jwtDecode(token)
     const appData = decodedToken[APP_METADATA_CLAIM]
+
+    // Funnel "Subscribed" / lapse events. Before the short circuits below,
+    // which these statuses always take. Safe to call on every pass: this
+    // function runs several times per token (see above), and the tracker
+    // dedupes per user + status across passes, reloads and tabs.
+    // Fire-and-forget: the cross-tab claim resolves asynchronously and
+    // nothing below depends on it.
+    trackSubscriptionFromToken(token, {isFresh})
 
     // Reauth-modal short circuits: show the modal and stop — leave
     // identity/token state as it was.
@@ -176,19 +200,6 @@ export default function BaseRoutes({testElt = null}) {
         cacheMode: 'on',
         useRefreshTokens: true,
       }
-      getAccessTokenSilently(tokenFetchOpts)
-        .then(processAccessToken)
-        .catch((err) => {
-          if (err.error === 'invalid_grant') {
-            logout({returnTo: window.location.origin})
-          } else if (err.error !== 'login_required') {
-            throw err
-          }
-        })
-        .finally(() => {
-          setIsAuthResolved(true)
-        })
-
       // Background fresh-claims pass. Cached tokens carry JWT claims frozen
       // at mint time, so a boot that only reads the cache would miss
       // anything set server-side since: the Stripe webhook flipping
@@ -199,19 +210,66 @@ export default function BaseRoutes({testElt = null}) {
       // exactly what cacheMode:'off' used to do — but off the load-blocking
       // path: it doesn't gate isAuthResolved, and processAccessToken
       // re-applies whatever it learns when it lands.
-      if (!freshClaimsRequestedRef.current) {
+      const startFreshClaimsPass = () => {
+        if (freshClaimsRequestedRef.current) {
+          return
+        }
         freshClaimsRequestedRef.current = true
         getAccessTokenSilently({...tokenFetchOpts, cacheMode: 'off'})
-          .then(processAccessToken)
+          .then((token) => processAccessToken(token, {isFresh: true}))
           .catch((err) => {
             if (err.error === 'invalid_grant') {
               logout({returnTo: window.location.origin})
             }
-            // Anything else is non-fatal here: the cached-token pass above
+            // Anything else is non-fatal here: the cached-token pass
             // already established a working session; this pass only exists
             // to refresh claims.
           })
       }
+
+      // The fresh pass is started only once the cached call has SETTLED,
+      // never alongside it. auth0-spa-js (2.0.2, getTokenSilently)
+      // coalesces concurrent calls through one in-flight promise per key
+      // `${clientId}::${audience}::${scope}` — cacheMode is not part of the
+      // key — so a cacheMode:'off' call issued while this cacheMode:'on'
+      // call is pending just receives the cached token. That silently
+      // defeated the pass (no refresh grant, so no pendingReauth flip and
+      // no invalid_grant logout on boot) and made it report a cached token
+      // as `isFresh`. Don't "simplify" this back into a parallel call.
+      // The SDK drops the key in a .finally on that same promise, so by the
+      // time the handlers below run the key is free again.
+      //
+      // Chained after the .finally, so it can't delay isAuthResolved; and
+      // the cached pass is processed first, so the fresh claims are the
+      // ones left applied. Skipped when the cached call says the session
+      // is gone — login_required (signed out) or invalid_grant (logout
+      // already under way) — where a forced refresh could only fail the
+      // same way; the parallel call used to coalesce into that same
+      // failure, so this is the old net behavior. Any other error is
+      // rethrown as before and also skips it. The ref claim is inside
+      // startFreshClaimsPass, so a navigation re-run whose cached call
+      // succeeds can still start the page's one pass.
+      getAccessTokenSilently(tokenFetchOpts)
+        .then((token) => {
+          processAccessToken(token)
+          return true
+        })
+        .catch((err) => {
+          if (err.error === 'invalid_grant') {
+            logout({returnTo: window.location.origin})
+          } else if (err.error !== 'login_required') {
+            throw err
+          }
+          return false
+        })
+        .finally(() => {
+          setIsAuthResolved(true)
+        })
+        .then((isSessionLive) => {
+          if (isSessionLive) {
+            startFreshClaimsPass()
+          }
+        })
     }
   }, [
     appPrefix,

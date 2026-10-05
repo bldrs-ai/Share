@@ -22,7 +22,13 @@ import ExportSection from './ExportSection'
 const mockUseStore = useStore
 
 
-jest.mock('../../privacy/analytics', () => ({gtagEvent: jest.fn()}))
+// Only gtagEvent is stubbed; the rest stays real because modules this one
+// pulls in (ProfileControl → privacy/subscriptionTracking) read
+// FUNNEL_EVENTS at import time.
+jest.mock('../../privacy/analytics', () => ({
+  ...jest.requireActual('../../privacy/analytics'),
+  gtagEvent: jest.fn(),
+}))
 // The size line's source is an OPFS header read (`export/artifactSizes.js`),
 // which needs a worker and a real artifact; the component's job is what it
 // does with the two numbers.
@@ -648,7 +654,7 @@ describe('ExportSection', () => {
 
     fireEvent.click(getByTestId('gated-help-action'))
     expect(goToSubscription).toHaveBeenCalledWith(
-      expect.objectContaining({stripeCustomerId: null, userEmail: 'a@b.c'}))
+      expect.objectContaining({stripeCustomerId: null, userEmail: 'a@b.c', from: 'export'}))
     expect(mockRun).not.toHaveBeenCalled()
   })
 

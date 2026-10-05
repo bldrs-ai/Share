@@ -192,6 +192,45 @@ describe('Analytics', () => {
   })
 
 
+  // The funnel events (bizdev dashboard funnel card) join on open_cid the
+  // same way real_model_open does; the helper is what guarantees that.
+  describe('gtagFunnelEvent', () => {
+    beforeEach(() => {
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+      Analytics.setIsAllowed(true)
+      window.gtag = jest.fn()
+    })
+
+    afterEach(() => {
+      delete window.gtag
+    })
+
+    test('attaches the prefixed client id as open_cid', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.gtagFunnelEvent(Analytics.FUNNEL_EVENTS.LOGIN, {method: 'github'})
+      expect(window.gtag).toHaveBeenCalledWith(
+        'event', 'login', {method: 'github', open_cid: 'cid.1871520000.1754700000'})
+    })
+
+    test('omits open_cid, rather than sending a blank, when no id resolved', () => {
+      Analytics.gtagFunnelEvent(Analytics.FUNNEL_EVENTS.SUBSCRIPTION_STARTED)
+      expect(window.gtag).toHaveBeenCalledWith('event', 'subscription_started', {})
+    })
+
+    test('event names are the ones the dashboard queries', () => {
+      expect(Analytics.FUNNEL_EVENTS).toEqual({
+        REAL_MODEL_OPEN: 'real_model_open',
+        QUOTA_LIMIT_REACHED: 'quota_limit_reached',
+        LOGIN: 'login',
+        BEGIN_CHECKOUT: 'begin_checkout',
+        SUBSCRIPTION_STARTED: 'subscription_started',
+        SUBSCRIPTION_ENDED: 'subscription_ended',
+      })
+    })
+  })
+
+
   /*
    * Sentry's half of the same id (issue #1767). Bare, because the
    * `cid.` prefix only exists to stop GA4 typing the value as a float,
