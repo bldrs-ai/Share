@@ -1502,7 +1502,7 @@ describe('viewer/three/IfcIsolator', () => {
         ['residency hides, isolation shows', 0, 100, false],
         ['residency shows, isolation hides', 0.99, 300, true],
         ['residency shows, isolation hides', 0.99, 300, false],
-      ])('%s a paste: hidden, and released to residency (residency subscribed first: %s)',
+      ])('%s a paste: hidden, and released to residency (target %s, product %s, residency subscribed first: %s)',
         (_case, target, product, residencyFirst) => {
           const {iso, mesh} = setupBatchedIsolator()
           iso.viewer.getSelectedIds = jest.fn(() => [100])
