@@ -284,8 +284,15 @@ Stripe, whatever happened to the events. It catches what the webhook can't:
 It works in two directions:
 1. **Demote.** An Auth0 user marked PRO whose Stripe customer isn't entitled
    gets `freePendingReauth`. A PRO user with **no** `stripeCustomerId` is
-   reported as unverifiable and never demoted, because that is what a manual
-   (comped) grant looks like.
+   never demoted, because that is what a manual (comped) grant looks like.
+   **To comp someone deliberately,** add `"comped": true` to their
+   app_metadata in the Auth0 dashboard (keep `"subscriptionStatus":
+   "sharePro"`, no `stripeCustomerId`). The sweep then lists them under
+   `comped` with no Sentry warning. Without the marker (it must be exactly
+   `true`, with status `sharePro`) they're `unverifiable` and do warn: an
+   unexpected grant, or a bug that writes PRO without a link, should reach
+   someone. A comp still at `shareProPendingReauth` has no paid access yet
+   (only `sharePro` gets it), so it warns until the user reauthenticates.
 2. **Promote.** A Stripe customer with an entitling Pro subscription whose
    Auth0 user isn't PRO gets `shareProPendingReauth`, with the customer linked.
    The user is found by `stripeCustomerId`, falling back to the customer's

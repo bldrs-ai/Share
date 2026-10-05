@@ -484,5 +484,38 @@ describe('reconcile-subscriptions', () => {
       expect(summary.scanned).toEqual({proUsers: 1, entitledCustomers: 1})
       expect(Sentry.captureMessage).not.toHaveBeenCalled()
     })
+
+    // A deliberate comp (`"comped": true`, set by hand in Auth0) is expected
+    // state: listed, never demoted, and no daily Sentry warning.
+    it('lists a Pro user marked comped under `comped`, never demotes them, and stays quiet in Sentry', async () => {
+      mockWorld({proUsers: [{user_id: 'auth0|comp', app_metadata: {subscriptionStatus: 'sharePro', comped: true}}]})
+
+      const {summary} = await sweep()
+
+      expect(summary.comped).toEqual(['auth0|comp'])
+      expect(summary.unverifiable).toEqual([])
+      expect(axios.patch).not.toHaveBeenCalled()
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+    })
+
+    // Unmarked, the same state may be a grant nobody meant or a bug that wrote
+    // PRO without a link, so it stays loud. The marker must be exactly `true`.
+    // A comp still at shareProPendingReauth has no paid access yet (only
+    // `sharePro` gets it), so it isn't a settled comp either (Codex on #1911).
+    it.each([
+      ['no marker', undefined, 'sharePro'],
+      ['the string "true"', 'true', 'sharePro'],
+      ['false', false, 'sharePro'],
+      ['true, but the status is shareProPendingReauth', true, 'shareProPendingReauth'],
+    ])('keeps a Pro user without a Stripe customer loud when the comped marker is %s', async (label, comped, subscriptionStatus) => {
+      mockWorld({proUsers: [{user_id: 'auth0|nolink', app_metadata: {subscriptionStatus, comped}}]})
+
+      const {summary} = await sweep()
+
+      expect(summary.comped).toEqual([])
+      expect(summary.unverifiable).toEqual([{user: 'auth0|nolink', reason: 'pro_without_stripe_customer'}])
+      expect(axios.patch).not.toHaveBeenCalled()
+      expect(Sentry.captureMessage).toHaveBeenCalledWith(expect.stringContaining('pro_without_stripe_customer'), 'warning')
+    })
   })
 })
