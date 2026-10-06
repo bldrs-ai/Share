@@ -1,6 +1,6 @@
 # AI workspace — runtime, providers, credits, sovereignty (AI.0)
 
-**Status:** v0.1 draft (2026-10-06). Story
+**Status:** v0.2 draft (2026-10-06; §12 rewritten after Jev research). Story
 [#1671](https://github.com/bldrs-ai/Share/issues/1671) under epic `assist-310`
 [#1659](https://github.com/bldrs-ai/Share/issues/1659). Roadmap §7.4 AI.0,
 Tracks T10 and T11.
@@ -37,8 +37,9 @@ Share code is cited as `path:line` at `main` @ `9577fdd`.
 
 - **Analysis.** Clash, quantity takeoff, code checks. Same loop, more tools.
 - **Generative CAD.** Routed to Create through a remote tool provider (§11).
-- **Generative UI (Jev).** Text → UI in the tray and for toolbelt apps.
-  Placeholder pending research (§12).
+- **Jev and generative UI.** Jev is a fast decision model (intent layer,
+  router, tool-call gate), not a UI generator. Generative UI in the tray is
+  a separate declarative-spec renderer (§12).
 - **Write tools.** `create-310` agent edits through the `create-300` op log
   ([model-edit.md](model-edit.md)).
 - **Toolbelt apps over postMessage MCP** (`assist-320`). Its sandbox and
@@ -66,6 +67,7 @@ Share code is cited as `path:line` at `main` @ `9577fdd`.
 | D11 | Share's agent is the orchestrator. Create plugs in as a **remote tool provider** in the same registry. Its LLM usage draws on the same provider abstraction and ledger | Create is a headless kernel with no LLM of its own. One loop and one bill |
 | D12 | Flag `assist`, with `bot` aliased via `FEATURE_IMPLICATIONS` during the port, then removed | Matches #1659/#1672. Fixes the `convo` drift |
 | D13 | Port `?feature=bot`: keep the tray, slice, bubbles, MSW mocks and network guard. Evolve the client and settings. Delete the eval and the plaintext key | The scope outgrew the prototype, but its UI and test scaffolding are sound |
+| D14 | *Proposed, pending product-owner confirmation.* **Jev: intent/command layer + router, through the relay; generative UI is separate (declarative renderer)** | Jev is a non-generative decision model: sub-second, near-free routing of simple commands, escalating to the LLM below a confidence threshold. UI generation needs an LLM and a spec renderer, not Jev |
 
 
 ## 3. Architecture
@@ -787,43 +789,83 @@ BYOK user's key pays for it. That is the reason to keep the loop in Share.
 - Do Create's verification checks surface in the transcript?
 
 
-## 12. Generative UI (Jev) — placeholder
+## 12. Jev (System One decisions) and generative UI
 
-> **TODO (pending research):** the coordinator is collecting research on
-> Jev (typesafe.ai, "System One models and Jev"). This section will be
-> amended when it lands. Nothing below is a decision.
+**What Jev is.** TypeSafe's first "System One" model: a structured decision
+model, **not an LLM and not a UI generator**. You send application `state`
+plus typed questions (Choice: which option? Score: where on an ordered scale?
+Noul: does it hold?) and get a typed answer with per-option probabilities and
+a confidence. OpenRouter's FAQ: "Is Jev an LLM? No. ... Jev doesn't return
+text, reasoning, or explanations"
+([OpenRouter Jev docs](https://openrouter.ai/docs/guides/community/jev),
+**live check 2026-10-06**). No streaming, no tools, nothing executes. An
+earlier draft of this section read it as text → UI; that was wrong.
 
-**Intent.** Use Jev for **text → UI**: the assistant answers with generated
-UI rendered in the tray (a schedule table, a filter panel, a small form that
-drives viewer tools), and toolbelt apps (`assist-320`) are authored as
-generated UI rather than hand-written code.
+- **Access.** `typesafe/jev-1.13` (`~typesafe/jev-latest`) via the OpenRouter
+  Decisions API `POST /api/alpha/decisions` (or System One,
+  `/api/v1/systemone`), same OpenRouter key. Not chat-completions compatible.
+  `@typesafe-ai/sdk` is MIT (0.6.0).
+- **Cost and maturity.** $0.042 per M input tokens, output free, 32k context.
+  Early access began 2026-09-15 and the route is `/alpha/`. The vendor's
+  70–500 ms latency is **UNVERIFIED**. Probabilities vary slightly between
+  calls, so thresholds go on bands.
+- **Not `typesafe/jev-router`**, an OpenRouter router model that uses Jev to
+  pick the LLM and reasoning effort per request.
 
-**Seams it touches:**
+"Text → UI" can mean two things. Both are recorded: the first is where Jev
+earns a place, the second does not use Jev.
 
-- **Tool surface (§9).** Generated UI that acts on the model must call the
-  same registry the agent calls, never `ShareViewer` or the store directly.
-  Otherwise it reopens the hole the bot's `new Function` eval had.
-- **Sandbox (`assist-320`, §16).** Where generated UI runs, and what it may
-  touch.
-- **Providers and credits (§5–§8).** If Jev needs its own model calls, they
-  should go through the same `Provider` abstraction and ledger, as with
-  Create (§11).
+### 12.1 Jev as intent layer, router and gate (proposed D14)
 
-**The sandboxing question to answer first: declarative spec or executable
-code?**
+1. **Intent/command layer (recommended first use).** Typed text → viewer
+   action. "Hide the walls" is a Choice over registry tool names, plus
+   Choice/Score over arguments (IFC type, level): sub-second and near-free,
+   which matters most on the anonymous tier (§6). Below a confidence
+   threshold it **escalates to the LLM agent loop**. It dispatches through
+   the same MCP-shaped registry (§9), never `ShareViewer` directly.
+2. **Router at the top of the turn.** Quick command, analysis question → LLM
+   agent, generative CAD → Create (§11). `typesafe/jev-router` is the
+   off-the-shelf model-picker variant, possibly an "auto" entry in the Pro
+   picker (§6).
+3. **Tool-call gate** for future write tools (`create-310`), per OpenRouter's
+   cookbook "Gate Agent Tool Calls with Jev"; fits model-edit.md §9.
 
-- **Declarative spec** (a typed component tree that Share renders from a
-  fixed component set). It can render in the tray with no iframe. Its
-  actions bind to registry tool names, and the spec can be validated
-  against a schema before render. The ceiling on expressiveness is the
-  component set.
-- **Executable code** (generated JS/JSX). It is far more expressive, but it
-  must run in the `assist-320` sandboxed iframe over postMessage MCP, with
-  per-app tool grants. That makes it gated on #1386 and the deferred
-  sandbox design.
+**Placement.**
 
-What Jev actually emits decides which of these it is, and therefore whether
-it can ship with `assist-310` or waits for `assist-320`.
+- **Hosted:** through the relay, which needs a **new route** (the Decisions
+  API isn't chat-completions). Credits come from the same ledger (§7).
+- **BYOK:** no Bldrs relay, so skip Jev and go straight to the LLM, or use it
+  with the user's OpenRouter-PKCE key (D6).
+- **Browser CORS** is **UNVERIFIED** (OpenRouter says keep the key
+  server-side). It is a spike item.
+- **Fail open.** Alpha and nondeterministic, so every miss falls back to the
+  LLM loop (the write gate fails closed, to a human confirm).
+
+**Sovereignty (§10).** The `state` sent to Jev counts as "what the AI can
+see", like tool results: user text, names, types and counts, never geometry.
+The disclosure table gains a Jev row when this ships.
+
+### 12.2 Generative UI proper (separate, not Jev)
+
+The assistant rendering a quantities table, filter panel or form in the tray
+needs a generative model, so it rides the LLM layer (§5–§8).
+
+- **Declarative spec, in the tray (recommended).** The LLM emits a spec
+  against a **Share-owned catalog of MUI components**. Actions bind to
+  **registry tool names** (§9). It renders inline with no iframe because
+  nothing executes; unknown types are rejected and props are allow-listed.
+- **Lead candidate: json-render** (`@json-render/core`, Apache-2.0, 0.21.0,
+  pre-1.0; npm registry, 2026-10-06). Zod catalog validation maps onto MUI.
+- **Alternatives:** Google A2UI (declarative protocol; npm package not
+  checked), Thesys C1 (hosted vendor in the LLM path, bypasses the relay and
+  BYOK), AI SDK generative UI (RSC `streamUI` doesn't fit a Vite SPA),
+  CopilotKit/AG-UI (large, overlaps our loop). Partial-spec streaming in
+  json-render or A2UI is **UNVERIFIED**.
+- **Executable generated code** stays in the `assist-320` iframe sandbox
+  (§16), gated on #1386.
+
+The spec renderer can ship with `assist-310`; the code path waits for
+`assist-320`.
 
 
 ## 13. D12 + D13 — Flag and bot port
@@ -928,7 +970,8 @@ Dependencies are in brackets.
 | N8 | model selector: free-models opt-in (all tiers) + Pro picker | "Free models (experimental)" choice with its disclosure on every tier; Pro catalog via relay, priced list, unavailable-under-deny handling | N7, N4 |
 | N9 | CSP `connect-src` hardening | Site-wide CSP, Report-Only first | — (before "remember key" leaves the flag) |
 | N10 | Create seam contract | Interface + doc only (§11), agreed with Create's E1 MCP surface | #1674 |
-| N11 | assist: generative UI via Jev (text→UI) | **Placeholder, pending research (§12).** Generated UI in the tray and for toolbelt apps, bound to registry tools; settle declarative spec vs executable code first | #1674 (tool surface), `assist-320` sandbox seam (§16) |
+| N11 | assist: Jev intent layer + router (System One decisions) | §12.1. Relay route for the Decisions API, `decide()` client, intent Choice over registry tool names with a confidence threshold and LLM escalation. Includes a **Jev-vs-LLM accuracy/latency eval on simple commands** (reuses N3's harness) and the CORS and measured-latency spikes | #1674 (tool registry), N6 (relay) |
+| N12 | assist: generative UI — declarative spec renderer (json-render + MUI catalog) | §12.2. Share-owned MUI catalog, spec validation, in-tray render, actions bound to registry tool names. Executable code stays with `assist-320` | #1674 (tool registry) |
 
 **Why these cuts.**
 
@@ -980,9 +1023,8 @@ because it rides the quota and billing rails.
    account's free-model training setting (§6). Is that acceptable, given
    that it applies only to requests the user opted into, or that overflowed?
    And the per-identity free-model request cap (placeholder: 30 a day).
-10. **Jev (§12).** Pending the research: does Jev emit a declarative spec
-    or executable code, and does generative UI ship with `assist-310` or
-    wait for the `assist-320` sandbox?
+10. **Jev (§12).** Confirm the intended use of Jev (intent layer, router,
+    gate) and whether generative UI should ship with `assist-310` or later.
 
 
 ## 16. Deferred (named so they are not lost)
