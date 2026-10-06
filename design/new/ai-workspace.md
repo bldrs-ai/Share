@@ -1,7 +1,8 @@
 # AI workspace — runtime, providers, credits, sovereignty (AI.0)
 
 **Status:** v0.3 draft (2026-10-06; §12 rewritten after Jev research; D7
-confirmed by spike #1927). Story
+confirmed by spike #1927; D3 allowlist, free list and D14 calibration
+set by eval #1929). Story
 [#1671](https://github.com/bldrs-ai/Share/issues/1671) under epic `assist-310`
 [#1659](https://github.com/bldrs-ai/Share/issues/1659). Roadmap §7.4 AI.0,
 Tracks T10 and T11.
@@ -18,7 +19,8 @@ threads, chips). This doc owns the *runtime* plan.
 **Evidence.** External facts carry the URL they were read from. Facts
 checked from this session's network carry **(live check 2026-10-06)**.
 Facts measured by the client-library spike carry **(spike #1927,
-2026-10-06)**; its results are posted on #1927.
+2026-10-06)**; its results are posted on #1927. Facts measured by the model
+eval carry **(eval #1929, 2026-10-06)**; results on #1929.
 Anything not verified is marked **UNVERIFIED** and becomes a spike item (§14).
 Share code is cited as `path:line` at `main` @ `9577fdd`.
 
@@ -58,8 +60,8 @@ Share code is cited as `path:line` at `main` @ `9577fdd`.
 | # | Decision | One-line rationale |
 |---|---|---|
 | D1 | Agent loop runs **in the browser**. The LLM call is the only remote hop, over one of two transports: **BYOK** (browser → provider) or **Hosted** (browser → Bldrs relay → OpenRouter) | The tools are in-page (viewer, store). A server loop would need the model, which breaks sovereignty |
-| D2 | Hosted transport = thin streaming relay `ai-chat`. It checks the tier, enforces the allowlist and `max_tokens`, forces `data_collection: "deny"` (except on the opt-in free-models path, D3), meters `usage.cost` (including after a client abort, §5), and never logs bodies. Vehicle (Edge vs v2 Function) is a spike. No per-user OpenRouter keys for now | Key custody and quota enforcement need a server. Minted browser keys are extractable, Bldrs is liable for them, and anonymous users can't get one |
-| D3 | Budgets are **USD-cost credits** from `usage.cost`. The **default** for anonymous and free tiers is a curated allowlist of **cheap paid** tool models with `data_collection: "deny"`. Every tier also gets an opt-in **"Free models (experimental)"** choice (`:free`, zero credits, labelled honestly), which is also the anonymous overflow when the spend breaker trips. Pro gets a live, priced model picker | Premium models must burn faster. `:free` caps are per account (~200–300 agent turns a day for everyone), and free endpoints may log or train on prompts, so free models can't be the default but are worth offering |
+| D2 | Hosted transport = thin streaming relay `ai-chat`. It checks the tier, enforces the allowlist and `max_tokens`, forces `data_collection: "deny"` (except for the optional NVIDIA entry on the free-models path, D3), meters `usage.cost` (including after a client abort, §5), and never logs bodies. Vehicle (Edge vs v2 Function) is a spike. No per-user OpenRouter keys for now | Key custody and quota enforcement need a server. Minted browser keys are extractable, Bldrs is liable for them, and anonymous users can't get one |
+| D3 | Budgets are **USD-cost credits** from `usage.cost`. The **default** for anonymous and free tiers is a curated allowlist of **cheap paid** tool models with `data_collection: "deny"`. Every tier also gets an opt-in **"Free models (experimental)"** choice (`:free`, zero credits, labelled honestly), which is also the anonymous overflow when the spend breaker trips. Pro gets a live, priced model picker | Premium models must burn faster. `:free` caps are per account (≈300 agent turns a day for everyone, eval #1929, 2026-10-06), and availability is volatile, so free models can't be the default but are worth offering. Default allowlist (eval #1929): `qwen/qwen3.7-flash` → `deepseek/deepseek-v4-flash` → `openai/gpt-oss-120b`, measured **$0.00015 a turn** on the default |
 | D4 | Metering ledger in **Netlify Blobs** (or similar), keyed by Auth0 `sub` or anonymous id, in day buckets. Auth0 `app_metadata` stays tier-only | Per-message writes don't fit a ~16 KB, last-write-wins, Management-API store |
 | D5 | Anonymous identity = relay-issued **HMAC token**, plus an IP-hash rate limit and a global daily spend breaker | There is no server identity for anonymous users today. The free AI tier is the funnel top and needs a bounded cost |
 | D6 | **BYOK** for Anthropic (native), OpenAI, Gemini (native), xAI, and OpenRouter via **OAuth PKCE**. Keys are session-only by default, with opt-in "remember", and never reach Bldrs | All five pass CORS preflight from bldrs.ai (live). BYOK users skip Bldrs credits entirely |
@@ -70,7 +72,7 @@ Share code is cited as `path:line` at `main` @ `9577fdd`.
 | D11 | Share's agent is the orchestrator. Create plugs in as a **remote tool provider** in the same registry. Its LLM usage draws on the same provider abstraction and ledger | Create is a headless kernel with no LLM of its own. One loop and one bill |
 | D12 | Flag `assist`, with `bot` aliased via `FEATURE_IMPLICATIONS` during the port, then removed | Matches #1659/#1672. Fixes the `convo` drift |
 | D13 | Port `?feature=bot`: keep the tray, slice, bubbles, MSW mocks and network guard. Evolve the client and settings. Delete the eval and the plaintext key | The scope outgrew the prototype, but its UI and test scaffolding are sound |
-| D14 | **DECIDED (product owner, 2026-10-06).** **Jev is the fast intent/command layer: natural language → viewer action, dispatched through the registry, promoted to the LLM agent loop when confidence is low.** Through the relay. Router and tool-call gate are follow-on uses. Generative UI is separate and later (declarative renderer) | Jev is a non-generative decision model: sub-second, near-free for simple commands, with a confidence value that says when to escalate. UI generation needs an LLM and a spec renderer, not Jev |
+| D14 | **DECIDED (product owner, 2026-10-06).** **Jev is the fast intent/command layer: natural language → viewer action, dispatched through the registry, promoted to the LLM agent loop on low confidence, a free-text or numeric argument, or a multi-step utterance.** Through the relay. Router and tool-call gate are follow-on uses. Generative UI is separate and later (declarative renderer) | Jev is a non-generative decision model: ~210 ms and near-free for one-step commands over enumerable arguments, 97% exact first action. Its confidence did not separate its errors (eval #1929), so Undo and the visible "did X" echo are the safety net, not a threshold (§12.1). UI generation needs an LLM and a spec renderer, not Jev |
 
 
 ## 3. Architecture
@@ -103,7 +105,7 @@ Share code is cited as `path:line` at `main` @ `9577fdd`.
    Transport B: Hosted (Auth0 Bearer or anon token)           │
      └─► /.netlify/…/ai-chat (relay, §5) ─► openrouter.ai ◄───┘
            tier · allowlist · max_tokens · data_collection:deny
-           (opt-in free models: no deny, zero credits)
+           (opt-in free models: deny kept except NVIDIA, zero credits)
            · usage.cost → ledger (Blobs) · no body logs
 ```
 
@@ -165,10 +167,12 @@ breaks the sovereignty boundary.
      that "store user data non-transiently and may train on it"
      ([provider selection](https://openrouter.ai/docs/guides/routing/provider-selection.md)).
      `require_parameters` makes `tools` a hard routing requirement, not a
-     soft preference (same page). **The one exception** is the opt-in
-     free-models choice (§6), which is sent without `deny`, because deny
-     would empty most of the free pool. That is exactly what its label
-     discloses.
+     soft preference (same page). **The one exception** is the
+     optional NVIDIA entry on the free-models list (§6), sent without
+     `deny` because its free endpoints answer 404 "No endpoints found
+     matching your data policy" under it (eval #1929, 2026-10-06). The
+     rest of the free list keeps `deny`. The relay picks the policy per
+     model from the free-list config, and the entry's label discloses it.
    - Attribution headers `HTTP-Referer` and `X-OpenRouter-Title`
      ([app attribution](https://openrouter.ai/docs/app-attribution.md)).
 4. **Streams** upstream SSE straight through to the client.
@@ -263,28 +267,30 @@ identified, paying, and bounded by a `monthly` key limit.
 ## 6. D3 — Tiers and credits
 
 **Unit.** Budgets are in USD cost as reported by OpenRouter's `usage.cost`,
-not in messages. One Opus 5.5 turn costs about 100× a gpt-oss-120b turn
+not in messages. One Opus 5.5 turn costs over 100× a gpt-oss-120b turn
 (table below), so a message count would either starve Pro or bankrupt the
 picker. The UI can show the budget as a percentage or as abstract "credits"
 (naming is an open question, §15). The ledger stores integer micro-USD.
 
 **Model choice for anonymous and free tiers.** There are three paths:
 
-1. **Default: cheap paid models.** A curated allowlist of 3–5 cheap,
-   tool-capable paid models, always sent with `data_collection: "deny"`.
-   The free/cheap model eval (spike #1929) picks the actual list.
+1. **Default: cheap paid models.** A curated allowlist, always sent with
+   `data_collection: "deny"`. Eval #1929 (below) picked it:
+   `qwen/qwen3.7-flash`, falling back to `deepseek/deepseek-v4-flash`,
+   then `openai/gpt-oss-120b` (four serving providers, so the
+   multi-provider availability hedge; qwen and deepseek each had one).
 2. **Opt-in "Free models (experimental)".** A choice in the model selector
    on every tier, anonymous included. It routes to `openrouter/free` (the
    free-models router, [FAQ](https://openrouter.ai/docs/faq.md)) or to a
-   curated `:free` list from #1929, and **costs zero credits**. The label says
-   plainly that it may be rate-limited or unavailable, and that upstream
-   providers may log or train on prompts. Choosing it shows the same
-   disclosure as §10's free-models row. These requests are sent without
-   `deny`, the one hosted exception (§5).
+   curated `:free` list (below), and **costs zero credits**. The label says
+   plainly that it may be rate-limited or unavailable. Those requests keep
+   `deny`, so the list needs no training disclosure. The one hosted
+   exception is the optional NVIDIA entry, sent without `deny` (§5), which
+   shows §10's free-models disclosure before first use.
 3. **Overflow.** When the global anonymous spend breaker trips (§7), the
    relay degrades anonymous traffic to the free-models path instead of
    refusing it. An in-tray notice says why ("free assistant busy, switched
-   to free models, which may log prompts; sign in for the standard
+   to free models, which may be slower; sign in for the standard
    models"). If the free pool is also exhausted (a 429 from OpenRouter, or
    `free_model_daily_requests.remaining` at 0 on `GET /api/v1/key`), the
    relay refuses with a sign-in prompt.
@@ -297,8 +303,10 @@ picker. The UI can show the budget as a percentage or as abstract "credits"
   additional accounts or API keys will not affect your rate limits, as we
   govern capacity globally"
   ([limits](https://openrouter.ai/docs/api/reference/limits.md)). An agent
-  turn is ~3–5 calls, so one Bldrs account gives about **200–300 turns a
-  day, shared by every free-model user**. ToS §7 forbids multiple accounts
+  turn is ≈3.3 requests (measured, eval #1929, 2026-10-06), so one Bldrs
+  account gives about **300 turns a day, shared by every free-model
+  user**. The eval alone used 802 of the 1,000, and provider-side 429s
+  appeared to count against the cap. ToS §7 forbids multiple accounts
   "for purposes of bypassing or circumventing use limits"
   ([terms](https://openrouter.ai/terms)).
 - **Logging and training.** "There are separate settings for paid and free
@@ -307,24 +315,79 @@ picker. The UI can show the budget as a percentage or as abstract "credits"
   Opting out means OpenRouter "will not route to providers that train", and
   providers whose policy is unconfirmed are skipped unless the toggle is on
   ([FAQ](https://openrouter.ai/docs/faq.md)).
-  - So the free path needs the Bldrs account's **free-model** training
-    setting switched on, or the pool shrinks. Free requests may then go to
-    providers that train.
+  - **Corrected by eval #1929 (2026-10-06):** an earlier draft here said
+    opting out would shrink or empty the free pool. It does not. Most of
+    the curated free models answer under `deny` (apodex-1.1-mini,
+    dots-3-note-preview, ling-3.0-flash-sante, `openrouter/free`). Only
+    the NVIDIA, Liquid and Poolside free endpoints need allow, and under
+    `deny` they fail with 404 "No endpoints found matching your data
+    policy (Free model training)". So the free path keeps `deny` for all
+    but the optional NVIDIA entry, and the Bldrs account's free-model
+    training setting is needed only if that model is listed.
   - Because the settings are separate, the paid default stays opt-out. It
     is also forced per request with `deny`.
-  - That `deny` would also exclude most `:free` endpoints is the
-    researcher's inference, not documented. #1929 confirms it.
 - **Availability churns.** The free roster changes often (17 free
   tool-capable models in the 2026-10-06 live check), and free endpoints come
-  and go. The FAQ calls free models "usually not suitable for production
-  use".
+  and go. In the eval, 5 of the 17 never completed a task (429, 403,
+  upstream overload) and 4 more lost a third or more to 429s and overload.
+  The FAQ calls free models "usually not suitable for production use".
 - **Paid cheap models cost almost nothing.** See the table below.
 
-**Spike #1929 picks the models.** It runs a tool-calling scorecard (tool-call
-accuracy, multi-turn coherence, latency, cost) over the 17 free
-tool-capable models plus 3–5 cheap paid ones. It uses the v0 tool schemas
-(§9) against canned scene fixtures, and its result sets both the default
-allowlist and the curated `:free` list. It needs an `OPENROUTER_API_KEY`.
+**Eval #1929 results (eval #1929, 2026-10-06).** 12 tasks in 6 categories
+(easy, lookup, multi-step, ambiguity, refusal to hallucinate, follow-up),
+each with a programmatic checker on final viewer state, over a canned
+63-element, 3-storey scene and 10 tools. Paid models ran 3 passes (36
+tasks), free models 1–2. Every request went out with `deny` and
+`require_parameters`. Total spend $0.73. Streaming tool calls worked on all
+8 paid models, and all 8 routed under `deny` on the first attempt.
+
+| Model | Tasks | Pass | Valid calls | Median call | $ / turn | Role |
+|---|---|---|---|---|---|---|
+| qwen/qwen3.7-flash | 36 | 100% | 100% | 1.9 s | 0.00015 | **default** |
+| deepseek/deepseek-v4-flash | 36 | 97% | 96% | 0.7 s | 0.00058 | fallback 1 |
+| openai/gpt-oss-120b | 36 | 89% | 100% | 1.7 s | 0.00015 | fallback 2 |
+| google/gemini-3.8-flash | 36 | 100% | 100% | 1.9 s | 0.0052 | Pro |
+| anthropic/claude-haiku-4.5 | 36 | 97% | 100% | 1.3 s | 0.0085 | Pro |
+| apodex/apodex-1.1-mini `:free` | 24 | 100% | 100% | 1.6 s | 0 | free list |
+| dots-studio/dots-3-note-preview `:free` | 24 | 96% | 100% | 3.2 s | 0 | free list |
+| nvidia/nemotron-3-super-120b-a12b `:free` | 24 | 100% | 100% | 1.5 s | 0 | free, needs allow |
+
+Also on the free list: ling-3.0-flash-sante 96% and `openrouter/free` 96%.
+gpt-oss-120b's misses are systematic ("now hide those" after an unfiltered
+search), which is why it is the last fallback, kept for its four providers.
+
+- **Not on the allowlist:** `gemini-2.5-flash-lite` (44%, invents argument
+  wrappers), `gpt-5-nano` (97% but 4.8 s a call, and once it claimed a cut
+  plane it never added), paid `nemotron-3.5-lightning` (94%, slow, put the
+  mid-level cut plane at the floor).
+- **Single-provider risk.** qwen3.7-flash (Alibaba) and deepseek-v4-flash
+  (Relace) were each served by one provider throughout. If either leaves
+  the deny pool the relay falls to the next entry, so the allowlist is
+  server config with a health check.
+- **Free-models list (opt-in, curated):** `apodex/apodex-1.1-mini:free`,
+  `dots-studio/dots-3-note-preview:free`,
+  `inclusionai/ling-3.0-flash-sante:free`, and `openrouter/free` as the
+  "any free model" entry (it served four different models during the run,
+  so latency varies). `nvidia/nemotron-3-super-120b-a12b:free` is
+  **optional**: 100% and the fastest free model, but it needs allow, so
+  listing it carries the logging/training disclosure (§5, §10, §15 Q9).
+  All of them deny-compatible except that one.
+- **Excluded, and why:** gemma-4-26b/31b (429 on every request);
+  inkling and inkling-small (403, "only available on agentic harnesses");
+  nemotron-3-nano-omni (overloaded, no deny endpoint); ling-3.1-flash and
+  laguna-s/xs (429s, 3–8 of 12 tasks completed; laguna needs allow);
+  nemotron-3-ultra (4 of 12 lost to overload; needs allow); lfm-2.5-2.6b
+  (75%, wrong arithmetic and cut height; needs allow); free
+  nemotron-3.5-lightning (92%, needs allow, superseded by super);
+  cohere/north-mini-code (92%, 90% valid calls, failed the ambiguity task
+  twice).
+- **Free availability is volatile**, so the list is server-side config and
+  the relay runs **server-side health checks** (a periodic canary
+  tool-call per entry; drop one that 429s or errors, and surface
+  retry-or-switch in the tray). It is never a client constant.
+- **Caveat.** A synthetic 63-element scene and 12 tasks: one task of
+  difference is noise. A follow-up run on a real large-model scene is
+  wanted (§14).
 
 **Live catalog (live check 2026-10-06):** `/api/v1/models` lists 464
 models. 396 have `tools` in `supported_parameters`, so the filter works
@@ -340,28 +403,34 @@ survive `data_collection: "deny"`. Two consequences:
   deny-compatible, the model can't be routed at all.
 
 The allowlist must be validated with real deny-routed calls before it
-ships. #1929 does that as part of its scorecard.
+ships. Eval #1929 did that: all 8 paid models routed under deny, so none
+of the candidates was unroutable. It also found that the paid endpoints
+that survive deny can be single-provider (qwen, deepseek), the availability
+risk named above.
 
-**Cost per agent turn.** Assumption, still to be measured (spike #1927 did
-not record per-turn token counts; #1929's scorecard does): one user
-message drives about 3 LLM calls (2 tool round-trips + answer). Each call
-carries ~6k input tokens (system + tool schemas + history + tool results)
-and the turn produces ~1k output tokens in total, so ~18k in / 1k out per
-turn, without caching. Prices are USD per M tokens, in/out (live check
-2026-10-06, catalog price).
+**Cost per agent turn.** Measured (eval #1929, 2026-10-06): qwen3.7-flash
+costs **$0.00015 a user turn** ($0.03 / $0.13 per M): ≈3.3 requests and
+≈6.7k input / 0.5k output tokens per turn (372 of them reasoning). The
+eval's tool results are small and its histories short. Real element lists
+are longer and conversations accumulate, so the **planning figure is
+$0.0003–0.0006 a turn** (2–4×, about 2,000–3,000 turns per dollar). Prices
+are USD per M tokens, in/out (live check 2026-10-06, catalog price). The
+"list" column is catalog price at the measured 6.7k / 0.5k turn shape, uncached;
+"measured" is `usage.cost` per turn where the eval ran the model.
 
-| Model | In / out | ≈ $ per turn | Tier |
-|---|---|---|---|
-| qwen/qwen3.7-flash | 0.03 / 0.13 | 0.0007 | allowlist candidate |
-| openai/gpt-oss-120b | 0.037 / 0.17 | 0.0008 (to 0.007 on the priciest endpoint) | allowlist candidate |
-| openai/gpt-5-nano | 0.05 / 0.40 | 0.0013 | allowlist candidate |
-| google/gemini-2.5-flash-lite | 0.10 / 0.40 | 0.0022 | allowlist candidate |
-| google/gemini-3.8-flash | 0.75 / 3.75 | 0.017 | Pro |
-| anthropic/claude-haiku-4.5 | 1 / 5 | 0.023 | Pro |
-| anthropic/claude-sonnet-5.5 | 2 / 10 | 0.046 | Pro |
-| openai/gpt-5.5 | 5 / 30 | 0.12 | Pro |
-| anthropic/claude-opus-5.5 | 4 / 20 | 0.092 | Pro |
-| anthropic/claude-fable-5.1 | 10 / 50 | 0.23 | Pro |
+| Model | In / out | ≈ $ per turn, list | Measured | Tier |
+|---|---|---|---|---|
+| qwen/qwen3.7-flash | 0.03 / 0.13 | 0.00027 | 0.00015 | allowlist default |
+| deepseek/deepseek-v4-flash | not recorded | not recorded | 0.00058 | allowlist fallback 1 |
+| openai/gpt-oss-120b | 0.037 / 0.17 | 0.00033 | 0.00015 | allowlist fallback 2 |
+| openai/gpt-5-nano | 0.05 / 0.40 | 0.00054 | not recorded | not listed (slow) |
+| google/gemini-2.5-flash-lite | 0.10 / 0.40 | 0.00087 | not recorded | not listed (44%) |
+| google/gemini-3.8-flash | 0.75 / 3.75 | 0.0069 | 0.0052 | Pro |
+| anthropic/claude-haiku-4.5 | 1 / 5 | 0.0092 | 0.0085 | Pro |
+| anthropic/claude-sonnet-5.5 | 2 / 10 | 0.018 | not run | Pro |
+| anthropic/claude-opus-5.5 | 4 / 20 | 0.037 | not run | Pro |
+| openai/gpt-5.5 | 5 / 30 | 0.049 | not run | Pro |
+| anthropic/claude-fable-5.1 | 10 / 50 | 0.092 | not run | Pro |
 
 **Prompt caching.** `cache_control` passes through OpenRouter when set via
 `@openrouter/ai-sdk-provider`'s `cacheControl`. Measured on claude-haiku-4.5
@@ -373,28 +442,28 @@ Explicit `cache_control` or the top-level form works on Anthropic, Vertex,
 Azure and Bedrock
 ([prompt caching](https://openrouter.ai/docs/prompt-caching.md)). GPT-5.6+
 bills cache writes at 1.25× input, so caching isn't free everywhere. The
-per-turn estimates above are the uncached worst case. With caching on, the
+list estimates above are the uncached worst case. With caching on, the
 system-plus-tools share of each call's input becomes a cache read, so
 expect the Pro-model rows to fall, by up to the measured 90% on that share.
 The allowlist rows are already cheap, so caching matters least there.
-#1929 and #1932 should re-measure.
+Eval #1929 ran uncached, so #1932 should measure the cached figure.
 
 **Tiers, with strawman numbers.** These are **placeholders for Pablo to
 set**. The windows mirror quotas.md: 30-day rolling for signed-in tiers.
 
 | Tier | Models | Budget (placeholder) | ≈ turns | Window | Identity |
 |---|---|---|---|---|---|
-| Anonymous | allowlist (default), or free models | $0.02 | 15–30 | 24 h per anon id; also $0.10 / 24 h per IP hash | HMAC anon token (D5) |
-| Free (signed in) | allowlist (default), or free models | $0.50 | 230–700 | 30-day rolling | Auth0 `sub` |
-| Pro (`sharePro`) | allowlist + priced picker, or free models | $5.00 | ~100 Sonnet 5.5, ~50 Opus 5.5, ~20 Fable 5.1, thousands on allowlist | 30-day rolling | Auth0 `sub` |
-| Free models (any tier, opt-in) | `openrouter/free` or curated `:free` | $0 (no credits) | ~200–300 a day **in total**, shared by every user | UTC day (OpenRouter's) | caller's tier identity |
+| Anonymous | allowlist (default), or free models | $0.02 | 35–65 | 24 h per anon id; also $0.10 / 24 h per IP hash | HMAC anon token (D5) |
+| Free (signed in) | allowlist (default), or free models | $0.50 | 800–1,700 | 30-day rolling | Auth0 `sub` |
+| Pro (`sharePro`) | allowlist + priced picker, or free models | $5.00 | ~135–270 Sonnet 5.5, ~70–135 Opus 5.5, ~25–55 Fable 5.1, ~10,000 on allowlist | 30-day rolling | Auth0 `sub` |
+| Free models (any tier, opt-in) | `openrouter/free` or curated `:free` | $0 (no credits) | ≈300 a day (≈1,000 requests) **in total**, shared by every user | UTC day (OpenRouter's) | caller's tier identity |
 | BYOK | anything the user's key allows | none from Bldrs | — | — | none needed |
-| Global breaker | — | $1 / day for all anonymous paid-model traffic (≈ 3× today's expected spend, = today's ad budget; sizing below); past it, anonymous traffic overflows to free models | — | UTC day | relay-wide |
+| Global breaker | — | $1 / day for all anonymous paid-model traffic (≈ 7× today's expected spend, = today's ad budget; sizing below); past it, anonymous traffic overflows to free models | — | UTC day | relay-wide |
 
 The dollar budgets can't limit free-model traffic, because it costs $0.
 So the ledger also counts free-model requests per identity (anonymous
 token, IP hash, `sub`) against a small daily cap (placeholder: 30 requests,
-~8 turns). Without it, one client could drain the shared daily pool for
+~9 turns). Without it, one client could drain the shared daily pool for
 everyone.
 
 **Sizing against today's traffic: AI spend as acquisition cost.** Share sees
@@ -407,30 +476,31 @@ as that ad spend, so it is sized next to it. Placeholder assumptions:
 | Daily users | 100 | today's traffic |
 | Share who try the assistant | 30% → 30 users | placeholder; `assist_open` (§7) measures it |
 | Turns per trying user | 10 | placeholder; `assist_turn` measures it |
-| Cost per turn, cheap default | ~$0.001 | gpt-oss-120b $0.0008, gpt-5-nano $0.0013 (table above) |
-| **Expected anonymous + free spend** | **30 × 10 × $0.001 ≈ $0.30 / day** | ≈ $9 / month |
-| Expected, if deny routes to the priciest gpt-oss endpoint | 300 × $0.007 ≈ $2.10 / day | upper bound until #1929 measures real routing |
+| Cost per turn, cheap default | ~$0.0005 | planning figure $0.0003–0.0006; measured $0.00015 on qwen3.7-flash (eval #1929) |
+| **Expected anonymous + free spend** | **30 × 10 × $0.0005 ≈ $0.15 / day** | ≈ $4.50 / month |
+| Expected, if all traffic ran on fallback 1 | 300 × $0.0023 ≈ $0.70 / day | deepseek-v4-flash, measured $0.00058 at 4× |
 
 What follows from that:
 
-- **AI cost per engaged user ≈ ad cost per visitor.** $0.30 for 30
-  assistant users is about $0.01 each. $1 of ads for ~100 visitors is about
+- **AI cost per engaged user ≲ ad cost per visitor.** $0.15 for 30
+  assistant users is about $0.005 each. $1 of ads for ~100 visitors is about
   $0.01 each, if all traffic were paid, which it isn't, so ads are really
   cheaper per visitor than that. A user who has worked with the assistant
   on their own model is a stronger conversion signal than a visit, for the
   same cent.
 - **Per-user budgets cover a trial with headroom.** The anonymous $0.02 is
-  15–25 cheap turns against the assumed 10. A signed-in free user's $0.50 a
-  month is ~400–600 turns. Ten fully active free users would cost ~$5 a
+  35–65 cheap turns against the assumed 10. A signed-in free user's $0.50 a
+  month is ~800–1,700 turns. Ten fully active free users would cost ~$5 a
   month, about $0.17 a day.
 - **The breaker is a multiple of expected spend, at the ad budget.**
-  - The anonymous breaker sits at **$1 a day**: about 3× the expected
-    $0.30 and equal to the daily ad budget. The worst anonymous day, viral
+  - The anonymous breaker sits at **$1 a day**: about 7× the expected
+    $0.15 (3× would be $0.45) and equal to the daily ad budget, which stays
+    the ceiling. The worst anonymous day, viral
     or abusive, then costs no more than one day of ads. The overflow
     (free models, then a sign-in prompt) keeps the assistant answering past
     that point.
-  - A 10× viral day (1,000 users, ~$3 of expected demand) trips the breaker
-    at about a third of the day's traffic. That is the intended trade.
+  - A 10× viral day (1,000 users, ~$1.50 of expected demand) trips the
+    breaker at about two-thirds of the day's traffic. That is the intended trade.
   - **Re-size the breaker as traffic grows.** Rule of thumb: about 3× the
     trailing 7-day median anonymous spend, never above a hard ceiling set
     by hand next to the ad budget. Both numbers are placeholders.
@@ -440,8 +510,8 @@ What follows from that:
   mechanism. Placeholder: $2 a day (≈ 10× today's expected free spend). Past
   it, free users overflow to free models with the same notice.
 - **The free-model pool can't carry even today's traffic as the default.**
-  ~300 expected turns a day against ~200–300 free turns a day for the whole
-  account (above). That is the D3 rationale in numbers.
+  ~300 expected turns a day against ≈300 free turns a day for the whole
+  account (above), which would leave nothing for anyone else. That is the D3 rationale in numbers.
 
 At the $25/mo Pro price mocked in #1421 (roadmap §4.9), a $5 AI budget is
 20% of revenue, plus OpenRouter's 5.5% credit-purchase fee
@@ -750,7 +820,7 @@ and "the user clicked it" are the same navigation.
 | Tool | Does | Backing seam |
 |---|---|---|
 | `model_summary` | Format, units, element counts by type, top N levels of spatial structure | `IFCSlice.elementTypesMap`, `ShareIfcManager.getSpatialStructure:118`, `idsByType:176`, `ShareModel.modelHasCapability:357` |
-| `search_elements` | Text/type query to refs + names, capped | `SearchIndex.search:138` |
+| `search_elements` | Optional text query plus type and level filters, to refs + names, capped. **`query` must be optional** (below) | `SearchIndex.search:138` |
 | `get_properties` | Attributes and psets for ≤ N refs | `getItemProperties:129`, `getPropertySets:140`, `ShareViewer.getProperties:836` |
 | `get_selection` | Current selection as refs | `NavTreeSlice` |
 | `select_elements` | Select refs (replace or add) | exposed `selectItemsInScene` |
@@ -761,6 +831,28 @@ and "the user clicked it" are the same navigation.
 | `make_permalink` | URL for the current camera + selection + visibility | `CameraControl.addCameraUrlParams:198`, `selectionHash.js`, `visibilityHash.js` |
 | `list_notes` | Notes on this model (titles, anchors) | `NotesSlice` |
 | `screenshot` *(opt-in)* | Canvas image for vision models | `ShareViewer.takeScreenshot:1861`, `sends: 'pixels'` |
+
+**What eval #1929 says about the tool surface** (eval #1929, 2026-10-06):
+
+- **`search_elements.query` optional.** A required `query` caused most
+  schema-invalid calls (deepseek, gemini-2.5-flash-lite) and sank
+  flash-lite to 44%. Re-run with it optional, gpt-5-nano went to 12/12.
+  Every model that omitted it was punished for something the description
+  says is allowed.
+- **Ambiguity tasks discriminate.** "Take me to the big room" is where
+  models differ: a name search for "room" misses the Open Office, so
+  haiku-4.5, nemotron-3.5-lightning, cohere, `openrouter/free` and lfm
+  confidently named Meeting Room A. Consider letting "room" match
+  IfcSpace.
+- **Tool results should be what the UI echoes, not the model's claims.**
+  `gpt-5-nano` once reported adding a cut plane it never added. The
+  tray's "did X" line (§12.1) should render from the tool call's result.
+- **No model hallucinated the missing property** (U-value of an element
+  without one): every completed answer fetched the element and said it was
+  absent.
+- Surface truncation and unknown-ref errors, and list the valid arguments
+  in tool errors. Every model recovered from the former, and the models
+  that gave up after one error are the ones that failed.
 
 **Rules for every tool:**
 
@@ -793,7 +885,7 @@ badge that expands) and in settings, per transport:
 | Transport | Who sees the conversation and tool results | Stored? |
 |---|---|---|
 | Hosted (default and Pro models) | The Bldrs relay (in transit only, no body logs); OpenRouter (metadata logged; prompt logging off on the Bldrs account, [FAQ](https://openrouter.ai/docs/faq.md)); the upstream provider, restricted to endpoints that don't collect data (`data_collection: "deny"`) | Not by Bldrs. Upstream per its policy, with deny |
-| Hosted, free models (opt-in, or anonymous overflow) | As above, **but without deny**: the upstream free provider may log the conversation and train on it | Not by Bldrs. Upstream may retain and train |
+| Hosted, free models (opt-in, or anonymous overflow) | As above, deny kept for the curated list. **The optional NVIDIA entry is sent without deny**: that upstream may log the conversation and train on it | Not by Bldrs. Deny entries per their policy; NVIDIA may retain and train |
 | BYOK (direct) | The chosen provider only, under the user's own account and terms | Per the user's provider account |
 | BYOK (OpenRouter PKCE) | OpenRouter + upstream, under the user's OpenRouter privacy settings (Bldrs can't force deny on the user's key) | Per the user's settings |
 
@@ -930,7 +1022,7 @@ does not use Jev and is a later story.
 
 1. **Intent/command layer (decided, first use).** Typed text → viewer
    action. "Hide the walls" is a Choice over registry tool names, plus
-   Choice/Score over arguments (IFC type, level): sub-second and near-free,
+   Choice/Score over enumerable arguments (IFC type, level): sub-second and near-free,
    which matters most on the anonymous tier (§6). It dispatches through the
    same MCP-shaped registry (§9), never `ShareViewer` directly.
 2. **Follow-on: router at the top of the turn.** Quick command, analysis
@@ -941,17 +1033,60 @@ does not use Jev and is a later story.
    OpenRouter's cookbook "Gate Agent Tool Calls with Jev"; fits
    model-edit.md §9.
 
-**Escalation design.** Jev answers with an action plus a confidence.
+**Measured (eval #1929, 2026-10-06).** 33 prompts × 3 calls, first action
+scored against the LLMs' first tool call on the same prompts:
 
-- **Above the threshold:** dispatch directly through the registry and show
-  the action in the tray as a compact "did X" message (for example "Hid 14
-  walls") with two affordances: **Undo**, and **Ask the assistant instead**.
-- **Below the threshold, or no option fits:** hand the original utterance and
-  Jev's candidate options to the LLM loop as context. The user sees the
-  normal assistant turn, not an error.
-- **Threshold.** Calibrated by the #1937 eval (Jev-vs-LLM accuracy and latency
-  on simple commands), per tool family: a wrong "hide" is cheap to undo, a
-  wrong write is not. Set it on probability bands, not exact values.
+| Router | Exact first action | Median latency | $ / call |
+|---|---|---|---|
+| Jev (scene in `state`) | 97% (99 calls) | ~210 ms | 0.000057 |
+| deepseek-v4-flash (scene in prompt) | 98% | ~1.0 s | 0.00019 |
+| qwen3.7-flash (scene in prompt) | 95% | ~2.3 s | 0.000042 |
+
+So Jev matches the best cheap LLMs and is 3–11× faster, but not cheaper.
+Every single-step command prompt was right on all 3 repetitions.
+
+- **Confidence did not separate its errors.** All 3 errors were one prompt,
+  "Make the building transparent" (no tool fits), at confidence 0.95–0.97,
+  and every answer below 0.8 (15 calls) was correct. Mean confidence was 91%
+  on right answers and 96% on wrong ones. A threshold of 0.5 would escalate
+  3% of calls, 0.8 15% and 0.95 29%, and catch none of the errors. Three
+  errors from one prompt is too little to call confidence useless in
+  general, but it supports no threshold yet.
+- **What Jev cannot do.** It chooses among enumerated options only: no
+  free-text `query`, no refs, no numeric offsets, no multi-step planning.
+  It suits one-step commands over enumerable arguments ("hide the slabs",
+  "show all", "make a link"). Lookups, counts and pset filtering stay with
+  the LLM. The question set (every tool and class described) must be
+  maintained with the registry.
+
+**Escalation design (D14 refined by the eval; the decision stands).** Jev
+answers with an action plus a confidence, and the confidence is not a safe
+gate on its own.
+
+- **Safety net: Undo plus the visible echo.** Every direct dispatch shows a
+  compact "did X" message (for example "Hid 14 walls", rendered from the
+  tool result, §9) with two affordances: **Undo**, and **Ask the assistant
+  instead**. A wrong "hide" is cheap to undo. That, not the threshold, is
+  what makes a wrong answer survivable.
+- **Escalate to the LLM loop, with the utterance and Jev's candidates as
+  context, when any of:**
+  - (a) confidence is low;
+  - (b) the chosen tool needs a free-text or numeric argument (a search
+    query, refs, a cut-plane offset), which Jev can't produce;
+  - (c) the utterance is multi-step.
+
+  The user sees the normal assistant turn, not an error.
+- **Out-of-catalogue detection.** The eval's Choice already carried
+  `no_action`, and Jev still picked `search_elements` for the one prompt no
+  tool fits, at high confidence. Consider a clearer "none of these" option
+  in the Choice, or a separate Noul question ("does any listed tool do
+  this?"), and test them on out-of-scope prompts.
+- **Calibrate on real utterances before the threshold means anything.** The
+  eval's 33 prompts were written by the harness author. Run Jev in shadow
+  (decide, don't dispatch) on real user utterances, compare with the LLM's
+  first action, and set the threshold per tool family on probability bands,
+  not exact values. A wrong write is not cheap to undo, so write tools keep
+  the human-confirm gate (below).
 
 **Placement.**
 
@@ -1086,15 +1221,15 @@ Dependencies are in brackets.
 | #1677 | large-model fixture + E2E | unchanged | #1675 |
 | [#1927](https://github.com/bldrs-ai/Share/issues/1927) | spike: providers + client library | **Done (2026-10-06).** D7 confirmed with three amendments (§9, §8, §5); results posted on #1927. Real-key success paths for the four direct providers remain open (§9 "Still unverified"). Original scope: provider matrix (§9), AI SDK vs TanStack AI, token-per-turn measurement (not recorded; see §6) | — |
 | [#1928](https://github.com/bldrs-ai/Share/issues/1928) | spike: relay vehicle + OpenRouter routing | Edge vs v2 Function limits, streaming, `verifyAuth0Bearer` adapter, Blobs atomicity, **abort metering (§5 Amendment 3):** after a client abort no usage reaches the client and Bedrock/Google/Alibaba bill the full generation with `cancelled:false`, so the relay must keep reading upstream to the final usage chunk, or reconcile via `X-Generation-Id` + `/api/v1/generation` (404 for >20 s, present by ~5 min). Prefer cancel-capable upstreams in `provider.order` | — |
-| [#1929](https://github.com/bldrs-ai/Share/issues/1929) | spike: free/cheap model eval | Tool-calling scorecard (accuracy, multi-turn coherence, latency, cost) over the 17 free tool-capable models + 3–5 cheap paid ones, v0 tool schemas on canned scene fixtures, deny-routing check. Picks the default allowlist and the curated `:free` list. Needs `OPENROUTER_API_KEY` | #1674 schemas (drafts are enough) |
+| [#1929](https://github.com/bldrs-ai/Share/issues/1929) | spike: free/cheap model eval | **Done, first run (2026-10-06); results on #1929.** Picked the default allowlist and the curated `:free` list (§6): $0.00015 a turn measured, deny routing confirmed for all 8 paid models, the free path keeps deny except the optional NVIDIA entry. Findings feed §9 (`query` optional) and §12.1 (Jev calibration). A **follow-up run on a real large-model scene** is wanted: the first used a synthetic 63-element scene. Original scope: tool-calling scorecard over the 17 free tool-capable models + 3–5 cheap paid ones, v0 tool schemas, deny-routing check | #1674 schemas (drafts are enough) |
 | [#1930](https://github.com/bldrs-ai/Share/issues/1930) | provider abstraction + BYOK key store + settings UI | `Provider` interface, four direct providers, key custody, Test/Forget, disclosure panel (§10). Evolves `BotSettings` | #1927 |
 | [#1931](https://github.com/bldrs-ai/Share/issues/1931) | OpenRouter PKCE connect | Connect/disconnect, callback route, key into #1930's store | #1930 |
-| [#1932](https://github.com/bldrs-ai/Share/issues/1932) | hosted relay `ai-chat` + anonymous identity | Relay (§5), HMAC token, IP-hash, global breaker with free-models overflow, the no-deny free-models path, replay + smoke | #1928, #1929 |
+| [#1932](https://github.com/bldrs-ai/Share/issues/1932) | hosted relay `ai-chat` + anonymous identity | Relay (§5), HMAC token, IP-hash, global breaker with free-models overflow, the free-models path (deny kept; no-deny only for the optional NVIDIA entry) with server-side health checks, replay + smoke | #1928, #1929 |
 | [#1933](https://github.com/bldrs-ai/Share/issues/1933) | credits ledger + tiers + quota UI + funnel events | Blobs ledger (USD + per-identity free-model request caps), `AI_CREDITS`, meter, `QuotaLimitDialog` upsell, overflow notice, GA events | #1932 |
 | [#1934](https://github.com/bldrs-ai/Share/issues/1934) | model selector: free-models opt-in (all tiers) + Pro picker | "Free models (experimental)" choice with its disclosure on every tier; Pro catalog via relay, priced list, unavailable-under-deny handling | #1933, #1930 |
 | [#1935](https://github.com/bldrs-ai/Share/issues/1935) | CSP `connect-src` hardening | Site-wide CSP, Report-Only first | — (before "remember key" leaves the flag) |
 | [#1936](https://github.com/bldrs-ai/Share/issues/1936) | Create seam contract | Interface + doc only (§11), agreed with Create's E1 MCP surface | #1674 |
-| [#1937](https://github.com/bldrs-ai/Share/issues/1937) | assist: Jev intent layer + router (System One decisions) | §12.1. Relay route for the Decisions API, `decide()` client, intent Choice over registry tool names with a confidence threshold, "did X" tray message with undo, and LLM escalation (§12.1). Includes a **Jev-vs-LLM accuracy/latency eval on simple commands** (reuses #1929's harness) calibrates the threshold, and carries the CORS and measured-latency spikes | #1674 (tool registry), #1932 (relay) |
+| [#1937](https://github.com/bldrs-ai/Share/issues/1937) | assist: Jev intent layer + router (System One decisions) | §12.1. Relay route for the Decisions API, `decide()` client, intent Choice over registry tool names (one-step commands over enumerable arguments only), "did X" tray message with Undo as the safety net, and LLM escalation on low confidence, a free-text or numeric argument, or a multi-step utterance. The Jev-vs-LLM eval is done (#1929: 97% exact, ~210 ms, confidence did not separate errors), so its scope is now **calibration on real user utterances** (shadow mode, per tool family), **out-of-catalogue detection** ("none of these" option or a Noul question), and the CORS spike. Reuses #1929's harness | #1674 (tool registry), #1932 (relay) |
 | [#1938](https://github.com/bldrs-ai/Share/issues/1938) | assist: generative UI — declarative spec renderer (json-render + MUI catalog) | §12.2. Share-owned MUI catalog, spec validation, in-tray render, actions bound to registry tool names. Executable code stays with `assist-320` | #1674 (tool registry) |
 
 **Why these cuts.**
@@ -1128,7 +1263,8 @@ because it rides the quota and billing rails.
    metered to Stripe, or a hard stop until the window rolls?
 3. **Anonymous exposure appetite.** The sizing in §6 puts the anonymous
    breaker at $1 a day (one day of ads) and the free-tier breaker at $2 a
-   day. Are those the right multiples of expected spend, and what is the
+   day (the anonymous one is now about 7× the measured-cost expectation of
+   $0.15). Are those the right multiples of expected spend, and what is the
    hard ceiling as traffic grows? Captcha on token mint from day one, or
    only when the breaker trips?
 4. **Naming.** The user-facing name for the assistant (roadmap §10 still
@@ -1143,10 +1279,13 @@ because it rides the quota and billing rails.
    for Pro only?
 8. **Create.** In-browser worker vs service (§11), and who owns the E1 MCP
    contract.
-9. **Free models.** The free path requires switching on the Bldrs
-   account's free-model training setting (§6). Is that acceptable, given
-   that it applies only to requests the user opted into, or that overflowed?
-   And the per-identity free-model request cap (placeholder: 30 a day).
+9. **Free models.** The curated free list keeps `deny` (eval #1929), so
+   the Bldrs account's free-model training setting needs switching on
+   only if the optional NVIDIA entry (nemotron-3-super, 100% and the
+   fastest free model, but it needs allow) is listed. Is listing it worth
+   that, given it applies only to requests the user opted into, or that
+   overflowed? And the per-identity free-model request cap (placeholder:
+   30 a day, about 9 turns).
 10. **Generative UI (§12.2).** When does it ship: with `assist-310` or
     later?
 
