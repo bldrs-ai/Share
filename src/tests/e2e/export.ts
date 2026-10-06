@@ -21,9 +21,10 @@ import {waitForModelReady} from './models'
 
 export const EXPORT_MODEL_PATH = '/share/v/p/index.ifc'
 
-// `export` is off by default (FeatureFlags.js). `glbVerbose` is pure
-// logging, and is how a spec knows the artifact writer finished rather than
-// racing it.
+// `export` has been default-on since the S4 rollout (#1835), so naming it is
+// redundant but harmless, and keeps these specs correct against a build that
+// flips it back off. `glbVerbose` is pure logging, and is how a spec knows
+// the artifact writer finished rather than racing it.
 export const EXPORT_FLAGS = '?feature=export,glbVerbose'
 
 export const PRO_MODULE_PATTERN = '**/.netlify/functions/pro-module*'

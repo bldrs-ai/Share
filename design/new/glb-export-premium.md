@@ -22,10 +22,21 @@ become the epic's sub-issues; §8 the cross-browser smoke checklist.
 *Updated 2026-09-16, after #1837/#1851/#1852 landed, the #1855 container
 gzip (§1.1a), today's byte-attribution measurement on #1831, and the
 `.glb.gz` round trip (§4.7), which reverses a decision §4.3 used to record.
-§1.1d was updated 2026-09-30 when `glbCollapse` went default-on.*
+§1.1d was updated 2026-09-30 when `glbCollapse` went default-on. The S4
+rollout (#1835) was prepared 2026-10-06: the `export` flag flip, the §7
+recommendations, and the checklist below; none of it is final until the owner's
+§8 smoke and the §7 confirmations.*
 
-**Where things stand:** the feature described in §1–§6 below is fully built
-and ships behind `?feature=export` (default **off**). Export lives in the
+**Where things stand:** the feature described in §1–§6 below is fully built.
+The S4 PR flips `export` to `isActive: true` in `src/FeatureFlags.js`, so
+**once it merges export is on by default** for everyone (`?feature=export` is
+then redundant; flipping the flag back to `false` is the kill switch, since
+`?feature=` can only turn flags on). The flag gates only the UI: the
+`pro-module` function still refuses everyone who is not `sharePro`
+(§1.3, §4.1), so what a free or anonymous user gains is the tab and its
+upgrade/login prompts, not the exporter. Until that PR merges the flag is
+still **off** and the paragraph below describes the shipped, flagged state.
+Export lives in the
 Save dialog's Export tab: the Include Bldrs metadata toggle, Portable
 toggle (on by default since #1831), Compression dropdown (None / Meshopt / Draco), Quality rung,
 Compress download toggle, a Download size line that *is* the file, and a
@@ -123,13 +134,17 @@ arm — the envelope comes off at the upload seam, and a second seam in
    layer instead (§1.1a, gzip outside the GLB entirely), not as an in-GLB
    JSON transform.
 3. **S4 (#1835) is the ship gate for all of the above, and it is not
-   done.** Outstanding: cross-browser smoke (Firefox, Safari — including
+   done: the flag flip is drafted, and waits on the owner's smoke.**
+   Outstanding: cross-browser smoke (Firefox, Safari — including
    OPFS `createWritable` and `CompressionStream` for `.glb.gz` — Edge, iOS
    Safari, Android Chrome) with real Auth0 accounts per tier, against the
    §8 checklist; the real Management API path for `record-export`
    (including whether the `https://bldrs.ai/app_metadata` JWT claim carries
-   `exports` at all — an Auth0 Action outside this repo); and flipping
-   `export` to `isActive: true`. (The site-wide esbuild-bundling decision
+   `exports` at all — an Auth0 Action outside this repo, which nothing in the
+   repo can verify: the client reads it through `APP_METADATA_CLAIM` in
+   `src/Auth0/appMetadata.js`, and the only places `exports` is asserted on
+   are mocks); and flipping `export` to `isActive: true` (drafted; see the
+   head of this block, and merged only after the owner's smoke). (The site-wide esbuild-bundling decision
    for every other ESM Netlify function that imports axios —
    `gh-oauth-exchange`, `gh-oauth-refresh`, `unlink-identity`,
    `create-portal-session`, `stripe-webhook`, which shared the latent nft
@@ -157,10 +172,16 @@ arm — the envelope comes off at the upload seam, and a second seam in
    (decimation, deprioritised — it attacks the ~1.2 MB geometry term on
    Snowdon, not the container), S5
    #1836 (further export formats, §6).
-5. **§7's two open questions are still open.** Whether free users get one
-   export as a conversion moment (§7.1) and how `shareProPendingReauth`
-   should be treated (§7.2) are both **owner decisions S4 has not made** —
-   this fold-back records the shipped reality, not those decisions.
+5. **§7's two open questions now carry a recommendation, pending owner
+   confirmation.** §7.1: no free export, Pro-only at launch. §7.2: keep
+   following `getTier`, so `shareProPendingReauth` is not Pro for export. Both
+   are recorded in §7 as *recommended, pending owner confirmation* and the S4
+   PR says the owner has to confirm them before it merges. They are not
+   decisions until then.
+6. **The §8 results are pending owner smoke.** Nothing in §8 has been run
+   against production with real Auth0 accounts, apart from the desktop
+   Chrome pass on 14 Sep. The signed-out production probes in the S4 PR are
+   the only part that needs no accounts.
 
 
 ## 1. What we already have
@@ -1962,8 +1983,9 @@ keeps its "Save" title; only the tab is named GitHub, since "Save" as a tab
 label duplicated that title and said nothing about where the save goes
 (further #1837 preview feedback, #1838). The tab bar is `Components/Tabs.jsx`,
 the Open dialog's pattern, and it only exists behind feature flag `export`
-(default off, `?feature=export`) — with the flag off the Save dialog has no
-tabs and is exactly what it was.
+(default on as of S4, #1835; it was `?feature=export` before) — with the flag
+off the Save dialog has no tabs and is exactly what it was, which
+`SaveModelControl.test.jsx` keeps covering by forcing the flag per case.
 
 Both panels share one gutter system: 1em between the tab bar's bottom border
 and the panel's own content (`SaveModelControl.jsx`'s `TAB_PANEL_SX`, applied
@@ -2488,22 +2510,43 @@ export module.
    It changes the function's gate from "Pro" to "Pro, or free with no
    prior export" and adds an `exports` read to the check. Not in v0.1;
    flagged for S4's rollout decision.
+   **Recommended, pending owner confirmation (S4, #1835): no free export.**
+   Export is Pro-only at launch, which is what the function already
+   enforces (anonymous: login prompt; free: `/subscribe/`). Revisit with
+   conversion data once the tab has been on for a while: the Export tab's
+   upgrade click is already reported as `from: 'export'` by
+   `goToSubscription`, so the funnel can be read. The one-free-export
+   variant stays cheap to add later (the gate change above); the reverse,
+   taking a free export away, is not.
 2. **`shareProPendingReauth`** — `GitHubFileBrowser` counts it as Pro,
    `getTier` doesn't. The function follows `getTier` (the quota authority);
    the UI badge follows `getTier` too. If pending-reauth users complain, fix
    `getTier`, not the export.
+   **Recommended, pending owner confirmation (S4, #1835): keep following
+   `getTier`.** `shareProPendingReauth` is **not** Pro for export:
+   `pro-module`, `record-export` and the quota tier honour only `sharePro`
+   (the same rule `reconcile-subscriptions` relies on, see
+   netlify-functions-testing.md §"Subscription reconciliation", where the
+   promotion to `sharePro` happens in an Auth0 step outside this repo). One
+   rule for every paid surface; the cost is that a user between a
+   payment and their next login sees the upgrade prompt on Export, and the
+   fix for that is reauth/`getTier`, not an exception here.
 3. **Auth0 `app_metadata` as the export ledger** inherits the quota
    design's migration note (Netlify Blobs / KV when Management-API limits
    bite). Same table, same move.
 
 
-## 8. Cross-browser smoke checklist (deploy preview, `?feature=export`)
+## 8. Cross-browser smoke checklist (deploy preview or dev deploy)
+
+Results: **pending owner smoke.** (Before the S4 flip this ran with
+`?feature=export`; after it the flag is on by default and the parameter is
+redundant, so a run is also the check that a plain URL shows the tab.)
 
 For each of Chrome, Firefox, Safari (macOS), Edge, iOS Safari, Android
 Chrome — with a real Auth0 account in each of the three tiers:
 
-1. Open a sample IFC; wait for the load snackbar. Open Share → the Export
-   section shows "Preparing GLB…" until the writer finishes, then enables.
+1. Open a sample IFC; wait for the load snackbar. Open Save → the Export
+   tab (on by default since S4, no `?feature=export` needed) shows "Preparing GLB…" until the writer finishes, then enables.
 2. Anonymous: click → login dialog. Free: click → `/subscribe/`. Pro:
    click → a `.glb` lands in Downloads (check the first 4 bytes are `glTF`
    and it opens in <https://gltf-viewer.donmccurdy.com/>).
@@ -2540,3 +2583,21 @@ Chrome — with a real Auth0 account in each of the three tiers:
 8. Mobile: the Save dialog's Export tab fits without horizontal scroll at
    390 px, the "Exported …" snackbar is readable over the open dialog, and
    the download lands in Files (iOS) / Downloads (Android).
+9. **No `CompressionStream` (Safari < 16.4, or a browser with it blocked).**
+   The OPFS cache container (§1.1a) must fall back to writing v2
+   (uncompressed) rather than erroring: load a model, reload, and confirm the
+   cache-hit path still engages and export still works. The "Compress
+   download" toggle (`.glb.gz`) must be absent from the Export tab (it is
+   hidden outright without `CompressionStream`), and the plain `.glb` export
+   must still work. (DevTools: delete `window.CompressionStream` before the
+   page loads, e.g. via an init script, if no old Safari is at hand.)
+10. **`.glb.gz` drag-in (§4.7).** Export with Compress download on, drag the
+    `.glb.gz` back into Share and also open it through the Open dialog's Local
+    tab: nav tree, palette colours and picking survive. Drop a `.spz` too:
+    splats must still load (it is a gzip stream and is passed through
+    still-compressed).
+11. **Google Drive `.glb.gz` (§4.7), the untested path.** Drive stores it as
+    `<blob-uuid>.gz` and Share falls back to a ranged GET of a `blob:` URL
+    that nobody has exercised. It should fail visibly rather than silently if
+    it fails at all. (GitHub-hosted `.glb.gz` is refused at the router by
+    design; confirm the refusal reads sensibly.)
