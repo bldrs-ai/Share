@@ -71,73 +71,74 @@ cross-references that connect them. The detailed bodies live in §4 (Epics) and 
 (Tracks). **Phase column**: A–E = MVP-plan phases (§6: A stabilise viewer,
 B identity, C sharing, D subscribe+ads, E launch checklist); G = growth funnel
 (§6 Phase G, parallel, starts now); AI = pivot arc (§7, after MVP launch);
-— = shipped, nothing pending; Post = §8 backlog.
+— = shipped, nothing pending; Post = §8 backlog. **Updated column** (§3.1): the
+quarter the row was last revised.
 
 ### 3.1 Epics
 
-| Verb | ID | Name | Status | Phase | Tracks |
-|---|---|---|---|---|---|
-| Open | `open-100` | Open from local file system | ✔ | — | — |
-| Open | `open-110` | Open from GitHub URL / UI | ✔ | — | — |
-| Open | `open-120` | Open from Google Drive | ✔ | — | — |
-| Open | `open-200` | Recents reliability | 🟡 | E | T5 |
-| Open | `open-210` | Open multiple IFCs in one session | ⬜ | Post | — |
-| Open | `open-300` | Multi-account Sources tab | 🟡 | B | T3 |
-| View | `view-100` | 3D + NavTree + Properties | ✔ | — | T1, T2 |
-| View | `view-110` | Cut planes | ✔ | — | T1 |
-| View | `view-120` | Shareable camera position | ✔ | — | — |
-| View | `view-130` | Performance + large-model viewing | 🟡 | A | T1, T2 |
-| View | `view-140` | Scoped display controls + shareable display state (<a href="https://github.com/bldrs-ai/Share/issues/1705" target="_blank" rel="noopener noreferrer">#1705</a>) | 🟡 | C | T1, T2 |
-| View | `view-200` | Persistent visibility / Isolate | 🟡 | Post | T1 |
-| View | `view-210` | Selection-based camera + measurement | ⬜ | Post | — |
-| View | `view-220` | Common view ops (nav-cube, explode, undo, IDS) (<a href="https://github.com/bldrs-ai/Share/issues/1881" target="_blank" rel="noopener noreferrer">#1881</a>) | 🟡 | Post | — |
-| View | `view-230` | Placemarks + maps-style issues w/filtering (🥇) | 🟡 | C, Post | T1, T6 |
-| View | `view-300` | ETL / Table view (❤️ Markus) | 🔮 | Post | T1 |
-| Share | `share-100` | Share link to current view | ✔ | — | — |
-| Share | `share-110` | Save model to user's hosting (originator share) | 🟡 | C | T2 |
-| Share | `share-120` | Extended Share/Login flow (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>) | ⬜ | C, D | — |
-| Share | `share-130` | Private link sharing + visibility chip | 🟡 | C | T4 |
-| Share | `share-140` | GLB export as a Pro feature (<a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a>) | 🟡 | D | T2, T8 |
-| Share | `share-200` | Grant/revoke per-principal sharing | 🟡 | C | T4 |
-| Share | `share-400` | Folder-scoped boundaries | ⬜ | Post | T4 |
-| Notes | `notes-100` | Anchored notes (GitHub-backed) | ✔ | — | — |
-| Notes | `notes-200` | BCF round-trip | ⬜ | Post | — |
-| Notes | `notes-300` | Drive-backed notes (NotesProvider) | 🔮 | Post | T4, T6 |
-| Versions | `versions-100` | Show specific version + branch/commit nav | 🟡 | — | — |
-| Versions | `versions-300` | Diff between versions | ⬜ | Post | — |
-| Versions | `versions-310` | Portable versions for Drive | 🔮 | Post | T6 |
-| Search | `search-100` | Search current model | 🟡 | — | — |
-| Search | `search-300` | Search across GitHub repos (❤️ Oleg) | 🔮 | Post | — |
-| Search | `search-310` | Knowledge graph (🥇, ❤️ Johannes) | 🔮 | AI | T10 |
-| Search | `search-320` | Fluid NavTree + breadcrumb-scoped search (<a href="https://github.com/bldrs-ai/Share/issues/1658" target="_blank" rel="noopener noreferrer">#1658</a>) (NEW) | ⬜ | AI | — |
-| Identity | `identity-100` | Auth0 primary login | ✔ | — | — |
-| Identity | `identity-110` | GitHub as Sources peer | 🟡 | B | T3 |
-| Identity | `identity-120` | Auth disambiguation (<a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a>) | ⬜ | B | — |
-| Identity | `identity-300` | Profile drawer + multi-account picker | 🟡 | B | T3 |
-| Apps | `apps-100` | Browse + select app (AppsDrawer) | ✔ | — | — |
-| Apps | `apps-110` | XYZ demo app (v0.1 API dogfood) | ✔ | — | — |
-| Apps | `apps-300` | v1.0 Public API + IDE (🥇) | 🔮 | AI | T11 |
-| Apps | `apps-310` | Bldrs Integrate (CI + ArchiCAD/Speckle) | 🔮 | AI | T11 |
-| Community | `community-100` | Welcome dialog + onboarding | ✔ | — | — |
-| Community | `community-110` | Analytics + survey + thumbs feedback | 🟡 | E | — |
-| Community | `community-200` | Bug report w/ screenshot + session state | ⬜ | Post | — |
-| Community | `community-210` | AEC outreach (🥇) | 🔮 | Post | — |
-| Subscribe | `subscribe-100` | Pricing tiers + feature manager (NEW) | 🟡 | D | T8 |
-| Subscribe | `subscribe-110` | Stripe checkout + portal (NEW) | ✔ | — | T8 |
-| Subscribe | `subscribe-120` | Quota tracking (NEW) | 🟡 | D | T8, T3 |
-| Subscribe | `subscribe-130` | Ads on free tier (<a href="https://github.com/bldrs-ai/Share/issues/1524" target="_blank" rel="noopener noreferrer">#1524</a>) — paused | ⬜ | D | T7 |
-| Subscribe | `subscribe-400` | Enterprise tier definition (NEW) | ⬜ | Post | T8 |
-| Grow | `grow-100` | SEO format landing pages `/viewer/*` (NEW) | ⬜ | G | T9 |
-| Grow | `grow-120` | Funnel instrumentation + GA hygiene (NEW) | 🟡 | G | T9 |
-| Grow | `grow-200` | Rich share-link previews / OG cards (NEW) | ⬜ | G | T9 |
-| Grow | `grow-400` | Large-model + data-sovereignty positioning (NEW) | ⬜ | G | T9 |
-| Assist | `assist-300` | Workspace shell: left drawer projects + org nav (<a href="https://github.com/bldrs-ai/Share/issues/1657" target="_blank" rel="noopener noreferrer">#1657</a>) (NEW) | 🟡 | AI | — |
-| Assist | `assist-310` | Conversational agent panel, single-user (<a href="https://github.com/bldrs-ai/Share/issues/1659" target="_blank" rel="noopener noreferrer">#1659</a>) (NEW) | ⬜ | AI | T10, T11 |
-| Assist | `assist-320` | AI-apps toolbelt: save/version/run + MCP (NEW) | ⬜ | AI | T11 |
-| Assist | `assist-400` | Multi-user channels + AI participation modes (<a href="https://github.com/bldrs-ai/Share/issues/1660" target="_blank" rel="noopener noreferrer">#1660</a>) (NEW) | ⬜ | AI | T10 |
-| Create | `create-300` | Model edit substrate: CRUD over an op log (<a href="https://github.com/bldrs-ai/Share/issues/1914" target="_blank" rel="noopener noreferrer">#1914</a>) (NEW) | 🟡 | AI | T12 |
-| Create | `create-310` | Agent write tools (<a href="https://github.com/bldrs-ai/Share/issues/1919" target="_blank" rel="noopener noreferrer">#1919</a>) (NEW) | ⬜ | AI | T11, T12 |
-| Create | `create-320` | Generative model creation: engine selection (<a href="https://github.com/bldrs-ai/Share/issues/1920" target="_blank" rel="noopener noreferrer">#1920</a>) (NEW) | ⬜ | AI | T12 |
+| Updated | Verb | ID | Name | Status | Phase | Tracks |
+|---|---|---|---|---|---|---|
+| Q3'26 | Open | `open-100` | Open from local file system | ✔ | — | — |
+| Q3'26 | Open | `open-110` | Open from GitHub URL / UI | ✔ | — | — |
+| Q3'26 | Open | `open-120` | Open from Google Drive | ✔ | — | — |
+| Q3'26 | Open | `open-200` | Recents reliability | 🟡 | E | T5 |
+| Q3'26 | Open | `open-210` | Open multiple IFCs in one session | ⬜ | Post | — |
+| Q3'26 | Open | `open-300` | Multi-account Sources tab | 🟡 | B | T3 |
+| Q3'26 | View | `view-100` | 3D + NavTree + Properties | ✔ | — | T1, T2 |
+| Q3'26 | View | `view-110` | Cut planes | ✔ | — | T1 |
+| Q3'26 | View | `view-120` | Shareable camera position | ✔ | — | — |
+| Q3'26 | View | `view-130` | Performance + large-model viewing | 🟡 | A | T1, T2 |
+| Q4'26 | View | `view-140` | Scoped display controls + shareable display state (<a href="https://github.com/bldrs-ai/Share/issues/1705" target="_blank" rel="noopener noreferrer">#1705</a>) | 🟡 | C | T1, T2 |
+| Q3'26 | View | `view-200` | Persistent visibility / Isolate | 🟡 | Post | T1 |
+| Q3'26 | View | `view-210` | Selection-based camera + measurement | ⬜ | Post | — |
+| Q4'26 | View | `view-220` | Common view ops (nav-cube, explode, undo, IDS) (<a href="https://github.com/bldrs-ai/Share/issues/1881" target="_blank" rel="noopener noreferrer">#1881</a>) | 🟡 | Post | — |
+| Q3'26 | View | `view-230` | Placemarks + maps-style issues w/filtering (🥇) | 🟡 | C, Post | T1, T6 |
+| Q3'26 | View | `view-300` | ETL / Table view (❤️ Markus) | 🔮 | Post | T1 |
+| Q3'26 | Share | `share-100` | Share link to current view | ✔ | — | — |
+| Q3'26 | Share | `share-110` | Save model to user's hosting (originator share) | 🟡 | C | T2 |
+| Q4'26 | Share | `share-120` | Extended Share/Login flow (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>) | ⬜ | C, D | — |
+| Q3'26 | Share | `share-130` | Private link sharing + visibility chip | 🟡 | C | T4 |
+| Q3'26 | Share | `share-140` | GLB export as a Pro feature (<a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a>) | 🟡 | D | T2, T8 |
+| Q3'26 | Share | `share-200` | Grant/revoke per-principal sharing | 🟡 | C | T4 |
+| Q3'26 | Share | `share-400` | Folder-scoped boundaries | ⬜ | Post | T4 |
+| Q3'26 | Notes | `notes-100` | Anchored notes (GitHub-backed) | ✔ | — | — |
+| Q3'26 | Notes | `notes-200` | BCF round-trip | ⬜ | Post | — |
+| Q3'26 | Notes | `notes-300` | Drive-backed notes (NotesProvider) | 🔮 | Post | T4, T6 |
+| Q3'26 | Versions | `versions-100` | Show specific version + branch/commit nav | 🟡 | — | — |
+| Q3'26 | Versions | `versions-300` | Diff between versions | ⬜ | Post | — |
+| Q3'26 | Versions | `versions-310` | Portable versions for Drive | 🔮 | Post | T6 |
+| Q3'26 | Search | `search-100` | Search current model | 🟡 | — | — |
+| Q3'26 | Search | `search-300` | Search across GitHub repos (❤️ Oleg) | 🔮 | Post | — |
+| Q3'26 | Search | `search-310` | Knowledge graph (🥇, ❤️ Johannes) | 🔮 | AI | T10 |
+| Q4'26 | Search | `search-320` | Fluid NavTree + breadcrumb-scoped search (<a href="https://github.com/bldrs-ai/Share/issues/1658" target="_blank" rel="noopener noreferrer">#1658</a>) (NEW) | ⬜ | AI | — |
+| Q3'26 | Identity | `identity-100` | Auth0 primary login | ✔ | — | — |
+| Q3'26 | Identity | `identity-110` | GitHub as Sources peer | 🟡 | B | T3 |
+| Q4'26 | Identity | `identity-120` | Auth disambiguation (<a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a>) | ⬜ | B | — |
+| Q4'26 | Identity | `identity-300` | Profile drawer + multi-account picker | 🟡 | B | T3 |
+| Q3'26 | Apps | `apps-100` | Browse + select app (AppsDrawer) | ✔ | — | — |
+| Q3'26 | Apps | `apps-110` | XYZ demo app (v0.1 API dogfood) | ✔ | — | — |
+| Q3'26 | Apps | `apps-300` | v1.0 Public API + IDE (🥇) | 🔮 | AI | T11 |
+| Q3'26 | Apps | `apps-310` | Bldrs Integrate (CI + ArchiCAD/Speckle) | 🔮 | AI | T11 |
+| Q3'26 | Community | `community-100` | Welcome dialog + onboarding | ✔ | — | — |
+| Q3'26 | Community | `community-110` | Analytics + survey + thumbs feedback | 🟡 | E | — |
+| Q3'26 | Community | `community-200` | Bug report w/ screenshot + session state | ⬜ | Post | — |
+| Q3'26 | Community | `community-210` | AEC outreach (🥇) | 🔮 | Post | — |
+| Q4'26 | Subscribe | `subscribe-100` | Pricing tiers + feature manager (NEW) | 🟡 | D | T8 |
+| Q4'26 | Subscribe | `subscribe-110` | Stripe checkout + portal (NEW) | ✔ | — | T8 |
+| Q4'26 | Subscribe | `subscribe-120` | Quota tracking (NEW) | 🟡 | D | T8, T3 |
+| Q4'26 | Subscribe | `subscribe-130` | Ads on free tier (<a href="https://github.com/bldrs-ai/Share/issues/1524" target="_blank" rel="noopener noreferrer">#1524</a>) — paused | ⬜ | D | T7 |
+| Q3'26 | Subscribe | `subscribe-400` | Enterprise tier definition (NEW) | ⬜ | Post | T8 |
+| Q3'26 | Grow | `grow-100` | SEO format landing pages `/viewer/*` (NEW) | ⬜ | G | T9 |
+| Q4'26 | Grow | `grow-120` | Funnel instrumentation + GA hygiene (NEW) | 🟡 | G | T9 |
+| Q3'26 | Grow | `grow-200` | Rich share-link previews / OG cards (NEW) | ⬜ | G | T9 |
+| Q3'26 | Grow | `grow-400` | Large-model + data-sovereignty positioning (NEW) | ⬜ | G | T9 |
+| Q4'26 | Assist | `assist-300` | Workspace shell: left drawer projects + org nav (<a href="https://github.com/bldrs-ai/Share/issues/1657" target="_blank" rel="noopener noreferrer">#1657</a>) (NEW) | 🟡 | AI | — |
+| Q4'26 | Assist | `assist-310` | Conversational agent panel, single-user (<a href="https://github.com/bldrs-ai/Share/issues/1659" target="_blank" rel="noopener noreferrer">#1659</a>) (NEW) | ⬜ | AI | T10, T11 |
+| Q3'26 | Assist | `assist-320` | AI-apps toolbelt: save/version/run + MCP (NEW) | ⬜ | AI | T11 |
+| Q4'26 | Assist | `assist-400` | Multi-user channels + AI participation modes (<a href="https://github.com/bldrs-ai/Share/issues/1660" target="_blank" rel="noopener noreferrer">#1660</a>) (NEW) | ⬜ | AI | T10 |
+| Q3'26 | Create | `create-300` | Model edit substrate: CRUD over an op log (<a href="https://github.com/bldrs-ai/Share/issues/1914" target="_blank" rel="noopener noreferrer">#1914</a>) (NEW) | 🟡 | AI | T12 |
+| Q3'26 | Create | `create-310` | Agent write tools (<a href="https://github.com/bldrs-ai/Share/issues/1919" target="_blank" rel="noopener noreferrer">#1919</a>) (NEW) | ⬜ | AI | T11, T12 |
+| Q3'26 | Create | `create-320` | Generative model creation: engine selection (<a href="https://github.com/bldrs-ai/Share/issues/1920" target="_blank" rel="noopener noreferrer">#1920</a>) (NEW) | ⬜ | AI | T12 |
 
 ### 3.2 Tracks
 
@@ -1849,6 +1850,7 @@ without sign-off.
 ## 11. Doc maintenance
 
 - **When an Epic ships:** update its row in §3.1 and its block in §4 from 🟡 → ✔.
+  Any edit to a §3.1 row also sets its Updated column to the current quarter.
   Move it out of the MVP phase list in §6 if it was there.
 - **When a story closes:** add it to the Closed list under its Epic; PR description
   should reference `roadmap.md` if the change moves an Epic state.
