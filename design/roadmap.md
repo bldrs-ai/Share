@@ -912,7 +912,7 @@ vision, architecture, and sequencing. Design doc to draft: `design/new/ai-worksp
 - Plan: `design/new/conversational-cad.md` §4 — conversations as the third
   ProjectsDrawer level (project → models → convos); message element-chips /
   anchors reuse the existing camera-hash + element-path/occurrence-path
-  permalink machinery. Behind `?feature=convo`.
+  permalink machinery. Behind `?feature=assist`.
 
 **Epic `assist-320`: AI-apps toolbelt (right drawer)** ⬜ (NEW)
 - The existing right-drawer AppsDrawer, upgraded: code the agent generates can be
@@ -1131,7 +1131,8 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
 - **Unblocks:** `assist-310`, `assist-400`, `search-310` (as retrieval), and the
   §7 AI-metering upsell.
 - **MVP impact:** None (pivot arc). Must not destabilise Phases A–E.
-- **Doc:** TBD — `design/new/ai-workspace.md`.
+- **Doc:** `design/new/ai-workspace.md` (runtime placement, providers, credits,
+  conversation store).
 
 
 ### Track T11: App sandbox + MCP bridge (NEW)
@@ -1149,7 +1150,8 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
   (checks as toolbelt apps).
 - **MVP impact:** None (pivot arc), except the #1386 repair which is
   independently worthwhile.
-- **Doc:** TBD — `design/new/ai-workspace.md` (sandbox/security section).
+- **Doc:** `design/new/ai-workspace.md` (tool registry §9; sandbox/security
+  section deferred to `assist-320`, §15).
 
 
 ### Track T12: Model edit substrate (NEW)
@@ -1595,7 +1597,10 @@ without sign-off.
   the **data-sovereignty constraint** cuts against anything that proxies model
   content wholesale: model bytes stay client-side, only conversation + tool
   results cross the wire, and that boundary should be user-visible. Decide in
-  `design/new/ai-workspace.md` before AI.2.
+  `design/new/ai-workspace.md` before AI.2. **Decided (2026-10):** the agent
+  loop runs client-side; a thin `ai-chat` relay holds the OpenRouter key and
+  meters credits for hosted traffic; BYOK goes browser → provider directly
+  (`ai-workspace.md` D1, D2, D6).
 - **AI pivot — engine write path.** The editing loop (§7.4 AI.5) needs Conway to
   support model mutation + re-emission (geometry and semantics), which today it
   doesn't. Biggest open technical question in the pivot: scope (parametric edits?
