@@ -1056,7 +1056,7 @@ vision, architecture, and sequencing. Design doc to draft: `design/new/ai-worksp
 - Plan: `design/new/conversational-cad.md` §4 — conversations as the third
   ProjectsDrawer level (project → models → convos); message element-chips /
   anchors reuse the existing camera-hash + element-path/occurrence-path
-  permalink machinery. Behind `?feature=convo`.
+  permalink machinery. Behind `?feature=assist`.
 - Prior art, not the T11 contract: the `?feature=bot` BotChat
   (`src/Components/Bot/`) — client-direct OpenRouter with a user-supplied key,
   and the LLM's JS runs via `new Function` (<a href="https://github.com/bldrs-ai/Share/issues/1822" target="_blank" rel="noopener noreferrer">#1822</a> no sandbox, <a href="https://github.com/bldrs-ai/Share/issues/1821" target="_blank" rel="noopener noreferrer">#1821</a> bypasses
@@ -1660,7 +1660,7 @@ can't destabilise the launch may start earlier behind flags.
   `?feature=workspace`. No AI dependency; can overlap MVP phases. (Drawer +
   TopBar shipped behind the flag, default off; open stories in §4.11.)
 - **AI.1a — Fluid Nav + scoped search.** `search-320` behind
-  `?feature=navSearch`: the element-referencing UX the convo panel's chips
+  `?feature=navSearch`: the element-referencing UX the assist panel's chips
   point into — and standalone viewer value if AI.2 slips.
   (`conversational-cad.md` §3.)
 - **AI.2 — Agent v0, single-user.** `assist-310`: viewer MCP tool surface (T11) +

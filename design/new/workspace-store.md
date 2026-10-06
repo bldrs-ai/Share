@@ -80,7 +80,7 @@ So the division is:
 
 AI conversation fits the same shape: the live exchange is a stream, the
 kept transcript is a file. This is the requirements overlap between the
-single-user convo panel (assist-310) and multi-user channels
+single-user assist panel (assist-310) and multi-user channels
 (assist-400), made structural.
 
 
@@ -157,7 +157,7 @@ migration. To keep it that way:
 
 1. **All new persistence goes through the `workspace/persistence.ts`
    seam, document-shaped.** Never a second bespoke store.
-2. **Conversation logs are file-shaped from day one.** When the convo
+2. **Conversation logs are file-shaped from day one.** When the assist
    tray stub (#1672) lands, its per-model/per-project log should be
    stored as a JSONL-style document the repo store can adopt wholesale.
 
