@@ -1,6 +1,7 @@
 # AI workspace — runtime, providers, credits, sovereignty (AI.0)
 
-**Status:** v0.2 draft (2026-10-06; §12 rewritten after Jev research). Story
+**Status:** v0.3 draft (2026-10-06; §12 rewritten after Jev research; D7
+confirmed by spike #1927). Story
 [#1671](https://github.com/bldrs-ai/Share/issues/1671) under epic `assist-310`
 [#1659](https://github.com/bldrs-ai/Share/issues/1659). Roadmap §7.4 AI.0,
 Tracks T10 and T11.
@@ -16,6 +17,8 @@ threads, chips). This doc owns the *runtime* plan.
 
 **Evidence.** External facts carry the URL they were read from. Facts
 checked from this session's network carry **(live check 2026-10-06)**.
+Facts measured by the client-library spike carry **(spike #1927,
+2026-10-06)**; its results are posted on #1927.
 Anything not verified is marked **UNVERIFIED** and becomes a spike item (§14).
 Share code is cited as `path:line` at `main` @ `9577fdd`.
 
@@ -55,15 +58,15 @@ Share code is cited as `path:line` at `main` @ `9577fdd`.
 | # | Decision | One-line rationale |
 |---|---|---|
 | D1 | Agent loop runs **in the browser**. The LLM call is the only remote hop, over one of two transports: **BYOK** (browser → provider) or **Hosted** (browser → Bldrs relay → OpenRouter) | The tools are in-page (viewer, store). A server loop would need the model, which breaks sovereignty |
-| D2 | Hosted transport = thin streaming relay `ai-chat`. It checks the tier, enforces the allowlist and `max_tokens`, forces `data_collection: "deny"` (except on the opt-in free-models path, D3), meters `usage.cost`, and never logs bodies. Vehicle (Edge vs v2 Function) is a spike. No per-user OpenRouter keys for now | Key custody and quota enforcement need a server. Minted browser keys are extractable, Bldrs is liable for them, and anonymous users can't get one |
+| D2 | Hosted transport = thin streaming relay `ai-chat`. It checks the tier, enforces the allowlist and `max_tokens`, forces `data_collection: "deny"` (except on the opt-in free-models path, D3), meters `usage.cost` (including after a client abort, §5), and never logs bodies. Vehicle (Edge vs v2 Function) is a spike. No per-user OpenRouter keys for now | Key custody and quota enforcement need a server. Minted browser keys are extractable, Bldrs is liable for them, and anonymous users can't get one |
 | D3 | Budgets are **USD-cost credits** from `usage.cost`. The **default** for anonymous and free tiers is a curated allowlist of **cheap paid** tool models with `data_collection: "deny"`. Every tier also gets an opt-in **"Free models (experimental)"** choice (`:free`, zero credits, labelled honestly), which is also the anonymous overflow when the spend breaker trips. Pro gets a live, priced model picker | Premium models must burn faster. `:free` caps are per account (~200–300 agent turns a day for everyone), and free endpoints may log or train on prompts, so free models can't be the default but are worth offering |
 | D4 | Metering ledger in **Netlify Blobs** (or similar), keyed by Auth0 `sub` or anonymous id, in day buckets. Auth0 `app_metadata` stays tier-only | Per-message writes don't fit a ~16 KB, last-write-wins, Management-API store |
 | D5 | Anonymous identity = relay-issued **HMAC token**, plus an IP-hash rate limit and a global daily spend breaker | There is no server identity for anonymous users today. The free AI tier is the funnel top and needs a bounded cost |
 | D6 | **BYOK** for Anthropic (native), OpenAI, Gemini (native), xAI, and OpenRouter via **OAuth PKCE**. Keys are session-only by default, with opt-in "remember", and never reach Bldrs | All five pass CORS preflight from bldrs.ai (live). BYOK users skip Bldrs credits entirely |
-| D7 | **Vercel AI SDK**, lazy-loaded behind the flag. Fallback: thin hand-rolled adapters. Confirmed by a real-key spike, with TanStack AI as the alternative | It handles Anthropic native, Gemini thought signatures and OpenAI-compatible endpoints, and its ~300 KB gz cost is paid only when the tray opens |
+| D7 | **Vercel AI SDK**, lazy-loaded behind the flag, with the pinned set in §9. Fallback: thin hand-rolled adapters. **Confirmed by spike #1927** (2026-10-06), with three amendments (§9, §8, §5) | It handles Anthropic native, Gemini thought signatures and OpenAI-compatible endpoints. Measured cost is a 167 KB gz core plus 15–60 KB per provider (336 KB monolithic), paid only when the tray opens, **and only if the build splits assist out** (§9 Amendment 1) |
 | D8 | Typed in-page **tool registry in MCP shape**. v0 is read/annotate only, replaces the bot's `new Function` eval, and needs `selectItemsInScene` exposed | One contract, so `assist-320` can serve it over postMessage MCP later |
 | D9 | **Model bytes never leave the machine.** Conversation and tool results do. Tools return summaries, never geometry. A per-transport "what the AI can see" disclosure. CSP `connect-src` is a hardening story | Sovereignty is the enterprise wedge (roadmap §7.2) |
-| D10 | Conversations are local, per model, file-shaped (JSONL), behind the `workspace/persistence.ts` seam, alongside the Tier-1 project struct | Durable and shared storage is `assist-400`'s problem. File-shaped now means the repo store adopts it later |
+| D10 | Conversations are local, per model, file-shaped (JSONL) and store AI SDK `responseMessages` whole, with `providerOptions` (§10), behind the `workspace/persistence.ts` seam, alongside the Tier-1 project struct | Durable and shared storage is `assist-400`'s problem. File-shaped now means the repo store adopts it later |
 | D11 | Share's agent is the orchestrator. Create plugs in as a **remote tool provider** in the same registry. Its LLM usage draws on the same provider abstraction and ledger | Create is a headless kernel with no LLM of its own. One loop and one bill |
 | D12 | Flag `assist`, with `bot` aliased via `FEATURE_IMPLICATIONS` during the port, then removed | Matches #1659/#1672. Fixes the `convo` drift |
 | D13 | Port `?feature=bot`: keep the tray, slice, bubbles, MSW mocks and network guard. Evolve the client and settings. Delete the eval and the plaintext key | The scope outgrew the prototype, but its UI and test scaffolding are sound |
@@ -92,9 +95,9 @@ Share code is cited as `path:line` at `main` @ `9577fdd`.
                                                               │
    Transport A: BYOK (key in tab memory / opt-in storage)     │
      ├─► api.anthropic.com/v1/messages  (native)  ◄───────────┤
-     ├─► api.openai.com/v1/chat/completions       ◄───────────┤
+     ├─► api.openai.com/v1/{chat,responses}       ◄───────────┤
      ├─► generativelanguage.googleapis.com (native) ◄─────────┤
-     ├─► api.x.ai/v1/chat/completions             ◄───────────┤
+     ├─► api.x.ai/v1/responses                    ◄───────────┤
      └─► openrouter.ai/api/v1 (PKCE user key)     ◄───────────┤
                                                               │
    Transport B: Hosted (Auth0 Bearer or anon token)           │
@@ -173,6 +176,8 @@ breaks the sovereignty boundary.
    the ledger. No extra API call is needed: usage is always included, and
    `usage: {include: true}` is deprecated
    ([usage accounting](https://openrouter.ai/docs/guides/administration/usage-accounting.md)).
+   After a client abort the relay keeps reading to that chunk, or reconciles
+   by generation id (Amendment 3, below).
 6. **Never logs bodies.** It logs only identity hash, tier, model, token
    counts, cost and the generation id (`X-Generation-Id`). Sentry scrubbing
    follows the same rule.
@@ -206,10 +211,37 @@ following are **UNVERIFIED**:
 
 `verifyAuth0Bearer` reads v1 `event.headers`
 (`_lib/auth0.js:82`), so either vehicle needs a small `Request` →
-`{headers}` adapter. The relay must also decide what happens on client
-abort: keep draining upstream to collect `usage.cost`, or reconcile later
-through `GET /api/v1/generation?id=`, which is CORS-open and returns cost
-after the fact. Part of the spike.
+`{headers}` adapter.
+
+**Amendment 3: client aborts can't be metered from the stream** (spike
+#1927, 2026-10-06). After `abort()` the AI SDK exposes **no usage**:
+`onAbort` reports `steps: 0`, and `totalUsage`, `providerMetadata` and
+`steps` reject. So a relay that debits only from the final SSE chunk it
+forwarded would under-count every aborted turn, and several upstreams keep
+generating and bill the whole thing. Measured via OpenRouter's
+`/api/v1/generation?id=`:
+
+| Model (upstream) | Aborted at | `/generation` |
+|---|---|---|
+| qwen3.7-flash (Alibaba) | 4.5 s | `cancelled:false`, 1,098 tokens, $0.000143 |
+| claude-haiku-4.5 (Bedrock) | 2.3 s | `cancelled:false`, 1,526 tokens, **$0.007654** (more than the un-aborted run, $0.005724) |
+| gemini-2.5-flash-lite (Google) | 1.1 s | `cancelled:false`, ran to `stop`, $0.000451 |
+| gpt-5-nano, `only:['openai']` | 3.4 s | **`cancelled:true`**, 597 reasoning tokens still billed ($0.00024) |
+
+Requirements on the relay (#1928, #1932):
+
+- **Keep reading upstream** to the final usage chunk after the client
+  disconnects, so the ledger still gets `usage.cost`. Or, as the fallback,
+  **reconcile** through `X-Generation-Id` (CORS-exposed) and
+  `GET /api/v1/generation?id=`. That endpoint returns 404 for more than
+  20 s after the call and has the record by about 5 min, so reconciliation
+  is a deferred job, not an inline lookup.
+- **Prefer cancel-capable upstreams** (OpenAI, Anthropic and xAI, per
+  OpenRouter's docs) in `provider.order`, so an abort actually stops
+  generation and cost. Even `cancelled:true` still bills what was already
+  generated.
+- Anthropic-direct cancellation through OpenRouter is **UNVERIFIED**: the
+  spike account routes it through a credit-less BYOK Anthropic key.
 
 **Rejected for now: per-user OpenRouter keys** minted with the Management
 API (`limit`, `limit_reset`, `expires_at`;
@@ -310,7 +342,8 @@ survive `data_collection: "deny"`. Two consequences:
 The allowlist must be validated with real deny-routed calls before it
 ships. #1929 does that as part of its scorecard.
 
-**Cost per agent turn.** Assumption, to be measured in spike #1927: one user
+**Cost per agent turn.** Assumption, still to be measured (spike #1927 did
+not record per-turn token counts; #1929's scorecard does): one user
 message drives about 3 LLM calls (2 tool round-trips + answer). Each call
 carries ~6k input tokens (system + tool schemas + history + tool results)
 and the turn produces ~1k output tokens in total, so ~18k in / 1k out per
@@ -330,12 +363,21 @@ turn, without caching. Prices are USD per M tokens, in/out (live check
 | anthropic/claude-opus-5.5 | 4 / 20 | 0.092 | Pro |
 | anthropic/claude-fable-5.1 | 10 / 50 | 0.23 | Pro |
 
-Prompt caching on the stable system-plus-tools prefix would cut the input
-side substantially for Anthropic models (explicit `cache_control`, or the
-top-level form on Anthropic, Vertex, Azure and Bedrock;
-[prompt caching](https://openrouter.ai/docs/prompt-caching.md)). GPT-5.6+
+**Prompt caching.** `cache_control` passes through OpenRouter when set via
+`@openrouter/ai-sdk-provider`'s `cacheControl`. Measured on claude-haiku-4.5
+with a ~15k-token system prompt: the 2nd identical call read 14,776 cached
+tokens and cost fell from $0.01883 to $0.00183, **−90%** (spike #1927,
+2026-10-06). **Recommendation:** mark the system prompt and the tool
+schemas (the stable prefix) as cacheable on hosted Claude and Gemini routes.
+Explicit `cache_control` or the top-level form works on Anthropic, Vertex,
+Azure and Bedrock
+([prompt caching](https://openrouter.ai/docs/prompt-caching.md)). GPT-5.6+
 bills cache writes at 1.25× input, so caching isn't free everywhere. The
-numbers above are the uncached worst case.
+per-turn estimates above are the uncached worst case. With caching on, the
+system-plus-tools share of each call's input becomes a cache read, so
+expect the Pro-model rows to fall, by up to the measured 90% on that share.
+The allowlist rows are already cheap, so caching matters least there.
+#1929 and #1932 should re-measure.
 
 **Tiers, with strawman numbers.** These are **placeholders for Pablo to
 set**. The windows mirror quotas.md: 30-day rolling for signed-in tiers.
@@ -447,9 +489,10 @@ Per-message metering would multiply that write rate by roughly 100.
   {'2026-10-06': microUsd, …}}`. The window sum is the last 30 day buckets,
   or 1 for anonymous. Pruning works like `pruneLoads` in quotas.md.
 - **Check then debit.** The relay checks remaining budget > 0 before
-  calling upstream, and debits the actual `usage.cost` after. Concurrent
-  requests can overshoot by at most (in-flight requests × one capped
-  request). `max_tokens` bounds that, so a lock isn't needed for v0.
+  calling upstream, and debits the actual `usage.cost` after, including for
+  aborted turns, which upstreams often bill in full (§5 Amendment 3).
+  Concurrent requests can overshoot by at most (in-flight requests × one
+  capped request). `max_tokens` bounds that, so a lock isn't needed for v0.
   Whether Blobs offers conditional writes or atomic increments is
   **UNVERIFIED** (spike #1928). Lost-update races under-count, the same
   "free extra, never wrongful block" direction quotas.md accepts.
@@ -506,19 +549,25 @@ Per-message metering would multiply that write rate by roughly 100.
 ## 8. D6 — BYOK
 
 **Providers and transport (preflight live check 2026-10-06, Origin
-`https://bldrs.ai`):**
+`https://bldrs.ai`; POST behaviour from spike #1927, 2026-10-06, run from
+Playwright Chromium on `http://localhost` with dummy keys):**
 
 | Provider | Endpoint and shape | CORS | Adapter | Main risk |
 |---|---|---|---|---|
-| Anthropic | `api.anthropic.com/v1/messages`, native Messages API | 200, `*`, but only with `anthropic-dangerous-direct-browser-access: true`. Without it, no ACAO (research-byok) | `@ai-sdk/anthropic` plus that header passed explicitly. It does **not** add it itself (grepped `dist/index.js`) | The header is undocumented except as the SDK's `dangerouslyAllowBrowser` ([TS SDK](https://platform.claude.com/docs/en/cli-sdks-libraries/sdks/typescript)). Pin and smoke-test it |
-| OpenAI | `api.openai.com/v1/chat/completions` | 200, echoes origin | `@ai-sdk/openai` (chat) | Responses API CORS broke in Jan 2026 per a forum thread ([2nd-hand](https://community.openai.com/t/has-the-cors-policy-changed-responses-api/1372791)). Use Chat Completions; Responses is UNVERIFIED |
-| Gemini | `generativelanguage.googleapis.com/v1beta/models/*:streamGenerateContent`, native | 200, echoes origin. 403 if unknown headers are requested, so request only those sent | `@ai-sdk/google` (native) | Gemini 3 needs `thought_signature` echoed back on function-call parts, or multi-turn tool use 400s ([2nd-hand](https://discuss.ai.google.dev/t/gemini-3-thought-signature-is-not-valid-cant-do-multi-turn-tool-calling/119360)), so not the `/openai/` compat path. `AQ.` auth-key behaviour from browsers is UNVERIFIED |
-| xAI | `api.x.ai/v1/chat/completions`, OpenAI-shaped | 200, `*` / `*` | `@ai-sdk/xai` | Docs mirrors call Chat Completions "legacy" in favour of Responses ([2nd-hand](https://docs.x.ai/api)). The adapter may need to move. Responses CORS not probed |
-| OpenRouter (user's account) | `openrouter.ai/api/v1/chat/completions` | 204, `*` | `@ai-sdk/openai-compatible` or `@openrouter/ai-sdk-provider` | OpenRouter sees the conversation. Disclose it |
+| Anthropic | `api.anthropic.com/v1/messages`, native Messages API | `ACAO: *`, but only with `anthropic-dangerous-direct-browser-access: true`. **Without it the call fails with a CORS `TypeError`**, not a readable 401 (spike #1927, 2026-10-06) | `@ai-sdk/anthropic` plus that header passed manually. It does **not** add it itself (grepped `dist/index.js`; confirmed by the spike) | The header is undocumented except as the SDK's `dangerouslyAllowBrowser` ([TS SDK](https://platform.claude.com/docs/en/cli-sdks-libraries/sdks/typescript)). Pin it and smoke-test it |
+| OpenAI | `api.openai.com/v1/chat/completions` and `/v1/responses` | Both CORS-open: **`ACAO: *` on the actual POST**. The "echoes origin" seen earlier came from the preflight (spike #1927, 2026-10-06) | `@ai-sdk/openai`. **`createOpenAI()(id)` defaults to Responses**, so pin `.chat()` or `.responses()` explicitly | The Jan 2026 forum report that Responses CORS broke ([2nd-hand](https://community.openai.com/t/has-the-cors-policy-changed-responses-api/1372791)) did not reproduce. Pin the transport so an SDK default change can't silently switch it |
+| Gemini | `generativelanguage.googleapis.com/v1beta/models/*:streamGenerateContent`, native | Echoes the origin (spike #1927). 403 if unknown headers are requested, so request only those sent | `@ai-sdk/google` (native) | Gemini 3 needs `thought_signature` echoed back on function-call parts, or multi-turn tool use 400s ([2nd-hand](https://discuss.ai.google.dev/t/gemini-3-thought-signature-is-not-valid-cant-do-multi-turn-tool-calling/119360)), so not the `/openai/` compat path. `@ai-sdk/google` 4.0.88 preserves it if the stored history keeps `providerOptions.google.thoughtSignature` (D10, §10). `AQ.` auth-key behaviour from browsers is UNVERIFIED |
+| xAI | `api.x.ai/v1/responses` | CORS-open on `/v1/responses` (spike #1927, 2026-10-06) | `@ai-sdk/xai` **5.x is Responses-only** | Resolved: the "legacy Chat Completions" risk is moot, because the adapter already speaks Responses. Pinned at 5.0.15 |
+| OpenRouter (user's account) | `openrouter.ai/api/v1/chat/completions` | 204, `*` | `@openrouter/ai-sdk-provider` (chosen over openai-compatible, §9). Passed stream, tool round-trip, ≥3-step loop, multi-turn, abort (spike #1927) | OpenRouter sees the conversation. Disclose it |
 
-Preflight is not proof: no authenticated POST, streamed body or tool delta
-was exercised. That is spike #1927, with the per-provider checks research-byok
-§5 lists.
+With a dummy key every direct endpoint returned a JS-readable 401/400, the
+one exception being Anthropic without its opt-in header (above). So CORS on
+the actual POST is settled for all four (spike #1927, 2026-10-06). The
+success path is still **UNVERIFIED** for the four direct providers: no
+authenticated stream, tool delta or multi-turn run has been made with a real
+key. The spike's `byok-harness.html` runs {stream, tool round-trip,
+multi-turn} for OpenAI Chat vs Responses, xAI, and Gemini native vs
+`/openai`. Only OpenRouter has passed all of them.
 
 **OpenRouter "connect your account" (PKCE).** Redirect to
 `https://openrouter.ai/auth?callback_url=…&code_challenge=…&code_challenge_method=S256&state=…`,
@@ -580,32 +629,82 @@ shows the transport ("Your Anthropic key") instead of a credit meter.
 
 ## 9. D7 + D8 — Client library and tool surface
 
-**D7: Vercel AI SDK, lazy.** `ai` plus `@ai-sdk/{anthropic,openai,google,xai}`
-measured ~299 KB min+gz for four providers, and ~205 KB for core +
-anthropic + openai-compatible (esbuild + gzip -9, research-byok §3; `ai`
-7.0.128).
+**D7: Vercel AI SDK, lazy. Status: confirmed by spike #1927 (2026-10-06).**
 
-- **Why it.** `streamText` and the tool loop need only `fetch`. It handles
-  Anthropic natively and round-trips Gemini thought signatures, and one
-  OpenAI-compatible provider covers both OpenRouter-with-user-key and our
-  relay (`baseURL` = relay, auth = Bearer).
-- **Bundle cost.** The assist bundle is a dynamic `import()` behind the
-  flag, and each provider package loads only when chosen. The viewer's
-  cold load is unchanged; the cost lands when the tray first opens.
-- **Fallback: thin adapters.** `@anthropic-ai/sdk` (~53 KB,
-  `dangerouslyAllowBrowser`), a fetch-based OpenAI-shape client (xAI,
-  OpenAI, OpenRouter, relay) and a Gemini-native adapter. That is under
-  ~60 KB plus Gemini, but we would own the loop and every provider quirk.
-- **Alternative evaluated in the spike: TanStack AI.** `@tanstack/ai` 0.64.1
-  with four adapters measured ~296 KB, with a `node:*` external needed.
-  Its `byok` module looks server-oriented.
+**Pinned set** (spike #1927, 2026-10-06):
 
-**Spike #1927 decides.** Real keys, run from a real browser tab on a deploy
-preview. The matrix is {Anthropic, OpenAI, Gemini, xAI, OpenRouter-PKCE} ×
-{stream, one tool round-trip, multi-turn with two tool calls}, for AI SDK vs
-TanStack AI. The spike also settles: success-path ACAO on SSE, Gemini `AQ.`
-keys, OpenAI Responses vs Chat, xAI Responses, and real token counts per
-turn for §6.
+```
+ai@7.0.128
+@ai-sdk/anthropic@4.0.72            # BYOK Anthropic (native Messages); pass the opt-in header manually
+@ai-sdk/openai@4.0.84               # BYOK OpenAI; call .chat() or .responses() explicitly
+@ai-sdk/google@4.0.88               # BYOK Gemini (native; thought signatures)
+@ai-sdk/xai@5.0.15                  # BYOK xAI; Responses API only in this major
+@openrouter/ai-sdk-provider@3.1.0   # hosted relay (baseURL → ai-chat) + OpenRouter PKCE
+```
+
+**Measured bundle** (spike #1927, 2026-10-06; esbuild + gzip). This replaces
+the earlier "~300 KB gz" figure, which was a research-byok estimate.
+
+| Build | gz |
+|---|---|
+| AI SDK + 4 native providers + OpenRouter, monolithic | 336 KB |
+| Same, **split**: core when the tray opens | 167 KB |
+| Same, split: per provider | 15–60 KB (xai 30, anthropic 44, openrouter 36, google 56, openai 60) |
+| Hosted only (`ai` + `@openrouter/ai-sdk-provider`) | 193 KB (174 KB with openai-compatible) |
+
+About 98 KB of the core is zod, and `@ai-sdk/gateway` (68 KB min) is pulled
+in unused. Expect roughly 197–227 KB gz on first tray open, for one provider.
+
+- **Why it.** `streamText` and the tool loop need only `fetch`. It is the
+  only candidate where every behaviour the spike tested passed with library
+  code alone: stream, tool round-trip, a ≥3-step `stopWhen` loop,
+  multi-turn, abort (spike #1927, 2026-10-06). It handles Anthropic
+  natively and round-trips Gemini thought signatures.
+- **Why not the others.** TanStack AI is larger at every split (374 KB gz
+  with five adapters, its OpenRouter adapter alone 154 KB), needs
+  `node:*` externals, rebuilds history by hand, and its `byok` scheme is
+  server-side. The hand-rolled client (57.5 KB gz; the OpenAI-shape client
+  alone is 1.9 KB) passes stream, tool and multi-turn, but we would own the
+  loop and every provider quirk. It stays the fallback.
+- **Why `@openrouter/ai-sdk-provider` over `@ai-sdk/openai-compatible`**
+  (+20 KB gz). It brings typed `provider` routing (so `data_collection:
+  'deny'` is a typed option), `cacheControl` mapping (§6), per-step
+  `usage.cost` in `providerMetadata.openrouter.usage` (the §5 metering
+  number, client-side), and `reasoning_details` replay (§10). One provider
+  covers OpenRouter-with-user-key and our relay (`baseURL` = relay, auth =
+  Bearer).
+- **Bundle cost.** Each provider package loads only when chosen. The
+  viewer's cold load is unchanged; the cost lands when the tray first
+  opens. **That holds only after Amendment 1.**
+
+**Amendment 1: lazy loading needs a build change** (spike #1927,
+2026-10-06). `tools/esbuild/common.js:71` sets `splitting: false`, so a
+literal `import('…assist')` is inlined into the main entry: **+196 KB gz on
+cold load** (0.1 KB with `splitting: true`). Assist must ship as a separate
+entry, the way `proModules.js` does, or the build must enable splitting
+(output is already ESM). This is a requirement on #1675 (§14).
+
+**ai@7 gotchas** (spike #1927, 2026-10-06):
+
+- `(await result.response).messages` covers the **last step only**. Use
+  `await result.responseMessages` (D10, §10).
+- A system message inside `messages` throws unless `allowSystemInMessages`
+  is set. Pass the system prompt as `instructions`.
+
+**Fallback: thin adapters.** `@anthropic-ai/sdk` (`dangerouslyAllowBrowser`),
+a fetch-based OpenAI-shape client (xAI, OpenAI, OpenRouter, relay) and a
+Gemini-native adapter. We would own the loop and every provider quirk.
+
+**Still unverified** (they need real keys, a deploy preview or another
+browser; the spike's `byok-harness.html` covers the first):
+
+- Direct providers on the success path (Anthropic, OpenAI, Gemini, xAI).
+- Loading from the real bldrs.ai origin or a deploy preview (localhost
+  only so far), and from the CDNs the harness targeted.
+- Gemini `AQ.` keys and referrer-restricted keys.
+- Anthropic-direct cancellation through OpenRouter.
+- Firefox and Safari.
+- OpenRouter PKCE (needs an interactive login).
 
 **D8: Tool registry, MCP-shaped.** One registry, in-page, typed:
 
@@ -733,6 +832,17 @@ GA), so it is its own story, #1935: start in `Report-Only` mode, then enforce.
   only `{conversationId, title, updatedAt}`. This refines the "stored with
   the Tier-1 project struct" wording in conversational-cad.md rather than
   contradicting it.
+- **Persist AI SDK `responseMessages`, with `providerOptions` intact**
+  (spike #1927, 2026-10-06). Not `(await result.response).messages`, which
+  in ai@7 covers the last step only. Gemini thought signatures
+  (`providerOptions.google.thoughtSignature`) and OpenRouter
+  `reasoning_details` live in `providerOptions`. If they are stripped,
+  `@ai-sdk/google` injects Google's skip sentinel and reasoning context is
+  lost **silently**, with no error. `reasoning_details` replay was verified
+  on gemini-3.1-flash-lite via OpenRouter. The JSONL line schema must
+  therefore store the SDK message object whole, not a flattened
+  `{role, text}`, and a round-trip test should assert `providerOptions`
+  survives a save and reload.
 - **Keys never go into transcripts.** Screenshots are stored as a
   placeholder, not pixels, unless the user keeps them.
 - **Shared and durable conversations, channels, and the Notes-vs-channels
@@ -944,7 +1054,8 @@ This stays a separate, later story (#1938). The code path waits for
   - The streaming vehicle may need harness work, because the replay runner
     targets v1 handlers. Part of #1928.
 - **Manual real-key smoke checklist** (each deploy preview that touches
-  assist; also the core of #1927):
+  assist; the spike's `byok-harness.html` covers the unverified part of it,
+  §9):
   1. For each provider: Test connection, then a streamed reply, then a
      prompt that needs two tool calls ("isolate all doors on level 2 and
      frame them"). The viewer state must match.
@@ -970,11 +1081,11 @@ Dependencies are in brackets.
 | #1672 | tray UI + drawer threads | Tray, threads, local JSONL log (D10). Introduces the `assist` flag + `bot` alias (D12) and renames the Bot components (D13 keep rows) | — |
 | #1673 | message anchors + element chips | Chips over permalink refs | #1672 |
 | #1674 | viewer tool surface v0 | Registry + v0 tools (§9). First task: expose `selectItemsInScene` | — |
-| #1675 | agent loop v0 + streaming | AI SDK loop over the registry. Deletes the eval path. Ships first on BYOK | #1674, #1927, #1930 |
+| #1675 | agent loop v0 + streaming | AI SDK loop over the registry, on the pinned set in §9. Deletes the eval path. Ships first on BYOK. **Build requirement (§9 Amendment 1):** `tools/esbuild/common.js:71` has `splitting: false`, so a dynamic `import()` is inlined (+196 KB gz on cold load). Ship assist as a separate entry like `proModules.js`, or enable splitting. Verify with a cold-load size check. Also: pin `.chat()`/`.responses()` for OpenAI, pass the Anthropic header, system prompt via `instructions` (§8, §9) | #1674, #1927 (done), #1930 |
 | #1676 | W7 reduced tool set | unchanged, droppable | #1672 |
 | #1677 | large-model fixture + E2E | unchanged | #1675 |
-| [#1927](https://github.com/bldrs-ai/Share/issues/1927) | spike: providers + client library | Real-key matrix (§9), AI SDK vs TanStack AI, token-per-turn measurement | — |
-| [#1928](https://github.com/bldrs-ai/Share/issues/1928) | spike: relay vehicle + OpenRouter routing | Edge vs v2 Function limits, streaming, `verifyAuth0Bearer` adapter, Blobs atomicity, abort metering | — |
+| [#1927](https://github.com/bldrs-ai/Share/issues/1927) | spike: providers + client library | **Done (2026-10-06).** D7 confirmed with three amendments (§9, §8, §5); results posted on #1927. Real-key success paths for the four direct providers remain open (§9 "Still unverified"). Original scope: provider matrix (§9), AI SDK vs TanStack AI, token-per-turn measurement (not recorded; see §6) | — |
+| [#1928](https://github.com/bldrs-ai/Share/issues/1928) | spike: relay vehicle + OpenRouter routing | Edge vs v2 Function limits, streaming, `verifyAuth0Bearer` adapter, Blobs atomicity, **abort metering (§5 Amendment 3):** after a client abort no usage reaches the client and Bedrock/Google/Alibaba bill the full generation with `cancelled:false`, so the relay must keep reading upstream to the final usage chunk, or reconcile via `X-Generation-Id` + `/api/v1/generation` (404 for >20 s, present by ~5 min). Prefer cancel-capable upstreams in `provider.order` | — |
 | [#1929](https://github.com/bldrs-ai/Share/issues/1929) | spike: free/cheap model eval | Tool-calling scorecard (accuracy, multi-turn coherence, latency, cost) over the 17 free tool-capable models + 3–5 cheap paid ones, v0 tool schemas on canned scene fixtures, deny-routing check. Picks the default allowlist and the curated `:free` list. Needs `OPENROUTER_API_KEY` | #1674 schemas (drafts are enough) |
 | [#1930](https://github.com/bldrs-ai/Share/issues/1930) | provider abstraction + BYOK key store + settings UI | `Provider` interface, four direct providers, key custody, Test/Forget, disclosure panel (§10). Evolves `BotSettings` | #1927 |
 | [#1931](https://github.com/bldrs-ai/Share/issues/1931) | OpenRouter PKCE connect | Connect/disconnect, callback route, key into #1930's store | #1930 |
@@ -989,7 +1100,7 @@ Dependencies are in brackets.
 **Why these cuts.**
 
 - The planning list had one provider/library spike. I split it into #1927
-  (client) and #1928 (relay): they need different credentials (five provider
+  (client, done) and #1928 (relay): they need different credentials (five provider
   keys vs an OpenRouter key and a Netlify preview), and #1928 also absorbs the
   Blobs unknowns that gate #1932 and #1933.
 - #1929, the model eval, is separate from both: it is a quality measurement,
