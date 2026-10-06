@@ -16,7 +16,7 @@ threads, chips). This doc owns the *runtime* plan.
 
 **Evidence.** External facts carry the URL they were read from. Facts
 checked from this session's network carry **(live check 2026-10-06)**.
-Anything not verified is marked **UNVERIFIED** and becomes a spike item (§13).
+Anything not verified is marked **UNVERIFIED** and becomes a spike item (§14).
 Share code is cited as `path:line` at `main` @ `9577fdd`.
 
 
@@ -37,11 +37,13 @@ Share code is cited as `path:line` at `main` @ `9577fdd`.
 
 - **Analysis.** Clash, quantity takeoff, code checks. Same loop, more tools.
 - **Generative CAD.** Routed to Create through a remote tool provider (§11).
+- **Generative UI (Jev).** Text → UI in the tray and for toolbelt apps.
+  Placeholder pending research (§12).
 - **Write tools.** `create-310` agent edits through the `create-300` op log
   ([model-edit.md](model-edit.md)).
 - **Toolbelt apps over postMessage MCP** (`assist-320`). Its sandbox and
   permission model will get its own section of this doc when that epic
-  starts (§15).
+  starts (§16).
 - **Shared and durable conversations** (`assist-400`). The ChannelProvider
   and the Notes-vs-channels question stay there
   ([workspace-store.md](workspace-store.md) §1.3).
@@ -124,7 +126,7 @@ leaves the browser. A single `Provider` interface hides two transports:
 - **Sovereignty stays simple to explain.** The only thing that crosses the
   wire is what the transcript shows (§10).
 - **No new server for BYOK.** The AI.2 demo can ship on BYOK alone before
-  the relay and credits exist (§13 sequencing).
+  the relay and credits exist (§14 sequencing).
 
 **What the server is still for.** Key custody and quota enforcement for
 hosted traffic (D2). That is all.
@@ -184,7 +186,7 @@ under its account" ([terms](https://openrouter.ai/terms), last updated
 are the Bldrs Share model assistant…") prepended to every hosted request
 narrows misuse at near-zero cost, so I recommend it. Requiring `tools` to
 match the published registry (by schema hash) is a stronger option, but it
-couples relay deploys to client releases. Left as an open question (§14).
+couples relay deploys to client releases. Left as an open question (§15).
 
 **Vehicle: open, spike N2.** Share has no streaming function today. Every
 function is a buffered v1 Lambda `handler(event)` except `proxy-handler.js`,
@@ -230,7 +232,7 @@ identified, paying, and bounded by a `monthly` key limit.
 not in messages. One Opus 5.5 turn costs about 100× a gpt-oss-120b turn
 (table below), so a message count would either starve Pro or bankrupt the
 picker. The UI can show the budget as a percentage or as abstract "credits"
-(naming is an open question, §14). The ledger stores integer micro-USD.
+(naming is an open question, §15). The ledger stores integer micro-USD.
 
 **Model choice for anonymous and free tiers.** There are three paths:
 
@@ -343,7 +345,7 @@ set**. The windows mirror quotas.md: 30-day rolling for signed-in tiers.
 | Pro (`sharePro`) | allowlist + priced picker, or free models | $5.00 | ~100 Sonnet 5.5, ~50 Opus 5.5, ~20 Fable 5.1, thousands on allowlist | 30-day rolling | Auth0 `sub` |
 | Free models (any tier, opt-in) | `openrouter/free` or curated `:free` | $0 (no credits) | ~200–300 a day **in total**, shared by every user | UTC day (OpenRouter's) | caller's tier identity |
 | BYOK | anything the user's key allows | none from Bldrs | — | — | none needed |
-| Global breaker | — | $25 / day for all anonymous paid-model traffic (≈ 25–35k turns); past it, anonymous traffic overflows to free models | — | UTC day | relay-wide |
+| Global breaker | — | $1 / day for all anonymous paid-model traffic (≈ 3× today's expected spend, = today's ad budget; sizing below); past it, anonymous traffic overflows to free models | — | UTC day | relay-wide |
 
 The dollar budgets can't limit free-model traffic, because it costs $0.
 So the ledger also counts free-model requests per identity (anonymous
@@ -351,11 +353,57 @@ token, IP hash, `sub`) against a small daily cap (placeholder: 30 requests,
 ~8 turns). Without it, one client could drain the shared daily pool for
 everyone.
 
+**Sizing against today's traffic: AI spend as acquisition cost.** Share sees
+about **100 users a day** today, against about **$1 a day of ad spend**.
+Hosted AI for anonymous and free users is a marketing cost of the same kind
+as that ad spend, so it is sized next to it. Placeholder assumptions:
+
+| Input | Value | Note |
+|---|---|---|
+| Daily users | 100 | today's traffic |
+| Share who try the assistant | 30% → 30 users | placeholder; `assist_open` (§7) measures it |
+| Turns per trying user | 10 | placeholder; `assist_turn` measures it |
+| Cost per turn, cheap default | ~$0.001 | gpt-oss-120b $0.0008, gpt-5-nano $0.0013 (table above) |
+| **Expected anonymous + free spend** | **30 × 10 × $0.001 ≈ $0.30 / day** | ≈ $9 / month |
+| Expected, if deny routes to the priciest gpt-oss endpoint | 300 × $0.007 ≈ $2.10 / day | upper bound until N3 measures real routing |
+
+What follows from that:
+
+- **AI cost per engaged user ≈ ad cost per visitor.** $0.30 for 30
+  assistant users is about $0.01 each. $1 of ads for ~100 visitors is about
+  $0.01 each, if all traffic were paid, which it isn't, so ads are really
+  cheaper per visitor than that. A user who has worked with the assistant
+  on their own model is a stronger conversion signal than a visit, for the
+  same cent.
+- **Per-user budgets cover a trial with headroom.** The anonymous $0.02 is
+  15–25 cheap turns against the assumed 10. A signed-in free user's $0.50 a
+  month is ~400–600 turns. Ten fully active free users would cost ~$5 a
+  month, about $0.17 a day.
+- **The breaker is a multiple of expected spend, at the ad budget.**
+  - The anonymous breaker sits at **$1 a day**: about 3× the expected
+    $0.30 and equal to the daily ad budget. The worst anonymous day, viral
+    or abusive, then costs no more than one day of ads. The overflow
+    (free models, then a sign-in prompt) keeps the assistant answering past
+    that point.
+  - A 10× viral day (1,000 users, ~$3 of expected demand) trips the breaker
+    at about a third of the day's traffic. That is the intended trade.
+  - **Re-size the breaker as traffic grows.** Rule of thumb: about 3× the
+    trailing 7-day median anonymous spend, never above a hard ceiling set
+    by hand next to the ad budget. Both numbers are placeholders.
+- **A signed-in free-tier breaker too** (added here, not in the planning
+  decisions). Per-user budgets bound one account, but free Auth0 accounts
+  are cheap to create, so the free tier gets the same daily breaker
+  mechanism. Placeholder: $2 a day (≈ 10× today's expected free spend). Past
+  it, free users overflow to free models with the same notice.
+- **The free-model pool can't carry even today's traffic as the default.**
+  ~300 expected turns a day against ~200–300 free turns a day for the whole
+  account (above). That is the D3 rationale in numbers.
+
 At the $25/mo Pro price mocked in #1421 (roadmap §4.9), a $5 AI budget is
 20% of revenue, plus OpenRouter's 5.5% credit-purchase fee
 ([FAQ](https://openrouter.ai/docs/faq.md)). Whether Pro gets **top-ups**
 (buy more credits), **pay-as-you-go** past the budget, or a hard stop is an
-open question (§14).
+open question (§15).
 
 **Pro picker.** Built from `GET /api/v1/models` (unauthenticated and
 CORS-open, live check 2026-10-06), filtered to `supported_parameters ∋
@@ -432,7 +480,8 @@ Per-message metering would multiply that write rate by roughly 100.
   mints a new anonId, but not a new IP. No raw IP is stored. The salt
   rotates daily, so the hashes don't link across days.
 - **Global breaker.** A relay-wide daily spend counter for the anonymous
-  tier's paid models. Past the threshold, anonymous traffic **degrades to
+  tier's paid models, sized at about 3× expected spend and capped near the
+  daily ad budget (placeholder $1 a day, §6 sizing). Past the threshold, anonymous traffic **degrades to
   the free-models path** (§6) with an in-tray notice, rather than being
   refused. Only when that pool is also exhausted do anonymous requests get
   "free assistant busy, sign in to continue", which is itself a conversion
@@ -449,7 +498,7 @@ Per-message metering would multiply that write rate by roughly 100.
   challenge on token mint (e.g. Cloudflare Turnstile, not evaluated), a
   lower anonymous `max_tokens`, requiring a loaded model (the client sends a
   model fingerprint; weak), and finally sign-in-only AI. How much exposure
-  is acceptable is Pablo's call (§14).
+  is acceptable is Pablo's call (§15).
 
 
 ## 8. D6 — BYOK
@@ -738,7 +787,46 @@ BYOK user's key pays for it. That is the reason to keep the loop in Share.
 - Do Create's verification checks surface in the transcript?
 
 
-## 12. D12 + D13 — Flag and bot port
+## 12. Generative UI (Jev) — placeholder
+
+> **TODO (pending research):** the coordinator is collecting research on
+> Jev (typesafe.ai, "System One models and Jev"). This section will be
+> amended when it lands. Nothing below is a decision.
+
+**Intent.** Use Jev for **text → UI**: the assistant answers with generated
+UI rendered in the tray (a schedule table, a filter panel, a small form that
+drives viewer tools), and toolbelt apps (`assist-320`) are authored as
+generated UI rather than hand-written code.
+
+**Seams it touches:**
+
+- **Tool surface (§9).** Generated UI that acts on the model must call the
+  same registry the agent calls, never `ShareViewer` or the store directly.
+  Otherwise it reopens the hole the bot's `new Function` eval had.
+- **Sandbox (`assist-320`, §16).** Where generated UI runs, and what it may
+  touch.
+- **Providers and credits (§5–§8).** If Jev needs its own model calls, they
+  should go through the same `Provider` abstraction and ledger, as with
+  Create (§11).
+
+**The sandboxing question to answer first: declarative spec or executable
+code?**
+
+- **Declarative spec** (a typed component tree that Share renders from a
+  fixed component set). It can render in the tray with no iframe. Its
+  actions bind to registry tool names, and the spec can be validated
+  against a schema before render. The ceiling on expressiveness is the
+  component set.
+- **Executable code** (generated JS/JSX). It is far more expressive, but it
+  must run in the `assist-320` sandboxed iframe over postMessage MCP, with
+  per-app tool grants. That makes it gated on #1386 and the deferred
+  sandbox design.
+
+What Jev actually emits decides which of these it is, and therefore whether
+it can ship with `assist-310` or waits for `assist-320`.
+
+
+## 13. D12 + D13 — Flag and bot port
 
 **D12: Flag.**
 
@@ -769,7 +857,7 @@ BYOK user's key pays for it. That is the reason to keep the loop in Share.
 | `BotChat.test.tsx`, `BotSettings.test.tsx`, `BotChat.spec.ts` | **Rewrite** against the new tray. Keep the MSW pattern |
 
 
-## 13. Testing and story breakdown
+## 14. Testing and story breakdown
 
 **Testing strategy.**
 
@@ -840,6 +928,7 @@ Dependencies are in brackets.
 | N8 | model selector: free-models opt-in (all tiers) + Pro picker | "Free models (experimental)" choice with its disclosure on every tier; Pro catalog via relay, priced list, unavailable-under-deny handling | N7, N4 |
 | N9 | CSP `connect-src` hardening | Site-wide CSP, Report-Only first | — (before "remember key" leaves the flag) |
 | N10 | Create seam contract | Interface + doc only (§11), agreed with Create's E1 MCP surface | #1674 |
+| N11 | assist: generative UI via Jev (text→UI) | **Placeholder, pending research (§12).** Generated UI in the tray and for toolbelt apps, bound to registry tools; settle declarative spec vs executable code first | #1674 (tool surface), `assist-320` sandbox seam (§16) |
 
 **Why these cuts.**
 
@@ -863,16 +952,18 @@ anchor. Per conversational-cad.md §6, the hosted half lands after Phase D,
 because it rides the quota and billing rails.
 
 
-## 14. Open questions for Pablo
+## 15. Open questions for Pablo
 
 1. **Budget numbers.** The anonymous, free and Pro budgets and windows in
    §6 are placeholders. They are also the anonymous IP-hash cap and the
    global breaker.
 2. **Pro beyond the budget.** Top-ups (buy credit packs), pay-as-you-go
    metered to Stripe, or a hard stop until the window rolls?
-3. **Anonymous exposure appetite.** What daily dollar figure is acceptable
-   to lose to abuse? Captcha on token mint from day one, or only when the
-   breaker trips?
+3. **Anonymous exposure appetite.** The sizing in §6 puts the anonymous
+   breaker at $1 a day (one day of ads) and the free-tier breaker at $2 a
+   day. Are those the right multiples of expected spend, and what is the
+   hard ceiling as traffic grows? Captcha on token mint from day one, or
+   only when the breaker trips?
 4. **Naming.** The user-facing name for the assistant (roadmap §10 still
    says "unpicked"), and whether budgets show as dollars, credits or a
    percentage.
@@ -889,9 +980,12 @@ because it rides the quota and billing rails.
    account's free-model training setting (§6). Is that acceptable, given
    that it applies only to requests the user opted into, or that overflowed?
    And the per-identity free-model request cap (placeholder: 30 a day).
+10. **Jev (§12).** Pending the research: does Jev emit a declarative spec
+    or executable code, and does generative UI ship with `assist-310` or
+    wait for the `assist-320` sandbox?
 
 
-## 15. Deferred (named so they are not lost)
+## 16. Deferred (named so they are not lost)
 
 - **Sandbox and MCP security for toolbelt apps** (`assist-320`, T11).
   Iframe origin isolation, per-app tool grants and approval, and versioned-app
