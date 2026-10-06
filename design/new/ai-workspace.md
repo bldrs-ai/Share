@@ -190,7 +190,7 @@ narrows misuse at near-zero cost, so I recommend it. Requiring `tools` to
 match the published registry (by schema hash) is a stronger option, but it
 couples relay deploys to client releases. Left as an open question (§15).
 
-**Vehicle: open, spike N2.** Share has no streaming function today. Every
+**Vehicle: open, spike #1928.** Share has no streaming function today. Every
 function is a buffered v1 Lambda `handler(event)` except `proxy-handler.js`,
 a v2 `export default async (req) => Response` with an origin allowlist
 (`netlify/functions/proxy-handler.js:11`). That one is the template. The
@@ -240,11 +240,11 @@ picker. The UI can show the budget as a percentage or as abstract "credits"
 
 1. **Default: cheap paid models.** A curated allowlist of 3–5 cheap,
    tool-capable paid models, always sent with `data_collection: "deny"`.
-   The free/cheap model eval (spike N3) picks the actual list.
+   The free/cheap model eval (spike #1929) picks the actual list.
 2. **Opt-in "Free models (experimental)".** A choice in the model selector
    on every tier, anonymous included. It routes to `openrouter/free` (the
    free-models router, [FAQ](https://openrouter.ai/docs/faq.md)) or to a
-   curated `:free` list from N3, and **costs zero credits**. The label says
+   curated `:free` list from #1929, and **costs zero credits**. The label says
    plainly that it may be rate-limited or unavailable, and that upstream
    providers may log or train on prompts. Choosing it shows the same
    disclosure as §10's free-models row. These requests are sent without
@@ -281,14 +281,14 @@ picker. The UI can show the budget as a percentage or as abstract "credits"
   - Because the settings are separate, the paid default stays opt-out. It
     is also forced per request with `deny`.
   - That `deny` would also exclude most `:free` endpoints is the
-    researcher's inference, not documented. N3 confirms it.
+    researcher's inference, not documented. #1929 confirms it.
 - **Availability churns.** The free roster changes often (17 free
   tool-capable models in the 2026-10-06 live check), and free endpoints come
   and go. The FAQ calls free models "usually not suitable for production
   use".
 - **Paid cheap models cost almost nothing.** See the table below.
 
-**Spike N3 picks the models.** It runs a tool-calling scorecard (tool-call
+**Spike #1929 picks the models.** It runs a tool-calling scorecard (tool-call
 accuracy, multi-turn coherence, latency, cost) over the 17 free
 tool-capable models plus 3–5 cheap paid ones. It uses the v0 tool schemas
 (§9) against canned scene fixtures, and its result sets both the default
@@ -298,7 +298,7 @@ allowlist and the curated `:free` list. It needs an `OPENROUTER_API_KEY`.
 models. 396 have `tools` in `supported_parameters`, so the filter works
 literally. 17 are free and tool-capable.
 
-**A gap the live check found (spike N3).** `/api/v1/models/{id}/endpoints`
+**A gap the live check found (spike #1929).** `/api/v1/models/{id}/endpoints`
 exposes no data-policy field, so the catalog can't say which endpoints
 survive `data_collection: "deny"`. Two consequences:
 
@@ -308,9 +308,9 @@ survive `data_collection: "deny"`. Two consequences:
   deny-compatible, the model can't be routed at all.
 
 The allowlist must be validated with real deny-routed calls before it
-ships. N3 does that as part of its scorecard.
+ships. #1929 does that as part of its scorecard.
 
-**Cost per agent turn.** Assumption, to be measured in spike N1: one user
+**Cost per agent turn.** Assumption, to be measured in spike #1927: one user
 message drives about 3 LLM calls (2 tool round-trips + answer). Each call
 carries ~6k input tokens (system + tool schemas + history + tool results)
 and the turn produces ~1k output tokens in total, so ~18k in / 1k out per
@@ -367,7 +367,7 @@ as that ad spend, so it is sized next to it. Placeholder assumptions:
 | Turns per trying user | 10 | placeholder; `assist_turn` measures it |
 | Cost per turn, cheap default | ~$0.001 | gpt-oss-120b $0.0008, gpt-5-nano $0.0013 (table above) |
 | **Expected anonymous + free spend** | **30 × 10 × $0.001 ≈ $0.30 / day** | ≈ $9 / month |
-| Expected, if deny routes to the priciest gpt-oss endpoint | 300 × $0.007 ≈ $2.10 / day | upper bound until N3 measures real routing |
+| Expected, if deny routes to the priciest gpt-oss endpoint | 300 × $0.007 ≈ $2.10 / day | upper bound until #1929 measures real routing |
 
 What follows from that:
 
@@ -451,7 +451,7 @@ Per-message metering would multiply that write rate by roughly 100.
   requests can overshoot by at most (in-flight requests × one capped
   request). `max_tokens` bounds that, so a lock isn't needed for v0.
   Whether Blobs offers conditional writes or atomic increments is
-  **UNVERIFIED** (spike N2). Lost-update races under-count, the same
+  **UNVERIFIED** (spike #1928). Lost-update races under-count, the same
   "free extra, never wrongful block" direction quotas.md accepts.
 - **Reuse.** Add `QUOTA_FEATURES.AI_CREDITS = 'ai_credits'`
   (`src/quota/quota.js:21`, whose comment already invites a new value per
@@ -517,7 +517,7 @@ Per-message metering would multiply that write rate by roughly 100.
 | OpenRouter (user's account) | `openrouter.ai/api/v1/chat/completions` | 204, `*` | `@ai-sdk/openai-compatible` or `@openrouter/ai-sdk-provider` | OpenRouter sees the conversation. Disclose it |
 
 Preflight is not proof: no authenticated POST, streamed body or tool delta
-was exercised. That is spike N1, with the per-provider checks research-byok
+was exercised. That is spike #1927, with the per-provider checks research-byok
 §5 lists.
 
 **OpenRouter "connect your account" (PKCE).** Redirect to
@@ -600,7 +600,7 @@ anthropic + openai-compatible (esbuild + gzip -9, research-byok §3; `ai`
   with four adapters measured ~296 KB, with a `node:*` external needed.
   Its `byok` module looks server-oriented.
 
-**Spike N1 decides.** Real keys, run from a real browser tab on a deploy
+**Spike #1927 decides.** Real keys, run from a real browser tab on a deploy
 preview. The matrix is {Anthropic, OpenAI, Gemini, xAI, OpenRouter-PKCE} ×
 {stream, one tool round-trip, multi-turn with two tool calls}, for AI SDK vs
 TanStack AI. The spike also settles: success-path ACAO on SSE, Gemini `AQ.`
@@ -718,7 +718,7 @@ sets only COOP (ads.md §"Privacy / CSP"). A `connect-src` allowlist (the
 five provider hosts, the relay, GitHub, Drive, Auth0, GA) is the strongest
 mitigation after not persisting keys. It stops injected script from sending
 a key to an arbitrary host. It is a site-wide project (fonts, workers, wasm,
-GA), so it is its own story, N9: start in `Report-Only` mode, then enforce.
+GA), so it is its own story, #1935: start in `Report-Only` mode, then enforce.
 
 **D10: Conversation store.**
 
@@ -839,7 +839,7 @@ does not use Jev and is a later story.
 - **Below the threshold, or no option fits:** hand the original utterance and
   Jev's candidate options to the LLM loop as context. The user sees the
   normal assistant turn, not an error.
-- **Threshold.** Calibrated by the N11 eval (Jev-vs-LLM accuracy and latency
+- **Threshold.** Calibrated by the #1937 eval (Jev-vs-LLM accuracy and latency
   on simple commands), per tool family: a wrong "hide" is cheap to undo, a
   wrong write is not. Set it on probability bands, not exact values.
 
@@ -877,7 +877,7 @@ needs a generative model, so it rides the LLM layer (§5–§8).
 - **Executable generated code** stays in the `assist-320` iframe sandbox
   (§16), gated on #1386.
 
-This stays a separate, later story (N12). The code path waits for
+This stays a separate, later story (#1938). The code path waits for
 `assist-320`.
 
 
@@ -942,9 +942,9 @@ This stays a separate, later story (N12). The code path waits for
     (including the unauthenticated request);
   - a `PROBES` entry for live smoke.
   - The streaming vehicle may need harness work, because the replay runner
-    targets v1 handlers. Part of N2.
+    targets v1 handlers. Part of #1928.
 - **Manual real-key smoke checklist** (each deploy preview that touches
-  assist; also the core of N1):
+  assist; also the core of #1927):
   1. For each provider: Test connection, then a streamed reply, then a
      prompt that needs two tool calls ("isolate all doors on level 2 and
      frame them"). The viewer state must match.
@@ -961,7 +961,7 @@ This stays a separate, later story (N12). The code path waits for
   6. DevTools network: no request carries model bytes, and no key goes to
      any non-provider host.
 
-**Stories.** The existing sub-issues of #1659, then the proposed new ones.
+**Stories.** The existing sub-issues of #1659, and the following additional ones also filed as sub-issues of #1659:
 Dependencies are in brackets.
 
 | # | Story | Scope | Depends on |
@@ -970,40 +970,40 @@ Dependencies are in brackets.
 | #1672 | tray UI + drawer threads | Tray, threads, local JSONL log (D10). Introduces the `assist` flag + `bot` alias (D12) and renames the Bot components (D13 keep rows) | — |
 | #1673 | message anchors + element chips | Chips over permalink refs | #1672 |
 | #1674 | viewer tool surface v0 | Registry + v0 tools (§9). First task: expose `selectItemsInScene` | — |
-| #1675 | agent loop v0 + streaming | AI SDK loop over the registry. Deletes the eval path. Ships first on BYOK | #1674, N1, N4 |
+| #1675 | agent loop v0 + streaming | AI SDK loop over the registry. Deletes the eval path. Ships first on BYOK | #1674, #1927, #1930 |
 | #1676 | W7 reduced tool set | unchanged, droppable | #1672 |
 | #1677 | large-model fixture + E2E | unchanged | #1675 |
-| N1 | spike: providers + client library | Real-key matrix (§9), AI SDK vs TanStack AI, token-per-turn measurement | — |
-| N2 | spike: relay vehicle + OpenRouter routing | Edge vs v2 Function limits, streaming, `verifyAuth0Bearer` adapter, Blobs atomicity, abort metering | — |
-| N3 | spike: free/cheap model eval | Tool-calling scorecard (accuracy, multi-turn coherence, latency, cost) over the 17 free tool-capable models + 3–5 cheap paid ones, v0 tool schemas on canned scene fixtures, deny-routing check. Picks the default allowlist and the curated `:free` list. Needs `OPENROUTER_API_KEY` | #1674 schemas (drafts are enough) |
-| N4 | provider abstraction + BYOK key store + settings UI | `Provider` interface, four direct providers, key custody, Test/Forget, disclosure panel (§10). Evolves `BotSettings` | N1 |
-| N5 | OpenRouter PKCE connect | Connect/disconnect, callback route, key into N4's store | N4 |
-| N6 | hosted relay `ai-chat` + anonymous identity | Relay (§5), HMAC token, IP-hash, global breaker with free-models overflow, the no-deny free-models path, replay + smoke | N2, N3 |
-| N7 | credits ledger + tiers + quota UI + funnel events | Blobs ledger (USD + per-identity free-model request caps), `AI_CREDITS`, meter, `QuotaLimitDialog` upsell, overflow notice, GA events | N6 |
-| N8 | model selector: free-models opt-in (all tiers) + Pro picker | "Free models (experimental)" choice with its disclosure on every tier; Pro catalog via relay, priced list, unavailable-under-deny handling | N7, N4 |
-| N9 | CSP `connect-src` hardening | Site-wide CSP, Report-Only first | — (before "remember key" leaves the flag) |
-| N10 | Create seam contract | Interface + doc only (§11), agreed with Create's E1 MCP surface | #1674 |
-| N11 | assist: Jev intent layer + router (System One decisions) | §12.1. Relay route for the Decisions API, `decide()` client, intent Choice over registry tool names with a confidence threshold, "did X" tray message with undo, and LLM escalation (§12.1). Includes a **Jev-vs-LLM accuracy/latency eval on simple commands** (reuses N3's harness) calibrates the threshold, and carries the CORS and measured-latency spikes | #1674 (tool registry), N6 (relay) |
-| N12 | assist: generative UI — declarative spec renderer (json-render + MUI catalog) | §12.2. Share-owned MUI catalog, spec validation, in-tray render, actions bound to registry tool names. Executable code stays with `assist-320` | #1674 (tool registry) |
+| [#1927](https://github.com/bldrs-ai/Share/issues/1927) | spike: providers + client library | Real-key matrix (§9), AI SDK vs TanStack AI, token-per-turn measurement | — |
+| [#1928](https://github.com/bldrs-ai/Share/issues/1928) | spike: relay vehicle + OpenRouter routing | Edge vs v2 Function limits, streaming, `verifyAuth0Bearer` adapter, Blobs atomicity, abort metering | — |
+| [#1929](https://github.com/bldrs-ai/Share/issues/1929) | spike: free/cheap model eval | Tool-calling scorecard (accuracy, multi-turn coherence, latency, cost) over the 17 free tool-capable models + 3–5 cheap paid ones, v0 tool schemas on canned scene fixtures, deny-routing check. Picks the default allowlist and the curated `:free` list. Needs `OPENROUTER_API_KEY` | #1674 schemas (drafts are enough) |
+| [#1930](https://github.com/bldrs-ai/Share/issues/1930) | provider abstraction + BYOK key store + settings UI | `Provider` interface, four direct providers, key custody, Test/Forget, disclosure panel (§10). Evolves `BotSettings` | #1927 |
+| [#1931](https://github.com/bldrs-ai/Share/issues/1931) | OpenRouter PKCE connect | Connect/disconnect, callback route, key into #1930's store | #1930 |
+| [#1932](https://github.com/bldrs-ai/Share/issues/1932) | hosted relay `ai-chat` + anonymous identity | Relay (§5), HMAC token, IP-hash, global breaker with free-models overflow, the no-deny free-models path, replay + smoke | #1928, #1929 |
+| [#1933](https://github.com/bldrs-ai/Share/issues/1933) | credits ledger + tiers + quota UI + funnel events | Blobs ledger (USD + per-identity free-model request caps), `AI_CREDITS`, meter, `QuotaLimitDialog` upsell, overflow notice, GA events | #1932 |
+| [#1934](https://github.com/bldrs-ai/Share/issues/1934) | model selector: free-models opt-in (all tiers) + Pro picker | "Free models (experimental)" choice with its disclosure on every tier; Pro catalog via relay, priced list, unavailable-under-deny handling | #1933, #1930 |
+| [#1935](https://github.com/bldrs-ai/Share/issues/1935) | CSP `connect-src` hardening | Site-wide CSP, Report-Only first | — (before "remember key" leaves the flag) |
+| [#1936](https://github.com/bldrs-ai/Share/issues/1936) | Create seam contract | Interface + doc only (§11), agreed with Create's E1 MCP surface | #1674 |
+| [#1937](https://github.com/bldrs-ai/Share/issues/1937) | assist: Jev intent layer + router (System One decisions) | §12.1. Relay route for the Decisions API, `decide()` client, intent Choice over registry tool names with a confidence threshold, "did X" tray message with undo, and LLM escalation (§12.1). Includes a **Jev-vs-LLM accuracy/latency eval on simple commands** (reuses #1929's harness) calibrates the threshold, and carries the CORS and measured-latency spikes | #1674 (tool registry), #1932 (relay) |
+| [#1938](https://github.com/bldrs-ai/Share/issues/1938) | assist: generative UI — declarative spec renderer (json-render + MUI catalog) | §12.2. Share-owned MUI catalog, spec validation, in-tray render, actions bound to registry tool names. Executable code stays with `assist-320` | #1674 (tool registry) |
 
 **Why these cuts.**
 
-- The planning list had one provider/library spike. I split it into N1
-  (client) and N2 (relay): they need different credentials (five provider
-  keys vs an OpenRouter key and a Netlify preview), and N2 also absorbs the
-  Blobs unknowns that gate N6 and N7.
-- N3, the model eval, is separate from both: it is a quality measurement,
+- The planning list had one provider/library spike. I split it into #1927
+  (client) and #1928 (relay): they need different credentials (five provider
+  keys vs an OpenRouter key and a Netlify preview), and #1928 also absorbs the
+  Blobs unknowns that gate #1932 and #1933.
+- #1929, the model eval, is separate from both: it is a quality measurement,
   not a plumbing check. It can start as soon as #1674's tool schemas are
   drafted, and it also owns the deny-routing check, because that is what
   decides which candidates are routable at all.
 - The flag and the bot rename fold into #1672, and eval deletion into
   #1675, rather than a separate "port" story. Those PRs touch the same
   files.
-- The disclosure UI rides on N4, where the transports are chosen.
+- The disclosure UI rides on #1930, where the transports are chosen.
 
-**Sequencing.** #1674 + N1 → N4 → #1675 gives a working BYOK agent with no
-server. That is enough for the AI.2 demo on a large model (#1677). N2 + N3
-→ N6 → N7 → N8 then add the funnel ("drop a model, get free help") and the Pro
+**Sequencing.** #1674 + #1927 → #1930 → #1675 gives a working BYOK agent with no
+server. That is enough for the AI.2 demo on a large model (#1677). #1928 + #1929
+→ #1932 → #1933 → #1934 then add the funnel ("drop a model, get free help") and the Pro
 anchor. Per conversational-cad.md §6, the hosted half lands after Phase D,
 because it rides the quota and billing rails.
 
@@ -1024,7 +1024,7 @@ because it rides the quota and billing rails.
    says "unpicked"), and whether budgets show as dollars, credits or a
    percentage.
 5. **Relay vehicle.** Edge Function vs v2 streaming Function. Defaults to
-   whichever N2 shows has the longer stream limit with working Auth0
+   whichever #1928 shows has the longer stream limit with working Auth0
    verification.
 6. **Server preamble / tool pinning** (§5). Accept the preamble? Pin the
    tool schema hash too?
