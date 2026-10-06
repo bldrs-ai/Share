@@ -1,7 +1,7 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.8 — Create verb group + Track T12 (model edit substrate)
-**Date:** 2026-10-05
+**Status:** Draft v0.9 — status reconciliation against what shipped (issue triage)
+**Date:** 2026-10-06
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022). PDF
 extract preserved in this commit's history; key Epic list inlined in §4.
@@ -71,87 +71,88 @@ cross-references that connect them. The detailed bodies live in §4 (Epics) and 
 (Tracks). **Phase column**: A–E = MVP-plan phases (§6: A stabilise viewer,
 B identity, C sharing, D subscribe+ads, E launch checklist); G = growth funnel
 (§6 Phase G, parallel, starts now); AI = pivot arc (§7, after MVP launch);
-— = shipped, nothing pending; Post = §8 backlog.
+— = shipped, nothing pending; Post = §8 backlog. **Updated column** (§3.1): the
+quarter the row was last revised.
 
 ### 3.1 Epics
 
-| Verb | ID | Name | Status | Phase | Tracks |
-|---|---|---|---|---|---|
-| Open | `open-100` | Open from local file system | ✔ | — | — |
-| Open | `open-110` | Open from GitHub URL / UI | ✔ | — | — |
-| Open | `open-120` | Open from Google Drive | ✔ | — | — |
-| Open | `open-200` | Recents reliability | 🟡 | E | T5 |
-| Open | `open-210` | Open multiple IFCs in one session | ⬜ | Post | — |
-| Open | `open-300` | Multi-account Sources tab | 🟡 | B | T3 |
-| View | `view-100` | 3D + NavTree + Properties | ✔ | — | T1, T2 |
-| View | `view-110` | Cut planes | ✔ | — | T1 |
-| View | `view-120` | Shareable camera position | ✔ | — | — |
-| View | `view-130` | Performance + large-model viewing | 🟡 | A | T1, T2 |
-| View | `view-140` | Scoped display controls + shareable display state | ⬜ | C | T1, T2 |
-| View | `view-200` | Persistent visibility / Isolate | 🟡 | Post | T1 |
-| View | `view-210` | Selection-based camera + measurement | ⬜ | Post | — |
-| View | `view-220` | Common view ops (nav-cube, explode, undo, IDS) | ⬜ | Post | — |
-| View | `view-230` | Placemarks + maps-style issues w/filtering (🥇) | 🟡 | C, Post | T1, T6 |
-| View | `view-300` | ETL / Table view (❤️ Markus) | 🔮 | Post | T1 |
-| Share | `share-100` | Share link to current view | ✔ | — | — |
-| Share | `share-110` | Save model to user's hosting (originator share) | 🟡 | C | T2 |
-| Share | `share-120` | Extended Share/Login flow (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>) | 🟡 | C, D | — |
-| Share | `share-130` | Private link sharing + visibility chip | 🟡 | C | T4 |
-| Share | `share-140` | GLB export as a Pro feature (<a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a>) | 🟡 | D | T2, T8 |
-| Share | `share-200` | Grant/revoke per-principal sharing | 🟡 | C | T4 |
-| Share | `share-400` | Folder-scoped boundaries | ⬜ | Post | T4 |
-| Notes | `notes-100` | Anchored notes (GitHub-backed) | ✔ | — | — |
-| Notes | `notes-200` | BCF round-trip | ⬜ | Post | — |
-| Notes | `notes-300` | Drive-backed notes (NotesProvider) | 🔮 | Post | T4, T6 |
-| Versions | `versions-100` | Show specific version + branch/commit nav | 🟡 | — | — |
-| Versions | `versions-300` | Diff between versions | ⬜ | Post | — |
-| Versions | `versions-310` | Portable versions for Drive | 🔮 | Post | T6 |
-| Search | `search-100` | Search current model | 🟡 | — | — |
-| Search | `search-300` | Search across GitHub repos (❤️ Oleg) | 🔮 | Post | — |
-| Search | `search-310` | Knowledge graph (🥇, ❤️ Johannes) | 🔮 | AI | T10 |
-| Search | `search-320` | Fluid NavTree + breadcrumb-scoped search (NEW) | ⬜ | AI | — |
-| Identity | `identity-100` | Auth0 primary login | ✔ | — | — |
-| Identity | `identity-110` | GitHub as Sources peer | 🟡 | B | T3 |
-| Identity | `identity-120` | Auth disambiguation (<a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a>) | 🟡 | B | — |
-| Identity | `identity-300` | Profile drawer + multi-account picker | ⬜ | B | T3 |
-| Apps | `apps-100` | Browse + select app (AppsDrawer) | ✔ | — | — |
-| Apps | `apps-110` | XYZ demo app (v0.1 API dogfood) | ✔ | — | — |
-| Apps | `apps-300` | v1.0 Public API + IDE (🥇) | 🔮 | AI | T11 |
-| Apps | `apps-310` | Bldrs Integrate (CI + ArchiCAD/Speckle) | 🔮 | AI | T11 |
-| Community | `community-100` | Welcome dialog + onboarding | ✔ | — | — |
-| Community | `community-110` | Analytics + survey + thumbs feedback | 🟡 | E | — |
-| Community | `community-200` | Bug report w/ screenshot + session state | ⬜ | Post | — |
-| Community | `community-210` | AEC outreach (🥇) | 🔮 | Post | — |
-| Subscribe | `subscribe-100` | Pricing tiers + feature manager (NEW) | ⬜ | D | T8 |
-| Subscribe | `subscribe-110` | Stripe checkout + portal (NEW) | ⬜ | D | T8 |
-| Subscribe | `subscribe-120` | Quota tracking (NEW) | ⬜ | D | T8, T3 |
-| Subscribe | `subscribe-130` | Ads on free tier | 🟡 | D | T7 |
-| Subscribe | `subscribe-400` | Enterprise tier definition (NEW) | ⬜ | Post | T8 |
-| Grow | `grow-100` | SEO format landing pages `/viewer/*` (NEW) | ⬜ | G | T9 |
-| Grow | `grow-120` | Funnel instrumentation + GA hygiene (NEW) | ⬜ | G | T9 |
-| Grow | `grow-200` | Rich share-link previews / OG cards (NEW) | ⬜ | G | T9 |
-| Grow | `grow-400` | Large-model + data-sovereignty positioning (NEW) | ⬜ | G | T9 |
-| Assist | `assist-300` | Workspace shell: left drawer projects + org nav (NEW) | ⬜ | AI | — |
-| Assist | `assist-310` | Conversational agent panel, single-user (NEW) | ⬜ | AI | T10, T11 |
-| Assist | `assist-320` | AI-apps toolbelt: save/version/run + MCP (NEW) | ⬜ | AI | T11 |
-| Assist | `assist-400` | Multi-user channels + AI participation modes (NEW) | ⬜ | AI | T10 |
-| Create | `create-300` | Model edit substrate: CRUD over an op log (<a href="https://github.com/bldrs-ai/Share/issues/1914" target="_blank" rel="noopener noreferrer">#1914</a>) (NEW) | 🟡 | AI | T12 |
-| Create | `create-310` | Agent write tools (<a href="https://github.com/bldrs-ai/Share/issues/1919" target="_blank" rel="noopener noreferrer">#1919</a>) (NEW) | ⬜ | AI | T11, T12 |
-| Create | `create-320` | Generative model creation: engine selection (<a href="https://github.com/bldrs-ai/Share/issues/1920" target="_blank" rel="noopener noreferrer">#1920</a>) (NEW) | ⬜ | AI | T12 |
+| Updated | Verb | ID | Name | Status | Phase | Tracks |
+|---|---|---|---|---|---|---|
+| Q3'26 | Open | `open-100` | Open from local file system | ✔ | — | — |
+| Q3'26 | Open | `open-110` | Open from GitHub URL / UI | ✔ | — | — |
+| Q3'26 | Open | `open-120` | Open from Google Drive | ✔ | — | — |
+| Q3'26 | Open | `open-200` | Recents reliability | 🟡 | E | T5 |
+| Q3'26 | Open | `open-210` | Open multiple IFCs in one session | ⬜ | Post | — |
+| Q3'26 | Open | `open-300` | Multi-account Sources tab | 🟡 | B | T3 |
+| Q3'26 | View | `view-100` | 3D + NavTree + Properties | ✔ | — | T1, T2 |
+| Q3'26 | View | `view-110` | Cut planes | ✔ | — | T1 |
+| Q3'26 | View | `view-120` | Shareable camera position | ✔ | — | — |
+| Q3'26 | View | `view-130` | Performance + large-model viewing | 🟡 | A | T1, T2 |
+| Q4'26 | View | `view-140` | Scoped display controls + shareable display state (<a href="https://github.com/bldrs-ai/Share/issues/1705" target="_blank" rel="noopener noreferrer">#1705</a>) | 🟡 | C | T1, T2 |
+| Q3'26 | View | `view-200` | Persistent visibility / Isolate | 🟡 | Post | T1 |
+| Q3'26 | View | `view-210` | Selection-based camera + measurement | ⬜ | Post | — |
+| Q4'26 | View | `view-220` | Common view ops (nav-cube, explode, undo, IDS) (<a href="https://github.com/bldrs-ai/Share/issues/1881" target="_blank" rel="noopener noreferrer">#1881</a>) | 🟡 | Post | — |
+| Q3'26 | View | `view-230` | Placemarks + maps-style issues w/filtering (🥇) | 🟡 | C, Post | T1, T6 |
+| Q3'26 | View | `view-300` | ETL / Table view (❤️ Markus) | 🔮 | Post | T1 |
+| Q3'26 | Share | `share-100` | Share link to current view | ✔ | — | — |
+| Q3'26 | Share | `share-110` | Save model to user's hosting (originator share) | 🟡 | C | T2 |
+| Q4'26 | Share | `share-120` | Extended Share/Login flow (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>) | ⬜ | C, D | — |
+| Q3'26 | Share | `share-130` | Private link sharing + visibility chip | 🟡 | C | T4 |
+| Q3'26 | Share | `share-140` | GLB export as a Pro feature (<a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a>) | 🟡 | D | T2, T8 |
+| Q3'26 | Share | `share-200` | Grant/revoke per-principal sharing | 🟡 | C | T4 |
+| Q3'26 | Share | `share-400` | Folder-scoped boundaries | ⬜ | Post | T4 |
+| Q3'26 | Notes | `notes-100` | Anchored notes (GitHub-backed) | ✔ | — | — |
+| Q3'26 | Notes | `notes-200` | BCF round-trip | ⬜ | Post | — |
+| Q3'26 | Notes | `notes-300` | Drive-backed notes (NotesProvider) | 🔮 | Post | T4, T6 |
+| Q3'26 | Versions | `versions-100` | Show specific version + branch/commit nav | 🟡 | — | — |
+| Q3'26 | Versions | `versions-300` | Diff between versions | ⬜ | Post | — |
+| Q3'26 | Versions | `versions-310` | Portable versions for Drive | 🔮 | Post | T6 |
+| Q3'26 | Search | `search-100` | Search current model | 🟡 | — | — |
+| Q3'26 | Search | `search-300` | Search across GitHub repos (❤️ Oleg) | 🔮 | Post | — |
+| Q3'26 | Search | `search-310` | Knowledge graph (🥇, ❤️ Johannes) | 🔮 | AI | T10 |
+| Q4'26 | Search | `search-320` | Fluid NavTree + breadcrumb-scoped search (<a href="https://github.com/bldrs-ai/Share/issues/1658" target="_blank" rel="noopener noreferrer">#1658</a>) (NEW) | ⬜ | AI | — |
+| Q3'26 | Identity | `identity-100` | Auth0 primary login | ✔ | — | — |
+| Q3'26 | Identity | `identity-110` | GitHub as Sources peer | 🟡 | B | T3 |
+| Q4'26 | Identity | `identity-120` | Auth disambiguation (<a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a>) | ⬜ | B | — |
+| Q4'26 | Identity | `identity-300` | Profile drawer + multi-account picker | 🟡 | B | T3 |
+| Q3'26 | Apps | `apps-100` | Browse + select app (AppsDrawer) | ✔ | — | — |
+| Q3'26 | Apps | `apps-110` | XYZ demo app (v0.1 API dogfood) | ✔ | — | — |
+| Q3'26 | Apps | `apps-300` | v1.0 Public API + IDE (🥇) | 🔮 | AI | T11 |
+| Q3'26 | Apps | `apps-310` | Bldrs Integrate (CI + ArchiCAD/Speckle) | 🔮 | AI | T11 |
+| Q3'26 | Community | `community-100` | Welcome dialog + onboarding | ✔ | — | — |
+| Q3'26 | Community | `community-110` | Analytics + survey + thumbs feedback | 🟡 | E | — |
+| Q3'26 | Community | `community-200` | Bug report w/ screenshot + session state | ⬜ | Post | — |
+| Q3'26 | Community | `community-210` | AEC outreach (🥇) | 🔮 | Post | — |
+| Q4'26 | Subscribe | `subscribe-100` | Pricing tiers + feature manager (NEW) | 🟡 | D | T8 |
+| Q4'26 | Subscribe | `subscribe-110` | Stripe checkout + portal (NEW) | ✔ | — | T8 |
+| Q4'26 | Subscribe | `subscribe-120` | Quota tracking (NEW) | 🟡 | D | T8, T3 |
+| Q4'26 | Subscribe | `subscribe-130` | Ads on free tier (<a href="https://github.com/bldrs-ai/Share/issues/1524" target="_blank" rel="noopener noreferrer">#1524</a>) — paused | ⬜ | D | T7 |
+| Q3'26 | Subscribe | `subscribe-400` | Enterprise tier definition (NEW) | ⬜ | Post | T8 |
+| Q3'26 | Grow | `grow-100` | SEO format landing pages `/viewer/*` (NEW) | ⬜ | G | T9 |
+| Q4'26 | Grow | `grow-120` | Funnel instrumentation + GA hygiene (NEW) | 🟡 | G | T9 |
+| Q3'26 | Grow | `grow-200` | Rich share-link previews / OG cards (NEW) | ⬜ | G | T9 |
+| Q3'26 | Grow | `grow-400` | Large-model + data-sovereignty positioning (NEW) | ⬜ | G | T9 |
+| Q4'26 | Assist | `assist-300` | Workspace shell: left drawer projects + org nav (<a href="https://github.com/bldrs-ai/Share/issues/1657" target="_blank" rel="noopener noreferrer">#1657</a>) (NEW) | 🟡 | AI | — |
+| Q4'26 | Assist | `assist-310` | Conversational agent panel, single-user (<a href="https://github.com/bldrs-ai/Share/issues/1659" target="_blank" rel="noopener noreferrer">#1659</a>) (NEW) | ⬜ | AI | T10, T11 |
+| Q3'26 | Assist | `assist-320` | AI-apps toolbelt: save/version/run + MCP (NEW) | ⬜ | AI | T11 |
+| Q4'26 | Assist | `assist-400` | Multi-user channels + AI participation modes (<a href="https://github.com/bldrs-ai/Share/issues/1660" target="_blank" rel="noopener noreferrer">#1660</a>) (NEW) | ⬜ | AI | T10 |
+| Q3'26 | Create | `create-300` | Model edit substrate: CRUD over an op log (<a href="https://github.com/bldrs-ai/Share/issues/1914" target="_blank" rel="noopener noreferrer">#1914</a>) (NEW) | 🟡 | AI | T12 |
+| Q3'26 | Create | `create-310` | Agent write tools (<a href="https://github.com/bldrs-ai/Share/issues/1919" target="_blank" rel="noopener noreferrer">#1919</a>) (NEW) | ⬜ | AI | T11, T12 |
+| Q3'26 | Create | `create-320` | Generative model creation: engine selection (<a href="https://github.com/bldrs-ai/Share/issues/1920" target="_blank" rel="noopener noreferrer">#1920</a>) (NEW) | ⬜ | AI | T12 |
 
 ### 3.2 Tracks
 
 | ID | Name | Status | Phase | Unblocks |
 |---|---|---|---|---|
 | T1 | Viewer Replacement | 🟡 | A (launch gate) | `view-100`, `view-110`, `view-200`, `view-130`, `view-300`, T2 |
-| T2 | GLB Model Sharing | 🟡 | C (Ph 4 + 5) | `share-110`, `notes-300`, `view-130` |
-| T3 | Identity Decoupling | 🟡 | B (PR2 + PR3) | `identity-110`, `identity-120`, `identity-300`, `open-300`, `share-200`, `subscribe-120`, T4 PR3 |
+| T2 | GLB Model Sharing | 🟡 | C (Ph 4 + 5) | `share-110`, `share-140`, `notes-300`, `view-130` |
+| T3 | Identity Decoupling | 🟡 | B (PR3) | `identity-110`, `identity-120`, `identity-300`, `open-300`, `share-200`, `subscribe-120`, T4 PR3 |
 | T4 | Multi-User Sharing | 🟡 | C (PR2 + PR3) | `share-130`, `share-200`, `share-400`, `notes-300`, `versions-310` |
 | T5 | Drive Recents HEAD-check | ⬜ | E (polish) | `open-200` |
 | T6 | Notes & Versions sidecar formats | ⬜ | Post | `notes-200`, `notes-300`, `versions-310` |
-| T7 | Ads | 🟡 | D | `subscribe-130` |
-| T8 | Pro/Billing (NEW) | ⬜ | D | `subscribe-100`, `subscribe-110`, `subscribe-120`, §7 AI metering |
-| T9 | Growth funnel & SEO surfaces (NEW) | ⬜ | G | `grow-100`, `grow-200`, `grow-120` |
+| T7 | Ads (paused) | ⬜ | D | `subscribe-130` |
+| T8 | Pro/Billing (NEW) | 🟡 | D | `subscribe-100`, `subscribe-110`, `subscribe-120`, §7 AI metering |
+| T9 | Growth funnel & SEO surfaces (NEW) | 🟡 | G | `grow-100`, `grow-200`, `grow-120` |
 | T10 | Agent runtime & conversation store (NEW) | ⬜ | AI (§7) | `assist-310`, `assist-400`, `search-310` |
 | T11 | App sandbox + MCP bridge (NEW) | ⬜ | AI (§7) | `assist-320`, `apps-300`, `apps-310` |
 | T12 | Model edit substrate (NEW) | 🟡 | AI (§7) | `create-300`, `create-310`, `create-320`, §7.4 AI.5 |
@@ -174,7 +175,14 @@ multi-model composition.
 loader. Recent stability work via OPFS caching (`src/OPFS/`) and Conway-direct parse
 (Track T1).
 - Closed: <a href="https://github.com/bldrs-ai/Share/issues/757" target="_blank" rel="noopener noreferrer">#757</a> Open sample model, <a href="https://github.com/bldrs-ai/Share/issues/934" target="_blank" rel="noopener noreferrer">#934</a> DnD-to-update.
-- No open stories; capability is steady-state.
+- Format breadth since v0.3 (each a `supportedTypes` entry + `findLoader` arm,
+  `design/new/adding-model-formats.md`): USD/USDA/USDC/USDZ (<a href="https://github.com/bldrs-ai/Share/issues/1728" target="_blank" rel="noopener noreferrer">#1728</a>), Gaussian
+  splats via Spark (<a href="https://github.com/bldrs-ai/Share/issues/1726" target="_blank" rel="noopener noreferrer">#1726</a>), Align ADF dental scans with MetaStream crowns decoded
+  in-repo (PR <a href="https://github.com/bldrs-ai/Share/issues/1878" target="_blank" rel="noopener noreferrer">#1878</a>, `design/new/adf-mts-decoder.md`), dropped binary STLs + STL
+  colours (PR <a href="https://github.com/bldrs-ai/Share/issues/1887" target="_blank" rel="noopener noreferrer">#1887</a>), and `.glb.gz` (Share's own compressed export).
+- Capability is steady-state. Open: <a href="https://github.com/bldrs-ai/Share/issues/1906" target="_blank" rel="noopener noreferrer">#1906</a> local open without OPFS (the Open
+  dialog now shows a typed "not available here" alert instead, PR <a href="https://github.com/bldrs-ai/Share/issues/1905" target="_blank" rel="noopener noreferrer">#1905</a>); <a href="https://github.com/bldrs-ai/Share/issues/1892" target="_blank" rel="noopener noreferrer">#1892</a>
+  Browse file-input GC race (fixed in PR <a href="https://github.com/bldrs-ai/Share/issues/1893" target="_blank" rel="noopener noreferrer">#1893</a>, open pending CI confirmation).
 
 **Epic `open-110`: Open from GitHub URL / UI** ✔
 *PDF Open.2 (the open-the-model half).* Done.
@@ -190,14 +198,19 @@ original list; landed via `googleDrive` flag now default-on).
 **Epic `open-200`: Recents reliability** 🟡 (NEW)
 *Not in PDF — surfaced by support friction.*
 - Track dependency: T5 Drive recents HEAD-check (proposed).
-- Open: <a href="https://github.com/bldrs-ai/Share/issues/1548" target="_blank" rel="noopener noreferrer">#1548</a> local recent fails hard after a cache clear — needs a typed
-  "file no longer available" alert (T5's pre-flight pattern applied to the
-  OPFS/local case, not just Drive).
-- Story to file: `open-200: Recents show typed unreachable alert + remove-recent`.
+- Closed: <a href="https://github.com/bldrs-ai/Share/issues/1548" target="_blank" rel="noopener noreferrer">#1548</a> local recent fails hard after a cache clear — PR <a href="https://github.com/bldrs-ai/Share/issues/1905" target="_blank" rel="noopener noreferrer">#1905</a> keeps local
+  recents and their OPFS uploads in step (`pruneMissingLocalRecents()` at startup
+  and when the Open dialog shows; Clear Local Cache clears both); <a href="https://github.com/bldrs-ai/Share/issues/1682" target="_blank" rel="noopener noreferrer">#1682</a> reopening
+  a local recent ("Loader could not read model") — recents open by OPFS storage id.
+- Open: the Drive half — T5's pre-flight (typed `FileUnreachable` alert +
+  remove-recent) is unbuilt, as is the GitHub equivalent.
+- Story to file: `open-200: Recents show typed unreachable alert + remove-recent`
+  (Drive + GitHub; local is done).
 
 **Epic `open-210`: Open multiple IFCs in one session** ⬜
 *PDF Open.3 — never started.*
 - Open: <a href="https://github.com/bldrs-ai/Share/issues/1251" target="_blank" rel="noopener noreferrer">#1251</a> Open 200: import and overlay multiple models.
+- Groundwork: <a href="https://github.com/bldrs-ai/Share/issues/1778" target="_blank" rel="noopener noreferrer">#1778</a> stop assuming conway's modelID is always 0 (open).
 - Pre-condition: Conway-direct + GLB cache are stable per-model (✔ via T1/T2), so
   scaling to N models is now a UI + state-management problem, not an engine problem.
 - **Not in MVP.** Loveable post-MVP.
@@ -218,8 +231,10 @@ slice, and isolation controls expected of a BIM viewer.
 *PDF View.1 — done in PDF. Re-validated against Conway-direct + GLB cache.*
 - Closed: <a href="https://github.com/bldrs-ai/Share/issues/1031" target="_blank" rel="noopener noreferrer">#1031</a> Initial model load, <a href="https://github.com/bldrs-ai/Share/issues/1046" target="_blank" rel="noopener noreferrer">#1046</a> Synchronized View+NavTree, <a href="https://github.com/bldrs-ai/Share/issues/1042" target="_blank" rel="noopener noreferrer">#1042</a> Centering &
   reset, <a href="https://github.com/bldrs-ai/Share/issues/1242" target="_blank" rel="noopener noreferrer">#1242</a> Access properties of selected element, <a href="https://github.com/bldrs-ai/Share/issues/1048" target="_blank" rel="noopener noreferrer">#1048</a> Navigate by hierarchy.
-- Open follow-up: NavTree on cache-hit GLB E2E spec (called out in
-  `design/new/viewer-replacement.md` §3b.iii).
+- Closed follow-up: NavTree + Properties cache-hit E2E (`NavTree.cacheHit.spec.ts`,
+  `Properties.cacheHit.spec.ts`, `Properties.stepCacheHit.spec.ts`), un-skipped once
+  OPFS was enabled in the Playwright build (<a href="https://github.com/bldrs-ai/Share/issues/1779" target="_blank" rel="noopener noreferrer">#1779</a>, <a href="https://github.com/bldrs-ai/Share/issues/1783" target="_blank" rel="noopener noreferrer">#1783</a>; mobile legs <a href="https://github.com/bldrs-ai/Share/issues/1787" target="_blank" rel="noopener noreferrer">#1787</a>).
+- Note: <a href="https://github.com/bldrs-ai/Share/issues/1031" target="_blank" rel="noopener noreferrer">#1031</a> (Initial model load) is listed Closed above but is still open on GitHub.
 - Regression fixed (viewer-replacement era): scene↔NavTree selection sync +
   element-path permalinks. The default-on Conway-direct scene pick set store state
   directly, bypassing the `selectItemsInScene` funnel — so a NavTree selection inherited
@@ -252,11 +267,18 @@ slice, and isolation controls expected of a BIM viewer.
   PR #1581) and
   <a href="https://github.com/bldrs-ai/Share/issues/1570" target="_blank" rel="noopener noreferrer">#1570</a> (pin down the `{value}`-handle + reference-graph contract `ifclib`
   imposes on the engine; defensive `reifyName`; possible re-home to conway).
-- Open bugs feeding Phase A stabilisation: <a href="https://github.com/bldrs-ai/Share/issues/1561" target="_blank" rel="noopener noreferrer">#1561</a> camera fit keys off "last scene
-  child" instead of a named primary-model reference; <a href="https://github.com/bldrs-ai/Share/issues/1545" target="_blank" rel="noopener noreferrer">#1545</a> `getSelectedElementsProps`
-  passes an expressID where a type code is expected (wrong/empty type in the
-  Properties panel); <a href="https://github.com/bldrs-ai/Share/issues/1249" target="_blank" rel="noopener noreferrer">#1249</a> (critical) selection/properties don't hydrate when a
-  private model is opened from an element permalink.
+- STEP follow-through since v0.7: per-solid selection of multibody parts; anonymous-
+  geometry permalinks (PR <a href="https://github.com/bldrs-ai/Share/issues/1600" target="_blank" rel="noopener noreferrer">#1600</a>); STEP part type + Properties on a cache-hit GLB
+  (<a href="https://github.com/bldrs-ai/Share/issues/1876" target="_blank" rel="noopener noreferrer">#1876</a>, <a href="https://github.com/bldrs-ai/Share/issues/1895" target="_blank" rel="noopener noreferrer">#1895</a>); STEP keeps conway handle 0 so its cached NavTree survives
+  (<a href="https://github.com/bldrs-ai/Share/issues/1777" target="_blank" rel="noopener noreferrer">#1777</a>); a root-shell pick highlights its product (<a href="https://github.com/bldrs-ai/Share/issues/1910" target="_blank" rel="noopener noreferrer">#1910</a>); standard glTF
+  scene/node naming for scene-graph models (<a href="https://github.com/bldrs-ai/Share/issues/1595" target="_blank" rel="noopener noreferrer">#1595</a>); scene shift-select and
+  multi-selection in the link (<a href="https://github.com/bldrs-ai/Share/issues/1886" target="_blank" rel="noopener noreferrer">#1886</a>). Open: <a href="https://github.com/bldrs-ai/Share/issues/1924" target="_blank" rel="noopener noreferrer">#1924</a> STEP root-selection follow-ups.
+- Phase A bug list: <a href="https://github.com/bldrs-ai/Share/issues/1545" target="_blank" rel="noopener noreferrer">#1545</a> `getSelectedElementsProps` type lookup — fixed (PR <a href="https://github.com/bldrs-ai/Share/issues/1592" target="_blank" rel="noopener noreferrer">#1592</a>).
+  <a href="https://github.com/bldrs-ai/Share/issues/1561" target="_blank" rel="noopener noreferrer">#1561</a> camera fit "last scene child" — closed on GitHub, but
+  `orbit-control.js` still carries `TODO(#1561)` and defaults to the last child
+  (callers now pass an explicit target); confirm or reopen. <a href="https://github.com/bldrs-ai/Share/issues/1249" target="_blank" rel="noopener noreferrer">#1249</a> (critical)
+  selection/properties don't hydrate when a private model is opened from an
+  element permalink — still open.
 
 **Epic `view-110`: Cut planes** ✔
 *PDF View.3 — Cut sub-item ✔.*
@@ -280,18 +302,43 @@ multi-worker; etc.*
     subpath export, and the release chain collapsed to Conway → Share (no more
     three-hop republish / 22-minor-version lag). Real-`web-ifc` engine-swap
     comparison retained. See `design/new/adapter-removal.md`.
-  - **GPU-instancing arc 🟡 (behind `?feature=batchedMesh`).** Grouper + measured
+  - **GPU-instancing arc ✔ (the default render path).** Grouper + measured
     analysis (#1568: ~60% vertex-memory reduction on instancing-dense Revit models,
     ~26% on STEP), `BatchedMesh` render path with recolor-based highlight, isolate,
     and BVH picking (#1571), and a batched→merged GLB-cache bake so cached
-    artifacts stay byte-compatible with the merged reader (#1574). Always-on flip
-    deferred pending smoke-test. See `viewer-replacement.md` §3b.iv.
+    artifacts stay byte-compatible with the merged reader (#1574). Now the default:
+    the demand pump assembles a durable BatchedMesh incrementally (B1) and cache hits
+    rebuild one from the batched-native GLB; `?feature=batchedMesh` survives only as
+    the gate for the classic whole-model fallback build. Per-occurrence narrowing +
+    hide on the batched path landed. See `viewer-replacement.md` §3b.iv/§3b.v.
+  - **Streamed columnar open ✔ (default-on, <a href="https://github.com/bldrs-ai/Share/issues/1609" target="_blank" rel="noopener noreferrer">#1609</a>; kill switch
+    `?feature=disableStreamOpen`)**, plus the lazy-properties memory arc
+    (names-only spatial tree <a href="https://github.com/bldrs-ai/Share/issues/1588" target="_blank" rel="noopener noreferrer">#1588</a>, streaming GLB props writer <a href="https://github.com/bldrs-ai/Share/issues/1589" target="_blank" rel="noopener noreferrer">#1589</a>, roots-only
+    sweep <a href="https://github.com/bldrs-ai/Share/issues/1599" target="_blank" rel="noopener noreferrer">#1599</a>, resident-geometry cap). Design: `lazy-properties-memory.md`.
+  - **Demand/tiled rendering ✔ (default-on 2026-07-22, PR <a href="https://github.com/bldrs-ai/Share/issues/1614" target="_blank" rel="noopener noreferrer">#1614</a>).** Deferred open +
+    batch pump, parse-time preview, STEP parity, incremental durable BatchedMesh (B1),
+    residency slider + eviction control (B2). Hardening since: georeferenced
+    recentre (PR <a href="https://github.com/bldrs-ai/Share/issues/1631" target="_blank" rel="noopener noreferrer">#1631</a>; heuristic redesign <a href="https://github.com/bldrs-ai/Share/issues/1633" target="_blank" rel="noopener noreferrer">#1633</a>), eviction/retry races,
+    >125k-geometry degradation, outlier-robust auto-framing. Slice C (tiles as truth
+    + GPU picking) is open (<a href="https://github.com/bldrs-ai/Share/issues/1613" target="_blank" rel="noopener noreferrer">#1613</a>); the streaming-loader epic <a href="https://github.com/bldrs-ai/Share/issues/1601" target="_blank" rel="noopener noreferrer">#1601</a>
+    (<a href="https://github.com/bldrs-ai/Share/issues/1602" target="_blank" rel="noopener noreferrer">#1602</a>–<a href="https://github.com/bldrs-ai/Share/issues/1606" target="_blank" rel="noopener noreferrer">#1606</a>) tracks the conway-milestone consumer side. Design:
+    `demand-tiled-rendering.md`.
+  - **Batched-native GLB cache ✔ (default-on 2026-08-28).** `EXT_mesh_gpu_instancing`
+    + `BLDRS_instance_tables`: a cache hit rebuilds a real BatchedMesh, so display
+    controls and residency work on reload. Followed by the gzipped OPFS container
+    (<a href="https://github.com/bldrs-ai/Share/issues/1855" target="_blank" rel="noopener noreferrer">#1855</a>) and the collapsed range-primitive layout (default-on, <a href="https://github.com/bldrs-ai/Share/issues/1902" target="_blank" rel="noopener noreferrer">#1902</a>).
 - Open: on-demand rendering (dirty-flag, currently 60Hz unconditional — `viewer-
   replacement.md` §3c.iv "Open perf items"); hover-pick throttling tuning; per-product
-  Mesh emission spike; `batchedMesh` always-on flip + per-occurrence selection
-  narrowing on the batched path; `EXT_mesh_gpu_instancing` batched-native GLB cache
-  (§3b.v) so the round-trip stays instanced and the artifact shrinks.
-- Open: **residency backends** — the B2 slider is gated on the batched path
+  Mesh emission spike. Related open bugs: <a href="https://github.com/bldrs-ai/Share/issues/1896" target="_blank" rel="noopener noreferrer">#1896</a> batched reader over-estimates bounds,
+  <a href="https://github.com/bldrs-ai/Share/issues/1824" target="_blank" rel="noopener noreferrer">#1824</a> coincident-twin pick ties, <a href="https://github.com/bldrs-ai/Share/issues/1814" target="_blank" rel="noopener noreferrer">#1814</a> demand pump produced no batches, <a href="https://github.com/bldrs-ai/Share/issues/1856" target="_blank" rel="noopener noreferrer">#1856</a>
+  show/clear local GLB-cache disk use.
+- Open: **residency beyond the batched path** (<a href="https://github.com/bldrs-ai/Share/issues/1711" target="_blank" rel="noopener noreferrer">#1711</a>). Scope shrank once the
+  batched-native cache landed: a cache hit on IFC/STEP is already a real
+  BatchedMesh, so the merged backend below is dead; what remains is the
+  scene-graph backend for GLB/OBJ/STL and friends. The slider is *visibility*, not
+  memory release — real geometry release is <a href="https://github.com/bldrs-ai/Share/issues/1913" target="_blank" rel="noopener noreferrer">#1913</a> (evict + rematerialize, whose
+  memory half builds on `create-300` L0). Original framing, for the record:
+  the B2 slider is gated on the batched path
   (`isBatchedMesh` + readable batch buffers), so it's invisible for GLB, OBJ and
   friends. Extract a backend interface and add a scene-graph backend
   (`Object3D.visible`) plus a merged backend (index compaction over
@@ -303,7 +350,7 @@ multi-worker; etc.*
 - Pre-public-launch gate: 4-angle screenshot harness + GLB bit-level diff (called out
   in `viewer-replacement.md` §3b.iii final paragraph). **Required for MVP.**
 
-**Epic `view-140`: Scoped display controls + shareable display state** ⬜
+**Epic `view-140`: Scoped display controls + shareable display state** 🟡 (<a href="https://github.com/bldrs-ai/Share/issues/1705" target="_blank" rel="noopener noreferrer">#1705</a>)
 *Not in the PDF — arrived from use. Five asks that are one feature: an
 appearance decision, applied to a scope, that survives a share.*
 - Auto-coloring (PR <a href="https://github.com/bldrs-ai/Share/pull/1626" target="_blank" rel="noopener noreferrer">#1626</a>) is default-on, invisible and irreversible —
@@ -330,26 +377,42 @@ appearance decision, applied to a scope, that survives a share.*
   changes the stored GLB format, which is safe because batched artifacts live
   in their own schema slot and the slot is part of the OPFS filename — see
   the design doc §7.1 for the argument and its two consequences.
+- Closed: <a href="https://github.com/bldrs-ai/Share/issues/1706" target="_blank" rel="noopener noreferrer">#1706</a> S1 source colours preserved, <a href="https://github.com/bldrs-ai/Share/issues/1707" target="_blank" rel="noopener noreferrer">#1707</a> S2 Color control (Auto /
+  Source), <a href="https://github.com/bldrs-ai/Share/issues/1708" target="_blank" rel="noopener noreferrer">#1708</a> S3 override stack, <a href="https://github.com/bldrs-ai/Share/issues/1712" target="_blank" rel="noopener noreferrer">#1712</a> S7 `#d:` permalink token (colour,
+  shading, residency, and hide/show/iso), <a href="https://github.com/bldrs-ai/Share/issues/1793" target="_blank" rel="noopener noreferrer">#1793</a> S9 batched-native GLB cache.
+  Shipped as PR <a href="https://github.com/bldrs-ai/Share/issues/1714" target="_blank" rel="noopener noreferrer">#1714</a>, E2E desktop + mobile.
+- Open: <a href="https://github.com/bldrs-ai/Share/issues/1709" target="_blank" rel="noopener noreferrer">#1709</a> S4 — Shaded + Wireframe shipped, **Shaded + edges** did not;
+  <a href="https://github.com/bldrs-ai/Share/issues/1710" target="_blank" rel="noopener noreferrer">#1710</a> S5 scoped application (sub-tree / part / mesh) — not started, the one ask
+  genuinely undone; <a href="https://github.com/bldrs-ai/Share/issues/1713" target="_blank" rel="noopener noreferrer">#1713</a> S8 wiki `Design:URLs` `#d:` entry. Residency beyond
+  IFC/STEP is `view-130` <a href="https://github.com/bldrs-ai/Share/issues/1711" target="_blank" rel="noopener noreferrer">#1711</a>.
 - Track dependency: T1 (subset builders, batched path), T2 (the override
   schema is what T2 Phase 4's view-states embed for anything past the URL cap).
 
 **Epic `view-200`: Persistent visibility / Isolate** 🟡
 *PDF "View element subsets" — partial.*
-- Open: <a href="https://github.com/bldrs-ai/Share/issues/1250" target="_blank" rel="noopener noreferrer">#1250</a> View 200 Implement persistent visibility (URL-encoded
-  `hiddenExpressIDs[]`) — **now planned as a slice of `view-140`'s `#d:`
-  token** rather than its own encoding, so hidden + color + shading +
-  residency round-trip together.
+- Landed: hide / isolate across every model shape — IFC, STEP occurrence paths, and
+  scene-graph formats (ADF, OBJ, FBX, STL, GLB) — plus multi-select and
+  shift-select (PRs <a href="https://github.com/bldrs-ai/Share/issues/1884" target="_blank" rel="noopener noreferrer">#1884</a>, <a href="https://github.com/bldrs-ai/Share/issues/1886" target="_blank" rel="noopener noreferrer">#1886</a>). Hide/isolate state round-trips in the `#d:`
+  permalink as `hide=` / `show=` / `iso=` (PR <a href="https://github.com/bldrs-ai/Share/issues/1885" target="_blank" rel="noopener noreferrer">#1885</a>; `model-display-controls.md`
+  §6.3). E2E: `HideFeat`, `IfcIsolator`, `stepVisibility`, `visibilityHash`, `adf`.
+- Open: <a href="https://github.com/bldrs-ai/Share/issues/1250" target="_blank" rel="noopener noreferrer">#1250</a> — the part that doesn't go through a link: hidden state kept
+  across sessions for the same user, plus the Figma flow. Also <a href="https://github.com/bldrs-ai/Share/issues/1820" target="_blank" rel="noopener noreferrer">#1820</a> isolation
+  outline invisible on the light theme, <a href="https://github.com/bldrs-ai/Share/issues/1821" target="_blank" rel="noopener noreferrer">#1821</a> BotChat isolate bypasses the
+  isolator, <a href="https://github.com/bldrs-ai/Share/issues/1775" target="_blank" rel="noopener noreferrer">#1775</a> hiding intermediate shapes drops colouring.
 - Track dependency: T1 §3b.iii isolate routing through IfcInstanceMap (landed).
-  Persistence to URL is the remaining slice.
 
 **Epic `view-210`: Selection-based camera + measurement** ⬜
 - Open: <a href="https://github.com/bldrs-ai/Share/issues/1044" target="_blank" rel="noopener noreferrer">#1044</a> View 200 Selection-based camera control; <a href="https://github.com/bldrs-ai/Share/issues/1047" target="_blank" rel="noopener noreferrer">#1047</a> View 200 Distance
   measurement between elements.
 - **Post-MVP.** Useful for the loveable target but not blocking.
 
-**Epic `view-220`: Common view operations** ⬜
-*PDF View.3 — partially done (Cut ✔). Still missing:*
-- Nav-cube, Explode, undo/redo.
+**Epic `view-220`: Common view operations** 🟡 (<a href="https://github.com/bldrs-ai/Share/issues/1881" target="_blank" rel="noopener noreferrer">#1881</a>)
+*PDF View.3 — partially done (Cut ✔).*
+- Closed: ViewCube navigation gizmo (<a href="https://github.com/bldrs-ai/Share/issues/1882" target="_blank" rel="noopener noreferrer">#1882</a>, PR <a href="https://github.com/bldrs-ai/Share/issues/1883" target="_blank" rel="noopener noreferrer">#1883</a>) — follows the camera,
+  face/edge/corner snap-and-fit, drag-orbit, step buttons + Home, bottom-bar toggle
+  (off by default, persisted). E2E `viewCube.spec.ts`, desktop + mobile.
+- Still missing: Explode, undo/redo (`create-300` L1 <a href="https://github.com/bldrs-ai/Share/issues/1916" target="_blank" rel="noopener noreferrer">#1916</a> is the edit op-log
+  undo, a different thing).
 - IDS (was MVD) — quality-check rules for the IFC. Discussed in PDF page 4–5.
 - **Post-MVP.** IDS is a non-trivial spec implementation.
 
@@ -442,18 +505,40 @@ publicly — and the recipient sees what was intended.
 - Track dependency: T2 Phase 5 (originator share flow: drop IFC → GLB written
   locally → upload artifact to Drive/GitHub/Firebase → link).
 
-**Epic `share-120`: Extended Share/Login flow (one-click)** 🟡 (NEW)
+**Epic `share-120`: Extended Share/Login flow (one-click)** ⬜ (NEW)
 - Open: <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> Share (200) Extended login flow — the dialog that picks between
   anonymous-public-5-day, free-public-long-term, Pro-private, etc. This is the
   surface where the Pro pricing tiers become visible.
+- Not started (2026-10): <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> is mock dialogs only, no PR. The Share dialog
+  today carries the camera / cut-plane / `#d:` display toggles only.
 - **Required for MVP** (it's where the upgrade prompt lives).
 
 **Epic `share-130`: Private link sharing + visibility chip** 🟡 (NEW)
 *Not in PDF except as "Private hosting" sub-bullet under Open.1.*
-- Track dependency: T4 Multi-User Sharing PR1 (landed: provider scaffolding + Drive
-  adapter); PR2 (Drive Share dialog UI); PR3 (GitHub sharing adapter).
-- Open: feature flag `sharing` is off; turn-on once PR2 lands.
+- Track dependency: T4 Multi-User Sharing PR1 (landed, <a href="https://github.com/bldrs-ai/Share/issues/1505" target="_blank" rel="noopener noreferrer">#1505</a>: provider scaffolding +
+  `GoogleDriveSharing`); PR2 (Drive Share dialog UI); PR3 (GitHub sharing adapter).
+- Open: feature flag `sharing` is off and has no consumer yet (no People panel or
+  visibility chip in the Share dialog); turn-on once PR2 lands.
+- Related legacy-path work (Auth0-federated GitHub, not T4): Pro-gated "Enable
+  private repos" opt-in (<a href="https://github.com/bldrs-ai/Share/issues/1625" target="_blank" rel="noopener noreferrer">#1625</a>) and the repo-scope grant persisting across
+  re-logins (<a href="https://github.com/bldrs-ai/Share/issues/1641" target="_blank" rel="noopener noreferrer">#1641</a>). <a href="https://github.com/bldrs-ai/Share/issues/160" target="_blank" rel="noopener noreferrer">#160</a> (2022 private hosting tracker) predates both.
 - **Required for MVP** (private sharing is a paid feature per <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>).
+
+**Epic `share-140`: GLB export as a Pro feature** 🟡 (NEW, <a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a>)
+*Not in PDF. Design: `design/new/glb-export-premium.md`.*
+- Closed: <a href="https://github.com/bldrs-ai/Share/issues/1832" target="_blank" rel="noopener noreferrer">#1832</a> pro-module pipeline, <a href="https://github.com/bldrs-ai/Share/issues/1833" target="_blank" rel="noopener noreferrer">#1833</a> Download GLB, <a href="https://github.com/bldrs-ai/Share/issues/1838" target="_blank" rel="noopener noreferrer">#1838</a> Export tab
+  (in the **Save** dialog, not Share), <a href="https://github.com/bldrs-ai/Share/issues/1834" target="_blank" rel="noopener noreferrer">#1834</a> export tracking (data path),
+  <a href="https://github.com/bldrs-ai/Share/issues/1841" target="_blank" rel="noopener noreferrer">#1841</a>/<a href="https://github.com/bldrs-ai/Share/issues/1842" target="_blank" rel="noopener noreferrer">#1842</a> size line + codec control, <a href="https://github.com/bldrs-ai/Share/issues/1843" target="_blank" rel="noopener noreferrer">#1843</a>/<a href="https://github.com/bldrs-ai/Share/issues/1844" target="_blank" rel="noopener noreferrer">#1844</a> Portable export +
+  re-hydration (Portable default-on since <a href="https://github.com/bldrs-ai/Share/issues/1904" target="_blank" rel="noopener noreferrer">#1904</a>), <a href="https://github.com/bldrs-ai/Share/issues/1848" target="_blank" rel="noopener noreferrer">#1848</a> quality + codec sweep,
+  <a href="https://github.com/bldrs-ai/Share/issues/1855" target="_blank" rel="noopener noreferrer">#1855</a> gzipped OPFS container, <a href="https://github.com/bldrs-ai/Share/issues/1862" target="_blank" rel="noopener noreferrer">#1862</a> JSON-chunk re-expression, <a href="https://github.com/bldrs-ai/Share/issues/1871" target="_blank" rel="noopener noreferrer">#1871</a> mesh
+  collapse (`glbCollapse` default-on, <a href="https://github.com/bldrs-ai/Share/issues/1902" target="_blank" rel="noopener noreferrer">#1902</a>), <a href="https://github.com/bldrs-ai/Share/issues/1900" target="_blank" rel="noopener noreferrer">#1900</a> one node per element,
+  <a href="https://github.com/bldrs-ai/Share/issues/1909" target="_blank" rel="noopener noreferrer">#1909</a> STEP shell → product highlight.
+- Open: <a href="https://github.com/bldrs-ai/Share/issues/1835" target="_blank" rel="noopener noreferrer">#1835</a> S4 rollout — cross-browser smoke, real Management API path,
+  design §7.1/§7.2 decisions, flip `export` (still default off), wiki entry;
+  <a href="https://github.com/bldrs-ai/Share/issues/1836" target="_blank" rel="noopener noreferrer">#1836</a> S5 further formats; <a href="https://github.com/bldrs-ai/Share/issues/1857" target="_blank" rel="noopener noreferrer">#1857</a> Draco + Meshopt together; <a href="https://github.com/bldrs-ai/Share/issues/1853" target="_blank" rel="noopener noreferrer">#1853</a>
+  decimation (deprioritised); STEP follow-ups <a href="https://github.com/bldrs-ai/Share/issues/1901" target="_blank" rel="noopener noreferrer">#1901</a> (multi-root files) and <a href="https://github.com/bldrs-ai/Share/issues/1924" target="_blank" rel="noopener noreferrer">#1924</a>.
+- Track dependency: T2 (the GLB artifact), T8 (Pro entitlement via `pro-module`).
+- Pro-band value, not on the §6.0 MVP list; rollout rides Phase D.
 
 **Epic `share-200`: Grant/revoke per-principal sharing** 🟡 (NEW)
 *Not in PDF.*
@@ -550,7 +635,11 @@ data graph.
 - Absorbs <a href="https://github.com/bldrs-ai/Share/issues/1254" target="_blank" rel="noopener noreferrer">#1254</a> (search by element name w/ scene highlighting).
 - Open design question: `NavTreeAndVersionsDrawer` retires entirely (Versions
   re-homes) or shrinks to Versions-only.
-- Behind `?feature=navSearch`. Sits between AI.1 and AI.2 in the pivot
+- First slice landed under `assist-300` instead: the TopBar breadcrumb + relocated
+  search (<a href="https://github.com/bldrs-ai/Share/issues/1663" target="_blank" rel="noopener noreferrer">#1663</a>, PR <a href="https://github.com/bldrs-ai/Share/issues/1703" target="_blank" rel="noopener noreferrer">#1703</a>), behind `?feature=workspace`; anchoring is
+  display-only so far (scope restriction is <a href="https://github.com/bldrs-ai/Share/issues/1669" target="_blank" rel="noopener noreferrer">#1669</a>/<a href="https://github.com/bldrs-ai/Share/issues/1699" target="_blank" rel="noopener noreferrer">#1699</a>). All eight
+  `search-320` sub-issues are still open.
+- Planned behind `?feature=navSearch` (not defined yet). Sits between AI.1 and AI.2 in the pivot
   sequence (§7.4); renumbers to `search-200` if wanted independent of the
   pivot.
 
@@ -561,24 +650,32 @@ User signs in, links data sources, and the system honors that even across primar
 changes (Google → GitHub or vice versa).
 
 **Epic `identity-100`: Auth0 primary login** ✔
-- Closed: <a href="https://github.com/bldrs-ai/Share/issues/1052" target="_blank" rel="noopener noreferrer">#1052</a> Profile 100 Login (initial); <a href="https://github.com/bldrs-ai/Share/issues/1070" target="_blank" rel="noopener noreferrer">#1070</a> Profile 100 Theme.
+- Closed: <a href="https://github.com/bldrs-ai/Share/issues/1070" target="_blank" rel="noopener noreferrer">#1070</a> Profile 100 Theme. (<a href="https://github.com/bldrs-ai/Share/issues/1052" target="_blank" rel="noopener noreferrer">#1052</a> Profile 100 Login is still open on
+  GitHub though login has long shipped.)
 - Track dependency: none — Auth0 SPA SDK in place.
+- Open: <a href="https://github.com/bldrs-ai/Share/issues/1923" target="_blank" rel="noopener noreferrer">#1923</a> sign-out — `logout({returnTo})` is ignored under auth0-spa-js 2.x
+  and sign-out never ends the Auth0 session.
 
 **Epic `identity-110`: GitHub as a Sources peer (not just primary)** 🟡
 *New since PDF; full design in `identity-decoupling.md` + decisions doc.*
-- Track dependency: T3 PR1 merged (provider scaffolding + Netlify Functions). PR2
-  (SourcesTab integration) + PR3 (switchover + flag retire) open.
+- Track dependency: T3 PR1 (<a href="https://github.com/bldrs-ai/Share/issues/1507" target="_blank" rel="noopener noreferrer">#1507</a>) and PR2 (<a href="https://github.com/bldrs-ai/Share/issues/1508" target="_blank" rel="noopener noreferrer">#1508</a>) merged — provider + Netlify
+  Functions, per-provider Sources tabs, Browse-on-connection, recents tagged with
+  `connectionId`, Auth0 primary-auth gate (UI + server-side bearer on `gh-oauth-*`),
+  "Saving as @login" + account picker. PR3 (switchover + flag retire) open.
+- Deferred from PR2: auto-create a GitHub connection from the Auth0-federated
+  identity, `connectionId` backfill on legacy recents.
 - Open: feature flag `githubAsSource` off.
 - **Required for MVP.**
 
-**Epic `identity-120`: Auth disambiguation across linked identities** 🟡
+**Epic `identity-120`: Auth disambiguation across linked identities** ⬜
 - Open: <a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a> Auth Disambiguation — primary + linked stored in cookie; chooser surface
-  for prior identities on next login.
+  for prior identities on next login. Not started (no PR, no code).
 - **Required for MVP** (otherwise users with two GH accounts can't tell what
   they're billed under).
 
-**Epic `identity-300`: Profile drawer + multi-account picker** ⬜
-- Implicit in T3 PR2 design.
+**Epic `identity-300`: Profile drawer + multi-account picker** 🟡
+- The "Saving as @login" footer + multi-account picker landed in T3 PR2 (<a href="https://github.com/bldrs-ai/Share/issues/1508" target="_blank" rel="noopener noreferrer">#1508</a>)
+  behind `githubAsSource`. Open: the profile drawer proper.
 - **Required for MVP** — the "Saving as X — GitHub" footer in the Save dialog
   (`identity-decoupling-decisions.md` §Q4).
 
@@ -593,7 +690,8 @@ Third-party (and dogfooded) apps add capabilities to Share via a stable API.
   iframe surface is the **seed of the AI-apps toolbelt** (`assist-320`, §7.2).
   <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> (iframe integration broken; its test suite disabled) graduates from
   dormant bug to pivot blocker — the sandbox foundation must work before anything
-  is built on it (§7.4 AI.0).
+  is built on it (§7.4 AI.0). Still the case at 2026-10: <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> open,
+  `IframeIntegration.spec.ts` still `describe.skip`; `Apps.spec.ts` (drawer) is live.
 
 **Epic `apps-110`: XYZ demo app (dogfood v0.1 API)** ✔
 *PDF Apps.1 — done in PDF.*
@@ -623,9 +721,10 @@ User finds out about Bldrs, gets oriented, leaves feedback, and finds product he
 
 **Epic `community-110`: Analytics + survey + thumbs feedback** 🟡
 *PDF Community.1 — analytics ✔, survey/feedback still open.*
-- Google Analytics integrated via `gtagEvent` (visible in code; called from `CadView`,
-  GLB pipeline, etc.).
-- Open: 👍/👎 exit feedback widget; in-app Google Forms survey link.
+- Google Analytics integrated via `gtagEvent`. Since v0.6: prod-only init,
+  `real_model_open` / `model_engagement`, GA client id as `open_cid`, and the
+  login → subscription funnel events (<a href="https://github.com/bldrs-ai/Share/issues/1912" target="_blank" rel="noopener noreferrer">#1912</a>) — see `grow-120`.
+- Open: 👍/👎 exit feedback widget; in-app Google Forms survey link (<a href="https://github.com/bldrs-ai/Share/issues/61" target="_blank" rel="noopener noreferrer">#61</a>).
 - **MVP impact:** at least one feedback affordance is needed for the public launch.
 
 **Epic `community-200`: Bug report w/ screenshot + session state** ⬜
@@ -662,23 +761,33 @@ hypotheses** (what share of users hit the threshold; of those, who pays vs.
 churns) instrumented well enough to produce decision-grade conversion evidence —
 not just a revenue trickle.*
 
-**Epic `subscribe-100`: Pricing tiers + feature manager** ⬜ (NEW)
+**Epic `subscribe-100`: Pricing tiers + feature manager** 🟡 (NEW)
 - Tasks: enumerate features per tier; ship a `tier`-aware capability map; UI in <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>
   mock dialog form.
 - Tier axis (v0.4): small models stay free and unlimited; the Pro boundary is
   **model size/complexity** (plus private sharing, multi-account, ad-free).
   Threshold placement is a §10 open question — it wants the model-size
   distribution from telemetry before it's picked.
+- Shipped: Free and Pro tiers are public (marketing `/pricing`, Stripe pricing
+  table at `/subscribe/`); `getTier` (`src/quota/quota.js`) maps `app_metadata`
+  `subscriptionStatus: sharePro` to Pro, which gates Export and `pro-module`.
+  Open: a real capability map, the <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> dialog, and which gates ship default-on
+  (`quotas` and `export` are both off). The public pricing copy ("2 model loads
+  per month" logged out) disagrees with `quotas.md` (anonymous = 2 lifetime).
 - **Required for MVP.**
 
-**Epic `subscribe-110`: Stripe checkout + portal** ⬜ (NEW)
-- Tasks: `create-portal-session` Netlify Function exists already (per identity
-  decoupling decisions doc — model pattern for new functions). Add
-  `create-checkout-session`; webhook for status changes; persist Pro flag against
-  Auth0 `sub`.
-- **Required for MVP.**
+**Epic `subscribe-110`: Stripe checkout + portal** ✔ (NEW)
+- Shipped: checkout is Stripe's hosted pricing table at `/subscribe/` (no
+  `create-checkout-session` function — <a href="https://github.com/bldrs-ai/Share/issues/1324" target="_blank" rel="noopener noreferrer">#1324</a>); `create-portal-session`;
+  `stripe-webhook` (never trusts the payload); Pro flag + `stripeCustomerId` in
+  Auth0 `app_metadata`; shared entitlement rules (`_lib/subscriptions.js`) and the
+  daily `reconcile-subscriptions` sweep (<a href="https://github.com/bldrs-ai/Share/issues/1889" target="_blank" rel="noopener noreferrer">#1889</a>, <a href="https://github.com/bldrs-ai/Share/issues/1891" target="_blank" rel="noopener noreferrer">#1891</a>). Tests:
+  `design/new/netlify-functions-testing.md`.
+- Follow-ups (<a href="https://github.com/bldrs-ai/Share/issues/1891" target="_blank" rel="noopener noreferrer">#1891</a>): serialize writes per customer; authoritative customer
+  ownership (Auth0 id on the Stripe customer at checkout); desktop + mobile E2E for
+  the subscription menu (`Subscription.spec.ts` is desktop-only).
 
-**Epic `subscribe-120`: Quota tracking** ⬜ (NEW)
+**Epic `subscribe-120`: Quota tracking** 🟡 (NEW)
 - Tasks: server-side counter keyed by Auth0 `sub` (per identity-decoupling-decisions
   §Q4 Open Question on "Quota tracking"); enforcement points in (a) GLB writer
   Phase-5 share upload, (b) per-connection refresh-token mint, (c) public-share
@@ -689,11 +798,27 @@ not just a revenue trickle.*
 - Experiment instrumentation is part of the epic, not an afterthought: events
   for threshold-hit, upgrade-prompt-shown, converted/churned, so the quota run
   yields decision-grade evidence either way.
+- **Shipped dark** (<a href="https://github.com/bldrs-ai/Share/issues/1740" target="_blank" rel="noopener noreferrer">#1740</a>, `quotas` flag off): `record-load` Netlify Function
+  (counts in Auth0 `app_metadata`), `useQuota`, `QuotaBadge`, `QuotaLimitDialog`,
+  `/share/quotas`. Design: `design/new/quotas.md`. v1 meters **private loads**
+  (anonymous 2 lifetime, free 4 per rolling 30 days, Pro unlimited; public GitHub
+  and samples free) — *not* the size/complexity axis above, and `quotas.md`
+  records the shipped rule, not a decision to drop that axis (§10). Of the
+  enforcement points only the load-site gate exists; (a)–(c) are not built.
+  Experiment events shipped in <a href="https://github.com/bldrs-ai/Share/issues/1912" target="_blank" rel="noopener noreferrer">#1912</a>. To roll out: the <a href="https://github.com/bldrs-ai/Share/issues/1740" target="_blank" rel="noopener noreferrer">#1740</a> smoke checklist,
+  then flip the flag.
 - **Required for MVP.**
 
-**Epic `subscribe-130`: Ads on free tier** 🟡
-- Track dependency: T7 Ads (<a href="https://github.com/bldrs-ai/Share/issues/1524" target="_blank" rel="noopener noreferrer">#1524</a>). Phase 1 activation in flight (<a href="https://github.com/bldrs-ai/Share/issues/1523" target="_blank" rel="noopener noreferrer">#1523</a>).
-- Open: Phases 2 (manual slots) + 3 (responsive) + 4 (consent gating).
+**Epic `subscribe-130`: Ads on free tier** ⬜ (paused)
+- Track dependency: T7 Ads (<a href="https://github.com/bldrs-ai/Share/issues/1524" target="_blank" rel="noopener noreferrer">#1524</a>). Phase 1 shipped (<a href="https://github.com/bldrs-ai/Share/issues/1523" target="_blank" rel="noopener noreferrer">#1523</a>/<a href="https://github.com/bldrs-ai/Share/issues/1526" target="_blank" rel="noopener noreferrer">#1526</a>) and led to
+  the 2026-05→07 Auto-ads incident; Phase 1b (<a href="https://github.com/bldrs-ai/Share/issues/1890" target="_blank" rel="noopener noreferrer">#1890</a>, 2026-09-30) **removed the
+  AdSense tag** after an ad served on prod with Auto ads switched off in the
+  console — `adsbygoogle.js` is the ad server, so the dashboard toggle could not
+  be trusted as the gate. No ads serve anywhere; `AdSense.spec.ts` asserts it.
+  Paused, not cancelled: `public/ads.txt` is kept, and a returning tag must be
+  scoped to the text routes (`design/new/ads.md`).
+- Open: Phases 2–5 (`ads.md`). Whether ads stay on the MVP bar is an open owner
+  decision (§6.0 item 5, §10).
 - **Required for MVP** — the free tier monetisation path.
 - Scope note: T7 is **on-site AdSense** (revenue). The Google Ads **acquisition**
   campaigns (Smart→Search rebuild, keywords, geo, bidding) are out of repo scope —
@@ -741,9 +866,19 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
   the logo as an AP214 assembly (`tools/models/README.md`). It shares world space
   with `index.ifc`, so the two pages can use the same `#c:` camera. `/viewer/ifc`
   points at `index.ifc`; the remaining formats still need one each.
+- Not started as of 2026-10: no `/viewer/*` route in `marketing/src/app`,
+  `sitemap.ts` or `_redirects`. Search Console verification is in place.
 - **Phase G.**
 
-**Epic `grow-120`: Funnel instrumentation + analytics hygiene** ⬜ (NEW)
+**Epic `grow-120`: Funnel instrumentation + analytics hygiene** 🟡 (NEW)
+- Status (2026-10): shipped — GA prod-only init, `real_model_open` (+ raw
+  `stats_*` load stats, <a href="https://github.com/bldrs-ai/Share/issues/1757" target="_blank" rel="noopener noreferrer">#1757</a>), `open_cid` param + user property, `local_hour`,
+  `model_engagement`, Sentry tagged with the same client id (<a href="https://github.com/bldrs-ai/Share/issues/1767" target="_blank" rel="noopener noreferrer">#1767</a>), and the
+  funnel past model-open (<a href="https://github.com/bldrs-ai/Share/issues/1912" target="_blank" rel="noopener noreferrer">#1912</a>): `login`, `quota_limit_reached`,
+  `begin_checkout`, `subscription_started` / `subscription_ended`
+  (`design/new/quotas.md` §"Funnel analytics"). **Still open:**
+  `share_link_created`, `share_link_opened`, `model_interacted`, and the bucketed
+  size/complexity fields (only raw `stats_fileSize` today).
 - Instrument the funnel stages the growth doc defines (§3 there):
   `share_link_created`, `share_link_opened`, `model_interacted` events in Share;
   `real_model_open` is sent directly by Share (CadView#loadModel, guarded by
@@ -882,9 +1017,11 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
 User works *with an AI agent* on their models and projects: converses with it,
 collaborates with teammates in the same conversation, and accumulates AI-built
 tools. This group is the Epic-level decomposition of the §7 pivot; read §7 for the
-vision, architecture, and sequencing. Design doc to draft: `design/new/ai-workspace.md`.
+vision, architecture, and sequencing. Design doc to draft: `design/new/ai-workspace.md`
+(<a href="https://github.com/bldrs-ai/Share/issues/1671" target="_blank" rel="noopener noreferrer">#1671</a>). Persistence direction (OPFS as a git-versioned workspace):
+`design/new/workspace-store.md`.
 
-**Epic `assist-300`: Workspace shell — left drawer, projects + org nav** ⬜ (NEW)
+**Epic `assist-300`: Workspace shell — left drawer, projects + org nav** 🟡 (NEW, <a href="https://github.com/bldrs-ai/Share/issues/1657" target="_blank" rel="noopener noreferrer">#1657</a>)
 - A modification of the existing UI adding a **left drawer** for workspace-level
   navigation: projects (models, conversations, shared artifacts, recents) and
   company-level nav (org, members, settings). Makes Share feel like a workspace
@@ -898,6 +1035,13 @@ vision, architecture, and sequencing. Design doc to draft: `design/new/ai-worksp
   `user_metadata` as a sync target for logged-in users. Also in scope: logo
   popup (About/Pricing/News on the marketing SSG build + manage-account entry)
   and the missing DS icon tokens.
+- **Shipped behind `?feature=workspace` (default off):** ProjectsDrawer — create
+  project, add/open models, Ungrouped, collapse-to-rail, resize, mobile (<a href="https://github.com/bldrs-ai/Share/issues/1661" target="_blank" rel="noopener noreferrer">#1661</a>,
+  PR <a href="https://github.com/bldrs-ai/Share/issues/1684" target="_blank" rel="noopener noreferrer">#1684</a>); TopBar breadcrumb + relocated search (<a href="https://github.com/bldrs-ai/Share/issues/1663" target="_blank" rel="noopener noreferrer">#1663</a>, PR <a href="https://github.com/bldrs-ai/Share/issues/1703" target="_blank" rel="noopener noreferrer">#1703</a>);
+  logo popup without the manage-account entry (<a href="https://github.com/bldrs-ai/Share/issues/1666" target="_blank" rel="noopener noreferrer">#1666</a>); Tier-1 local
+  persistence. **Open:** Tier-2 Auth0 `user_metadata` sync (<a href="https://github.com/bldrs-ai/Share/issues/1662" target="_blank" rel="noopener noreferrer">#1662</a>),
+  `OpenModelControl` leaving `ControlsGroup` (<a href="https://github.com/bldrs-ai/Share/issues/1664" target="_blank" rel="noopener noreferrer">#1664</a>), Profile + Share moving to
+  the TopBar (<a href="https://github.com/bldrs-ai/Share/issues/1665" target="_blank" rel="noopener noreferrer">#1665</a>), DS icon tokens (<a href="https://github.com/bldrs-ai/Share/issues/1667" target="_blank" rel="noopener noreferrer">#1667</a>).
 
 **Epic `assist-310`: Conversational agent panel (single-user)** ⬜ (NEW)
 - A Claude-Code-like conversation panel over the open project/model: prompt →
@@ -912,7 +1056,11 @@ vision, architecture, and sequencing. Design doc to draft: `design/new/ai-worksp
 - Plan: `design/new/conversational-cad.md` §4 — conversations as the third
   ProjectsDrawer level (project → models → convos); message element-chips /
   anchors reuse the existing camera-hash + element-path/occurrence-path
-  permalink machinery. Behind `?feature=convo`.
+  permalink machinery. Behind `?feature=assist`.
+- Prior art, not the T11 contract: the `?feature=bot` BotChat
+  (`src/Components/Bot/`) — client-direct OpenRouter with a user-supplied key,
+  and the LLM's JS runs via `new Function` (<a href="https://github.com/bldrs-ai/Share/issues/1822" target="_blank" rel="noopener noreferrer">#1822</a> no sandbox, <a href="https://github.com/bldrs-ai/Share/issues/1821" target="_blank" rel="noopener noreferrer">#1821</a> bypasses
+  isolator state). AI.2 supersedes it; `create-310` retires the `new Function` path.
 
 **Epic `assist-320`: AI-apps toolbelt (right drawer)** ⬜ (NEW)
 - The existing right-drawer AppsDrawer, upgraded: code the agent generates can be
@@ -960,6 +1108,9 @@ does not wait for an engine write path. Plan:
 - Layers, one story each: L0 mutation-safe batches (<a href="https://github.com/bldrs-ai/Share/issues/1915" target="_blank" rel="noopener noreferrer">#1915</a>), L1 op log +
   undo/redo (<a href="https://github.com/bldrs-ai/Share/issues/1916" target="_blank" rel="noopener noreferrer">#1916</a>), L2 apply backends (<a href="https://github.com/bldrs-ai/Share/issues/1917" target="_blank" rel="noopener noreferrer">#1917</a>), L3 persistence + replay
   (<a href="https://github.com/bldrs-ai/Share/issues/1918" target="_blank" rel="noopener noreferrer">#1918</a>). Behind `?feature=edit`.
+- L0 landed (<a href="https://github.com/bldrs-ai/Share/issues/1922" target="_blank" rel="noopener noreferrer">#1922</a>, #1915 closed): `batchedEdit.js` is the only way to mutate a
+  loaded batch. No user-visible surface yet and the `edit` flag is not wired;
+  L1–L3 open.
 
 **Epic `create-310`: Agent write tools** ⬜ (NEW, <a href="https://github.com/bldrs-ai/Share/issues/1919" target="_blank" rel="noopener noreferrer">#1919</a>)
 - Edit ops on the T11 tool surface: the agent writes `create-300` ops, never
@@ -970,7 +1121,8 @@ does not wait for an engine write path. Plan:
 **Epic `create-320`: Generative model creation — engine selection** ⬜ (NEW, <a href="https://github.com/bldrs-ai/Share/issues/1920" target="_blank" rel="noopener noreferrer">#1920</a>)
 - Text/prompt → model, landing through `create-300` `create` ops. Research
   (<a href="https://github.com/bldrs-ai/Share/issues/1921" target="_blank" rel="noopener noreferrer">#1921</a>) recommends IFC-shaped extrusions first and embedded OpenSCAD
-  WASM second, not CADAM as an engine: `design/new/create-engine.md`.
+  WASM second, not CADAM as an engine: `design/new/create-engine.md` (landed in
+  <a href="https://github.com/bldrs-ai/Share/issues/1922" target="_blank" rel="noopener noreferrer">#1922</a>). Implementation stories not filed yet.
 
 
 ## 5. Cross-cutting Tracks
@@ -986,19 +1138,23 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
   ships Conway-direct IFC parse, per-instance picking, unified Clipper. Conway-direct
   also parses **STEP / AP214** assemblies, with per-occurrence NavTree↔scene selection
   and hide keyed on the occurrence path (`design/new/step-occurrence-selection.md`).
-- **Status:** Phases 0–4 + 5a + 5b landed. `conwayDirectIfc` + `glb` default-on.
+- **Status:** Phases 0–5 landed (5a–5g, PR <a href="https://github.com/bldrs-ai/Share/issues/1544" target="_blank" rel="noopener noreferrer">#1544</a>): the `web-ifc-viewer` fork is
+  gone, `three` is current tree-wide, `conwayDirectIfc` + `glb` default-on.
   **Adapter removal landed (2026-06)** — the `conway-web-ifc-adapter` shim is
   retired; Share consumes `@bldrs-ai/conway/web-ifc` directly and the release
   chain is Conway → Share (`design/new/adapter-removal.md`). **GPU instancing
-  active (§3b.iv):** grouper analysis (#1568), `BatchedMesh` render path behind
-  `?feature=batchedMesh` (#1571), batched→merged GLB-cache bake (#1574).
+  is the default render path (§3b.iv):** grouper (#1568),
+  `BatchedMesh` (#1571), demand-assembled BatchedMesh, batched-native GLB cache
+  (default-on 2026-08-28); `?feature=batchedMesh` now gates only the classic
+  fallback. Demand/tiled rendering default-on (PR #1614). Hide/isolate for every
+  model shape + `#d:` permalinks (PRs #1884–#1886).
   **STEP metadata** extraction landed conway-side (conway #345 arc); Share
   verification is open (#1569, #1570); the occurrence-path selection/permalink
   key landed (PRs #1573/#1575/#1581).
-  Remaining: perf items (on-demand rendering, hover-pick throttle), per-product
-  mesh emission spike, `batchedMesh` always-on flip, `EXT_mesh_gpu_instancing`
-  cache schema (§3b.v), **public-launch test gate** (4-angle screenshots + GLB
-  bit-level diff harness).
+  Remaining: on-demand (dirty-flag) rendering, hover-pick throttle, per-product
+  mesh emission spike, `IfcViewsManager` deletion, `?feature=look` default flip,
+  demand slice C (<a href="https://github.com/bldrs-ai/Share/issues/1613" target="_blank" rel="noopener noreferrer">#1613</a>), and the **public-launch test gate** (4-angle screenshots
+  + GLB bit-level diff harness — not built).
 - **Render look (§6e):** the filmic/PBR look — uniform `MeshStandardMaterial` +
   sRGB albedo, gradient studio IBL, Khronos-Neutral tone-mapping, retuned lights,
   a user-facing **Neutral / Flat** render-mode toggle in the profile menu, plus a
@@ -1015,9 +1171,13 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
 
 - **What:** Content-addressed GLB cache + originator-side share. Phases 0–3 (cache
   key, extension split, picker fix, BLDRS_* extensions) landed.
-- **Status:** Phases 4 (Notes + view-states v0.1 round-trip), 5 (originator share
-  flow), 6 (shared cache tier — Drive/Firebase) open.
-- **Unblocks:** `share-110`, `notes-300`, `view-130` perf wins.
+- **Status:** Beyond the original plan: batched-native artifact (default-on),
+  gzipped OPFS container (<a href="https://github.com/bldrs-ai/Share/issues/1855" target="_blank" rel="noopener noreferrer">#1855</a>), collapsed range-primitive layout (<a href="https://github.com/bldrs-ai/Share/issues/1902" target="_blank" rel="noopener noreferrer">#1902</a>),
+  portable export + `.glb.gz` round trip, and the Pro Download GLB path
+  (`share-140`, `?feature=export`, default off). Phases 4 (Notes + view-states
+  v0.1 round-trip), 5 (originator share flow — Download GLB is a local download,
+  not a share link), 6 (shared cache tier — Drive/Firebase) not started.
+- **Unblocks:** `share-110`, `share-140`, `view-140`, `notes-300`, `view-130` perf wins.
 - **MVP impact:** Phase 5 (originator share flow) — required. Phase 4 — required
   (so notes survive cache hits). Phase 6 — post-MVP optimisation.
 - **Doc:** `design/new/glb-model-sharing.md`.
@@ -1028,11 +1188,12 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
 - **What:** GitHub as `ConnectionProvider` peer of Drive. Two Netlify Functions for
   the OAuth code/refresh exchange; multi-account GitHub support; legacy
   Auth0-federated path retained for migration.
-- **Status:** PR1 (provider scaffolding + Functions) merged. PR2 (SourcesTab UI
-  integration, recents migration) + PR3 (switchover + flag retire) open.
+- **Status:** PR1 (<a href="https://github.com/bldrs-ai/Share/issues/1507" target="_blank" rel="noopener noreferrer">#1507</a>) and PR2 (<a href="https://github.com/bldrs-ai/Share/issues/1508" target="_blank" rel="noopener noreferrer">#1508</a>: Sources tabs, recents tagging,
+  Auth0 gate) merged, behind `githubAsSource` (off). PR3 (switchover + flag
+  retire) open; PR2 deferrals listed under `identity-110`.
 - **Unblocks:** `identity-110`, `identity-120`, `identity-300`, `open-300`,
   `share-200`, `subscribe-120` (quota keying), and T4 PR3 (GH sharing).
-- **MVP impact:** PR2 + PR3 required.
+- **MVP impact:** PR3 required.
 - **Docs:** `design/new/identity-decoupling.md` + `identity-decoupling-decisions.md`.
 
 
@@ -1041,7 +1202,8 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
 - **What:** Grants/revoke, visibility, folder-scoped routes; consistent across Drive
   + GitHub. Stretch: portable sidecar formats for Notes + Versions, round-trippers to
   git.
-- **Status:** PR1 (provider scaffolding) merged. PR2 (Drive Share dialog UI), PR3 (GH
+- **Status:** PR1 (<a href="https://github.com/bldrs-ai/Share/issues/1505" target="_blank" rel="noopener noreferrer">#1505</a>, provider scaffolding + `GoogleDriveSharing`) merged; the
+  `sharing` flag has no consumer yet. PR2 (Drive Share dialog UI), PR3 (GH
   sharing adapter), PR4 (folder boundary routes) open. PR5 (GH token-health parity)
   and PR6 (flag retire) follow.
 - **Unblocks:** `share-130`, `share-200`, `share-400`, `notes-300`, `versions-310`.
@@ -1054,7 +1216,8 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
 
 - **What:** Pre-flight Drive metadata check on recents click; typed `FileUnreachable`
   alert variants.
-- **Status:** Proposed. Not started.
+- **Status:** Proposed. Drive + GitHub pre-flight not started; the local/OPFS case
+  shipped separately (<a href="https://github.com/bldrs-ai/Share/issues/1548" target="_blank" rel="noopener noreferrer">#1548</a>, PR <a href="https://github.com/bldrs-ai/Share/issues/1905" target="_blank" rel="noopener noreferrer">#1905</a>).
 - **Unblocks:** `open-200`. Pattern reusable for GH recents once `githubAsSource`
   lands.
 - **MVP impact:** Polish; not strictly required for paid launch but the support
@@ -1075,10 +1238,12 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
 ### Track T7: Ads
 
 - **What:** AdSense free-tier monetisation without Auto-ads on viewer routes.
-- **Status:** Phase 1 activation in flight (<a href="https://github.com/bldrs-ai/Share/issues/1523" target="_blank" rel="noopener noreferrer">#1523</a>). Phases 2–4 outlined.
+- **Status:** Paused. Phase 1 shipped (<a href="https://github.com/bldrs-ai/Share/issues/1523" target="_blank" rel="noopener noreferrer">#1523</a>) and caused an incident; Phase 1b
+  (<a href="https://github.com/bldrs-ai/Share/issues/1890" target="_blank" rel="noopener noreferrer">#1890</a>) removed the AdSense tag, so the repo, not the dashboard, keeps ads
+  off. Phases 2–5 TBD (`ads.md`).
 - **Unblocks:** `subscribe-130`.
-- **MVP impact:** Phase 1 required (activate publisher account). Phases 2–3
-  should land before public launch but can lag a beat.
+- **MVP impact:** owner decision pending — was "Phase 1 required, Phases 2–3
+  before public launch".
 - **Doc:** `design/new/ads.md` + epic <a href="https://github.com/bldrs-ai/Share/issues/1524" target="_blank" rel="noopener noreferrer">#1524</a>.
 
 
@@ -1086,8 +1251,11 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
 
 - **What:** Tier definitions, Stripe integration, quota infrastructure, feature-gate
   plumbing throughout the app.
-- **Status:** Not started. Existing seeds: `netlify/functions/create-portal-session.js`,
-  `netlify/functions/unlink-identity.js` (pattern reuse).
+- **Status:** Substantially landed. Stripe pricing table + `create-portal-session`
+  + `stripe-webhook` + shared entitlement rules + daily `reconcile-subscriptions`
+  (<a href="https://github.com/bldrs-ai/Share/issues/1889" target="_blank" rel="noopener noreferrer">#1889</a>, <a href="https://github.com/bldrs-ai/Share/issues/1891" target="_blank" rel="noopener noreferrer">#1891</a>), all default-on; quota server + client (`record-load`,
+  <a href="https://github.com/bldrs-ai/Share/issues/1740" target="_blank" rel="noopener noreferrer">#1740</a>) shipped dark behind `quotas`; `pro-module` / `record-export` serve
+  `share-140`.
 - **Unblocks:** `subscribe-100`, `subscribe-110`, `subscribe-120`. Forward-looking:
   the same quota/metering rails are what §7 AI usage metering hangs off — design
   the counter keying with that consumer in mind.
@@ -1096,7 +1264,8 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
   Share is the only thing that works). Phase D runs as an instrumented
   experiment; see §4.9.
 - **MVP impact:** Required end-to-end.
-- **Doc:** TBD — to be drafted in `design/new/pro-billing.md`.
+- **Docs:** `design/new/quotas.md`, `design/new/netlify-functions-testing.md`,
+  `design/new/glb-export-premium.md` (no standalone `pro-billing.md`).
 
 
 ### Track T9: Growth funnel & SEO surfaces (NEW)
@@ -1107,9 +1276,11 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
   guard on GA init), OG/link-preview metadata on share URLs, the
   `/viewer/<format>` landing pages, and the `grow-400` large-model +
   data-sovereignty positioning page — all on the marketing SSG build.
-- **Status:** Not started in-repo. The enabling substrate (Next.js SSG marketing
-  build, PR #1519) is landed; strategy + attribution live in the private bizdev
-  docs.
+- **Status:** Partly landed. GA hygiene, `open_cid` / `real_model_open` /
+  engagement events, and the login → subscription funnel events (<a href="https://github.com/bldrs-ai/Share/issues/1750" target="_blank" rel="noopener noreferrer">#1750</a>,
+  <a href="https://github.com/bldrs-ai/Share/issues/1757" target="_blank" rel="noopener noreferrer">#1757</a>, <a href="https://github.com/bldrs-ai/Share/issues/1767" target="_blank" rel="noopener noreferrer">#1767</a>, <a href="https://github.com/bldrs-ai/Share/issues/1912" target="_blank" rel="noopener noreferrer">#1912</a>) on top of the Next.js SSG marketing build (PR <a href="https://github.com/bldrs-ai/Share/issues/1519" target="_blank" rel="noopener noreferrer">#1519</a>).
+  Not started: `/viewer/*`, OG cards, the `grow-400` page, share-link events.
+  Strategy + attribution live in the private bizdev docs.
 - **Unblocks:** `grow-100`, `grow-200`, `grow-120`, `grow-400`; honest measurement
   of every outreach move in `community-210`; conversion-based bidding for the
   (out-of-repo) acquisition campaigns; the Phase D quota-threshold pick.
@@ -1125,13 +1296,15 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
   dispatch, streaming), conversation persistence, and — for `assist-400` — a
   shared store with realtime sync and the direct-address vs channel-awareness
   routing.
-- **Status:** Not started. Design questions (runtime placement client vs broker,
+- **Status:** Not started (BotChat, `?feature=bot`, is a client-direct prototype
+  with no shared runtime or persistence). Design questions (runtime placement client vs broker,
   provider strategy, store choice, relation to Notes) go to
   `design/new/ai-workspace.md` first — see §7.4 AI.0 and §10 open questions.
 - **Unblocks:** `assist-310`, `assist-400`, `search-310` (as retrieval), and the
   §7 AI-metering upsell.
 - **MVP impact:** None (pivot arc). Must not destabilise Phases A–E.
-- **Doc:** TBD — `design/new/ai-workspace.md`.
+- **Doc:** TBD — `design/new/ai-workspace.md` (<a href="https://github.com/bldrs-ai/Share/issues/1671" target="_blank" rel="noopener noreferrer">#1671</a>); persistence input:
+  `design/new/workspace-store.md`.
 
 
 ### Track T11: App sandbox + MCP bridge (NEW)
@@ -1142,9 +1315,12 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
   MCP transport. Plus app storage/versioning for the toolbelt. Forward scope
   (v0.4): **write/edit tools** — the AI editing loop (§7.4 AI.5) rides this same
   contract but is gated on a Conway-side write path that doesn't exist yet.
-- **Status:** Not started. Seeds: `WidgetApi/` + AppsDrawer (`apps-100`), the
-  `IfcModelService` query surface (T1). Known debt: <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> iframe integration
-  broken with its suite disabled — repair is the first slice.
+- **Status:** Not started. Seeds: `AppsMessagesHandler.js` (two read-only messages:
+  `getLoadedFile`, `getSelectedElements`) + AppsDrawer (`apps-100`), the
+  `IfcModelService` query surface (T1); `WidgetApi/` points the other way
+  (Share as a widget in a host page). Known debt: <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> iframe integration
+  broken with its suite disabled — repair is the first slice; AppsDrawer iframes
+  carry no `sandbox` attribute; BotChat <a href="https://github.com/bldrs-ai/Share/issues/1821" target="_blank" rel="noopener noreferrer">#1821</a>/<a href="https://github.com/bldrs-ai/Share/issues/1822" target="_blank" rel="noopener noreferrer">#1822</a>.
 - **Unblocks:** `assist-320`, `apps-300` (MCP-first public API), `apps-310`
   (checks as toolbelt apps).
 - **MVP impact:** None (pivot arc), except the #1386 repair which is
@@ -1160,7 +1336,8 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
   undo/redo, apply backends per render path, and a persisted sidecar replayed
   on load. IFC/STEP export of edits waits on a Conway writer; nothing else
   does.
-- **Status:** In flight. Design doc landed; L0 (<a href="https://github.com/bldrs-ai/Share/issues/1915" target="_blank" rel="noopener noreferrer">#1915</a>) in review.
+- **Status:** In flight. Design doc landed; L0 (<a href="https://github.com/bldrs-ai/Share/issues/1915" target="_blank" rel="noopener noreferrer">#1915</a>) landed in <a href="https://github.com/bldrs-ai/Share/issues/1922" target="_blank" rel="noopener noreferrer">#1922</a>. L1 op
+  log (<a href="https://github.com/bldrs-ai/Share/issues/1916" target="_blank" rel="noopener noreferrer">#1916</a>), L2 backends (<a href="https://github.com/bldrs-ai/Share/issues/1917" target="_blank" rel="noopener noreferrer">#1917</a>) and L3 persistence (<a href="https://github.com/bldrs-ai/Share/issues/1918" target="_blank" rel="noopener noreferrer">#1918</a>) open.
 - **Unblocks:** `create-300`, `create-310`, `create-320`, the §7.4 AI.5 editing
   loop, and the CRUD half of <a href="https://github.com/bldrs-ai/Share/issues/1913" target="_blank" rel="noopener noreferrer">#1913</a>.
 - **MVP impact:** None (pivot arc), behind `?feature=edit`.
@@ -1196,21 +1373,28 @@ evidence. Thresholds/targets live in the private bizdev docs.
 The open 100-band work, exhaustively — this list IS the MVP; everything else
 in this plan is opportunistic until the trickle exists:
 
-1. **The viewer holds** (Phase A): T1 public-launch gate, on-demand rendering,
-   the `view-130` bug list (#1561, #1545, #1249), STEP verification #1569.
-2. **Identity is billable** (Phase B): T3 PR2/PR3 (`identity-110`), auth
+1. **The viewer holds** (Phase A): T1 public-launch gate, dirty-flag on-demand
+   rendering, the remaining `view-130` bugs (#1249; #1561 to confirm — #1545 fixed),
+   STEP verification #1569.
+2. **Identity is billable** (Phase B): T3 PR3 (`identity-110`; PR2 landed behind
+   the flag), auth
    disambiguation #1422 (`identity-120`) — so the quota key and the card
    belong to the same person.
 3. **The paid offer exists** (Phase C): private link sharing (`share-130`, T4
    PR2/PR3) + the extended Share/Login flow (`share-120`, #1421 — the paywall
    surface) + originator save/share (`share-110`, T2 Ph4+5).
 4. **It bills** (Phase D): `subscribe-100` tiers, `subscribe-110` Stripe,
-   `subscribe-120` size/complexity quota with experiment events.
+   `subscribe-120` size/complexity quota with experiment events. *(2026-10:
+   billing ✔; tiers 🟡; a count-based quota is built but dark behind `quotas`.)*
 5. **The free tier monetises and acquires** (Phase D): T7 ads
    (`subscribe-130`) — also the campaign engine CAC is measured against.
+   *(2026-10: paused — AdSense tag removed, <a href="https://github.com/bldrs-ai/Share/issues/1890" target="_blank" rel="noopener noreferrer">#1890</a>. Owner to confirm whether
+   this stays in the 100 band; if not, §11 calls for a renumber + ID-lineage row.)*
 6. **It's measurable and findable** (Phase G): `grow-120` funnel events + GA
    hygiene (the CAC denominator), `grow-100` `/viewer/ifc` + `/viewer/step`
    landing pages (the campaign targets), `community-110` feedback affordance.
+   *(2026-10: `grow-120` 🟡 — funnel through subscription shipped, share-link
+   events pending; `grow-100` ⬜; `community-110` 🟡.)*
 
 Demoted out of the MVP band in the v0.6 pass — still scheduled where phases
 already cover them, but explicitly *not* load-bearing for the trickle: recents
@@ -1231,7 +1415,8 @@ landing page — before the MVP launch needs any of it.
   data (✅ `src/index/ga.js`).
 - `grow-120` events: `share_link_created`, `share_link_opened`,
   `model_interacted` wired into the share flow + viewer; `real_model_open`
-  fires from Share on non-demo model opens (✅), key-event marking GA4-side.
+  fires from Share on non-demo model opens (✅), key-event marking GA4-side;
+  login → subscription funnel events (✅ <a href="https://github.com/bldrs-ai/Share/issues/1912" target="_blank" rel="noopener noreferrer">#1912</a>).
 - `grow-100`: `/viewer/ifc` + `/viewer/step` landing pages on the marketing SSG
   build (then `/viewer/stl`, `/viewer/obj`, …). Unblocks the acquisition-campaign
   landing targets.
@@ -1240,7 +1425,8 @@ landing page — before the MVP launch needs any of it.
   generation may pair with T2 Phase 5 in Phase C if edge injection is the chosen
   route.
 - `grow-120` v0.4 slice: size/complexity buckets on the model-open event — the
-  data the Phase D quota threshold gets picked from.
+  data the Phase D quota threshold gets picked from. (Partial: raw `stats_*`
+  fields, <a href="https://github.com/bldrs-ai/Share/issues/1757" target="_blank" rel="noopener noreferrer">#1757</a>; not bucketed, no element count.)
 - `grow-400`: the large-model + data-sovereignty positioning page.
 
 **Exit:** funnel dashboard shows clean stage-by-stage counts (with large-model
@@ -1255,21 +1441,24 @@ format pages + positioning page indexed.
   - On-demand rendering (dirty-flag) — biggest framerate win available.
   - Per-product Mesh emission spike — measure cost.
 - Flag-flip decisions (each is one PR + baseline regen once smoke-tested):
-  - `?feature=batchedMesh` always-on (§3b.iv — needs per-occurrence narrowing on
-    the batched path first, or an accepted gap).
+  - `?feature=batchedMesh` — effectively done (demand path + batched GLB cache are
+    default-on; per-occurrence narrowing landed). Remaining decision: retire the
+    flag and the classic fallback it gates.
   - `?feature=look` default-on (§6e render look — flip + regenerate screenshot
     baselines).
-- Correctness bugs on the rebuilt path: <a href="https://github.com/bldrs-ai/Share/issues/1561" target="_blank" rel="noopener noreferrer">#1561</a> camera-fit "last scene child"
-  heuristic, <a href="https://github.com/bldrs-ai/Share/issues/1545" target="_blank" rel="noopener noreferrer">#1545</a> wrong arg to `getIfcType`, <a href="https://github.com/bldrs-ai/Share/issues/1249" target="_blank" rel="noopener noreferrer">#1249</a> (critical) element-permalink
-  hydration on private models.
+- Correctness bugs on the rebuilt path: <a href="https://github.com/bldrs-ai/Share/issues/1249" target="_blank" rel="noopener noreferrer">#1249</a> (critical) element-permalink
+  hydration on private models; <a href="https://github.com/bldrs-ai/Share/issues/1561" target="_blank" rel="noopener noreferrer">#1561</a> closed on GitHub but its TODO is still in
+  code — confirm. (<a href="https://github.com/bldrs-ai/Share/issues/1545" target="_blank" rel="noopener noreferrer">#1545</a> fixed, PR <a href="https://github.com/bldrs-ai/Share/issues/1592" target="_blank" rel="noopener noreferrer">#1592</a>.)
+- Demand/tiled rendering + residency slider shipped default-on (PR <a href="https://github.com/bldrs-ai/Share/issues/1614" target="_blank" rel="noopener noreferrer">#1614</a>); slice C
+  remains (<a href="https://github.com/bldrs-ai/Share/issues/1613" target="_blank" rel="noopener noreferrer">#1613</a>).
 - STEP follow-through: <a href="https://github.com/bldrs-ai/Share/issues/1569" target="_blank" rel="noopener noreferrer">#1569</a> NavTree/Properties verification over the NIST
   corpus — unblocked: the Conway release bump landed (PR #1584) and the
   occurrence-path permalink key landed (PR #1581).
 - T1 **public-launch gate**: 4-angle screenshot harness + GLB bit-level diff against
   golden artifacts. Runs in CI. This is the "we won't regress on the things that
   worked" insurance.
-- Stretch in this phase: hover-pick throttle tuning; subset-pool unification;
-  `EXT_mesh_gpu_instancing` cache schema (§3b.v).
+- Stretch in this phase: hover-pick throttle tuning; subset-pool unification.
+  (`EXT_mesh_gpu_instancing` cache schema landed, default-on.)
 
 **Exit:** screenshot harness green on the fixture corpus; on-demand rendering shipped
 default-on; flag-flip decisions made (shipped or explicitly deferred).
@@ -1279,11 +1468,13 @@ default-on; flag-flip decisions made (shipped or explicitly deferred).
 **Goal:** the Pro user has a coherent multi-account identity that quota tracking can
 hang off.
 - T3 PR2 (SourcesTab GitHub integration + recents migration). Behind `githubAsSource`
-  flag.
+  flag. (✅ <a href="https://github.com/bldrs-ai/Share/issues/1507" target="_blank" rel="noopener noreferrer">#1507</a>/<a href="https://github.com/bldrs-ai/Share/issues/1508" target="_blank" rel="noopener noreferrer">#1508</a>; flag still off.)
 - T3 PR2 follow-up: gate connect actions behind Auth0 primary auth (per decisions doc
-  §PR2 "Gate connection actions behind Auth0").
+  §PR2 "Gate connection actions behind Auth0"). (✅ <a href="https://github.com/bldrs-ai/Share/issues/1508" target="_blank" rel="noopener noreferrer">#1508</a> — UI gate + server-side
+  bearer.)
 - `identity-120`: <a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a> Auth disambiguation chooser.
-- `identity-300`: profile drawer multi-account picker + "Saving as X" footer.
+- `identity-300`: profile drawer multi-account picker + "Saving as X" footer. (✅
+  footer + picker <a href="https://github.com/bldrs-ai/Share/issues/1508" target="_blank" rel="noopener noreferrer">#1508</a>; profile drawer open.)
 - T3 PR3 switchover; retire `githubAsSource` flag.
 
 **Exit:** a user logged-in via Google can browse and save to two GitHub accounts;
@@ -1317,18 +1508,20 @@ it was pasted.
 of those, pay vs. churn), events in place to answer them, and the outcome
 treated as evidence about where willingness-to-pay lives even if revenue is
 small. The quota axis is **model size/complexity**, never model count — small
-models stay free and unlimited.
-- T8 design doc (`design/new/pro-billing.md`) drafted first — locks in tier
+models stay free and unlimited. *(2026-10: billing has landed; the quota that
+shipped dark counts private loads — see `subscribe-120` and §10.)*
+- T8 design doc (`design/new/pro-billing.md`) drafted first (never written as such;
+  de facto `quotas.md` + `netlify-functions-testing.md`) — locks in tier
   definitions + the experiment's hypotheses/threshold before code. Threshold
   picked from the `grow-120` size-distribution telemetry (Phase G), not
   guessed.
 - `subscribe-100` pricing tiers + feature-gate map.
 - `subscribe-110` Stripe checkout + portal Netlify Functions. Pattern from
-  `unlink-identity.js`.
+  `unlink-identity.js`. (✅ hosted pricing table + portal + webhook + reconcile.)
 - `subscribe-120` quota tracking — instrument the three enforcement points (GLB
   upload, refresh-token mint, public-share retention).
-- T7 Phase 2 + 3 ad slots on `/about`, `/privacy`, `/tos`, `/blog/*`.
-- `subscribe-130` ads wired to free-tier-only gate.
+- T7 Phase 2 + 3 ad slots on `/about`, `/privacy`, `/tos`, `/blog/*`. (Paused.)
+- `subscribe-130` ads wired to free-tier-only gate. (Paused.)
 - `share-120` Extended Share dialog (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>) wires Pro upsell into the share flow.
 
 **Exit:** a free user hits the size/complexity threshold and can upgrade in two
@@ -1338,13 +1531,16 @@ stated hypotheses.
 
 ### Phase E: Public-launch checklist
 **Goal:** the public site is ready for cold traffic.
-- T7 Phase 4 (consent gating) if EU consent landscape requires.
-- T5 Drive recents HEAD-check (and GH + local/OPFS equivalents — <a href="https://github.com/bldrs-ai/Share/issues/1548" target="_blank" rel="noopener noreferrer">#1548</a>) — UX
+- T7 Phase 4 (consent gating) if EU consent landscape requires. (Moot while no ad
+  tag ships.)
+- T5 Drive recents HEAD-check (and the GH equivalent; local/OPFS shipped — <a href="https://github.com/bldrs-ai/Share/issues/1548" target="_blank" rel="noopener noreferrer">#1548</a>,
+  PR <a href="https://github.com/bldrs-ai/Share/issues/1905" target="_blank" rel="noopener noreferrer">#1905</a>) — UX
   polish; reduces "WTF failures."
 - `community-110` thumbs feedback widget.
 - Sentry + GA dashboards confirmed; runbook for typical failure modes. Funnel
   events (Phase G) reviewed against a week of real traffic.
-- Pricing page + ToS + Privacy updated.
+- Pricing page + ToS + Privacy updated. (Pricing page exists on the marketing
+  build; reconcile its limit copy with the shipped quota rules.)
 - Decision: drop T5 of the legacy Auth0-federated GH path, or leave for one more
   release.
 - Outreach readiness: the Show HN moment (bizdev doc §7) waits for this phase —
@@ -1356,7 +1552,8 @@ stated hypotheses.
 
 ## 7. The AI-workspace pivot
 
-**Status:** direction agreed (2026-07). Design doc to draft at
+**Status:** direction agreed (2026-07); the AI.1 shell and the AI.5 edit substrate
+have partly landed behind flags (§4.11, §4.12). Design doc still to draft at
 `design/new/ai-workspace.md` before implementation starts. This section is the
 roadmap-level summary: the vision, the three architecture surfaces, what existing
 work it absorbs, and how it sequences against the MVP.
@@ -1458,10 +1655,12 @@ can't destabilise the launch may start earlier behind flags.
   broker), provider strategy, conversation-store choice, sandbox/MCP security
   model, Notes/channels relationship. Fix <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> and re-enable the iframe
   suite — the sandbox foundation must hold weight before anything is built on it.
+  (2026-10: <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> still open, suite still `describe.skip`; the doc is <a href="https://github.com/bldrs-ai/Share/issues/1671" target="_blank" rel="noopener noreferrer">#1671</a>.)
 - **AI.1 — Workspace shell.** `assist-300` left drawer behind
-  `?feature=workspace`. No AI dependency; can overlap MVP phases.
+  `?feature=workspace`. No AI dependency; can overlap MVP phases. (Drawer +
+  TopBar shipped behind the flag, default off; open stories in §4.11.)
 - **AI.1a — Fluid Nav + scoped search.** `search-320` behind
-  `?feature=navSearch`: the element-referencing UX the convo panel's chips
+  `?feature=navSearch`: the element-referencing UX the assist panel's chips
   point into — and standalone viewer value if AI.2 slips.
   (`conversational-cad.md` §3.)
 - **AI.2 — Agent v0, single-user.** `assist-310`: viewer MCP tool surface (T11) +
@@ -1482,7 +1681,7 @@ can't destabilise the launch may start earlier behind flags.
   the write path is scoped. **Update (v0.8):** the Share-side substrate no
   longer waits on Conway — edits are an op log over the immutable source
   (Track T12, `create-300`..`create-320`); only IFC/STEP *export* of an edited
-  model still needs the writer.
+  model still needs the writer. L0 landed (<a href="https://github.com/bldrs-ai/Share/issues/1922" target="_blank" rel="noopener noreferrer">#1922</a>).
 
 Each stage is a shippable, demoable increment; AI.2 is the earliest point at
 which the pivot is publicly visible.
@@ -1507,15 +1706,15 @@ reflects current product-pull:
 1. **`view-300` ETL / Table view** 🔮 (❤️ Markus). The "10$/mo by itself" loveable.
    Pre-cond mostly done via T1.
 2. **`open-210` Multi-IFC overlay session** (<a href="https://github.com/bldrs-ai/Share/issues/1251" target="_blank" rel="noopener noreferrer">#1251</a>). Conway+GLB make this tractable.
-3. **`view-200` Persistent visibility URL encoding** (<a href="https://github.com/bldrs-ai/Share/issues/1250" target="_blank" rel="noopener noreferrer">#1250</a>). Last slice on top of
-   T1 isolate routing.
+3. **`view-200` cross-session hidden-state persistence** (<a href="https://github.com/bldrs-ai/Share/issues/1250" target="_blank" rel="noopener noreferrer">#1250</a>). URL encoding
+   shipped in the `#d:` token (PR <a href="https://github.com/bldrs-ai/Share/issues/1885" target="_blank" rel="noopener noreferrer">#1885</a>); what remains is per-user persistence.
 4. **`view-210` Selection-based camera + measurement** (<a href="https://github.com/bldrs-ai/Share/issues/1044" target="_blank" rel="noopener noreferrer">#1044</a>, <a href="https://github.com/bldrs-ai/Share/issues/1047" target="_blank" rel="noopener noreferrer">#1047</a>).
 5. **T2 Phase 6 Shared cache tier** (Firebase/Drive sidecar).
 6. **T4 PR4 Folder-scoped routes**.
 7. **`notes-200` BCF round-trip**.
 8. **T6 Stretch Q1–Q4 portable notes/versions** for Drive parity with GH.
-9. **`view-220` Common view ops**: nav-cube, explode, undo/redo. IDS validation
-   separately.
+9. **`view-220` Common view ops**: explode, undo/redo (nav-cube shipped, <a href="https://github.com/bldrs-ai/Share/issues/1882" target="_blank" rel="noopener noreferrer">#1882</a>).
+   IDS validation separately.
 10. **`view-230` Maps-style filtering UI on top of Placemarks** 🔮 — Placemark
     primitive itself is 🟡 with polish slated for Phase C (see Epic). The filter
     chips + cluster rendering visualization on top is the post-MVP loveable.
@@ -1540,6 +1739,15 @@ reflects current product-pull:
 
 ## 9. Migration to GH issues + wiki
 
+**Status (2026-10):** step 1 is done for the AI arc and the newer epics —
+`assist-300` <a href="https://github.com/bldrs-ai/Share/issues/1657" target="_blank" rel="noopener noreferrer">#1657</a>, `assist-310` <a href="https://github.com/bldrs-ai/Share/issues/1659" target="_blank" rel="noopener noreferrer">#1659</a>, `assist-400` <a href="https://github.com/bldrs-ai/Share/issues/1660" target="_blank" rel="noopener noreferrer">#1660</a>, `search-320`
+<a href="https://github.com/bldrs-ai/Share/issues/1658" target="_blank" rel="noopener noreferrer">#1658</a>, `view-140` <a href="https://github.com/bldrs-ai/Share/issues/1705" target="_blank" rel="noopener noreferrer">#1705</a>, `view-220` <a href="https://github.com/bldrs-ai/Share/issues/1881" target="_blank" rel="noopener noreferrer">#1881</a>, `share-140` <a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a>,
+`create-300`/`310`/`320` (<a href="https://github.com/bldrs-ai/Share/issues/1914" target="_blank" rel="noopener noreferrer">#1914</a>, <a href="https://github.com/bldrs-ai/Share/issues/1919" target="_blank" rel="noopener noreferrer">#1919</a>, <a href="https://github.com/bldrs-ai/Share/issues/1920" target="_blank" rel="noopener noreferrer">#1920</a>), plus T7's <a href="https://github.com/bldrs-ai/Share/issues/1524" target="_blank" rel="noopener noreferrer">#1524</a> and the
+streaming-loader epic <a href="https://github.com/bldrs-ai/Share/issues/1601" target="_blank" rel="noopener noreferrer">#1601</a>. Still missing: `assist-320`, every `grow-*` and
+`subscribe-*`, and the MVP-required `share-110`/`120`/`130`, `identity-110`/`120`/`300`
+and `open-300` (file each when its work starts, then parent <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>/<a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a> under
+theirs). Step 2 is done for the conversational-CAD families. Steps 3–4 not started.
+
 Once this doc lands, the backfill order:
 
 1. **GitHub issues — Epics first.**
@@ -1563,7 +1771,7 @@ Once this doc lands, the backfill order:
    this doc. Strip the implementation links and `MVP impact` rows; keep the
    Epic-by-Epic structure with status. The wiki page becomes the user-facing roadmap.
 5. **CLAUDE.md router row.**
-   Added in this commit so future assistants find this doc.
+   Done (router row present).
 
 I'll draft each batch and review with you before creating GH issues — won't bulk-create
 without sign-off.
@@ -1578,14 +1786,23 @@ without sign-off.
 - **Quota threshold placement.** *Where* the size/complexity threshold sits is
   open — it should fall where free alternatives stop working and Share doesn't.
   Pick from the `grow-120` size-distribution telemetry (Phase G) + the
-  engine-benchmark data, not by feel. (ai-strategy §9.3.)
+  engine-benchmark data, not by feel. (ai-strategy §9.3.) **Drift (2026-10):**
+  the quota that shipped dark (<a href="https://github.com/bldrs-ai/Share/issues/1740" target="_blank" rel="noopener noreferrer">#1740</a>, `design/new/quotas.md`) counts private
+  loads, not size/complexity — decide whether it replaces the size axis or
+  precedes it, and update §4.9 / T8 to match.
 - **Free-tier quota numbers.** Public anonymous share TTL (3 days? 5 days?), public
   hosting size ceiling (PDF <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> says <10MB), refresh-token-mint rate. Needs a call
-  before `subscribe-120`.
+  before `subscribe-120`. Partly answered: `quotas.md` §Tiers sets the load quota
+  (anonymous 2 lifetime, free 4 per rolling 30 days, Pro unlimited); TTL, size
+  ceiling and mint rate are still open, and the public pricing copy disagrees
+  with the anonymous limit.
 - **Auth0 enforcement on Netlify Functions.** Flagged in
   `identity-decoupling-decisions.md` §Open Implementation Details. Needs to be
   resolved before Phase D quota tracking ships (the quota key is meaningless if the
-  functions are anonymous).
+  functions are anonymous). **Resolved for the gated functions:** `record-load`,
+  `record-export` and `pro-module` validate the Auth0 bearer token (`quotas.md`
+  §"The server is authoritative"). `proxy-handler` carries no auth — confirm
+  that's intended, then drop this item.
 - **BCF priority.** Industry-credibility win vs. cost. If we want it for MVP it
   becomes Phase C scope; otherwise it slips to post-MVP per §8 item 7.
 - **AI pivot — agent runtime placement.** Client-direct LLM calls (user's key /
@@ -1595,7 +1812,8 @@ without sign-off.
   the **data-sovereignty constraint** cuts against anything that proxies model
   content wholesale: model bytes stay client-side, only conversation + tool
   results cross the wire, and that boundary should be user-visible. Decide in
-  `design/new/ai-workspace.md` before AI.2.
+  `design/new/ai-workspace.md` before AI.2. Data point: BotChat (`?feature=bot`)
+  already calls OpenRouter client-direct with a user key in localStorage (<a href="https://github.com/bldrs-ai/Share/issues/1822" target="_blank" rel="noopener noreferrer">#1822</a>).
 - **AI pivot — engine write path.** The editing loop (§7.4 AI.5) needs Conway to
   support model mutation + re-emission (geometry and semantics), which today it
   doesn't. Biggest open technical question in the pivot: scope (parametric edits?
@@ -1604,15 +1822,21 @@ without sign-off.
   answer decides how soon the headline capability is honest. **v0.8:** the edit
   log is decided — an op log over the immutable source, Share-side
   (`design/new/model-edit.md`), so editing itself no longer waits on this;
-  what remains is export. Scoping in `design/new/create-engine.md` Part B.
+  what remains is export. Scoping in `design/new/create-engine.md` Part B, which
+  recommends a splice writer.
 - **AI pivot — conversation store.** `assist-400` needs shared, realtime-ish
   conversation state. Candidates: GitHub-issue-backed (Notes-style, free, slow),
   Firebase/Firestore (already floated for T2 Phase 6), or a purpose-built
   backend. Also: are channels and Notes one primitive or two? (An anchored note
-  thread and a channel message are close cousins.)
+  thread and a channel message are close cousins.) Direction, not decision:
+  `design/new/workspace-store.md` §1.3 (repo as durable record, live stream
+  distilled into it); channels-vs-Notes is still open there (§6.6).
 - **AI pivot — sandbox security model.** Toolbelt apps run generated code:
   iframe origin isolation, MCP tool permissioning (which tools does an app get,
   who approves), and versioned-app provenance all need a design pass (T11).
+- **Ads on the MVP bar.** T7 is paused after <a href="https://github.com/bldrs-ai/Share/issues/1890" target="_blank" rel="noopener noreferrer">#1890</a> removed the AdSense tag.
+  Decide whether `subscribe-130` stays in the 100 band (§6.0 item 5) or is
+  demoted — a demotion is a renumber per §11.
 - **AI pivot — naming.** "Assist" is the working Epic-group verb; the
   user-facing name for the workspace/agent is unpicked.
 - **Growth — OG image mechanism.** Edge-function injection on `/share/*` vs
@@ -1626,6 +1850,7 @@ without sign-off.
 ## 11. Doc maintenance
 
 - **When an Epic ships:** update its row in §3.1 and its block in §4 from 🟡 → ✔.
+  Any edit to a §3.1 row also sets its Updated column to the current quarter.
   Move it out of the MVP phase list in §6 if it was there.
 - **When a story closes:** add it to the Closed list under its Epic; PR description
   should reference `roadmap.md` if the change moves an Epic state.
@@ -1732,13 +1957,28 @@ tools (<a href="https://github.com/bldrs-ai/Share/issues/1919" target="_blank" r
 but export.
 
 
+**v0.9 (2026-10-06)** reconciles statuses against what shipped since v0.6, from
+an issue-triage pass over the code, git history and the open issues. No IDs
+change. Movers: `subscribe-110` ✔ (Stripe pricing table, portal, webhook,
+entitlement rules, daily reconcile); `subscribe-100`, `subscribe-120`,
+`grow-120`, `identity-300`, `view-140`, `view-220`, `assist-300` and Tracks T8/T9
+⬜ → 🟡; `subscribe-130` and T7 → ⬜ **paused** (AdSense tag removed, <a href="https://github.com/bldrs-ai/Share/issues/1890" target="_blank" rel="noopener noreferrer">#1890</a>);
+`share-120` and `identity-120` 🟡 → ⬜ (no code or PR behind either). `share-140`
+gets the §4.3 block it was missing. Landed work recorded in place: T1 Phase 5
+complete and BatchedMesh as the default render path, demand/tiled rendering,
+the batched-native GLB cache, hide/isolate + `#d:` for every model shape, the
+ViewCube, T3 PR2 and T4 PR1, local recents pruning, `create-300` L0. Two drifts
+raised for the owner in §10: the shipped quota counts loads, not size; and
+whether ads stay on the MVP bar.
+
+
 ## ID lineage
 
 Every epic that has ever been renumbered (all other IDs have been stable since
 v0.2). Resolve any ID you meet in an older branch, issue, or PR description
 through this table; several numbers were **reused across revisions**
-(`share-120`, `share-130`, `share-200`, `open-200`, `view-130`, `view-220`,
-`view-230`, `assist-300`), and `subscribe-100/110/120` were restored to their
+(`share-120`, `share-130`, `share-140`, `share-200`, `open-200`, `view-130`,
+`view-140`, `view-220`, `view-230`, `assist-300`), and `subscribe-100/110/120` were restored to their
 original meanings.
 
 | Epic (current name) | v0.2–v0.4 | v0.5 | v0.6 (current) |

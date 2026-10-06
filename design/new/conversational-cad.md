@@ -252,9 +252,9 @@ pivot, it renumbers to `search-200` (MLP) per the maintenance rules.
 ## 4. Epic 3 — Conversational CAD (`assist-310` + T10/T11)
 
 The conversation panel over the open model, single-user first, behind
-`?feature=convo` (W6). The multi-user mechanics stay in Epic 4.
+`?feature=assist` (W6). The multi-user mechanics stay in Epic 4.
 
-- **Convo tray + drawer threads (W6, W1b).** Conversations become the third
+- **Assist tray + drawer threads (W6, W1b).** Conversations become the third
   level of the ProjectsDrawer hierarchy (project → models → convos, e.g.
   "Roof plant access review"); the tray sits above the BottomBar (which
   could later absorb the Bot slot — W8). AI replies styled distinct (accent
@@ -270,7 +270,7 @@ The conversation panel over the open model, single-user first, behind
   out of Share still yields working deep links. This is the cheapest
   high-leverage slice: the whole anchor system already exists, the epic
   wires it into message rendering.
-- **Reduced tool set while convo visible (W7 — proposal, TBD).** The
+- **Reduced tool set while assist visible (W7 — proposal, TBD).** The
   bottom-center section cluster folds into the right column plus an active
   Conversation toggle; top-left ControlsGroup hidden; full layout returns
   when the tray closes. Prototype it behind the same flag; keep it a
@@ -322,7 +322,7 @@ design, not code.
 Nothing here changes the v0.6 call that the Assist arc is out of the MVP
 band — the pivot follows the trickle (§6.0, §7.4). Practical consequences:
 
-- Every epic ships behind its flag (`workspace`, `convo`, `presence`;
+- Every epic ships behind its flag (`workspace`, `assist`, `presence`;
   Epic 2 proposes its own `navSearch` flag rather than riding `workspace`,
   so the two UI arcs can flip independently). Default-off until each arc's
   screenshot baselines + E2E are in.
@@ -434,13 +434,13 @@ scope mechanic + unified current-path model; Versions re-home decision;
 #1254 fold-in.
 
 ### epic: assist-310: Conversational agent panel (single-user)
-> Convo tray (`?feature=convo`) + drawer threads; agent drives the viewer
+> Assist tray (`?feature=assist`) + drawer threads; agent drives the viewer
 > through the T11 MCP tool surface; message element-chips/anchors reuse
 > existing permalink machinery. Prereq: `design/new/ai-workspace.md`
 > (runtime/provider/store/sovereignty). Plan: §4; roadmap §7.4 AI.2;
 > Tracks T10/T11. Wireframes W6, W7, W1b.
 
-Sub-issues: `ai-workspace.md` design doc (AI.0); convo tray UI + drawer
+Sub-issues: `ai-workspace.md` design doc (AI.0); assist tray UI + drawer
 threads (stub, no backend); message anchors/element chips over permalink
 infra; viewer MCP tool surface v0 (read/annotate); agent loop v0 +
 streaming; W7 reduced-tool-set proposal (separate, droppable); large-model
