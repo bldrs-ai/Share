@@ -67,7 +67,7 @@ Share code is cited as `path:line` at `main` @ `9577fdd`.
 | D11 | Share's agent is the orchestrator. Create plugs in as a **remote tool provider** in the same registry. Its LLM usage draws on the same provider abstraction and ledger | Create is a headless kernel with no LLM of its own. One loop and one bill |
 | D12 | Flag `assist`, with `bot` aliased via `FEATURE_IMPLICATIONS` during the port, then removed | Matches #1659/#1672. Fixes the `convo` drift |
 | D13 | Port `?feature=bot`: keep the tray, slice, bubbles, MSW mocks and network guard. Evolve the client and settings. Delete the eval and the plaintext key | The scope outgrew the prototype, but its UI and test scaffolding are sound |
-| D14 | *Proposed, pending product-owner confirmation.* **Jev: intent/command layer + router, through the relay; generative UI is separate (declarative renderer)** | Jev is a non-generative decision model: sub-second, near-free routing of simple commands, escalating to the LLM below a confidence threshold. UI generation needs an LLM and a spec renderer, not Jev |
+| D14 | **DECIDED (product owner, 2026-10-06).** **Jev is the fast intent/command layer: natural language → viewer action, dispatched through the registry, promoted to the LLM agent loop when confidence is low.** Through the relay. Router and tool-call gate are follow-on uses. Generative UI is separate and later (declarative renderer) | Jev is a non-generative decision model: sub-second, near-free for simple commands, with a confidence value that says when to escalate. UI generation needs an LLM and a spec renderer, not Jev |
 
 
 ## 3. Architecture
@@ -812,23 +812,36 @@ earlier draft of this section read it as text → UI; that was wrong.
 - **Not `typesafe/jev-router`**, an OpenRouter router model that uses Jev to
   pick the LLM and reasoning effort per request.
 
-"Text → UI" can mean two things. Both are recorded: the first is where Jev
-earns a place, the second does not use Jev.
+"Text → UI" meant two things. The product owner confirmed the first (natural
+language → UI action, Jev as intent layer with LLM promotion); the second
+does not use Jev and is a later story.
 
-### 12.1 Jev as intent layer, router and gate (proposed D14)
+### 12.1 Jev as intent layer (D14, decided), then router and gate
 
-1. **Intent/command layer (recommended first use).** Typed text → viewer
+1. **Intent/command layer (decided, first use).** Typed text → viewer
    action. "Hide the walls" is a Choice over registry tool names, plus
    Choice/Score over arguments (IFC type, level): sub-second and near-free,
-   which matters most on the anonymous tier (§6). Below a confidence
-   threshold it **escalates to the LLM agent loop**. It dispatches through
-   the same MCP-shaped registry (§9), never `ShareViewer` directly.
-2. **Router at the top of the turn.** Quick command, analysis question → LLM
-   agent, generative CAD → Create (§11). `typesafe/jev-router` is the
-   off-the-shelf model-picker variant, possibly an "auto" entry in the Pro
-   picker (§6).
-3. **Tool-call gate** for future write tools (`create-310`), per OpenRouter's
-   cookbook "Gate Agent Tool Calls with Jev"; fits model-edit.md §9.
+   which matters most on the anonymous tier (§6). It dispatches through the
+   same MCP-shaped registry (§9), never `ShareViewer` directly.
+2. **Follow-on: router at the top of the turn.** Quick command, analysis
+   question → LLM agent, generative CAD → Create (§11). `typesafe/jev-router`
+   is the off-the-shelf model-picker variant, possibly an "auto" entry in
+   the Pro picker (§6).
+3. **Follow-on: tool-call gate** for future write tools (`create-310`), per
+   OpenRouter's cookbook "Gate Agent Tool Calls with Jev"; fits
+   model-edit.md §9.
+
+**Escalation design.** Jev answers with an action plus a confidence.
+
+- **Above the threshold:** dispatch directly through the registry and show
+  the action in the tray as a compact "did X" message (for example "Hid 14
+  walls") with two affordances: **Undo**, and **Ask the assistant instead**.
+- **Below the threshold, or no option fits:** hand the original utterance and
+  Jev's candidate options to the LLM loop as context. The user sees the
+  normal assistant turn, not an error.
+- **Threshold.** Calibrated by the N11 eval (Jev-vs-LLM accuracy and latency
+  on simple commands), per tool family: a wrong "hide" is cheap to undo, a
+  wrong write is not. Set it on probability bands, not exact values.
 
 **Placement.**
 
@@ -864,7 +877,7 @@ needs a generative model, so it rides the LLM layer (§5–§8).
 - **Executable generated code** stays in the `assist-320` iframe sandbox
   (§16), gated on #1386.
 
-The spec renderer can ship with `assist-310`; the code path waits for
+This stays a separate, later story (N12). The code path waits for
 `assist-320`.
 
 
@@ -970,7 +983,7 @@ Dependencies are in brackets.
 | N8 | model selector: free-models opt-in (all tiers) + Pro picker | "Free models (experimental)" choice with its disclosure on every tier; Pro catalog via relay, priced list, unavailable-under-deny handling | N7, N4 |
 | N9 | CSP `connect-src` hardening | Site-wide CSP, Report-Only first | — (before "remember key" leaves the flag) |
 | N10 | Create seam contract | Interface + doc only (§11), agreed with Create's E1 MCP surface | #1674 |
-| N11 | assist: Jev intent layer + router (System One decisions) | §12.1. Relay route for the Decisions API, `decide()` client, intent Choice over registry tool names with a confidence threshold and LLM escalation. Includes a **Jev-vs-LLM accuracy/latency eval on simple commands** (reuses N3's harness) and the CORS and measured-latency spikes | #1674 (tool registry), N6 (relay) |
+| N11 | assist: Jev intent layer + router (System One decisions) | §12.1. Relay route for the Decisions API, `decide()` client, intent Choice over registry tool names with a confidence threshold, "did X" tray message with undo, and LLM escalation (§12.1). Includes a **Jev-vs-LLM accuracy/latency eval on simple commands** (reuses N3's harness) calibrates the threshold, and carries the CORS and measured-latency spikes | #1674 (tool registry), N6 (relay) |
 | N12 | assist: generative UI — declarative spec renderer (json-render + MUI catalog) | §12.2. Share-owned MUI catalog, spec validation, in-tray render, actions bound to registry tool names. Executable code stays with `assist-320` | #1674 (tool registry) |
 
 **Why these cuts.**
@@ -1023,8 +1036,8 @@ because it rides the quota and billing rails.
    account's free-model training setting (§6). Is that acceptable, given
    that it applies only to requests the user opted into, or that overflowed?
    And the per-identity free-model request cap (placeholder: 30 a day).
-10. **Jev (§12).** Confirm the intended use of Jev (intent layer, router,
-    gate) and whether generative UI should ship with `assist-310` or later.
+10. **Generative UI (§12.2).** When does it ship: with `assist-310` or
+    later?
 
 
 ## 16. Deferred (named so they are not lost)
