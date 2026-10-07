@@ -9,6 +9,7 @@ import {
   uncompressedSizes,
 } from '../../export/artifactSizes'
 import {codecToSelect, shouldAutoMeasure} from '../../export/codecSizes'
+import {FREE_EXPORT_WINDOW_DAYS, formatNextFreeExport} from '../../export/freeExports'
 import {
   QUALITY_DEFAULT,
   QUALITY_LABELS,
@@ -23,6 +24,7 @@ import {
 import {isGzipAvailable} from '../../export/glbGzip'
 import useCodecSizes from '../../export/useCodecSizes'
 import useExport, {formatBytes} from '../../export/useExport'
+import useFreeExports from '../../export/useFreeExports'
 import {gtagEvent} from '../../privacy/analytics'
 import {TIERS, getTier} from '../../quota/quota'
 import useStore from '../../store/useStore'
@@ -46,13 +48,17 @@ import {
  *
  * The states resolve in this order (design/new/glb-export-premium.md §4.4):
  * no artifact yet beats everything (there is nothing to download); then
- * anonymous → log in; then free → upgrade; then Pro → the export itself. The
- * two non-Pro states render the button in the GATED look — visible, dimmed,
- * and clickable into help that says what unlocks it — rather than as a live
- * button that silently does something else. The tier check here is `getTier`,
- * the same mapping the server uses, but it decides only what is RENDERED —
- * the `pro-module` function re-checks the subscription on every request and
- * is the authority.
+ * anonymous → log in; then a free user with no free exports left in the
+ * rolling window → upgrade, saying when the next one frees up; then a free
+ * user with exports left, or Pro → the export itself. The gated states render
+ * the button in the GATED look — visible, dimmed, and clickable into help that
+ * says what unlocks it — rather than as a live button that silently does
+ * something else. A free user also sees how many of their free exports are
+ * left (§4.8); Pro sees nothing new. The tier check here is `getTier`, the
+ * same mapping the server uses, and the count is the server's — but both
+ * decide only what is RENDERED: the `pro-module` function re-checks the
+ * subscription and the free-export ledger on every request and is the
+ * authority.
  *
  * The controls run in the order the choices COMPOUND: what goes in the file,
  * what shape it is in, how it is squeezed, how hard, and whether the result
@@ -296,6 +302,13 @@ export default function ExportSection() {
   const sizes = estimate?.sizes ?? null
 
   const isPro = getTier(appMetadata, isAuthenticated) === TIERS.PAID
+  // The free tier's allowance as the server last stated it, or null (Pro,
+  // anonymous, or not known yet). Unknown is NOT gated: the click goes to
+  // `pro-module`, which counts for itself, and a refusal there fills this in.
+  const freeAllowance = useFreeExports()
+  const isFreeTier = isAuthenticated && !isPro
+  const isAtFreeLimit = isFreeTier && freeAllowance?.remaining === 0
+  const nextFreeExport = formatNextFreeExport(freeAllowance?.nextFreeAt)
   // The loader publishes this once the artifact is actually in OPFS — on a
   // cache miss when the writer finishes, on a cache hit right away. Formats
   // that produce no artifact at all — a `.bld` assembly (its children each
@@ -428,7 +441,7 @@ export default function ExportSection() {
       size='small'
       onClick={onExportClick}
       disabled={!isArtifactReady || isExporting}
-      startIcon={isAuthenticated && isPro ? <FileDownloadIcon/> : <LockIcon/>}
+      startIcon={isAuthenticated && !isAtFreeLimit ? <FileDownloadIcon/> : <LockIcon/>}
       sx={{textTransform: 'none'}}
       data-testid='export-glb-button'
     >
@@ -453,12 +466,16 @@ export default function ExportSection() {
         {exportButton}
       </GatedAction>
     )
-  } else if (!isPro) {
+  } else if (isAtFreeLimit) {
+    // The existing Pro upsell, now reached when the free allowance runs out
+    // rather than on the first click (§7.1). Same slug and `reason` as the
+    // Pro-only gate it replaces, so the funnel's `export_gated` series and
+    // the `from: 'export'` upgrade click carry on unbroken.
     gatedButton = (
       <GatedAction
         slug='export-pro'
-        title='Pro feature'
-        body={MSG_EXPORT_NEEDS_PRO}
+        title='Free exports used'
+        body={freeLimitHelp(freeAllowance.limit, nextFreeExport)}
         actionLabel='Upgrade to Pro'
         onAction={onUpgradeClick}
         onOpen={() => gtagEvent('export_gated', {reason: 'free'})}
@@ -792,12 +809,55 @@ export default function ExportSection() {
         sx={{mt: '1em', textAlign: 'center'}}
         data-testid='export-action-row'
       >
-        {isAuthenticated && !isPro &&
+        {isFreeTier &&
          <Chip label='Pro' size='small' color='primary' data-testid='export-pro-chip'/>}
         {gatedButton}
       </Stack>
+      {/* What a free user has left. Under the action rather than beside it:
+          at 390px the row already holds the button and the Pro chip, and a
+          caption in it would push the row into a wrap. `data-remaining`
+          carries the raw count for the E2E. */}
+      {isFreeTier && freeAllowance &&
+       <Typography
+         variant='caption'
+         color='text.secondary'
+         sx={{mt: '0.5em', textAlign: 'center'}}
+         data-testid='export-free-remaining'
+         data-remaining={freeAllowance.remaining}
+       >
+         {freeRemainingCaption(freeAllowance, nextFreeExport)}
+       </Typography>}
     </Stack>
   )
+}
+
+
+/**
+ * The count line under a free user's Export button.
+ *
+ * @param {{limit: number, remaining: number}} allowance
+ * @param {?string} nextFreeExport formatted `nextFreeAt`, or null
+ * @return {string} e.g. '1 of 2 free exports left this week'
+ */
+function freeRemainingCaption({limit, remaining}, nextFreeExport) {
+  const count = `${remaining} of ${limit} free exports left this week`
+  // At the limit the line also says when that changes; above it, the help
+  // that names the date is one click away and the line stays short.
+  return remaining === 0 && nextFreeExport ? `${count} · next one ${nextFreeExport}` : count
+}
+
+
+/**
+ * The at-the-limit gate's help text.
+ *
+ * @param {number} limit
+ * @param {?string} nextFreeExport formatted `nextFreeAt`, or null
+ * @return {string}
+ */
+function freeLimitHelp(limit, nextFreeExport) {
+  const used = `You've used your ${limit} free exports for the last ${FREE_EXPORT_WINDOW_DAYS} days.`
+  const next = nextFreeExport ? ` Your next free export is available ${nextFreeExport}.` : ''
+  return `${used}${next} Pro exports are unlimited.`
 }
 
 
@@ -817,7 +877,6 @@ function codecBytes(sizes, isMetadataIncluded) {
 }
 
 
-const MSG_EXPORT_NEEDS_PRO = 'Exporting a GLB needs a Pro subscription'
 // Above ~50 MB nothing starts on its own: three encoders over an artifact
 // that size is seconds of uninterruptible main-thread work, and the user
 // should be the one who asks for it (`export/codecSizes.js`).

@@ -12,6 +12,7 @@ import {triggerDownload} from './download'
 import {recordExport} from './exportHistory'
 import {QUALITY_DEFAULT, isQualityLevel} from './exportQuality'
 import {getExportFormat} from './exportRegistry'
+import {FREE_EXPORT_LIMIT_REASON, formatNextFreeExport} from './freeExports'
 import {COMPRESSION_NONE, isCompressionMode} from './glbCompression'
 import {isGzipAvailable} from './glbGzip'
 import {ProModuleDeniedError, loadProModule} from './proModuleLoader'
@@ -54,7 +55,14 @@ const SIZE_DECIMALS = 1
  * `ExportsList`, which holds the `{cacheKeyArgs, schemaVer}` of a model that
  * may not be the one on screen (§4.5).
  *
- * Design: design/new/glb-export-premium.md §4.4.
+ * A FREE user's export is charged by the server as it hands over the module
+ * (§4.8): `loadProModule` reports the charge, this records the export under
+ * the charge's id so `record-export` fills in that ledger row, and every
+ * allowance the server reports on the way — the charge header, the record
+ * response, an at-the-limit refusal — goes into the store slot the Export
+ * tab's count line reads (`useFreeExports`).
+ *
+ * Design: design/new/glb-export-premium.md §4.4, §4.8.
  *
  * @return {{run: Function, isExporting: boolean, error: ?Error}}
  */
@@ -62,6 +70,7 @@ export default function useExport() {
   const glbArtifact = useStore((state) => state.glbArtifact)
   const setAppMetadata = useStore((state) => state.setAppMetadata)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
+  const setFreeExportAllowance = useStore((state) => state.setFreeExportAllowance)
   const {getAccessTokenSilently, user} = useAuth0()
   // In the STORE, not in this hook: `ExportSection` and `ExportsList` each
   // call `useExport`, so per-instance state let one of them start an export
@@ -91,6 +100,13 @@ export default function useExport() {
     return token
   }, [getAccessTokenSilently, setAppMetadata])
 
+  // The allowance as the server last stated it, for this account only.
+  const noteAllowance = useCallback((freeExports) => {
+    if (freeExports && user?.sub) {
+      setFreeExportAllowance({sub: user.sub, ...freeExports})
+    }
+  }, [setFreeExportAllowance, user?.sub])
+
   const run = useCallback(async (formatId, options = {}, source = null) => {
     const format = getExportFormat(formatId)
     if (!format || format.status !== 'shipped') {
@@ -118,7 +134,13 @@ export default function useExport() {
         return null
       }
 
-      const proModule = await loadProModule(format.moduleName, () => getAccessTokenSilently(TOKEN_PARAMS))
+      // `charge` is non-null when the server spent one of a free user's
+      // exports on this delivery (§4.8). The loader has already declined to
+      // memoise it; what is left here is to show the new count and to record
+      // the export under the charge's id.
+      const {namespace: proModule, charge} =
+        await loadProModule(format.moduleName, () => getAccessTokenSilently(TOKEN_PARAMS))
+      noteAllowance(charge?.freeExports)
       const bytes = new Uint8Array(await file.arrayBuffer())
       const {blob, filename, stats} = await proModule.exportArtifact({
         bytes,
@@ -142,6 +164,10 @@ export default function useExport() {
       // rejects (exportHistory.js), and the catch below is belt and braces.
       await recordExport(
         {
+          // A free export is recorded INTO the ledger row its charge wrote;
+          // `record-export` refuses a free user's row it never charged.
+          // Undefined for Pro, where a fresh id is minted as before.
+          id: charge?.exportId,
           // The share path, the same key shape record-load counts loads
           // under. The cache-key fields beside it stay in this browser
           // (exportHistory.js) — they are what "Download again" needs and
@@ -175,6 +201,7 @@ export default function useExport() {
         () => getAccessTokenSilently(TOKEN_PARAMS),
         refreshAppMetadata,
       ).then((recordResult) => {
+        noteAllowance(recordResult.freeExports)
         if (recordResult.status === HTTP_AUTHORIZATION_REQUIRED || recordResult.status === HTTP_FORBIDDEN) {
           // `pro-module` already said yes to this user moments ago, so a
           // denial HERE means the two gates disagree — worth seeing.
@@ -197,11 +224,21 @@ export default function useExport() {
         // one at the same codec, and the funnel question #1843 asks is
         // whether anyone chooses it.
         portable: Boolean(options.portable),
+        // Spent one of a free user's exports, rather than a Pro export: the
+        // funnel's "do free exports convert" question (§7.1).
+        free_export: Boolean(charge),
       })
       return {filename, stats}
     } catch (e) {
       setError(e)
-      if (e instanceof ProModuleDeniedError) {
+      if (e instanceof ProModuleDeniedError && e.reason === FREE_EXPORT_LIMIT_REASON) {
+        // Out of free exports for now. The tier is right (free) — it is the
+        // COUNT the client had that was stale — so there is no JWT to
+        // refresh; the refusal carries the allowance, and storing it turns
+        // the Export button into the at-the-limit gate on this render.
+        noteAllowance(e.freeExports)
+        setSnackMessage({text: freeLimitMessage(e.freeExports), autoDismiss: true})
+      } else if (e instanceof ProModuleDeniedError) {
         // The server is the authority and it said no, so the badge that let
         // this click through is stale. Refresh the JWT and apply its claims,
         // so every app_metadata reader (the tier check above, the Profile
@@ -216,9 +253,23 @@ export default function useExport() {
     } finally {
       setIsExporting(false)
     }
-  }, [glbArtifact, getAccessTokenSilently, refreshAppMetadata, setIsExporting, setSnackMessage, user?.sub])
+  }, [glbArtifact, getAccessTokenSilently, noteAllowance, refreshAppMetadata, setIsExporting, setSnackMessage, user?.sub])
 
   return {run, isExporting, error}
+}
+
+
+/**
+ * The snackbar for a free user the server refused at the limit.
+ *
+ * @param {?object} freeExports The allowance the refusal carried
+ * @return {string}
+ */
+export function freeLimitMessage(freeExports) {
+  const limit = freeExports?.limit
+  const next = formatNextFreeExport(freeExports?.nextFreeAt)
+  const used = limit ? `You've used your ${limit} free exports for this week.` : 'You\'re out of free exports for now.'
+  return next ? `${used} The next one frees up ${next}.` : used
 }
 
 

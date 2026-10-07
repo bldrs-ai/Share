@@ -1,4 +1,4 @@
-import React, {ReactElement, useCallback, useEffect, useState} from 'react'
+import React, {ReactElement, useCallback, useEffect, useMemo, useState} from 'react'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import {Box, Button, Chip, Link, Stack, Typography} from '@mui/material'
@@ -64,7 +64,14 @@ dayjs.extend(relativeTime)
  * @return {ReactElement}
  */
 export default function ExportsList({onNavigate}) {
-  const [entries, setEntries] = useState([])
+  const [allEntries, setEntries] = useState([])
+  // A free export is charged by `pro-module` before it runs, as a ledger row
+  // with no `key` yet; `record-export` fills the key in once the file has
+  // downloaded (design/new/glb-export-premium.md §4.8). A charge whose export
+  // then failed in the browser keeps its null key forever, and still counts
+  // against the allowance — but it is not something the user exported, so
+  // it is not listed here (it would render as a blank row with no model).
+  const entries = useMemo(() => allEntries.filter(isCompletedExport), [allEntries])
   const [redownloadableIds, setRedownloadableIds] = useState([])
 
   const appMetadata = useStore((state) => state.appMetadata)
@@ -249,6 +256,16 @@ async function findRedownloadableIds(entries) {
     }
   }))
   return checked.filter((id) => id !== null)
+}
+
+
+/**
+ * @param {object} entry A history row
+ * @return {boolean} whether it records a finished export — one that names
+ *   its model. A free-export charge whose export never completed does not.
+ */
+function isCompletedExport(entry) {
+  return typeof entry?.key === 'string' && entry.key.length > 0
 }
 
 

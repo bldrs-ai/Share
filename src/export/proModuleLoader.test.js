@@ -23,10 +23,24 @@ describe('proModuleLoader', () => {
   /**
    * @param {number} status
    * @param {string} [body]
+   * @param {object} [headers] response headers, by name
    * @return {object} a minimal fetch Response double
    */
-  function response(status, body = MODULE_SOURCE) {
-    return {ok: status === HTTP_OK, status, text: () => Promise.resolve(body)}
+  function response(status, body = MODULE_SOURCE, headers = {}) {
+    const lower = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]))
+    return {
+      ok: status === HTTP_OK,
+      status,
+      text: () => Promise.resolve(body),
+      headers: {get: (name) => lower[name.toLowerCase()] ?? null},
+    }
+  }
+
+  // What pro-module sends a free user with the module: the charge's ledger
+  // row id, and the allowance left after it.
+  const CHARGED = {
+    'X-Bldrs-Export-Id': '7a1c2b3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+    'X-Bldrs-Free-Exports': JSON.stringify({limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-10-13T12:00:00.000Z'}),
   }
 
   beforeEach(() => {
@@ -43,9 +57,10 @@ describe('proModuleLoader', () => {
   })
 
   it('fetches with a Bearer token and imports the module from a blob URL', async () => {
-    const namespace = await loadProModule('glbExport', getAccessToken)
+    const {namespace, charge} = await loadProModule('glbExport', getAccessToken)
 
     expect(namespace).toBe(MODULE_NAMESPACE)
+    expect(charge).toBeNull()
     expect(fetchMock).toHaveBeenCalledWith(
       '/.netlify/functions/pro-module?name=glbExport',
       {headers: {Authorization: 'Bearer test-token'}},
@@ -68,13 +83,46 @@ describe('proModuleLoader', () => {
     expect(revokeObjectURL).toHaveBeenCalledWith(BLOB_URL)
   })
 
-  it('memoises per name, so a second export costs no request', async () => {
+  it('memoises a Pro delivery per name, so a second export costs no request', async () => {
     const first = await loadProModule('glbExport', getAccessToken)
     const second = await loadProModule('glbExport', getAccessToken)
 
     expect(second).toBe(first)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(mockImportModuleFromUrl).toHaveBeenCalledTimes(1)
+  })
+
+  describe('a delivery the server charged a free export for', () => {
+    it('reports the charge, so the export can be recorded under its id', async () => {
+      fetchMock.mockResolvedValue(response(HTTP_OK, MODULE_SOURCE, CHARGED))
+
+      const {namespace, charge} = await loadProModule('glbExport', getAccessToken)
+
+      expect(namespace).toBe(MODULE_NAMESPACE)
+      expect(charge).toEqual({
+        exportId: '7a1c2b3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+        freeExports: {limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-10-13T12:00:00.000Z'},
+      })
+    })
+
+    it('is NOT memoised: each free export fetches, and is charged, again', async () => {
+      // The soft spot this closes (glb-export-premium.md §4.8): a memoised
+      // free delivery would export for nothing for the rest of the session.
+      fetchMock.mockResolvedValue(response(HTTP_OK, MODULE_SOURCE, CHARGED))
+
+      await loadProModule('glbExport', getAccessToken)
+      await loadProModule('glbExport', getAccessToken)
+
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('still reports the charge when the allowance header is unreadable', async () => {
+      fetchMock.mockResolvedValue(response(HTTP_OK, MODULE_SOURCE, {...CHARGED, 'X-Bldrs-Free-Exports': 'not json'}))
+
+      const {charge} = await loadProModule('glbExport', getAccessToken)
+
+      expect(charge).toEqual({exportId: '7a1c2b3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d', freeExports: null})
+    })
   })
 
   it('shares one fetch between concurrent callers', async () => {
@@ -106,7 +154,7 @@ describe('proModuleLoader', () => {
     await expect(loadProModule('glbExport', getAccessToken)).rejects.toBeInstanceOf(ProModuleDeniedError)
 
     // Same page, now subscribed: the second attempt must reach the server.
-    const namespace = await loadProModule('glbExport', getAccessToken)
+    const {namespace} = await loadProModule('glbExport', getAccessToken)
     expect(namespace).toBe(MODULE_NAMESPACE)
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
@@ -146,6 +194,19 @@ describe('proModuleLoader', () => {
 
     expect(error).toBeInstanceOf(ProModuleDeniedError)
     expect(error.message).toBe('Pro module "glbExport" denied (403: subscription_required)')
+    expect(error.reason).toBe('subscription_required')
+    expect(error.freeExports).toBeNull()
+  })
+
+  it('hands a free user\'s at-the-limit refusal its allowance, for the "next free export" line', async () => {
+    const freeExports = {limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-09T09:00:00.000Z'}
+    fetchMock.mockResolvedValue(response(HTTP_FORBIDDEN, JSON.stringify({error: 'free_export_limit', freeExports})))
+
+    const error = await loadProModule('glbExport', getAccessToken).catch((e) => e)
+
+    expect(error).toBeInstanceOf(ProModuleDeniedError)
+    expect(error.reason).toBe('free_export_limit')
+    expect(error.freeExports).toEqual(freeExports)
   })
 
   it('omits the Authorization header when there is no token getter', async () => {

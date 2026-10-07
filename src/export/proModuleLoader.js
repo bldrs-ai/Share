@@ -1,4 +1,5 @@
 import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
+import {FREE_EXPORTS_HEADER, FREE_EXPORT_ID_HEADER} from './freeExports'
 import {importModuleFromUrl} from './importModuleFromUrl'
 
 
@@ -17,6 +18,15 @@ import {importModuleFromUrl} from './importModuleFromUrl'
  * after the import, and the namespace lives only in this module's Map — gone
  * on reload, never in OPFS, localStorage or the HTTP cache.
  *
+ * ONLY A PRO DELIVERY IS MEMOISED. A free user's module comes with a free
+ * export charged against it (`pro-module` says so with an
+ * `X-Bldrs-Export-Id` header), and memoising that would let the rest of the
+ * session export for nothing — the soft spot design/new/glb-export-premium.md
+ * §4.8 closes. So a charged delivery is used for the one export it paid for
+ * and dropped, and the next export fetches (and is charged) again. The
+ * SERVER's header decides, not the client's idea of the tier, which can be
+ * stale either way.
+ *
  * Design: design/new/glb-export-premium.md §3, §4.1, §4.6.
  */
 
@@ -28,34 +38,46 @@ const PRO_MODULE_ENDPOINT = '/.netlify/functions/pro-module'
 // out" or "crashed".
 const MAX_DETAIL_CHARS = 120
 
-// name → in-flight or settled module namespace. Holding the PROMISE (not the
-// namespace) is what makes concurrent callers share one fetch: two clicks
-// before the first response still cost one request.
+// name → in-flight or settled `{namespace, charge}`. Holding the PROMISE (not
+// the namespace) is what makes concurrent callers share one fetch: two clicks
+// before the first response still cost one request. A charged (free-tier)
+// delivery is evicted as soon as it settles; see the header.
 const loadedModules = new Map()
 
 
 /** Thrown when the server refused to hand over the module. */
 export class ProModuleDeniedError extends Error {
   /**
-   * @param {number} status 401 (no/invalid token) or 403 (not subscribed)
+   * @param {number} status 401 (no/invalid token) or 403 (refused)
    * @param {string} message
+   * @param {object} [detail]
+   * @param {?string} [detail.reason] The function's `error`, e.g.
+   *   'free_export_limit' or 'missing_auth0_token'
+   * @param {?object} [detail.freeExports] The allowance a free-tier refusal
+   *   carries (`freeExports.js#freeExportAllowance`), for the "next free
+   *   export on …" message
    */
-  constructor(status, message) {
+  constructor(status, message, {reason = null, freeExports = null} = {}) {
     super(message)
     this.name = 'ProModuleDeniedError'
     this.status = status
+    this.reason = reason
+    this.freeExports = freeExports
   }
 }
 
 
 /**
- * Fetch and import a pro module, memoised per page.
+ * Fetch and import a pro module — memoised per page for Pro, fetched afresh
+ * for every free-tier export.
  *
  * @param {string} name Module id, e.g. 'glbExport'
  * @param {Function} [getAccessToken] Returns a Promise of an Auth0 access
  *   token. Omitted (or resolving to nothing) means an unauthenticated
  *   request, which the server answers with 401.
- * @return {Promise<object>} the module namespace
+ * @return {Promise<{namespace: object, charge: ?{exportId: string, freeExports: ?object}}>}
+ *   the module namespace, and — when the server charged a free export for
+ *   this delivery — the charge's ledger row id and the allowance left
  * @throws {ProModuleDeniedError} on 401/403; a plain Error otherwise
  */
 export function loadProModule(name, getAccessToken) {
@@ -66,8 +88,15 @@ export function loadProModule(name, getAccessToken) {
   const pending = fetchAndImport(name, getAccessToken)
   // Evict on failure, so the retry after an upgrade (or after a network
   // blip) actually re-requests instead of replaying the rejection forever.
-  // Only SUCCESS is permanently memoised.
-  pending.catch(() => loadedModules.delete(name))
+  // And evict a CHARGED success too: it paid for one export, not a session.
+  // Only an uncharged (Pro) success stays memoised.
+  pending.then(
+    ({charge}) => {
+      if (charge && loadedModules.get(name) === pending) {
+        loadedModules.delete(name)
+      }
+    },
+    () => loadedModules.delete(name))
   loadedModules.set(name, pending)
   return pending
 }
@@ -93,23 +122,47 @@ async function fetchAndImport(name, getAccessToken) {
   const response = await fetch(`${PRO_MODULE_ENDPOINT}?name=${encodeURIComponent(name)}`, {headers})
 
   if (!response.ok) {
-    const detail = await serverErrorDetail(response)
+    const {detail, body} = await serverErrorDetail(response)
     if (response.status === HTTP_AUTHORIZATION_REQUIRED || response.status === HTTP_FORBIDDEN) {
       throw new ProModuleDeniedError(
-        response.status, `Pro module "${name}" denied (${response.status}${detail})`)
+        response.status, `Pro module "${name}" denied (${response.status}${detail})`,
+        {reason: body?.error ?? null, freeExports: body?.freeExports ?? null})
     }
     throw new Error(`Pro module "${name}" failed to load (${response.status}${detail})`)
   }
 
+  const charge = chargeFrom(response)
   const source = await response.text()
   const blobUrl = URL.createObjectURL(new Blob([source], {type: 'text/javascript'}))
   try {
-    return await importModuleFromUrl(blobUrl)
+    return {namespace: await importModuleFromUrl(blobUrl), charge}
   } finally {
     // Revoke as soon as the import resolves: the module is compiled and the
     // URL is a live handle to the premium source for as long as it exists.
     URL.revokeObjectURL(blobUrl)
   }
+}
+
+
+/**
+ * The free export a delivery was charged against, read off `pro-module`'s
+ * response headers, or null for an uncharged (Pro) delivery.
+ *
+ * @param {Response} response A 200 from `pro-module`
+ * @return {?{exportId: string, freeExports: ?object}}
+ */
+function chargeFrom(response) {
+  const exportId = response.headers.get(FREE_EXPORT_ID_HEADER)
+  if (!exportId) {
+    return null
+  }
+  let freeExports = null
+  try {
+    freeExports = JSON.parse(response.headers.get(FREE_EXPORTS_HEADER))
+  } catch {
+    // The count line just waits for record-export's figure instead.
+  }
+  return {exportId, freeExports}
 }
 
 
@@ -125,23 +178,25 @@ async function fetchAndImport(name, getAccessToken) {
  * its first line.
  *
  * @param {Response} response A non-OK response
- * @return {Promise<string>} e.g. ': app_metadata_lookup_failed at mgmt_token, upstream 401' — or ''
+ * @return {Promise<{detail: string, body: ?object}>} `detail` e.g.
+ *   ': app_metadata_lookup_failed at mgmt_token, upstream 401' — or '' — and
+ *   the parsed JSON body when there was one
  */
 async function serverErrorDetail(response) {
   let text = ''
   try {
     text = await response.text()
   } catch {
-    return ''
+    return {detail: '', body: null}
   }
   let body = null
   try {
     body = JSON.parse(text)
   } catch {
-    return text ? `: ${text.trim().split('\n')[0].slice(0, MAX_DETAIL_CHARS)}` : ''
+    return {detail: text ? `: ${text.trim().split('\n')[0].slice(0, MAX_DETAIL_CHARS)}` : '', body: null}
   }
   if (!body || typeof body.error !== 'string') {
-    return ''
+    return {detail: '', body: null}
   }
   let detail = `: ${body.error}`
   if (body.step) {
@@ -153,5 +208,5 @@ async function serverErrorDetail(response) {
   if (Array.isArray(body.missing) && body.missing.length) {
     detail += `, unset ${body.missing.join(' ')}`
   }
-  return detail
+  return {detail, body}
 }

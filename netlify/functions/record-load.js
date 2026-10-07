@@ -11,7 +11,8 @@
  *   1. Validate the access token via Auth0 /userinfo → sub.
  *   2. Read user app_metadata via Auth0 Management API
  *      (mgmt token cached in module scope).
- *   3. Derive tier: subscriptionStatus === 'sharePro' → PAID, else FREE.
+ *   3. Derive tier: a Pro subscriptionStatus (`sharePro` or
+ *      `shareProPendingReauth`, src/quota/proStatus.js) → PAID, else FREE.
  *   4. For /v/gh/, resolve repo privacy via unauth api.github.com
  *      (cached per "owner/repo" in module scope, 15-minute TTL).
  *   5. Prune loads outside the rolling 30-day window.
@@ -28,6 +29,7 @@
 
 import axios from 'axios'
 import * as Sentry from '@sentry/serverless'
+import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
 
 
 Sentry.AWSLambda.init({
@@ -146,7 +148,9 @@ async function patchUsageQuota(mgmtToken, auth0UserId, loads) {
  * @return {string}
  */
 function getTier(appMetadata) {
-  if (appMetadata && appMetadata.subscriptionStatus === 'sharePro') {
+  // The same Pro definition `src/quota/quota.js#getTier` reads, so the badge
+  // and this gate agree about a pending-reauth user (both: paid).
+  if (appMetadata && isProSubscriptionStatus(appMetadata.subscriptionStatus)) {
     return TIER_PAID
   }
   return TIER_FREE

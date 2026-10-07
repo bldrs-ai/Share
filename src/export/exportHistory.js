@@ -394,6 +394,10 @@ function unrecordedLocalRows(serverExports, localExports) {
  * @param {string} entry.format Format id from `exportRegistry.js`
  * @param {number} entry.bytes Size of the downloaded file
  * @param {string} [entry.title] Display label; the key's basename otherwise
+ * @param {string} [entry.id] The row id to record under. A free-tier export
+ *   passes the id `pro-module` charged it under, so `record-export` fills in
+ *   that ledger row rather than refusing an uncharged one; otherwise a fresh
+ *   id is minted here
  * @param {object} [entry.cacheKeyArgs] Local-only; enables "Download again"
  * @param {string} [entry.schemaVer] Local-only; pairs with cacheKeyArgs
  * @param {object} [entry.options] Local-only; the options this export RAN
@@ -405,14 +409,16 @@ function unrecordedLocalRows(serverExports, localExports) {
  *   token. Omitted means local-only (no server row).
  * @param {Function} [refreshToken] Force-refreshes the JWT after a server
  *   write, so `app_metadata` readers see the new list (the `useQuota` pattern)
- * @return {Promise<object>} `{recorded, status, exports}` — `recorded` is
- *   true only when the server persisted the row, `status` is the HTTP status
- *   when there was one, and `exports` is the list now in OPFS
+ * @return {Promise<object>} `{recorded, status, exports, freeExports}` —
+ *   `recorded` is true only when the server persisted the row, `status` is
+ *   the HTTP status when there was one, `exports` is the list now in OPFS,
+ *   and `freeExports` is the free-tier allowance the server reported after
+ *   recording (null for Pro, or when it reported none)
  */
 export async function recordExport(entry, sub, getAccessToken, refreshToken) {
-  const {key, format, bytes, title, cacheKeyArgs, schemaVer, options} = entry
+  const {id, key, format, bytes, title, cacheKeyArgs, schemaVer, options} = entry
   const local = {
-    id: newLocalId(),
+    id: id || newLocalId(),
     key,
     title: title || null,
     format,
@@ -487,5 +493,33 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
       // Non-fatal: the mirrored list above is already what the UI reads.
     }
   }
-  return {recorded: true, status: response.status, exports: mirrored}
+  return {recorded: true, status: response.status, exports: mirrored, freeExports: data.freeExports ?? null}
+}
+
+
+/**
+ * The signed-in user's free-export allowance, from `record-export`'s GET.
+ *
+ * NEVER THROWS: the count on the Export tab is a courtesy, and the gate is
+ * `pro-module`'s. Anything short of a clean answer is null, which the tab
+ * reads as "unknown" and shows no count for.
+ *
+ * @param {Function} getAccessToken Returns a Promise of an Auth0 access token
+ * @return {Promise<?{tier: string, freeExports: ?object}>} null when unknown
+ */
+export async function fetchFreeExportAllowance(getAccessToken) {
+  try {
+    const token = await getAccessToken()
+    const response = await fetch(RECORD_EXPORT_ENDPOINT, {headers: {Authorization: `Bearer ${token}`}})
+    if (!response.ok) {
+      return null
+    }
+    const data = await response.json()
+    if (!data || typeof data.tier !== 'string') {
+      return null
+    }
+    return {tier: data.tier, freeExports: data.freeExports ?? null}
+  } catch {
+    return null
+  }
 }

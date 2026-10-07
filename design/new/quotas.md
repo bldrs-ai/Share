@@ -49,14 +49,25 @@ Enforcement ships dark behind the `quotas` flag.
 | Tier | Limit | Window | Determined by |
 |---|---|---|---|
 | Anonymous (not signed in) | 2 | Lifetime — never resets without sign-in | client only |
-| Free (signed in) | 4 | 30-day rolling | `subscriptionStatus !== 'sharePro'` |
-| Paid (`sharePro`) | Unlimited | — | `subscriptionStatus === 'sharePro'` |
+| Free (signed in) | 4 | 30-day rolling | `subscriptionStatus` not a Pro status |
+| Paid (`sharePro`, `shareProPendingReauth`) | Unlimited | — | `isProSubscriptionStatus(subscriptionStatus)` |
 
 `getTier(appMetadata, isAuthenticated)` in `src/quota/quota.js` is the single
-mapping. It is used client-side and — duplicated, by construction kept in
-lock-step — in the server function (a CommonJS Lambda that can't import the ESM
-lib). Anonymous gets a *lifetime* cap of 2 rather than a rolling window so the
-conversion moment lands early, while the user is still engaged.
+mapping on the client. Which statuses are Pro is defined once, in
+`src/quota/proStatus.js`, and `record-load.js` imports that same definition
+(it is ESM now, so the old hand-copied `'sharePro'` check is gone).
+`shareProPendingReauth` — paid, waiting on a re-login for the GitHub scope —
+has counted as Pro since the GLB-export S4 decision
+([glb-export-premium.md](glb-export-premium.md) §7.2), so a pending-reauth
+user gets unlimited loads; that is intended. Anonymous gets a *lifetime* cap
+of 2 rather than a rolling window so the conversion moment lands early, while
+the user is still engaged.
+
+The same rolling-window shape meters one more thing: **free GLB exports**, 2
+per rolling 7 days for a signed-in free user, counted on the
+`app_metadata.exports` ledger by the `pro-module` function rather than here,
+and live with the `export` flag rather than `quotas`
+([glb-export-premium.md](glb-export-premium.md) §4.8).
 
 ## What counts
 

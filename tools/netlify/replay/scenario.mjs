@@ -54,7 +54,11 @@ export function listScenarios() {
 /**
  * Read a scenario and replace every `{"$fixture": "<path>"}` with the parsed
  * contents of `fixtures/<path>`, recursively, so recorded payloads (a Stripe
- * event, an Auth0 user) are written once and shared.
+ * event, an Auth0 user) are written once and shared. `{"$fixturePath":
+ * "<path>"}` is replaced by the ABSOLUTE path of `fixtures/<path>` instead —
+ * for an env var that has to name a directory, which a scenario can't spell
+ * portably (the replay runs from the repo for source and from a temp dir for
+ * the bundle).
  *
  * @param {string} file
  * @return {object}
@@ -75,6 +79,12 @@ function resolveFixtures(value, stack) {
   }
   if (value === null || typeof value !== 'object') {
     return value
+  }
+  if (typeof value.$fixturePath === 'string') {
+    if (Object.keys(value).length > 1) {
+      throw new Error(`$fixturePath ${value.$fixturePath}: nothing may sit beside it`)
+    }
+    return path.join(FIXTURE_ROOT, value.$fixturePath)
   }
   if (typeof value.$fixture === 'string') {
     const {$fixture: ref, $merge: merge, ...rest} = value

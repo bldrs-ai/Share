@@ -10,7 +10,9 @@ import {
   uncompressedSizes,
 } from '../../export/artifactSizes'
 import {AUTO_MEASURE_MAX_BYTES} from '../../export/codecSizes'
+import {formatNextFreeExport} from '../../export/freeExports'
 import useCodecSizes from '../../export/useCodecSizes'
+import useFreeExports from '../../export/useFreeExports'
 import {gtagEvent} from '../../privacy/analytics'
 import useStore from '../../store/useStore'
 import {actAsyncFlush} from '../../utils/tests'
@@ -46,6 +48,13 @@ jest.mock('../Profile/subscriptionNav', () => ({goToSubscription: jest.fn()}))
 // these assertions are about what the PANEL does with the figures — which is
 // the auto-selection, the per-option labels and the Stop control.
 jest.mock('../../export/useCodecSizes', () => ({
+  __esModule: true,
+  default: jest.fn(),
+}))
+// The allowance's own fetch and store wiring are pinned in
+// `export/useFreeExports.test.js`; here it is a value the test deals, so the
+// assertions are about what the PANEL does with a count.
+jest.mock('../../export/useFreeExports', () => ({
   __esModule: true,
   default: jest.fn(),
 }))
@@ -175,6 +184,8 @@ describe('ExportSection', () => {
     // one.
     uncompressedSizes.mockResolvedValue({withMetadata: WITH_METADATA_BYTES, withoutMetadata: WITHOUT_METADATA_BYTES})
     useCodecSizes.mockReturnValue(NO_CODEC_SIZES)
+    // No allowance unless a test deals one: what Pro and anonymous get.
+    useFreeExports.mockReturnValue(null)
     // jsdom has no `CompressionStream`, and the gzip row is hidden without
     // one — so without this the control under test would simply not be in the
     // DOM and every assertion about it would fail for the wrong reason
@@ -638,38 +649,81 @@ describe('ExportSection', () => {
     expect(mockRun).not.toHaveBeenCalled()
   })
 
-  it('offers a signed-in free user the Pro gate, with a Pro chip', async () => {
-    await setStore(ARTIFACT, {subscriptionStatus: 'free', stripeCustomerId: null, userEmail: 'a@b.c'})
-    const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+  describe('a signed-in free user (2 free exports per rolling 7 days, §4.8)', () => {
+    const FREE = {subscriptionStatus: 'free', stripeCustomerId: null, userEmail: 'a@b.c'}
+    const NEXT_FREE_AT = '2026-10-09T09:00:00.000Z'
 
-    expect(getByTestId('export-pro-chip')).toBeInTheDocument()
-    // The gated look is not the DOM `disabled` attribute: the click has to
-    // reach the wrapper, or the help never opens (#1838).
-    const gate = getByTestId('gated-export-pro')
-    expect(gate).toHaveAttribute('aria-disabled', 'true')
-    fireEvent.click(gate)
+    it('exports with what is left, and is told how much that is', async () => {
+      useFreeExports.mockReturnValue({limit: 2, used: 1, remaining: 1, nextFreeAt: NEXT_FREE_AT})
+      await setStore(ARTIFACT, FREE)
+      const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
-    expect(getByTestId('gated-help')).toHaveTextContent('Pro subscription')
-    expect(gtagEvent).toHaveBeenCalledWith('export_gated', {reason: 'free'})
+      expect(getByTestId('export-free-remaining')).toHaveTextContent('1 of 2 free exports left this week')
+      expect(getByTestId('export-free-remaining')).toHaveAttribute('data-remaining', '1')
+      // Still a Pro feature, so the chip stays — but the button is live.
+      expect(getByTestId('export-pro-chip')).toBeInTheDocument()
+      expect(queryByTestId('gated-export-pro')).toBeNull()
+      fireEvent.click(getByTestId('export-glb-button'))
+      expect(mockRun).toHaveBeenCalledTimes(1)
+    })
 
-    fireEvent.click(getByTestId('gated-help-action'))
-    expect(goToSubscription).toHaveBeenCalledWith(
-      expect.objectContaining({stripeCustomerId: null, userEmail: 'a@b.c', from: 'export'}))
-    expect(mockRun).not.toHaveBeenCalled()
+    it('meets the Pro upsell at the limit, which says when the next free export frees up', async () => {
+      useFreeExports.mockReturnValue({limit: 2, used: 2, remaining: 0, nextFreeAt: NEXT_FREE_AT})
+      await setStore(ARTIFACT, FREE)
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+      const next = formatNextFreeExport(NEXT_FREE_AT)
+      expect(getByTestId('export-free-remaining'))
+        .toHaveTextContent(`0 of 2 free exports left this week · next one ${next}`)
+      // The gated look is not the DOM `disabled` attribute: the click has to
+      // reach the wrapper, or the help never opens (#1838).
+      const gate = getByTestId('gated-export-pro')
+      expect(gate).toHaveAttribute('aria-disabled', 'true')
+      fireEvent.click(gate)
+
+      expect(getByTestId('gated-help')).toHaveTextContent('You\'ve used your 2 free exports for the last 7 days.')
+      expect(getByTestId('gated-help')).toHaveTextContent(`Your next free export is available ${next}.`)
+      expect(gtagEvent).toHaveBeenCalledWith('export_gated', {reason: 'free'})
+
+      fireEvent.click(getByTestId('gated-help-action'))
+      expect(goToSubscription).toHaveBeenCalledWith(
+        expect.objectContaining({stripeCustomerId: null, userEmail: 'a@b.c', from: 'export'}))
+      expect(mockRun).not.toHaveBeenCalled()
+    })
+
+    it('is not gated while the allowance is unknown — the server decides that click', async () => {
+      useFreeExports.mockReturnValue(null)
+      await setStore(ARTIFACT, FREE)
+      const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+      expect(queryByTestId('export-free-remaining')).toBeNull()
+      expect(queryByTestId('gated-export-pro')).toBeNull()
+      fireEvent.click(getByTestId('export-glb-button'))
+      expect(mockRun).toHaveBeenCalledTimes(1)
+    })
   })
 
-  it('treats shareProPendingReauth as not-Pro, following getTier', async () => {
-    // getTier is the entitlement authority and the `pro-module` function
-    // mirrors it, so the UI must not offer an export the server will 403.
+  it('treats shareProPendingReauth as Pro: no gate, no chip, no count', async () => {
+    // Paid, waiting on a re-login (owner decision, §7.2). Even handed an
+    // exhausted allowance, the panel must not gate or count a Pro user.
+    useFreeExports.mockReturnValue({limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-09T09:00:00.000Z'})
     await setStore(ARTIFACT, {subscriptionStatus: 'shareProPendingReauth'})
     const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
-    expect(queryByTestId('gated-export-pro')).toBeInTheDocument()
-    fireEvent.click(getByTestId('gated-export-pro'))
-    fireEvent.click(getByTestId('gated-help-action'))
+    expect(queryByTestId('gated-export-pro')).toBeNull()
+    expect(queryByTestId('export-pro-chip')).toBeNull()
+    expect(queryByTestId('export-free-remaining')).toBeNull()
+    fireEvent.click(getByTestId('export-glb-button'))
+    expect(mockRun).toHaveBeenCalledTimes(1)
+  })
 
-    expect(mockRun).not.toHaveBeenCalled()
-    expect(goToSubscription).toHaveBeenCalled()
+  it('shows a Pro user nothing new', async () => {
+    useFreeExports.mockReturnValue(null)
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+    const {queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+    expect(queryByTestId('export-free-remaining')).toBeNull()
+    expect(queryByTestId('export-pro-chip')).toBeNull()
   })
 
   describe('the Quality control (#1848)', () => {

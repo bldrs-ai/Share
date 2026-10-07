@@ -36,6 +36,19 @@ export default function createUISlice(set, get) {
     isExportInFlight: false,
     setIsExportInFlight: (inFlight) => set(() => ({isExportInFlight: inFlight})),
 
+    // A free user's export allowance as the server last reported it —
+    // `{sub, limit, used, remaining, nextFreeAt}`, or null while unknown
+    // (src/export/freeExports.js). Written from three answers: record-export's
+    // GET when the Export tab opens (`useFreeExports`), pro-module's charge
+    // header and record-export's POST after an export, and pro-module's
+    // at-the-limit refusal (`useExport`). Store rather than component state
+    // because the hook that exports and the panel that shows the count are
+    // different components. Carries the `sub` it belongs to, so a sign-out
+    // and sign-in as someone else never shows them the previous count.
+    // Design: design/new/glb-export-premium.md §4.8.
+    freeExportAllowance: null,
+    setFreeExportAllowance: (allowance) => set(() => ({freeExportAllowance: allowance})),
+
     isHelpVisible: helpIsVisibleInitially(),
     setIsHelpVisible: (is) => set(() => ({isHelpVisible: is})),
 

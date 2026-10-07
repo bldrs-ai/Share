@@ -306,9 +306,11 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
           if (isProInAuth0(stored.subscriptionStatus)) {
             // Strictly `true`: the marker is set by hand in the Auth0
             // dashboard, and a typo like "yes" should stay loud. And only
-            // with `sharePro`: pro-module and record-load grant paid access
-            // for nothing else, so a comp left at `shareProPendingReauth` is
-            // not a working comp yet and stays loud (Codex on #1911).
+            // with `sharePro`, the settled status (Codex on #1911). Since the
+            // S4 decision (glb-export-premium.md §7.2) `shareProPendingReauth`
+            // grants paid access too, so a comp left there does work — but
+            // a hand edit should not leave the transient value that sends
+            // the user through the reauth modal, so it stays loud.
             if (stored.comped === true && stored.subscriptionStatus === 'sharePro') {
               summary.comped.push(userId)
             } else {

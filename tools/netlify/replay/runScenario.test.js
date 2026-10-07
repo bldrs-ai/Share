@@ -11,6 +11,7 @@ import os from 'node:os'
 import path from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {replayAll} from './replayAll.mjs'
+import {FIXTURE_ROOT} from './scenario.mjs'
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -27,6 +28,7 @@ const EXCHANGE = {
   response: {status: 200, json: {v: 42}},
 }
 const ALSO = {request: {method: 'GET', url: 'https://upstream.test/also'}, response: {status: 200, json: {}}}
+const FROZEN_NOW = `2026-10-06T12:00:00.000Z ${Date.parse('2026-10-06T12:00:00.000Z')}`
 const TWO_CALLS = {method: 'GET', path: '/.netlify/functions/echo', headers: {}, query: {also: '1'}}
 const BASE = {
   env: {WHO: 'replay'},
@@ -62,6 +64,15 @@ const CASES = [
     'outbound #2 (GET https://upstream.test/also): not in the scenario'],
   ['exchangeOrder any still reports a call never made', {request: TWO_CALLS, exchangeOrder: 'any', exchanges: [ALSO, EXCHANGE, ALSO]},
     'outbound GET https://upstream.test/also: expected but never made'],
+  // `now` freezes both spellings of "the current time"; without it the
+  // clock is the real one, so a frozen expectation fails.
+  ['now freezes the clock', {now: '2026-10-06T12:00:00.000Z', expect: {...BASE.expect, headers: {'x-now': FROZEN_NOW}}}, null],
+  ['the clock runs without now', {expect: {...BASE.expect, headers: {'x-now': FROZEN_NOW}}}, 'response header x-now'],
+  // `$fixturePath` resolves to an absolute path under the replay fixtures.
+  ['$fixturePath resolves to the fixtures dir', {
+    env: {WHO: {$fixturePath: 'task-root'}},
+    exchanges: [{...EXCHANGE, request: {...EXCHANGE.request, body: {n: 1, from: path.join(FIXTURE_ROOT, 'task-root')}}}],
+  }, null],
   ['exchangeOrder any still checks bodies', {
     request: TWO_CALLS, exchangeOrder: 'any',
     exchanges: [ALSO, {...EXCHANGE, request: {...EXCHANGE.request, body: {n: 2}}}],

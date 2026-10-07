@@ -1,0 +1,73 @@
+{
+  "description": "A free user who has used both free exports in the last 7 days is refused, per the Management API rather than their token, and told when the next one frees up. Nothing is charged and the module is not read.",
+  "env": {
+    "$fixture": "env/auth0.json"
+  },
+  "now": "2026-10-06T12:00:00.000Z",
+  "request": {
+    "method": "GET",
+    "path": "/.netlify/functions/pro-module",
+    "headers": {
+      "authorization": "Bearer user-access-token"
+    },
+    "query": {
+      "name": "glbExport"
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-userinfo.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "exports": [
+                {
+                  "id": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+                  "key": "/share/v/p/index.ifc",
+                  "title": "index.ifc",
+                  "format": "glb",
+                  "bytes": 1024,
+                  "exportedAt": "2026-10-05T08:00:00.000Z",
+                  "free": true
+                },
+                {
+                  "id": "b4a2d3e5-6f7a-4b8c-9d0e-1f2a3b4c5d6e",
+                  "key": "/share/v/p/index.ifc",
+                  "title": "index.ifc",
+                  "format": "glb",
+                  "bytes": 1024,
+                  "exportedAt": "2026-10-02T09:00:00.000Z",
+                  "free": true
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 403,
+    "json": {
+      "error": "free_export_limit",
+      "freeExports": {
+        "limit": 2,
+        "used": 2,
+        "remaining": 0,
+        "nextFreeAt": "2026-10-09T09:00:00.000Z"
+      }
+    }
+  }
+}

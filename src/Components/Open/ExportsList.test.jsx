@@ -123,6 +123,29 @@ describe('ExportsList', () => {
     expect(await screen.findByTestId('exports-download-again')).toBeInTheDocument()
   })
 
+  // A free export's charge row (pro-module, §4.8) has no key until
+  // record-export fills it in; one whose export failed never gets one. It
+  // still counts against the allowance, but it is not an export to list.
+  it('leaves out a free-export charge whose export never completed', async () => {
+    loadExports.mockResolvedValue({exports: [
+      aRow({id: 'charged-only', key: null, title: null, bytes: null, free: true, cacheKeyArgs: undefined}),
+      aRow({id: 'done', free: true}),
+    ]})
+
+    await renderList()
+
+    expect(await screen.findAllByTestId('exports-row')).toHaveLength(1)
+    expect(screen.getByTestId('exports-row')).toHaveTextContent('/share/v/p/index.ifc')
+  })
+
+  it('shows the empty state when the only rows are uncompleted charges', async () => {
+    loadExports.mockResolvedValue({exports: [aRow({id: 'charged-only', key: null, title: null, free: true})]})
+
+    await renderList()
+
+    expect(await screen.findByTestId('exports-empty')).toBeInTheDocument()
+  })
+
   it('falls back to the share path\'s basename when a row has no title', async () => {
     loadExports.mockResolvedValue({exports: [aRow({title: null, key: '/share/v/p/nested/model.step'})]})
 

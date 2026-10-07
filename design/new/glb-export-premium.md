@@ -13,8 +13,9 @@ the browser, how the export code is delivered *only* to subscribed users,
 how a user sees what they have exported, and what each further format (OBJ,
 STL, USD, …) would need.
 
-Sections 1–3 are the investigation; §4–§6 the design; §7 the stages that
-become the epic's sub-issues; §8 the cross-browser smoke checklist.
+Sections 1–3 are the investigation; §4–§6 the design (§4.8 is the free
+tier's export allowance); §5 the stages that became the epic's sub-issues;
+§7 the owner's decisions; §8 the cross-browser smoke checklist.
 
 
 ## Status & remaining work
@@ -24,18 +25,23 @@ gzip (§1.1a), today's byte-attribution measurement on #1831, and the
 `.glb.gz` round trip (§4.7), which reverses a decision §4.3 used to record.
 §1.1d was updated 2026-09-30 when `glbCollapse` went default-on. The S4
 rollout (#1835) was prepared 2026-10-06: the `export` flag flip, the §7
-recommendations, and the checklist below; none of it is final until the owner's
-§8 smoke and the §7 confirmations.*
+decisions, and the checklist below. The owner decided §7 the same day — 2 free
+exports per rolling 7 days (§4.8), and `shareProPendingReauth` counts as Pro —
+and both are built on the S4 branch. None of it is final until the owner's §8
+smoke.*
 
 **Where things stand:** the feature described in §1–§6 below is fully built.
 The S4 PR flips `export` to `isActive: true` in `src/FeatureFlags.js`, so
 **once it merges export is on by default** for everyone (`?feature=export` is
 then redundant; flipping the flag back to `false` is the kill switch, since
-`?feature=` can only turn flags on). The flag gates only the UI: the
-`pro-module` function still refuses everyone who is not `sharePro`
-(§1.3, §4.1), so what a free or anonymous user gains is the tab and its
-upgrade/login prompts, not the exporter. Until that PR merges the flag is
-still **off** and the paragraph below describes the shipped, flagged state.
+`?feature=` can only turn flags on). The flag gates only the UI; the
+`pro-module` function decides who gets the exporter (§1.3, §4.1). With the S4
+branch that is: Pro (`sharePro` or `shareProPendingReauth`) without limit; a
+signed-in free user **2 exports per rolling 7 days**, each charged against
+their `app_metadata.exports` ledger as the module is handed over (§4.8), then
+the upgrade prompt saying when the next one frees up; anonymous, the login
+prompt. Until that PR merges the flag is still **off** and the paragraph below
+describes the shipped, flagged state, in which only `sharePro` exports.
 Export lives in the
 Save dialog's Export tab: the Include Bldrs metadata toggle, Portable
 toggle (on by default since #1831), Compression dropdown (None / Meshopt / Draco), Quality rung,
@@ -172,12 +178,16 @@ arm — the envelope comes off at the upload seam, and a second seam in
    (decimation, deprioritised — it attacks the ~1.2 MB geometry term on
    Snowdon, not the container), S5
    #1836 (further export formats, §6).
-5. **§7's two open questions now carry a recommendation, pending owner
-   confirmation.** §7.1: no free export, Pro-only at launch. §7.2: keep
-   following `getTier`, so `shareProPendingReauth` is not Pro for export. Both
-   are recorded in §7 as *recommended, pending owner confirmation* and the S4
-   PR says the owner has to confirm them before it merges. They are not
-   decisions until then.
+5. **§7's two open questions are decided (owner, 2026-10-06), and built on
+   the S4 branch.** §7.1: a signed-in free user gets **2 exports per rolling
+   7 days** (`FREE_EXPORT_LIMIT` / `FREE_EXPORT_WINDOW_DAYS`,
+   `src/export/freeExports.js`); Pro is unlimited; anonymous still gets the
+   login prompt. `pro-module` charges each free export as it serves the
+   module and refuses at the limit; §4.8 has the design and what stays
+   bypassable. §7.2: `shareProPendingReauth` **is** Pro — for export and, since
+   `getTier` drives quotas, for loads too — through one shared definition,
+   `src/quota/proStatus.js`, that `getTier`, `pro-module`, `record-export`,
+   `record-load` and the Stripe reconciliation all import.
 6. **The §8 results are pending owner smoke.** Nothing in §8 has been run
    against production with real Auth0 accounts, apart from the desktop
    Chrome pass on 14 Sep. The signed-out production probes in the S4 PR are
@@ -1163,8 +1173,12 @@ key.commitHash, key.owner, key.repo, key.branch)` — the reader's own call.
   Auth0 `app_metadata.subscriptionStatus = 'sharePro'` (+ `stripeCustomerId`).
 - **Client:** the JWT carries `https://bldrs.ai/app_metadata`; `BaseRoutes`
   decodes it into `store.appMetadata`. `src/quota/quota.js#getTier` is the
-  tier mapping (`'sharePro'` → PAID); `GitHubFileBrowser` also treats
-  `'shareProPendingReauth'` as Pro.
+  tier mapping: either Pro status → PAID. The Pro statuses are `sharePro` and
+  `shareProPendingReauth` (what the webhook writes on FREE→PRO: paid, waiting
+  on a re-login for the GitHub scope), defined once in `src/quota/proStatus.js`
+  and imported by the browser (`getTier`, `GitHubFileBrowser`, the MSW mocks)
+  and the functions (`_lib/subscriptions.js`, `pro-module`, `record-export`,
+  `record-load`) alike (§7.2).
 - **Server-side gate precedent:** `netlify/functions/record-load.js`
   (Bearer → `/userinfo` → Management API → `app_metadata`), with the shared
   `_lib/auth0.js#verifyAuth0Bearer` helper. `create-portal-session.js` is
@@ -1196,8 +1210,10 @@ page is served COOP `same-origin-allow-popups` without COEP.
 1. A Pro user downloads the current model as a valid, standalone `.glb`
    in one click, from the artifact Share already built — no re-parse.
 2. Non-subscribers see the affordance and are routed to upgrade; they
-   **never receive the export code**, and the server, not the client, is
-   the authority on who does (same principle as quotas).
+   receive the export code **only against a free export the server has
+   charged** (2 per rolling 7 days for a signed-in free user, §4.8; never for
+   anonymous), and the server, not the client, is the authority on who does
+   (same principle as quotas).
 3. A user can see what they exported (what, when, which format, how big)
    and re-download from the local cache when it is still there.
 4. The design extends to other formats by adding a module, not a
@@ -1235,10 +1251,13 @@ and never touches OPFS, localStorage or the HTTP cache.
 
 ```
 src/export/
-  proModuleLoader.js     host: loadProModule(name, getToken) → module namespace (blob import), memoised per page
+  proModuleLoader.js     host: loadProModule(name, getToken) → {namespace, charge} (blob import);
+                         memoised per page for Pro, fetched per export for a free user (§4.8)
   exportRegistry.js      host: EXPORT_FORMATS matrix (id, label, ext, mime, moduleName, status)
-  exportHistory.js       host: OPFS mirror `exports.json` + subscribeToExports (S3)
+  exportHistory.js       host: OPFS mirror `exports.json` + subscribeToExports (S3); the allowance GET
+  freeExports.js         shared (host AND functions): FREE_EXPORT_LIMIT, FREE_EXPORT_WINDOW_DAYS, the window (§4.8)
   useExport.js           host: hook: locate artifact → load module → run → download → record
+  useFreeExports.js      host: hook: a free user's allowance, for the Export tab's count line (§4.8)
   pro/
     glbExport.entry.js   PRO MODULE entry (built separately; never bundled into index.js)
     glbExport.js         the export itself: container unpack, optional strip, Blob
@@ -1248,8 +1267,9 @@ src/Components/                    (as built: the components live with their men
   Open/ExportsList.jsx   host: "My Exports" list (S3), inline under the button (S2b)
   GatedAction.jsx        host: the shared "looks disabled, explains itself" wrapper (S2b)
 netlify/functions/
-  pro-module.js          GET ?name=<id> — Auth0 bearer + Pro check → JS bytes, no-store
-  record-export.js       POST {key, format, title, bytes} → app_metadata.exports (S3)
+  pro-module.js          GET ?name=<id> — Auth0 bearer + Pro check, or a free export charged → JS bytes, no-store
+  record-export.js       POST {key, format, title, bytes} → app_metadata.exports (S3);
+                         GET → the caller's free-export allowance (§4.8)
   _pro-modules/          BUILD OUTPUT (gitignored): glbExport.js
   _tests/                jest suites for the two functions (§4.2: a top-level
                          .js here would deploy AS a function)
@@ -2181,7 +2201,7 @@ button swallows the click, and the help would never open. Test ids:
 | Action | Unlocked by | Help | Unlocking action |
 |---|---|---|---|
 | **Save** (toolbar, signed out) | signing in to a connector (GitHub today; Drive per identity-decoupling) | "Log in to one of your connectors to save models" | Log in → `LoginDialog` |
-| **GLB export** (Save → Export, signed in, free) | Pro subscription | "Exporting a GLB needs a Pro subscription" | Upgrade to Pro → `Profile/subscriptionNav.js` |
+| **GLB export** (Save → Export, signed in, free, **at the free limit**, §4.8) | Pro subscription, or the next free export freeing up | "You've used your 2 free exports for the last 7 days. Your next free export is available Thu, Oct 9, 9:00 AM. Pro exports are unlimited." | Upgrade to Pro → `Profile/subscriptionNav.js` |
 | **GLB export** (signed out — defensive; the dialog only opens signed in) | logging in | "Log in to export this model as a GLB" | Log in → `LoginDialog` |
 | **Private sharing** (Share dialog, `sharing` flag) | Pro subscription | "Private links need a Pro subscription" | Upgrade to Pro |
 
@@ -2195,12 +2215,17 @@ The Export GLB button's own states, resolved in this order:
 |---|---|---|
 | no model / no artifact yet (`glbArtifact` null, writer in flight) | disabled, "Preparing GLB…" | — |
 | not signed in | gated look + lock | help → log in |
-| signed in, not Pro | gated look + lock + `Pro` chip | help → subscription flow |
-| Pro | "Export GLB" | `useExport().run('glb')` → progress → browser download → snackbar "Exported <name> (<size>)" |
-| module load 401/403 | error snackbar "Export requires a Pro subscription" + re-check tier | server said no; the client badge was stale — force-refresh the JWT like `useQuota` does |
+| signed in, free, no free export left in the window (§4.8) | gated look + lock + `Pro` chip; under it "0 of 2 free exports left this week · next one <date>" | help → subscription flow |
+| signed in, free, exports left (or count not known yet) | "Export GLB" + `Pro` chip; under it "N of 2 free exports left this week" | `useExport().run('glb')`, charged by the server → download → the count drops |
+| Pro (`sharePro` or `shareProPendingReauth`) | "Export GLB" — nothing new | `useExport().run('glb')` → progress → browser download → snackbar "Exported <name> (<size>)" |
+| module load 403 `free_export_limit` | snackbar "You've used your 2 free exports for this week. The next one frees up <date>." | the count was stale — the refusal carries the allowance, which turns the button into the gate above |
+| module load other 401/403 | error snackbar "Export requires a Pro subscription" + re-check tier | server said no; the client badge was stale — force-refresh the JWT like `useQuota` does |
 
 The Pro check on the client uses `getTier(appMetadata, isAuthenticated) ===
-TIERS.PAID` **for the UI only**; the function is the authority.
+TIERS.PAID`, and the free count is the server's last answer
+(`useFreeExports`); both are **for the UI only** — the function is the
+authority, and an unknown count is not gated (the click goes to the server,
+which counts for itself).
 `gtagEvent('export_gated', {reason})` fires when the help OPENS, which is the
 moment the user met the gate.
 
@@ -2221,12 +2246,16 @@ fallback is `window.open(blobUrl)`.
 Two layers, mirroring quotas (`design/new/quotas.md`):
 
 - **Server (authoritative for signed-in users):** `record-export.js` —
-  Bearer + Pro check, then append `{id, key, title, format, bytes,
+  Bearer, then for Pro append `{id, key, title, format, bytes,
   exportedAt}` to `app_metadata.exports`, newest first, capped at 100
   entries (Auth0 `app_metadata` has a 16 KB soft ceiling; 100 × ~150 B is
-  well under). Returns `{exports}`. Same read-modify-write caveat as
-  `record-load` (last-write-wins; loss direction is a missing history row,
-  never a wrong gate).
+  well under). For a free user the same list is the free-export ledger: the
+  row already exists, written by `pro-module` when it charged the export, and
+  this fills it in under the same id rather than appending (§4.8). Returns
+  `{exports}` (+ `freeExports` for a free user). Same read-modify-write
+  caveat as `record-load` (last-write-wins; loss direction is a missing
+  history row or a lost charge row — a free extra export — never a wrongful
+  refusal).
 - **Client:** `src/export/exportHistory.js` keeps one mirror file per
   account, `exports.<encodeURIComponent(sub)>.json`, at the OPFS root (raw
   `navigator.storage.getDirectory()`, no worker dependency — the quota lib's
@@ -2327,18 +2356,25 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   token. No sourcemap, minified.
 - The function verifies the bearer against Auth0 `/userinfo` on every
   request, reads `app_metadata` through the Management API (never trusts
-  the JWT claim the client already has), and answers `403` for non-Pro,
-  `401` for no/invalid token. Denials are Sentry-tagged with the sub.
+  the JWT claim the client already has), and answers `401` for no/invalid
+  token, `403 free_export_limit` for a free user with no free export left
+  in the window, and otherwise serves — charging a free user's export into
+  the ledger before the module leaves (§4.8). Refusals are Sentry-tagged
+  with the sub.
 - Response headers: `Content-Type: text/javascript`, `Cache-Control:
-  private, no-store`, `X-Content-Type-Options: nosniff`. The client revokes
-  the blob URL after import and holds the namespace in a module-scope
-  `Map` only (gone on reload).
+  private, no-store`, `X-Content-Type-Options: nosniff`, and on a charged
+  free delivery `X-Bldrs-Export-Id` + `X-Bldrs-Free-Exports`. The client
+  revokes the blob URL after import and holds a Pro namespace in a
+  module-scope `Map` only (gone on reload); a charged one it does not hold
+  at all.
 - Dev bypass follows `_lib/auth0.js`: with `AUTH0_DOMAIN` unset the
   function serves the module and fires the existing one-shot Sentry
   warning — same as the OAuth broker functions.
 - What this is not: a Pro user can copy the module text from devtools.
   That's the same exposure as any client-side feature and is accepted; the
-  line held is *distribution*, which is what the pricing depends on.
+  line held is *distribution*, which is what the pricing depends on. Since
+  §7.1 a free user can do the same with a module they were charged for, and
+  that is the free tier's remaining bypass (§4.8).
 
 
 ### 4.7 The way back in: opening a `.glb.gz`
@@ -2432,6 +2468,109 @@ rendered. The Compress download caption changed with it: *"gzip — saves a
 .glb.gz, reopens in Share"*.
 
 
+### 4.8 Free exports: 2 per rolling 7 days (§7.1)
+
+The owner's §7.1 decision: a signed-in free user gets **N = 2 exports per
+rolling D = 7 days**; Pro (§7.2: `sharePro` or `shareProPendingReauth`) is
+unlimited; anonymous still gets the login prompt. N and D are
+`FREE_EXPORT_LIMIT` and `FREE_EXPORT_WINDOW_DAYS` in
+`src/export/freeExports.js`, the one module the functions, the Export tab and
+the MSW mocks all import, together with the window itself
+(`freeExportAllowance`). Change the allowance there and nowhere else.
+
+**The ledger** is the list `record-export` already kept: Auth0
+`app_metadata.exports`. A free export is a row with `free: true`; only those
+rows count, so a lapsed Pro user's history never eats their allowance. A row
+counts while `now < exportedAt + 7 days`, so each one comes back exactly a
+week after it was spent — the rolling shape of quotas' 30-day window
+([quotas.md](quotas.md) §"30-day rolling window"), not a calendar reset.
+`nextFreeAt` is when the oldest counted row stops counting.
+
+**Where it is counted: at delivery, in `pro-module`.** That is the one step
+the server controls. The alternative — let `record-export` count and have
+`pro-module` refuse when the count is at the limit — counts only what the
+client chooses to report: `record-export` runs after the file is already in
+Downloads, so blocking that one request (devtools, an extension, going
+offline at the right moment) would make every free export uncounted. So:
+
+1. `pro-module` reads `app_metadata` (Management API, as before). Pro → serve,
+   nothing written. Free with `remaining === 0` → **403
+   `free_export_limit`**, body `{freeExports: {limit, used, remaining,
+   nextFreeAt}}`, and nothing read or written.
+2. Free under the limit → read the module first (a missing build must not cost
+   an export), then PATCH a charge row — `{id, format, exportedAt, free: true,
+   key: null, title: null, bytes: null}` — to the front of `exports`, and only
+   then serve. A failed PATCH is a 502 and no module: an uncharged delivery is
+   the thing being prevented. The 200 carries `X-Bldrs-Export-Id` (the row
+   id) and `X-Bldrs-Free-Exports` (the allowance after the charge).
+3. The client (`proModuleLoader.js`) does **not memoise a charged delivery**.
+   A memoised one would let the rest of the session export for nothing — the
+   soft spot of the original Pro-only design, where memoising was the point.
+   The server's header decides this, not the client's idea of the tier.
+4. `useExport` records the export under the charge's id, and `record-export`
+   **fills in** that row (key, title, format, bytes; id, `exportedAt` and
+   `free` stay the server's). A free user's POST whose id matches no charge
+   row is refused (403 `free_export_not_charged`): `record-export` never adds
+   a free row, so a free user cannot write their own ledger, up or down.
+5. The count the user sees comes from the server: `record-export`'s GET when
+   the Export tab opens (`useFreeExports`), then the charge header, the
+   record response and any `free_export_limit` refusal, all into one store
+   slot (`UISlice#freeExportAllowance`, keyed by `sub`). It is display only;
+   an unknown count is not gated, because the server counts for itself.
+
+The UI (§4.4): under a free user's Export button, "N of 2 free exports left
+this week"; at the limit the button takes the existing Pro upsell gate (same
+`gated-export-pro` slug, same `export_gated {reason: 'free'}` event, so the
+funnel series carries on), whose help says when the next export frees up, and
+the line under it adds "· next one <date>". Pro sees nothing new.
+`export_model` gains `free_export: true|false`, which is §7.1's conversion
+question.
+
+**What stays bypassable**, honestly:
+
+- **Keeping the module.** A free user who has been charged once holds the
+  exporter's source for that page — in the network panel, or by keeping a
+  reference to the namespace from devtools — and can replay it without
+  `pro-module` ever being asked again. The module itself has no gate, and any
+  gate inside it could be edited out. This is §4.6's accepted exposure
+  ("a Pro user can copy the module text") extended to free users; it takes
+  deliberate devtools work, not a blocked request. Closing it would mean
+  server-side export (§3 option D), a non-goal.
+- **Racing requests.** Every `app_metadata` writer here is read-modify-write
+  with no compare-and-swap. Two `pro-module` requests from one account fired
+  together can both read the same count and both be served, and a charge row
+  can be lost to a concurrent write of `exports` (another tab's record). The
+  loss direction is a free extra export, never a wrongful refusal — the same
+  one `record-load` accepts for quotas. The honest client serialises its own
+  exports (`isExportInFlight`), so this takes a script. The fix is the same
+  KV-store migration quotas.md lists.
+- **A charge without an export.** The credit is spent when the module is
+  served, so an export that then fails in the browser (the encoder throws,
+  the tab closes) has still used one. `useExport` loads the module only once
+  the artifact is in hand, which keeps this to genuine failures. No refund
+  path exists, deliberately: a refund endpoint is a way to un-count a
+  successful export. Such a charge row keeps `key: null` for good; "My
+  Exports" (`ExportsList`) leaves rows without a key out, since there is no
+  model to name or reopen, while the allowance still counts them.
+
+**Tests.** `src/export/freeExports.test.js` (the window, its edge, Pro rows
+not counted); `netlify/functions/_tests/pro-module.test.js` (anonymous 401,
+free under the limit 200 and charged before serving, free at the limit 403
+with the allowance, pending-reauth 200 and uncharged, Pro 200 and uncharged,
+no charge on a missing build, no module on a failed charge) and
+`record-export.test.js` (the fill-in, the uncharged refusal, the GET); replay
+scenarios `pro-module/{charges-free-export,refuses-free-user-at-limit,
+serves-pending-reauth}` and `record-export/{fills-in-charged-free-export,
+refuses-uncharged-free-export,records-pending-reauth-export,
+reports-free-allowance}`, which freeze the clock with the harness's `now` and
+serve a stand-in module from `fixtures/task-root` (replay README); the loader,
+`useExport`, `useFreeExports`, `ExportSection` and `ExportsList` suites; and in
+`Components/Share/exportGlb.spec.ts`, desktop and mobile, *"a free user
+exports twice, watching the count drop, then meets the Pro gate"* and *"a
+pending-reauth subscriber exports as Pro, with nothing counted"*. The MSW
+mocks and the Playwright `page.route` fallbacks (`tests/e2e/export.ts`) apply
+the same gate to the same in-page ledger, `window.__mockExports`.
+
 ## 5. Stages (→ sub-issues of the epic)
 
 | # | Title | Delivers | Tests |
@@ -2503,34 +2642,34 @@ likely second premium format; its module is the one that decides whether
 export module.
 
 
-## 7. Open questions
+## 7. Decisions (were open questions)
 
-1. **Should free users get *one* export?** A single free export is a strong
-   conversion moment (the quota design's "anonymous gets 2 loads" logic).
-   It changes the function's gate from "Pro" to "Pro, or free with no
-   prior export" and adds an `exports` read to the check. Not in v0.1;
-   flagged for S4's rollout decision.
-   **Recommended, pending owner confirmation (S4, #1835): no free export.**
-   Export is Pro-only at launch, which is what the function already
-   enforces (anonymous: login prompt; free: `/subscribe/`). Revisit with
-   conversion data once the tab has been on for a while: the Export tab's
-   upgrade click is already reported as `from: 'export'` by
-   `goToSubscription`, so the funnel can be read. The one-free-export
-   variant stays cheap to add later (the gate change above); the reverse,
-   taking a free export away, is not.
-2. **`shareProPendingReauth`** — `GitHubFileBrowser` counts it as Pro,
-   `getTier` doesn't. The function follows `getTier` (the quota authority);
-   the UI badge follows `getTier` too. If pending-reauth users complain, fix
-   `getTier`, not the export.
-   **Recommended, pending owner confirmation (S4, #1835): keep following
-   `getTier`.** `shareProPendingReauth` is **not** Pro for export:
-   `pro-module`, `record-export` and the quota tier honour only `sharePro`
-   (the same rule `reconcile-subscriptions` relies on, see
-   netlify-functions-testing.md §"Subscription reconciliation", where the
-   promotion to `sharePro` happens in an Auth0 step outside this repo). One
-   rule for every paid surface; the cost is that a user between a
-   payment and their next login sees the upgrade prompt on Export, and the
-   fix for that is reauth/`getTier`, not an exception here.
+1. **Should free users get free exports?** Decided by the owner for S4
+   (#1835, 2026-10-06): **yes — a signed-in free user gets 2 exports per
+   rolling 7 days.** Pro is unlimited; anonymous still gets the login prompt.
+   (The recommendation drafted before the decision was "no free export,
+   Pro-only at launch"; the owner chose the conversion moment instead.)
+   `pro-module` charges each free export against the `app_metadata.exports`
+   ledger as it serves the module and refuses at the limit; the design, and
+   what a determined user can still get around, are in §4.8. Whether free
+   exports convert is readable from the funnel: `export_model` carries
+   `free_export`, and the upgrade click from the at-the-limit gate still
+   reports `from: 'export'` through `goToSubscription`.
+2. **`shareProPendingReauth` is Pro.** Decided by the owner for S4: it is the
+   status `stripe-webhook.js` writes on FREE→PRO, so the payment is
+   confirmed; it only waits for the user to log in again for the GitHub
+   scope, after which an Auth0 Action promotes it to `sharePro`. The server
+   side already treated it as Pro (`_lib/subscriptions.js`'s
+   `PRO_AUTH0_STATUSES`, the reconcile sweep); `getTier`, `pro-module`,
+   `record-export` and `record-load` did not, each with its own hand-copied
+   `'sharePro'`. All of them now import one definition,
+   `src/quota/proStatus.js`, and `PRO_AUTH0_STATUSES` *is* that set (a test
+   pins the identity). **Side effect, intended:** `getTier` also drives
+   quotas, so a pending-reauth user gets Pro (unlimited) loads as well, and
+   `record-load` agrees. The one place `sharePro` alone still matters is the
+   reconcile sweep's hand-set comp (`comped: true`), which must be the
+   settled `sharePro` so a hand edit never sends a comped user through the
+   reauth modal.
 3. **Auth0 `app_metadata` as the export ledger** inherits the quota
    design's migration note (Netlify Blobs / KV when Management-API limits
    bite). Same table, same move.
@@ -2543,17 +2682,32 @@ Results: **pending owner smoke.** (Before the S4 flip this ran with
 redundant, so a run is also the check that a plain URL shows the tab.)
 
 For each of Chrome, Firefox, Safari (macOS), Edge, iOS Safari, Android
-Chrome — with a real Auth0 account in each of the three tiers:
+Chrome — with a real Auth0 account in each of the three tiers (anonymous;
+free, with no free exports in the last 7 days; Pro), plus once with a
+pending-reauth account (step 12):
 
 1. Open a sample IFC; wait for the load snackbar. Open Save → the Export
    tab (on by default since S4, no `?feature=export` needed) shows "Preparing GLB…" until the writer finishes, then enables.
-2. Anonymous: click → login dialog. Free: click → `/subscribe/`. Pro:
-   click → a `.glb` lands in Downloads (check the first 4 bytes are `glTF`
-   and it opens in <https://gltf-viewer.donmccurdy.com/>).
+2. Anonymous: click → login dialog. Free: see step 2b. Pro: click → a
+   `.glb` lands in Downloads (check the first 4 bytes are `glTF` and it
+   opens in <https://gltf-viewer.donmccurdy.com/>), and **nothing new** is
+   shown — no count line under the button, no Pro chip.
+2b. **Free tier (§4.8).** Under the button: "2 of 2 free exports left this
+   week". Export → a `.glb` lands and the line reads "1 of 2". Export again →
+   "0 of 2 free exports left this week · next one <date>", and the button
+   takes the gated look. Click it → the help says "You've used your 2 free
+   exports for the last 7 days. Your next free export is available <date>",
+   and Upgrade to Pro → `/subscribe/`. The date should be 7 days after the
+   FIRST of the two exports. Reload the page and reopen the tab: still
+   "0 of 2" (the count is the server's, not the page's).
 3. Pro, DevTools → Network: `pro-module?name=glbExport` is `200`,
-   `text/javascript`, `cache-control: private, no-store`; a second click
-   does **not** re-fetch (memoised). Free user forging the request gets
-   `403`; no token gets `401`.
+   `text/javascript`, `cache-control: private, no-store`, with **no**
+   `x-bldrs-export-id` header; a second click does **not** re-fetch
+   (memoised). Free user: each export is its own `pro-module` request, each
+   `200` with an `x-bldrs-export-id`; a forged request at the limit gets
+   `403` `{"error":"free_export_limit", …}`; no token gets `401`. In the
+   Auth0 dashboard the free user's `app_metadata.exports` holds one row per
+   export with `"free": true`, each filled in with the model's `key`.
 4. Reload the page: the Export section is enabled immediately (cache-hit
    sets `glbArtifact`); export again → same bytes.
 5. Toggle "Include Bldrs metadata" off → the file is smaller and its JSON
@@ -2601,3 +2755,10 @@ Chrome — with a real Auth0 account in each of the three tiers:
     that nobody has exercised. It should fail visibly rather than silently if
     it fails at all. (GitHub-hosted `.glb.gz` is refused at the router by
     design; confirm the refusal reads sensibly.)
+12. **Pending reauth (§7.2).** With an account whose `subscriptionStatus` is
+    `shareProPendingReauth` (pay, and export before logging in again — or set
+    it by hand in the Auth0 dashboard on a test account): the Export tab
+    shows no count, no chip and no gate; export works; `pro-module` answers
+    `200` with no `x-bldrs-export-id`; nothing with `"free": true` is added
+    to `app_metadata.exports`. Private model loads are not counted against
+    the quota either (`record-load` answers `tier: "paid"`) — intended.

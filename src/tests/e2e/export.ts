@@ -1,4 +1,13 @@
-import {Page, expect} from '@playwright/test'
+import {Page, Route, expect} from '@playwright/test'
+import {randomUUID} from 'crypto'
+import {
+  FREE_EXPORTS_HEADER,
+  FREE_EXPORT_ID_HEADER,
+  FREE_EXPORT_LIMIT_REASON,
+  freeExportAllowance,
+  newFreeExportRow,
+} from '../../export/freeExports'
+import {isProSubscriptionStatus} from '../../quota/proStatus'
 import {estimateKey, settledEstimateBytes} from './exportEstimate'
 import {captureGlbLogs, waitForGlbLog} from './glbLogs'
 import {waitForModelReady} from './models'
@@ -34,6 +43,8 @@ export const PRO_MODULE_PATTERN = '**/.netlify/functions/pro-module*'
 export const PRO_MODULE_FILE = 'netlify/functions/_pro-modules/glbExport.js'
 
 export const GLTF_MAGIC = 'glTF'
+const HTTP_OK = 200
+const HTTP_FORBIDDEN = 403
 export const EXPORT_TEST_TIMEOUT_MS = 120_000
 
 const CACHE_TIMEOUT_MS = 60_000
@@ -56,10 +67,23 @@ const SNACKBAR_SELECTOR = '[data-testid="snackbar"]'
 const HALF = 2
 
 
+/** The tiers a spec can put the user in; pending-reauth is Pro (§7.2). */
+export type SubscriptionTier = 'sharePro' | 'shareProPendingReauth' | 'free'
+
 type AppMetadata = {
   userEmail: string
   stripeCustomerId: string | null
-  subscriptionStatus: 'sharePro' | 'free'
+  subscriptionStatus: SubscriptionTier
+}
+
+/** A row of the mocks' export ledger, `window.__mockExports` (api-handlers.js). */
+export type LedgerRow = {
+  id: string
+  key: string | null
+  format: string
+  bytes: number | null
+  exportedAt: string
+  free?: boolean
 }
 
 type WindowWithStore = Window & {
@@ -75,7 +99,7 @@ type WindowWithStore = Window & {
  * @param page Playwright page
  * @param tier which tier to inject
  */
-export async function setSubscriptionTier(page: Page, tier: 'sharePro' | 'free') {
+export async function setSubscriptionTier(page: Page, tier: SubscriptionTier) {
   await page.evaluate((subscriptionTier) => {
     const store = (window as unknown as WindowWithStore).store
     if (!store) {
@@ -84,9 +108,23 @@ export async function setSubscriptionTier(page: Page, tier: 'sharePro' | 'free')
     store.getState().setAppMetadata({
       userEmail: 'cypress@bldrs.ai',
       stripeCustomerId: null,
-      subscriptionStatus: subscriptionTier as 'sharePro' | 'free',
+      subscriptionStatus: subscriptionTier as SubscriptionTier,
     })
   }, tier)
+}
+
+
+/**
+ * The mocks' export ledger as it stands — the stand-in for Auth0
+ * `app_metadata.exports` that the pro-module and record-export mocks share
+ * (src/__mocks__/api-handlers.js), and so the record of what a free user was
+ * charged.
+ *
+ * @param page Playwright page
+ * @return the rows, newest first
+ */
+export function exportLedger(page: Page): Promise<LedgerRow[]> {
+  return page.evaluate(() => (window as unknown as {__mockExports?: LedgerRow[]}).__mockExports ?? [])
 }
 
 
@@ -587,12 +625,101 @@ export function glbJsonChunk(bytes: Buffer): {
  */
 export async function routeProModule(page: Page) {
   await page.route(PRO_MODULE_PATTERN, async (route) => {
-    await route.fulfill({
-      path: PRO_MODULE_FILE,
-      contentType: 'text/javascript; charset=utf-8',
-      headers: {'Cache-Control': 'private, no-store'},
-    })
+    // The same gate the MSW mock applies, against the same in-page tier and
+    // ledger, so a free-tier spec means the same thing whichever half
+    // answers: a fallback that served everyone would hand a free user at the
+    // limit the module the spec expects refused (§4.8).
+    const headers: Record<string, string> = {'Cache-Control': 'private, no-store'}
+    const {isPro, ledger} = await mockAccount(page)
+    if (!isPro) {
+      const allowance = freeExportAllowance(ledger)
+      if (allowance.remaining === 0) {
+        await fulfillJson(route, HTTP_FORBIDDEN, {error: FREE_EXPORT_LIMIT_REASON, freeExports: allowance})
+        return
+      }
+      const row = newFreeExportRow({id: randomUUID(), format: 'glb'}) as LedgerRow
+      const charged = [row, ...ledger]
+      await setLedger(page, charged)
+      headers[FREE_EXPORT_ID_HEADER] = row.id
+      headers[FREE_EXPORTS_HEADER] = JSON.stringify(freeExportAllowance(charged))
+    }
+    await route.fulfill({path: PRO_MODULE_FILE, contentType: 'text/javascript; charset=utf-8', headers})
   })
+}
+
+
+export const RECORD_EXPORT_PATTERN = '**/.netlify/functions/record-export'
+
+
+/**
+ * The `page.route` fallback for `record-export`, for the same reason
+ * `routeProModule` has one: MSW answers first when its worker is up, and this
+ * answers the same way, from the same ledger, when it isn't. GET reports the
+ * free allowance; POST fills in a free user's charged row or prepends a Pro
+ * row, as the function does (§4.5, §4.8).
+ *
+ * @param page Playwright page
+ */
+export async function routeRecordExport(page: Page) {
+  await page.route(RECORD_EXPORT_PATTERN, async (route) => {
+    const {isPro, ledger} = await mockAccount(page)
+    if (route.request().method() === 'GET') {
+      await fulfillJson(route, HTTP_OK, isPro ?
+        {tier: 'paid', freeExports: null} :
+        {tier: 'free', freeExports: freeExportAllowance(ledger)})
+      return
+    }
+    const body = route.request().postDataJSON() ?? {}
+    if (!isPro) {
+      const chargedAt = ledger.findIndex((row) => row.free === true && row.id === body.id)
+      if (chargedAt === -1) {
+        await fulfillJson(route, HTTP_FORBIDDEN, {error: 'free_export_not_charged'})
+        return
+      }
+      const filled = ledger.map((row, i) => (i === chargedAt ? {...row, key: body.key, bytes: body.bytes} : row))
+      await setLedger(page, filled)
+      await fulfillJson(route, HTTP_OK, {exports: filled, freeExports: freeExportAllowance(filled)})
+      return
+    }
+    const recorded = [{id: body.id ?? randomUUID(), key: body.key, format: body.format, bytes: body.bytes,
+      exportedAt: new Date().toISOString()}, ...ledger]
+    await setLedger(page, recorded)
+    await fulfillJson(route, HTTP_OK, {exports: recorded})
+  })
+}
+
+
+/**
+ * @param page Playwright page
+ * @return whether the store's tier is Pro, and the ledger
+ */
+async function mockAccount(page: Page): Promise<{isPro: boolean, ledger: LedgerRow[]}> {
+  const status = await page.evaluate(() => {
+    const store = (window as unknown as {store?: {getState: () => {appMetadata?: {subscriptionStatus?: string}}}}).store
+    return store?.getState().appMetadata?.subscriptionStatus ?? null
+  })
+  return {isPro: isProSubscriptionStatus(status), ledger: await exportLedger(page)}
+}
+
+
+/**
+ * @param page Playwright page
+ * @param rows the ledger to leave in the page
+ */
+async function setLedger(page: Page, rows: LedgerRow[]) {
+  await page.evaluate((next) => {
+    (window as unknown as {__mockExports?: LedgerRow[]}).__mockExports = next
+  }, rows)
+}
+
+
+/**
+ * @param route the route to answer
+ * @param status HTTP status
+ * @param body JSON body
+ */
+async function fulfillJson(route: Route, status: number, body: object) {
+  await route.fulfill({status, contentType: 'application/json', body: JSON.stringify(body)})
 }
 
 

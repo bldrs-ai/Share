@@ -90,9 +90,17 @@ describe('getTier', () => {
     expect(getTier({subscriptionStatus: 'sharePro'}, true)).toBe(TIERS.PAID)
   })
 
-  it('free when authenticated without sharePro', () => {
+  // Paid already, waiting on a re-login (stripe-webhook's FREE→PRO write):
+  // the owner's §7.2 decision, design/new/glb-export-premium.md. Drives
+  // unlimited loads and the export UI alike.
+  it('paid when subscriptionStatus is shareProPendingReauth', () => {
+    expect(getTier({subscriptionStatus: 'shareProPendingReauth'}, true)).toBe(TIERS.PAID)
+  })
+
+  it('free when authenticated without a Pro status', () => {
     expect(getTier({}, true)).toBe(TIERS.FREE)
     expect(getTier({subscriptionStatus: 'free'}, true)).toBe(TIERS.FREE)
+    expect(getTier({subscriptionStatus: 'freePendingReauth'}, true)).toBe(TIERS.FREE)
     expect(getTier(null, true)).toBe(TIERS.FREE)
   })
 
