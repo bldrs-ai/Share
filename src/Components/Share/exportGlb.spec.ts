@@ -92,6 +92,36 @@ async function pickShellAndExpectProductRow(page: Page, isMerged = false) {
 
 
 /**
+ * In `twoRootShells.step`, double-click a shell of the SECOND part and expect
+ * that part's row, and only it, to be the selection, still narrowed to the one
+ * shell once the link the pick wrote (`part.step/0/3007`) has been read back.
+ *
+ * @param page Playwright page
+ */
+async function pickSecondPartShellAndExpectItsRow(page: Page) {
+  await expect(page.locator('[data-is-selected="true"]')).toHaveCount(0)
+  // Picked with the NavTree closed: on the mobile viewport its drawer covers
+  // the part of the canvas this part is drawn in. The row check opens it.
+  const panel = page.getByTestId('NavTreePanel')
+  if (await panel.isVisible()) {
+    await page.getByTestId('control-button-navigation').click()
+    await expect(panel).toBeHidden()
+  }
+  await doubleClickSelectsAnElement(page, 'any', 'root', SECOND_PART_OWNER)
+  await expectProductRowSelected(page, SECOND_PART_NAME)
+  await expect(page.locator(`[data-node-label="${SHELLS_PART_NAME}"][data-is-selected="true"]`)).toHaveCount(0)
+  await expectNavTreeFollowsSelection(page)
+  await expect(page).toHaveURL(new RegExp(`\\.step/\\d+/${SECOND_PART_ROW}(\\?|#|$)`))
+  // The link's own read-back must neither widen the pick to the whole part
+  // nor drop it.
+  await page.waitForTimeout(SELECTION_SETTLE_MS)
+  const held = await selectionState(page)
+  expect(held.anchors).toEqual([`${SECOND_PART_ROW}`])
+  expect(held.instanceCount).toBe(1)
+}
+
+
+/**
  * Load a URL again and wait for it to be served from the artifact cache.
  *
  * @param page Playwright page
@@ -395,6 +425,12 @@ const SHELLS_PART_NAME = 'Shells'
 // occurrence path (#1901, codex on #1908).
 const TWO_ROOT_FIXTURE = 'src/tests/fixtures/twoRootShells.step'
 const TWO_ROOT_PART_NAMES = ['Shells', 'Plates']
+// The second part: its row is the product_definition #3007, and its shells
+// report the product_definition_shape #3008 as their owner. Only the owner
+// list Conway puts on #3007 (conway#723) joins the two (#1901, #1909).
+const SECOND_PART_NAME = 'Plates'
+const SECOND_PART_ROW = 3007
+const SECOND_PART_OWNER = 3008
 
 
 /**
@@ -1456,12 +1492,13 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     expect(await isolatedInstanceCount(page)).toBe(ASSEMBLY_INSTANCES)
   })
 
-  test('a file of several top-level parts never gives one part the shells of another', async ({page}) => {
-    // #1901 follow-up (codex on #1908). Two disconnected parts, each a body of
-    // 80 unnamed shells, so every row of both has an EMPTY occurrence path.
-    // Joining the rows to the tree on the empty path alone hands the first
-    // part all 160 rows and exports the second empty: the file opens and looks
-    // right, but names the wrong part. The user's actions are those of the
+  test('a file of several top-level parts gives each part exactly its own shells', async ({page}) => {
+    // #1901. Two disconnected parts, each a body of 80 unnamed shells, so
+    // every row of both has an EMPTY occurrence path. Joining the rows to the
+    // tree on the empty path alone handed the first part all 160 rows and
+    // exported the second empty (codex on #1908); not joining them at all left
+    // all 160 under `Unassigned`. The rows' owner and each part's owner list
+    // (conway#723) name the part. The user's actions are those of the
     // single-part test above.
     test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
@@ -1496,8 +1533,9 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       Number.isInteger(node?.extras?.bldrsTableNode) ? (node?.extras?.bldrsRowCount ?? 1) : 0
     // Every shell of both parts is in the file...
     expect(nodes.reduce((rows, node) => rows + rowsOf(node), 0)).toBe(2 * SHELLS_FIXTURE_ROWS)
-    // ...and no part owns more than its own 80: the part a shell is filed
-    // under is a claim about it. The bug filed all 160 under the first part.
+    // ...each part owns exactly its own 80: the part a shell is filed under is
+    // a claim about it. One bug filed all 160 under the first part, the rule
+    // that replaced it filed them under neither...
     const ownedBy = (name: string) => {
       const part = nodes.find((node) => node.name === name)
       expect(part, `the file should name ${name}`).toBeDefined()
@@ -1505,9 +1543,10 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
         .reduce((rows, node) => rows + rowsOf(node), 0)
     }
     for (const name of TWO_ROOT_PART_NAMES) {
-      expect(ownedBy(name), `${name} must not own the other part's shells`)
-        .toBeLessThanOrEqual(SHELLS_FIXTURE_ROWS)
+      expect(ownedBy(name), `${name} must own exactly its own shells`).toBe(SHELLS_FIXTURE_ROWS)
     }
+    // ...and nothing is left unnamed.
+    expect(nodes.find((node) => node.name === 'Unassigned')).toBeUndefined()
 
     await page.keyboard.press('Escape')
     resetGlbLogs(glbLogs)
@@ -1517,6 +1556,31 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await dismissLoadSnackbar(page)
     await waitForGlbLog(glbLogs, `${2 * SHELLS_FIXTURE_ROWS} instance(s), 1 collapsed table(s)`, EXPORT_TEST_TIMEOUT_MS)
     await doubleClickSelectsAnElement(page, 'collapsed')
+  })
+
+  test('a shell picked in the second of two top-level parts highlights that part in the NavTree', async ({page}) => {
+    // #1909's multi-root case (#1901). Every shell of both parts sits at the
+    // empty occurrence path, and so do both parts' rows and Conway's `Model`
+    // wrapper, so the path names no row; the shell's owner (#3008) is no row
+    // either. Each part's owner list (conway#723) joins the two. A file with
+    // one part was already handled by the one-empty-path rule; this one was
+    // left unselected.
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+
+    await loadModelAndWaitForArtifact(page)
+    resetGlbLogs(glbLogs)
+    await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await dismissLoadSnackbar(page)
+    await pickSecondPartShellAndExpectItsRow(page)
+
+    // And again from the cached artifact, whose tree must have kept the owner
+    // lists: the model's own URL, not the permalink the pick wrote, so the row
+    // can only light up through the pick.
+    await reloadFromCache(page, glbLogs)
+    await pickSecondPartShellAndExpectItsRow(page)
   })
 
   test('a Pro user picks a Quality rung, and the panel says what it costs', async ({page}) => {

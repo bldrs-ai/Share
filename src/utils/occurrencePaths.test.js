@@ -1,19 +1,45 @@
 /* eslint-disable no-magic-numbers */
 import {
   findNodeByOccurrencePath,
+  findRootLevelOwnerNode,
+  findRootLevelProductNode,
   findSoleRootNode,
   occurrenceElementPathIds,
+  occurrenceOwnerIndex,
   occurrencePathKey,
   occurrencePathKeySetForTree,
   occurrencePathsEqual,
   resolveElementPathOccurrence,
   resolvePickedOccurrenceNode,
   resolveRootOnlyElementPath,
+  rootLevelInstancesOfProduct,
   rootLevelSelectionForAnchors,
   selectedOccurrences,
   toggleRootLevelInstanceSelection,
   trimToTreeOccurrencePath,
 } from './occurrencePaths'
+
+
+/**
+ * twoRootShells.step as Conway's tree carries it since conway#723: a synthetic
+ * `Model` wrapper (id 0, no owner) over two disconnected parts, every node at
+ * the empty path, each part listing the product_definition_shape its rows
+ * report as their parent (8 for Shells #7, 3008 for Plates #3007).
+ *
+ * @param {boolean} [withOwners] false for a tree from before the owner lists
+ * @return {object} spatial-structure root
+ */
+function makeTwoRootTree(withOwners = true) {
+  const part = (expressID, name, shape) => ({
+    expressID, type: 'product', Name: {value: name}, occurrencePath: [],
+    ...(withOwners ? {productDefinitionShapeExpressIDs: [shape]} : {}), children: [],
+  })
+  return {
+    expressID: 0, type: 'product_structure', Name: {value: 'Model'}, occurrencePath: [],
+    ...(withOwners ? {productDefinitionShapeExpressIDs: []} : {}),
+    children: [part(7, 'Shells', 8), part(3007, 'Plates', 3008)],
+  }
+}
 
 
 /**
@@ -255,6 +281,256 @@ describe('utils/occurrencePaths', () => {
     it('is null without a tree', () => {
       expect(resolveRootOnlyElementPath(null, ['7'])).toBeNull()
       expect(resolveRootOnlyElementPath(undefined, ['7'])).toBeNull()
+    })
+  })
+
+  describe('occurrenceOwnerIndex / the (path, owner) join (#1901, #1909)', () => {
+    it('names each part of a multi-root file by its owner, where the empty path names none', () => {
+      const tree = makeTwoRootTree()
+      expect(findSoleRootNode(tree)).toBeNull()
+      expect(findRootLevelOwnerNode(tree, 8)).toBe(tree.children[0])
+      expect(findRootLevelOwnerNode(tree, 3008)).toBe(tree.children[1])
+      // Ids arrive as numbers from tables and as strings from the store.
+      expect(findRootLevelOwnerNode(tree, '3008')).toBe(tree.children[1])
+    })
+
+    it('never names the synthetic wrapper, and nothing for an unknown owner', () => {
+      const tree = makeTwoRootTree()
+      expect(findRootLevelOwnerNode(tree, 0)).toBeNull()
+      expect(findRootLevelOwnerNode(tree, 9999)).toBeNull()
+    })
+
+    it('keys a reused part by path AND owner, so its occurrences stay apart', () => {
+      // as1-oc-214's two nuts under rod-assembly: one part PDS (741) shared,
+      // each occurrence its own (750, 756).
+      const root = {expressID: 5, occurrencePath: [], productDefinitionShapeExpressIDs: [4], children: [
+        {expressID: 751, occurrencePath: [1137, 751], productDefinitionShapeExpressIDs: [741, 750], children: []},
+        {expressID: 757, occurrencePath: [1137, 757], productDefinitionShapeExpressIDs: [741, 756], children: []},
+      ]}
+      const index = occurrenceOwnerIndex(root)
+      expect(index.get('1137/751|741')).toBe(root.children[0])
+      expect(index.get('1137/757|741')).toBe(root.children[1])
+      expect(index.get('1137/751|756')).toBeUndefined()
+      expect(index.get('|4')).toBe(root)
+    })
+
+    it('falls back to the one-product rule, which is what a tree without lists always had', () => {
+      const onlyProduct = {expressID: 7, occurrencePath: [], children: []}
+      expect(occurrenceOwnerIndex(onlyProduct)).toBeNull()
+      expect(findRootLevelOwnerNode(onlyProduct, 8)).toBe(onlyProduct)
+      // A one-product tree WITH lists answers the same for an owner it does
+      // not list (a free representation), so single-root picks do not change.
+      const listed = {expressID: 7, occurrencePath: [], productDefinitionShapeExpressIDs: [8], children: []}
+      expect(findRootLevelOwnerNode(listed, 8)).toBe(listed)
+      expect(findRootLevelOwnerNode(listed, 510)).toBe(listed)
+    })
+
+    it('leaves a multi-root tree without lists, whose placements report shapes, selecting as before', () => {
+      // An older engine or cache: no owner lists, and every placement reports
+      // a product_definition_shape (8, 3008) the tree cannot name.
+      const tree = makeTwoRootTree(false)
+      const rootLevel = {instanceIds: [0, 1, 2, 3], parentExpressIds: [8, 3008], instanceOwners: [8, 3008, 8, 3008]}
+      // A pick names no part, so a shift-pick keeps the generic row toggle.
+      expect(findRootLevelOwnerNode(tree, 8)).toBeNull()
+      expect(findRootLevelOwnerNode(tree, 3008)).toBeNull()
+      // The parts are rows the join now names (by their own ids)...
+      expect(findRootLevelProductNode(tree, 7)).toBe(tree.children[0])
+      expect(findRootLevelProductNode(tree, 0)).toBeNull()
+      // ...but claim none of the root-level instances, so a row click adds
+      // nothing to what it selected before, and a `wrapper/part` link is not
+      // read as root-only: it falls through to the occurrence/scalar path.
+      expect(rootLevelInstancesOfProduct(tree, tree.children[0], rootLevel))
+        .toEqual({instanceIds: [], ownerIds: []})
+      expect(rootLevelSelectionForAnchors({
+        rootNode: tree, anchorIds: [7], rootLevel, current: {anchors: [], instances: []},
+      })).toBeNull()
+      expect(rootLevelSelectionForAnchors({
+        rootNode: tree, anchorIds: [7, 3007], rootLevel, current: {anchors: [7], instances: [1]}, keepNarrowing: true,
+      })).toBeNull()
+      expect(resolveRootOnlyElementPath(tree, ['0', '7'], () => rootLevel)).toBeNull()
+      expect(resolveRootOnlyElementPath(tree, ['0', '3007'], () => rootLevel)).toBeNull()
+    })
+
+    it('finds a top-level product row by id: the sole root, or a part, never the wrapper', () => {
+      const tree = makeTwoRootTree()
+      expect(findRootLevelProductNode(tree, 3007)).toBe(tree.children[1])
+      expect(findRootLevelProductNode(tree, '7')).toBe(tree.children[0])
+      expect(findRootLevelProductNode(tree, 0)).toBeNull()
+      const onlyProduct = {expressID: 7, occurrencePath: [], children: []}
+      expect(findRootLevelProductNode(onlyProduct, 7)).toBe(onlyProduct)
+      expect(findRootLevelProductNode(onlyProduct, 8)).toBeNull()
+    })
+
+    it('splits the model\'s root-level instances by part, and gives the sole root all of them', () => {
+      const tree = makeTwoRootTree()
+      const rootLevel = {instanceIds: [0, 1, 2, 3], parentExpressIds: [8, 3008], instanceOwners: [8, 3008, 8, 3008]}
+      expect(rootLevelInstancesOfProduct(tree, tree.children[0], rootLevel))
+        .toEqual({instanceIds: [0, 2], ownerIds: [8]})
+      expect(rootLevelInstancesOfProduct(tree, tree.children[1], rootLevel))
+        .toEqual({instanceIds: [1, 3], ownerIds: [3008]})
+      const onlyProduct = {expressID: 7, occurrencePath: [], productDefinitionShapeExpressIDs: [8], children: []}
+      expect(rootLevelInstancesOfProduct(onlyProduct, onlyProduct,
+        {instanceIds: [0, 1], parentExpressIds: [8, 510], instanceOwners: [8, 510]}))
+        .toEqual({instanceIds: [0, 1], ownerIds: [8, 510]})
+    })
+
+    it('names a part whose placement reports the part\'s own product_definition as owner (direct SDR)', () => {
+      // No product_definition_shape between the SDR and the part, so the
+      // owner is the part's own id — the case glbPortable.js#rowKeyOf joins
+      // through `emptyPathNodeIds`. The owner lists hold only PDS ids, so the
+      // join has to key each part by its own id too.
+      const tree = makeTwoRootTree()
+      expect(findRootLevelOwnerNode(tree, 3007)).toBe(tree.children[1])
+      expect(findRootLevelOwnerNode(tree, '7')).toBe(tree.children[0])
+      // The synthetic wrapper owns no geometry, by either kind of id.
+      expect(findRootLevelOwnerNode(tree, 0)).toBeNull()
+      expect(findRootLevelProductNode(tree, 0)).toBeNull()
+      // A row click / permalink on the part takes those instances too, beside
+      // the ones its PDS owns, and leaves the other part's alone.
+      const rootLevel = {instanceIds: [0, 1, 2, 3], parentExpressIds: [8, 3007, 7], instanceOwners: [8, 3007, 7, 3008]}
+      expect(rootLevelInstancesOfProduct(tree, tree.children[0], rootLevel))
+        .toEqual({instanceIds: [0, 2], ownerIds: [8, 7]})
+      expect(rootLevelInstancesOfProduct(tree, tree.children[1], rootLevel))
+        .toEqual({instanceIds: [1, 3], ownerIds: [3007, 3008]})
+    })
+
+    it('keys a direct-SDR part that lists no shape at all (a cache round trip drops empty lists)', () => {
+      // `bldrsSpatialTree#serializeNode` keeps the list only when non-empty,
+      // so from cache such a part carries no list; the tree still has lists
+      // elsewhere, which is what says the join is available.
+      const tree = makeTwoRootTree()
+      delete tree.children[1].productDefinitionShapeExpressIDs
+      expect(findRootLevelOwnerNode(tree, 3007)).toBe(tree.children[1])
+      expect(findRootLevelProductNode(tree, 3007)).toBe(tree.children[1])
+      expect(rootLevelInstancesOfProduct(tree, tree.children[1],
+        {instanceIds: [0, 1], parentExpressIds: [8, 3007], instanceOwners: [8, 3007]}))
+        .toEqual({instanceIds: [1], ownerIds: [3007]})
+    })
+
+    it('reads a part\'s root-only permalink, `wrapper/part`, and nothing else of that shape', () => {
+      const tree = makeTwoRootTree()
+      expect(resolveRootOnlyElementPath(tree, ['0', '3007'])).toBe(tree.children[1])
+      expect(resolveRootOnlyElementPath(tree, ['0', '7'])).toBe(tree.children[0])
+      expect(resolveRootOnlyElementPath(tree, ['1', '3007'])).toBeNull()
+      expect(resolveRootOnlyElementPath(tree, ['0', '3007', '5'])).toBeNull()
+      expect(resolveRootOnlyElementPath(tree, ['0', '3007x'])).toBeNull()
+      // With the model's root-level instances, a part is read as root-only
+      // only when it claims some of them; otherwise the link keeps the path it
+      // took before (#1901).
+      const rootLevel = {instanceIds: [0, 1], parentExpressIds: [8], instanceOwners: [8, 8]}
+      expect(resolveRootOnlyElementPath(tree, ['0', '7'], () => rootLevel)).toBe(tree.children[0])
+      expect(resolveRootOnlyElementPath(tree, ['0', '3007'], () => rootLevel)).toBeNull()
+      expect(resolveRootOnlyElementPath(makeTwoRootTree(false), ['0', '3007'], () => rootLevel)).toBeNull()
+      // The one-segment, one-product link never consults it.
+      const onlyProduct = {expressID: 7, occurrencePath: [], children: []}
+      expect(resolveRootOnlyElementPath(onlyProduct, ['7'], () => {
+        throw new Error('not consulted')
+      })).toBe(onlyProduct)
+    })
+
+    describe('a multi-root file whose every part uses a direct SDR (no shape listed anywhere)', () => {
+      // Each part's placements report the part's own product_definition (7,
+      // 3007) as owner. No node lists a shape: a fresh parse carries `[]`
+      // lists, and a cache round trip (`bldrsSpatialTree#serializeNode`)
+      // drops them. Both must resolve alike.
+      const variants = [
+        ['fresh parse (empty lists)', () => {
+          const tree = makeTwoRootTree()
+          tree.children.forEach((part) => {
+            part.productDefinitionShapeExpressIDs = []
+          })
+          return tree
+        }],
+        ['cache hit (no lists)', () => makeTwoRootTree(false)],
+      ]
+      const rootLevel = {instanceIds: [0, 1, 2, 3], parentExpressIds: [7, 3007], instanceOwners: [7, 3007, 7, 3007]}
+
+      /**
+       * A scene pick as `CadView#selectFromInstancePick` takes it: the part
+       * the (empty path, owner) join names, then for a shift-pick
+       * `CadView#toggleRootLevelInstance`; a plain pick anchors the selection
+       * on that part's row with the owner as the selected id.
+       *
+       * @param {object} tree spatial-structure root
+       * @param {object} selection `{elements, anchors, instances}`
+       * @param {number} instanceId the picked root-level instance
+       * @param {boolean} isShift shift held
+       * @return {object|null} the next selection, or null when the join names
+       *   no part (the pick would take the generic row-toggle path)
+       */
+      function pick(tree, selection, instanceId, isShift) {
+        const ownerId = rootLevel.instanceOwners[rootLevel.instanceIds.indexOf(instanceId)]
+        const rootRow = findRootLevelOwnerNode(tree, ownerId)
+        if (!rootRow) {
+          return null
+        }
+        if (!isShift) {
+          return {elements: [ownerId], anchors: [rootRow.expressID], instances: [instanceId]}
+        }
+        const own = rootLevelInstancesOfProduct(tree, rootRow, rootLevel)
+        return toggleRootLevelInstanceSelection({
+          selection, rootId: rootRow.expressID, ownerId, instanceId,
+          rootInstanceIds: own.instanceIds, rootOwnerIds: own.ownerIds,
+        })
+      }
+
+      it.each(variants)('%s: a pick names the part that owns it, never the wrapper', (label, make) => {
+        const tree = make()
+        expect(occurrenceOwnerIndex(tree)).not.toBeNull()
+        expect(findSoleRootNode(tree)).toBeNull()
+        expect(findRootLevelOwnerNode(tree, 7)).toBe(tree.children[0])
+        expect(findRootLevelOwnerNode(tree, '3007')).toBe(tree.children[1])
+        expect(findRootLevelOwnerNode(tree, 0)).toBeNull()
+        expect(findRootLevelOwnerNode(tree, 8)).toBeNull()
+        expect(findRootLevelProductNode(tree, 3007)).toBe(tree.children[1])
+        expect(findRootLevelProductNode(tree, 0)).toBeNull()
+      })
+
+      it.each(variants)('%s: a row click or permalink is that part\'s own instances only', (label, make) => {
+        const tree = make()
+        expect(rootLevelInstancesOfProduct(tree, tree.children[0], rootLevel))
+          .toEqual({instanceIds: [0, 2], ownerIds: [7]})
+        expect(rootLevelInstancesOfProduct(tree, tree.children[1], rootLevel))
+          .toEqual({instanceIds: [1, 3], ownerIds: [3007]})
+        expect(rootLevelSelectionForAnchors({
+          rootNode: tree, anchorIds: [3007], rootLevel, current: {anchors: [], instances: []},
+        })).toEqual({instanceIds: [1, 3], ownerIds: [3007]})
+        expect(resolveRootOnlyElementPath(tree, ['0', '3007'], () => rootLevel)).toBe(tree.children[1])
+        expect(resolveRootOnlyElementPath(tree, ['0', '0'], () => rootLevel)).toBeNull()
+      })
+
+      it.each(variants)('%s: shift-picked shells accumulate per instance, not by toggling the row', (label, make) => {
+        const tree = make()
+        let selection = pick(tree, null, 1, false)
+        expect(selection).toEqual({elements: [3007], anchors: [3007], instances: [1]})
+        // A second shell of the same part joins; the shared row is not toggled off.
+        selection = pick(tree, selection, 3, true)
+        expect(selection).toEqual({elements: [3007], anchors: [3007], instances: [1, 3]})
+        // A shell of the other part joins under its own row.
+        selection = pick(tree, selection, 0, true)
+        expect(selection).toEqual({elements: [3007, 7], anchors: [3007, 7], instances: [1, 3, 0]})
+        // Dropping one shell keeps its part while the other is held...
+        selection = pick(tree, selection, 1, true)
+        expect(selection).toEqual({elements: [3007, 7], anchors: [3007, 7], instances: [3, 0]})
+        // ...and the last one takes the part's row and owner with it, leaving
+        // the other part alone.
+        selection = pick(tree, selection, 3, true)
+        expect(selection).toEqual({elements: [7], anchors: [7], instances: [0]})
+      })
+    })
+
+    it('a row click on one part means that part\'s own instances, not the other\'s', () => {
+      const tree = makeTwoRootTree()
+      const rootLevel = {instanceIds: [0, 1, 2, 3], parentExpressIds: [8, 3008], instanceOwners: [8, 3008, 8, 3008]}
+      const resolve = (over) => rootLevelSelectionForAnchors({
+        rootNode: tree, rootLevel, current: {anchors: [], instances: []}, ...over,
+      })
+      expect(resolve({anchorIds: [3007]})).toEqual({instanceIds: [1, 3], ownerIds: [3008]})
+      expect(resolve({anchorIds: [7, 3007]}).instanceIds.sort()).toEqual([0, 1, 2, 3])
+      expect(resolve({anchorIds: [0]})).toBeNull()
+      // A shift-click keeps the part's picked shell narrowed.
+      expect(resolve({anchorIds: [3007], current: {anchors: [3007], instances: [3]}, keepNarrowing: true}))
+        .toEqual({instanceIds: [3], ownerIds: [3008]})
     })
   })
 

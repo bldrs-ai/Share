@@ -50,6 +50,8 @@ import {navWith} from '../utils/navigate'
 import {addProperties} from '../utils/objects'
 import {labelForGeometryId} from '../utils/geometryLabels'
 import {
+  findRootLevelOwnerNode,
+  findRootLevelProductNode,
   findSoleRootNode,
   occurrenceElementPathIds,
   occurrencePathKey,
@@ -58,6 +60,7 @@ import {
   resolveElementPathOccurrence,
   resolvePickedOccurrenceNode,
   resolveRootOnlyElementPath,
+  rootLevelInstancesOfProduct,
   rootLevelSelectionForAnchors,
   selectedOccurrences,
   toggleRootLevelInstanceSelection,
@@ -1016,13 +1019,18 @@ export default function CadView({
     // A root-level STEP placement (empty occurrence path) has no path to
     // highlight a row by, and its owner id is the product_definition_shape
     // where the row is the product_definition, so the NavTree matched nothing
-    // (#1909). In a one-product file the empty path names the root row
-    // exactly (`findSoleRootNode`), so hand that row to the funnel as the
+    // (#1909). The (empty path, owner) join names the top-level product that
+    // owns it — the one part of a multi-root file whose owner list holds the
+    // pick's owner (#1901) — and falls back to the sole root of a one-product
+    // file (`findRootLevelOwnerNode`). Hand that row to the funnel as the
     // anchor: the row highlight, Properties, crumb and permalink follow
     // anchors, while the scene keeps selecting by the owner id (hide, the
-    // per-instance narrowing). Several top-level products stay as they were.
-    // Resolved before the shift branch, which needs it too.
-    const rootRow = (isRootLevel && occurrencePath === null) ? findSoleRootNode(rootEltForPick) : null
+    // per-instance narrowing). A multi-root tree without owner lists stays as
+    // it was, unless a placement reports a part's own product_definition as
+    // its owner (direct SDR), which names that part whatever lists the tree
+    // carries. Resolved before the shift branch, which needs it too.
+    const rootRow = (isRootLevel && occurrencePath === null) ?
+      findRootLevelOwnerNode(rootEltForPick, parentExpressId) : null
     if (isShiftKeyDown && rootRow) {
       toggleRootLevelInstance(rootRow, targetId, instanceId)
       return
@@ -1063,13 +1071,17 @@ export default function CadView({
    * instances; `selectedElements` only ever gains the owner ids, since the
    * instance narrowing, not the owners, decides what is lit.
    *
-   * @param {object} rootRow the tree's root element (the product's row)
+   * @param {object} rootRow the top-level product's row: the tree's root, or
+   *   in a multi-root file the part that owns the shell
    * @param {number} ownerId the shell's owner (`product_definition_shape`)
    * @param {number} instanceId the clicked instance
    */
   function toggleRootLevelInstance(rootRow, ownerId, instanceId) {
     const state = useStore.getState()
-    const rootLevel = rootLevelInstances()
+    // Only this product's own shells: in a multi-root file the other parts'
+    // root-level shells are theirs, and must neither keep this row anchored
+    // nor leave with it.
+    const rootLevel = rootLevelInstancesOfProduct(state.rootElement, rootRow, rootLevelInstances())
     const path = state.selectedOccurrencePath
     const occurrenceRow = (Array.isArray(path) && path.length > 0) ?
       (state.selectedSolidExpressId ?? path[path.length - 1]) : null
@@ -1084,7 +1096,7 @@ export default function CadView({
       ownerId,
       instanceId,
       rootInstanceIds: rootLevel.instanceIds,
-      rootOwnerIds: rootLevel.parentExpressIds,
+      rootOwnerIds: rootLevel.ownerIds,
     })
     selectItemsInScene(next.elements, false, next.instances, null, null, next.anchors)
   }
@@ -1222,16 +1234,20 @@ export default function CadView({
       return
     }
     try {
-      // A shift-click that took the sole root's row out of the selection takes
-      // the root's own geometry with it: its owner ids are in the viewer's
-      // selected ids, not in the anchors, and would keep every root-level
-      // shell lit by id once the row is gone.
+      // A shift-click that took a top-level product's row out of the
+      // selection takes the product's own geometry with it: its owner ids are
+      // in the viewer's selected ids, not in the anchors, and would keep its
+      // root-level shells lit by id once the row is gone.
       if (keepRootNarrowing) {
-        const root = findSoleRootNode(useStore.getState().rootElement)
+        const rootElt = useStore.getState().rootElement
         const held = (useStore.getState().selectedAnchorIds ?? []).map(Number)
-        if (root && held.includes(root.expressID) && !(anchorIds ?? resultIDs).map(Number).includes(root.expressID)) {
-          const owners = new Set(rootLevelInstances().parentExpressIds.map(Number))
-          resultIDs = resultIDs.filter((id) => !owners.has(Number(id)))
+        const kept = (anchorIds ?? resultIDs).map(Number)
+        for (const id of held.filter((anchor) => !kept.includes(anchor))) {
+          const product = findRootLevelProductNode(rootElt, id)
+          if (product) {
+            const owners = new Set(rootLevelInstancesOfProduct(rootElt, product, rootLevelInstances()).ownerIds.map(Number))
+            resultIDs = resultIDs.filter((resultId) => !owners.has(Number(resultId)))
+          }
         }
       }
       // STEP, selected by row rather than by pick (a shift-click
@@ -1247,9 +1263,9 @@ export default function CadView({
           instanceIds = [...new Set(occurrences.flatMap(({occurrencePath: path, solidExpressId: solid}) =>
             occurrenceInstanceIds(path, true, solid)))]
         }
-        // The sole root product has an empty occurrence path, so the lookup
-        // above can't resolve it: its row means every root-level instance
-        // (#1909; `rootLevelSelectionForAnchors` has the rule).
+        // A top-level product has an empty occurrence path, so the lookup
+        // above can't resolve it: its row means every one of its root-level
+        // instances (#1909, #1901; `rootLevelSelectionForAnchors` has the rule).
         const rootLevel = rootLevelInstances()
         const root = rootLevelSelectionForAnchors({
           rootNode: useStore.getState().rootElement,
@@ -1371,7 +1387,10 @@ export default function CadView({
     // can't read it, having no occurrence path to resolve. Restore it as the
     // pick selects: the root row as the anchor, the scene on the root's
     // instances.
-    const rootOnly = resolveRootOnlyElementPath(useStore.getState().rootElement, parts)
+    // A part that claims no root-level instance is not resolved here (null),
+    // so its `wrapper/part` link falls through to the branch below, as it did
+    // before the multi-root parts were named (#1901).
+    const rootOnly = resolveRootOnlyElementPath(useStore.getState().rootElement, parts, rootLevelInstances)
     if (rootOnly) {
       selectRootOnlyElement(rootOnly, force)
       return
@@ -1468,17 +1487,18 @@ export default function CadView({
 
 
   /**
-   * Select the root product from a root-only permalink, as a click on its row
-   * does: the root row is the anchor and the scene is on ALL its root-level
+   * Select a top-level product from a root-only permalink, as a click on its
+   * row does: the row is the anchor and the scene is on ALL its root-level
    * instances (a link can't say which shell was clicked; see
-   * `rootLevelSelectionForAnchors`). Does nothing when the model has no
+   * `rootLevelSelectionForAnchors`). Does nothing when the product has no
    * root-level geometry to select, which is how such a link behaved before.
    *
-   * @param {object} rootRow the tree's root element
+   * @param {object} rootRow the product's row: the tree's root, or one part
+   *   of a multi-root file (`resolveRootOnlyElementPath`)
    * @param {boolean} force select it even if it's already the anchor
    */
   function selectRootOnlyElement(rootRow, force) {
-    const rootLevel = rootLevelInstances()
+    const rootLevel = rootLevelInstancesOfProduct(useStore.getState().rootElement, rootRow, rootLevelInstances())
     if (rootLevel.instanceIds.length === 0) {
       return
     }
@@ -1500,28 +1520,32 @@ export default function CadView({
 
 
   /**
-   * The model's root-level instances (an empty path), the ids that own them,
-   * and the instances of every occurrence below the root; empty where the
-   * viewer can't say.
+   * The model's root-level instances (an empty path), the ids that own them
+   * (per instance in `instanceOwners`), and the instances of every occurrence
+   * below the sole root, or below a given part of a multi-root file
+   * (`descendantInstanceIdsOf`); empty where the viewer can't say.
    *
    * @return {{instanceIds: Array<number>, parentExpressIds: Array<number>,
-   *   descendantInstanceIds: Array<number>}}
+   *   instanceOwners: Array<number>, descendantInstanceIds: Array<number>,
+   *   descendantInstanceIdsOf: Function}}
    */
   function rootLevelInstances() {
+    const descendantsOf = (product) => [...new Set((product?.children ?? []).flatMap((child) =>
+      (Array.isArray(child.occurrencePath) && child.occurrencePath.length > 0) ?
+        occurrenceInstanceIds(child.occurrencePath, true, child.ephemeral === true ? child.expressID : null) :
+        []))]
     if (typeof viewer?.getRootLevelInstances !== 'function') {
-      return {instanceIds: [], parentExpressIds: [], descendantInstanceIds: []}
+      return {
+        instanceIds: [], parentExpressIds: [], instanceOwners: [],
+        descendantInstanceIds: [], descendantInstanceIdsOf: () => [],
+      }
     }
     const rootLevel = viewer.getRootLevelInstances(0)
     // The whole product is the root's own geometry and every occurrence below
     // it. Only worth resolving when the root has geometry of its own.
     const root = findSoleRootNode(useStore.getState().rootElement)
-    const descendantInstanceIds = (root && rootLevel.instanceIds.length > 0) ?
-      [...new Set((root.children ?? []).flatMap((child) =>
-        (Array.isArray(child.occurrencePath) && child.occurrencePath.length > 0) ?
-          occurrenceInstanceIds(child.occurrencePath, true, child.ephemeral === true ? child.expressID : null) :
-          []))] :
-      []
-    return {...rootLevel, descendantInstanceIds}
+    const descendantInstanceIds = (root && rootLevel.instanceIds.length > 0) ? descendantsOf(root) : []
+    return {...rootLevel, descendantInstanceIds, descendantInstanceIdsOf: descendantsOf}
   }
 
 
