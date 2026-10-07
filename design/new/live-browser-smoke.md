@@ -104,10 +104,22 @@ absolute path (`/share/v/p/index.ifc?feature=export`), so a path prefix would
 be silently dropped. `liveEnv.ts#liveTargetFrom` handles the variable this way:
 
 - **Unset:** every spec skips, and says so.
-- **Set but malformed:** the run fails. Examples are `http://` on a real
-  host, or an origin with a path or query.
-- **`http://localhost`:** accepted. Specs that need Auth0 or Netlify Functions
-  then report "not applicable on this target".
+- **Set but malformed, or off the allow-list:** the run fails.
+- **`http://localhost`:** accepted outside CI only. Specs that need Auth0 or
+  Netlify Functions then report "not applicable on this target".
+
+**The target is an allow-list** (`tools/live-smoke/targets.js`), because a run
+carries real test credentials (Codex, P1 on #1942). It allows:
+
+- `https://deploy-preview-<n>--<project>.netlify.app`, for a project in
+  `LIVE_NETLIFY_PROJECTS` (`bldrs-share-prod`, `bldrs-share-dev`);
+- the production origins in `LIVE_PRODUCTION_ORIGINS` (`https://bldrs.ai`);
+- localhost, outside CI only.
+
+The URL must be an origin: no credentials, path, query, fragment or port.
+`live-smoke.yml` checks the target with `checkTarget.mjs` before any step that
+is given a secret, and the specs check it again (`liveEnv.ts#liveTargetFrom`).
+To smoke another origin, add it to `targets.js` in a reviewed PR.
 
 **Five projects**, named as the `free` keys of the account map:
 
@@ -216,6 +228,29 @@ taken as far as rotation requires.
 names a `fill` value in the step title, which the HTML report prints and CI
 uploads.
 
+**Credentials go only to an allow-listed Auth0 host** (Codex, P1 on #1942).
+The redirect from `/popup-auth` is the target's to choose. A wrong or
+compromised target could send the login page to any form with a username and
+a password field, and the old check, "the page has left the target's
+origin", would have typed the reusable credentials into it. Now
+(`tools/live-smoke/loginHosts.js`, `liveSession.ts#loginWithPassword`):
+
+- **The allowed hosts** are `LIVE_SMOKE_AUTH0_DOMAIN` and, if the browser
+  logs in through a custom domain, `LIVE_SMOKE_AUTH0_LOGIN_HOST`. Both are
+  matched exactly, case-insensitively. https is required, and a non-default
+  port is refused.
+- **The page is checked before the email and again before the password,**
+  since Universal Login can be two screens.
+- **Each value is set by an evaluate that repeats the check** against the
+  document it writes into, in the same turn, and refuses a field inside a
+  frame. A navigation between the check and the write cannot redirect it.
+- **It fails closed.** With neither variable set, the tiered specs skip and
+  `loginWithPassword` refuses to start. A malformed value fails the run.
+- **Verified with a local phishing page.** A target whose `/popup-auth`
+  redirected to a page that reports every keystroke received the email and
+  the password from the old code. The new code throws "Refusing to enter
+  credentials" and the page received nothing.
+
 
 ## The reset script
 
@@ -315,13 +350,18 @@ The owner provisions all of these. Names only; the workflow references them as
 | Secret | What | Used by | Absent → |
 |---|---|---|---|
 | `LIVE_SMOKE_ACCOUNTS` | The account map above | Login in every tiered spec; the reset | Tiered specs skip ("LIVE_SMOKE_ACCOUNTS has no pro account", …) |
-| `LIVE_SMOKE_AUTH0_DOMAIN` | The tenant's canonical domain, e.g. `bldrs.us.auth0.com` (not a custom domain) | Reset; ledger reads in the free and pending specs | Those specs skip; the reset prints "Skipped" |
+| `LIVE_SMOKE_AUTH0_DOMAIN` | The tenant's canonical domain, e.g. `bldrs.us.auth0.com` (not a custom domain) | Reset; ledger reads in the free and pending specs; the allowed login host | Every tiered spec skips (no host is trusted with a password); the reset prints "Skipped" |
 | `LIVE_SMOKE_AUTH0_CLIENT_ID` | A machine-to-machine application for the Management API | Same | Same; if only some of the three are set, the run fails |
 | `LIVE_SMOKE_AUTH0_CLIENT_SECRET` | Its secret | Same | Same |
 
-The repository variable **`LIVE_SMOKE_NETLIFY_PROJECT`** is optional. It names
-the Netlify project whose deploy preview a PR run targets, and defaults to
-`bldrs-share-prod`.
+Two optional repository variables:
+
+- **`LIVE_SMOKE_NETLIFY_PROJECT`** names the Netlify project whose deploy
+  preview a PR run targets. It defaults to `bldrs-share-prod`, and must be in
+  `targets.js#LIVE_NETLIFY_PROJECTS`.
+- **`LIVE_SMOKE_AUTH0_LOGIN_HOST`** names the browser's Universal Login host,
+  if that is a custom domain (e.g. `login.bldrs.ai`) rather than the tenant
+  domain. It is a variable, not a secret: it is a host name.
 
 
 ## Skip, don't fail
@@ -446,6 +486,13 @@ For a PR, the target comes from the head commit's
 waits up to 20 minutes for it. It is validated with functions-smoke.yml's
 regex: `^https://deploy-preview-[0-9]+--[a-z0-9-]+\.netlify\.app/?$`.
 
+Then, for every trigger, `node tools/live-smoke/checkTarget.mjs` holds the URL
+to the allow-list, after checkout and before the install. No step up to that
+point is given a secret, and every step that is given one uses the checked
+URL. A PR run executes the PR's own code with the secrets; that is
+`pull_request`'s trust boundary for same-repository branches, and a fork's PR
+gets no secrets.
+
 ### Steps
 
 1. Install, then `npx playwright install --with-deps chromium firefox webkit`.
@@ -559,8 +606,9 @@ merged (follow-up PR):
 
 | Check | Where it ran | Result |
 |---|---|---|
-| Jest: `tools/live-smoke` (accounts, Management API client, reset) | This sandbox, `yarn test-tools` runner | 33 passed. Written red against stubs first. |
-| Jest: `src/tests/e2e/live` (5 helper suites) | This sandbox, `jest --config tools/jest/jest.config.js` | 40 passed. Each helper was mutated and its tests went red. |
+| Jest: `tools/live-smoke` (accounts, Management API client, reset, target and login-host allow-lists) | This sandbox, `yarn test-tools` runner | 49 passed. Each suite was written red against stubs first. |
+| Jest: `src/tests/e2e/live` (5 helper suites) | This sandbox, `jest --config tools/jest/jest.config.js` | 42 passed. Each helper was mutated and its tests went red. |
+| Login gate against a local phishing redirect | This sandbox, chromium | Old code: the page received the email and password. New code: refused, nothing received. |
 | Live config, no secrets, all 5 projects | This sandbox | 65 of 65 skipped, each with its reason. No browser launched. |
 | Live config, `LIVE_BASE_URL` = a local `test-flows-build` (MSW) | This sandbox, `chromium` + `mobile-pixel` | 6 passed: the anonymous gate, the cache, and the step-9 fallback. 20 skipped as not applicable on a local target. |
 | The same, against a local `yarn build-prod` (no MSW, `window.useStore`) | This sandbox, `chromium` + `mobile-pixel` | The same 6 passed, 20 skipped. |
@@ -610,8 +658,9 @@ This sandbox's network policy blocked the browser download from
    Nothing else.
 5. **GitHub Actions secrets:** `LIVE_SMOKE_ACCOUNTS`,
    `LIVE_SMOKE_AUTH0_DOMAIN`, `LIVE_SMOKE_AUTH0_CLIENT_ID`,
-   `LIVE_SMOKE_AUTH0_CLIENT_SECRET`. Optionally, the repository variable
-   `LIVE_SMOKE_NETLIFY_PROJECT`.
+   `LIVE_SMOKE_AUTH0_CLIENT_SECRET`. Optionally, the repository variables
+   `LIVE_SMOKE_NETLIFY_PROJECT` and, if Universal Login runs on a custom
+   domain, `LIVE_SMOKE_AUTH0_LOGIN_HOST`.
 6. **Label:** create `live-smoke`.
 7. **First run:** run `yarn live-smoke-reset --dry-run` locally with the
    secrets exported. It should print the seven accounts and no drift.

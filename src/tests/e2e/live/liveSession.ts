@@ -8,9 +8,11 @@ import {
   LiveAdmin,
   LiveTarget,
   accountFor,
+  allowedLoginHosts,
   freeTierFromProbe,
   liveAdminFrom,
   liveTargetFrom,
+  loginPageProblem,
   parseLiveAccounts,
 } from './liveEnv'
 
@@ -85,7 +87,7 @@ export type LiveSession = {
  * @return what it needs; never returns when the spec was skipped
  */
 export function requireLive(testInfo: TestInfo, needs: {role?: LiveRole, admin?: boolean, functions?: boolean} = {}): LiveSession {
-  const {target, skip, problem} = liveTargetFrom(process.env.LIVE_BASE_URL)
+  const {target, skip, problem} = liveTargetFrom(process.env.LIVE_BASE_URL, process.env)
   if (problem !== null) {
     throw new Error(problem)
   }
@@ -108,6 +110,15 @@ export function requireLive(testInfo: TestInfo, needs: {role?: LiveRole, admin?:
     const found = accountFor(parsed.accounts, needs.role, testInfo.project.name)
     if (found.account === null) {
       test.skip(true, found.skip ?? `no ${needs.role} account`)
+    }
+    // Credentials are typed only into an allow-listed Auth0 host; with none
+    // configured there is nowhere they may go (loginWithPassword).
+    const login = allowedLoginHosts(process.env)
+    if (login.problem !== null) {
+      if (!login.isUnset) {
+        throw new Error(login.problem)
+      }
+      test.skip(true, login.problem)
     }
     account = found.account
   }
@@ -169,24 +180,45 @@ export async function setReturningVisitor(context: BrowserContext, target: LiveT
  * refresh token present it twice — which Auth0 treats as token theft and
  * answers by revoking the whole family, mid-run.
  *
+ * **Credentials go only to an allow-listed Auth0 host** (Codex on #1942).
+ * The redirect from `/popup-auth` is the target's to choose, so a
+ * compromised or wrong target could send this page to any form with a
+ * username and a password field. Before the email, and again before the
+ * password, the page must be https on exactly a host from
+ * `tools/live-smoke/loginHosts.js#allowedLoginHosts`; and each value is set
+ * by an evaluate that repeats the check against the document it is writing
+ * into, in the same turn, so a navigation between the check and the write
+ * cannot redirect it. With no host configured, nothing is typed.
+ *
  * @param context the browser context the spec will use
  * @param target the deploy
  * @param account the test account
  */
 export async function loginWithPassword(context: BrowserContext, target: LiveTarget, account: {email: string, password: string}) {
+  // Fail closed, here as well as in requireLive's skip: no allowed host, no
+  // login.
+  const {hosts, problem} = allowedLoginHosts(process.env)
+  if (problem !== null) {
+    throw new Error(`Refusing to log in: ${problem}`)
+  }
   const page = await context.newPage()
   try {
     await page.goto(`${target.baseUrl}/popup-auth?connection=${DATABASE_CONNECTION}`)
     await page.waitForURL((url) => url.origin !== target.baseUrl, {timeout: LOGIN_TIMEOUT_MS})
+    await page.waitForLoadState('domcontentloaded')
+    assertLoginPage(page, hosts)
     await failOnAuth0ErrorPage(page)
     // New Universal Login names the field `username`; Classic, `email`.
-    await enterQuietly(page.locator('input[name="username"], input[name="email"]').first(), account.email)
+    await enterQuietly(page.locator('input[name="username"], input[name="email"]').first(), account.email, hosts)
     const password = page.locator('input[name="password"]')
     if (!await password.isVisible()) {
-      // Identifier-first: the password is on the next screen.
+      // Identifier-first: the password is on the next screen — which is a
+      // navigation, so the page is checked again before anything is typed.
       await page.locator('button[type="submit"]').first().click()
+      await password.waitFor({timeout: LOGIN_TIMEOUT_MS})
     }
-    await enterQuietly(password, account.password)
+    assertLoginPage(page, hosts)
+    await enterQuietly(password, account.password, hosts)
     await page.locator('button[type="submit"][name="action"], button[type="submit"]').first().click()
     await page.waitForURL((url) => url.origin === target.baseUrl || url.pathname.includes('consent'),
       {timeout: LOGIN_TIMEOUT_MS}).catch(async () => {
@@ -212,22 +244,57 @@ export async function loginWithPassword(context: BrowserContext, target: LiveTar
 
 
 /**
- * Put a value in a form field without it becoming part of the run's record.
+ * Throw, typing nothing, unless the page is an allowed Auth0 login page.
+ *
+ * @param page the login page
+ * @param hosts from `allowedLoginHosts`
+ */
+function assertLoginPage(page: Page, hosts: string[]) {
+  const problem = loginPageProblem(page.url(), hosts)
+  if (problem !== null) {
+    throw new Error(`Refusing to enter credentials: ${problem}. Set LIVE_SMOKE_AUTH0_LOGIN_HOST if Share's ` +
+      'login runs on a custom Auth0 domain (design/new/live-browser-smoke.md §"Logging in").')
+  }
+}
+
+
+/**
+ * Put a value in a form field without it becoming part of the run's record,
+ * and only if the field's own document is an allowed login page.
+ *
  * `locator.fill` names its value in the step title, which the HTML report
- * prints and CI uploads; an evaluate's arguments are not in the title.
+ * prints and CI uploads; an evaluate's arguments are not in the title. The
+ * host check is repeated INSIDE the evaluate, against the document the value
+ * is written into and in the same turn as the write, because the page can
+ * navigate between {@link assertLoginPage} and this call. A field in a frame
+ * (where `window.top` is another document, or another origin and throws) is
+ * refused too.
  *
  * @param field the input
  * @param value what to enter
+ * @param hosts from `allowedLoginHosts`
  */
-async function enterQuietly(field: Locator, value: string) {
+async function enterQuietly(field: Locator, value: string, hosts: string[]) {
   await field.waitFor({timeout: LOGIN_TIMEOUT_MS})
-  await field.evaluate((element, text) => {
+  await field.evaluate((element, {text, allowed}) => {
+    const doc = element.ownerDocument
+    const where = doc.location
+    let isTop = false
+    try {
+      isTop = window.top !== null && window.top.document === doc
+    } catch {
+      isTop = false
+    }
+    if (!isTop || where.protocol !== 'https:' || where.port !== '' ||
+        !allowed.includes(where.hostname.toLowerCase())) {
+      throw new Error(`refusing to enter a credential on ${where.protocol}//${where.host}`)
+    }
     const input = element as HTMLInputElement
     input.focus()
     input.value = text
     input.dispatchEvent(new Event('input', {bubbles: true}))
     input.dispatchEvent(new Event('change', {bubbles: true}))
-  }, value)
+  }, {text: value, allowed: hosts})
 }
 
 
@@ -553,5 +620,5 @@ export async function sceneHighlightCount(page: Page): Promise<number> {
  * installed just to report that it had nothing to test.
  */
 export function skipAllWithoutTarget() {
-  test.skip(() => liveTargetFrom(process.env.LIVE_BASE_URL).skip !== null, 'LIVE_BASE_URL is not set')
+  test.skip(() => liveTargetFrom(process.env.LIVE_BASE_URL, process.env).skip !== null, 'LIVE_BASE_URL is not set')
 }

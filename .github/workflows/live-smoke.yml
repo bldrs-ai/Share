@@ -24,8 +24,17 @@ name: live-smoke
 # from under another run's free-tier spec. Queued, not cancelled — GitHub
 # keeps the newest pending run.
 #
-# Secrets are referenced by name only and reach the specs as environment
-# variables. Without them every spec reports SKIPPED with its reason (the
+# The target is an ALLOW-LIST, not any https origin
+# (tools/live-smoke/targets.js: deploy previews of the allowed Netlify
+# projects, and production): a run logs real test accounts in, so a dispatch
+# pointed at someone else's origin must stop before any step is given a
+# secret (Codex on #1942). `Check the target against the allow-list` below
+# is that gate; every step that sees a secret comes after it and uses its
+# output. The browser login is gated again on the Auth0 host
+# (tools/live-smoke/loginHosts.js).
+#
+# Secrets are referenced by name only, and reach only the steps that need
+# them, as environment variables. Without them every spec reports SKIPPED with its reason (the
 # step summary lists them), so a fork's PR, which gets no secrets, is a run
 # of skips rather than a failure.
 #
@@ -73,6 +82,8 @@ jobs:
     steps:
       # Event values reach the shell only through env, never through ${{ }}
       # interpolation into a script.
+      # No secret is in this step's environment, nor in any step up to and
+      # including the allow-list check.
       - name: Resolve the target
         id: target
         env:
@@ -85,6 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            # A first, shape-only check; the allow-list is checked below.
             url="${INPUT_URL%/}"
             if [[ ! "$url" =~ ^https://[a-z0-9.-]+$ ]]; then
               echo "base_url must be an https origin with no path: $INPUT_URL"; exit 1
@@ -129,6 +141,18 @@ jobs:
         with:
           node-version: 24
           cache: yarn
+      # The gate. Dependency-free, so it runs before the install; a URL off
+      # the allow-list fails the job here, and nothing after it runs.
+      - name: Check the target against the allow-list
+        id: allowed
+        if: steps.target.outputs.run == 'true'
+        env:
+          CI: 'true'
+          CANDIDATE: ${{ steps.target.outputs.url }}
+        run: |
+          set -euo pipefail
+          origin="$(node tools/live-smoke/checkTarget.mjs "$CANDIDATE")"
+          echo "url=$origin" >> "$GITHUB_OUTPUT"
       - name: Install
         if: steps.target.outputs.run == 'true'
         run: |
@@ -156,16 +180,19 @@ jobs:
           LIVE_SMOKE_AUTH0_CLIENT_SECRET: ${{ secrets.LIVE_SMOKE_AUTH0_CLIENT_SECRET }}
         run: node tools/live-smoke/resetAccounts.mjs --if-configured
 
-      - name: Smoke ${{ steps.target.outputs.url }}
+      - name: Smoke ${{ steps.allowed.outputs.url }}
         if: steps.target.outputs.run == 'true'
         env:
           CI: 'true'
-          LIVE_BASE_URL: ${{ steps.target.outputs.url }}
+          LIVE_BASE_URL: ${{ steps.allowed.outputs.url }}
           PROJECTS: ${{ github.event.inputs.projects }}
           LIVE_SMOKE_ACCOUNTS: ${{ secrets.LIVE_SMOKE_ACCOUNTS }}
           LIVE_SMOKE_AUTH0_DOMAIN: ${{ secrets.LIVE_SMOKE_AUTH0_DOMAIN }}
           LIVE_SMOKE_AUTH0_CLIENT_ID: ${{ secrets.LIVE_SMOKE_AUTH0_CLIENT_ID }}
           LIVE_SMOKE_AUTH0_CLIENT_SECRET: ${{ secrets.LIVE_SMOKE_AUTH0_CLIENT_SECRET }}
+          # Only where the browser's Universal Login is a custom domain rather
+          # than the tenant domain above (tools/live-smoke/loginHosts.js).
+          LIVE_SMOKE_AUTH0_LOGIN_HOST: ${{ vars.LIVE_SMOKE_AUTH0_LOGIN_HOST }}
         run: |
           args=()
           IFS=',' read -ra wanted <<< "${PROJECTS:-}"

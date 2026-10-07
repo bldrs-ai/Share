@@ -1,16 +1,25 @@
 /* eslint-disable no-magic-numbers */
-import {claimedSubscriptionStatus, freeTierFromProbe, liveAdminFrom, liveTargetFrom} from './liveEnv'
+import {
+  allowedLoginHosts,
+  claimedSubscriptionStatus,
+  freeTierFromProbe,
+  liveAdminFrom,
+  liveTargetFrom,
+  loginPageProblem,
+} from './liveEnv'
 
 
 describe('live/liveEnv', () => {
   describe('liveTargetFrom', () => {
+    const CI = {CI: 'true'}
+
     it('skips, with the variable named, when LIVE_BASE_URL is unset or blank', () => {
-      expect(liveTargetFrom(undefined)).toEqual({target: null, skip: 'LIVE_BASE_URL is not set', problem: null})
-      expect(liveTargetFrom('  ').skip).toBe('LIVE_BASE_URL is not set')
+      expect(liveTargetFrom(undefined, CI)).toEqual({target: null, skip: 'LIVE_BASE_URL is not set', problem: null})
+      expect(liveTargetFrom('  ', CI).skip).toBe('LIVE_BASE_URL is not set')
     })
 
-    it('takes a deploy preview, drops a trailing slash, and expects functions there', () => {
-      const {target, skip, problem} = liveTargetFrom('https://deploy-preview-1939--bldrs-share-prod.netlify.app/')
+    it('takes an allowed deploy preview, drops a trailing slash, and expects functions there', () => {
+      const {target, skip, problem} = liveTargetFrom('https://deploy-preview-1939--bldrs-share-prod.netlify.app/', CI)
       expect(skip).toBeNull()
       expect(problem).toBeNull()
       expect(target).toEqual({
@@ -20,19 +29,42 @@ describe('live/liveEnv', () => {
       })
     })
 
-    it('takes a local http build, which has no functions behind it', () => {
-      expect(liveTargetFrom('http://localhost:9081').target)
+    it('takes a local http build outside CI only, with no functions behind it', () => {
+      expect(liveTargetFrom('http://localhost:9081', {}).target)
         .toEqual({baseUrl: 'http://localhost:9081', hostname: 'localhost', servesFunctions: false})
-      expect(liveTargetFrom('http://127.0.0.1:8080').target.servesFunctions).toBe(false)
+      expect(liveTargetFrom('http://127.0.0.1:8080', {}).target.servesFunctions).toBe(false)
+      expect(liveTargetFrom('http://localhost:9081', CI).target).toBeNull()
+      expect(liveTargetFrom('http://localhost:9081', CI).problem).toMatch(/not allowed in CI/)
     })
 
-    it('refuses rather than skips a value that is set and wrong', () => {
-      expect(liveTargetFrom('bldrs.ai').problem).toBe('LIVE_BASE_URL is not a URL: bldrs.ai')
-      expect(liveTargetFrom('http://bldrs.ai').problem).toBe('LIVE_BASE_URL must be https (or http on localhost): http://bldrs.ai')
-      expect(liveTargetFrom('https://bldrs.ai/share/v/p/index.ifc').problem)
-        .toBe('LIVE_BASE_URL must be an origin with no path: https://bldrs.ai/share/v/p/index.ifc')
-      expect(liveTargetFrom('https://bldrs.ai/?feature=export').skip).toBeNull()
-      expect(liveTargetFrom('https://bldrs.ai/?feature=export').target).toBeNull()
+    it('refuses rather than skips a value that is set and wrong, or off the allow-list', () => {
+      expect(liveTargetFrom('bldrs.ai', CI).problem).toBe('LIVE_BASE_URL is not a URL: bldrs.ai')
+      for (const url of [
+        'http://bldrs.ai',
+        'https://bldrs.ai/share/v/p/index.ifc',
+        'https://bldrs.ai/?feature=export',
+        'https://evil.example',
+        'https://deploy-preview-1--attacker.netlify.app',
+      ]) {
+        const {target, skip, problem} = liveTargetFrom(url, CI)
+        expect([target, skip]).toEqual([null, null])
+        expect(problem).toMatch(/\S/)
+      }
+    })
+  })
+
+  describe('the login-host gate, as the specs import it', () => {
+    it('trusts only the configured tenant, exactly, over https', () => {
+      const {hosts} = allowedLoginHosts({LIVE_SMOKE_AUTH0_DOMAIN: 'bldrs.us.auth0.com'})
+      expect(loginPageProblem('https://bldrs.us.auth0.com/u/login', hosts)).toBeNull()
+      expect(loginPageProblem('https://bldrs.us.auth0.com.evil.com/u/login', hosts)).toMatch(/not an allowed/)
+      expect(loginPageProblem('http://bldrs.us.auth0.com/u/login', hosts)).toMatch(/not https/)
+    })
+
+    it('fails closed when no host is configured', () => {
+      const {hosts, problem} = allowedLoginHosts({})
+      expect(problem).toMatch(/not set/)
+      expect(loginPageProblem('https://bldrs.us.auth0.com/u/login', hosts)).toMatch(/no allowed Auth0 login host/)
     })
   })
 

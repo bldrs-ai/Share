@@ -9,9 +9,11 @@
  */
 import {LIVE_PROJECTS, accountFor, parseLiveAccounts} from '../../../../tools/live-smoke/accounts.js'
 import {adminConfigFromEnv, createAuth0Admin} from '../../../../tools/live-smoke/auth0Management.js'
+import {allowedLoginHosts, loginPageProblem} from '../../../../tools/live-smoke/loginHosts.js'
+import {checkLiveTarget} from '../../../../tools/live-smoke/targets.js'
 
 
-export {LIVE_PROJECTS, accountFor, parseLiveAccounts}
+export {LIVE_PROJECTS, accountFor, allowedLoginHosts, loginPageProblem, parseLiveAccounts}
 
 export type LiveAdmin = ReturnType<typeof createAuth0Admin>
 
@@ -32,42 +34,34 @@ export type LiveTarget = {
   servesFunctions: boolean
 }
 
-const LOCAL_HOSTS = ['localhost', '127.0.0.1']
-
-
 /**
- * Read `LIVE_BASE_URL`.
+ * Read `LIVE_BASE_URL`, and hold it to the allow-list in
+ * `tools/live-smoke/targets.js`: a deploy preview of an allowed Netlify
+ * project, a production origin, or — outside CI only — localhost. A run
+ * carries real test credentials, so "any https origin" is not a target
+ * (Codex on #1942).
  *
  * Unset is a skip — every spec reports it — but SET and wrong is a problem:
  * a typo would otherwise turn a whole run into skips that read like "no
- * secrets", which nobody investigates.
+ * secrets", which nobody investigates, and a URL off the allow-list must
+ * stop the run rather than be skipped past.
  *
  * @param raw the variable's value
+ * @param env `process.env`, for `CI`
  * @return exactly one of `target`, `skip`, `problem` is non-null
  */
-export function liveTargetFrom(raw: string | undefined): {
+export function liveTargetFrom(raw: string | undefined, env: Record<string, string | undefined> = {}): {
   target: LiveTarget | null, skip: string | null, problem: string | null,
 } {
   if (raw === undefined || raw.trim() === '') {
     return {target: null, skip: 'LIVE_BASE_URL is not set', problem: null}
   }
-  let url: URL
-  try {
-    url = new URL(raw.trim())
-  } catch {
-    return {target: null, skip: null, problem: `LIVE_BASE_URL is not a URL: ${raw}`}
-  }
-  const isLocal = LOCAL_HOSTS.includes(url.hostname)
-  if (url.protocol !== 'https:' && !(isLocal && url.protocol === 'http:')) {
-    return {target: null, skip: null, problem: `LIVE_BASE_URL must be https (or http on localhost): ${raw}`}
-  }
-  // The specs navigate by absolute path (`/share/v/p/index.ifc`), which
-  // would silently drop a path prefix rather than honour it.
-  if (url.pathname !== '/' || url.search !== '' || url.hash !== '') {
-    return {target: null, skip: null, problem: `LIVE_BASE_URL must be an origin with no path: ${raw}`}
+  const {origin, isLocal, problem} = checkLiveTarget(raw, {isCI: env.CI === 'true'})
+  if (origin === null) {
+    return {target: null, skip: null, problem}
   }
   return {
-    target: {baseUrl: url.origin, hostname: url.hostname, servesFunctions: !isLocal},
+    target: {baseUrl: origin, hostname: new URL(origin).hostname, servesFunctions: !isLocal},
     skip: null,
     problem: null,
   }
