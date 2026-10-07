@@ -111,6 +111,18 @@ module.exports = {
     //
     // The zone bans the whole of `src` from importing it; the override
     // below re-allows the directory to import itself.
+    //
+    // Assist import fence (design/new/ai-workspace.md §2.1, D15) is the
+    // second zone, in the same rule because an override REPLACES a rule's
+    // options rather than merging them: a separate `src/assist/**` override
+    // would silently drop the pro-module zone for those files.
+    // `src/assist/` is package-shaped and moves to bldrs-ai/Assist once #1675
+    // settles; hosts import it and inject tool providers, never the reverse.
+    // So nothing under it may import anything outside it except packages
+    // (`./node_modules`). The rule resolves each import first, so one that
+    // doesn't resolve is skipped — esbuild and tsc fail on those anyway.
+    // `src/assist/importBoundary.test.js` lints a violating import to prove
+    // the zone fires.
     {
       files: ['src/**/*.js', 'src/**/*.jsx', 'src/**/*.ts', 'src/**/*.tsx'],
       excludedFiles: ['src/export/pro/**'],
@@ -121,6 +133,12 @@ module.exports = {
             from: './src/export/pro',
             message: 'src/export/pro is premium code built outside docs/ — ' +
               'load it at runtime via src/export/proModuleLoader.js, never by import',
+          }, {
+            target: './src/assist',
+            from: '.',
+            except: ['./src/assist', './node_modules'],
+            message: 'src/assist must not import from outside src/assist (ai-workspace.md §2.1, D15): ' +
+              'the host imports Assist and injects tool providers, never the reverse',
           }],
         }],
       },
