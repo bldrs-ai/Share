@@ -1,0 +1,187 @@
+name: live-smoke
+
+# Live browser smoke of GLB export and the subscription tiers, against a
+# DEPLOYED Share: the `*.live.spec.ts` specs under
+# tools/playwright.live.config.js, in Chromium, Firefox, WebKit and two
+# emulated phones, logged in as real Auth0 test accounts (anonymous, free,
+# comped Pro, pending reauth). It automates most of the cross-browser
+# checklist in design/new/glb-export-premium.md §8; the design, the account
+# setup and what stays manual are in design/new/live-browser-smoke.md.
+#
+# Triggers — never on every push. A run takes one runner for its whole
+# length, and CI is capped at 4 concurrent jobs (CLAUDE.md, "PRs: open in
+# draft"):
+#  - `workflow_dispatch` with any https origin: a deploy preview, a branch
+#    deploy, production.
+#  - A PR marked ready for review, IF it touches export, subscription or
+#    harness code (the path check below) — against that PR's Netlify deploy
+#    preview.
+#  - The `live-smoke` label on a PR, whatever it touches — the way to ask for
+#    a run on demand, including on a PR still in draft.
+#
+# One run at a time, repository-wide: every run logs in as the same test
+# accounts, and the reset at the start of one run would pull the ledger out
+# from under another run's free-tier spec. Queued, not cancelled — GitHub
+# keeps the newest pending run.
+#
+# Secrets are referenced by name only and reach the specs as environment
+# variables. Without them every spec reports SKIPPED with its reason (the
+# step summary lists them), so a fork's PR, which gets no secrets, is a run
+# of skips rather than a failure.
+#
+# Traces and videos are OFF here, and nothing logs a credential: a trace
+# records what was typed into the login form and every request's headers,
+# and a public repository's artifacts are readable by anyone.
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Deploy to smoke: an https origin, e.g. https://deploy-preview-1939--bldrs-share-prod.netlify.app'
+        required: true
+      projects:
+        description: 'Playwright projects, comma-separated (blank: all — chromium,firefox,webkit,mobile-iphone,mobile-pixel)'
+        required: false
+        default: ''
+  pull_request:
+    types: [ready_for_review, labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.action == 'ready_for_review' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'live-smoke')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: read
+    env:
+      # Which Netlify project's deploy preview a PR run targets. Both post a
+      # `netlify/<project>/deploy-preview` status (functions-smoke.yml); the
+      # test accounts live in the Auth0 tenant that project's deploys use.
+      NETLIFY_PROJECT: ${{ vars.LIVE_SMOKE_NETLIFY_PROJECT || 'bldrs-share-prod' }}
+    steps:
+      # Event values reach the shell only through env, never through ${{ }}
+      # interpolation into a script.
+      - name: Resolve the target
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          INPUT_URL: ${{ github.event.inputs.base_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            url="${INPUT_URL%/}"
+            if [[ ! "$url" =~ ^https://[a-z0-9.-]+$ ]]; then
+              echo "base_url must be an https origin with no path: $INPUT_URL"; exit 1
+            fi
+            echo "url=$url" >> "$GITHUB_OUTPUT"; echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then echo "Unexpected sha: $HEAD_SHA"; exit 1; fi
+
+          # Ready-for-review runs only for PRs that can change what this
+          # smokes. The label runs regardless.
+          if [[ "$ACTION" == ready_for_review ]]; then
+            relevant='^(src/export/|src/Components/Open/(Export|SaveModelControl)|src/Components/Share/|src/Components/GatedAction|src/Auth0/|src/quota/|src/loader/glb|src/OPFS/|src/store/|src/BaseRoutes|netlify/functions/(pro-module|record-export|record-load|stripe-webhook|reconcile-subscriptions|_lib/)|tools/esbuild/proModules|src/tests/e2e/(live/|export)|tools/live-smoke/|tools/playwright\.live\.config\.js|\.github/workflows/live-smoke\.yml)'
+            if ! gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' | grep -Eq "$relevant"; then
+              echo "This PR touches nothing the live smoke covers; add the live-smoke label to run it anyway."
+              echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+          fi
+
+          # The PR's deploy preview, from the commit status Netlify posts on
+          # the head commit once the preview is live. A PR marked ready right
+          # after a push may beat the deploy, so wait for it.
+          context="netlify/$NETLIFY_PROJECT/deploy-preview"
+          url=''
+          for _ in $(seq 1 40); do
+            url="$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/statuses" \
+              --jq "[.[] | select(.context == \"$context\" and .state == \"success\")][0].target_url // empty")"
+            [[ -n "$url" ]] && break
+            sleep 30
+          done
+          if [[ -z "$url" ]]; then echo "No successful $context status on $HEAD_SHA after 20 minutes"; exit 1; fi
+          if [[ ! "$url" =~ ^https://deploy-preview-[0-9]+--[a-z0-9-]+\.netlify\.app/?$ ]]; then
+            echo "Not a Netlify deploy-preview URL: $url"; exit 1
+          fi
+          echo "url=${url%/}" >> "$GITHUB_OUTPUT"; echo "run=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.target.outputs.run == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        if: steps.target.outputs.run == 'true'
+        with:
+          node-version: 24
+          cache: yarn
+      - name: Install
+        if: steps.target.outputs.run == 'true'
+        run: |
+          yarn install --frozen-lockfile --prefer-offline
+          npx playwright install --with-deps chromium firefox webkit
+
+      # GitHub masks a secret only where its whole value is printed; the
+      # account JSON's emails and passwords would not be. Mask each one.
+      - name: Mask account values
+        if: steps.target.outputs.run == 'true'
+        env:
+          LIVE_SMOKE_ACCOUNTS: ${{ secrets.LIVE_SMOKE_ACCOUNTS }}
+        run: |
+          if [[ -n "${LIVE_SMOKE_ACCOUNTS:-}" ]]; then
+            jq -r '.. | objects | select(has("email")) | .email, .password' <<< "$LIVE_SMOKE_ACCOUNTS" 2>/dev/null |
+              while IFS= read -r value; do [[ -n "$value" ]] && echo "::add-mask::$value"; done || true
+          fi
+
+      - name: Reset the test accounts
+        if: steps.target.outputs.run == 'true'
+        env:
+          LIVE_SMOKE_ACCOUNTS: ${{ secrets.LIVE_SMOKE_ACCOUNTS }}
+          LIVE_SMOKE_AUTH0_DOMAIN: ${{ secrets.LIVE_SMOKE_AUTH0_DOMAIN }}
+          LIVE_SMOKE_AUTH0_CLIENT_ID: ${{ secrets.LIVE_SMOKE_AUTH0_CLIENT_ID }}
+          LIVE_SMOKE_AUTH0_CLIENT_SECRET: ${{ secrets.LIVE_SMOKE_AUTH0_CLIENT_SECRET }}
+        run: node tools/live-smoke/resetAccounts.mjs --if-configured
+
+      - name: Smoke ${{ steps.target.outputs.url }}
+        if: steps.target.outputs.run == 'true'
+        env:
+          CI: 'true'
+          LIVE_BASE_URL: ${{ steps.target.outputs.url }}
+          PROJECTS: ${{ github.event.inputs.projects }}
+          LIVE_SMOKE_ACCOUNTS: ${{ secrets.LIVE_SMOKE_ACCOUNTS }}
+          LIVE_SMOKE_AUTH0_DOMAIN: ${{ secrets.LIVE_SMOKE_AUTH0_DOMAIN }}
+          LIVE_SMOKE_AUTH0_CLIENT_ID: ${{ secrets.LIVE_SMOKE_AUTH0_CLIENT_ID }}
+          LIVE_SMOKE_AUTH0_CLIENT_SECRET: ${{ secrets.LIVE_SMOKE_AUTH0_CLIENT_SECRET }}
+        run: |
+          args=()
+          IFS=',' read -ra wanted <<< "${PROJECTS:-}"
+          for project in "${wanted[@]}"; do
+            project="${project// /}"
+            if [[ -n "$project" ]]; then
+              if [[ ! "$project" =~ ^[a-z-]+$ ]]; then echo "Bad project name: $project"; exit 1; fi
+              args+=("--project=$project")
+            fi
+          done
+          yarn test-flows-live "${args[@]}"
+
+      - name: Upload the report
+        if: always() && steps.target.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-smoke-report
+          path: tools/playwright-report-live
+          retention-days: 7

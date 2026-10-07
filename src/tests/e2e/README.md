@@ -41,6 +41,13 @@ specs. Keep it that way.
   `waitForModel` for dialog/panel specs), and the rest of the page-bootstrap
   helpers.
 - `homepage.ts`, `workspace.ts` — page-object-ish helpers for those areas.
+- `live/` — the live smoke harness's helpers (`*.live.spec.ts` under
+  `tools/playwright.live.config.js`, against a deployed Share with real
+  Auth0 accounts): `liveSession.ts` is the Playwright side (skip decisions,
+  password login, response watching, the OPFS container probe, the
+  no-`CompressionStream` shim); `liveEnv`, `freeAllowance`, `glbBytes`,
+  `glbNode` and `spz` are Playwright-free and Jest-tested beside it. See
+  [design/new/live-browser-smoke.md](../../../design/new/live-browser-smoke.md).
 
 ## Put specs next to their subject, not here
 
