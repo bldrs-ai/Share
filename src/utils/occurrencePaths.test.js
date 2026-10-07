@@ -355,6 +355,39 @@ describe('utils/occurrencePaths', () => {
         .toEqual({instanceIds: [0, 1], ownerIds: [8, 510]})
     })
 
+    it('names a part whose placement reports the part\'s own product_definition as owner (direct SDR)', () => {
+      // No product_definition_shape between the SDR and the part, so the
+      // owner is the part's own id — the case glbPortable.js#rowKeyOf joins
+      // through `emptyPathNodeIds`. The owner lists hold only PDS ids, so the
+      // join has to key each part by its own id too.
+      const tree = makeTwoRootTree()
+      expect(findRootLevelOwnerNode(tree, 3007)).toBe(tree.children[1])
+      expect(findRootLevelOwnerNode(tree, '7')).toBe(tree.children[0])
+      // The synthetic wrapper owns no geometry, by either kind of id.
+      expect(findRootLevelOwnerNode(tree, 0)).toBeNull()
+      expect(findRootLevelProductNode(tree, 0)).toBeNull()
+      // A row click / permalink on the part takes those instances too, beside
+      // the ones its PDS owns, and leaves the other part's alone.
+      const rootLevel = {instanceIds: [0, 1, 2, 3], parentExpressIds: [8, 3007, 7], instanceOwners: [8, 3007, 7, 3008]}
+      expect(rootLevelInstancesOfProduct(tree, tree.children[0], rootLevel))
+        .toEqual({instanceIds: [0, 2], ownerIds: [8, 7]})
+      expect(rootLevelInstancesOfProduct(tree, tree.children[1], rootLevel))
+        .toEqual({instanceIds: [1, 3], ownerIds: [3007, 3008]})
+    })
+
+    it('keys a direct-SDR part that lists no shape at all (a cache round trip drops empty lists)', () => {
+      // `bldrsSpatialTree#serializeNode` keeps the list only when non-empty,
+      // so from cache such a part carries no list; the tree still has lists
+      // elsewhere, which is what says the join is available.
+      const tree = makeTwoRootTree()
+      delete tree.children[1].productDefinitionShapeExpressIDs
+      expect(findRootLevelOwnerNode(tree, 3007)).toBe(tree.children[1])
+      expect(findRootLevelProductNode(tree, 3007)).toBe(tree.children[1])
+      expect(rootLevelInstancesOfProduct(tree, tree.children[1],
+        {instanceIds: [0, 1], parentExpressIds: [8, 3007], instanceOwners: [8, 3007]}))
+        .toEqual({instanceIds: [1], ownerIds: [3007]})
+    })
+
     it('reads a part\'s root-only permalink, `wrapper/part`, and nothing else of that shape', () => {
       const tree = makeTwoRootTree()
       expect(resolveRootOnlyElementPath(tree, ['0', '3007'])).toBe(tree.children[1])

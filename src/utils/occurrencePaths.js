@@ -409,6 +409,20 @@ const ownerIndexCache = new WeakMap()
  * multi-root file has the path `[]`, and a part reused at many occurrences
  * reports one PDS from all of them.
  *
+ * A placement can also report the part's own `product_definition` as its
+ * owner, when its SDR names the definition directly with no PDS between —
+ * the case `glbPortable.js#rowKeyOf` joins through `emptyPathNodeIds`. So
+ * every empty-path node below the tree root is ALSO keyed by (`[]`, its own
+ * `expressID`). Not the tree root itself: in a multi-root file that is
+ * Conway's synthetic `Model` wrapper, which owns no geometry and must never
+ * be named (in a one-product file it is the sole root, which
+ * `findRootLevelOwnerNode` falls back to anyway). Added only when the tree
+ * carries owner lists at all, so a list-less tree stays null and resolves as
+ * before; checked per TREE, not per node, because
+ * `bldrsSpatialTree#serializeNode` drops an empty list and a direct-SDR part
+ * from cache may carry none. Express ids are unique within a file, so a
+ * definition's key cannot collide with a shape's.
+ *
  * Memoized per root-node object, like `occurrencePathKeySetForTree`.
  *
  * @param {object|null|undefined} rootNode spatial-structure root element
@@ -422,10 +436,14 @@ export function occurrenceOwnerIndex(rootNode) {
     return ownerIndexCache.get(rootNode)
   }
   const index = new Map()
+  const emptyPathParts = []
   const stack = [rootNode]
   while (stack.length > 0) {
     const node = stack.pop()
     const owners = node.productDefinitionShapeExpressIDs
+    if (node !== rootNode && Array.isArray(node.occurrencePath) && node.occurrencePath.length === 0) {
+      emptyPathParts.push(node)
+    }
     if (Array.isArray(node.occurrencePath) && Array.isArray(owners)) {
       for (const owner of owners) {
         const key = occurrenceOwnerKey(node.occurrencePath, owner)
@@ -441,6 +459,17 @@ export function occurrenceOwnerIndex(rootNode) {
         if (child && typeof child === 'object') {
           stack.push(child)
         }
+      }
+    }
+  }
+  // Gated on a NON-EMPTY list somewhere, not on any list being present: a
+  // fresh parse carries `[]` lists that a cache hit drops, and the two must
+  // resolve alike.
+  if (index.size > 0) {
+    for (const part of emptyPathParts) {
+      const key = occurrenceOwnerKey([], part.expressID)
+      if (!index.has(key)) {
+        index.set(key, part)
       }
     }
   }
@@ -510,7 +539,8 @@ export function findRootLevelProductNode(rootNode, id) {
  * In a one-product tree that is all of them: every empty-path placement
  * belongs to the sole root, whatever its owner, which is the #1909 rule and
  * stays it. In a multi-root tree a placement belongs to the part whose
- * `productDefinitionShapeExpressIDs` lists its owner.
+ * `productDefinitionShapeExpressIDs` lists its owner, or whose own id IS its
+ * owner (a direct SDR, see `occurrenceOwnerIndex`).
  *
  * @param {object|null|undefined} rootNode spatial-structure root element
  * @param {object} productNode a top-level product (`findRootLevelProductNode`)
@@ -525,7 +555,13 @@ export function rootLevelInstancesOfProduct(rootNode, productNode, rootLevel) {
   if (findSoleRootNode(rootNode) === productNode) {
     return {instanceIds: [...instanceIds], ownerIds: [...(rootLevel?.parentExpressIds ?? [])]}
   }
+  // The part's own id is an owner too: a placement whose SDR names the
+  // product_definition directly reports it in place of a PDS (the direct-SDR
+  // case `occurrenceOwnerIndex` keys the part by).
   const owners = new Set((productNode?.productDefinitionShapeExpressIDs ?? []).map(Number))
+  if (productNode && productNode.expressID !== undefined) {
+    owners.add(Number(productNode.expressID))
+  }
   const mine = []
   const mineOwners = new Set()
   instanceIds.forEach((id, i) => {
