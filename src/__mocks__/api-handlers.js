@@ -327,7 +327,10 @@ function netlifyHandlers() {
       if (!isMockPro()) {
         const chargedAt = id ? existing.findIndex((row) => row && row.free === true && row.id === id) : -1
         if (chargedAt === -1) {
-          return jsonMockResponse(HTTP_FORBIDDEN, {error: 'free_export_not_charged'})
+          // The allowance rides along, as in the function: it is the only way
+          // a tab whose charge row lost a ledger race learns its real count.
+          return jsonMockResponse(HTTP_FORBIDDEN,
+            {error: 'free_export_not_charged', freeExports: freeExportAllowance(existing)})
         }
         const filled = existing.map((row, i) => (i === chargedAt ?
           {...row, key, title: title || null, format, bytes} : row))

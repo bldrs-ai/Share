@@ -673,7 +673,9 @@ export async function routeRecordExport(page: Page) {
     if (!isPro) {
       const chargedAt = ledger.findIndex((row) => row.free === true && row.id === body.id)
       if (chargedAt === -1) {
-        await fulfillJson(route, HTTP_FORBIDDEN, {error: 'free_export_not_charged'})
+        // Carries the allowance like the function's refusal, so the stale-count recovery is testable.
+        await fulfillJson(route, HTTP_FORBIDDEN,
+          {error: 'free_export_not_charged', freeExports: freeExportAllowance(ledger)})
         return
       }
       const filled = ledger.map((row, i) => (i === chargedAt ? {...row, key: body.key, bytes: body.bytes} : row))
