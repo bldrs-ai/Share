@@ -513,9 +513,17 @@ It never runs on every push.
 
 ### Target
 
-For a PR, the target comes from the head commit's
-`netlify/<project>/deploy-preview` status in state `success`. The workflow
-waits up to 20 minutes for it. It is validated with functions-smoke.yml's
+For a PR, the target comes from the **newest** `netlify/<project>/deploy-preview`
+status on the head commit (`tools/live-smoke/previewStatus.mjs`):
+
+- **Success:** its URL is the target.
+- **Pending, or no status yet:** wait. The workflow waits up to 20 minutes.
+- **Failure or error:** the run stops.
+
+An older `success` never counts (Codex on #1942). The preview URL is a stable
+alias for the PR, so after a redeploy of the same head it serves the previous
+deploy until the new one lands. Picking any success would smoke that previous
+deploy and report it green. It is validated with functions-smoke.yml's
 regex: `^https://deploy-preview-[0-9]+--[a-z0-9-]+\.netlify\.app/?$`.
 
 Then, for every trigger, `node tools/live-smoke/checkTarget.mjs` holds the URL
