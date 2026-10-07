@@ -61,6 +61,8 @@ const DRACO_DIR = path.resolve(__dirname, '../../public/static/js/draco')
 // NORMAL from, and to.
 const FLOAT_COMPONENT_TYPE = 5126
 const BYTE_COMPONENT_TYPE = 5120
+const UNSIGNED_BYTE_COMPONENT_TYPE = 5121
+const UNSIGNED_SHORT_COMPONENT_TYPE = 5123
 // The Momentum fixture's scene range, the model every measured figure in
 // #1848 is quoted against.
 const MOMENTUM_RANGE_M = 22.0
@@ -81,9 +83,14 @@ const MOMENTUM_RANGE_M = 22.0
  * @param {boolean} [options.withNormals] Add `NORMAL`, the one attribute the
  *   two codecs treat DIFFERENTLY under quality: Draco quantizes it to
  *   NORMAL bits, Meshopt's `FILTER` rewrites it octahedrally
+ * @param {Array<{ArrayType: Function, isNormalized: boolean}>} [options.texcoords]
+ *   One `TEXCOORD_n` per entry, stored as that typed array: how a source
+ *   comes to hold the non-float texcoord formats core glTF does and does not
+ *   allow (#1943 codex P2)
  * @return {Promise<Uint8Array>} a standalone GLB
  */
-async function geometryGlb({withPerVertexIds = false, withNormals = false, areIdsFloat = false} = {}) {
+async function geometryGlb(
+  {withPerVertexIds = false, withNormals = false, areIdsFloat = false, texcoords = []} = {}) {
   const doc = new Document()
   const buffer = doc.createBuffer()
   const positions = []
@@ -109,6 +116,13 @@ async function geometryGlb({withPerVertexIds = false, withNormals = false, areId
     primitive.setAttribute('NORMAL', doc.createAccessor()
       .setType('VEC3').setArray(new Float32Array(normals)).setBuffer(buffer))
   }
+  texcoords.forEach(({ArrayType, isNormalized}, n) => {
+    primitive.setAttribute(`TEXCOORD_${n}`, doc.createAccessor()
+      .setType('VEC2')
+      .setArray(new ArrayType(Array.from({length: VERTEX_COUNT * 2}, (_, i) => i % 100)))
+      .setNormalized(isNormalized)
+      .setBuffer(buffer))
+  })
   if (withPerVertexIds) {
     // Uint32, as `batchedToMergedMesh.js`/`flatMeshToBufferGeometry.js` write
     // it: three's `GLTFExporter` exempts `_`-prefixed attributes from its
@@ -930,9 +944,6 @@ describe('export/glbCompression against glTF-Validator (#1943)', () => {
   //
   // Asserted as the validator's own `numErrors` AND as the list of messages,
   // so a failure names the code instead of printing "expected 0, got 3".
-  const QUANTIZED_ATTRIBUTE = /^(POSITION|NORMAL|TANGENT|TEXCOORD_\d+)$/
-  const INTEGER_COMPONENT_TYPES = [5120, 5121, 5122, 5123]
-
   /**
    * @param {Uint8Array} glbBytes
    * @return {Promise<Array<string>>} `code @ pointer` for every validator error
@@ -945,18 +956,23 @@ describe('export/glbCompression against glTF-Validator (#1943)', () => {
   }
 
   /**
-   * Whether any POSITION / NORMAL / TANGENT / TEXCOORD accessor is stored as
-   * an integer — the condition under which the file needs the extension,
-   * stated independently of the code that decides it.
+   * Whether any accessor is in a format core glTF does not allow, which is
+   * the condition under which the file needs the extension — stated here from
+   * the spec's attribute table, independently of the code that decides it.
+   * POSITION / NORMAL / TANGENT are FLOAT only; TEXCOORD_n also allows
+   * normalized UNSIGNED_BYTE and UNSIGNED_SHORT.
    *
    * @param {object} json
    * @return {boolean}
    */
   function storesQuantizedAttributes(json) {
+    const isCore = (semantic, {componentType, normalized}) => componentType === FLOAT_COMPONENT_TYPE ||
+      (/^TEXCOORD_\d+$/.test(semantic) && Boolean(normalized) &&
+        (componentType === UNSIGNED_BYTE_COMPONENT_TYPE || componentType === UNSIGNED_SHORT_COMPONENT_TYPE))
     return (json.meshes || []).some((mesh) => mesh.primitives.some((primitive) =>
       Object.entries(primitive.attributes)
-        .filter(([semantic]) => QUANTIZED_ATTRIBUTE.test(semantic))
-        .some(([, index]) => INTEGER_COMPONENT_TYPES.includes(json.accessors[index].componentType))))
+        .filter(([semantic]) => /^(POSITION|NORMAL|TANGENT|TEXCOORD_\d+)$/.test(semantic))
+        .some(([semantic, index]) => !isCore(semantic, json.accessors[index]))))
   }
 
   /**
@@ -1074,6 +1090,53 @@ describe('export/glbCompression against glTF-Validator (#1943)', () => {
       expect(storesQuantizedAttributes(json)).toBe(true)
       expect(json.extensionsRequired).toContain('KHR_mesh_quantization')
       expect(await errorsOf(out.bytes)).toEqual([])
+    }, TIMEOUT_MS)
+  })
+
+  describe('texcoords, which core glTF allows to be normalized unsigned (codex P2 on #1944)', () => {
+    const CORE_TEXCOORDS = [
+      {ArrayType: Uint8Array, isNormalized: true},
+      {ArrayType: Uint16Array, isNormalized: true},
+    ]
+
+    it.each([
+      [COMPRESSION_DRACO, QUALITY_BALANCED],
+      [COMPRESSION_MESHOPT, QUALITY_BEST],
+      // No NORMAL, so the FILTER has nothing to rewrite and nothing else
+      // quantizes: the texcoords are the only integer attributes in the file.
+      [COMPRESSION_MESHOPT, QUALITY_BALANCED],
+    ])('declares nothing for normalized UNSIGNED_BYTE / UNSIGNED_SHORT under %s (%s)', async (mode, quality) => {
+      const source = withBldrsPayload(await geometryGlb({texcoords: CORE_TEXCOORDS}))
+      expect(parseGlb(source).json.accessors.map(({componentType}) => componentType))
+        .toEqual(expect.arrayContaining([UNSIGNED_BYTE_COMPONENT_TYPE, UNSIGNED_SHORT_COMPONENT_TYPE]))
+
+      const out = await compressExportGlb(source, mode, quality)
+
+      expect(out.mode).toBe(mode)
+      // The codec kept them integers, so this is not passing for want of any.
+      const {json} = parseGlb(out.withoutMetadata)
+      const kept = Object.entries(json.meshes[0].primitives[0].attributes)
+        .filter(([semantic]) => semantic.startsWith('TEXCOORD_'))
+        .map(([, index]) => json.accessors[index])
+      expect(kept.map(({componentType}) => componentType))
+        .toEqual([UNSIGNED_BYTE_COMPONENT_TYPE, UNSIGNED_SHORT_COMPONENT_TYPE])
+      expect(kept.every(({normalized}) => normalized)).toBe(true)
+      await expectValidBothSides(out, false)
+    }, TIMEOUT_MS)
+
+    it.each([
+      ['signed BYTE', {ArrayType: Int8Array, isNormalized: true}],
+      ['signed SHORT', {ArrayType: Int16Array, isNormalized: true}],
+      ['non-normalized UNSIGNED_BYTE', {ArrayType: Uint8Array, isNormalized: false}],
+      ['non-normalized UNSIGNED_SHORT', {ArrayType: Uint16Array, isNormalized: false}],
+    ])('still declares the extension for %s', async (_, texcoord) => {
+      const source = withBldrsPayload(await geometryGlb({texcoords: [texcoord]}))
+
+      for (const mode of [COMPRESSION_DRACO, COMPRESSION_MESHOPT]) {
+        const out = await compressExportGlb(source, mode, QUALITY_BEST)
+        expect(out.mode).toBe(mode)
+        await expectValidBothSides(out, true)
+      }
     }, TIMEOUT_MS)
   })
 

@@ -353,22 +353,48 @@ async function transformGlb(glbBytes, mode, draco, sourceCodecs = [], quality = 
 }
 
 
-// glTF accessor component type of a plain float, the only one core glTF
-// allows on POSITION / NORMAL / TANGENT.
+// glTF accessor component types.
 const FLOAT_COMPONENT_TYPE = 5126
+const UNSIGNED_BYTE_COMPONENT_TYPE = 5121
+const UNSIGNED_SHORT_COMPONENT_TYPE = 5123
 // The vertex attributes `KHR_mesh_quantization` widens the component types of.
 const QUANTIZABLE_SEMANTIC = /^(POSITION|NORMAL|TANGENT|TEXCOORD_\d+)$/
+const TEXCOORD_SEMANTIC = /^TEXCOORD_\d+$/
+
+
+/**
+ * Whether storing this attribute this way needs `KHR_mesh_quantization`, per
+ * core glTF's attribute table: POSITION / NORMAL / TANGENT are FLOAT only,
+ * and TEXCOORD_n additionally allows NORMALIZED unsigned byte / short. A
+ * signed or non-normalized texcoord is outside core too, and so is anything
+ * else that is not a float. Requiring the extension for a format core already
+ * allows would make a viewer without it reject an otherwise-readable file
+ * (codex P2 on #1944).
+ *
+ * @param {string} semantic e.g. 'TEXCOORD_0'
+ * @param {number} componentType glTF accessor component type
+ * @param {boolean} isNormalized the accessor's `normalized` flag
+ * @return {boolean}
+ */
+function needsMeshQuantization(semantic, componentType, isNormalized) {
+  if (!QUANTIZABLE_SEMANTIC.test(semantic) || componentType === FLOAT_COMPONENT_TYPE) {
+    return false
+  }
+  const isCoreTexcoord = TEXCOORD_SEMANTIC.test(semantic) && isNormalized &&
+    (componentType === UNSIGNED_BYTE_COMPONENT_TYPE || componentType === UNSIGNED_SHORT_COMPONENT_TYPE)
+  return !isCoreTexcoord
+}
 
 
 /**
  * Declare `KHR_mesh_quantization` — used AND required — when the file this
- * transform is about to write stores any geometry attribute as an integer.
- * Core glTF only allows float POSITION / NORMAL / TANGENT, so a viewer that
- * does not know the extension is entitled to refuse the file, and
- * glTF-Validator reports `MESH_PRIMITIVE_ATTRIBUTES_ACCESSOR_INVALID_FORMAT`
- * on every such primitive (#1943).
+ * transform is about to write stores any geometry attribute in a format core
+ * glTF does not allow (`needsMeshQuantization`). A viewer that does not know
+ * the extension is entitled to refuse such a file, and glTF-Validator
+ * reports `MESH_PRIMITIVE_ATTRIBUTES_ACCESSOR_INVALID_FORMAT` on every such
+ * primitive (#1943).
  *
- * Two sources of integer attributes, neither of which `@gltf-transform`
+ * Two sources of such attributes, neither of which `@gltf-transform`
  * declares for us:
  *
  * - The Meshopt FILTER method. `EXTMeshoptCompression` rewrites NORMAL and
@@ -394,10 +420,8 @@ function declareMeshQuantization(doc, KHRMeshQuantization, isFilterPending) {
   for (const mesh of doc.getRoot().listMeshes()) {
     for (const primitive of mesh.listPrimitives()) {
       for (const semantic of primitive.listSemantics()) {
-        if (!QUANTIZABLE_SEMANTIC.test(semantic)) {
-          continue
-        }
-        if (primitive.getAttribute(semantic).getComponentType() !== FLOAT_COMPONENT_TYPE) {
+        const accessor = primitive.getAttribute(semantic)
+        if (needsMeshQuantization(semantic, accessor.getComponentType(), accessor.getNormalized())) {
           isQuantized = true
         } else if (isFilterPending && (semantic === 'NORMAL' || semantic === 'TANGENT')) {
           // Morph-target deltas are not filtered, but they are not read here
