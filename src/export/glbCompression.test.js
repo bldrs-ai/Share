@@ -16,12 +16,13 @@ import {readFileSync} from 'node:fs'
 import path from 'node:path'
 import {captureException} from '@sentry/react'
 import {Document, Logger, WebIO} from '@gltf-transform/core'
-import {EXTMeshGPUInstancing, EXTMeshoptCompression, KHRDracoMeshCompression} from '@gltf-transform/extensions'
+import {EXTMeshGPUInstancing, EXTMeshoptCompression, KHRDracoMeshCompression, KHRMeshQuantization} from '@gltf-transform/extensions'
+import {validateBytes} from 'gltf-validator'
 import {BatchedMesh, Matrix4} from 'three'
 import {ROW_TAG_SEMANTIC} from '../loader/bldrsInstanceTables'
 import {batchedArtifactBytes, triangleGeometry} from '../loader/glbArtifact.fixture'
 import {isBldrsExtension} from '../loader/glbArtifactSize'
-import {loadDracoDecoder} from '../loader/glbCompress'
+import {compressGlb, loadDracoDecoder} from '../loader/glbCompress'
 import {parseGlb} from '../loader/injectGlbExtensions'
 import {
   QUALITY_BALANCED,
@@ -37,6 +38,7 @@ import {
   compressionFidelityCaption,
   isCompressionMode,
 } from './glbCompression'
+import {rewriteGlbPortable} from './glbPortable'
 
 
 jest.mock('@sentry/react', () => ({captureException: jest.fn()}))
@@ -276,7 +278,9 @@ async function attributeOf(glbBytes, name, codec = COMPRESSION_NONE) {
   } else if (codec === COMPRESSION_MESHOPT) {
     const {MeshoptDecoder} = await import('meshoptimizer/decoder')
     await MeshoptDecoder.ready
-    io.registerExtensions([EXTMeshoptCompression])
+    // Quantization too: a reader that does not know the extension refuses a
+    // file that requires it, which is the point of declaring it (#1943).
+    io.registerExtensions([EXTMeshoptCompression, KHRMeshQuantization])
       .registerDependencies({'meshopt.decoder': MeshoptDecoder})
   }
   const doc = await io.readBinary(glbBytes)
@@ -912,6 +916,205 @@ describe('export/glbCompression', () => {
       expect(out.withoutMetadata.byteLength).toBeLessThan(source.byteLength)
       expect(out.strippedExtensions).toEqual(['BLDRS_element_properties'])
     })
+  })
+})
+
+
+describe('export/glbCompression against glTF-Validator (#1943)', () => {
+  // The Khronos validator is the strict loader this file is written for: it
+  // is what a viewer that enforces core glTF would do. Meshopt's FILTER
+  // method rewrites NORMAL to normalized BYTE inside `@gltf-transform`'s own
+  // writer, which does not declare `KHR_mesh_quantization` for it, so before
+  // the fix every Meshopt export of a model with normals reported
+  // `MESH_PRIMITIVE_ATTRIBUTES_ACCESSOR_INVALID_FORMAT` once per primitive.
+  //
+  // Asserted as the validator's own `numErrors` AND as the list of messages,
+  // so a failure names the code instead of printing "expected 0, got 3".
+  const QUANTIZED_ATTRIBUTE = /^(POSITION|NORMAL|TANGENT|TEXCOORD_\d+)$/
+  const INTEGER_COMPONENT_TYPES = [5120, 5121, 5122, 5123]
+
+  /**
+   * @param {Uint8Array} glbBytes
+   * @return {Promise<Array<string>>} `code @ pointer` for every validator error
+   */
+  async function errorsOf(glbBytes) {
+    const report = await validateBytes(glbBytes)
+    return report.issues.messages
+      .filter(({severity}) => severity === 0)
+      .map(({code, pointer}) => `${code} @ ${pointer}`)
+  }
+
+  /**
+   * Whether any POSITION / NORMAL / TANGENT / TEXCOORD accessor is stored as
+   * an integer — the condition under which the file needs the extension,
+   * stated independently of the code that decides it.
+   *
+   * @param {object} json
+   * @return {boolean}
+   */
+  function storesQuantizedAttributes(json) {
+    return (json.meshes || []).some((mesh) => mesh.primitives.some((primitive) =>
+      Object.entries(primitive.attributes)
+        .filter(([semantic]) => QUANTIZED_ATTRIBUTE.test(semantic))
+        .some(([, index]) => INTEGER_COMPONENT_TYPES.includes(json.accessors[index].componentType))))
+  }
+
+  /**
+   * Both sides of the metadata toggle must validate, and any quantized
+   * attribute must be declared on each.
+   *
+   * @param {object} out `compressExportGlb`'s result
+   * @param {boolean} isQuantized whether this encode is expected to quantize
+   */
+  async function expectValidBothSides(out, isQuantized) {
+    for (const side of ['withMetadata', 'withoutMetadata']) {
+      expect(await errorsOf(out[side])).toEqual([])
+      const {json} = parseGlb(out[side])
+      expect(storesQuantizedAttributes(json)).toBe(isQuantized)
+      if (isQuantized) {
+        expect(json.extensionsUsed).toContain('KHR_mesh_quantization')
+        expect(json.extensionsRequired).toContain('KHR_mesh_quantization')
+      }
+      // One entry, not two, however many routes asked for it.
+      expect(json.extensionsUsed.filter((name) => name === 'KHR_mesh_quantization').length)
+        .toBe(isQuantized ? 1 : 0)
+    }
+  }
+
+  beforeAll(() => {
+    installDracoEncoder()
+    installDracoDecoder()
+  })
+
+  it('fails the validator for the check itself: a quantized file without the extension', async () => {
+    // Guards the assertions below against passing vacuously (a validator that
+    // never reports, or a report shape that filters everything out): the
+    // pre-fix defect, reproduced by deleting the declaration from a good file.
+    const good = await compressExportGlb(
+      withBldrsPayload(await geometryGlb({withNormals: true})), COMPRESSION_MESHOPT, QUALITY_BALANCED)
+    const {json, bin} = parseGlb(good.withoutMetadata)
+    json.extensionsUsed = json.extensionsUsed.filter((name) => name !== 'KHR_mesh_quantization')
+    json.extensionsRequired = json.extensionsRequired.filter((name) => name !== 'KHR_mesh_quantization')
+
+    expect(await errorsOf(serializeGlb(json, bin)))
+      .toContain('MESH_PRIMITIVE_ATTRIBUTES_ACCESSOR_INVALID_FORMAT @ /meshes/0/primitives/0/attributes/NORMAL')
+  }, TIMEOUT_MS)
+
+  describe('Meshopt', () => {
+    it('declares the extension on the FILTER rungs, with metadata on and off', async () => {
+      const source = withBldrsPayload(await geometryGlb({withNormals: true}))
+      for (const quality of [QUALITY_BALANCED, QUALITY_SMALLEST]) {
+        const out = await compressExportGlb(source, COMPRESSION_MESHOPT, quality)
+        expect(normalComponentTypeOf(out.withoutMetadata)).toBe(BYTE_COMPONENT_TYPE)
+        await expectValidBothSides(out, true)
+      }
+    }, TIMEOUT_MS)
+
+    it('declares nothing on Best, whose QUANTIZE method leaves the floats alone', async () => {
+      const out = await compressExportGlb(
+        withBldrsPayload(await geometryGlb({withNormals: true})), COMPRESSION_MESHOPT, QUALITY_BEST)
+
+      expect(normalComponentTypeOf(out.withoutMetadata)).toBe(FLOAT_COMPONENT_TYPE)
+      await expectValidBothSides(out, false)
+    }, TIMEOUT_MS)
+
+    it('declares nothing for a model with no NORMAL to filter', async () => {
+      const out = await compressExportGlb(withBldrsPayload(await geometryGlb()), COMPRESSION_MESHOPT)
+
+      await expectValidBothSides(out, false)
+    }, TIMEOUT_MS)
+
+    describe('the batched-native artifact, native and portable', () => {
+      const ELEMENTS = 8
+      let batched
+
+      beforeAll(async () => {
+        const mesh = new BatchedMesh(ELEMENTS, ELEMENTS * 3, ELEMENTS * 3)
+        for (let i = 0; i < ELEMENTS; i++) {
+          mesh.setMatrixAt(
+            mesh.addInstance(mesh.addGeometry(triangleGeometry(1 + (i / 100)))),
+            new Matrix4().makeTranslation(i, 0, 0))
+        }
+        mesh.instanceParents = Array.from({length: ELEMENTS}, (_, i) => 100 + i)
+        mesh.instanceOccurrenceIds = Array.from({length: ELEMENTS}, (_, i) => i)
+        mesh.instanceSourceColors = Array.from({length: ELEMENTS}, () => ({x: 0.8, y: 0.8, z: 0.8, w: 1}))
+        batched = {
+          plain: await batchedArtifactBytes(mesh),
+          collapsed: await batchedArtifactBytes(mesh, {collapse: true}),
+        }
+      }, TIMEOUT_MS)
+
+      it.each([
+        ['native', 'plain', false],
+        ['native, collapsed', 'collapsed', false],
+        ['portable', 'plain', true],
+        ['portable, collapsed', 'collapsed', true],
+      ])('validates %s', async (_, layout, isPortable) => {
+        const source = isPortable ? rewriteGlbPortable(batched[layout]).bytes : batched[layout]
+
+        const out = await compressExportGlb(source, COMPRESSION_MESHOPT)
+
+        expect(out.mode).toBe(COMPRESSION_MESHOPT)
+        await expectValidBothSides(out, true)
+      }, TIMEOUT_MS)
+    })
+  })
+
+  describe('the cache pipeline (`?feature=glbMeshopt`)', () => {
+    // A different writer: `glbCompress.js` runs `@gltf-transform`'s own
+    // `meshopt()`, which quantizes POSITION as well. The extension it adds to
+    // the document was dropped on write because the IO had not registered it.
+    it('writes a Meshopt artifact that validates', async () => {
+      const source = await geometryGlb({withNormals: true})
+
+      const out = await compressGlb(source, 'meshopt')
+
+      expect(out.mode).toBe('meshopt')
+      const {json} = parseGlb(out.bytes)
+      expect(storesQuantizedAttributes(json)).toBe(true)
+      expect(json.extensionsRequired).toContain('KHR_mesh_quantization')
+      expect(await errorsOf(out.bytes)).toEqual([])
+    }, TIMEOUT_MS)
+  })
+
+  describe('Draco', () => {
+    it('validates, and declares nothing, because it keeps NORMAL float', async () => {
+      const out = await compressExportGlb(
+        withBldrsPayload(await geometryGlb({withNormals: true})), COMPRESSION_DRACO, QUALITY_BALANCED)
+
+      expect(out.mode).toBe(COMPRESSION_DRACO)
+      await expectValidBothSides(out, false)
+    }, TIMEOUT_MS)
+  })
+
+  describe('a Meshopt artifact written before the declaration existed', () => {
+    // The cache pipeline and earlier builds of this file left normalized BYTE
+    // normals in artifacts that do not name the extension. Re-encoding one
+    // must not carry the omission forward — under any target codec — because
+    // the quantized accessors are read back as they are.
+    let legacy
+
+    beforeAll(async () => {
+      const current = await compressExportGlb(
+        withBldrsPayload(await geometryGlb({withNormals: true})), COMPRESSION_MESHOPT, QUALITY_BALANCED)
+      const {json, bin} = parseGlb(current.withMetadata)
+      json.extensionsUsed = json.extensionsUsed.filter((name) => name !== 'KHR_mesh_quantization')
+      json.extensionsRequired = json.extensionsRequired.filter((name) => name !== 'KHR_mesh_quantization')
+      legacy = serializeGlb(json, bin)
+      expect(storesQuantizedAttributes(parseGlb(legacy).json)).toBe(true)
+      expect(parseGlb(legacy).json.extensionsUsed).not.toContain('KHR_mesh_quantization')
+    }, TIMEOUT_MS)
+
+    it.each([
+      [COMPRESSION_MESHOPT, QUALITY_BEST],
+      [COMPRESSION_MESHOPT, QUALITY_BALANCED],
+      [COMPRESSION_DRACO, QUALITY_BALANCED],
+    ])('re-encodes as %s (%s) with the declaration', async (mode, quality) => {
+      const out = await compressExportGlb(legacy, mode, quality)
+
+      expect(out.mode).toBe(mode)
+      await expectValidBothSides(out, true)
+    }, TIMEOUT_MS)
   })
 })
 
