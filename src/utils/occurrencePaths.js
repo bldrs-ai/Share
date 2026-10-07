@@ -397,9 +397,10 @@ const ownerIndexCache = new WeakMap()
 /**
  * Every tree node, keyed by (occurrence path, owner) for each
  * `product_definition_shape` the node lists in
- * `productDefinitionShapeExpressIDs`. Null when no node carries that list:
- * IFC, a scene-graph tree, or a STEP tree from an engine (or a cache artifact
- * written by one) that predates it.
+ * `productDefinitionShapeExpressIDs`, plus the own-id aliases below. Null
+ * when that keys nothing: IFC, a scene-graph tree, or a one-product STEP tree
+ * from an engine (or a cache artifact written by one) that predates the lists,
+ * whose only empty-path node is the root.
  *
  * Why the pair: a placement reports its geometry's owner, the PDS, while the
  * tree is keyed on what that PDS describes (the `product_definition` for a
@@ -416,12 +417,20 @@ const ownerIndexCache = new WeakMap()
  * `expressID`). Not the tree root itself: in a multi-root file that is
  * Conway's synthetic `Model` wrapper, which owns no geometry and must never
  * be named (in a one-product file it is the sole root, which
- * `findRootLevelOwnerNode` falls back to anyway). Added only when the tree
- * carries owner lists at all, so a list-less tree stays null and resolves as
- * before; checked per TREE, not per node, because
- * `bldrsSpatialTree#serializeNode` drops an empty list and a direct-SDR part
- * from cache may carry none. Express ids are unique within a file, so a
- * definition's key cannot collide with a shape's.
+ * `findRootLevelOwnerNode` falls back to anyway). Added whether or not any
+ * node lists a shape: when every part of a multi-root file uses a direct SDR,
+ * no list is non-empty (and `bldrsSpatialTree#serializeNode` drops the empty
+ * ones), yet these aliases are the only join there is. That is safe for a
+ * list-less tree from an older engine or cache too. Express ids are unique
+ * within a file, so an alias matches only a placement that really reports
+ * that `product_definition` as its owner, and a definition's key cannot
+ * collide with a shape's. A placement owned by a PDS the tree does not list
+ * still finds nothing, as before. What a list-less tree does gain is a
+ * `findRootLevelProductNode` answer for each part, so a row click or a
+ * permalink reaches `rootLevelInstancesOfProduct`. Where that partition comes
+ * back empty, its callers fall back to the selection the part had before
+ * (`rootLevelSelectionForAnchors` adds nothing, `resolveRootOnlyElementPath`
+ * hands the link back to the occurrence/scalar path).
  *
  * Memoized per root-node object, like `occurrencePathKeySetForTree`.
  *
@@ -462,15 +471,12 @@ export function occurrenceOwnerIndex(rootNode) {
       }
     }
   }
-  // Gated on a NON-EMPTY list somewhere, not on any list being present: a
-  // fresh parse carries `[]` lists that a cache hit drops, and the two must
-  // resolve alike.
-  if (index.size > 0) {
-    for (const part of emptyPathParts) {
-      const key = occurrenceOwnerKey([], part.expressID)
-      if (!index.has(key)) {
-        index.set(key, part)
-      }
+  // Not gated on the tree listing any shape: an all-direct-SDR multi-root
+  // file lists none, and these are its only keys (see the doc above).
+  for (const part of emptyPathParts) {
+    const key = occurrenceOwnerKey([], part.expressID)
+    if (!index.has(key)) {
+      index.set(key, part)
     }
   }
   const result = index.size > 0 ? index : null
@@ -506,8 +512,11 @@ export function findRootLevelOwnerNode(rootNode, ownerId) {
 /**
  * The top-level product row `id` names, or null: the sole empty-path node of
  * a one-product tree, or one of the parts of a multi-root tree (an empty-path
- * node that owns geometry under the join). Never the synthetic `Model`
- * wrapper, which lists no owner.
+ * node the join keys, which every one below the root is, by its own id if by
+ * nothing else). Never the synthetic `Model` wrapper, which lists no owner
+ * and is never aliased. Naming a part says nothing about whether it has
+ * root-level geometry to select: that is `rootLevelInstancesOfProduct`, and
+ * an empty answer there leaves the row to its pre-#1901 selection.
  *
  * @param {object|null|undefined} rootNode spatial-structure root element
  * @param {number|string} id a row's express id
@@ -595,17 +604,24 @@ export function rootLevelInstancesOfProduct(rootNode, productNode, rootLevel) {
  *     synthetic wrapper, so the link a pick of its own geometry writes is
  *     `wrapper/part` (`part.step/0/3007`, the element table's path to the
  *     row). It names the part when the part is one of the wrapper's children
- *     and owns geometry under the (path, owner) join
- *     (`findRootLevelProductNode`); without the owner lists it stays null, as
- *     before (#1901, #1909). A one-product tree never takes this branch, so a
+ *     (`findRootLevelProductNode`) AND, given `getRootLevel`, claims some of the
+ *     model's root-level instances (`rootLevelInstancesOfProduct`). A part
+ *     that claims none — a multi-root tree without owner lists whose
+ *     placements report shapes, or a part with no geometry of its own — stays
+ *     null, so the link takes the occurrence/scalar path it did before
+ *     (#1901, #1909). A one-product tree never takes this branch, so a
  *     two-segment link there is still an occurrence path.
  *
  * @param {object|null|undefined} rootNode spatial-structure root element
  * @param {Array<string>} parts the element path split on '/', below the model
  *   file
+ * @param {Function} [getRootLevel] returns the model's root-level instances
+ *   (`ShareViewer#getRootLevelInstances`) as `rootLevelInstancesOfProduct`
+ *   takes them. A function, so only a two-segment multi-root link pays for
+ *   it; omitted, a part is named without that check.
  * @return {object|null} the product node, or null
  */
-export function resolveRootOnlyElementPath(rootNode, parts) {
+export function resolveRootOnlyElementPath(rootNode, parts, getRootLevel) {
   if (!rootNode || !Array.isArray(parts) || !parts.every((part) => /^\d+$/.test(part))) {
     return null
   }
@@ -624,7 +640,14 @@ export function resolveRootOnlyElementPath(rootNode, parts) {
     return null
   }
   const part = findRootLevelProductNode(rootNode, parts[1])
-  return part && (rootNode.children ?? []).includes(part) ? part : null
+  if (!part || !(rootNode.children ?? []).includes(part)) {
+    return null
+  }
+  if (typeof getRootLevel === 'function' &&
+      rootLevelInstancesOfProduct(rootNode, part, getRootLevel()).instanceIds.length === 0) {
+    return null
+  }
+  return part
 }
 
 
@@ -655,9 +678,10 @@ export function resolveRootOnlyElementPath(rootNode, parts) {
  * owner its `productDefinitionShapeExpressIDs` lists
  * (`rootLevelInstancesOfProduct`); in a one-product file they are all of them.
  *
- * Null when no anchor is a top-level product (IFC; a multi-root tree without
- * owner lists; the synthetic wrapper), or none of them has root-level
- * geometry. The last is a plain assembly: its root row selects what it always
+ * Null when no anchor is a top-level product (IFC; the synthetic wrapper), or
+ * none of them has root-level geometry it can claim. The last is a plain
+ * assembly, or a part of a multi-root tree without owner lists whose
+ * placements report shapes it cannot name: its row selects what it always
  * did, and this adds nothing.
  *
  * @param {object} args

@@ -1026,7 +1026,9 @@ export default function CadView({
     // anchor: the row highlight, Properties, crumb and permalink follow
     // anchors, while the scene keeps selecting by the owner id (hide, the
     // per-instance narrowing). A multi-root tree without owner lists stays as
-    // it was. Resolved before the shift branch, which needs it too.
+    // it was, unless a placement reports a part's own product_definition as
+    // its owner (direct SDR), which names that part whatever lists the tree
+    // carries. Resolved before the shift branch, which needs it too.
     const rootRow = (isRootLevel && occurrencePath === null) ?
       findRootLevelOwnerNode(rootEltForPick, parentExpressId) : null
     if (isShiftKeyDown && rootRow) {
@@ -1385,7 +1387,10 @@ export default function CadView({
     // can't read it, having no occurrence path to resolve. Restore it as the
     // pick selects: the root row as the anchor, the scene on the root's
     // instances.
-    const rootOnly = resolveRootOnlyElementPath(useStore.getState().rootElement, parts)
+    // A part that claims no root-level instance is not resolved here (null),
+    // so its `wrapper/part` link falls through to the branch below, as it did
+    // before the multi-root parts were named (#1901).
+    const rootOnly = resolveRootOnlyElementPath(useStore.getState().rootElement, parts, rootLevelInstances)
     if (rootOnly) {
       selectRootOnlyElement(rootOnly, force)
       return
