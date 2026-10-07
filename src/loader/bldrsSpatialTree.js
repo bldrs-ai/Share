@@ -96,6 +96,17 @@ function serializeNode(node, depth = 0) {
   if (Array.isArray(node.occurrencePath)) {
     out.occurrencePath = node.occurrencePath
   }
+  // Preserve the STEP owner list (the product_definition_shape ids that
+  // describe this node, conway#723): a row's parent is one of them, and with
+  // its occurrence path it names exactly one node, where the path alone cannot
+  // tell the parts of a multi-root file apart (#1901 export join, #1909 pick
+  // → NavTree row; `utils/occurrencePaths.js#occurrenceOwnerIndex`). Kept only
+  // when non-empty, so IFC trees and the synthetic multi-root wrapper cost
+  // nothing. An artifact written before it has no list and degrades to the
+  // path-only rules, which is what it had.
+  if (Array.isArray(node.productDefinitionShapeExpressIDs) && node.productDefinitionShapeExpressIDs.length > 0) {
+    out.productDefinitionShapeExpressIDs = node.productDefinitionShapeExpressIDs
+  }
   // Preserve the STEP ephemeral-solid marker and the suppressed-solid count
   // (for an "N more…" affordance) so a cache-hit tree keeps rendering solid
   // nodes the way a fresh parse does. Absent for IFC and product nodes.

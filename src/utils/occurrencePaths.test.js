@@ -1,19 +1,45 @@
 /* eslint-disable no-magic-numbers */
 import {
   findNodeByOccurrencePath,
+  findRootLevelOwnerNode,
+  findRootLevelProductNode,
   findSoleRootNode,
   occurrenceElementPathIds,
+  occurrenceOwnerIndex,
   occurrencePathKey,
   occurrencePathKeySetForTree,
   occurrencePathsEqual,
   resolveElementPathOccurrence,
   resolvePickedOccurrenceNode,
   resolveRootOnlyElementPath,
+  rootLevelInstancesOfProduct,
   rootLevelSelectionForAnchors,
   selectedOccurrences,
   toggleRootLevelInstanceSelection,
   trimToTreeOccurrencePath,
 } from './occurrencePaths'
+
+
+/**
+ * twoRootShells.step as Conway's tree carries it since conway#723: a synthetic
+ * `Model` wrapper (id 0, no owner) over two disconnected parts, every node at
+ * the empty path, each part listing the product_definition_shape its rows
+ * report as their parent (8 for Shells #7, 3008 for Plates #3007).
+ *
+ * @param {boolean} [withOwners] false for a tree from before the owner lists
+ * @return {object} spatial-structure root
+ */
+function makeTwoRootTree(withOwners = true) {
+  const part = (expressID, name, shape) => ({
+    expressID, type: 'product', Name: {value: name}, occurrencePath: [],
+    ...(withOwners ? {productDefinitionShapeExpressIDs: [shape]} : {}), children: [],
+  })
+  return {
+    expressID: 0, type: 'product_structure', Name: {value: 'Model'}, occurrencePath: [],
+    ...(withOwners ? {productDefinitionShapeExpressIDs: []} : {}),
+    children: [part(7, 'Shells', 8), part(3007, 'Plates', 3008)],
+  }
+}
 
 
 /**
@@ -255,6 +281,102 @@ describe('utils/occurrencePaths', () => {
     it('is null without a tree', () => {
       expect(resolveRootOnlyElementPath(null, ['7'])).toBeNull()
       expect(resolveRootOnlyElementPath(undefined, ['7'])).toBeNull()
+    })
+  })
+
+  describe('occurrenceOwnerIndex / the (path, owner) join (#1901, #1909)', () => {
+    it('names each part of a multi-root file by its owner, where the empty path names none', () => {
+      const tree = makeTwoRootTree()
+      expect(findSoleRootNode(tree)).toBeNull()
+      expect(findRootLevelOwnerNode(tree, 8)).toBe(tree.children[0])
+      expect(findRootLevelOwnerNode(tree, 3008)).toBe(tree.children[1])
+      // Ids arrive as numbers from tables and as strings from the store.
+      expect(findRootLevelOwnerNode(tree, '3008')).toBe(tree.children[1])
+    })
+
+    it('never names the synthetic wrapper, and nothing for an unknown owner', () => {
+      const tree = makeTwoRootTree()
+      expect(findRootLevelOwnerNode(tree, 0)).toBeNull()
+      expect(findRootLevelOwnerNode(tree, 9999)).toBeNull()
+    })
+
+    it('keys a reused part by path AND owner, so its occurrences stay apart', () => {
+      // as1-oc-214's two nuts under rod-assembly: one part PDS (741) shared,
+      // each occurrence its own (750, 756).
+      const root = {expressID: 5, occurrencePath: [], productDefinitionShapeExpressIDs: [4], children: [
+        {expressID: 751, occurrencePath: [1137, 751], productDefinitionShapeExpressIDs: [741, 750], children: []},
+        {expressID: 757, occurrencePath: [1137, 757], productDefinitionShapeExpressIDs: [741, 756], children: []},
+      ]}
+      const index = occurrenceOwnerIndex(root)
+      expect(index.get('1137/751|741')).toBe(root.children[0])
+      expect(index.get('1137/757|741')).toBe(root.children[1])
+      expect(index.get('1137/751|756')).toBeUndefined()
+      expect(index.get('|4')).toBe(root)
+    })
+
+    it('falls back to the one-product rule, which is what a tree without lists always had', () => {
+      const onlyProduct = {expressID: 7, occurrencePath: [], children: []}
+      expect(occurrenceOwnerIndex(onlyProduct)).toBeNull()
+      expect(findRootLevelOwnerNode(onlyProduct, 8)).toBe(onlyProduct)
+      // A one-product tree WITH lists answers the same for an owner it does
+      // not list (a free representation), so single-root picks do not change.
+      const listed = {expressID: 7, occurrencePath: [], productDefinitionShapeExpressIDs: [8], children: []}
+      expect(findRootLevelOwnerNode(listed, 8)).toBe(listed)
+      expect(findRootLevelOwnerNode(listed, 510)).toBe(listed)
+    })
+
+    it('leaves a multi-root tree without lists unresolved, as before', () => {
+      const tree = makeTwoRootTree(false)
+      expect(occurrenceOwnerIndex(tree)).toBeNull()
+      expect(findRootLevelOwnerNode(tree, 8)).toBeNull()
+      expect(findRootLevelProductNode(tree, 7)).toBeNull()
+    })
+
+    it('finds a top-level product row by id: the sole root, or a part, never the wrapper', () => {
+      const tree = makeTwoRootTree()
+      expect(findRootLevelProductNode(tree, 3007)).toBe(tree.children[1])
+      expect(findRootLevelProductNode(tree, '7')).toBe(tree.children[0])
+      expect(findRootLevelProductNode(tree, 0)).toBeNull()
+      const onlyProduct = {expressID: 7, occurrencePath: [], children: []}
+      expect(findRootLevelProductNode(onlyProduct, 7)).toBe(onlyProduct)
+      expect(findRootLevelProductNode(onlyProduct, 8)).toBeNull()
+    })
+
+    it('splits the model\'s root-level instances by part, and gives the sole root all of them', () => {
+      const tree = makeTwoRootTree()
+      const rootLevel = {instanceIds: [0, 1, 2, 3], parentExpressIds: [8, 3008], instanceOwners: [8, 3008, 8, 3008]}
+      expect(rootLevelInstancesOfProduct(tree, tree.children[0], rootLevel))
+        .toEqual({instanceIds: [0, 2], ownerIds: [8]})
+      expect(rootLevelInstancesOfProduct(tree, tree.children[1], rootLevel))
+        .toEqual({instanceIds: [1, 3], ownerIds: [3008]})
+      const onlyProduct = {expressID: 7, occurrencePath: [], productDefinitionShapeExpressIDs: [8], children: []}
+      expect(rootLevelInstancesOfProduct(onlyProduct, onlyProduct,
+        {instanceIds: [0, 1], parentExpressIds: [8, 510], instanceOwners: [8, 510]}))
+        .toEqual({instanceIds: [0, 1], ownerIds: [8, 510]})
+    })
+
+    it('reads a part\'s root-only permalink, `wrapper/part`, and nothing else of that shape', () => {
+      const tree = makeTwoRootTree()
+      expect(resolveRootOnlyElementPath(tree, ['0', '3007'])).toBe(tree.children[1])
+      expect(resolveRootOnlyElementPath(tree, ['0', '7'])).toBe(tree.children[0])
+      expect(resolveRootOnlyElementPath(tree, ['1', '3007'])).toBeNull()
+      expect(resolveRootOnlyElementPath(tree, ['0', '3007', '5'])).toBeNull()
+      expect(resolveRootOnlyElementPath(tree, ['0', '3007x'])).toBeNull()
+      expect(resolveRootOnlyElementPath(makeTwoRootTree(false), ['0', '3007'])).toBeNull()
+    })
+
+    it('a row click on one part means that part\'s own instances, not the other\'s', () => {
+      const tree = makeTwoRootTree()
+      const rootLevel = {instanceIds: [0, 1, 2, 3], parentExpressIds: [8, 3008], instanceOwners: [8, 3008, 8, 3008]}
+      const resolve = (over) => rootLevelSelectionForAnchors({
+        rootNode: tree, rootLevel, current: {anchors: [], instances: []}, ...over,
+      })
+      expect(resolve({anchorIds: [3007]})).toEqual({instanceIds: [1, 3], ownerIds: [3008]})
+      expect(resolve({anchorIds: [7, 3007]}).instanceIds.sort()).toEqual([0, 1, 2, 3])
+      expect(resolve({anchorIds: [0]})).toBeNull()
+      // A shift-click keeps the part's picked shell narrowed.
+      expect(resolve({anchorIds: [3007], current: {anchors: [3007], instances: [3]}, keepNarrowing: true}))
+        .toEqual({instanceIds: [3], ownerIds: [3008]})
     })
   })
 

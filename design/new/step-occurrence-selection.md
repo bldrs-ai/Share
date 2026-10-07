@@ -360,10 +360,9 @@ order; BVH permutes only the index buffer, not the numbering).
    exactly. What remains is the sliver the body segment can't reach: a
    root-level product whose single solid makes it its own body, where the path
    is legitimately empty and `getOccurrencePathByInstance` still normalizes it
-   to `null`. The one-root file is closed (#1909, below); a file with
-   several distinct single-solid products at the root still degrades to
-   type-level there, and a real fix still needs a PDS→product-definition→node
-   reverse map.
+   to `null`. The one-root file is closed (#1909, below), and so is a file of
+   several top-level products (#1901, "Several top-level products" below),
+   through the PDS→node owner lists Conway puts on the tree (conway#723).
 
    **One-root files (#1909).** The sliver was not harmless: a part with no
    assembly structure (DSA2, `sameIdentityShells.step`) is *all* root-level
@@ -385,17 +384,45 @@ order; BVH permutes only the index buffer, not the numbering).
    NavTree row highlight, Properties, the TopBar crumb and the `.step/<root>`
    permalink follow, while `selectedElements` keeps the owner id the scene and
    hide key on, so scene highlighting and `H` are unchanged. This is the same
-   rule `glbPortable.js#hasSingleEmptyPathNode` applies to the export (#1908).
+   rule `glbPortable.js#emptyPathJoinOf` applies to the export (#1908).
 
-   **One rule for selecting the sole root.** Four paths select it, and they
-   agree on what is lit:
+   **Several top-level products (#1901, conway#723).** Conway wraps them in a
+   synthetic `Model` node and gives the wrapper and each part
+   `occurrencePath: []`, so the empty path names no one part. Since
+   `@bldrs-ai/conway` `1.1609.723` every tree node lists the
+   `product_definition_shape`s that describe it
+   (`productDefinitionShapeExpressIDs`: the part's own, then on an occurrence
+   node the occurrence's), which are exactly the ids a placement reports as
+   its owner. `utils/occurrencePaths.js#occurrenceOwnerIndex` keys every node
+   by `${path}|${owner}` for each id in its list, and a pick with
+   `(path, parent)` resolves to `index.get(`${path.join('/')}|${parent}`)`.
+   For an empty-path pick that is the part that owns the shell
+   (`findRootLevelOwnerNode`, which falls back to `findSoleRootNode`, so a
+   one-product file resolves as before, whatever the owner). The wrapper's
+   list is empty and is never a target. `serializeNode` keeps the list, so a
+   cache hit resolves the same as a fresh parse; an artifact written before
+   it has no list and a multi-root pick there stays unhighlighted, as before
+   (no `schemaVer` bump: `glb-export-premium.md` §4.3).
+
+   Every rule below holds per part. A part is a **top-level product**: the
+   sole root of a one-product file, or one part of a multi-root file
+   (`findRootLevelProductNode`). Its own instances are all of the model's
+   root-level instances in the first case and, in the second, those whose
+   owner its list names (`rootLevelInstancesOfProduct`, fed per instance by
+   `ShareViewer#getRootLevelInstances().instanceOwners`). A part's permalink is
+   `part.step/<wrapper>/<part>` (`part.step/0/3007` in `twoRootShells.step`),
+   the element table's path to its row, and `resolveRootOnlyElementPath` reads
+   it as the root-only link one level down.
+
+   **One rule for selecting a top-level product.** Four paths select it, and
+   they agree on what is lit:
 
    | path | the scene is on | how |
    |---|---|---|
    | scene **pick** | the shell clicked | `selectFromInstancePick` names the instance |
    | scene **shift-pick** | the shells picked, each toggled on its own (a picked child occurrence keeps its row) | `toggleRootLevelInstanceSelection` |
    | NavTree **row click** | the whole product: the root-level instances plus every descendant occurrence's; shift-click on the selected row drops it; Hide and Isolate act on all of it | the funnel resolves the root anchor: `rootLevelSelectionForAnchors` |
-   | **permalink** `part.step/<root>` | the whole product, the same | same resolver, via `selectRootOnlyElement` |
+   | **permalink** `part.step/<root>` (multi-root: `part.step/<wrapper>/<part>`) | the whole product, the same | same resolver, via `selectRootOnlyElement` |
 
    A **shift-click on another row** after shift-picking shells recomputes the
    instances from the anchors; the root anchor then carries the shells already
@@ -473,11 +500,13 @@ order; BVH permutes only the index buffer, not the numbering).
      instances are carried over. Assemblies, IFC and every placement below the
      root keep the row toggle.
 
-   Still open: with several top-level products Conway wraps them in a synthetic
-   `Model` node and gives the wrapper and each root `occurrencePath: []`, so
-   the empty path names no one part and the pick stays unhighlighted (never
-   mis-highlighted). Telling the roots apart needs the shape-to-definition link
-   that the tree, the instance tables and the instance map do not carry.
+   Closed by the owner lists (above): with several top-level products the
+   pick used to stay unhighlighted (never mis-highlighted), since the tree,
+   the instance tables and the instance map carried no shape-to-definition
+   link. `exportGlb.spec.ts` picks a shell of the second part of
+   `twoRootShells.step`, on a fresh parse and from the cache, and expects that
+   part's row alone, still narrowed to the one shell after the `0/3007` link
+   is read back.
 5. **`?feature=batchedMesh`.** The BatchedMesh render path builds no
    `IfcInstanceMap`, so per-occurrence (and all per-instance) selection no-ops
    under that flag — a documented gap in `buildBatchedConwayModel`, not a
