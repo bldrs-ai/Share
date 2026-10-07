@@ -194,8 +194,11 @@ export function hasValidUrlParams() {
  * Adds camera coords to url.
  *
  * @param {object} cameraControls obtained from the viewer
+ * @param {object} [location] where to write the `#c:` token; a location-shaped
+ *   `{hash}` double lets a caller compose a link without touching the page's
+ *   URL (the Assist `share.permalink` tool, viewer/tools/shareTools.js)
  */
-export function addCameraUrlParams(cameraControls) {
+export function addCameraUrlParams(cameraControls, location = window.location) {
   // addCameraUrlParams is accessed from the issue card and it is undefined on the first render
   if (!cameraControls) {
     return
@@ -208,7 +211,7 @@ export function addCameraUrlParams(cameraControls) {
   } else {
     camArr = camArr.concat(roundCoord(...target))
   }
-  addHashParams(window.location, HASH_PREFIX_CAMERA, camArr)
+  addHashParams(location, HASH_PREFIX_CAMERA, camArr)
 }
 
 

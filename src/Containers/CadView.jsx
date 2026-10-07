@@ -4,6 +4,7 @@ import {MeshLambertMaterial} from 'three'
 import {Box} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {captureException} from '@sentry/react'
+import {isFeatureEnabled} from '../FeatureFlags'
 import {fileSuffixBoundaryRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
@@ -70,6 +71,8 @@ import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
 import {DEFAULT_LOOK} from '../viewer/looks'
+import {installAssistDevHook} from '../viewer/tools/assistHost'
+import {registerSelectionFunnel} from '../viewer/tools/selectionFunnel'
 import ViewCube from '../Components/ViewCube/ViewCube'
 import {applyVisibilityHash} from '../Components/Residency/visibilityHash'
 import VisibilityHashWriter from '../Components/Residency/VisibilityHashWriter'
@@ -170,6 +173,9 @@ export default function CadView({
   // (codex review of Share#1899). Cleared when the model path changes, so a
   // new open of any model is counted once.
   const reportedRefusalRef = useRef(null)
+  // This render's `selectItemsInScene`, for the funnel registered with
+  // `viewer/tools/selectionFunnel.js` (see the effect near the end).
+  const selectItemsInSceneRef = useRef(null)
 
   // IFCSlice
   const model = useStore((state) => state.model)
@@ -1850,6 +1856,18 @@ export default function CadView({
   }, [])
 
   useEffect(() => () => stopModelEngagementRef.current?.(), [])
+
+  // Expose the selection funnel to non-React callers — the Assist view tools
+  // (src/viewer/tools/, ai-workspace.md §9). `selectItemsInScene` is a fresh
+  // closure every render, so the registered wrapper reads the ref, refreshed
+  // each render: a tool call reaches the same funnel a NavTree click does,
+  // with this render's viewer, element table and router. Registered once per
+  // mount and cleared on unmount.
+  selectItemsInSceneRef.current = selectItemsInScene
+  useEffect(() => registerSelectionFunnel((...args) => selectItemsInSceneRef.current(...args)), [])
+  // `window.__bldrsAssistTools`, the tool registry's dev hook, under
+  // `?feature=assist` only (read once, at mount).
+  useEffect(() => (isFeatureEnabled('assist') ? installAssistDevHook() : undefined), [])
 
 
   const abs = {position: 'absolute'}
