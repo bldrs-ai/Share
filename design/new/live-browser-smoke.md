@@ -83,7 +83,7 @@ These are final.
 | Specs | `src/Components/Share/export{Anonymous,Pro,Free,Pending,NoCompressionStream}.live.spec.ts`, beside `exportGlb.spec.ts` ([src/tests/e2e/README.md](../../src/tests/e2e/README.md): specs live with their subject). |
 | Mocked suite | `tools/playwright.config.js` lists `**/*.live.spec.ts` in `testIgnore`. Against MSW they could only ever skip. |
 | Playwright-side helpers | `src/tests/e2e/live/liveSession.ts`: skip decisions, login, response watching, the OPFS container probe, the `CompressionStream` shim. |
-| Pure helpers, Jest-tested | `src/tests/e2e/live/{liveEnv,freeAllowance,glbBytes,glbNode,spz}.ts`, each with a `.test.js`. They carry no Playwright import (the README says why that is load-bearing). |
+| Pure helpers, Jest-tested | `src/tests/e2e/live/{liveEnv,loginCompletion,freeAllowance,glbBytes,glbNode,spz}.ts`, each with a `.test.js`. They carry no Playwright import (the README says why that is load-bearing). |
 | Checker fixtures | `src/tests/e2e/live/__fixtures__/`: two real Share exports of `index.ifc`, for the `glbNode` tests. |
 | Accounts, reset, reporter | `tools/live-smoke/`: `accounts.js`, `auth0Management.js`, `resetAccounts.mjs` (+ tests), and `liveReporter.js`. |
 | Workflow | `.github/workflows/live-smoke.yml` |
@@ -223,6 +223,38 @@ from one saved state would present the same refresh token twice, and Auth0's
 reuse detection answers that by revoking the whole token family mid-run. The
 brief asked for a per-run fresh `storageState`. Per-test is the same idea,
 taken as far as rotation requires.
+
+**The login page closing is how a login ends, not an error** (Codex, second
+P1 on #1942). `PopupCallback.jsx` awaits `handleRedirectCallback()`, which is
+when the tokens are cached, and then calls `window.close()`. A browser that
+honours that closes the very page the harness was polling, and a poll of a
+closed page could only ever read "no session".
+
+So completion is decided by `loginCompletion.ts` from what was observed:
+
+- **Done:** an Auth0 session is in the context's localStorage. It is read from
+  the login page while that page lives, and afterwards from a probe page on
+  the target's `/robots.txt`. localStorage is per origin and shared by the
+  context's pages, and a static document runs no SDK, so it spends no refresh
+  token.
+- **Failed at once:** the page closed before it reached `/popup-callback`.
+- **Failed:** the callback closed its page and the cache is still empty 5 s
+  later. Also failed: the 45 s budget ran out, with the reason saying whether
+  the callback was ever reached.
+
+**How it was checked.** The flow was replayed against a routed stand-in
+target and Auth0 (so the host gate passes), with the callback page caching the
+tokens and then closing.
+
+- **Old code:** after a successful login it timed out ("never cached a
+  session").
+- **New code:** it completes in under a second, fails an empty callback after
+  the grace period, and fails an early close immediately.
+
+This sandbox's Chromium ignores `window.close()` on a page that has navigated
+(its history is longer than one entry). The replay therefore closes the page
+from the harness at the moment the script asks. Browsers that honour the call
+do the same thing.
 
 **Values are entered with an `evaluate`, not `locator.fill`.** Playwright
 names a `fill` value in the step title, which the HTML report prints and CI
@@ -607,7 +639,7 @@ merged (follow-up PR):
 | Check | Where it ran | Result |
 |---|---|---|
 | Jest: `tools/live-smoke` (accounts, Management API client, reset, target and login-host allow-lists) | This sandbox, `yarn test-tools` runner | 49 passed. Each suite was written red against stubs first. |
-| Jest: `src/tests/e2e/live` (5 helper suites) | This sandbox, `jest --config tools/jest/jest.config.js` | 42 passed. Each helper was mutated and its tests went red. |
+| Jest: `src/tests/e2e/live` (6 helper suites) | This sandbox, `jest --config tools/jest/jest.config.js` | 49 passed. Each helper was mutated and its tests went red. |
 | Login gate against a local phishing redirect | This sandbox, chromium | Old code: the page received the email and password. New code: refused, nothing received. |
 | Live config, no secrets, all 5 projects | This sandbox | 65 of 65 skipped, each with its reason. No browser launched. |
 | Live config, `LIVE_BASE_URL` = a local `test-flows-build` (MSW) | This sandbox, `chromium` + `mobile-pixel` | 6 passed: the anonymous gate, the cache, and the step-9 fallback. 20 skipped as not applicable on a local target. |

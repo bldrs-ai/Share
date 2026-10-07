@@ -4,6 +4,7 @@ import {DATABASE_CONNECTION} from '../../../../tools/live-smoke/auth0Management.
 import {captureGlbLogs, waitForGlbLog} from '../glbLogs'
 import {waitForModelReady} from '../models'
 import {containerHeader} from './glbBytes'
+import {isCallbackUrl, loginCompletion} from './loginCompletion'
 import {
   LiveAdmin,
   LiveTarget,
@@ -51,6 +52,7 @@ export const LIVE_TEST_TIMEOUT_MS = 240_000
 const MODEL_READY_TIMEOUT_MS = 90_000
 const WRITER_TIMEOUT_MS = 90_000
 const LOGIN_TIMEOUT_MS = 45_000
+const SESSION_POLL_MS = 250
 const ESTIMATE_TIMEOUT_MS = 60_000
 // The Auth0 SDK's cache key prefix with `cacheLocation: 'localstorage'`
 // (src/Auth0/Auth0ProviderWithHistory.jsx). Entries are
@@ -202,6 +204,19 @@ export async function loginWithPassword(context: BrowserContext, target: LiveTar
     throw new Error(`Refusing to log in: ${problem}`)
   }
   const page = await context.newPage()
+  // Watched from the start: the page that succeeds is closed by
+  // PopupCallback, so these are how the end of the login is known
+  // (loginCompletion.ts).
+  const signals = {reachedCallback: false, closedAtMs: null as number | null}
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame() && isCallbackUrl(frame.url(), target.baseUrl)) {
+      signals.reachedCallback = true
+    }
+  })
+  page.on('close', () => {
+    signals.closedAtMs = Date.now()
+  })
+  let probe: Page | null = null
   try {
     await page.goto(`${target.baseUrl}/popup-auth?connection=${DATABASE_CONNECTION}`)
     await page.waitForURL((url) => url.origin !== target.baseUrl, {timeout: LOGIN_TIMEOUT_MS})
@@ -220,26 +235,82 @@ export async function loginWithPassword(context: BrowserContext, target: LiveTar
     assertLoginPage(page, hosts)
     await enterQuietly(password, account.password, hosts)
     await page.locator('button[type="submit"][name="action"], button[type="submit"]').first().click()
-    await page.waitForURL((url) => url.origin === target.baseUrl || url.pathname.includes('consent'),
-      {timeout: LOGIN_TIMEOUT_MS}).catch(async () => {
+    await backOnTargetOrClosed(page, target, (url) => url.pathname.includes('consent'))
+    if (!page.isClosed() && new URL(page.url()).pathname.includes('consent')) {
+      await page.locator('button[value="accept"]').click()
+      await backOnTargetOrClosed(page, target)
+    }
+    if (!page.isClosed() && new URL(page.url()).origin !== target.baseUrl) {
       await failOnAuth0ErrorPage(page)
       throw new Error('Auth0 did not return to the app after the password step. Check the account\'s password ' +
         `in LIVE_SMOKE_ACCOUNTS, that ${DATABASE_CONNECTION} is enabled for the Share application, and that ` +
         `${target.baseUrl}/popup-callback is an Allowed Callback URL.`)
-    })
-    if (new URL(page.url()).pathname.includes('consent')) {
-      await page.locator('button[value="accept"]').click()
-      await page.waitForURL((url) => url.origin === target.baseUrl, {timeout: LOGIN_TIMEOUT_MS})
     }
-    await expect.poll(() => hasCachedSession(page), {
-      timeout: LOGIN_TIMEOUT_MS,
-      message: 'the Auth0 SDK never cached a session after /popup-callback',
-    }).toBe(true)
+
+    // Done when the context holds a session — read from the login page while
+    // it lives, and from a probe page on the target's origin once
+    // PopupCallback has closed it. A page that closed before the callback,
+    // or a callback that cached nothing, fails with that reason.
+    const deadline = Date.now() + LOGIN_TIMEOUT_MS
+    for (;;) {
+      if (page.isClosed() && probe === null) {
+        probe = await openSessionProbe(context, target)
+      }
+      const hasSession = await readCachedSession(page.isClosed() ? probe as Page : page)
+      const outcome = loginCompletion({...signals, hasSession, nowMs: Date.now(), deadlinePassed: Date.now() > deadline})
+      if (outcome.state === 'done') {
+        break
+      }
+      if (outcome.state === 'failed') {
+        throw new Error(`The login did not complete: ${outcome.reason}`)
+      }
+      await new Promise((resolve) => setTimeout(resolve, SESSION_POLL_MS))
+    }
   } finally {
-    if (!page.isClosed()) {
-      await page.close()
+    for (const open of [page, probe]) {
+      if (open !== null && !open.isClosed()) {
+        await open.close()
+      }
     }
   }
+}
+
+
+/**
+ * Wait until the login page is back on the target (or at a page `alsoStop`
+ * accepts), or has closed — PopupCallback closes it on success, and a
+ * `waitForURL` on a closed page only rejects. Either way it returns; the
+ * caller reads the page's state.
+ *
+ * @param page the login page
+ * @param target the deploy
+ * @param alsoStop another URL to stop at, e.g. Auth0's consent screen
+ */
+async function backOnTargetOrClosed(page: Page, target: LiveTarget, alsoStop: (url: URL) => boolean = () => false) {
+  if (page.isClosed()) {
+    return
+  }
+  await Promise.race([
+    page.waitForURL((url) => url.origin === target.baseUrl || alsoStop(url), {timeout: LOGIN_TIMEOUT_MS}),
+    page.waitForEvent('close', {timeout: LOGIN_TIMEOUT_MS}),
+  ]).catch(() => undefined)
+}
+
+
+/**
+ * A page in the login's context, on the target's origin, from which to read
+ * the session after the login page has closed. `robots.txt` rather than the
+ * app: a static document has the origin's localStorage and runs nothing — the
+ * app would start the Auth0 SDK and spend the refresh token.
+ *
+ * @param context the login's browser context
+ * @param target the deploy
+ * @return the probe page
+ */
+async function openSessionProbe(context: BrowserContext, target: LiveTarget): Promise<Page> {
+  const probe = await context.newPage()
+  await probe.goto(`${target.baseUrl}/robots.txt`, {waitUntil: 'commit', timeout: LOGIN_TIMEOUT_MS})
+  return probe
 }
 
 
@@ -313,12 +384,13 @@ async function failOnAuth0ErrorPage(page: Page) {
 
 
 /**
- * @param page any page on the deploy's origin
- * @return whether the Auth0 SDK has tokens cached
+ * @param page any open page on the deploy's origin
+ * @return whether the Auth0 SDK has tokens cached, or null when the page
+ *   could not be read (it is navigating, or closed under us)
  */
-async function hasCachedSession(page: Page): Promise<boolean> {
+async function readCachedSession(page: Page): Promise<boolean | null> {
   return await page.evaluate((prefix) => Object.keys(window.localStorage)
-    .some((key) => key.startsWith(prefix) && !key.endsWith('@@user@@')), AUTH0_CACHE_PREFIX).catch(() => false)
+    .some((key) => key.startsWith(prefix) && !key.endsWith('@@user@@')), AUTH0_CACHE_PREFIX).catch(() => null)
 }
 
 

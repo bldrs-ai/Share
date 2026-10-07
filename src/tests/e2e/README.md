@@ -45,7 +45,7 @@ specs. Keep it that way.
   `tools/playwright.live.config.js`, against a deployed Share with real
   Auth0 accounts): `liveSession.ts` is the Playwright side (skip decisions,
   password login, response watching, the OPFS container probe, the
-  no-`CompressionStream` shim); `liveEnv`, `freeAllowance`, `glbBytes`,
+  no-`CompressionStream` shim); `liveEnv`, `loginCompletion`, `freeAllowance`, `glbBytes`,
   `glbNode` and `spz` are Playwright-free and Jest-tested beside it. See
   [design/new/live-browser-smoke.md](../../../design/new/live-browser-smoke.md).
 
