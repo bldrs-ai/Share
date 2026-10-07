@@ -242,7 +242,14 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
           ` (subscriptionStatus=${appMetadata.subscriptionStatus || 'none'})`,
         'warning',
       )
-      return errorResponse(HTTP_FORBIDDEN, 'free_export_not_charged')
+      // The allowance rides along because the refusal can be the LOSER of a
+      // two-tab read-modify-write race on the ledger (the other tab's PATCH
+      // overwrote this tab's charge row): the client's cached count — taken
+      // from the charge header, which counted that row — is then too LOW, and
+      // this is the only answer it will get before the next remount. `existing`
+      // is already the authoritative ledger, so it costs nothing to state.
+      return errorResponse(HTTP_FORBIDDEN, 'free_export_not_charged',
+        {freeExports: freeExportAllowance(existing)})
     }
     // Fill the charge row in place. Its id, `exportedAt` and `free` are the
     // server's from the charge and stay: the window counts from when the

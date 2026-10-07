@@ -2512,11 +2512,20 @@ offline at the right moment) would make every free export uncounted. So:
    `free` stay the server's). A free user's POST whose id matches no charge
    row is refused (403 `free_export_not_charged`): `record-export` never adds
    a free row, so a free user cannot write their own ledger, up or down.
+   The refusal carries the ledger's `freeExports`, and `recordExport` returns
+   it: a charge row lost to the two-tab race (§ Racing requests) would
+   otherwise leave the loser's cached `remaining: 0` standing and gate that
+   tab until a remount.
 5. The count the user sees comes from the server: `record-export`'s GET when
    the Export tab opens (`useFreeExports`), then the charge header, the
    record response and any `free_export_limit` refusal, all into one store
    slot (`UISlice#freeExportAllowance`, keyed by `sub`). It is display only;
    an unknown count is not gated, because the server counts for itself.
+   When a `free_export_limit` refusal arrives while the claim still says Pro
+   (a canceled or demoted account on a stale JWT), `useExport` force-refreshes
+   the claim as it does for any other denial: `ExportSection` only gates when
+   `getTier` reads free, so storing the allowance alone left every click
+   repeating the refusal.
 
 The UI (§4.4): under a free user's Export button, "N of 2 free exports left
 this week"; at the limit the button takes the existing Pro upsell gate (same

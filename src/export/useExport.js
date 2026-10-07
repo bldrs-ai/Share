@@ -6,6 +6,7 @@ import {glbCacheKey} from '../loader/glbCacheKey'
 import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
 import {gtagEvent} from '../privacy/analytics'
+import {TIERS, getTier} from '../quota/quota'
 import useStore from '../store/useStore'
 import {compressedExport, gzippedExport} from './artifactSizes'
 import {triggerDownload} from './download'
@@ -71,7 +72,7 @@ export default function useExport() {
   const setAppMetadata = useStore((state) => state.setAppMetadata)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const setFreeExportAllowance = useStore((state) => state.setFreeExportAllowance)
-  const {getAccessTokenSilently, user} = useAuth0()
+  const {getAccessTokenSilently, isAuthenticated, user} = useAuth0()
   // In the STORE, not in this hook: `ExportSection` and `ExportsList` each
   // call `useExport`, so per-instance state let one of them start an export
   // while the other's was still running (#1834).
@@ -238,6 +239,15 @@ export default function useExport() {
         // the Export button into the at-the-limit gate on this render.
         noteAllowance(e.freeExports)
         setSnackMessage({text: freeLimitMessage(e.freeExports), autoDismiss: true})
+        // ...unless the tier is NOT right: a JWT still saying Pro for an
+        // account that was canceled or demoted (stale claim) renders an
+        // ungated button and hides the allowance (`ExportSection` only gates
+        // `isFreeTier`), so every click would repeat this refusal. Read the
+        // store NOW rather than a render-time closure, and refresh so the
+        // claim flips to free and the gate this allowance feeds appears.
+        if (getTier(useStore.getState().appMetadata, isAuthenticated) === TIERS.PAID) {
+          refreshAppMetadata().catch((refreshError) => captureException(refreshError))
+        }
       } else if (e instanceof ProModuleDeniedError) {
         // The server is the authority and it said no, so the badge that let
         // this click through is stale. Refresh the JWT and apply its claims,
@@ -253,7 +263,7 @@ export default function useExport() {
     } finally {
       setIsExporting(false)
     }
-  }, [glbArtifact, getAccessTokenSilently, noteAllowance, refreshAppMetadata, setIsExporting, setSnackMessage, user?.sub])
+  }, [glbArtifact, getAccessTokenSilently, isAuthenticated, noteAllowance, refreshAppMetadata, setIsExporting, setSnackMessage, user?.sub])
 
   return {run, isExporting, error}
 }

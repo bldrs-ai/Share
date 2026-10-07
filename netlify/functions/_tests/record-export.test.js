@@ -257,6 +257,18 @@ describe('record-export function', () => {
       expect(axios.patch).not.toHaveBeenCalled()
     })
 
+    it('states the ledger\'s allowance on the refusal, for the loser of a two-tab race', async () => {
+      // Tab B's charge row was overwritten by tab A's PATCH, so B's POST is
+      // refused — but B cached `remaining: 0` from its charge header. The
+      // refusal is the only chance to correct it.
+      mockAuth0({subscriptionStatus: 'free', exports: [chargeRow(CHARGE_ID)]})
+
+      const res = await handler(getEvent({id: '5f6b1d7e-1a2b-4c3d-9e4f-0a1b2c3d4e5f'}))
+
+      expect(res.statusCode).toBe(403)
+      expect(JSON.parse(res.body).freeExports).toMatchObject({limit: 2, used: 1, remaining: 1})
+    })
+
     it('refuses a body with no id at all', async () => {
       mockAuth0({})
 

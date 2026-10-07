@@ -465,7 +465,16 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
   if (response.status === HTTP_AUTHORIZATION_REQUIRED || response.status === HTTP_FORBIDDEN) {
     // The server disagrees about entitlement. The user still got their file,
     // so the local row stays; the caller decides whether to re-check the tier.
-    return {recorded: false, status: response.status, exports: optimistic}
+    // A `free_export_not_charged` 403 also carries the authoritative
+    // allowance (record-export.js), which the caller needs because the count
+    // it cached from the charge may be one the ledger no longer holds.
+    let refusal = null
+    try {
+      refusal = await response.json()
+    } catch {
+      refusal = null
+    }
+    return {recorded: false, status: response.status, exports: optimistic, freeExports: refusal?.freeExports ?? null}
   }
 
   let data = null

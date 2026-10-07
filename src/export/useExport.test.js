@@ -647,6 +647,35 @@ describe('useExport', () => {
     })
   })
 
+  describe('a free-limit refusal that contradicts the locally paid tier', () => {
+    const atLimit = {limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-09T09:00:00.000Z'}
+
+    beforeEach(() => {
+      loadProModule.mockRejectedValue(
+        new ProModuleDeniedError(403, 'denied', {reason: 'free_export_limit', freeExports: atLimit}))
+    })
+
+    it('refreshes the claim, so the tier flips to free and the gate shows', async () => {
+      // The JWT still says Pro for a canceled account; `ExportSection` hides
+      // the allowance and the gate while `getTier` says PAID, so storing the
+      // allowance alone left every click repeating the refusal.
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      getAccessTokenSilently.mockImplementation((params) => Promise.resolve(params?.cacheMode === 'off' ?
+        jwtWithAppMetadata({subscriptionStatus: 'canceled'}) :
+        'cached-token'))
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(getAccessTokenSilently).toHaveBeenCalledWith(
+        expect.objectContaining({cacheMode: 'off', useRefreshTokens: true}))
+      expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'canceled'})
+      expect(useStore.getState().freeExportAllowance).toEqual({sub: 'github|1234567', ...atLimit})
+    })
+  })
+
   it('does nothing premium when no artifact has been published yet', async () => {
     useStore.getState().setGlbArtifact(null)
     const {result} = renderHook(() => useExport())

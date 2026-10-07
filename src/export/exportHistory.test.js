@@ -585,6 +585,17 @@ describe('exportHistory', () => {
       expect((await loadExports(SUB)).exports[0]).toMatchObject({key: KEY})
     })
 
+    it('returns the allowance a free_export_not_charged refusal carries', async () => {
+      const freeExports = {limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-10-13T12:00:00.000Z'}
+      global.fetch.mockResolvedValue({
+        ok: false, status: 403, json: () => Promise.resolve({error: 'free_export_not_charged', freeExports}),
+      })
+
+      const result = await recordExport(anEntry(), SUB, jest.fn().mockResolvedValue('token'))
+
+      expect(result).toMatchObject({recorded: false, status: 403, freeExports})
+    })
+
     it('keeps the local row when the network is down', async () => {
       global.fetch.mockRejectedValue(new Error('offline'))
 
