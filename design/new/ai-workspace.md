@@ -2,7 +2,8 @@
 
 **Status:** v0.3 draft (2026-10-06; §12 rewritten after Jev research; D7
 confirmed by spike #1927; D3 allowlist, free list and D14 calibration
-set by eval #1929). Story
+set by eval #1929; D15 repo plan, use-case map and Assist API surface
+added). Story
 [#1671](https://github.com/bldrs-ai/Share/issues/1671) under epic `assist-310`
 [#1659](https://github.com/bldrs-ai/Share/issues/1659). Roadmap §7.4 AI.0,
 Tracks T10 and T11.
@@ -55,6 +56,30 @@ Share code is cited as `path:line` at `main` @ `9577fdd`.
   ([workspace-store.md](workspace-store.md) §1.3).
 
 
+### 1.1 Use cases → where they run
+
+The use cases the product owner listed map onto two homes: Assist (the
+browser agent of this doc, with more tools over time) and Create (the
+generative-CAD engine, §11). Most of them are Assist.
+
+| Use case | Runs where | Needs |
+|---|---|---|
+| A1 FAQs, contact bizdev | Assist (no model needed) | `knowledge.docs.search` + a `bizdev.contact` tool |
+| A2.1–2 select/explode/highlight prefab from supplier X; note anything not in the BOM | Assist, in browser | `view.*` tools, `notes.*`, project knowledge |
+| A2.3–4 share a view link; mark as ordered, open a PR, send to accounting for review | Assist, in browser | `share.*` (permalink, versions/PR) + `collab.*` (request review) |
+| B1.1–2 model provenance (created when/by whom/last edits), ontology & stats (window system, window count on level 2) | Assist, in browser | the same `view.*` query tools as A2.1 |
+| B1.3 logistics: part versions, sourcing, product sheets | Assist + server-side tools | `knowledge.web.lookup`, `knowledge.productSheet` |
+| B2 standards/regulations (e.g. Swiss code beam sizing); B3 engineering FAQs | Assist + server-side tools | `knowledge.codes.search` and retrieval over standards/product data |
+| B4 direct text-to-CAD synthesis (iterative, reviewed, buildable assemblies) | **Create**, headless, long-running | its own design→build→verify loop |
+
+**B1–B3 are "Assist with more tools", not Create.** "How many windows on
+level 2" is the same query whether it is framed as analysis or as UI
+control: one `view.query` call, one answer. Create is distinct only for B4,
+because that loop runs for minutes, iterates, checkpoints for review, and
+runs headless (replicad → STEP → conway verify), none of which fits a
+browser chat turn. Worked example: §9 "Worked example".
+
+
 ## 2. Decision summary
 
 | # | Decision | One-line rationale |
@@ -68,11 +93,60 @@ Share code is cited as `path:line` at `main` @ `9577fdd`.
 | D7 | **Vercel AI SDK**, lazy-loaded behind the flag, with the pinned set in §9. Fallback: thin hand-rolled adapters. **Confirmed by spike #1927** (2026-10-06), with three amendments (§9, §8, §5) | It handles Anthropic native, Gemini thought signatures and OpenAI-compatible endpoints. Measured cost is a 167 KB gz core plus 15–60 KB per provider (336 KB monolithic), paid only when the tray opens, **and only if the build splits assist out** (§9 Amendment 1) |
 | D8 | Typed in-page **tool registry in MCP shape**. v0 is read/annotate only, replaces the bot's `new Function` eval, and needs `selectItemsInScene` exposed | One contract, so `assist-320` can serve it over postMessage MCP later |
 | D9 | **Model bytes never leave the machine.** Conversation and tool results do. Tools return summaries, never geometry. A per-transport "what the AI can see" disclosure. CSP `connect-src` is a hardening story | Sovereignty is the enterprise wedge (roadmap §7.2) |
-| D10 | Conversations are local, per model, file-shaped (JSONL) and store AI SDK `responseMessages` whole, with `providerOptions` (§10), behind the `workspace/persistence.ts` seam, alongside the Tier-1 project struct | Durable and shared storage is `assist-400`'s problem. File-shaped now means the repo store adopts it later |
-| D11 | Share's agent is the orchestrator. Create plugs in as a **remote tool provider** in the same registry. Its LLM usage draws on the same provider abstraction and ledger | Create is a headless kernel with no LLM of its own. One loop and one bill |
+| D10 | Conversations are local, per model, file-shaped (JSONL) and store AI SDK `responseMessages` whole, with `providerOptions` (§10), behind the `workspace/persistence.ts` seam, alongside the Tier-1 project struct | Durable and shared storage is `assist-400`'s problem. File-shaped now means the repo store adopts it later. **Amended by D15:** the host reaches it through Collab's conversation-store interface (local implementation first), which supersedes the storage *location* here |
+| D11 | Assist is the front door. Create plugs in as a **tool provider** (`create.design` → job). Create owns its own long-running loop, built on Assist's core (providers + ledger), and review checkpoints surface in the Collab thread (amended by D15) | Synthesis runs for minutes and iterates, which a chat turn cannot. One billing story |
 | D12 | Flag `assist`, with `bot` aliased via `FEATURE_IMPLICATIONS` during the port, then removed | Matches #1659/#1672. Fixes the `convo` drift |
 | D13 | Port `?feature=bot`: keep the tray, slice, bubbles, MSW mocks and network guard. Evolve the client and settings. Delete the eval and the plaintext key | The scope outgrew the prototype, but its UI and test scaffolding are sound |
 | D14 | **DECIDED (product owner, 2026-10-06).** **Jev is the fast intent/command layer: natural language → viewer action, dispatched through the registry, promoted to the LLM agent loop on low confidence, a free-text or numeric argument, or a multi-step utterance.** Through the relay. Router and tool-call gate are follow-on uses. Generative UI is separate and later (declarative renderer) | Jev is a non-generative decision model: ~210 ms and near-free for one-step commands over enumerable arguments, 97% exact first action. Its confidence did not separate its errors (eval #1929), so Undo and the visible "did X" echo are the safety net, not a threshold (§12.1). UI generation needs an LLM and a spec renderer, not Jev |
+| D15 | **Repo structure and dependency direction (§2.1).** Targets: conway, View, Share (app shell, cross-repo E2E), Collab, Assist, Create. **Assist never imports Share, View or Collab**: hosts import Assist and inject tool providers. Built now as a package-shaped `src/assist/` inside Share with an enforced import boundary and its own esbuild entry; extracted to `bldrs-ai/Assist` once #1675 settles | Coupling to live viewer state belongs in the tool implementations, behind JSON-in/JSON-out tools. A boundary enforced from day one makes the later move a `git mv` + `package.json` |
+
+
+### 2.1 D15 — Repo structure and dependency direction
+
+**Target repos.**
+
+| Repo | Role |
+|---|---|
+| conway | Engine (IFC/STEP parse, geometry). Exists |
+| **View** | Viewer library plus the `view.*` tool provider. Extracted from Share's `src/viewer` + `src/loader` (~77k of Share's ~191k src LOC), as its own epic **after Assist v0**, starting with a coupling spike: zustand store, MUI, `CadView` |
+| **Share** | App shell: routing, auth, sources, billing, sharing, the Netlify functions host. **Home of cross-repo E2E** |
+| **Collab** | Exists: threads, permissions, persistence/ChannelProvider. Assist conversations go through a Collab conversation-store interface (local implementation first), which supersedes D10's storage location |
+| **Assist** | Agent core, tray UI package, relay handler, knowledge tools |
+| **Create** | Exists: synthesis engine, tool server, and its own long-running agent loop built on Assist's core |
+
+**Dependency inversion.** Assist never imports Share, View or Collab. Hosts
+import Assist and inject tool providers (§9). The tight coupling to live
+viewer state lives entirely in the tool implementations (Share now, View
+later), behind JSON-in/JSON-out tools.
+
+**Assist ↔ Create is loose.** Assist hands B4 (§1.1) to Create as tools:
+`create.design(intent, context) → job`, `create.job.status`,
+`create.job.review`. Create runs its own iterations, and review checkpoints
+surface as messages in the Collab thread. Create depends on Assist's core
+library (providers + credits ledger: one billing story), not the reverse.
+Each tool provider owns and versions its own tool schemas; there is no
+contracts repo. See §11.
+
+**Location now.** Assist is built **package-shaped inside Share** at
+`src/assist/`, with its own esbuild entry (this also satisfies spike
+#1927's Amendment 1, §9) and an eslint `no-restricted-imports` boundary
+forbidding imports from outside `src/assist/`. It moves to
+`bldrs-ai/Assist` once #1675 (agent loop) settles, which is roughly when
+Create needs the core. With the boundary enforced from day one, the move is
+a `git mv` + `package.json`.
+
+**Boundary test: where does a change go?**
+
+| Change | Lands in |
+|---|---|
+| Add or adjust a viewer tool | Share only (View later) |
+| Prompting, loop, providers, Jev, credits | Assist only |
+| Tray look | Assist (the host passes its theme) |
+| Change the `Tool` / `ToolResult` contract | Both (small, versioned, rare) |
+
+**Multi-repo cost.** Contract changes become a PR + publish chain (the same
+as conway → npm → Share today), and integration E2E lives only in Share. The
+fallback if churn bites is one monorepo with packages.
 
 
 ## 3. Architecture
@@ -776,22 +850,92 @@ browser; the spike's `byok-harness.html` covers the first):
 - Firefox and Safari.
 - OpenRouter PKCE (needs an interactive login).
 
-**D8: Tool registry, MCP-shaped.** One registry, in-page, typed:
+**D8: Tool registry, MCP-shaped, and the Assist API surface (D15).** One
+registry, in-page, typed. Tools are grouped into **providers**, each owned
+and versioned by the repo that implements it. The host injects them; Assist
+imports none of them (§2.1).
 
 ```ts
-interface AssistTool {
-  name: string                    // snake_case, MCP tool name rules
-  description: string             // what the model reads
-  inputSchema: JSONSchema         // MCP `inputSchema`
-  run(args, ctx): Promise<ToolResult>   // ctx: viewer, store, model
-  sends?: 'text' | 'pixels'       // pixels => opt-in (screenshot)
+interface Tool<I, O> {
+  name: string                    // 'view.select', 'notes.add', 'create.design'
+  description: string
+  inputSchema: JSONSchema
+  annotations?: {
+    readOnly?: boolean            // query: runs freely
+    viewState?: boolean           // select/isolate/camera: runs, undoable
+    mutatesDocument?: boolean     // notes, versions, PRs: needs approval
+    external?: boolean            // email, Collab post, Create job: needs approval
+    sendsPixels?: boolean         // screenshot: opt-in
+  }
+  run(input: I, ctx: ToolContext): Promise<ToolResult<O>>
 }
-// ToolResult mirrors MCP CallToolResult: {content: [{type:'text', text}], isError?}
+interface ToolResult<O> {
+  content: O                      // what the model sees: summaries, never geometry
+  echo?: string                   // what the UI shows: "Hid 48 walls"
+  refs?: Ref[]                    // element chips, opaque ('e123', 'o1.2.3', 'g<GlobalId>')
+  undo?: () => Promise<void>
+}
+interface ToolProvider { id: string; tools(): Tool[]; onChange?(cb: () => void): void }
+interface ContextSource { id: string; snapshot(): ContextBlock }   // ambient per-turn state; also Jev's `state`
 ```
 
-Each provider adapter converts the registry to its native tool format, and
-`assist-320` can later serve the same registry over postMessage MCP to
-sandboxed apps. The registry replaces the bot's two unsafe mechanisms:
+`inputSchema` is MCP's, and `annotations` follows MCP's tool-annotation
+idea, so `assist-320` can later serve the same registry over postMessage
+MCP. `sendsPixels` replaces the earlier `sends: 'pixels'` flag. Each
+provider adapter converts the registry to its native tool format.
+
+**Entry point.** The host assembles Assist from transports, providers,
+context sources and a conversation store:
+
+```ts
+const assist = createAssist({
+  transport: hosted({ relayUrl, getToken }) | byok({ provider, keyStore }),
+  providers: [viewTools, shareTools, notesTools, collabTools, knowledgeTools, createTools],
+  context:   [viewContext, projectContext],
+  store:     conversationStore,          // Collab interface; local implementation first
+  intent:    jev({ threshold }),         // optional fast path (D14)
+  policy:    { confirm: (tool, input) => Promise<boolean> },
+})
+const session = assist.open(conversationId)
+for await (const ev of session.send(text, { refs })) render(ev)
+session.abort(); session.undo(stepId)
+```
+
+- **Event stream.** `text-delta`, `tool-call`, `tool-result` (with
+  `echo`/`refs`/`undo`), `intent-dispatched`, `escalated`,
+  `approval-request`, `usage`, `error`, `done`.
+- **Approval policy is derived from annotations.** `readOnly` runs.
+  `viewState` runs with undo. `mutatesDocument` and `external` go through an
+  approval card (`policy.confirm`).
+- **Adapters.**
+  - `@bldrs-ai/assist/react`: `<AssistProvider>`, `useAssistSession(id)` →
+    `{messages, send, abort, status, usage}`, and `<AssistTray>` themed via
+    the host's MUI theme. `renderRef` / `onRefClick` props let chips route
+    through Share's permalink machinery, so Assist never interprets refs.
+  - `@bldrs-ai/assist/relay`: `createRelayHandler({ verifyAuth, ledger,
+    allowlist, openRouterKey }) → (Request) => Response`. Share's
+    `netlify/functions/ai-chat.js` becomes a ~5-line wrapper (§5).
+
+**Tool namespaces.**
+
+| Namespace | Owner | Tools |
+|---|---|---|
+| `view.*` | Share (→ View) | query, select, isolate, hide, explode, highlight, camera.focus, properties, cutPlane |
+| `notes.*`, `share.*` | Share | notes.add, share.permalink, versions.commit / versions.pr |
+| `collab.*` | Collab | post, requestReview |
+| `knowledge.*` | Assist, server-side | docs.search, web.lookup, productSheet, codes.search |
+| `create.*` | Create | design, job.status, job.review |
+| `bizdev.contact` | Share | one tool |
+
+**Worked example (use case A2.1).** "Show me the supplier X prefab":
+`view.query{IfcWindow, level 2}` → `view.select` → `view.explode` →
+`knowledge.project("supplier X prefab")` → `view.highlight(refs)`. Every
+call is `readOnly` or `viewState`, so there are no prompts and each step is
+undoable. A2.4 ("mark as ordered, open a PR, send to accounting") ends in
+`versions.pr` + `collab.requestReview`: `mutatesDocument` and `external`, so
+the user sees approval cards before either runs.
+
+The registry replaces the bot's two unsafe mechanisms:
 `safeJsonFromCodeBlock` JSON parsing (`eval.ts`) and
 `new Function('viewer', 'store', 'setSelectedElements', …)` over
 model-supplied `client_code` (`BotChat.jsx:162`).
@@ -815,26 +959,32 @@ first. It is a task inside #1674.
 Results render as element chips through #1673, so "the AI pointed at it"
 and "the user clicked it" are the same navigation.
 
-**v0 tools (read/annotate; #1674):**
+**v0 tools (read/annotate; #1674),** in the namespaced form. Annotation
+column: R = `readOnly`, V = `viewState`, P = `sendsPixels`.
 
-| Tool | Does | Backing seam |
-|---|---|---|
-| `model_summary` | Format, units, element counts by type, top N levels of spatial structure | `IFCSlice.elementTypesMap`, `ShareIfcManager.getSpatialStructure:118`, `idsByType:176`, `ShareModel.modelHasCapability:357` |
-| `search_elements` | Optional text query plus type and level filters, to refs + names, capped. **`query` must be optional** (below) | `SearchIndex.search:138` |
-| `get_properties` | Attributes and psets for ≤ N refs | `getItemProperties:129`, `getPropertySets:140`, `ShareViewer.getProperties:836` |
-| `get_selection` | Current selection as refs | `NavTreeSlice` |
-| `select_elements` | Select refs (replace or add) | exposed `selectItemsInScene` |
-| `isolate` / `hide` / `show` / `reset_visibility` | Visibility by refs, IFC ids or STEP occurrences | `IfcIsolator.isolateElementsById:1591`, `hideElementsById:1295`, `unHideElementsById:1331`, `unHideAllElements:1379`, `hideOccurrences:848`, `isolateOccurrences:1551` |
-| `focus` / `fit_view` | Frame refs, or the whole model | `Selector.pickByIds(…, focus)`, `fitToFrame` (`context/context.js:215`), `setCameraFromParams` (`CameraControl.jsx:123`) |
-| `cut_plane` | Add or clear an axis cut at an offset | `CutPlanesSlice.addCutPlaneDirection:11` |
-| `set_display` | Auto-colour or wireframe, scoped | `DisplaySlice.setDisplayOverride:34` ([model-display-controls.md](model-display-controls.md)) |
-| `make_permalink` | URL for the current camera + selection + visibility | `CameraControl.addCameraUrlParams:198`, `selectionHash.js`, `visibilityHash.js` |
-| `list_notes` | Notes on this model (titles, anchors) | `NotesSlice` |
-| `screenshot` *(opt-in)* | Canvas image for vision models | `ShareViewer.takeScreenshot:1861`, `sends: 'pixels'` |
+| Tool | Ann. | Does | Backing seam |
+|---|---|---|---|
+| `view.summary` | R | Format, units, element counts by type, top N levels of spatial structure | `IFCSlice.elementTypesMap`, `ShareIfcManager.getSpatialStructure:118`, `idsByType:176`, `ShareModel.modelHasCapability:357` |
+| `view.query` | R | Optional text query plus type and level filters, to refs + names, capped. **`query` must be optional** (below) | `SearchIndex.search:138` |
+| `view.properties` | R | Attributes and psets for ≤ N refs | `getItemProperties:129`, `getPropertySets:140`, `ShareViewer.getProperties:836` |
+| `view.selection` | R | Current selection as refs | `NavTreeSlice` |
+| `view.select` | V | Select refs (replace or add) | exposed `selectItemsInScene` |
+| `view.isolate` / `view.hide` / `view.show` / `view.resetVisibility` | V | Visibility by refs, IFC ids or STEP occurrences | `IfcIsolator.isolateElementsById:1591`, `hideElementsById:1295`, `unHideElementsById:1331`, `unHideAllElements:1379`, `hideOccurrences:848`, `isolateOccurrences:1551` |
+| `view.camera.focus` / `view.camera.fit` | V | Frame refs, or the whole model | `Selector.pickByIds(…, focus)`, `fitToFrame` (`context/context.js:215`), `setCameraFromParams` (`CameraControl.jsx:123`) |
+| `view.cutPlane` | V | Add or clear an axis cut at an offset | `CutPlanesSlice.addCutPlaneDirection:11` |
+| `view.display` | V | Auto-colour or wireframe, scoped | `DisplaySlice.setDisplayOverride:34` ([model-display-controls.md](model-display-controls.md)) |
+| `share.permalink` | R | URL for the current camera + selection + visibility | `CameraControl.addCameraUrlParams:198`, `selectionHash.js`, `visibilityHash.js` |
+| `notes.list` | R | Notes on this model (titles, anchors) | `NotesSlice` |
+| `view.screenshot` *(opt-in)* | P | Canvas image for vision models | `ShareViewer.takeScreenshot:1861` |
+
+`view.explode` and `view.highlight` (the A2.1 example) are not in the v0
+backing set above; they join the `view.*` provider when their display seams
+exist. `notes.add`, `share.versions.*`, `collab.*`, `knowledge.*` and
+`create.*` are later providers (§14), each behind its approval annotation.
 
 **What eval #1929 says about the tool surface** (eval #1929, 2026-10-06):
 
-- **`search_elements.query` optional.** A required `query` caused most
+- **`view.query`'s `query` argument optional** (eval #1929 called the tool `search_elements`). A required `query` caused most
   schema-invalid calls (deepseek, gemini-2.5-flash-lite) and sank
   flash-lite to 44%. Re-run with it optional, gpt-5-nano went to 12/12.
   Every model that omitted it was punished for something the description
@@ -865,8 +1015,9 @@ and "the user clicked it" are the same navigation.
   element names and psets come from untrusted files. Without an egress tool,
   injected text can at worst move the camera or change visibility; it can't
   exfiltrate anything.
-- **Notes writes (`create_note`) wait for v0.1,** behind a confirm, because
-  they post to GitHub as the user.
+- **Notes writes (`notes.add`) wait for v0.1,** annotated `mutatesDocument`
+  so they go through an approval card, because they post to GitHub as the
+  user.
 - **Model-edit tools are `create-310`**, through the op log with
   preview-before-apply.
 
@@ -913,6 +1064,11 @@ GA), so it is its own story, #1935: start in `Report-Only` mode, then enforce.
 
 **D10: Conversation store.**
 
+- **Through Collab's conversation-store interface (D15).** Assist talks to
+  a `store` it is handed (§9 `createAssist`), not to Share's persistence
+  directly. The local, file-shaped implementation below is the first
+  implementation of that interface; it supersedes D10's original location
+  (`workspace/persistence.ts` directly), not its format.
 - **Local, per model**, linked from the Tier-1 project struct
   (conversational-cad.md §4 "Persistence, initially").
 - **File-shaped from day one:** one JSONL document per conversation
@@ -948,22 +1104,27 @@ GA), so it is its own story, #1935: start in `Report-Only` mode, then enforce.
 - A headless, Node ≥22 TypeScript kernel. It authors parametric parts in
   replicad/OCCT wasm, exports STEP, re-ingests through conway, measures
   (bbox, volume, closure, winding) and renders 4-view sheets.
-- **No LLM calls of its own**, and no HTTP or MCP interface.
+- **No LLM calls of its own yet** (D15 gives it a loop on Assist's core), and no HTTP or MCP interface.
 - Its E1 plan is an "MCP tool surface v0 (stdio + in-process) over conway
   read/verify + kernel author/compile/export" (Create `README.md` §Next).
 
-**Decision.** Share's agent is the orchestrator. Generative-CAD requests go
-to Create through a **remote tool provider**: a registry entry that
-advertises Create's MCP tools (`author_part`, `verify`, …) alongside the
-viewer tools. The loop doesn't care where a tool runs. There is one
-conversation, one transcript and one bill.
+**Decision (amended by D15).** Assist is the front door; Create owns the
+long loop. Direct text-to-CAD synthesis (B4, §1.1) is iterative, reviewed
+and slow, so Assist does not run it turn by turn. Instead Create is a
+**tool provider** in the registry (§9): `create.design(intent, context) →
+job`, `create.job.status`, `create.job.review` (all `external`, so they need
+approval). Create runs its own design → build → verify iterations as a
+**long-running agent loop built on Assist's core** (providers + credits
+ledger). **Review checkpoints surface as messages in the Collab thread**, so
+the user reviews and steers from the same conversation. Create depends on
+Assist, never the reverse, and owns and versions its own tool schemas.
 
 **Contract sketch** (interface only; nothing built in AI.2):
 
 - **Share → Create:** `{intent, context}`. The context carries the selected
   element refs (§9), model units and up axis, a placement frame (an origin
   and axes from the selection or a pick), relevant dimensions from
-  `get_properties`, and constraints ("fits the opening `e123`").
+  `view.properties`, and constraints ("fits the opening `e123`").
 - **Create → Share:** `{artifact: STEP bytes or a ref, params, provenance:
   {kernelVersion, paramsHash, checks: {bbox, volume, closed}}, preview?}`.
 - **Landing.** The artifact enters as `create-320` `create` ops in the
@@ -971,10 +1132,11 @@ conversation, one transcript and one bill.
   [create-engine.md](create-engine.md)). It gets a minted `g<GlobalId>`,
   and it is undoable and reviewable like a human edit.
 
-**Credits.** Any LLM usage on Create's side (for example a self-review loop
-like CADAM's, create-engine.md §A4) should use the same `Provider`
-abstraction and the same ledger, so a hosted user's budget covers it and a
-BYOK user's key pays for it. That is the reason to keep the loop in Share.
+**Credits.** Create's LLM usage (its design/self-review loop, like CADAM's,
+create-engine.md §A4) uses Assist core's `Provider` abstraction and the same
+ledger, so a hosted user's budget covers it and a BYOK user's key pays for
+it. That shared dependency, not a shared loop, is what keeps it one billing
+story.
 
 **Open questions (seam, not build):**
 
@@ -1179,7 +1341,7 @@ This stays a separate, later story (#1938). The code path waits for
 - **E2E (Playwright).** Every story's happy path runs under
   `describeMobileAndDesktop` (`src/tests/e2e/formFactor.ts`, CLAUDE.md).
   For example: open the tray, send a prompt, the mocked model calls
-  `select_elements`, the selection appears in the NavTree, and the chip
+  `view.select`, the selection appears in the NavTree, and the chip
   navigates. #1677 adds a large-model fixture.
 - **Relay.** Per [netlify-functions-testing.md](netlify-functions-testing.md):
   - mocked unit tests;
@@ -1215,7 +1377,7 @@ Dependencies are in brackets.
 | #1671 | this doc | AI.0 decisions | — |
 | #1672 | tray UI + drawer threads | Tray, threads, local JSONL log (D10). Introduces the `assist` flag + `bot` alias (D12) and renames the Bot components (D13 keep rows) | — |
 | #1673 | message anchors + element chips | Chips over permalink refs | #1672 |
-| #1674 | viewer tool surface v0 | Registry + v0 tools (§9). First task: expose `selectItemsInScene` | — |
+| #1674 | viewer tool surface v0 | Tool contract (`src/assist/types`), registry + annotation-driven policy, `src/assist/` package boundary (lint rule + separate esbuild entry), expose `selectItemsInScene`, v0 `view.*` tools + `share.permalink`, dev hook for E2E (§2.1, §9) | — |
 | #1675 | agent loop v0 + streaming | AI SDK loop over the registry, on the pinned set in §9. Deletes the eval path. Ships first on BYOK. **Build requirement (§9 Amendment 1):** `tools/esbuild/common.js:71` has `splitting: false`, so a dynamic `import()` is inlined (+196 KB gz on cold load). Ship assist as a separate entry like `proModules.js`, or enable splitting. Verify with a cold-load size check. Also: pin `.chat()`/`.responses()` for OpenAI, pass the Anthropic header, system prompt via `instructions` (§8, §9) | #1674, #1927 (done), #1930 |
 | #1676 | W7 reduced tool set | unchanged, droppable | #1672 |
 | #1677 | large-model fixture + E2E | unchanged | #1675 |
@@ -1231,6 +1393,8 @@ Dependencies are in brackets.
 | [#1936](https://github.com/bldrs-ai/Share/issues/1936) | Create seam contract | Interface + doc only (§11), agreed with Create's E1 MCP surface | #1674 |
 | [#1937](https://github.com/bldrs-ai/Share/issues/1937) | assist: Jev intent layer + router (System One decisions) | §12.1. Relay route for the Decisions API, `decide()` client, intent Choice over registry tool names (one-step commands over enumerable arguments only), "did X" tray message with Undo as the safety net, and LLM escalation on low confidence, a free-text or numeric argument, or a multi-step utterance. The Jev-vs-LLM eval is done (#1929: 97% exact, ~210 ms, confidence did not separate errors), so its scope is now **calibration on real user utterances** (shadow mode, per tool family), **out-of-catalogue detection** ("none of these" option or a Noul question), and the CORS spike. Reuses #1929's harness | #1674 (tool registry), #1932 (relay) |
 | [#1938](https://github.com/bldrs-ai/Share/issues/1938) | assist: generative UI — declarative spec renderer (json-render + MUI catalog) | §12.2. Share-owned MUI catalog, spec validation, in-tray render, actions bound to registry tool names. Executable code stays with `assist-320` | #1674 (tool registry) |
+| to file | View extraction epic (coupling spike first) | Extract `src/viewer` + `src/loader` and the `view.*` provider into the View repo (§2.1). Starts with a coupling spike: zustand store, MUI, `CadView` | after Assist v0 (#1674, #1675) |
+| to file | Assist repo extraction | `git mv` `src/assist/` to `bldrs-ai/Assist` + `package.json`; Share consumes it as a dependency (§2.1) | after #1675 |
 
 **Why these cuts.**
 
