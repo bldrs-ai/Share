@@ -7,7 +7,6 @@ import {prettyType} from '../../utils/ifc'
 import {
   findRootLevelProductNode,
   occurrenceElementPathIds,
-  occurrencePathKeySetForTree,
   rootLevelInstancesOfProduct,
   selectedOccurrences,
 } from '../../utils/occurrencePaths'
@@ -480,23 +479,31 @@ function funnelOrThrow() {
 
 
 /**
- * Bind an undo to the model its call changed. CadView stays mounted when the
- * route loads another model (a `modelPath` change builds a new viewer and
- * model under the same funnel), so an undo that outlived its model would
- * restore the old model's ids into the new one's selection, or replay a
- * disposed isolator's state into the shared store while reporting success
- * (Codex review on #1946). Once a different model is loaded the undo rejects
- * `expired` and changes nothing. The dev hook also drops its stack on a
- * model change (assistHost.js); this guard covers every other holder.
+ * Bind an undo to the viewer and model its call changed; it rejects
+ * `expired` and changes nothing once either is replaced (Codex review on
+ * #1946, both rounds).
  *
- * @param {object} model the store's model when the call ran
+ * Why both, and not a load-generation token: CadView stays mounted while
+ * the route loads another model, and it replaces the two in order —
+ * `onModelPath` (and a theme change, through the same `initViewerCb`)
+ * stores the NEW viewer at once with `setViewer`, while `setModel` waits for
+ * the async load. Checking the model alone passes in that window and replays
+ * the old isolator or camera into the shared store; checking the viewer
+ * alone would miss a model swapped under a kept viewer. Together they cover
+ * the whole sequence with the identities the store already holds, where a
+ * generation counter would need a new store field kept in step by every
+ * load path. The dev hook also drops its stack on either change
+ * (assistHost.js).
+ *
+ * @param {object} state the store state the call ran against
  * @param {Function} fn the restore
  * @return {Function} `() => Promise<void>`
  */
-function undoWhileLoaded(model, fn) {
+function undoWhileLoaded({viewer, model}, fn) {
   return () => Promise.resolve().then(() => {
-    if (useStore.getState().model !== model) {
-      throw new ToolError('expired', 'The model this step changed is no longer loaded; nothing was undone.')
+    const now = useStore.getState()
+    if (now.viewer !== viewer || now.model !== model) {
+      throw new ToolError('expired', 'The view this step changed is no longer loaded; nothing was undone.')
     }
     return fn()
   })
@@ -560,7 +567,7 @@ function select({refs, mode = 'replace'}) {
     content: {selected: after.length, truncated: after.length > listed.length, refs: listed, types},
     echo: after.length === 0 ? 'Cleared the selection' : `Selected ${after.length} element${after.length === 1 ? '' : 's'}`,
     refs: listed,
-    undo: undoWhileLoaded(state.model, () => {
+    undo: undoWhileLoaded(state, () => {
       const restore = funnelOrThrow()
       if (before.elements.length === 0) {
         restore([])
@@ -587,20 +594,29 @@ function select({refs, mode = 'replace'}) {
  *
  * @param {object} state store state
  * @param {number} id the row's express id
+ * Recognized by the row itself, not by the tree: a STEP row always carries
+ * an `occurrencePath` array (empty at the top), and IFC and scene-graph rows
+ * carry none. Asking whether the tree has any PATHFUL keys instead, as the
+ * first version did, missed root-only files — `twoRootShells.step`, where
+ * Conway's synthetic wrapper and both parts all sit at the empty path — so
+ * `e3007` fell back to row ids again (Codex review round 2 on #1946).
+ *
  * @return {object|null} `{nodeId, occurrencePath: [], solidExpressId: null,
- *   instanceIds}`, or null off an occurrence-keyed (STEP) tree or when the
- *   subtree has no geometry
+ *   instanceIds}`, or null for a non-STEP row or a subtree with no geometry
  */
 function wholeProductOccurrence({viewer, rootElement}, id) {
   const node = nodesById(rootElement).get(id)
-  if (!node || !(occurrencePathKeySetForTree(rootElement)?.size > 0) ||
-      typeof viewer.getInstanceIdsForOccurrencePath !== 'function') {
+  if (!node || !Array.isArray(node.occurrencePath)) {
     return null
   }
+  const resolvePath = typeof viewer.getInstanceIdsForOccurrencePath === 'function'
   const rootLevel = typeof viewer.getRootLevelInstances === 'function' ? viewer.getRootLevelInstances(0) : null
   const instanceIds = new Set()
   walkTree(node, (row) => {
     if (Array.isArray(row.occurrencePath) && row.occurrencePath.length > 0) {
+      if (!resolvePath) {
+        return false
+      }
       // Prefix-inclusive: this covers the occurrence's own descendants.
       viewer.getInstanceIdsForOccurrencePath(0, row.occurrencePath, {
         includeDescendants: true,
@@ -667,13 +683,13 @@ function visibilityTargets(targets, {viewer, rootElement}) {
 
 
 /**
- * @param {object} model the store's model when the call ran
+ * @param {object} state the store state the call ran against
  * @param {object} isolator
  * @param {object} before captureVisibility snapshot
  * @return {Function} undo
  */
-function visibilityUndo(model, isolator, before) {
-  return undoWhileLoaded(model, () => restoreVisibility(isolator, before))
+function visibilityUndo(state, isolator, before) {
+  return undoWhileLoaded(state, () => restoreVisibility(isolator, before))
 }
 
 
@@ -707,7 +723,7 @@ function isolate({refs}) {
     content: {isolated: targets.length, refs: targets.slice(0, MAX_RESULT_REFS).map(({ref}) => ref)},
     echo: `Isolated ${targets.length} element${targets.length === 1 ? '' : 's'}`,
     refs: targets.slice(0, MAX_RESULT_REFS).map(({ref}) => ref),
-    undo: visibilityUndo(state.model, isolator, before),
+    undo: visibilityUndo(state, isolator, before),
   }
 }
 
@@ -742,7 +758,7 @@ function hide({refs}) {
     },
     echo: `Hid ${targets.length} element${targets.length === 1 ? '' : 's'}`,
     refs: targets.slice(0, MAX_RESULT_REFS).map(({ref}) => ref),
-    undo: visibilityUndo(state.model, isolator, before),
+    undo: visibilityUndo(state, isolator, before),
   }
 }
 
@@ -762,7 +778,7 @@ function showAll() {
     content: {shown: hidden, endedIsolation: wasIsolated},
     echo: hidden === 0 && !wasIsolated ? 'Everything was already shown' :
       `Showed everything${wasIsolated ? ' and ended isolation' : ''}`,
-    undo: visibilityUndo(state.model, isolator, before),
+    undo: visibilityUndo(state, isolator, before),
   }
 }
 
@@ -796,7 +812,7 @@ function focus({refs = []}) {
   const settle = (promise) => {
     Promise.resolve(promise).catch((e) => console.warn('view.focus: camera transition failed', e))
   }
-  const undo = undoWhileLoaded(model, () => {
+  const undo = undoWhileLoaded(state, () => {
     settle(controls.setLookAt(position.x, position.y, position.z, target.x, target.y, target.z, true))
   })
   if (refs.length === 0) {

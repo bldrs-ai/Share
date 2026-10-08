@@ -3,7 +3,7 @@
 // keeps every host import path but the package name.
 export {ToolError} from './errors'
 export type {ToolErrorCode} from './errors'
-export {findNonJson} from './json'
+export {copyJson, findNonJson} from './json'
 export {policyFor} from './policy'
 export {DEFAULT_MAX_RESULT_CHARS, createRegistry} from './registry'
 export type {Registry, RegistryOptions} from './registry'

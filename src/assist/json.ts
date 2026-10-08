@@ -18,62 +18,93 @@
  *   offending value and why, e.g. `#/items/0/position: Float32Array`
  */
 export function findNonJson(value: unknown): string | null {
-  return visit(value, '#', new Set())
+  return copyJson(value).problem
 }
+
+
+/**
+ * Validate `value` as plain JSON and copy it, in ONE pass that reads each
+ * property exactly once. The copy is what a caller gets, so the guarantee
+ * holds after the check too: a provider that keeps a reference and mutates
+ * it later, or an accessor that answers differently on a second read, can't
+ * reach the caller through it (Codex review on #1946). Validating the
+ * original and then copying it would read every getter twice.
+ *
+ * @param value
+ * @return `{copy, problem}`: the fresh plain-JSON copy and null, or
+ *   undefined and the path to the first offending value
+ */
+export function copyJson(value: unknown): {copy: unknown, problem: string | null} {
+  try {
+    return {copy: visit(value, '#', new Set()), problem: null}
+  } catch (e) {
+    if (e instanceof NotJson) {
+      return {copy: undefined, problem: e.message}
+    }
+    throw e
+  }
+}
+
+
+/** A value that isn't plain JSON, at a path. Internal to the walk. */
+class NotJson extends Error {}
 
 
 /**
  * @param value
  * @param path
  * @param ancestors objects on the current path, for cycle detection
- * @return see {@link findNonJson}
+ * @return a plain-JSON copy of `value`
+ * @throws {NotJson} at the first value that isn't plain JSON
  */
-function visit(value: unknown, path: string, ancestors: Set<object>): string | null {
+function visit(value: unknown, path: string, ancestors: Set<object>): unknown {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') {
-    return null
+    return value
   }
   if (typeof value === 'number') {
-    return Number.isFinite(value) ? null : `${path}: non-finite number ${value}`
+    if (!Number.isFinite(value)) {
+      throw new NotJson(`${path}: non-finite number ${value}`)
+    }
+    return value
   }
   if (typeof value !== 'object') {
     // undefined, function, symbol, bigint
-    return `${path}: ${typeof value}`
+    throw new NotJson(`${path}: ${typeof value}`)
   }
   if (ancestors.has(value)) {
-    return `${path}: cycle`
+    throw new NotJson(`${path}: cycle`)
   }
   if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
-    return `${path}: ${value.constructor?.name ?? 'binary buffer'}`
+    throw new NotJson(`${path}: ${value.constructor?.name ?? 'binary buffer'}`)
   }
   const isArray = Array.isArray(value)
   if (!isArray) {
     const proto = Object.getPrototypeOf(value)
     if (proto !== Object.prototype && proto !== null) {
-      return `${path}: ${proto?.constructor?.name ?? 'class'} instance`
+      throw new NotJson(`${path}: ${proto?.constructor?.name ?? 'class'} instance`)
     }
   }
   ancestors.add(value)
   try {
     if (isArray) {
-      for (let i = 0; i < value.length; i++) {
-        const problem = visit(value[i], `${path}/${i}`, ancestors)
-        if (problem) {
-          return problem
-        }
+      const items = value as unknown[]
+      const copy = []
+      for (let i = 0; i < items.length; i++) {
+        copy.push(visit(items[i], `${path}/${i}`, ancestors))
       }
-      return null
+      return copy
     }
+    const copy: Record<string, unknown> = {}
+    // Object.entries reads each own enumerable property (getters included)
+    // once; the copy keeps the value that was checked.
     for (const [key, child] of Object.entries(value)) {
       // An absent optional field, which JSON.stringify drops anyway.
       if (child === undefined) {
         continue
       }
-      const problem = visit(child, `${path}/${key}`, ancestors)
-      if (problem) {
-        return problem
-      }
+      copy[key] = visit(child, `${path}/${key}`, ancestors)
     }
-    return null
+    return copy
   } finally {
     ancestors.delete(value)
   }

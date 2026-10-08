@@ -1,5 +1,5 @@
 import {BufferAttribute, Vector3} from 'three'
-import {findNonJson} from './json'
+import {copyJson, findNonJson} from './json'
 
 
 describe('assist/json', () => {
@@ -18,6 +18,17 @@ describe('assist/json', () => {
     ['undefined in an array', [undefined], '#/0: undefined'],
   ])('rejects %s', (_label, value, expected) => {
     expect(findNonJson(value)).toBe(expected)
+  })
+
+  it('copies plain JSON deeply and reports the problem instead of a copy otherwise', () => {
+    const source = {a: [1, {b: 'x'}], c: undefined}
+    const {copy, problem} = copyJson(source)
+    expect(problem).toBeNull()
+    expect(copy).toEqual({a: [1, {b: 'x'}]})
+    expect(copy).not.toBe(source)
+    expect(copy.a).not.toBe(source.a)
+    expect(copy.a[1]).not.toBe(source.a[1])
+    expect(copyJson({p: new Float32Array(1)})).toEqual({copy: undefined, problem: '#/p: Float32Array'})
   })
 
   it('rejects a cycle but not a shared (acyclic) subobject', () => {

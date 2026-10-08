@@ -404,6 +404,33 @@ describe('viewer/tools (view + share providers)', () => {
       expect(fixture.controls.setLookAt).not.toHaveBeenCalled()
     })
 
+    // Round 2: a theme change rebuilds the viewer and stores it BEFORE the
+    // reload reaches setModel, so in between the model still matches.
+    const rebuildViewerOnly = () => useStore.setState({viewer: {isolator: {}, context: {}}})
+
+    it('visibility and camera undo reject expired once the viewer is rebuilt, model unchanged', async () => {
+      const isolate = await registry.call('view.isolate', {refs: ['e10']})
+      const focus = await registry.call('view.focus', {refs: ['e102']})
+      rebuildViewerOnly()
+      expect(useStore.getState().model).toBe(fixture.model)
+      expect((await rejection(isolate.undo())).code).toBe('expired')
+      expect((await rejection(focus.undo())).code).toBe('expired')
+      expect(useStore.getState().isTempIsolationModeOn).toBe(true)
+      expect(fixture.controls.setLookAt).not.toHaveBeenCalled()
+    })
+
+    it('the dev hook drops its undo stack when only the viewer is rebuilt', async () => {
+      const target = {}
+      const uninstall = installAssistDevHook(target)
+      try {
+        expect((await target.__bldrsAssistTools.call('view.hide', {refs: ['e100']})).ok).toBe(true)
+        rebuildViewerOnly()
+        expect(await target.__bldrsAssistTools.undo()).toBe(false)
+      } finally {
+        uninstall()
+      }
+    })
+
     it('the dev hook drops its undo stack', async () => {
       const target = {}
       const uninstall = installAssistDevHook(target)

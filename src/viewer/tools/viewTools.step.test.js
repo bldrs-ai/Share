@@ -10,7 +10,7 @@ import useStore from '../../store/useStore'
 import {ShareViewer} from '../ShareViewer'
 import {createShareAssistRegistry} from './assistHost'
 import {registerSelectionFunnel} from './selectionFunnel'
-import {loadFixture, makeStepModel, makeStoreFunnel, visibleProducts} from './tools.fixture'
+import {loadFixture, makeStepModel, makeStoreFunnel, makeTwoRootStepModel, visibleProducts} from './tools.fixture'
 import {captureVisibility, restoreVisibility} from './visibilityState'
 
 
@@ -97,5 +97,50 @@ describe('viewer/tools on a STEP assembly', () => {
     expect(useStore.getState().isolatedElements).toEqual(isolatedBefore)
     // The link still carries the pathful occurrence (a pathless one has no ref).
     expect(isolator.isolatedOccurrences.map(({nodeId}) => nodeId)).toEqual([20])
+  })
+})
+
+
+// Codex review round 2 on #1946: in a root-only multi-root file no row has a
+// pathful key, which the first fix took to mean "not STEP" — so a part's ref
+// fell back to row ids, isolate blanked the model and focus rejected.
+describe('viewer/tools on a root-only multi-root STEP file (twoRootShells.step)', () => {
+  let fixture
+  let registry
+  let unregister
+
+
+  beforeEach(async () => {
+    fixture = await loadFixture({build: makeTwoRootStepModel, viewer: Object.create(ShareViewer.prototype)})
+    registry = createShareAssistRegistry()
+    unregister = registerSelectionFunnel(makeStoreFunnel())
+  })
+
+
+  afterEach(() => {
+    unregister()
+    registry.dispose()
+  })
+
+
+  it('isolates one part by the placements its owner list names', async () => {
+    const result = await registry.call('view.isolate', {refs: ['e3007']})
+    expect(visibleProducts(fixture.batch)).toEqual([3008, 3008])
+    await result.undo()
+    expect(visibleProducts(fixture.batch)).toEqual([8, 8, 3008, 3008])
+  })
+
+  it('hides one part and frames each', async () => {
+    await registry.call('view.hide', {refs: ['e7']})
+    expect(visibleProducts(fixture.batch)).toEqual([3008, 3008])
+    // Shells: placements 0–1, x 0–11. Plates: placements 2–3, x 20–31.
+    expect((await registry.call('view.focus', {refs: ['e7']})).content.center).toEqual([5.5, 0.5, 0])
+    expect((await registry.call('view.focus', {refs: ['e3007']})).content.center).toEqual([25.5, 0.5, 0])
+  })
+
+  it('isolates both parts through the synthetic wrapper', async () => {
+    await registry.call('view.isolate', {refs: ['e0']})
+    expect(visibleProducts(fixture.batch)).toEqual([8, 8, 3008, 3008])
+    expect(useStore.getState().isTempIsolationModeOn).toBe(true)
   })
 })

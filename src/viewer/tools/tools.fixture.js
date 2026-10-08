@@ -199,6 +199,49 @@ export function makeStepModel() {
 
 
 /**
+ * `twoRootShells.step` as Conway's tree carries it (src/tests/fixtures/; the
+ * same shape `utils/occurrencePaths.test.js` models): a synthetic `Model`
+ * wrapper (0) over two disconnected top-level parts, EVERY node at the empty
+ * occurrence path, each part listing the product_definition_shape its
+ * placements report as their owner — Shells #7 → 8, Plates #3007 → 3008.
+ * No row has a pathful key. Two placements per part, in emission order:
+ * 8, 8, 3008, 3008.
+ *
+ * @return {object} `{model, tree, batch}`
+ */
+export function makeTwoRootStepModel() {
+  const owners = [8, 8, 3008, 3008]
+  const flatMeshes = owners.map((expressID, i) => ({
+    expressID,
+    geometries: [{
+      geometryExpressID: SHAPE_ID,
+      flatTransformation: translateX(i * SPACING),
+      color: {x: 0.5, y: 0.5, z: 0.5, w: 1},
+      occurrencePath: [],
+    }],
+  }))
+  const {batches} = flatMeshToBatchedModel(flatMeshes, unitTriangleApi(), 0)
+  decorateBatchMeshes(batches)
+  const model = new Group()
+  batches.forEach(({mesh}) => model.add(mesh))
+  const part = (expressID, name, shape) => ({
+    expressID, type: 'product', Name: {type: 1, value: name}, occurrencePath: [],
+    productDefinitionShapeExpressIDs: [shape], children: [],
+  })
+  const tree = {
+    expressID: 0, type: 'product_structure', Name: {type: 1, value: 'Model'}, occurrencePath: [],
+    productDefinitionShapeExpressIDs: [],
+    children: [part(7, 'Shells', 8), part(3007, 'Plates', 3008)],
+  }
+  model.format = 'step'
+  model.getSpatialStructure = () => Promise.resolve(tree)
+  model.getItemProperties = () => Promise.resolve(null)
+  model.getPropertySets = () => Promise.resolve([])
+  return {model, tree, batch: batches[0].mesh}
+}
+
+
+/**
  * @return {object} a camera-controls double that records its moves. Its
  *   getters allocate when called without an `out`, as camera-controls' do
  *   (`addCameraUrlParams` relies on that).

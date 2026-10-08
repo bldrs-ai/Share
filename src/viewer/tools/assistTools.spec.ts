@@ -1,4 +1,5 @@
 import {Page, expect, test} from '@playwright/test'
+import {openLocalFile} from '../../tests/e2e/export'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {homepageSetup, pauseViewerRendering, setIsReturningUser} from '../../tests/e2e/utils'
@@ -20,6 +21,13 @@ const IFC_PATH = '/share/v/p/index.ifc?feature=assist'
 const PROXY_TYPE = 'IfcBuildingElementProxy'
 const PROXY_LABEL = 'Together'
 const PROXY_COUNT = 7
+// Two disconnected top-level parts under Conway's synthetic wrapper, every
+// row at the empty occurrence path (exportGlb.spec.ts has the same fixture).
+// Plates is product_definition #3007; its shells report #3008 as owner.
+const TWO_ROOT_FIXTURE = 'src/tests/fixtures/twoRootShells.step'
+const PLATES_ROW = 3007
+const PLATES_OWNER = 3008
+const TWO_ROOT_TIMEOUT_MS = 90_000
 
 
 /** What `__bldrsAssistTools.call` resolves to (assistHost.js). */
@@ -76,6 +84,26 @@ describeMobileAndDesktop('Assist view tools', () => {
     await expect.poll(() => hashToken(page, 'd')).toBe(null)
   })
 
+  // Codex review round 2 on #1946: in a file whose rows are ALL at the empty
+  // occurrence path, a part's ref fell back to row ids that own no geometry,
+  // and isolate blanked the model while reporting success.
+  test('isolates one part of a root-only multi-root STEP file', async ({page}) => {
+    test.setTimeout(TWO_ROOT_TIMEOUT_MS)
+    await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await waitForModelReady(page)
+    await enableAssistInPlace(page)
+    const total = await visibleInstances(page)
+    const plates = await instancesOf(page, PLATES_OWNER)
+    expect(plates).toBeGreaterThan(0)
+    expect(plates).toBeLessThan(total)
+
+    const isolate = await callTool(page, 'view.isolate', {refs: [`e${PLATES_ROW}`]})
+    expect(isolate.ok, JSON.stringify(isolate.error)).toBe(true)
+    await expect.poll(() => visibleInstances(page)).toBe(plates)
+    expect(await page.evaluate(() => (window as unknown as AssistWindow).__bldrsAssistTools.undo())).toBe(true)
+    await expect.poll(() => visibleInstances(page)).toBe(total)
+  })
+
   test('a ref the model lacks fails the call, naming it, and changes nothing', async ({page}) => {
     const before = await visibleInstances(page)
     const result = await callTool(page, 'view.isolate', {refs: ['e999999']})
@@ -106,6 +134,25 @@ function callTool(page: Page, name: string, input: unknown): Promise<CallResult>
   return page.evaluate(([toolName, toolInput]) =>
     (window as unknown as AssistWindow).__bldrsAssistTools.call(toolName as string, toolInput),
   [name, input])
+}
+
+
+/**
+ * Turn `?feature=assist` on without reloading. A model opened from disk
+ * lives at a `/share/v/new/…` route that a reload can't reopen, and the
+ * Open flow doesn't carry the query over. The router follows a popstate, and
+ * the dev hook follows the router (CadView's `useExistInFeature('assist')`).
+ *
+ * @param page Playwright page
+ */
+async function enableAssistInPlace(page: Page) {
+  await page.evaluate(() => {
+    const url = new URL(window.location.href)
+    url.searchParams.set('feature', 'assist')
+    window.history.pushState(null, '', url)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  await page.waitForFunction(() => Boolean((window as unknown as Partial<AssistWindow>).__bldrsAssistTools))
 }
 
 

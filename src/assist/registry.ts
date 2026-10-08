@@ -1,5 +1,5 @@
 import {ToolError} from './errors'
-import {findNonJson} from './json'
+import {copyJson} from './json'
 import {policyFor} from './policy'
 import {assertSupportedSchema, validate} from './schema'
 import {
@@ -230,7 +230,8 @@ function sanitizeResult(name: string, result: ToolResult<unknown>, maxChars: num
   if (unknown.length > 0) {
     throw invalid(`fields outside the result contract (${unknown.join(', ')})`, {unknown})
   }
-  const problem = findNonJson(result.content)
+  // The caller gets the checked copy, never the provider's object.
+  const {copy: content, problem} = copyJson(result.content)
   if (problem) {
     throw invalid(`content that is not plain JSON (${problem})`, {problem})
   }
@@ -244,7 +245,7 @@ function sanitizeResult(name: string, result: ToolResult<unknown>, maxChars: num
   if (result.undo !== undefined && typeof result.undo !== 'function') {
     throw invalid('an undo that is not a function')
   }
-  const outward: ToolResult<unknown> = {content: result.content}
+  const outward: ToolResult<unknown> = {content}
   if (result.echo !== undefined) {
     outward.echo = result.echo
   }

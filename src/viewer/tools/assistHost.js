@@ -34,9 +34,10 @@ export function createShareAssistRegistry() {
  *
  * Results cross `page.evaluate` as plain data, which is why `undo` is a
  * stack here instead of the function each result carries. The stack is
- * emptied whenever the store's model changes: CadView (and so this hook)
- * stays mounted while the route loads another model, and an entry for the
- * old one has nothing left to restore (Codex review on #1946; each undo also
+ * emptied whenever the store's viewer or model changes: CadView (and so
+ * this hook) stays mounted while the route loads another model or a theme
+ * change rebuilds the viewer, and an entry for the old one has nothing left
+ * to restore (Codex review on #1946; each undo also
  * refuses on its own — viewTools.js `undoWhileLoaded`). Tools whose policy
  * is 'confirm' are refused: this hook has no approval card, and none of the
  * v0 tools needs one.
@@ -48,7 +49,9 @@ export function installAssistDevHook(target = window) {
   const registry = createShareAssistRegistry()
   const undos = []
   const unsubscribe = useStore.subscribe((state, previous) => {
-    if (state.model !== previous.model) {
+    // A new viewer is stored before its model loads (viewTools.js
+    // `undoWhileLoaded` has the sequence), so either change ends the stack.
+    if (state.model !== previous.model || state.viewer !== previous.viewer) {
       undos.length = 0
     }
   })

@@ -211,6 +211,38 @@ describe('assist/registry', () => {
       expect(result.refs).toEqual(['e1'])
     })
 
+    // Codex review round 2 on #1946: the checked content must be what the
+    // caller holds, not the provider's object.
+    it('hands back a copy of content that the provider can no longer change', async () => {
+      const kept = {items: [{ref: 'e1'}]}
+      const registry = createRegistry([makeProvider('view', [
+        makeTool('view.a', {run: () => Promise.resolve({content: kept})}),
+      ])])
+      const result = await registry.call('view.a', {refs: ['e1']})
+      kept.items.push({position: new Float32Array(3)})
+      kept.items[0].ref = 'changed'
+      expect(result.content).toEqual({items: [{ref: 'e1'}]})
+      expect(result.content).not.toBe(kept)
+    })
+
+    it('reads a getter once and keeps the value it checked', async () => {
+      let reads = 0
+      const content = {
+        get data() {
+          reads++
+          return reads === 1 ? 'ok' : new Float32Array(3)
+        },
+      }
+      const registry = createRegistry([makeProvider('view', [
+        makeTool('view.a', {run: () => Promise.resolve({content})}),
+      ])])
+      const result = await registry.call('view.a', {refs: ['e1']})
+      expect(reads).toBe(1)
+      expect(result.content.data).toBe('ok')
+      expect(result.content.data).toBe('ok')
+      expect(Object.getOwnPropertyDescriptor(result.content, 'data')).toHaveProperty('value', 'ok')
+    })
+
     it('refuses non-string refs and a missing content', async () => {
       const registry = createRegistry([makeProvider('view', [
         makeTool('view.a', {run: () => Promise.resolve({content: {}, refs: [1]})}),
