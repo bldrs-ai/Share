@@ -26,6 +26,8 @@ export type ToolErrorCode =
   | 'not_ready'
   /** The call is valid but would have no effect, or contradicts the current view state. */
   | 'rejected'
+  /** An undo whose state is gone: the host replaced what it changed (another model loaded). */
+  | 'expired'
 
 
 /** An error a tool call reports. Thrown by the registry and by tools. */

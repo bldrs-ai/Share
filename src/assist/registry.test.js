@@ -178,6 +178,39 @@ describe('assist/registry', () => {
       expect(error.details.cap).toBe(DEFAULT_MAX_RESULT_CHARS)
     })
 
+    // Codex review on #1946: the guard once read `content` only, so a buffer
+    // in `echo` or in an extra field went straight through to the caller.
+    it.each([
+      ['a buffer as echo', {content: {}, echo: new Float32Array(3)}, /an echo that is not a string/],
+      ['a geometry field beside content', {content: {}, position: new Float32BufferAttribute([0, 0, 0], 3)},
+        /fields outside the result contract \(position\)/],
+      ['an undo that is not a function', {content: {}, undo: 'later'}, /an undo that is not a function/],
+    ])('refuses %s', async (_label, returned, message) => {
+      const registry = createRegistry([makeProvider('view', [makeTool('view.a', {run: () => Promise.resolve(returned)})])])
+      const error = await rejection(registry.call('view.a', {refs: ['e1']}))
+      expect(error.code).toBe('invalid_result')
+      expect(error.message).toMatch(message)
+    })
+
+    it('counts echo and refs toward the size cap', async () => {
+      const big = 'x'.repeat(DEFAULT_MAX_RESULT_CHARS)
+      const registry = createRegistry([makeProvider('view', [
+        makeTool('view.a', {run: () => Promise.resolve({content: {}, echo: big})}),
+      ])])
+      expect((await rejection(registry.call('view.a', {refs: ['e1']}))).code).toBe('result_too_large')
+    })
+
+    it('returns a copy holding only the contract\'s fields', async () => {
+      const undo = jest.fn()
+      const returned = {content: {n: 1}, echo: 'did it', refs: ['e1'], undo}
+      const registry = createRegistry([makeProvider('view', [makeTool('view.a', {run: () => Promise.resolve(returned)})])])
+      const result = await registry.call('view.a', {refs: ['e1']})
+      expect(result).not.toBe(returned)
+      expect(result).toEqual({content: {n: 1}, echo: 'did it', refs: ['e1'], undo})
+      returned.refs.push('e2')
+      expect(result.refs).toEqual(['e1'])
+    })
+
     it('refuses non-string refs and a missing content', async () => {
       const registry = createRegistry([makeProvider('view', [
         makeTool('view.a', {run: () => Promise.resolve({content: {}, refs: [1]})}),

@@ -11,11 +11,8 @@
  * (visibilityHash#applyVisibilityHash): clear, hide, isolate — so the store,
  * the NavTree eyes and the permalink writer all follow.
  *
- * Two things a snapshot does NOT bring back: a selection that a hide pruned
- * (`hideElementsById` drops hidden ids from `selectedElements`), and a whole
- * root-level STEP product isolated TOGETHER with other occurrences — it has
- * no path (`_wholeRootOccurrences`), so only the pathful ones are restored.
- * Isolated on its own, its instances are restored, under its row.
+ * One thing a snapshot does NOT bring back: a selection that a hide pruned
+ * (`hideElementsById` drops hidden ids from `selectedElements`).
  */
 
 
@@ -33,11 +30,23 @@ export function captureVisibility(isolator) {
     }))
   let isolation = null
   if (isolator.tempIsolationModeOn) {
-    isolation = isolator.isolatedInstanceIds ? {
-      occurrences: (isolator.isolatedOccurrences ?? []).map((occurrence) => ({...occurrence})),
-      instanceIds: [...isolator.isolatedInstanceIds],
-      nodeIds: [...isolator.isolatedIds],
-    } : {ids: [...isolator.isolatedIds]}
+    if (isolator.isolatedInstanceIds) {
+      // An occurrence isolation keeps its pathful occurrences
+      // (`isolatedOccurrences`, what the link is written from) but not its
+      // pathless ones — a whole root-level STEP product
+      // (`_wholeRootOccurrences`, viewTools' whole-product rows) has no path.
+      // Those are the isolated rows missing from that list; their instances
+      // are inside `isolatedInstanceIds`.
+      const occurrences = (isolator.isolatedOccurrences ?? []).map((occurrence) => ({...occurrence}))
+      const pathful = new Set(occurrences.map(({nodeId}) => nodeId))
+      isolation = {
+        occurrences,
+        pathlessNodeIds: [...new Set(isolator.isolatedIds.filter((nodeId) => !pathful.has(nodeId)))],
+        instanceIds: [...isolator.isolatedInstanceIds],
+      }
+    } else {
+      isolation = {ids: [...isolator.isolatedIds]}
+    }
   }
   return {hiddenIds: [...isolator.hiddenIds], hiddenOccurrences, isolation}
 }
@@ -63,16 +72,19 @@ export function restoreVisibility(isolator, snapshot) {
   }
   if (isolation.ids) {
     isolator.isolateElementsById(isolation.ids)
-  } else if (isolation.occurrences.length > 0) {
-    isolator.isolateOccurrences(isolation.occurrences)
-  } else {
-    // Only pathless (whole root-level product) occurrences were isolated;
-    // they carry their instances, as `_wholeRootOccurrences` builds them.
-    isolator.isolateOccurrences([{
-      nodeId: isolation.nodeIds[0],
-      occurrencePath: [],
-      solidExpressId: null,
-      instanceIds: isolation.instanceIds,
-    }])
+    return
   }
+  // The pathful occurrences resolve their own instances by path. Each
+  // pathless row comes back as a pathless occurrence, so it keeps its row in
+  // `isolatedIds` and its isolation glasses; the snapshot's whole instance set
+  // rides on the first of them, which covers every pathless product's
+  // instances (the union is all the isolator shows). Codex review on #1946:
+  // restoring the pathful ones alone dropped the products.
+  const pathless = isolation.pathlessNodeIds.map((nodeId, i) => ({
+    nodeId,
+    occurrencePath: [],
+    solidExpressId: null,
+    instanceIds: i === 0 ? isolation.instanceIds : [],
+  }))
+  isolator.isolateOccurrences([...isolation.occurrences, ...pathless])
 }

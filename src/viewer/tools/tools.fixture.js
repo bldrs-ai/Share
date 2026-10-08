@@ -153,6 +153,52 @@ export function makeModel() {
 
 
 /**
+ * A STEP-shaped assembly, as a Conway STEP load leaves it: NavTree rows are
+ * NAUOs keyed by occurrence path, which own no geometry; placements belong to
+ * the parts' product_definition_shape ids. The top-level product has an
+ * empty occurrence path (`findSoleRootNode`) and geometry of its own (#1909):
+ *
+ *   Assembly 1 (path [])          own shell: owner 500
+ *     Sub 10 [10]  › Bolt 11 [10,11], Bolt 12 [10,12]   owner 100, twice
+ *     Plate 20 [20]                                       owner 200
+ *
+ * Placements in emission order (= batch id): 500, 100, 100, 200.
+ *
+ * @return {object} `{model, tree, batch}`
+ */
+export function makeStepModel() {
+  const placements = [[500, []], [100, [10, 11]], [100, [10, 12]], [200, [20]]]
+  const flatMeshes = placements.map(([expressID, occurrencePath], i) => ({
+    expressID,
+    geometries: [{
+      geometryExpressID: SHAPE_ID,
+      flatTransformation: translateX(i * SPACING),
+      color: {x: 0.5, y: 0.5, z: 0.5, w: 1},
+      occurrencePath,
+    }],
+  }))
+  const {batches} = flatMeshToBatchedModel(flatMeshes, unitTriangleApi(), 0)
+  decorateBatchMeshes(batches)
+  const model = new Group()
+  batches.forEach(({mesh}) => model.add(mesh))
+  const row = (expressID, name, occurrencePath, children = []) =>
+    ({expressID, type: 'NEXT_ASSEMBLY_USAGE_OCCURRENCE', Name: {type: 1, value: name}, occurrencePath, children})
+  const tree = {
+    ...row(1, 'Assembly', [], [
+      row(10, 'Sub', [10], [row(11, 'Bolt', [10, 11]), row(12, 'Bolt', [10, 12])]),
+      row(20, 'Plate', [20]),
+    ]),
+    type: 'PRODUCT_DEFINITION',
+  }
+  model.format = 'step'
+  model.getSpatialStructure = () => Promise.resolve(tree)
+  model.getItemProperties = () => Promise.resolve(null)
+  model.getPropertySets = () => Promise.resolve([])
+  return {model, tree, batch: batches[0].mesh}
+}
+
+
+/**
  * @return {object} a camera-controls double that records its moves. Its
  *   getters allocate when called without an `out`, as camera-controls' do
  *   (`addCameraUrlParams` relies on that).
@@ -202,10 +248,15 @@ export function makeStoreFunnel() {
  * Load the fixture into the real store, behind a viewer whose isolator is
  * real, as CadView#onModel leaves things.
  *
+ * @param {object} [opts]
+ * @param {Function} [opts.build] the model builder (`makeModel`, `makeStepModel`)
+ * @param {object} [opts.viewer] the viewer to dress, e.g. an
+ *   `Object.create(ShareViewer.prototype)` whose real occurrence resolvers
+ *   should run; its `IFC` is pointed at the model
  * @return {Promise<object>} `{viewer, model, tree, batch, controls, searchIndex}`
  */
-export async function loadFixture() {
-  const {model, tree, batch} = makeModel()
+export async function loadFixture({build = makeModel, viewer = {}} = {}) {
+  const {model, tree, batch} = build()
   const controls = makeCameraControls()
   const scene = {add: jest.fn(), remove: jest.fn()}
   const isolatorContext = {
@@ -215,7 +266,9 @@ export async function loadFixture() {
     renderer: {update: jest.fn()},
     items: {pickableIfcModels: []},
   }
-  const viewer = {
+  Object.assign(viewer, {
+    // What ShareViewer#_modelById reads.
+    IFC: {context: {items: {ifcModels: [model]}}},
     postProcessor: {createOutlineEffect: jest.fn(() => ({setSelection: jest.fn()}))},
     setSelection: jest.fn(),
     setInstanceSelection: jest.fn(),
@@ -224,7 +277,7 @@ export async function loadFixture() {
     _clearPreselectionForAllModels: jest.fn(),
     _clearConwaySelectionSubsets: jest.fn(),
     context: {getCameraControls: () => controls, fitModelToFrame: jest.fn()},
-  }
+  })
   viewer.isolator = new IfcIsolator(isolatorContext, viewer)
   await viewer.isolator.setModel(model)
   const searchIndex = new SearchIndex()

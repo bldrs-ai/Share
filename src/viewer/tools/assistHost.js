@@ -1,4 +1,5 @@
 import {ToolError, createRegistry} from '../../assist'
+import useStore from '../../store/useStore'
 import {createShareToolProvider} from './shareTools'
 import {createViewContextSource} from './viewContext'
 import {createViewToolProvider} from './viewTools'
@@ -27,13 +28,18 @@ export function createShareAssistRegistry() {
  *   list()             tool descriptors (name, description, schema, policy)
  *   call(name, input)  → {ok: true, content, echo, refs, undoable}
  *                      | {ok: false, error: {code, message, details}}
- *   undo()             reverses the most recent undoable call; → boolean
+ *   undo()             reverses the most recent undoable call; → true, or
+ *                      false with nothing to undo; rejects if the undo failed
  *   context()          context blocks
  *
  * Results cross `page.evaluate` as plain data, which is why `undo` is a
- * stack here instead of the function each result carries. Tools whose
- * policy is 'confirm' are refused: this hook has no approval card, and none
- * of the v0 tools needs one.
+ * stack here instead of the function each result carries. The stack is
+ * emptied whenever the store's model changes: CadView (and so this hook)
+ * stays mounted while the route loads another model, and an entry for the
+ * old one has nothing left to restore (Codex review on #1946; each undo also
+ * refuses on its own — viewTools.js `undoWhileLoaded`). Tools whose policy
+ * is 'confirm' are refused: this hook has no approval card, and none of the
+ * v0 tools needs one.
  *
  * @param {object} [target] where to install (the window)
  * @return {Function} uninstall
@@ -41,6 +47,11 @@ export function createShareAssistRegistry() {
 export function installAssistDevHook(target = window) {
   const registry = createShareAssistRegistry()
   const undos = []
+  const unsubscribe = useStore.subscribe((state, previous) => {
+    if (state.model !== previous.model) {
+      undos.length = 0
+    }
+  })
   const failure = (e) => ({
     ok: false,
     error: e instanceof ToolError ? e.toJSON() : {code: 'error', message: String(e?.message ?? e), details: {}},
@@ -74,6 +85,7 @@ export function installAssistDevHook(target = window) {
   }
   return () => {
     delete target.__bldrsAssistTools
+    unsubscribe()
     registry.dispose()
   }
 }

@@ -4,7 +4,6 @@ import {MeshLambertMaterial} from 'three'
 import {Box} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {captureException} from '@sentry/react'
-import {isFeatureEnabled} from '../FeatureFlags'
 import {fileSuffixBoundaryRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
@@ -36,6 +35,7 @@ import {NeedsReconnectError} from '../connections/errors'
 import {UnsupportedSchemaError, reportUnsupportedSchema} from '../loader/unsupportedSchema'
 import {getBrowser} from '../connections/registry'
 import modelIdentity from '../routes/modelIdentity'
+import useExistInFeature from '../hooks/useExistInFeature'
 import useStore from '../store/useStore'
 import {
   expandedIdsForSelection,
@@ -220,6 +220,7 @@ export default function CadView({
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
   const [searchParams] = useSearchParams()
+  const isAssistEnabled = useExistInFeature('assist')
 
   // Begin helpers //
   /**
@@ -1866,8 +1867,10 @@ export default function CadView({
   selectItemsInSceneRef.current = selectItemsInScene
   useEffect(() => registerSelectionFunnel((...args) => selectItemsInSceneRef.current(...args)), [])
   // `window.__bldrsAssistTools`, the tool registry's dev hook, under
-  // `?feature=assist` only (read once, at mount).
-  useEffect(() => (isFeatureEnabled('assist') ? installAssistDevHook() : undefined), [])
+  // `?feature=assist` only. Follows the URL, not just the mount: CadView
+  // stays mounted across navigation, so the hook installs when the flag
+  // appears and the cleanup uninstalls it when the flag goes.
+  useEffect(() => (isAssistEnabled ? installAssistDevHook() : undefined), [isAssistEnabled])
 
 
   const abs = {position: 'absolute'}

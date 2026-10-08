@@ -25,8 +25,10 @@ import {
  * - Input is validated against the tool's `inputSchema` BEFORE `run`, so a
  *   tool body never sees a schema-invalid call, and the error lists every
  *   violation (eval #1929: models recover from errors that say what's wrong).
- * - Results are plain JSON under a size cap. A buffer, a class instance or a
- *   cycle in `content` is refused (`json.ts`), never forwarded.
+ * - Results are plain JSON under a size cap: `content` passes `json.ts`,
+ *   `echo` is a string, `refs` are strings, and any other field is refused.
+ *   Only `undo`, which never leaves the page, may be a function. Callers get
+ *   a rebuilt copy, never the provider's object.
  */
 
 
@@ -128,9 +130,7 @@ export function createRegistry(providers: ToolProvider[], opts: RegistryOptions 
         throw new ToolError('invalid_input', `Invalid input for '${name}': ${problems.join('; ')}`,
           {problems, inputSchema: tool.inputSchema})
       }
-      const result = await tool.run(args, ctx)
-      checkResult(name, result, maxResultChars)
-      return result
+      return sanitizeResult(name, await tool.run(args, ctx), maxResultChars)
     },
     context: () => contextSources.map((source) => source.snapshot()),
     onChange: (cb) => {
@@ -204,28 +204,60 @@ function indexTools(providers: ToolProvider[]): Map<string, Tool> {
 }
 
 
+// The fields a result may carry. Everything but `undo` leaves the page (a
+// model's context, a transcript, the UI), so everything but `undo` is checked.
+const RESULT_FIELDS = new Set(['content', 'echo', 'refs', 'undo'])
+
+
 /**
+ * Check a tool's result and return a copy holding only the contract's fields,
+ * so nothing a provider tacked on reaches a caller. `undo` is the one
+ * non-JSON field allowed: it stays in the page and is never serialized.
+ *
  * @param name
  * @param result what `run` returned
- * @param maxChars
+ * @param maxChars cap on the serialized outward fields together
+ * @return the result, rebuilt from its checked fields
  * @throws {ToolError} invalid_result or result_too_large
  */
-function checkResult(name: string, result: ToolResult<unknown>, maxChars: number): void {
-  if (result === null || typeof result !== 'object' || !('content' in result)) {
-    throw new ToolError('invalid_result', `Tool '${name}' returned no content.`)
+function sanitizeResult(name: string, result: ToolResult<unknown>, maxChars: number): ToolResult<unknown> {
+  const invalid = (what: string, details: Record<string, unknown> = {}) =>
+    new ToolError('invalid_result', `Tool '${name}' returned ${what}.`, details)
+  if (result === null || typeof result !== 'object' || Array.isArray(result) || !('content' in result)) {
+    throw invalid('no content')
+  }
+  const unknown = Object.keys(result).filter((key) => !RESULT_FIELDS.has(key))
+  if (unknown.length > 0) {
+    throw invalid(`fields outside the result contract (${unknown.join(', ')})`, {unknown})
   }
   const problem = findNonJson(result.content)
   if (problem) {
-    throw new ToolError('invalid_result',
-      `Tool '${name}' returned content that is not plain JSON (${problem}).`, {problem})
+    throw invalid(`content that is not plain JSON (${problem})`, {problem})
+  }
+  if (result.echo !== undefined && typeof result.echo !== 'string') {
+    throw invalid('an echo that is not a string')
   }
   if (result.refs !== undefined &&
       (!Array.isArray(result.refs) || result.refs.some((ref) => typeof ref !== 'string'))) {
-    throw new ToolError('invalid_result', `Tool '${name}' returned refs that are not strings.`)
+    throw invalid('refs that are not strings')
   }
-  const size = JSON.stringify(result.content)?.length ?? 0
+  if (result.undo !== undefined && typeof result.undo !== 'function') {
+    throw invalid('an undo that is not a function')
+  }
+  const outward: ToolResult<unknown> = {content: result.content}
+  if (result.echo !== undefined) {
+    outward.echo = result.echo
+  }
+  if (result.refs !== undefined) {
+    outward.refs = [...result.refs]
+  }
+  const size = JSON.stringify(outward).length
   if (size > maxChars) {
     throw new ToolError('result_too_large',
       `Tool '${name}' returned ${size} characters (cap ${maxChars}).`, {size, cap: maxChars})
   }
+  if (result.undo !== undefined) {
+    outward.undo = result.undo
+  }
+  return outward
 }

@@ -375,6 +375,49 @@ describe('viewer/tools (view + share providers)', () => {
   })
 
 
+  // Codex review on #1946: CadView stays mounted while the route loads another
+  // model, so an undo can outlive the model it changed. It must refuse, not
+  // replay the old isolator / ids / camera into the new model's state.
+  describe('undo after the model changed', () => {
+    const loadAnotherModel = () => useStore.setState({model: {format: 'ifc'}})
+
+    it('visibility undo rejects expired and leaves the state alone', async () => {
+      const result = await registry.call('view.isolate', {refs: ['e10']})
+      loadAnotherModel()
+      const error = await rejection(result.undo())
+      expect(error.code).toBe('expired')
+      expect(useStore.getState().isTempIsolationModeOn).toBe(true)
+      expect(visibleProducts(fixture.batch)).toEqual([100, 101, 102, 103])
+    })
+
+    it('selection undo rejects expired without calling the funnel', async () => {
+      const result = await registry.call('view.select', {refs: ['e102']})
+      loadAnotherModel()
+      expect((await rejection(result.undo())).code).toBe('expired')
+      expect(funnel).toHaveBeenCalledTimes(1)
+    })
+
+    it('camera undo rejects expired without moving the camera', async () => {
+      const result = await registry.call('view.focus', {refs: ['e102']})
+      loadAnotherModel()
+      expect((await rejection(result.undo())).code).toBe('expired')
+      expect(fixture.controls.setLookAt).not.toHaveBeenCalled()
+    })
+
+    it('the dev hook drops its undo stack', async () => {
+      const target = {}
+      const uninstall = installAssistDevHook(target)
+      try {
+        expect((await target.__bldrsAssistTools.call('view.hide', {refs: ['e100']})).ok).toBe(true)
+        loadAnotherModel()
+        expect(await target.__bldrsAssistTools.undo()).toBe(false)
+      } finally {
+        uninstall()
+      }
+    })
+  })
+
+
   describe('dev hook', () => {
     it('installs list/call/undo/context, returns errors as data, and uninstalls', async () => {
       const target = {}

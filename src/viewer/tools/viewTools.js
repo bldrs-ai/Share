@@ -4,7 +4,13 @@ import {ToolError} from '../../assist'
 import useStore from '../../store/useStore'
 import {getDescendantExpressIds} from '../../utils/TreeUtils'
 import {prettyType} from '../../utils/ifc'
-import {occurrenceElementPathIds, selectedOccurrences} from '../../utils/occurrencePaths'
+import {
+  findRootLevelProductNode,
+  occurrenceElementPathIds,
+  occurrencePathKeySetForTree,
+  rootLevelInstancesOfProduct,
+  selectedOccurrences,
+} from '../../utils/occurrencePaths'
 import {FRAMING_MARGIN} from '../three/cameraLimits'
 import {occurrenceRef} from '../visibilityRefs'
 import {elementBounds} from './elementBounds'
@@ -474,6 +480,30 @@ function funnelOrThrow() {
 
 
 /**
+ * Bind an undo to the model its call changed. CadView stays mounted when the
+ * route loads another model (a `modelPath` change builds a new viewer and
+ * model under the same funnel), so an undo that outlived its model would
+ * restore the old model's ids into the new one's selection, or replay a
+ * disposed isolator's state into the shared store while reporting success
+ * (Codex review on #1946). Once a different model is loaded the undo rejects
+ * `expired` and changes nothing. The dev hook also drops its stack on a
+ * model change (assistHost.js); this guard covers every other holder.
+ *
+ * @param {object} model the store's model when the call ran
+ * @param {Function} fn the restore
+ * @return {Function} `() => Promise<void>`
+ */
+function undoWhileLoaded(model, fn) {
+  return () => Promise.resolve().then(() => {
+    if (useStore.getState().model !== model) {
+      throw new ToolError('expired', 'The model this step changed is no longer loaded; nothing was undone.')
+    }
+    return fn()
+  })
+}
+
+
+/**
  * @param {object} input
  * @return {object} ToolResult
  */
@@ -530,7 +560,7 @@ function select({refs, mode = 'replace'}) {
     content: {selected: after.length, truncated: after.length > listed.length, refs: listed, types},
     echo: after.length === 0 ? 'Cleared the selection' : `Selected ${after.length} element${after.length === 1 ? '' : 's'}`,
     refs: listed,
-    undo: () => Promise.resolve().then(() => {
+    undo: undoWhileLoaded(state.model, () => {
       const restore = funnelOrThrow()
       if (before.elements.length === 0) {
         restore([])
@@ -544,11 +574,62 @@ function select({refs, mode = 'replace'}) {
 
 
 /**
+ * A STEP row with no occurrence path — the file's top-level product, or one
+ * part of a multi-root file — as one pathless occurrence carrying the
+ * instances of its whole subtree: its own root-level geometry
+ * (`rootLevelInstancesOfProduct`, #1909/#1901) plus every pathful occurrence
+ * below it. That is the same "whole product" a row click selects (the
+ * funnel's `rootLevelSelectionForAnchors` over CadView#rootLevelInstances)
+ * and that Isolate and Hide act on (IfcIsolator#_wholeRootOccurrences).
+ * Without it the row fell through to element ids that own no STEP geometry,
+ * and Isolate blanked the model while reporting success (Codex review on
+ * #1946).
+ *
+ * @param {object} state store state
+ * @param {number} id the row's express id
+ * @return {object|null} `{nodeId, occurrencePath: [], solidExpressId: null,
+ *   instanceIds}`, or null off an occurrence-keyed (STEP) tree or when the
+ *   subtree has no geometry
+ */
+function wholeProductOccurrence({viewer, rootElement}, id) {
+  const node = nodesById(rootElement).get(id)
+  if (!node || !(occurrencePathKeySetForTree(rootElement)?.size > 0) ||
+      typeof viewer.getInstanceIdsForOccurrencePath !== 'function') {
+    return null
+  }
+  const rootLevel = typeof viewer.getRootLevelInstances === 'function' ? viewer.getRootLevelInstances(0) : null
+  const instanceIds = new Set()
+  walkTree(node, (row) => {
+    if (Array.isArray(row.occurrencePath) && row.occurrencePath.length > 0) {
+      // Prefix-inclusive: this covers the occurrence's own descendants.
+      viewer.getInstanceIdsForOccurrencePath(0, row.occurrencePath, {
+        includeDescendants: true,
+        geometryExpressId: row.ephemeral === true ? Number(row.expressID) : null,
+      }).forEach((instanceId) => instanceIds.add(instanceId))
+      return false
+    }
+    const product = rootLevel ? findRootLevelProductNode(rootElement, row.expressID) : null
+    if (product) {
+      rootLevelInstancesOfProduct(rootElement, product, rootLevel).instanceIds
+        .forEach((instanceId) => instanceIds.add(instanceId))
+    }
+    return true
+  })
+  if (instanceIds.size === 0) {
+    return null
+  }
+  return {nodeId: id, occurrencePath: [], solidExpressId: null, instanceIds: [...instanceIds]}
+}
+
+
+/**
  * Split resolved targets into what the isolator hides and isolates by:
  * element ids (each with its NavTree descendants, as the eye does —
  * `flattenChildren`), and STEP occurrences. A STEP row named by `e<id>` owns
  * no geometry, so it is resolved to its occurrences the way a selected row is
- * (`selectedOccurrences`); that is empty for IFC and scene-graph models.
+ * (`selectedOccurrences`), or, when it has no occurrence path, to its whole
+ * product ({@link wholeProductOccurrence}). Both are empty for IFC and
+ * scene-graph models.
  *
  * @param {Array<object>} targets from resolveRefs
  * @param {object} state store state
@@ -574,6 +655,11 @@ function visibilityTargets(targets, {viewer, rootElement}) {
       }
       continue
     }
+    const whole = wholeProductOccurrence({viewer, rootElement}, target.id)
+    if (whole) {
+      occurrences.push(whole)
+      continue
+    }
     isolator.flattenChildren(target.id).forEach((id) => ids.add(id))
   }
   return {ids: [...ids], occurrences}
@@ -581,12 +667,13 @@ function visibilityTargets(targets, {viewer, rootElement}) {
 
 
 /**
+ * @param {object} model the store's model when the call ran
  * @param {object} isolator
  * @param {object} before captureVisibility snapshot
  * @return {Function} undo
  */
-function visibilityUndo(isolator, before) {
-  return () => Promise.resolve().then(() => restoreVisibility(isolator, before))
+function visibilityUndo(model, isolator, before) {
+  return undoWhileLoaded(model, () => restoreVisibility(isolator, before))
 }
 
 
@@ -620,7 +707,7 @@ function isolate({refs}) {
     content: {isolated: targets.length, refs: targets.slice(0, MAX_RESULT_REFS).map(({ref}) => ref)},
     echo: `Isolated ${targets.length} element${targets.length === 1 ? '' : 's'}`,
     refs: targets.slice(0, MAX_RESULT_REFS).map(({ref}) => ref),
-    undo: visibilityUndo(isolator, before),
+    undo: visibilityUndo(state.model, isolator, before),
   }
 }
 
@@ -655,7 +742,7 @@ function hide({refs}) {
     },
     echo: `Hid ${targets.length} element${targets.length === 1 ? '' : 's'}`,
     refs: targets.slice(0, MAX_RESULT_REFS).map(({ref}) => ref),
-    undo: visibilityUndo(isolator, before),
+    undo: visibilityUndo(state.model, isolator, before),
   }
 }
 
@@ -675,7 +762,7 @@ function showAll() {
     content: {shown: hidden, endedIsolation: wasIsolated},
     echo: hidden === 0 && !wasIsolated ? 'Everything was already shown' :
       `Showed everything${wasIsolated ? ' and ended isolation' : ''}`,
-    undo: visibilityUndo(isolator, before),
+    undo: visibilityUndo(state.model, isolator, before),
   }
 }
 
@@ -695,7 +782,7 @@ function round(v) {
  */
 function focus({refs = []}) {
   const state = loadedState()
-  const {viewer, model, rootElement} = state
+  const {viewer, model} = state
   const controls = viewer.context?.getCameraControls?.()
   if (!controls) {
     throw new ToolError('not_ready', 'The camera is not ready.')
@@ -709,7 +796,7 @@ function focus({refs = []}) {
   const settle = (promise) => {
     Promise.resolve(promise).catch((e) => console.warn('view.focus: camera transition failed', e))
   }
-  const undo = () => Promise.resolve().then(() => {
+  const undo = undoWhileLoaded(model, () => {
     settle(controls.setLookAt(position.x, position.y, position.z, target.x, target.y, target.z, true))
   })
   if (refs.length === 0) {
@@ -717,21 +804,11 @@ function focus({refs = []}) {
     return {content: {framed: 'model'}, echo: 'Framed the whole model', undo}
   }
   const targets = assertResolved(resolveRefs(refs, state))
-  const nodes = nodesById(rootElement)
-  const ids = new Set()
-  const instanceIds = new Set()
-  for (const t of targets) {
-    if (t.kind === 'occurrence') {
-      t.occurrence.instanceIds.forEach((id) => instanceIds.add(id))
-      continue
-    }
-    ids.add(t.id)
-    const node = nodes.get(t.id)
-    if (node) {
-      getDescendantExpressIds(node).forEach((id) => ids.add(id))
-    }
-  }
-  const box = elementBounds(model, {ids, instanceIds})
+  // The same resolution hide and isolate use, so a STEP row frames its
+  // occurrences' instances rather than ids that own no geometry.
+  const resolved = visibilityTargets(targets, state)
+  const instanceIds = new Set(resolved.occurrences.flatMap((occurrence) => occurrence.instanceIds))
+  const box = elementBounds(model, {ids: new Set(resolved.ids), instanceIds})
   if (!box) {
     throw new ToolError('rejected', 'None of these elements has geometry to frame.', {refs})
   }
