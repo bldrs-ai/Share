@@ -1,4 +1,4 @@
-import {Page, expect, test} from '@playwright/test'
+import {ConsoleMessage, Page, expect, test} from '@playwright/test'
 import {
   clickGate,
   dismissLoadSnackbar,
@@ -40,6 +40,44 @@ import {
   watchResponses,
   skipAllWithoutTarget,
 } from '../../tests/e2e/live/liveSession'
+
+
+const ALLOWANCE_AFTER_RELOAD_MS = 60_000
+
+
+/**
+ * Click the gate's Upgrade to Pro and expect the full-page navigation to
+ * `/subscribe/`. When it doesn't come, say what the page did instead —
+ * runs 37738031064 and 37740697840 timed out here with nothing to go on:
+ * the page errors and console errors since the click, where the page is,
+ * and whether the gate's help is still open (the click not landing).
+ *
+ * @param page the page, with the gate's help open
+ */
+async function expectUpgradeNavigates(page: Page) {
+  const problems: string[] = []
+  const onPageError = (error: Error) => problems.push(`pageerror: ${error.message}`)
+  const onConsole = (message: ConsoleMessage) => {
+    if (message.type() === 'error') {
+      problems.push(`console.error: ${message.text()}`)
+    }
+  }
+  page.on('pageerror', onPageError)
+  page.on('console', onConsole)
+  try {
+    await page.getByTestId('gated-help-action').click()
+    await page.waitForURL(/\/subscribe\//, SUBSCRIBE_NAVIGATION)
+  } catch (err) {
+    const helpOpen = await page.getByTestId('gated-help').isVisible().catch(() => false)
+    throw new Error(`Upgrade to Pro did not reach /subscribe/: still at ${page.url()}; ` +
+      `gate help ${helpOpen ? 'still open' : 'closed'}; ` +
+      `${problems.length === 0 ? 'no page or console errors' : problems.join(' | ')}. ` +
+      `(${(err as Error).message.split('\n')[0]})`)
+  } finally {
+    page.off('pageerror', onPageError)
+    page.off('console', onConsole)
+  }
+}
 
 
 /**
@@ -183,12 +221,14 @@ test.describe('Live smoke: free', () => {
     await page.reload({waitUntil: 'domcontentloaded'})
     await expect(page.getByTestId('control-button-profile-icon-authenticated')).toBeVisible()
     await openExportTab(page)
-    await expect(caption).toHaveAttribute('data-remaining', '0')
+    // Longer than the default: after a reload the allowance is fetched only
+    // once auth resolves, which on the emulated phone took more than 20s
+    // (mobile-pixel, run 37740697840).
+    await expect(caption).toHaveAttribute('data-remaining', '0', {timeout: ALLOWANCE_AFTER_RELOAD_MS})
 
     // And Upgrade to Pro goes to the subscribe page.
     await clickGate(page, 'gated-export-pro')
-    await page.getByTestId('gated-help-action').click()
-    await page.waitForURL(/\/subscribe\//, SUBSCRIBE_NAVIGATION)
+    await expectUpgradeNavigates(page)
   })
 
   test('a free user is gated straight to /subscribe/ (step 2 before #1939)', async ({page, context, request}, testInfo) => {
@@ -217,8 +257,7 @@ test.describe('Live smoke: free', () => {
     await expect(page.getByTestId('export-pro-chip')).toBeVisible()
     await clickGate(page, 'gated-export-pro')
     await expect(page.getByTestId('gated-help')).toContainText('needs a Pro subscription')
-    await page.getByTestId('gated-help-action').click()
-    await page.waitForURL(/\/subscribe\//, SUBSCRIBE_NAVIGATION)
+    await expectUpgradeNavigates(page)
     // The exporter was never sent to a free user here.
     expect(proModule).toHaveLength(0)
   })

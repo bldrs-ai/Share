@@ -40,6 +40,8 @@ const CACHE_TIMEOUT_MS = 60_000
 // that has to be fetched and instantiated first — DRACO's arrives as a
 // script tag and a sibling `.wasm` (`loader/glbCompress.js`).
 const COMPRESS_TIMEOUT_MS = 60_000
+// Dismissing the load snackbar is a courtesy click; it may have closed itself.
+const SNACKBAR_CLICK_TIMEOUT_MS = 5_000
 
 // Byte offset of the JSON chunk's length field in a GLB: past the 12-byte
 // file header. The 8 bytes after it are the chunk's own header.
@@ -134,7 +136,10 @@ export async function openExportTab(page: Page) {
 export async function dismissLoadSnackbar(page: Page) {
   const ok = page.getByTestId('LoadStatusOk')
   if (await ok.isVisible()) {
-    await ok.click()
+    // The snackbar can close itself between the check and the click, and a
+    // detached button is retried until the test times out (live run
+    // 37740697840). The assertion below is the one that matters.
+    await ok.click({timeout: SNACKBAR_CLICK_TIMEOUT_MS}).catch(() => undefined)
   }
   await expect(page.getByTestId('snackbar')).toBeHidden()
 }
