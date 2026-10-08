@@ -25,6 +25,14 @@ export const flags = [
   // is invisible until flipped.
   // See design/new/conversational-cad.md §2.
   {name: 'workspace', isActive: false},
+  // The AI assistant (epic assist-310, #1659; design/new/ai-workspace.md §13,
+  // D12). Today it gates only the dev hook `window.__bldrsAssistTools` that
+  // drives the viewer tool registry (src/viewer/tools/assistHost.js, #1674);
+  // the tray and agent loop join it in #1672 / #1675, and #1672 also aliases
+  // the old `?feature=bot` to it. The registry and tool providers ship
+  // unconditionally — CadView registers the selection funnel they use either
+  // way — but nothing calls them without this flag.
+  {name: 'assist', isActive: false},
   // Usage quotas. The quota lib (src/quota), the record-load Netlify
   // function, the useQuota hook and QuotaLimitDialog all ship
   // unconditionally; this flag gates ENFORCEMENT. When off, useQuota
