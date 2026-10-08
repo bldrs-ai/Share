@@ -24,6 +24,7 @@ import {
   LIVE_TEST_TIMEOUT_MS,
   PRO_MODULE_URL,
   RECORD_EXPORT_URL,
+  cacheDirectives,
   clickExportAndDownload,
   loginWithPassword,
   noteUnverified,
@@ -161,7 +162,9 @@ test.describe('Live smoke: Pro', () => {
     expect(proModule).toHaveLength(1)
     expect(proModule[0].status).toBe(HTTP_OK)
     expect(proModule[0].headers['content-type']).toMatch(/^text\/javascript/)
-    expect(proModule[0].headers['cache-control']).toBe('private, no-store')
+    // Directives, not the string: Netlify's edge re-serializes the header
+    // the function set as `private, no-store` to `private,no-store`.
+    expect(cacheDirectives(proModule[0].headers['cache-control'])).toEqual(['no-store', 'private'])
     // A Pro delivery is never charged (#1939 §4.8): no free-export row id.
     expect(proModule[0].headers['x-bldrs-export-id']).toBeUndefined()
 

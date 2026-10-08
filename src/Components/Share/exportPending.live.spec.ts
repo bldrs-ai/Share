@@ -11,6 +11,7 @@ import {
   appMetadataOf,
   clickExportAndDownload,
   dismissReauthDialog,
+  dismissReauthDialogWhenShown,
   loginWithPassword,
   noteUnverified,
   openLiveModel,
@@ -71,6 +72,9 @@ test.describe('Live smoke: pending reauth', () => {
       await admin.patchAppMetadata(userId, {subscriptionStatus: PENDING})
     }
 
+    // Installed before the load: the dialog can open at any point after it,
+    // whichever token says pending.
+    const reauthDismissals = await dismissReauthDialogWhenShown(page)
     const proModule = watchResponses(page, PRO_MODULE_URL)
     const glbLogs = await openLiveModel(page, {isSignedIn: true})
     const token = await sessionAccessToken(page)
@@ -86,7 +90,8 @@ test.describe('Live smoke: pending reauth', () => {
 
     const claim = claimedSubscriptionStatus(token)
     if (claim === PENDING) {
-      expect(await dismissReauthDialog(page), 'a pending claim opens the reauthentication dialog').toBe(true)
+      const shownNow = await dismissReauthDialog(page)
+      expect(shownNow || reauthDismissals() > 0, 'a pending claim opens the reauthentication dialog').toBe(true)
     }
     await waitForArtifactWritten(page, glbLogs)
     await openExportTab(page)

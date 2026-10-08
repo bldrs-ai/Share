@@ -772,6 +772,51 @@ async function readRenderState(page: Page): Promise<RenderState> {
 
 
 /**
+ * Keep the reauthentication dialog out of the way for the rest of the test,
+ * however late it opens. BaseRoutes' background fresh-claims pass lands
+ * after the page's first token and opens the dialog whenever the claims it
+ * fetched say pending — including when the spec itself has just set the
+ * account back to pending — so a one-time check right after the load can
+ * miss it, and it then blocks the next click (first account-backed run,
+ * #1948). Playwright runs the handler whenever the dialog would block an
+ * action.
+ *
+ * @param page the page
+ * @return how many times the handler has dismissed it so far
+ */
+export async function dismissReauthDialogWhenShown(page: Page): Promise<() => number> {
+  let dismissed = 0
+  await page.addLocatorHandler(page.getByRole('dialog').filter({hasText: 'Reauthentication Required'}), async () => {
+    dismissed++
+    await page.keyboard.press('Escape')
+  })
+  return () => dismissed
+}
+
+
+/**
+ * A Cache-Control value as its sorted, trimmed directives. Netlify's edge
+ * re-serializes the header a function sets — `private, no-store` arrives as
+ * `private,no-store` — so specs compare directives, not strings.
+ *
+ * @param value the header value, if any
+ * @return its directives, sorted
+ */
+export function cacheDirectives(value: string | undefined): string[] {
+  return (value ?? '').split(',').map((directive) => directive.trim()).filter((directive) => directive !== '').sort()
+}
+
+
+/**
+ * `waitForURL` options for the Upgrade action's full-page navigation to
+ * `/subscribe/`: done at commit. The spec is about where the action goes,
+ * and the subscribe page's own `load` waits on Stripe's embed, which can
+ * outlast what is left of the test's timeout.
+ */
+export const SUBSCRIBE_NAVIGATION = {waitUntil: 'commit' as const, timeout: NAVIGATION_TIMEOUT_MS}
+
+
+/**
  * The pending-reauth account's JWT makes BaseRoutes open a "Reauthentication
  * Required" dialog; dismiss it the way a user who means to carry on would.
  *

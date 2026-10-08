@@ -26,6 +26,7 @@ import {
   LIVE_TEST_TIMEOUT_MS,
   PRO_MODULE_URL,
   RECORD_EXPORT_URL,
+  SUBSCRIBE_NAVIGATION,
   SeenResponse,
   appMetadataOf,
   clickExportAndDownload,
@@ -187,7 +188,7 @@ test.describe('Live smoke: free', () => {
     // And Upgrade to Pro goes to the subscribe page.
     await clickGate(page, 'gated-export-pro')
     await page.getByTestId('gated-help-action').click()
-    await page.waitForURL(/\/subscribe\//)
+    await page.waitForURL(/\/subscribe\//, SUBSCRIBE_NAVIGATION)
   })
 
   test('a free user is gated straight to /subscribe/ (step 2 before #1939)', async ({page, context, request}, testInfo) => {
@@ -217,7 +218,7 @@ test.describe('Live smoke: free', () => {
     await clickGate(page, 'gated-export-pro')
     await expect(page.getByTestId('gated-help')).toContainText('needs a Pro subscription')
     await page.getByTestId('gated-help-action').click()
-    await page.waitForURL(/\/subscribe\//)
+    await page.waitForURL(/\/subscribe\//, SUBSCRIBE_NAVIGATION)
     // The exporter was never sent to a free user here.
     expect(proModule).toHaveLength(0)
   })
