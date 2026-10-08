@@ -52,6 +52,8 @@ const CACHE_TIMEOUT_MS = 60_000
 // that has to be fetched and instantiated first — DRACO's arrives as a
 // script tag and a sibling `.wasm` (`loader/glbCompress.js`).
 const COMPRESS_TIMEOUT_MS = 60_000
+// Dismissing the load snackbar is a courtesy click; it may have closed itself.
+const SNACKBAR_CLICK_TIMEOUT_MS = 5_000
 
 // Byte offset of the JSON chunk's length field in a GLB: past the 12-byte
 // file header. The 8 bytes after it are the chunk's own header.
@@ -173,7 +175,10 @@ export async function openExportTab(page: Page) {
 export async function dismissLoadSnackbar(page: Page) {
   const ok = page.getByTestId('LoadStatusOk')
   if (await ok.isVisible()) {
-    await ok.click()
+    // The snackbar can close itself between the check and the click, and a
+    // detached button is retried until the test times out (live run
+    // 37740697840). The assertion below is the one that matters.
+    await ok.click({timeout: SNACKBAR_CLICK_TIMEOUT_MS}).catch(() => undefined)
   }
   await expect(page.getByTestId('snackbar')).toBeHidden()
 }
@@ -236,19 +241,22 @@ export async function clickGate(page: Page, testId: string) {
 export async function expectSnackbarOnTop(page: Page) {
   const content = page.locator(`${SNACKBAR_SELECTOR} .MuiSnackbarContent-root`)
   await expect(content).toBeVisible()
-  const box = await content.boundingBox()
-  if (box === null) {
-    throw new Error('The snackbar content has no layout box')
-  }
-  const isOnTop = await page.evaluate(({x, y, selector}) => {
-    const hit = document.elementFromPoint(x, y)
-    return Boolean(hit && hit.closest(selector))
-  }, {
-    x: box.x + (box.width / HALF),
-    y: box.y + (box.height / HALF),
-    selector: SNACKBAR_SELECTOR,
-  })
-  expect(isOnTop).toBe(true)
+  // Measured and hit-tested in ONE evaluate: a snackbar that auto-hides
+  // between a separate boundingBox() and the hit-test reads as "no layout
+  // box" (mobile-pixel, live run 37742719516).
+  const where = await page.evaluate(({selector, half}) => {
+    const el = document.querySelector(`${selector} .MuiSnackbarContent-root`)
+    if (el === null) {
+      return 'closed before it could be hit-tested'
+    }
+    const rect = el.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) {
+      return 'closed before it could be hit-tested'
+    }
+    const hit = document.elementFromPoint(rect.x + (rect.width / half), rect.y + (rect.height / half))
+    return hit !== null && hit.closest(selector) !== null ? 'on top' : `under ${hit === null ? 'nothing' : hit.tagName}`
+  }, {selector: SNACKBAR_SELECTOR, half: HALF})
+  expect(where).toBe('on top')
 }
 
 
