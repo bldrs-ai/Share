@@ -2555,6 +2555,14 @@ offline at the right moment) would make every free export uncounted. So:
    A memoised one would let the rest of the session export for nothing — the
    soft spot of the original Pro-only design, where memoising was the point.
    The server's header decides this, not the client's idea of the tier.
+   A memoised **Pro** delivery goes stale when the account loses Pro while
+   the page stays open: canceled from another tab or device, or demoted by
+   a failed payment. Its next export skips `pro-module`, so nothing is
+   charged, and `record-export` refuses the uncharged row
+   (`free_export_not_charged`). `useExport` takes that refusal as the
+   signal: it evicts the memo (`forgetProModule`) and force-refreshes the
+   claim. At most the one export already downloaded goes uncharged; the next
+   one is charged or refused like any free-tier export.
 4. `useExport` records the export under the charge's id, and `record-export`
    **fills in** that row (key, title, format, bytes; id, `exportedAt` and
    `free` stay the server's). A free user's POST whose id matches no charge

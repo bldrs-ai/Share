@@ -1,5 +1,5 @@
 import {CompressionStream as NodeCompressionStream} from 'node:stream/web'
-import {act, renderHook} from '@testing-library/react'
+import {act, renderHook, waitFor} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn} from '../__mocks__/authentication'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
 import {gtagEvent} from '../privacy/analytics'
@@ -7,7 +7,7 @@ import useStore from '../store/useStore'
 import {compressedExport, gzippedExport} from './artifactSizes'
 import {triggerDownload} from './download'
 import {recordExport} from './exportHistory'
-import {ProModuleDeniedError, loadProModule} from './proModuleLoader'
+import {ProModuleDeniedError, forgetProModule, loadProModule} from './proModuleLoader'
 import useExport, {bytesBucket, formatBytes, freeLimitMessage} from './useExport'
 
 
@@ -28,6 +28,7 @@ jest.mock('./exportHistory', () => ({recordExport: jest.fn()}))
 jest.mock('./proModuleLoader', () => ({
   ...jest.requireActual('./proModuleLoader'),
   loadProModule: jest.fn(),
+  forgetProModule: jest.fn(),
 }))
 
 
@@ -457,6 +458,50 @@ describe('useExport', () => {
     })
 
     expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'sharePro'})
+  })
+
+  describe('when record-export refuses an export pro-module already served', () => {
+    const refused = {recorded: false, status: 403, exports: []}
+
+    it('forgets the memoised Pro module and refreshes the claims, for an uncharged export', async () => {
+      // The account lost Pro while this page stayed open: the memo would
+      // otherwise keep exporting uncharged for the rest of the session.
+      getAccessTokenSilently.mockImplementation((params) => Promise.resolve(params?.cacheMode === 'off' ?
+        jwtWithAppMetadata({subscriptionStatus: 'free'}) :
+        'cached-token'))
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      recordExport.mockResolvedValue(refused)
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(forgetProModule).toHaveBeenCalledWith('glbExport')
+      await waitFor(() => expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'free'}))
+    })
+
+    it('leaves the loader alone for a charged export, which was never memoised', async () => {
+      loadProModule.mockResolvedValue({namespace: {exportArtifact}, charge: {exportId: 'row-1', freeExports: null}})
+      recordExport.mockResolvedValue(refused)
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(forgetProModule).not.toHaveBeenCalled()
+    })
+
+    it('leaves the loader alone when record-export accepts the export', async () => {
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(forgetProModule).not.toHaveBeenCalled()
+    })
   })
 
   it('still reports success when recording the export fails', async () => {

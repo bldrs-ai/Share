@@ -103,6 +103,24 @@ export function loadProModule(name, getAccessToken) {
 
 
 /**
+ * Drop one memoised module, so the next export asks `pro-module` again.
+ *
+ * For a Pro delivery the server no longer stands behind: the account lost
+ * Pro while this page stayed open (canceled from another tab or device,
+ * demoted by a failed payment), so the memoised module would keep exporting
+ * uncharged for the rest of the session. `useExport` calls this when
+ * `record-export` refuses an uncharged export — the in-session signal that
+ * the memo has gone stale. The next export then fetches afresh and is
+ * charged, or refused, like any other free-tier one.
+ *
+ * @param {string} name Module id, e.g. 'glbExport'
+ */
+export function forgetProModule(name) {
+  loadedModules.delete(name)
+}
+
+
+/**
  * Drop the memoised modules. Tests only — a page never wants this (the
  * whole point of the Map is that the second export costs no request).
  */

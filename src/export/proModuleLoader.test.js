@@ -7,7 +7,7 @@ jest.mock('./importModuleFromUrl', () => ({
 }))
 
 import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN, HTTP_INTERNAL_SERVER_ERROR, HTTP_OK} from '../net/http'
-import {ProModuleDeniedError, loadProModule, resetProModuleCache} from './proModuleLoader'
+import {ProModuleDeniedError, forgetProModule, loadProModule, resetProModuleCache} from './proModuleLoader'
 
 
 describe('proModuleLoader', () => {
@@ -90,6 +90,14 @@ describe('proModuleLoader', () => {
     expect(second).toBe(first)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(mockImportModuleFromUrl).toHaveBeenCalledTimes(1)
+  })
+
+  it('fetches afresh after forgetProModule, for a Pro module the server stopped standing behind', async () => {
+    await loadProModule('glbExport', getAccessToken)
+    forgetProModule('glbExport')
+    await loadProModule('glbExport', getAccessToken)
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   describe('a delivery the server charged a free export for', () => {

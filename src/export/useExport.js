@@ -16,7 +16,7 @@ import {getExportFormat} from './exportRegistry'
 import {FREE_EXPORT_LIMIT_REASON, formatNextFreeExport} from './freeExports'
 import {COMPRESSION_NONE, isCompressionMode} from './glbCompression'
 import {isGzipAvailable} from './glbGzip'
-import {ProModuleDeniedError, loadProModule} from './proModuleLoader'
+import {ProModuleDeniedError, forgetProModule, loadProModule} from './proModuleLoader'
 
 
 // The Auth0 audience/scope every token call site in the app uses; kept
@@ -207,6 +207,17 @@ export default function useExport() {
           // `pro-module` already said yes to this user moments ago, so a
           // denial HERE means the two gates disagree — worth seeing.
           captureException(new Error(`record-export refused the export (${recordResult.status})`))
+          if (!charge) {
+            // An UNCHARGED delivery is the loader's memoised Pro module, and
+            // the server just refused to stand behind it: the account lost
+            // Pro while this page stayed open. Without this every later
+            // export would reuse the memo and skip `pro-module`'s charge for
+            // the rest of the session. Forget it so the next export is
+            // charged (or refused) afresh, and refresh the claims so the UI
+            // gates the button now rather than after a reload.
+            forgetProModule(format.moduleName)
+            refreshAppMetadata().catch((refreshError) => captureException(refreshError))
+          }
         }
       }).catch((recordError) => captureException(recordError))
       gtagEvent('export_model', {
