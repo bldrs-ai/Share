@@ -27,6 +27,44 @@
  */
 
 
+/** Playwright engines whose Linux build has been seen to lack `navigator.storage`. */
+const OPFS_LESS_ENGINES = ['webkit', 'firefox']
+
+
+/**
+ * Whether a cache-dependent spec should SKIP because this engine's Playwright
+ * build has no OPFS at all, and the skip's reason; null means run it.
+ *
+ * Found by #1942's second CI run: Playwright's Linux WebKit build has no
+ * `navigator.storage`, so `getDirectory()` throws a TypeError and the app
+ * correctly reports `isOpfsAvailable: false` and loads from the network.
+ * That is the build, not the product — real Safari has OPFS (#1686). The
+ * gate is deliberately narrow:
+ *
+ * - Chromium NEVER skips. It has OPFS, so a missing one there is a real
+ *   regression and has to fail.
+ * - An engine that does have `getDirectory` never skips either, so an OPFS
+ *   that exists but cannot write still fails with the OPFS probe's output.
+ *
+ * Pure so `loadDiagnosis.test.js` can pin both; `liveSession.ts#skipUnlessOpfs`
+ * reads the probe from the page and calls `test.skip` with this reason.
+ *
+ * @param signals.engine Playwright's `browserType().name()`
+ * @param signals.hasGetDirectory `typeof navigator.storage?.getDirectory === 'function'` in the page
+ * @return the skip reason, or null when the spec should run
+ */
+export function opfsSkipReason(signals: {engine: string, hasGetDirectory: boolean}): string | null {
+  const {engine, hasGetDirectory} = signals
+  // An allow-list of the two engines that lack it, not "anything but
+  // chromium": an engine the harness could not name must fail, not skip.
+  if (hasGetDirectory || !OPFS_LESS_ENGINES.includes(engine)) {
+    return null
+  }
+  return `${engine}: no navigator.storage in this Playwright build; OPFS cache paths are covered on ` +
+    'chromium and by the manual Safari check (§8 step 7)'
+}
+
+
 /** What the page says about OPFS, read when an artifact wait fails. */
 export type OpfsState = {
   /**

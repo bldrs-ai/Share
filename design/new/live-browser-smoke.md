@@ -404,7 +404,10 @@ failure:
 - no `LIVE_BASE_URL`;
 - no account for this role or project;
 - no Management API credentials;
-- a local target that has no functions.
+- a local target that has no functions;
+- **a non-Chromium engine whose Playwright build has no OPFS** (WebKit, on
+  Linux), for the specs that need the GLB cache. Chromium is never skipped
+  for this: no OPFS there is a regression, and fails.
 
 A malformed input is a **failure**.
 
@@ -591,7 +594,7 @@ label run uses #1939's merge ref, which includes main's harness.
 | 5b | Meshopt, then Draco: settles; weighs what it said; opens in donmccurdy; `BLDRS_` kept; Draco's script + `.wasm` served | Automated + replaced. The `.wasm` must be served as `application/wasm`. | `exportPro` › Meshopt and Draco… |
 | 5c | Portable: settles, weighs what it said, no `EXT_mesh_gpu_instancing` (3dviewer.net), named hierarchy (three.js editor), Portable + Draco keeps names, reopens in Share with NavTree + highlight | Automated + replaced. Scene → row picking on the reopened file stays with the mocked suite (`exportGlb.spec.ts`), and so does the editor's autosave. | `exportPro` › Portable… |
 | 6 | Export history list, Download again, Clear Local Cache | **Partly.** The server half is automated: each export's `record-export` POST is 200 and the stored row carries the file's bytes and the model's key. The list is not mounted on main (§4.5, dormant), so the UI half is noted as unverified and is not tested. | `exportPro` › Preparing… |
-| 7 | Safari: the download is a file, not an inline tab; OPFS available | Automated in WebKit (a download event, the page not navigated; OPFS used by every load). **Residual manual** for real Safari. | all specs, `webkit` + `mobile-iphone` |
+| 7 | Safari: the download is a file, not an inline tab; OPFS available | The download half is automated in WebKit (a download event, the page not navigated), but only where the Pro specs get that far: Playwright's Linux WebKit has no OPFS, so every cache-dependent spec **skips** there ([below](#found-while-building-it)). **Residual manual** for real Safari: the download, and its OPFS cache. | `webkit` + `mobile-iphone` skip; `chromium` and `mobile-pixel` run |
 | 8 | Mobile: no horizontal scroll at 390 px, snackbar readable over the dialog | Automated in the emulated profiles (`expectNoHorizontalScroll`, `expectSnackbarOnTop`) | `exportPro` › Preparing…, mobile projects |
 | 8 | The download lands in Files (iOS) / Downloads (Android) | **Residual manual** | — |
 | 9 | No `CompressionStream`: cache falls back to v2 and still hits; no Compress download row; plain `.glb` works | Automated, in the page **and the writer's worker** ([below](#found-while-building-it)), with the v3 control in `exportAnonymous` | `exportNoCompressionStream` (both tests) |
@@ -604,6 +607,11 @@ merged (follow-up PR):
 
 - Real iOS Safari and Android Chrome: the file lands in Files / Downloads.
 - Real desktop Safari: the download is a file and not an inline tab.
+- **Real Safari's OPFS cache** (step 7): the GLB artifact is written, the
+  reload hits it, and Export enables at once. Playwright's WebKit has no
+  `navigator.storage`, so no automated run exercises the cache path on that
+  engine; Safari's sync-access-handle write (#1686) is the part most worth
+  a person's five minutes.
 - The Google Drive `.glb.gz` path (§4.7).
 - The three.js editor's autosave on a large portable file, and Edge as itself
   rather than through Chromium, both optional.
@@ -667,6 +675,50 @@ merged (follow-up PR):
     `getDirectory()` and a worker `createSyncAccessHandle()` write.
 
 
+- **The second CI run (#1942's preview, still no account secrets) read both
+  causes off the new diagnostics. Both are the test environment, not the
+  product.**
+  - **Firefox, all 3 tests: the runner has no GPU, and headless Firefox
+    blocks WebGL.**
+    - The diagnostics: `WebGL2: none (WebGL creation failed: * AllowWebgl2:false
+      restricts context creation on this system.)`, then three.js'
+      `A WebGL context could not be created`, then the ErrorBoundary's
+      "Oh no!".
+    - That is Firefox's graphics blocklist refusing the driver, not a
+      missing feature. `tools/playwright.live.config.js` now gives the
+      `firefox` project `firefoxUserPrefs`: `webgl.force-enabled: true` (the
+      blocklist override; the one that matters), plus `webgl.disabled: false`
+      and `webgl.enable-webgl2: true` as guards, since three.js needs WebGL2.
+    - **Not verified.** The Firefox download is blocked in the sandbox that
+      wrote this, so the prefs are chosen from Mozilla support threads and
+      the three.js forum for this exact message, not run. The re-run decides.
+      If WebGL2 is still refused, the next knobs are `gfx.webrender.software:
+      true` and `LIBGL_ALWAYS_SOFTWARE=1` in the workflow.
+    - The product's silent crash without WebGL is #659, and is not touched
+      here.
+  - **WebKit and `mobile-iphone`, the 4 cache tests: Playwright's Linux
+    WebKit has no `navigator.storage` at all.**
+    - The app reports `isOpfsAvailable: false`, and
+      `navigator.storage.getDirectory()` throws `TypeError: undefined is not
+      an object (evaluating 'navigator.storage.getDirectory')`.
+    - The app degrades correctly: it loads from the network and just has no
+      cache. Real Safari has OPFS (#1686, closed), so this is the build and
+      not a product bug.
+    - So every spec that waits for the artifact now **skips** there, with the
+      reason in the reporter, rather than failing
+      (`liveSession.ts#skipUnlessOpfs`, called by `waitForArtifactWritten`;
+      the decision is `loadDiagnosis.ts#opfsSkipReason`). That is the cache
+      half of steps 4 and 9 and every Pro, free and pending spec, because the
+      Export button is enabled by the artifact.
+    - The gate is narrow: the probe is `typeof navigator.storage?.getDirectory
+      !== 'function'` read in the page, and only `webkit` and `firefox` skip
+      on it. **Chromium never skips**; a missing OPFS there fails.
+    - The specs that do not need the cache (the step 2 gate) keep running on
+      WebKit.
+    - **Safari's OPFS cache therefore stays a manual check** (step 7 and the
+      residual list above).
+
+
 ## What ran where
 
 | Check | Where it ran | Result |
@@ -680,6 +732,9 @@ merged (follow-up PR):
 | Step 9 can fail | This sandbox, chromium | Red without the worker wrap, and red with the wrap but without the removal. |
 | Pro and step-9 Pro spec bodies, with login swapped for the mocked suite's | This sandbox, mocked build, chromium | All passed except Meshopt validation, the finding above |
 | Anonymous live specs on #1942's preview | CI (`live-smoke`, b75e09e) | chromium and mobile-pixel passed; firefox 3 and webkit/mobile-iphone 4 failed — the first-run finding above |
+| Anonymous live specs on #1942's preview | CI (`live-smoke`, 00b895d) | chromium and mobile-pixel passed again; firefox 3 failed on WebGL (`AllowWebgl2:false`) and webkit/mobile-iphone 4 on `navigator.storage` being undefined: the second-run finding above |
+| `opfsSkipReason` | This sandbox, Jest | Red against a missing export, then green: webkit and firefox skip without `getDirectory`, chromium never does, an engine that has it never does, an unnamed engine never does |
+| The OPFS skip, end to end | This sandbox, chromium, temporarily mutated to treat chromium as OPFS-less | The cache spec skipped with the reason in the summary; mutation reverted. Unmutated: no skip on chromium or mobile-pixel, 6 passed, 20 skipped for the same target reasons as before |
 | The failure diagnoses, shapes forced in Chromium (`getDirectory()` rejected; `getContext('webgl*')` null) | This sandbox, local `test-flows-build` | Each named its cause: no OPFS in the store, in 0.8s instead of 90s; the dropzone gone with "Error creating WebGL context." and WebGL2 none. Anonymous and step-9 specs still pass on chromium + mobile-pixel. |
 
 **Unverified until the owner's setup exists:**
@@ -687,7 +742,9 @@ merged (follow-up PR):
 - every tiered spec against a real deploy;
 - real Auth0 login;
 - the free and pending specs entirely;
-- Firefox and WebKit.
+- Firefox and WebKit. In particular the Firefox WebGL prefs, which are
+  unrun anywhere until the next CI run, and Safari's OPFS cache, which no
+  automated run reaches.
 
 This sandbox's network policy blocked the browser download from
 `cdn.playwright.dev` and every Netlify and Auth0 host.

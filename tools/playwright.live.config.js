@@ -27,6 +27,35 @@ const DEVICES = {
   'mobile-iphone': devices['iPhone 13'],
   'mobile-pixel': devices['Pixel 7'],
 }
+
+// Firefox on a GitHub Linux runner has no GPU, and #1942's second CI run
+// showed it refusing WebGL outright: "WebGL creation failed: * AllowWebgl2:false
+// restricts context creation on this system", then three.js's "A WebGL
+// context could not be created", then the app's ErrorBoundary ("Oh no!")
+// on every spec that loads a model. (The product's silent crash without
+// WebGL is #659; this only keeps the smoke from tripping on the runner.)
+//
+// The message is Firefox's graphics blocklist saying no to this
+// driver/environment, not a missing feature, so the prefs below override the
+// blocklist and let Mesa's software rasteriser (llvmpipe) serve the context.
+// Kept to the minimum; none of this was runnable where it was written (the
+// Firefox download is blocked there), so the next CI run is its test. If
+// WebGL2 is still refused, the run's WebGL diagnostics will say so, and the
+// next knobs are `gfx.webrender.software: true` and LIBGL_ALWAYS_SOFTWARE=1
+// in the workflow's environment.
+const FIREFOX_USER_PREFS = {
+  // The blocklist override, and the one pref that matters: community reports
+  // of this exact "restricts context creation" message on blocklisted or
+  // virtualised drivers are fixed by it (Mozilla support threads; three.js
+  // forum "FireFox on Windows: WebGL creation failed").
+  'webgl.force-enabled': true,
+  // Both default to the values given; stated so a runner image or a future
+  // Playwright Firefox profile that flips them cannot silently turn WebGL
+  // (or its WebGL2 half, which three.js r163+ requires) back off.
+  'webgl.disabled': false,
+  'webgl.enable-webgl2': true,
+}
+
 for (const name of LIVE_PROJECTS) {
   if (!DEVICES[name]) {
     throw new Error(`playwright.live.config.js: no device for project ${name}`)
@@ -72,5 +101,12 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
 
-  projects: LIVE_PROJECTS.map((name) => ({name, workers: 1, use: {...DEVICES[name]}})),
+  projects: LIVE_PROJECTS.map((name) => ({
+    name,
+    workers: 1,
+    use: {
+      ...DEVICES[name],
+      ...(name === 'firefox' ? {launchOptions: {firefoxUserPrefs: FIREFOX_USER_PREFS}} : {}),
+    },
+  })),
 })

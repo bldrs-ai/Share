@@ -4,6 +4,7 @@ import {
   artifactVerdict,
   describeArtifactFailure,
   describeModelNotReady,
+  opfsSkipReason,
   pushDiagnostic,
   redactDiagnostic,
 } from './loadDiagnosis'
@@ -108,6 +109,31 @@ describe('live/loadDiagnosis', () => {
       expect(describeModelNotReady(render, [])).toContain('cadview-dropzone is not in the DOM')
       expect(describeModelNotReady({...render, hasDropzone: true, modelReady: 'false'}, []))
         .toContain('data-model-ready=false: the load itself did not finish')
+    })
+  })
+
+  describe('opfsSkipReason', () => {
+    it('skips webkit and firefox when the page has no getDirectory, naming the engine', () => {
+      for (const engine of ['webkit', 'firefox']) {
+        const reason = opfsSkipReason({engine, hasGetDirectory: false})
+        expect(reason).toContain(`${engine}: no navigator.storage in this Playwright build`)
+        expect(reason).toContain('covered on chromium')
+        expect(reason).toContain('manual Safari check (§8 step 7)')
+      }
+    })
+
+    it('never skips chromium: no OPFS there is a regression and must fail', () => {
+      expect(opfsSkipReason({engine: 'chromium', hasGetDirectory: false})).toBeNull()
+    })
+
+    it('does not skip an engine it cannot name, so a harness gap fails loudly', () => {
+      expect(opfsSkipReason({engine: 'unknown', hasGetDirectory: false})).toBeNull()
+    })
+
+    it('does not skip an engine that has OPFS, so a real write failure still fails', () => {
+      for (const engine of ['chromium', 'webkit', 'firefox']) {
+        expect(opfsSkipReason({engine, hasGetDirectory: true})).toBeNull()
+      }
     })
   })
 

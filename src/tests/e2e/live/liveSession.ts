@@ -10,6 +10,7 @@ import {
   artifactVerdict,
   describeArtifactFailure,
   describeModelNotReady,
+  opfsSkipReason,
   pushDiagnostic,
 } from './loadDiagnosis'
 import {isCallbackUrl, loginCompletion} from './loginCompletion'
@@ -510,10 +511,15 @@ export function captureLoadDiagnostics(page: Page): string[] {
  * listed while it is still being written (OPFS.worker.js, on resolving
  * early), and the specs read the artifact's bytes next.
  *
+ * Skips first, through {@link skipUnlessOpfs}, in an engine whose Playwright
+ * build has no OPFS: every spec that waits for the artifact is a cache spec
+ * (the Export button is enabled by it), so one call here covers them all.
+ *
  * @param page the page {@link openLiveModel} loaded
  * @param glbLogs from {@link openLiveModel}
  */
 export async function waitForArtifactWritten(page: Page, glbLogs: string[]) {
+  await skipUnlessOpfs(page)
   const diagnostics = DIAGNOSTICS.get(page) ?? []
   const appOpfs = await readAppOpfsVerdict(page)
   const started = Date.now()
@@ -530,6 +536,26 @@ export async function waitForArtifactWritten(page: Page, glbLogs: string[]) {
       throw new Error(describeArtifactFailure(verdict.reason, {glbLines, opfs, diagnostics}))
     }
     await new Promise((resolve) => setTimeout(resolve, ARTIFACT_POLL_MS))
+  }
+}
+
+
+/**
+ * Skip the running test, with the reason, when this browser has no OPFS to
+ * test the cache with and is not Chromium (loadDiagnosis.ts#opfsSkipReason
+ * has the decision and why it is narrow).
+ *
+ * The probe runs in the page, on the deploy's origin: `navigator.storage`
+ * can differ on `about:blank`. Call it after {@link openLiveModel}.
+ *
+ * @param page a page on the deploy's origin
+ */
+export async function skipUnlessOpfs(page: Page) {
+  const hasGetDirectory = await page.evaluate(() => typeof navigator.storage?.getDirectory === 'function')
+  const engine = page.context().browser()?.browserType().name() ?? 'unknown'
+  const reason = opfsSkipReason({engine, hasGetDirectory})
+  if (reason !== null) {
+    test.skip(true, reason)
   }
 }
 
