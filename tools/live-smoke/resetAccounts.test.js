@@ -5,7 +5,7 @@ import {main, resetAccounts} from './resetAccounts.mjs'
 /* eslint-disable no-magic-numbers */
 const DOMAIN = 'tenant.example.auth0.com'
 const CONFIG = {domain: DOMAIN, clientId: 'm2m-client', clientSecret: 'm2m-secret'}
-const DB = 'Username-Password-Authentication'
+const DB = 'share-live-smoke'
 
 const ACCOUNTS = {
   pro: {email: 'pro@example.test', password: 'pw-pro'},
