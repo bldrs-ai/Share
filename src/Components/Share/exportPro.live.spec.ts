@@ -39,6 +39,10 @@ import {
 import {makeSpz} from '../../tests/e2e/live/spz'
 
 
+// Click to "Exported …": the export itself, on the slowest project.
+const EXPORTED_MESSAGE_TIMEOUT_MS = 120_000
+
+
 /**
  * Live smoke, Pro tier (the comped Pro account): §8 steps 1, 2, 3, 4, 5, 5b,
  * 5c, 6, 8 and 10 — and 7's "a file, not an inline tab" as far as an engine
@@ -148,16 +152,19 @@ test.describe('Live smoke: Pro', () => {
     await waitForCodecSizing(page)
     const withMetadata = await selectCompression(page, 'none')
 
-    const first = await clickExportAndDownload(page)
-    // Step 8, checked first: the "Exported …" message reads over the
-    // still-open dialog, and nothing pushes the page sideways (the mobile
-    // projects' half). Before the byte checks below, which take long enough
-    // on the phone projects for the message to auto-hide (mobile-pixel,
-    // live run 37747107871).
-    await expect(page.getByRole('dialog')).toBeVisible()
-    await expect(page.getByTestId('snackbar')).toContainText('Exported')
-    await expectSnackbarOnTop(page)
-    await expectNoHorizontalScroll(page)
+    // Step 8, watched from BEFORE the click: the "Exported …" message reads
+    // over the still-open dialog, and nothing pushes the page sideways (the
+    // mobile projects' half). The message auto-dismisses after 5s
+    // (AlertDialogAndSnackbar), and on mobile-pixel in CI reading the
+    // download back alone outlasted that (live runs 37747107871 and
+    // 37820640515), so it is checked as it appears, alongside the download.
+    const exportedMessage = (async () => {
+      await expect(page.getByTestId('snackbar')).toContainText('Exported', {timeout: EXPORTED_MESSAGE_TIMEOUT_MS})
+      await expect(page.getByRole('dialog')).toBeVisible()
+      await expectSnackbarOnTop(page)
+      await expectNoHorizontalScroll(page)
+    })()
+    const [first] = await Promise.all([clickExportAndDownload(page), exportedMessage])
     expect(first.name).toBe('index.glb')
     expect(glbFramingProblems(first.bytes)).toEqual([])
     expect(first.bytes.byteLength).toBe(withMetadata)
