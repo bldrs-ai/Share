@@ -202,19 +202,22 @@ export async function clickGate(page: Page, testId: string) {
 export async function expectSnackbarOnTop(page: Page) {
   const content = page.locator(`${SNACKBAR_SELECTOR} .MuiSnackbarContent-root`)
   await expect(content).toBeVisible()
-  const box = await content.boundingBox()
-  if (box === null) {
-    throw new Error('The snackbar content has no layout box')
-  }
-  const isOnTop = await page.evaluate(({x, y, selector}) => {
-    const hit = document.elementFromPoint(x, y)
-    return Boolean(hit && hit.closest(selector))
-  }, {
-    x: box.x + (box.width / HALF),
-    y: box.y + (box.height / HALF),
-    selector: SNACKBAR_SELECTOR,
-  })
-  expect(isOnTop).toBe(true)
+  // Measured and hit-tested in ONE evaluate: a snackbar that auto-hides
+  // between a separate boundingBox() and the hit-test reads as "no layout
+  // box" (mobile-pixel, live run 37742719516).
+  const where = await page.evaluate(({selector, half}) => {
+    const el = document.querySelector(`${selector} .MuiSnackbarContent-root`)
+    if (el === null) {
+      return 'closed before it could be hit-tested'
+    }
+    const rect = el.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) {
+      return 'closed before it could be hit-tested'
+    }
+    const hit = document.elementFromPoint(rect.x + (rect.width / half), rect.y + (rect.height / half))
+    return hit !== null && hit.closest(selector) !== null ? 'on top' : `under ${hit === null ? 'nothing' : hit.tagName}`
+  }, {selector: SNACKBAR_SELECTOR, half: HALF})
+  expect(where).toBe('on top')
 }
 
 

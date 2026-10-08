@@ -1,4 +1,4 @@
-import {ConsoleMessage, Page, expect, test} from '@playwright/test'
+import {ConsoleMessage, Page, Request, Response, expect, test} from '@playwright/test'
 import {
   clickGate,
   dismissLoadSnackbar,
@@ -62,8 +62,24 @@ async function expectUpgradeNavigates(page: Page) {
       problems.push(`console.error: ${message.text()}`)
     }
   }
+  // A failed document load leaves the page on chrome-error:// with no
+  // page error (run 37742719516), so the main frame's own request and
+  // response are recorded too.
+  const onRequestFailed = (request: Request) => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+      problems.push(`navigation failed: ${request.url()} ${request.failure()?.errorText ?? ''}`)
+    }
+  }
+  const onResponse = (response: Response) => {
+    const request = response.request()
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+      problems.push(`navigation response: ${response.status()} ${response.url()}`)
+    }
+  }
   page.on('pageerror', onPageError)
   page.on('console', onConsole)
+  page.on('requestfailed', onRequestFailed)
+  page.on('response', onResponse)
   try {
     await page.getByTestId('gated-help-action').click()
     await page.waitForURL(/\/subscribe\//, SUBSCRIBE_NAVIGATION)
@@ -71,11 +87,13 @@ async function expectUpgradeNavigates(page: Page) {
     const helpOpen = await page.getByTestId('gated-help').isVisible().catch(() => false)
     throw new Error(`Upgrade to Pro did not reach /subscribe/: still at ${page.url()}; ` +
       `gate help ${helpOpen ? 'still open' : 'closed'}; ` +
-      `${problems.length === 0 ? 'no page or console errors' : problems.join(' | ')}. ` +
+      `${problems.length === 0 ? 'no page, console or navigation events' : problems.join(' | ')}. ` +
       `(${(err as Error).message.split('\n')[0]})`)
   } finally {
     page.off('pageerror', onPageError)
     page.off('console', onConsole)
+    page.off('requestfailed', onRequestFailed)
+    page.off('response', onResponse)
   }
 }
 
