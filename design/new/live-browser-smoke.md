@@ -197,7 +197,7 @@ its whole value appears.
 Share's login dialog offers only GitHub and Google. Its popup route takes any
 Auth0 connection, though:
 
-1. `<base>/popup-auth?connection=Username-Password-Authentication` calls
+1. `<base>/popup-auth?connection=share-live-smoke` calls
    `loginWithRedirect`.
 2. Auth0's Universal Login asks for the email and password.
 3. Auth0 returns to `<origin>/popup-callback`.
@@ -295,7 +295,7 @@ asks, up to three times.
 **How each account is found and read:**
 
 1. Look the account up by email (`users-by-email`).
-2. Keep only users with a `Username-Password-Authentication` identity, so a
+2. Keep only users with a `share-live-smoke` identity, so a
    GitHub login with the same address is ignored.
 3. There must then be exactly one. None or two is drift.
 4. Read the user back from the primary store.
@@ -513,11 +513,10 @@ this one.
 It never runs on every push.
 
 - **`workflow_dispatch`** with an https origin, plus optional projects.
-- **A PR marked ready for review**, but only if it touches export,
-  subscription or harness paths. CI is capped at 4 concurrent jobs, and a full
-  run holds one runner for tens of minutes. This filter is the one change
-  beyond the brief, listed under [open questions](#open-questions).
-- **The `live-smoke` label** on any PR, draft or not.
+- **The `live-smoke` label** on any PR, draft or not. This is the only PR
+  trigger: marking a PR ready does not start a run. CI is capped at 4
+  concurrent jobs and a full run holds one runner for tens of minutes, so a
+  run is always asked for. To re-run, remove the label and add it again.
 
 ### Target
 
@@ -821,9 +820,12 @@ This sandbox's network policy blocked the browser download from
 
 ## Owner setup
 
-1. **Auth0, Database connection.** `Username-Password-Authentication` must be
-   enabled for the Share SPA application (Applications → the SPA →
-   Connections). Sign-ups can stay off; the owner creates the users.
+1. **Auth0, Database connection.** A dedicated database connection,
+   `share-live-smoke`, holds only the test users. It has sign-ups disabled and
+   Email as the only identifier, and is enabled for the Share SPA application
+   alone (Applications → the SPA → Connections). A connection of their own
+   keeps the test users apart from any real password users, and the reset
+   script only ever touches users with an identity in it.
 2. **Test users**, in that connection, email verified:
    - **5 free:** one per project. No `subscriptionStatus` (or `"free"`).
    - **1 Pro:** app_metadata `{"subscriptionStatus": "sharePro", "comped":
@@ -907,10 +909,8 @@ part of phase 1.
      before. That only narrows the window.
 
    This changes billing code, so the owner decides.
-2. **Ready-for-review scoping.** The brief said "PR ready_for_review → that
-   PR's preview". The workflow runs on ready-for-review only for PRs touching
-   export, subscription or harness paths, because of the 4-runner cap; the
-   label runs any PR. Drop the filter if every PR should pay for a run.
+2. **Ready-for-review scoping.** Resolved: the owner chose label-only PR
+   runs. Marking a PR ready no longer starts one.
 3. **Which Netlify project.** PR runs default to `bldrs-share-prod`'s
    preview. If `bldrs-share-dev` uses a different Auth0 tenant or client, the
    accounts must live in the one the chosen project uses.

@@ -24,6 +24,7 @@ import {
   LIVE_TEST_TIMEOUT_MS,
   PRO_MODULE_URL,
   RECORD_EXPORT_URL,
+  cacheDirectives,
   clickExportAndDownload,
   loginWithPassword,
   noteUnverified,
@@ -148,6 +149,15 @@ test.describe('Live smoke: Pro', () => {
     const withMetadata = await selectCompression(page, 'none')
 
     const first = await clickExportAndDownload(page)
+    // Step 8, checked first: the "Exported …" message reads over the
+    // still-open dialog, and nothing pushes the page sideways (the mobile
+    // projects' half). Before the byte checks below, which take long enough
+    // on the phone projects for the message to auto-hide (mobile-pixel,
+    // live run 37747107871).
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await expect(page.getByTestId('snackbar')).toContainText('Exported')
+    await expectSnackbarOnTop(page)
+    await expectNoHorizontalScroll(page)
     expect(first.name).toBe('index.glb')
     expect(glbFramingProblems(first.bytes)).toEqual([])
     expect(first.bytes.byteLength).toBe(withMetadata)
@@ -161,16 +171,11 @@ test.describe('Live smoke: Pro', () => {
     expect(proModule).toHaveLength(1)
     expect(proModule[0].status).toBe(HTTP_OK)
     expect(proModule[0].headers['content-type']).toMatch(/^text\/javascript/)
-    expect(proModule[0].headers['cache-control']).toBe('private, no-store')
+    // Directives, not the string: Netlify's edge re-serializes the header
+    // the function set as `private, no-store` to `private,no-store`.
+    expect(cacheDirectives(proModule[0].headers['cache-control'])).toEqual(['no-store', 'private'])
     // A Pro delivery is never charged (#1939 §4.8): no free-export row id.
     expect(proModule[0].headers['x-bldrs-export-id']).toBeUndefined()
-
-    // Step 8: the "Exported …" message reads over the still-open dialog, and
-    // nothing pushes the page sideways (the mobile projects' half).
-    await expect(page.getByRole('dialog')).toBeVisible()
-    await expect(page.getByTestId('snackbar')).toContainText('Exported')
-    await expectSnackbarOnTop(page)
-    await expectNoHorizontalScroll(page)
 
     // Step 5: metadata off is a smaller file with no BLDRS_ anywhere in its
     // JSON — and the first file, with it on, had some.
