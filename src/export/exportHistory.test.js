@@ -593,7 +593,7 @@ describe('exportHistory', () => {
 
       const result = await recordExport(anEntry(), SUB, jest.fn().mockResolvedValue('token'))
 
-      expect(result).toMatchObject({recorded: false, status: 403, freeExports})
+      expect(result).toMatchObject({recorded: false, status: 403, freeExports, reason: 'free_export_not_charged'})
     })
 
     it('keeps the local row when the network is down', async () => {

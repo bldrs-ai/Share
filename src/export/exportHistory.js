@@ -413,7 +413,9 @@ function unrecordedLocalRows(serverExports, localExports) {
  *   `recorded` is true only when the server persisted the row, `status` is
  *   the HTTP status when there was one, `exports` is the list now in OPFS,
  *   and `freeExports` is the free-tier allowance the server reported after
- *   recording (null for Pro, or when it reported none)
+ *   recording (null for Pro, or when it reported none). A 401/403 refusal
+ *   also carries `reason`, the function's `error` (e.g.
+ *   'free_export_not_charged'), or null when its body had none
  */
 export async function recordExport(entry, sub, getAccessToken, refreshToken) {
   const {id, key, format, bytes, title, cacheKeyArgs, schemaVer, options} = entry
@@ -474,7 +476,13 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
     } catch {
       refusal = null
     }
-    return {recorded: false, status: response.status, exports: optimistic, freeExports: refusal?.freeExports ?? null}
+    return {
+      recorded: false,
+      status: response.status,
+      exports: optimistic,
+      freeExports: refusal?.freeExports ?? null,
+      reason: refusal?.error ?? null,
+    }
   }
 
   let data = null

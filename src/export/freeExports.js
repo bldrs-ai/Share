@@ -50,6 +50,16 @@ export const FREE_EXPORT_WINDOW_MS =
  */
 export const FREE_EXPORT_LIMIT_REASON = 'free_export_limit'
 
+
+/**
+ * The `error` `record-export` refuses an uncharged free-tier row with (403),
+ * the allowance beside it. For an export `pro-module` served WITHOUT a
+ * charge, it is the definitive sign the account is no longer Pro — unlike a
+ * 401, which an expired token or an Auth0 hiccup also produces — so it is
+ * the one refusal `useExport` evicts a memoised Pro module on.
+ */
+export const FREE_EXPORT_NOT_CHARGED_REASON = 'free_export_not_charged'
+
 /**
  * Response header on a module `pro-module` charged a free export for: the id
  * of the ledger row it wrote. The client records the export under that id, so

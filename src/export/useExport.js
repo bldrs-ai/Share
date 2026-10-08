@@ -13,7 +13,7 @@ import {triggerDownload} from './download'
 import {recordExport} from './exportHistory'
 import {QUALITY_DEFAULT, isQualityLevel} from './exportQuality'
 import {getExportFormat} from './exportRegistry'
-import {FREE_EXPORT_LIMIT_REASON, formatNextFreeExport} from './freeExports'
+import {FREE_EXPORT_LIMIT_REASON, FREE_EXPORT_NOT_CHARGED_REASON, formatNextFreeExport} from './freeExports'
 import {COMPRESSION_NONE, isCompressionMode} from './glbCompression'
 import {isGzipAvailable} from './glbGzip'
 import {ProModuleDeniedError, forgetProModule, loadProModule} from './proModuleLoader'
@@ -207,14 +207,18 @@ export default function useExport() {
           // `pro-module` already said yes to this user moments ago, so a
           // denial HERE means the two gates disagree — worth seeing.
           captureException(new Error(`record-export refused the export (${recordResult.status})`))
-          if (!charge) {
+          if (!charge && recordResult.reason === FREE_EXPORT_NOT_CHARGED_REASON) {
             // An UNCHARGED delivery is the loader's memoised Pro module, and
-            // the server just refused to stand behind it: the account lost
-            // Pro while this page stayed open. Without this every later
-            // export would reuse the memo and skip `pro-module`'s charge for
-            // the rest of the session. Forget it so the next export is
-            // charged (or refused) afresh, and refresh the claims so the UI
-            // gates the button now rather than after a reload.
+            // the server just refused it as a free user's uncharged row: the
+            // account lost Pro while this page stayed open. Without this
+            // every later export would reuse the memo and skip
+            // `pro-module`'s charge for the rest of the session. Forget it so
+            // the next export is charged (or refused) afresh, and refresh the
+            // claims so the UI gates the button now rather than after a
+            // reload. Only on this 403: a 401 also comes from a token that
+            // expired mid-export or an Auth0 outage, on an account that may
+            // still be Pro, and evicting then would make every export wait
+            // on `pro-module` for the length of the outage.
             forgetProModule(format.moduleName)
             refreshAppMetadata().catch((refreshError) => captureException(refreshError))
           }

@@ -2559,9 +2559,10 @@ offline at the right moment) would make every free export uncounted. So:
    the page stays open: canceled from another tab or device, or demoted by
    a failed payment. Its next export skips `pro-module`, so nothing is
    charged, and `record-export` refuses the uncharged row
-   (`free_export_not_charged`). `useExport` takes that refusal as the
-   signal: it evicts the memo (`forgetProModule`) and force-refreshes the
-   claim. At most the one export already downloaded goes uncharged; the next
+   (`free_export_not_charged`). `useExport` takes that refusal, and only
+   that one, as the signal: it evicts the memo (`forgetProModule`) and
+   force-refreshes the claim. A 401 is not enough, because an expired token
+   or an Auth0 outage also gives one on an account that may still be Pro. At most the one export already downloaded goes uncharged; the next
    one is charged or refused like any free-tier export.
 4. `useExport` records the export under the charge's id, and `record-export`
    **fills in** that row (key, title, format, bytes; id, `exportedAt` and

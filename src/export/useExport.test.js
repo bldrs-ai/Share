@@ -461,7 +461,7 @@ describe('useExport', () => {
   })
 
   describe('when record-export refuses an export pro-module already served', () => {
-    const refused = {recorded: false, status: 403, exports: []}
+    const refused = {recorded: false, status: 403, exports: [], reason: 'free_export_not_charged'}
 
     it('forgets the memoised Pro module and refreshes the claims, for an uncharged export', async () => {
       // The account lost Pro while this page stayed open: the memo would
@@ -484,6 +484,17 @@ describe('useExport', () => {
     it('leaves the loader alone for a charged export, which was never memoised', async () => {
       loadProModule.mockResolvedValue({namespace: {exportArtifact}, charge: {exportId: 'row-1', freeExports: null}})
       recordExport.mockResolvedValue(refused)
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(forgetProModule).not.toHaveBeenCalled()
+    })
+
+    it('leaves the loader alone on a 401, which an expired token or an Auth0 outage also gives', async () => {
+      recordExport.mockResolvedValue({recorded: false, status: 401, exports: [], reason: 'invalid_auth0_token'})
       const {result} = renderHook(() => useExport())
 
       await act(async () => {
