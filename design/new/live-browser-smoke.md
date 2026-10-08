@@ -407,7 +407,12 @@ failure:
 - a local target that has no functions;
 - **a non-Chromium engine whose Playwright build has no OPFS** (WebKit, on
   Linux), for the specs that need the GLB cache. Chromium is never skipped
-  for this: no OPFS there is a regression, and fails.
+  for this: no OPFS there is a regression, and fails;
+- **a Firefox or WebKit whose Playwright build gets no WebGL2 on the runner**,
+  for every spec that loads a model (all of them), decided by
+  `loadDiagnosis.ts#webglSkipReason` from a probe in `openLiveModel` before it
+  navigates. Chromium is never skipped for this either: it renders in
+  software, so no WebGL there is a regression, and fails.
 
 A malformed input is a **failure**.
 
@@ -605,6 +610,10 @@ label run uses #1939's merge ref, which includes main's harness.
 **Residual manual list**, which is what §8 becomes once this and #1939 have
 merged (follow-up PR):
 
+- **Firefox, the whole flow**, until #1947 gets WebGL working on the runner.
+  The live specs skip there (`webglSkipReason`), so no automated run covers
+  it: Firefox's own download, OPFS and `CompressionStream`, and the export
+  itself, by hand.
 - Real iOS Safari and Android Chrome: the file lands in Files / Downloads.
 - Real desktop Safari: the download is a file and not an inline tab.
 - **Real Safari's OPFS cache** (step 7): the GLB artifact is written, the
@@ -684,16 +693,10 @@ merged (follow-up PR):
       restricts context creation on this system.)`, then three.js'
       `A WebGL context could not be created`, then the ErrorBoundary's
       "Oh no!".
-    - That is Firefox's graphics blocklist refusing the driver, not a
-      missing feature. `tools/playwright.live.config.js` now gives the
-      `firefox` project `firefoxUserPrefs`: `webgl.force-enabled: true` (the
-      blocklist override; the one that matters), plus `webgl.disabled: false`
-      and `webgl.enable-webgl2: true` as guards, since three.js needs WebGL2.
-    - **Not verified.** The Firefox download is blocked in the sandbox that
-      wrote this, so the prefs are chosen from Mozilla support threads and
-      the three.js forum for this exact message, not run. The re-run decides.
-      If WebGL2 is still refused, the next knobs are `gfx.webrender.software:
-      true` and `LIBGL_ALWAYS_SOFTWARE=1` in the workflow.
+    - That looked like Firefox's graphics blocklist refusing the driver, so
+      the `firefox` project was given `firefoxUserPrefs` (`webgl.force-enabled`
+      and two guards). The prefs and the two attempts after them all failed;
+      see the third run below.
     - The product's silent crash without WebGL is #659, and is not touched
       here.
   - **WebKit and `mobile-iphone`, the 4 cache tests: Playwright's Linux
@@ -719,6 +722,65 @@ merged (follow-up PR):
       residual list above).
 
 
+- **The third CI run (prefs, then Mesa): Firefox still has no WebGL, and the
+  owner stopped spending runs on it.**
+  - With the prefs, the error was `Exhausted GL driver options` (run
+    37725256026). Installing Mesa (`libegl1 libgles2 libgl1-mesa-dri`) and
+    setting `LIBGL_ALWAYS_SOFTWARE=1` changed nothing: `WebGL creation failed:
+    * tryNativeGL () * Exhausted GL driver options.
+    (FEATURE_FAILURE_WEBGL_EXHAUSTED_DRIVERS)` (run 37726235368). The app then
+    crashed to "Oh no!" (#659).
+  - **Decision:** the model-loading specs now SKIP on Firefox (and WebKit)
+    when the page cannot make a WebGL2 context, with a reason naming #659 and
+    #1947. The Mesa install, `LIBGL_ALWAYS_SOFTWARE` and the Firefox prefs were
+    all removed from the workflow and the config. The prefs were harmless, but
+    they did nothing, and `webgl.force-enabled` overrides Firefox's blocklist,
+    so leaving it would only confuse the next attempt. #1947 lists what is
+    untried: headed Firefox under `xvfb-run`, more prefs, `MOZ_WEBGL_FORCE_EGL`
+    and `MOZ_X11_EGL`, a GPU runner.
+  - The gate is narrow, like the OPFS one: `webglSkipReason` allows only
+    `firefox` and `webkit` to skip, and only when `getContext('webgl2')` is
+    null on the page BEFORE the model is navigated to. A Firefox that does get
+    a context still runs, and a crash then still fails.
+- **The fourth CI run: one Chromium spec failed on a `goto` that never
+  finished.**
+  - The annotation: `page.goto: net::ERR_ABORTED; maybe frame was detached?`
+    and `Test timeout of 240000ms exceeded`, in `exportAnonymous` step 2, after
+    three earlier runs where it passed.
+  - **Mechanism.** The two errors are one event, not two. Playwright raises
+    that message when the page's pending DOCUMENT request is cancelled
+    (`frames.js#requestFailed` with `canceled`), and what cancels it is the
+    test timeout closing the page. So the `goto` was still pending for the
+    whole 240s; `ERR_ABORTED` is the teardown, not a navigation superseding
+    it. Playwright's `navigationTimeout` defaults to none, so nothing else
+    bounded it.
+    - Reproduced: a socket that accepts and never answers, with a test timeout
+      shorter than the `goto`'s, gives exactly that pair of errors.
+  - **Ruled out: the app navigating the page.**
+    - Nothing of the app runs before the document commits.
+    - A client-side route change is a `history` call, which does not cancel a
+      pending navigation.
+    - The only load-time route code is `BaseRoutes` and `ShareRoutes`
+      forwarding from `/` and `/share`, which this URL is neither of.
+    - The only full navigations in the app are user actions
+      (`navigateToModel`, `reloadAfterCacheClear`).
+    - `isFirstTime` only decides whether the About panel opens
+      (`privacy/firstTime.js`); it never redirects.
+    - Another test's page cannot interfere: each test has its own context.
+  - **Not found: why the document request hung.** Whether Netlify's preview
+    stalled, the runner's network did, or the request raced five browsers
+    starting at once is not in the run's output; the log keeps nothing of the
+    request. Locally, 5 repeats of the same spec on a local build all passed.
+  - **What changed.** `openLiveModel` bounds the `goto` at 60s
+    (`NAVIGATION_TIMEOUT_MS`) and, on failure, says which stage stalled: no
+    response at all, an HTTP status with no DOMContentLoaded, or a network
+    failure (`loadDiagnosis.ts#describeNavigationFailure`). It does **not**
+    retry. A deploy that does not serve the page is what this smoke exists to
+    report, and a retry would hide a flake that should be counted. The next
+    occurrence therefore fails in 60s and says whether the server or the page
+    stalled.
+
+
 ## What ran where
 
 | Check | Where it ran | Result |
@@ -736,15 +798,22 @@ merged (follow-up PR):
 | `opfsSkipReason` | This sandbox, Jest | Red against a missing export, then green: webkit and firefox skip without `getDirectory`, chromium never does, an engine that has it never does, an unnamed engine never does |
 | The OPFS skip, end to end | This sandbox, chromium, temporarily mutated to treat chromium as OPFS-less | The cache spec skipped with the reason in the summary; mutation reverted. Unmutated: no skip on chromium or mobile-pixel, 6 passed, 20 skipped for the same target reasons as before |
 | The failure diagnoses, shapes forced in Chromium (`getDirectory()` rejected; `getContext('webgl*')` null) | This sandbox, local `test-flows-build` | Each named its cause: no OPFS in the store, in 0.8s instead of 90s; the dropzone gone with "Error creating WebGL context." and WebGL2 none. Anonymous and step-9 specs still pass on chromium + mobile-pixel. |
+| Anonymous live specs on #1942's preview | CI (`live-smoke`, 491c983, with Mesa and the prefs) | firefox still had no WebGL (`FEATURE_FAILURE_WEBGL_EXHAUSTED_DRIVERS`); chromium's step 2 `goto` hung to the 240s timeout; the rest as before |
+| `webglSkipReason`, `describeNavigationFailure` | This sandbox, Jest | Red against missing exports, then green: firefox and webkit skip without WebGL2 naming #659 and #1947; chromium and an unnamed engine never skip; an engine with WebGL2 never skips |
+| The WebGL skip, end to end | This sandbox, chromium, temporarily mutated to probe `false` and to treat chromium as WebGL-less | The anonymous spec skipped with the reason in the summary; mutation reverted. Unmutated: no skip on chromium or mobile-pixel |
+| The hung `goto` | This sandbox, chromium, against a socket that accepts and never answers | With no `goto` timeout and a short test timeout: `Test timeout` plus `page.goto: net::ERR_ABORTED; maybe frame was detached?`, the CI signature. With the 60s bound: `Timeout 60000ms exceeded` and "no response to the document request came within 60s" |
+| Live config on a local `test-flows-build`, after this change | This sandbox, `chromium` + `mobile-pixel`; the anonymous spec `--repeat-each=5` on chromium | 6 passed, 20 skipped as not applicable; 10 passed, 5 skipped with the repeats. No WebGL skip |
 
 **Unverified until the owner's setup exists:**
 
 - every tiered spec against a real deploy;
 - real Auth0 login;
 - the free and pending specs entirely;
-- Firefox and WebKit. In particular the Firefox WebGL prefs, which are
-  unrun anywhere until the next CI run, and Safari's OPFS cache, which no
-  automated run reaches.
+- Firefox, entirely: until #1947 lands it only skips. Its coverage is the
+  manual checklist.
+- WebKit's model-loading specs when WebGL is present, and Safari's OPFS
+  cache, which no automated run reaches;
+- the cause of the fourth run's hung `goto`: it has not recurred locally.
 
 This sandbox's network policy blocked the browser download from
 `cdn.playwright.dev` and every Netlify and Auth0 host.

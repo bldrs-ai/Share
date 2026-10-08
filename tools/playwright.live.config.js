@@ -28,33 +28,17 @@ const DEVICES = {
   'mobile-pixel': devices['Pixel 7'],
 }
 
-// Firefox on a GitHub Linux runner has no GPU, and #1942's second CI run
-// showed it refusing WebGL outright: "WebGL creation failed: * AllowWebgl2:false
-// restricts context creation on this system", then three.js's "A WebGL
-// context could not be created", then the app's ErrorBoundary ("Oh no!")
-// on every spec that loads a model. (The product's silent crash without
-// WebGL is #659; this only keeps the smoke from tripping on the runner.)
-//
-// The message is Firefox's graphics blocklist saying no to this
-// driver/environment, not a missing feature, so the prefs below override the
-// blocklist and let Mesa's software rasteriser (llvmpipe) serve the context.
-// Kept to the minimum; none of this was runnable where it was written (the
-// Firefox download is blocked there), so the next CI run is its test. If
-// WebGL2 is still refused, the run's WebGL diagnostics will say so, and the
-// next knobs are `gfx.webrender.software: true` and LIBGL_ALWAYS_SOFTWARE=1
-// in the workflow's environment.
-const FIREFOX_USER_PREFS = {
-  // The blocklist override, and the one pref that matters: community reports
-  // of this exact "restricts context creation" message on blocklisted or
-  // virtualised drivers are fixed by it (Mozilla support threads; three.js
-  // forum "FireFox on Windows: WebGL creation failed").
-  'webgl.force-enabled': true,
-  // Both default to the values given; stated so a runner image or a future
-  // Playwright Firefox profile that flips them cannot silently turn WebGL
-  // (or its WebGL2 half, which three.js r163+ requires) back off.
-  'webgl.disabled': false,
-  'webgl.enable-webgl2': true,
-}
+// Firefox and WebKit on a GitHub Linux runner may have no WebGL at all, and
+// then the app crashes on load (the product's silent no-WebGL crash is #659).
+// The model-loading specs SKIP there, with that reason, rather than fail for
+// the runner's sake (liveSession.ts#skipUnlessWebGL); Chromium never skips.
+// Getting Firefox a context is #1947. Three attempts failed and were
+// removed: the `webgl.force-enabled` / `webgl.disabled:false` /
+// `webgl.enable-webgl2` prefs (still "Exhausted GL driver options"), Mesa
+// installed on the runner, and LIBGL_ALWAYS_SOFTWARE=1. The prefs were
+// harmless but did nothing, and `webgl.force-enabled` overrides Firefox's
+// graphics blocklist, so keeping a no-op that changes what a skip probe sees
+// would only muddy the next attempt; #1947 lists what is still untried.
 
 for (const name of LIVE_PROJECTS) {
   if (!DEVICES[name]) {
@@ -106,7 +90,6 @@ export default defineConfig({
     workers: 1,
     use: {
       ...DEVICES[name],
-      ...(name === 'firefox' ? {launchOptions: {firefoxUserPrefs: FIREFOX_USER_PREFS}} : {}),
     },
   })),
 })

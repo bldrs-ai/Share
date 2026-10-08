@@ -4,9 +4,11 @@ import {
   artifactVerdict,
   describeArtifactFailure,
   describeModelNotReady,
+  describeNavigationFailure,
   opfsSkipReason,
   pushDiagnostic,
   redactDiagnostic,
+  webglSkipReason,
 } from './loadDiagnosis'
 
 
@@ -134,6 +136,54 @@ describe('live/loadDiagnosis', () => {
       for (const engine of ['chromium', 'webkit', 'firefox']) {
         expect(opfsSkipReason({engine, hasGetDirectory: true})).toBeNull()
       }
+    })
+  })
+
+  describe('webglSkipReason', () => {
+    it('skips firefox and webkit without WebGL2, naming the engine and both issues', () => {
+      for (const engine of ['firefox', 'webkit']) {
+        const reason = webglSkipReason({engine, hasWebGL2: false})
+        expect(reason).toContain(`${engine}: no WebGL2 in this Playwright build`)
+        expect(reason).toContain('#659')
+        expect(reason).toContain('#1947')
+      }
+    })
+
+    it('never skips chromium: no WebGL there is a regression and must fail', () => {
+      expect(webglSkipReason({engine: 'chromium', hasWebGL2: false})).toBeNull()
+    })
+
+    it('does not skip an engine it cannot name, so a harness gap fails loudly', () => {
+      expect(webglSkipReason({engine: 'unknown', hasWebGL2: false})).toBeNull()
+    })
+
+    it('does not skip an engine that has WebGL2, so a real crash still fails', () => {
+      for (const engine of ['chromium', 'webkit', 'firefox']) {
+        expect(webglSkipReason({engine, hasWebGL2: true})).toBeNull()
+      }
+    })
+  })
+
+  describe('describeNavigationFailure', () => {
+    const NAV = 'page.goto: net::ERR_ABORTED; maybe frame was detached?'
+
+    it('says no response ever came, and that the app never ran, when the document request was pending', () => {
+      const text = describeNavigationFailure(NAV, {status: null, failure: null, pendingMs: 60_000, timeoutMs: 60_000})
+      expect(text).toContain(NAV)
+      expect(text).toContain('no response')
+      expect(text).toContain('60s')
+      expect(text).toContain('app never started')
+    })
+
+    it('reports the status when the document answered but never reached DOMContentLoaded', () => {
+      const text = describeNavigationFailure(NAV, {status: 200, failure: null, pendingMs: 60_000, timeoutMs: 60_000})
+      expect(text).toContain('HTTP 200')
+      expect(text).toContain('DOMContentLoaded')
+    })
+
+    it('reports the network failure when the document request itself failed', () => {
+      const text = describeNavigationFailure(NAV, {status: null, failure: 'net::ERR_CONNECTION_RESET', pendingMs: 3_000, timeoutMs: 60_000})
+      expect(text).toContain('net::ERR_CONNECTION_RESET')
     })
   })
 

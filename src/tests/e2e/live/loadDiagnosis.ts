@@ -65,6 +65,97 @@ export function opfsSkipReason(signals: {engine: string, hasGetDirectory: boolea
 }
 
 
+const MS_PER_SECOND = 1000
+
+/** Playwright engines whose Linux build on a GPU-less runner has been seen to have no WebGL. */
+const WEBGL_LESS_ENGINES = ['firefox', 'webkit']
+
+
+/**
+ * Whether a model-loading spec should SKIP because this engine's Playwright
+ * build has no WebGL2 here, and the skip's reason; null means run it.
+ *
+ * Found by #1942's CI runs: Playwright's Firefox on the GitHub Linux runner
+ * (no GPU) fails `getContext('webgl2')` with `FEATURE_FAILURE_WEBGL_EXHAUSTED_DRIVERS`
+ * whatever the prefs (`webgl.force-enabled`) or Mesa installs tried, and the
+ * app then crashes to its error boundary ("Oh no!", the product's silent
+ * no-WebGL crash, #659). Every spec loads a model, so every spec fails there
+ * for a reason that is the runner, not the deploy. Same shape and same
+ * narrowness as {@link opfsSkipReason}:
+ *
+ * - Chromium NEVER skips. It renders in software (SwiftShader), so no WebGL
+ *   there is a real regression and has to fail.
+ * - An engine that reports WebGL2 never skips, so a crash with a context
+ *   still fails.
+ *
+ * Pure so `loadDiagnosis.test.js` can pin both. `liveSession.ts#skipUnlessWebGL`
+ * probes the page BEFORE `openLiveModel` navigates and calls `test.skip` with
+ * this reason.
+ *
+ * @param signals.engine Playwright's `browserType().name()`
+ * @param signals.hasWebGL2 `!!canvas.getContext('webgl2')` in the page
+ * @return the skip reason, or null when the spec should run
+ */
+export function webglSkipReason(signals: {engine: string, hasWebGL2: boolean}): string | null {
+  const {engine, hasWebGL2} = signals
+  // An allow-list, as for OPFS: an engine the harness could not name must fail, not skip.
+  if (hasWebGL2 || !WEBGL_LESS_ENGINES.includes(engine)) {
+    return null
+  }
+  return `${engine}: no WebGL2 in this Playwright build on the GPU-less runner, so the app crashes on load ` +
+    '(#659); Firefox/WebKit WebGL on the runner is tracked in #1947, until then covered on chromium and ' +
+    'by the manual checklist (design/new/glb-export-premium.md §8)'
+}
+
+
+/** What the harness saw of the model page's document request when `page.goto` failed. */
+export type NavigationObservation = {
+  /** The document response's HTTP status; null when no response arrived. */
+  status: number | null
+  /** The document request's `requestfailed` errorText, when it failed on its own. */
+  failure: string | null
+  /** How long the navigation had been pending. */
+  pendingMs: number
+  /** The `goto` timeout it was given. */
+  timeoutMs: number
+}
+
+
+/**
+ * Explain a failed `page.goto` of the model URL.
+ *
+ * Written after #1942's fourth live run, where one Chromium spec reported
+ * `page.goto: net::ERR_ABORTED; maybe frame was detached?` plus a 240s test
+ * timeout. That message is Playwright's rendering of a document request that
+ * was CANCELLED while still pending (frames.js `requestFailed(…, canceled)`),
+ * which is what test-timeout teardown does to a navigation that never
+ * finished — so it names the teardown, not a cause. It is not the app
+ * navigating away: nothing of the app runs before the document commits, and
+ * a client-side route change (`history.pushState`) does not cancel a pending
+ * `goto`. With no `goto` timeout (Playwright's default is none) the wait
+ * lasted the whole test; `liveSession.ts#openLiveModel` now bounds it and
+ * passes what it observed here, so the failure says which stage stalled.
+ *
+ * @param message the error's message
+ * @param seen what the harness observed
+ * @return the message with the stage that stalled
+ */
+export function describeNavigationFailure(message: string, seen: NavigationObservation): string {
+  const secs = Math.round(seen.timeoutMs / MS_PER_SECOND)
+  let stage: string
+  if (seen.failure !== null) {
+    stage = `the document request failed on its own: ${seen.failure}`
+  } else if (seen.status === null) {
+    stage = `no response to the document request came within ${secs}s, so the app never started: ` +
+      'the deploy (or the runner\'s network) stalled before the page existed'
+  } else {
+    stage = `the document answered HTTP ${seen.status} but DOMContentLoaded did not fire within ${secs}s ` +
+      'while the app never started: a parser-blocking script or stylesheet stalled'
+  }
+  return `${message}\n\nNavigation to the model: ${stage} (pending ${Math.round(seen.pendingMs / MS_PER_SECOND)}s).`
+}
+
+
 /** What the page says about OPFS, read when an artifact wait fails. */
 export type OpfsState = {
   /**

@@ -1,5 +1,5 @@
 import {readFile} from 'node:fs/promises'
-import {APIRequestContext, BrowserContext, Download, Locator, Page, Response, TestInfo, expect, test} from '@playwright/test'
+import {APIRequestContext, BrowserContext, Download, Locator, Page, Request, Response, TestInfo, expect, test} from '@playwright/test'
 import {DATABASE_CONNECTION} from '../../../../tools/live-smoke/auth0Management.js'
 import {captureGlbLogs, glbLinesSinceReset} from '../glbLogs'
 import {waitForModelReady} from '../models'
@@ -10,8 +10,10 @@ import {
   artifactVerdict,
   describeArtifactFailure,
   describeModelNotReady,
+  describeNavigationFailure,
   opfsSkipReason,
   pushDiagnostic,
+  webglSkipReason,
 } from './loadDiagnosis'
 import {isCallbackUrl, loginCompletion} from './loginCompletion'
 import {
@@ -59,6 +61,16 @@ export const HTTP_METHOD_NOT_ALLOWED = 405
 // mocked suite's budgets assume localhost.
 export const LIVE_TEST_TIMEOUT_MS = 240_000
 const MODEL_READY_TIMEOUT_MS = 90_000
+
+/**
+ * `page.goto` of the model URL. Playwright's default is no limit at all
+ * (`navigationTimeout: 0`), so a document request that never answers held a
+ * spec until its 240s test timeout and then surfaced as a bare
+ * `net::ERR_ABORTED` (#1942, run 37726235368). A healthy deploy answers in
+ * seconds; this is generous for a cold Netlify preview over the internet.
+ */
+const NAVIGATION_TIMEOUT_MS = 60_000
+const ABORTED_BY_TEARDOWN = 'net::ERR_ABORTED'
 const WRITER_TIMEOUT_MS = 90_000
 const LOGIN_TIMEOUT_MS = 45_000
 const SESSION_POLL_MS = 250
@@ -436,15 +448,19 @@ export async function sessionAccessToken(page: Page): Promise<string> {
 /**
  * Open the live model and wait for it, logged in or not.
  *
+ * Skips first, through {@link skipUnlessWebGL}, in an engine with no WebGL on
+ * this runner: every spec loads the model, and the app cannot render one.
+ *
  * @param page the page
  * @param options
  * @param options.isSignedIn wait for the signed-in toolbar first
  * @return the `[glb]` console buffer, capturing from before the navigation
  */
 export async function openLiveModel(page: Page, {isSignedIn = false}: {isSignedIn?: boolean} = {}): Promise<string[]> {
+  await skipUnlessWebGL(page)
   const glbLogs = captureGlbLogs(page)
   const diagnostics = captureLoadDiagnostics(page)
-  await page.goto(LIVE_MODEL_URL, {waitUntil: 'domcontentloaded'})
+  await gotoLiveModel(page)
   if (isSignedIn) {
     await expect(page.getByTestId('control-button-profile-icon-authenticated'))
       .toBeVisible({timeout: LOGIN_TIMEOUT_MS})
@@ -458,6 +474,77 @@ export async function openLiveModel(page: Page, {isSignedIn = false}: {isSignedI
     throw new Error(`${(e as Error).message}\n\n${describeModelNotReady(render, diagnostics)}`)
   }
   return glbLogs
+}
+
+
+/**
+ * Skip the running test, with the reason, when this browser cannot make a
+ * WebGL2 context and is not Chromium (loadDiagnosis.ts#webglSkipReason has
+ * the decision and why it is narrow).
+ *
+ * Probed BEFORE the model is navigated to, on whatever the page holds (a
+ * fresh page is `about:blank`): the app crashes to its error boundary
+ * without WebGL (#659), and a context is a property of the browser's
+ * graphics stack, not of the origin. `getContext` on a throwaway canvas
+ * is the same question three.js asks first.
+ *
+ * @param page a page that has not yet navigated to the model
+ */
+export async function skipUnlessWebGL(page: Page) {
+  const hasWebGL2 = await page.evaluate(() => !!document.createElement('canvas').getContext('webgl2'))
+  const engine = page.context().browser()?.browserType().name() ?? 'unknown'
+  const reason = webglSkipReason({engine, hasWebGL2})
+  if (reason !== null) {
+    test.skip(true, reason)
+  }
+}
+
+
+/**
+ * `page.goto` of the model URL, bounded, and saying which stage stalled
+ * when it does not finish.
+ *
+ * The app cannot be the cause of an aborted `goto`: nothing of it runs until
+ * the document commits, and its own route changes are `history` calls that
+ * do not cancel a pending navigation (BaseRoutes/ShareRoutes only `navigate`
+ * from `/` and `/share`, never from `/share/v/p/index.ifc`). So there is no
+ * "settled URL" to wait for here, and a failure is never retried: a deploy
+ * that does not serve the page is exactly what this smoke exists to report.
+ *
+ * @param page the page
+ */
+async function gotoLiveModel(page: Page) {
+  const observed: {status: number | null, failure: string | null} = {status: null, failure: null}
+  const isDocument = (request: {isNavigationRequest(): boolean, frame(): unknown}) =>
+    request.isNavigationRequest() && request.frame() === page.mainFrame()
+  const onResponse = (response: Response) => {
+    if (isDocument(response.request())) {
+      observed.status = response.status()
+    }
+  }
+  const onFailed = (request: Request) => {
+    // ERR_ABORTED is a cancellation (the page closing under a pending
+    // navigation), not the network refusing: reproduced locally by pointing
+    // a spec at a socket that accepts and never answers, with a test timeout
+    // shorter than the goto's. It says nothing about why the request hung.
+    const errorText = request.failure()?.errorText ?? null
+    if (isDocument(request) && errorText !== ABORTED_BY_TEARDOWN) {
+      observed.failure = errorText
+    }
+  }
+  page.on('response', onResponse)
+  page.on('requestfailed', onFailed)
+  const started = Date.now()
+  try {
+    await page.goto(LIVE_MODEL_URL, {waitUntil: 'domcontentloaded', timeout: NAVIGATION_TIMEOUT_MS})
+  } catch (e) {
+    throw new Error(describeNavigationFailure((e as Error).message, {
+      ...observed, pendingMs: Date.now() - started, timeoutMs: NAVIGATION_TIMEOUT_MS,
+    }))
+  } finally {
+    page.off('response', onResponse)
+    page.off('requestfailed', onFailed)
+  }
 }
 
 
