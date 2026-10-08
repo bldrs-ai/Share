@@ -230,35 +230,51 @@ function sanitizeResult(name: string, result: ToolResult<unknown>, maxChars: num
   if (unknown.length > 0) {
     throw invalid(`fields outside the result contract (${unknown.join(', ')})`, {unknown})
   }
-  // The caller gets the checked copy, never the provider's object.
-  const {copy: content, problem} = copyJson(result.content)
+  // Read each field exactly once, then check and copy those snapshots: an
+  // accessor that answered one way to the checks and another to the copy
+  // would otherwise slip past them (Codex review round 3 on #1946). Content
+  // is copied in the same pass that checks it (`copyJson`).
+  const {content: rawContent, echo, refs: rawRefs, undo} = result
+  const {copy: content, problem} = copyJson(rawContent)
   if (problem) {
     throw invalid(`content that is not plain JSON (${problem})`, {problem})
   }
-  if (result.echo !== undefined && typeof result.echo !== 'string') {
+  if (echo !== undefined && typeof echo !== 'string') {
     throw invalid('an echo that is not a string')
   }
-  if (result.refs !== undefined &&
-      (!Array.isArray(result.refs) || result.refs.some((ref) => typeof ref !== 'string'))) {
-    throw invalid('refs that are not strings')
+  let refs: string[] | undefined
+  if (rawRefs !== undefined) {
+    if (!Array.isArray(rawRefs)) {
+      throw invalid('refs that are not strings')
+    }
+    // Snapshot the elements too (an index can be an accessor), then check.
+    const length = rawRefs.length
+    const snapshot: unknown[] = []
+    for (let i = 0; i < length; i++) {
+      snapshot.push(rawRefs[i])
+    }
+    if (snapshot.some((ref) => typeof ref !== 'string')) {
+      throw invalid('refs that are not strings')
+    }
+    refs = snapshot as string[]
   }
-  if (result.undo !== undefined && typeof result.undo !== 'function') {
+  if (undo !== undefined && typeof undo !== 'function') {
     throw invalid('an undo that is not a function')
   }
   const outward: ToolResult<unknown> = {content}
-  if (result.echo !== undefined) {
-    outward.echo = result.echo
+  if (echo !== undefined) {
+    outward.echo = echo
   }
-  if (result.refs !== undefined) {
-    outward.refs = [...result.refs]
+  if (refs !== undefined) {
+    outward.refs = refs
   }
   const size = JSON.stringify(outward).length
   if (size > maxChars) {
     throw new ToolError('result_too_large',
       `Tool '${name}' returned ${size} characters (cap ${maxChars}).`, {size, cap: maxChars})
   }
-  if (result.undo !== undefined) {
-    outward.undo = result.undo
+  if (undo !== undefined) {
+    outward.undo = undo
   }
   return outward
 }

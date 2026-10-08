@@ -243,6 +243,40 @@ describe('assist/registry', () => {
       expect(Object.getOwnPropertyDescriptor(result.content, 'data')).toHaveProperty('value', 'ok')
     })
 
+    // Codex review round 3 on #1946: every field, not just content, is read
+    // once and the checked snapshot is what the caller gets.
+    it('reads echo, refs, each ref and undo once, keeping what it checked', async () => {
+      const reads = {echo: 0, refs: 0, ref0: 0, undo: 0}
+      const undo = jest.fn()
+      const refs = ['placeholder']
+      Object.defineProperty(refs, 0, {
+        enumerable: true,
+        get: () => (reads.ref0++ === 0 ? 'e1' : new Float32Array(3)),
+      })
+      const returned = {
+        content: {},
+        get echo() {
+          return reads.echo++ === 0 ? 'did it' : new Float32Array(3)
+        },
+        get refs() {
+          return reads.refs++ === 0 ? refs : [new Float32Array(3)]
+        },
+        get undo() {
+          return reads.undo++ === 0 ? undo : 'later'
+        },
+      }
+      const registry = createRegistry([makeProvider('view', [makeTool('view.a', {run: () => Promise.resolve(returned)})])])
+      const result = await registry.call('view.a', {refs: ['e1']})
+      expect(reads).toEqual({echo: 1, refs: 1, ref0: 1, undo: 1})
+      expect(result).toEqual({content: {}, echo: 'did it', refs: ['e1'], undo})
+    })
+
+    it('counts a JSON "__proto__" key toward the size cap', async () => {
+      const content = JSON.parse(`{"__proto__":{"big":"${'x'.repeat(DEFAULT_MAX_RESULT_CHARS)}"}}`)
+      const registry = createRegistry([makeProvider('view', [makeTool('view.a', {run: () => Promise.resolve({content})})])])
+      expect((await rejection(registry.call('view.a', {refs: ['e1']}))).code).toBe('result_too_large')
+    })
+
     it('refuses non-string refs and a missing content', async () => {
       const registry = createRegistry([makeProvider('view', [
         makeTool('view.a', {run: () => Promise.resolve({content: {}, refs: [1]})}),

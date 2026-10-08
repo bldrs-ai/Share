@@ -31,6 +31,15 @@ describe('assist/json', () => {
     expect(copyJson({p: new Float32Array(1)})).toEqual({copy: undefined, problem: '#/p: Float32Array'})
   })
 
+  it('keeps a JSON "__proto__" key as an own property, not a prototype', () => {
+    const {copy, problem} = copyJson(JSON.parse('{"__proto__":{"x":1}}'))
+    expect(problem).toBeNull()
+    expect(Object.prototype.hasOwnProperty.call(copy, '__proto__')).toBe(true)
+    expect(Object.getPrototypeOf(copy)).toBe(Object.prototype)
+    expect(copy.x).toBeUndefined()
+    expect(JSON.stringify(copy)).toBe('{"__proto__":{"x":1}}')
+  })
+
   it('rejects a cycle but not a shared (acyclic) subobject', () => {
     const shared = {x: 1}
     expect(findNonJson({a: shared, b: shared})).toBeNull()

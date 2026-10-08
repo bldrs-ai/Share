@@ -102,7 +102,17 @@ function visit(value: unknown, path: string, ancestors: Set<object>): unknown {
       if (child === undefined) {
         continue
       }
-      copy[key] = visit(child, `${path}/${key}`, ancestors)
+      // Defined, not assigned: `copy['__proto__'] = …` would call the
+      // prototype setter, so a JSON `"__proto__"` key would vanish from the
+      // copy (and from the size cap) and reparent it instead (Codex review
+      // round 3 on #1946). A plain object rather than Object.create(null),
+      // so a result still has Object.prototype's methods.
+      Object.defineProperty(copy, key, {
+        value: visit(child, `${path}/${key}`, ancestors),
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      })
     }
     return copy
   } finally {
