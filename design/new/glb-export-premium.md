@@ -138,18 +138,17 @@ arm — the envelope comes off at the upload seam, and a second seam in
    shrink what ships. This is why the win landed at the OPFS **container**
    layer instead (§1.1a, gzip outside the GLB entirely), not as an in-GLB
    JSON transform.
-3. **S4 (#1835) is the ship gate for all of the above, and it is not
-   done: the flag flip is drafted, and waits on the owner's smoke.**
-   Outstanding: cross-browser smoke (Firefox, Safari — including
-   OPFS `createWritable` and `CompressionStream` for `.glb.gz` — Edge, iOS
-   Safari, Android Chrome) with real Auth0 accounts per tier, against the
-   §8 checklist; the real Management API path for `record-export`
-   (including whether the `https://bldrs.ai/app_metadata` JWT claim carries
-   `exports` at all — an Auth0 Action outside this repo, which nothing in the
-   repo can verify: the client reads it through `APP_METADATA_CLAIM` in
-   `src/Auth0/appMetadata.js`, and the only places `exports` is asserted on
-   are mocks); and flipping `export` to `isActive: true` (drafted; see the
-   head of this block, and merged only after the owner's smoke). (The site-wide esbuild-bundling decision
+3. **S4 (#1835) shipped as #1939 on 2026-10-08: `export` is on by
+   default.** The cross-browser smoke is now the account-backed live smoke
+   (§8, `design/new/live-browser-smoke.md`), which exercises
+   `record-export`'s real Management API path on every run. Still open:
+   the residual manual checks in §8 (Firefox until #1947, real Safari's
+   download and OPFS cache, real phones, Google Drive `.glb.gz`), and
+   whether the `https://bldrs.ai/app_metadata` JWT claim carries `exports`
+   at all — an Auth0 Action outside this repo, which nothing in the repo can
+   verify (the client reads it through `APP_METADATA_CLAIM` in
+   `src/Auth0/appMetadata.js`; the free count does not depend on it, "My
+   Exports" hydration on a new device does). (The site-wide esbuild-bundling decision
    for every other ESM Netlify function that imports axios —
    `gh-oauth-exchange`, `gh-oauth-refresh`, `unlink-identity`,
    `create-portal-session`, `stripe-webhook`, which shared the latent nft
@@ -187,10 +186,11 @@ arm — the envelope comes off at the upload seam, and a second seam in
    `getTier` drives quotas, for loads too — through one shared definition,
    `src/quota/proStatus.js`, that `getTier`, `pro-module`, `record-export`,
    `record-load` and the Stripe reconciliation all import.
-6. **The §8 results are pending owner smoke.** Nothing in §8 has been run
-   against production with real Auth0 accounts, apart from the desktop
-   Chrome pass on 14 Sep. The signed-out production probes in the S4 PR are
-   the only part that needs no accounts.
+6. **§8 runs as the live smoke.** It ran against #1939's deploy preview
+   with real Auth0 accounts in every tier (runs linked in §8). It covers
+   chromium and mobile-pixel fully; webkit, mobile-iphone and firefox run
+   only what needs neither OPFS nor WebGL, so §8 keeps a short manual list
+   for those engines.
 
 
 ## 1. What we already have
@@ -2644,7 +2644,7 @@ the same gate to the same in-page ledger, `window.__mockExports`.
 | S2 | GLB export | `glbArtifact` store slot (writer + reader set, load clears), `pro/glbExport.entry.js`, `useExport`, `ExportSection` in ShareDialog, `export` flag, `subscriptionNav.js` extraction | jest: container→GLB, strip option; **E2E desktop+mobile** (`describeMobileAndDesktop`): Pro user opens a fixture, waits for the writer, clicks Download GLB, asserts a `.glb` download whose bytes start with `glTF`; gated states for anonymous and free |
 | S3 | Export tracking | `record-export.js`, `exportHistory.js`, `ExportsDialog.jsx`, Profile menu item, analytics events | jest: history lib (prune/cap/OPFS-unavailable), function handler; **E2E desktop+mobile**: after an export the dialog lists it; "Download again" on a cached artifact |
 | S2b | Placement + gated actions (#1838) | Export tab in the Save dialog (`ExportSection` + `ExportsList` moved to `Open/`), Save always visible, `GatedAction.jsx`, `zIndex.snackbar` + mobile dialog inset | jest: gated click still fires, tab hides the Save action, flag-off dialog has no tabs; **E2E desktop+mobile**: signed-out Save shows the help, free Export shows the Pro help, the export snackbar is visible and uncovered over the open dialog |
-| S4 | Rollout | This doc folded back to shipped reality, `quotas.md`-style status block, wiki entry, flag flip, roadmap row `share-140` | smoke checklist §8 run on the deploy preview with a real Pro account |
+| S4 | Rollout | This doc folded back to shipped reality, `quotas.md`-style status block, wiki entry, flag flip, roadmap row `share-140` | §8 live smoke green on the deploy preview with real accounts per tier; residual manual list in §8 |
 | S5 | Further formats (spec only) | §6 matrix → one issue per format when scheduled | — |
 
 S1 and S2 land in one PR (the smoke instance needs both); S3 follows on the
