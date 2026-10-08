@@ -249,17 +249,24 @@ export async function loginWithPassword(context: BrowserContext, target: LiveTar
     assertLoginPage(page, hosts)
     await failOnAuth0ErrorPage(page)
     // New Universal Login names the field `username`; Classic, `email`.
-    await enterQuietly(page.locator('input[name="username"], input[name="email"]').first(), account.email, hosts)
+    const identifier = page.locator('input[name="username"], input[name="email"]').first()
+    await enterQuietly(identifier, account.email, hosts)
+    // Each form is submitted by Enter in the field just filled, not by
+    // clicking a submit button: New Universal Login puts a hidden
+    // (aria-hidden, tabindex -1) default submit first in the form, there
+    // only so Enter submits, so `button[type="submit"]` finds it before
+    // the visible one and the click never lands (first account-backed run,
+    // #1948).
     const password = page.locator('input[name="password"]')
     if (!await password.isVisible()) {
       // Identifier-first: the password is on the next screen — which is a
       // navigation, so the page is checked again before anything is typed.
-      await page.locator('button[type="submit"]').first().click()
+      await identifier.press('Enter')
       await password.waitFor({timeout: LOGIN_TIMEOUT_MS})
     }
     assertLoginPage(page, hosts)
     await enterQuietly(password, account.password, hosts)
-    await page.locator('button[type="submit"][name="action"], button[type="submit"]').first().click()
+    await password.press('Enter')
     await backOnTargetOrClosed(page, target, (url) => url.pathname.includes('consent'))
     if (!page.isClosed() && new URL(page.url()).pathname.includes('consent')) {
       await page.locator('button[value="accept"]').click()
