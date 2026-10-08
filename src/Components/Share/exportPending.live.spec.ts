@@ -88,7 +88,7 @@ test.describe('Live smoke: pending reauth', () => {
     if (claim === PENDING) {
       expect(await dismissReauthDialog(page), 'a pending claim opens the reauthentication dialog').toBe(true)
     }
-    await waitForArtifactWritten(glbLogs)
+    await waitForArtifactWritten(page, glbLogs)
     await openExportTab(page)
     await dismissLoadSnackbar(page)
     await expect(page.getByTestId('export-glb-button')).toBeEnabled()

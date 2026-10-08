@@ -42,7 +42,7 @@ test.describe('Live smoke: no CompressionStream (step 9)', () => {
     await withoutCompressionStream(context)
 
     const glbLogs = await openLiveModel(page)
-    await waitForArtifactWritten(glbLogs)
+    await waitForArtifactWritten(page, glbLogs)
     expect(await page.evaluate(() => typeof CompressionStream)).toBe('undefined')
     // The writer's worker really was started through the shim; without
     // this, a v3 artifact could be blamed on the fallback, or a v2 on luck.
@@ -65,7 +65,7 @@ test.describe('Live smoke: no CompressionStream (step 9)', () => {
     await loginWithPassword(context, target, account as {email: string, password: string})
 
     const glbLogs = await openLiveModel(page, {isSignedIn: true})
-    await waitForArtifactWritten(glbLogs)
+    await waitForArtifactWritten(page, glbLogs)
     expect(await wrappedWriterWorkers(page)).toBeGreaterThan(0)
 
     await openExportTab(page)

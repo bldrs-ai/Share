@@ -53,7 +53,7 @@ test.describe('Live smoke: anonymous', () => {
     const {target} = requireLive(testInfo)
     await setReturningVisitor(context, target)
     const glbLogs = await openLiveModel(page)
-    await waitForArtifactWritten(glbLogs)
+    await waitForArtifactWritten(page, glbLogs)
 
     // The control for exportNoCompressionStream.live.spec.ts: with the
     // engine's own CompressionStream the artifact is the v3 gzipped

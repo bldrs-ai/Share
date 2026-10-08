@@ -109,7 +109,7 @@ test.describe('Live smoke: free', () => {
     const proModule = watchResponses(page, PRO_MODULE_URL)
     const records = watchResponses(page, RECORD_EXPORT_URL)
     const glbLogs = await openLiveModel(page, {isSignedIn: true})
-    await waitForArtifactWritten(glbLogs)
+    await waitForArtifactWritten(page, glbLogs)
     await openExportTab(page)
     await dismissLoadSnackbar(page)
 
@@ -207,7 +207,7 @@ test.describe('Live smoke: free', () => {
     await loginWithPassword(context, target, account)
     const proModule = watchResponses(page, PRO_MODULE_URL)
     const glbLogs = await openLiveModel(page, {isSignedIn: true})
-    await waitForArtifactWritten(glbLogs)
+    await waitForArtifactWritten(page, glbLogs)
     await openExportTab(page)
     await dismissLoadSnackbar(page)
 

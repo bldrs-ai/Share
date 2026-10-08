@@ -67,7 +67,7 @@ async function proWithArtifact(page: Page, context: BrowserContext, testInfo: Te
   await setReturningVisitor(context, target)
   await loginWithPassword(context, target, account as {email: string, password: string})
   const glbLogs = await openLiveModel(page, {isSignedIn: true})
-  await waitForArtifactWritten(glbLogs)
+  await waitForArtifactWritten(page, glbLogs)
   return glbLogs
 }
 
@@ -134,7 +134,7 @@ test.describe('Live smoke: Pro', () => {
     } else {
       expect(before).toEqual({label: 'Preparing GLB…', isDisabled: true, hasArtifact: false})
     }
-    await waitForArtifactWritten(glbLogs)
+    await waitForArtifactWritten(page, glbLogs)
     await expect(button).toBeEnabled()
     await expect(button).toHaveText('Export GLB')
 

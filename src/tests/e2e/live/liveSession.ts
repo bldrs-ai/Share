@@ -1,9 +1,17 @@
 import {readFile} from 'node:fs/promises'
 import {APIRequestContext, BrowserContext, Download, Locator, Page, Response, TestInfo, expect, test} from '@playwright/test'
 import {DATABASE_CONNECTION} from '../../../../tools/live-smoke/auth0Management.js'
-import {captureGlbLogs, waitForGlbLog} from '../glbLogs'
+import {captureGlbLogs, glbLinesSinceReset} from '../glbLogs'
 import {waitForModelReady} from '../models'
 import {containerHeader} from './glbBytes'
+import {
+  OpfsState,
+  RenderState,
+  artifactVerdict,
+  describeArtifactFailure,
+  describeModelNotReady,
+  pushDiagnostic,
+} from './loadDiagnosis'
 import {isCallbackUrl, loginCompletion} from './loginCompletion'
 import {
   LiveAdmin,
@@ -53,6 +61,10 @@ const MODEL_READY_TIMEOUT_MS = 90_000
 const WRITER_TIMEOUT_MS = 90_000
 const LOGIN_TIMEOUT_MS = 45_000
 const SESSION_POLL_MS = 250
+const ARTIFACT_POLL_MS = 250
+// The OPFS probe's worker gets this long to answer before it is reported as
+// silent; it is only run on a failure path, so this never delays a pass.
+const OPFS_PROBE_TIMEOUT_MS = 10_000
 const ESTIMATE_TIMEOUT_MS = 60_000
 // The Auth0 SDK's cache key prefix with `cacheLocation: 'localstorage'`
 // (src/Auth0/Auth0ProviderWithHistory.jsx). Entries are
@@ -430,23 +442,212 @@ export async function sessionAccessToken(page: Page): Promise<string> {
  */
 export async function openLiveModel(page: Page, {isSignedIn = false}: {isSignedIn?: boolean} = {}): Promise<string[]> {
   const glbLogs = captureGlbLogs(page)
+  const diagnostics = captureLoadDiagnostics(page)
   await page.goto(LIVE_MODEL_URL, {waitUntil: 'domcontentloaded'})
   if (isSignedIn) {
     await expect(page.getByTestId('control-button-profile-icon-authenticated'))
       .toBeVisible({timeout: LOGIN_TIMEOUT_MS})
   }
-  await waitForModelReady(page, MODEL_READY_TIMEOUT_MS)
+  try {
+    await waitForModelReady(page, MODEL_READY_TIMEOUT_MS)
+  } catch (e) {
+    // The bare locator timeout is what #1942's first Firefox run reported,
+    // three times, with no way to tell a crashed app from a slow load.
+    const render = await readRenderState(page).catch(() => null)
+    throw new Error(`${(e as Error).message}\n\n${describeModelNotReady(render, diagnostics)}`)
+  }
   return glbLogs
 }
 
 
+// Diagnostics per page, so `waitForArtifactWritten` can read what
+// `openLiveModel` captured without every spec threading a second buffer.
+const DIAGNOSTICS = new WeakMap<Page, string[]>()
+
+
 /**
- * Wait for the OPFS artifact the Export button needs.
+ * Capture this page's errors and console errors/warnings, redacted
+ * (loadDiagnosis.ts#redactDiagnostic), for a failure message to print. One
+ * buffer per page: a second call returns the first's.
  *
+ * Console warnings are kept because the loader's OPFS fallback is reported
+ * only as a `debug().warn` (`Loader.js`, "OPFS path failed"), and
+ * `checkOPFSAvailability()`'s rejection only as a `debug().error`.
+ *
+ * @param page the page, before it navigates
+ * @return the buffer, filled as messages arrive
+ */
+export function captureLoadDiagnostics(page: Page): string[] {
+  const existing = DIAGNOSTICS.get(page)
+  if (existing !== undefined) {
+    return existing
+  }
+  const diagnostics: string[] = []
+  DIAGNOSTICS.set(page, diagnostics)
+  page.on('pageerror', (error) => pushDiagnostic(diagnostics, `pageerror: ${error.name}: ${error.message}`))
+  page.on('console', (msg) => {
+    const type = msg.type()
+    if (type === 'error' || type === 'warning') {
+      pushDiagnostic(diagnostics, `console.${type}: ${msg.text()}`)
+    }
+  })
+  return diagnostics
+}
+
+
+/**
+ * Wait for the OPFS artifact the Export button needs: the writer's
+ * `[glb] writer: wrote` line.
+ *
+ * Fails EARLY, with the cause, when the artifact can no longer come — the
+ * writer skipped, the app has no OPFS in this context, the loader's OPFS
+ * path threw, or the reader never ran at all (loadDiagnosis.ts#artifactVerdict).
+ * #1942's first WebKit run burned the full timeout on exactly that last
+ * case and reported only "Captured: (none)".
+ *
+ * Success is still the console line, not a file appearing in OPFS: the
+ * writer's line is logged after the write has landed, whereas a file can be
+ * listed while it is still being written (OPFS.worker.js, on resolving
+ * early), and the specs read the artifact's bytes next.
+ *
+ * @param page the page {@link openLiveModel} loaded
  * @param glbLogs from {@link openLiveModel}
  */
-export async function waitForArtifactWritten(glbLogs: string[]) {
-  await waitForGlbLog(glbLogs, 'writer: wrote', WRITER_TIMEOUT_MS)
+export async function waitForArtifactWritten(page: Page, glbLogs: string[]) {
+  const diagnostics = DIAGNOSTICS.get(page) ?? []
+  const appOpfs = await readAppOpfsVerdict(page)
+  const started = Date.now()
+  for (;;) {
+    const glbLines = glbLinesSinceReset(glbLogs)
+    const verdict = artifactVerdict({
+      glbLines, diagnostics, appOpfs, elapsedMs: Date.now() - started, timeoutMs: WRITER_TIMEOUT_MS,
+    })
+    if (verdict.state === 'done') {
+      return
+    }
+    if (verdict.state === 'failed') {
+      const opfs = await readOpfsState(page).catch(() => null)
+      throw new Error(describeArtifactFailure(verdict.reason, {glbLines, opfs, diagnostics}))
+    }
+    await new Promise((resolve) => setTimeout(resolve, ARTIFACT_POLL_MS))
+  }
+}
+
+
+/**
+ * @param page a page on the deploy's origin
+ * @return the store's `isOpfsAvailable`, or undefined when the store is not exposed
+ */
+async function readAppOpfsVerdict(page: Page): Promise<boolean | null | undefined> {
+  return await page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = (window as any).useStore ?? (window as any).store
+    return store?.getState ? store.getState().isOpfsAvailable : undefined
+  }).catch(() => undefined)
+}
+
+
+/**
+ * What OPFS this page's context really offers, independent of the app:
+ * the store's verdict, `getDirectory()`, and a sync-access-handle write from
+ * a worker — Safari's only OPFS write path (#1686), and so the one the GLB
+ * cache depends on. The probe file is removed again and never parses as a
+ * container, so {@link opfsContainers} does not see it.
+ *
+ * @param page a page on the deploy's origin
+ * @return the probe's findings
+ */
+export async function readOpfsState(page: Page): Promise<OpfsState> {
+  const app = await readAppOpfsVerdict(page)
+  const probed = await page.evaluate(async (timeoutMs) => {
+    const describe = (e: unknown) => {
+      const err = e as {name?: string, message?: string} | null
+      return `${err?.name ?? 'Error'}: ${err?.message ?? String(e)}`
+    }
+    let directory = 'ok'
+    try {
+      await navigator.storage.getDirectory()
+    } catch (e) {
+      directory = describe(e)
+    }
+    if (directory !== 'ok') {
+      return {directory, syncWrite: 'not tried (no directory)'}
+    }
+    const source = `onmessage = async () => {
+      const name = '__live-smoke-opfs-probe-' + Math.random().toString(36).slice(2)
+      try {
+        const root = await navigator.storage.getDirectory()
+        const file = await root.getFileHandle(name, {create: true})
+        const handle = await file.createSyncAccessHandle()
+        handle.write(new Uint8Array([1]))
+        handle.flush()
+        handle.close()
+        await root.removeEntry(name)
+        postMessage('ok')
+      } catch (e) {
+        postMessage((e && e.name ? e.name : 'Error') + ': ' + (e && e.message ? e.message : String(e)))
+      }
+    }`
+    const url = URL.createObjectURL(new Blob([source], {type: 'text/javascript'}))
+    try {
+      const syncWrite = await new Promise<string>((resolve) => {
+        const worker = new Worker(url)
+        const timer = setTimeout(() => {
+          worker.terminate()
+          resolve(`no answer in ${timeoutMs}ms`)
+        }, timeoutMs)
+        worker.onmessage = (event) => {
+          clearTimeout(timer)
+          worker.terminate()
+          resolve(String(event.data))
+        }
+        worker.onerror = (event) => {
+          clearTimeout(timer)
+          worker.terminate()
+          resolve(`worker error: ${event.message}`)
+        }
+        worker.postMessage(null)
+      })
+      return {directory, syncWrite}
+    } catch (e) {
+      return {directory, syncWrite: `could not start a worker: ${describe(e)}`}
+    } finally {
+      URL.revokeObjectURL(url)
+    }
+  }, OPFS_PROBE_TIMEOUT_MS)
+  return {app, ...probed}
+}
+
+
+/**
+ * @param page the page whose model never became ready
+ * @return what it looks like, and whether a fresh canvas gets WebGL2
+ */
+async function readRenderState(page: Page): Promise<RenderState> {
+  return await page.evaluate(() => {
+    const dropzone = document.querySelector('[data-testid="cadview-dropzone"]')
+    const canvas = document.createElement('canvas')
+    let creationError = ''
+    canvas.addEventListener('webglcontextcreationerror', (event) => {
+      creationError = (event as WebGLContextEvent).statusMessage
+    })
+    let webgl2: string
+    try {
+      const gl = canvas.getContext('webgl2')
+      webgl2 = gl === null ?
+        `none${creationError ? ` (${creationError})` : ''}` :
+        `${gl.getParameter(gl.VENDOR)} / ${gl.getParameter(gl.RENDERER)}`
+    } catch (e) {
+      webgl2 = `getContext threw: ${(e as Error).message}`
+    }
+    return {
+      url: window.location.href,
+      hasDropzone: dropzone !== null,
+      modelReady: dropzone?.getAttribute('data-model-ready') ?? null,
+      bodyText: document.body?.innerText ?? '',
+      webgl2,
+    }
+  })
 }
 
 

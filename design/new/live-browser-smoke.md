@@ -640,6 +640,31 @@ merged (follow-up PR):
   `setAppMetadata`. So the store may hold no tier, and `getTier` would then
   read free and show the Pro chip. This is untested against a real deploy;
   the spec will say.
+- **The first CI run (#1942's preview, no account secrets) failed 7 tests,
+  all outside Chromium, and both shapes were bare timeouts.**
+  - Firefox: `cadview-dropzone` "element(s) not found" for 90s, on every
+    spec that loads a model. CadView renders the dropzone unconditionally,
+    so the app tree never mounted or was torn down — in production, by
+    `index.jsx`'s ErrorBoundary. Reproduced in Chromium by taking WebGL
+    away: the same "not found", the page left blank (#659). Whether that is
+    Firefox's actual cause is not known; the run kept no page errors.
+  - WebKit and the iPhone profile: the model loaded, then `writer: wrote`
+    never came and **no `[glb]` line at all was captured**. Those lines are
+    main-thread `console.info` calls, which Playwright's WebKit forwards
+    like Chromium's, so this is not a capture gap: the loader never reached
+    its GLB cache lookup, which happens only on its OPFS path. Either the
+    app found no OPFS in that context or the OPFS block threw and fell back
+    to a direct fetch — reproduced in Chromium by rejecting
+    `getDirectory()`. Real Safari does reach the reader (#1686's console),
+    so a Playwright-WebKit-only cause such as its ephemeral contexts is
+    plausible, but unconfirmed.
+  - The harness now says which (`src/tests/e2e/live/loadDiagnosis.ts`):
+    `openLiveModel` reports page errors, whether the ErrorBoundary fallback
+    is showing, and whether a fresh canvas gets WebGL2;
+    `waitForArtifactWritten` fails as soon as the artifact can no longer
+    come — no OPFS in the store, the loader's "OPFS path failed" warning, a
+    writer skip, or no reader line — and prints an OPFS probe:
+    `getDirectory()` and a worker `createSyncAccessHandle()` write.
 
 
 ## What ran where
@@ -654,6 +679,8 @@ merged (follow-up PR):
 | The same, against a local `yarn build-prod` (no MSW, `window.useStore`) | This sandbox, `chromium` + `mobile-pixel` | The same 6 passed, 20 skipped. |
 | Step 9 can fail | This sandbox, chromium | Red without the worker wrap, and red with the wrap but without the removal. |
 | Pro and step-9 Pro spec bodies, with login swapped for the mocked suite's | This sandbox, mocked build, chromium | All passed except Meshopt validation, the finding above |
+| Anonymous live specs on #1942's preview | CI (`live-smoke`, b75e09e) | chromium and mobile-pixel passed; firefox 3 and webkit/mobile-iphone 4 failed — the first-run finding above |
+| The failure diagnoses, shapes forced in Chromium (`getDirectory()` rejected; `getContext('webgl*')` null) | This sandbox, local `test-flows-build` | Each named its cause: no OPFS in the store, in 0.8s instead of 90s; the dropzone gone with "Error creating WebGL context." and WebGL2 none. Anonymous and step-9 specs still pass on chromium + mobile-pixel. |
 
 **Unverified until the owner's setup exists:**
 
