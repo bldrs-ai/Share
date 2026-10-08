@@ -920,7 +920,7 @@ session.abort(); session.undo(stepId)
 
 | Namespace | Owner | Tools |
 |---|---|---|
-| `view.*` | Share (→ View) | query, select, isolate, hide, explode, highlight, camera.focus, properties, cutPlane |
+| `view.*` | Share (→ View) | query, properties, select, isolate, hide, showAll, focus (#1946); later: show, explode, highlight, cutPlane, display |
 | `notes.*`, `share.*` | Share | notes.add, share.permalink, versions.commit / versions.pr |
 | `collab.*` | Collab | post, requestReview |
 | `knowledge.*` | Assist, server-side | docs.search, web.lookup, productSheet, codes.search |
@@ -962,29 +962,31 @@ and "the user clicked it" are the same navigation.
 **v0 tools (read/annotate; #1674),** in the namespaced form. Annotation
 column: R = `readOnly`, V = `viewState`, P = `sendsPixels`.
 
+The v0 slice is implemented in #1946 (`src/viewer/tools/`, `src/assist/`); the names below are the ones it ships.
+
 | Tool | Ann. | Does | Backing seam |
 |---|---|---|---|
-| `view.summary` | R | Format, units, element counts by type, top N levels of spatial structure | `IFCSlice.elementTypesMap`, `ShareIfcManager.getSpatialStructure:118`, `idsByType:176`, `ShareModel.modelHasCapability:357` |
-| `view.query` | R | Optional text query plus type and level filters, to refs + names, capped. **`query` must be optional** (below) | `SearchIndex.search:138` |
-| `view.properties` | R | Attributes and psets for ≤ N refs | `getItemProperties:129`, `getPropertySets:140`, `ShareViewer.getProperties:836` |
-| `view.selection` | R | Current selection as refs | `NavTreeSlice` |
-| `view.select` | V | Select refs (replace or add) | exposed `selectItemsInScene` |
-| `view.isolate` / `view.hide` / `view.show` / `view.resetVisibility` | V | Visibility by refs, IFC ids or STEP occurrences | `IfcIsolator.isolateElementsById:1591`, `hideElementsById:1295`, `unHideElementsById:1331`, `unHideAllElements:1379`, `hideOccurrences:848`, `isolateOccurrences:1551` |
-| `view.camera.focus` / `view.camera.fit` | V | Frame refs, or the whole model | `Selector.pickByIds(…, focus)`, `fitToFrame` (`context/context.js:215`), `setCameraFromParams` (`CameraControl.jsx:123`) |
-| `view.cutPlane` | V | Add or clear an axis cut at an offset | `CutPlanesSlice.addCutPlaneDirection:11` |
-| `view.display` | V | Auto-colour or wireframe, scoped | `DisplaySlice.setDisplayOverride:34` ([model-display-controls.md](model-display-controls.md)) |
+| `view.query` | R | Optional `ifcType`, `level`, `name` and `text` filters, to refs + names. ≤200 refs, with `total` and `truncated`. Every filter is optional (below) | `SearchIndex.search:138` |
+| `view.properties` | R | Attributes and psets for ≤20 refs | `getItemProperties:129`, `getPropertySets:140`, `ShareViewer.getProperties:836` |
+| `view.select` | V | Select refs (replace, add, or clear) | exposed `selectItemsInScene` |
+| `view.isolate` / `view.hide` / `view.showAll` | V | Visibility by refs, IFC ids or STEP occurrences; `showAll` unhides everything | `IfcIsolator.isolateElementsById:1591`, `hideElementsById:1295`, `unHideAllElements:1379`, `hideOccurrences:848`, `isolateOccurrences:1551` |
+| `view.focus` | V | Frame refs, or the whole model when `refs` is omitted; returns center and radius | `Selector.pickByIds(…, focus)`, `fitToFrame` (`context/context.js:215`), `setCameraFromParams` (`CameraControl.jsx:123`) |
 | `share.permalink` | R | URL for the current camera + selection + visibility | `CameraControl.addCameraUrlParams:198`, `selectionHash.js`, `visibilityHash.js` |
-| `notes.list` | R | Notes on this model (titles, anchors) | `NotesSlice` |
-| `view.screenshot` *(opt-in)* | P | Canvas image for vision models | `ShareViewer.takeScreenshot:1861` |
+| `view.summary`, `view.selection` | — | Not tools in v0: covered by the `view` context source (model, element and level counts, selection, visibility) | `IFCSlice.elementTypesMap`, `ShareIfcManager.getSpatialStructure:118`, `idsByType:176`, `NavTreeSlice` |
+| `view.show` *(later slice)* | V | Unhide by refs, IFC ids or STEP occurrences | `unHideElementsById:1331` |
+| `view.cutPlane` *(later slice)* | V | Add or clear an axis cut at an offset | `CutPlanesSlice.addCutPlaneDirection:11` |
+| `view.display` *(later slice)* | V | Auto-colour or wireframe, scoped | `DisplaySlice.setDisplayOverride:34` ([model-display-controls.md](model-display-controls.md)) |
+| `notes.list` *(later slice)* | R | Notes on this model (titles, anchors) | `NotesSlice` |
+| `view.screenshot` *(later slice, opt-in)* | P | Canvas image for vision models | `ShareViewer.takeScreenshot:1861` |
 
-`view.explode` and `view.highlight` (the A2.1 example) are not in the v0
-backing set above; they join the `view.*` provider when their display seams
-exist. `notes.add`, `share.versions.*`, `collab.*`, `knowledge.*` and
-`create.*` are later providers (§14), each behind its approval annotation.
+Not in #1946, and later slices: `view.explode` and `view.highlight` (the A2.1
+example), which also wait for their display seams; plus the rows marked above.
+`notes.add`, `share.versions.*`, `collab.*`, `knowledge.*` and `create.*` are
+later providers (§14), each behind its approval annotation.
 
 **What eval #1929 says about the tool surface** (eval #1929, 2026-10-06):
 
-- **`view.query`'s `query` argument optional** (eval #1929 called the tool `search_elements`). A required `query` caused most
+- **`view.query`'s text filter optional**, now `text` in #1946 with every filter optional (eval #1929 called the tool `search_elements`). A required `query` caused most
   schema-invalid calls (deepseek, gemini-2.5-flash-lite) and sank
   flash-lite to 44%. Re-run with it optional, gpt-5-nano went to 12/12.
   Every model that omitted it was punished for something the description
