@@ -10,7 +10,14 @@ import useStore from '../../store/useStore'
 import {ShareViewer} from '../ShareViewer'
 import {createShareAssistRegistry} from './assistHost'
 import {registerSelectionFunnel} from './selectionFunnel'
-import {loadFixture, makeStepModel, makeStoreFunnel, makeTwoRootStepModel, visibleProducts} from './tools.fixture'
+import {
+  loadFixture,
+  makeReusedStepModel,
+  makeStepModel,
+  makeStoreFunnel,
+  makeTwoRootStepModel,
+  visibleProducts,
+} from './tools.fixture'
 import {captureVisibility, restoreVisibility} from './visibilityState'
 
 
@@ -50,6 +57,13 @@ describe('viewer/tools on a STEP assembly', () => {
     expect(useStore.getState().isTempIsolationModeOn).toBe(true)
     await result.undo()
     expect(useStore.getState().isTempIsolationModeOn).toBe(false)
+  })
+
+  // Codex review round 4 on #1946: a one-product file's root IS the product.
+  it('lists the top-level product of a one-product file in view.query', async () => {
+    const all = await registry.call('view.query', {})
+    expect(all.refs).toEqual(['e1', 'o10', 'o10.11', 'o10.12', 'o20'])
+    expect((await registry.call('view.query', {name: 'Assembly'})).refs).toEqual(['e1'])
   })
 
   it('isolates a row by its occurrences', async () => {
@@ -138,9 +152,52 @@ describe('viewer/tools on a root-only multi-root STEP file (twoRootShells.step)'
     expect((await registry.call('view.focus', {refs: ['e3007']})).content.center).toEqual([25.5, 0.5, 0])
   })
 
+  it('lists both parts in view.query but not the synthetic wrapper', async () => {
+    expect((await registry.call('view.query', {})).refs).toEqual(['e7', 'e3007'])
+  })
+
   it('isolates both parts through the synthetic wrapper', async () => {
     await registry.call('view.isolate', {refs: ['e0']})
     expect(visibleProducts(fixture.batch)).toEqual([8, 8, 3008, 3008])
     expect(useStore.getState().isTempIsolationModeOn).toBe(true)
+  })
+})
+
+
+// Codex review round 4 on #1946: a single occurrence selection reported its
+// row as `e<row>`, which every copy of a reused sub-assembly shares, so
+// hiding by the returned chip hid every copy.
+describe('viewer/tools on a reused STEP sub-assembly', () => {
+  let fixture
+  let registry
+  let unregister
+
+
+  beforeEach(async () => {
+    fixture = await loadFixture({build: makeReusedStepModel, viewer: Object.create(ShareViewer.prototype)})
+    registry = createShareAssistRegistry()
+    unregister = registerSelectionFunnel(makeStoreFunnel())
+  })
+
+
+  afterEach(() => {
+    unregister()
+    registry.dispose()
+  })
+
+
+  it('returns the occurrence ref it selected, and hiding by it hides only that copy', async () => {
+    const selected = await registry.call('view.select', {refs: ['o30.10.11']})
+    expect(selected.refs).toEqual(['o30.10.11'])
+    expect(selected.content.refs).toEqual(['o30.10.11'])
+    expect(visibleProducts(fixture.batch)).toEqual([100, 100])
+    await registry.call('view.hide', {refs: selected.refs})
+    expect(visibleProducts(fixture.batch)).toEqual([100])
+    // The copy left is the second placement (x 10–11).
+    expect((await registry.call('view.focus', {refs: ['o40.10.11']})).content.center).toEqual([10.5, 0.5, 0])
+  })
+
+  it('lists each copy by its own occurrence ref in view.query', async () => {
+    expect((await registry.call('view.query', {name: 'Bolt'})).refs).toEqual(['o30.10.11', 'o40.10.11'])
   })
 })

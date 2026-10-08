@@ -279,6 +279,26 @@ describe('viewer/tools (view + share providers)', () => {
       expect(Object.values(useStore.getState().hiddenElements).some(Boolean)).toBe(false)
     })
 
+    // Codex review round 4 on #1946: hiding prunes the selection, so undo
+    // must give it back, not only the visibility.
+    it('undo of a hide restores the selection the hide pruned', async () => {
+      await registry.call('view.select', {refs: ['e102']})
+      const hidden = await registry.call('view.hide', {refs: ['e102']})
+      expect(useStore.getState().selectedElements).not.toContain('102')
+      await hidden.undo()
+      expect(visibleProducts(fixture.batch)).toEqual(ALL_PRODUCTS)
+      expect(useStore.getState().selectedElements).toEqual(['102'])
+      expect(useStore.getState().selectedAnchorIds).toEqual(['102'])
+    })
+
+    it('undo of a hide leaves an unchanged selection alone', async () => {
+      await registry.call('view.select', {refs: ['e100']})
+      const calls = funnel.mock.calls.length
+      const hidden = await registry.call('view.hide', {refs: ['e202']})
+      await hidden.undo()
+      expect(funnel.mock.calls.length).toBe(calls)
+    })
+
     it('refuses to hide during isolation, and to isolate only hidden elements', async () => {
       await registry.call('view.hide', {refs: ['e102']})
       expect((await rejection(registry.call('view.isolate', {refs: ['e102']}))).code).toBe('rejected')

@@ -6,6 +6,7 @@ import {getDescendantExpressIds} from '../../utils/TreeUtils'
 import {prettyType} from '../../utils/ifc'
 import {
   findRootLevelProductNode,
+  findSoleRootNode,
   occurrenceElementPathIds,
   rootLevelInstancesOfProduct,
   selectedOccurrences,
@@ -287,9 +288,14 @@ function query({ifcType, level, name, text, limit = DEFAULT_QUERY_LIMIT}) {
 
   const items = []
   let total = 0
+  // The root is usually the model itself, not an element in it: an IFC
+  // project, or the synthetic wrapper Conway puts over a multi-root STEP
+  // file. A one-product STEP file is the exception — its root IS the
+  // product, the row a user selects (`findSoleRootNode`), so it is listed
+  // (Codex review round 4 on #1946).
+  const rootIsElement = findSoleRootNode(rootElement) === rootElement
   walkTree(rootElement, (node, depth) => {
-    // The root is the model itself, not an element in it.
-    if (depth === 0) {
+    if (depth === 0 && !rootIsElement) {
       return
     }
     const id = Number(node.expressID)
@@ -511,6 +517,70 @@ function undoWhileLoaded({viewer, model}, fn) {
 
 
 /**
+ * @param {object} state store state
+ * @return {object} the selection, as the funnel takes it back
+ */
+function captureSelection(state) {
+  return {
+    elements: [...(state.selectedElements ?? [])],
+    anchors: [...(state.selectedAnchorIds ?? [])],
+    instances: [...(state.selectedInstanceIds ?? [])],
+    occurrencePath: state.selectedOccurrencePath ?? null,
+    solid: state.selectedSolidExpressId ?? null,
+  }
+}
+
+
+/**
+ * Put a captured selection back through the funnel, as a NavTree click
+ * would set it.
+ *
+ * @param {object} before from {@link captureSelection}
+ */
+function restoreSelection(before) {
+  const restore = funnelOrThrow()
+  if (before.elements.length === 0) {
+    restore([])
+    return
+  }
+  restore(before.elements.map(Number), true, before.instances, before.occurrencePath, before.solid,
+    before.anchors.map(Number))
+}
+
+
+/**
+ * @param {object} before from {@link captureSelection}
+ * @return {boolean} whether the store's selection still is `before`
+ */
+function selectionUnchanged(before) {
+  const now = captureSelection(useStore.getState())
+  const same = (a, b) => a.length === b.length && a.every((v, i) => String(v) === String(b[i]))
+  return same(now.elements, before.elements) && same(now.anchors, before.anchors) &&
+    same(now.instances, before.instances) && now.solid === before.solid &&
+    same(now.occurrencePath ?? [], before.occurrencePath ?? [])
+}
+
+
+/**
+ * @param {object} viewer
+ * @return {Array<string>} refs for the selection held now. A single STEP
+ *   occurrence selection is named by its occurrence ref: its anchor is the
+ *   row id, which the copies of a reused sub-assembly share, so `e<row>`
+ *   would name every copy and a follow-up hide or isolate would hit them
+ *   all (Codex review round 4 on #1946). Rows of a multi-selection keep
+ *   their row refs, which is what such a selection holds (selectionHash.js).
+ */
+function selectionRefs(viewer) {
+  const {selectedAnchorIds, selectedOccurrencePath, selectedSolidExpressId} = useStore.getState()
+  if (Array.isArray(selectedOccurrencePath) && selectedOccurrencePath.length > 0) {
+    return [occurrenceRef(occurrenceElementPathIds(0, selectedOccurrencePath, selectedSolidExpressId ?? null).slice(1))]
+  }
+  const refOf = refMaker(viewer)
+  return (selectedAnchorIds ?? []).map((id) => refOf(Number(id)))
+}
+
+
+/**
  * @param {object} input
  * @return {object} ToolResult
  */
@@ -519,13 +589,7 @@ function select({refs, mode = 'replace'}) {
   const {rootElement} = state
   const funnel = funnelOrThrow()
   const targets = assertResolved(resolveRefs(refs, state))
-  const before = {
-    elements: [...(state.selectedElements ?? [])],
-    anchors: [...(state.selectedAnchorIds ?? [])],
-    instances: [...(state.selectedInstanceIds ?? [])],
-    occurrencePath: state.selectedOccurrencePath ?? null,
-    solid: state.selectedSolidExpressId ?? null,
-  }
+  const before = captureSelection(state)
   const nodes = nodesById(rootElement)
   const occurrenceTargets = targets.filter(({kind}) => kind === 'occurrence')
   if (mode === 'replace' && targets.length === 1 && occurrenceTargets.length === 1) {
@@ -556,26 +620,17 @@ function select({refs, mode = 'replace'}) {
     }
   }
   const after = useStore.getState().selectedAnchorIds ?? []
-  const refOf = refMaker(state.viewer)
   const types = {}
   for (const id of after) {
     const type = nodeType(nodes.get(Number(id))) || 'unknown'
     types[type] = (types[type] ?? 0) + 1
   }
-  const listed = after.slice(0, MAX_RESULT_REFS).map((id) => refOf(Number(id)))
+  const listed = selectionRefs(state.viewer).slice(0, MAX_RESULT_REFS)
   return {
     content: {selected: after.length, truncated: after.length > listed.length, refs: listed, types},
     echo: after.length === 0 ? 'Cleared the selection' : `Selected ${after.length} element${after.length === 1 ? '' : 's'}`,
     refs: listed,
-    undo: undoWhileLoaded(state, () => {
-      const restore = funnelOrThrow()
-      if (before.elements.length === 0) {
-        restore([])
-        return
-      }
-      restore(before.elements.map(Number), true, before.instances, before.occurrencePath, before.solid,
-        before.anchors.map(Number))
-    }),
+    undo: undoWhileLoaded(state, () => restoreSelection(before)),
   }
 }
 
@@ -683,13 +738,25 @@ function visibilityTargets(targets, {viewer, rootElement}) {
 
 
 /**
+ * The undo for hide / isolate / showAll: the visibility from before the
+ * call, then the selection, which `hideElementsById` prunes of what it hid.
+ * Restoring visibility alone left a hidden-then-shown element unselected
+ * (Codex review round 4 on #1946). The selection goes back through the
+ * funnel, and only when the call changed it.
+ *
  * @param {object} state the store state the call ran against
  * @param {object} isolator
  * @param {object} before captureVisibility snapshot
  * @return {Function} undo
  */
 function visibilityUndo(state, isolator, before) {
-  return undoWhileLoaded(state, () => restoreVisibility(isolator, before))
+  const selection = captureSelection(state)
+  return undoWhileLoaded(state, () => {
+    restoreVisibility(isolator, before)
+    if (!selectionUnchanged(selection) && getSelectionFunnel()) {
+      restoreSelection(selection)
+    }
+  })
 }
 
 

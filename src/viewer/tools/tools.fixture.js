@@ -199,6 +199,47 @@ export function makeStepModel() {
 
 
 /**
+ * A reused sub-assembly: Sub (NAUO 10) with its Bolt (NAUO 11) is placed
+ * twice, under A (30) and B (40). The copies' rows share their express ids
+ * — the NavTree shows 10 and 11 twice — so only the occurrence path tells
+ * them apart. One placement of owner 100 per copy, emission order
+ * [30,10,11] then [40,10,11].
+ *
+ *   Top 1 (path []) › A 30 [30] › Sub 10 [30,10] › Bolt 11 [30,10,11]
+ *                   › B 40 [40] › Sub 10 [40,10] › Bolt 11 [40,10,11]
+ *
+ * @return {object} `{model, tree, batch}`
+ */
+export function makeReusedStepModel() {
+  const paths = [[30, 10, 11], [40, 10, 11]]
+  const flatMeshes = paths.map((occurrencePath, i) => ({
+    expressID: 100,
+    geometries: [{
+      geometryExpressID: SHAPE_ID,
+      flatTransformation: translateX(i * SPACING),
+      color: {x: 0.5, y: 0.5, z: 0.5, w: 1},
+      occurrencePath,
+    }],
+  }))
+  const {batches} = flatMeshToBatchedModel(flatMeshes, unitTriangleApi(), 0)
+  decorateBatchMeshes(batches)
+  const model = new Group()
+  batches.forEach(({mesh}) => model.add(mesh))
+  const row = (expressID, name, occurrencePath, children = []) =>
+    ({expressID, type: 'NEXT_ASSEMBLY_USAGE_OCCURRENCE', Name: {type: 1, value: name}, occurrencePath, children})
+  const copy = (parent) => row(parent, parent === 30 ? 'A' : 'B', [parent], [
+    row(10, 'Sub', [parent, 10], [row(11, 'Bolt', [parent, 10, 11])]),
+  ])
+  const tree = {...row(1, 'Top', [], [copy(30), copy(40)]), type: 'PRODUCT_DEFINITION'}
+  model.format = 'step'
+  model.getSpatialStructure = () => Promise.resolve(tree)
+  model.getItemProperties = () => Promise.resolve(null)
+  model.getPropertySets = () => Promise.resolve([])
+  return {model, tree, batch: batches[0].mesh}
+}
+
+
+/**
  * `twoRootShells.step` as Conway's tree carries it (src/tests/fixtures/; the
  * same shape `utils/occurrencePaths.test.js` models): a synthetic `Model`
  * wrapper (0) over two disconnected top-level parts, EVERY node at the empty
