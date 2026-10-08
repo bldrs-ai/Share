@@ -1,10 +1,12 @@
 /*
  * Tests for the record-export Netlify Function — the server-side history of
- * what a Pro user exported (design/new/glb-export-premium.md §4.5).
+ * what a user exported (design/new/glb-export-premium.md §4.5), which is
+ * also the free tier's export ledger (§4.8).
  *
- * Two things here are worth more than the happy path: the 403, which is the
- * only reason an unentitled client can't write to another user's
- * `app_metadata` at will, and the shape of the PATCH — Auth0 merges
+ * Three things here are worth more than the happy path: the free-tier fill-in,
+ * which must turn `pro-module`'s charge row into the export's row WITHOUT
+ * counting it twice and must never let a free user add a row of their own;
+ * the 403 that refuses exactly that; and the shape of the PATCH — Auth0 merges
  * `app_metadata` a top-level key at a time, so a patch carrying anything
  * besides `exports` would silently rewrite the quota or subscription state
  * that `record-load.js` and the Stripe webhook own.
@@ -34,6 +36,23 @@ jest.mock('@sentry/serverless', () => ({
 const SUB = 'google-oauth2|1234567890'
 const KEY = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
 const EXPORTS_CAP = 100
+const DAY_MS = 24 * 60 * 60 * 1000
+const CHARGE_ID = '7a1c2b3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
+
+
+/**
+ * The row pro-module writes when it hands a free user the module.
+ *
+ * @param {string} id
+ * @param {number} daysAgo
+ * @return {object}
+ */
+function chargeRow(id, daysAgo = 0) {
+  return {
+    id, key: null, title: null, format: 'glb', bytes: null,
+    exportedAt: new Date(Date.now() - (daysAgo * DAY_MS)).toISOString(), free: true,
+  }
+}
 
 
 /**
@@ -184,14 +203,125 @@ describe('record-export function', () => {
     expect(patchedAppMetadata().exports).toHaveLength(EXPORTS_CAP)
   })
 
-  it('403s a signed-in user without a subscription, and writes nothing', async () => {
-    mockAuth0({})
+  // Paid, waiting on a re-login: Pro (§7.2), so recorded like sharePro —
+  // prepended, never matched against a charge.
+  it('records a pending-reauth subscriber\'s export as Pro', async () => {
+    mockAuth0({subscriptionStatus: 'shareProPendingReauth'})
 
     const res = await handler(getEvent())
 
-    expect(res.statusCode).toBe(403)
-    expect(JSON.parse(res.body).error).toBe('subscription_required')
-    expect(axios.patch).not.toHaveBeenCalled()
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body)
+    expect(body.exports).toHaveLength(1)
+    expect(body.exports[0]).toMatchObject({key: KEY, bytes: 2048})
+    expect(body.exports[0].free).toBeUndefined()
+    expect(body.freeExports).toBeUndefined()
+  })
+
+  describe('a free user', () => {
+    it('fills in the row pro-module charged, so the export counts once', async () => {
+      const charge = chargeRow(CHARGE_ID)
+      const older = chargeRow('6b2d3c4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e', 3)
+      mockAuth0({subscriptionStatus: 'free', exports: [charge, older]})
+
+      const res = await handler(getEvent({id: CHARGE_ID}))
+
+      expect(res.statusCode).toBe(200)
+      const written = patchedAppMetadata().exports
+      // Two rows before, two after: filled in place, not appended.
+      expect(written).toHaveLength(2)
+      expect(written[0]).toEqual({...charge, key: KEY, title: 'box.ifc', format: 'glb', bytes: 2048})
+      // The charge's own stamp stands — the window counts from delivery.
+      expect(written[0].exportedAt).toBe(charge.exportedAt)
+      expect(written[1]).toEqual(older)
+      expect(JSON.parse(res.body).freeExports).toMatchObject({limit: 2, used: 2, remaining: 0})
+    })
+
+    it('reports the allowance left after the export', async () => {
+      mockAuth0({exports: [chargeRow(CHARGE_ID)]})
+
+      const res = await handler(getEvent({id: CHARGE_ID}))
+
+      expect(JSON.parse(res.body).freeExports).toMatchObject({limit: 2, used: 1, remaining: 1})
+    })
+
+    it('refuses an export pro-module never charged, and writes nothing', async () => {
+      // Appending would let a free user write their own ledger; a free row
+      // only ever comes from pro-module, at delivery.
+      mockAuth0({subscriptionStatus: 'free', exports: [chargeRow(CHARGE_ID)]})
+
+      const res = await handler(getEvent({id: '5f6b1d7e-1a2b-4c3d-9e4f-0a1b2c3d4e5f'}))
+
+      expect(res.statusCode).toBe(403)
+      expect(JSON.parse(res.body).error).toBe('free_export_not_charged')
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it('states the ledger\'s allowance on the refusal, for the loser of a two-tab race', async () => {
+      // Tab B's charge row was overwritten by tab A's PATCH, so B's POST is
+      // refused — but B cached `remaining: 0` from its charge header. The
+      // refusal is the only chance to correct it.
+      mockAuth0({subscriptionStatus: 'free', exports: [chargeRow(CHARGE_ID)]})
+
+      const res = await handler(getEvent({id: '5f6b1d7e-1a2b-4c3d-9e4f-0a1b2c3d4e5f'}))
+
+      expect(res.statusCode).toBe(403)
+      expect(JSON.parse(res.body).freeExports).toMatchObject({limit: 2, used: 1, remaining: 1})
+    })
+
+    it('refuses a body with no id at all', async () => {
+      mockAuth0({})
+
+      const res = await handler(getEvent())
+
+      expect(res.statusCode).toBe(403)
+      expect(JSON.parse(res.body).error).toBe('free_export_not_charged')
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it('will not fill in a Pro-era row that merely shares the id', async () => {
+      const proEra = {...chargeRow(CHARGE_ID), free: undefined, key: '/k', bytes: 5}
+      delete proEra.free
+      mockAuth0({exports: [proEra]})
+
+      const res = await handler(getEvent({id: CHARGE_ID}))
+
+      expect(res.statusCode).toBe(403)
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('GET: the caller\'s free-export allowance', () => {
+    const getAllowance = () => handler({httpMethod: 'GET', headers: {authorization: 'Bearer user-token'}})
+
+    it('reports what a free user has left in the window, and writes nothing', async () => {
+      mockAuth0({exports: [chargeRow(CHARGE_ID, 2), chargeRow('x', 9)]})
+
+      const res = await getAllowance()
+
+      expect(res.statusCode).toBe(200)
+      const body = JSON.parse(res.body)
+      expect(body.tier).toBe('free')
+      // The 9-day-old export has left the 7-day window.
+      expect(body.freeExports).toMatchObject({limit: 2, used: 1, remaining: 1})
+      expect(Date.parse(body.freeExports.nextFreeAt)).toBeGreaterThan(Date.now())
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it.each(['sharePro', 'shareProPendingReauth'])('reports no allowance for %s, which is unlimited', async (status) => {
+      mockAuth0({subscriptionStatus: status, exports: [chargeRow(CHARGE_ID)]})
+
+      const body = JSON.parse((await getAllowance()).body)
+
+      expect(body).toEqual({tier: 'paid', freeExports: null})
+    })
+
+    it('401s with no bearer token', async () => {
+      const res = await handler({httpMethod: 'GET', headers: {}})
+
+      expect(res.statusCode).toBe(401)
+      expect(axios.get).not.toHaveBeenCalled()
+    })
   })
 
   it('401s a request with no bearer token', async () => {
@@ -210,8 +340,8 @@ describe('record-export function', () => {
     expect(axios.patch).not.toHaveBeenCalled()
   })
 
-  it('405s a non-POST', async () => {
-    const res = await handler(getEvent({}, {httpMethod: 'GET'}))
+  it('405s anything but GET and POST', async () => {
+    const res = await handler(getEvent({}, {httpMethod: 'PUT'}))
 
     expect(res.statusCode).toBe(405)
     expect(axios.get).not.toHaveBeenCalled()

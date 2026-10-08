@@ -369,13 +369,18 @@ really is scheduled. Its replays run against both the source and the bundle.
 
 **Out of this repo: the Auth0 promotion step.** Something outside the repo,
 presumably an Auth0 Action, promotes `shareProPendingReauth` to `sharePro`
-after the user reauthenticates. `pro-module`, `record-export` and the quota
-tier honour only `sharePro`. That step should confirm, against Stripe, that
-the user's `stripeCustomerId` holds an entitling Pro subscription before
-promoting. With that check in place, a stale `shareProPendingReauth` that
-slips past the webhook can't become paid access. It does **not** cover a
-lost demotion: a user already `sharePro` whose demotion was lost keeps paid
-access until the sweep demotes them, and only in apply mode (ops#34).
+after the user reauthenticates. Since the S4 decision
+(glb-export-premium.md §7.2) `shareProPendingReauth` is itself Pro:
+`pro-module`, `record-export`, `record-load` and `getTier` all read the one
+definition in `src/quota/proStatus.js`, which `_lib/subscriptions.js`'s
+`PRO_AUTH0_STATUSES` is. So a stale `shareProPendingReauth` that slips past
+the webhook IS paid access until the sweep demotes it (in apply mode), not
+only after the promotion. The promotion step should still confirm, against
+Stripe, that the user's `stripeCustomerId` holds an entitling Pro
+subscription before writing `sharePro`. Neither that check nor the
+webhook covers a lost demotion: a user already Pro (either status) whose
+demotion was lost keeps paid access until the sweep demotes them, and only in
+apply mode (ops#34).
 
 ## Known gaps and follow-ups
 

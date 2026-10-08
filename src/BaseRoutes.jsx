@@ -108,6 +108,20 @@ export default function BaseRoutes({testElt = null}) {
     // nothing below depends on it.
     trackSubscriptionFromToken(token, {isFresh})
 
+    // Only overwrite store appMetadata when the JWT actually carries
+    // one — tests (e.g. Subscription.spec) inject appMetadata directly
+    // before login and expect it to stick.
+    //
+    // BEFORE the reauth short circuits below, which return early: the
+    // pending-reauth claim has to reach the store too. `getTier` reads
+    // `store.appMetadata`, and `shareProPendingReauth` is Pro
+    // (design/new/glb-export-premium.md §7.2), so skipping this write left a
+    // paying user on the free tier's Export UI (Pro chip, count caption, the
+    // at-the-limit gate) while the server treated them as Pro.
+    if (appData) {
+      setAppMetadata(appData)
+    }
+
     // Reauth-modal short circuits: show the modal and stop — leave
     // identity/token state as it was.
     if (appData?.subscriptionStatus === 'shareProPendingReauth') {
@@ -119,13 +133,6 @@ export default function BaseRoutes({testElt = null}) {
       setReauthScope('public_repo')
       setReauthModalOpen(true)
       return
-    }
-
-    // Only overwrite store appMetadata when the JWT actually carries
-    // one — tests (e.g. Subscription.spec) inject appMetadata directly
-    // before login and expect it to stick.
-    if (appData) {
-      setAppMetadata(appData)
     }
 
     const identities = decodedToken['https://bldrs.ai/identities'] || decodedToken.identities || []

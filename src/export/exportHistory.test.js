@@ -1,4 +1,5 @@
 import {
+  fetchFreeExportAllowance,
   hydrateExports,
   loadExports,
   recordExport,
@@ -435,6 +436,25 @@ describe('exportHistory', () => {
       expect(optimisticId).toMatch(UUID_PATTERN)
     })
 
+    it('records a free export under the id pro-module charged it under', async () => {
+      // record-export fills in the charged ledger row by this id, and refuses
+      // a free user's row it never charged — a freshly minted id here would
+      // turn every free export into a 403 and a dangling charge row.
+      const chargeId = '7a1c2b3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
+      const freeExports = {limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-10-13T12:00:00.000Z'}
+      global.fetch.mockResolvedValue({ok: true, status: 200, json: () => Promise.resolve({
+        exports: [{id: chargeId, key: KEY, format: 'glb', bytes: 2048, exportedAt: '2026-10-06T12:00:00.000Z', free: true}],
+        freeExports,
+      })})
+
+      const result = await recordExport(anEntry({id: chargeId}), SUB, jest.fn().mockResolvedValue('token'))
+
+      expect(JSON.parse(global.fetch.mock.calls[0][1].body).id).toBe(chargeId)
+      expect(result.exports[0].id).toBe(chargeId)
+      // The allowance the server counted after the record, for the tab's line.
+      expect(result.freeExports).toEqual(freeExports)
+    })
+
     it('mints a row id the server will accept, even with no crypto.randomUUID', async () => {
       // `record-export.js` 400s an id that isn't a well-formed v4 UUID, so
       // the fallback path (jsdom, or a browser on a non-secure origin) has
@@ -565,6 +585,17 @@ describe('exportHistory', () => {
       expect((await loadExports(SUB)).exports[0]).toMatchObject({key: KEY})
     })
 
+    it('returns the allowance a free_export_not_charged refusal carries', async () => {
+      const freeExports = {limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-10-13T12:00:00.000Z'}
+      global.fetch.mockResolvedValue({
+        ok: false, status: 403, json: () => Promise.resolve({error: 'free_export_not_charged', freeExports}),
+      })
+
+      const result = await recordExport(anEntry(), SUB, jest.fn().mockResolvedValue('token'))
+
+      expect(result).toMatchObject({recorded: false, status: 403, freeExports, reason: 'free_export_not_charged'})
+    })
+
     it('keeps the local row when the network is down', async () => {
       global.fetch.mockRejectedValue(new Error('offline'))
 
@@ -617,6 +648,28 @@ describe('exportHistory', () => {
       expect(exports[0].key).toBe(KEY)
       expect(exports[exports.length - 1].id).toBe(`old-${EXPORTS_CAP - 2}`)
       expect(exports.some((e) => e.id === `old-${EXPORTS_CAP - 1}`)).toBe(false)
+    })
+  })
+
+  describe('fetchFreeExportAllowance', () => {
+    it('GETs record-export with the bearer, and returns the tier and allowance', async () => {
+      const freeExports = {limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-10-13T12:00:00.000Z'}
+      global.fetch.mockResolvedValue({ok: true, status: 200, json: () => Promise.resolve({tier: 'free', freeExports})})
+
+      const result = await fetchFreeExportAllowance(jest.fn().mockResolvedValue('token'))
+
+      expect(global.fetch).toHaveBeenCalledWith('/.netlify/functions/record-export', {headers: {Authorization: 'Bearer token'}})
+      expect(result).toEqual({tier: 'free', freeExports})
+    })
+
+    it.each([
+      ['a non-OK answer', () => global.fetch.mockResolvedValue({ok: false, status: 502, json: () => Promise.resolve({})})],
+      ['a network failure', () => global.fetch.mockRejectedValue(new Error('offline'))],
+      ['a body without a tier', () => global.fetch.mockResolvedValue({ok: true, status: 200, json: () => Promise.resolve({})})],
+    ])('reads %s as unknown rather than throwing', async (_label, arrange) => {
+      arrange()
+
+      await expect(fetchFreeExportAllowance(jest.fn().mockResolvedValue('token'))).resolves.toBeNull()
     })
   })
 })

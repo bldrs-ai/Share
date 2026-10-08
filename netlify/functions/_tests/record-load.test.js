@@ -155,4 +155,17 @@ describe('record-load function', () => {
     expect(JSON.parse(res.body)).toMatchObject({allowed: true, limit: null, tier: 'paid'})
     expect(axios.patch).not.toHaveBeenCalled()
   })
+
+  // Paid, waiting on a re-login for the GitHub scope: Pro for loads too, the
+  // owner's §7.2 decision (src/quota/proStatus.js) — the same answer the
+  // client's getTier gives, so the badge and this gate agree.
+  it('does not gate or record for a pending-reauth subscriber either', async () => {
+    mockAuth0({subscriptionStatus: 'shareProPendingReauth', usageQuota: {loads: recentLoads(FREE_LIMIT)}})
+
+    const res = await handler(getEvent())
+
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.body)).toMatchObject({allowed: true, limit: null, tier: 'paid'})
+    expect(axios.patch).not.toHaveBeenCalled()
+  })
 })

@@ -35,15 +35,18 @@ export const flags = [
   // to roll the limits out to everyone.
   // See design/new/quotas.md.
   {name: 'quotas', isActive: false},
-  // Model export ("Download GLB" in the Share dialog), sold as a Pro
-  // feature. Gates ONLY the UI section: the pro-module pipeline (the
+  // Model export ("Download GLB" in the Save dialog's Export tab), sold as
+  // a Pro feature. Gates ONLY the UI section: the pro-module pipeline (the
   // `pro-module` Netlify Function, `proModuleLoader`, the separately-built
   // module) ships unconditionally and is gated by the subscription check on
-  // the server, not by this flag. Off by default while the flow is
-  // validated against real Auth0 tiers and a real Stripe subscription;
-  // enable per-session with `?feature=export`.
+  // the server, not by this flag, so turning the UI on for everyone does not
+  // hand the exporter to non-subscribers. Default ON as of the S4 rollout
+  // (#1835); it was opt-in via `?feature=export` while the flow was
+  // validated against real Auth0 tiers and a real Stripe subscription.
+  // `?feature=` can only turn flags ON, so flipping this back to false is the
+  // prod-wide kill switch (the dialog then has no tabs at all, as before).
   // See design/new/glb-export-premium.md.
-  {name: 'export', isActive: false},
+  {name: 'export', isActive: true},
   // GLB runtime artifact pipeline (design/new/glb-model-sharing.md).
   // `glb` enables both the writer (post-IFC-parse cache warm-up) and the
   // reader (skip-IFC-when-GLB-cached fast path in Loader.js).

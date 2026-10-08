@@ -1,5 +1,5 @@
 import {CompressionStream as NodeCompressionStream} from 'node:stream/web'
-import {act, renderHook} from '@testing-library/react'
+import {act, renderHook, waitFor} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn} from '../__mocks__/authentication'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
 import {gtagEvent} from '../privacy/analytics'
@@ -7,8 +7,8 @@ import useStore from '../store/useStore'
 import {compressedExport, gzippedExport} from './artifactSizes'
 import {triggerDownload} from './download'
 import {recordExport} from './exportHistory'
-import {ProModuleDeniedError, loadProModule} from './proModuleLoader'
-import useExport, {bytesBucket, formatBytes} from './useExport'
+import {ProModuleDeniedError, forgetProModule, loadProModule} from './proModuleLoader'
+import useExport, {bytesBucket, formatBytes, freeLimitMessage} from './useExport'
 
 
 jest.mock('../OPFS/utils', () => ({readModelByPathFromOPFS: jest.fn()}))
@@ -28,6 +28,7 @@ jest.mock('./exportHistory', () => ({recordExport: jest.fn()}))
 jest.mock('./proModuleLoader', () => ({
   ...jest.requireActual('./proModuleLoader'),
   loadProModule: jest.fn(),
+  forgetProModule: jest.fn(),
 }))
 
 
@@ -75,7 +76,7 @@ describe('useExport', () => {
     mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently})
     recordExport.mockResolvedValue({recorded: true, status: 200, exports: []})
     exportArtifact = jest.fn().mockReturnValue(EXPORTED)
-    loadProModule.mockResolvedValue({exportArtifact})
+    loadProModule.mockResolvedValue({namespace: {exportArtifact}, charge: null})
     readModelByPathFromOPFS.mockResolvedValue({
       arrayBuffer: () => Promise.resolve(ARTIFACT_BYTES.buffer),
     })
@@ -84,6 +85,7 @@ describe('useExport', () => {
     useStore.getState().setAppMetadata(null)
     useStore.getState().setSnackMessage(null)
     useStore.getState().setIsExportInFlight(false)
+    useStore.getState().setFreeExportAllowance(null)
   })
 
   afterAll(() => {
@@ -116,6 +118,7 @@ describe('useExport', () => {
       bytes_bucket: '<1MB',
       source_kind: KIND_LABEL,
       portable: false,
+      free_export: false,
     })
   })
 
@@ -457,6 +460,61 @@ describe('useExport', () => {
     expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'sharePro'})
   })
 
+  describe('when record-export refuses an export pro-module already served', () => {
+    const refused = {recorded: false, status: 403, exports: [], reason: 'free_export_not_charged'}
+
+    it('forgets the memoised Pro module and refreshes the claims, for an uncharged export', async () => {
+      // The account lost Pro while this page stayed open: the memo would
+      // otherwise keep exporting uncharged for the rest of the session.
+      getAccessTokenSilently.mockImplementation((params) => Promise.resolve(params?.cacheMode === 'off' ?
+        jwtWithAppMetadata({subscriptionStatus: 'free'}) :
+        'cached-token'))
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      recordExport.mockResolvedValue(refused)
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(forgetProModule).toHaveBeenCalledWith('glbExport')
+      await waitFor(() => expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'free'}))
+    })
+
+    it('leaves the loader alone for a charged export, which was never memoised', async () => {
+      loadProModule.mockResolvedValue({namespace: {exportArtifact}, charge: {exportId: 'row-1', freeExports: null}})
+      recordExport.mockResolvedValue(refused)
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(forgetProModule).not.toHaveBeenCalled()
+    })
+
+    it('leaves the loader alone on a 401, which an expired token or an Auth0 outage also gives', async () => {
+      recordExport.mockResolvedValue({recorded: false, status: 401, exports: [], reason: 'invalid_auth0_token'})
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(forgetProModule).not.toHaveBeenCalled()
+    })
+
+    it('leaves the loader alone when record-export accepts the export', async () => {
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(forgetProModule).not.toHaveBeenCalled()
+    })
+  })
+
   it('still reports success when recording the export fails', async () => {
     // The file is in the user's Downloads either way; a history write that
     // couldn't happen must not read as a failed export.
@@ -490,7 +548,7 @@ describe('useExport', () => {
     // the two exports then raced each other's history write (#1834).
     let release
     loadProModule.mockReturnValue(new Promise((resolve) => {
-      release = () => resolve({exportArtifact})
+      release = () => resolve({namespace: {exportArtifact}, charge: null})
     }))
     const {result} = renderHook(() => useExport())
     const other = renderHook(() => useExport())
@@ -570,6 +628,108 @@ describe('useExport', () => {
     expect(recordExport).not.toHaveBeenCalled()
     expect(gtagEvent).not.toHaveBeenCalled()
     expect(result.current.error).toBeInstanceOf(ProModuleDeniedError)
+  })
+
+  describe('a free user\'s export (§4.8)', () => {
+    const CHARGE_ID = '7a1c2b3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
+    const AFTER_CHARGE = {limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-10-13T12:00:00.000Z'}
+
+    beforeEach(() => {
+      loadProModule.mockResolvedValue({namespace: {exportArtifact}, charge: {exportId: CHARGE_ID, freeExports: AFTER_CHARGE}})
+    })
+
+    it('records the export under the id the server charged it under', async () => {
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      // Any other id and record-export refuses it as an uncharged free row.
+      expect(recordExport.mock.calls[0][0].id).toBe(CHARGE_ID)
+      expect(gtagEvent).toHaveBeenCalledWith('export_model', expect.objectContaining({free_export: true}))
+    })
+
+    it('puts the allowance the charge left into the store, for the count line', async () => {
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(useStore.getState().freeExportAllowance).toEqual({sub: 'github|1234567', ...AFTER_CHARGE})
+    })
+
+    it('then takes the figure record-export reports, which is later', async () => {
+      const afterRecord = {...AFTER_CHARGE, used: 2, remaining: 0}
+      recordExport.mockResolvedValue({recorded: true, status: 200, exports: [], freeExports: afterRecord})
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(useStore.getState().freeExportAllowance).toEqual({sub: 'github|1234567', ...afterRecord})
+    })
+
+    it('records a Pro export under a fresh id, as before', async () => {
+      loadProModule.mockResolvedValue({namespace: {exportArtifact}, charge: null})
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(recordExport.mock.calls[0][0].id).toBeUndefined()
+      expect(useStore.getState().freeExportAllowance).toBeNull()
+    })
+
+    it('at the limit, says when the next free export frees up, and stores the allowance', async () => {
+      const atLimit = {limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-09T09:00:00.000Z'}
+      loadProModule.mockRejectedValue(new ProModuleDeniedError(403, 'denied', {reason: 'free_export_limit', freeExports: atLimit}))
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(useStore.getState().snackMessage.text).toBe(freeLimitMessage(atLimit))
+      expect(useStore.getState().snackMessage.text).toMatch(/^You've used your 2 free exports for this week\. The next one frees up /)
+      expect(useStore.getState().freeExportAllowance).toEqual({sub: 'github|1234567', ...atLimit})
+      // The tier was right; there is no stale badge to refresh.
+      expect(getAccessTokenSilently).not.toHaveBeenCalledWith(expect.objectContaining({cacheMode: 'off'}))
+      expect(triggerDownload).not.toHaveBeenCalled()
+      expect(recordExport).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('a free-limit refusal that contradicts the locally paid tier', () => {
+    const atLimit = {limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-09T09:00:00.000Z'}
+
+    beforeEach(() => {
+      loadProModule.mockRejectedValue(
+        new ProModuleDeniedError(403, 'denied', {reason: 'free_export_limit', freeExports: atLimit}))
+    })
+
+    it('refreshes the claim, so the tier flips to free and the gate shows', async () => {
+      // The JWT still says Pro for a canceled account; `ExportSection` hides
+      // the allowance and the gate while `getTier` says PAID, so storing the
+      // allowance alone left every click repeating the refusal.
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      getAccessTokenSilently.mockImplementation((params) => Promise.resolve(params?.cacheMode === 'off' ?
+        jwtWithAppMetadata({subscriptionStatus: 'canceled'}) :
+        'cached-token'))
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(getAccessTokenSilently).toHaveBeenCalledWith(
+        expect.objectContaining({cacheMode: 'off', useRefreshTokens: true}))
+      expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'canceled'})
+      expect(useStore.getState().freeExportAllowance).toEqual({sub: 'github|1234567', ...atLimit})
+    })
   })
 
   it('does nothing premium when no artifact has been published yet', async () => {

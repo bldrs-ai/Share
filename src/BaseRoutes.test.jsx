@@ -11,6 +11,7 @@ import {_resetGaClientIdForTests, setGaClientId} from './privacy/analytics'
 import * as subscriptionTracking from './privacy/subscriptionTracking'
 import {HelmetThemeCtx} from './Share.fixture'
 import BaseRoutes from './BaseRoutes'
+import {TIERS, getTier} from './quota/quota'
 import useStore from './store/useStore'
 
 
@@ -297,6 +298,47 @@ describe('BaseRoutes - auth resolution', () => {
     await waitFor(() => {
       expect(screen.getByText('Reauthentication Required')).toBeInTheDocument()
     })
+  })
+
+  // design/new/glb-export-premium.md §7.2 / §8 step 12: a pending-reauth
+  // account is Pro. The reauth modal short-circuits processAccessToken before
+  // the GitHub identity block, but the claim must still reach the store: every
+  // tier reader (getTier -> ExportSection, useFreeExports, useQuota) reads
+  // store.appMetadata, so a skipped write left a paying user on the free UI.
+  it('shareProPendingReauth: opens the reauth modal AND records the claim so the tier is paid', async () => {
+    const token = 'pending-jwt'
+    tokenClaims[token] = {
+      'https://bldrs.ai/app_metadata': {subscriptionStatus: 'shareProPendingReauth'},
+    }
+    mockedUseAuth0.mockReturnValue({
+      ...mockedUserLoggedIn,
+      getAccessTokenSilently: jest.fn().mockResolvedValue(token),
+    })
+    await renderAndResolve()
+    await waitFor(() => {
+      expect(screen.getByText('Reauthentication Required')).toBeInTheDocument()
+    })
+    expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'shareProPendingReauth'})
+    expect(getTier(useStore.getState().appMetadata, true)).toBe(TIERS.PAID)
+    // The modal path still leaves identity/token state alone.
+    expect(useStore.getState().accessToken).toBe('')
+  })
+
+  it('freePendingReauth: opens the reauth modal and records the claim (still free tier)', async () => {
+    const token = 'free-pending-jwt'
+    tokenClaims[token] = {
+      'https://bldrs.ai/app_metadata': {subscriptionStatus: 'freePendingReauth'},
+    }
+    mockedUseAuth0.mockReturnValue({
+      ...mockedUserLoggedIn,
+      getAccessTokenSilently: jest.fn().mockResolvedValue(token),
+    })
+    await renderAndResolve()
+    await waitFor(() => {
+      expect(screen.getByText('Reauthentication Required')).toBeInTheDocument()
+    })
+    expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'freePendingReauth'})
+    expect(getTier(useStore.getState().appMetadata, true)).toBe(TIERS.FREE)
   })
 })
 

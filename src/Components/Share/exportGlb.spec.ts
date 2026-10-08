@@ -4,7 +4,6 @@ import {Locator, Page, expect, test} from '@playwright/test'
 import {
   EXPORT_TEST_TIMEOUT_MS,
   GLTF_MAGIC,
-  PRO_MODULE_PATTERN,
   clickGate,
   disableDracoEncoder,
   dismissLoadSnackbar,
@@ -14,6 +13,7 @@ import {
   expectNoHorizontalScroll,
   expectProductRowSelected,
   expectSnackbarOnTop,
+  exportLedger,
   glbJsonChunk,
   loadModelAndWaitForArtifact,
   openExportTab,
@@ -21,6 +21,7 @@ import {
   reopenLocalGlb,
   selectedInstancesAndAnchors,
   routeProModule,
+  routeRecordExport,
   selectCompression,
   selectQuality,
   setPortable,
@@ -470,6 +471,12 @@ async function sceneHighlightCount(page: Page): Promise<number> {
     /* eslint-enable @typescript-eslint/no-explicit-any */
   })
 }
+
+
+// How long an export's history record may take to settle — the record-export
+// round trip plus the JWT refresh after it, which `isExportInFlight` waits on
+// (useExport.js). Seconds when idle; well past the 5 s default on a busy box.
+const RECORD_SETTLE_TIMEOUT_MS = 30_000
 
 
 describeMobileAndDesktop('Share 140: Export GLB', () => {
@@ -1937,32 +1944,103 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(page.getByTestId('login-with-github')).toBeVisible()
   })
 
-  test('a signed-in free user is offered the Pro gate, then upgrade', async ({page}) => {
+  // The owner's §7.1 decision: a signed-in free user gets 2 exports per
+  // rolling 7 days. The server charges each one as it hands over the module
+  // (§4.8); this is the user's own path through that, end to end.
+  test('a free user exports twice, watching the count drop, then meets the Pro gate', async ({page}) => {
     test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
-    // Nothing premium may be requested for a user we already know isn't
-    // entitled — the server would refuse, and the UI shouldn't ask.
     const proModuleRequests = watchProModuleRequests(page)
-    await page.route(PRO_MODULE_PATTERN, async (route) => {
-      await route.fulfill({status: 403, body: 'denied'})
-    })
+    await routeProModule(page)
+    await routeRecordExport(page)
 
     await loadModelAndWaitForArtifact(page)
     await setSubscriptionTier(page, 'free')
     await auth0Login(page)
 
     await openExportTab(page)
-    // The chip is the affordance that says why the button won't export.
+    await dismissLoadSnackbar(page)
+    const remaining = page.getByTestId('export-free-remaining')
+    await expect(remaining).toHaveText('2 of 2 free exports left this week')
+    // Still a Pro feature: the chip stays beside a button that now works.
     await expect(page.getByTestId('export-pro-chip')).toBeVisible()
+    await expect(page.getByTestId('gated-export-pro')).toHaveCount(0)
 
+    await waitForCodecSizing(page)
+    await selectCompression(page, 'none')
+    const exportButton = page.getByTestId('export-glb-button')
+
+    for (const left of [1, 0]) {
+      // The button stays disabled until the previous export's record (and
+      // the JWT refresh after it) settles — `isExportInFlight` serialises
+      // the ledger write (useExport.js) — which outlasts the default 5 s
+      // under load.
+      await expect(exportButton).toBeEnabled({timeout: RECORD_SETTLE_TIMEOUT_MS})
+      const downloadPromise = page.waitForEvent('download')
+      await exportButton.click()
+      const bytes = await readFile(await (await downloadPromise).path())
+      expect(bytes.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+      await expect(remaining).toHaveAttribute('data-remaining', `${left}`)
+    }
+    await expect(remaining).toContainText('0 of 2 free exports left this week · next one ')
+
+    // Each export was charged once and then filled in by record-export under
+    // the charge's id: two free rows, each naming the model, not four.
+    await expect.poll(async () => (await exportLedger(page)).filter((row) => row.free && row.key !== null).length,
+      {timeout: RECORD_SETTLE_TIMEOUT_MS}).toBe(2)
+    expect((await exportLedger(page)).filter((row) => row.free)).toHaveLength(2)
+    // A free delivery is not memoised: each export fetched, and paid for, its
+    // own module. Counting the function URL only — MSW then fetches the
+    // `__pro_dev__` copy itself, which is the same delivery.
+    const deliveries = () => proModuleRequests.filter((url) => url.includes('pro-module'))
+    expect(deliveries()).toHaveLength(2)
+
+    // The third: the Pro upsell, saying when the next free export frees up.
     await clickGate(page, 'gated-export-pro')
-    await expect(page.getByTestId('gated-help')).toContainText('Pro subscription')
+    await expect(page.getByTestId('gated-help')).toContainText('You\'ve used your 2 free exports for the last 7 days.')
+    await expect(page.getByTestId('gated-help')).toContainText('Your next free export is available ')
+    // The at-the-limit row (caption + gate + chip) must still fit at 390px.
+    await expectNoHorizontalScroll(page)
 
     await page.getByTestId('gated-help-action').click()
-
     // `/subscribe/` is an MSW stub in this build and ProfileControl's
     // `useMock` path writes it into the document rather than navigating,
     // so this is the same assertion Profile/Subscription.spec.ts makes.
     await expect(page.getByText('Mock Subscribe Page')).toBeVisible()
-    expect(proModuleRequests).toEqual([])
+    // The gate held the click: no third module was requested.
+    expect(deliveries()).toHaveLength(2)
+  })
+
+  // The owner's §7.2 decision: `shareProPendingReauth` — paid, waiting on a
+  // re-login for the GitHub scope — is Pro.
+  test('a pending-reauth subscriber exports as Pro, with nothing counted', async ({page}) => {
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
+    const proModuleRequests = watchProModuleRequests(page)
+    await routeProModule(page)
+    await routeRecordExport(page)
+
+    await loadModelAndWaitForArtifact(page)
+    await setSubscriptionTier(page, 'shareProPendingReauth')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    // Nothing new for Pro: no count, no chip, no gate.
+    await expect(page.getByTestId('export-glb-button')).toBeEnabled()
+    await expect(page.getByTestId('export-free-remaining')).toHaveCount(0)
+    await expect(page.getByTestId('export-pro-chip')).toHaveCount(0)
+    await expect(page.getByTestId('gated-export-pro')).toHaveCount(0)
+
+    await waitForCodecSizing(page)
+    await selectCompression(page, 'none')
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByTestId('export-glb-button').click()
+    const bytes = await readFile(await (await downloadPromise).path())
+    expect(bytes.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+    expect(proModuleRequests.filter((url) => url.includes('pro-module')).length).toBeGreaterThan(0)
+
+    // Recorded as a Pro export — a row naming the model — and never charged.
+    await expect.poll(async () => (await exportLedger(page)).filter((row) => row.key !== null).length,
+      {timeout: RECORD_SETTLE_TIMEOUT_MS}).toBe(1)
+    expect((await exportLedger(page)).filter((row) => row.free)).toEqual([])
   })
 })

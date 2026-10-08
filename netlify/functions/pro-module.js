@@ -11,8 +11,27 @@
  *   2. Validate the bearer via Auth0 /userinfo → sub (`verifyAuth0Bearer`).
  *   3. Read app_metadata through the Management API — NOT the caller's JWT
  *      claim, which is as stale as the token it was minted into.
- *   4. `subscriptionStatus === 'sharePro'` → 200 with the module text;
- *      anything else → 403.
+ *   4. A Pro status (`sharePro` or `shareProPendingReauth`,
+ *      src/quota/proStatus.js) → 200 with the module text, nothing written.
+ *   5. Anyone else signed in is on the free tier, which gets
+ *      FREE_EXPORT_LIMIT exports per rolling FREE_EXPORT_WINDOW_DAYS
+ *      (src/export/freeExports.js). At the limit → 403
+ *      `free_export_limit`, with the allowance (and when the next export
+ *      frees up) in the body. Under it → a free export is CHARGED here: a
+ *      `free: true` row is prepended to `app_metadata.exports` before the
+ *      module goes out, and the 200 carries that row's id
+ *      (`X-Bldrs-Export-Id`) and the allowance left
+ *      (`X-Bldrs-Free-Exports`).
+ *
+ * Why the charge is HERE and not in `record-export`: this is the only step
+ * the server controls. `record-export` is called by the client after the
+ * file is already in the user's Downloads, so a counter there is one blocked
+ * request away from unlimited exports. Charging on delivery means every
+ * module a free user receives has been paid for out of their allowance; the
+ * client must not memoise such a delivery (proModuleLoader.js reads the
+ * header to know). What it cannot stop — a user who keeps the module text
+ * they were served and replays it — is the same exposure §4.6 accepts for
+ * Pro, and is spelled out in design/new/glb-export-premium.md §4.8.
  *
  * Why a function serves this at all: the module is built OUTSIDE `docs/`
  * (into `_pro-modules/`, gitignored, shipped to the lambda by netlify.toml's
@@ -24,10 +43,24 @@
  * Design: design/new/glb-export-premium.md §3 (option C), §4.2, §4.6.
  */
 
+import {randomUUID} from 'crypto'
 import fs from 'fs/promises'
 import * as path from 'path'
 import * as Sentry from '@sentry/serverless'
-import {getUserAppMetadata, managementApiFailureDetail, verifyAuth0Bearer} from './_lib/auth0.js'
+import {
+  FREE_EXPORTS_HEADER,
+  FREE_EXPORT_ID_HEADER,
+  FREE_EXPORT_LIMIT_REASON,
+  freeExportAllowance,
+  newFreeExportRow,
+} from '../../src/export/freeExports.js'
+import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
+import {
+  getUserAppMetadata,
+  managementApiFailureDetail,
+  patchUserAppMetadata,
+  verifyAuth0Bearer,
+} from './_lib/auth0.js'
 
 
 Sentry.AWSLambda.init({
@@ -42,17 +75,17 @@ const HTTP_NOT_FOUND = 404
 const HTTP_METHOD_NOT_ALLOWED = 405
 const HTTP_BAD_GATEWAY = 502
 
-// The complete set of servable module ids. The requested name is matched
-// against this set and the FILENAME is then composed from the matched
-// constant — the query string never reaches the filesystem, so no amount of
-// `../` in it can address a file outside `_pro-modules/`.
-const PRO_MODULE_NAMES = new Set(['glbExport'])
+// The complete set of servable module ids, each with the export format it
+// produces (what a free export's ledger row records). The requested name is
+// matched against these keys and the FILENAME is then composed from the
+// matched constant — the query string never reaches the filesystem, so no
+// amount of `../` in it can address a file outside `_pro-modules/`.
+const PRO_MODULE_FORMATS = new Map([['glbExport', 'glb']])
 
-// Mirrors src/quota/quota.js#getTier's PAID branch. Deliberately NOT
-// including 'shareProPendingReauth' (which `GitHubFileBrowser` does treat as
-// Pro): `getTier` is the entitlement authority, and the export UI follows it
-// too — design/new/glb-export-premium.md §7 open question 2.
-const PRO_SUBSCRIPTION_STATUS = 'sharePro'
+// Same cap and same reason as `record-export.js`'s EXPORTS_CAP: the charge
+// row lands in the list that function keeps, under Auth0's 16 KB
+// app_metadata ceiling.
+const EXPORTS_CAP = 100
 
 const PRO_MODULES_DIR_NAME = '_pro-modules'
 
@@ -127,7 +160,7 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   }
 
   const name = event.queryStringParameters?.name || ''
-  if (!PRO_MODULE_NAMES.has(name)) {
+  if (!PRO_MODULE_FORMATS.has(name)) {
     return errorResponse(HTTP_NOT_FOUND, 'unknown_module')
   }
 
@@ -138,35 +171,37 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
 
   // sub === null is the unconfigured-dev bypass `_lib/auth0.js` documents
   // (AUTH0_DOMAIN unset). It already fired its one-shot Sentry warning; there
-  // is no Management API to ask, so serve — same posture as the gh-oauth
-  // broker functions, and such a deploy has no paying users to protect.
+  // is no Management API to ask (or to charge a free export to), so serve —
+  // same posture as the gh-oauth broker functions, and such a deploy has no
+  // paying users to protect.
+  let appMetadata = null
   if (auth.sub !== null) {
-    let appMetadata
     try {
       appMetadata = await getUserAppMetadata(auth.sub)
     } catch (err) {
-      const detail = managementApiFailureDetail(err)
-      Sentry.captureException(err, {tags: {step: detail.step}})
-      // Netlify's function log is the one channel every deploy context has
-      // — Sentry only exists where SENTRY_DSN is set — so the step goes
-      // there too. Names of unset env vars only; never their values.
-      console.error(`pro-module: app_metadata lookup failed at ${detail.step}` +
-        ` (upstream ${detail.upstreamStatus ?? 'n/a'}): ${err.message}`)
-      return errorResponse(HTTP_BAD_GATEWAY, 'app_metadata_lookup_failed', detail)
+      return managementApiFailure(err, 'app_metadata lookup', 'app_metadata_lookup_failed')
     }
-    if (appMetadata.subscriptionStatus !== PRO_SUBSCRIPTION_STATUS) {
-      // Denials are the signal that matters here: a spike means either a
-      // stale client badge (the UI let someone click who shouldn't have) or
-      // someone probing the endpoint. Tagged with the sub so either is
-      // attributable.
+  }
+  const isFreeTier = appMetadata !== null && !isProSubscriptionStatus(appMetadata.subscriptionStatus)
+
+  let allowance = null
+  if (isFreeTier) {
+    allowance = freeExportAllowance(appMetadata.exports)
+    if (allowance.remaining === 0) {
+      // Refusals are the signal that matters here: the Export tab gates a
+      // free user at the limit before they can click, so a refusal means a
+      // stale count on the client or someone probing the endpoint. Tagged
+      // with the sub so either is attributable.
       Sentry.captureMessage(
-        `pro-module: denied ${name} to ${auth.sub} (subscriptionStatus=${appMetadata.subscriptionStatus || 'none'})`,
+        `pro-module: free export limit reached for ${auth.sub} (${name}; used ${allowance.used}/${allowance.limit})`,
         'warning',
       )
-      return errorResponse(HTTP_FORBIDDEN, 'subscription_required')
+      return errorResponse(HTTP_FORBIDDEN, FREE_EXPORT_LIMIT_REASON, {freeExports: allowance})
     }
   }
 
+  // Read BEFORE charging: a module missing from the deploy is a build fault,
+  // and must not cost a free user one of their exports.
   const source = await readProModuleSource(name)
   if (source === null) {
     // Built output missing on a deploy that should have it — a build/config
@@ -176,16 +211,58 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
     return errorResponse(HTTP_NOT_FOUND, 'module_not_built')
   }
 
-  return {
-    statusCode: HTTP_OK,
-    headers: {
-      // `private, no-store` so no shared cache (and no browser disk cache)
-      // ever holds premium code that a later, unentitled request could be
-      // served from. nosniff keeps a hostile embed from re-typing it.
-      'Content-Type': 'text/javascript; charset=utf-8',
-      'Cache-Control': 'private, no-store',
-      'X-Content-Type-Options': 'nosniff',
-    },
-    body: source,
+  const headers = {
+    // `private, no-store` so no shared cache (and no browser disk cache)
+    // ever holds premium code that a later, unentitled request could be
+    // served from. nosniff keeps a hostile embed from re-typing it.
+    'Content-Type': 'text/javascript; charset=utf-8',
+    'Cache-Control': 'private, no-store',
+    'X-Content-Type-Options': 'nosniff',
   }
+
+  if (isFreeTier) {
+    // Charge before serving, and refuse to serve if the charge didn't land:
+    // an uncharged delivery is exactly the free export this gate exists to
+    // count. Only the `exports` key is patched, so a concurrent
+    // `record-load` write of `usageQuota` survives (same as record-export).
+    // Read-modify-write with no compare-and-swap, like every app_metadata
+    // writer here: two requests racing from one account can both read the
+    // same count and both be served, and one charge row can be lost to the
+    // other's write. That is a free extra export, never a wrongful refusal
+    // (§4.8 lists it among what stays bypassable).
+    const existing = Array.isArray(appMetadata.exports) ? appMetadata.exports : []
+    const row = newFreeExportRow({id: randomUUID(), format: PRO_MODULE_FORMATS.get(name)})
+    const charged = [row, ...existing].slice(0, EXPORTS_CAP)
+    try {
+      await patchUserAppMetadata(auth.sub, {exports: charged})
+    } catch (err) {
+      return managementApiFailure(err, 'free export charge', 'free_export_charge_failed')
+    }
+    headers[FREE_EXPORT_ID_HEADER] = row.id
+    headers[FREE_EXPORTS_HEADER] = JSON.stringify(freeExportAllowance(charged))
+  }
+
+  return {statusCode: HTTP_OK, headers, body: source}
 })
+
+
+/**
+ * Report a Management API failure and answer 502 with the step it failed
+ * at, so the browser can tell the function's own answer from a function
+ * that never ran.
+ *
+ * @param {Error} err
+ * @param {string} what for the log line, e.g. 'app_metadata lookup'
+ * @param {string} error the response's `error`
+ * @return {object} Netlify Functions response
+ */
+function managementApiFailure(err, what, error) {
+  const detail = managementApiFailureDetail(err)
+  Sentry.captureException(err, {tags: {step: detail.step}})
+  // Netlify's function log is the one channel every deploy context has —
+  // Sentry only exists where SENTRY_DSN is set — so the step goes there
+  // too. Names of unset env vars only; never their values.
+  console.error(`pro-module: ${what} failed at ${detail.step}` +
+    ` (upstream ${detail.upstreamStatus ?? 'n/a'}): ${err.message}`)
+  return errorResponse(HTTP_BAD_GATEWAY, error, detail)
+}

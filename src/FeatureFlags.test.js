@@ -51,6 +51,16 @@ describe('FeatureFlags', () => {
     expect(disable?.isActive).toBe(false)
   })
 
+  it('declares export active by default', () => {
+    // share-140 S4 (#1835): the Export tab ships on for everyone. The server
+    // (`pro-module`) still gates the exporter on the subscription, so this
+    // only decides whether the UI is there. SaveModelControl.test.jsx forces
+    // the flag per case and so keeps covering the flag-off dialog.
+    const exportFlag = flags.find((f) => f.name === 'export')
+    expect(exportFlag?.isActive).toBe(true)
+    expect(isFeatureEnabled('export')).toBe(true)
+  })
+
   describe('isFeatureEnabled', () => {
     it('returns false for unknown name', () => {
       expect(isFeatureEnabled('not-a-flag')).toBe(false)

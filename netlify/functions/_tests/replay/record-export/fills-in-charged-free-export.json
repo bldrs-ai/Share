@@ -1,0 +1,99 @@
+{
+  "description": "A free user's export is recorded INTO the row pro-module charged for it (same id, same stamp), so it counts once; the response reports the allowance left.",
+  "env": {
+    "$fixture": "env/auth0.json"
+  },
+  "now": "2026-10-06T12:00:00.000Z",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/record-export",
+    "headers": {
+      "authorization": "Bearer user-access-token"
+    },
+    "body": {
+      "id": "0d4e2c1a-7b3f-4c5d-8e9f-1a2b3c4d5e6f",
+      "key": "/share/v/p/index.ifc",
+      "format": "glb",
+      "title": "index.ifc",
+      "bytes": 4096
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-userinfo.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "exports": [
+                {
+                  "id": "0d4e2c1a-7b3f-4c5d-8e9f-1a2b3c4d5e6f",
+                  "key": null,
+                  "title": null,
+                  "format": "glb",
+                  "bytes": null,
+                  "exportedAt": "2026-10-06T11:59:00.000Z",
+                  "free": true
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "body": {
+          "app_metadata": {
+            "exports": [
+              {
+                "id": "0d4e2c1a-7b3f-4c5d-8e9f-1a2b3c4d5e6f",
+                "key": "/share/v/p/index.ifc",
+                "bytes": 4096,
+                "exportedAt": "2026-10-06T11:59:00.000Z",
+                "free": true
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "json": {
+      "exports": [
+        {
+          "id": "0d4e2c1a-7b3f-4c5d-8e9f-1a2b3c4d5e6f",
+          "bytes": 4096,
+          "free": true
+        }
+      ],
+      "freeExports": {
+        "limit": 2,
+        "used": 1,
+        "remaining": 1,
+        "nextFreeAt": "2026-10-13T11:59:00.000Z"
+      }
+    }
+  }
+}

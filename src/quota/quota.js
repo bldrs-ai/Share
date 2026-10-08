@@ -1,3 +1,6 @@
+import {isProSubscriptionStatus} from './proStatus'
+
+
 /** Quota tiers */
 export const TIERS = {
   ANONYMOUS: 'anonymous',
@@ -50,7 +53,13 @@ export function subscribeToQuota(cb) {
 
 /**
  * Map auth state + Auth0 app_metadata to a quota tier.
- * Pure — used both server-side (record-load) and client-side (useQuota).
+ * Pure — used client-side (useQuota, the export UI); `record-load` makes the
+ * same Pro decision server-side from the same definition.
+ *
+ * PAID is either Pro status (`quota/proStatus.js`): `sharePro`, and
+ * `shareProPendingReauth` — paid, waiting on a re-login for the GitHub scope
+ * (design/new/glb-export-premium.md §7.2). So a pending-reauth user also gets
+ * unlimited loads, deliberately.
  *
  * @param {object} appMetadata Auth0 app_metadata, may be null
  * @param {boolean} isAuthenticated
@@ -60,7 +69,7 @@ export function getTier(appMetadata, isAuthenticated) {
   if (!isAuthenticated) {
     return TIERS.ANONYMOUS
   }
-  if (appMetadata && appMetadata.subscriptionStatus === 'sharePro') {
+  if (appMetadata && isProSubscriptionStatus(appMetadata.subscriptionStatus)) {
     return TIERS.PAID
   }
   return TIERS.FREE

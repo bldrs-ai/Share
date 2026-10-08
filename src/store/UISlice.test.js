@@ -101,6 +101,14 @@ describe('store/UISlice', () => {
       expect(store.getState().isExportInFlight).toBe(false)
     })
 
+    it('starts with no free-export allowance, and stores the one it is given', () => {
+      const store = makeStore()
+      expect(store.getState().freeExportAllowance).toBeNull()
+      const allowance = {sub: 'github|1', limit: 2, used: 1, remaining: 1, nextFreeAt: null}
+      store.getState().setFreeExportAllowance(allowance)
+      expect(store.getState().freeExportAllowance).toBe(allowance)
+    })
+
     it('setSnackMessage stores the snack message', () => {
       const store = makeStore()
       store.getState().setSnackMessage(['loading'])
