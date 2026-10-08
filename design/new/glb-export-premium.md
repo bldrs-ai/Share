@@ -20,28 +20,27 @@ tier's export allowance); §5 the stages that became the epic's sub-issues;
 
 ## Status & remaining work
 
-*Updated 2026-09-16, after #1837/#1851/#1852 landed, the #1855 container
-gzip (§1.1a), today's byte-attribution measurement on #1831, and the
-`.glb.gz` round trip (§4.7), which reverses a decision §4.3 used to record.
-§1.1d was updated 2026-09-30 when `glbCollapse` went default-on. The S4
-rollout (#1835) was prepared 2026-10-06: the `export` flag flip, the §7
-decisions, and the checklist below. The owner decided §7 the same day — 2 free
-exports per rolling 7 days (§4.8), and `shareProPendingReauth` counts as Pro —
-and both are built on the S4 branch. None of it is final until the owner's §8
-smoke.*
+*Updated 2026-10-08, after S4 (#1835) merged as #1939 (4cf2aef5). That PR
+flipped the `export` flag, built the §7 decisions (2 free exports per rolling
+7 days, §4.8; `shareProPendingReauth` counts as Pro), and moved the §8 smoke
+to the automated live smoke plus a residual manual list. The 2026-09-16 status
+it builds on covered #1837/#1851/#1852, the #1855 container gzip (§1.1a), the
+byte-attribution measurement on #1831, and the `.glb.gz` round trip (§4.7),
+which reverses a decision §4.3 used to record. §1.1d was updated 2026-09-30
+when `glbCollapse` went default-on.*
 
-**Where things stand:** the feature described in §1–§6 below is fully built.
-The S4 PR flips `export` to `isActive: true` in `src/FeatureFlags.js`, so
-**once it merges export is on by default** for everyone (`?feature=export` is
-then redundant; flipping the flag back to `false` is the kill switch, since
+**Where things stand:** the feature described in §1–§6 below is fully built
+and on by default. S4 (#1939) flipped `export` to `isActive: true` in
+`src/FeatureFlags.js`, so export is on for everyone (`?feature=export` is
+redundant; flipping the flag back to `false` is the kill switch, since
 `?feature=` can only turn flags on). The flag gates only the UI; the
-`pro-module` function decides who gets the exporter (§1.3, §4.1). With the S4
-branch that is: Pro (`sharePro` or `shareProPendingReauth`) without limit; a
-signed-in free user **2 exports per rolling 7 days**, each charged against
-their `app_metadata.exports` ledger as the module is handed over (§4.8), then
-the upgrade prompt saying when the next one frees up; anonymous, the login
-prompt. Until that PR merges the flag is still **off** and the paragraph below
-describes the shipped, flagged state, in which only `sharePro` exports.
+`pro-module` function decides who gets the exporter (§1.3, §4.1). What ships:
+Pro (`sharePro` or `shareProPendingReauth`) without limit; a signed-in free
+user **2 exports per rolling 7 days**, each charged against their
+`app_metadata.exports` ledger as the module is handed over (§4.8), then the
+upgrade prompt saying when the next one frees up; anonymous users get the
+login prompt. The cross-browser smoke (§8) is now the automated live smoke
+plus a short residual manual list.
 Export lives in the
 Save dialog's Export tab: the Include Bldrs metadata toggle, Portable
 toggle (on by default since #1831), Compression dropdown (None / Meshopt / Draco), Quality rung,
@@ -139,18 +138,17 @@ arm — the envelope comes off at the upload seam, and a second seam in
    shrink what ships. This is why the win landed at the OPFS **container**
    layer instead (§1.1a, gzip outside the GLB entirely), not as an in-GLB
    JSON transform.
-3. **S4 (#1835) is the ship gate for all of the above, and it is not
-   done: the flag flip is drafted, and waits on the owner's smoke.**
-   Outstanding: cross-browser smoke (Firefox, Safari — including
-   OPFS `createWritable` and `CompressionStream` for `.glb.gz` — Edge, iOS
-   Safari, Android Chrome) with real Auth0 accounts per tier, against the
-   §8 checklist; the real Management API path for `record-export`
-   (including whether the `https://bldrs.ai/app_metadata` JWT claim carries
-   `exports` at all — an Auth0 Action outside this repo, which nothing in the
-   repo can verify: the client reads it through `APP_METADATA_CLAIM` in
-   `src/Auth0/appMetadata.js`, and the only places `exports` is asserted on
-   are mocks); and flipping `export` to `isActive: true` (drafted; see the
-   head of this block, and merged only after the owner's smoke). (The site-wide esbuild-bundling decision
+3. **S4 (#1835) shipped as #1939 on 2026-10-08: `export` is on by
+   default.** The cross-browser smoke is now the account-backed live smoke
+   (§8, `design/new/live-browser-smoke.md`), which exercises
+   `record-export`'s real Management API path on every run. Still open:
+   the residual manual checks in §8 (Firefox until #1947, real Safari's
+   download and OPFS cache, real phones, Google Drive `.glb.gz`), and
+   whether the `https://bldrs.ai/app_metadata` JWT claim carries `exports`
+   at all — an Auth0 Action outside this repo, which nothing in the repo can
+   verify (the client reads it through `APP_METADATA_CLAIM` in
+   `src/Auth0/appMetadata.js`; the free count does not depend on it, "My
+   Exports" hydration on a new device does). (The site-wide esbuild-bundling decision
    for every other ESM Netlify function that imports axios —
    `gh-oauth-exchange`, `gh-oauth-refresh`, `unlink-identity`,
    `create-portal-session`, `stripe-webhook`, which shared the latent nft
@@ -188,10 +186,11 @@ arm — the envelope comes off at the upload seam, and a second seam in
    `getTier` drives quotas, for loads too — through one shared definition,
    `src/quota/proStatus.js`, that `getTier`, `pro-module`, `record-export`,
    `record-load` and the Stripe reconciliation all import.
-6. **The §8 results are pending owner smoke.** Nothing in §8 has been run
-   against production with real Auth0 accounts, apart from the desktop
-   Chrome pass on 14 Sep. The signed-out production probes in the S4 PR are
-   the only part that needs no accounts.
+6. **§8 runs as the live smoke.** It ran against #1939's deploy preview
+   with real Auth0 accounts in every tier (runs linked in §8). It covers
+   chromium and mobile-pixel fully; webkit, mobile-iphone and firefox run
+   only what needs neither OPFS nor WebGL, so §8 keeps a short manual list
+   for those engines.
 
 
 ## 1. What we already have
@@ -2645,7 +2644,7 @@ the same gate to the same in-page ledger, `window.__mockExports`.
 | S2 | GLB export | `glbArtifact` store slot (writer + reader set, load clears), `pro/glbExport.entry.js`, `useExport`, `ExportSection` in ShareDialog, `export` flag, `subscriptionNav.js` extraction | jest: container→GLB, strip option; **E2E desktop+mobile** (`describeMobileAndDesktop`): Pro user opens a fixture, waits for the writer, clicks Download GLB, asserts a `.glb` download whose bytes start with `glTF`; gated states for anonymous and free |
 | S3 | Export tracking | `record-export.js`, `exportHistory.js`, `ExportsDialog.jsx`, Profile menu item, analytics events | jest: history lib (prune/cap/OPFS-unavailable), function handler; **E2E desktop+mobile**: after an export the dialog lists it; "Download again" on a cached artifact |
 | S2b | Placement + gated actions (#1838) | Export tab in the Save dialog (`ExportSection` + `ExportsList` moved to `Open/`), Save always visible, `GatedAction.jsx`, `zIndex.snackbar` + mobile dialog inset | jest: gated click still fires, tab hides the Save action, flag-off dialog has no tabs; **E2E desktop+mobile**: signed-out Save shows the help, free Export shows the Pro help, the export snackbar is visible and uncovered over the open dialog |
-| S4 | Rollout | This doc folded back to shipped reality, `quotas.md`-style status block, wiki entry, flag flip, roadmap row `share-140` | smoke checklist §8 run on the deploy preview with a real Pro account |
+| S4 | Rollout | This doc folded back to shipped reality, `quotas.md`-style status block, wiki entry, flag flip, roadmap row `share-140` | §8 live smoke green on the deploy preview with real accounts per tier; residual manual list in §8 |
 | S5 | Further formats (spec only) | §6 matrix → one issue per format when scheduled | — |
 
 S1 and S2 land in one PR (the smoke instance needs both); S3 follows on the
@@ -2741,90 +2740,36 @@ export module.
    bite). Same table, same move.
 
 
-## 8. Cross-browser smoke checklist (deploy preview or dev deploy)
+## 8. Cross-browser smoke: automated live smoke + residual manual checks
 
-Results: **pending owner smoke.** (Before the S4 flip this ran with
-`?feature=export`; after it the flag is on by default and the parameter is
-redundant, so a run is also the check that a plain URL shows the tab.)
+Most of the checklist that used to be run by hand is now automated by the
+account-backed live smoke ([live-browser-smoke.md](live-browser-smoke.md), run
+by `.github/workflows/live-smoke.yml` on the `live-smoke` PR label or by
+workflow_dispatch against a deploy URL). Step-by-step coverage of the former
+12 steps is in that doc's [§8 mapping](live-browser-smoke.md#8-mapping) table.
+Results for #1939: the full run is
+https://github.com/bldrs-ai/Share/actions/runs/37820640515 (27 passed, 1
+failed; the failure was a test-timing bug, fixed in #1950); the mobile-pixel
+re-run is https://github.com/bldrs-ai/Share/actions/runs/37823278603 (11
+passed); the chromium run after the stale-memo fix is
+https://github.com/bldrs-ai/Share/actions/runs/37828097215 (12 passed). The
+live smoke also found the `/subscribe/` redirect loop, fixed by #1949.
 
-For each of Chrome, Firefox, Safari (macOS), Edge, iOS Safari, Android
-Chrome — with a real Auth0 account in each of the three tiers (anonymous;
-free, with no free exports in the last 7 days; Pro), plus once with a
-pending-reauth account (step 12):
+**Residual manual checks.** These stay with a person; the mapping table marks
+each one "Residual manual".
 
-1. Open a sample IFC; wait for the load snackbar. Open Save → the Export
-   tab (on by default since S4, no `?feature=export` needed) shows "Preparing GLB…" until the writer finishes, then enables.
-2. Anonymous: click → login dialog. Free: see step 2b. Pro: click → a
-   `.glb` lands in Downloads (check the first 4 bytes are `glTF` and it
-   opens in <https://gltf-viewer.donmccurdy.com/>), and **nothing new** is
-   shown — no count line under the button, no Pro chip.
-2b. **Free tier (§4.8).** Under the button: "2 of 2 free exports left this
-   week". Export → a `.glb` lands and the line reads "1 of 2". Export again →
-   "0 of 2 free exports left this week · next one <date>", and the button
-   takes the gated look. Click it → the help says "You've used your 2 free
-   exports for the last 7 days. Your next free export is available <date>",
-   and Upgrade to Pro → `/subscribe/`. The date should be 7 days after the
-   FIRST of the two exports. Reload the page and reopen the tab: still
-   "0 of 2" (the count is the server's, not the page's).
-3. Pro, DevTools → Network: `pro-module?name=glbExport` is `200`,
-   `text/javascript`, `cache-control: private, no-store`, with **no**
-   `x-bldrs-export-id` header; a second click does **not** re-fetch
-   (memoised). Free user: each export is its own `pro-module` request, each
-   `200` with an `x-bldrs-export-id`; a forged request at the limit gets
-   `403` `{"error":"free_export_limit", …}`; no token gets `401`. In the
-   Auth0 dashboard the free user's `app_metadata.exports` holds one row per
-   export with `"free": true`, each filled in with the model's `key`.
-4. Reload the page: the Export section is enabled immediately (cache-hit
-   sets `glbArtifact`); export again → same bytes.
-5. Toggle "Include Bldrs metadata" off → the file is smaller and its JSON
-   chunk has no `BLDRS_` strings (`strings file.glb | grep BLDRS_`).
-5b. Compression → Meshopt, then Draco: the line says *Estimating…*, then
-   settles smaller; the download weighs exactly what it said; the file opens
-   in <https://gltf-viewer.donmccurdy.com/> and still carries `BLDRS_` with
-   the metadata toggle on. DRACO specifically, because it is the one that
-   fetches a `<script>` and a sibling `.wasm` from `/static/js/draco/` at
-   click time — a blocked or mis-served asset is a per-browser failure the
-   others never see.
-5c. **Portable** — on when the tab opens (#1831) — at codec None: the line
-   says *Estimating…*, then settles; the download weighs exactly what it said;
-   the file opens in <https://3dviewer.net/>, which refuses the native export
-   (Portable off: `Unsupported extension: EXT_mesh_gpu_instancing`), and the
-   three.js editor shows the nested, named hierarchy (Bldrs › Build › Every ›
-   Thing) instead of `mesh_N` — and finishes its autosave (a large model's
-   portable file used to hang it; §4.3 "The vertex layout"). Then Portable + Draco, to confirm the codec preserves the node
-   names. Reopening a portable export in Share shows the nav tree, renders
-   palette-coloured, and picks: clicking a nav-tree row highlights in the
-   scene and vice versa, exactly as the default export does (#1849).
-6. Save → Export lists the exports below the button, with sizes and dates;
-   "Download again" works on the cached one; Clear Local Cache → the row
-   says the model must be reopened.
-7. Safari specifically: the download is a file, not an inline tab (§4.4
-   fallback); OPFS is available (Safari ≥ 17 for `createWritable`).
-8. Mobile: the Save dialog's Export tab fits without horizontal scroll at
-   390 px, the "Exported …" snackbar is readable over the open dialog, and
-   the download lands in Files (iOS) / Downloads (Android).
-9. **No `CompressionStream` (Safari < 16.4, or a browser with it blocked).**
-   The OPFS cache container (§1.1a) must fall back to writing v2
-   (uncompressed) rather than erroring: load a model, reload, and confirm the
-   cache-hit path still engages and export still works. The "Compress
-   download" toggle (`.glb.gz`) must be absent from the Export tab (it is
-   hidden outright without `CompressionStream`), and the plain `.glb` export
-   must still work. (DevTools: delete `window.CompressionStream` before the
-   page loads, e.g. via an init script, if no old Safari is at hand.)
-10. **`.glb.gz` drag-in (§4.7).** Export with Compress download on, drag the
-    `.glb.gz` back into Share and also open it through the Open dialog's Local
-    tab: nav tree, palette colours and picking survive. Drop a `.spz` too:
-    splats must still load (it is a gzip stream and is passed through
-    still-compressed).
-11. **Google Drive `.glb.gz` (§4.7), the untested path.** Drive stores it as
-    `<blob-uuid>.gz` and Share falls back to a ranged GET of a `blob:` URL
-    that nobody has exercised. It should fail visibly rather than silently if
-    it fails at all. (GitHub-hosted `.glb.gz` is refused at the router by
-    design; confirm the refusal reads sensibly.)
-12. **Pending reauth (§7.2).** With an account whose `subscriptionStatus` is
-    `shareProPendingReauth` (pay, and export before logging in again — or set
-    it by hand in the Auth0 dashboard on a test account): the Export tab
-    shows no count, no chip and no gate; export works; `pro-module` answers
-    `200` with no `x-bldrs-export-id`; nothing with `"free": true` is added
-    to `app_metadata.exports`. Private model loads are not counted against
-    the quota either (`record-load` answers `tier: "paid"`) — intended.
+- **Firefox, the whole flow**, until #1947 gets WebGL working on the runner.
+  The live specs skip Firefox (`webglSkipReason`), so its own download, OPFS
+  and `CompressionStream`, and the export itself, are checked by hand.
+- **Real iOS Safari and Android Chrome**: the file lands in Files (iOS) or
+  Downloads (Android).
+- **Real desktop Safari**: the download is a file, not an inline tab.
+- **Real Safari's OPFS cache** (the former step 7): the GLB artifact is
+  written, a reload hits it, and Export enables at once. Playwright's WebKit
+  has no `navigator.storage`, so no automated run exercises this path. The
+  sync-access-handle write (#1686) is the part most worth a person's five
+  minutes.
+- **Google Drive `.glb.gz`** (§4.7): the Drive picker and OAuth, which no
+  automated run reaches.
+- **Optional**: the three.js editor's autosave on a large portable file (the
+  former step 5c), and Edge as itself rather than through Chromium.

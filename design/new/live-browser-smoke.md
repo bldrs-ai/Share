@@ -802,17 +802,27 @@ merged (follow-up PR):
 | The WebGL skip, end to end | This sandbox, chromium, temporarily mutated to probe `false` and to treat chromium as WebGL-less | The anonymous spec skipped with the reason in the summary; mutation reverted. Unmutated: no skip on chromium or mobile-pixel |
 | The hung `goto` | This sandbox, chromium, against a socket that accepts and never answers | With no `goto` timeout and a short test timeout: `Test timeout` plus `page.goto: net::ERR_ABORTED; maybe frame was detached?`, the CI signature. With the 60s bound: `Timeout 60000ms exceeded` and "no response to the document request came within 60s" |
 | Live config on a local `test-flows-build`, after this change | This sandbox, `chromium` + `mobile-pixel`; the anonymous spec `--repeat-each=5` on chromium | 6 passed, 20 skipped as not applicable; 10 passed, 5 skipped with the repeats. No WebGL skip |
+| First account-backed run, #1939's preview | CI ([37733161733](https://github.com/bldrs-ai/Share/actions/runs/37733161733)), all 5 projects | Reset clean (7 roles, no drift). 13 passed, 36 failed, 16 skipped: every login clicked Auth0's hidden default submit button. Fixed by submitting with Enter (#1948) |
+| Account-backed runs 2–5, #1939's preview | CI ([37738031064](https://github.com/bldrs-ai/Share/actions/runs/37738031064), [37740697840](https://github.com/bldrs-ai/Share/actions/runs/37740697840), [37742719516](https://github.com/bldrs-ai/Share/actions/runs/37742719516), [37747107871](https://github.com/bldrs-ai/Share/actions/runs/37747107871)) | Logins pass from run 2 on: 23, then 25, 25, 25 passed. The failures were test timing and an exact `Cache-Control` match (fixed in #1948), plus the `/subscribe/` redirect loop, a real bug (#1949) |
+| `/subscribe/` fix, #1949's preview | CI ([37750199168](https://github.com/bldrs-ai/Share/actions/runs/37750199168)), chromium | 11 passed, 2 skipped (the #1939-only specs) |
+| Full run, #1939's preview with #1948 and #1949 merged | CI ([37820640515](https://github.com/bldrs-ai/Share/actions/runs/37820640515)), all 5 projects | 27 passed, 1 failed, 37 skipped. The failure was mobile-pixel's Exported snackbar auto-hiding during the download read (#1950) |
+| mobile-pixel with #1950 | CI ([37823278603](https://github.com/bldrs-ai/Share/actions/runs/37823278603)) | 11 passed, 2 skipped, 0 failed |
+| chromium after #1939's stale-memo fix | CI ([37828097215](https://github.com/bldrs-ai/Share/actions/runs/37828097215)) | 12 passed, 1 skipped, 0 failed |
 
-**Unverified until the owner's setup exists:**
+**Verified since the owner's setup (2026-10-08):** real Auth0 login in
+every project, and the anonymous, free and Pro specs against #1939's
+deploy preview on chromium and mobile-pixel (the pending spec runs on
+chromium only, by design), per the CI rows above. The free-tier spec spends two real free exports per project and
+the reset script restores them before each run.
 
-- every tiered spec against a real deploy;
-- real Auth0 login;
-- the free and pending specs entirely;
+**Still unverified:**
+
 - Firefox, entirely: until #1947 lands it only skips. Its coverage is the
-  manual checklist.
+  manual list in [glb-export-premium.md](glb-export-premium.md) §8.
 - WebKit's model-loading specs when WebGL is present, and Safari's OPFS
   cache, which no automated run reaches;
-- the cause of the fourth run's hung `goto`: it has not recurred locally.
+- the cause of the fourth anonymous run's hung `goto`: it has not recurred,
+  locally or in any account-backed run.
 
 This sandbox's network policy blocked the browser download from
 `cdn.playwright.dev` and every Netlify and Auth0 host.
