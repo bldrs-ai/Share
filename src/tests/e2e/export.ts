@@ -796,11 +796,13 @@ export type PlacementLevel = 'root' | 'child' | 'any'
  * @param kind which elements to aim at
  * @param level 'root' aims only at the root product's own geometry (empty
  *   occurrence path), 'child' only at a child occurrence's
+ * @param owner aim only at placements whose parent (the geometry's owner)
+ *   is this id, e.g. one part of a multi-root file; any when omitted
  * @return the parent expressID that got selected
  */
 export async function doubleClickSelectsAnElement(
-  page: Page, kind: ElementKind, level: PlacementLevel = 'any'): Promise<number> {
-  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate(({aimAt, level: aimLevel}) => {
+  page: Page, kind: ElementKind, level: PlacementLevel = 'any', owner: number | null = null): Promise<number> {
+  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate(({aimAt, level: aimLevel, onlyParent}) => {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const w = window as any
     const state = (w.store ?? w.useStore).getState()
@@ -828,6 +830,9 @@ export async function doubleClickSelectsAnElement(
         if ((aimLevel === 'root' && pathLength !== 0) || (aimLevel === 'child' && !(pathLength > 0))) {
           continue
         }
+        if (onlyParent !== null && mesh.instanceParents[batchId] !== onlyParent) {
+          continue
+        }
         const box = new Box3()
         const matrix = new Matrix4()
         mesh.getBoundingBoxAt(geometryId, box)
@@ -853,7 +858,7 @@ export async function doubleClickSelectsAnElement(
     }
     return out
     /* eslint-enable @typescript-eslint/no-explicit-any */
-  }, {aimAt: kind, level})
+  }, {aimAt: kind, level, onlyParent: owner})
   expect(candidates.length, 'there must be an element of the kind under test on screen')
     .toBeGreaterThan(0)
 

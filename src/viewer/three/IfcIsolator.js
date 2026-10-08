@@ -10,7 +10,13 @@ import {
   isSceneGraphModel,
   sceneGraphElementIds,
 } from './sceneGraphVisibility'
-import {findSoleRootNode, occurrenceKey, occurrencePathKey, selectedOccurrences} from '../../utils/occurrencePaths'
+import {
+  findRootLevelProductNode,
+  occurrenceKey,
+  occurrencePathKey,
+  rootLevelInstancesOfProduct,
+  selectedOccurrences,
+} from '../../utils/occurrencePaths'
 import {MeshLambertMaterial, DoubleSide, Mesh} from 'three'
 import useStore from '../../store/useStore'
 import {BlendFunction} from 'postprocessing'
@@ -1074,52 +1080,64 @@ export default class IfcIsolator {
       occurrencePath: single ? path : null,
       solidExpressId: state.selectedSolidExpressId ?? null,
     })
-    const root = single ? null : this._wholeRootOccurrence(state, anchors ?? [])
-    return root ? [...occurrences, root] : occurrences
+    const roots = single ? [] : this._wholeRootOccurrences(state, anchors ?? [])
+    return [...occurrences, ...roots]
   }
 
 
   /**
-   * The sole root product as an occurrence, when the selection is the WHOLE
-   * product (#1909): its row, with every root-level instance and every
-   * descendant occurrence's selected. The root's empty path is no key for
+   * Each anchored top-level product as an occurrence, when the selection is
+   * the WHOLE product (#1909): its row, with every one of its root-level
+   * instances and every descendant occurrence's selected. A top-level product
+   * is the sole root of a one-product file or one part of a multi-root file
+   * (`findRootLevelProductNode`), whose own instances are those its owner list
+   * names (`rootLevelInstancesOfProduct`, #1901). Its empty path is no key for
    * `selectedOccurrences`, so without this H and Isolate fell back to the
-   * root's owner ids and left the highlighted children alone. A pick narrowed
-   * to some shells is not the whole product and keeps the owner-id route.
+   * owner ids and left the highlighted children alone. A pick narrowed to some
+   * shells is not the whole product and keeps the owner-id route.
    *
    * It has no path of its own, so it carries its instances (see
    * `_occurrenceInstanceIds`), and isn't written to the link.
    *
    * @param {object} state the store state
    * @param {Array<number|string>} anchors the selection's anchor rows
-   * @return {object|null} `{nodeId, occurrencePath: [], solidExpressId, instanceIds}`
+   * @return {Array<object>} `{nodeId, occurrencePath: [], solidExpressId, instanceIds}`
+   *   per whole product selected
    * @private
    */
-  _wholeRootOccurrence(state, anchors) {
-    const root = findSoleRootNode(state.rootElement)
-    if (!root || !anchors.map(Number).includes(root.expressID) ||
-        typeof this.viewer.getRootLevelInstances !== 'function') {
-      return null
+  _wholeRootOccurrences(state, anchors) {
+    if (typeof this.viewer.getRootLevelInstances !== 'function') {
+      return []
     }
-    const rootLevel = this.viewer.getRootLevelInstances(0).instanceIds
+    const products = [...new Set(anchors.map((id) => findRootLevelProductNode(state.rootElement, id))
+      .filter(Boolean))]
+    if (products.length === 0) {
+      return []
+    }
+    const rootLevel = this.viewer.getRootLevelInstances(0)
     const selected = new Set(state.selectedInstanceIds ?? [])
-    if (rootLevel.length === 0 || !rootLevel.every((id) => selected.has(id))) {
-      return null
-    }
-    const product = new Set(rootLevel)
-    for (const child of root.children ?? []) {
-      if (Array.isArray(child.occurrencePath) && child.occurrencePath.length > 0) {
-        this.viewer.getInstanceIdsForOccurrencePath(0, child.occurrencePath, {
-          geometryExpressId: child.ephemeral === true ? child.expressID : null,
-        }).forEach((id) => product.add(id))
+    const out = []
+    for (const root of products) {
+      const own = rootLevelInstancesOfProduct(state.rootElement, root, rootLevel).instanceIds
+      if (own.length === 0 || !own.every((id) => selected.has(id))) {
+        continue
       }
+      const product = new Set(own)
+      for (const child of root.children ?? []) {
+        if (Array.isArray(child.occurrencePath) && child.occurrencePath.length > 0) {
+          this.viewer.getInstanceIdsForOccurrencePath(0, child.occurrencePath, {
+            geometryExpressId: child.ephemeral === true ? child.expressID : null,
+          }).forEach((id) => product.add(id))
+        }
+      }
+      out.push({
+        nodeId: root.expressID,
+        occurrencePath: [],
+        solidExpressId: null,
+        instanceIds: [...selected].filter((id) => product.has(id)),
+      })
     }
-    return {
-      nodeId: root.expressID,
-      occurrencePath: [],
-      solidExpressId: null,
-      instanceIds: [...selected].filter((id) => product.has(id)),
-    }
+    return out
   }
 
 
@@ -1130,7 +1148,7 @@ export default class IfcIsolator {
    * @private
    */
   _occurrenceInstanceIds({occurrencePath, solidExpressId, instanceIds}) {
-    // The sole root product carries its own (it has no path to resolve).
+    // A top-level product carries its own (it has no path to resolve).
     if (Array.isArray(instanceIds)) {
       return instanceIds
     }

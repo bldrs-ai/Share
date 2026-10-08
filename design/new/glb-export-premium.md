@@ -1532,6 +1532,23 @@ Four things about that table are load-bearing:
   silently inert option, `exportQuality.js#isDracoOnlyRung` marks that rung
   and the fidelity caption reads "geometry exact; shading normals rounded —
   Meshopt has no coarser setting".
+- **The quantized normals are declared (#1943).** A normalized `BYTE` NORMAL
+  is not core glTF — it needs `KHR_mesh_quantization`, used and required, or
+  glTF-Validator reports `MESH_PRIMITIVE_ATTRIBUTES_ACCESSOR_INVALID_FORMAT`
+  once per primitive and a strict loader may refuse the file. Nothing
+  declared it: `FILTER` rewrites NORMAL inside the extension's own `write()`,
+  after the document is built, and the transform that would have added the
+  extension (`quantize()`) is the one this path deliberately does not run.
+  `glbCompression.js#declareMeshQuantization` adds it when the filter will
+  fire on a NORMAL/TANGENT, and also when the source already holds integer
+  attributes (a Meshopt cache artifact, or one an older build wrote without
+  the declaration) — which covers a Draco re-encode of such a source. The
+  cache pipeline's own `meshopt()` (`glbCompress.js`) had the same hole one
+  step earlier: it quantizes POSITION too, and the extension it added was
+  dropped on write because that IO had not registered it. QUANTIZE (Best) on
+  a float source stores the floats untouched and declares nothing. The Jest
+  coverage runs the Khronos validator itself over native, collapsed and
+  portable Meshopt exports, both metadata sides, and the legacy re-encodes.
 
 **Where the ladder stops, and what it cost to stop there** (#1852's sweep,
 kept as #1854's evidence). Swept on the same two models through the same
@@ -1833,41 +1850,71 @@ one-row element's stamp is byte-for-byte the old one. Three decisions:
   refuses the table — fail-soft to the plain model, never a mis-join.
 
 **The empty occurrence path is a key, in a file with one root** (#1901). The
-join between a collapsed row and the spatial tree is `glbPortable.js#elementKeyOf`:
-the occurrence path when the row has one, else the scalar parent id. A STEP part
-with no assembly structure — one PRODUCT, thousands of shells — has `[]` for
-every row's path, and the key used to treat `[]` as "no path". That fell back to
-the scalar id, which disagrees across the join: a row's parent is the geometry's
-owner, the `product_definition_shape`, while the tree's root is the
-`product_definition` it describes (`#8` against `#7` in the fixture, `#4`
-against `#5` in the real 28,674-shell part). The scalar keys never met, so the
-part's one node stayed empty and its mesh landed on an `Unassigned` node, named
-by the shape's id — in the three.js editor, 3dviewer.net and Share's own scene
-graph (Share's NavTree is built from `BLDRS_spatial_tree`, not the node graph,
-so it never showed it). The tree root carries `occurrencePath: []` too, so when
-it is the ONLY tree node with an empty path, `[]` joins as the key `''` and the
-part's rows sit on the part's own node.
+join between a collapsed row and the spatial tree is `glbPortable.js#rowKeyOf`
+against `#nodeKeyOf`: the occurrence path when the row has one, else the scalar
+parent id. A STEP part with no assembly structure — one PRODUCT, thousands of
+shells — has `[]` for every row's path, and the key used to treat `[]` as "no
+path". That fell back to the scalar id, which disagrees across the join: a
+row's parent is the geometry's owner, the `product_definition_shape`, while
+the tree's root is the `product_definition` it describes (`#8` against `#7` in
+the fixture, `#4` against `#5` in the real 28,674-shell part). The scalar keys
+never met, so the part's one node stayed empty and its mesh landed on an
+`Unassigned` node, named by the shape's id — in the three.js editor,
+3dviewer.net and Share's own scene graph (Share's NavTree is built from
+`BLDRS_spatial_tree`, not the node graph, so it never showed it). The tree root
+carries `occurrencePath: []` too, so when it is the ONLY tree node with an
+empty path, `[]` joins as the key `''` and the part's rows sit on the part's
+own node (`emptyPathJoinOf().isSingle`).
 
-Only then. A file with several disconnected top-level products is wrapped by
-Conway in a synthetic `Model` node, and the wrapper AND every genuine root
-carry `occurrencePath: []`; each root's rows are owned by its own shape. The
-empty path then names no one part, and what would tell the roots apart — which
-`product_definition` a shape belongs to — is in none of the tree, the tables
-and the instance map (Conway resolves it internally and does not serialise it;
-`serializeNode` keeps neither `productDefinitionExpressID` nor the shape ids).
-Keying on `''` there handed the first root every root's rows and exported the
-others empty (codex on #1908), a mislabelled file, which is worse than an
-unlabelled one. So `hasSingleEmptyPathNode` gates the empty-path key on the
-tree having exactly one such node; with more, those files keep the scalar join
-and the rows stay under `Unassigned` as before. Naming them needs the
-shape→definition link written into the artifact (a Share-side capture at write
-time, or Conway exposing it on the tree node) — not done.
+**Several top-level parts join on (empty path, owner).** A file with several
+disconnected top-level products is wrapped by Conway in a synthetic `Model`
+node, and the wrapper AND every genuine root carry `occurrencePath: []`; each
+root's rows are owned by its own shape. The empty path names no one part, and
+keying on `''` handed the first root every root's rows and exported the others
+empty (codex on #1908) — a mislabelled file, worse than an unlabelled one, so
+#1908 left those rows under `Unassigned`. What tells the roots apart is which
+node a row's owner describes, and since conway#723 (`@bldrs-ai/conway`
+`1.1609.723`) every tree node carries it: `productDefinitionShapeExpressIDs`,
+the PDSs whose `definition` is the node's `product_definition`, then (on an
+occurrence node) those whose `definition` is its NAUO — exactly the ids the
+scene reports as a placement's owner. A row resolves to the node whose path
+equals its own AND whose list holds its owner (`utils/occurrencePaths.js#
+occurrenceOwnerIndex`); neither half is a key alone, since a reused part
+reports one PDS from every occurrence. In a multi-root tree an empty-path row
+resolves through that index to its part, and both sides key on the part's own
+id (`@<expressID>`, which cannot meet a path key or an IFC id). The wrapper's
+list is empty, so no row ever resolves to it. A row whose owner IS a part's
+`product_definition` (an SDR naming it directly) joins that part on the scalar
+id, as it did before. One rule, two consequences for the one-root case: it is
+unchanged (`''` on both sides, whatever the owner), and so is a multi-root
+artifact written before the lists, whose rows find no index entry and stay
+under `Unassigned`.
+
+**The artifact: an additive field, no new OPFS slot.**
+`bldrsSpatialTree.js#serializeNode` keeps the list when it is non-empty (IFC,
+the wrapper and nodes without geometry cost nothing). It is one more key
+inside the gzipped `BLDRS_spatial_tree` payload, which every reader ignores
+when absent and every older reader ignores when present, so neither of the
+hazards that gave the collapsed layout its own slot (§1.1d) applies: a rollback
+build reading a new artifact just doesn't use the list, and this build reading
+an old one degrades to the rules above. Bumping `schemaVer` would re-parse every
+cached model of every user, IFC included, to name the parts of the rare
+multi-root STEP file; not bumping means such a file cached before this change
+keeps its `Unassigned` rows until the user clears it from the local cache.
+The live tree (a fresh parse) has the lists from conway directly.
+
+On the four real models every portable rewrite is byte-identical to `main`'s
+(DSA2, Right_Hand, the dental clinic and Snowdon; measured on their stored
+collapsed artifacts). On `twoRootShells.step` (two parts, 80 shells each) the
+export goes from both parts empty and 160 rows under `Unassigned` to each part
+owning exactly its own 80, with no `Unassigned` node.
 
 A row with no path array at all — every IFC element, or a STEP table written
-without paths — joins on the scalar id, byte-for-byte as before. On the four
-real models only the single-root STEP part changes (an `Unassigned` node and a
-`#4` node gone, its mesh on the product's node); the STEP assembly and both IFC
-files rewrite to identical bytes. Every other reader of an occurrence path
+without paths — joins on the scalar id, byte-for-byte as before. When #1908
+added the one-root key, on the four real models only the single-root STEP part
+changed (an `Unassigned` node and a `#4` node gone, its mesh on the product's
+node); the STEP assembly and both IFC files rewrote to identical bytes. Every
+other reader of an occurrence path
 (`utils/occurrencePaths.js`, `ShareViewer#getOccurrenceInstanceIds`) still
 treats `[]` as "no occurrence", which is right for picking, which names an
 occurrence rather than an element; this join is the one place that must tell
@@ -1917,10 +1964,11 @@ hydrates with every row its own range — 28,674 / 5,235 / 1,165 / 4 collapsed
 rows — each row's triangles equal to the source artifact's (Draco within its
 step) and a sampled pick on each landing on its element; Khronos
 `gltf-validator` 2.0.0-dev.3.10 reports 0 errors and 0 warnings on every None
-and Draco file. Every Meshopt file, before and after alike, reports
+and Draco file. Every Meshopt file, before and after alike, reported
 `MESH_PRIMITIVE_ATTRIBUTES_ACCESSOR_INVALID_FORMAT` on its Int8 normals,
-because the FILTER encode does not declare `KHR_mesh_quantization` — a
-separate, pre-existing codec issue this change neither causes nor fixes.
+because the FILTER encode did not declare `KHR_mesh_quantization` — a
+separate, pre-existing codec issue this change neither caused nor fixed;
+#1943 fixed it (below).
 
 **The default.** Portable is **on** when the Export tab opens (#1831). The
 file a user downloads is one they mean to open somewhere, the native shape is
