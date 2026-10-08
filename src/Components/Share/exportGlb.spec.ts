@@ -375,6 +375,9 @@ function millimetresIn(caption: string | null): number {
  * observable in a browser: a DOM-disabled button eats the click, so the help
  * that explains the gate never opens (#1838).
  */
+// glTF accessor component type BYTE (signed 8-bit): what Meshopt's octahedral
+// filter stores a NORMAL as.
+const BYTE_COMPONENT_TYPE = 5120
 // The two codecs the Export tab offers, and what each does to THIS fixture.
 // `index.ifc` is the Bldrs logo — about 12 KB of geometry — and Meshopt's
 // per-bufferView extension entries, its fallback buffer and the
@@ -700,6 +703,20 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
 
       expect(json.extensionsUsed).toContain(codec.extension)
       expect(json.extensionsRequired).toContain(codec.extension)
+      // Meshopt's default rung rewrites NORMAL as normalized BYTE, which core
+      // glTF does not allow: the file must say so or a strict loader (and
+      // glTF-Validator) rejects it (#1943). Counted first, so the assertion
+      // below cannot pass for want of a quantized normal to check.
+      const quantizedNormals = (json.meshes ?? []).flatMap((mesh) => mesh.primitives)
+        .filter((primitive) => primitive.attributes.NORMAL !== undefined)
+        .filter((primitive) => json.accessors?.[primitive.attributes.NORMAL].componentType === BYTE_COMPONENT_TYPE)
+      if (codec.mode === 'meshopt') {
+        expect(quantizedNormals.length, 'meshopt quantizes this fixture\'s normals').toBeGreaterThan(0)
+      }
+      if (quantizedNormals.length > 0) {
+        expect(json.extensionsUsed, `${codec.mode} stores BYTE normals`).toContain('KHR_mesh_quantization')
+        expect(json.extensionsRequired, `${codec.mode} stores BYTE normals`).toContain('KHR_mesh_quantization')
+      }
       // …and the Bldrs metadata is still in there, which is the half
       // `@gltf-transform` drops unless it is detached and re-attached around
       // the transform.

@@ -1491,6 +1491,23 @@ Four things about that table are load-bearing:
   silently inert option, `exportQuality.js#isDracoOnlyRung` marks that rung
   and the fidelity caption reads "geometry exact; shading normals rounded —
   Meshopt has no coarser setting".
+- **The quantized normals are declared (#1943).** A normalized `BYTE` NORMAL
+  is not core glTF — it needs `KHR_mesh_quantization`, used and required, or
+  glTF-Validator reports `MESH_PRIMITIVE_ATTRIBUTES_ACCESSOR_INVALID_FORMAT`
+  once per primitive and a strict loader may refuse the file. Nothing
+  declared it: `FILTER` rewrites NORMAL inside the extension's own `write()`,
+  after the document is built, and the transform that would have added the
+  extension (`quantize()`) is the one this path deliberately does not run.
+  `glbCompression.js#declareMeshQuantization` adds it when the filter will
+  fire on a NORMAL/TANGENT, and also when the source already holds integer
+  attributes (a Meshopt cache artifact, or one an older build wrote without
+  the declaration) — which covers a Draco re-encode of such a source. The
+  cache pipeline's own `meshopt()` (`glbCompress.js`) had the same hole one
+  step earlier: it quantizes POSITION too, and the extension it added was
+  dropped on write because that IO had not registered it. QUANTIZE (Best) on
+  a float source stores the floats untouched and declares nothing. The Jest
+  coverage runs the Khronos validator itself over native, collapsed and
+  portable Meshopt exports, both metadata sides, and the legacy re-encodes.
 
 **Where the ladder stops, and what it cost to stop there** (#1852's sweep,
 kept as #1854's evidence). Swept on the same two models through the same
@@ -1906,10 +1923,11 @@ hydrates with every row its own range — 28,674 / 5,235 / 1,165 / 4 collapsed
 rows — each row's triangles equal to the source artifact's (Draco within its
 step) and a sampled pick on each landing on its element; Khronos
 `gltf-validator` 2.0.0-dev.3.10 reports 0 errors and 0 warnings on every None
-and Draco file. Every Meshopt file, before and after alike, reports
+and Draco file. Every Meshopt file, before and after alike, reported
 `MESH_PRIMITIVE_ATTRIBUTES_ACCESSOR_INVALID_FORMAT` on its Int8 normals,
-because the FILTER encode does not declare `KHR_mesh_quantization` — a
-separate, pre-existing codec issue this change neither causes nor fixes.
+because the FILTER encode did not declare `KHR_mesh_quantization` — a
+separate, pre-existing codec issue this change neither caused nor fixed;
+#1943 fixed it (below).
 
 **The default.** Portable is **on** when the Export tab opens (#1831). The
 file a user downloads is one they mean to open somewhere, the native shape is
