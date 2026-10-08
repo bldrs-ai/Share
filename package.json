@@ -175,6 +175,7 @@
     "eslint-plugin-react-hooks": "4.6.0",
     "eslint-plugin-testing-library": "5.9.1",
     "get-port-please": "^3.2.0",
+    "gltf-validator": "2.0.0-dev.3.10",
     "http-server": "14.1.1",
     "husky": "8.0.1",
     "identity-obj-proxy": "3.0.0",
