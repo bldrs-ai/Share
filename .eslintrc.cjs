@@ -31,7 +31,14 @@ module.exports = {
   // tools/esbuild/proModules.js). It sits under `netlify/`, which CI lints
   // wholesale (`eslint src netlify tools`), so without this every build makes
   // the lint gate fail on generated code.
-  ignorePatterns: ['tools/playwright-report/**', 'netlify/functions/_pro-modules/**'],
+  // `playwright-report-live/` and `test-results-live/` are the live smoke
+  // run's output (tools/playwright.live.config.js), bundled viewer code.
+  ignorePatterns: [
+    'tools/playwright-report/**',
+    'tools/playwright-report-live/**',
+    'tools/test-results-live/**',
+    'netlify/functions/_pro-modules/**',
+  ],
   overrides: [
     {
       files: ['*.js', '*.mjs', '*.jsx'],
