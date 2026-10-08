@@ -117,7 +117,7 @@ jobs:
           # Ready-for-review runs only for PRs that can change what this
           # smokes. The label runs regardless.
           if [[ "$ACTION" == ready_for_review ]]; then
-            relevant='^(src/export/|src/Components/Open/(Export|SaveModelControl)|src/Components/Share/|src/Components/GatedAction|src/Auth0/|src/quota/|src/loader/glb|src/OPFS/|src/store/|src/BaseRoutes|netlify/functions/(pro-module|record-export|record-load|stripe-webhook|reconcile-subscriptions|_lib/)|tools/esbuild/proModules|src/tests/e2e/(live/|export)|tools/live-smoke/|tools/playwright\.live\.config\.js|\.github/workflows/live-smoke\.yml)'
+            relevant='^(src/export/|src/Components/Open/(Export|SaveModelControl)|src/Components/Share/|src/Components/GatedAction|src/Auth0/|src/quota/|src/loader/(glb|gzipEnvelope)|src/OPFS/|src/store/|src/BaseRoutes|netlify/functions/(pro-module|record-export|record-load|stripe-webhook|reconcile-subscriptions|_lib/)|tools/esbuild/proModules|src/tests/e2e/(live/|export)|tools/live-smoke/|tools/playwright\.live\.config\.js|\.github/workflows/live-smoke\.yml)'
             if ! gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' | grep -Eq "$relevant"; then
               echo "This PR touches nothing the live smoke covers; add the live-smoke label to run it anyway."
               echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
