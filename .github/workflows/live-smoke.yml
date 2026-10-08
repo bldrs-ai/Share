@@ -166,6 +166,12 @@ jobs:
         run: |
           yarn install --frozen-lockfile --prefer-offline
           npx playwright install --with-deps chromium firefox webkit
+          # Firefox's WebGL needs a GL driver. The runner has no GPU and
+          # `--with-deps` installs no Mesa, so Firefox fails with
+          # "Exhausted GL driver options" even with webgl.force-enabled
+          # (run 37725256026). Mesa's software rasterizer (llvmpipe) through
+          # EGL gives it one; LIBGL_ALWAYS_SOFTWARE in the Smoke step pins it.
+          sudo apt-get install -y --no-install-recommends libegl1 libgles2 libgl1-mesa-dri
 
       # GitHub masks a secret only where its whole value is printed; the
       # account JSON's emails and passwords would not be. Mask each one.
@@ -192,6 +198,7 @@ jobs:
         if: steps.target.outputs.run == 'true'
         env:
           CI: 'true'
+          LIBGL_ALWAYS_SOFTWARE: '1'
           LIVE_BASE_URL: ${{ steps.allowed.outputs.url }}
           PROJECTS: ${{ github.event.inputs.projects }}
           LIVE_SMOKE_ACCOUNTS: ${{ secrets.LIVE_SMOKE_ACCOUNTS }}
