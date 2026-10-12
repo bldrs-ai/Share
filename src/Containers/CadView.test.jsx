@@ -16,6 +16,7 @@ import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
 // bodies below read its singleton.
 import '../../__mocks__/shareViewerTestHarness'
 import {ShareViewer} from '../viewer/ShareViewer'
+import {getSelectionFunnel} from '../viewer/tools/selectionFunnel'
 import Clipper from '../viewer/three/Clipper'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
@@ -376,6 +377,69 @@ describe('CadView', () => {
     expect(result.current.selectedElements).toHaveLength(0)
     expect(result.current.selectedInstanceIds).toHaveLength(0)
     await actAsyncFlush()
+  })
+
+
+  // The funnel is reachable outside React for the Assist view tools
+  // (viewer/tools/selectionFunnel.js, #1674). What's registered must BE the
+  // funnel — the same store contract a NavTree click gets, including the
+  // per-instance reset above — and must go away with the CadView that
+  // registered it, or a tool would select into an unmounted viewer.
+  it('registers its selection funnel for non-React callers, and clears it on unmount', async () => {
+    const testTree = makeTestTree()
+    const targetEltId = testTree.children[0].expressID
+    const STALE_INSTANCE_ID = 42
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setModelPath({filepath: `/index.ifc`})
+      result.current.setSelectedInstanceIds([STALE_INSTANCE_ID])
+    })
+    const {unmount} = render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => screen.getByTestId(aboutControlTestId))
+
+    const funnel = getSelectionFunnel()
+    expect(typeof funnel).toBe('function')
+    await act(() => funnel([targetEltId], false))
+    expect(result.current.selectedElements).toEqual([`${targetEltId}`])
+    expect(result.current.selectedAnchorIds).toEqual([`${targetEltId}`])
+    expect(result.current.selectedInstanceIds).toEqual([])
+
+    unmount()
+    expect(getSelectionFunnel()).toBeNull()
+  })
+
+
+  // Codex review on #1946: the gate was read once at mount, but CadView stays
+  // mounted across navigation. The hook must follow the URL both ways.
+  it('installs the Assist dev hook while ?feature=assist is in the URL, without a remount', async () => {
+    // This file mocks the exported useNavigate; drive the router for real.
+    let navigateTo = null
+    const RouterDriver = () => {
+      navigateTo = jest.requireActual('react-router-dom').useNavigate()
+      return null
+    }
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    const {unmount} = render(
+      <ShareMock initialEntries={['/index.ifc']}>
+        <RouterDriver/>
+        <CadView installPrefix='' appPrefix='' pathPrefix=''/>
+      </ShareMock>)
+    await actAsyncFlush()
+    expect(window.__bldrsAssistTools).toBeUndefined()
+
+    await act(() => navigateTo('/index.ifc?feature=assist'))
+    await waitFor(() => expect(window.__bldrsAssistTools).toBeDefined())
+    expect(window.__bldrsAssistTools.list().map(({name}) => name)).toContain('view.select')
+
+    await act(() => navigateTo('/index.ifc'))
+    await waitFor(() => expect(window.__bldrsAssistTools).toBeUndefined())
+
+    await act(() => navigateTo('/index.ifc?feature=assist'))
+    await waitFor(() => expect(window.__bldrsAssistTools).toBeDefined())
+    unmount()
+    expect(window.__bldrsAssistTools).toBeUndefined()
   })
 
 
