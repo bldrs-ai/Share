@@ -27,9 +27,11 @@
  *      manual (comped) grant looks, and revoking it silently would be worse
  *      than reporting it. One an admin has marked `"comped": true` in
  *      app_metadata, with `sharePro`, is listed under `comped` and raises no
- *      Sentry warning;
- *      an unmarked one is `unverifiable` and does, so an unexpected grant —
- *      or a bug that writes PRO without a link — still reaches someone.
+ *      Sentry warning. A live smoke test account (primary identity in the
+ *      `share-live-smoke` connection) is listed under `testAccounts`, also
+ *      without one. Any other is `unverifiable` and warns, so an unexpected
+ *      grant — or a bug that writes PRO without a link — still reaches
+ *      someone.
  *   2. PROMOTE: Stripe customers with an entitling Share Pro subscription
  *      whose Auth0 user is not PRO → 'shareProPendingReauth' (and the
  *      customer id linked). The user is found by `stripeCustomerId`, then by
@@ -92,6 +94,8 @@ const HTTP_OK = 200
 const HTTP_INTERNAL_ERROR = 500
 const REQUIRED_ENV = ['STRIPE_SECRET_KEY', 'SHARE_PRO_PRICE_ID', 'AUTH0_DOMAIN', 'AUTH0_CLIENT_ID', 'AUTH0_CLIENT_SECRET']
 const STRIPE_PAGE_SIZE = 100
+// The Auth0 database connection the live smoke's test accounts live in.
+const LIVE_SMOKE_CONNECTION = 'share-live-smoke'
 const PRO_USERS_QUERY = 'app_metadata.subscriptionStatus:(sharePro OR shareProPendingReauth)'
 // The two deadlines in the header, from the start of the handler. A
 // truncated run is a Sentry warning. Tomorrow's run starts from the top in
@@ -223,6 +227,27 @@ function interleave(a, b) {
 
 
 /**
+ * Whether this is one of the live browser smoke's Auth0 test accounts: its
+ * PRIMARY identity is in the `share-live-smoke` database connection, which
+ * holds only those accounts and has sign-ups disabled, so only an admin puts
+ * a user there (design/new/live-browser-smoke.md; the reset script finds the
+ * accounts by the same connection). The primary
+ * identity, not any: a real user who somehow linked a smoke identity stays
+ * a real user. The pending account sits at `shareProPendingReauth` with no
+ * Stripe customer by design (tools/live-smoke/resetAccounts.mjs puts it
+ * back there before every run), so without this it would be a daily
+ * `unverifiable` warning about the test harness.
+ *
+ * @param {object} user an Auth0 user, read from the primary store
+ * @return {boolean}
+ */
+function isLiveSmokeAccount(user) {
+  const primary = (user.identities || []).find((identity) => `${identity.provider}|${identity.user_id}` === user.user_id)
+  return Boolean(primary) && primary.connection === LIVE_SMOKE_CONNECTION
+}
+
+
+/**
  * @param {Error} err
  * @return {string} a log-safe one-liner
  */
@@ -250,8 +275,10 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
   // `scanned` separates "nothing to do" from "the queries matched nothing".
   // `comped` lists PRO users deliberately granted without a Stripe customer
   // (app_metadata.comped === true): expected, so no Sentry warning.
+  // `testAccounts` lists the live smoke's own PRO accounts that aren't comped
+  // (the pending-reauth one): expected too, and just as quiet.
   const summary = {
-    mode: apply ? 'apply' : 'report', demote: [], promote: [], relink: [], comped: [], unverifiable: [], errors: [],
+    mode: apply ? 'apply' : 'report', demote: [], promote: [], relink: [], comped: [], testAccounts: [], unverifiable: [], errors: [],
     scanned: {proUsers: 0, entitledCustomers: 0}, truncated: false, skipped: 0, inFlight: 0,
   }
   const startedAt = Date.now()
@@ -313,6 +340,8 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
             // the user through the reauth modal, so it stays loud.
             if (stored.comped === true && stored.subscriptionStatus === 'sharePro') {
               summary.comped.push(userId)
+            } else if (isLiveSmokeAccount(user)) {
+              summary.testAccounts.push(userId)
             } else {
               summary.unverifiable.push({user: userId, reason: 'pro_without_stripe_customer'})
             }

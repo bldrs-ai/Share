@@ -22,8 +22,8 @@
  *   reset. Anything else (a free status, a Stripe customer, which the daily
  *   sweep would demote) is drift and fails without writing.
  * - **pro**: verified, never written. It must be comped Pro — `comped:
- *   true`, `sharePro`, no `stripeCustomerId` — because that is the one shape
- *   `reconcile-subscriptions` neither demotes nor warns about
+ *   true`, `sharePro`, no `stripeCustomerId` — because that is the shape
+ *   `reconcile-subscriptions` neither demotes nor warns about for any user
  *   (design/new/live-browser-smoke.md §"Why comped Pro is safe" cites the
  *   code). Comping is an owner action in the Auth0 dashboard; a script that
  *   could set `comped` could also hand out Pro.

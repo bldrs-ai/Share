@@ -291,8 +291,14 @@ It works in two directions:
    `comped` with no Sentry warning. Without the marker (it must be exactly
    `true`, with status `sharePro`) they're `unverifiable` and do warn: an
    unexpected grant, or a bug that writes PRO without a link, should reach
-   someone. A comp still at `shareProPendingReauth` has no paid access yet
-   (only `sharePro` gets it), so it warns until the user reauthenticates.
+   someone. A comp left at `shareProPendingReauth` warns too: a hand edit
+   shouldn't leave the transient status that sends the user through the
+   reauth modal. The one other quiet case is the live browser smoke's own
+   accounts: a PRO user whose primary identity is in the `share-live-smoke`
+   connection is listed under `testAccounts`, with no Sentry warning. That
+   covers the pending-reauth test account, which sits at
+   `shareProPendingReauth` with no Stripe customer by design
+   ([live-browser-smoke.md](live-browser-smoke.md)).
 2. **Promote.** A Stripe customer with an entitling Pro subscription whose
    Auth0 user isn't PRO gets `shareProPendingReauth`, with the customer linked.
    The user is found by `stripeCustomerId`, falling back to the customer's

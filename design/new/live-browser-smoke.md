@@ -366,12 +366,16 @@ this block.
 
 So the comped test account is never demoted and never warned about.
 
-**The pending test account is not comped**, so the sweep reports it as
-`unverifiable` (`pro_without_stripe_customer`) on every run while it sits at
-`shareProPendingReauth`. That means **one daily Sentry warning that names the
-pending test user**. It is never demoted either. Whether to accept that or
-filter it out is an [open question](#open-questions). Nothing in the billing
-code was changed.
+**The pending test account is not comped.** Before it was handled, the sweep
+reported it as `unverifiable` (`pro_without_stripe_customer`) on every run
+while it sat at `shareProPendingReauth`: one daily Sentry warning naming the
+pending test user. The sweep now recognises the smoke's accounts by their
+**primary identity's connection**, `share-live-smoke` (the same key the reset
+uses to find them), and lists such a user under `testAccounts`, logged at
+INFO, with no Sentry warning. It is still never written to. Only the
+primary identity counts, so a real user who linked a smoke identity stays
+loud. The connection must hold nothing but these test accounts for that to
+be safe.
 
 
 ## Secrets
@@ -910,15 +914,11 @@ part of phase 1.
 
 ## Open questions
 
-1. **The pending test account's daily Sentry warning.** The sweep lists it as
-   `unverifiable` while it sits at `shareProPendingReauth`. Options:
-   - accept it;
-   - tag the test users, e.g. an `app_metadata.liveSmoke: true` marker, and
-     have the sweep list them separately;
-   - reset the pending account to `sharePro` after each run instead of
-     before. That only narrows the window.
-
-   This changes billing code, so the owner decides.
+1. **The pending test account's daily Sentry warning.** Resolved: the owner
+   chose to have the sweep list the smoke's accounts separately. It keys on
+   the `share-live-smoke` connection rather than a new `app_metadata`
+   marker, so there is nothing extra to set by hand
+   ([above](#why-comped-pro-is-safe-from-the-sweep)).
 2. **Ready-for-review scoping.** Resolved: the owner chose label-only PR
    runs. Marking a PR ready no longer starts one.
 3. **Which Netlify project.** PR runs default to `bldrs-share-prod`'s
