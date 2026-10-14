@@ -330,7 +330,10 @@ to repair (`relink` entries come only from there).
 would change as one JSON line (Auth0 user ids and Stripe customer ids, never
 emails) and sends a Sentry warning when there are discrepancies. The line
 also carries `scanned` counts, so a query that silently matched nothing
-doesn't look like a clean run. Entries in `demote` / `promote` / `relink`
+doesn't look like a clean run. The line is logged at the level Sentry gets:
+INFO for a clean run, WARN when there's something to look at, ERROR when an
+item failed. Netlify labels each line by its console method, so an ERROR
+line in the function log always means a failure. Entries in `demote` / `promote` / `relink`
 are what the sweep found; in apply mode a write that failed is also in
 `errors`. Set `RECONCILE_MODE=apply` in the Netlify UI once a report run has
 been read and looks right, **in the production context only**: whether

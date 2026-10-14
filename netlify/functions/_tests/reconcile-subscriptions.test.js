@@ -147,6 +147,8 @@ describe('reconcile-subscriptions', () => {
     resetManagementApiTokenCache()
     process.env = {...savedEnv, ...ENV}
     jest.spyOn(console, 'error').mockImplementation(() => {})
+    jest.spyOn(console, 'warn').mockImplementation(() => {})
+    jest.spyOn(console, 'log').mockImplementation(() => {})
   })
 
   afterEach(() => {
@@ -516,6 +518,53 @@ describe('reconcile-subscriptions', () => {
       expect(summary.unverifiable).toEqual([{user: 'auth0|nolink', reason: 'pro_without_stripe_customer'}])
       expect(axios.patch).not.toHaveBeenCalled()
       expect(Sentry.captureMessage).toHaveBeenCalledWith(expect.stringContaining('pro_without_stripe_customer'), 'warning')
+    })
+  })
+
+  // Netlify labels a function log line by the console method that wrote it,
+  // so the summary's method IS its level in the log: a clean run logged with
+  // console.error read as a daily failure.
+  describe('summary log level', () => {
+    /**
+     * @param {string} method a console method
+     * @return {Array<string>} the summary lines it wrote
+     */
+    function summaryLines(method) {
+      // eslint-disable-next-line no-console -- reads the spies, including console.log's
+      return console[method].mock.calls.map(([msg]) => String(msg)).filter((msg) => msg.startsWith('reconcile-subscriptions: {'))
+    }
+
+    it('logs a clean run as INFO (console.log)', async () => {
+      mockWorld({proUsers: [proUser(1)], subsByCustomer: {cus_1: [proSub('cus_1')]}, pricePages: [[proSub('cus_1')]]})
+
+      await sweep()
+
+      expect(summaryLines('log')).toHaveLength(1)
+      expect(summaryLines('warn')).toEqual([])
+      expect(summaryLines('error')).toEqual([])
+    })
+
+    it('logs a run with something to look at as WARN (console.warn)', async () => {
+      mockWorld({proUsers: [{user_id: 'auth0|nolink', app_metadata: {subscriptionStatus: 'sharePro'}}]})
+
+      await sweep()
+
+      expect(summaryLines('warn')).toEqual([expect.stringContaining('pro_without_stripe_customer')])
+      expect(summaryLines('log')).toEqual([])
+      expect(summaryLines('error')).toEqual([])
+    })
+
+    it('logs a run with a failed item as ERROR (console.error)', async () => {
+      mockWorld({proUsers: [proUser(1)]})
+      const inner = mockStripeClient.subscriptions.list.getMockImplementation()
+      mockStripeClient.subscriptions.list.mockImplementation((params) => (params.customer === 'cus_1' ?
+        Promise.reject(Object.assign(new Error('Stripe answered 500'), {statusCode: 500})) : inner(params)))
+
+      await sweep()
+
+      expect(summaryLines('error')).toEqual([expect.stringContaining('Stripe answered 500')])
+      expect(summaryLines('log')).toEqual([])
+      expect(summaryLines('warn')).toEqual([])
     })
   })
 })

@@ -419,12 +419,23 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
   }
 
   const line = JSON.stringify(summary)
-  // The function log is the one channel every deploy context has.
-  console.error(`reconcile-subscriptions: ${line}`)
   const discrepancies = summary.demote.length + summary.promote.length
+  let level = 'info'
   if (summary.errors.length > 0) {
-    Sentry.captureMessage(`reconcile-subscriptions: ${summary.errors.length} item(s) failed: ${line}`, 'error')
+    level = 'error'
   } else if (discrepancies > 0 || summary.unverifiable.length > 0 || summary.truncated) {
+    level = 'warning'
+  }
+  // The function log is the one channel every deploy context has, and it
+  // gets the same level as Sentry. Netlify labels each log line by the
+  // console method that wrote it (log → INFO, warn → WARN, error → ERROR), so
+  // a clean run written with console.error read as a failure every day.
+  // eslint-disable-next-line no-console -- a clean run's summary is INFO on purpose; see above
+  const log = {info: console.log, warning: console.warn, error: console.error}[level]
+  log(`reconcile-subscriptions: ${line}`)
+  if (level === 'error') {
+    Sentry.captureMessage(`reconcile-subscriptions: ${summary.errors.length} item(s) failed: ${line}`, 'error')
+  } else if (level === 'warning') {
     Sentry.captureMessage(`reconcile-subscriptions (${summary.mode}): ${line}`, 'warning')
   }
   return {statusCode: HTTP_OK, headers: {'Content-Type': 'application/json'}, body: line}
