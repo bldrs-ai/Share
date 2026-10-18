@@ -291,8 +291,14 @@ It works in two directions:
    `comped` with no Sentry warning. Without the marker (it must be exactly
    `true`, with status `sharePro`) they're `unverifiable` and do warn: an
    unexpected grant, or a bug that writes PRO without a link, should reach
-   someone. A comp still at `shareProPendingReauth` has no paid access yet
-   (only `sharePro` gets it), so it warns until the user reauthenticates.
+   someone. A comp left at `shareProPendingReauth` warns too: a hand edit
+   shouldn't leave the transient status that sends the user through the
+   reauth modal. The one other quiet case is the live browser smoke's own
+   accounts: a PRO user whose primary identity is in the `share-live-smoke`
+   connection is listed under `testAccounts`, with no Sentry warning. That
+   covers the pending-reauth test account, which sits at
+   `shareProPendingReauth` with no Stripe customer by design
+   ([live-browser-smoke.md](live-browser-smoke.md)).
 2. **Promote.** A Stripe customer with an entitling Pro subscription whose
    Auth0 user isn't PRO gets `shareProPendingReauth`, with the customer linked.
    The user is found by `stripeCustomerId`, falling back to the customer's
@@ -330,7 +336,10 @@ to repair (`relink` entries come only from there).
 would change as one JSON line (Auth0 user ids and Stripe customer ids, never
 emails) and sends a Sentry warning when there are discrepancies. The line
 also carries `scanned` counts, so a query that silently matched nothing
-doesn't look like a clean run. Entries in `demote` / `promote` / `relink`
+doesn't look like a clean run. The line is logged at the level Sentry gets:
+INFO for a clean run, WARN when there's something to look at, ERROR when an
+item failed. Netlify labels each line by its console method, so an ERROR
+line in the function log always means a failure. Entries in `demote` / `promote` / `relink`
 are what the sweep found; in apply mode a write that failed is also in
 `errors`. Set `RECONCILE_MODE=apply` in the Netlify UI once a report run has
 been read and looks right, **in the production context only**: whether
