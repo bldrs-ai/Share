@@ -1,7 +1,7 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.8 — Create verb group + Track T12 (model edit substrate)
-**Date:** 2026-10-05
+**Status:** Draft v0.9 — shipped-status refresh against code + relation to the bizdev planning set
+**Date:** 2026-10-20
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022). PDF
 extract preserved in this commit's history; key Epic list inlined in §4.
@@ -13,6 +13,26 @@ top-down review, surfaces the work that landed without story tracking, and lays 
 It is the single source of truth for Epic/Story/Track structure. The wiki page
 `Planning:-Requirements` and the `epic`-labeled GitHub issues mirror this doc; when they
 disagree, this doc wins and the others get updated.
+
+
+## Relation to the bizdev planning set
+
+Business priority, ICP validation gates and pricing are tracked in the **private**
+`bldrs-ai/bizdev` planning issues (<a href="https://github.com/bldrs-ai/bizdev/issues/289" target="_blank" rel="noopener noreferrer">bizdev#289</a>–<a href="https://github.com/bldrs-ai/bizdev/issues/336" target="_blank" rel="noopener noreferrer">bizdev#336</a>; the convention is in bizdev
+`docs/planning.md`, pending in <a href="https://github.com/bldrs-ai/bizdev/pull/337" target="_blank" rel="noopener noreferrer">#337</a>). This roadmap keeps owning technical design and
+sequencing. Bizdev rows link to the Share epics that implement them ("Implemented
+by"), and those epics carry a back-link comment.
+
+Where the two plans disagree, the decision is tracked as a bizdev `decision` issue
+and this doc is updated once it's decided. Open now — questions, not answers:
+- <a href="https://github.com/bldrs-ai/bizdev/issues/331" target="_blank" rel="noopener noreferrer">bizdev#331</a> Paywall axis: model size vs private sharing vs private loads?
+- <a href="https://github.com/bldrs-ai/bizdev/issues/332" target="_blank" rel="noopener noreferrer">bizdev#332</a> Billing timing: bizdev Phase 1 vs this doc's Phase D?
+- <a href="https://github.com/bldrs-ai/bizdev/issues/333" target="_blank" rel="noopener noreferrer">bizdev#333</a> Hosting: does Phase C originator save mean the user's own storage or Bldrs-hosted?
+- <a href="https://github.com/bldrs-ai/bizdev/issues/334" target="_blank" rel="noopener noreferrer">bizdev#334</a> Pro price: the $25/mo mock in <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> vs ~$12?
+- <a href="https://github.com/bldrs-ai/bizdev/issues/335" target="_blank" rel="noopener noreferrer">bizdev#335</a> AI/editing work running ahead of plan: the behind-flags rule vs bizdev's discovery rule for L items?
+- <a href="https://github.com/bldrs-ai/bizdev/issues/336" target="_blank" rel="noopener noreferrer">bizdev#336</a> Channels: the Collab repo vs the in-app ChannelProvider (`assist-400`)?
+
+Bizdev is private; those links resolve only for org members.
 
 
 ## 1. Approach
@@ -122,13 +142,13 @@ B identity, C sharing, D subscribe+ads, E launch checklist); G = growth funnel
 | Community | `community-110` | Analytics + survey + thumbs feedback | 🟡 | E | — |
 | Community | `community-200` | Bug report w/ screenshot + session state | ⬜ | Post | — |
 | Community | `community-210` | AEC outreach (🥇) | 🔮 | Post | — |
-| Subscribe | `subscribe-100` | Pricing tiers + feature manager (NEW) | ⬜ | D | T8 |
-| Subscribe | `subscribe-110` | Stripe checkout + portal (NEW) | ⬜ | D | T8 |
-| Subscribe | `subscribe-120` | Quota tracking (NEW) | ⬜ | D | T8, T3 |
+| Subscribe | `subscribe-100` | Pricing tiers + feature manager (NEW) | 🟡 | D | T8 |
+| Subscribe | `subscribe-110` | Stripe checkout + portal (NEW) | 🟡 | D | T8 |
+| Subscribe | `subscribe-120` | Quota tracking (NEW) | 🟡 | D | T8, T3 |
 | Subscribe | `subscribe-130` | Ads on free tier | 🟡 | D | T7 |
 | Subscribe | `subscribe-400` | Enterprise tier definition (NEW) | ⬜ | Post | T8 |
 | Grow | `grow-100` | SEO format landing pages `/viewer/*` (NEW) | ⬜ | G | T9 |
-| Grow | `grow-120` | Funnel instrumentation + GA hygiene (NEW) | ⬜ | G | T9 |
+| Grow | `grow-120` | Funnel instrumentation + GA hygiene (NEW) | 🟡 | G | T9 |
 | Grow | `grow-200` | Rich share-link previews / OG cards (NEW) | ⬜ | G | T9 |
 | Grow | `grow-400` | Large-model + data-sovereignty positioning (NEW) | ⬜ | G | T9 |
 | Assist | `assist-300` | Workspace shell: left drawer projects + org nav (NEW) | ⬜ | AI | — |
@@ -150,8 +170,8 @@ B identity, C sharing, D subscribe+ads, E launch checklist); G = growth funnel
 | T5 | Drive Recents HEAD-check | ⬜ | E (polish) | `open-200` |
 | T6 | Notes & Versions sidecar formats | ⬜ | Post | `notes-200`, `notes-300`, `versions-310` |
 | T7 | Ads | 🟡 | D | `subscribe-130` |
-| T8 | Pro/Billing (NEW) | ⬜ | D | `subscribe-100`, `subscribe-110`, `subscribe-120`, §7 AI metering |
-| T9 | Growth funnel & SEO surfaces (NEW) | ⬜ | G | `grow-100`, `grow-200`, `grow-120` |
+| T8 | Pro/Billing (NEW) | 🟡 | D | `subscribe-100`, `subscribe-110`, `subscribe-120`, §7 AI metering |
+| T9 | Growth funnel & SEO surfaces (NEW) | 🟡 | G | `grow-100`, `grow-200`, `grow-120` |
 | T10 | Agent runtime & conversation store (NEW) | ⬜ | AI (§7) | `assist-310`, `assist-400`, `search-310` |
 | T11 | App sandbox + MCP bridge (NEW) | ⬜ | AI (§7) | `assist-320`, `apps-300`, `apps-310` |
 | T12 | Model edit substrate (NEW) | 🟡 | AI (§7) | `create-300`, `create-310`, `create-320`, §7.4 AI.5 |
@@ -662,7 +682,14 @@ hypotheses** (what share of users hit the threshold; of those, who pays vs.
 churns) instrumented well enough to produce decision-grade conversion evidence —
 not just a revenue trickle.*
 
-**Epic `subscribe-100`: Pricing tiers + feature manager** ⬜ (NEW)
+**Epic `subscribe-100`: Pricing tiers + feature manager** 🟡 (NEW)
+- Shipped (v0.9): three tiers — anonymous / free / Pro — mapped once in
+  `src/quota/quota.js#getTier`, with the Pro statuses defined in
+  `src/quota/proStatus.js`; the public pricing page
+  (`marketing/src/components/PricingTiers.tsx`). Not shipped: the size/complexity
+  axis below — the shipped tiers differ on private-model loads (enforcement off
+  by default, `subscribe-120`) and GLB exports (`share-140`) — and the
+  `tier`-aware capability map.
 - Tasks: enumerate features per tier; ship a `tier`-aware capability map; UI in <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>
   mock dialog form.
 - Tier axis (v0.4): small models stay free and unlimited; the Pro boundary is
@@ -671,14 +698,30 @@ not just a revenue trickle.*
   distribution from telemetry before it's picked.
 - **Required for MVP.**
 
-**Epic `subscribe-110`: Stripe checkout + portal** ⬜ (NEW)
+**Epic `subscribe-110`: Stripe checkout + portal** 🟡 (NEW)
+- Shipped (v0.9), live in production: checkout through Stripe's hosted pricing
+  table on `/subscribe/` (`src/Components/Stripe/PricingTable.jsx`) rather than a
+  `create-checkout-session` function; portal via `create-portal-session.js`;
+  `stripe-webhook.js` mirrors entitlement into Auth0 `app_metadata` (rules in
+  `netlify/functions/_lib/subscriptions.js`) and `reconcile-subscriptions.js` is
+  the daily sweep (`design/new/netlify-functions-testing.md`). Not shipped: the
+  `create-checkout-session` function below.
 - Tasks: `create-portal-session` Netlify Function exists already (per identity
   decoupling decisions doc — model pattern for new functions). Add
   `create-checkout-session`; webhook for status changes; persist Pro flag against
   Auth0 `sub`.
 - **Required for MVP.**
 
-**Epic `subscribe-120`: Quota tracking** ⬜ (NEW)
+**Epic `subscribe-120`: Quota tracking** 🟡 (NEW)
+- Shipped (v0.9): the server-side counter keyed by Auth0 `sub`
+  (`netlify/functions/record-load.js`, `app_metadata.usageQuota`), metering
+  **private-model loads** on a 30-day window, with enforcement behind the
+  `quotas` flag, **default off** (`src/FeatureFlags.js`; `design/new/quotas.md`);
+  the `share-140` free-export allowance (`src/export/freeExports.js`, charged in
+  `pro-module.js`, reported by `record-export.js`); funnel events `quota_limit_reached`,
+  `begin_checkout`, `subscription_started`/`_ended`
+  (`src/privacy/analytics.js#FUNNEL_EVENTS`). Not shipped: enforcement points
+  (a)–(d) below, including the size/complexity gate.
 - Tasks: server-side counter keyed by Auth0 `sub` (per identity-decoupling-decisions
   §Q4 Open Question on "Quota tracking"); enforcement points in (a) GLB writer
   Phase-5 share upload, (b) per-connection refresh-token mint, (c) public-share
@@ -743,7 +786,13 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
   points at `index.ifc`; the remaining formats still need one each.
 - **Phase G.**
 
-**Epic `grow-120`: Funnel instrumentation + analytics hygiene** ⬜ (NEW)
+**Epic `grow-120`: Funnel instrumentation + analytics hygiene** 🟡 (NEW)
+- Status (v0.9): the hygiene guard, `real_model_open` (with `open_cid`,
+  `local_hour` and `stats_*` load stats), `model_engagement` and the upgrade-funnel
+  events have shipped (✅ items below). Not shipped: `share_link_created`,
+  `share_link_opened`, `model_interacted` (no emitter in `src/`), and bucketed
+  size/complexity — the raw byte count rides as `stats_fileSize`
+  (`src/Containers/CadView.jsx`), with no element count.
 - Instrument the funnel stages the growth doc defines (§3 there):
   `share_link_created`, `share_link_opened`, `model_interacted` events in Share;
   `real_model_open` is sent directly by Share (CadView#loadModel, guarded by
@@ -1086,8 +1135,12 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
 
 - **What:** Tier definitions, Stripe integration, quota infrastructure, feature-gate
   plumbing throughout the app.
-- **Status:** Not started. Existing seeds: `netlify/functions/create-portal-session.js`,
-  `netlify/functions/unlink-identity.js` (pattern reuse).
+- **Status:** Partly built (v0.9). Shipped: Stripe → Auth0 entitlement
+  (`stripe-webhook.js`, `_lib/subscriptions.js`, the `reconcile-subscriptions.js`
+  sweep), portal (`create-portal-session.js`), the subscriber-only export module
+  (`pro-module.js`, `record-export.js`), and private-load quota metering
+  (`record-load.js`, `src/quota/`; enforcement behind the default-off `quotas`
+  flag). Not built: the size/complexity axis below. Detail in §4.9.
 - **Unblocks:** `subscribe-100`, `subscribe-110`, `subscribe-120`. Forward-looking:
   the same quota/metering rails are what §7 AI usage metering hangs off — design
   the counter keying with that consumer in mind.
@@ -1096,7 +1149,8 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
   Share is the only thing that works). Phase D runs as an instrumented
   experiment; see §4.9.
 - **MVP impact:** Required end-to-end.
-- **Doc:** TBD — to be drafted in `design/new/pro-billing.md`.
+- **Doc:** TBD — to be drafted in `design/new/pro-billing.md`. Shipped pieces are
+  documented in `design/new/quotas.md` and `design/new/glb-export-premium.md`.
 
 
 ### Track T9: Growth funnel & SEO surfaces (NEW)
@@ -1107,9 +1161,10 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
   guard on GA init), OG/link-preview metadata on share URLs, the
   `/viewer/<format>` landing pages, and the `grow-400` large-model +
   data-sovereignty positioning page — all on the marketing SSG build.
-- **Status:** Not started in-repo. The enabling substrate (Next.js SSG marketing
-  build, PR #1519) is landed; strategy + attribution live in the private bizdev
-  docs.
+- **Status:** In flight. The `grow-120` hygiene guard and model-open/engagement
+  events have shipped (§4.10); the landing pages, OG cards and share-loop events
+  have not. The enabling substrate (Next.js SSG marketing build, PR #1519) is
+  landed; strategy + attribution live in the private bizdev docs.
 - **Unblocks:** `grow-100`, `grow-200`, `grow-120`, `grow-400`; honest measurement
   of every outreach move in `community-210`; conversion-based bidding for the
   (out-of-repo) acquisition campaigns; the Phase D quota-threshold pick.
@@ -1357,7 +1412,8 @@ stated hypotheses.
 ## 7. The AI-workspace pivot
 
 **Status:** direction agreed (2026-07). Design doc to draft at
-`design/new/ai-workspace.md` before implementation starts. This section is the
+`design/new/ai-workspace.md` before implementation starts — not on main yet;
+pending in draft PR <a href="https://github.com/bldrs-ai/Share/pull/1926" target="_blank" rel="noopener noreferrer">#1926</a>. This section is the
 roadmap-level summary: the vision, the three architecture surfaces, what existing
 work it absorbs, and how it sequences against the MVP.
 
@@ -1730,6 +1786,12 @@ sub-issues created per that doc's §8.
 tools (<a href="https://github.com/bldrs-ai/Share/issues/1919" target="_blank" rel="noopener noreferrer">#1919</a>), `create-320` generative creation (<a href="https://github.com/bldrs-ai/Share/issues/1920" target="_blank" rel="noopener noreferrer">#1920</a>), all new IDs in the
 300 band. The editing loop (§7.4 AI.5) no longer waits on Conway for anything
 but export.
+
+
+**v0.9 (2026-10-20)** refreshes shipped status against the code — T8, T9,
+`subscribe-100`/`110`/`120` and `grow-120` move ⬜ → 🟡, each with what shipped
+and what the item still asks for — and adds "Relation to the bizdev planning set"
+after the intro.
 
 
 ## ID lineage
