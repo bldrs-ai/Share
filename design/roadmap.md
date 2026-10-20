@@ -1137,8 +1137,9 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
   plumbing throughout the app.
 - **Status:** Partly built (v0.9). Shipped: Stripe → Auth0 entitlement
   (`stripe-webhook.js`, `_lib/subscriptions.js`, the `reconcile-subscriptions.js`
-  sweep), portal (`create-portal-session.js`), the subscriber-only export module
-  (`pro-module.js`, `record-export.js`), and private-load quota metering
+  sweep), portal (`create-portal-session.js`), the entitlement-gated export module
+  (`pro-module.js`, `record-export.js`: unlimited for Pro, a small rolling free
+  allowance for signed-in free users — `src/export/freeExports.js`), and private-load quota metering
   (`record-load.js`, `src/quota/`; enforcement behind the default-off `quotas`
   flag). Not built: the size/complexity axis below. Detail in §4.9.
 - **Unblocks:** `subscribe-100`, `subscribe-110`, `subscribe-120`. Forward-looking:
