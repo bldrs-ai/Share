@@ -90,10 +90,17 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         navToDefault(navigate, appPrefix)
         return true
       }
+      // `isUploadedFile` is compared too: `/share/v/new/<id>` and
+      // `/share/v/p/<id>` parse to the same filepath and no gitpath, so
+      // without it a navigation between the two would keep the previous
+      // route's upload provenance, which CadView hands the loader as
+      // `isUploadedRoute` (#1955, codex review on #1956). Coerced because
+      // non-file routes don't set it.
       if (modelPath === null ||
           (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
           (modelPath.gitpath && modelPath.gitpath !== mp.gitpath) ||
-          (!modelPath.gitpath && mp.gitpath)) {
+          (!modelPath.gitpath && mp.gitpath) ||
+          Boolean(modelPath.isUploadedFile) !== Boolean(mp.isUploadedFile)) {
         setModelPath(mp)
         debug().log('Share#onChangeUrlParams: new model path: ', mp)
       }

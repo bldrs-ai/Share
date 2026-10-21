@@ -96,3 +96,50 @@ describe('Share with an unsupported model path', () => {
     expect(useStore.getState().repository).toBe(null)
   })
 })
+
+
+/**
+ * `/share/v/new/<id>` and `/share/v/p/<id>` parse to the same filepath and no
+ * gitpath. modelPath lives in the store, so moving between them must replace
+ * it, or the upload provenance CadView hands the loader (`isUploadedRoute`)
+ * is the previous route's (#1955, codex review on #1956).
+ */
+describe('Share when only the upload provenance of the route changes', () => {
+  const storageId = '12345678-1234-4abc-9def-123456789abc.ifc'
+
+  // Before mount, for the same act() reason as above.
+  beforeEach(() => {
+    useStore.setState({alert: null, modelPath: null})
+  })
+
+  /**
+   * @param {string} prefix '/share/v/p' or '/share/v/new'
+   */
+  function renderFileRoute(prefix) {
+    render(
+      <MockComponent>
+        <MemoryRouter initialEntries={[`${prefix}/${storageId}`]}>
+          <Routes>
+            <Route
+              path={`${prefix}/*`}
+              element={<Share installPrefix='' appPrefix='/share' pathPrefix={prefix}/>}
+            />
+          </Routes>
+        </MemoryRouter>
+      </MockComponent>)
+  }
+
+  it('replaces an upload modelPath when the same file is opened as hosted', () => {
+    // What /share/v/new/<id> left in the store.
+    useStore.setState({modelPath: {filepath: storageId, isUploadedFile: true}})
+    renderFileRoute('/share/v/p')
+    expect(useStore.getState().modelPath.filepath).toBe(storageId)
+    expect(useStore.getState().modelPath.isUploadedFile).toBe(false)
+  })
+
+  it('replaces a hosted modelPath when the same file is opened as an upload', () => {
+    useStore.setState({modelPath: {filepath: storageId, isUploadedFile: false}})
+    renderFileRoute('/share/v/new')
+    expect(useStore.getState().modelPath.isUploadedFile).toBe(true)
+  })
+})
