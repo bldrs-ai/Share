@@ -33,6 +33,8 @@ import {
 import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
 import {UnsupportedSchemaError, reportUnsupportedSchema} from '../loader/unsupportedSchema'
+import {hasInMemoryUpload} from '../loader/inMemoryUploads'
+import {InMemoryUploadGoneError, inMemoryUploadGoneAlert} from '../OPFS/messages'
 import {getBrowser} from '../connections/registry'
 import modelIdentity from '../routes/modelIdentity'
 import useStore from '../store/useStore'
@@ -382,6 +384,8 @@ export default function CadView({
           connection: e.connection,
           message: 'Your Google Drive session expired. Reconnect to load this file.',
         })
+      } else if (e instanceof InMemoryUploadGoneError) {
+        setAlert(inMemoryUploadGoneAlert())
       } else {
         setAlert(e)
       }
@@ -398,8 +402,10 @@ export default function CadView({
       // instead of landing in one detail-free "model loading failed"
       // bucket (conway #301 §7).
       // Same for an unsupported schema: an intended, documented limit that
-      // is already explained to the user, not a defect for triage.
-      if (!isOOM && !(e instanceof UnsupportedSchemaError)) {
+      // is already explained to the user, not a defect for triage. And for
+      // an in-memory upload whose page is gone: a known limit of browsers
+      // without OPFS (#1906), counted in analytics by AlertDialog.
+      if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof InMemoryUploadGoneError)) {
         attachLoadFailureContext()
         captureException(e)
       }
@@ -514,6 +520,19 @@ export default function CadView({
     const isGoogleResult = routeResult.kind === 'provider' && routeResult.provider === 'google'
     const filepath = isGoogleResult ? routeResult.downloadUrl : (routeResult.downloadUrl || routeResult.filepath)
     const gitpath = routeResult.gitpath
+    // Without OPFS a local file lives only in the memory of the page that
+    // opened it (loader/inMemoryUploads.js, #1906). A /v/new/ URL this page
+    // doesn't hold — a reload, or the link opened anywhere else — can't load,
+    // so say that rather than let the Loader fetch a blob URL that never
+    // existed here. The route, not the Loader's `testUuid` heuristic, decides
+    // what is an upload: a Drive blob URL and a hosted `<uuid>.ifc` pass that
+    // test too.
+    if (routeResult.isUploadedFile === true && isOpfsAvailable === false) {
+      const storageId = routeResult.filepath.split('/').pop()
+      if (!hasInMemoryUpload(storageId)) {
+        throw new InMemoryUploadGoneError(storageId)
+      }
+    }
     const loadingMessageBase = `Loading ${isGoogleResult ? routeResult.fileId : filepath}`
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)

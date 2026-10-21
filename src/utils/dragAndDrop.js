@@ -1,11 +1,11 @@
 import {guessTypeFromFile} from '../Filetype'
-import {NO_OPFS_LOCAL_FILE_ALERT, noOpfsLocalFileAlert} from '../OPFS/messages'
 import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
+import {registerInMemoryUpload} from '../loader/inMemoryUploads'
 import {disablePageReloadApprovalCheck} from './event'
 import {trackAlert} from './alertTracking'
-import {navigateToModel} from './navigate'
+import {navigateToInMemoryModel, navigateToModel} from './navigate'
 import debug, {WARN} from './debug'
 
 
@@ -49,16 +49,9 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
 
   // `null` is the store's "probe not resolved yet" (BaseRoutes sets it at
   // startup), not "unavailable". A drop has no user-activation constraint,
-  // so ask directly rather than guess.
+  // so ask directly rather than guess. Without OPFS the file is held in
+  // memory instead (#1906, `onHeldInMemory` below).
   const hasOpfs = isOpfsAvailable === null ? await checkOPFSAvailability() : isOpfsAvailable
-  if (!hasOpfs) {
-    // AlertDialog counts it (analytics only); see noOpfsLocalFileAlert.
-    setAlert(noOpfsLocalFileAlert())
-    if (onError) {
-      onError(NO_OPFS_LOCAL_FILE_ALERT)
-    }
-    return
-  }
 
   if (quotaOptions && !quotaOptions.hasCapacity) {
     quotaOptions.onExceeded()
@@ -138,7 +131,34 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     }
   }
 
-  saveDnDFileToOpfs(uploadedFile, type, onWritten)
+  /**
+   * The no-OPFS path: hold the file in this page's memory and navigate
+   * in-app, since a page load would drop it (`loader/inMemoryUploads.js`).
+   * No local recent: nothing is stored to reopen it from.
+   *
+   * @param {string} storageId `<uuid>.<ext>`, the in-memory id
+   */
+  async function onHeldInMemory(storageId) {
+    const key = `${appPrefix}/v/new/${storageId}`
+    if (quotaOptions) {
+      const result = await quotaOptions.record(key)
+      if (result && result.allowed === false) {
+        quotaOptions.onExceeded()
+        return
+      }
+    }
+    debug().log('handleFileDrop: navigate in-app to in-memory upload:', storageId)
+    navigateToInMemoryModel(key, navigate)
+    if (onSuccess) {
+      onSuccess(storageId)
+    }
+  }
+
+  if (hasOpfs) {
+    saveDnDFileToOpfs(uploadedFile, type, onWritten)
+  } else {
+    await onHeldInMemory(registerInMemoryUpload(uploadedFile, type))
+  }
 }
 
 

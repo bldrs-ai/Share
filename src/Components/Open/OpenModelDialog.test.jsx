@@ -2,7 +2,6 @@ import React from 'react'
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {noOpfsLocalFileAlert} from '../../OPFS/messages'
 import {NeedsReconnectError} from '../../connections/errors'
 import {
   addRecentFileEntry,
@@ -12,7 +11,7 @@ import {
 import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
 import {loadLocalFile} from '../../utils/loader'
-import {navigateToModel} from '../../utils/navigate'
+import {navigateToInMemoryModel, navigateToModel} from '../../utils/navigate'
 import useStore from '../../store/useStore'
 import OpenModelDialog from './OpenModelDialog'
 
@@ -55,7 +54,7 @@ jest.mock('../Connections/GoogleDriveTab', () => function MockGoogleDriveTab({on
 jest.mock('../Connections/GitHubTab', () => function MockGitHubTab() {
   return <div data-testid='mock-github-tab'/>
 })
-jest.mock('../../utils/navigate', () => ({navigateToModel: jest.fn()}))
+jest.mock('../../utils/navigate', () => ({navigateToInMemoryModel: jest.fn(), navigateToModel: jest.fn()}))
 jest.mock('../../utils/loader', () => ({loadLocalFile: jest.fn()}))
 
 
@@ -414,18 +413,30 @@ describe('OpenModelDialog — Local tab', () => {
     expect(setPendingModelNameUpdate).toHaveBeenCalledWith(STORAGE_ID)
   })
 
-  // `isOpfsAvailable` used to be `checkOPFSAvailability()`'s unawaited
-  // Promise — always truthy — so this branch was unreachable. Without OPFS
-  // the pick can't survive navigateToModel's full page load (#1906).
-  it('alerts instead of opening a picker when the store says OPFS is unavailable', async () => {
+  // Without OPFS the pick is held in memory and opened by an in-app
+  // navigation: a page load would drop it before the Loader could read it,
+  // and nothing is stored to list as a recent (#1906).
+  it('holds the pick in memory and navigates in-app when the store says OPFS is unavailable', async () => {
     act(() => useStore.setState({isOpfsAvailable: false}))
+    loadLocalFile.mockImplementation((onLoad) => onLoad(STORAGE_ID, Date.now(), 'box.ifc'))
     renderLocalTab([])
     fireEvent.click(screen.getByTestId('button_open_file'))
     await waitFor(() => {
-      expect(useStore.getState().alert).toEqual(noOpfsLocalFileAlert())
+      expect(navigateToInMemoryModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
     })
-    expect(loadLocalFile).not.toHaveBeenCalled()
+    expect(loadLocalFile).toHaveBeenCalledWith(
+      expect.any(Function), false, false, expect.any(Function), {inMemory: true})
     expect(navigateToModel).not.toHaveBeenCalled()
+    expect(addRecentFileEntry).not.toHaveBeenCalled()
+    expect(setPendingModelNameUpdate).not.toHaveBeenCalled()
+    expect(useStore.getState().alert).toBeNull()
+  })
+
+  it('asks loadLocalFile for OPFS storage when the store says OPFS is available', () => {
+    renderLocalTab([])
+    fireEvent.click(screen.getByTestId('button_open_file'))
+    expect(loadLocalFile).toHaveBeenCalledWith(
+      expect.any(Function), false, false, expect.any(Function), {inMemory: false})
   })
 
   // Every probe would reject (and log) with OPFS known to be missing.
