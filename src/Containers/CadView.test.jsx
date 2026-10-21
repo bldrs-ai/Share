@@ -21,6 +21,7 @@ import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
 import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
+import {UploadNotInBrowserError} from '../OPFS/messages'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
@@ -648,6 +649,31 @@ describe('CadView', () => {
     expect(captureMessageSpy).toHaveBeenCalledWith(
       'Unsupported IFC schema: IFC4X3_RC2',
       expect.objectContaining({level: 'info', fingerprint: ['unsupported-schema', 'IFC4X3_RC2']}))
+  })
+
+  // #1955: SHARE-1NR, the top hard-failure group, was this case reported as
+  // a defect with the worker's raw "Folder <id> not found" string. The
+  // loader only raises the typed error once OPFS confirms the upload is
+  // absent, so it's user state: explain it, and keep it out of Sentry.
+  it('explains an upload that is not in this browser, and keeps it out of Sentry', async () => {
+    const goneErr = new UploadNotInBrowserError('12345678-1234-4abc-9def-123456789abc.ifc')
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw goneErr
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => {
+      const alert = result.current.alert
+      expect(alert).toBeTruthy()
+      expect(alert.type).toBe('uploadNotInBrowser')
+      expect(alert.message).toMatch(/isn't in this browser/)
+    })
+    expect(captureExceptionSpy).not.toHaveBeenCalledWith(goneErr)
   })
 
   // The auth-state effect re-runs onViewer for the same route after a

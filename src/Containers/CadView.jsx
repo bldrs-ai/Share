@@ -33,6 +33,7 @@ import {
 import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
 import {UnsupportedSchemaError, reportUnsupportedSchema} from '../loader/unsupportedSchema'
+import {UploadNotInBrowserError, uploadNotInBrowserAlert} from '../OPFS/messages'
 import {getBrowser} from '../connections/registry'
 import modelIdentity from '../routes/modelIdentity'
 import useStore from '../store/useStore'
@@ -382,6 +383,11 @@ export default function CadView({
           connection: e.connection,
           message: 'Your Google Drive session expired. Reconnect to load this file.',
         })
+      } else if (e instanceof UploadNotInBrowserError) {
+        // A /v/new/ URL whose upload this browser never held or no longer
+        // holds (#1955). Explain it and offer to open a file, instead of
+        // the worker's raw "Folder <id> not found" under an Error header.
+        setAlert(uploadNotInBrowserAlert())
       } else {
         setAlert(e)
       }
@@ -398,8 +404,12 @@ export default function CadView({
       // instead of landing in one detail-free "model loading failed"
       // bucket (conway #301 §7).
       // Same for an unsupported schema: an intended, documented limit that
-      // is already explained to the user, not a defect for triage.
-      if (!isOOM && !(e instanceof UnsupportedSchemaError)) {
+      // is already explained to the user, not a defect for triage. And for
+      // an upload that isn't in this browser: the loader only raises it
+      // after OPFS confirmed the entry is absent, so it's user state, not a
+      // bug — and it was SHARE-1NR, the top hard-failure group (#1955).
+      // AlertDialog still counts it in analytics.
+      if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof UploadNotInBrowserError)) {
         attachLoadFailureContext()
         captureException(e)
       }

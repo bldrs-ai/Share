@@ -10,10 +10,12 @@ import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 import {
   deleteFileFromOPFS,
   doesFileExistInOPFS,
+  doesUploadExistInOPFS,
   downloadToOPFS,
   downloadModel,
   getModelFromOPFS,
 } from '../OPFS/utils'
+import {UploadNotInBrowserError} from '../OPFS/messages'
 import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import useStore from '../store/useStore'
 import {constructUploadedBlobPath, load, NotFoundError} from './Loader'
@@ -29,6 +31,7 @@ jest.mock('../OPFS/utils', () => ({
   downloadToOPFS: jest.fn(),
   downloadModel: jest.fn(),
   doesFileExistInOPFS: jest.fn(),
+  doesUploadExistInOPFS: jest.fn(),
   writeBase64Model: jest.fn(),
   deleteFileFromOPFS: jest.fn(),
   readModelByPathFromOPFS: jest.fn(),
@@ -620,6 +623,55 @@ describe('load() error/edge paths with OPFS enabled', () => {
     ).rejects.toThrow(/OPFS read failed/)
 
     expect(axios.get).not.toHaveBeenCalled()
+  })
+
+
+  describe('an upload whose OPFS read fails (#1955)', () => {
+    const storageId = '12345678-1234-4abc-9def-123456789abc.ifc'
+    // The shape the worker reports for a missing upload folder (SHARE-1NR).
+    const workerError = new Error(
+      `Folder ${storageId} not found: NotFoundError: A requested file or directory could not be found`)
+
+    beforeEach(() => {
+      getModelFromOPFS.mockReset()
+      getModelFromOPFS.mockRejectedValue(workerError)
+      doesUploadExistInOPFS.mockReset()
+      dereferenceAndProxyDownloadContents.mockResolvedValue([
+        `blob:http://localhost/${storageId}`, '', false, false,
+      ])
+    })
+
+    it('throws UploadNotInBrowserError when OPFS confirms the upload is absent', async () => {
+      doesUploadExistInOPFS.mockResolvedValue(false)
+      const err = await load(storageId, viewer, onProgress, true, setOpfsFile, '').catch((e) => e)
+      expect(err).toBeInstanceOf(UploadNotInBrowserError)
+      expect(err.storageId).toBe(storageId)
+      // Probed by the storage id, not the rewritten blob: path.
+      expect(doesUploadExistInOPFS).toHaveBeenCalledWith(storageId)
+      expect(axios.get).not.toHaveBeenCalled()
+    })
+
+    it('probes by the final path segment when the route carries a prefix', async () => {
+      doesUploadExistInOPFS.mockResolvedValue(false)
+      const err = await load(`/share/v/new/${storageId}`, viewer, onProgress, true, setOpfsFile, '')
+        .catch((e) => e)
+      expect(err).toBeInstanceOf(UploadNotInBrowserError)
+      expect(doesUploadExistInOPFS).toHaveBeenCalledWith(storageId)
+    })
+
+    // The read failed for some other reason while the entry is there: a real
+    // OPFS defect, which must keep its own error so it still reaches Sentry.
+    it('keeps the original error when the upload is present', async () => {
+      doesUploadExistInOPFS.mockResolvedValue(true)
+      const err = await load(storageId, viewer, onProgress, true, setOpfsFile, '').catch((e) => e)
+      expect(err).toBe(workerError)
+    })
+
+    it('keeps the original error when the probe itself cannot look', async () => {
+      doesUploadExistInOPFS.mockRejectedValue(new DOMException('denied', 'SecurityError'))
+      const err = await load(storageId, viewer, onProgress, true, setOpfsFile, '').catch((e) => e)
+      expect(err).toBe(workerError)
+    })
   })
 
 

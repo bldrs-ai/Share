@@ -14,12 +14,14 @@ import {reportModelInfo, reportSourceInfo} from './loadProgress'
 import {
   deleteFileFromOPFS,
   doesFileExistInOPFS,
+  doesUploadExistInOPFS,
   downloadModel,
   downloadToOPFS,
   getModelFromOPFS,
   readModelByPathFromOPFS,
   writeBase64Model,
 } from '../OPFS/utils'
+import {UploadNotInBrowserError} from '../OPFS/messages'
 import {HTTP_NOT_FOUND} from '../net/http'
 import {looksLikeLfsPointer} from '../net/github/lfs'
 import {assertDefined} from '../utils/assert'
@@ -250,6 +252,10 @@ export async function load(
   // loads (GitHub, external, locally hosted) the trailing path
   // segment is the filename.
   const sourceFileName = isUploadedFile ? uploadedDisplayFileName(path) : fileNameFromPath(path)
+  // The OPFS entry name for an upload — the same final path segment
+  // `constructUploadedBlobPath` keeps and `getModelFromOPFS` reads by. Kept
+  // so a failed read can ask OPFS directly whether the entry exists.
+  const uploadStorageId = isUploadedFile ? path.split('/').pop() : null
   if (isUploadedFile) {
     path = constructUploadedBlobPath(path)
     debug().log('Loader#load: file uploaded, blob path:', path)
@@ -597,7 +603,25 @@ export async function load(
       // Uploaded files (drag-drop, file picker) only exist in OPFS — there
       // is no remote URL to fall back to. Re-throw so the user sees the
       // error rather than a misleading "fall-through succeeded" outcome.
+      //
+      // The common way to get here is a `/v/new/<id>` URL opened in a
+      // browser that never held the upload: a link pasted from another
+      // machine, or one that outlived a storage clear (#1955). The worker
+      // reports that as a bare `Folder <id> not found` string. Rather than
+      // string-match it, ask OPFS directly; only a definitive "absent"
+      // becomes the typed error CadView explains to the user. A probe that
+      // says present, or that itself throws (couldn't look), leaves the
+      // original error in place so real OPFS defects still surface.
       if (isUploadedFile) {
+        let isAbsent = false
+        try {
+          isAbsent = (await doesUploadExistInOPFS(uploadStorageId)) === false
+        } catch (probeError) {
+          debug().warn('Loader#load: could not probe OPFS for upload:', probeError)
+        }
+        if (isAbsent) {
+          throw new UploadNotInBrowserError(uploadStorageId)
+        }
         throw opfsError
       }
       // Bad-input errors (unparseable URL, unknown GitHub repo shape) are
