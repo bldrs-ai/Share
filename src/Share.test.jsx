@@ -5,6 +5,7 @@ import {MockComponent} from './__mocks__/MockComponent'
 import MockRoutes from './BaseRoutesMock.test'
 import useStore from './store/useStore'
 import {UNSUPPORTED_FILE_ALERT} from './routes/routes'
+import {actAsyncFlush} from './utils/tests'
 // Slice 5d.4: Share renders the app, which loads ShareViewer (→
 // IfcContext / ShareIfc). ShareViewer no longer self-imports the fork to
 // trigger the Jest harness, so load it explicitly before `./Share` so
@@ -94,5 +95,40 @@ describe('Share with an unsupported model path', () => {
   it('does not configure a repository from the params that failed to parse', () => {
     renderGithubRoute('Jetenginestep.st')
     expect(useStore.getState().repository).toBe(null)
+  })
+})
+
+
+/**
+ * #705: a file opened from the user's computer keeps its Share button, so
+ * ShareControl can show it gated with the reason. It used to be hidden here
+ * (`isShareEnabled` false), which told the user nothing.
+ */
+describe('Share for a local upload route', () => {
+  // Seeded false so the assertion can't pass on the slice's default (true).
+  beforeEach(() => {
+    useStore.setState({modelPath: null, repository: null, isShareEnabled: false, isNotesEnabled: true})
+  })
+
+  it('shows the Share button, with upload provenance for ShareControl to gate on', async () => {
+    render(
+      <MockComponent>
+        <MemoryRouter initialEntries={['/share/v/new/12345678-1234-4abc-9def-123456789abc.ifc']}>
+          <Routes>
+            <Route
+              path='/share/v/new/*'
+              element={<Share installPrefix='' appPrefix='/share' pathPrefix='/share/v/new'/>}
+            />
+          </Routes>
+        </MemoryRouter>
+      </MockComponent>)
+    // The route mounts CadView, whose viewer setup settles after the first
+    // render; flush it inside act() so it doesn't land as a stray update.
+    await actAsyncFlush()
+    expect(useStore.getState().isShareEnabled).toBe(true)
+    expect(useStore.getState().modelPath.isUploadedFile).toBe(true)
+    // Unchanged: still no repository, so no notes.
+    expect(useStore.getState().repository).toBe(null)
+    expect(useStore.getState().isNotesEnabled).toBe(false)
   })
 })

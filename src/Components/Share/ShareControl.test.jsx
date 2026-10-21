@@ -3,10 +3,19 @@ import React from 'react'
 import {act, fireEvent, render, renderHook, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import useStore from '../../store/useStore'
-import ShareControl from './ShareControl'
+import {gtagEvent} from '../../privacy/analytics'
+import ShareControl, {MSG_LOCAL_SHARE_BODY, MSG_LOCAL_SHARE_TITLE} from './ShareControl'
 import {ColorMode} from '../../viewer/display/colorMode'
 import {ShadingMode} from '../../viewer/display/shadingMode'
 import {DEFAULT_COLOR} from '../../viewer/ifc/flatMeshToBatchedModel'
+
+
+// Only gtagEvent is stubbed, for the same reason as ExportSection.test.jsx:
+// modules pulled in transitively read FUNNEL_EVENTS at import time.
+jest.mock('../../privacy/analytics', () => ({
+  ...jest.requireActual('../../privacy/analytics'),
+  gtagEvent: jest.fn(),
+}))
 
 
 describe('ShareControl', () => {
@@ -162,5 +171,88 @@ describe('ShareDialog display-settings toggle', () => {
     fireEvent.click(await findByTestId('control-button-share'))
     expect(await findByTestId('toggle-display')).toBeInTheDocument()
     expect(window.location.hash).not.toContain('d:')
+  })
+})
+
+
+/**
+ * #705: a model opened from the user's computer lives only in this browser's
+ * OPFS, so the link the Share dialog would hand out opens nowhere else. The
+ * button stays in its slot, gated: a click explains and offers the Open
+ * dialog instead of a link.
+ */
+describe('ShareControl for a local upload (#705)', () => {
+  // Route provenance, as routes.ts#processFile produces it for
+  // `/share/v/new/<id>` and Share.jsx stores it.
+  const uploadedModelPath = {filepath: '/12345678-1234-4abc-9def-123456789abc.ifc', isUploadedFile: true}
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.setState({modelPath: uploadedModelPath, isShareVisible: false, isOpenModelVisible: false})
+    })
+  })
+
+  afterEach(() => {
+    act(() => {
+      useStore.setState({modelPath: null, isShareVisible: false, isOpenModelVisible: false})
+    })
+  })
+
+  it('renders the Share button gated, not as a dialog toggle', async () => {
+    const {findByTestId, queryByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    const gate = await findByTestId('gated-share')
+    expect(gate).toHaveAttribute('aria-disabled', 'true')
+    // Same test id as the live button, inside the gate, so selectors that
+    // look for the toolbar's Share button still find it.
+    expect(gate).toContainElement(await findByTestId('control-button-share'))
+    expect(queryByTestId('textfield-link')).toBeNull()
+  })
+
+  it('explains why on click, without opening the Share dialog', async () => {
+    const {findByTestId, findByText, queryByTestId} = render(
+      <ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(await findByTestId('gated-share'))
+    expect(await findByTestId('gated-help')).toBeInTheDocument()
+    expect(await findByText(MSG_LOCAL_SHARE_TITLE)).toBeInTheDocument()
+    expect(await findByText(MSG_LOCAL_SHARE_BODY)).toBeInTheDocument()
+    expect(queryByTestId('textfield-link')).toBeNull()
+    expect(queryByTestId('img-qrcode')).toBeNull()
+    expect(useStore.getState().isShareVisible).toBe(false)
+    expect(gtagEvent).toHaveBeenCalledWith('share_gated', {reason: 'local_file'})
+  })
+
+  it('"Open a file" opens the Open dialog', async () => {
+    const {findByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(await findByTestId('gated-share'))
+    fireEvent.click(await findByTestId('gated-help-action'))
+    expect(useStore.getState().isOpenModelVisible).toBe(true)
+    expect(useStore.getState().isShareVisible).toBe(false)
+  })
+
+  // The dialog is visible-by-store-flag, and the flag is seeded from a
+  // `#share:` hash at startup (UISlice#shareIsVisibleInitially). For an
+  // upload the dialog isn't mounted at all, so that path can't show the
+  // local link either.
+  it('does not show the dialog even when the share flag is already set', async () => {
+    act(() => {
+      useStore.setState({isShareVisible: true})
+    })
+    const {findByTestId, queryByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    expect(await findByTestId('gated-share')).toBeInTheDocument()
+    expect(queryByTestId('textfield-link')).toBeNull()
+  })
+
+  // A hosted model NAMED `<uuid>.ifc` (`/share/v/p/` or GitHub) has a real,
+  // portable URL. Only the route's provenance distinguishes it from an
+  // upload; the loader's UUID-in-the-path heuristic can't.
+  it('leaves a hosted UUID-named model shareable', async () => {
+    act(() => {
+      useStore.setState({modelPath: {...uploadedModelPath, isUploadedFile: false}})
+    })
+    const {findByTestId, queryByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(await findByTestId('control-button-share'))
+    expect(await findByTestId('textfield-link')).toBeInTheDocument()
+    expect(queryByTestId('gated-share')).toBeNull()
   })
 })
