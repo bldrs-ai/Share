@@ -1,5 +1,6 @@
 import {UUID_REGEX} from '../utils/strings'
 import {
+  forgetInMemoryUpload,
   getInMemoryUpload,
   hasInMemoryUpload,
   registerInMemoryUpload,
@@ -32,5 +33,13 @@ describe('inMemoryUploads', () => {
   it('holds nothing it was not given, as after a reload', () => {
     expect(hasInMemoryUpload('4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc')).toBe(false)
     expect(getInMemoryUpload('4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc')).toBeUndefined()
+  })
+
+  it('forgets a file it is told to drop, and only that one', () => {
+    const kept = registerInMemoryUpload(new File(['a'], 'a.ifc'), 'ifc')
+    const dropped = registerInMemoryUpload(new File(['b'], 'b.ifc'), 'ifc')
+    forgetInMemoryUpload(dropped)
+    expect(hasInMemoryUpload(dropped)).toBe(false)
+    expect(hasInMemoryUpload(kept)).toBe(true)
   })
 })

@@ -63,6 +63,19 @@ export function getInMemoryUpload(storageId) {
 
 
 /**
+ * Drop a held file the opener decided not to open after all: the quota's
+ * `record()` denied it after it was registered (codex review on #1957).
+ * Nothing else removes entries, so without this a denied file would stay in
+ * memory for the life of the page.
+ *
+ * @param {string} storageId `<uuid>.<ext>`
+ */
+export function forgetInMemoryUpload(storageId) {
+  uploads.delete(storageId)
+}
+
+
+/**
  * Test-only: forget every held file, as a reload would.
  */
 export function resetInMemoryUploadsForTest() {

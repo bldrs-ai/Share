@@ -2,7 +2,7 @@ import {guessTypeFromFile} from '../Filetype'
 import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
-import {registerInMemoryUpload} from '../loader/inMemoryUploads'
+import {forgetInMemoryUpload, registerInMemoryUpload} from '../loader/inMemoryUploads'
 import {disablePageReloadApprovalCheck} from './event'
 import {trackAlert} from './alertTracking'
 import {navigateToInMemoryModel, navigateToModel} from './navigate'
@@ -143,6 +143,9 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     if (quotaOptions) {
       const result = await quotaOptions.record(key)
       if (result && result.allowed === false) {
+        // Registered before the quota could answer (the key names the id),
+        // so drop it: nothing else would (codex review on #1957).
+        forgetInMemoryUpload(storageId)
         quotaOptions.onExceeded()
         return
       }

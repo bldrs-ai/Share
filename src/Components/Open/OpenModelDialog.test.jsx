@@ -11,6 +11,8 @@ import {
 import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
 import {loadLocalFile} from '../../utils/loader'
+import useQuota from '../../hooks/useQuota'
+import {getInMemoryUpload, registerInMemoryUpload} from '../../loader/inMemoryUploads'
 import {navigateToInMemoryModel, navigateToModel} from '../../utils/navigate'
 import useStore from '../../store/useStore'
 import OpenModelDialog from './OpenModelDialog'
@@ -56,6 +58,12 @@ jest.mock('../Connections/GitHubTab', () => function MockGitHubTab() {
 })
 jest.mock('../../utils/navigate', () => ({navigateToInMemoryModel: jest.fn(), navigateToModel: jest.fn()}))
 jest.mock('../../utils/loader', () => ({loadLocalFile: jest.fn()}))
+// The real hook, unless a test overrides it for one render (the quota denial
+// below); with the `quotas` flag off it always admits.
+jest.mock('../../hooks/useQuota', () => {
+  const actual = jest.requireActual('../../hooks/useQuota')
+  return {__esModule: true, default: jest.fn(actual.default)}
+})
 
 
 const mockNavigate = jest.fn()
@@ -347,7 +355,7 @@ describe('OpenModelDialog — Local tab', () => {
    */
   function renderLocalTab(localFiles) {
     loadRecentFilesBySource.mockImplementation((source) => source === 'local' ? localFiles : [])
-    render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
+    return render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
   }
 
   // The recents/openFile handlers await the quota record() gate (a no-op
@@ -430,6 +438,34 @@ describe('OpenModelDialog — Local tab', () => {
     expect(addRecentFileEntry).not.toHaveBeenCalled()
     expect(setPendingModelNameUpdate).not.toHaveBeenCalled()
     expect(useStore.getState().alert).toBeNull()
+  })
+
+  // The pick is held before the quota's record() answers (its key names the
+  // id), so a denial must drop it: nothing else removes entries.
+  it('drops an in-memory pick the quota denies', async () => {
+    const recordDenied = jest.fn().mockResolvedValue({allowed: false})
+    const realUseQuota = useQuota.getMockImplementation()
+    useQuota.mockImplementation(() => ({
+      tier: 'free', record: recordDenied, check: jest.fn(), hasCapacity: true,
+    }))
+    act(() => useStore.setState({isOpfsAvailable: false}))
+    let heldId
+    loadLocalFile.mockImplementation((onLoad) => {
+      heldId = registerInMemoryUpload(new File(['x'], 'box.ifc'), 'ifc')
+      onLoad(heldId, Date.now(), 'box.ifc')
+    })
+    const {unmount} = renderLocalTab([])
+    try {
+      fireEvent.click(screen.getByTestId('button_open_file'))
+      await waitFor(() => expect(recordDenied).toHaveBeenCalledWith(`/share/v/new/${heldId}`))
+      await waitFor(() => expect(getInMemoryUpload(heldId)).toBeUndefined())
+      expect(navigateToInMemoryModel).not.toHaveBeenCalled()
+    } finally {
+      // Unmount before swapping the real hook back: it calls hooks the stub
+      // doesn't, and a re-render across the swap breaks the hook order.
+      unmount()
+      useQuota.mockImplementation(realUseQuota)
+    }
   })
 
   it('asks loadLocalFile for OPFS storage when the store says OPFS is available', () => {

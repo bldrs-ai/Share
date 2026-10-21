@@ -1,6 +1,7 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {Box, Button, Divider, Slide, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {forgetInMemoryUpload} from '../../loader/inMemoryUploads'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
 import {loadLocalFile} from '../../utils/loader'
@@ -292,6 +293,9 @@ export default function OpenModelDialog({
       const sharePath = `${appPrefix}/v/new/${storageId}`
       const {allowed} = await record(sharePath)
       if (!allowed) {
+        if (isInMemory) {
+          forgetInMemoryUpload(storageId)
+        }
         setShowQuotaDialog(true)
         return
       }

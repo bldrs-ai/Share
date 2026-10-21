@@ -684,6 +684,9 @@ describe('CadView', () => {
     await actAsyncFlush()
     await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
     expect(String(loadSpy.mock.calls[1][0])).toContain('other.ifc')
+    // The superseded load's failure is about a model the user left; its
+    // alert must not sit over the replayed one, whose OK would navigate home.
+    expect(result.current.alert).toBeNull()
   })
 
   // Without OPFS a local file lives only in the memory of the page that

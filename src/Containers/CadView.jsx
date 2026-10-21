@@ -177,6 +177,11 @@ export default function CadView({
   const inFlightModelKeyRef = useRef(null)
   const isViewerReloadPendingRef = useRef(false)
   const latestOnViewerRef = useRef(null)
+  // The alert as it stood when the in-flight load began. If that load is
+  // superseded and fails, the alert it raises belongs to a model the user
+  // has already left; left up, it would sit over the replayed model, and
+  // dismissing it navigates home (codex review on #1957).
+  const alertAtLoadStartRef = useRef(null)
   // The model a schema refusal was last counted in Sentry for
   // (unsupportedSchema.js#reportUnsupportedSchema). The auth-state effect
   // below can re-run onViewer for the SAME route after a refusal —
@@ -299,6 +304,7 @@ export default function CadView({
     }
     onViewerInFlightRef.current = true
     inFlightModelKeyRef.current = modelIdentity(modelPath, installPrefix)
+    alertAtLoadStartRef.current = useStore.getState().alert
     try {
       await onViewerInternal()
     } finally {
@@ -306,6 +312,9 @@ export default function CadView({
       inFlightModelKeyRef.current = null
       if (isViewerReloadPendingRef.current) {
         isViewerReloadPendingRef.current = false
+        if (useStore.getState().alert !== alertAtLoadStartRef.current) {
+          setAlert(null)
+        }
         await latestOnViewerRef.current()
       }
     }

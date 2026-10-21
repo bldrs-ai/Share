@@ -212,6 +212,9 @@ describe('dragAndDrop utility', () => {
 
       expect(quotaOptions.record).toHaveBeenCalledWith(expect.stringMatching(/^\/prefix\/v\/new\//))
       expect(quotaOptions.onExceeded).toHaveBeenCalled()
+      // A denied file must not stay held for the life of the page.
+      const deniedId = quotaOptions.record.mock.calls[0][0].split('/').pop()
+      expect(getInMemoryUpload(deniedId)).toBeUndefined()
       expect(mockNavigate).not.toHaveBeenCalled()
       expect(mockOnSuccess).not.toHaveBeenCalled()
     })
