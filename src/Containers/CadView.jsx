@@ -34,6 +34,7 @@ import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
 import {UnsupportedSchemaError, reportUnsupportedSchema} from '../loader/unsupportedSchema'
 import {UploadNotInBrowserError, uploadNotInBrowserAlert} from '../OPFS/messages'
+import {reportUploadNotInBrowser} from '../OPFS/reportUploadNotInBrowser'
 import {getBrowser} from '../connections/registry'
 import modelIdentity from '../routes/modelIdentity'
 import useStore from '../store/useStore'
@@ -169,7 +170,8 @@ export default function CadView({
   // isViewerLoaded stays false on failure — and each re-run would count
   // the refusal again, inflating the demand numbers the report exists for
   // (codex review of Share#1899). Cleared when the model path changes, so a
-  // new open of any model is counted once.
+  // new open of any model is counted once. The upload-not-in-browser count
+  // (#1955) is gated by the same ref, under its own key prefix.
   const reportedRefusalRef = useRef(null)
 
   // IFCSlice
@@ -388,6 +390,13 @@ export default function CadView({
         // holds (#1955). Explain it and offer to open a file, instead of
         // the worker's raw "Folder <id> not found" under an Error header.
         setAlert(uploadNotInBrowserAlert())
+        // Counted at info level, not captured as a defect: see
+        // reportUploadNotInBrowser. Once per route, like a schema refusal.
+        const goneKey = `upload-not-in-browser:${modelIdentity(modelPath, installPrefix)}`
+        if (reportedRefusalRef.current !== goneKey) {
+          reportedRefusalRef.current = goneKey
+          reportUploadNotInBrowser()
+        }
       } else {
         setAlert(e)
       }
@@ -408,7 +417,8 @@ export default function CadView({
       // an upload that isn't in this browser: the loader only raises it
       // after OPFS confirmed the entry is absent, so it's user state, not a
       // bug — and it was SHARE-1NR, the top hard-failure group (#1955).
-      // AlertDialog still counts it in analytics.
+      // Its volume is still counted: an info-level message above, plus
+      // AlertDialog's analytics event.
       if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof UploadNotInBrowserError)) {
         attachLoadFailureContext()
         captureException(e)

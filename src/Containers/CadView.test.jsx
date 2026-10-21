@@ -655,7 +655,7 @@ describe('CadView', () => {
   // a defect with the worker's raw "Folder <id> not found" string. The
   // loader only raises the typed error once OPFS confirms the upload is
   // absent, so it's user state: explain it, and keep it out of Sentry.
-  it('explains an upload that is not in this browser, and keeps it out of Sentry', async () => {
+  it('explains an upload that is not in this browser, and counts it in Sentry as info rather than an error', async () => {
     const goneErr = new UploadNotInBrowserError('12345678-1234-4abc-9def-123456789abc.ifc')
     const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
       throw goneErr
@@ -663,6 +663,7 @@ describe('CadView', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {})
     const Sentry = require('@sentry/react')
     const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const captureMessageSpy = jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({
       filepath: '12345678-1234-4abc-9def-123456789abc.ifc',
@@ -677,8 +678,39 @@ describe('CadView', () => {
       expect(alert.message).toMatch(/isn't in this browser/)
     })
     expect(captureExceptionSpy).not.toHaveBeenCalledWith(goneErr)
+    // …but its volume stays visible in Sentry, as info, in one issue (#1956).
+    expect(captureMessageSpy).toHaveBeenCalledWith(
+      'Upload not in this browser',
+      expect.objectContaining({level: 'info', fingerprint: ['upload-not-in-browser']}))
     // The route's provenance is what lets the loader reclassify at all.
     expect(loadSpy.mock.calls[0][6]).toEqual({isUploadedRoute: true})
+  })
+
+  // Same dedupe as a schema refusal: the auth-state effect re-runs the load
+  // for the same route, and each re-run must not count again.
+  it('counts an upload not in this browser once, even when an auth change reloads it', async () => {
+    const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw new UploadNotInBrowserError('12345678-1234-4abc-9def-123456789abc.ifc')
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const captureMessageSpy = jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({
+      filepath: '12345678-1234-4abc-9def-123456789abc.ifc',
+      isUploadedFile: true,
+    }))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(result.current.alert?.type).toBe('uploadNotInBrowser'))
+    const loadsBefore = loadSpy.mock.calls.length
+    await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+    await actAsyncFlush()
+    await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+    const reports = captureMessageSpy.mock.calls
+      .filter(([title]) => title === 'Upload not in this browser')
+    expect(reports).toHaveLength(1)
   })
 
   // A hosted file whose NAME is a UUID looks like an upload to the loader's
