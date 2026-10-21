@@ -657,14 +657,17 @@ describe('CadView', () => {
   // absent, so it's user state: explain it, and keep it out of Sentry.
   it('explains an upload that is not in this browser, and keeps it out of Sentry', async () => {
     const goneErr = new UploadNotInBrowserError('12345678-1234-4abc-9def-123456789abc.ifc')
-    jest.spyOn(Loader, 'load').mockImplementation(() => {
+    const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
       throw goneErr
     })
     jest.spyOn(console, 'error').mockImplementation(() => {})
     const Sentry = require('@sentry/react')
     const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
     const {result} = renderHook(() => useStore((state) => state))
-    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    await act(() => result.current.setModelPath({
+      filepath: '12345678-1234-4abc-9def-123456789abc.ifc',
+      isUploadedFile: true,
+    }))
     render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
     await actAsyncFlush()
     await waitFor(() => {
@@ -674,6 +677,28 @@ describe('CadView', () => {
       expect(alert.message).toMatch(/isn't in this browser/)
     })
     expect(captureExceptionSpy).not.toHaveBeenCalledWith(goneErr)
+    // The route's provenance is what lets the loader reclassify at all.
+    expect(loadSpy.mock.calls[0][6]).toEqual({isUploadedRoute: true})
+  })
+
+  // A hosted file whose NAME is a UUID looks like an upload to the loader's
+  // path heuristic; only the route knows it isn't (codex review on #1956).
+  it('tells the loader a hosted UUID-named file is not an upload route', async () => {
+    const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw new Error('stop after the call')
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({
+      filepath: '12345678-1234-4abc-9def-123456789abc.ifc',
+      isUploadedFile: false,
+    }))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(loadSpy).toHaveBeenCalled())
+    expect(loadSpy.mock.calls[0][6]).toEqual({isUploadedRoute: false})
   })
 
   // The auth-state effect re-runs onViewer for the same route after a

@@ -207,6 +207,12 @@ function probeLfsBytes(data) {
  *   load renders INTO another load's model, so it owns no page-level state:
  *   it takes no artifact generation and publishes no artifact
  *   (glbArtifactPublish.js).
+ * @param {boolean} [options.isUploadedRoute] True only when the ROUTE says
+ *   this is an upload (`FileResult.isUploadedFile`, i.e. a `/share/v/new/`
+ *   URL). Gates the "upload isn't in this browser" reclassification below.
+ *   `isUploadedFile` here can't stand in for it: it's `testUuid(path)`, and
+ *   a hosted `/v/p/<uuid>.ifc` reaches this function as the very same URL
+ *   string as `/v/new/<uuid>.ifc` (codex review on #1956).
  * @return {object} The model or undefined
  */
 export async function load(
@@ -216,7 +222,7 @@ export async function load(
   isOpfsAvailable,
   setOpfsFile,
   accessToken = '',
-  {isNestedLoad = false} = {},
+  {isNestedLoad = false, isUploadedRoute = false} = {},
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
   // HACK: pathArg can be a URL or a string
@@ -612,7 +618,12 @@ export async function load(
       // becomes the typed error CadView explains to the user. A probe that
       // says present, or that itself throws (couldn't look), leaves the
       // original error in place so real OPFS defects still surface.
-      if (isUploadedFile) {
+      //
+      // Only for routes that ARE uploads (`isUploadedRoute`). `isUploadedFile`
+      // is a UUID-in-the-path heuristic that also matches a hosted model
+      // named `<uuid>.ifc`; for that misclassification the OPFS entry is
+      // absent too, and the friendly, Sentry-silent alert would hide it.
+      if (isUploadedFile && isUploadedRoute) {
         let isAbsent = false
         try {
           isAbsent = (await doesUploadExistInOPFS(uploadStorageId)) === false
@@ -622,6 +633,8 @@ export async function load(
         if (isAbsent) {
           throw new UploadNotInBrowserError(uploadStorageId)
         }
+      }
+      if (isUploadedFile) {
         throw opfsError
       }
       // Bad-input errors (unparseable URL, unknown GitHub repo shape) are

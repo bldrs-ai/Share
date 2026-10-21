@@ -628,6 +628,11 @@ describe('load() error/edge paths with OPFS enabled', () => {
 
   describe('an upload whose OPFS read fails (#1955)', () => {
     const storageId = '12345678-1234-4abc-9def-123456789abc.ifc'
+    // What CadView passes for `/share/v/new/<id>`: routes.ts resolves the id
+    // against the origin. A hosted `/share/v/p/<id>` resolves to the SAME
+    // string, which is why provenance has to come from the route.
+    const routeDownloadUrl = `http://localhost/${storageId}`
+    const uploadRoute = {isUploadedRoute: true}
     // The shape the worker reports for a missing upload folder (SHARE-1NR).
     const workerError = new Error(
       `Folder ${storageId} not found: NotFoundError: A requested file or directory could not be found`)
@@ -643,7 +648,8 @@ describe('load() error/edge paths with OPFS enabled', () => {
 
     it('throws UploadNotInBrowserError when OPFS confirms the upload is absent', async () => {
       doesUploadExistInOPFS.mockResolvedValue(false)
-      const err = await load(storageId, viewer, onProgress, true, setOpfsFile, '').catch((e) => e)
+      const err = await load(routeDownloadUrl, viewer, onProgress, true, setOpfsFile, '', uploadRoute)
+        .catch((e) => e)
       expect(err).toBeInstanceOf(UploadNotInBrowserError)
       expect(err.storageId).toBe(storageId)
       // Probed by the storage id, not the rewritten blob: path.
@@ -651,26 +657,33 @@ describe('load() error/edge paths with OPFS enabled', () => {
       expect(axios.get).not.toHaveBeenCalled()
     })
 
-    it('probes by the final path segment when the route carries a prefix', async () => {
-      doesUploadExistInOPFS.mockResolvedValue(false)
-      const err = await load(`/share/v/new/${storageId}`, viewer, onProgress, true, setOpfsFile, '')
-        .catch((e) => e)
-      expect(err).toBeInstanceOf(UploadNotInBrowserError)
-      expect(doesUploadExistInOPFS).toHaveBeenCalledWith(storageId)
-    })
-
     // The read failed for some other reason while the entry is there: a real
     // OPFS defect, which must keep its own error so it still reaches Sentry.
     it('keeps the original error when the upload is present', async () => {
       doesUploadExistInOPFS.mockResolvedValue(true)
-      const err = await load(storageId, viewer, onProgress, true, setOpfsFile, '').catch((e) => e)
+      const err = await load(routeDownloadUrl, viewer, onProgress, true, setOpfsFile, '', uploadRoute)
+        .catch((e) => e)
       expect(err).toBe(workerError)
     })
 
     it('keeps the original error when the probe itself cannot look', async () => {
       doesUploadExistInOPFS.mockRejectedValue(new DOMException('denied', 'SecurityError'))
-      const err = await load(storageId, viewer, onProgress, true, setOpfsFile, '').catch((e) => e)
+      const err = await load(routeDownloadUrl, viewer, onProgress, true, setOpfsFile, '', uploadRoute)
+        .catch((e) => e)
       expect(err).toBe(workerError)
+    })
+
+    // A hosted model NAMED `<uuid>.ifc` (`/share/v/p/` or `/share/v/gh/`)
+    // trips the loader's testUuid heuristic, so it too takes the upload
+    // branch and fails its OPFS read. That's a misclassification, not a
+    // missing upload: it must keep its error (and reach Sentry), never be
+    // re-labelled "not in this browser" (codex review on #1956).
+    it('does not reclassify a hosted UUID-named file the route did not mark as an upload', async () => {
+      doesUploadExistInOPFS.mockResolvedValue(false)
+      const err = await load(routeDownloadUrl, viewer, onProgress, true, setOpfsFile, '')
+        .catch((e) => e)
+      expect(err).toBe(workerError)
+      expect(doesUploadExistInOPFS).not.toHaveBeenCalled()
     })
   })
 

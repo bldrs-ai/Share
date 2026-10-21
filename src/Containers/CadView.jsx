@@ -570,7 +570,10 @@ export default function CadView({
         // (usually empty) value.
         const tokenNow = useStore.getState().accessToken
         loadedModel = await load(filepath, viewer, onProgress,
-          (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow)
+          (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow,
+          // Route provenance, which the loader can't recover from `filepath`
+          // alone: /v/new/<id> and /v/p/<id> give the same URL (#1956).
+          {isUploadedRoute: routeResult.isUploadedFile === true})
       }
     } catch (error) {
       loadError = error
