@@ -164,6 +164,19 @@ export default function CadView({
   // fire end-to-end → double load. This in-flight ref dedupes overlapping
   // calls; whichever effect tick wins, the other skips.
   const onViewerInFlightRef = useRef(false)
+  // The model the in-flight onViewer is loading, and whether a call for a
+  // DIFFERENT model arrived meanwhile. That is not a duplicate: dropping it
+  // left the URL on the new model while nothing ever loaded it. It became
+  // reachable once a no-OPFS local open switched models by an in-app
+  // navigation instead of a page load (navigateToInMemoryModel, #1906; codex
+  // review on #1957). Such a call is replayed, through `latestOnViewerRef` so
+  // it sees that render's viewer and modelPath, once the in-flight one ends.
+  // Keyed by model identity, not by viewer: the viewer is also re-created
+  // for the SAME model during mount, and those calls must stay deduped (the
+  // Safari double-load above).
+  const inFlightModelKeyRef = useRef(null)
+  const isViewerReloadPendingRef = useRef(false)
+  const latestOnViewerRef = useRef(null)
   // The model a schema refusal was last counted in Sentry for
   // (unsupportedSchema.js#reportUnsupportedSchema). The auth-state effect
   // below can re-run onViewer for the SAME route after a refusal —
@@ -276,16 +289,28 @@ export default function CadView({
     // don't accidentally claim the slot and starve the eventual successful
     // load from the [viewer] effect.
     if (onViewerInFlightRef.current) {
+      if (inFlightModelKeyRef.current !== modelIdentity(modelPath, installPrefix)) {
+        debug().warn('CadView#onViewer: model changed mid-load; loading it once the current load ends')
+        isViewerReloadPendingRef.current = true
+        return
+      }
       debug().warn('CadView#onViewer: already in flight; skipping duplicate')
       return
     }
     onViewerInFlightRef.current = true
+    inFlightModelKeyRef.current = modelIdentity(modelPath, installPrefix)
     try {
       await onViewerInternal()
     } finally {
       onViewerInFlightRef.current = false
+      inFlightModelKeyRef.current = null
+      if (isViewerReloadPendingRef.current) {
+        isViewerReloadPendingRef.current = false
+        await latestOnViewerRef.current()
+      }
     }
   }
+  latestOnViewerRef.current = onViewer
 
 
   /** Inner load body — preconditions checked + in-flight flag managed by `onViewer`. */

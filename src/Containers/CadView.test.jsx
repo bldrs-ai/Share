@@ -652,6 +652,40 @@ describe('CadView', () => {
       expect.objectContaining({level: 'info', fingerprint: ['unsupported-schema', 'IFC4X3_RC2']}))
   })
 
+  // A model change that lands while another load is in flight is not a
+  // duplicate to drop: the in-flight guard used to skip it, leaving the URL
+  // on the new model while nothing loaded it. A no-OPFS local open reaches
+  // this by navigating in-app instead of a page load (#1906, codex review on
+  // #1957), so it is replayed once the in-flight load ends.
+  it('loads a model the path changed to while another load was in flight', async () => {
+    let failFirstLoad
+    const loadSpy = jest.spyOn(Loader, 'load')
+      .mockImplementationOnce(() => new Promise((resolve, reject) => {
+        failFirstLoad = reject
+      }))
+      .mockImplementation(() => new Promise(() => {}))
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setAlert(null))
+    await act(() => result.current.setIsOpfsAvailable(false))
+    await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(1))
+
+    // Mid-load, the user opens another model.
+    await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+    await actAsyncFlush()
+    expect(loadSpy).toHaveBeenCalledTimes(1)
+
+    await act(() => failFirstLoad(new Error('first load ends')))
+    await actAsyncFlush()
+    await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+    expect(String(loadSpy.mock.calls[1][0])).toContain('other.ifc')
+  })
+
   // Without OPFS a local file lives only in the memory of the page that
   // opened it (#1906). A /v/new/ route this page doesn't hold — a reload, or
   // the link opened elsewhere — says so instead of fetching a blob URL that
