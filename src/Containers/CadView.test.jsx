@@ -814,6 +814,40 @@ describe('CadView', () => {
     // loadAnalytics.test.js (the param assembly), loadProgress.test.js (the
     // reporter) and realModelOpen.spec.ts (the real pipeline in a browser).
 
+    // The auth-state effect re-runs onViewer for the same route after a
+    // failure (isViewerLoaded stays false). One user open is one failure.
+    it('sends one load_failed for a model, even when an auth change reloads it', async () => {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new Error('OpenModel returned -1')
+      })
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1))
+      const loadsBefore = loadSpy.mock.calls.length
+      await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+      await actAsyncFlush()
+      // The reload really happened, so the single event below is the dedupe
+      // at work and not a reload that never ran.
+      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+      expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1)
+    })
+
+    it('sends load_failed again for a different model', async () => {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new Error('OpenModel returned -1')
+      })
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1))
+      await act(() => result.current.setModelPath({filepath: `/other.ifc`}))
+      await actAsyncFlush()
+      await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(2))
+    })
+
     it('classifies a refused schema as unsupported_schema', async () => {
       loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
         throw new UnsupportedSchemaError('IFC4X3_RC2')

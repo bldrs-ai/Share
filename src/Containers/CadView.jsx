@@ -195,6 +195,12 @@ export default function CadView({
   // (codex review of Share#1899). Cleared when the model path changes, so a
   // new open of any model is counted once.
   const reportedRefusalRef = useRef(null)
+  // The model a `load_failed` was last sent for, for the same reason and
+  // with the same lifetime as reportedRefusalRef: the auth-state effect
+  // re-runs onViewer for the SAME route after any failure (isViewerLoaded
+  // stays false), and without this each re-run would send another
+  // load_failed for one user open (codex review of Share#1961).
+  const reportedLoadFailureRef = useRef(null)
 
   // IFCSlice
   const model = useStore((state) => state.model)
@@ -400,9 +406,13 @@ export default function CadView({
       // own catch, which also sees the auth-shaped first try that
       // loadModelWithAuthRetry then retries and may well win: that is not a
       // failed load, and counting it would. The same isRealModelOpen guard as
-      // the success event, so the homepage demo never reports. Closed-set
+      // the success event, so the homepage demo never reports. Deduped per
+      // model like the schema refusal below, because the auth-state effect
+      // re-runs onViewer for the same route after a failure. Closed-set
       // params only (loadAnalytics#loadFailureParams).
-      if (isRealModelOpen(modelPath)) {
+      const failureKey = modelIdentity(modelPath, installPrefix)
+      if (isRealModelOpen(modelPath) && reportedLoadFailureRef.current !== failureKey) {
+        reportedLoadFailureRef.current = failureKey
         const {phase, fileSize, format} = getLoadFailureInfo(loadSerialBefore)
         gtagFunnelEvent(FUNNEL_EVENTS.LOAD_FAILED, loadFailureParams({error: e, format, fileSize, phase}))
       }
@@ -1727,6 +1737,7 @@ export default function CadView({
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath, modelPath:', modelPath)
     reportedRefusalRef.current = null
+    reportedLoadFailureRef.current = null
     onModelPath()
   }, [modelPath, customViewSettings])
 
