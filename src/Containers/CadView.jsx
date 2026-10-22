@@ -40,7 +40,13 @@ import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
 import {UnsupportedSchemaError, reportUnsupportedSchema} from '../loader/unsupportedSchema'
 import {hasInMemoryUpload} from '../loader/inMemoryUploads'
-import {InMemoryUploadGoneError, inMemoryUploadGoneAlert} from '../OPFS/messages'
+import {
+  InMemoryUploadGoneError,
+  UploadNotInBrowserError,
+  inMemoryUploadGoneAlert,
+  uploadNotInBrowserAlert,
+} from '../OPFS/messages'
+import {reportUploadNotInBrowser} from '../OPFS/reportUploadNotInBrowser'
 import {getBrowser} from '../connections/registry'
 import modelIdentity from '../routes/modelIdentity'
 import useStore from '../store/useStore'
@@ -196,7 +202,8 @@ export default function CadView({
   // the identity changes (dedupeModelKeyRef, in the modelPath effect), not on
   // every run of it: that effect also re-runs for the same model (Widget API
   // view settings), and clearing there let one model count twice (codex
-  // review of Share#1961).
+  // review of Share#1961). The upload-not-in-browser count (#1955) is gated
+  // by the same ref, under its own key prefix.
   const reportedRefusalRef = useRef(null)
   // The model identity the two dedupe refs belong to.
   const dedupeModelKeyRef = useRef(null)
@@ -455,7 +462,21 @@ export default function CadView({
           message: 'Your Google Drive session expired. Reconnect to load this file.',
         })
       } else if (e instanceof InMemoryUploadGoneError) {
+        // No OPFS and this page doesn't hold the file (#1906). Distinct from
+        // the next case, where OPFS exists but lacks the entry.
         setAlert(inMemoryUploadGoneAlert())
+      } else if (e instanceof UploadNotInBrowserError) {
+        // A /v/new/ URL whose upload this browser never held or no longer
+        // holds (#1955). Explain it and offer to open a file, instead of
+        // the worker's raw "Folder <id> not found" under an Error header.
+        setAlert(uploadNotInBrowserAlert())
+        // Counted at info level, not captured as a defect: see
+        // reportUploadNotInBrowser. Once per route, like a schema refusal.
+        const goneKey = `upload-not-in-browser:${modelIdentity(modelPath, installPrefix)}`
+        if (reportedRefusalRef.current !== goneKey) {
+          reportedRefusalRef.current = goneKey
+          reportUploadNotInBrowser()
+        }
       } else {
         setAlert(e)
       }
@@ -474,8 +495,14 @@ export default function CadView({
       // Same for an unsupported schema: an intended, documented limit that
       // is already explained to the user, not a defect for triage. And for
       // an in-memory upload whose page is gone: a known limit of browsers
-      // without OPFS (#1906), counted in analytics by AlertDialog.
-      if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof InMemoryUploadGoneError)) {
+      // without OPFS (#1906), counted in analytics by AlertDialog. And for
+      // an upload that isn't in this browser (OPFS present, entry absent):
+      // the loader only raises it after OPFS confirmed the entry is absent,
+      // so it's user state, not a bug — and it was SHARE-1NR, the top
+      // hard-failure group (#1955). Its volume is still counted: an
+      // info-level message above, plus AlertDialog's analytics event.
+      if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof InMemoryUploadGoneError) &&
+          !(e instanceof UploadNotInBrowserError)) {
         attachLoadFailureContext()
         captureException(e)
       }
@@ -649,7 +676,10 @@ export default function CadView({
         // (usually empty) value.
         const tokenNow = useStore.getState().accessToken
         loadedModel = await load(filepath, viewer, onProgress,
-          (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow)
+          (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow,
+          // Route provenance, which the loader can't recover from `filepath`
+          // alone: /v/new/<id> and /v/p/<id> give the same URL (#1956).
+          {isUploadedRoute: routeResult.isUploadedFile === true})
       }
     } catch (error) {
       loadError = error

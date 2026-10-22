@@ -14,12 +14,14 @@ import {reportCacheHit, reportModelInfo, reportSourceInfo} from './loadProgress'
 import {
   deleteFileFromOPFS,
   doesFileExistInOPFS,
+  doesUploadExistInOPFS,
   downloadModel,
   downloadToOPFS,
   getModelFromOPFS,
   readModelByPathFromOPFS,
   writeBase64Model,
 } from '../OPFS/utils'
+import {UploadNotInBrowserError} from '../OPFS/messages'
 import {getInMemoryUpload} from './inMemoryUploads'
 import {HTTP_NOT_FOUND} from '../net/http'
 import {looksLikeLfsPointer} from '../net/github/lfs'
@@ -206,6 +208,12 @@ function probeLfsBytes(data) {
  *   load renders INTO another load's model, so it owns no page-level state:
  *   it takes no artifact generation and publishes no artifact
  *   (glbArtifactPublish.js).
+ * @param {boolean} [options.isUploadedRoute] True only when the ROUTE says
+ *   this is an upload (`FileResult.isUploadedFile`, i.e. a `/share/v/new/`
+ *   URL). Gates the "upload isn't in this browser" reclassification below.
+ *   `isUploadedFile` here can't stand in for it: it's `testUuid(path)`, and
+ *   a hosted `/v/p/<uuid>.ifc` reaches this function as the very same URL
+ *   string as `/v/new/<uuid>.ifc` (codex review on #1956).
  * @return {object} The model or undefined
  */
 export async function load(
@@ -215,7 +223,7 @@ export async function load(
   isOpfsAvailable,
   setOpfsFile,
   accessToken = '',
-  {isNestedLoad = false} = {},
+  {isNestedLoad = false, isUploadedRoute = false} = {},
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
   // HACK: pathArg can be a URL or a string
@@ -251,6 +259,10 @@ export async function load(
   // loads (GitHub, external, locally hosted) the trailing path
   // segment is the filename.
   const sourceFileName = isUploadedFile ? uploadedDisplayFileName(path) : fileNameFromPath(path)
+  // The OPFS entry name for an upload — the same final path segment
+  // `constructUploadedBlobPath` keeps and `getModelFromOPFS` reads by. Kept
+  // so a failed read can ask OPFS directly whether the entry exists.
+  const uploadStorageId = isUploadedFile ? path.split('/').pop() : null
   // A local file opened in a browser without OPFS is held in this page's
   // memory under its `/v/new/` id (`inMemoryUploads.js`, #1906); there is no
   // blob URL to fetch, since the opener never minted one. Looked up before
@@ -608,6 +620,31 @@ export async function load(
       // Uploaded files (drag-drop, file picker) only exist in OPFS — there
       // is no remote URL to fall back to. Re-throw so the user sees the
       // error rather than a misleading "fall-through succeeded" outcome.
+      //
+      // The common way to get here is a `/v/new/<id>` URL opened in a
+      // browser that never held the upload: a link pasted from another
+      // machine, or one that outlived a storage clear (#1955). The worker
+      // reports that as a bare `Folder <id> not found` string. Rather than
+      // string-match it, ask OPFS directly; only a definitive "absent"
+      // becomes the typed error CadView explains to the user. A probe that
+      // says present, or that itself throws (couldn't look), leaves the
+      // original error in place so real OPFS defects still surface.
+      //
+      // Only for routes that ARE uploads (`isUploadedRoute`). `isUploadedFile`
+      // is a UUID-in-the-path heuristic that also matches a hosted model
+      // named `<uuid>.ifc`; for that misclassification the OPFS entry is
+      // absent too, and the friendly, Sentry-silent alert would hide it.
+      if (isUploadedFile && isUploadedRoute) {
+        let isAbsent = false
+        try {
+          isAbsent = (await doesUploadExistInOPFS(uploadStorageId)) === false
+        } catch (probeError) {
+          debug().warn('Loader#load: could not probe OPFS for upload:', probeError)
+        }
+        if (isAbsent) {
+          throw new UploadNotInBrowserError(uploadStorageId)
+        }
+      }
       if (isUploadedFile) {
         throw opfsError
       }

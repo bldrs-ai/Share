@@ -10,10 +10,12 @@ import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 import {
   deleteFileFromOPFS,
   doesFileExistInOPFS,
+  doesUploadExistInOPFS,
   downloadToOPFS,
   downloadModel,
   getModelFromOPFS,
 } from '../OPFS/utils'
+import {UploadNotInBrowserError} from '../OPFS/messages'
 import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import useStore from '../store/useStore'
 import {constructUploadedBlobPath, load, NotFoundError} from './Loader'
@@ -29,6 +31,7 @@ jest.mock('../OPFS/utils', () => ({
   downloadToOPFS: jest.fn(),
   downloadModel: jest.fn(),
   doesFileExistInOPFS: jest.fn(),
+  doesUploadExistInOPFS: jest.fn(),
   writeBase64Model: jest.fn(),
   deleteFileFromOPFS: jest.fn(),
   readModelByPathFromOPFS: jest.fn(),
@@ -620,6 +623,68 @@ describe('load() error/edge paths with OPFS enabled', () => {
     ).rejects.toThrow(/OPFS read failed/)
 
     expect(axios.get).not.toHaveBeenCalled()
+  })
+
+
+  describe('an upload whose OPFS read fails (#1955)', () => {
+    const storageId = '12345678-1234-4abc-9def-123456789abc.ifc'
+    // What CadView passes for `/share/v/new/<id>`: routes.ts resolves the id
+    // against the origin. A hosted `/share/v/p/<id>` resolves to the SAME
+    // string, which is why provenance has to come from the route.
+    const routeDownloadUrl = `http://localhost/${storageId}`
+    const uploadRoute = {isUploadedRoute: true}
+    // The shape the worker reports for a missing upload folder (SHARE-1NR).
+    const workerError = new Error(
+      `Folder ${storageId} not found: NotFoundError: A requested file or directory could not be found`)
+
+    beforeEach(() => {
+      getModelFromOPFS.mockReset()
+      getModelFromOPFS.mockRejectedValue(workerError)
+      doesUploadExistInOPFS.mockReset()
+      dereferenceAndProxyDownloadContents.mockResolvedValue([
+        `blob:http://localhost/${storageId}`, '', false, false,
+      ])
+    })
+
+    it('throws UploadNotInBrowserError when OPFS confirms the upload is absent', async () => {
+      doesUploadExistInOPFS.mockResolvedValue(false)
+      const err = await load(routeDownloadUrl, viewer, onProgress, true, setOpfsFile, '', uploadRoute)
+        .catch((e) => e)
+      expect(err).toBeInstanceOf(UploadNotInBrowserError)
+      expect(err.storageId).toBe(storageId)
+      // Probed by the storage id, not the rewritten blob: path.
+      expect(doesUploadExistInOPFS).toHaveBeenCalledWith(storageId)
+      expect(axios.get).not.toHaveBeenCalled()
+    })
+
+    // The read failed for some other reason while the entry is there: a real
+    // OPFS defect, which must keep its own error so it still reaches Sentry.
+    it('keeps the original error when the upload is present', async () => {
+      doesUploadExistInOPFS.mockResolvedValue(true)
+      const err = await load(routeDownloadUrl, viewer, onProgress, true, setOpfsFile, '', uploadRoute)
+        .catch((e) => e)
+      expect(err).toBe(workerError)
+    })
+
+    it('keeps the original error when the probe itself cannot look', async () => {
+      doesUploadExistInOPFS.mockRejectedValue(new DOMException('denied', 'SecurityError'))
+      const err = await load(routeDownloadUrl, viewer, onProgress, true, setOpfsFile, '', uploadRoute)
+        .catch((e) => e)
+      expect(err).toBe(workerError)
+    })
+
+    // A hosted model NAMED `<uuid>.ifc` (`/share/v/p/` or `/share/v/gh/`)
+    // trips the loader's testUuid heuristic, so it too takes the upload
+    // branch and fails its OPFS read. That's a misclassification, not a
+    // missing upload: it must keep its error (and reach Sentry), never be
+    // re-labelled "not in this browser" (codex review on #1956).
+    it('does not reclassify a hosted UUID-named file the route did not mark as an upload', async () => {
+      doesUploadExistInOPFS.mockResolvedValue(false)
+      const err = await load(routeDownloadUrl, viewer, onProgress, true, setOpfsFile, '')
+        .catch((e) => e)
+      expect(err).toBe(workerError)
+      expect(doesUploadExistInOPFS).not.toHaveBeenCalled()
+    })
   })
 
 
