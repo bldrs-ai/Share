@@ -332,6 +332,21 @@ describe('trackEngagementOnOpen', () => {
       await first
     })
 
+    // The user opts out while this open waits behind another tab's hold.
+    it('records nothing when consent is withdrawn while it waits for the lock', async () => {
+      await trackEngagementOnOpen(T0)
+      await trackEngagementOnOpen(T0 + HOUR)
+      const before = localStorage.getItem(ENGAGEMENT_STORAGE_KEY)
+      const sentBefore = sentNames()
+      const fake = installGatedFakeLocks()
+      const waiting = trackEngagementOnOpen(T0 + (2 * HOUR))
+      Analytics.setIsAllowed(false)
+      fake.open()
+      expect(await waiting).toEqual([])
+      expect(localStorage.getItem(ENGAGEMENT_STORAGE_KEY)).toBe(before)
+      expect(sentNames()).toEqual(sentBefore)
+    })
+
     // Another tab holds the lock across an await, as a real tab's critical
     // section can. Without the lock this tab would read, write and emit
     // straight away; with it, nothing happens until the holder lets go.

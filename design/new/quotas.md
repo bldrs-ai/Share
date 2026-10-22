@@ -328,7 +328,9 @@ The parts that aren't obvious:
     page load is skipped.
   - **Consent:** analytics is opt-out (`isAllowed()` defaults to true).
     Nothing is read, written or sent while the user has opted out, and opens
-    made while opted out are never counted retroactively.
+    made while opted out are never counted retroactively. The check repeats
+    inside the lock, because consent can be withdrawn while an open waits
+    behind another tab's hold.
   - **Fails closed.** If localStorage cannot be read or written the open is
     not counted: a per-page fallback would fire `engaged_use` for anyone who
     opens three models in one session and again on every reload. Under-count

@@ -144,6 +144,14 @@ export function trackEngagementOnOpen(now = Date.now(), modelKey = undefined) {
     lastCountedModelKey = modelKey
   }
   return withCrossTabLock(ENGAGEMENT_STORAGE_KEY, () => {
+    // Consent can be withdrawn while this request waits behind another tab's
+    // hold on the lock, so the check above may be stale by now. An open made
+    // after the opt-out must not be persisted: it would count toward a later
+    // threshold or set engagedAt and suppress a valid conversion for 30 days
+    // (codex review of Share#1963).
+    if (!isAllowed()) {
+      return []
+    }
     let state
     try {
       state = readState()
