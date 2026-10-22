@@ -322,7 +322,11 @@ export function getOpenCid() {
  * constant.
  *
  * Params, and where each fires (design/new/quotas.md §"Funnel analytics"):
- *   REAL_MODEL_OPEN      {content_id, content_type, stats_*, …}  CadView
+ *   REAL_MODEL_OPEN      {content_id, content_type, load_outcome, stats_*, …}
+ *                        CadView, on success only
+ *   LOAD_FAILED          {content_type, size_bucket, reason_class, last_phase}
+ *                        CadView's onViewerInternal catch, once per failed
+ *                        attempt; closed-set values only (Share#1954)
  *   QUOTA_LIMIT_REACHED  {tier, feature}  QuotaLimitDialog, once per showing
  *   LOGIN                {method}  Auth0/useLoginTracking, once per
  *                        completed sign-in, never on a cached-session boot
@@ -339,6 +343,7 @@ export function getOpenCid() {
  */
 export const FUNNEL_EVENTS = Object.freeze({
   REAL_MODEL_OPEN: 'real_model_open',
+  LOAD_FAILED: 'load_failed',
   QUOTA_LIMIT_REACHED: 'quota_limit_reached',
   // GA4 recommended-event names, so `login` {method} and `begin_checkout`
   // also land in GA4's own standard reports.

@@ -198,7 +198,8 @@ behind the same analytics consent check as every other `gtagEvent`.
 | Step | Event | Params | Fires |
 |---|---|---|---|
 | Visit | `session_start` / `page_view` | — | GA4 sends these itself |
-| Model open | `real_model_open` | `content_id`, `content_type`, `stats_*`, `local_hour`, `open_cid` | `CadView` after a real (non-demo) load; see `analytics#isRealModelOpen` |
+| Model open | `real_model_open` | `content_id`, `content_type`, `load_outcome`, `stats_*` (below), `local_hour`, `open_cid` | `CadView` after a real (non-demo) load; see `analytics#isRealModelOpen` |
+| (failed open) | `load_failed` | `content_type`, `size_bucket`, `reason_class`, `last_phase`, `open_cid` | `CadView#onViewerInternal`'s catch, once per failed attempt, real (non-demo) models only |
 | Hit a limit | `quota_limit_reached` | `tier` (`anonymous` \| `free`), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
 | Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown` | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
 | Upgrade click | `begin_checkout` (GA4 recommended) | `from`: `profile` \| `export` \| `quota`; `destination`: `checkout` \| `portal` | `goToSubscription` (`Profile/subscriptionNav.js`), which every upgrade CTA goes through |
@@ -300,8 +301,72 @@ The parts that aren't obvious:
     next full page load. The marker is also per-browser, so seeing the
     pending state on two devices counts twice.
 
+### Load outcome (Share#1954)
+
+`real_model_open` only ever sees loads that returned, so GA could not see
+loads that failed, loads that "succeeded" with an empty viewer, or how big the
+model was. The numbers it did carry (`stats_errorCount`, `stats_warningCount`,
+`stats_loadTime`) did not mean what their names said (ops#28 §1, §4). Source
+trace: <https://github.com/bldrs-ai/ops/issues/28#issuecomment-6322838217>.
+The params are assembled in `src/loader/loadAnalytics.js`; the per-load tallies
+live on the reporter in `src/loader/loadProgress.js`.
+
+- **`load_failed`** carries only closed-set values, never text from the error,
+  file or URL. `reason_class` is `oom` | `parse` | `unsupported_schema` |
+  `other` (`classifyLoadFailure`, a heuristic over the error's type and message:
+  `parse` means the bytes arrived and could not be turned into a model, a
+  network or routing failure is `other`). `size_bucket` is `<1mb` | `1-10mb` |
+  `10-50mb` | `50-200mb` | `200mb+` | `unknown`. `last_phase` is the reporter's
+  last phase as a slug from a fixed list, `other` for anything else, `none` when
+  no load had begun. It is sent from the one catch every failure of an attempt
+  reaches, not from `loadModel`'s own, which also sees the auth-shaped first try
+  that `loadModelWithAuthRetry` retries and may win.
+- **`load_outcome`** is `displayed` or `unusable`, from `classifyLoadOutcome`.
+  Only the conway path reports geometry counts, so every other format reads
+  `displayed` (the same default the Sentry tag has).
+- **Severity.** `stats_engineErrorTotal` / `stats_engineErrorDistinct` /
+  `stats_engineWarnDistinct` / `stats_dataDefectTotal` come from conway's
+  `Logger` through the reporter's proxy, which sees every occurrence, not only
+  the first one conway echoes to the console. A data defect (conway's
+  `dataDefect` category, plus the two unmarked fallback messages
+  `isDataDefectDiagnostic` knows) is counted in `dataDefectTotal` and not in the
+  engine counts. They are absent, not zero, for a load no engine reported on.
+- **Page noise.** The console tee is every `console.warn` / `console.error` on
+  the whole page during the load, download window included. It is now
+  `stats_pageErrorCount` / `stats_pageWarnCount`. The unqualified
+  `stats_errorCount` / `stats_warningCount` are reserved for conway's own counts
+  and are **not sent** until conway#740 adds `Statistics.getErrorCount()` /
+  `getWarningCount()`: `ShareIfcLoader` already forwards them when they exist.
+  The Sentry diagnostics gate in `CadView` uses the engine pair when present,
+  else the page pair, so #1767's chip behaviour is unchanged.
+- **Timings.** `stats_loadTime` is the wall clock from load start to the load
+  returning, the same definition for every format. Conway's total is
+  `stats_openMs`: open + parse + demand-prep only, no download, wasm init,
+  geometry pump, batched build or scene add. `stats_firstMeshMs` is the same
+  clock at the first geometry on screen: the first preview mesh or streamed
+  batch on the progressive IFC/STEP path, otherwise the moment the finished
+  model is added to the scene. `stats_cacheHit` is `"true"` when the GLB
+  artifact cache served the model (which `content_type` reports as plain `glb`),
+  `"false"` otherwise, including every format that has no artifact cache.
+- **Counts.** `stats_vertexCount`, `stats_triangleCount` (conway path only),
+  `stats_productCount` (`Statistics.getProductCount`). Products-with-geometry,
+  and so a partial-load fraction, needs conway#740 and is not sent.
+- **Not covered.** A GLB cache hit has no geometry counts, so it reports no
+  vertex or triangle counts and `load_outcome` defaults to `displayed`.
+
 GA4-admin follow-ups (Admin → Custom definitions / Key events). None of this
 has a backfill, so these only start accruing data once registered:
+
+- Load outcome (Share#1954), event-scoped, **dimensions** (text): `load_outcome`,
+  `reason_class`, `size_bucket`, `last_phase`, `stats_cacheHit`. **Metrics**
+  (standard, numeric): `stats_vertexCount`, `stats_triangleCount`,
+  `stats_productCount`, `stats_firstMeshMs` and `stats_openMs` (unit:
+  milliseconds), `stats_engineErrorDistinct`, `stats_engineErrorTotal`,
+  `stats_engineWarnDistinct`, `stats_dataDefectTotal`, `stats_pageErrorCount`,
+  `stats_pageWarnCount`. `content_type` is shared with `real_model_open`.
+  `stats_loadTime` changes meaning for IFC/STEP (it was conway's parse timer, so
+  it jumps up); mark the change date on the dashboard rather than comparing the
+  series across it.
 
 - Register **event-scoped custom dimensions** for `method`, `tier`, `feature`,
   `from` and `destination`. `open_cid` needs nothing new: GA4 keys an

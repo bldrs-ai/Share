@@ -221,6 +221,7 @@ describe('Analytics', () => {
     test('event names are the ones the dashboard queries', () => {
       expect(Analytics.FUNNEL_EVENTS).toEqual({
         REAL_MODEL_OPEN: 'real_model_open',
+        LOAD_FAILED: 'load_failed',
         QUOTA_LIMIT_REACHED: 'quota_limit_reached',
         LOGIN: 'login',
         BEGIN_CHECKOUT: 'begin_checkout',

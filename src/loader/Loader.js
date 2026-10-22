@@ -10,7 +10,7 @@ import {USDLoader} from 'three/examples/jsm/loaders/USDLoader.js'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
 import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
-import {reportModelInfo, reportSourceInfo} from './loadProgress'
+import {reportCacheHit, reportModelInfo, reportSourceInfo} from './loadProgress'
 import {
   deleteFileFromOPFS,
   doesFileExistInOPFS,
@@ -859,6 +859,12 @@ export async function load(
 
   // Used for GA stats
   model.type = loader.type
+  // `model.type` is 'glb' for both a native GLB and a GLB-artifact cache
+  // hit, because a hit swaps the loader tuple to the GLB loader. Say which
+  // it was, so GA can separate warm opens from cold parses
+  // (`stats_cacheHit`). Read here, after the OPFS block, because the stale
+  // Git LFS pointer path above can still reset it to false.
+  reportCacheHit(cameFromGlbCache)
 
   // ShareModel decoration (see src/viewer/ShareModel.js): adds
   // `format` + `capabilities` so call-sites can branch on intrinsic
