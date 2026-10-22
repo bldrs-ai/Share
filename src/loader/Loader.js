@@ -22,6 +22,7 @@ import {
   writeBase64Model,
 } from '../OPFS/utils'
 import {UploadNotInBrowserError} from '../OPFS/messages'
+import {getInMemoryUpload} from './inMemoryUploads'
 import {HTTP_NOT_FOUND} from '../net/http'
 import {looksLikeLfsPointer} from '../net/github/lfs'
 import {assertDefined} from '../utils/assert'
@@ -262,6 +263,14 @@ export async function load(
   // `constructUploadedBlobPath` keeps and `getModelFromOPFS` reads by. Kept
   // so a failed read can ask OPFS directly whether the entry exists.
   const uploadStorageId = isUploadedFile ? path.split('/').pop() : null
+  // A local file opened in a browser without OPFS is held in this page's
+  // memory under its `/v/new/` id (`inMemoryUploads.js`, #1906); there is no
+  // blob URL to fetch, since the opener never minted one. Looked up before
+  // the blob-path rewrite below discards the id. Only consulted when OPFS is
+  // unavailable, the only case anything registers there.
+  const inMemoryFile = (isUploadedFile && !isOpfsAvailable) ?
+    getInMemoryUpload(fileNameFromPath(path)) :
+    undefined
   if (isUploadedFile) {
     path = constructUploadedBlobPath(path)
     debug().log('Loader#load: file uploaded, blob path:', path)
@@ -276,7 +285,9 @@ export async function load(
   // Should be true of all locally hosted files, e.g. /index.ifc.  Uploads will have "blob:" prefix
   const isLocallyHostedFile = !path.startsWith('blob:') && !path.startsWith('http')
   debug().log(`Loader#load: isLocallyHostedFile:${isLocallyHostedFile} if path has leading slash:`, path)
-  if (!isOpfsAvailable) {
+  if (inMemoryFile !== undefined) {
+    debug().log('Loader#load: reading in-memory upload:', path)
+  } else if (!isOpfsAvailable) {
     debug().log('Loader#load: download1:', path, accessToken, isOpfsAvailable)
     if (isLocallyHostedFile) {
       derefPath = path
@@ -660,7 +671,12 @@ export async function load(
     }
   }
 
-  if (modelData === undefined) {
+  if (inMemoryFile !== undefined) {
+    // Same shapes `axiosDownload` returns for its `text` / `arraybuffer`
+    // response types, which is what the rest of this function expects.
+    onProgress('Reading model data...')
+    modelData = isFormatText ? await inMemoryFile.text() : await inMemoryFile.arrayBuffer()
+  } else if (modelData === undefined) {
     // Either OPFS is unavailable in this browser, or the OPFS attempt above
     // failed and we're falling back. Either way, fetch the bytes directly.
     if (isBase64) {
@@ -1388,6 +1404,12 @@ function uploadedDisplayFileName(uploadPath) {
   const storageId = fileNameFromPath(uploadPath)
   if (storageId === null) {
     return null
+  }
+  // An upload held in memory (no OPFS, #1906) has no recents entry; the
+  // File it holds still knows the user's name for it.
+  const inMemoryName = getInMemoryUpload(storageId)?.name
+  if (typeof inMemoryName === 'string' && inMemoryName !== '') {
+    return inMemoryName
   }
   try {
     const entry = loadAllRecentFiles().find((f) => f.id === storageId)

@@ -189,6 +189,21 @@ export function navigateToModel(target, navigate) {
 
 
 /**
+ * Navigate to a local file held in memory (`loader/inMemoryUploads.js`), in
+ * a browser without OPFS (#1906). Unlike `navigateToModel` this is an in-app
+ * (react-router) transition, never a page load: the `File` lives only in this
+ * page's memory, so a page load would end it before the Loader could read it.
+ * The current query string is carried forward, as `navigateToModel` does.
+ *
+ * @param {string} path `${appPrefix}/v/new/<uuid>.<ext>`
+ * @param {Function} navigate react-router navigate
+ */
+export function navigateToInMemoryModel(path, navigate) {
+  navigate(withCurrentSearch(path))
+}
+
+
+/**
  * Helper for calling navigate that will remove a named parameter from search.
  *
  * @param {Function} navigate

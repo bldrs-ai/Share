@@ -81,8 +81,8 @@ opens (`isDialogDisplayed` → true), so the entry is visible immediately withou
 `src/Components/Open/OpenModelDialog.spec.ts` for a worked example.
 
 **OPFS in tests**: on since #1779, so a spec exercises the same OPFS path as production —
-`saveDnDFileToOpfs` runs (the no-OPFS blob fallback was removed in #1905; without OPFS, local
-opens now show `NO_OPFS_LOCAL_FILE_ALERT`, see #1906), and the GLB cache round-trip
+`saveDnDFileToOpfs` runs (without OPFS, local opens are held in memory instead,
+`loader/inMemoryUploads.js`, #1906), and the GLB cache round-trip
 (writer → OPFS → reader) is reachable at all. That round-trip is what the cache-hit specs guard;
 without OPFS they could only ever have tested a live parse.
 

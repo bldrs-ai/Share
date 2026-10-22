@@ -2,7 +2,7 @@ import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from './dragAndD
 import {guessTypeFromFile} from '../Filetype'
 import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
-import {NO_OPFS_LOCAL_FILE_ALERT, noOpfsLocalFileAlert} from '../OPFS/messages'
+import {getInMemoryUpload} from '../loader/inMemoryUploads'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {disablePageReloadApprovalCheck} from './event'
 import {trackAlert} from './alertTracking'
@@ -23,6 +23,8 @@ const mockDebug = {
   warn: jest.fn(),
 }
 debug.mockReturnValue(mockDebug)
+
+const UUID_DOT_IFC = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.ifc$/
 
 
 describe('dragAndDrop utility', () => {
@@ -166,10 +168,12 @@ describe('dragAndDrop utility', () => {
       expect(mockDebug.log).toHaveBeenCalledWith('handleFileDrop: navigate to:', mockFileName)
     })
 
-    // Without OPFS there is nowhere for the file to survive navigateToModel's
-    // full page load, so say so rather than navigate to a load that fails (#1906).
-    it('alerts and stops, storing nothing, when OPFS is unavailable', async () => {
-      mockEvent.dataTransfer.files = [{name: 'test.ifc', type: 'application/octet-stream', size: 1024}]
+    // Without OPFS the file is held in this page's memory and opened by an
+    // in-app navigation: a page load would drop it before the Loader could
+    // read it, and nothing is stored to list as a recent (#1906).
+    it('holds the file in memory and navigates in-app when OPFS is unavailable', async () => {
+      const mockFile = {name: 'test.ifc', type: 'application/octet-stream', size: 1024}
+      mockEvent.dataTransfer.files = [mockFile]
       guessTypeFromFile.mockResolvedValue('ifc')
 
       await handleFileDrop(
@@ -182,13 +186,36 @@ describe('dragAndDrop utility', () => {
         mockOnError,
       )
 
-      expect(mockSetAlert).toHaveBeenCalledWith(noOpfsLocalFileAlert())
-      // AlertDialog counts it (analytics only); counting here too doubled it.
-      expect(trackAlert).not.toHaveBeenCalled()
-      expect(mockOnError).toHaveBeenCalledWith(NO_OPFS_LOCAL_FILE_ALERT)
+      expect(mockOnSuccess).toHaveBeenCalledTimes(1)
+      const storageId = mockOnSuccess.mock.calls[0][0]
+      expect(storageId).toMatch(UUID_DOT_IFC)
+      expect(getInMemoryUpload(storageId)).toBe(mockFile)
+      expect(mockNavigate).toHaveBeenCalledWith(`/prefix/v/new/${storageId}`)
       expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
-      expect(mockNavigate).not.toHaveBeenCalled()
       expect(addRecentFileEntry).not.toHaveBeenCalled()
+      expect(setPendingModelNameUpdate).not.toHaveBeenCalled()
+      expect(mockSetAlert).not.toHaveBeenCalled()
+      expect(mockOnError).not.toHaveBeenCalled()
+    })
+
+    it('gates an in-memory drop on the quota like any other', async () => {
+      mockEvent.dataTransfer.files = [{name: 'test.ifc', type: 'application/octet-stream', size: 1024}]
+      guessTypeFromFile.mockResolvedValue('ifc')
+      const quotaOptions = {
+        hasCapacity: true,
+        record: jest.fn().mockResolvedValue({allowed: false}),
+        onExceeded: jest.fn(),
+      }
+
+      await handleFileDrop(
+        mockEvent, mockNavigate, '/prefix', false, mockSetAlert, mockOnSuccess, mockOnError, quotaOptions)
+
+      expect(quotaOptions.record).toHaveBeenCalledWith(expect.stringMatching(/^\/prefix\/v\/new\//))
+      expect(quotaOptions.onExceeded).toHaveBeenCalled()
+      // A denied file must not stay held for the life of the page.
+      const deniedId = quotaOptions.record.mock.calls[0][0].split('/').pop()
+      expect(getInMemoryUpload(deniedId)).toBeUndefined()
+      expect(mockNavigate).not.toHaveBeenCalled()
       expect(mockOnSuccess).not.toHaveBeenCalled()
     })
 
@@ -206,15 +233,16 @@ describe('dragAndDrop utility', () => {
       expect(mockSetAlert).not.toHaveBeenCalled()
     })
 
-    it('alerts when the store has not resolved OPFS and the probe says no', async () => {
+    it('holds the file in memory when the store has not resolved OPFS and the probe says no', async () => {
       mockEvent.dataTransfer.files = [{name: 'test.ifc', type: 'application/octet-stream', size: 1024}]
       guessTypeFromFile.mockResolvedValue('ifc')
       checkOPFSAvailability.mockResolvedValue(false)
 
       await handleFileDrop(mockEvent, mockNavigate, '/prefix', null, mockSetAlert)
 
-      expect(mockSetAlert).toHaveBeenCalledWith(noOpfsLocalFileAlert())
+      expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/^\/prefix\/v\/new\/.+\.ifc$/))
       expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
+      expect(mockSetAlert).not.toHaveBeenCalled()
     })
 
     it('records the file in recent history after successful drop', async () => {
