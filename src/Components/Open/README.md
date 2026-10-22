@@ -44,7 +44,7 @@ Owns all tab state and model-loading callbacks. Responsibilities:
 | Concern | Detail |
 |---|---|
 | Tab list | `[Local, Google*, GitHub, Samples]`; tab index in Zustand `currentTab` |
-| Local open | `loadLocalFile` → OPFS → navigate `/v/new/<filename>`. Without OPFS, an alert instead (`OPFS/messages.js`, #1906) |
+| Local open | `loadLocalFile` → OPFS → navigate `/v/new/<filename>`. Without OPFS, the file is held in memory (`loader/inMemoryUploads.js`) and opened by an in-app navigation, with no local recent; reloading that URL explains the file is gone (`OPFS/messages.js`, #1906) |
 | Local recents | `loadRecentFilesBySource('local')` on dialog open |
 | Google open | Two paths: picker (`handlePickerSelect`) or direct by id (`handleOpenById`) → both navigate to `/v/g/<fileId>` |
 | GitHub recents | `loadRecentFilesBySource('github')` on dialog open |

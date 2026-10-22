@@ -1,4 +1,6 @@
-import {navigateToModel, isTempModelPath, homeModelPath, navToDefault, reloadAfterCacheClear} from './navigate'
+import {
+  navigateToInMemoryModel, navigateToModel, isTempModelPath, homeModelPath, navToDefault, reloadAfterCacheClear,
+} from './navigate'
 
 
 describe('navigateToModel', () => {
@@ -73,6 +75,34 @@ describe('navigateToModel', () => {
       navigateToModel({pathname: '/share/v/new/haus.ifc', search: '?feature=bot'})
       expect(assignCalls).toEqual(['/share/v/new/haus.ifc?feature=bot'])
     })
+  })
+})
+
+
+// A file held only in this page's memory (#1906): a page load would end it,
+// so this must be an in-app navigation even outside tests, where
+// navigateToModel does a full load.
+describe('navigateToInMemoryModel', () => {
+  let locationGetter
+  const assign = jest.fn()
+  const prevEnv = process.env.NODE_ENV
+
+  beforeEach(() => {
+    process.env.NODE_ENV = 'development'
+    locationGetter = jest.spyOn(window, 'location', 'get').mockReturnValue({search: '?feature=look', assign})
+  })
+
+  afterEach(() => {
+    process.env.NODE_ENV = prevEnv
+    locationGetter.mockRestore()
+    assign.mockClear()
+  })
+
+  it('navigates in-app, carrying the query string, and never loads a page', () => {
+    const navigate = jest.fn()
+    navigateToInMemoryModel('/share/v/new/4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc', navigate)
+    expect(navigate).toHaveBeenCalledWith('/share/v/new/4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc?feature=look')
+    expect(assign).not.toHaveBeenCalled()
   })
 })
 

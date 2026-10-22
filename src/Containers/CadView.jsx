@@ -33,6 +33,8 @@ import {
 import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
 import {UnsupportedSchemaError, reportUnsupportedSchema} from '../loader/unsupportedSchema'
+import {hasInMemoryUpload} from '../loader/inMemoryUploads'
+import {InMemoryUploadGoneError, inMemoryUploadGoneAlert} from '../OPFS/messages'
 import {getBrowser} from '../connections/registry'
 import modelIdentity from '../routes/modelIdentity'
 import useStore from '../store/useStore'
@@ -162,6 +164,24 @@ export default function CadView({
   // fire end-to-end → double load. This in-flight ref dedupes overlapping
   // calls; whichever effect tick wins, the other skips.
   const onViewerInFlightRef = useRef(false)
+  // The model the in-flight onViewer is loading, and whether a call for a
+  // DIFFERENT model arrived meanwhile. That is not a duplicate: dropping it
+  // left the URL on the new model while nothing ever loaded it. It became
+  // reachable once a no-OPFS local open switched models by an in-app
+  // navigation instead of a page load (navigateToInMemoryModel, #1906; codex
+  // review on #1957). Such a call is replayed, through `latestOnViewerRef` so
+  // it sees that render's viewer and modelPath, once the in-flight one ends.
+  // Keyed by model identity, not by viewer: the viewer is also re-created
+  // for the SAME model during mount, and those calls must stay deduped (the
+  // Safari double-load above).
+  const inFlightModelKeyRef = useRef(null)
+  const isViewerReloadPendingRef = useRef(false)
+  const latestOnViewerRef = useRef(null)
+  // The alert as it stood when the in-flight load began. If that load is
+  // superseded and fails, the alert it raises belongs to a model the user
+  // has already left; left up, it would sit over the replayed model, and
+  // dismissing it navigates home (codex review on #1957).
+  const alertAtLoadStartRef = useRef(null)
   // The model a schema refusal was last counted in Sentry for
   // (unsupportedSchema.js#reportUnsupportedSchema). The auth-state effect
   // below can re-run onViewer for the SAME route after a refusal —
@@ -274,16 +294,32 @@ export default function CadView({
     // don't accidentally claim the slot and starve the eventual successful
     // load from the [viewer] effect.
     if (onViewerInFlightRef.current) {
+      if (inFlightModelKeyRef.current !== modelIdentity(modelPath, installPrefix)) {
+        debug().warn('CadView#onViewer: model changed mid-load; loading it once the current load ends')
+        isViewerReloadPendingRef.current = true
+        return
+      }
       debug().warn('CadView#onViewer: already in flight; skipping duplicate')
       return
     }
     onViewerInFlightRef.current = true
+    inFlightModelKeyRef.current = modelIdentity(modelPath, installPrefix)
+    alertAtLoadStartRef.current = useStore.getState().alert
     try {
       await onViewerInternal()
     } finally {
       onViewerInFlightRef.current = false
+      inFlightModelKeyRef.current = null
+      if (isViewerReloadPendingRef.current) {
+        isViewerReloadPendingRef.current = false
+        if (useStore.getState().alert !== alertAtLoadStartRef.current) {
+          setAlert(null)
+        }
+        await latestOnViewerRef.current()
+      }
     }
   }
+  latestOnViewerRef.current = onViewer
 
 
   /** Inner load body — preconditions checked + in-flight flag managed by `onViewer`. */
@@ -382,6 +418,8 @@ export default function CadView({
           connection: e.connection,
           message: 'Your Google Drive session expired. Reconnect to load this file.',
         })
+      } else if (e instanceof InMemoryUploadGoneError) {
+        setAlert(inMemoryUploadGoneAlert())
       } else {
         setAlert(e)
       }
@@ -398,8 +436,10 @@ export default function CadView({
       // instead of landing in one detail-free "model loading failed"
       // bucket (conway #301 §7).
       // Same for an unsupported schema: an intended, documented limit that
-      // is already explained to the user, not a defect for triage.
-      if (!isOOM && !(e instanceof UnsupportedSchemaError)) {
+      // is already explained to the user, not a defect for triage. And for
+      // an in-memory upload whose page is gone: a known limit of browsers
+      // without OPFS (#1906), counted in analytics by AlertDialog.
+      if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof InMemoryUploadGoneError)) {
         attachLoadFailureContext()
         captureException(e)
       }
@@ -514,6 +554,19 @@ export default function CadView({
     const isGoogleResult = routeResult.kind === 'provider' && routeResult.provider === 'google'
     const filepath = isGoogleResult ? routeResult.downloadUrl : (routeResult.downloadUrl || routeResult.filepath)
     const gitpath = routeResult.gitpath
+    // Without OPFS a local file lives only in the memory of the page that
+    // opened it (loader/inMemoryUploads.js, #1906). A /v/new/ URL this page
+    // doesn't hold — a reload, or the link opened anywhere else — can't load,
+    // so say that rather than let the Loader fetch a blob URL that never
+    // existed here. The route, not the Loader's `testUuid` heuristic, decides
+    // what is an upload: a Drive blob URL and a hosted `<uuid>.ifc` pass that
+    // test too.
+    if (routeResult.isUploadedFile === true && isOpfsAvailable === false) {
+      const storageId = routeResult.filepath.split('/').pop()
+      if (!hasInMemoryUpload(storageId)) {
+        throw new InMemoryUploadGoneError(storageId)
+      }
+    }
     const loadingMessageBase = `Loading ${isGoogleResult ? routeResult.fileId : filepath}`
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)

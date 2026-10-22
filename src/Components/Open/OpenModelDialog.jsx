@@ -1,7 +1,7 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {Box, Button, Divider, Slide, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {noOpfsLocalFileAlert} from '../../OPFS/messages'
+import {forgetInMemoryUpload} from '../../loader/inMemoryUploads'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
 import {loadLocalFile} from '../../utils/loader'
@@ -14,7 +14,7 @@ import {
 import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
-import {navigateToModel} from '../../utils/navigate'
+import {navigateToInMemoryModel, navigateToModel} from '../../utils/navigate'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import useExistInFeature from '../../hooks/useExistInFeature'
@@ -273,22 +273,19 @@ export default function OpenModelDialog({
   }
 
   const openFile = () => {
-    // `false`, not falsy: the store holds `null` until BaseRoutes' probe
-    // resolves, and that means "not known yet", not "unavailable". Browse is
-    // disabled while it's `null` (below), so this only fires on a real no.
-    if (isOpfsAvailable === false) {
-      // AlertDialog counts it (analytics only); see noOpfsLocalFileAlert.
-      setIsDialogDisplayed(false)
-      setAlert(noOpfsLocalFileAlert())
-      return
-    }
     if (!hasCapacity) {
       setShowQuotaDialog(true)
       return
     }
+    // Without OPFS the pick is held in memory instead (#1906). `false`, not
+    // falsy: the store holds `null` until BaseRoutes' probe resolves, which
+    // means "not known yet". Browse is disabled while it's `null` (below), so
+    // this is decided on a real answer.
+    const isInMemory = isOpfsAvailable === false
     /**
      * @param {string} storageId OPFS storage id, `<blob-uuid>.<ext>` — the
-     *   `/v/new/` path segment the Loader resolves against OPFS.
+     *   `/v/new/` path segment the Loader resolves against OPFS — or, when
+     *   `isInMemory`, the same-shaped in-memory id.
      * @param {number} lastModifiedUtc Epoch ms from the picked File.
      * @param {string} [originalName] The user's filename, e.g. `box.ifc`.
      */
@@ -296,7 +293,16 @@ export default function OpenModelDialog({
       const sharePath = `${appPrefix}/v/new/${storageId}`
       const {allowed} = await record(sharePath)
       if (!allowed) {
+        if (isInMemory) {
+          forgetInMemoryUpload(storageId)
+        }
         setShowQuotaDialog(true)
+        return
+      }
+      if (isInMemory) {
+        // The file is held only in this page's memory, so no page load, and
+        // no local recent: there is nothing stored to reopen it from.
+        navigateToInMemoryModel(sharePath, navigate)
         return
       }
       disablePageReloadApprovalCheck()
@@ -316,7 +322,7 @@ export default function OpenModelDialog({
     // The dialog closes on pick, so a file that cannot be opened at all —
     // a `.glb.gz` in a browser with no `DecompressionStream`, a name and a
     // header that between them name no format — has no other way to say so.
-    loadLocalFile(onLoad, false, false, (message) => setAlert(message))
+    loadLocalFile(onLoad, false, false, (message) => setAlert(message), {inMemory: isInMemory})
     setIsDialogDisplayed(false)
   }
 

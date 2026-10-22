@@ -21,6 +21,8 @@ import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
 import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
+import {registerInMemoryUpload, resetInMemoryUploadsForTest} from '../loader/inMemoryUploads'
+import {InMemoryUploadGoneError, inMemoryUploadGoneAlert} from '../OPFS/messages'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
@@ -648,6 +650,81 @@ describe('CadView', () => {
     expect(captureMessageSpy).toHaveBeenCalledWith(
       'Unsupported IFC schema: IFC4X3_RC2',
       expect.objectContaining({level: 'info', fingerprint: ['unsupported-schema', 'IFC4X3_RC2']}))
+  })
+
+  // A model change that lands while another load is in flight is not a
+  // duplicate to drop: the in-flight guard used to skip it, leaving the URL
+  // on the new model while nothing loaded it. A no-OPFS local open reaches
+  // this by navigating in-app instead of a page load (#1906, codex review on
+  // #1957), so it is replayed once the in-flight load ends.
+  it('loads a model the path changed to while another load was in flight', async () => {
+    let failFirstLoad
+    const loadSpy = jest.spyOn(Loader, 'load')
+      .mockImplementationOnce(() => new Promise((resolve, reject) => {
+        failFirstLoad = reject
+      }))
+      .mockImplementation(() => new Promise(() => {}))
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setAlert(null))
+    await act(() => result.current.setIsOpfsAvailable(false))
+    await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(1))
+
+    // Mid-load, the user opens another model.
+    await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+    await actAsyncFlush()
+    expect(loadSpy).toHaveBeenCalledTimes(1)
+
+    await act(() => failFirstLoad(new Error('first load ends')))
+    await actAsyncFlush()
+    await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+    expect(String(loadSpy.mock.calls[1][0])).toContain('other.ifc')
+    // The superseded load's failure is about a model the user left; its
+    // alert must not sit over the replayed one, whose OK would navigate home.
+    expect(result.current.alert).toBeNull()
+  })
+
+  // Without OPFS a local file lives only in the memory of the page that
+  // opened it (#1906). A /v/new/ route this page doesn't hold — a reload, or
+  // the link opened elsewhere — says so instead of fetching a blob URL that
+  // never existed here, and stays out of Sentry.
+  it('explains a /v/new/ upload this page no longer holds, without loading or reporting it', async () => {
+    resetInMemoryUploadsForTest()
+    const loadSpy = jest.spyOn(Loader, 'load')
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setIsOpfsAvailable(false))
+    await act(() => result.current.setModelPath({
+      kind: 'file', isUploadedFile: true, filepath: '4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc'}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix='/v/new'/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(result.current.alert).toEqual(inMemoryUploadGoneAlert()))
+    expect(loadSpy).not.toHaveBeenCalled()
+    expect(captureExceptionSpy).not.toHaveBeenCalledWith(expect.any(InMemoryUploadGoneError))
+  })
+
+  it('loads a /v/new/ upload this page holds in memory', async () => {
+    resetInMemoryUploadsForTest()
+    const storageId = registerInMemoryUpload(new File([], 'box.ifc'), 'ifc')
+    // Reaching the Loader is the point; what it does with the bytes is
+    // Loader.inMemoryUpload.test.js's.
+    const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => new Promise(() => {}))
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setAlert(null))
+    await act(() => result.current.setIsOpfsAvailable(false))
+    await act(() => result.current.setModelPath({kind: 'file', isUploadedFile: true, filepath: storageId}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix='/v/new'/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(loadSpy).toHaveBeenCalled())
+    expect(loadSpy.mock.calls[0][0]).toContain(storageId)
+    expect(result.current.alert).toBeNull()
   })
 
   // The auth-state effect re-runs onViewer for the same route after a
