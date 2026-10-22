@@ -108,7 +108,9 @@ describe('navigateToInMemoryModel', () => {
 
 
 describe('isTempModelPath', () => {
-  it('is true for uploaded /v/new/ models', () => {
+  it('is true for local-only models, and the legacy /v/new/ route', () => {
+    expect(isTempModelPath('/share/v/local-only/AA77535-D1B6-49A9-915B.ifc')).toBe(true)
+    expect(isTempModelPath('/Share/share/v/local-only/uuid.ifc')).toBe(true)
     expect(isTempModelPath('/share/v/new/AA77535-D1B6-49A9-915B.ifc')).toBe(true)
     expect(isTempModelPath('/Share/share/v/new/uuid.ifc')).toBe(true)
   })

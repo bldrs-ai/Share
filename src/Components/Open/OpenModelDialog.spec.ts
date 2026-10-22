@@ -99,9 +99,9 @@ describe('Open 100: Open model dialog', () => {
       await page.getByTestId('tab-local').click()
       await page.getByTestId(`link-open-recent-${STORAGE_ID}`).click()
 
-      // /v/new/box.ifc would miss OPFS entirely and fetch the SPA
+      // /v/local-only/box.ifc would miss OPFS entirely and fetch the SPA
       // catch-all from the origin — the #1682 crash.
-      await expect(page).toHaveURL(new RegExp(`/v/new/${STORAGE_ID}$`))
+      await expect(page).toHaveURL(new RegExp(`/v/local-only/${STORAGE_ID}$`))
     })
   })
 

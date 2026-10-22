@@ -216,7 +216,12 @@ async function isPrivateGhRepo(owner, repo) {
  * @return {Promise<boolean>}
  */
 async function isQuotableLoad(key) {
-  if (key.includes('/v/new/') || key.includes('/v/g/')) {
+  // Local files are always private: `/v/local-only/` since Share#1959, and
+  // the legacy `/v/new/` for keys recorded before it — kept in step across
+  // the rename on purpose, not dropped (design/new/quotas.md §"What counts").
+  // Mirrors src/quota/quota.js#isLocallyQuotable (which this bundle can't
+  // import).
+  if (key.includes('/v/local-only/') || key.includes('/v/new/') || key.includes('/v/g/')) {
     return true
   }
   // /v/gh/<owner>/<repo>/<branch>/<path>

@@ -430,7 +430,7 @@ export default function CadView({
         // the next case, where OPFS exists but lacks the entry.
         setAlert(inMemoryUploadGoneAlert())
       } else if (e instanceof UploadNotInBrowserError) {
-        // A /v/new/ URL whose upload this browser never held or no longer
+        // A /v/local-only/ URL whose upload this browser never held or no longer
         // holds (#1955). Explain it and offer to open a file, instead of
         // the worker's raw "Folder <id> not found" under an Error header.
         setAlert(uploadNotInBrowserAlert())
@@ -582,7 +582,7 @@ export default function CadView({
     const filepath = isGoogleResult ? routeResult.downloadUrl : (routeResult.downloadUrl || routeResult.filepath)
     const gitpath = routeResult.gitpath
     // Without OPFS a local file lives only in the memory of the page that
-    // opened it (loader/inMemoryUploads.js, #1906). A /v/new/ URL this page
+    // opened it (loader/inMemoryUploads.js, #1906). A /v/local-only/ URL this page
     // doesn't hold — a reload, or the link opened anywhere else — can't load,
     // so say that rather than let the Loader fetch a blob URL that never
     // existed here. The route, not the Loader's `testUuid` heuristic, decides
@@ -642,7 +642,7 @@ export default function CadView({
         loadedModel = await load(filepath, viewer, onProgress,
           (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow,
           // Route provenance, which the loader can't recover from `filepath`
-          // alone: /v/new/<id> and /v/p/<id> give the same URL (#1956).
+          // alone: /v/local-only/<id> and /v/p/<id> give the same URL (#1956).
           {isUploadedRoute: routeResult.isUploadedFile === true})
       }
     } catch (error) {

@@ -3,7 +3,7 @@ import {loadFailureCaptureContext} from '../loader/loadProgress'
 
 
 /**
- * Count one `/v/new/` open whose upload isn't in this browser (#1955), as an
+ * Count one `/v/local-only/` open whose upload isn't in this browser (#1955), as an
  * info-level Sentry message rather than an exception.
  *
  * Until #1956 these were SHARE-1NR, the top hard-failure group, filed as a

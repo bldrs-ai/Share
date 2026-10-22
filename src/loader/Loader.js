@@ -209,11 +209,11 @@ function probeLfsBytes(data) {
  *   it takes no artifact generation and publishes no artifact
  *   (glbArtifactPublish.js).
  * @param {boolean} [options.isUploadedRoute] True only when the ROUTE says
- *   this is an upload (`FileResult.isUploadedFile`, i.e. a `/share/v/new/`
+ *   this is an upload (`FileResult.isUploadedFile`, i.e. a `/share/v/local-only/`
  *   URL). Gates the "upload isn't in this browser" reclassification below.
  *   `isUploadedFile` here can't stand in for it: it's `testUuid(path)`, and
  *   a hosted `/v/p/<uuid>.ifc` reaches this function as the very same URL
- *   string as `/v/new/<uuid>.ifc` (codex review on #1956).
+ *   string as `/v/local-only/<uuid>.ifc` (codex review on #1956).
  * @return {object} The model or undefined
  */
 export async function load(
@@ -249,7 +249,7 @@ export async function load(
 
   // TODO(pablo): we should pass in the routeResult instead of the path
   // Test for uploaded first
-  // Maybe use path.startsWith('/share/v/new')
+  // The route's own answer is routes/localOnly.ts isLocalOnlyPath (#1959)
   const isUploadedFile = testUuid(path)
   // Human-readable source filename for root-label composition (#1595,
   // "Scene (ISS_stationary.glb)"). For uploads the route carries only
@@ -264,7 +264,7 @@ export async function load(
   // so a failed read can ask OPFS directly whether the entry exists.
   const uploadStorageId = isUploadedFile ? path.split('/').pop() : null
   // A local file opened in a browser without OPFS is held in this page's
-  // memory under its `/v/new/` id (`inMemoryUploads.js`, #1906); there is no
+  // memory under its `/v/local-only/` id (`inMemoryUploads.js`, #1906); there is no
   // blob URL to fetch, since the opener never minted one. Looked up before
   // the blob-path rewrite below discards the id. Only consulted when OPFS is
   // unavailable, the only case anything registers there.
@@ -621,7 +621,7 @@ export async function load(
       // is no remote URL to fall back to. Re-throw so the user sees the
       // error rather than a misleading "fall-through succeeded" outcome.
       //
-      // The common way to get here is a `/v/new/<id>` URL opened in a
+      // The common way to get here is a `/v/local-only/<id>` URL opened in a
       // browser that never held the upload: a link pasted from another
       // machine, or one that outlived a storage clear (#1955). The worker
       // reports that as a bare `Folder <id> not found` string. Rather than
@@ -1394,7 +1394,7 @@ function fileNameFromPath(path) {
  * user's original filename in the recent-files entry keyed by that
  * UUID (`utils/dragAndDrop.js#onWritten` → `addRecentFileEntry`).
  * Falls back to the UUID-based storage name when the entry is missing
- * (cleared localStorage, direct navigation to a stale /v/new/ URL).
+ * (cleared localStorage, direct navigation to a stale /v/local-only/ URL).
  *
  * @param {string} uploadPath the pre-blob-rewrite path whose trailing
  *   segment is the upload's storage id (`<uuid>.<type>`)

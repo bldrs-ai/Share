@@ -42,8 +42,20 @@ function isoDaysBefore(baseMs, days) {
 // path classifiers
 // ---------------------------------------------------------------------------
 describe('isLocallyQuotable', () => {
-  it('local files are locally quotable', () => {
-    expect(isLocallyQuotable('/share/v/new/model.ifc')).toBe(true)
+  // Kept in step across the #1959 rename ON PURPOSE (design/new/quotas.md
+  // §"What counts"): local files are metered under the new route name, the
+  // legacy one, and the GitHub Pages prefix. If the owner decides local
+  // viewing is unmetered, this is the test to flip — together with the
+  // hasCapacity pre-gates listed there.
+  it('local files are locally quotable, under either route name and any prefix', () => {
+    for (const key of [
+      '/share/v/local-only/model.ifc',
+      '/share/v/new/model.ifc',
+      '/Share/share/v/local-only/model.ifc',
+    ]) {
+      expect(isLocallyQuotable(key)).toBe(true)
+      expect(isQuotablePath(key)).toBe(true)
+    }
   })
 
   it('google drive files are locally quotable', () => {
@@ -70,7 +82,7 @@ describe('isServerResolvedPath', () => {
 
 describe('isQuotablePath', () => {
   it('returns true for local, drive, and github', () => {
-    expect(isQuotablePath('/share/v/new/x.ifc')).toBe(true)
+    expect(isQuotablePath('/share/v/local-only/x.ifc')).toBe(true)
     expect(isQuotablePath('/share/v/g/abc')).toBe(true)
     expect(isQuotablePath('/share/v/gh/foo/bar/main/x.ifc')).toBe(true)
   })

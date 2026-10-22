@@ -5,7 +5,7 @@
  *
  * These had drifted apart — the drawer derived its own label from the URL
  * and so listed local uploads as raw OPFS storage ids
- * (`/v/new/<blob-uuid>.ifc`), while Recents already knew the real
+ * (`/v/local-only/<blob-uuid>.ifc`), while Recents already knew the real
  * filename. One module so a naming fix lands everywhere at once.
  */
 
@@ -29,7 +29,7 @@ export function recentDisplayName(entry) {
 
 /**
  * The recents entry for a model route, if we have one. A local upload
- * routes by its OPFS storage id (`/v/new/<blob-uuid>.ifc`), so the path
+ * routes by its OPFS storage id (`/v/local-only/<blob-uuid>.ifc`), so the path
  * segment alone would display as a UUID; recents holds the id -> name
  * mapping (see #1682).
  *
@@ -71,7 +71,8 @@ export function pageTitleForModel(modelPath, modelName, isUploadedFile) {
   const modelPathFilename = modelPath.filepath?.split('/').pop()
   switch (modelPath.kind) {
     case 'file':
-      return isUploadedFile ? `New: ${modelName}` : `${modelName || modelPathFilename}`
+      // Named for the route (`/v/local-only/`, #1959), formerly `New: ` after `/v/new/`.
+      return isUploadedFile ? `Local-only: ${modelName}` : `${modelName || modelPathFilename}`
     case 'provider':
       switch (modelPath.provider) {
         case 'google':

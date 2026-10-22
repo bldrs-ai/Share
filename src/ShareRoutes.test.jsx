@@ -1,14 +1,15 @@
 import React from 'react'
 import {render, waitFor} from '@testing-library/react'
-import {MemoryRouter, Route, Routes, useLocation} from 'react-router-dom'
+import {MemoryRouter, Route, Routes, useLocation, useNavigationType} from 'react-router-dom'
 import ShareRoutes from './ShareRoutes'
 
 
 // Share mounts CadView and the whole viewer stack. This suite only
-// exercises the /share -> /share/v/p forward, so stub it out.
+// exercises ShareRoutes' own forwards, so stub it out, keeping the
+// pathPrefix it was handed so a test can tell which route rendered it.
 jest.mock('./Share', () => {
-  return function MockShare() {
-    return <div data-testid='mock-share'>Mock Share</div>
+  return function MockShare({pathPrefix}) {
+    return <div data-testid='mock-share' data-path-prefix={pathPrefix}>Mock Share</div>
   }
 })
 
@@ -20,26 +21,28 @@ jest.mock('./Share', () => {
  * @return {null}
  */
 function LocationSpy({onLocation}) {
-  onLocation(useLocation())
+  onLocation({...useLocation(), navigationType: useNavigationType()})
   return null
 }
 
 
 /**
  * Render ShareRoutes the way BaseRoutes mounts it — nested under a
- * `/share/*` parent route, so its internal `<Route path='/'>` matches.
+ * `<appPrefix>/*` parent route, so its internal `<Route path='/'>` matches.
  *
  * @param {string} entry Initial URL
+ * @param {string} [installPrefix] '' on bldrs.ai, '/Share' on GitHub Pages
  * @return {Function} Getter for the most recent router location
  */
-function renderAt(entry) {
+function renderAt(entry, installPrefix = '') {
+  const appPrefix = `${installPrefix}/share`
   let seen = null
   render(
     <MemoryRouter initialEntries={[entry]}>
       <Routes>
         <Route
-          path='/share/*'
-          element={<ShareRoutes installPrefix='' appPrefix='/share'/>}
+          path={`${appPrefix}/*`}
+          element={<ShareRoutes installPrefix={installPrefix} appPrefix={appPrefix}/>}
         />
       </Routes>
       <LocationSpy onLocation={(loc) => {
@@ -72,5 +75,38 @@ describe('ShareRoutes Forward', () => {
     const location = renderAt('/share?gclid=TEST123&utm_source=google&foo=bar')
     await waitFor(() => expect(location().pathname).toBe('/share/v/p'))
     expect(location().search).toBe('?gclid=TEST123&utm_source=google&foo=bar')
+  })
+})
+
+
+// #1959: the local-only route's old name redirects to its new one, so old
+// recents, bookmarks and copied links keep working.
+describe('ShareRoutes legacy /v/new/ redirect', () => {
+  const ID = '0b4c2f1e-8d6a-4c3b-9e2f-1a2b3c4d5e6f.ifc'
+
+  it('rewrites /v/new/<id> to /v/local-only/<id> with replace, keeping search and hash', async () => {
+    const location = renderAt(`/share/v/new/${ID}?feature=look#c:1,2,3`)
+    await waitFor(() => expect(location().pathname).toBe(`/share/v/local-only/${ID}`))
+    expect(location().search).toBe('?feature=look')
+    expect(location().hash).toBe('#c:1,2,3')
+    // replaceState, not pushState: Back must not land on the old URL and
+    // bounce straight forward again.
+    expect(location().navigationType).toBe('REPLACE')
+  })
+
+  it('renders Share for the local-only route, with its own path prefix', async () => {
+    const {findByTestId} = render(
+      <MemoryRouter initialEntries={[`/share/v/local-only/${ID}`]}>
+        <Routes>
+          <Route path='/share/*' element={<ShareRoutes installPrefix='' appPrefix='/share'/>}/>
+        </Routes>
+      </MemoryRouter>,
+    )
+    expect((await findByTestId('mock-share')).getAttribute('data-path-prefix')).toBe('/share/v/local-only')
+  })
+
+  it('redirects under the GitHub Pages install prefix too', async () => {
+    const location = renderAt(`/Share/share/v/new/${ID}`, '/Share')
+    await waitFor(() => expect(location().pathname).toBe(`/Share/share/v/local-only/${ID}`))
   })
 })

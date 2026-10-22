@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect, useState} from 'react'
 import {Box, Button, Divider, Slide, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {forgetInMemoryUpload} from '../../loader/inMemoryUploads'
+import {localOnlyPath, toLocalOnlyPath} from '../../routes/localOnly'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
 import {loadLocalFile} from '../../utils/loader'
@@ -284,13 +285,13 @@ export default function OpenModelDialog({
     const isInMemory = isOpfsAvailable === false
     /**
      * @param {string} storageId OPFS storage id, `<blob-uuid>.<ext>` — the
-     *   `/v/new/` path segment the Loader resolves against OPFS — or, when
+     *   `/v/local-only/` path segment the Loader resolves against OPFS — or, when
      *   `isInMemory`, the same-shaped in-memory id.
      * @param {number} lastModifiedUtc Epoch ms from the picked File.
      * @param {string} [originalName] The user's filename, e.g. `box.ifc`.
      */
     const onLoad = async (storageId, lastModifiedUtc, originalName) => {
-      const sharePath = `${appPrefix}/v/new/${storageId}`
+      const sharePath = localOnlyPath(appPrefix, storageId)
       const {allowed} = await record(sharePath)
       if (!allowed) {
         if (isInMemory) {
@@ -342,7 +343,12 @@ export default function OpenModelDialog({
    * @param {object} entry A `local` RecentFileEntry.
    */
   const handleOpenLocalRecent = async (entry) => {
-    const key = entry.sharePath || `${appPrefix}/v/new/${entry.id}`
+    // A recent recorded before #1959 carries the legacy `/v/new/` form.
+    // Open it at the canonical path, the key every new open is recorded
+    // under, rather than through the redirect hop. (With `quotas` on, the
+    // first re-open of such a recent counts once under the new key: the
+    // ledger dedupes by exact key.)
+    const key = entry.sharePath ? toLocalOnlyPath(entry.sharePath) : localOnlyPath(appPrefix, entry.id)
     const {allowed} = await record(key)
     if (!allowed) {
       setShowQuotaDialog(true)

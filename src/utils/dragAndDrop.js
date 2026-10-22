@@ -3,6 +3,7 @@ import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {forgetInMemoryUpload, registerInMemoryUpload} from '../loader/inMemoryUploads'
+import {localOnlyPath} from '../routes/localOnly'
 import {disablePageReloadApprovalCheck} from './event'
 import {trackAlert} from './alertTracking'
 import {navigateToInMemoryModel, navigateToModel} from './navigate'
@@ -100,11 +101,11 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
 
   /**
    * @param {string} fileName The OPFS storage id the upload was written
-   *   under (`<blob-uuid>.<ext>`) — the `/v/new/` segment the Loader
+   *   under (`<blob-uuid>.<ext>`) — the `/v/local-only/` segment the Loader
    *   resolves, distinct from the user's `uploadedFile.name`.
    */
   async function onWritten(fileName) {
-    const key = `${appPrefix}/v/new/${fileName}`
+    const key = localOnlyPath(appPrefix, fileName)
     if (quotaOptions) {
       const result = await quotaOptions.record(key)
       if (result && result.allowed === false) {
@@ -139,7 +140,7 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
    * @param {string} storageId `<uuid>.<ext>`, the in-memory id
    */
   async function onHeldInMemory(storageId) {
-    const key = `${appPrefix}/v/new/${storageId}`
+    const key = localOnlyPath(appPrefix, storageId)
     if (quotaOptions) {
       const result = await quotaOptions.record(key)
       if (result && result.allowed === false) {

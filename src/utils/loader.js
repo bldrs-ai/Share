@@ -50,7 +50,7 @@ function holdUntilPicked(fileInput) {
  * Upload a local file for display.
  *
  * The first `onLoad` arg is the OPFS storage id the worker wrote under
- * (`<blob-uuid>.<ext>`) — that's the `/v/new/` path segment. The third
+ * (`<blob-uuid>.<ext>`) — that's the `/v/local-only/` path segment. The third
  * is the user's original filename, which callers need to keep as the
  * recents display name (they are NOT interchangeable, see #1682).
  *

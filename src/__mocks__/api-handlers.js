@@ -239,7 +239,7 @@ function netlifyHandlers() {
       const tier = isMockPro() ? 'paid' : 'free'
 
       // Quotability — same path classification as the real handler.
-      const isLocallyQuotable = key.includes('/v/new/') || key.includes('/v/g/')
+      const isLocallyQuotable = key.includes('/v/local-only/') || key.includes('/v/new/') || key.includes('/v/g/')
       const ghMatch = key.match(/\/v\/gh\/([^/]+)\/([^/]+)\//)
       let quotable = isLocallyQuotable
       if (ghMatch) {

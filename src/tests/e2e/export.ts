@@ -543,7 +543,7 @@ export async function toggleGzip(page: Page): Promise<number> {
  * @param path the file on disk
  */
 export async function reopenLocalGlb(page: Page, path: string) {
-  await openLocalFile(page, path, /\/share\/v\/new\/.+\.glb/)
+  await openLocalFile(page, path, /\/share\/v\/local-only\/.+\.glb/)
 }
 
 

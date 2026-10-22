@@ -65,7 +65,7 @@ export function localCacheKey({filePath, contentSha}) {
 
 
 /**
- * Uploaded file (drag-and-drop, /share/v/new/<uuid>). Stored at the same
+ * Uploaded file (drag-and-drop, /share/v/local-only/<uuid>). Stored at the same
  * OPFS location as locally-hosted files.
  *
  * @param {object} args

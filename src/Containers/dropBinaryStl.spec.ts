@@ -358,7 +358,7 @@ async function dropCubeAndSample(page: Page, bytes: number[]): Promise<number[]>
   await dropFile(page, bytes, 'cube.stl')
   // The drop navigates to the upload's route; evaluating before that
   // settles races the page being torn down under the probe.
-  await expect(page).toHaveURL(/\/share\/v\/new\/[0-9a-f-]+\.stl$/i, {timeout: LOAD_TIMEOUT_MS})
+  await expect(page).toHaveURL(/\/share\/v\/local-only\/[0-9a-f-]+\.stl$/i, {timeout: LOAD_TIMEOUT_MS})
   await expect.poll(() => loadedTriangleCount(page), {timeout: LOAD_TIMEOUT_MS}).toBe(CUBE.length)
   let previous: {framing: Framing, rgb: number[]} | null = null
   let latest: {framing: Framing, rgb: number[]} | null = null
@@ -419,7 +419,7 @@ describeMobileAndDesktop('Drop a binary STL', () => {
     await dropFile(page, binaryStlBytes(), 'part.stl')
 
     // The upload's storage extension is the sniffed type.
-    await expect(page).toHaveURL(/\/share\/v\/new\/[0-9a-f-]+\.stl$/i, {timeout: LOAD_TIMEOUT_MS})
+    await expect(page).toHaveURL(/\/share\/v\/local-only\/[0-9a-f-]+\.stl$/i, {timeout: LOAD_TIMEOUT_MS})
     await expect.poll(() => loadedTriangleCount(page), {timeout: LOAD_TIMEOUT_MS})
       .toBe(TETRAHEDRON.length)
   })

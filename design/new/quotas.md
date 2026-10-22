@@ -75,13 +75,32 @@ Only *private* loads count. A load is quotable when its share path matches:
 
 | Path | Classifier | Privacy |
 |---|---|---|
-| `/v/new/<filename>` | `isLocallyQuotable` | local file — always private |
+| `/v/local-only/<filename>` (legacy `/v/new/`, #1959) | `isLocallyQuotable` | local file — always private |
 | `/v/g/<fileId>` | `isLocallyQuotable` | Google Drive — always private |
 | `/v/gh/<org>/<repo>/...` | `isServerResolvedPath` | GitHub — **server** resolves public vs private |
 
 `isQuotablePath` is their union. Public GitHub repos and sample models are
 **not** counted. The dedup key is the share path itself, so reloading the same
 model never consumes a new slot (surfaced as `alreadyCounted`).
+
+**Local files across the #1959 rename — kept metered on purpose.** Until
+#1959 the local-file row matched by a `/v/new/` substring, both client-side
+(`isLocallyQuotable`) and in `record-load`. Renaming the route to
+`/v/local-only/` would have silently taken local files out of the meter. #1959
+keeps them in it explicitly instead: both classifiers match `/v/local-only/`
+(through `routes/localOnly.ts` on the client, under any install prefix) and
+the legacy `/v/new/`, and `quota.test.js` and `record-load.test.js` pin it.
+
+The owner's direction (2026-10-22) is that viewing a local file should stay
+free and unmetered. That is a separate, deliberate change, not a side effect
+of the rename. Flipping only the classifiers would leave local files
+half-metered, because three local entry points refuse a drop or pick on
+`useQuota().hasCapacity` before they know the key:
+`dragAndDrop.js#handleFileDrop` (ViewerContainer's dropzone and
+OnboardingOverlay), and `OpenModelDialog#openFile`.
+`QuotaLimitDialog.spec.ts` also uses a local drop as its at-the-limit
+trigger. All of those move together. With `quotas` off (production today),
+none of this meters anything.
 
 ### GitHub privacy detection
 

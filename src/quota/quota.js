@@ -1,3 +1,4 @@
+import {isLocalOnlyPath} from '../routes/localOnly'
 import {isProSubscriptionStatus} from './proStatus'
 
 
@@ -78,14 +79,22 @@ export function getTier(appMetadata, isAuthenticated) {
 
 /**
  * Paths whose privacy is unambiguously known client-side without a
- * server round-trip. Local files (/v/new/) and Drive files (/v/g/)
- * are always private.
+ * server round-trip. Local files (/v/local-only/, legacy /v/new/) and
+ * Drive files (/v/g/) are always private. Keep in step with
+ * netlify/functions/record-load.js#isQuotableLoad.
+ *
+ * Local files are matched through routes/localOnly.ts on purpose: until
+ * Share#1959 this was a `/v/new/` substring, and renaming the route would
+ * otherwise have dropped local files from the meter silently. Whether they
+ * SHOULD be metered is an open owner decision (design/new/quotas.md
+ * §"What counts"); #1959 only preserves today's behaviour across the
+ * rename.
  *
  * @param {string} key Share path
  * @return {boolean}
  */
 export function isLocallyQuotable(key) {
-  return key.includes('/v/new/') || key.includes('/v/g/')
+  return isLocalOnlyPath(key) || key.includes('/v/g/')
 }
 
 

@@ -5,7 +5,7 @@ import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
 
 
 /**
- * Opening a `/share/v/new/<storageId>` link in a browser that doesn't hold the
+ * Opening a `/share/v/local-only/<storageId>` link in a browser that doesn't hold the
  * upload explains itself and offers to open a file (#1955).
  *
  * An upload lives only in the OPFS of the browser that dropped it, but its URL
@@ -29,7 +29,9 @@ describeMobileAndDesktop('Open 110: a local-file link opened in another browser'
   test.beforeEach(async ({page, context}) => {
     await homepageSetup(page)
     await setIsReturningUser(context)
-    await page.goto(`/share/v/new/${MISSING_ID}`, {waitUntil: 'domcontentloaded'})
+    // The canonical route since #1959; the legacy `/v/new/` form redirects
+    // here (routes/localOnlyRoute.spec.ts covers that, alert included).
+    await page.goto(`/share/v/local-only/${MISSING_ID}`, {waitUntil: 'domcontentloaded'})
     await expect(page.getByRole('dialog')).toBeVisible({timeout: ALERT_TIMEOUT_MS})
   })
 
