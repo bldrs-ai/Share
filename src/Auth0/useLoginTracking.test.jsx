@@ -3,6 +3,7 @@ import {renderHook, waitFor} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../__mocks__/authentication'
 import {_resetGaClientIdForTests, setGaClientId} from '../privacy/analytics'
 import {installGatedFakeLocks, uninstallFakeLocks} from '../privacy/crossTabLock.fixture'
+import {clearGateLogin, noteGateLogin} from './gateLogin'
 import useLoginTracking, {
   _resetLoginTrackingForTests,
   loginMethodFromSub,
@@ -76,6 +77,26 @@ describe('useLoginTracking', () => {
     step({...mockedUserLoggedIn, user: {...mockedUserLoggedIn.user}})
     await flush()
     expect(loginEvents()).toHaveLength(1)
+  })
+
+  // Share#1964: a sign-in started at a visible gate says so.
+  it('adds from: gate and the feature when a gate started the sign-in', async () => {
+    noteGateLogin('export')
+    const step = mountWith(LOADING)
+    step(mockedUserLoggedOut)
+    step(mockedUserLoggedIn)
+    await waitFor(() => expect(loginEvents()).toHaveLength(1))
+    expect(loginEvents()[0]).toEqual(['event', 'login', {method: 'github', from: 'gate', feature: 'export'}])
+  })
+
+  it('leaves a sign-in no gate started unattributed, including after a dismissed gate', async () => {
+    noteGateLogin('share')
+    clearGateLogin()
+    const step = mountWith(LOADING)
+    step(mockedUserLoggedOut)
+    step(mockedUserLoggedIn)
+    await waitFor(() => expect(loginEvents()).toHaveLength(1))
+    expect(loginEvents()[0]).toEqual(['event', 'login', {method: 'github'}])
   })
 
   it('fires once for a redirect login, which has no in-page edge', async () => {

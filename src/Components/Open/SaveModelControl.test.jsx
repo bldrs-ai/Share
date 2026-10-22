@@ -41,55 +41,73 @@ describe('SaveModelControl', () => {
       result.current.setIsSaveModelVisible(false)
       result.current.setAccessToken(null)
       result.current.setOpfsFile(null)
+      result.current.setGateLoginReturn(null)
     })
   })
 
-  it('Gates the toolbar button when the user is not logged in', async () => {
-    // The whole point of the gated look (#1838): the button is visible and
-    // the click still lands — a DOM-disabled button would swallow it and the
-    // user would learn nothing. The dialog stays shut, because a signed-out
-    // user has nowhere to save.
+  // Share#1964: the Save dialog opens for everyone, so a signed-out user
+  // reaches Export GLB and its anonymous gate (the only place the funnel's
+  // `export_gated{reason: 'anonymous'}` can fire). It used to be a gate of its
+  // own (#1838), which kept that gate unreachable.
+  it('opens for a signed-out user, on the Export tab with the export gate', async () => {
+    mockIsFeatureEnabled.mockReturnValue(true)
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
-    const {getByTestId, queryByRole} = render(<SaveModelControlFixture/>)
+    const {getByTestId, findByTestId, queryByTestId} = render(<SaveModelControlFixture/>)
 
-    const gate = getByTestId('gated-save')
-    expect(gate).toHaveAttribute('aria-disabled', 'true')
-    expect(getByTestId('control-button-save')).not.toBeDisabled()
+    expect(queryByTestId('gated-save')).toBeNull()
+    fireEvent.click(getByTestId('control-button-save'))
 
-    fireEvent.click(gate)
-
-    const help = await waitFor(() => getByTestId('gated-help'))
-    expect(help).toHaveTextContent('Log in to one of your connectors to save models')
-    expect(queryByRole('dialog')).toBeNull()
+    expect(await findByTestId('export-section')).toBeInTheDocument()
+    expect(getByTestId('gated-export-anonymous')).toHaveAttribute('aria-disabled', 'true')
   })
 
-  it('Keeps the gated toolbar button off the tab order, and inert if activated', async () => {
-    // `TooltipIconButton` has to FORWARD tabIndex for this — it renders a
-    // MUI ToggleButton and passes only the props it names — or a keyboard
-    // user tabs onto the Save button behind the gate and Enter opens the
-    // save dialog they cannot use (#1838).
+  it('opens for a signed-out user with `export` off too, on the log-in prompt', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
-    const {getByTestId, queryByRole} = render(<SaveModelControlFixture/>)
+    const {getByTestId, findByRole, queryByTestId} = render(<SaveModelControlFixture/>)
 
-    const button = getByTestId('control-button-save')
-    expect(button).toHaveAttribute('tabindex', '-1')
+    fireEvent.click(getByTestId('control-button-save'))
 
-    // Enter on a focused button IS a click dispatched on it, which never
-    // goes through hit-testing and so ignores `pointer-events: none`.
-    fireEvent.click(button)
-
-    expect(await waitFor(() => getByTestId('gated-help'))).toBeInTheDocument()
-    expect(queryByRole('dialog')).toBeNull()
+    expect(await findByRole('dialog')).toBeInTheDocument()
+    expect(queryByTestId('tabs-github-export')).toBeNull()
+    // Nothing to save to while signed out.
+    expect(getByTestId('button-dialog-main-action')).toBeDisabled()
   })
 
-  it('Sends the signed-out user to the login dialog from the gate', async () => {
+  it('comes back to the Export tab after a sign-in its gate started', async () => {
+    mockIsFeatureEnabled.mockReturnValue(true)
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
-    const {getByTestId} = render(<SaveModelControlFixture/>)
+    const {getByTestId, findByTestId, queryByTestId, rerender} = render(<SaveModelControlFixture/>)
 
-    fireEvent.click(getByTestId('gated-save'))
-    fireEvent.click(await waitFor(() => getByTestId('gated-help-action')))
-
+    fireEvent.click(getByTestId('control-button-save'))
+    fireEvent.click(await findByTestId('gated-export-anonymous'))
+    fireEvent.click(await findByTestId('gated-help-action'))
     expect(useStore.getState().isLoginVisible).toBe(true)
+    expect(useStore.getState().gateLoginReturn).toBe('export')
+
+    // The user closes the Save dialog while signing in; the return must
+    // reopen it.
+    act(() => {
+      useStore.getState().setIsSaveModelVisible(false)
+    })
+
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    rerender(<SaveModelControlFixture/>)
+
+    expect(await findByTestId('export-section')).toBeInTheDocument()
+    expect(useStore.getState().isSaveModelVisible).toBe(true)
+    expect(queryByTestId('gated-export-anonymous')).toBeNull()
+    expect(useStore.getState().gateLoginReturn).toBeNull()
+  })
+
+  it('does not reopen for a sign-in that no gate started', () => {
+    mockIsFeatureEnabled.mockReturnValue(true)
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    const {rerender} = render(<SaveModelControlFixture/>)
+
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    rerender(<SaveModelControlFixture/>)
+
+    expect(useStore.getState().isSaveModelVisible).toBe(false)
   })
 
   it('Renders branch selector after selecting a repository', async () => {

@@ -219,10 +219,42 @@ behind the same analytics consent check as every other `gtagEvent`.
 | Visit | `session_start` / `page_view` | — | GA4 sends these itself |
 | Model open | `real_model_open` | `content_id`, `content_type`, `stats_*`, `local_hour`, `open_cid` | `CadView` after a real (non-demo) load; see `analytics#isRealModelOpen` |
 | Hit a limit | `quota_limit_reached` | `tier` (`anonymous` \| `free`), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
-| Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown` | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
+| Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown`; plus `from: 'gate'` and `feature` (`export` \| `share`) when a visible gate started the sign-in (§"Gate events") | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
 | Upgrade click | `begin_checkout` (GA4 recommended) | `from`: `profile` \| `export` \| `quota`; `destination`: `checkout` \| `portal` | `goToSubscription` (`Profile/subscriptionNav.js`), which every upgrade CTA goes through |
 | Subscribed | `subscription_started` | — | `BaseRoutes#processAccessToken` on `shareProPendingReauth` (below) |
 | (lapsed) | `subscription_ended` | — | same, on `freePendingReauth` |
+
+### Gate events (Share#1964)
+
+A small set of features sits behind sign-in, shown to everyone, and every hit
+is counted, so the paywall axis (bizdev#331) is decided on measured intent.
+The names are `GATE_EVENTS` in `src/privacy/analytics.js`. All are sent
+through `gtagEventWithCid`, the same `open_cid` attachment as the funnel
+events, so a gate hit joins the same client's `real_model_open`, `login` and
+`begin_checkout`.
+
+| Event | Params | Fires |
+|---|---|---|
+| `export_gated` | `reason`: `anonymous` \| `free` | `ExportSection`, when the gate's help opens. `anonymous` is reachable since #1964: the Save dialog opens for a signed-out user, on its Export tab |
+| `export_model` | `format`, `bytes_bucket`, `source_kind`, `portable`, `free_export` | `useExport`, on a delivered download |
+| `export_failed` | `format`, `reason`: `free_limit` \| `denied` \| `error` | `useExport`, on a failed run |
+| `share_gated` | `reason`: `local_file`; `signed_in` | `ShareControl`, when the local-only Share gate's help opens |
+| `share_interest` | `feature`: `save_to_cloud`; `signed_in` | `ShareControl`, the "Save to Google Drive or GitHub to share — coming soon" line; at most once per opening of the help |
+
+A sign-in started from a gate (`Auth0/gateLogin.js`) adds `from: 'gate'` and
+`feature` to `login`. The attribution is module state, consumed by the next
+`login`, dropped when the login dialog is dismissed, and expired after 10
+minutes, so an abandoned popup doesn't label a later Profile-menu sign-in.
+The export gate also sets `gateLoginReturn`, so `SaveModelControl` reopens
+the Save dialog on Export once signed in.
+
+GA-side these params need **event-scoped custom dimensions** before they
+appear in reports: `reason`, `signed_in`, `format`, `source_kind`,
+`portable`, `free_export` and `bytes_bucket`. `feature` and `from` are
+already on the funnel's list below; GA4 keys a dimension by parameter name,
+so one registration covers these events too, and the same goes for
+`open_cid`. They are added to the GA4-admin follow-ups at the end of this
+section.
 
 The parts that aren't obvious:
 
@@ -323,7 +355,9 @@ GA4-admin follow-ups (Admin → Custom definitions / Key events). None of this
 has a backfill, so these only start accruing data once registered:
 
 - Register **event-scoped custom dimensions** for `method`, `tier`, `feature`,
-  `from` and `destination`. `open_cid` needs nothing new: GA4 keys an
+  `from` and `destination`, and, for the gate events (§"Gate events",
+  Share#1964), `reason`, `signed_in`, `format`, `source_kind`, `portable`,
+  `free_export` and `bytes_bucket`. `open_cid` needs nothing new: GA4 keys an
   event-scoped dimension by parameter name, not by event, so the one
   registered for `real_model_open` applies to these events too.
 - Mark **`login`** and **`subscription_started`** as **key events**.

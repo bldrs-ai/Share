@@ -1927,17 +1927,20 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(page.getByTestId('export-compression')).toContainText('None')
   })
 
-  test('a signed-out user is told what unlocks Save, and gets no dialog', async ({page}) => {
+  // Share#1964: Save opens for everyone, on Export for a signed-out user,
+  // and the export itself is what is gated. The sign-in round trip and the
+  // events are Components/Open/visibleGates.spec.ts.
+  test('a signed-out user reaches Export, and is told what unlocks it', async ({page}) => {
     test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
 
     await loadModelAndWaitForArtifact(page)
 
-    // Visible for everyone now, in the gated look.
-    await expect(page.getByTestId('gated-save')).toBeVisible()
-    await clickGate(page, 'gated-save')
+    await expect(page.getByTestId('gated-save')).toHaveCount(0)
+    await page.getByTestId('control-button-save').click()
+    await expect(page.getByTestId('export-section')).toBeVisible()
+    await clickGate(page, 'gated-export-anonymous')
 
-    await expect(page.getByTestId('gated-help')).toContainText('Log in to one of your connectors')
-    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page.getByTestId('gated-help')).toContainText('Log in to export')
 
     // And the gate's own action is the way forward.
     await page.getByTestId('gated-help-action').click()

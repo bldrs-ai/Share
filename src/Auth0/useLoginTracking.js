@@ -2,6 +2,7 @@ import {useEffect, useRef} from 'react'
 import {FUNNEL_EVENTS, gtagFunnelEvent} from '../privacy/analytics'
 import {withCrossTabLock} from '../privacy/crossTabLock'
 import {useAuth0} from './Auth0Proxy'
+import {takeGateLoginSource} from './gateLogin'
 
 
 /*
@@ -154,8 +155,12 @@ export default function useLoginTracking() {
     sawSignedOutRef.current = false
     isRedirectLoginPending = false
     const sub = user.sub
-    const method = loginMethodFromSub(sub)
-    readAuthTime(getIdTokenClaims).then((authTime) => claimLogin(sub, authTime, method))
+    // `{from: 'gate', feature}` when a visible gate started this sign-in
+    // (gateLogin.js). Taken now, synchronously: the gated control's own
+    // effect for the same render may act on the sign-in too, and the
+    // attribution must not depend on which effect runs first.
+    const params = {method: loginMethodFromSub(sub), ...takeGateLoginSource()}
+    readAuthTime(getIdTokenClaims).then((authTime) => claimLogin(sub, authTime, params))
   }, [isLoading, isAuthenticated, user, getIdTokenClaims])
 }
 
@@ -191,14 +196,15 @@ async function readAuthTime(getIdTokenClaims) {
  *
  * @param {?string} sub
  * @param {?number} authTime
- * @param {string} method `login` event param
+ * @param {object} params `login` event params: `{method}`, plus
+ *   `{from: 'gate', feature}` for a gate-started sign-in
  * @return {Promise<boolean>} false when another tab (or an earlier pass)
  *   already reported this sign-in
  */
-function claimLogin(sub, authTime, method) {
+function claimLogin(sub, authTime, params) {
   if (authTime === null) {
     // No auth_time, no identity for the sign-in: nothing to dedupe on.
-    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method})
+    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, params)
     return Promise.resolve(true)
   }
   const id = `${sub}|${authTime}`
@@ -211,7 +217,7 @@ function claimLogin(sub, authTime, method) {
     } catch {
       // Storage unavailable: no cross-tab dedupe, the in-page edge decides.
     }
-    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method})
+    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, params)
     return true
   })
 }

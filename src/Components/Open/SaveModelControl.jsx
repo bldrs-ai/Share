@@ -11,6 +11,7 @@ import {
 } from '@mui/material'
 import {Clear as ClearIcon, SaveOutlined as SaveOutlinedIcon} from '@mui/icons-material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {GATE_RETURN_EXPORT} from '../../Auth0/gateLogin'
 import {writeSavedGithubModelOPFS} from '../../OPFS/utils'
 import {commitFile, getFilesAndFolders} from '../../net/github/Files'
 import {getOrganizations} from '../../net/github/Organizations'
@@ -20,9 +21,8 @@ import useStore from '../../store/useStore'
 import {navigateBaseOnModelPath} from '../../utils/location'
 import {navigateToModel} from '../../utils/navigate'
 import {isFeatureEnabled} from '../../FeatureFlags'
-import {ControlButton, TooltipIconButton} from '../Buttons'
+import {ControlButton} from '../Buttons'
 import Dialog from '../Dialog'
-import GatedAction from '../GatedAction'
 import Tabs from '../Tabs'
 import useExistInFeature from '../../hooks/useExistInFeature'
 import ExportSection from './ExportSection'
@@ -34,17 +34,25 @@ import SelectorSeparator from './SelectorSeparator'
 /**
  * Displays model save dialog.
  *
- * Visible to everyone, signed in or not (#1838): a signed-out user gets the
- * button in the gated look, and clicking it says what unlocks it instead of
- * opening a dialog they can't use. Hiding it taught nobody that Share can
- * save at all.
+ * Opens for everyone, signed in or not (Share#1964). It used to be a
+ * signed-out gate of its own (#1838), which kept anonymous users from ever
+ * seeing the Export tab, so the export funnel's anonymous arm
+ * (`export_gated{reason: 'anonymous'}`) could never fire. Now a signed-out
+ * user opens the dialog on the Export tab, where Export GLB carries the
+ * anonymous gate (ExportSection), and the GitHub tab says to log in
+ * (PleaseLogin). A sign-in started from that gate comes back here: the
+ * dialog reopens on the Export tab (`gateLoginReturn`, Auth0/gateLogin.js).
  *
  * @return {ReactElement}
  */
 export default function SaveModelControl() {
   const isSaveModelVisible = useStore((state) => state.isSaveModelVisible)
   const setIsSaveModelVisible = useStore((state) => state.setIsSaveModelVisible)
-  const setIsLoginVisible = useStore((state) => state.setIsLoginVisible)
+  const gateLoginReturn = useStore((state) => state.gateLoginReturn)
+  const setGateLoginReturn = useStore((state) => state.setGateLoginReturn)
+  // Lifted from SaveModelDialog so the effects below can choose the tab.
+  const [currentTab, setCurrentTab] = useState(0)
+  const isExportEnabled = isFeatureEnabled('export')
 
   const {isAuthenticated, user} = useAuth0()
   const navigate = useNavigate()
@@ -68,31 +76,28 @@ export default function SaveModelControl() {
   }, [isSaveModelVisible, accessToken, user])
 
 
-  if (!isAuthenticated) {
-    return (
-      <GatedAction
-        slug='save'
-        title={MSG_SAVE}
-        body={MSG_SAVE_NEEDS_LOGIN}
-        actionLabel='Log in'
-        onAction={() => setIsLoginVisible(true)}
-      >
-        {/* The real toolbar button, dimmed and inert — same icon in the same
-            slot, so the toolbar doesn't reflow when the user signs in.
-            GatedAction owns the click; this handler never runs. */}
-        <TooltipIconButton
-          title={MSG_SAVE}
-          onClick={() => setIsSaveModelVisible(true)}
-          icon={<SaveOutlinedIcon className='icon-share'/>}
-          placement='bottom'
-          variant='control'
-          color='success'
-          size='small'
-          dataTestId='control-button-save'
-        />
-      </GatedAction>
-    )
-  }
+  // Signed out, the dialog opens on Export: the GitHub tab can only say "log
+  // in", while Export shows the feature behind its gate, which is what the
+  // gate events count (Share#1964). Keyed on the dialog opening, so a
+  // signed-out user can still switch to GitHub while it is open.
+  useEffect(() => {
+    if (isSaveModelVisible && !isAuthenticated && isExportEnabled) {
+      setCurrentTab(TAB_EXPORT)
+    }
+  }, [isSaveModelVisible, isAuthenticated, isExportEnabled])
+
+  // Back to the export after a sign-in its gate started. The login dialog
+  // sits over this one, so the Save dialog is usually still open; reopening
+  // and re-selecting the tab covers the user having closed it meanwhile.
+  useEffect(() => {
+    if (isAuthenticated && gateLoginReturn === GATE_RETURN_EXPORT) {
+      setGateLoginReturn(null)
+      if (isExportEnabled) {
+        setCurrentTab(TAB_EXPORT)
+      }
+      setIsSaveModelVisible(true)
+    }
+  }, [isAuthenticated, gateLoginReturn, isExportEnabled, setGateLoginReturn, setIsSaveModelVisible])
 
   return (
     <ControlButton
@@ -107,6 +112,8 @@ export default function SaveModelControl() {
         setIsDialogDisplayed={setIsSaveModelVisible}
         navigate={navigate}
         orgNamesArr={orgNamesArr}
+        currentTab={currentTab}
+        setCurrentTab={setCurrentTab}
       />
     </ControlButton>
   )
@@ -118,9 +125,11 @@ export default function SaveModelControl() {
  * @property {Function} setIsDialogDisplayed Show SaveModelDialog
  * @property {Function} navigate Callback from CadView to change page url
  * @property {Array<string>} orgNamesArr The current user's GH orgs
+ * @property {number} currentTab Selected tab (TAB_LABELS index)
+ * @property {Function} setCurrentTab Select a tab
  * @return {object} React component
  */
-function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, orgNamesArr}) {
+function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, orgNamesArr, currentTab, setCurrentTab}) {
   const {isAuthenticated, user} = useAuth0()
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
@@ -144,7 +153,6 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   // Export rides the same `export` flag as everything else in §4.4: with it
   // off this dialog has no tabs at all and looks exactly as it did before.
   const isExportEnabled = isFeatureEnabled('export')
-  const [currentTab, setCurrentTab] = useState(0)
   const isExportTab = isExportEnabled && currentTab === TAB_EXPORT
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
@@ -387,9 +395,8 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
           alignItems='center'
           sx={TAB_PANEL_SX}
         >
-          {/* Signed-out no longer reaches this dialog — the toolbar button
-              is gated instead (#1838) — but the branch stays as the backstop
-              for a session that expires with the dialog open. */}
+          {/* A signed-out user reaches this dialog (it opens on Export for
+              them, Share#1964); on this tab, log in is all there is to do. */}
           {!isAuthenticated ? (
             <PleaseLogin/>
           ) : isSaveDisabled ? (
@@ -662,9 +669,6 @@ const MSG_ORGANIZATION = 'Organization'
 const MSG_PICK_GITHUB_ACCOUNT_HELP = 'Pick which connected GitHub account this commit is attributed to'
 const MSG_SAVE = 'Save'
 const MSG_SAVE_MODEL = 'Save model'
-// GitHub is the only connector that can take a save today; Drive follows
-// with identity-decoupling, and this text covers both.
-const MSG_SAVE_NEEDS_LOGIN = 'Log in to one of your connectors to save models'
 const MSG_SAVE_SUCCESS = 'Model saved successfully!'
 const MSG_REPOSITORY = 'Repository'
 // The dialog keeps its "Save" title (MSG_SAVE) — only the tab is renamed:

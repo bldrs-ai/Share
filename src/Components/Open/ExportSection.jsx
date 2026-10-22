@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {Box, Button, Chip, MenuItem, Select, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {GATE_RETURN_EXPORT, useStartGateLogin} from '../../Auth0/gateLogin'
 import {
   artifactPositionRange,
   artifactSizes,
@@ -25,7 +26,7 @@ import {isGzipAvailable} from '../../export/glbGzip'
 import useCodecSizes from '../../export/useCodecSizes'
 import useExport, {formatBytes} from '../../export/useExport'
 import useFreeExports from '../../export/useFreeExports'
-import {gtagEvent} from '../../privacy/analytics'
+import {GATE_EVENTS, gtagEventWithCid} from '../../privacy/analytics'
 import {TIERS, getTier} from '../../quota/quota'
 import useStore from '../../store/useStore'
 import GatedAction from '../GatedAction'
@@ -85,7 +86,7 @@ import {
 export default function ExportSection() {
   const appMetadata = useStore((state) => state.appMetadata)
   const glbArtifact = useStore((state) => state.glbArtifact)
-  const setIsLoginVisible = useStore((state) => state.setIsLoginVisible)
+  const startGateLogin = useStartGateLogin()
 
   // Default ON: it's the user's own model, so the properties and spatial
   // tree ride along unless they're passing the file to someone else.
@@ -449,9 +450,10 @@ export default function ExportSection() {
     </Button>
   )
 
-  // The signed-out branch is defensive: the Save dialog this section lives in
-  // only opens for a signed-in user (an anonymous Save click gets its own
-  // gate). Kept so the section stays correct wherever it is mounted.
+  // Signed out: the Save dialog opens on this tab for everyone (Share#1964),
+  // so this is the gate an anonymous user meets. Its sign-in returns them to
+  // this tab (SaveModelControl, `gateLoginReturn`) and is attributed to the
+  // gate in `login` (Auth0/gateLogin.js).
   let gatedButton = exportButton
   if (!isAuthenticated) {
     gatedButton = (
@@ -460,8 +462,8 @@ export default function ExportSection() {
         title='Log in to export'
         body={MSG_LOGIN_TO_EXPORT}
         actionLabel='Log in'
-        onAction={() => setIsLoginVisible(true)}
-        onOpen={() => gtagEvent('export_gated', {reason: 'anonymous'})}
+        onAction={() => startGateLogin('export', GATE_RETURN_EXPORT)}
+        onOpen={() => gtagEventWithCid(GATE_EVENTS.EXPORT_GATED, {reason: 'anonymous'})}
       >
         {exportButton}
       </GatedAction>
@@ -478,7 +480,7 @@ export default function ExportSection() {
         body={freeLimitHelp(freeAllowance.limit, nextFreeExport)}
         actionLabel='Upgrade to Pro'
         onAction={onUpgradeClick}
-        onOpen={() => gtagEvent('export_gated', {reason: 'free'})}
+        onOpen={() => gtagEventWithCid(GATE_EVENTS.EXPORT_GATED, {reason: 'free'})}
       >
         {exportButton}
       </GatedAction>

@@ -9,6 +9,7 @@ import {
 import {useTheme} from '@mui/material/styles'
 import {captureException} from '@sentry/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {clearGateLogin} from '../../Auth0/gateLogin'
 import {getRenderMode, setRenderMode as saveRenderMode} from '../../privacy/preferences'
 import {trackSubscriptionFromToken} from '../../privacy/subscriptionTracking'
 import useStore from '../../store/useStore'
@@ -67,6 +68,7 @@ export default function ProfileControl() {
 
   const isLoginVisible = useStore((state) => state.isLoginVisible)
   const setIsLoginVisible = useStore((state) => state.setIsLoginVisible)
+  const setGateLoginReturn = useStore((state) => state.setGateLoginReturn)
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
   const [renderMode, setRenderModeState] = useState(getRenderMode() ?? DEFAULT_LOOK)
   const [isManageProfileOpen, setIsManageProfileOpen] = useState(false)
@@ -353,7 +355,17 @@ export default function ProfileControl() {
 
       <LoginDialog
         isDialogDisplayed={isLoginVisible}
-        setIsDialogDisplayed={(isDisplayed) => setIsLoginVisible(isDisplayed)}
+        setIsDialogDisplayed={(isDisplayed) => {
+          // Only a dismissal comes through here (onLoginClick closes the
+          // dialog itself), so a gate's pending sign-in is abandoned:
+          // neither its `login` attribution nor its return-to may carry
+          // over to a later, unrelated sign-in (Auth0/gateLogin.js).
+          if (!isDisplayed) {
+            clearGateLogin()
+            setGateLoginReturn(null)
+          }
+          setIsLoginVisible(isDisplayed)
+        }}
         onLogin={onLoginClick}
         isGoogleEnabled={isGoogleEnabled}
       />

@@ -5,7 +5,7 @@ import {appMetadataFromToken} from '../Auth0/appMetadata'
 import {glbCacheKey} from '../loader/glbCacheKey'
 import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
-import {gtagEvent} from '../privacy/analytics'
+import {GATE_EVENTS, gtagEventWithCid} from '../privacy/analytics'
 import {TIERS, getTier} from '../quota/quota'
 import useStore from '../store/useStore'
 import {compressedExport, gzippedExport} from './artifactSizes'
@@ -224,7 +224,7 @@ export default function useExport() {
           }
         }
       }).catch((recordError) => captureException(recordError))
-      gtagEvent('export_model', {
+      gtagEventWithCid(GATE_EVENTS.EXPORT_MODEL, {
         format: format.id,
         bytes_bucket: bytesBucket(stats?.outputBytes ?? blob.size),
         // The loader's categorical kind, carried on the artifact slot. NOT
@@ -247,6 +247,13 @@ export default function useExport() {
       return {filename, stats}
     } catch (e) {
       setError(e)
+      // One per failed run, beside export_model's one per delivered file, so
+      // the funnel sees attempts that didn't land and why. `reason` is the
+      // same three-way split as the handling below.
+      gtagEventWithCid(GATE_EVENTS.EXPORT_FAILED, {
+        format: format.id,
+        reason: exportFailureReason(e),
+      })
       if (e instanceof ProModuleDeniedError && e.reason === FREE_EXPORT_LIMIT_REASON) {
         // Out of free exports for now. The tier is right (free) — it is the
         // COUNT the client had that was stale — so there is no JWT to
@@ -281,6 +288,21 @@ export default function useExport() {
   }, [glbArtifact, getAccessTokenSilently, isAuthenticated, noteAllowance, refreshAppMetadata, setIsExporting, setSnackMessage, user?.sub])
 
   return {run, isExporting, error}
+}
+
+
+/**
+ * The `reason` param of `export_failed`.
+ *
+ * @param {Error} error What the export run threw
+ * @return {'free_limit'|'denied'|'error'} out of free exports; refused by
+ *   the server (no Pro); anything else
+ */
+export function exportFailureReason(error) {
+  if (error instanceof ProModuleDeniedError) {
+    return error.reason === FREE_EXPORT_LIMIT_REASON ? 'free_limit' : 'denied'
+  }
+  return 'error'
 }
 
 

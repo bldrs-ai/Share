@@ -61,6 +61,12 @@ export default function createUISlice(set, get) {
     isLoginVisible: loginIsVisibleInitially(),
     setIsLoginVisible: (is) => set(() => ({isLoginVisible: is})),
 
+    // Where a sign-in started at a visible gate returns the user, e.g.
+    // 'export' (SaveModelControl reopens its Export tab). Null otherwise.
+    // See Auth0/gateLogin.js.
+    gateLoginReturn: null,
+    setGateLoginReturn: (where) => set(() => ({gateLoginReturn: where})),
+
     isSaveModelVisible: false,
     setIsSaveModelVisible: (is) => set(() => ({isSaveModelVisible: is})),
 
