@@ -29,6 +29,7 @@ import {downloadToOPFS} from '../OPFS/utils'
 import {INSTANCE_TABLES_VERSION} from './bldrsInstanceTables'
 import {packGlbChunks} from './glbContainer'
 import {isBldrsGlbArtifact, load} from './Loader'
+import {beginLoadProgress, endLoadProgress, getCompletedLoadStats} from './loadProgress'
 import {
   batchedArtifactBytes,
   liveBatchedModel,
@@ -159,6 +160,25 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
     expect(model.capabilities.ifcSubsets).toBe(false)
     expect(getGlbLogs().map((l) => l.text))
       .toContain('reader: hydrated instance-table artifact to a BatchedMesh model')
+  })
+
+  // `model.type` is 'glb' for a native GLB and for a GLB-artifact cache hit
+  // alike (the hit swaps the loader tuple), so GA needs the explicit signal.
+  // This is the not-a-hit half: a file the user opened is never cacheHit.
+  // The hit half (`cameFromGlbCache` true) is a pass-through of that local
+  // and has no end-to-end unit test: it needs a real container in the OPFS
+  // mock; check it on a deploy preview by opening one IFC twice.
+  it('reports a file the user opened as not a cache hit (Share#1954 stats_cacheHit)', async () => {
+    // The reporter mirrors its report lines to console.info.
+    const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
+    beginLoadProgress({fileInfo: ARTIFACT_PATH})
+    try {
+      await openGlb(await batchedArtifactBytes(liveBatchedModel()))
+    } finally {
+      endLoadProgress()
+      infoSpy.mockRestore()
+    }
+    expect(getCompletedLoadStats().cacheHit).toBe('false')
   })
 
   describe('…wrapped in a gzipped v3 container (#1855)', () => {
