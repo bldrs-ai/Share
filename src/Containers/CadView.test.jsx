@@ -756,6 +756,31 @@ describe('CadView', () => {
     expect(refusalReports).toHaveLength(1)
   })
 
+  // Same dedupe, for the other rerun trigger: view settings from the Widget
+  // API re-run the load for the same model.
+  it('counts a refused model once, even when view settings reload it', async () => {
+    const schemaErr = new UnsupportedSchemaError('IFC4X3_RC2')
+    const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw schemaErr
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const captureMessageSpy = jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(result.current.alert?.type).toBe('unsupportedSchema'))
+    const loadsBefore = loadSpy.mock.calls.length
+    await act(() => result.current.setCustomViewSettings({foo: 'bar'}))
+    await actAsyncFlush()
+    await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+    const refusalReports = captureMessageSpy.mock.calls
+      .filter(([title]) => title === 'Unsupported IFC schema: IFC4X3_RC2')
+    expect(refusalReports).toHaveLength(1)
+  })
+
   // Share#1954: GA must see loads that fail and loads that display nothing,
   // not only the ones that succeed.
   describe('load outcome analytics (Share#1954)', () => {
@@ -830,6 +855,24 @@ describe('CadView', () => {
       await actAsyncFlush()
       // The reload really happened, so the single event below is the dedupe
       // at work and not a reload that never ran.
+      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+      expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1)
+    })
+
+    // The [modelPath, customViewSettings] effect re-runs the load for the
+    // same model when the Widget API changes view settings.
+    it('sends one load_failed for a model, even when view settings reload it', async () => {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new Error('OpenModel returned -1')
+      })
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1))
+      const loadsBefore = loadSpy.mock.calls.length
+      await act(() => result.current.setCustomViewSettings({foo: 'bar'}))
+      await actAsyncFlush()
       await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
       expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1)
     })

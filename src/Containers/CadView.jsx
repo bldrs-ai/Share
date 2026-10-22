@@ -192,14 +192,18 @@ export default function CadView({
   // below can re-run onViewer for the SAME route after a refusal —
   // isViewerLoaded stays false on failure — and each re-run would count
   // the refusal again, inflating the demand numbers the report exists for
-  // (codex review of Share#1899). Cleared when the model path changes, so a
-  // new open of any model is counted once.
+  // (codex review of Share#1899). Keyed by model identity and never cleared:
+  // the [modelPath, customViewSettings] effect also re-runs for the same
+  // model (Widget API view settings), and clearing there let the same model
+  // count twice (codex review of Share#1961). Opening a different model
+  // changes the key, so every new open is still counted once.
   const reportedRefusalRef = useRef(null)
   // The model a `load_failed` was last sent for, for the same reason and
-  // with the same lifetime as reportedRefusalRef: the auth-state effect
-  // re-runs onViewer for the SAME route after any failure (isViewerLoaded
-  // stays false), and without this each re-run would send another
-  // load_failed for one user open (codex review of Share#1961).
+  // with the same keying as reportedRefusalRef: the auth-state effect and
+  // the customViewSettings effect re-run onViewer for the SAME route after
+  // any failure (isViewerLoaded stays false), and without this each re-run
+  // would send another load_failed for one user open (codex review of
+  // Share#1961).
   const reportedLoadFailureRef = useRef(null)
 
   // IFCSlice
@@ -1736,8 +1740,6 @@ export default function CadView({
   // programmatic navigation (e.g. clicking element links).
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath, modelPath:', modelPath)
-    reportedRefusalRef.current = null
-    reportedLoadFailureRef.current = null
     onModelPath()
   }, [modelPath, customViewSettings])
 
