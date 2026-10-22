@@ -756,6 +756,111 @@ describe('CadView', () => {
     expect(refusalReports).toHaveLength(1)
   })
 
+  // Share#1954: GA must see loads that fail and loads that display nothing,
+  // not only the ones that succeed.
+  describe('load outcome analytics (Share#1954)', () => {
+    let loadSpy
+
+    /** @return {Array<[string, object]>} [name, params] of every gtag event sent */
+    function gaEvents() {
+      return window.gtag.mock.calls.map(([, name, params]) => [name, params])
+    }
+
+    beforeEach(() => {
+      window.gtag = jest.fn()
+      // '../Filetype' is automocked for this whole file, which leaves
+      // supportedTypes empty; load_failed's content_type is allowlisted
+      // against it, so seed the one format these tests load.
+      Filetype.supportedTypes.push('ifc')
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    })
+
+    afterEach(() => {
+      delete window.gtag
+      Filetype.supportedTypes.splice(0)
+      // Each test spies Loader.load differently; a spy left over would feed
+      // the next test the previous one's failure. Only this one is restored:
+      // restoreAllMocks would also reset the file-level jest.fn() doubles.
+      loadSpy?.mockRestore()
+      loadSpy = undefined
+    })
+
+    it('sends exactly one load_failed, with closed-set params and no free text', async () => {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new Error('OpenModel returned -1 for /private/secret-house.ifc')
+      })
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      const failures = gaEvents().filter(([name]) => name === 'load_failed')
+      expect(failures).toEqual([['load_failed', {
+        content_type: 'ifc',
+        size_bucket: 'unknown',
+        reason_class: 'parse',
+        last_phase: 'none',
+      }]])
+      expect(JSON.stringify(failures)).not.toContain('secret')
+      expect(gaEvents().filter(([name]) => name === 'real_model_open')).toHaveLength(0)
+    })
+
+    // The success half (real_model_open's load_outcome and timings) cannot
+    // run here: this file's ShareViewer double shares one ThreeContext across
+    // tests and the first unmount disposes it, so loadModel never gets past
+    // `viewer.context.getScene()`. That half is pinned by
+    // loadAnalytics.test.js (the param assembly), loadProgress.test.js (the
+    // reporter) and realModelOpen.spec.ts (the real pipeline in a browser).
+
+    it('classifies a refused schema as unsupported_schema', async () => {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new UnsupportedSchemaError('IFC4X3_RC2')
+      })
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert?.type).toBe('unsupportedSchema'))
+      expect(gaEvents().find(([name]) => name === 'load_failed')[1].reason_class)
+        .toBe('unsupported_schema')
+    })
+
+    it('does not report a failure to load the bundled demo model', async () => {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new Error('OpenModel returned -1')
+      })
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({kind: 'file', isUploadedFile: false, filepath: 'index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(0)
+    })
+
+    it('does not borrow the previous load\'s phase for a failure before any load began', async () => {
+      resetInMemoryUploadsForTest()
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({
+        kind: 'file', isUploadedFile: true, filepath: '4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix='/v/new'/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).toEqual(inMemoryUploadGoneAlert()))
+      // Thrown before beginLoadProgress ran for this attempt: no phase, no
+      // size and no format, whatever an earlier test's reporter left behind.
+      expect(gaEvents().filter(([name]) => name === 'load_failed')).toEqual([['load_failed', {
+        content_type: 'unknown',
+        size_bucket: 'unknown',
+        reason_class: 'other',
+        last_phase: 'none',
+      }]])
+    })
+  })
+
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing
   /*
   import {__getShareViewerMockSingleton} from '../../__mocks__/shareViewerTestHarness'

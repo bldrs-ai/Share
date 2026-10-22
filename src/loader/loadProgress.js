@@ -63,6 +63,9 @@ const BYTES_PER_MB = 1024 * 1024 // eslint-disable-line no-magic-numbers
 export const STALL_TIMEOUT_MS = 30_000
 
 let activeReporter = null
+// Incremented by every beginLoadProgress, so a caller can tell whether a
+// load began since it last looked (see getLoadFailureInfo).
+let loadSerial = 0
 
 
 /**
@@ -139,8 +142,24 @@ class LoadProgressReporter {
     this.stallReported = false
     this.startTime = Date.now()
     this.fileSize = undefined
+    // Page-wide console.warn / console.error calls in the load window, from
+    // the console tee. NOT engine severity: see completedStats.
     this.warningCount = 0
     this.errorCount = 0
+    // Engine severity tally, from conway's Logger via installDefectProxy.
+    // Engine = not a data defect: a defect is a statement about the input
+    // file, so it is counted on its own (dataDefectTotal), per the ops#28
+    // rubric. The Sets key distinct entries as level|message, matching how
+    // conway dedups for its console echo.
+    this.engineErrorKeys = new Set()
+    this.engineWarningKeys = new Set()
+    this.engineErrorTotal = 0
+    this.dataDefectTotal = 0
+    // True when the load was served from the GLB artifact cache rather than
+    // parsed by the engine (reportCacheHit); undefined until the loader says.
+    this.cacheHit = undefined
+    // Load-clock ms of the first geometry on screen (reportFirstMesh).
+    this.firstMeshMs = undefined
     // Engine events carry their own elapsedMs measured from the ENGINE's
     // clock (conway's tracker starts at OpenModel), not from load start.
     // This offset rebases them onto the load clock — set once at the first
@@ -248,6 +267,7 @@ class LoadProgressReporter {
         if (typeof entry?.message !== 'string') {
           return
         }
+        this.tallySeverity(entry)
         if (entry.category === DATA_DEFECT) {
           this.dataDefectMessages.add(collapseWhitespace(entry.message))
         } else if (entry.level === 'warning' || entry.level === 'error') {
@@ -256,6 +276,35 @@ class LoadProgressReporter {
       },
     }
     Logger.addProxy(this.defectProxy)
+  }
+
+  /**
+   * Fold one conway log entry into the severity tally behind the
+   * `stats_engine*` / `stats_dataDefectTotal` GA params (Share#1954).
+   *
+   * The proxy is handed an entry on EVERY Logger.log call, not only the
+   * first occurrence conway echoes to the console, so `Total` counts every
+   * occurrence and `Distinct` counts entries. An entry is a data defect when
+   * conway marked it, or when it is one of the DATA_DEFECT_FALLBACK_MESSAGES
+   * conway does not mark (the same two sources isDataDefectDiagnostic uses).
+   * Only warning and error are tallied; debug/info are not diagnostics.
+   *
+   * @param {object} entry conway LogEntry {level, message, category}
+   */
+  tallySeverity(entry) {
+    if (entry.level !== 'warning' && entry.level !== 'error') {
+      return
+    }
+    const base = collapseWhitespace(entry.message)
+    if (entry.category === DATA_DEFECT ||
+        DATA_DEFECT_FALLBACK_MESSAGES.has(normalizeMessageDigits(base))) {
+      this.dataDefectTotal++
+    } else if (entry.level === 'error') {
+      this.engineErrorTotal++
+      this.engineErrorKeys.add(base)
+    } else {
+      this.engineWarningKeys.add(base)
+    }
   }
 
   /**
@@ -607,12 +656,36 @@ class LoadProgressReporter {
     // Keep the dashboard fields beside the report source of truth. Values
     // are captured before dispose restores the console tee and before the
     // next load replaces this reporter.
+    //
+    // `loadTime` is the wall clock from beginLoadProgress to here, the same
+    // definition for every format; CadView lets nothing overwrite it
+    // (loadAnalytics#buildOutcomeParams).
+    //
+    // The console-tee counts are named for what they are. They are every
+    // console.warn/error on the page between load start and here, including
+    // the download window, three.js and glTF loaders, third-party scripts and
+    // Share's own fallbacks, so they are noise and not engine severity. The
+    // unqualified `errorCount` / `warningCount` are reserved for the engine's
+    // own counts once conway#740 supplies them (ShareIfcLoader#loadStats).
+    //
+    // The engine severity tally is reported only when this load went through
+    // the conway engine path (it reported geometry stats). Elsewhere the
+    // proxy never fires, and a 0 would claim "the engine logged nothing"
+    // about a load no engine logged for.
+    const hasEngine = this.geometryStats !== undefined
     this.completedStats = {
       fileSize: this.fileSize,
       memoryUsed: heapMb === undefined ? undefined : Math.round(heapMb * BYTES_PER_MB),
       loadTime: finishedAt - this.startTime,
-      errorCount: this.errorCount,
-      warningCount: this.warningCount,
+      pageErrorCount: this.errorCount,
+      pageWarnCount: this.warningCount,
+      engineErrorDistinct: hasEngine ? this.engineErrorKeys.size : undefined,
+      engineErrorTotal: hasEngine ? this.engineErrorTotal : undefined,
+      engineWarnDistinct: hasEngine ? this.engineWarningKeys.size : undefined,
+      dataDefectTotal: hasEngine ? this.dataDefectTotal : undefined,
+      vertexCount: this.geometryStats?.vertexCount,
+      triangleCount: this.geometryStats?.triangleCount,
+      cacheHit: this.cacheHit === undefined ? undefined : String(this.cacheHit),
     }
 
     useStore.getState().setCurrentLoadLine(null)
@@ -722,8 +795,8 @@ class LoadProgressReporter {
       contexts: {
         loadDiagnostics: {
           // The counts the dashboard chip is coloured by: Conway's own
-          // for IFC/STEP, this reporter's console tee as the
-          // cross-format fallback (ShareIfcLoader#loadStats).
+          // once conway#740 supplies them (ShareIfcLoader#loadStats; none
+          // today), otherwise this reporter's page-wide console tee.
           errorCount,
           warningCount,
           // The console tee's own view, which on IFC/STEP can disagree
@@ -804,6 +877,7 @@ export function beginLoadProgress(opts) {
   // one's live line takes over the snackbar.
   store.setLoadResult(null)
   activeReporter = new LoadProgressReporter(opts)
+  loadSerial++
   return activeReporter
 }
 
@@ -1124,7 +1198,88 @@ export function reportGeometryStats(stats) {
  * @return {object|null}
  */
 export function getCompletedLoadStats() {
-  return activeReporter?.completedStats ?? null
+  if (!activeReporter?.completedStats) {
+    return null
+  }
+  // firstMeshMs is read live, not frozen with the rest at finishReport: a
+  // format with no progressive preview only has a first mesh once CadView
+  // adds the finished model to the scene, which is after the report is
+  // frozen (reportFirstMesh).
+  return {...activeReporter.completedStats, firstMeshMs: activeReporter.firstMeshMs}
+}
+
+
+/**
+ * The GA `load_outcome` of the most recently completed load: `displayed` or
+ * `unusable`, from classifyLoadOutcome over what the loader reported.
+ * Undefined with no reporter, so the param is omitted rather than invented.
+ *
+ * @return {string|undefined}
+ */
+export function getCompletedLoadOutcome() {
+  return activeReporter ? classifyLoadOutcome(activeReporter.geometryStats) : undefined
+}
+
+
+/**
+ * Say whether the load was served from the GLB artifact cache (true) or
+ * produced by parsing the source (false). Reported by Loader#load once the
+ * source is settled, because that is where a cache hit is decided: the
+ * loader tuple is swapped to the GLB loader and `model.type` becomes `glb`,
+ * which is why a cache hit is otherwise indistinguishable from a native GLB
+ * (ops#28 §3). Safe no-op with no active load.
+ *
+ * @param {boolean} isHit
+ */
+export function reportCacheHit(isHit) {
+  if (activeReporter && !activeReporter.ended) {
+    activeReporter.cacheHit = isHit === true
+  }
+}
+
+
+/**
+ * Mark the moment geometry first reached the scene, in the load's own clock
+ * (ms since beginLoadProgress, the same clock as `loadTime`). Latches: only
+ * the first call counts. Called from ProgressiveLoadSession when the first
+ * preview mesh or streamed bounds arrive, and from CadView right after the
+ * finished model is added to the scene, so formats with no progressive path
+ * report their one-shot arrival instead of nothing. Safe no-op with no load.
+ */
+export function reportFirstMesh() {
+  if (activeReporter && activeReporter.firstMeshMs === undefined) {
+    activeReporter.firstMeshMs = Date.now() - activeReporter.startTime
+  }
+}
+
+
+/**
+ * Everything `load_failed` needs from the reporter, for a failure that
+ * surfaced after `serialBefore` was read from currentLoadSerial().
+ *
+ * The serial matters because the reporter outlives its load (so Sentry can
+ * still read the last phase after endLoadProgress). A failure thrown BEFORE
+ * beginLoadProgress ran, such as an in-memory upload that no longer exists,
+ * would otherwise be reported with the PREVIOUS load's phase and size.
+ *
+ * @param {number} serialBefore currentLoadSerial() from before the attempt
+ * @return {{phase: (string|undefined), fileSize: (number|undefined), format: (string|undefined)}}
+ */
+export function getLoadFailureInfo(serialBefore) {
+  if (!activeReporter || loadSerial <= serialBefore) {
+    return {phase: undefined, fileSize: undefined, format: undefined}
+  }
+  return {
+    phase: activeReporter.lastEvent?.phase,
+    fileSize: activeReporter.fileSize,
+    format: extensionOf(activeReporter.fallbackName),
+  }
+}
+
+
+/** @return {number} how many loads have begun; pair with getLoadFailureInfo */
+export function currentLoadSerial() {
+  return loadSerial
 }
 
 
@@ -1202,11 +1357,13 @@ export function attachLoadFailureContext() {
  * **The counts must be the caller's, not this reporter's.** The obvious
  * gate — the console tee's own errorCount/warningCount — is the wrong
  * number on exactly the formats this join is about. What colours a chip
- * is GA's `stats_errorCount` / `stats_warningCount`, and for IFC/STEP
- * those are Conway's, not the tee's: ShareIfcLoader publishes them on
- * `loadStats`, which CadView applies *after* getCompletedLoadStats() so
- * the engine's numbers win. Gating on the tee would let the two
- * disagree, and each direction of disagreement is worse than the gap
+ * is GA's engine `stats_errorCount` / `stats_warningCount` when
+ * ShareIfcLoader publishes them on `loadStats` (conway#740; today it
+ * cannot, because conway's Statistics has no such methods), and the
+ * tee's `stats_pageErrorCount` / `stats_pageWarnCount` otherwise —
+ * CadView picks per load. Gating on the tee alone would, once the engine
+ * counts exist, let the two disagree, and each direction of
+ * disagreement is worse than the gap
  * this closes — a red chip whose Sentry link resolves to nothing, or a
  * green chip with an issue behind it. Both look like the join working.
  *

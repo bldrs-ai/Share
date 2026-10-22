@@ -94,6 +94,7 @@ describe('Loader', () => {
                 getPreprocessorVersion: jest.fn().mockReturnValue('1.0'),
                 getParseTime: jest.fn().mockReturnValue(50), // eslint-disable-line no-magic-numbers
                 getTotalTime: jest.fn().mockReturnValue(150), // eslint-disable-line no-magic-numbers
+                getProductCount: jest.fn().mockReturnValue(42), // eslint-disable-line no-magic-numbers
               }),
               getConwayVersion: jest.fn().mockReturnValue('1.0.0'),
               properties: {
@@ -430,10 +431,14 @@ describe('Loader', () => {
       expect(model).toBeDefined()
       expect(model.loadStats).toMatchObject({
         memoryUsed: 1024,
-        loadTime: 150,
+        openMs: 150,
+        productCount: 42,
         errorCount: 2,
         warningCount: 3,
       })
+      // Conway's total is a parse timer, not the wall clock; it must never
+      // again ride under the name that GA reports as the load time.
+      expect(model.loadStats).not.toHaveProperty('loadTime')
       expect(model).toMatchSnapshot()
 
       // The `[conwayDirect] parsed …` summary is the integration-boundary

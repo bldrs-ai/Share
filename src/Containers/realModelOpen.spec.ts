@@ -23,11 +23,14 @@ const REAL_MODEL = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
  * before they cross the evaluate boundary.
  *
  * @param page Playwright page object
- * @return Array of {name, contentId, hasOpenCid, openCid, localHour} per real_model_open event
+ * @return Array of {name, contentId, hasOpenCid, openCid, localHour, params} per real_model_open event
  */
 async function realModelOpenEvents(
   page: Page,
-): Promise<{name: string, contentId: string, hasOpenCid: boolean, openCid?: unknown, localHour?: unknown}[]> {
+): Promise<{
+  name: string, contentId: string, hasOpenCid: boolean, openCid?: unknown, localHour?: unknown,
+  params: Record<string, unknown>,
+}[]> {
   return await page.evaluate(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dataLayer: any[] = (window as any).dataLayer || []
@@ -39,7 +42,26 @@ async function realModelOpenEvents(
         hasOpenCid: entry[2]?.open_cid !== undefined,
         openCid: entry[2]?.open_cid,
         localHour: entry[2]?.local_hour,
+        params: {...entry[2]},
       }))
+  })
+}
+
+
+/**
+ * Collect `load_failed` gtag events from the page's dataLayer; see
+ * realModelOpenEvents for why the dataLayer is readable with gtag blocked.
+ *
+ * @param page Playwright page object
+ * @return Array of the params of each load_failed event
+ */
+async function loadFailedEvents(page: Page): Promise<Record<string, unknown>[]> {
+  return await page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dataLayer: any[] = (window as any).dataLayer || []
+    return dataLayer
+      .filter((entry) => entry?.[0] === 'event' && entry?.[1] === 'load_failed')
+      .map((entry) => ({...entry[2]}))
   })
 }
 
@@ -85,6 +107,48 @@ describeMobileAndDesktop('real_model_open GA event', () => {
     // param must be absent rather than empty, so it can't form its own
     // bucket in GA4.
     expect(events[0].hasOpenCid).toBe(false)
+  })
+
+  /*
+   * Share#1954: through the real loader, a successful open says how it went.
+   * `stats_loadTime` is the wall clock, `stats_openMs` is conway's parse timer
+   * under its own name, and a first mesh is stamped on the same clock, so it
+   * can never precede the load it belongs to by more than the scene add.
+   */
+  test('carries the load outcome, geometry counts and honest timings', async ({page}) => {
+    await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
+    await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    const events = await realModelOpenEvents(page)
+    expect(events).toHaveLength(1)
+    const {params} = events[0]
+    expect(params.load_outcome).toBe('displayed')
+    expect(params.stats_vertexCount).toBeGreaterThan(0)
+    expect(params.stats_triangleCount).toBeGreaterThan(0)
+    expect(typeof params.stats_loadTime).toBe('number')
+    expect(typeof params.stats_firstMeshMs).toBe('number')
+    expect(typeof params.stats_openMs).toBe('number')
+    expect(['true', 'false']).toContain(params.stats_cacheHit)
+    // Page-wide console noise is labelled as such; the engine's own names
+    // stay absent until conway#740.
+    expect(typeof params.stats_pageErrorCount).toBe('number')
+    expect(typeof params.stats_pageWarnCount).toBe('number')
+    expect(params).not.toHaveProperty('stats_errorCount')
+    expect(await loadFailedEvents(page)).toHaveLength(0)
+  })
+
+  // A model the server cannot find fails to load, so GA gets the other half
+  // of the funnel: exactly one load_failed and no real_model_open.
+  test('sends load_failed, and no real_model_open, when the model cannot be loaded', async ({page}) => {
+    const missing = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/does-not-exist.ifc'
+    await page.goto(missing, {waitUntil: 'domcontentloaded'})
+    await expect.poll(async () => (await loadFailedEvents(page)).length).toBe(1)
+    const [failure] = await loadFailedEvents(page)
+    expect(failure.content_type).toBe('ifc')
+    expect(failure.reason_class).toBe('other')
+    expect(Object.keys(failure).sort()).toEqual(
+      ['content_type', 'last_phase', 'reason_class', 'size_bucket'])
+    expect(await realModelOpenEvents(page)).toHaveLength(0)
   })
 
   /*
