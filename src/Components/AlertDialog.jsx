@@ -46,11 +46,13 @@ export default function AlertDialog({onClose}) {
     if (typeof alert !== 'object') {
       return
     }
-    if (alert.type === 'unsupportedSchema' || alert.type === 'inMemoryUploadGone') {
+    if (alert.type === 'unsupportedSchema' || alert.type === 'inMemoryUploadGone' || alert.type === 'uploadNotInBrowser') {
       // Expected outcome, not a defect: analytics only, never Sentry
       // (alertTracking.js#trackAlertEvent). `inMemoryUploadGone` is a
       // /v/new/ URL whose file, opened without OPFS, was held only by a
-      // page that is gone (OPFS/messages.js, #1906).
+      // page that is gone (OPFS/messages.js, #1906); `uploadNotInBrowser` is
+      // a /v/new/ link, with OPFS available, to an upload this browser
+      // doesn't hold (#1955).
       trackAlertEvent(alert.message)
     } else if (alert.type === 'oom' || alert.type === 'needsReconnect') {
       trackAlert(alert.message, alert)
@@ -71,6 +73,8 @@ export default function AlertDialog({onClose}) {
   const isNeedsReconnect = alert && typeof alert === 'object' && alert.type === 'needsReconnect'
   const isUnsupportedSchema = alert && typeof alert === 'object' && alert.type === 'unsupportedSchema'
   const isInMemoryUploadGone = alert && typeof alert === 'object' && alert.type === 'inMemoryUploadGone'
+  const isUploadNotInBrowser = alert && typeof alert === 'object' && alert.type === 'uploadNotInBrowser'
+  const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
 
   const refresh = () => {
     try {
@@ -100,6 +104,16 @@ export default function AlertDialog({onClose}) {
     }
   }
 
+  // The upload is gone, so there is no model to stay on: close the way a
+  // failed load does (onClose → navToDefault), then open the Open dialog so
+  // re-opening the file is one click. Visibility is store state that
+  // useHashState re-asserts as `#open` after the navigation, so it survives
+  // the route change.
+  const openAFile = () => {
+    onCloseInner()
+    setIsOpenModelVisible(true)
+  }
+
   let actionCb
   let actionTitle
   if (isOom) {
@@ -113,6 +127,9 @@ export default function AlertDialog({onClose}) {
     // navToDefault); "Reset" would suggest something can be fixed here.
     actionCb = onCloseInner
     actionTitle = 'OK'
+  } else if (isUploadNotInBrowser) {
+    actionCb = openAFile
+    actionTitle = 'Open a file'
   } else {
     actionCb = onCloseInner
     actionTitle = 'Reset'
@@ -127,14 +144,17 @@ export default function AlertDialog({onClose}) {
     headerText = 'Not supported yet'
   } else if (isInMemoryUploadGone) {
     headerText = 'File no longer available'
+  } else if (isUploadNotInBrowser) {
+    headerText = 'File not in this browser'
   } else {
     headerText = 'Error'
   }
 
-  // No "contact us" footer for an unsupported schema or an in-memory upload
-  // whose page is gone: both are known, documented limits, so there is
-  // nothing for support to diagnose.
-  const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema && !isInMemoryUploadGone
+  // No "contact us" footer for an unsupported schema, an in-memory upload
+  // whose page is gone, or an upload this browser doesn't hold: all are
+  // known, documented limits, so there is nothing for support to diagnose.
+  const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema && !isInMemoryUploadGone &&
+    !isUploadNotInBrowser
   return (
     <Dialog
       headerText={headerText}
@@ -176,7 +196,7 @@ function createAlertReport(a) {
     return a
   } else if (typeof a === 'object') {
     if (a && (a.type === 'oom' || a.type === 'needsReconnect' || a.type === 'unsupportedSchema' ||
-        a.type === 'inMemoryUploadGone')) {
+        a.type === 'inMemoryUploadGone' || a.type === 'uploadNotInBrowser')) {
       return a.message
     } else if (a instanceof NotFoundError) {
       return displayPathAlert(a)

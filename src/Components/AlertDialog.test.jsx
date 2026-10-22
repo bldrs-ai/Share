@@ -1,7 +1,12 @@
 import React from 'react'
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {StoreRouteThemeCtx} from '../Share.fixture'
-import {IN_MEMORY_UPLOAD_GONE_ALERT, inMemoryUploadGoneAlert} from '../OPFS/messages'
+import {
+  IN_MEMORY_UPLOAD_GONE_ALERT,
+  UPLOAD_NOT_IN_BROWSER_ALERT,
+  inMemoryUploadGoneAlert,
+  uploadNotInBrowserAlert,
+} from '../OPFS/messages'
 import {getProvider} from '../connections/registry'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
@@ -277,6 +282,53 @@ describe('AlertDialog — inMemoryUploadGone alert type', () => {
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
     expect(trackAlertEvent).toHaveBeenCalledTimes(1)
     expect(trackAlertEvent).toHaveBeenCalledWith(IN_MEMORY_UPLOAD_GONE_ALERT)
+    expect(trackAlert).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('AlertDialog — uploadNotInBrowser alert type (#1955)', () => {
+  const onClose = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+      useStore.getState().setIsOpenModelVisible(false)
+    })
+  })
+
+  it('explains it under its own header, without the Discord footer', () => {
+    act(() => {
+      useStore.getState().setAlert(uploadNotInBrowserAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('File not in this browser')).toBeInTheDocument()
+    expect(screen.queryByText('Error')).not.toBeInTheDocument()
+    expect(screen.getByText(/isn't in this browser/)).toBeInTheDocument()
+    expect(screen.queryByText(/Discord/i)).not.toBeInTheDocument()
+  })
+
+  // The failed load left no model to stay on, so the action closes the way a
+  // failed load does (onClose → navToDefault) and opens the Open dialog.
+  it('"Open a file" closes the alert through onClose and opens the Open dialog', () => {
+    act(() => {
+      useStore.getState().setAlert(uploadNotInBrowserAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByText('Open a file'))
+    expect(useStore.getState().alert).toBeNull()
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(useStore.getState().isOpenModelVisible).toBe(true)
+  })
+
+  it('counts the alert once, in analytics only', () => {
+    act(() => {
+      useStore.getState().setAlert(uploadNotInBrowserAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(trackAlertEvent).toHaveBeenCalledTimes(1)
+    expect(trackAlertEvent).toHaveBeenCalledWith(UPLOAD_NOT_IN_BROWSER_ALERT)
     expect(trackAlert).not.toHaveBeenCalled()
   })
 })
