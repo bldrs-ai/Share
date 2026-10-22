@@ -131,9 +131,17 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsVersionsEnabled(false)
       setIsShareEnabled(true)
       setIsNotesEnabled(false)
+    } else if (pathPrefix.startsWith('/share/v/new')) {
+      // A file opened from the user's computer: no repository, and a URL
+      // that only opens in this browser. The Share button is still shown,
+      // but ShareControl renders it gated with the reason, instead of hiding
+      // it with no word on why (#705).
+      setRepository(null, null)
+      setIsVersionsEnabled(false)
+      setIsShareEnabled(true)
+      setIsNotesEnabled(false)
     } else {
       debug().warn('No repository set for project!, ', pathPrefix)
-      // Local /v/new models have no repository
       setRepository(null, null)
       setIsVersionsEnabled(false)
       setIsShareEnabled(false)
