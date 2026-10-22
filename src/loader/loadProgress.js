@@ -296,8 +296,12 @@ class LoadProgressReporter {
       return
     }
     const base = collapseWhitespace(entry.message)
-    if (entry.category === DATA_DEFECT ||
-        DATA_DEFECT_FALLBACK_MESSAGES.has(normalizeMessageDigits(base))) {
+    // Exact match, not isDataDefectDiagnostic's digit-normalized one: that
+    // normalization is for the console tee's text, which has the record id
+    // appended, whereas conway's entry.message is already the base message,
+    // and the fallback keys contain no digits. This runs on every Logger.log
+    // call, which on a bad STEP file is hundreds of thousands.
+    if (entry.category === DATA_DEFECT || DATA_DEFECT_FALLBACK_MESSAGES.has(base)) {
       this.dataDefectTotal++
     } else if (entry.level === 'error') {
       this.engineErrorTotal++
@@ -1272,7 +1276,14 @@ export function getLoadFailureInfo(serialBefore) {
   return {
     phase: activeReporter.lastEvent?.phase,
     fileSize: activeReporter.fileSize,
-    format: extensionOf(activeReporter.fallbackName),
+    // From the identity itself rather than fallbackName: a GitHub route's
+    // fileInfo is a URL object, which basenameOf (string-only) answers with
+    // '' for, so fallbackName is empty for exactly the models users share.
+    //
+    // A gzip suffix is an envelope, not a format: `model.glb.gz` is routed
+    // and loaded as a GLB (Filetype#getValidExtension strips it the same
+    // way), so GA must see `glb`, not `gz`.
+    format: extensionOf(basenameOf(String(activeReporter.fileInfo)).replace(/\.gz$/i, '')),
   }
 }
 

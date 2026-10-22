@@ -488,6 +488,23 @@ describe('loadProgress', () => {
         expect(getLoadFailureInfo(before)).toEqual({phase: 'geometry', fileSize: 5000, format: 'ifc'})
       })
 
+      it('reads the format off a URL object, which is what a GitHub route passes', () => {
+        const before = currentLoadSerial()
+        beginLoadProgress({fileInfo: new URL('https://github.com/bldrs-ai/test-models/main/ifc/misc/box.ifc')})
+        expect(getLoadFailureInfo(before).format).toBe('ifc')
+      })
+
+      it.each([
+        ['https://host/models/box.glb.gz', 'glb'],
+        ['https://host/models/BOX.GLB.GZ?x=1', 'glb'],
+        // A bare .gz names no format underneath.
+        ['https://host/models/archive.gz', undefined],
+      ])('strips the gzip envelope: %s -> %s', (fileInfo, expected) => {
+        const before = currentLoadSerial()
+        beginLoadProgress({fileInfo})
+        expect(getLoadFailureInfo(before).format).toBe(expected)
+      })
+
       it('reports nothing for a failure that came before any load began', () => {
         beginLoadProgress({fileInfo: 'previous.ifc'})
         reportModelInfo({fileName: 'previous.ifc', byteLength: 5000})

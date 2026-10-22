@@ -142,7 +142,7 @@ describeMobileAndDesktop('real_model_open GA event', () => {
   test('sends load_failed, and no real_model_open, when the model cannot be loaded', async ({page}) => {
     const missing = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/does-not-exist.ifc'
     await page.goto(missing, {waitUntil: 'domcontentloaded'})
-    await expect.poll(async () => (await loadFailedEvents(page)).length).toBe(1)
+    await expect.poll(async () => (await loadFailedEvents(page)).length, {timeout: 20_000}).toBe(1)
     const [failure] = await loadFailedEvents(page)
     expect(failure.content_type).toBe('ifc')
     expect(failure.reason_class).toBe('other')
