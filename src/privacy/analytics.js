@@ -346,6 +346,10 @@ export const FUNNEL_EVENTS = Object.freeze({
   BEGIN_CHECKOUT: 'begin_checkout',
   SUBSCRIPTION_STARTED: 'subscription_started',
   SUBSCRIPTION_ENDED: 'subscription_ended',
+  // Engaged-use conversions for Google Ads (Share#1960, bizdev#339); sent
+  // by privacy/engagementTracking.js from the real-open path.
+  ENGAGED_USE: 'engaged_use',
+  RETURN_VISIT: 'return_visit',
 })
 
 

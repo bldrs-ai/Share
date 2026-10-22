@@ -226,6 +226,8 @@ describe('Analytics', () => {
         BEGIN_CHECKOUT: 'begin_checkout',
         SUBSCRIPTION_STARTED: 'subscription_started',
         SUBSCRIPTION_ENDED: 'subscription_ended',
+        ENGAGED_USE: 'engaged_use',
+        RETURN_VISIT: 'return_visit',
       })
     })
   })

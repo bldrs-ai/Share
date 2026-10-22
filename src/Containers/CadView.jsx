@@ -17,6 +17,7 @@ import {
   isRealModelOpen,
   startModelEngagement,
 } from '../privacy/analytics'
+import {trackEngagementOnOpen} from '../privacy/engagementTracking'
 import {getRenderMode} from '../privacy/preferences'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
@@ -734,6 +735,11 @@ export default function CadView({
       // keeps it in the text slot; see analytics#getLocalHour.
       eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
       gtagEvent(FUNNEL_EVENTS.REAL_MODEL_OPEN, eventParams)
+      // Engaged-use conversions (Share#1960). Same real-open gate as the
+      // event above; keyed by model so a theme/view-settings reload of the
+      // same model is not a second open. Resolves to the events it sent
+      // and never rejects, so it is not awaited.
+      trackEngagementOnOpen(Date.now(), modelIdentity(modelPath, installPrefix))
       // Give a chip with non-zero errors/warnings a Sentry event to link
       // to (issue #1767). Gated on the very counts just assembled above,
       // because those are what colour the chip — for IFC/STEP they are
