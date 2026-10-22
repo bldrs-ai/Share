@@ -891,6 +891,30 @@ describe('CadView', () => {
       await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(2))
     })
 
+    // A fails, a model that reports nothing opens (the demo is excluded from
+    // load_failed), A fails again: that is a second open of A. Without the
+    // reset on a model change, A's key was still held and the event dropped.
+    it('sends load_failed again when a model is reopened after another one', async () => {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new Error('OpenModel returned -1')
+      })
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1))
+      const loadsBeforeDemo = loadSpy.mock.calls.length
+      await act(() => result.current.setModelPath({kind: 'file', isUploadedFile: false, filepath: 'index.ifc'}))
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBeforeDemo))
+      expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1)
+      const loadsBeforeA = loadSpy.mock.calls.length
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBeforeA))
+      await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(2))
+    })
+
     it('classifies a refused schema as unsupported_schema', async () => {
       loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
         throw new UnsupportedSchemaError('IFC4X3_RC2')

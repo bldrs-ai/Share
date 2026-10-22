@@ -192,12 +192,14 @@ export default function CadView({
   // below can re-run onViewer for the SAME route after a refusal —
   // isViewerLoaded stays false on failure — and each re-run would count
   // the refusal again, inflating the demand numbers the report exists for
-  // (codex review of Share#1899). Keyed by model identity and never cleared:
-  // the [modelPath, customViewSettings] effect also re-runs for the same
-  // model (Widget API view settings), and clearing there let the same model
-  // count twice (codex review of Share#1961). Opening a different model
-  // changes the key, so every new open is still counted once.
+  // (codex review of Share#1899). Keyed by model identity and cleared when
+  // the identity changes (dedupeModelKeyRef, in the modelPath effect), not on
+  // every run of it: that effect also re-runs for the same model (Widget API
+  // view settings), and clearing there let one model count twice (codex
+  // review of Share#1961).
   const reportedRefusalRef = useRef(null)
+  // The model identity the two dedupe refs belong to.
+  const dedupeModelKeyRef = useRef(null)
   // The model a `load_failed` was last sent for, for the same reason and
   // with the same keying as reportedRefusalRef: the auth-state effect and
   // the customViewSettings effect re-run onViewer for the SAME route after
@@ -1740,6 +1742,16 @@ export default function CadView({
   // programmatic navigation (e.g. clicking element links).
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath, modelPath:', modelPath)
+    // A different model starts a new open, so its failures count again even
+    // when the model in between never touched the dedupe refs (A fails, B
+    // loads, A fails). Reruns of the SAME model (customViewSettings) keep
+    // them, so one failed open stays one event. Share#1961 codex review.
+    const dedupeKey = modelIdentity(modelPath, installPrefix)
+    if (dedupeModelKeyRef.current !== dedupeKey) {
+      dedupeModelKeyRef.current = dedupeKey
+      reportedRefusalRef.current = null
+      reportedLoadFailureRef.current = null
+    }
     onModelPath()
   }, [modelPath, customViewSettings])
 
