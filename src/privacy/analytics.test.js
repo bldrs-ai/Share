@@ -340,6 +340,24 @@ describe('Analytics', () => {
       })).toBe(false)
     })
 
+    // The /viewer/step landing page links here; it is a demo, not a user's
+    // own model, and was counted as a real open before.
+    test('false for the hosted STEP demo (/share/v/p/index.step)', () => {
+      expect(Analytics.isRealModelOpen({
+        kind: 'file',
+        isUploadedFile: false,
+        filepath: 'index.step',
+      })).toBe(false)
+    })
+
+    test('true for a model merely named like the demo, from another source', () => {
+      expect(Analytics.isRealModelOpen({
+        kind: 'provider',
+        provider: 'github',
+        gitpath: 'https://github.com/someone/repo/blob/main/index.step',
+      })).toBe(true)
+    })
+
     test('false for a demo permalink with an element subpath', () => {
       // processFile strips the eltPath, so the demo shape is identical.
       expect(Analytics.isRealModelOpen({

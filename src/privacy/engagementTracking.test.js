@@ -11,6 +11,8 @@ import {
 
 const DAY = 24 * 60 * 60 * 1000 // eslint-disable-line no-magic-numbers
 const HOUR = 60 * 60 * 1000 // eslint-disable-line no-magic-numbers
+const MINUTE = 60 * 1000 // eslint-disable-line no-magic-numbers
+const COOLDOWN_DAYS = 30
 // Local noon, so +/- a few hours never crosses a local calendar day.
 const T0 = new Date(2026, 9, 1, 12, 0, 0).getTime() // eslint-disable-line no-magic-numbers
 
@@ -51,6 +53,40 @@ describe('trackEngagementOnOpen', () => {
     uninstallFakeLocks()
     Cookies.remove('isAnalyticsAllowed')
     jest.restoreAllMocks()
+  })
+
+  describe('engaged_use cooldown', () => {
+    it('stays quiet at 29 days and fires again at exactly 30', async () => {
+      await trackEngagementOnOpen(T0)
+      await trackEngagementOnOpen(T0 + HOUR)
+      await trackEngagementOnOpen(T0 + (2 * HOUR))
+      const engagedAt = stored().engagedAt
+      // Seed three fresh opens so only the cooldown can say no.
+      const seed = (at) => localStorage.setItem(ENGAGEMENT_STORAGE_KEY, JSON.stringify({
+        opens: [at - HOUR, at - (2 * HOUR)], engagedAt, returnDay: null,
+      }))
+      window.gtag.mockClear()
+      seed(engagedAt + ((COOLDOWN_DAYS - 1) * DAY))
+      await trackEngagementOnOpen(engagedAt + ((COOLDOWN_DAYS - 1) * DAY))
+      expect(sentNames()).not.toContain('engaged_use')
+      seed(engagedAt + (COOLDOWN_DAYS * DAY))
+      await trackEngagementOnOpen(engagedAt + (COOLDOWN_DAYS * DAY))
+      expect(sentNames()).toContain('engaged_use')
+    })
+
+    // The clock steps back (NTP correction, manual change) right after the
+    // open that sent engaged_use. That open is a future stamp now, but the two
+    // before it are still inside the window.
+    it('does not send a second engaged_use when the clock steps back a minute', async () => {
+      await trackEngagementOnOpen(T0)
+      await trackEngagementOnOpen(T0 + HOUR)
+      await trackEngagementOnOpen(T0 + (2 * HOUR))
+      expect(sentNames().filter((n) => n === 'engaged_use')).toHaveLength(1)
+      await trackEngagementOnOpen(T0 + (2 * HOUR) - MINUTE)
+      expect(sentNames().filter((n) => n === 'engaged_use')).toHaveLength(1)
+      // The cooldown restarts from the corrected clock.
+      expect(stored().engagedAt).toBe(T0 + (2 * HOUR) - MINUTE)
+    })
   })
 
   describe('reloads of the same model (theme or view-settings re-init)', () => {
@@ -116,7 +152,7 @@ describe('trackEngagementOnOpen', () => {
       }
       expect(sentNames().filter((n) => n === 'engaged_use')).toHaveLength(1)
       // 29 days on: three more opens in a week, still inside the cooldown.
-      const T29 = T0 + (29 * DAY) // eslint-disable-line no-magic-numbers
+      const T29 = T0 + ((COOLDOWN_DAYS - 1) * DAY)
       for (let i = 0; i < 3; i++) {
         await trackEngagementOnOpen(T29 + (i * HOUR))
       }
@@ -232,13 +268,18 @@ describe('trackEngagementOnOpen', () => {
     })
 
     it('fails closed when writing storage throws: nothing could stop a repeat', async () => {
+      // Two opens recorded for real, so the third WOULD send engaged_use if
+      // the emit did not depend on the write having succeeded.
+      await trackEngagementOnOpen(T0)
+      await trackEngagementOnOpen(T0 + HOUR)
+      const sentBefore = sentNames()
       jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
         throw new Error('quota')
       })
-      for (let i = 0; i < 4; i++) {
-        await trackEngagementOnOpen(T0 + (i * HOUR))
-      }
-      expect(window.gtag).not.toHaveBeenCalled()
+      expect(await trackEngagementOnOpen(T0 + (2 * HOUR))).toEqual([])
+      expect(sentNames()).toEqual(sentBefore)
+      expect(sentNames()).not.toContain('engaged_use')
+      expect(stored().opens).toEqual([T0, T0 + HOUR])
     })
 
     it('attaches open_cid like the other funnel events', async () => {
@@ -291,15 +332,22 @@ describe('trackEngagementOnOpen', () => {
       await first
     })
 
-    it('two tabs reaching the third open together send engaged_use once', async () => {
-      await trackEngagementOnOpen(T0)
-      await trackEngagementOnOpen(T0 + HOUR)
-      const fake = installGatedFakeLocks()
-      const a = trackEngagementOnOpen(T0 + (2 * HOUR))
-      const b = trackEngagementOnOpen(T0 + (2 * HOUR) + 1000) // eslint-disable-line no-magic-numbers
-      fake.open()
-      await Promise.all([a, b])
-      expect(sentNames().filter((n) => n === 'engaged_use')).toHaveLength(1)
+    // Another tab holds the lock across an await, as a real tab's critical
+    // section can. Without the lock this tab would read, write and emit
+    // straight away; with it, nothing happens until the holder lets go.
+    it('waits for a lock another tab holds before reading or writing', async () => {
+      installGatedFakeLocks().open()
+      let release
+      const held = navigator.locks.request(ENGAGEMENT_STORAGE_KEY, () => new Promise((resolve) => {
+        release = resolve
+      }))
+      const mine = trackEngagementOnOpen(T0)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(release).toBeDefined()
+      expect(localStorage.getItem(ENGAGEMENT_STORAGE_KEY)).toBeNull()
+      release()
+      await Promise.all([held, mine])
+      expect(stored().opens).toEqual([T0])
     })
   })
 })

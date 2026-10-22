@@ -16,9 +16,12 @@ import {withCrossTabLock} from './crossTabLock'
  *
  * "Open" is whatever CadView counts as `real_model_open`: it calls
  * trackEngagementOnOpen from inside the isRealModelOpen branch, so the bundled
- * demo and every *.netlify.app host (the team's own review traffic) never
+ * hosted demos and every *.netlify.app host (review and CI traffic) never
  * reach here, and gtag/js itself only loads on prod hosts (index/ga.js
  * #shouldInitGa). Exclusion is therefore inherited rather than re-implemented.
+ * That is a host and demo exclusion only: team members' own opens on
+ * bldrs.ai are counted here as for real_model_open, and are filtered at
+ * query time on the bizdev dashboard (GA_CONFIG.orgUsers), not in the client.
  *
  * Storage failure fails CLOSED. With no way to remember an open, the only
  * alternative is a per-page counter, which would fire engaged_use for anyone
@@ -51,7 +54,9 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000 // eslint-disable-line no-magic-numbers
 // Widget API view settings re-create the viewer, which re-runs the load, and
 // each success sends real_model_open again), and counting those would let
 // toggling the theme twice on one model read as engaged use. A different
-// model, or a fresh page load, counts as a new open.
+// model, or a fresh page load, counts as a new open. Known under-count: A,
+// then the demo (never tracked, so it does not clear this), then A again in
+// one page load is skipped; that is the safe error for this conversion.
 let lastCountedModelKey = null
 
 
@@ -113,7 +118,7 @@ function readState() {
  * Record one real model open and send engaged_use / return_visit when this
  * open earns them. Call once per real open, after real_model_open is sent.
  *
- * Writes nothing and sends nothing when analytics consent is withheld, when
+ * Writes nothing and sends nothing when the user has opted out of analytics, when
  * localStorage is unavailable, or when the write fails (the state that would
  * stop a repeat could not be saved).
  *
@@ -154,9 +159,19 @@ export function trackEngagementOnOpen(now = Date.now(), modelKey = undefined) {
     const windowOpens = past.filter((t) => now - t < ENGAGED_WINDOW_DAYS * MS_PER_DAY)
     const opensInWindow = windowOpens.length + 1
 
+    // The same clock step-back applies to the last engaged_use: the open that
+    // sent it is dropped from `past` above as future-stamped, but the opens
+    // before it are still in the window, so the next open would make three
+    // again and send a second engaged_use minutes after the first. Clamp the
+    // stamp to now instead, which keeps the cooldown running and restarts its
+    // 30 days from the corrected clock.
+    if (state.engagedAt !== null && state.engagedAt > now) {
+      state.engagedAt = now
+    }
+
     const events = []
     if (opensInWindow >= ENGAGED_OPENS_THRESHOLD &&
-        (state.engagedAt === null || state.engagedAt > now ||
+        (state.engagedAt === null ||
           now - state.engagedAt >= ENGAGED_COOLDOWN_DAYS * MS_PER_DAY)) {
       events.push([FUNNEL_EVENTS.ENGAGED_USE, {
         window_days: ENGAGED_WINDOW_DAYS,

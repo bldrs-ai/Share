@@ -312,16 +312,23 @@ The parts that aren't obvious:
   the event when the open earns it. They are meant to be imported as
   **secondary, observe-only** conversions.
   - **What counts as an open** is `real_model_open`: `CadView` calls it from
-    inside the `isRealModelOpen` branch, right after that event. The demo and
-    `*.netlify.app` are excluded exactly as there, and gtag/js only loads on
-    prod hosts (`index/ga.js#shouldInitGa`), so the team's own traffic never
-    reaches it. A reload of the same model in one page load (a theme change
+    inside the `isRealModelOpen` branch, right after that event. The hosted
+    demos (`index.ifc` and `index.step`, the latter the `/viewer/step`
+    landing page's target) and `*.netlify.app` are excluded exactly as there,
+    and gtag/js only loads on prod hosts (`index/ga.js#shouldInitGa`), so
+    review and CI traffic never reaches it. Team members' own opens on
+    bldrs.ai are counted, as for `real_model_open`: they are filtered at
+    query time on the bizdev dashboard (`GA_CONFIG.orgUsers`), not in the
+    client. A reload of the same model in one page load (a theme change
     or Widget API view settings re-create the viewer, and each success sends
     `real_model_open` again) is not a second open: the tracker skips a call
     whose model key equals the previous counted open's. Opening the same
-    model again in a later page load counts.
-  - **Consent:** nothing is read, written or sent while `isAllowed()` is
-    false, so opens before consent are not counted retroactively.
+    model again in a later page load counts. Known under-count: A, then the
+    demo (never tracked, so it does not clear the key), then A again in one
+    page load is skipped.
+  - **Consent:** analytics is opt-out (`isAllowed()` defaults to true).
+    Nothing is read, written or sent while the user has opted out, and opens
+    made while opted out are never counted retroactively.
   - **Fails closed.** If localStorage cannot be read or written the open is
     not counted: a per-page fallback would fire `engaged_use` for anyone who
     opens three models in one session and again on every reload. Under-count
@@ -330,8 +337,10 @@ The parts that aren't obvious:
   - **Windows:** the 7-day window excludes its edge (an open exactly 7 days
     old is outside it); `return_visit` is measured in local calendar days, so
     DST cannot make a day 23 or 25 hours, and sends once per day. Stored times
-    in the future (clock moved back) are dropped. The read-compare-write-emit
-    runs under a Web Lock so two tabs cannot both emit.
+    in the future (clock moved back) are dropped, and a future `engaged_use`
+    time is clamped to now, so a clock step-back cannot send it twice. The
+    read-compare-write-emit runs under a Web Lock so two tabs cannot both
+    emit.
 
 ### Load outcome (Share#1954)
 
