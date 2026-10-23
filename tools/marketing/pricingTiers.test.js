@@ -31,9 +31,12 @@ const LOCAL_WORDS = /\b(?:local|your computer|drag and drop|uploads?|uploaded)\b
 const LIMIT_WORDS =
   /\b(?:\d+|limit(?:s|ed)?|max(?:imum)?|up to|quota|metered|capped|per\s+(?:day|week|month|year)|a\s+(?:day|week|month|year))\b/i
 
-// Any count of models, files, exports or loads. The only ones allowed are the
-// two generated claims.
-const COUNTED_NOUN = /\b\d+\s+(?:\w+\s+){0,2}(?:models?|files?|exports?|uploads?|loads?)\b/gi
+// Any count of models, files, exports or loads, with its window when it has
+// one. Each must equal one of the two generated claims EXACTLY, window
+// included: a prefix match let "2 GLB exports a month" through beside the
+// real weekly claim (codex review on Share#1971).
+const COUNTED_PHRASE =
+  /\b\d+\s+(?:\w+\s+){0,2}(?:models?|files?|exports?|uploads?|loads?)\b(?:\s+(?:a|per|every|each)\s+\w+|\s*\/\s*\w+)?/gi
 
 
 /**
@@ -45,6 +48,8 @@ function planCopy(plan) {
     plan.name,
     plan.description,
     plan.badge,
+    // The button label renders too (codex review on Share#1971).
+    plan.cta,
     ...plan.sections.flatMap((section) => [section.heading, ...section.features]),
   ].filter((text) => typeof text === 'string')
 }
@@ -78,8 +83,8 @@ function planProblems(plans, expected) {
       if (LOCAL_WORDS.test(text) && LIMIT_WORDS.test(text)) {
         problems.push(`${name}: limit on local files, which are unmetered: "${text}"`)
       }
-      for (const [count] of text.matchAll(COUNTED_NOUN)) {
-        if (!expected.models.startsWith(count) && !expected.exports.startsWith(count)) {
+      for (const [phrase] of text.matchAll(COUNTED_PHRASE)) {
+        if (phrase !== expected.models && phrase !== expected.exports) {
           problems.push(`${name}: a count the viewer doesn't enforce: "${text}"`)
         }
       }
@@ -161,6 +166,19 @@ describe('marketing pricing plans', () => {
       expect(planProblems(editPlans('Your files never leave your computer', claim), ENFORCED).join('\n'))
         .toMatch(/limit on local files/)
     }
+  })
+
+  it('fails an allowance claim with the wrong window anywhere, even beside the right one', () => {
+    const edited = editPlans('Unlimited private models', 'Unlimited private models, plus 2 GLB exports a month')
+    expect(planProblems(edited, ENFORCED).join('\n'))
+      .toMatch(/Share Pro: a count the viewer doesn't enforce: ".*2 GLB exports a month"/)
+  })
+
+  it('checks the button label too', () => {
+    const edited = JSON.parse(JSON.stringify(PLANS))
+    edited.find((plan) => plan.name === 'Free account').cta = 'Get 5 GLB exports'
+    expect(planProblems(edited, ENFORCED).join('\n'))
+      .toMatch(/Free account: a count the viewer doesn't enforce: "Get 5 GLB exports"/)
   })
 
   it('fails load-count copy', () => {

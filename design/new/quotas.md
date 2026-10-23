@@ -270,8 +270,9 @@ changes the price. (`.mjs` because `marketing/package.json` has no `"type":
 `tools/marketing/pricingTiers.test.js` is a drift tripwire over that data, not
 a proof against a hostile author. It checks that the Free account plan states
 both claims as worded from the constants, that Pro says unlimited, that no
-plan entry puts a limit on local files, and that no other count of
-models/files/exports/loads appears. It proves itself: `buildPlans()` with
+plan entry (CTA included) puts a limit on local files, and that every count
+of models/files/exports/loads equals one of the two generated claims exactly,
+window included. It proves itself: `buildPlans()` with
 other allowances yields their claims, and a hard-coded wrong number, a
 removed claim, a local-file limit or load-count copy in `PLANS` each go red.
 Header, enterprise and FAQ copy on the page are reviewed by hand. (Round 1
