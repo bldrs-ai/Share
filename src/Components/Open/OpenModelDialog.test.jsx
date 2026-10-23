@@ -15,6 +15,7 @@ import useQuota from '../../hooks/useQuota'
 import {getInMemoryUpload, registerInMemoryUpload} from '../../loader/inMemoryUploads'
 import {navigateToInMemoryModel, navigateToModel} from '../../utils/navigate'
 import useStore from '../../store/useStore'
+import {GATE_RETURN_EXPORT, noteGateLogin, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
 import OpenModelDialog from './OpenModelDialog'
 
 
@@ -112,6 +113,18 @@ describe('OpenModelDialog — GitHub tab', () => {
     act(() => {
       useStore.getState().setCurrentTab(0)
     })
+  })
+
+  // codex review on Share#1968: Connect GitHub is not a gate's sign-in, so a
+  // stale gate attempt must neither label its `login` nor reopen Export.
+  it('drops a stale gate attempt when Connect GitHub starts a sign-in', () => {
+    noteGateLogin('export', GATE_RETURN_EXPORT)
+    renderGithubTab(false)
+
+    fireEvent.click(screen.getByTestId('button-login-github'))
+
+    expect(takeGateLoginSource()).toEqual({})
+    expect(takeGateLoginReturn()).toBeNull()
   })
 
   it('shows login button when not authenticated', () => {

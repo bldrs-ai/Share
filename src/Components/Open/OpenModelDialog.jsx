@@ -1,6 +1,7 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {Box, Button, Divider, Slide, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {startLogin} from '../../Auth0/gateLogin'
 import {forgetInMemoryUpload} from '../../loader/inMemoryUploads'
 import {localOnlyPath, toLocalOnlyPath} from '../../routes/localOnly'
 import useStore from '../../store/useStore'
@@ -385,6 +386,8 @@ export default function OpenModelDialog({
   const handleGithubRemove = () => logout({openUrl: false})
 
   const handleLoginGithub = () => {
+    // Not a gate's sign-in: drop any stale gate attempt (Auth0/gateLogin.js).
+    startLogin()
     if (useMock) {
       loginWithRedirect('github')
     } else {

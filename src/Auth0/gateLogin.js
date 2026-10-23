@@ -24,10 +24,13 @@ import useStore from '../store/useStore'
  *      module's), so a gate abandoned in one tab can't reopen a dialog in
  *      another.
  *
- * The record is dropped when this page's login dialog is dismissed (only if
- * it is still this page's attempt: another tab may have started a newer one
- * since, which must survive; codex review on Share#1968), and always when a
- * sign-in starts from the Profile menu (ProfileControl). Both parts expire
+ * Every sign-in start goes through startLogin(): it drops any pending
+ * attempt, and a gate then records its own. So a sign-in that is not a
+ * gate's (the Profile menu, OpenModelDialog's Connect GitHub,
+ * QuotaLimitDialog's Sign up) never inherits a stale attempt (codex review on
+ * Share#1968). The record is also dropped when this page's login dialog is
+ * dismissed, only if it is still this page's attempt: another tab may have
+ * started a newer one since, which must survive. Both parts expire
  * after
  * GATE_LOGIN_TTL_MS: a popup the user abandoned must not label, or reopen
  * Save for, a sign-in made later. Where storage is unavailable nothing is
@@ -144,13 +147,31 @@ export function clearGateLogin() {
 
 
 /**
- * @return {Function} `(feature, returnTo?) => void`: records the gate
- *   attempt and opens the existing login dialog.
+ * The bookkeeping every sign-in start goes through, BEFORE it opens the
+ * login dialog, the popup or the redirect. It drops any pending gate
+ * attempt, so a non-gate sign-in can't be attributed to a stale gate or
+ * reopen its dialog. With `fromGate`, it then records that gate's attempt.
+ *
+ * @param {object} [options]
+ * @param {?{feature: string, returnTo: (string|undefined)}} [options.fromGate]
+ *   the gate starting this sign-in, if any
+ */
+export function startLogin({fromGate = null} = {}) {
+  clearGateLogin()
+  if (fromGate) {
+    noteGateLogin(fromGate.feature, fromGate.returnTo || null)
+  }
+}
+
+
+/**
+ * @return {Function} `(feature, returnTo?) => void`: starts a gate's sign-in
+ *   (startLogin) and opens the existing login dialog.
  */
 export function useStartGateLogin() {
   const setIsLoginVisible = useStore((state) => state.setIsLoginVisible)
   return useCallback((feature, returnTo = null) => {
-    noteGateLogin(feature, returnTo)
+    startLogin({fromGate: {feature, returnTo}})
     setIsLoginVisible(true)
   }, [setIsLoginVisible])
 }

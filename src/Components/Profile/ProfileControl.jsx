@@ -9,7 +9,7 @@ import {
 import {useTheme} from '@mui/material/styles'
 import {captureException} from '@sentry/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {abandonGateLogin, clearGateLogin} from '../../Auth0/gateLogin'
+import {abandonGateLogin, startLogin} from '../../Auth0/gateLogin'
 import {getRenderMode, setRenderMode as saveRenderMode} from '../../privacy/preferences'
 import {trackSubscriptionFromToken} from '../../privacy/subscriptionTracking'
 import useStore from '../../store/useStore'
@@ -204,10 +204,8 @@ export default function ProfileControl() {
         {!isAuthenticated && (
           <MenuItem
             onClick={() => {
-              // A sign-in started here is not a gate's: drop any pending gate
-              // attempt so it neither labels this `login` nor reopens a
-              // gated dialog after it (Auth0/gateLogin.js).
-              clearGateLogin()
+              // A sign-in started here is not a gate's (Auth0/gateLogin.js).
+              startLogin()
               setIsLoginVisible(true)
               onCloseMenu()
             }}
