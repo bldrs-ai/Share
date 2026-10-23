@@ -9,6 +9,7 @@ import {
   mockedUserLoggedIn,
   mockedUserLoggedOut,
 } from '../../__mocks__/authentication'
+import {GATE_LOGIN_KEY, GATE_LOGIN_TTL_MS, clearGateLogin, noteGateLogin} from '../../Auth0/gateLogin'
 import {SaveModelControlFixture} from './SaveModelControl.fixture'
 import {MOCK_ORGANIZATIONS} from '../../net/github/Organizations.fixture'
 
@@ -41,8 +42,9 @@ describe('SaveModelControl', () => {
       result.current.setIsSaveModelVisible(false)
       result.current.setAccessToken(null)
       result.current.setOpfsFile(null)
-      result.current.setGateLoginReturn(null)
     })
+    clearGateLogin()
+    localStorage.removeItem(GATE_LOGIN_KEY)
   })
 
   // Share#1964: the Save dialog opens for everyone, so a signed-out user
@@ -82,7 +84,6 @@ describe('SaveModelControl', () => {
     fireEvent.click(await findByTestId('gated-export-anonymous'))
     fireEvent.click(await findByTestId('gated-help-action'))
     expect(useStore.getState().isLoginVisible).toBe(true)
-    expect(useStore.getState().gateLoginReturn).toBe('export')
 
     // The user closes the Save dialog while signing in; the return must
     // reopen it.
@@ -96,7 +97,33 @@ describe('SaveModelControl', () => {
     expect(await findByTestId('export-section')).toBeInTheDocument()
     expect(useStore.getState().isSaveModelVisible).toBe(true)
     expect(queryByTestId('gated-export-anonymous')).toBeNull()
-    expect(useStore.getState().gateLoginReturn).toBeNull()
+  })
+
+  // codex review on Share#1968: the return has the attempt's lifecycle.
+  it('does not reopen for a sign-in after the gate attempt expired', () => {
+    mockIsFeatureEnabled.mockReturnValue(true)
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    noteGateLogin('export', 'export', Date.now() - GATE_LOGIN_TTL_MS - 1)
+    const {rerender} = render(<SaveModelControlFixture/>)
+
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    rerender(<SaveModelControlFixture/>)
+
+    expect(useStore.getState().isSaveModelVisible).toBe(false)
+  })
+
+  it('does not reopen for a gate attempt another tab started', () => {
+    mockIsFeatureEnabled.mockReturnValue(true)
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    localStorage.setItem(GATE_LOGIN_KEY, JSON.stringify({
+      feature: 'export', returnTo: 'export', attemptId: 'another-tab', at: Date.now(),
+    }))
+    const {rerender} = render(<SaveModelControlFixture/>)
+
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    rerender(<SaveModelControlFixture/>)
+
+    expect(useStore.getState().isSaveModelVisible).toBe(false)
   })
 
   it('does not reopen for a sign-in that no gate started', () => {

@@ -68,7 +68,6 @@ export default function ProfileControl() {
 
   const isLoginVisible = useStore((state) => state.isLoginVisible)
   const setIsLoginVisible = useStore((state) => state.setIsLoginVisible)
-  const setGateLoginReturn = useStore((state) => state.setGateLoginReturn)
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
   const [renderMode, setRenderModeState] = useState(getRenderMode() ?? DEFAULT_LOOK)
   const [isManageProfileOpen, setIsManageProfileOpen] = useState(false)
@@ -205,6 +204,10 @@ export default function ProfileControl() {
         {!isAuthenticated && (
           <MenuItem
             onClick={() => {
+              // A sign-in started here is not a gate's: drop any pending gate
+              // attempt so it neither labels this `login` nor reopens a
+              // gated dialog after it (Auth0/gateLogin.js).
+              clearGateLogin()
               setIsLoginVisible(true)
               onCloseMenu()
             }}
@@ -362,7 +365,6 @@ export default function ProfileControl() {
           // over to a later, unrelated sign-in (Auth0/gateLogin.js).
           if (!isDisplayed) {
             clearGateLogin()
-            setGateLoginReturn(null)
           }
           setIsLoginVisible(isDisplayed)
         }}

@@ -753,6 +753,8 @@ describe('useExport', () => {
     expect(loadProModule).not.toHaveBeenCalled()
     expect(readModelByPathFromOPFS).not.toHaveBeenCalled()
     expect(useStore.getState().snackMessage.text).toMatch(/still being prepared/)
+    // A run that delivers nothing is still one export_failed (codex on #1968).
+    expect(gtagEventWithCid.mock.calls).toEqual([['export_failed', {format: 'glb', reason: 'unavailable'}]])
   })
 
   it('tells the user to reload when the artifact has been evicted from OPFS', async () => {
@@ -765,6 +767,7 @@ describe('useExport', () => {
 
     expect(loadProModule).not.toHaveBeenCalled()
     expect(useStore.getState().snackMessage.text).toMatch(/reload the model/)
+    expect(gtagEventWithCid.mock.calls).toEqual([['export_failed', {format: 'glb', reason: 'unavailable'}]])
   })
 
   it('rejects a format that has not shipped', async () => {

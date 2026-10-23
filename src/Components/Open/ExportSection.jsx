@@ -452,8 +452,8 @@ export default function ExportSection() {
 
   // Signed out: the Save dialog opens on this tab for everyone (Share#1964),
   // so this is the gate an anonymous user meets. Its sign-in returns them to
-  // this tab (SaveModelControl, `gateLoginReturn`) and is attributed to the
-  // gate in `login` (Auth0/gateLogin.js).
+  // this tab (SaveModelControl) and is attributed to the gate in `login`
+  // (Auth0/gateLogin.js).
   let gatedButton = exportButton
   if (!isAuthenticated) {
     gatedButton = (

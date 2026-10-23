@@ -375,8 +375,8 @@ export function gtagFunnelEvent(eventName, parameters = {}) {
  *                   help opening
  *   EXPORT_MODEL    {format, bytes_bucket, source_kind, portable,
  *                   free_export}  useExport, on a delivered download
- *   EXPORT_FAILED   {format, reason: 'free_limit'|'denied'|'error'}
- *                   useExport, on a failed run
+ *   EXPORT_FAILED   {format, reason: 'free_limit'|'denied'|'unavailable'|
+ *                   'error'}  useExport, once per run that delivers no file
  *   SHARE_GATED     {reason: 'local_file', signed_in}  ShareControl, on the
  *                   local-only Share gate's help opening
  *   SHARE_INTEREST  {feature: 'save_to_cloud', signed_in}  ShareControl, on

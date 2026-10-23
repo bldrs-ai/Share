@@ -14,7 +14,7 @@ import {formatNextFreeExport} from '../../export/freeExports'
 import useCodecSizes from '../../export/useCodecSizes'
 import useFreeExports from '../../export/useFreeExports'
 import {gtagEventWithCid} from '../../privacy/analytics'
-import {GATE_RETURN_EXPORT, takeGateLoginSource} from '../../Auth0/gateLogin'
+import {GATE_RETURN_EXPORT, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
 import useStore from '../../store/useStore'
 import {actAsyncFlush} from '../../utils/tests'
 import {goToSubscription} from '../Profile/subscriptionNav'
@@ -651,7 +651,7 @@ describe('ExportSection', () => {
     expect(useStore.getState().isLoginVisible).toBe(true)
     expect(mockRun).not.toHaveBeenCalled()
     // The sign-in is attributed to this gate, and returns to the Export tab.
-    expect(useStore.getState().gateLoginReturn).toBe(GATE_RETURN_EXPORT)
+    expect(takeGateLoginReturn()).toBe(GATE_RETURN_EXPORT)
     expect(takeGateLoginSource()).toEqual({from: 'gate', feature: 'export'})
   })
 

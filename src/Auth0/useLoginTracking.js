@@ -155,12 +155,8 @@ export default function useLoginTracking() {
     sawSignedOutRef.current = false
     isRedirectLoginPending = false
     const sub = user.sub
-    // `{from: 'gate', feature}` when a visible gate started this sign-in
-    // (gateLogin.js). Taken now, synchronously: the gated control's own
-    // effect for the same render may act on the sign-in too, and the
-    // attribution must not depend on which effect runs first.
-    const params = {method: loginMethodFromSub(sub), ...takeGateLoginSource()}
-    readAuthTime(getIdTokenClaims).then((authTime) => claimLogin(sub, authTime, params))
+    const method = loginMethodFromSub(sub)
+    readAuthTime(getIdTokenClaims).then((authTime) => claimLogin(sub, authTime, method))
   }, [isLoading, isAuthenticated, user, getIdTokenClaims])
 }
 
@@ -194,17 +190,21 @@ async function readAuthTime(getIdTokenClaims) {
  * double-fire guard is not here but in the hook (sawSignedOutRef /
  * isRedirectLoginPending are cleared synchronously before this is reached).
  *
+ * The winner also takes the gate attribution (`{from: 'gate', feature}`,
+ * gateLogin.js), inside the claim: the gate may have been started in any
+ * signed-out tab, and the attribution belongs to the one `login` that is
+ * actually sent (codex review on Share#1968).
+ *
  * @param {?string} sub
  * @param {?number} authTime
- * @param {object} params `login` event params: `{method}`, plus
- *   `{from: 'gate', feature}` for a gate-started sign-in
+ * @param {string} method `login` event param
  * @return {Promise<boolean>} false when another tab (or an earlier pass)
  *   already reported this sign-in
  */
-function claimLogin(sub, authTime, params) {
+function claimLogin(sub, authTime, method) {
   if (authTime === null) {
     // No auth_time, no identity for the sign-in: nothing to dedupe on.
-    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, params)
+    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method, ...takeGateLoginSource()})
     return Promise.resolve(true)
   }
   const id = `${sub}|${authTime}`
@@ -217,7 +217,7 @@ function claimLogin(sub, authTime, params) {
     } catch {
       // Storage unavailable: no cross-tab dedupe, the in-page edge decides.
     }
-    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, params)
+    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method, ...takeGateLoginSource()})
     return true
   })
 }

@@ -11,7 +11,7 @@ import {
 } from '@mui/material'
 import {Clear as ClearIcon, SaveOutlined as SaveOutlinedIcon} from '@mui/icons-material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {GATE_RETURN_EXPORT} from '../../Auth0/gateLogin'
+import {GATE_RETURN_EXPORT, takeGateLoginReturn} from '../../Auth0/gateLogin'
 import {writeSavedGithubModelOPFS} from '../../OPFS/utils'
 import {commitFile, getFilesAndFolders} from '../../net/github/Files'
 import {getOrganizations} from '../../net/github/Organizations'
@@ -41,15 +41,14 @@ import SelectorSeparator from './SelectorSeparator'
  * user opens the dialog on the Export tab, where Export GLB carries the
  * anonymous gate (ExportSection), and the GitHub tab says to log in
  * (PleaseLogin). A sign-in started from that gate comes back here: the
- * dialog reopens on the Export tab (`gateLoginReturn`, Auth0/gateLogin.js).
+ * dialog reopens on the Export tab (the attempt's `returnTo`,
+ * Auth0/gateLogin.js).
  *
  * @return {ReactElement}
  */
 export default function SaveModelControl() {
   const isSaveModelVisible = useStore((state) => state.isSaveModelVisible)
   const setIsSaveModelVisible = useStore((state) => state.setIsSaveModelVisible)
-  const gateLoginReturn = useStore((state) => state.gateLoginReturn)
-  const setGateLoginReturn = useStore((state) => state.setGateLoginReturn)
   // Lifted from SaveModelDialog so the effects below can choose the tab.
   const [currentTab, setCurrentTab] = useState(0)
   const isExportEnabled = isFeatureEnabled('export')
@@ -89,15 +88,17 @@ export default function SaveModelControl() {
   // Back to the export after a sign-in its gate started. The login dialog
   // sits over this one, so the Save dialog is usually still open; reopening
   // and re-selecting the tab covers the user having closed it meanwhile.
+  // takeGateLoginReturn only answers for an unexpired attempt this page
+  // started, so an abandoned or other-tab gate can't reopen Save on a later
+  // sign-in (codex review on Share#1968).
   useEffect(() => {
-    if (isAuthenticated && gateLoginReturn === GATE_RETURN_EXPORT) {
-      setGateLoginReturn(null)
+    if (isAuthenticated && takeGateLoginReturn() === GATE_RETURN_EXPORT) {
       if (isExportEnabled) {
         setCurrentTab(TAB_EXPORT)
       }
       setIsSaveModelVisible(true)
     }
-  }, [isAuthenticated, gateLoginReturn, isExportEnabled, setGateLoginReturn, setIsSaveModelVisible])
+  }, [isAuthenticated, isExportEnabled, setIsSaveModelVisible])
 
   return (
     <ControlButton

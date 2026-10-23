@@ -3,7 +3,7 @@ import {renderHook, waitFor} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../__mocks__/authentication'
 import {_resetGaClientIdForTests, setGaClientId} from '../privacy/analytics'
 import {installGatedFakeLocks, uninstallFakeLocks} from '../privacy/crossTabLock.fixture'
-import {clearGateLogin, noteGateLogin} from './gateLogin'
+import {GATE_LOGIN_KEY, GATE_LOGIN_TTL_MS, clearGateLogin, noteGateLogin} from './gateLogin'
 import useLoginTracking, {
   _resetLoginTrackingForTests,
   loginMethodFromSub,
@@ -21,6 +21,7 @@ describe('useLoginTracking', () => {
   beforeEach(() => {
     _resetLoginTrackingForTests()
     _resetGaClientIdForTests()
+    clearGateLogin()
     localStorage.clear()
     window.gtag = jest.fn()
   })
@@ -162,6 +163,50 @@ describe('useLoginTracking', () => {
     await waitFor(() => expect(localStorage.getItem('bldrs.ga.lastReportedLogin')).toBe(`${mockedUserLoggedIn.user.sub}|${FIRST_SIGN_IN}`))
     await flush()
     expect(loginEvents()).toHaveLength(1)
+  })
+
+  // codex review on Share#1968: the gate attribution belongs to the one
+  // `login` actually sent, so the tab that WINS the claim takes it, whichever
+  // tab started the gate (here: another tab, which wrote the shared record).
+  it('gives the gate attribution to the winning tab, even when another tab started the gate', async () => {
+    localStorage.setItem(GATE_LOGIN_KEY, JSON.stringify({
+      feature: 'export', returnTo: 'export', attemptId: 'another-tab', at: Date.now(),
+    }))
+    const tabA = mountWith(mockedUserLoggedOut)
+    const tabB = mountWith(mockedUserLoggedOut)
+    tabA(withClaims(FIRST_SIGN_IN))
+    await waitFor(() => expect(loginEvents()).toHaveLength(1))
+    expect(loginEvents()[0][2]).toMatchObject({method: 'github', from: 'gate', feature: 'export'})
+
+    // The losing tab neither sends a second login nor holds the attribution.
+    tabB(withClaims(FIRST_SIGN_IN))
+    await flush()
+    expect(loginEvents()).toHaveLength(1)
+    // Only the attribution was consumed; the return stays for its own tab.
+    expect(JSON.parse(localStorage.getItem(GATE_LOGIN_KEY))).toMatchObject({feature: null, returnTo: 'export'})
+  })
+
+  it('does not tag an unrelated sign-in with a gate abandoned past the TTL', async () => {
+    noteGateLogin('export', null, Date.now() - GATE_LOGIN_TTL_MS - 1)
+    const step = mountWith(mockedUserLoggedOut)
+    step(withClaims(FIRST_SIGN_IN))
+    await waitFor(() => expect(loginEvents()).toHaveLength(1))
+    expect(loginEvents()[0][2]).toEqual({method: 'github'})
+  })
+
+  it('gives no attribution when storage fails, and still reports the sign-in', async () => {
+    noteGateLogin('export')
+    const getItem = jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    try {
+      const step = mountWith(mockedUserLoggedOut)
+      step(withClaims(FIRST_SIGN_IN))
+      await waitFor(() => expect(loginEvents()).toHaveLength(1))
+      expect(loginEvents()[0][2]).toEqual({method: 'github'})
+    } finally {
+      getItem.mockRestore()
+    }
   })
 
   // codex finding on #1912. The app's logouts keep the Auth0 session

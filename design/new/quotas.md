@@ -237,16 +237,23 @@ events, so a gate hit joins the same client's `real_model_open`, `login` and
 |---|---|---|
 | `export_gated` | `reason`: `anonymous` \| `free` | `ExportSection`, when the gate's help opens. `anonymous` is reachable since #1964: the Save dialog opens for a signed-out user, on its Export tab |
 | `export_model` | `format`, `bytes_bucket`, `source_kind`, `portable`, `free_export` | `useExport`, on a delivered download |
-| `export_failed` | `format`, `reason`: `free_limit` \| `denied` \| `error` | `useExport`, on a failed run |
+| `export_failed` | `format`, `reason`: `free_limit` \| `denied` \| `unavailable` \| `error` | `useExport`, once per run that delivers no file (`unavailable`: the cached artifact is gone) |
 | `share_gated` | `reason`: `local_file`; `signed_in` | `ShareControl`, when the local-only Share gate's help opens |
 | `share_interest` | `feature`: `save_to_cloud`; `signed_in` | `ShareControl`, the "Save to Google Drive or GitHub to share — coming soon" line; at most once per opening of the help |
 
 A sign-in started from a gate (`Auth0/gateLogin.js`) adds `from: 'gate'` and
-`feature` to `login`. The attribution is module state, consumed by the next
-`login`, dropped when the login dialog is dismissed, and expired after 10
-minutes, so an abandoned popup doesn't label a later Profile-menu sign-in.
-The export gate also sets `gateLoginReturn`, so `SaveModelControl` reopens
-the Save dialog on Export once signed in.
+`feature` to `login`. The gate writes one attempt record to localStorage,
+`{feature, returnTo, attemptId, at}`:
+- **Attribution.** `feature` is taken by whichever tab wins `login`'s
+  cross-tab claim, inside the claim, so it lands on the one `login` sent.
+- **Return.** `returnTo` (the export gate's 'export') reopens the Save dialog
+  on Export, and only in the page that started the attempt.
+- **Lifetime.** The record is dropped on dismissal of the login dialog and
+  when a sign-in starts from the Profile menu. Both parts expire after 10
+  minutes, so an abandoned popup neither labels nor reopens anything for a
+  later sign-in.
+- **No storage.** Without storage it records nothing: no attribution, no
+  return.
 
 GA-side these params need **event-scoped custom dimensions** before they
 appear in reports: `reason`, `signed_in`, `format`, `source_kind`,
