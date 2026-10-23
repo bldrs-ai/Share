@@ -15,6 +15,7 @@
  */
 
 import axios from 'axios'
+import {FREE_PRIVATE_MODEL_LIMIT} from '../../../src/quota/limits.js'
 import {handler} from '../record-load.js'
 
 
@@ -32,7 +33,7 @@ jest.mock('@sentry/serverless', () => ({
 
 const SUB = 'google-oauth2|1234567890'
 const KEY = '/share/v/g/abc123'
-const FREE_LIMIT = 4
+const FREE_LIMIT = FREE_PRIVATE_MODEL_LIMIT
 const AUTH0_DOMAIN = 'bldrs.us.auth0.com.test'
 // `sub` carries a `|`, so this also pins that it's URL-encoded into the path.
 const USER_URL = `https://${AUTH0_DOMAIN}/api/v2/users/google-oauth2%7C1234567890`
@@ -125,21 +126,99 @@ describe('record-load function', () => {
     expect(patched.usageQuota.loads).toEqual([{key: KEY, loadedAt: expect.any(String)}])
   })
 
-  // Local files stay metered across the Share#1959 rename, on purpose
-  // (design/new/quotas.md §"What counts"): `/v/local-only/` under either
-  // install prefix, and the legacy `/v/new/` on keys recorded before it.
-  it.each([
+  const LOCAL_KEYS = [
     ['/share/v/local-only/0b4c2f1e-8d6a-4c3b-9e2f-1a2b3c4d5e6f.ifc'],
     ['/Share/share/v/local-only/0b4c2f1e-8d6a-4c3b-9e2f-1a2b3c4d5e6f.ifc'],
     ['/share/v/new/0b4c2f1e-8d6a-4c3b-9e2f-1a2b3c4d5e6f.ifc'],
-  ])('counts a local file load (%s) for a free user', async (key) => {
-    mockAuth0({})
+  ]
+
+  // Share#1966: a local file is free and unmetered, under either route name
+  // and install prefix — never counted, never refused, even at the limit.
+  it.each(LOCAL_KEYS)('never counts a local file load (%s), even at the limit', async (key) => {
+    mockAuth0({usageQuota: {loads: recentLoads(FREE_LIMIT)}})
 
     const res = await handler(getEvent({key}))
 
     expect(res.statusCode).toBe(200)
-    expect(JSON.parse(res.body)).toMatchObject({allowed: true, used: 1, tier: 'free'})
-    expect(axios.patch.mock.calls[0][1].app_metadata.usageQuota.loads).toEqual([{key, loadedAt: expect.any(String)}])
+    expect(JSON.parse(res.body)).toMatchObject({allowed: true, used: FREE_LIMIT, tier: 'free'})
+    expect(axios.patch).not.toHaveBeenCalled()
+  })
+
+  // The abuse switch (design/new/quotas.md §"Metering local files again").
+  describe('with METER_LOCAL_FILES=true', () => {
+    beforeEach(() => {
+      process.env.METER_LOCAL_FILES = 'true'
+    })
+    afterEach(() => {
+      delete process.env.METER_LOCAL_FILES
+    })
+
+    it.each(LOCAL_KEYS)('counts a local file load (%s) for a free user', async (key) => {
+      mockAuth0({})
+
+      const res = await handler(getEvent({key}))
+
+      expect(res.statusCode).toBe(200)
+      expect(JSON.parse(res.body)).toMatchObject({allowed: true, used: 1, tier: 'free'})
+      expect(axios.patch.mock.calls[0][1].app_metadata.usageQuota.loads).toEqual([{key, loadedAt: expect.any(String)}])
+    })
+
+    it('denies a new local file load for a free user at the limit', async () => {
+      mockAuth0({usageQuota: {loads: recentLoads(FREE_LIMIT)}})
+
+      const res = await handler(getEvent({key: LOCAL_KEYS[0][0]}))
+
+      expect(res.statusCode).toBe(403)
+    })
+  })
+
+  it('denies a free user the 3rd distinct private model within 30 days', async () => {
+    expect(FREE_LIMIT).toBe(2)
+    mockAuth0({usageQuota: {loads: recentLoads(2)}})
+
+    const res = await handler(getEvent({key: '/share/v/g/third-model'}))
+
+    expect(res.statusCode).toBe(403)
+    expect(JSON.parse(res.body)).toMatchObject({allowed: false, used: 2, limit: 2})
+    expect(axios.patch).not.toHaveBeenCalled()
+  })
+
+  /**
+   * Answer api.github.com's repo lookup with `status`, Auth0 as mockAuth0 set.
+   *
+   * @param {number} status
+   */
+  function mockGithubRepoStatus(status) {
+    const authGet = axios.get.getMockImplementation()
+    axios.get.mockImplementation((url, config) => {
+      if (url.startsWith('https://api.github.com/repos/')) {
+        return Promise.resolve({status, data: {}})
+      }
+      return authGet(url, config)
+    })
+  }
+
+  it('never counts a public GitHub model, even at the limit', async () => {
+    mockAuth0({usageQuota: {loads: recentLoads(FREE_LIMIT)}})
+    mockGithubRepoStatus(200)
+
+    const res = await handler(getEvent({key: '/share/v/gh/someorg/public-models/main/tower.ifc'}))
+
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.body)).toMatchObject({allowed: true, used: FREE_LIMIT})
+    expect(axios.get).toHaveBeenCalledWith('https://api.github.com/repos/someorg/public-models', expect.anything())
+    expect(axios.patch).not.toHaveBeenCalled()
+  })
+
+  it('counts a private GitHub model', async () => {
+    mockAuth0({})
+    mockGithubRepoStatus(404)
+
+    const res = await handler(getEvent({key: '/share/v/gh/someorg/private-models/main/tower.ifc'}))
+
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.body)).toMatchObject({allowed: true, used: 1})
+    expect(axios.patch).toHaveBeenCalledTimes(1)
   })
 
   // The route is the FIRST `/v/` segment: a public GitHub file whose repo
@@ -162,14 +241,6 @@ describe('record-load function', () => {
     expect(res.statusCode).toBe(200)
     expect(axios.get).toHaveBeenCalledWith('https://api.github.com/repos/pubowner/pubrepo', expect.anything())
     expect(axios.patch).not.toHaveBeenCalled()
-  })
-
-  it('denies a new local file load for a free user at the limit', async () => {
-    mockAuth0({usageQuota: {loads: recentLoads(FREE_LIMIT)}})
-
-    const res = await handler(getEvent({key: '/share/v/local-only/0b4c2f1e-8d6a-4c3b-9e2f-1a2b3c4d5e6f.ifc'}))
-
-    expect(res.statusCode).toBe(403)
   })
 
   it('does not count a key twice, even at the limit', async () => {

@@ -35,6 +35,17 @@ export const flags = [
   // to roll the limits out to everyone.
   // See design/new/quotas.md.
   {name: 'quotas', isActive: false},
+  // Puts local files (`/v/local-only/`, legacy `/v/new/`) back in the quota
+  // meter. Off: viewing a local file is free and unmetered (Share#1966, the
+  // owner's 2026-10-22 decision, and what the pricing page promises). This
+  // is the abuse switch, kept so the meter can come back without a code
+  // change to the classifiers: `?feature=meterLocalFiles` turns it on for the
+  // client only (anonymous counting is client-side, so that is enough for a
+  // signed-out test); record-load honours this flag too, or the
+  // METER_LOCAL_FILES=true env var for the function alone. Meaningless while
+  // `quotas` is off. Flipping it on also contradicts the pricing copy.
+  // See design/new/quotas.md §"Metering local files again".
+  {name: 'meterLocalFiles', isActive: false},
   // Model export ("Download GLB" in the Save dialog's Export tab), sold as
   // a Pro feature. Gates ONLY the UI section: the pro-module pipeline (the
   // `pro-module` Netlify Function, `proModuleLoader`, the separately-built

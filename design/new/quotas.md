@@ -38,7 +38,7 @@ Enforcement ships dark behind the `quotas` flag.
 2. **Close #1494 as superseded** (a pointer comment is already on that PR).
 3. **Deploy-preview smoke test** (checklist in #1740): with `?feature=quotas`
    and a real Auth0 free user — public GH repo loads without counting;
-   private repo counts; 5th private load → 403 + `QuotaLimitDialog`, no
+   private repo counts; 3rd private load → 403 + `QuotaLimitDialog`, no
    navigation; `sharePro` unlimited; `/share/quotas` renders.
 4. **Bake, then roll out.** Test per-session via `?feature=quotas`; when
    satisfied, flip the flag's `isActive` to `true` in `src/FeatureFlags.js`.
@@ -49,8 +49,15 @@ Enforcement ships dark behind the `quotas` flag.
 | Tier | Limit | Window | Determined by |
 |---|---|---|---|
 | Anonymous (not signed in) | 2 | Lifetime — never resets without sign-in | client only |
-| Free (signed in) | 4 | 30-day rolling | `subscriptionStatus` not a Pro status |
+| Free (signed in) | 2 | 30-day rolling | `subscriptionStatus` not a Pro status |
 | Paid (`sharePro`, `shareProPendingReauth`) | Unlimited | — | `isProSubscriptionStatus(subscriptionStatus)` |
+
+The numbers live in one place, `src/quota/limits.js` (`LIMITS`,
+`FREE_PRIVATE_MODEL_LIMIT`, `ROLLING_WINDOW_DAYS`), imported by the client,
+`record-load`, its MSW mock and the pricing-page guard (§"Pricing copy"
+below). Until Share#1966's PR the function hand-copied `FREE_LIMIT = 4`. The
+free limit went from 4 to 2 private models per window in that PR, with the
+pricing page's three tiers (bizdev#331).
 
 `getTier(appMetadata, isAuthenticated)` in `src/quota/quota.js` is the single
 mapping on the client. Which statuses are Pro is defined once, in
@@ -61,7 +68,10 @@ has counted as Pro since the GLB-export S4 decision
 ([glb-export-premium.md](glb-export-premium.md) §7.2), so a pending-reauth
 user gets unlimited loads; that is intended. Anonymous gets a *lifetime* cap
 of 2 rather than a rolling window so the conversion moment lands early, while
-the user is still engaged.
+the user is still engaged. With local files unmetered and connecting Drive or
+GitHub requiring sign-in, the anonymous cap now only bites on private *links*:
+a Drive or private-GitHub URL opened while signed out. Its number was left
+alone in Share#1966's PR.
 
 The same rolling-window shape meters one more thing: **free GLB exports**, 2
 per rolling 7 days for a signed-in free user, counted on the
@@ -75,32 +85,64 @@ Only *private* loads count. A load is quotable when its share path matches:
 
 | Path | Classifier | Privacy |
 |---|---|---|
-| `/v/local-only/<filename>` (legacy `/v/new/`, #1959) | `isLocallyQuotable` | local file — always private |
+| `/v/local-only/<filename>` (legacy `/v/new/`, #1959) | — | local file — **not counted** (Share#1966), unless `meterLocalFiles` is on |
 | `/v/g/<fileId>` | `isLocallyQuotable` | Google Drive — always private |
 | `/v/gh/<org>/<repo>/...` | `isServerResolvedPath` | GitHub — **server** resolves public vs private |
 
 `isQuotablePath` is their union. Public GitHub repos and sample models are
-**not** counted. The dedup key is the share path itself, so reloading the same
+**not** counted. The local and Drive rule is one function,
+`limits.js#isAlwaysPrivateRouteKind(routeKind, meterLocalFiles)`, which
+`isLocallyQuotable`, `record-load#isQuotableLoad` and the MSW mock all call;
+the route kind is the segment after the FIRST `/v/` (#1967).
+
+**Drive counts every file as private.** Drive has no cheap public/private
+answer the way GitHub's unauthenticated repo lookup gives one, so a Drive
+file is always metered, even one shared "anyone with the link". That agrees
+with the pricing page, which promises *unlimited* only for public GitHub
+models; Drive is among the "private models" a free account gets 2 of. The dedup key is the share path itself, so reloading the same
 model never consumes a new slot (surfaced as `alreadyCounted`).
 
-**Local files across the #1959 rename — kept metered on purpose.** Until
-#1959 the local-file row matched by a `/v/new/` substring, both client-side
-(`isLocallyQuotable`) and in `record-load`. Renaming the route to
-`/v/local-only/` would have silently taken local files out of the meter. #1959
-keeps them in it explicitly instead: both classifiers match `/v/local-only/`
-(through `routes/localOnly.ts` on the client, under any install prefix) and
-the legacy `/v/new/`, and `quota.test.js` and `record-load.test.js` pin it.
+**Local files are free and unmetered (Share#1966).** The owner's direction
+(2026-10-22): viewing a file from your own computer is never counted and never
+refused, at any tier. The pricing page promises it, and its guard fails on
+any limit claim about local files (§"Pricing copy"). Three things moved
+together so local files aren't left half-metered:
 
-The owner's direction (2026-10-22) is that viewing a local file should stay
-free and unmetered. That is a separate, deliberate change, not a side effect
-of the rename. Flipping only the classifiers would leave local files
-half-metered, because three local entry points refuse a drop or pick on
-`useQuota().hasCapacity` before they know the key:
-`dragAndDrop.js#handleFileDrop` (ViewerContainer's dropzone and
-OnboardingOverlay), and `OpenModelDialog#openFile`.
-`QuotaLimitDialog.spec.ts` also uses a local drop as its at-the-limit
-trigger. All of those move together. With `quotas` off (production today),
-none of this meters anything.
+- The classifiers: `isLocallyQuotable` and `record-load` stop matching
+  `/v/local-only/` and the legacy `/v/new/`.
+- The `hasCapacity` pre-gates, which refused a drop or pick *before* its key
+  was known, are gone: `dragAndDrop.js#handleFileDrop` (ViewerContainer's
+  dropzone and OnboardingOverlay) and `OpenModelDialog#openFile`. A local open
+  now goes straight to `record(key)`, which passes the unmetered key.
+- `QuotaLimitDialog.spec.ts` reaches the limit on a Drive pick instead of a
+  local drop, and `localFilesUnmetered.spec.ts` drops three local files
+  signed out (one past the anonymous cap) and asserts no dialog and an empty
+  ledger.
+
+Ledgers may still hold `/v/new/` or `/v/local-only/` rows from before. They
+age out of the 30-day window; an anonymous OPFS ledger never prunes, so such
+rows keep counting toward the lifetime cap until sign-in.
+
+### Metering local files again
+
+The meter is kept available for abuse, behind a switch that is **off by
+default**: the `meterLocalFiles` flag in `src/FeatureFlags.js`.
+
+- **Client:** `quota.js#isLocalFileMeteringEnabled()` reads it through
+  `isFeatureEnabled`, so `?feature=meterLocalFiles` turns it on for one
+  session, and `isActive: true` for everyone. Signed-out counting is
+  client-side (OPFS), so the URL flag alone meters an anonymous session.
+- **Server:** `record-load` honours the same flag's `isActive`, **or** the
+  `METER_LOCAL_FILES=true` Netlify env var, which meters this function alone
+  (a URL flag never reaches it). Testing signed-in metering on a deploy
+  preview needs both the URL flag and the env var.
+- **MSW mock:** reads the flag, standing in for both.
+
+With the switch on, `record(key)` is again a local open's only gate: the
+removed pre-gates don't come back, so an OPFS drop is written before
+`record-load` answers, and a refused one is left in OPFS (an orphan blob, not
+a counted load). Turning it on also makes the pricing page untrue. Change the
+copy first, or the guard test fails once the copy says otherwise.
 
 ### GitHub privacy detection
 
@@ -187,7 +229,7 @@ mirror / offline fallback. It is *not* the authority for signed-in users.
 `pruneLoads(loads, tier, now)` drops loads whose `loadedAt` is older than
 `ROLLING_WINDOW_DAYS` (30). Anonymous is exempt (lifetime cap). Pruning runs on
 both the client (`useQuota`) and the server (before counting) so the two agree.
-A free user who opened 4 private models gets a slot back exactly 30 days after
+A free user who opened 2 private models gets a slot back exactly 30 days after
 each load, rather than all at once on a calendar reset.
 
 ## UI surfaces
@@ -199,8 +241,33 @@ Summary only; the wiring lives in
   amber ≥ 75%; hidden entirely when `limit === Infinity` (paid or flag-off).
 - **`QuotaLimitDialog`** on `403`: states the numeric limit + rolling-window
   phrasing, links to `/share/quotas`.
-- Gated load sites: Drive picker + recents, local file + recents, GitHub recents
-  + browser, sample chips, drag-and-drop.
+- Gated load sites: Drive picker + recents, GitHub recents + browser, sample
+  chips (public, so they pass), and local file + recents + drag-and-drop, which
+  `record()` passes while local files are unmetered.
+
+## Pricing copy
+
+The marketing pricing page (`marketing/src/components/PricingTiers.tsx`) is a
+static Next.js build that can't import these constants, so its numbers are
+literals. `tools/marketing/pricingTiers.test.js` keeps them true:
+
+- every "N private models a <window>" claim must equal
+  `FREE_PRIVATE_MODEL_LIMIT` / `ROLLING_WINDOW_DAYS` (30 days → "month"), and
+  every "N GLB exports a <window>" claim must equal `FREE_EXPORT_LIMIT` /
+  `FREE_EXPORT_WINDOW_DAYS` (7 → "week", `src/export/freeExports.js`); both
+  claims must be present;
+- any limit wording on a line about local files fails, as does load-count
+  copy ("N model loads", #1965) and any other "N models/files/exports" the
+  checks can't verify;
+- it proves itself by re-running against the real page with each number
+  bumped by one, and against fixtures for the local-file and load-count
+  shapes.
+
+It no longer depends on the `quotas` flag. #1965's version allowed no limit
+copy while enforcement was off. Now the copy must match the enforced
+constants whatever the flag says, so the flag can be staged separately from
+the copy. In-app surfaces (`QuotaLimitDialog`, `/share/quotas`, the Export
+tab) read the constants directly.
 
 ## Funnel analytics
 

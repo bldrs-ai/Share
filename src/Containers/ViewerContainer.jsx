@@ -23,7 +23,7 @@ export default function ViewerContainer() {
   const [showQuotaDialog, setShowQuotaDialog] = useState(false)
 
   const navigate = useNavigate()
-  const {tier, hasCapacity, record} = useQuota()
+  const {tier, record} = useQuota()
 
   /**
    * Handles file drop into drag-n-drop area
@@ -33,7 +33,6 @@ export default function ViewerContainer() {
   async function onDrop(event) {
     setIsDragActive(false)
     await handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert, undefined, undefined, {
-      hasCapacity,
       record,
       onExceeded: () => setShowQuotaDialog(true),
     })

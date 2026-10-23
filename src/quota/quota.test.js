@@ -2,6 +2,7 @@ import {
   TIERS,
   LIMITS,
   ROLLING_WINDOW_DAYS,
+  isLocalFileMeteringEnabled,
   isLocallyQuotable,
   isServerResolvedPath,
   isQuotablePath,
@@ -42,28 +43,49 @@ function isoDaysBefore(baseMs, days) {
 // path classifiers
 // ---------------------------------------------------------------------------
 describe('isLocallyQuotable', () => {
-  // Kept in step across the #1959 rename ON PURPOSE (design/new/quotas.md
-  // §"What counts"): local files are metered under the new route name, the
-  // legacy one, and the GitHub Pages prefix. If the owner decides local
-  // viewing is unmetered, this is the test to flip — together with the
-  // hasCapacity pre-gates listed there.
-  it('local files are locally quotable, under either route name and any prefix', () => {
-    for (const key of [
-      '/share/v/local-only/model.ifc',
-      '/share/v/new/model.ifc',
-      '/Share/share/v/local-only/model.ifc',
-    ]) {
-      expect(isLocallyQuotable(key)).toBe(true)
-      expect(isQuotablePath(key)).toBe(true)
+  const LOCAL_KEYS = [
+    '/share/v/local-only/model.ifc',
+    '/share/v/new/model.ifc',
+    '/Share/share/v/local-only/model.ifc',
+  ]
+
+  // Share#1966: viewing a local file is free and unmetered, under the
+  // route's current name, its legacy one and the GitHub Pages prefix.
+  it('never counts local files with the local meter off (the default)', () => {
+    for (const key of LOCAL_KEYS) {
+      expect(isLocallyQuotable(key)).toBe(false)
+      expect(isLocallyQuotable(key, false)).toBe(false)
+      expect(isQuotablePath(key)).toBe(false)
     }
   })
 
-  it('google drive files are locally quotable', () => {
+  // The abuse switch (design/new/quotas.md §"Metering local files again").
+  it('counts local files when meterLocalFiles is on, under either route name and any prefix', () => {
+    for (const key of LOCAL_KEYS) {
+      expect(isLocallyQuotable(key, true)).toBe(true)
+      expect(isQuotablePath(key, true)).toBe(true)
+    }
+  })
+
+  it('reads the meterLocalFiles flag by default', () => {
+    expect(isLocalFileMeteringEnabled()).toBe(false)
+    window.history.pushState({}, '', '/share/v/p/index.ifc?feature=meterLocalFiles')
+    try {
+      expect(isLocalFileMeteringEnabled()).toBe(true)
+      expect(isLocallyQuotable('/share/v/local-only/model.ifc')).toBe(true)
+    } finally {
+      window.history.pushState({}, '', '/')
+    }
+  })
+
+  it('google drive files are locally quotable, with or without the local meter', () => {
     expect(isLocallyQuotable('/share/v/g/1BxABCxyz')).toBe(true)
+    expect(isLocallyQuotable('/share/v/g/1BxABCxyz', true)).toBe(true)
   })
 
   it('github files are NOT locally quotable (server decides)', () => {
     expect(isLocallyQuotable('/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc')).toBe(false)
+    expect(isLocallyQuotable('/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc', true)).toBe(false)
   })
 })
 
@@ -90,7 +112,7 @@ describe('quota path classification by route kind', () => {
       '/share/v/gh/org/repo/main/v/new/model.ifc',
       '/share/v/gh/org/repo/main/v/g/model.ifc',
     ]) {
-      expect(isLocallyQuotable(key)).toBe(false)
+      expect(isLocallyQuotable(key, true)).toBe(false)
       expect(isServerResolvedPath(key)).toBe(true)
     }
   })
@@ -103,10 +125,11 @@ describe('quota path classification by route kind', () => {
 
 
 describe('isQuotablePath', () => {
-  it('returns true for local, drive, and github', () => {
-    expect(isQuotablePath('/share/v/local-only/x.ifc')).toBe(true)
+  it('returns true for drive and github, and for local only with the local meter on', () => {
     expect(isQuotablePath('/share/v/g/abc')).toBe(true)
     expect(isQuotablePath('/share/v/gh/foo/bar/main/x.ifc')).toBe(true)
+    expect(isQuotablePath('/share/v/local-only/x.ifc')).toBe(false)
+    expect(isQuotablePath('/share/v/local-only/x.ifc', true)).toBe(true)
   })
 
   it('returns false for unknown paths', () => {
@@ -194,31 +217,42 @@ describe('checkQuota', () => {
   })
 
   it('allows first load for anonymous', () => {
-    const {allowed, used, limit} = checkQuota(makeQuota(TIERS.ANONYMOUS), '/v/new/a.ifc')
+    const {allowed, used, limit} = checkQuota(makeQuota(TIERS.ANONYMOUS), '/v/g/a')
     expect(allowed).toBe(true)
     expect(used).toBe(0)
     expect(limit).toBe(LIMITS[TIERS.ANONYMOUS])
   })
 
   it('blocks when anonymous limit reached', () => {
-    const quota = makeQuota(TIERS.ANONYMOUS, ['/v/new/a.ifc', '/v/new/b.ifc'])
-    const {allowed} = checkQuota(quota, '/v/new/c.ifc')
+    const quota = makeQuota(TIERS.ANONYMOUS, ['/v/g/a', '/v/g/b'])
+    const {allowed} = checkQuota(quota, '/v/g/c')
     expect(allowed).toBe(false)
   })
 
   it('marks already-counted key as allowed even past the limit', () => {
-    const quota = makeQuota(TIERS.ANONYMOUS, ['/v/new/a.ifc', '/v/new/b.ifc'])
-    const {allowed, alreadyCounted} = checkQuota(quota, '/v/new/a.ifc')
+    const quota = makeQuota(TIERS.ANONYMOUS, ['/v/g/a', '/v/g/b'])
+    const {allowed, alreadyCounted} = checkQuota(quota, '/v/g/a')
     expect(allowed).toBe(true)
     expect(alreadyCounted).toBe(true)
   })
 
-  it('allows up to the free tier limit', () => {
-    const keys = ['/v/g/1', '/v/g/2', '/v/g/3']
-    const quota = makeQuota(TIERS.FREE, keys)
-    expect(checkQuota(quota, '/v/g/4').allowed).toBe(true)
-    const full = makeQuota(TIERS.FREE, [...keys, '/v/g/4'])
-    expect(checkQuota(full, '/v/g/5').allowed).toBe(false)
+  it('free tier: two distinct private models in 30 days, the 3rd is denied', () => {
+    expect(LIMITS[TIERS.FREE]).toBe(2)
+    expect(checkQuota(makeQuota(TIERS.FREE, ['/v/g/1']), '/v/g/2').allowed).toBe(true)
+    const full = makeQuota(TIERS.FREE, ['/v/g/1', '/v/g/2'])
+    const third = checkQuota(full, '/v/g/3')
+    expect(third.allowed).toBe(false)
+    expect(third.used).toBe(2)
+    // Reopening one of the two stays free.
+    expect(checkQuota(full, '/v/g/1').allowed).toBe(true)
+  })
+
+  it('free tier: a model opened over 30 days ago no longer counts', () => {
+    const quota = {tier: TIERS.FREE, loads: [
+      {key: '/v/g/1', loadedAt: isoDaysBefore(Date.now(), DAYS_OUTSIDE_WINDOW)},
+      {key: '/v/g/2', loadedAt: recent()},
+    ]}
+    expect(checkQuota(quota, '/v/g/3').allowed).toBe(true)
   })
 
   it('always allows paid tier', () => {
@@ -320,6 +354,22 @@ describe('loadQuota / saveQuota / recordLoad', () => {
     await recordLoad('/share/v/g/abc123')
     const result = await recordLoad('/share/v/g/abc123')
     expect(result.loads).toHaveLength(1)
+  })
+
+  it('recordLoad never records a local file with the local meter off', async () => {
+    expect(await recordLoad('/share/v/local-only/abc.ifc')).toBeNull()
+    expect(await recordLoad('/share/v/new/abc.ifc')).toBeNull()
+    expect((await loadQuota()).loads).toHaveLength(0)
+  })
+
+  it('recordLoad records a local file when meterLocalFiles is on', async () => {
+    window.history.pushState({}, '', '/share/v/p/index.ifc?feature=meterLocalFiles')
+    try {
+      const result = await recordLoad('/share/v/local-only/abc.ifc')
+      expect(result.loads.map((l) => l.key)).toEqual(['/share/v/local-only/abc.ifc'])
+    } finally {
+      window.history.pushState({}, '', '/')
+    }
   })
 
   it('recordLoad returns null for github paths (server-resolved)', async () => {

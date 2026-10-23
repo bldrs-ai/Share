@@ -1,6 +1,8 @@
 import React, {ReactElement} from 'react'
 import {Box, Link, Table, TableBody, TableCell, TableHead, TableRow, Typography} from '@mui/material'
 import TitledLayout from '../../layouts/TitledLayout'
+import {FREE_EXPORT_LIMIT, FREE_EXPORT_WINDOW_DAYS} from '../../export/freeExports'
+import {LIMITS, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/limits'
 
 
 /** @return {ReactElement} */
@@ -10,10 +12,10 @@ export default function Quotas() {
       <Box sx={{maxWidth: 720, margin: '0 auto', padding: '1em'}}>
         <Typography variant='h4' gutterBottom>Usage limits</Typography>
         <Typography paragraph>
-          Bldrs Share counts loads of <em>private</em> models — files in
-          your local browser storage, files from your Google Drive, and
-          private GitHub repositories. Public GitHub samples and shared
-          public-repo models do not count.
+          Bldrs Share counts the <em>private</em> models you open from the
+          cloud: files from your Google Drive and from private GitHub
+          repositories. Files from your own computer and public GitHub
+          models are free and unlimited.
         </Typography>
 
         <Table sx={{marginTop: '1em'}}>
@@ -27,13 +29,13 @@ export default function Quotas() {
           <TableBody>
             <TableRow>
               <TableCell>Anonymous</TableCell>
-              <TableCell>2</TableCell>
+              <TableCell>{LIMITS[TIERS.ANONYMOUS]}</TableCell>
               <TableCell>Lifetime — sign in to reset</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>Free (signed in)</TableCell>
-              <TableCell>4</TableCell>
-              <TableCell>Rolling 30 days</TableCell>
+              <TableCell>{LIMITS[TIERS.FREE]}</TableCell>
+              <TableCell>Rolling {ROLLING_WINDOW_DAYS} days</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>Pro</TableCell>
@@ -52,13 +54,20 @@ export default function Quotas() {
 
         <Typography variant='h6' sx={{marginTop: '1.5em'}}>What does <em>not</em> count?</Typography>
         <Typography component='ul'>
+          <li>Files opened from your computer (drag and drop, or Browse)</li>
           <li>Public GitHub repositories (including all sample models)</li>
           <li>Browsing the model viewer itself, navigation, search, etc.</li>
         </Typography>
 
+        <Typography variant='h6' sx={{marginTop: '1.5em'}}>GLB exports</Typography>
+        <Typography paragraph>
+          A free account includes {FREE_EXPORT_LIMIT} GLB exports in any
+          rolling {FREE_EXPORT_WINDOW_DAYS} days.
+        </Typography>
+
         <Typography sx={{marginTop: '2em'}}>
           Need more? <Link href='/subscribe'>Upgrade to Pro</Link> for
-          unlimited private model loads.
+          unlimited private models and unlimited GLB exports.
         </Typography>
       </Box>
     </TitledLayout>
