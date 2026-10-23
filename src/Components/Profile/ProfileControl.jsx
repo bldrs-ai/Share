@@ -9,7 +9,7 @@ import {
 import {useTheme} from '@mui/material/styles'
 import {captureException} from '@sentry/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {clearGateLogin} from '../../Auth0/gateLogin'
+import {abandonGateLogin, clearGateLogin} from '../../Auth0/gateLogin'
 import {getRenderMode, setRenderMode as saveRenderMode} from '../../privacy/preferences'
 import {trackSubscriptionFromToken} from '../../privacy/subscriptionTracking'
 import useStore from '../../store/useStore'
@@ -364,7 +364,7 @@ export default function ProfileControl() {
           // neither its `login` attribution nor its return-to may carry
           // over to a later, unrelated sign-in (Auth0/gateLogin.js).
           if (!isDisplayed) {
-            clearGateLogin()
+            abandonGateLogin()
           }
           setIsLoginVisible(isDisplayed)
         }}

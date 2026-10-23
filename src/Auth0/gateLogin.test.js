@@ -1,5 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {
+  abandonGateLogin,
   GATE_LOGIN_KEY,
   GATE_LOGIN_TTL_MS,
   GATE_RETURN_EXPORT,
@@ -35,6 +36,31 @@ describe('Auth0/gateLogin', () => {
     clearGateLogin()
     expect(takeGateLoginSource()).toEqual({})
     expect(takeGateLoginReturn()).toBeNull()
+  })
+
+  it('abandoning removes this page\'s own attempt', () => {
+    noteGateLogin('export', GATE_RETURN_EXPORT)
+    abandonGateLogin()
+    expect(localStorage.getItem(GATE_LOGIN_KEY)).toBeNull()
+    expect(takeGateLoginSource()).toEqual({})
+  })
+
+  // codex review on Share#1968 (round 3): tab A dismissing its older dialog
+  // must not delete the newer attempt tab B wrote over it.
+  it('abandoning leaves a newer attempt another tab started', () => {
+    noteGateLogin('export', GATE_RETURN_EXPORT) // tab A
+    const tabB = {feature: 'share', returnTo: null, attemptId: 'tab-b', at: Date.now()}
+    localStorage.setItem(GATE_LOGIN_KEY, JSON.stringify(tabB)) // tab B, newer
+    abandonGateLogin() // tab A dismisses
+    expect(JSON.parse(localStorage.getItem(GATE_LOGIN_KEY))).toEqual(tabB)
+    expect(takeGateLoginSource()).toEqual({from: 'gate', feature: 'share'})
+  })
+
+  it('a non-gate sign-in clears any attempt, whoever started it', () => {
+    localStorage.setItem(GATE_LOGIN_KEY, JSON.stringify(
+      {feature: 'share', returnTo: null, attemptId: 'tab-b', at: Date.now()}))
+    clearGateLogin()
+    expect(localStorage.getItem(GATE_LOGIN_KEY)).toBeNull()
   })
 
   // A popup abandoned at a gate must not label, or reopen Save for, a

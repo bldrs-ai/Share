@@ -24,8 +24,11 @@ import useStore from '../store/useStore'
  *      module's), so a gate abandoned in one tab can't reopen a dialog in
  *      another.
  *
- * The record is dropped when the login dialog is dismissed and when a sign-in
- * starts from the Profile menu (ProfileControl), and both parts expire after
+ * The record is dropped when this page's login dialog is dismissed (only if
+ * it is still this page's attempt: another tab may have started a newer one
+ * since, which must survive; codex review on Share#1968), and always when a
+ * sign-in starts from the Profile menu (ProfileControl). Both parts expire
+ * after
  * GATE_LOGIN_TTL_MS: a popup the user abandoned must not label, or reopen
  * Save for, a sign-in made later. Where storage is unavailable nothing is
  * recorded, so nothing is attributed or reopened: it fails closed.
@@ -107,7 +110,29 @@ export function takeGateLoginReturn(now = Date.now()) {
 }
 
 
-/** Forget any gate attempt (login dialog dismissed, or a non-gate sign-in). */
+/**
+ * This page's gate attempt was abandoned (its login dialog was dismissed).
+ * Removes the record only if it is still this page's attempt: a newer one
+ * another tab started since is left alone.
+ */
+export function abandonGateLogin() {
+  const attemptId = myAttemptId
+  myAttemptId = null
+  if (attemptId === null) {
+    return
+  }
+  try {
+    const record = JSON.parse(localStorage.getItem(GATE_LOGIN_KEY))
+    if (record && record.attemptId === attemptId) {
+      localStorage.removeItem(GATE_LOGIN_KEY)
+    }
+  } catch {
+    // Storage unavailable: there is no record to clear either.
+  }
+}
+
+
+/** Forget any gate attempt, whoever started it: a sign-in that is not a gate's. */
 export function clearGateLogin() {
   myAttemptId = null
   try {
