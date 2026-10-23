@@ -328,8 +328,11 @@ export function getOpenCid() {
  *                        CadView's onViewerInternal catch, once per failed
  *                        attempt; closed-set values only (Share#1954)
  *   QUOTA_LIMIT_REACHED  {tier, feature}  QuotaLimitDialog, once per showing
- *   LOGIN                {method}  Auth0/useLoginTracking, once per
- *                        completed sign-in, never on a cached-session boot
+ *   LOGIN                {method, from?, feature?}  Auth0/useLoginTracking,
+ *                        once per completed sign-in, never on a
+ *                        cached-session boot; `from: 'gate'` + `feature`
+ *                        when the sign-in began at a visible gate
+ *                        (Auth0/gateLogin.js)
  *   BEGIN_CHECKOUT       {from, destination}  Profile/subscriptionNav
  *   SUBSCRIPTION_STARTED / SUBSCRIPTION_ENDED  {}  BaseRoutes'
  *                        processAccessToken on the pendingReauth statuses,
@@ -367,6 +370,48 @@ export const FUNNEL_EVENTS = Object.freeze({
  * @param {object} [parameters]
  */
 export function gtagFunnelEvent(eventName, parameters = {}) {
+  gtagEventWithCid(eventName, parameters)
+}
+
+
+/*
+ * Events at the visible gates and the actions behind them (Share#1964), all
+ * sent through gtagEventWithCid so the dashboard can join them to the same
+ * client's real_model_open, login and begin_checkout. Params, and where each
+ * fires:
+ *
+ *   EXPORT_GATED    {reason: 'anonymous'|'free'}  ExportSection, on the gate's
+ *                   help opening
+ *   EXPORT_MODEL    {format, bytes_bucket, source_kind, portable,
+ *                   free_export}  useExport, on a delivered download
+ *   EXPORT_FAILED   {format, reason: 'free_limit'|'denied'|'unavailable'|
+ *                   'error'}  useExport, once per run that delivers no file
+ *   SHARE_GATED     {reason: 'local_file', signed_in}  ShareControl, on the
+ *                   local-only Share gate's help opening
+ *   SHARE_INTEREST  {feature: 'save_to_cloud', signed_in}  ShareControl, on
+ *                   the "coming soon" line in that help
+ *
+ * Like FUNNEL_EVENTS, the names are queried verbatim GA-side; GA4 has no
+ * rename.
+ */
+export const GATE_EVENTS = Object.freeze({
+  EXPORT_GATED: 'export_gated',
+  EXPORT_MODEL: 'export_model',
+  EXPORT_FAILED: 'export_failed',
+  SHARE_GATED: 'share_gated',
+  SHARE_INTEREST: 'share_interest',
+})
+
+
+/**
+ * gtagEvent plus OPEN_CID_PARAM (getOpenCid()), omitted rather than blank
+ * when no client id has resolved — off-prod, under automation, on blocked
+ * clients. The join key for any event the funnel needs to follow per client.
+ *
+ * @param {string} eventName
+ * @param {object} [parameters]
+ */
+export function gtagEventWithCid(eventName, parameters = {}) {
   const openCid = getOpenCid()
   gtagEvent(eventName, openCid ? {...parameters, [OPEN_CID_PARAM]: openCid} : parameters)
 }

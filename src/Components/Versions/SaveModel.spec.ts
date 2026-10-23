@@ -27,11 +27,14 @@ describe('Versions 100: Save model', () => {
       await returningUserVisitsHomepageWaitForModel(page)
     })
 
-    test('Save button visible but gated', async ({page}) => {
-      // Signed out, Save is shown in the gated look rather than hidden
-      // (#1838): the click opens help saying what unlocks it.
-      await expect(page.getByTestId('gated-save')).toBeVisible({timeout: 10000})
-      await expect(page.getByRole('dialog')).toHaveCount(0)
+    test('Save button visible, and opens for a signed-out user', async ({page}) => {
+      // Signed out, Save opens like for anyone else (Share#1964; before that
+      // it was a gate of its own, #1838). The gates are inside: GitHub says
+      // to log in, and Export GLB carries the export gate.
+      await expect(page.getByTestId('control-button-save')).toBeVisible({timeout: 10000})
+      await expect(page.getByTestId('gated-save')).toHaveCount(0)
+      await page.getByTestId('control-button-save').click()
+      await expect(page.getByRole('dialog')).toBeVisible()
     })
 
     describe('User login', () => {

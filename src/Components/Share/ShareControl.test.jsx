@@ -3,19 +3,37 @@ import React from 'react'
 import {act, fireEvent, render, renderHook, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import useStore from '../../store/useStore'
-import {gtagEvent} from '../../privacy/analytics'
-import ShareControl, {MSG_LOCAL_SHARE_BODY, MSG_LOCAL_SHARE_TITLE} from './ShareControl'
+import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
+import {takeGateLoginSource} from '../../Auth0/gateLogin'
+import {gtagEventWithCid} from '../../privacy/analytics'
+import ShareControl, {
+  MSG_LOCAL_SHARE_BODY,
+  MSG_LOCAL_SHARE_TITLE,
+  MSG_SHARE_COMING_SOON,
+  MSG_SHARE_INTEREST_NOTED,
+} from './ShareControl'
 import {ColorMode} from '../../viewer/display/colorMode'
 import {ShadingMode} from '../../viewer/display/shadingMode'
 import {DEFAULT_COLOR} from '../../viewer/ifc/flatMeshToBatchedModel'
 
 
-// Only gtagEvent is stubbed, for the same reason as ExportSection.test.jsx:
+// Only the senders are stubbed, for the same reason as ExportSection.test.jsx:
 // modules pulled in transitively read FUNNEL_EVENTS at import time.
+// gtagEventWithCid attaches open_cid (privacy/analytics.test.js).
 jest.mock('../../privacy/analytics', () => ({
   ...jest.requireActual('../../privacy/analytics'),
   gtagEvent: jest.fn(),
+  gtagEventWithCid: jest.fn(),
 }))
+
+
+// ShareControl reads the auth state (the local-only gate's Sign in, and
+// `signed_in` on its events). The mocked SDK hook returns undefined until
+// given a value, so every suite starts signed out; cases that need a
+// signed-in user set it themselves.
+beforeEach(() => {
+  mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+})
 
 
 describe('ShareControl', () => {
@@ -219,7 +237,44 @@ describe('ShareControl for a local upload (#705)', () => {
     expect(queryByTestId('textfield-link')).toBeNull()
     expect(queryByTestId('img-qrcode')).toBeNull()
     expect(useStore.getState().isShareVisible).toBe(false)
-    expect(gtagEvent).toHaveBeenCalledWith('share_gated', {reason: 'local_file'})
+    expect(gtagEventWithCid).toHaveBeenCalledWith('share_gated', {reason: 'local_file', signed_in: false})
+  })
+
+  // Share#1964: the gate measures intent.
+  it('counts one share_interest per opening, from the "coming soon" line', async () => {
+    const {findByTestId, findByText, queryByTestId} = render(
+      <ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(await findByTestId('gated-share'))
+    expect(await findByText(MSG_SHARE_COMING_SOON)).toBeInTheDocument()
+
+    fireEvent.click(await findByTestId('share-interest'))
+    expect(gtagEventWithCid).toHaveBeenCalledWith('share_interest', {feature: 'save_to_cloud', signed_in: false})
+    // A thank-you replaces the link, and the help stays open.
+    expect(await findByText(MSG_SHARE_INTEREST_NOTED)).toBeInTheDocument()
+    expect(queryByTestId('share-interest')).toBeNull()
+    expect(await findByTestId('gated-help')).toBeInTheDocument()
+    expect(gtagEventWithCid.mock.calls.filter(([name]) => name === 'share_interest')).toHaveLength(1)
+  })
+
+  it('offers a signed-out user Sign in, attributed to the gate', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    const {findByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(await findByTestId('gated-share'))
+    const signIn = await findByTestId('gated-help-secondary-action')
+    expect(signIn).toHaveTextContent('Sign in')
+
+    fireEvent.click(signIn)
+    expect(useStore.getState().isLoginVisible).toBe(true)
+    expect(takeGateLoginSource()).toEqual({from: 'gate', feature: 'share'})
+  })
+
+  it('reports signed_in and offers no Sign in for a signed-in user', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    const {findByTestId, queryByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(await findByTestId('gated-share'))
+    expect(await findByTestId('gated-help')).toBeInTheDocument()
+    expect(queryByTestId('gated-help-secondary-action')).toBeNull()
+    expect(gtagEventWithCid).toHaveBeenCalledWith('share_gated', {reason: 'local_file', signed_in: true})
   })
 
   it('"Open a file" opens the Open dialog', async () => {

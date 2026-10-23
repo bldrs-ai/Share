@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect, useRef} from 'react'
 import {Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Link, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {startLogin} from '../../Auth0/gateLogin'
 import {FUNNEL_EVENTS, gtagFunnelEvent} from '../../privacy/analytics'
 import {LIMITS, QUOTA_FEATURES, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/quota'
 import useStore from '../../store/useStore'
@@ -73,6 +74,8 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
 
   const handleSignUp = () => {
     onClose()
+    // Not a gate's sign-in: drop any stale gate attempt (Auth0/gateLogin.js).
+    startLogin()
     loginWithRedirect()
   }
 

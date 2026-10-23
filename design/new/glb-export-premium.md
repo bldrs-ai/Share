@@ -2273,8 +2273,10 @@ TIERS.PAID`, and the free count is the server's last answer
 (`useFreeExports`); both are **for the UI only** — the function is the
 authority, and an unknown count is not gated (the click goes to the server,
 which counts for itself).
-`gtagEvent('export_gated', {reason})` fires when the help OPENS, which is the
-moment the user met the gate.
+`export_gated {reason}` fires when the help OPENS, which is the moment the
+user met the gate. It is sent with `open_cid` (`gtagEventWithCid`, Share#1964),
+and the `anonymous` row is reachable since #1964: the Save dialog opens for a
+signed-out user, on this tab (design/new/quotas.md §"Gate events").
 
 Those status snackbars have to be readable while the dialog that started them
 is still open, so `theme/Theme.jsx` puts `zIndex.snackbar` (2100) above
@@ -2389,11 +2391,13 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   pending, and the same merge runs on the record response so a later
   successful export doesn't wipe it. Hydrated rows the server
   alone knows about offer regeneration, as before.
-- **Analytics:** `gtagEvent('export_model', {format, bytes_bucket,
-  source_kind})` on success — `source_kind` is the loader's categorical kind
+- **Analytics** (all with `open_cid` since Share#1964, plus `export_failed
+  {format, reason}` on a failed run; design/new/quotas.md §"Gate events"):
+  `export_model {format, bytes_bucket,
+  source_kind, portable, free_export}` on success — `source_kind` is the loader's categorical kind
   (`github` / `local` / `upload` / `external`), carried on the `glbArtifact`
   slot by both producers, NOT the cache key's `ns1` (the repo owner on
-  GitHub, a constant everywhere else) and `gtagEvent('export_gated', {reason})` on a
+  GitHub, a constant everywhere else) and `export_gated {reason}` on a
   login/upgrade redirect — the funnel signal for the pricing page.
 
 ### 4.6 Hardening summary

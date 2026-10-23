@@ -220,12 +220,51 @@ behind the same analytics consent check as every other `gtagEvent`.
 | Model open | `real_model_open` | `content_id`, `content_type`, `load_outcome`, `stats_*` (below), `local_hour`, `open_cid` | `CadView` after a real (non-demo) load; see `analytics#isRealModelOpen` |
 | (failed open) | `load_failed` | `content_type`, `size_bucket`, `reason_class`, `last_phase`, `open_cid` | `CadView#onViewerInternal`'s catch, once per failed attempt, real (non-demo) models only |
 | Hit a limit | `quota_limit_reached` | `tier` (`anonymous` \| `free`), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
-| Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown` | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
+| Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown`; plus `from: 'gate'` and `feature` (`export` \| `share`) when a visible gate started the sign-in (§"Gate events") | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
 | Upgrade click | `begin_checkout` (GA4 recommended) | `from`: `profile` \| `export` \| `quota`; `destination`: `checkout` \| `portal` | `goToSubscription` (`Profile/subscriptionNav.js`), which every upgrade CTA goes through |
 | Subscribed | `subscription_started` | — | `BaseRoutes#processAccessToken` on `shareProPendingReauth` (below) |
 | (lapsed) | `subscription_ended` | — | same, on `freePendingReauth` |
 | Engaged | `engaged_use` | `window_days` (7), `opens_in_window`, `threshold` (3), `open_cid` | `src/privacy/engagementTracking.js`, on the 3rd real open in a rolling 7 days; at most once per browser per 30 days (below) |
 | Returned | `return_visit` | `days_since_last_open` (1-14), `open_cid` | same, on an open 1-14 calendar days after the previous one; once per return day |
+
+### Gate events (Share#1964)
+
+A small set of features sits behind sign-in, shown to everyone, and every hit
+is counted, so the paywall axis (bizdev#331) is decided on measured intent.
+The names are `GATE_EVENTS` in `src/privacy/analytics.js`. All are sent
+through `gtagEventWithCid`, the same `open_cid` attachment as the funnel
+events, so a gate hit joins the same client's `real_model_open`, `login` and
+`begin_checkout`.
+
+| Event | Params | Fires |
+|---|---|---|
+| `export_gated` | `reason`: `anonymous` \| `free` | `ExportSection`, when the gate's help opens. `anonymous` is reachable since #1964: the Save dialog opens for a signed-out user, on its Export tab |
+| `export_model` | `format`, `bytes_bucket`, `source_kind`, `portable`, `free_export` | `useExport`, on a delivered download |
+| `export_failed` | `format`, `reason`: `free_limit` \| `denied` \| `unavailable` \| `error` | `useExport`, once per run that delivers no file (`unavailable`: the cached artifact is gone) |
+| `share_gated` | `reason`: `local_file`; `signed_in` | `ShareControl`, when the local-only Share gate's help opens |
+| `share_interest` | `feature`: `save_to_cloud`; `signed_in` | `ShareControl`, the "Save to Google Drive or GitHub to share — coming soon" line; at most once per opening of the help |
+
+A sign-in started from a gate (`Auth0/gateLogin.js`) adds `from: 'gate'` and
+`feature` to `login`. The gate writes one attempt record to localStorage,
+`{feature, returnTo, attemptId, at}`:
+- **Attribution.** `feature` is taken by whichever tab wins `login`'s
+  cross-tab claim, inside the claim, so it lands on the one `login` sent.
+- **Return.** `returnTo` (the export gate's 'export') reopens the Save dialog
+  on Export, and only in the page that started the attempt.
+- **Lifetime.** The record is dropped on dismissal of the login dialog and
+  when a sign-in starts from the Profile menu. Both parts expire after 10
+  minutes, so an abandoned popup neither labels nor reopens anything for a
+  later sign-in.
+- **No storage.** Without storage it records nothing: no attribution, no
+  return.
+
+GA-side these params need **event-scoped custom dimensions** before they
+appear in reports: `reason`, `signed_in`, `format`, `source_kind`,
+`portable`, `free_export` and `bytes_bucket`. `feature` and `from` are
+already on the funnel's list below; GA4 keys a dimension by parameter name,
+so one registration covers these events too, and the same goes for
+`open_cid`. They are added to the GA4-admin follow-ups at the end of this
+section.
 
 The parts that aren't obvious:
 
@@ -431,7 +470,9 @@ has a backfill, so these only start accruing data once registered:
   series across it.
 
 - Register **event-scoped custom dimensions** for `method`, `tier`, `feature`,
-  `from` and `destination`. `open_cid` needs nothing new: GA4 keys an
+  `from` and `destination`, and, for the gate events (§"Gate events",
+  Share#1964), `reason`, `signed_in`, `format`, `source_kind`, `portable`,
+  `free_export` and `bytes_bucket`. `open_cid` needs nothing new: GA4 keys an
   event-scoped dimension by parameter name, not by event, so the one
   registered for `real_model_open` applies to these events too.
 - Mark **`login`** and **`subscription_started`** as **key events**.

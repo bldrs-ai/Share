@@ -2,13 +2,14 @@ import {CompressionStream as NodeCompressionStream} from 'node:stream/web'
 import {act, renderHook, waitFor} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn} from '../__mocks__/authentication'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
-import {gtagEvent} from '../privacy/analytics'
+import {gtagEventWithCid} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {compressedExport, gzippedExport} from './artifactSizes'
 import {triggerDownload} from './download'
 import {recordExport} from './exportHistory'
 import {ProModuleDeniedError, forgetProModule, loadProModule} from './proModuleLoader'
-import useExport, {bytesBucket, formatBytes, freeLimitMessage} from './useExport'
+import {FREE_EXPORT_LIMIT_REASON} from './freeExports'
+import useExport, {bytesBucket, exportFailureReason, formatBytes, freeLimitMessage} from './useExport'
 
 
 jest.mock('../OPFS/utils', () => ({readModelByPathFromOPFS: jest.fn()}))
@@ -16,7 +17,14 @@ jest.mock('../OPFS/utils', () => ({readModelByPathFromOPFS: jest.fn()}))
 // here it stands in for "the panel already compressed this", which is the
 // state the hook is written against.
 jest.mock('./artifactSizes', () => ({compressedExport: jest.fn(), gzippedExport: jest.fn()}))
-jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
+// gtagEventWithCid is the one that carries open_cid (Share#1964); its own
+// test is in privacy/analytics.test.js. GATE_EVENTS stays real so the names
+// asserted here are the names that ship.
+jest.mock('../privacy/analytics', () => ({
+  gtagEvent: jest.fn(),
+  gtagEventWithCid: jest.fn(),
+  GATE_EVENTS: jest.requireActual('../privacy/analytics').GATE_EVENTS,
+}))
 jest.mock('./download', () => ({triggerDownload: jest.fn()}))
 // The history lib has its own suite (exportHistory.test.js); here it stands
 // in for "the export was recorded", and mocking it keeps this suite off OPFS
@@ -113,7 +121,7 @@ describe('useExport', () => {
     })
     expect(triggerDownload).toHaveBeenCalledWith(EXPORTED.blob, 'box.glb')
     expect(useStore.getState().snackMessage).toEqual({text: 'Exported box.glb (2.0 KB)', autoDismiss: true})
-    expect(gtagEvent).toHaveBeenCalledWith('export_model', {
+    expect(gtagEventWithCid).toHaveBeenCalledWith('export_model', {
       format: 'glb',
       bytes_bucket: '<1MB',
       source_kind: KIND_LABEL,
@@ -340,7 +348,7 @@ describe('useExport', () => {
         options: {stripBldrsMetadata: true, compression: 'none', portable: true},
       }),
       expect.anything(), expect.any(Function), expect.any(Function))
-    expect(gtagEvent.mock.calls[0][1].portable).toBe(true)
+    expect(gtagEventWithCid.mock.calls[0][1].portable).toBe(true)
   })
 
   it('still runs no hook when neither control asks for one', async () => {
@@ -363,7 +371,7 @@ describe('useExport', () => {
       await result.current.run('glb', {})
     })
 
-    const [, params] = gtagEvent.mock.calls[0]
+    const [, params] = gtagEventWithCid.mock.calls[0]
     expect(params.source_kind).toBe('github')
     expect(Object.values(params)).not.toContain(CACHE_KEY_ARGS.ns1)
   })
@@ -377,7 +385,7 @@ describe('useExport', () => {
       await result.current.run('glb', {})
     })
 
-    expect(gtagEvent.mock.calls[0][1].source_kind).toBe('unknown')
+    expect(gtagEventWithCid.mock.calls[0][1].source_kind).toBe('unknown')
   })
 
   it('records the export in history, with the artifact fields "Download again" needs', async () => {
@@ -626,7 +634,9 @@ describe('useExport', () => {
       expect.objectContaining({cacheMode: 'off', useRefreshTokens: true}))
     expect(triggerDownload).not.toHaveBeenCalled()
     expect(recordExport).not.toHaveBeenCalled()
-    expect(gtagEvent).not.toHaveBeenCalled()
+    // No export_model for a file that never landed; one export_failed instead.
+    expect(gtagEventWithCid.mock.calls.map(([name]) => name)).toEqual(['export_failed'])
+    expect(gtagEventWithCid).toHaveBeenCalledWith('export_failed', {format: 'glb', reason: 'denied'})
     expect(result.current.error).toBeInstanceOf(ProModuleDeniedError)
   })
 
@@ -647,7 +657,7 @@ describe('useExport', () => {
 
       // Any other id and record-export refuses it as an uncharged free row.
       expect(recordExport.mock.calls[0][0].id).toBe(CHARGE_ID)
-      expect(gtagEvent).toHaveBeenCalledWith('export_model', expect.objectContaining({free_export: true}))
+      expect(gtagEventWithCid).toHaveBeenCalledWith('export_model', expect.objectContaining({free_export: true}))
     })
 
     it('puts the allowance the charge left into the store, for the count line', async () => {
@@ -743,6 +753,8 @@ describe('useExport', () => {
     expect(loadProModule).not.toHaveBeenCalled()
     expect(readModelByPathFromOPFS).not.toHaveBeenCalled()
     expect(useStore.getState().snackMessage.text).toMatch(/still being prepared/)
+    // A run that delivers nothing is still one export_failed (codex on #1968).
+    expect(gtagEventWithCid.mock.calls).toEqual([['export_failed', {format: 'glb', reason: 'unavailable'}]])
   })
 
   it('tells the user to reload when the artifact has been evicted from OPFS', async () => {
@@ -755,6 +767,7 @@ describe('useExport', () => {
 
     expect(loadProModule).not.toHaveBeenCalled()
     expect(useStore.getState().snackMessage.text).toMatch(/reload the model/)
+    expect(gtagEventWithCid.mock.calls).toEqual([['export_failed', {format: 'glb', reason: 'unavailable'}]])
   })
 
   it('rejects a format that has not shipped', async () => {
@@ -779,5 +792,16 @@ describe('size reporting', () => {
     expect(bytesBucket(5 * 1024 * 1024)).toBe('1-10MB')
     expect(bytesBucket(50 * 1024 * 1024)).toBe('10-100MB')
     expect(bytesBucket(500 * 1024 * 1024)).toBe('>100MB')
+  })
+})
+
+
+// `export_failed`'s `reason` (Share#1964), the same three-way split the
+// hook's catch handles.
+describe('exportFailureReason', () => {
+  it('names the free-export limit, a server denial, and anything else', () => {
+    expect(exportFailureReason(new ProModuleDeniedError(403, 'limit', {reason: FREE_EXPORT_LIMIT_REASON}))).toBe('free_limit')
+    expect(exportFailureReason(new ProModuleDeniedError(403, 'denied'))).toBe('denied')
+    expect(exportFailureReason(new Error('encoder blew up'))).toBe('error')
   })
 })
