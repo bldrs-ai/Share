@@ -29,12 +29,13 @@ export const flags = [
   // function, the useQuota hook and QuotaLimitDialog all ship
   // unconditionally; this flag gates ENFORCEMENT. When off, useQuota
   // reports unlimited capacity and record() is a no-op, so no load is
-  // ever counted or blocked and the QuotaBadge stays hidden. Off by
-  // default while quotas are validated against real Auth0 + public/private
-  // repos; enable per-session with `?feature=quotas`. Flip isActive to true
-  // to roll the limits out to everyone.
+  // ever counted or blocked and the QuotaBadge stays hidden. ON since
+  // Share#1970, which made the pricing page's limits the enforced ones
+  // (local files unmetered, free accounts 2 private models per rolling 30
+  // days). `?feature=` can only turn flags ON, so flipping this back to
+  // false is the prod-wide off switch.
   // See design/new/quotas.md.
-  {name: 'quotas', isActive: false},
+  {name: 'quotas', isActive: true},
   // Puts local files (`/v/local-only/`, legacy `/v/new/`) back in the quota
   // meter. Off: viewing a local file is free and unmetered (Share#1966, the
   // owner's 2026-10-22 decision, and what the pricing page promises). This
@@ -42,8 +43,8 @@ export const flags = [
   // change to the classifiers: `?feature=meterLocalFiles` turns it on for the
   // client only (anonymous counting is client-side, so that is enough for a
   // signed-out test); record-load honours this flag too, or the
-  // METER_LOCAL_FILES=true env var for the function alone. Meaningless while
-  // `quotas` is off. Flipping it on also contradicts the pricing copy.
+  // METER_LOCAL_FILES=true env var for the function alone. Meaningless if
+  // `quotas` is turned off. Flipping it on also contradicts the pricing copy.
   // See design/new/quotas.md §"Metering local files again".
   {name: 'meterLocalFiles', isActive: false},
   // Model export ("Download GLB" in the Save dialog's Export tab), sold as

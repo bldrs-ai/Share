@@ -155,7 +155,7 @@ in this order:
 3. **`record(key)`** — the authoritative gate; on `403` open `QuotaLimitDialog`
    instead of navigating, otherwise add the recent and navigate.
 
-When the `quotas` flag is off (the default) `useQuota` reports unlimited
+When the `quotas` flag is off (it is on since Share#1970) `useQuota` reports unlimited
 capacity and `record()` is a no-op, so every load site above is inert.
 
 ### Files (this subsystem)

@@ -3,17 +3,26 @@
 Server-enforced metering of *private* model loads — tier-aware, with a 30-day
 rolling window and GitHub public/private detection. Nudges anonymous and
 free-tier users toward sign-up / upgrade without ever blocking public or sample
-content. Ships behind the `quotas` feature flag (off by default).
+content. Enforcement is the `quotas` feature flag, on in production since
+Share#1970.
 
 This is the design of record for the feature. The Open-dialog UI wiring is in
 [src/Components/Open/README.md](../../src/Components/Open/README.md) §Usage Quotas.
 
 ## Rollout
 
-- **Feature-flagged.** `quotas` in `src/FeatureFlags.js` (`isActive: false`).
-  Enable per session with `?feature=quotas`; flip `isActive: true` to roll out
-  to everyone. When off, `useQuota` reports unlimited capacity and `record()`
-  is a no-op, so nothing is counted, blocked, or badged.
+- **Feature-flagged, now on.** `quotas` in `src/FeatureFlags.js` is
+  `isActive: true` since Share#1970, in a commit of its own ("Enable quotas in
+  production") so it can be staged apart from the pricing copy. Flipping it
+  back to `false` is the prod-wide off switch (`?feature=` can only turn a
+  flag on). When off, `useQuota` reports unlimited capacity and `record()` is
+  a no-op, so nothing is counted, blocked, or badged.
+- **What turning it on changes in production:** signed-in free users get 2
+  private models (Drive, private GitHub) per rolling 30 days and see
+  `QuotaLimitDialog` on the 3rd; signed-out users get 2 private links for
+  life; local files and public GitHub stay unlimited. `quota_limit_reached`
+  starts firing in production GA (§"Funnel analytics"), and every Drive or
+  `/v/gh/` open by a signed-in user now calls `record-load`.
 - **Landed as a 4-PR stack** (supersedes #1494). See the Implementation map.
 
 ## Status & remaining work
