@@ -212,20 +212,36 @@ async function isPrivateGhRepo(owner, repo) {
 }
 
 /**
+ * The view route's kind: the path segment after the FIRST `/v/` of a share
+ * path, e.g. 'gh', 'g', 'local-only'. The same rule as
+ * src/routes/localOnly.ts#viewRouteKind, which this bundle can't import. Only
+ * the first `/v/` is the route: a GitHub file path may itself contain
+ * `v/local-only/` or `v/g/` (codex review on Share#1967).
+ *
+ * @param {string} key Share path
+ * @return {?string}
+ */
+function viewRouteKind(key) {
+  const match = /\/v\/([^/?#]+)/.exec(key)
+  return match ? match[1] : null
+}
+
+/**
  * @param {string} key Share path
  * @return {Promise<boolean>}
  */
 async function isQuotableLoad(key) {
+  const kind = viewRouteKind(key)
   // Local files are always private: `/v/local-only/` since Share#1959, and
   // the legacy `/v/new/` for keys recorded before it — kept in step across
   // the rename on purpose, not dropped (design/new/quotas.md §"What counts").
-  // Mirrors src/quota/quota.js#isLocallyQuotable (which this bundle can't
-  // import).
-  if (key.includes('/v/local-only/') || key.includes('/v/new/') || key.includes('/v/g/')) {
+  // Drive (`/v/g/`) is always private too. Mirrors
+  // src/quota/quota.js#isLocallyQuotable.
+  if (kind === 'local-only' || kind === 'new' || kind === 'g') {
     return true
   }
   // /v/gh/<owner>/<repo>/<branch>/<path>
-  const ghMatch = key.match(/\/v\/gh\/([^/]+)\/([^/]+)\//)
+  const ghMatch = kind === 'gh' && key.match(/\/v\/gh\/([^/]+)\/([^/]+)\//)
   if (ghMatch) {
     const owner = decodeURIComponent(ghMatch[1])
     const repo = decodeURIComponent(ghMatch[2])

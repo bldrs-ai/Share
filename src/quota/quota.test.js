@@ -80,6 +80,28 @@ describe('isServerResolvedPath', () => {
 })
 
 
+// The route kind is the FIRST `/v/` segment (routes/localOnly.ts): a GitHub
+// file whose path contains `v/local-only/` or `v/g/` is a GitHub load, for
+// the server to resolve, never a local or Drive one (codex review on #1967).
+describe('quota path classification by route kind', () => {
+  it('treats a GitHub path containing a local-only or Drive segment as GitHub', () => {
+    for (const key of [
+      '/share/v/gh/org/repo/main/v/local-only/model.ifc',
+      '/share/v/gh/org/repo/main/v/new/model.ifc',
+      '/share/v/gh/org/repo/main/v/g/model.ifc',
+    ]) {
+      expect(isLocallyQuotable(key)).toBe(false)
+      expect(isServerResolvedPath(key)).toBe(true)
+    }
+  })
+
+  it('is not fooled by a Drive or local key that looks like it holds /v/gh/', () => {
+    expect(isServerResolvedPath('/share/v/g/v/gh/x')).toBe(false)
+    expect(isLocallyQuotable('/share/v/g/v/gh/x')).toBe(true)
+  })
+})
+
+
 describe('isQuotablePath', () => {
   it('returns true for local, drive, and github', () => {
     expect(isQuotablePath('/share/v/local-only/x.ifc')).toBe(true)

@@ -1,4 +1,4 @@
-import {isLocalOnlyPath} from '../routes/localOnly'
+import {isLocalOnlyPath, viewRouteKind} from '../routes/localOnly'
 import {isProSubscriptionStatus} from './proStatus'
 
 
@@ -94,7 +94,9 @@ export function getTier(appMetadata, isAuthenticated) {
  * @return {boolean}
  */
 export function isLocallyQuotable(key) {
-  return isLocalOnlyPath(key) || key.includes('/v/g/')
+  // By route kind, not substring: a GitHub file path can contain `v/g/` or
+  // `v/local-only/` (codex review on Share#1967).
+  return isLocalOnlyPath(key) || viewRouteKind(key) === 'g'
 }
 
 
@@ -107,7 +109,7 @@ export function isLocallyQuotable(key) {
  * @return {boolean}
  */
 export function isServerResolvedPath(key) {
-  return key.includes('/v/gh/')
+  return viewRouteKind(key) === 'gh'
 }
 
 

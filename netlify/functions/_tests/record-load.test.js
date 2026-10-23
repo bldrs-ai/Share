@@ -142,6 +142,28 @@ describe('record-load function', () => {
     expect(axios.patch.mock.calls[0][1].app_metadata.usageQuota.loads).toEqual([{key, loadedAt: expect.any(String)}])
   })
 
+  // The route is the FIRST `/v/` segment: a public GitHub file whose repo
+  // path contains `v/local-only/` is a GitHub load, resolved by repo privacy,
+  // not a local one (codex review on Share#1967).
+  it('resolves a GitHub path containing /v/local-only/ by repo privacy, not as local', async () => {
+    mockAuth0({usageQuota: {loads: recentLoads(FREE_LIMIT)}})
+    const authGet = axios.get.getMockImplementation()
+    axios.get.mockImplementation((url, config) => {
+      if (url.startsWith('https://api.github.com/repos/')) {
+        return Promise.resolve({status: 200, data: {}})
+      }
+      return authGet(url, config)
+    })
+
+    const res = await handler(getEvent({key: '/share/v/gh/pubowner/pubrepo/main/v/local-only/model.ifc'}))
+
+    // Public repo: not quotable, so a free user AT the limit is let through
+    // and nothing is written.
+    expect(res.statusCode).toBe(200)
+    expect(axios.get).toHaveBeenCalledWith('https://api.github.com/repos/pubowner/pubrepo', expect.anything())
+    expect(axios.patch).not.toHaveBeenCalled()
+  })
+
   it('denies a new local file load for a free user at the limit', async () => {
     mockAuth0({usageQuota: {loads: recentLoads(FREE_LIMIT)}})
 

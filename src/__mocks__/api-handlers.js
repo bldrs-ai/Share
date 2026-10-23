@@ -238,9 +238,11 @@ function netlifyHandlers() {
       // Either Pro status, like the real function (src/quota/proStatus.js).
       const tier = isMockPro() ? 'paid' : 'free'
 
-      // Quotability — same path classification as the real handler.
-      const isLocallyQuotable = key.includes('/v/local-only/') || key.includes('/v/new/') || key.includes('/v/g/')
-      const ghMatch = key.match(/\/v\/gh\/([^/]+)\/([^/]+)\//)
+      // Quotability — same path classification as the real handler: by the
+      // route kind, the segment after the FIRST `/v/`.
+      const routeKind = (/\/v\/([^/?#]+)/.exec(key) || [])[1]
+      const isLocallyQuotable = routeKind === 'local-only' || routeKind === 'new' || routeKind === 'g'
+      const ghMatch = routeKind === 'gh' && key.match(/\/v\/gh\/([^/]+)\/([^/]+)\//)
       let quotable = isLocallyQuotable
       if (ghMatch) {
         // Heuristic: repo names containing "Public" (matching our sample
