@@ -258,19 +258,27 @@ Summary only; the wiring lives in
 
 The marketing pricing page (`marketing/src/components/PricingTiers.tsx`) is a
 static Next.js build that can't import these constants, so its numbers are
-literals. `tools/marketing/pricingTiers.test.js` keeps them true:
+literals. `tools/marketing/pricingTiers.test.js` keeps them true, and it checks
+the **rendered** page, not the source text: it compiles the component with
+esbuild (bare imports resolved from the repo root's node_modules, so it doesn't
+need a marketing install), renders it with `react-dom/server`, and reads the
+text card by card. A source scan was satisfied by a dead string that never
+renders, and missed a claim split across JSX elements (codex review on #1971).
 
-- every "N private models a <window>" claim must equal
-  `FREE_PRIVATE_MODEL_LIMIT` / `ROLLING_WINDOW_DAYS` (30 days → "month"), and
-  every "N GLB exports a <window>" claim must equal `FREE_EXPORT_LIMIT` /
-  `FREE_EXPORT_WINDOW_DAYS` (7 → "week", `src/export/freeExports.js`); both
-  claims must be present;
-- any limit wording on a line about local files fails, as does load-count
+- The Free account card must state "N private models a <window>" equal to
+  `FREE_PRIVATE_MODEL_LIMIT` / `ROLLING_WINDOW_DAYS` (30 days → "month") and
+  "N GLB exports a <window>" equal to `FREE_EXPORT_LIMIT` /
+  `FREE_EXPORT_WINDOW_DAYS` (7 → "week", `src/export/freeExports.js`). Any such
+  claim anywhere on the page must match. The Share Pro card must state
+  unlimited private models and unlimited GLB exports.
+- Limit wording in the same element as local-file wording, or in an adjacent
+  one (a label and its value in sibling elements), fails. So do load-count
   copy ("N model loads", #1965) and any other "N models/files/exports" the
-  checks can't verify;
-- it proves itself by re-running against the real page with each number
-  bumped by one, and against fixtures for the local-file and load-count
-  shapes.
+  checks can't verify.
+- It proves itself by editing the real source and rendering it: remove a
+  claim from `PLANS`, move it into a comment, change a number or window, or
+  add a split-JSX local limit ("Local files" / "Maximum: 5 per month"). Each
+  must go red.
 
 It no longer depends on the `quotas` flag. #1965's version allowed no limit
 copy while enforcement was off. Now the copy must match the enforced
