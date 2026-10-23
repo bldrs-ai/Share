@@ -74,9 +74,9 @@ const PLANS: Plan[] = [
     // Display only: what a subscriber is CHARGED is the Pro price in Stripe
     // (the pricing table in src/Components/Stripe/PricingTable.jsx and the
     // SHARE_PRO_PRICE_ID Netlify env the webhook entitles on). Nothing ties
-    // these numbers to it, so change them together. $25 came from the
-    // share#1421 paywall mock; the list price is an open decision in
-    // bldrs-ai/bizdev#334 (~$12 per the Monetization Strategy).
+    // these numbers to it, so change them together. $25 is that price,
+    // confirmed and kept by Pablo on 2026-10-22 (bldrs-ai/bizdev#334,
+    // closed "$25 stays"); it first appeared in the share#1421 paywall mock.
     monthlyPrice: 25,
     yearlyPrice: 270,
     description: 'IFC and STEP sharing and collaboration for individual professionals',
