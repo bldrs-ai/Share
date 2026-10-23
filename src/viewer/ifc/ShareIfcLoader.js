@@ -624,8 +624,17 @@ export default class ShareIfcLoader {
         const statsApi = ifcAPI.getStatistics(modelID)
         const geometryMemory = statsApi.getGeometryMemory()
         const totalTime = statsApi.getTotalTime()
+        // Not on conway's Statistics yet (conway#740), so both are undefined
+        // today and `loadStats` simply omits them. When conway ships them
+        // they flow to GA as the unqualified stats_errorCount /
+        // stats_warningCount with no Share change; until then those names
+        // are absent and the page-wide tee reports under stats_pageErrorCount
+        // / stats_pageWarnCount (loadProgress#finishReport).
         const errorCount = statsApi.getErrorCount?.()
         const warningCount = statsApi.getWarningCount?.()
+        // On the Statistics API of the pinned conway, but the Jest mocks of
+        // it (Loader*.test.js) predate the call, hence the optional chain.
+        const productCount = statsApi.getProductCount?.()
         ifcModel.name = statsApi.projectName ?? undefined
         ifcModel.loadStats = {
           loaderVersion: ifcAPI.getConwayVersion?.(),
@@ -641,7 +650,15 @@ export default class ShareIfcLoader {
           // For IFC/STEP they must describe Conway itself, rather than the
           // browser-wide heap and console tee used as other-format fallbacks.
           memoryUsed: geometryMemory,
-          loadTime: totalTime,
+          // Conway's own total is a parse timer, NOT the wall clock. With
+          // demand geometry it covers open + parse + demand-prep and excludes
+          // download, wasm init, the geometry pump, the batched build and the
+          // scene add (ops#28 §4). It used to be published as `loadTime`,
+          // overwriting the reporter's wall clock for IFC/STEP only, so the
+          // GA metric mixed two definitions. It is `openMs` now, and
+          // `loadTime` stays the reporter's (loadAnalytics#buildOutcomeParams).
+          openMs: totalTime,
+          ...(productCount === undefined ? {} : {productCount}),
           ...(errorCount === undefined ? {} : {errorCount}),
           ...(warningCount === undefined ? {} : {warningCount}),
         }

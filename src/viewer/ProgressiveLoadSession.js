@@ -1,5 +1,5 @@
 import {Box3, Group, Sphere, Vector3} from 'three'
-import {setLoadSummary} from '../loader/loadProgress'
+import {reportFirstMesh, setLoadSummary} from '../loader/loadProgress'
 import debug, {WARN} from '../utils/debug'
 import {FRAMING_MARGIN, applyCameraLimits, cameraLimitsForSphere} from './three/cameraLimits'
 import {ElementBoxes, robustBoundsFromElements} from './three/robustBounds'
@@ -187,6 +187,9 @@ export default class ProgressiveLoadSession {
       }
       this.previewGroup.add(mesh)
       this.previewMeshCount++
+      // First geometry on screen, for the GA `stats_firstMeshMs` timing.
+      // Latches, so only the first mesh of the load is recorded.
+      reportFirstMesh()
       if (!this.previewInstalled) {
         this.previewInstalled = true
         this.scene.add(this.previewGroup)
@@ -224,6 +227,10 @@ export default class ProgressiveLoadSession {
       // scratch box it reuses for the next instance.
       this.streamedBoxes.push(box)
       this.boundsRevision_++
+      // The incremental builder's batches are on screen as soon as their
+      // bounds are announced: the same first-geometry moment as above, for
+      // the demand/streaming path that never calls addPreviewMesh.
+      reportFirstMesh()
       if (this.state === SessionState.IDLE) {
         this.state = SessionState.PREVIEWING
       }
