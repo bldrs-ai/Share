@@ -221,11 +221,14 @@ describe('Analytics', () => {
     test('event names are the ones the dashboard queries', () => {
       expect(Analytics.FUNNEL_EVENTS).toEqual({
         REAL_MODEL_OPEN: 'real_model_open',
+        LOAD_FAILED: 'load_failed',
         QUOTA_LIMIT_REACHED: 'quota_limit_reached',
         LOGIN: 'login',
         BEGIN_CHECKOUT: 'begin_checkout',
         SUBSCRIPTION_STARTED: 'subscription_started',
         SUBSCRIPTION_ENDED: 'subscription_ended',
+        ENGAGED_USE: 'engaged_use',
+        RETURN_VISIT: 'return_visit',
       })
     })
   })
@@ -337,6 +340,24 @@ describe('Analytics', () => {
       })).toBe(false)
     })
 
+    // The /viewer/step landing page links here; it is a demo, not a user's
+    // own model, and was counted as a real open before.
+    test('false for the hosted STEP demo (/share/v/p/index.step)', () => {
+      expect(Analytics.isRealModelOpen({
+        kind: 'file',
+        isUploadedFile: false,
+        filepath: 'index.step',
+      })).toBe(false)
+    })
+
+    test('true for a model merely named like the demo, from another source', () => {
+      expect(Analytics.isRealModelOpen({
+        kind: 'provider',
+        provider: 'github',
+        gitpath: 'https://github.com/someone/repo/blob/main/index.step',
+      })).toBe(true)
+    })
+
     test('false for a demo permalink with an element subpath', () => {
       // processFile strips the eltPath, so the demo shape is identical.
       expect(Analytics.isRealModelOpen({
@@ -356,9 +377,10 @@ describe('Analytics', () => {
     })
 
     test('true for an upload even when isUploadedFile is misdetected', () => {
-      // GitHub Pages installs prefix routes with /Share, defeating
-      // processFile's '/share/v/new' test — the UUID filepath still
-      // distinguishes the upload from the demo.
+      // Before #1959, GitHub Pages installs (routes prefixed /Share)
+      // defeated processFile's '/share/v/new' test. processFile is now
+      // prefix-independent (routes/localOnly.ts), but the UUID filepath
+      // stays an independent backup that distinguishes upload from demo.
       expect(Analytics.isRealModelOpen({
         kind: 'file',
         isUploadedFile: false,

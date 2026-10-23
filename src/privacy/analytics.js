@@ -322,7 +322,11 @@ export function getOpenCid() {
  * constant.
  *
  * Params, and where each fires (design/new/quotas.md §"Funnel analytics"):
- *   REAL_MODEL_OPEN      {content_id, content_type, stats_*, …}  CadView
+ *   REAL_MODEL_OPEN      {content_id, content_type, load_outcome, stats_*, …}
+ *                        CadView, on success only
+ *   LOAD_FAILED          {content_type, size_bucket, reason_class, last_phase}
+ *                        CadView's onViewerInternal catch, once per failed
+ *                        attempt; closed-set values only (Share#1954)
  *   QUOTA_LIMIT_REACHED  {tier, feature}  QuotaLimitDialog, once per showing
  *   LOGIN                {method}  Auth0/useLoginTracking, once per
  *                        completed sign-in, never on a cached-session boot
@@ -339,6 +343,7 @@ export function getOpenCid() {
  */
 export const FUNNEL_EVENTS = Object.freeze({
   REAL_MODEL_OPEN: 'real_model_open',
+  LOAD_FAILED: 'load_failed',
   QUOTA_LIMIT_REACHED: 'quota_limit_reached',
   // GA4 recommended-event names, so `login` {method} and `begin_checkout`
   // also land in GA4's own standard reports.
@@ -346,6 +351,10 @@ export const FUNNEL_EVENTS = Object.freeze({
   BEGIN_CHECKOUT: 'begin_checkout',
   SUBSCRIPTION_STARTED: 'subscription_started',
   SUBSCRIPTION_ENDED: 'subscription_ended',
+  // Engaged-use conversions for Google Ads (Share#1960, bizdev#339); sent
+  // by privacy/engagementTracking.js from the real-open path.
+  ENGAGED_USE: 'engaged_use',
+  RETURN_VISIT: 'return_visit',
 })
 
 
@@ -520,6 +529,15 @@ export function _resetGaClientIdForTests() {
 
 
 /**
+ * Hosted demo models under public/: the homepage's logo (index.ifc) and its
+ * STEP twin (index.step, the `/viewer/step` landing page's default target;
+ * tools/models/README.md). Both are pageview-shaped, never a user's own
+ * model.
+ */
+const HOSTED_DEMO_FILEPATHS = ['index.ifc', 'index.step']
+
+
+/**
  * True for model loads worth counting as the `real_model_open` GA event:
  * any remote source (GitHub, Google Drive, generic URL) or an uploaded
  * file. False for the bundled demo model the homepage auto-loads
@@ -534,10 +552,11 @@ export function _resetGaClientIdForTests() {
  * #1959 processFile derives isUploadedFile prefix-independently
  * (routes/localOnly.ts), so a local-only open is never mistaken for the
  * demo on a GitHub Pages install either. The filepath check is
- * independent backup: upload filepaths are UUID-derived, never
- * 'index.ifc'. The route rename changes nothing here or in the event: the
- * demo stays /v/p/index.ifc, and content_id is the file's download URL,
- * which never carried the route segment.
+ * independent backup: upload filepaths are UUID-derived, never a hosted
+ * demo's name (HOSTED_DEMO_FILEPATHS). The route rename changes nothing
+ * here or in the event: the demos stay /v/p/index.ifc and /v/p/index.step,
+ * and content_id is the file's download URL, which never carried the
+ * route segment.
  *
  * Also false on Netlify hosts (*.netlify.app), except deploy previews with
  * `?feature=gaEnableInPreview`, so ordinary team review sessions don't
@@ -566,6 +585,6 @@ export function isRealModelOpen(
   }
   const isBundledDemo = routeResult?.kind === 'file' &&
     !routeResult.isUploadedFile &&
-    routeResult.filepath === 'index.ifc'
+    HOSTED_DEMO_FILEPATHS.includes(routeResult.filepath)
   return !isBundledDemo
 }

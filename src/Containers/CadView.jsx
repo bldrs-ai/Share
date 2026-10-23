@@ -14,9 +14,11 @@ import {
   getLocalHour,
   getOpenCid,
   gtagEvent,
+  gtagFunnelEvent,
   isRealModelOpen,
   startModelEngagement,
 } from '../privacy/analytics'
+import {trackEngagementOnOpen} from '../privacy/engagementTracking'
 import {getRenderMode} from '../privacy/preferences'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
@@ -25,11 +27,16 @@ import {
   attachLoadFailureContext,
   beginLoadProgress,
   captureLoadDiagnostics,
+  currentLoadSerial,
   endLoadProgress,
+  getCompletedLoadOutcome,
   getCompletedLoadStats,
+  getLoadFailureInfo,
+  reportFirstMesh,
   reportFramingExclusion,
   reportLoadProgress,
 } from '../loader/loadProgress'
+import {buildOutcomeParams, loadFailureParams} from '../loader/loadAnalytics'
 import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
 import {UnsupportedSchemaError, reportUnsupportedSchema} from '../loader/unsupportedSchema'
@@ -55,7 +62,6 @@ import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
 import {navWith} from '../utils/navigate'
-import {addProperties} from '../utils/objects'
 import {labelForGeometryId} from '../utils/geometryLabels'
 import {
   findRootLevelOwnerNode,
@@ -193,10 +199,22 @@ export default function CadView({
   // below can re-run onViewer for the SAME route after a refusal —
   // isViewerLoaded stays false on failure — and each re-run would count
   // the refusal again, inflating the demand numbers the report exists for
-  // (codex review of Share#1899). Cleared when the model path changes, so a
-  // new open of any model is counted once. The upload-not-in-browser count
-  // (#1955) is gated by the same ref, under its own key prefix.
+  // (codex review of Share#1899). Keyed by model identity and cleared when
+  // the identity changes (dedupeModelKeyRef, in the modelPath effect), not on
+  // every run of it: that effect also re-runs for the same model (Widget API
+  // view settings), and clearing there let one model count twice (codex
+  // review of Share#1961). The upload-not-in-browser count (#1955) is gated
+  // by the same ref, under its own key prefix.
   const reportedRefusalRef = useRef(null)
+  // The model identity the two dedupe refs belong to.
+  const dedupeModelKeyRef = useRef(null)
+  // The model a `load_failed` was last sent for, for the same reason and
+  // with the same keying as reportedRefusalRef: the auth-state effect and
+  // the customViewSettings effect re-run onViewer for the SAME route after
+  // any failure (isViewerLoaded stays false), and without this each re-run
+  // would send another load_failed for one user open (codex review of
+  // Share#1961).
+  const reportedLoadFailureRef = useRef(null)
 
   // IFCSlice
   const model = useStore((state) => state.model)
@@ -387,11 +405,30 @@ export default function CadView({
 
     let tmpModelRef
     let isOOM = false
+    // Read before the attempt so the catch can tell whether a load reporter
+    // began for THIS attempt (getLoadFailureInfo).
+    const loadSerialBefore = currentLoadSerial()
     try {
       tmpModelRef = await loadModelWithAuthRetry(modelPath, isAuthSettledBeforeLoad)
     } catch (e) {
       if (isOutOfMemoryError(e)) {
         isOOM = true
+      }
+      // GA's view of a load that did not display: the other half of
+      // real_model_open, which only ever sees successes. Sent from here, the
+      // one place every failure of an attempt lands, and not from loadModel's
+      // own catch, which also sees the auth-shaped first try that
+      // loadModelWithAuthRetry then retries and may well win: that is not a
+      // failed load, and counting it would. The same isRealModelOpen guard as
+      // the success event, so the homepage demo never reports. Deduped per
+      // model like the schema refusal below, because the auth-state effect
+      // re-runs onViewer for the same route after a failure. Closed-set
+      // params only (loadAnalytics#loadFailureParams).
+      const failureKey = modelIdentity(modelPath, installPrefix)
+      if (isRealModelOpen(modelPath) && reportedLoadFailureRef.current !== failureKey) {
+        reportedLoadFailureRef.current = failureKey
+        const {phase, fileSize, format} = getLoadFailureInfo(loadSerialBefore)
+        gtagFunnelEvent(FUNNEL_EVENTS.LOAD_FAILED, loadFailureParams({error: e, format, fileSize, phase}))
       }
       if (isOOM) {
         // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
@@ -686,6 +723,10 @@ export default function CadView({
     updateLoadedFileInfo(filepath)
 
     viewer.context.getScene().add(loadedModel)
+    // First geometry in the scene, for formats with no progressive preview
+    // (and GLB cache hits): their one-shot arrival is their first mesh. A
+    // no-op when ProgressiveLoadSession already recorded an earlier one.
+    reportFirstMesh()
 
     // Size the dolly range + near/far clip planes to the model *before*
     // any camera pose is applied, so the first frame is already drawn
@@ -742,13 +783,15 @@ export default function CadView({
         content_type: loadedModel.type || 'undefined',
         content_id: filepath,
       }
-      // The progress reporter supplies cross-format fallbacks. Conway's
-      // IFC/STEP engine stats then override memory/time/diagnostic counts
-      // with engine-scoped values from loadedModel.loadStats.
-      addProperties(eventParams, getCompletedLoadStats() ?? {}, 'stats_')
-      if (loadedModel.loadStats) {
-        addProperties(eventParams, loadedModel.loadStats, 'stats_')
-      }
+      // How the load went: the reporter's cross-format snapshot merged with
+      // Conway's engine stats for IFC/STEP, plus the displayed/unusable
+      // verdict. loadTime stays the reporter's wall clock whatever the engine
+      // says; see loadAnalytics#buildOutcomeParams.
+      Object.assign(eventParams, buildOutcomeParams({
+        completedStats: getCompletedLoadStats() ?? undefined,
+        loadStats: loadedModel.loadStats,
+        loadOutcome: getCompletedLoadOutcome(),
+      }))
       // Per-user open depth: GA4 has no user-id dimension, so the
       // client id rides along as an event-scoped custom dimension,
       // prefix-tagged by getOpenCid so GA4 can't type it as a number.
@@ -764,16 +807,22 @@ export default function CadView({
       // keeps it in the text slot; see analytics#getLocalHour.
       eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
       gtagEvent(FUNNEL_EVENTS.REAL_MODEL_OPEN, eventParams)
+      // Engaged-use conversions (Share#1960). Same real-open gate as the
+      // event above; keyed by model so a theme/view-settings reload of the
+      // same model is not a second open. Resolves to the events it sent
+      // and never rejects, so it is not awaited.
+      trackEngagementOnOpen(Date.now(), modelIdentity(modelPath, installPrefix))
       // Give a chip with non-zero errors/warnings a Sentry event to link
       // to (issue #1767). Gated on the very counts just assembled above,
-      // because those are what colour the chip — for IFC/STEP they are
-      // Conway's, applied over the reporter's console-tee fallbacks a few
-      // lines up, so gating on the tee would let the event and the chip
-      // disagree. Siting the call here is also what keeps it to real,
-      // successful opens. See loadProgress#captureLoadDiagnostics.
+      // because those are what colour the chip: Conway's own
+      // stats_errorCount / stats_warningCount when it supplies them
+      // (conway#740; it does not yet), else the page-wide console tee the
+      // reporter publishes as stats_pageErrorCount / stats_pageWarnCount.
+      // Siting the call here is also what keeps it to real, successful
+      // opens. See loadProgress#captureLoadDiagnostics.
       captureLoadDiagnostics({
-        errorCount: eventParams.stats_errorCount,
-        warningCount: eventParams.stats_warningCount,
+        errorCount: eventParams.stats_errorCount ?? eventParams.stats_pageErrorCount,
+        warningCount: eventParams.stats_warningCount ?? eventParams.stats_pageWarnCount,
         contentId: eventParams.content_id,
         contentType: eventParams.content_type,
       })
@@ -1729,7 +1778,16 @@ export default function CadView({
   // programmatic navigation (e.g. clicking element links).
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath, modelPath:', modelPath)
-    reportedRefusalRef.current = null
+    // A different model starts a new open, so its failures count again even
+    // when the model in between never touched the dedupe refs (A fails, B
+    // loads, A fails). Reruns of the SAME model (customViewSettings) keep
+    // them, so one failed open stays one event. Share#1961 codex review.
+    const dedupeKey = modelIdentity(modelPath, installPrefix)
+    if (dedupeModelKeyRef.current !== dedupeKey) {
+      dedupeModelKeyRef.current = dedupeKey
+      reportedRefusalRef.current = null
+      reportedLoadFailureRef.current = null
+    }
     onModelPath()
   }, [modelPath, customViewSettings])
 
