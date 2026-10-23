@@ -20,6 +20,16 @@ jest.mock('../../net/github/Organizations', () => ({
 jest.mock('../../net/github/Branches', () => ({
   getBranches: jest.fn(),
 }))
+// The Export tab mounts ExportSection, whose OPFS header reads (size line,
+// position range) settle on their own schedule; resolved-null stand-ins let
+// an async act around the opening click drain them inside act. What the panel does with the figures
+// is ExportSection.test.jsx's subject.
+jest.mock('../../export/artifactSizes', () => ({
+  artifactSizes: jest.fn(() => Promise.resolve(null)),
+  artifactPositionRange: jest.fn(() => Promise.resolve(null)),
+  retainOnlyCompressedExports: jest.fn(),
+  uncompressedSizes: jest.fn(() => Promise.resolve(null)),
+}))
 // Default the feature flag to off so existing tests see no behavioural
 // change. The B4 sub-suite below opts in per-case.
 jest.mock('../../hooks/useExistInFeature', () => jest.fn().mockReturnValue(false))
@@ -57,7 +67,12 @@ describe('SaveModelControl', () => {
     const {getByTestId, findByTestId, queryByTestId} = render(<SaveModelControlFixture/>)
 
     expect(queryByTestId('gated-save')).toBeNull()
-    fireEvent.click(getByTestId('control-button-save'))
+    // Async act: opening mounts ExportSection, whose header reads resolve a
+    // microtask later and must land inside act (console hygiene).
+    await act(async () => {
+      fireEvent.click(getByTestId('control-button-save'))
+      await Promise.resolve()
+    })
 
     expect(await findByTestId('export-section')).toBeInTheDocument()
     expect(getByTestId('gated-export-anonymous')).toHaveAttribute('aria-disabled', 'true')
@@ -80,7 +95,10 @@ describe('SaveModelControl', () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
     const {getByTestId, findByTestId, queryByTestId, rerender} = render(<SaveModelControlFixture/>)
 
-    fireEvent.click(getByTestId('control-button-save'))
+    await act(async () => {
+      fireEvent.click(getByTestId('control-button-save'))
+      await Promise.resolve()
+    })
     fireEvent.click(await findByTestId('gated-export-anonymous'))
     fireEvent.click(await findByTestId('gated-help-action'))
     expect(useStore.getState().isLoginVisible).toBe(true)
@@ -92,7 +110,10 @@ describe('SaveModelControl', () => {
     })
 
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    rerender(<SaveModelControlFixture/>)
+    await act(async () => {
+      rerender(<SaveModelControlFixture/>)
+      await Promise.resolve()
+    })
 
     expect(await findByTestId('export-section')).toBeInTheDocument()
     expect(useStore.getState().isSaveModelVisible).toBe(true)
