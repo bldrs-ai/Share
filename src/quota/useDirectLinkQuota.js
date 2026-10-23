@@ -78,21 +78,24 @@ export function directLinkQuotaKey(modelPath, appPrefix) {
  * picks the anonymous OPFS-only path while `isAuthenticated` is still false,
  * which would keep a signed-in user's load off the server ledger.
  *
- * A key the local ledger already holds (mirrored from the server by the
- * dialog's record(), or by an earlier page load) is skipped without a
- * record-load round-trip. That is what makes "open from the dialog, then
- * load" one count; the server's own dedup by key backs it up when the
- * mirror hasn't loaded yet.
+ * Dedup across opens is record()'s own, by key: record-load's ledger for a
+ * signed-in user (a key it already holds comes back `alreadyCounted`, with
+ * no write), the OPFS ledger for an anonymous one. That is what makes "open
+ * from the dialog, then load" one count. The hook deliberately does NOT
+ * short-circuit on the local mirror (`check(key).alreadyCounted`): OPFS is
+ * per browser, not per user, so a row left by an anonymous open, an offline
+ * fallback or another account would silence this user's server call, and
+ * with it the meter and the event (codex review on Share#1971).
  *
  * @param {string} appPrefix e.g. '/share'
  * @return {Function} (modelPath) => void, fire-and-forget
  */
 export default function useDirectLinkQuota(appPrefix) {
-  const {record, check} = useQuota()
+  const {record} = useQuota()
   const {isLoading: isAuthLoading} = useAuth0()
   const [pending, setPending] = useState(null)
   // Keys already metered this page load. A ref, so StrictMode's double
-  // effect run and the record/check identity changes (every quota update)
+  // effect run and the record identity changes (every quota update)
   // that re-run the effect below can't meter a key twice.
   const meteredKeysRef = useRef(new Set())
 
@@ -115,9 +118,6 @@ export default function useDirectLinkQuota(appPrefix) {
       return
     }
     meteredKeysRef.current.add(key)
-    if (check(key).alreadyCounted) {
-      return
-    }
     // record() never rejects: network and token failures fall back to OPFS
     // inside useQuota. Not awaited — the model is already on screen and
     // nothing here may hold it.
@@ -132,7 +132,7 @@ export default function useDirectLinkQuota(appPrefix) {
         route_kind: routeKind,
       })
     })
-  }, [pending, isAuthLoading, check, record])
+  }, [pending, isAuthLoading, record])
 
   return meterLoadedModel
 }

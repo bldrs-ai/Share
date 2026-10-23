@@ -1,5 +1,5 @@
 import {act, renderHook} from '@testing-library/react'
-import {mockedUseAuth0, mockedUserLoggedIn} from '../__mocks__/authentication'
+import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../__mocks__/authentication'
 import useQuota from '../hooks/useQuota'
 import {gtagEventWithCid} from '../privacy/analytics'
 import {handleRoute} from '../routes/routes'
@@ -8,8 +8,9 @@ import useDirectLinkQuota, {directLinkQuotaKey} from './useDirectLinkQuota'
 
 // The quota hook is the seam under test's collaborator: its own suite
 // (hooks/useQuota.test.js) and record-load's cover what record() does with a
-// key. Here it is a spy, so these tests pin WHEN the direct-link path calls
-// it and what it does with the answer.
+// key. In the first suite it is a spy, so those tests pin WHEN the
+// direct-link path calls it and what it does with the answer; the second
+// puts the real hook back to pin the dedup across the dialog and a link.
 jest.mock('../hooks/useQuota')
 // GATE_EVENTS stays real so the event name asserted is the one that ships;
 // gtagEventWithCid is what attaches open_cid (privacy/analytics.test.js).
@@ -44,13 +45,13 @@ const githubRoute = (repo = 'private-repo') =>
 /**
  * @param {object} [opts]
  * @param {object} [opts.recordOutcome] what record() resolves to
- * @param {boolean} [opts.alreadyCounted] what check() reports
  * @return {{record: Function, check: Function}} jest mocks
  */
-function mockQuota({recordOutcome = {allowed: true, used: 1, limit: 2, tier: 'free', alreadyCounted: false},
-  alreadyCounted = false} = {}) {
+function mockQuota({recordOutcome = {allowed: true, used: 1, limit: 2, tier: 'free', alreadyCounted: false}} = {}) {
   const record = jest.fn(() => Promise.resolve(recordOutcome))
-  const check = jest.fn(() => ({allowed: true, used: 0, limit: 2, alreadyCounted}))
+  // check() reports every key as already counted: the hook must not consult
+  // it (the local mirror is per browser, not per user; see the hook's doc).
+  const check = jest.fn(() => ({allowed: true, used: 0, limit: 2, alreadyCounted: true}))
   useQuota.mockReturnValue({used: 0, limit: 2, tier: 'free', hasCapacity: true, record, check})
   return {record, check}
 }
@@ -82,8 +83,9 @@ describe('quota/useDirectLinkQuota', () => {
   })
 
   it('records a direct private Drive load once, under the Open dialog\'s key', async () => {
-    const {record} = mockQuota()
+    const {record, check} = mockQuota()
     await meter(driveRoute())
+    expect(check).not.toHaveBeenCalled()
     expect(record).toHaveBeenCalledTimes(1)
     expect(record).toHaveBeenCalledWith(DRIVE_KEY)
     expect(gtagEventWithCid).not.toHaveBeenCalled()
@@ -133,13 +135,6 @@ describe('quota/useDirectLinkQuota', () => {
     expect(gtagEventWithCid).not.toHaveBeenCalled()
   })
 
-  it('does not re-record a path the ledger already holds (opened from the dialog, then reloaded)', async () => {
-    const {record, check} = mockQuota({alreadyCounted: true})
-    await meter(driveRoute())
-    expect(check).toHaveBeenCalledWith(DRIVE_KEY)
-    expect(record).not.toHaveBeenCalled()
-  })
-
   it('meters a model once per page load: a re-init or A → B → A is not a second open', async () => {
     const {record} = mockQuota({recordOutcome: {allowed: false, used: 2, limit: 2, tier: 'free', alreadyCounted: false}})
     await meter(driveRoute(), driveRoute(), githubRoute(), driveRoute())
@@ -162,6 +157,113 @@ describe('quota/useDirectLinkQuota', () => {
     })
     expect(record).toHaveBeenCalledTimes(1)
     expect(record).toHaveBeenCalledWith(DRIVE_KEY)
+  })
+})
+
+
+/**
+ * In-memory OPFS holding `quota.json`, the shape quota.js reads and writes
+ * (as hooks/useQuota.test.js mocks it).
+ *
+ * @param {object|null} initial quota to start with, or null for none
+ * @return {{read: Function}} the stored quota, parsed, or null
+ */
+function mockOpfs(initial = null) {
+  let stored = initial === null ? null : JSON.stringify(initial)
+  const handle = {
+    getFile: () => Promise.resolve({
+      text: () => (stored === null ? Promise.reject(new Error('not found')) : Promise.resolve(stored)),
+    }),
+    createWritable: () => Promise.resolve({
+      write: (data) => {
+        stored = data
+        return Promise.resolve()
+      },
+      close: () => Promise.resolve(),
+    }),
+  }
+  Object.defineProperty(global.navigator, 'storage', {
+    value: {getDirectory: () => Promise.resolve({getFileHandle: () => Promise.resolve(handle)})},
+    configurable: true,
+  })
+  return {read: () => (stored === null ? null : JSON.parse(stored))}
+}
+
+
+/**
+ * The real useQuota under the direct-link hook, as CadView and the Open
+ * dialog share it.
+ *
+ * @return {Promise<object>} renderHook result; current is {quota, meter}
+ */
+async function renderWithRealQuota() {
+  const hook = renderHook(() => ({quota: useQuota(), meter: useDirectLinkQuota(APP_PREFIX)}))
+  // Settle the OPFS read on mount inside act.
+  await act(async () => {})
+  return hook
+}
+
+
+describe('quota/useDirectLinkQuota with the real useQuota', () => {
+  const realFetch = global.fetch
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    useQuota.mockImplementation(jest.requireActual('../hooks/useQuota').default)
+  })
+
+  afterEach(() => {
+    delete global.navigator.storage
+    global.fetch = realFetch
+  })
+
+  it('a model opened from the Open dialog, then from a pasted link, is counted once', async () => {
+    // Signed out, so the ledger is OPFS and readable here. The link is the
+    // Drive-URL form, which has to land on the dialog's key to dedup.
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    const opfs = mockOpfs()
+    const {result} = await renderWithRealQuota()
+
+    await act(async () => {
+      await result.current.quota.record(DRIVE_KEY)
+    })
+    await act(async () => {
+      result.current.meter(routeFor('/share/v/g', {'*': `https://drive.google.com/file/d/${DRIVE_ID}/view`}))
+      await Promise.resolve()
+    })
+    await act(async () => {})
+
+    expect(opfs.read().loads.map((l) => l.key)).toEqual([DRIVE_KEY])
+    expect(gtagEventWithCid).not.toHaveBeenCalled()
+  })
+
+  it('a signed-in direct load asks the server even when this browser\'s OPFS holds the key', async () => {
+    // The row came from an anonymous open in this browser; this account's
+    // server ledger is full without it. Trusting the local mirror would
+    // skip record-load, so the load would go unmetered and uncounted
+    // (codex review on Share#1971).
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    mockOpfs({tier: 'anonymous', loads: [{key: DRIVE_KEY, loadedAt: new Date().toISOString()}]})
+    const serverLoads = [0, 1].map((i) => ({key: `/share/v/g/other-${i}`, loadedAt: new Date().toISOString()}))
+    global.fetch = jest.fn(() => Promise.resolve({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve({allowed: false, used: 2, limit: 2, tier: 'free', loads: serverLoads}),
+    }))
+    const {result} = await renderWithRealQuota()
+
+    await act(async () => {
+      result.current.meter(driveRoute())
+      await Promise.resolve()
+    })
+    await act(async () => {})
+
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    const [url, init] = global.fetch.mock.calls[0]
+    expect(url).toBe('/.netlify/functions/record-load')
+    expect(JSON.parse(init.body)).toEqual({key: DRIVE_KEY})
+    expect(gtagEventWithCid).toHaveBeenCalledWith('quota_soft_limit_exceeded',
+      {tier: 'free', used: 2, limit: 2, route_kind: 'gdrive'})
   })
 })
 

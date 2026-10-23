@@ -187,9 +187,12 @@ workaround is used before deciding whether it should be gated:
   Drive is `${appPrefix}/v/g/<fileId>` (a `/v/g/<drive URL>` link parses to
   the same id), GitHub is `navigateBaseOnModelPath(org, repo, branch, path)`
   without the element path. A model the dialog already recorded, or one
-  reloaded within the window, is found in the mirrored ledger
-  (`check(key).alreadyCounted`) and not recorded again; the server's own dedup
-  backs that up when the mirror hasn't loaded.
+  reloaded within the window, comes back `alreadyCounted` from `record()`
+  (record-load's ledger signed in, OPFS signed out) and costs no new slot.
+  The hook does not short-circuit on the local mirror: OPFS is per browser,
+  not per user, so a row from an anonymous open or another account would
+  silence this user's server call (codex review on Share#1971). A signed-in
+  direct load is therefore one `record-load` call per model per page load.
 - **Once per model per page load**, and only after Auth0 settles: before it
   does, `record()` would take the anonymous OPFS-only path and keep a
   signed-in user's load off the server ledger.
