@@ -205,6 +205,8 @@ behind the same analytics consent check as every other `gtagEvent`.
 | Upgrade click | `begin_checkout` (GA4 recommended) | `from`: `profile` \| `export` \| `quota`; `destination`: `checkout` \| `portal` | `goToSubscription` (`Profile/subscriptionNav.js`), which every upgrade CTA goes through |
 | Subscribed | `subscription_started` | — | `BaseRoutes#processAccessToken` on `shareProPendingReauth` (below) |
 | (lapsed) | `subscription_ended` | — | same, on `freePendingReauth` |
+| Engaged | `engaged_use` | `window_days` (7), `opens_in_window`, `threshold` (3), `open_cid` | `src/privacy/engagementTracking.js`, on the 3rd real open in a rolling 7 days; at most once per browser per 30 days (below) |
+| Returned | `return_visit` | `days_since_last_open` (1-14), `open_cid` | same, on an open 1-14 calendar days after the previous one; once per return day |
 
 The parts that aren't obvious:
 
@@ -301,6 +303,47 @@ The parts that aren't obvious:
     next full page load. The marker is also per-browser, so seeing the
     pending state on two devices counts twice.
 
+- **`engaged_use` and `return_visit` are browser-side counters (Share#1960,
+  bizdev#339).** GA4 cannot express "3rd model open in a rolling 7 days" as
+  a key event, and Google Ads can only import events GA4 sends, so
+  `trackEngagementOnOpen` (`src/privacy/engagementTracking.js`) keeps a
+  capped list of open timestamps, the last `engaged_use` time and the last
+  `return_visit` day under localStorage key `bldrs.ga.engagement`, and sends
+  the event when the open earns it. They are meant to be imported as
+  **secondary, observe-only** conversions.
+  - **What counts as an open** is `real_model_open`: `CadView` calls it from
+    inside the `isRealModelOpen` branch, right after that event. The hosted
+    demos (`index.ifc` and `index.step`, the latter the `/viewer/step`
+    landing page's target) and `*.netlify.app` are excluded exactly as there,
+    and gtag/js only loads on prod hosts (`index/ga.js#shouldInitGa`), so
+    review and CI traffic never reaches it. Team members' own opens on
+    bldrs.ai are counted, as for `real_model_open`: they are filtered at
+    query time on the bizdev dashboard (`GA_CONFIG.orgUsers`), not in the
+    client. A reload of the same model in one page load (a theme change
+    or Widget API view settings re-create the viewer, and each success sends
+    `real_model_open` again) is not a second open: the tracker skips a call
+    whose model key equals the previous counted open's. Opening the same
+    model again in a later page load counts. Known under-count: A, then the
+    demo (never tracked, so it does not clear the key), then A again in one
+    page load is skipped.
+  - **Consent:** analytics is opt-out (`isAllowed()` defaults to true).
+    Nothing is read, written or sent while the user has opted out, and opens
+    made while opted out are never counted retroactively. The check repeats
+    inside the lock, because consent can be withdrawn while an open waits
+    behind another tab's hold.
+  - **Fails closed.** If localStorage cannot be read or written the open is
+    not counted: a per-page fallback would fire `engaged_use` for anyone who
+    opens three models in one session and again on every reload. Under-count
+    is the safe error for a conversion Ads may learn from. It is also per
+    browser, so one person on two browsers counts twice.
+  - **Windows:** the 7-day window excludes its edge (an open exactly 7 days
+    old is outside it); `return_visit` is measured in local calendar days, so
+    DST cannot make a day 23 or 25 hours, and sends once per day. Stored times
+    in the future (clock moved back) are dropped, and a future `engaged_use`
+    time is clamped to now, so a clock step-back cannot send it twice. The
+    read-compare-write-emit runs under a Web Lock so two tabs cannot both
+    emit.
+
 ### Load outcome (Share#1954)
 
 `real_model_open` only ever sees loads that returned, so GA could not see
@@ -373,6 +416,11 @@ has a backfill, so these only start accruing data once registered:
   event-scoped dimension by parameter name, not by event, so the one
   registered for `real_model_open` applies to these events too.
 - Mark **`login`** and **`subscription_started`** as **key events**.
+- For `engaged_use` / `return_visit`: register **event-scoped custom
+  dimensions/metrics** for `window_days`, `opens_in_window`, `threshold` and
+  `days_since_last_open` (numeric, so metrics), mark both events as **key
+  events**, then import them into Google Ads as **secondary** conversions
+  (bizdev#339).
 
 ## Implementation map
 
