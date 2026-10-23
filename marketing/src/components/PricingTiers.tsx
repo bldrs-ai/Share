@@ -15,110 +15,20 @@ import {
 import CheckIcon from '@mui/icons-material/Check'
 import RocketIcon from '@mui/icons-material/Rocket'
 import StarIcon from '@mui/icons-material/Star'
-import {SOCIAL, VIEWER_PATH} from '@/lib/site'
+import {PLANS} from '@/lib/pricingPlans.mjs'
+import {VIEWER_PATH} from '@/lib/site'
 import {LIME, LIME_HOVER} from '@/lib/theme'
-
-
-interface Section {
-  heading: string | null
-  features: string[]
-}
-
-interface Plan {
-  name: string
-  monthlyPrice: number
-  yearlyPrice: number
-  perMember?: boolean
-  description: string
-  sections: Section[]
-  cta: string
-  ctaLink: string
-  ctaVariant: 'contained' | 'outlined'
-  highlight: boolean
-  badge?: string
-}
-
-// Every limit below is a literal on purpose: this static build can't import
-// the SPA's constants. tools/marketing/pricingTiers.test.js checks each
-// number against what the viewer ENFORCES — the private-model allowance in
-// src/quota/limits.js (record-load, 30-day rolling window) and the free
-// exports in src/export/freeExports.js (pro-module, 7-day rolling window) —
-// and fails on any limit claim about local files, which are free and
-// unmetered (Share#1966). Change a number there and here together.
-const PLANS: Plan[] = [
-  {
-    name: 'Bldrs Share',
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    description: 'Fast, browser-first IFC and STEP viewing',
-    sections: [
-      {
-        heading: 'No login required:',
-        features: [
-          'Fast IFC and STEP viewing in your browser',
-          'Your files never leave your computer',
-          'Open and share public GitHub models, unlimited',
-        ],
-      },
-    ],
-    cta: 'Get Started',
-    ctaLink: VIEWER_PATH,
-    ctaVariant: 'outlined',
-    highlight: false,
-  },
-  {
-    name: 'Free account',
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    description: 'Sign in free to open your private models',
-    sections: [
-      {
-        heading: 'Everything in Bldrs Share, plus:',
-        features: [
-          'Connect Google Drive and GitHub',
-          'Open and share 2 private models a month',
-          '2 GLB exports a week',
-        ],
-      },
-    ],
-    cta: 'Sign In Free',
-    ctaLink: VIEWER_PATH,
-    ctaVariant: 'outlined',
-    highlight: false,
-  },
-  {
-    name: 'Share Pro',
-    // Display only: what a subscriber is CHARGED is the Pro price in Stripe
-    // (the pricing table in src/Components/Stripe/PricingTable.jsx and the
-    // SHARE_PRO_PRICE_ID Netlify env the webhook entitles on). Nothing ties
-    // these numbers to it, so change them together. $25 is that price,
-    // confirmed and kept by Pablo on 2026-10-22 (bldrs-ai/bizdev#334,
-    // closed "$25 stays"); it first appeared in the share#1421 paywall mock.
-    monthlyPrice: 25,
-    yearlyPrice: 270,
-    description: 'IFC and STEP sharing and collaboration for individual professionals',
-    sections: [
-      {
-        heading: 'Everything in Free account, plus:',
-        features: [
-          'Unlimited private models',
-          'Unlimited GLB exports',
-        ],
-      },
-    ],
-    cta: 'Start Pro',
-    ctaLink: VIEWER_PATH,
-    ctaVariant: 'contained',
-    highlight: true,
-    badge: 'Popular',
-  },
-]
 
 
 /**
  * Pricing cards + monthly/yearly toggle. Client component because the toggle
  * needs React state — the surrounding page (metadata, JSON-LD, layout chrome)
  * stays in a server component.
+ *
+ * Every plan's copy comes from PLANS (lib/pricingPlans.mjs), whose allowances
+ * are built from the enforced quota constants. Keep it that way: copy that
+ * states a limit belongs in PLANS, not in this JSX, and the toggle changes
+ * only the price.
  */
 export default function PricingTiers() {
   const [isYearly, setIsYearly] = useState(false)
@@ -224,7 +134,7 @@ export default function PricingTiers() {
 
                   <Box sx={{mt: 'auto', pt: 2}}>
                     <Button
-                      href={plan.ctaLink}
+                      href={VIEWER_PATH}
                       variant={plan.ctaVariant}
                       fullWidth
                       startIcon={plan.highlight ? <RocketIcon/> : undefined}

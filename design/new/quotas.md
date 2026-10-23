@@ -63,7 +63,7 @@ Enforcement ships dark behind the `quotas` flag.
 
 The numbers live in one place, `src/quota/limits.js` (`LIMITS`,
 `FREE_PRIVATE_MODEL_LIMIT`, `ROLLING_WINDOW_DAYS`), imported by the client,
-`record-load`, its MSW mock and the pricing-page guard (§"Pricing copy"
+`record-load`, its MSW mock and the marketing pricing plans (§"Pricing copy"
 below). Until Share#1966's PR the function hand-copied `FREE_LIMIT = 4`. The
 free limit went from 4 to 2 private models per window in that PR, with the
 pricing page's three tiers (bizdev#331).
@@ -256,29 +256,28 @@ Summary only; the wiring lives in
 
 ## Pricing copy
 
-The marketing pricing page (`marketing/src/components/PricingTiers.tsx`) is a
-static Next.js build that can't import these constants, so its numbers are
-literals. `tools/marketing/pricingTiers.test.js` keeps them true, and it checks
-the **rendered** page, not the source text: it compiles the component with
-esbuild (bare imports resolved from the repo root's node_modules, so it doesn't
-need a marketing install), renders it with `react-dom/server`, and reads the
-text card by card. A source scan was satisfied by a dead string that never
-renders, and missed a claim split across JSX elements (codex review on #1971).
+The marketing pricing page is a static Next.js build, and its quota copy can't
+drift from what is enforced, by construction. `PLANS`
+(`marketing/src/lib/pricingPlans.mjs`) is the only place that copy lives, and it
+**builds** the Free account allowances from the enforced constants:
+`FREE_PRIVATE_MODEL_LIMIT` / `ROLLING_WINDOW_DAYS` from `limits.js` ("2 private
+models a month") and `FREE_EXPORT_LIMIT` / `FREE_EXPORT_WINDOW_DAYS` from
+`src/export/freeExports.js` ("2 GLB exports a week"). `PricingTiers.tsx`
+renders `PLANS` and states no limit of its own; the monthly/yearly toggle only
+changes the price. (`.mjs` because `marketing/package.json` has no `"type":
+"module"`; marketing's tsconfig has `allowJs` for it.)
 
-- The Free account card must state "N private models a <window>" equal to
-  `FREE_PRIVATE_MODEL_LIMIT` / `ROLLING_WINDOW_DAYS` (30 days → "month") and
-  "N GLB exports a <window>" equal to `FREE_EXPORT_LIMIT` /
-  `FREE_EXPORT_WINDOW_DAYS` (7 → "week", `src/export/freeExports.js`). Any such
-  claim anywhere on the page must match. The Share Pro card must state
-  unlimited private models and unlimited GLB exports.
-- Limit wording in the same element as local-file wording, or in an adjacent
-  one (a label and its value in sibling elements), fails. So do load-count
-  copy ("N model loads", #1965) and any other "N models/files/exports" the
-  checks can't verify.
-- It proves itself by editing the real source and rendering it: remove a
-  claim from `PLANS`, move it into a comment, change a number or window, or
-  add a split-JSX local limit ("Local files" / "Maximum: 5 per month"). Each
-  must go red.
+`tools/marketing/pricingTiers.test.js` is a drift tripwire over that data, not
+a proof against a hostile author. It checks that the Free account plan states
+both claims as worded from the constants, that Pro says unlimited, that no
+plan entry puts a limit on local files, and that no other count of
+models/files/exports/loads appears. It proves itself: `buildPlans()` with
+other allowances yields their claims, and a hard-coded wrong number, a
+removed claim, a local-file limit or load-count copy in `PLANS` each go red.
+Header, enterprise and FAQ copy on the page are reviewed by hand. (Round 1
+and 2 of codex review on #1971 tried source-line scanning and then rendered-HTML
+parsing; both had bypasses, so the copy moved into data built from the
+constants instead.)
 
 It no longer depends on the `quotas` flag. #1965's version allowed no limit
 copy while enforcement was off. Now the copy must match the enforced

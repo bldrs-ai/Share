@@ -166,4 +166,4 @@ capacity and `record()` is a no-op, so every load site above is inert.
 | `QuotaLimitDialog.jsx` | Over-limit value-prop modal |
 | `src/hooks/useQuota.js` | Hook over the lib + `record-load` |
 | `src/quota/quota.js` | Core lib — see [design/new/quotas.md](../../../design/new/quotas.md) |
-| `src/quota/limits.js` | Tiers, limits, window and the always-private route rule, shared with `record-load` and the pricing-page guard |
+| `src/quota/limits.js` | Tiers, limits, window and the always-private route rule, shared with `record-load` and the marketing pricing plans |

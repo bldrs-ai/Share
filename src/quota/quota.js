@@ -5,7 +5,7 @@ import {isProSubscriptionStatus} from './proStatus'
 
 
 // The tiers, their limits and the window are defined once, in limits.js,
-// which record-load and the pricing-page guard import too. Re-exported here
+// which record-load and the marketing pricing plans import too. Re-exported here
 // so the client keeps one import site.
 export {LIMITS, ROLLING_WINDOW_DAYS, TIERS} from './limits'
 

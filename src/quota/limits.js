@@ -5,9 +5,10 @@
  *
  * THE ONE PLACE these numbers live. The client (`quota.js`, `useQuota`,
  * `QuotaLimitDialog`, `/share/quotas`), the `record-load` function, its MSW
- * mock and the marketing pricing guard (`tools/marketing/pricingTiers.test.js`)
- * all import this file, so the limit a user is sold, the one the dialog
- * quotes and the one the server enforces cannot disagree. They did before:
+ * mock and the marketing pricing plans (`marketing/src/lib/pricingPlans.mjs`,
+ * which builds its copy from them) all import this file, so the limit a user
+ * is sold, the one the dialog quotes and the one the server enforces cannot
+ * disagree. They did before:
  * `record-load` hand-copied `FREE_LIMIT = 4` "in lock-step" with the client.
  *
  * Dependency-free and imported with its `.js` extension by the functions,
