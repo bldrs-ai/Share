@@ -202,7 +202,6 @@ describe('dragAndDrop utility', () => {
       mockEvent.dataTransfer.files = [{name: 'test.ifc', type: 'application/octet-stream', size: 1024}]
       guessTypeFromFile.mockResolvedValue('ifc')
       const quotaOptions = {
-        hasCapacity: true,
         record: jest.fn().mockResolvedValue({allowed: false}),
         onExceeded: jest.fn(),
       }
@@ -217,6 +216,28 @@ describe('dragAndDrop utility', () => {
       expect(getInMemoryUpload(deniedId)).toBeUndefined()
       expect(mockNavigate).not.toHaveBeenCalled()
       expect(mockOnSuccess).not.toHaveBeenCalled()
+    })
+
+    // Share#1966: a local file is free and unmetered, so a user at their
+    // private-model limit still opens one. Before, a `hasCapacity` pre-gate
+    // refused the drop before its key was known; now record() — which passes
+    // a /v/local-only/ key — is the only gate. `hasCapacity: false` is the
+    // old caller shape, kept here to show it no longer refuses anything.
+    it('opens a local drop for a user at their private-model limit', async () => {
+      mockEvent.dataTransfer.files = [{name: 'test.ifc', type: 'application/octet-stream', size: 1024}]
+      guessTypeFromFile.mockResolvedValue('ifc')
+      const quotaOptions = {
+        hasCapacity: false,
+        record: jest.fn().mockResolvedValue({allowed: true}),
+        onExceeded: jest.fn(),
+      }
+
+      await handleFileDrop(
+        mockEvent, mockNavigate, '/prefix', false, mockSetAlert, mockOnSuccess, mockOnError, quotaOptions)
+
+      expect(quotaOptions.onExceeded).not.toHaveBeenCalled()
+      expect(quotaOptions.record).toHaveBeenCalledWith(expect.stringMatching(/^\/prefix\/v\/local-only\//))
+      expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/^\/prefix\/v\/local-only\/.+\.ifc$/))
     })
 
     // `null` is the store before BaseRoutes' probe resolves: "not known yet",

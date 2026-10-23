@@ -1,20 +1,13 @@
-import {isLocalOnlyPath, viewRouteKind} from '../routes/localOnly'
+import {isFeatureEnabled} from '../FeatureFlags'
+import {viewRouteKind} from '../routes/localOnly'
+import {LIMITS, ROLLING_WINDOW_MS, TIERS, isAlwaysPrivateRouteKind} from './limits'
 import {isProSubscriptionStatus} from './proStatus'
 
 
-/** Quota tiers */
-export const TIERS = {
-  ANONYMOUS: 'anonymous',
-  FREE: 'free',
-  PAID: 'paid',
-}
-
-/** Quotable load limits per tier within the rolling window */
-export const LIMITS = {
-  [TIERS.ANONYMOUS]: 2, // lifetime cap; never resets without sign-in
-  [TIERS.FREE]: 4, // counted within ROLLING_WINDOW_DAYS
-  [TIERS.PAID]: Infinity,
-}
+// The tiers, their limits and the window are defined once, in limits.js,
+// which record-load and the marketing pricing plans import too. Re-exported here
+// so the client keeps one import site.
+export {LIMITS, ROLLING_WINDOW_DAYS, TIERS} from './limits'
 
 /**
  * What a quota limits, as reported in the `feature` param of the
@@ -25,16 +18,6 @@ export const LIMITS = {
 export const QUOTA_FEATURES = {
   PRIVATE_LOAD: 'private_load',
 }
-
-/** Length of the rolling window for non-anonymous tiers, in days */
-export const ROLLING_WINDOW_DAYS = 30
-
-const HOURS_PER_DAY = 24
-const MINUTES_PER_HOUR = 60
-const SECONDS_PER_MINUTE = 60
-const MILLIS_PER_SECOND = 1000
-const ROLLING_WINDOW_MS =
-  ROLLING_WINDOW_DAYS * HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MINUTE * MILLIS_PER_SECOND
 
 /** Subscribers notified after every saveQuota write */
 const listeners = new Set()
@@ -78,25 +61,38 @@ export function getTier(appMetadata, isAuthenticated) {
 
 
 /**
- * Paths whose privacy is unambiguously known client-side without a
- * server round-trip. Local files (/v/local-only/, legacy /v/new/) and
- * Drive files (/v/g/) are always private. Keep in step with
- * netlify/functions/record-load.js#isQuotableLoad.
+ * Whether local files are metered — the `meterLocalFiles` feature flag, off
+ * by default. Local files are free and unmetered (Share#1966); the flag is
+ * an abuse switch that puts them back in the meter (design/new/quotas.md
+ * §"Metering local files again"). record-load honours the same flag, or the
+ * METER_LOCAL_FILES env var, server-side.
  *
- * Local files are matched through routes/localOnly.ts on purpose: until
- * Share#1959 this was a `/v/new/` substring, and renaming the route would
- * otherwise have dropped local files from the meter silently. Whether they
- * SHOULD be metered is an open owner decision (design/new/quotas.md
- * §"What counts"); #1959 only preserves today's behaviour across the
- * rename.
- *
- * @param {string} key Share path
  * @return {boolean}
  */
-export function isLocallyQuotable(key) {
-  // By route kind, not substring: a GitHub file path can contain `v/g/` or
-  // `v/local-only/` (codex review on Share#1967).
-  return isLocalOnlyPath(key) || viewRouteKind(key) === 'g'
+export function isLocalFileMeteringEnabled() {
+  return isFeatureEnabled('meterLocalFiles')
+}
+
+
+/**
+ * Paths whose privacy is unambiguously known client-side without a
+ * server round-trip: Drive files (/v/g/) are always private. Local files
+ * (/v/local-only/, legacy /v/new/) are NOT counted (Share#1966) unless the
+ * `meterLocalFiles` switch is on. The rule itself is
+ * limits.js#isAlwaysPrivateRouteKind, which
+ * netlify/functions/record-load.js#isQuotableLoad and the MSW mock share.
+ *
+ * By route kind, not substring: a GitHub file path can contain `v/g/` or
+ * `v/local-only/` (codex review on Share#1967). viewRouteKind takes the
+ * segment after the FIRST `/v/`, so this holds under any install prefix.
+ *
+ * @param {string} key Share path
+ * @param {boolean} [meterLocalFiles] defaults to the feature flag;
+ *   parameterized for tests
+ * @return {boolean}
+ */
+export function isLocallyQuotable(key, meterLocalFiles = isLocalFileMeteringEnabled()) {
+  return isAlwaysPrivateRouteKind(viewRouteKind(key), meterLocalFiles)
 }
 
 
@@ -119,10 +115,11 @@ export function isServerResolvedPath(key) {
  * record-load at all; use isLocallyQuotable for OPFS-only fallback.
  *
  * @param {string} key
+ * @param {boolean} [meterLocalFiles] see isLocallyQuotable
  * @return {boolean}
  */
-export function isQuotablePath(key) {
-  return isLocallyQuotable(key) || isServerResolvedPath(key)
+export function isQuotablePath(key, meterLocalFiles = isLocalFileMeteringEnabled()) {
+  return isLocallyQuotable(key, meterLocalFiles) || isServerResolvedPath(key)
 }
 
 

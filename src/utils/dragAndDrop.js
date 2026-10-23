@@ -21,9 +21,15 @@ import debug, {WARN} from './debug'
  * @param {Function} setAlert Function to set alert messages
  * @param {Function} [onSuccess] Optional callback when file is successfully processed
  * @param {Function} [onError] Optional callback when an error occurs
- * @param {{hasCapacity: boolean, record: Function, onExceeded: Function}} [quotaOptions]
- *   Optional quota integration. When provided, blocks the drop if hasCapacity is false
- *   and records the load key via record() on success.
+ * @param {{record: Function, onExceeded: Function}} [quotaOptions]
+ *   Optional quota integration: records the load key via record() once the
+ *   file is stored, and calls onExceeded instead of navigating if refused.
+ *   There is deliberately no capacity check before the drop is read: local
+ *   files are free and unmetered (Share#1966), so record() passes their key,
+ *   and a pre-gate on the user's private-model count would refuse a local
+ *   file for being at a limit that doesn't apply to it. With
+ *   `meterLocalFiles` switched on, record() is still the gate; the file is
+ *   stored first, as for an allowed drop, and left in OPFS on a refusal.
  */
 export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert, onSuccess, onError, quotaOptions) {
   event.preventDefault()
@@ -53,11 +59,6 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
   // so ask directly rather than guess. Without OPFS the file is held in
   // memory instead (#1906, `onHeldInMemory` below).
   const hasOpfs = isOpfsAvailable === null ? await checkOPFSAvailability() : isOpfsAvailable
-
-  if (quotaOptions && !quotaOptions.hasCapacity) {
-    quotaOptions.onExceeded()
-    return
-  }
 
   const dropped = files[0]
 

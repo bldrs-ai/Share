@@ -267,6 +267,7 @@ describe('Analytics', () => {
         EXPORT_FAILED: 'export_failed',
         SHARE_GATED: 'share_gated',
         SHARE_INTEREST: 'share_interest',
+        QUOTA_SOFT_LIMIT_EXCEEDED: 'quota_soft_limit_exceeded',
       })
     })
   })

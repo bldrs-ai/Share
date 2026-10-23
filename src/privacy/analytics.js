@@ -390,6 +390,12 @@ export function gtagFunnelEvent(eventName, parameters = {}) {
  *                   local-only Share gate's help opening
  *   SHARE_INTEREST  {feature: 'save_to_cloud', signed_in}  ShareControl, on
  *                   the "coming soon" line in that help
+ *   QUOTA_SOFT_LIMIT_EXCEEDED  {tier, used, limit, route_kind: 'gdrive'|
+ *                   'github'}  quota/useDirectLinkQuota, when a model opened
+ *                   straight from its URL is over the private-model limit.
+ *                   The load is NOT blocked (a soft gate, measured first);
+ *                   once per model per page load (design/new/quotas.md
+ *                   §"Direct links: soft gate")
  *
  * Like FUNNEL_EVENTS, the names are queried verbatim GA-side; GA4 has no
  * rename.
@@ -400,6 +406,7 @@ export const GATE_EVENTS = Object.freeze({
   EXPORT_FAILED: 'export_failed',
   SHARE_GATED: 'share_gated',
   SHARE_INTEREST: 'share_interest',
+  QUOTA_SOFT_LIMIT_EXCEEDED: 'quota_soft_limit_exceeded',
 })
 
 
