@@ -19,7 +19,8 @@ This is the design of record for the feature. The Open-dialog UI wiring is in
   a no-op, so nothing is counted, blocked, or badged.
 - **What turning it on changes in production:** signed-in free users get 2
   private models (Drive, private GitHub) per rolling 30 days and see
-  `QuotaLimitDialog` on the 3rd; signed-out users get 2 private links for
+  `QuotaLimitDialog` on the 3rd opened from the Open dialog (a pasted link
+  to a 3rd still opens, and is counted in GA: §"Direct links: soft gate"); signed-out users get 2 private links for
   life; local files and public GitHub stay unlimited. `quota_limit_reached`
   starts firing in production GA (§"Funnel analytics"), and every Drive or
   `/v/gh/` open by a signed-in user now calls `record-load`.
@@ -166,6 +167,55 @@ The server calls `api.github.com/repos/{owner}/{repo}` unauthenticated:
 Conservative on failure by design: a GitHub outage or the 60/hr unauth rate
 limit must never wrongly burn a user's quota. Lookups are cached module-scope
 (15-min TTL) across warm Lambda invocations.
+
+### Direct links: soft gate (measured, not blocked)
+
+A model opened straight from its URL (a pasted or clicked `/share/v/g/…` or
+`/share/v/gh/…` link) never passes the Open dialog, which is where every
+`record()` call above sits. Until Share#1971 such loads were not metered at
+all (codex P1 on that PR). The owner's decision (Pablo, 2026-10-23) is to
+**meter direct links but not block them**, and to measure how often the
+workaround is used before deciding whether it should be gated:
+
+- **What is metered.** After each successful load, `CadView#onViewerInternal`
+  hands the loaded route to `quota/useDirectLinkQuota.js`, which calls the
+  same `useQuota().record(key)` the dialog does: Drive files, and `/v/gh/`
+  files, whose privacy record-load decides (a public repo comes back
+  not-quotable and is never counted). Never local files, hosted `/v/p/`
+  models or generic `/v/u/` URLs.
+- **Same key as the dialog**, so the ledger's dedup by share path holds:
+  Drive is `${appPrefix}/v/g/<fileId>` (a `/v/g/<drive URL>` link parses to
+  the same id), GitHub is `navigateBaseOnModelPath(org, repo, branch, path)`
+  without the element path. A model the dialog already recorded, or one
+  reloaded within the window, is found in the mirrored ledger
+  (`check(key).alreadyCounted`) and not recorded again; the server's own dedup
+  backs that up when the mirror hasn't loaded.
+- **Once per model per page load**, and only after Auth0 settles: before it
+  does, `record()` would take the anonymous OPFS-only path and keep a
+  signed-in user's load off the server ledger.
+- **Never blocks.** If `record()` comes back `allowed: false` (record-load's
+  403, or the OPFS fallback at the cap), the model stays loaded,
+  `QuotaLimitDialog` is not shown, and `quota_soft_limit_exceeded` is sent
+  instead (params below). A refused load is not written to the ledger, so the
+  same link opened again on a later page load is refused, and counted in GA,
+  again. The Open dialog keeps blocking exactly as before.
+
+| Event | Params | Fires |
+|---|---|---|
+| `quota_soft_limit_exceeded` | `tier` (`anonymous` \| `free`), `used`, `limit`, `route_kind` (`gdrive` \| `github`), `open_cid` | `useDirectLinkQuota`, when a direct-link load is over the limit; at most once per model per page load |
+
+Sent through `gtagEventWithCid` (`GATE_EVENTS.QUOTA_SOFT_LIMIT_EXCEEDED`),
+so it joins the same client's `real_model_open`. GA4 side: register `tier`,
+`route_kind` and `open_cid` as event-scoped custom dimensions (the last two
+may already exist) and `used` / `limit` as custom metrics.
+
+**Revisit weekly; decide on blocking by 2026-11-23 (Pablo).** Blocking would
+mean showing `QuotaLimitDialog` over the loaded model (or before the load)
+from this same seam; the event count is the input to that decision.
+
+Covered by `src/quota/useDirectLinkQuota.test.js` and
+`src/quota/directLinkSoftGate.spec.ts` (desktop and mobile: a free user at the
+limit opens a private Drive link, it loads, no dialog, one event).
 
 ## The server is authoritative
 
@@ -327,6 +377,7 @@ events, so a gate hit joins the same client's `real_model_open`, `login` and
 | `export_failed` | `format`, `reason`: `free_limit` \| `denied` \| `unavailable` \| `error` | `useExport`, once per run that delivers no file (`unavailable`: the cached artifact is gone) |
 | `share_gated` | `reason`: `local_file`; `signed_in` | `ShareControl`, when the local-only Share gate's help opens |
 | `share_interest` | `feature`: `save_to_cloud`; `signed_in` | `ShareControl`, the "Save to Google Drive or GitHub to share — coming soon" line; at most once per opening of the help |
+| `quota_soft_limit_exceeded` | `tier`, `used`, `limit`, `route_kind`: `gdrive` \| `github` | `quota/useDirectLinkQuota.js`, when a model opened from its URL is over the limit; the load is not blocked (§"Direct links: soft gate") |
 
 A sign-in started from a gate (`Auth0/gateLogin.js`) adds `from: 'gate'` and
 `feature` to `login`. The gate writes one attempt record to localStorage,
@@ -580,8 +631,9 @@ The per-layer PRs carry the review history; layers 2–4 reached `main` via the
 
 ## Out of scope / follow-ups
 
-- `WidgetApi` / `LoadModelEventHandler` programmatic loads bypass the React hook
-  and are not metered (flagged).
+- `WidgetApi` / `LoadModelEventHandler` programmatic loads bypass the Open
+  dialog; any that end in a CadView load of a Drive or GitHub route are
+  soft-metered like a direct link (§"Direct links: soft gate"), never blocked.
 - Migrate quota storage off Auth0 `app_metadata` to a KV store when
   Management-API limits bite. This also fixes the known read-modify-write
   race: `record-load` has no compare-and-set, so two concurrent loads for
