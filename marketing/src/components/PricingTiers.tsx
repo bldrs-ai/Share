@@ -53,15 +53,16 @@ const PLANS: Plan[] = [
           'Basic Bldrs Tools',
           'Drag and drop',
           'No data transfer',
-          '2 model loads per month',
         ],
       },
-      {
-        heading: 'With Login:',
-        features: [
-          '4 model loads per month',
-        ],
-      },
+      // No model-load limit is listed here on purpose. Load quotas are built
+      // (src/quota/quota.js LIMITS) but ENFORCEMENT is behind the `quotas`
+      // flag in src/FeatureFlags.js, which is off, so no load is ever counted
+      // or blocked in production. This static build can't read that flag at
+      // runtime; tools/marketing/pricingTiers.test.js fails the build if load
+      // copy comes back while the flag is off. When `quotas` is flipped on,
+      // re-add copy that matches LIMITS and design/new/quotas.md: it counts
+      // PRIVATE loads only, and the anonymous cap is lifetime, not monthly.
     ],
     cta: 'Get Started',
     ctaLink: VIEWER_PATH,
@@ -70,6 +71,12 @@ const PLANS: Plan[] = [
   },
   {
     name: 'Share Pro',
+    // Display only: what a subscriber is CHARGED is the Pro price in Stripe
+    // (the pricing table in src/Components/Stripe/PricingTable.jsx and the
+    // SHARE_PRO_PRICE_ID Netlify env the webhook entitles on). Nothing ties
+    // these numbers to it, so change them together. $25 is that price,
+    // confirmed and kept by Pablo on 2026-10-22 (bldrs-ai/bizdev#334,
+    // closed "$25 stays"); it first appeared in the share#1421 paywall mock.
     monthlyPrice: 25,
     yearlyPrice: 270,
     description: 'IFC and STEP sharing and collaboration for individual professionals',
