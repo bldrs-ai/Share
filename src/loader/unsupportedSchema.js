@@ -1,5 +1,6 @@
 import {captureMessage} from '@sentry/react'
 import {stepSchemaName} from '../Filetype'
+import {isLocalOnlyPath} from '../routes/localOnly'
 import {loadFailureCaptureContext} from './loadProgress'
 
 
@@ -287,28 +288,18 @@ async function headerText(source) {
 
 
 /**
- * Is this an upload route (`/share/v/new/…`), whatever the install prefix?
- *
- * routes.ts#processFile sets `isUploadedFile` with a `startsWith('/share/v/new')`
- * test, which misses GitHub Pages-style installs served under a prefix
- * (`/Share/share/v/new/…`) — analytics.js#isRealModelOpen documents the
- * same gap. Matching the segment anywhere in the path keeps those uploads
- * from being tagged `hosted` (codex review of Share#1899).
+ * Is this an upload route (`/share/v/local-only/…`, or the legacy
+ * `/share/v/new/…`), whatever the install prefix? `routes/localOnly.ts` is
+ * the one test; it already covers GitHub Pages-style installs served under a
+ * prefix (`/Share/share/v/…`, codex review of Share#1899), and since #1959
+ * routes.ts#processFile's `isUploadedFile` uses it too. This stays as the
+ * fallback for a route result that doesn't carry the flag.
  *
  * @param {URL|string|undefined} originalUrl
  * @return {boolean}
  */
 function isUploadRoute(originalUrl) {
-  if (originalUrl === undefined || originalUrl === null) {
-    return false
-  }
-  let pathname
-  try {
-    pathname = new URL(String(originalUrl), 'http://localhost').pathname
-  } catch (_) {
-    return false
-  }
-  return /\/share\/v\/new(\/|$)/.test(pathname)
+  return isLocalOnlyPath(originalUrl)
 }
 
 

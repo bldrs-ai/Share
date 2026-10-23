@@ -218,15 +218,21 @@ describe('loader/unsupportedSchema — modelSourceOf', () => {
 })
 
 
-// routes.ts#processFile's upload test is `startsWith('/share/v/new')`, so
-// on a GitHub Pages-style install under a prefix an upload arrives with
-// isUploadedFile false (codex review of Share#1899).
+// A route result without a trustworthy `isUploadedFile` still classifies by
+// its URL, whatever the install prefix (codex review of Share#1899). Since
+// #1959 processFile itself is prefix-independent (routes/localOnly.ts); this
+// is the fallback.
 describe('loader/unsupportedSchema — uploads under an install prefix', () => {
   it('still classifies them as uploads', () => {
     expect(modelSourceOf({
       kind: 'file',
       isUploadedFile: false,
       originalUrl: new URL('https://bldrs-ai.github.io/Share/share/v/new/0b4c2f.ifc'),
+    })).toBe('upload')
+    expect(modelSourceOf({
+      kind: 'file',
+      isUploadedFile: false,
+      originalUrl: new URL('https://bldrs-ai.github.io/Share/share/v/local-only/0b4c2f.ifc'),
     })).toBe('upload')
   })
 })

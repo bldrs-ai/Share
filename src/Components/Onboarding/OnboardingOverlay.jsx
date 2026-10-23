@@ -82,7 +82,7 @@ export default function OnboardingOverlay({isVisible, onClose}) {
       // onExceeded below (codex review on #1905).
       () => onClose(false),
       // Same quota gate as ViewerContainer's dropzone — a first-visit drop
-      // through the overlay is still a /v/new/ private load and must count.
+      // through the overlay is still a /v/local-only/ private load and must count.
       {
         hasCapacity,
         record,

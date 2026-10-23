@@ -12,7 +12,7 @@ import {v4 as uuidv4} from 'uuid'
  * stays here instead, the opener navigates in-app (`navigateToInMemoryModel`,
  * no page load), and `Loader#load` reads the bytes from here.
  *
- * Keys look like OPFS storage ids, `<uuid>.<ext>`, so the `/v/new/` route
+ * Keys look like OPFS storage ids, `<uuid>.<ext>`, so the `/v/local-only/` route
  * parses them and `findLoader` picks the loader by extension, exactly as for
  * an OPFS upload. Entries are never removed while the page lives: keeping
  * them is what lets Back return to an earlier upload. A picked or dropped
@@ -31,7 +31,7 @@ const uploads = new Map()
  *   gzip transport envelope (`loader/gzipEnvelope.js`)
  * @param {string} ext The extension the loader resolves it by, no dot, e.g.
  *   `ifc` — the same one an OPFS upload is stored under
- * @return {string} `<uuid>.<ext>`, the `/v/new/` path segment
+ * @return {string} `<uuid>.<ext>`, the `/v/local-only/` path segment
  */
 export function registerInMemoryUpload(file, ext) {
   // A v4 uuid, which `testUuid` (`Loader#load`'s upload test) accepts. The

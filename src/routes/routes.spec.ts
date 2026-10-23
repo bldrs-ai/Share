@@ -83,7 +83,7 @@ test.describe('Routes', () => {
     expect(response.status()).toBe(HTTP_OK)
   })
 
-  test.skip('upload IFC → redirects to /share/v/new/<UUID>.ifc and renders', async ({page}) => {
+  test.skip('upload IFC → redirects to /share/v/local-only/<UUID>.ifc and renders', async ({page}) => {
     await page.goto('/share/v/p/index.ifc') // or wherever your uploader lives
 
     const FIXTURES_DIR = join(__dirname, '..', '..', 'cypress', 'fixtures')
@@ -110,8 +110,8 @@ test.describe('Routes', () => {
     }, {byteArrayArg: byteArray, nameArg: name})
 
 
-    // URL becomes /share/v/new/<UUID>.stl — we don’t care about the exact UUID, just the shape.
-    await expect(page).toHaveURL(/\/share\/v\/new\/[0-9a-fA-F-].*$/, {timeout: 30_000})
+    // URL becomes /share/v/local-only/<UUID>.stl — we don’t care about the exact UUID, just the shape.
+    await expect(page).toHaveURL(/\/share\/v\/local-only\/[0-9a-fA-F-].*$/, {timeout: 30_000})
 
     // Wait for model ready attribute on dropzone (matching working homepage test)
     const dropzone = page.getByTestId('cadview-dropzone')

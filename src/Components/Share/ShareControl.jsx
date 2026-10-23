@@ -12,7 +12,7 @@ import ShareDialog from './ShareDialog'
  * This button hosts the ShareDialog component and toggles it open and
  * closed.
  *
- * For a model opened from the user's computer (a `/share/v/new/<id>` route)
+ * For a model opened from the user's computer (a `/share/v/local-only/<id>` route)
  * the button is gated instead (#705): the upload lives only in this browser's
  * OPFS, so the link the dialog would hand out opens nowhere else — a
  * recipient gets the raw "Folder <id> not found" error, Sentry's top
@@ -82,9 +82,9 @@ export default function ShareControl() {
 }
 
 
-export const MSG_LOCAL_SHARE_TITLE = 'Local files can\'t be shared yet'
+export const MSG_LOCAL_SHARE_TITLE = 'Local-only files can\'t be shared yet'
 // "Open it from GitHub or Google Drive" is the same way out the no-OPFS
 // alert offers (OPFS/messages.js), so local-file limits read alike.
 export const MSG_LOCAL_SHARE_BODY =
-  'This model was opened from a file on your computer, so it\'s kept only in this browser ' +
-  'and a link to it won\'t open anywhere else. Open it from GitHub or Google Drive to share it.'
+  'This model was opened from a file on your computer, so it\'s local-only: it\'s kept only in ' +
+  'this browser, and a link to it won\'t open anywhere else. Open it from GitHub or Google Drive to share it.'

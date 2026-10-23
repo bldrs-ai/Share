@@ -16,8 +16,8 @@ import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
  * recover the file, and says so.
  */
 const PICKED_FILE = 'public/index.ifc'
-// The upload's id, `<uuid>.ifc`, under the `/v/new/` route.
-const UPLOAD_URL = /\/share\/v\/new\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.ifc$/
+// The upload's id, `<uuid>.ifc`, under the `/v/local-only/` route (#1959).
+const UPLOAD_URL = /\/share\/v\/local-only\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.ifc$/
 // A distinctive slice of IN_MEMORY_UPLOAD_GONE_ALERT, which the spec can't
 // import (it would pull the app's module graph into the test runner).
 const GONE_TEXT = 'opened from your computer in a previous page and is no longer available'
@@ -77,7 +77,7 @@ async function dropPickedFile(page: Page) {
  * A failed load raises an alert and then redirects to the home model, which
  * also ends model-ready, so neither "a model is ready" nor "the URL changed"
  * proves anything alone. What does: the page title takes the uploaded
- * model's `New: ` form only once that model has loaded, the URL is still the
+ * model's `Local-only: ` form only once that model has loaded, the URL is still the
  * upload's, and no dialog (the alert) is up.
  *
  * @param page
@@ -85,7 +85,7 @@ async function dropPickedFile(page: Page) {
 async function expectUploadOpened(page: Page) {
   await expect(page).toHaveURL(UPLOAD_URL)
   await waitForModelReady(page)
-  await expect(page).toHaveTitle(/^New: /)
+  await expect(page).toHaveTitle(/^Local-only: /)
   await expect(page).toHaveURL(UPLOAD_URL)
   await expect(page.getByRole('dialog')).toHaveCount(0)
 }

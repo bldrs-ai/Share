@@ -29,12 +29,14 @@ The system supports five route types, defined by their path prefixes:
 - **Example**: `/share/v/p/model.ifc/123`
 - **Result**: `FileResult` with filepath and optional element path
 
-#### 2. **New/Uploaded Files** (`/v/new`)
-- **Pattern**: `/share/v/new/*`
+#### 2. **Local-only Files** (`/v/local-only`)
+- **Pattern**: `/share/v/local-only/*`
 - **Handler**: `processFile`
-- **Use Case**: Files uploaded via drag-and-drop or file picker
-- **Example**: `/share/v/new/AA77535-D1B6-49A9-915B-41343B08BF83.ifc`
+- **Use Case**: Files opened from the user's computer via drag-and-drop or file picker. Their bytes live only in this browser (OPFS, or page memory without OPFS), so the URL opens nowhere else — hence the name (#1959)
+- **Example**: `/share/v/local-only/AA77535-D1B6-49A9-915B-41343B08BF83.ifc`
 - **Result**: `FileResult` with `isUploadedFile: true`
+- **Legacy**: `/share/v/new/*`, the route's name before #1959, redirects here (history.replaceState, search and hash kept), so old recents, bookmarks and copied links still resolve
+- **Provenance**: every "is this a local-only path?" test goes through `routes/localOnly.ts#isLocalOnlyPath`, which is install-prefix-independent (`/Share/share/v/…` on GitHub Pages) and accepts both names. Don't add `startsWith('/share/v/…')` checks
 
 #### 3. **GitHub Files** (`/v/gh`)
 - **Pattern**: `/share/v/gh/:org/:repo/:branch/*`
@@ -130,7 +132,8 @@ Routes are configured in `ShareRoutes.jsx`:
 
 ```jsx
 <Route path='v/p/*' element={<Share pathPrefix={`${appPrefix}/v/p`}/>}/>
-<Route path='v/new/*' element={<Share pathPrefix={`${appPrefix}/v/new`}/>}/>
+<Route path='v/local-only/*' element={<Share pathPrefix={`${appPrefix}/v/local-only`}/>}/>
+<Route path='v/new/*' element={<LegacyUploadRedirect/>}/>
 <Route path='v/gh/:org/:repo/:branch/*' element={<Share pathPrefix={`${appPrefix}/v/gh`}/>}/>
 <Route path='v/u/*' element={<Share pathPrefix={`${appPrefix}/v/u`}/>}/>
 <Route path='v/g/*' element={<Share pathPrefix={`${appPrefix}/v/g`}/>}/>

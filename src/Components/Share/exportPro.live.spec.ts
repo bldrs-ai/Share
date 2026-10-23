@@ -97,7 +97,7 @@ async function expectReopenedModelIsPickable(page: Page) {
   }
   await node(LEAF_LABEL).first().getByTestId('NavTreeNodeLabel').click()
   await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
-  await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.glb(\/\d+)+/)
+  await expect(page).toHaveURL(/\/share\/v\/(?:new|local-only)\/[^/]+\.glb(\/\d+)+/)
   // …and the scene paints it, which is the half a tree that merely rendered
   // would not give (#1844).
   await expect.poll(() => sceneHighlightCount(page)).toBeGreaterThan(0)
@@ -342,7 +342,7 @@ test.describe('Live smoke: Pro', () => {
     await page.keyboard.press('Escape')
 
     // The Open dialog's Local tab.
-    await openLocalFile(page, savedPath, /\/share\/v\/new\/[^/]+\.glb/)
+    await openLocalFile(page, savedPath, /\/share\/v\/(?:new|local-only)\/[^/]+\.glb/)
     await waitForModelReady(page, LIVE_TEST_TIMEOUT_MS)
     await expectReopenedModelIsPickable(page)
 
@@ -351,7 +351,7 @@ test.describe('Live smoke: Pro', () => {
     const beforeDrop = page.url()
     await dropFile(page, savedPath, 'index.glb.gz', 'application/gzip')
     await expect(page).not.toHaveURL(beforeDrop, {timeout: LIVE_TEST_TIMEOUT_MS})
-    await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.glb/)
+    await expect(page).toHaveURL(/\/share\/v\/(?:new|local-only)\/[^/]+\.glb/)
     await waitForModelReady(page, LIVE_TEST_TIMEOUT_MS)
     await expectReopenedModelIsPickable(page)
 
@@ -361,7 +361,7 @@ test.describe('Live smoke: Pro', () => {
     const spzPath = testInfo.outputPath('point.spz')
     await writeFile(spzPath, makeSpz())
     await dropFile(page, spzPath, 'point.spz', 'application/octet-stream')
-    await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.spz/, {timeout: LIVE_TEST_TIMEOUT_MS})
+    await expect(page).toHaveURL(/\/share\/v\/(?:new|local-only)\/[^/]+\.spz/, {timeout: LIVE_TEST_TIMEOUT_MS})
     // Ready, and no "Load failed": a .spz the splat loader cannot read shows
     // that alert and never sets data-model-ready (checked against a corrupt
     // one while writing this).

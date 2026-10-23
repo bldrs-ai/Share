@@ -548,11 +548,15 @@ const HOSTED_DEMO_FILEPATHS = ['index.ifc', 'index.step']
  * ads-campaign-build §1, growth-strategy §3).
  *
  * Demo detection matches routes.ts#processFile output for hosted
- * project files: {kind: 'file', isUploadedFile: false, filepath}. The
- * filepath check covers uploads on GitHub Pages installs, where
- * processFile's '/share/v/new' prefix test misses ('/Share/share/v/new')
- * and isUploadedFile comes back false — upload filepaths are
- * UUID-derived, never a hosted demo's name (HOSTED_DEMO_FILEPATHS).
+ * project files: {kind: 'file', isUploadedFile: false, filepath}. Since
+ * #1959 processFile derives isUploadedFile prefix-independently
+ * (routes/localOnly.ts), so a local-only open is never mistaken for the
+ * demo on a GitHub Pages install either. The filepath check is
+ * independent backup: upload filepaths are UUID-derived, never a hosted
+ * demo's name (HOSTED_DEMO_FILEPATHS). The route rename changes nothing
+ * here or in the event: the demos stay /v/p/index.ifc and /v/p/index.step,
+ * and content_id is the file's download URL, which never carried the
+ * route segment.
  *
  * Also false on Netlify hosts (*.netlify.app), except deploy previews with
  * `?feature=gaEnableInPreview`, so ordinary team review sessions don't

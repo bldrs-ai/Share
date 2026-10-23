@@ -49,9 +49,9 @@ export default function AlertDialog({onClose}) {
     if (alert.type === 'unsupportedSchema' || alert.type === 'inMemoryUploadGone' || alert.type === 'uploadNotInBrowser') {
       // Expected outcome, not a defect: analytics only, never Sentry
       // (alertTracking.js#trackAlertEvent). `inMemoryUploadGone` is a
-      // /v/new/ URL whose file, opened without OPFS, was held only by a
+      // /v/local-only/ URL whose file, opened without OPFS, was held only by a
       // page that is gone (OPFS/messages.js, #1906); `uploadNotInBrowser` is
-      // a /v/new/ link, with OPFS available, to an upload this browser
+      // a /v/local-only/ link, with OPFS available, to an upload this browser
       // doesn't hold (#1955).
       trackAlertEvent(alert.message)
     } else if (alert.type === 'oom' || alert.type === 'needsReconnect') {

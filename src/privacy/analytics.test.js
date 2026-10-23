@@ -377,9 +377,10 @@ describe('Analytics', () => {
     })
 
     test('true for an upload even when isUploadedFile is misdetected', () => {
-      // GitHub Pages installs prefix routes with /Share, defeating
-      // processFile's '/share/v/new' test — the UUID filepath still
-      // distinguishes the upload from the demo.
+      // Before #1959, GitHub Pages installs (routes prefixed /Share)
+      // defeated processFile's '/share/v/new' test. processFile is now
+      // prefix-independent (routes/localOnly.ts), but the UUID filepath
+      // stays an independent backup that distinguishes upload from demo.
       expect(Analytics.isRealModelOpen({
         kind: 'file',
         isUploadedFile: false,

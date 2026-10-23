@@ -47,7 +47,7 @@ import {
 
 
 // Model routes all live under the viewer path segment, e.g.
-// /share/v/new/file.ifc, /share/v/gh/org/repo/branch/file.ifc.
+// /share/v/local-only/file.ifc, /share/v/gh/org/repo/branch/file.ifc.
 const MODEL_ROUTE_RE = /\/v\//
 
 // Narrower than this on drag-release and the drawer collapses to its rail

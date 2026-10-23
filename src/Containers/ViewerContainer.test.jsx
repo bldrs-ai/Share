@@ -174,10 +174,10 @@ describe('ViewerContainer', () => {
 
     dropzone.dispatchEvent(mockEvent)
 
-    // Make sure we navigate to /app/v/new/myUploadedFileName
+    // Make sure we navigate to /app/v/local-only/myUploadedFileName
     await waitFor(() => {
       expect(saveDnDFileToOpfs).toHaveBeenCalledTimes(1)
-      expect(mockNavigate).toHaveBeenCalledWith('/app/v/new/myUploadedFileName')
+      expect(mockNavigate).toHaveBeenCalledWith('/app/v/local-only/myUploadedFileName')
     })
   })
 
@@ -209,7 +209,7 @@ describe('ViewerContainer', () => {
     dropzone.dispatchEvent(mockEvent)
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/^\/app\/v\/new\/[0-9a-f-]{36}\.my-recognized-type$/))
+      expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/^\/app\/v\/local-only\/[0-9a-f-]{36}\.my-recognized-type$/))
     })
     expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
     expect(mockSetAlert).not.toHaveBeenCalled()

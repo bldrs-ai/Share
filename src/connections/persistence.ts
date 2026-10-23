@@ -19,7 +19,7 @@ export interface RecentFileEntry {
   /**
    * Dedup key: fileId (google-drive) | sharePath (github) | OPFS storage
    * id, `<blob-uuid>.<ext>` (local). For local entries this — not `name` —
-   * is what `/v/new/` navigation and `Loader#load` resolve against OPFS.
+   * is what `/v/local-only/` navigation and `Loader#load` resolve against OPFS.
    */
   id: string
   source: RecentFileSource
@@ -34,7 +34,7 @@ export interface RecentFileEntry {
    * still render, but nothing should write one.
    */
   lastModifiedUtc?: number | null
-  /** Navigate path for local (/v/new/[storage-id]) and github (/v/gh/...) */
+  /** Navigate path for local (/v/local-only/[storage-id]) and github (/v/gh/...) */
   sharePath?: string
   /** google-drive only */
   connectionId?: string

@@ -125,6 +125,53 @@ describe('record-load function', () => {
     expect(patched.usageQuota.loads).toEqual([{key: KEY, loadedAt: expect.any(String)}])
   })
 
+  // Local files stay metered across the Share#1959 rename, on purpose
+  // (design/new/quotas.md §"What counts"): `/v/local-only/` under either
+  // install prefix, and the legacy `/v/new/` on keys recorded before it.
+  it.each([
+    ['/share/v/local-only/0b4c2f1e-8d6a-4c3b-9e2f-1a2b3c4d5e6f.ifc'],
+    ['/Share/share/v/local-only/0b4c2f1e-8d6a-4c3b-9e2f-1a2b3c4d5e6f.ifc'],
+    ['/share/v/new/0b4c2f1e-8d6a-4c3b-9e2f-1a2b3c4d5e6f.ifc'],
+  ])('counts a local file load (%s) for a free user', async (key) => {
+    mockAuth0({})
+
+    const res = await handler(getEvent({key}))
+
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.body)).toMatchObject({allowed: true, used: 1, tier: 'free'})
+    expect(axios.patch.mock.calls[0][1].app_metadata.usageQuota.loads).toEqual([{key, loadedAt: expect.any(String)}])
+  })
+
+  // The route is the FIRST `/v/` segment: a public GitHub file whose repo
+  // path contains `v/local-only/` is a GitHub load, resolved by repo privacy,
+  // not a local one (codex review on Share#1967).
+  it('resolves a GitHub path containing /v/local-only/ by repo privacy, not as local', async () => {
+    mockAuth0({usageQuota: {loads: recentLoads(FREE_LIMIT)}})
+    const authGet = axios.get.getMockImplementation()
+    axios.get.mockImplementation((url, config) => {
+      if (url.startsWith('https://api.github.com/repos/')) {
+        return Promise.resolve({status: 200, data: {}})
+      }
+      return authGet(url, config)
+    })
+
+    const res = await handler(getEvent({key: '/share/v/gh/pubowner/pubrepo/main/v/local-only/model.ifc'}))
+
+    // Public repo: not quotable, so a free user AT the limit is let through
+    // and nothing is written.
+    expect(res.statusCode).toBe(200)
+    expect(axios.get).toHaveBeenCalledWith('https://api.github.com/repos/pubowner/pubrepo', expect.anything())
+    expect(axios.patch).not.toHaveBeenCalled()
+  })
+
+  it('denies a new local file load for a free user at the limit', async () => {
+    mockAuth0({usageQuota: {loads: recentLoads(FREE_LIMIT)}})
+
+    const res = await handler(getEvent({key: '/share/v/local-only/0b4c2f1e-8d6a-4c3b-9e2f-1a2b3c4d5e6f.ifc'}))
+
+    expect(res.statusCode).toBe(403)
+  })
+
   it('does not count a key twice, even at the limit', async () => {
     const loads = [...recentLoads(FREE_LIMIT - 1), {key: KEY, loadedAt: new Date().toISOString()}]
     mockAuth0({usageQuota: {loads}})

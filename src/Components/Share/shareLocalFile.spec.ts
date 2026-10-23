@@ -9,7 +9,7 @@ import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
  * Share is gated for a model opened from the user's computer (#705).
  *
  * An upload is stored only in this browser's OPFS and served from
- * `/share/v/new/<id>`, so the link the Share dialog used to show opened
+ * `/share/v/local-only/<id>`, so the link the Share dialog used to show opened
  * nowhere else. This walks the user's own path — Open › Local › Browse, then
  * Share — and checks the button explains itself instead of offering a link,
  * and that its action leads to the Open dialog (where GitHub and Google
@@ -45,7 +45,7 @@ describeMobileAndDesktop('Share 110: a model opened from a local file', () => {
     const chooserEvent = page.waitForEvent('filechooser')
     await page.getByTestId('button_open_file').click()
     await (await chooserEvent).setFiles(PICKED_FILE)
-    await expect(page).toHaveURL(/\/share\/v\/new\/.+\.ifc/)
+    await expect(page).toHaveURL(/\/share\/v\/local-only\/.+\.ifc/)
     await waitForModelReady(page)
 
     await expect(page.getByTestId('gated-share')).toBeVisible()
@@ -56,7 +56,7 @@ describeMobileAndDesktop('Share 110: a model opened from a local file', () => {
     await clickGate(page, 'gated-share')
 
     const help = page.getByTestId('gated-help')
-    await expect(help.getByText('Local files can\'t be shared yet')).toBeVisible()
+    await expect(help.getByText('Local-only files can\'t be shared yet')).toBeVisible()
     await expect(help.getByText(HELP_TEXT, {exact: false})).toBeVisible()
     // No link, no QR: the dialog that would show the local URL never opened.
     await expect(page.getByTestId('textfield-link')).toHaveCount(0)
