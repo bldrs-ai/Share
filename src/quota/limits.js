@@ -35,12 +35,20 @@ export const ANONYMOUS_PRIVATE_MODEL_LIMIT = 2
 
 /**
  * Private models a signed-in free user may open per ROLLING_WINDOW_DAYS.
- * The pricing page sells this as "2 private models a month".
+ * The pricing page sells this as "Open and share 2 private models a week".
  */
 export const FREE_PRIVATE_MODEL_LIMIT = 2
 
-/** Length of the rolling window for non-anonymous tiers, in days */
-export const ROLLING_WINDOW_DAYS = 30
+/**
+ * Length of the free tier's rolling window, in days: for private models here
+ * and for free GLB exports, whose `FREE_EXPORT_WINDOW_DAYS`
+ * (`export/freeExports.js`) IS this constant. One window, so the pricing
+ * page's "2 private models a week" and "2 GLB exports a week" can't drift
+ * apart. Owner decision 2026-10-26 (was 30): "weekly will help keep us more
+ * top-of-mind, and private shares and exports should be on the same timing
+ * to keep it simple." Anonymous is exempt — a lifetime cap, never pruned.
+ */
+export const ROLLING_WINDOW_DAYS = 7
 
 const HOURS_PER_DAY = 24
 const MINUTES_PER_HOUR = 60
@@ -87,5 +95,8 @@ export function isAlwaysPrivateRouteKind(routeKind, meterLocalFiles) {
   if (routeKind === DRIVE_ROUTE_KIND) {
     return true
   }
-  return meterLocalFiles === true && LOCAL_ROUTE_KINDS.includes(routeKind)
+  // The typeof guard is for tsc, not behavior (a null kind was never in the
+  // list): freeExports.js imports this file now, which puts it in the
+  // typecheck's graph via the TypeScript that imports freeExports.
+  return meterLocalFiles === true && typeof routeKind === 'string' && LOCAL_ROUTE_KINDS.includes(routeKind)
 }

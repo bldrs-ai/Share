@@ -1,4 +1,4 @@
-import {FREE_EXPORT_LIMIT, FREE_EXPORT_WINDOW_DAYS} from '../export/freeExports'
+import {FREE_EXPORT_LIMIT, FREE_EXPORT_WINDOW_DAYS, FREE_EXPORT_WINDOW_MS} from '../export/freeExports'
 import {LEGACY_UPLOAD_ROUTE, LOCAL_ONLY_ROUTE} from '../routes/localOnly'
 import {
   DRIVE_ROUTE_KIND,
@@ -6,6 +6,7 @@ import {
   LIMITS,
   LOCAL_ROUTE_KINDS,
   ROLLING_WINDOW_DAYS,
+  ROLLING_WINDOW_MS,
   TIERS,
   isAlwaysPrivateRouteKind,
 } from './limits'
@@ -19,14 +20,23 @@ describe('quota/limits', () => {
     expect([...LOCAL_ROUTE_KINDS].sort()).toEqual([LOCAL_ONLY_ROUTE, LEGACY_UPLOAD_ROUTE].sort())
   })
 
-  // The owner's tiers (Share#1966 PR): what the pricing page sells.
-  it('allows a free account 2 private models per rolling 30 days, and 2 GLB exports per 7', () => {
+  // The owner's tiers (Share#1966 PR, window 2026-10-26): what the pricing
+  // page sells.
+  it('allows a free account 2 private models and 2 GLB exports per rolling 7 days', () => {
     expect(FREE_PRIVATE_MODEL_LIMIT).toBe(2)
     expect(LIMITS[TIERS.FREE]).toBe(FREE_PRIVATE_MODEL_LIMIT)
-    expect(ROLLING_WINDOW_DAYS).toBe(30)
+    expect(ROLLING_WINDOW_DAYS).toBe(7)
+    expect(ROLLING_WINDOW_MS).toBe(7 * 24 * 60 * 60 * 1000)
     expect(FREE_EXPORT_LIMIT).toBe(2)
     expect(FREE_EXPORT_WINDOW_DAYS).toBe(7)
     expect(LIMITS[TIERS.PAID]).toBe(Infinity)
+  })
+
+  // "Private shares and exports should be on the same timing" (owner,
+  // 2026-10-26): one window, so moving it can't move only one of them.
+  it('gives private models and GLB exports the same window', () => {
+    expect(FREE_EXPORT_WINDOW_DAYS).toBe(ROLLING_WINDOW_DAYS)
+    expect(FREE_EXPORT_WINDOW_MS).toBe(ROLLING_WINDOW_MS)
   })
 
   describe('isAlwaysPrivateRouteKind', () => {

@@ -15,7 +15,7 @@
  *      `shareProPendingReauth`, src/quota/proStatus.js) → PAID, else FREE.
  *   4. For /v/gh/, resolve repo privacy via unauth api.github.com
  *      (cached per "owner/repo" in module scope, 15-minute TTL).
- *   5. Prune loads outside the rolling 30-day window.
+ *   5. Prune loads outside the rolling window (ROLLING_WINDOW_DAYS, 7).
  *      Local files (`/v/local-only/`, legacy `/v/new/`) are not quotable:
  *      they're free and unmetered (Share#1966) unless local metering is
  *      switched on (isLocalFileMeteringEnabled below).

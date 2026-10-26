@@ -20,6 +20,13 @@ const USER_EMAIL = 'cypress+quota@bldrs.ai'
 // own copy is asserted against this too: if the limit moves, this fails.
 const FREE_LIMIT = 2
 
+// ROLLING_WINDOW_DAYS in src/quota/limits.js (owner, 2026-10-26; was 30),
+// restated for the same reason. The mock prunes its ledger to it, as the
+// real record-load does.
+const WINDOW_DAYS = 7
+const DAY_MS = 86_400_000
+const HTTP_OK = 200
+
 // Same fakes GoogleDriveConnect.spec.ts uses: GIS OAuth and the Picker,
 // replaced so no popup or Google request happens.
 const GOOGLE_APIS_FAKE_PATH = path.resolve(process.cwd(), 'src/Components/Connections/googleApisFake.js')
@@ -63,19 +70,24 @@ async function setFreeUserMetadata(page: Page) {
 
 /**
  * Give the record-load mock (the server's stand-in) `count` distinct private
- * models this user already opened inside the 30-day window — Drive keys,
- * which count whatever `meterLocalFiles` says.
+ * models this user already opened inside the 7-day window — Drive keys,
+ * which count whatever `meterLocalFiles` says. `daysAgo` dates them, one
+ * entry per model (default: all just now).
  *
  * @param page Playwright page
  * @param count How many prior private models
+ * @param daysAgo How long ago each was opened, in days
  */
-async function seedServerLoads(page: Page, count: number) {
-  await page.evaluate((n) => {
+async function seedServerLoads(page: Page, count: number, daysAgo: number[] = []) {
+  await page.evaluate(({n, ages, dayMs}) => {
     const w = window as unknown as WindowWithStore
     w.__mockQuotaForce5xx = false
-    const loadedAt = new Date().toISOString()
-    w.__mockQuotaLoads = Array.from({length: n}, (_, i) => ({key: `/share/v/g/seeded-${i}`, loadedAt}))
-  }, count)
+    const now = Date.now()
+    w.__mockQuotaLoads = Array.from({length: n}, (_, i) => ({
+      key: `/share/v/g/seeded-${i}`,
+      loadedAt: new Date(now - ((ages[i] ?? 0) * dayMs)).toISOString(),
+    }))
+  }, {n: count, ages: daysAgo, dayMs: DAY_MS})
 }
 
 
@@ -180,7 +192,7 @@ describeMobileAndDesktop('QuotaLimitDialog', () => {
     await pickDriveFile(page, 'third-private-model')
 
     await expect(page.getByTestId('button-quota-subscribe')).toBeVisible()
-    await expect(page.getByText(`limit of ${FREE_LIMIT} private models in any rolling 30-day window`))
+    await expect(page.getByText(`limit of ${FREE_LIMIT} private models in any rolling ${WINDOW_DAYS}-day window`))
       .toBeVisible()
     // Refused, so the model never opened.
     expect(new URL(page.url()).pathname).not.toMatch(/\/v\/g\//)
@@ -190,6 +202,39 @@ describeMobileAndDesktop('QuotaLimitDialog', () => {
     await expect.poll(() => funnelEvents(page, 'quota_limit_reached')).toHaveLength(1)
     const [limitEvent] = await funnelEvents(page, 'quota_limit_reached')
     expect(limitEvent.params).toMatchObject({tier: 'free', feature: 'private_load'})
+  })
+
+  // The window's edge from the user's side: one of the two seeded models was
+  // opened 8 days ago, outside the 7-day window, so the 3rd pick is the 2nd
+  // that counts — no dialog, and the server records it and drops the stale
+  // row. Same as a ledger written under the old 30-day window at rollout.
+  test('a private model opened 8 days ago doesn\'t count: the next one opens', async ({page}) => {
+    await seedServerLoads(page, FREE_LIMIT, [0, WINDOW_DAYS + 1])
+    const recordLoad = page.waitForResponse((r) => new URL(r.url()).pathname === '/.netlify/functions/record-load')
+
+    await pickDriveFile(page, 'after-the-window')
+
+    const response = await recordLoad
+    expect(response.status()).toBe(HTTP_OK)
+    expect(await response.json()).toMatchObject({allowed: true, used: FREE_LIMIT, limit: FREE_LIMIT})
+    const serverKeys = await page.evaluate(() =>
+      (window as unknown as WindowWithStore).__mockQuotaLoads?.map((l) => l.key))
+    expect(serverKeys).toEqual(['/share/v/g/seeded-0', '/share/v/g/after-the-window'])
+    await expect(page.getByTestId('button-quota-subscribe')).toHaveCount(0)
+    expect(await funnelEvents(page, 'quota_limit_reached')).toHaveLength(0)
+  })
+
+  // The dialog's "What counts?" link: /share/quotas quotes the same window.
+  test('the limit dialog links to the quotas page, which says rolling 7 days', async ({page}) => {
+    await pickDriveFile(page, 'third-private-model')
+    await expect(page.getByTestId('button-quota-subscribe')).toBeVisible()
+
+    await page.getByRole('link', {name: 'What counts?'}).click()
+
+    await expect(page).toHaveURL(/\/share\/quotas$/)
+    const freeRow = page.getByRole('row', {name: /Free \(signed in\)/})
+    await expect(freeRow).toContainText(`Rolling ${WINDOW_DAYS} days`)
+    await expect(freeRow).toContainText(String(FREE_LIMIT))
   })
 
   test('free user at the limit subscribes through checkout', async ({page}) => {

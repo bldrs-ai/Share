@@ -22,8 +22,12 @@ const HOURS_PER_DAY = 24
 const MILLIS_PER_SEC = 1000
 const DAY_MS = HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MIN * MILLIS_PER_SEC
 
-const DAYS_OUTSIDE_WINDOW = 40
-const DAYS_INSIDE_WINDOW = 29
+// The free tier's window is 7 days (owner, 2026-10-26; was 30). Literal
+// days rather than ROLLING_WINDOW_DAYS-relative, so a change to the window
+// is a failing test here and not just a test that follows it.
+const WINDOW_DAYS = 7
+const DAYS_OUTSIDE_WINDOW = 8
+const DAYS_INSIDE_WINDOW = 6
 const DAYS_NEAR_BOUNDARY = 0.01
 const DAYS_FAR_PAST = 365
 const DAYS_LONG_PAST = 60
@@ -175,10 +179,11 @@ describe('pruneLoads', () => {
   const NOW = Date.parse('2026-05-01T00:00:00.000Z')
   const dayBack = (n) => isoDaysBefore(NOW, n)
 
-  it('drops free-tier loads older than 30 days', () => {
+  it('drops free-tier loads older than 7 days', () => {
+    expect(ROLLING_WINDOW_DAYS).toBe(WINDOW_DAYS)
     const loads = [
-      {key: 'a', loadedAt: dayBack(DAYS_OUTSIDE_WINDOW)}, // out
-      {key: 'b', loadedAt: dayBack(DAYS_INSIDE_WINDOW)}, // in
+      {key: 'a', loadedAt: dayBack(DAYS_OUTSIDE_WINDOW)}, // out: 8 days ago
+      {key: 'b', loadedAt: dayBack(DAYS_INSIDE_WINDOW)}, // in: 6 days ago
       {key: 'c', loadedAt: dayBack(1)}, // in
     ]
     const out = pruneLoads(loads, TIERS.FREE, NOW)
@@ -186,8 +191,17 @@ describe('pruneLoads', () => {
   })
 
   it('keeps loads exactly at the boundary', () => {
-    const loads = [{key: 'edge', loadedAt: dayBack(ROLLING_WINDOW_DAYS - DAYS_NEAR_BOUNDARY)}]
+    const loads = [{key: 'edge', loadedAt: dayBack(WINDOW_DAYS - DAYS_NEAR_BOUNDARY)}]
     expect(pruneLoads(loads, TIERS.FREE, NOW)).toHaveLength(1)
+  })
+
+  // The edge itself, to the millisecond: inclusive at exactly 7 days
+  // (`loadedAt >= now - window`), gone one millisecond later.
+  it('counts a load exactly 7 days old, and not one a millisecond older', () => {
+    const exactly = new Date(NOW - (WINDOW_DAYS * DAY_MS)).toISOString()
+    const justOutside = new Date(NOW - (WINDOW_DAYS * DAY_MS) - 1).toISOString()
+    const loads = [{key: 'exactly', loadedAt: exactly}, {key: 'outside', loadedAt: justOutside}]
+    expect(pruneLoads(loads, TIERS.FREE, NOW).map((l) => l.key)).toEqual(['exactly'])
   })
 
   it('does not prune anonymous tier (lifetime cap)', () => {
@@ -236,7 +250,7 @@ describe('checkQuota', () => {
     expect(alreadyCounted).toBe(true)
   })
 
-  it('free tier: two distinct private models in 30 days, the 3rd is denied', () => {
+  it('free tier: two distinct private models in 7 days, the 3rd is denied', () => {
     expect(LIMITS[TIERS.FREE]).toBe(2)
     expect(checkQuota(makeQuota(TIERS.FREE, ['/v/g/1']), '/v/g/2').allowed).toBe(true)
     const full = makeQuota(TIERS.FREE, ['/v/g/1', '/v/g/2'])
@@ -247,12 +261,20 @@ describe('checkQuota', () => {
     expect(checkQuota(full, '/v/g/1').allowed).toBe(true)
   })
 
-  it('free tier: a model opened over 30 days ago no longer counts', () => {
+  it('free tier: a model opened 8 days ago no longer counts', () => {
     const quota = {tier: TIERS.FREE, loads: [
       {key: '/v/g/1', loadedAt: isoDaysBefore(Date.now(), DAYS_OUTSIDE_WINDOW)},
       {key: '/v/g/2', loadedAt: recent()},
     ]}
-    expect(checkQuota(quota, '/v/g/3').allowed).toBe(true)
+    expect(checkQuota(quota, '/v/g/3')).toMatchObject({allowed: true, used: 1})
+  })
+
+  it('free tier: a model opened 6 days ago still counts, so the 3rd is denied', () => {
+    const quota = {tier: TIERS.FREE, loads: [
+      {key: '/v/g/1', loadedAt: isoDaysBefore(Date.now(), DAYS_INSIDE_WINDOW)},
+      {key: '/v/g/2', loadedAt: recent()},
+    ]}
+    expect(checkQuota(quota, '/v/g/3')).toMatchObject({allowed: false, used: 2})
   })
 
   it('always allows paid tier', () => {
