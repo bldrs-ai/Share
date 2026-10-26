@@ -129,11 +129,14 @@ describeMobileAndDesktop('real_model_open GA event', () => {
     expect(typeof params.stats_firstMeshMs).toBe('number')
     expect(typeof params.stats_openMs).toBe('number')
     expect(['true', 'false']).toContain(params.stats_cacheHit)
-    // Page-wide console noise is labelled as such; the engine's own names
-    // stay absent until conway#740.
+    // Page-wide console noise is labelled as such, apart from the engine's
+    // own unqualified counts, which conway#740 supplies from the pinned
+    // 1.1626.740 on (ShareIfcLoader#loadStats). Before that pin they were
+    // guarded as absent.
     expect(typeof params.stats_pageErrorCount).toBe('number')
     expect(typeof params.stats_pageWarnCount).toBe('number')
-    expect(params).not.toHaveProperty('stats_errorCount')
+    expect(typeof params.stats_errorCount).toBe('number')
+    expect(typeof params.stats_warningCount).toBe('number')
     expect(await loadFailedEvents(page)).toHaveLength(0)
   })
 
