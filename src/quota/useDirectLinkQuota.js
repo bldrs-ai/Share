@@ -1,7 +1,14 @@
 import {useCallback, useEffect, useRef, useState} from 'react'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import useQuota from '../hooks/useQuota'
-import {GATE_EVENTS, gtagEventWithCid} from '../privacy/analytics'
+import {
+  GATE_EVENTS,
+  MODEL_ACTIONS,
+  MODEL_GATES,
+  MODEL_SOURCES,
+  gtagEventWithCid,
+  trackModelAction,
+} from '../privacy/analytics'
 import {navigateBaseOnModelPath} from '../utils/location'
 
 
@@ -130,6 +137,16 @@ export default function useDirectLinkQuota(appPrefix) {
         used: outcome.used,
         limit: outcome.limit,
         route_kind: routeKind,
+      })
+      // Its normalized twin (design/new/quotas.md §"Analytics: normalized
+      // tier events"): a private open, the tier model's "share", let through
+      // over the limit. The tier is the one record-load acted on. The view
+      // itself is model_view {gate: 'none'} from CadView.
+      trackModelAction(MODEL_ACTIONS.SHARE, {
+        gate: MODEL_GATES.SOFT,
+        source: MODEL_SOURCES.HOSTED,
+        routeKind,
+        tier: outcome.tier,
       })
     })
   }, [pending, isAuthLoading, record])

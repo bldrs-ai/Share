@@ -3,7 +3,14 @@ import {Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Link
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {startLogin} from '../../Auth0/gateLogin'
-import {FUNNEL_EVENTS, gtagFunnelEvent} from '../../privacy/analytics'
+import {
+  FUNNEL_EVENTS,
+  MODEL_ACTIONS,
+  MODEL_GATES,
+  MODEL_SOURCES,
+  gtagFunnelEvent,
+  trackModelAction,
+} from '../../privacy/analytics'
 import {LIMITS, QUOTA_FEATURES, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/quota'
 import useStore from '../../store/useStore'
 import {useMock} from '../Profile/ProfileControl'
@@ -53,6 +60,17 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
     gtagFunnelEvent(FUNNEL_EVENTS.QUOTA_LIMIT_REACHED, {
       tier: isAnonymous ? TIERS.ANONYMOUS : tier,
       feature,
+    })
+    // Its normalized twin (design/new/quotas.md §"Analytics: normalized tier
+    // events"). Private-model opens are the tier model's "share" action ("open
+    // and share N private models"), so the wall is model_share {blocked}.
+    // Always hosted: local files are unmetered, so only a Drive or private
+    // GitHub open reaches this dialog (with the meterLocalFiles abuse switch
+    // on, a local drop could too; the dialog isn't given the key to tell).
+    trackModelAction(MODEL_ACTIONS.SHARE, {
+      gate: MODEL_GATES.BLOCKED,
+      source: MODEL_SOURCES.HOSTED,
+      tier: isAnonymous ? TIERS.ANONYMOUS : tier,
     })
   }, [isOpen, isAnonymous, tier, feature])
 

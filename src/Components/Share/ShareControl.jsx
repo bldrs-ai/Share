@@ -3,7 +3,15 @@ import {Link, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {useStartGateLogin} from '../../Auth0/gateLogin'
 import useStore from '../../store/useStore'
-import {GATE_EVENTS, gtagEventWithCid} from '../../privacy/analytics'
+import {
+  GATE_EVENTS,
+  MODEL_ACTIONS,
+  MODEL_GATES,
+  MODEL_ROUTE_KINDS,
+  MODEL_SOURCES,
+  gtagEventWithCid,
+  trackModelAction,
+} from '../../privacy/analytics'
 import {ControlButtonWithHashState, TooltipIconButton} from '../Buttons'
 import GatedAction from '../GatedAction'
 import {HASH_PREFIX_SHARE} from './hashState'
@@ -87,6 +95,15 @@ export default function ShareControl() {
         onOpen={() => {
           setIsInterestNoted(false)
           gtagEventWithCid(GATE_EVENTS.SHARE_GATED, {reason: 'local_file', signed_in: isAuthenticated})
+          // Its normalized twin: a share the local-file gate turned into an
+          // upsell (design/new/quotas.md §"Analytics: normalized tier events").
+          trackModelAction(MODEL_ACTIONS.SHARE, {
+            gate: MODEL_GATES.UPSELL,
+            source: MODEL_SOURCES.LOCAL,
+            routeKind: MODEL_ROUTE_KINDS.LOCAL,
+            isAuthenticated,
+            appMetadata: useStore.getState().appMetadata,
+          })
         }}
       >
         {/* The real toolbar button, dimmed and inert, under the same test id

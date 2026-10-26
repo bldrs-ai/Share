@@ -5,7 +5,14 @@ import {appMetadataFromToken} from '../Auth0/appMetadata'
 import {glbCacheKey} from '../loader/glbCacheKey'
 import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
-import {GATE_EVENTS, gtagEventWithCid} from '../privacy/analytics'
+import {
+  GATE_EVENTS,
+  MODEL_ACTIONS,
+  MODEL_GATES,
+  gtagEventWithCid,
+  modelRouteSource,
+  trackModelAction,
+} from '../privacy/analytics'
 import {TIERS, getTier} from '../quota/quota'
 import useStore from '../store/useStore'
 import {compressedExport, gzippedExport} from './artifactSizes'
@@ -116,8 +123,26 @@ export default function useExport() {
     // One `export_failed` per run that doesn't deliver a file, whichever way
     // it fails (codex review on Share#1968), beside export_model's one per
     // delivered file.
-    const reportFailure = (reason) => gtagEventWithCid(GATE_EVENTS.EXPORT_FAILED, {format: format.id, reason})
     const artifact = source || glbArtifact
+    // The normalized twin of export_model / export_failed{free_limit}
+    // (design/new/quotas.md §"Analytics: normalized tier events"). Source is
+    // the model on screen; a "Download again" of a history row (`source`
+    // passed) may be another model, so it sends no source rather than a
+    // wrong one.
+    const reportModelExport = (gate) => trackModelAction(MODEL_ACTIONS.EXPORT, {
+      gate,
+      ...(source ? {} : modelRouteSource(useStore.getState().modelPath)),
+      isAuthenticated,
+      appMetadata: useStore.getState().appMetadata,
+    })
+    const reportFailure = (reason) => {
+      gtagEventWithCid(GATE_EVENTS.EXPORT_FAILED, {format: format.id, reason})
+      // Only the free-allowance refusal is a gate. `denied`, `unavailable`
+      // and `error` are failures, not gate verdicts, and send no model_export.
+      if (reason === FREE_LIMIT_FAILURE_REASON) {
+        reportModelExport(MODEL_GATES.BLOCKED)
+      }
+    }
     if (!artifact) {
       // The button is disabled in this state; reaching here means the
       // artifact went away between render and click.
@@ -250,6 +275,7 @@ export default function useExport() {
         // funnel's "do free exports convert" question (§7.1).
         free_export: Boolean(charge),
       })
+      reportModelExport(MODEL_GATES.NONE)
       return {filename, stats}
     } catch (e) {
       setError(e)
@@ -295,6 +321,13 @@ export default function useExport() {
 /** `export_failed`'s `reason` when there is no artifact to export from */
 export const EXPORT_UNAVAILABLE_REASON = 'unavailable'
 
+/**
+ * `export_failed`'s `reason` when the free allowance is spent: the one
+ * failure that is a gate's verdict, so the one that also sends
+ * model_export {gate: 'blocked'}.
+ */
+export const FREE_LIMIT_FAILURE_REASON = 'free_limit'
+
 
 /**
  * The `reason` param of `export_failed` for a run that threw (the other
@@ -306,7 +339,7 @@ export const EXPORT_UNAVAILABLE_REASON = 'unavailable'
  */
 export function exportFailureReason(error) {
   if (error instanceof ProModuleDeniedError) {
-    return error.reason === FREE_EXPORT_LIMIT_REASON ? 'free_limit' : 'denied'
+    return error.reason === FREE_EXPORT_LIMIT_REASON ? FREE_LIMIT_FAILURE_REASON : 'denied'
   }
   return 'error'
 }

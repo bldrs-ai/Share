@@ -10,13 +10,17 @@ import {onHash} from '../Components/Camera/CameraControl'
 import {
   FUNNEL_EVENTS,
   LOCAL_HOUR_PARAM,
+  MODEL_ACTIONS,
+  MODEL_GATES,
   OPEN_CID_PARAM,
   getLocalHour,
   getOpenCid,
   gtagEvent,
   gtagFunnelEvent,
   isRealModelOpen,
+  modelRouteSource,
   startModelEngagement,
+  trackModelAction,
 } from '../privacy/analytics'
 import {trackEngagementOnOpen} from '../privacy/engagementTracking'
 import {getRenderMode} from '../privacy/preferences'
@@ -816,6 +820,17 @@ export default function CadView({
       // keeps it in the text slot; see analytics#getLocalHour.
       eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
       gtagEvent(FUNNEL_EVENTS.REAL_MODEL_OPEN, eventParams)
+      // The normalized twin (design/new/quotas.md §"Analytics: normalized
+      // tier events"), beside — never instead of — real_model_open, which
+      // Ads and the dashboard key on. Always `gate: 'none'`: a view that a
+      // soft gate let through over the limit is still an ungated view; the
+      // over-limit fact is model_share {gate: 'soft'} (useDirectLinkQuota).
+      trackModelAction(MODEL_ACTIONS.VIEW, {
+        gate: MODEL_GATES.NONE,
+        ...modelRouteSource(routeResult),
+        isAuthenticated,
+        appMetadata: useStore.getState().appMetadata,
+      })
       // Engaged-use conversions (Share#1960). Same real-open gate as the
       // event above; keyed by model so a theme/view-settings reload of the
       // same model is not a second open. Resolves to the events it sent

@@ -2,7 +2,7 @@ import {CompressionStream as NodeCompressionStream} from 'node:stream/web'
 import {act, renderHook, waitFor} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn} from '../__mocks__/authentication'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
-import {gtagEventWithCid} from '../privacy/analytics'
+import {gtagEventWithCid, trackModelAction} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {compressedExport, gzippedExport} from './artifactSizes'
 import {triggerDownload} from './download'
@@ -20,11 +20,20 @@ jest.mock('./artifactSizes', () => ({compressedExport: jest.fn(), gzippedExport:
 // gtagEventWithCid is the one that carries open_cid (Share#1964); its own
 // test is in privacy/analytics.test.js. GATE_EVENTS stays real so the names
 // asserted here are the names that ship.
-jest.mock('../privacy/analytics', () => ({
-  gtagEvent: jest.fn(),
-  gtagEventWithCid: jest.fn(),
-  GATE_EVENTS: jest.requireActual('../privacy/analytics').GATE_EVENTS,
-}))
+// trackModelAction is mocked the same way (its tests are there too);
+// modelRouteSource and the MODEL_* vocabularies stay real.
+jest.mock('../privacy/analytics', () => {
+  const actual = jest.requireActual('../privacy/analytics')
+  return {
+    gtagEvent: jest.fn(),
+    gtagEventWithCid: jest.fn(),
+    trackModelAction: jest.fn(),
+    GATE_EVENTS: actual.GATE_EVENTS,
+    MODEL_ACTIONS: actual.MODEL_ACTIONS,
+    MODEL_GATES: actual.MODEL_GATES,
+    modelRouteSource: actual.modelRouteSource,
+  }
+})
 jest.mock('./download', () => ({triggerDownload: jest.fn()}))
 // The history lib has its own suite (exportHistory.test.js); here it stands
 // in for "the export was recorded", and mocking it keeps this suite off OPFS
@@ -80,6 +89,7 @@ describe('useExport', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    useStore.setState({modelPath: null})
     getAccessTokenSilently = jest.fn().mockResolvedValue('test-token')
     mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently})
     recordExport.mockResolvedValue({recorded: true, status: 200, exports: []})
@@ -101,6 +111,7 @@ describe('useExport', () => {
   })
 
   it('reads the artifact at the published key, exports it and downloads the result', async () => {
+    useStore.setState({modelPath: {kind: 'provider', provider: 'github'}})
     const {result} = renderHook(() => useExport())
 
     await act(async () => {
@@ -128,6 +139,10 @@ describe('useExport', () => {
       portable: false,
       free_export: false,
     })
+    // ...and its normalized twin, for the model on screen.
+    expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({
+      gate: 'none', source: 'hosted', routeKind: 'github', isAuthenticated: true,
+    })]])
   })
 
   it('hands the pro module the very bytes the size line quoted', async () => {
@@ -637,6 +652,8 @@ describe('useExport', () => {
     // No export_model for a file that never landed; one export_failed instead.
     expect(gtagEventWithCid.mock.calls.map(([name]) => name)).toEqual(['export_failed'])
     expect(gtagEventWithCid).toHaveBeenCalledWith('export_failed', {format: 'glb', reason: 'denied'})
+    // Denied is a failure, not a gate verdict: no model_export.
+    expect(trackModelAction).not.toHaveBeenCalled()
     expect(result.current.error).toBeInstanceOf(ProModuleDeniedError)
   })
 
@@ -710,6 +727,10 @@ describe('useExport', () => {
       expect(getAccessTokenSilently).not.toHaveBeenCalledWith(expect.objectContaining({cacheMode: 'off'}))
       expect(triggerDownload).not.toHaveBeenCalled()
       expect(recordExport).not.toHaveBeenCalled()
+      // The allowance refused it: export_failed{free_limit}, shadowed by
+      // model_export {blocked}.
+      expect(gtagEventWithCid).toHaveBeenCalledWith('export_failed', {format: 'glb', reason: 'free_limit'})
+      expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({gate: 'blocked'})]])
     })
   })
 
@@ -755,6 +776,7 @@ describe('useExport', () => {
     expect(useStore.getState().snackMessage.text).toMatch(/still being prepared/)
     // A run that delivers nothing is still one export_failed (codex on #1968).
     expect(gtagEventWithCid.mock.calls).toEqual([['export_failed', {format: 'glb', reason: 'unavailable'}]])
+    expect(trackModelAction).not.toHaveBeenCalled()
   })
 
   it('tells the user to reload when the artifact has been evicted from OPFS', async () => {

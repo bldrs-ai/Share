@@ -619,6 +619,106 @@ has a backfill, so these only start accruing data once registered:
   `days_since_last_open` (numeric, so metrics), mark both events as **key
   events**, then import them into Google Ads as **secondary** conversions
   (bizdev#339).
+- For the normalized events (§"Analytics: normalized tier events"):
+  register **event-scoped custom dimensions** for `source` and `gate`.
+  `tier`, `route_kind` and `open_cid` are already registered.
+
+### Analytics: normalized tier events
+
+The events above grew one at a time, each shaped by where it fires: a tier
+on `quota_limit_reached`, a `reason` on `export_gated`, `signed_in` on
+`share_gated`, nothing at all on `share`. So "how often does a free user
+hit a wall exporting a local file?" means joining four differently-shaped
+events. Three normalized events sit **beside** them instead: one per action,
+with who, from where, and what the gate did as params. This is "normalized in
+the database sense" (owner, 2026-10-26).
+
+| Event | Action | Params |
+|---|---|---|
+| `model_view` | a real model open | `tier`, `source`, `route_kind`, `gate: 'none'`, `open_cid` |
+| `model_share` | handing out, or opening, a model in a way the tiers meter as sharing (below) | `tier`, `source`, `route_kind` (where known), `gate`, `open_cid` |
+| `model_export` | a GLB export | `tier`, `source` and `route_kind` (where known), `gate`, `open_cid` |
+
+- **`tier`**: `anon` \| `free` \| `pro`. Derived the way the quota code
+  derives it, `quota.js#getTier` (and so `proStatus.js`:
+  `shareProPendingReauth` is `pro`). Where the gate already had a tier, that
+  tier is used: QuotaLimitDialog's prop, and record-load's answer on the
+  soft gate. Note the vocabulary: `quota_limit_reached` and
+  `quota_soft_limit_exceeded` send `tier` as `anonymous` / `free` / `paid`
+  in the same (registered) dimension, so filter by event name when you cut by
+  tier.
+- **`source`**: `local` (a file from the user's computer, `/v/local-only/`)
+  \| `hosted` (everything else: Drive, GitHub including the samples, a
+  generic URL, a hosted `/v/p/` project file).
+- **`route_kind`**: the finer cut under `source`. The values are `local`,
+  `project` (`/v/p/`), `github`, `gdrive` and `url`. `github` and `gdrive`
+  are the values `quota_soft_limit_exceeded` already sends.
+- **`gate`**: `none` (the action happened), `upsell` (a gate showed an upsell
+  in place of the action), `blocked` (refused), `soft` (allowed, but over
+  the limit and recorded as such).
+- **`open_cid`**: attached by `gtagEventWithCid`, as on every funnel and gate
+  event.
+
+Consent and org users work exactly as for the legacy events.
+`trackModelAction` (`src/privacy/analytics.js`) sends through
+`gtagEventWithCid` → `gtagEvent`, which re-reads the consent cookie on every
+call. Team members are not filtered in the client; the dashboard drops them
+at query time by `open_cid` (`GA_CONFIG.orgUsers`). `model_view` fires inside
+CadView's `isRealModelOpen` branch, so it inherits the demo and
+`*.netlify.app` exclusions of `real_model_open`.
+
+**The grid, and the legacy event each cell shadows.** The legacy events stay,
+unrenamed, for continuity: GA4 has no rename, Google Ads imports
+`real_model_open` as its conversion, and the bizdev dashboard queries the old
+names verbatim. Each new event fires at the same point as the legacy one, in
+the same handler.
+
+| New event | `gate` | Shadows | Fires | `source` |
+|---|---|---|---|---|
+| `model_view` | `none` | `real_model_open` | `CadView`, every real open | from the route |
+| `model_share` | `none` | `share` | `ShareDialog`, when it opens | from the route (always `hosted`: local files get the gate instead) |
+| `model_share` | `upsell` | `share_gated` | `ShareControl`'s local-file gate, when its help opens | `local` |
+| `model_share` | `blocked` | `quota_limit_reached` | `QuotaLimitDialog`, once per showing | `hosted` |
+| `model_share` | `soft` | `quota_soft_limit_exceeded` | `useDirectLinkQuota`, a direct link over the limit | `hosted`, with `route_kind` `gdrive` / `github` |
+| `model_export` | `none` | `export_model` | `useExport`, on a delivered download | from the route; omitted for "Download again" of a history row |
+| `model_export` | `upsell` | `export_gated` (both reasons) | `ExportSection`'s anonymous and free gates, when their help opens | from the route |
+| `model_export` | `blocked` | `export_failed {reason: 'free_limit'}` | `useExport` | as `none` |
+
+`export_failed` with any other reason (`denied`, `unavailable`, `error`) sends
+no `model_export`: no gate refused anything, the export just did not happen.
+A soft-gated open still sends `model_view {gate: 'none'}`. The view was not
+gated; the over-limit fact is on `model_share {gate: 'soft'}`.
+
+**Why private-model opens are "share" (flagged for the owner).** The tier
+model sells private models as one allowance, "Open and share 2 private models
+a week" (§"Pricing copy"), and the quota code meters *opens* of private
+hosted models (§"What counts"). So the quota walls (`blocked` and `soft`)
+are cells of `model_share`, not of `model_view`. This means `model_share`
+covers two user actions:
+- clicking Share (`none` and `upsell`)
+- opening a private hosted model past the allowance (`blocked` and `soft`)
+
+An allowed private open is not a `model_share {gate: 'none'}`: it is just a
+`model_view`. If the owner would rather keep sharing and opening apart, the
+`blocked` and `soft` cells move to `model_view` in two call sites, and this
+table changes with them.
+
+**Share "completed" means the dialog opened.** `model_share {gate: 'none'}`
+fires where the legacy `share` event does, when ShareDialog opens and shows
+the link and QR code. It does not fire on the Copy Link click. That keeps
+`none` and `upsell` the same user action (clicking Share) with different
+outcomes, and it counts a QR-code share that never copies. Counting copies
+instead would be a one-line move to `ShareDialog#onCopy`.
+
+**`blocked` on QuotaLimitDialog is `hosted` by construction.** Local files
+are unmetered, so only a Drive or private-GitHub open can reach the dialog.
+With the `meterLocalFiles` abuse switch on, a local drop could reach it as
+well and would still be labelled `hosted`. The dialog is not given the key.
+
+GA-side, register **event-scoped custom dimensions** for `source` and `gate`.
+`tier` ("Quota tier"), `route_kind` and `open_cid` are already registered,
+and GA4 keys a dimension by parameter name, so those registrations cover the
+new events too.
 
 ## Implementation map
 

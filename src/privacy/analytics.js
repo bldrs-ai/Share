@@ -2,6 +2,7 @@ import Cookies from 'js-cookie'
 import {setTag} from '@sentry/react'
 import {assertDefined} from '../utils/assert'
 import {isFeatureEnabled} from '../FeatureFlags'
+import {TIERS, getTier} from '../quota/quota'
 import Expires from './Expires'
 
 
@@ -421,6 +422,153 @@ export const GATE_EVENTS = Object.freeze({
 export function gtagEventWithCid(eventName, parameters = {}) {
   const openCid = getOpenCid()
   gtagEvent(eventName, openCid ? {...parameters, [OPEN_CID_PARAM]: openCid} : parameters)
+}
+
+
+/*
+ * Normalized model-action events: one event per ACTION, with the tier, the
+ * model's source and the gate's verdict as params — "normalized in the
+ * database sense" (owner, 2026-10-26), so GA can cut any action by
+ * tier × source × gate instead of joining a dozen differently-shaped legacy
+ * events. design/new/quotas.md §"Analytics: normalized tier events" has
+ * the grid and which legacy event each cell shadows.
+ *
+ * These are ADDED beside the legacy events, never instead of them: GA4 has
+ * no rename, Ads imports `real_model_open` as its conversion, and the bizdev
+ * dashboard queries the old names verbatim. Each call site below fires both.
+ *
+ *   model_view    {tier, source, route_kind, gate: 'none', open_cid}
+ *                 CadView, beside every real_model_open
+ *   model_share   {tier, source, route_kind?, gate, open_cid}
+ *                 none     ShareDialog opening (beside `share`)
+ *                 upsell   ShareControl's local-file gate (beside share_gated)
+ *                 blocked  QuotaLimitDialog (beside quota_limit_reached)
+ *                 soft     useDirectLinkQuota (beside quota_soft_limit_exceeded)
+ *   model_export  {tier, source?, route_kind?, gate, open_cid}
+ *                 none     useExport delivery (beside export_model)
+ *                 upsell   ExportSection's gates (beside export_gated)
+ *                 blocked  useExport, export_failed{reason: 'free_limit'} only
+ */
+export const MODEL_ACTION_EVENTS = Object.freeze({
+  view: 'model_view',
+  share: 'model_share',
+  export: 'model_export',
+})
+
+/** The model actions trackModelAction takes: the keys of MODEL_ACTION_EVENTS. */
+export const MODEL_ACTIONS = Object.freeze({VIEW: 'view', SHARE: 'share', EXPORT: 'export'})
+
+/**
+ * What the gate did to the action: let it through (`none`), showed an upsell
+ * in place of it (`upsell`), refused it (`blocked`), or let it through while
+ * recording that it was over the limit (`soft`).
+ */
+export const MODEL_GATES = Object.freeze({NONE: 'none', UPSELL: 'upsell', BLOCKED: 'blocked', SOFT: 'soft'})
+
+/** Where the model came from: the user's computer, or anywhere hosted. */
+export const MODEL_SOURCES = Object.freeze({LOCAL: 'local', HOSTED: 'hosted'})
+
+/**
+ * `route_kind` per route, the finer cut under `source`. 'gdrive' and 'github'
+ * are the values quota_soft_limit_exceeded already sends under the same
+ * (registered) dimension, so the two events share a vocabulary.
+ */
+export const MODEL_ROUTE_KINDS = Object.freeze({
+  LOCAL: 'local',
+  PROJECT: 'project',
+  GITHUB: 'github',
+  GDRIVE: 'gdrive',
+  URL: 'url',
+})
+
+/** The `tier` param, from the quota code's tiers (quota/limits.js#TIERS). */
+const TIER_PARAMS = Object.freeze({
+  [TIERS.ANONYMOUS]: 'anon',
+  [TIERS.FREE]: 'free',
+  [TIERS.PAID]: 'pro',
+})
+
+
+/**
+ * The `tier` param: 'anon' | 'free' | 'pro'. A quota tier the caller already
+ * has (QuotaLimitDialog's prop, record-load's answer) is used as is, since
+ * it is the verdict the gate acted on; otherwise it is derived exactly as
+ * the quota code derives it, quota.js#getTier — which reads Pro off
+ * proStatus.js, so `shareProPendingReauth` is 'pro' here too.
+ *
+ * @param {object} [who]
+ * @param {string} [who.tier] a quota tier (TIERS) the caller already has
+ * @param {boolean} [who.isAuthenticated]
+ * @param {object} [who.appMetadata]
+ * @return {string} 'anon' | 'free' | 'pro'
+ */
+export function modelActionTier({tier, isAuthenticated, appMetadata} = {}) {
+  return TIER_PARAMS[tier] || TIER_PARAMS[getTier(appMetadata, isAuthenticated === true)]
+}
+
+
+/**
+ * `source` and `route_kind` for a route result (routes.ts#handleRoute, the
+ * store's `modelPath`). Empty for no route, so a caller that can't tell
+ * sends neither rather than a guess.
+ *
+ * @param {object|null} routeResult
+ * @return {object} `{source, routeKind}`, or `{}` when unknown
+ */
+export function modelRouteSource(routeResult) {
+  if (!routeResult) {
+    return {}
+  }
+  if (routeResult.kind === 'file') {
+    return routeResult.isUploadedFile === true ?
+      {source: MODEL_SOURCES.LOCAL, routeKind: MODEL_ROUTE_KINDS.LOCAL} :
+      {source: MODEL_SOURCES.HOSTED, routeKind: MODEL_ROUTE_KINDS.PROJECT}
+  }
+  if (routeResult.kind === 'provider' && routeResult.provider === 'github') {
+    return {source: MODEL_SOURCES.HOSTED, routeKind: MODEL_ROUTE_KINDS.GITHUB}
+  }
+  if (routeResult.kind === 'provider' && routeResult.provider === 'google') {
+    return {source: MODEL_SOURCES.HOSTED, routeKind: MODEL_ROUTE_KINDS.GDRIVE}
+  }
+  if (routeResult.kind === 'url') {
+    return {source: MODEL_SOURCES.HOSTED, routeKind: MODEL_ROUTE_KINDS.URL}
+  }
+  return {}
+}
+
+
+/**
+ * Send one normalized model-action event (MODEL_ACTION_EVENTS) through
+ * gtagEventWithCid: consent is checked there (gtagEvent re-reads it on every
+ * call) and `open_cid` attached the same way as on every funnel and gate
+ * event. Org users are not filtered here, as for every other event: the
+ * dashboard drops them at query time by `open_cid` (GA_CONFIG.orgUsers).
+ *
+ * An unknown action or gate sends nothing: analytics must never throw into
+ * a load or a click, and a misspelt cell is worse than a missing one.
+ *
+ * @param {string} action 'view' | 'share' | 'export' (MODEL_ACTIONS)
+ * @param {object} [details]
+ * @param {string} details.gate one of MODEL_GATES
+ * @param {string} [details.source] one of MODEL_SOURCES; omitted when unknown
+ * @param {string} [details.routeKind] sent as `route_kind`; omitted when unknown
+ * @param {string} [details.tier] a quota tier the caller already has
+ * @param {boolean} [details.isAuthenticated] for deriving the tier
+ * @param {object} [details.appMetadata] for deriving the tier
+ */
+export function trackModelAction(action, {gate, source, routeKind, tier, isAuthenticated, appMetadata} = {}) {
+  const eventName = MODEL_ACTION_EVENTS[action]
+  if (!eventName || !Object.values(MODEL_GATES).includes(gate)) {
+    return
+  }
+  const params = {tier: modelActionTier({tier, isAuthenticated, appMetadata}), gate}
+  if (Object.values(MODEL_SOURCES).includes(source)) {
+    params.source = source
+  }
+  if (routeKind) {
+    params.route_kind = routeKind
+  }
+  gtagEventWithCid(eventName, params)
 }
 
 

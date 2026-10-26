@@ -13,7 +13,7 @@ import {AUTO_MEASURE_MAX_BYTES} from '../../export/codecSizes'
 import {formatNextFreeExport} from '../../export/freeExports'
 import useCodecSizes from '../../export/useCodecSizes'
 import useFreeExports from '../../export/useFreeExports'
-import {gtagEventWithCid} from '../../privacy/analytics'
+import {gtagEventWithCid, trackModelAction} from '../../privacy/analytics'
 import {GATE_RETURN_EXPORT, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
 import useStore from '../../store/useStore'
 import {actAsyncFlush} from '../../utils/tests'
@@ -33,6 +33,7 @@ jest.mock('../../privacy/analytics', () => ({
   ...jest.requireActual('../../privacy/analytics'),
   gtagEvent: jest.fn(),
   gtagEventWithCid: jest.fn(),
+  trackModelAction: jest.fn(),
 }))
 // The size line's source is an OPFS header read (`export/artifactSizes.js`),
 // which needs a worker and a real artifact; the component's job is what it
@@ -646,6 +647,8 @@ describe('ExportSection', () => {
 
     fireEvent.click(getByTestId('gated-export-anonymous'))
     expect(gtagEventWithCid).toHaveBeenCalledWith('export_gated', {reason: 'anonymous'})
+    // Its normalized twin.
+    expect(trackModelAction).toHaveBeenCalledWith('export', expect.objectContaining({gate: 'upsell', isAuthenticated: false}))
     fireEvent.click(getByTestId('gated-help-action'))
 
     expect(useStore.getState().isLoginVisible).toBe(true)
@@ -690,6 +693,7 @@ describe('ExportSection', () => {
       expect(getByTestId('gated-help')).toHaveTextContent('You\'ve used your 2 free exports for the last 7 days.')
       expect(getByTestId('gated-help')).toHaveTextContent(`Your next free export is available ${next}.`)
       expect(gtagEventWithCid).toHaveBeenCalledWith('export_gated', {reason: 'free'})
+      expect(trackModelAction).toHaveBeenCalledWith('export', expect.objectContaining({gate: 'upsell', isAuthenticated: true}))
 
       fireEvent.click(getByTestId('gated-help-action'))
       expect(goToSubscription).toHaveBeenCalledWith(

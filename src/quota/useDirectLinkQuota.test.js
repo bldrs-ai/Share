@@ -1,7 +1,7 @@
 import {act, renderHook} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../__mocks__/authentication'
 import useQuota from '../hooks/useQuota'
-import {gtagEventWithCid} from '../privacy/analytics'
+import {gtagEventWithCid, trackModelAction} from '../privacy/analytics'
 import {handleRoute} from '../routes/routes'
 import useDirectLinkQuota, {directLinkQuotaKey} from './useDirectLinkQuota'
 
@@ -17,6 +17,7 @@ jest.mock('../hooks/useQuota')
 jest.mock('../privacy/analytics', () => ({
   ...jest.requireActual('../privacy/analytics'),
   gtagEventWithCid: jest.fn(),
+  trackModelAction: jest.fn(),
 }))
 
 
@@ -89,6 +90,7 @@ describe('quota/useDirectLinkQuota', () => {
     expect(record).toHaveBeenCalledTimes(1)
     expect(record).toHaveBeenCalledWith(DRIVE_KEY)
     expect(gtagEventWithCid).not.toHaveBeenCalled()
+    expect(trackModelAction).not.toHaveBeenCalled()
   })
 
   it('over the limit, sends quota_soft_limit_exceeded and does not block', async () => {
@@ -98,6 +100,10 @@ describe('quota/useDirectLinkQuota', () => {
     expect(gtagEventWithCid).toHaveBeenCalledTimes(1)
     expect(gtagEventWithCid).toHaveBeenCalledWith('quota_soft_limit_exceeded',
       {tier: 'free', used: 2, limit: 2, route_kind: 'gdrive'})
+    // Its normalized twin, with the tier record-load acted on.
+    expect(trackModelAction.mock.calls).toEqual([['share', {
+      gate: 'soft', source: 'hosted', routeKind: 'gdrive', tier: 'free',
+    }]])
     // Fire-and-forget: the meter returns nothing for a caller to await or
     // branch on, so CadView's load cannot be held or undone by it.
     let returned = null

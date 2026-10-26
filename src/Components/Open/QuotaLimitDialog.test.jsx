@@ -66,6 +66,17 @@ describe('QuotaLimitDialog', () => {
     expect(limitEvents()[1][2]).toEqual({tier: 'anonymous', feature: 'private_load', open_cid: 'cid.111.222'})
   })
 
+  // Its normalized twin: a private open (the tier model's "share") blocked,
+  // with the dialog's tier, once per showing like the legacy event.
+  it('sends model_share {blocked, hosted} beside quota_limit_reached', () => {
+    setGaClientId('111.222')
+    renderDialog({tier: TIERS.FREE, isOpen: true})
+    const shares = window.gtag.mock.calls.filter(([kind, name]) => kind === 'event' && name === 'model_share')
+    expect(shares).toEqual([['event', 'model_share', {
+      tier: 'free', gate: 'blocked', source: 'hosted', open_cid: 'cid.111.222',
+    }]])
+  })
+
   it('stays quiet while closed', () => {
     renderDialog({tier: TIERS.FREE, isOpen: false})
     expect(limitEvents()).toHaveLength(0)

@@ -5,7 +5,7 @@ import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import useStore from '../../store/useStore'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
 import {takeGateLoginSource} from '../../Auth0/gateLogin'
-import {gtagEventWithCid} from '../../privacy/analytics'
+import {gtagEvent, gtagEventWithCid, trackModelAction} from '../../privacy/analytics'
 import ShareControl, {
   MSG_LOCAL_SHARE_BODY,
   MSG_LOCAL_SHARE_TITLE,
@@ -24,6 +24,7 @@ jest.mock('../../privacy/analytics', () => ({
   ...jest.requireActual('../../privacy/analytics'),
   gtagEvent: jest.fn(),
   gtagEventWithCid: jest.fn(),
+  trackModelAction: jest.fn(),
 }))
 
 
@@ -238,6 +239,10 @@ describe('ShareControl for a local upload (#705)', () => {
     expect(queryByTestId('img-qrcode')).toBeNull()
     expect(useStore.getState().isShareVisible).toBe(false)
     expect(gtagEventWithCid).toHaveBeenCalledWith('share_gated', {reason: 'local_file', signed_in: false})
+    // Its normalized twin: a local share turned into an upsell.
+    expect(trackModelAction).toHaveBeenCalledWith('share', expect.objectContaining({
+      gate: 'upsell', source: 'local', routeKind: 'local', isAuthenticated: false,
+    }))
   })
 
   // Share#1964: the gate measures intent.
@@ -309,5 +314,31 @@ describe('ShareControl for a local upload (#705)', () => {
     fireEvent.click(await findByTestId('control-button-share'))
     expect(await findByTestId('textfield-link')).toBeInTheDocument()
     expect(queryByTestId('gated-share')).toBeNull()
+  })
+
+  // The ungated share: the dialog opening, with a model loaded, sends the
+  // legacy `share` and its normalized twin model_share {none}, once.
+  it('counts an opened Share dialog as model_share with gate none', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    act(() => {
+      useStore.setState({
+        modelPath: {kind: 'provider', provider: 'github', org: 'o', repo: 'r', branch: 'main', filepath: 'm.ifc'},
+        model: {type: 'IFC'},
+      })
+    })
+    try {
+      const {findByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+      fireEvent.click(await findByTestId('control-button-share'))
+      expect(await findByTestId('textfield-link')).toBeInTheDocument()
+      await waitFor(() => expect(trackModelAction).toHaveBeenCalled())
+      expect(gtagEvent).toHaveBeenCalledWith('share', expect.objectContaining({method: 'url'}))
+      expect(trackModelAction.mock.calls).toEqual([['share', expect.objectContaining({
+        gate: 'none', source: 'hosted', routeKind: 'github', isAuthenticated: true,
+      })]])
+    } finally {
+      act(() => {
+        useStore.setState({model: null})
+      })
+    }
   })
 })

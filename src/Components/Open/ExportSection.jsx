@@ -26,7 +26,14 @@ import {isGzipAvailable} from '../../export/glbGzip'
 import useCodecSizes from '../../export/useCodecSizes'
 import useExport, {formatBytes} from '../../export/useExport'
 import useFreeExports from '../../export/useFreeExports'
-import {GATE_EVENTS, gtagEventWithCid} from '../../privacy/analytics'
+import {
+  GATE_EVENTS,
+  MODEL_ACTIONS,
+  MODEL_GATES,
+  gtagEventWithCid,
+  modelRouteSource,
+  trackModelAction,
+} from '../../privacy/analytics'
 import {TIERS, getTier} from '../../quota/quota'
 import useStore from '../../store/useStore'
 import GatedAction from '../GatedAction'
@@ -454,6 +461,19 @@ export default function ExportSection() {
   // so this is the gate an anonymous user meets. Its sign-in returns them to
   // this tab (SaveModelControl) and is attributed to the gate in `login`
   // (Auth0/gateLogin.js).
+  // An export the gate turned into an upsell: export_gated, and its
+  // normalized twin model_export {upsell} (design/new/quotas.md §"Analytics:
+  // normalized tier events"), for the model on screen.
+  const reportGated = (reason) => {
+    gtagEventWithCid(GATE_EVENTS.EXPORT_GATED, {reason})
+    trackModelAction(MODEL_ACTIONS.EXPORT, {
+      gate: MODEL_GATES.UPSELL,
+      ...modelRouteSource(useStore.getState().modelPath),
+      isAuthenticated,
+      appMetadata,
+    })
+  }
+
   let gatedButton = exportButton
   if (!isAuthenticated) {
     gatedButton = (
@@ -463,7 +483,7 @@ export default function ExportSection() {
         body={MSG_LOGIN_TO_EXPORT}
         actionLabel='Log in'
         onAction={() => startGateLogin('export', GATE_RETURN_EXPORT)}
-        onOpen={() => gtagEventWithCid(GATE_EVENTS.EXPORT_GATED, {reason: 'anonymous'})}
+        onOpen={() => reportGated('anonymous')}
       >
         {exportButton}
       </GatedAction>
@@ -480,7 +500,7 @@ export default function ExportSection() {
         body={freeLimitHelp(freeAllowance.limit, nextFreeExport)}
         actionLabel='Upgrade to Pro'
         onAction={onUpgradeClick}
-        onOpen={() => gtagEventWithCid(GATE_EVENTS.EXPORT_GATED, {reason: 'free'})}
+        onOpen={() => reportGated('free')}
       >
         {exportButton}
       </GatedAction>
