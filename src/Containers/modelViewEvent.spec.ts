@@ -2,7 +2,12 @@ import {readFileSync} from 'fs'
 import {Page, expect, test} from '@playwright/test'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 import {waitForModelReady} from '../tests/e2e/models'
-import {homepageSetup, returningUserVisitsHomepageWaitForModel} from '../tests/e2e/utils'
+import {
+  auth0Login,
+  homepageSetup,
+  returningUserVisitsHomepageWaitForModel,
+  setupAuthenticationIntercepts,
+} from '../tests/e2e/utils'
 
 
 const DROPPED_FILE = 'public/index.ifc'
@@ -82,5 +87,36 @@ describeMobileAndDesktop('model_view GA event', () => {
     expect(view.params).toEqual({tier: 'anon', gate: 'none', source: 'local', route_kind: 'local'})
     // Beside the legacy event, not instead of it.
     expect(await gaEvents(page, 'real_model_open')).toHaveLength(1)
+  })
+})
+
+
+/**
+ * A signed-in free user's local open is `free`, not `anon`, though a local
+ * file loads without waiting for auth. model_view is sent once auth settles
+ * (Containers/modelViewTracking.js). The race itself, a load finishing
+ * before the session restores, doesn't happen here: this build's mock
+ * Auth0 restores the session synchronously on the drop's page load. So the
+ * race is pinned by modelViewTracking.test.js, and this is the happy path
+ * end to end.
+ */
+describeMobileAndDesktop('model_view GA event, signed in', () => {
+  test.beforeEach(async ({page}) => {
+    await homepageSetup(page)
+    await setupAuthenticationIntercepts(page)
+    await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
+    await auth0Login(page)
+  })
+
+  test('a signed-in free user\'s local open is model_view {free, local}', async ({page}) => {
+    const before = page.url()
+    await dropLocalFile(page)
+    await page.waitForURL((url) => url.href !== before && LOCAL_ONLY_URL.test(url.pathname))
+    await waitForModelReady(page)
+    await expect(page.getByTestId('control-button-profile-icon-authenticated')).toBeVisible()
+
+    await expect.poll(() => gaEvents(page, 'model_view')).toHaveLength(1)
+    const [view] = await gaEvents(page, 'model_view')
+    expect(view.params).toEqual({tier: 'free', gate: 'none', source: 'local', route_kind: 'local'})
   })
 })

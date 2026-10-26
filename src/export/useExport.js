@@ -126,12 +126,17 @@ export default function useExport() {
     const artifact = source || glbArtifact
     // The normalized twin of export_model / export_failed{free_limit}
     // (design/new/quotas.md §"Analytics: normalized tier events"). Source is
-    // the model on screen; a "Download again" of a history row (`source`
-    // passed) may be another model, so it sends no source rather than a
-    // wrong one.
-    const reportModelExport = (gate) => trackModelAction(MODEL_ACTIONS.EXPORT, {
+    // the model on screen, snapshotted NOW: the event goes out after the
+    // module load, the conversion and the history write, and navigation
+    // isn't locked meanwhile, so reading the route then could credit the
+    // export to the next model (codex review on Share#1976). A "Download
+    // again" of a history row (`source` passed) may be another model, so it
+    // sends no source rather than a wrong one.
+    const exportSource = source ? {} : modelRouteSource(useStore.getState().modelPath)
+    const reportModelExport = (gate, tier) => trackModelAction(MODEL_ACTIONS.EXPORT, {
       gate,
-      ...(source ? {} : modelRouteSource(useStore.getState().modelPath)),
+      ...exportSource,
+      tier,
       isAuthenticated,
       appMetadata: useStore.getState().appMetadata,
     })
@@ -139,8 +144,11 @@ export default function useExport() {
       gtagEventWithCid(GATE_EVENTS.EXPORT_FAILED, {format: format.id, reason})
       // Only the free-allowance refusal is a gate. `denied`, `unavailable`
       // and `error` are failures, not gate verdicts, and send no model_export.
+      // That refusal is free-tier by definition, whatever the local claim
+      // says: a stale-Pro JWT on a canceled account (handled below) must not
+      // land in the blocked × pro cell (codex review on Share#1976).
       if (reason === FREE_LIMIT_FAILURE_REASON) {
-        reportModelExport(MODEL_GATES.BLOCKED)
+        reportModelExport(MODEL_GATES.BLOCKED, TIERS.FREE)
       }
     }
     if (!artifact) {

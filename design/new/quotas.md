@@ -675,17 +675,30 @@ the same handler.
 
 | New event | `gate` | Shadows | Fires | `source` |
 |---|---|---|---|---|
-| `model_view` | `none` | `real_model_open` | `CadView`, every real open | from the route |
+| `model_view` | `none` | `real_model_open` | `CadView`, every real open; sent once auth settles (`Containers/modelViewTracking.js`) | from the route |
 | `model_share` | `none` | `share` | `ShareDialog`, when it opens | from the route (always `hosted`: local files get the gate instead) |
 | `model_share` | `upsell` | `share_gated` | `ShareControl`'s local-file gate, when its help opens | `local` |
 | `model_share` | `blocked` | `quota_limit_reached` | `QuotaLimitDialog`, once per showing | `hosted` |
 | `model_share` | `soft` | `quota_soft_limit_exceeded` | `useDirectLinkQuota`, a direct link over the limit | `hosted`, with `route_kind` `gdrive` / `github` |
-| `model_export` | `none` | `export_model` | `useExport`, on a delivered download | from the route; omitted for "Download again" of a history row |
+| `model_export` | `none` | `export_model` | `useExport`, on a delivered download | from the route as it was when the export started; omitted for "Download again" of a history row |
 | `model_export` | `upsell` | `export_gated` (both reasons) | `ExportSection`'s anonymous and free gates, when their help opens | from the route |
-| `model_export` | `blocked` | `export_failed {reason: 'free_limit'}` | `useExport` | as `none` |
+| `model_export` | `blocked` | `export_failed {reason: 'free_limit'}` | `useExport`; `tier` is always `free` | as `none` |
 
 `export_failed` with any other reason (`denied`, `unavailable`, `error`) sends
 no `model_export`: no gate refused anything, the export just did not happen.
+
+Three timing rules keep the cells honest (codex review on Share#1976):
+- **`model_view` waits for auth to settle** (`isAuthResolved`, capped at
+  `AUTH_SETTLE_RETRY_MS`) and reads the tier then. A local, Drive, `/v/p/` or
+  URL model loads without waiting for auth, so its load can finish while
+  Auth0 is still restoring a signed-in session. The auth-change reload is
+  deduped, so the tier would otherwise be the pre-auth `anon`.
+- **`model_export` snapshots its source when the export starts.** The event
+  goes out after the module load and conversion, and navigation isn't locked
+  meanwhile.
+- **A free-allowance refusal is `free`**, even when the local claim still
+  says Pro. That is the stale-JWT case on a canceled account, which
+  `useExport` already refreshes.
 A soft-gated open still sends `model_view {gate: 'none'}`. The view was not
 gated; the over-limit fact is on `model_share {gate: 'soft'}`.
 

@@ -10,17 +10,13 @@ import {onHash} from '../Components/Camera/CameraControl'
 import {
   FUNNEL_EVENTS,
   LOCAL_HOUR_PARAM,
-  MODEL_ACTIONS,
-  MODEL_GATES,
   OPEN_CID_PARAM,
   getLocalHour,
   getOpenCid,
   gtagEvent,
   gtagFunnelEvent,
   isRealModelOpen,
-  modelRouteSource,
   startModelEngagement,
-  trackModelAction,
 } from '../privacy/analytics'
 import {trackEngagementOnOpen} from '../privacy/engagementTracking'
 import {getRenderMode} from '../privacy/preferences'
@@ -102,6 +98,7 @@ import {
   isAuthShapedLoadError,
   waitForAuthSettled,
 } from './authLoadGate'
+import {trackModelViewWhenAuthSettled} from './modelViewTracking'
 import {elementSelection} from './selection'
 import {partsToPath} from './urls'
 import {initViewer} from './viewer'
@@ -260,6 +257,11 @@ export default function CadView({
   const location = useLocation()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
+  // The latest auth state, for model_view's tier, which is read after auth
+  // settles rather than when the load that sends it began (see the
+  // trackModelViewWhenAuthSettled call in loadModel).
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  isAuthenticatedRef.current = isAuthenticated
   // Soft quota gate for models opened straight from a URL (codex P1 on
   // Share#1971): records the load, never blocks it. Called after each
   // successful load below.
@@ -820,17 +822,10 @@ export default function CadView({
       // keeps it in the text slot; see analytics#getLocalHour.
       eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
       gtagEvent(FUNNEL_EVENTS.REAL_MODEL_OPEN, eventParams)
-      // The normalized twin (design/new/quotas.md §"Analytics: normalized
-      // tier events"), beside — never instead of — real_model_open, which
-      // Ads and the dashboard key on. Always `gate: 'none'`: a view that a
-      // soft gate let through over the limit is still an ungated view; the
-      // over-limit fact is model_share {gate: 'soft'} (useDirectLinkQuota).
-      trackModelAction(MODEL_ACTIONS.VIEW, {
-        gate: MODEL_GATES.NONE,
-        ...modelRouteSource(routeResult),
-        isAuthenticated,
-        appMetadata: useStore.getState().appMetadata,
-      })
+      // The normalized twin, beside — never instead of — real_model_open,
+      // which Ads and the dashboard key on. Sent once auth settles, with the
+      // auth state of then; modelViewTracking.js says why. Not awaited.
+      trackModelViewWhenAuthSettled(routeResult, () => isAuthenticatedRef.current)
       // Engaged-use conversions (Share#1960). Same real-open gate as the
       // event above; keyed by model so a theme/view-settings reload of the
       // same model is not a second open. Resolves to the events it sent

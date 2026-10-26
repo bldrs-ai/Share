@@ -145,6 +145,36 @@ describe('useExport', () => {
     })]])
   })
 
+  // The event goes out after the module load and conversion, and navigation
+  // isn't locked meanwhile: the source is the model the export started on
+  // (codex review on Share#1976).
+  it('attributes the export to the model it started on, even after navigating mid-export', async () => {
+    useStore.setState({modelPath: {kind: 'file', isUploadedFile: true, filepath: '/u.ifc'}})
+    let releaseModule
+    loadProModule.mockImplementation(() => new Promise((resolve) => {
+      releaseModule = () => resolve({namespace: {exportArtifact}, charge: null})
+    }))
+    const {result} = renderHook(() => useExport())
+
+    let running
+    act(() => {
+      running = result.current.run('glb', {})
+    })
+    await waitFor(() => expect(releaseModule).toBeDefined())
+    // The user opens a GitHub model while the export is in flight.
+    act(() => {
+      useStore.setState({modelPath: {kind: 'provider', provider: 'github'}})
+    })
+    await act(async () => {
+      releaseModule()
+      await running
+    })
+
+    expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({
+      gate: 'none', source: 'local', routeKind: 'local',
+    })]])
+  })
+
   it('hands the pro module the very bytes the size line quoted', async () => {
     // The codecs live in the host bundle, so the host compresses — but only
     // the pro module can turn bytes into a download, and the bytes it gets
@@ -728,9 +758,9 @@ describe('useExport', () => {
       expect(triggerDownload).not.toHaveBeenCalled()
       expect(recordExport).not.toHaveBeenCalled()
       // The allowance refused it: export_failed{free_limit}, shadowed by
-      // model_export {blocked}.
+      // model_export {blocked}, free-tier by definition.
       expect(gtagEventWithCid).toHaveBeenCalledWith('export_failed', {format: 'glb', reason: 'free_limit'})
-      expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({gate: 'blocked'})]])
+      expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({gate: 'blocked', tier: 'free'})]])
     })
   })
 
@@ -760,6 +790,24 @@ describe('useExport', () => {
         expect.objectContaining({cacheMode: 'off', useRefreshTokens: true}))
       expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'canceled'})
       expect(useStore.getState().freeExportAllowance).toEqual({sub: 'github|1234567', ...atLimit})
+    })
+
+    // The refusal proves the free allowance was what blocked it, so the
+    // normalized event is free-tier even while the local claim still says
+    // Pro (codex review on Share#1976). Run through the real derivation.
+    it('reports model_export {blocked} as free, not pro', async () => {
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(trackModelAction).toHaveBeenCalledTimes(1)
+      const [action, details] = trackModelAction.mock.calls[0]
+      expect(action).toBe('export')
+      expect(details).toMatchObject({gate: 'blocked', appMetadata: {subscriptionStatus: 'sharePro'}})
+      expect(jest.requireActual('../privacy/analytics').modelActionTier(details)).toBe('free')
     })
   })
 
