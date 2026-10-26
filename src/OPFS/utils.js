@@ -546,7 +546,7 @@ export function saveDnDFileToOpfs(file, type, callback) {
 }
 
 /**
- * Whether a local upload is still in OPFS, i.e. whether `/v/new/<storageId>`
+ * Whether a local upload is still in OPFS, i.e. whether `/v/local-only/<storageId>`
  * can load. Mirrors the layout `OPFS.worker.js` `writeModelToOPFS` writes and
  * `readModelFromOPFS` reads: a root-level folder named `storageId` holding a
  * file of the same name.

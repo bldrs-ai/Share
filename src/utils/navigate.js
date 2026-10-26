@@ -1,4 +1,5 @@
 import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
+import {isLocalOnlyPath} from '../routes/localOnly'
 import {disablePageReloadApprovalCheck} from './event'
 
 
@@ -36,15 +37,16 @@ export function navToDefault(navigate, appPrefix) {
 
 /**
  * True when `pathname` addresses a temporary (uploaded) model. These live
- * under the `/v/new/<uuid>` route and are stored only in OPFS — there is
- * no remote source to reload them from, so clearing the cache leaves the
- * URL pointing at a model that no longer exists.
+ * under the `/v/local-only/<uuid>` route (legacy `/v/new/<uuid>`) and are
+ * stored only in OPFS — there is no remote source to reload them from, so
+ * clearing the cache leaves the URL pointing at a model that no longer
+ * exists.
  *
  * @param {string} pathname e.g. window.location.pathname
  * @return {boolean}
  */
 export function isTempModelPath(pathname) {
-  return typeof pathname === 'string' && pathname.includes('/v/new/')
+  return typeof pathname === 'string' && isLocalOnlyPath(pathname)
 }
 
 
@@ -73,7 +75,7 @@ export function homeModelPath(appPrefix) {
  * Refresh the page after a Clear-Local-Cache reset. A normal model reloads
  * from its remote source, so a plain page reload is enough. But a temporary
  * (uploaded) model exists only in the OPFS cache we just cleared — reloading
- * its `/v/new/<uuid>` URL would parse as a local model that is no longer
+ * its `/v/local-only/<uuid>` URL would parse as a local model that is no longer
  * present, and the loader would raise a "file not found" error dialog (with
  * a Reset button). Detect that case and navigate to the home model instead,
  * so the user gets a fresh session with no error — exactly what hitting
@@ -123,7 +125,7 @@ export function navWith(navigate, path, options = {
  * Merge the current query string into `path` when it carries none of its
  * own, inserting it before any hash. Opening a model is a full page load
  * (see `navigateToModel`), and most call sites build their destination
- * from path segments alone (`${appPrefix}/v/new/${filename}`), so without
+ * from path segments alone (`${appPrefix}/v/local-only/${filename}`), so without
  * this the reload drops `?feature=…` and the user falls out of whatever
  * flags they were running — same reason `homeModelPath` carries the query
  * forward across the cache-clear redirect.
@@ -195,7 +197,7 @@ export function navigateToModel(target, navigate) {
  * page's memory, so a page load would end it before the Loader could read it.
  * The current query string is carried forward, as `navigateToModel` does.
  *
- * @param {string} path `${appPrefix}/v/new/<uuid>.<ext>`
+ * @param {string} path `${appPrefix}/v/local-only/<uuid>.<ext>`
  * @param {Function} navigate react-router navigate
  */
 export function navigateToInMemoryModel(path, navigate) {

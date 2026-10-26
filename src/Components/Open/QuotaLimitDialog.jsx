@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect, useRef} from 'react'
 import {Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Link, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {startLogin} from '../../Auth0/gateLogin'
 import {FUNNEL_EVENTS, gtagFunnelEvent} from '../../privacy/analytics'
 import {LIMITS, QUOTA_FEATURES, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/quota'
 import useStore from '../../store/useStore'
@@ -73,6 +74,8 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
 
   const handleSignUp = () => {
     onClose()
+    // Not a gate's sign-in: drop any stale gate attempt (Auth0/gateLogin.js).
+    startLogin()
     loginWithRedirect()
   }
 
@@ -92,12 +95,12 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
       <DialogContent>
         <Typography variant='body2' sx={{mb: 2}}>
           You&apos;ve reached your limit of {limitText}.
-          {' '}<Link href='/share/quotas'>What counts as a load?</Link>
+          {' '}<Link href='/share/quotas'>What counts?</Link>
         </Typography>
         <Stack divider={<Divider/>} spacing={2}>
           <Stack direction='row' alignItems='center' spacing={2}>
             <Typography variant='body2' sx={{flex: 1}}>
-              Unlimited private models, priority loading, and team sharing.
+              Share Pro: unlimited private models and unlimited GLB exports.
             </Typography>
             <Button
               onClick={handleSubscribe}
@@ -112,8 +115,9 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
           {isAnonymous && (
             <Stack direction='row' alignItems='center' spacing={2}>
               <Typography variant='body2' sx={{flex: 1}}>
-                Sign up free to open {LIMITS[TIERS.FREE]} private models per
-                rolling {ROLLING_WINDOW_DAYS} days and sync across devices.
+                Sign up free to connect Google Drive and GitHub, and open
+                {' '}{LIMITS[TIERS.FREE]} private models in any rolling
+                {' '}{ROLLING_WINDOW_DAYS} days.
               </Typography>
               <Button
                 onClick={handleSignUp}

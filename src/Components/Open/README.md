@@ -44,7 +44,7 @@ Owns all tab state and model-loading callbacks. Responsibilities:
 | Concern | Detail |
 |---|---|
 | Tab list | `[Local, Google*, GitHub, Samples]`; tab index in Zustand `currentTab` |
-| Local open | `loadLocalFile` → OPFS → navigate `/v/new/<filename>`. Without OPFS, the file is held in memory (`loader/inMemoryUploads.js`) and opened by an in-app navigation, with no local recent; reloading that URL explains the file is gone (`InMemoryUploadGoneError`, `OPFS/messages.js`, #1906). With OPFS, a `/v/new/` URL whose upload isn't in this browser's OPFS (a pasted link, a cleared cache) gets the "File not in this browser" alert, whose action opens this dialog (`UploadNotInBrowserError`, #1955) |
+| Local open | `loadLocalFile` → OPFS → navigate `/v/local-only/<filename>`. Without OPFS, the file is held in memory (`loader/inMemoryUploads.js`) and opened by an in-app navigation, with no local recent; reloading that URL explains the file is gone (`InMemoryUploadGoneError`, `OPFS/messages.js`, #1906). With OPFS, a `/v/local-only/` URL whose upload isn't in this browser's OPFS (a pasted link, a cleared cache) gets the "File not in this browser" alert, whose action opens this dialog (`UploadNotInBrowserError`, #1955) |
 | Local recents | `loadRecentFilesBySource('local')` on dialog open |
 | Google open | Two paths: picker (`handlePickerSelect`) or direct by id (`handleOpenById`) → both navigate to `/v/g/<fileId>` |
 | GitHub recents | `loadRecentFilesBySource('github')` on dialog open |
@@ -106,8 +106,10 @@ below).
 
 ## Usage Quotas
 
-Private-model loads (local, Drive, private GitHub) are metered per tier to
-create a sign-up / upgrade moment; public and sample content is never counted.
+Private-model loads from the cloud (Drive, private GitHub) are metered per tier
+to create a sign-up / upgrade moment; local files and public or sample content
+are never counted (Share#1966; the `meterLocalFiles` flag can put local files
+back in the meter, see quotas.md §"Metering local files again").
 **The full design — tiers and limits, the 30-day rolling window, the
 server-authoritative `record-load` gate, GitHub public/private detection, the
 OPFS local fallback, and the `quotas` feature flag — lives in
@@ -138,8 +140,10 @@ browser, sample chips, drag-and-drop (viewport and onboarding overlay) — gates
 in this order:
 
 1. **Cheap client check** — `check(key)` when the share path is known up front
-   (recents), `hasCapacity` when it isn't yet (new local file). If denied, open
-   `QuotaLimitDialog` and stop (no consent popup, no server round-trip).
+   (recents). If denied, open `QuotaLimitDialog` and stop (no consent popup, no
+   server round-trip). A new local file has no up-front check: it's unmetered,
+   and a `hasCapacity` pre-gate would refuse it for a limit that doesn't apply
+   to it, so `record()` (step 3) is its only gate.
    `check` only denies a *known-new, known-private* load: already-counted keys
    stay openable at limit (mirroring the server's idempotency), and `/v/gh/`
    paths pass through because only the server can tell public from private.
@@ -151,7 +155,7 @@ in this order:
 3. **`record(key)`** — the authoritative gate; on `403` open `QuotaLimitDialog`
    instead of navigating, otherwise add the recent and navigate.
 
-When the `quotas` flag is off (the default) `useQuota` reports unlimited
+When the `quotas` flag is off (it is on since Share#1970) `useQuota` reports unlimited
 capacity and `record()` is a no-op, so every load site above is inert.
 
 ### Files (this subsystem)
@@ -162,3 +166,4 @@ capacity and `record()` is a no-op, so every load site above is inert.
 | `QuotaLimitDialog.jsx` | Over-limit value-prop modal |
 | `src/hooks/useQuota.js` | Hook over the lib + `record-load` |
 | `src/quota/quota.js` | Core lib — see [design/new/quotas.md](../../../design/new/quotas.md) |
+| `src/quota/limits.js` | Tiers, limits, window and the always-private route rule, shared with `record-load` and the marketing pricing plans |

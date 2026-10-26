@@ -14,7 +14,9 @@ import {
   freeExportAllowance,
   newFreeExportRow,
 } from '../export/freeExports'
+import {FREE_PRIVATE_MODEL_LIMIT, isAlwaysPrivateRouteKind} from '../quota/limits'
 import {isProSubscriptionStatus} from '../quota/proStatus'
+import {isLocalFileMeteringEnabled} from '../quota/quota'
 import apiHandlersGithub from './api-handlers-github'
 import apiHandlersOpenrouter from './api-handlers-openrouter'
 
@@ -115,7 +117,8 @@ function workersAndWasmPassthrough() {
 }
 
 
-const FREE_LIMIT_MOCK = 4
+// The real function's limit, from the one definition (quota/limits.js).
+const FREE_LIMIT_MOCK = FREE_PRIVATE_MODEL_LIMIT
 
 // Kept in lock-step with `netlify/functions/pro-module.js`'s allowlist, and
 // the format each module's free-export charge row records.
@@ -238,9 +241,14 @@ function netlifyHandlers() {
       // Either Pro status, like the real function (src/quota/proStatus.js).
       const tier = isMockPro() ? 'paid' : 'free'
 
-      // Quotability — same path classification as the real handler.
-      const isLocallyQuotable = key.includes('/v/new/') || key.includes('/v/g/')
-      const ghMatch = key.match(/\/v\/gh\/([^/]+)\/([^/]+)\//)
+      // Quotability — same path classification as the real handler: by the
+      // route kind, the segment after the FIRST `/v/`, through the shared
+      // rule. Local files count only with `meterLocalFiles` on (Share#1966);
+      // the real function also takes METER_LOCAL_FILES, which a browser mock
+      // has no equivalent of, so the flag stands in for both.
+      const routeKind = (/\/v\/([^/?#]+)/.exec(key) || [])[1]
+      const isLocallyQuotable = isAlwaysPrivateRouteKind(routeKind, isLocalFileMeteringEnabled())
+      const ghMatch = routeKind === 'gh' && key.match(/\/v\/gh\/([^/]+)\/([^/]+)\//)
       let quotable = isLocallyQuotable
       if (ghMatch) {
         // Heuristic: repo names containing "Public" (matching our sample

@@ -3,6 +3,7 @@ import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {forgetInMemoryUpload, registerInMemoryUpload} from '../loader/inMemoryUploads'
+import {localOnlyPath} from '../routes/localOnly'
 import {disablePageReloadApprovalCheck} from './event'
 import {trackAlert} from './alertTracking'
 import {navigateToInMemoryModel, navigateToModel} from './navigate'
@@ -20,9 +21,15 @@ import debug, {WARN} from './debug'
  * @param {Function} setAlert Function to set alert messages
  * @param {Function} [onSuccess] Optional callback when file is successfully processed
  * @param {Function} [onError] Optional callback when an error occurs
- * @param {{hasCapacity: boolean, record: Function, onExceeded: Function}} [quotaOptions]
- *   Optional quota integration. When provided, blocks the drop if hasCapacity is false
- *   and records the load key via record() on success.
+ * @param {{record: Function, onExceeded: Function}} [quotaOptions]
+ *   Optional quota integration: records the load key via record() once the
+ *   file is stored, and calls onExceeded instead of navigating if refused.
+ *   There is deliberately no capacity check before the drop is read: local
+ *   files are free and unmetered (Share#1966), so record() passes their key,
+ *   and a pre-gate on the user's private-model count would refuse a local
+ *   file for being at a limit that doesn't apply to it. With
+ *   `meterLocalFiles` switched on, record() is still the gate; the file is
+ *   stored first, as for an allowed drop, and left in OPFS on a refusal.
  */
 export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert, onSuccess, onError, quotaOptions) {
   event.preventDefault()
@@ -52,11 +59,6 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
   // so ask directly rather than guess. Without OPFS the file is held in
   // memory instead (#1906, `onHeldInMemory` below).
   const hasOpfs = isOpfsAvailable === null ? await checkOPFSAvailability() : isOpfsAvailable
-
-  if (quotaOptions && !quotaOptions.hasCapacity) {
-    quotaOptions.onExceeded()
-    return
-  }
 
   const dropped = files[0]
 
@@ -100,11 +102,11 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
 
   /**
    * @param {string} fileName The OPFS storage id the upload was written
-   *   under (`<blob-uuid>.<ext>`) — the `/v/new/` segment the Loader
+   *   under (`<blob-uuid>.<ext>`) — the `/v/local-only/` segment the Loader
    *   resolves, distinct from the user's `uploadedFile.name`.
    */
   async function onWritten(fileName) {
-    const key = `${appPrefix}/v/new/${fileName}`
+    const key = localOnlyPath(appPrefix, fileName)
     if (quotaOptions) {
       const result = await quotaOptions.record(key)
       if (result && result.allowed === false) {
@@ -139,7 +141,7 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
    * @param {string} storageId `<uuid>.<ext>`, the in-memory id
    */
   async function onHeldInMemory(storageId) {
-    const key = `${appPrefix}/v/new/${storageId}`
+    const key = localOnlyPath(appPrefix, storageId)
     if (quotaOptions) {
       const result = await quotaOptions.record(key)
       if (result && result.allowed === false) {

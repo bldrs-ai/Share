@@ -13,7 +13,8 @@ import {AUTO_MEASURE_MAX_BYTES} from '../../export/codecSizes'
 import {formatNextFreeExport} from '../../export/freeExports'
 import useCodecSizes from '../../export/useCodecSizes'
 import useFreeExports from '../../export/useFreeExports'
-import {gtagEvent} from '../../privacy/analytics'
+import {gtagEventWithCid} from '../../privacy/analytics'
+import {GATE_RETURN_EXPORT, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
 import useStore from '../../store/useStore'
 import {actAsyncFlush} from '../../utils/tests'
 import {goToSubscription} from '../Profile/subscriptionNav'
@@ -24,12 +25,14 @@ import ExportSection from './ExportSection'
 const mockUseStore = useStore
 
 
-// Only gtagEvent is stubbed; the rest stays real because modules this one
+// Only the senders are stubbed; the rest stays real because modules this one
 // pulls in (ProfileControl → privacy/subscriptionTracking) read
-// FUNNEL_EVENTS at import time.
+// FUNNEL_EVENTS at import time. gtagEventWithCid is the sender that attaches
+// open_cid (Share#1964; its own test is in privacy/analytics.test.js).
 jest.mock('../../privacy/analytics', () => ({
   ...jest.requireActual('../../privacy/analytics'),
   gtagEvent: jest.fn(),
+  gtagEventWithCid: jest.fn(),
 }))
 // The size line's source is an OPFS header read (`export/artifactSizes.js`),
 // which needs a worker and a real artifact; the component's job is what it
@@ -642,11 +645,14 @@ describe('ExportSection', () => {
     const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
     fireEvent.click(getByTestId('gated-export-anonymous'))
-    expect(gtagEvent).toHaveBeenCalledWith('export_gated', {reason: 'anonymous'})
+    expect(gtagEventWithCid).toHaveBeenCalledWith('export_gated', {reason: 'anonymous'})
     fireEvent.click(getByTestId('gated-help-action'))
 
     expect(useStore.getState().isLoginVisible).toBe(true)
     expect(mockRun).not.toHaveBeenCalled()
+    // The sign-in is attributed to this gate, and returns to the Export tab.
+    expect(takeGateLoginReturn()).toBe(GATE_RETURN_EXPORT)
+    expect(takeGateLoginSource()).toEqual({from: 'gate', feature: 'export'})
   })
 
   describe('a signed-in free user (2 free exports per rolling 7 days, §4.8)', () => {
@@ -683,7 +689,7 @@ describe('ExportSection', () => {
 
       expect(getByTestId('gated-help')).toHaveTextContent('You\'ve used your 2 free exports for the last 7 days.')
       expect(getByTestId('gated-help')).toHaveTextContent(`Your next free export is available ${next}.`)
-      expect(gtagEvent).toHaveBeenCalledWith('export_gated', {reason: 'free'})
+      expect(gtagEventWithCid).toHaveBeenCalledWith('export_gated', {reason: 'free'})
 
       fireEvent.click(getByTestId('gated-help-action'))
       expect(goToSubscription).toHaveBeenCalledWith(

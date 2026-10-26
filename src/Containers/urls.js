@@ -1,6 +1,6 @@
 /**
  * @param {string} pathPrefix e.g. /share/v/p
- * @param {string} repoFilePath e.g. index.ifc OR org/repo/file.ifc with /share/v/gh OR uuid with pathPrefix=/share/v/new
+ * @param {string} repoFilePath e.g. index.ifc OR org/repo/file.ifc with /share/v/gh OR uuid with pathPrefix=/share/v/local-only
  * @param {string} elementPath /1/2/3/4
  * @return {string}
  */

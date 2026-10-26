@@ -1,5 +1,5 @@
 /**
- * What the user is told when a `/v/new/<id>` URL names a file that was
+ * What the user is told when a `/v/local-only/<id>` URL names a file that was
  * opened in a browser without OPFS (Firefox private windows, some embeds),
  * and the page that opened it is gone: a reload, or the link opened anywhere
  * else (#1906).
@@ -17,7 +17,7 @@ export const IN_MEMORY_UPLOAD_GONE_ALERT =
 
 
 /**
- * Thrown by CadView for a `/v/new/` URL, in a browser without OPFS, whose
+ * Thrown by CadView for a `/v/local-only/` URL, in a browser without OPFS, whose
  * file this page doesn't hold (`hasInMemoryUpload`).
  */
 export class InMemoryUploadGoneError extends Error {
@@ -46,8 +46,10 @@ export function inMemoryUploadGoneAlert() {
 
 
 /**
- * What the user is told when a `/v/new/<storageId>` URL names an upload that
- * isn't in this browser's OPFS (#1955).
+ * What the user is told when a `/v/local-only/<storageId>` URL (or a legacy
+ * `/v/new/` one, redirected there) names an upload that isn't in this
+ * browser's OPFS (#1955). It says "local-only", the route's own name since
+ * #1959, so the URL and the explanation use the same word.
  *
  * An upload's bytes live only in the OPFS of the browser profile that
  * dropped it, but its URL is portable: it gets pasted into chats (#705 —
@@ -58,8 +60,8 @@ export function inMemoryUploadGoneAlert() {
  * the user's terms, instead of the worker's `Folder <id> not found` string.
  */
 export const UPLOAD_NOT_IN_BROWSER_ALERT =
-  'This model was opened from a file on someone\'s computer, and files opened that way are ' +
-  'kept only in the browser that opened them. It isn\'t in this browser, so it can\'t be shown here. ' +
+  'This is a local-only link: the model was opened from a file on someone\'s computer, and ' +
+  'local-only files are kept only in the browser that opened them. It isn\'t in this browser, so it can\'t be shown here. ' +
   'If it\'s your file, open it again from your computer. ' +
   'If someone sent you this link, ask them to share the model from GitHub or Google Drive instead.'
 

@@ -3,17 +3,27 @@
 Server-enforced metering of *private* model loads — tier-aware, with a 30-day
 rolling window and GitHub public/private detection. Nudges anonymous and
 free-tier users toward sign-up / upgrade without ever blocking public or sample
-content. Ships behind the `quotas` feature flag (off by default).
+content. Enforcement is the `quotas` feature flag, on in production since
+Share#1970.
 
 This is the design of record for the feature. The Open-dialog UI wiring is in
 [src/Components/Open/README.md](../../src/Components/Open/README.md) §Usage Quotas.
 
 ## Rollout
 
-- **Feature-flagged.** `quotas` in `src/FeatureFlags.js` (`isActive: false`).
-  Enable per session with `?feature=quotas`; flip `isActive: true` to roll out
-  to everyone. When off, `useQuota` reports unlimited capacity and `record()`
-  is a no-op, so nothing is counted, blocked, or badged.
+- **Feature-flagged, now on.** `quotas` in `src/FeatureFlags.js` is
+  `isActive: true` since Share#1970, in a commit of its own ("Enable quotas in
+  production") so it can be staged apart from the pricing copy. Flipping it
+  back to `false` is the prod-wide off switch (`?feature=` can only turn a
+  flag on). When off, `useQuota` reports unlimited capacity and `record()` is
+  a no-op, so nothing is counted, blocked, or badged.
+- **What turning it on changes in production:** signed-in free users get 2
+  private models (Drive, private GitHub) per rolling 30 days and see
+  `QuotaLimitDialog` on the 3rd opened from the Open dialog (a pasted link
+  to a 3rd still opens, and is counted in GA: §"Direct links: soft gate"); signed-out users get 2 private links for
+  life; local files and public GitHub stay unlimited. `quota_limit_reached`
+  starts firing in production GA (§"Funnel analytics"), and every Drive or
+  `/v/gh/` open by a signed-in user now calls `record-load`.
 - **Landed as a 4-PR stack** (supersedes #1494). See the Implementation map.
 
 ## Status & remaining work
@@ -38,7 +48,7 @@ Enforcement ships dark behind the `quotas` flag.
 2. **Close #1494 as superseded** (a pointer comment is already on that PR).
 3. **Deploy-preview smoke test** (checklist in #1740): with `?feature=quotas`
    and a real Auth0 free user — public GH repo loads without counting;
-   private repo counts; 5th private load → 403 + `QuotaLimitDialog`, no
+   private repo counts; 3rd private load → 403 + `QuotaLimitDialog`, no
    navigation; `sharePro` unlimited; `/share/quotas` renders.
 4. **Bake, then roll out.** Test per-session via `?feature=quotas`; when
    satisfied, flip the flag's `isActive` to `true` in `src/FeatureFlags.js`.
@@ -49,8 +59,15 @@ Enforcement ships dark behind the `quotas` flag.
 | Tier | Limit | Window | Determined by |
 |---|---|---|---|
 | Anonymous (not signed in) | 2 | Lifetime — never resets without sign-in | client only |
-| Free (signed in) | 4 | 30-day rolling | `subscriptionStatus` not a Pro status |
+| Free (signed in) | 2 | 30-day rolling | `subscriptionStatus` not a Pro status |
 | Paid (`sharePro`, `shareProPendingReauth`) | Unlimited | — | `isProSubscriptionStatus(subscriptionStatus)` |
+
+The numbers live in one place, `src/quota/limits.js` (`LIMITS`,
+`FREE_PRIVATE_MODEL_LIMIT`, `ROLLING_WINDOW_DAYS`), imported by the client,
+`record-load`, its MSW mock and the marketing pricing plans (§"Pricing copy"
+below). Until Share#1966's PR the function hand-copied `FREE_LIMIT = 4`. The
+free limit went from 4 to 2 private models per window in that PR, with the
+pricing page's three tiers (bizdev#331).
 
 `getTier(appMetadata, isAuthenticated)` in `src/quota/quota.js` is the single
 mapping on the client. Which statuses are Pro is defined once, in
@@ -61,7 +78,10 @@ has counted as Pro since the GLB-export S4 decision
 ([glb-export-premium.md](glb-export-premium.md) §7.2), so a pending-reauth
 user gets unlimited loads; that is intended. Anonymous gets a *lifetime* cap
 of 2 rather than a rolling window so the conversion moment lands early, while
-the user is still engaged.
+the user is still engaged. With local files unmetered and connecting Drive or
+GitHub requiring sign-in, the anonymous cap now only bites on private *links*:
+a Drive or private-GitHub URL opened while signed out. Its number was left
+alone in Share#1966's PR.
 
 The same rolling-window shape meters one more thing: **free GLB exports**, 2
 per rolling 7 days for a signed-in free user, counted on the
@@ -75,13 +95,64 @@ Only *private* loads count. A load is quotable when its share path matches:
 
 | Path | Classifier | Privacy |
 |---|---|---|
-| `/v/new/<filename>` | `isLocallyQuotable` | local file — always private |
+| `/v/local-only/<filename>` (legacy `/v/new/`, #1959) | — | local file — **not counted** (Share#1966), unless `meterLocalFiles` is on |
 | `/v/g/<fileId>` | `isLocallyQuotable` | Google Drive — always private |
 | `/v/gh/<org>/<repo>/...` | `isServerResolvedPath` | GitHub — **server** resolves public vs private |
 
 `isQuotablePath` is their union. Public GitHub repos and sample models are
-**not** counted. The dedup key is the share path itself, so reloading the same
+**not** counted. The local and Drive rule is one function,
+`limits.js#isAlwaysPrivateRouteKind(routeKind, meterLocalFiles)`, which
+`isLocallyQuotable`, `record-load#isQuotableLoad` and the MSW mock all call;
+the route kind is the segment after the FIRST `/v/` (#1967).
+
+**Drive counts every file as private.** Drive has no cheap public/private
+answer the way GitHub's unauthenticated repo lookup gives one, so a Drive
+file is always metered, even one shared "anyone with the link". That agrees
+with the pricing page, which promises *unlimited* only for public GitHub
+models; Drive is among the "private models" a free account gets 2 of. The dedup key is the share path itself, so reloading the same
 model never consumes a new slot (surfaced as `alreadyCounted`).
+
+**Local files are free and unmetered (Share#1966).** The owner's direction
+(2026-10-22): viewing a file from your own computer is never counted and never
+refused, at any tier. The pricing page promises it, and its guard fails on
+any limit claim about local files (§"Pricing copy"). Three things moved
+together so local files aren't left half-metered:
+
+- The classifiers: `isLocallyQuotable` and `record-load` stop matching
+  `/v/local-only/` and the legacy `/v/new/`.
+- The `hasCapacity` pre-gates, which refused a drop or pick *before* its key
+  was known, are gone: `dragAndDrop.js#handleFileDrop` (ViewerContainer's
+  dropzone and OnboardingOverlay) and `OpenModelDialog#openFile`. A local open
+  now goes straight to `record(key)`, which passes the unmetered key.
+- `QuotaLimitDialog.spec.ts` reaches the limit on a Drive pick instead of a
+  local drop, and `localFilesUnmetered.spec.ts` drops three local files
+  signed out (one past the anonymous cap) and asserts no dialog and an empty
+  ledger.
+
+Ledgers may still hold `/v/new/` or `/v/local-only/` rows from before. They
+age out of the 30-day window; an anonymous OPFS ledger never prunes, so such
+rows keep counting toward the lifetime cap until sign-in.
+
+### Metering local files again
+
+The meter is kept available for abuse, behind a switch that is **off by
+default**: the `meterLocalFiles` flag in `src/FeatureFlags.js`.
+
+- **Client:** `quota.js#isLocalFileMeteringEnabled()` reads it through
+  `isFeatureEnabled`, so `?feature=meterLocalFiles` turns it on for one
+  session, and `isActive: true` for everyone. Signed-out counting is
+  client-side (OPFS), so the URL flag alone meters an anonymous session.
+- **Server:** `record-load` honours the same flag's `isActive`, **or** the
+  `METER_LOCAL_FILES=true` Netlify env var, which meters this function alone
+  (a URL flag never reaches it). Testing signed-in metering on a deploy
+  preview needs both the URL flag and the env var.
+- **MSW mock:** reads the flag, standing in for both.
+
+With the switch on, `record(key)` is again a local open's only gate: the
+removed pre-gates don't come back, so an OPFS drop is written before
+`record-load` answers, and a refused one is left in OPFS (an orphan blob, not
+a counted load). Turning it on also makes the pricing page untrue. Change the
+copy first, or the guard test fails once the copy says otherwise.
 
 ### GitHub privacy detection
 
@@ -96,6 +167,58 @@ The server calls `api.github.com/repos/{owner}/{repo}` unauthenticated:
 Conservative on failure by design: a GitHub outage or the 60/hr unauth rate
 limit must never wrongly burn a user's quota. Lookups are cached module-scope
 (15-min TTL) across warm Lambda invocations.
+
+### Direct links: soft gate (measured, not blocked)
+
+A model opened straight from its URL (a pasted or clicked `/share/v/g/…` or
+`/share/v/gh/…` link) never passes the Open dialog, which is where every
+`record()` call above sits. Until Share#1971 such loads were not metered at
+all (codex P1 on that PR). The owner's decision (Pablo, 2026-10-23) is to
+**meter direct links but not block them**, and to measure how often the
+workaround is used before deciding whether it should be gated:
+
+- **What is metered.** After each successful load, `CadView#onViewerInternal`
+  hands the loaded route to `quota/useDirectLinkQuota.js`, which calls the
+  same `useQuota().record(key)` the dialog does: Drive files, and `/v/gh/`
+  files, whose privacy record-load decides (a public repo comes back
+  not-quotable and is never counted). Never local files, hosted `/v/p/`
+  models or generic `/v/u/` URLs.
+- **Same key as the dialog**, so the ledger's dedup by share path holds:
+  Drive is `${appPrefix}/v/g/<fileId>` (a `/v/g/<drive URL>` link parses to
+  the same id), GitHub is `navigateBaseOnModelPath(org, repo, branch, path)`
+  without the element path. A model the dialog already recorded, or one
+  reloaded within the window, comes back `alreadyCounted` from `record()`
+  (record-load's ledger signed in, OPFS signed out) and costs no new slot.
+  The hook does not short-circuit on the local mirror: OPFS is per browser,
+  not per user, so a row from an anonymous open or another account would
+  silence this user's server call (codex review on Share#1971). A signed-in
+  direct load is therefore one `record-load` call per model per page load.
+- **Once per model per page load**, and only after Auth0 settles: before it
+  does, `record()` would take the anonymous OPFS-only path and keep a
+  signed-in user's load off the server ledger.
+- **Never blocks.** If `record()` comes back `allowed: false` (record-load's
+  403, or the OPFS fallback at the cap), the model stays loaded,
+  `QuotaLimitDialog` is not shown, and `quota_soft_limit_exceeded` is sent
+  instead (params below). A refused load is not written to the ledger, so the
+  same link opened again on a later page load is refused, and counted in GA,
+  again. The Open dialog keeps blocking exactly as before.
+
+| Event | Params | Fires |
+|---|---|---|
+| `quota_soft_limit_exceeded` | `tier` (`anonymous` \| `free`), `used`, `limit`, `route_kind` (`gdrive` \| `github`), `open_cid` | `useDirectLinkQuota`, when a direct-link load is over the limit; at most once per model per page load |
+
+Sent through `gtagEventWithCid` (`GATE_EVENTS.QUOTA_SOFT_LIMIT_EXCEEDED`),
+so it joins the same client's `real_model_open`. GA4 side: register `tier`,
+`route_kind` and `open_cid` as event-scoped custom dimensions (the last two
+may already exist) and `used` / `limit` as custom metrics.
+
+**Revisit weekly; decide on blocking by 2026-11-23 (Pablo).** Blocking would
+mean showing `QuotaLimitDialog` over the loaded model (or before the load)
+from this same seam; the event count is the input to that decision.
+
+Covered by `src/quota/useDirectLinkQuota.test.js` and
+`src/quota/directLinkSoftGate.spec.ts` (desktop and mobile: a free user at the
+limit opens a private Drive link, it loads, no dialog, one event).
 
 ## The server is authoritative
 
@@ -168,7 +291,7 @@ mirror / offline fallback. It is *not* the authority for signed-in users.
 `pruneLoads(loads, tier, now)` drops loads whose `loadedAt` is older than
 `ROLLING_WINDOW_DAYS` (30). Anonymous is exempt (lifetime cap). Pruning runs on
 both the client (`useQuota`) and the server (before counting) so the two agree.
-A free user who opened 4 private models gets a slot back exactly 30 days after
+A free user who opened 2 private models gets a slot back exactly 30 days after
 each load, rather than all at once on a calendar reset.
 
 ## UI surfaces
@@ -180,8 +303,41 @@ Summary only; the wiring lives in
   amber ≥ 75%; hidden entirely when `limit === Infinity` (paid or flag-off).
 - **`QuotaLimitDialog`** on `403`: states the numeric limit + rolling-window
   phrasing, links to `/share/quotas`.
-- Gated load sites: Drive picker + recents, local file + recents, GitHub recents
-  + browser, sample chips, drag-and-drop.
+- Gated load sites: Drive picker + recents, GitHub recents + browser, sample
+  chips (public, so they pass), and local file + recents + drag-and-drop, which
+  `record()` passes while local files are unmetered.
+
+## Pricing copy
+
+The marketing pricing page is a static Next.js build, and its quota copy can't
+drift from what is enforced, by construction. `PLANS`
+(`marketing/src/lib/pricingPlans.mjs`) is the only place that copy lives, and it
+**builds** the Free account allowances from the enforced constants:
+`FREE_PRIVATE_MODEL_LIMIT` / `ROLLING_WINDOW_DAYS` from `limits.js` ("2 private
+models a month") and `FREE_EXPORT_LIMIT` / `FREE_EXPORT_WINDOW_DAYS` from
+`src/export/freeExports.js` ("2 GLB exports a week"). `PricingTiers.tsx`
+renders `PLANS` and states no limit of its own; the monthly/yearly toggle only
+changes the price. (`.mjs` because `marketing/package.json` has no `"type":
+"module"`; marketing's tsconfig has `allowJs` for it.)
+
+`tools/marketing/pricingTiers.test.js` is a drift tripwire over that data, not
+a proof against a hostile author. It checks that the Free account plan states
+both claims as worded from the constants, that Pro says unlimited, that no
+plan entry (CTA included) puts a limit on local files, and that every count
+of models/files/exports/loads equals one of the two generated claims exactly,
+window included. It proves itself: `buildPlans()` with
+other allowances yields their claims, and a hard-coded wrong number, a
+removed claim, a local-file limit or load-count copy in `PLANS` each go red.
+Header, enterprise and FAQ copy on the page are reviewed by hand. (Round 1
+and 2 of codex review on #1971 tried source-line scanning and then rendered-HTML
+parsing; both had bypasses, so the copy moved into data built from the
+constants instead.)
+
+It no longer depends on the `quotas` flag. #1965's version allowed no limit
+copy while enforcement was off. Now the copy must match the enforced
+constants whatever the flag says, so the flag can be staged separately from
+the copy. In-app surfaces (`QuotaLimitDialog`, `/share/quotas`, the Export
+tab) read the constants directly.
 
 ## Funnel analytics
 
@@ -201,12 +357,52 @@ behind the same analytics consent check as every other `gtagEvent`.
 | Model open | `real_model_open` | `content_id`, `content_type`, `load_outcome`, `stats_*` (below), `local_hour`, `open_cid` | `CadView` after a real (non-demo) load; see `analytics#isRealModelOpen` |
 | (failed open) | `load_failed` | `content_type`, `size_bucket`, `reason_class`, `last_phase`, `open_cid` | `CadView#onViewerInternal`'s catch, once per failed attempt, real (non-demo) models only |
 | Hit a limit | `quota_limit_reached` | `tier` (`anonymous` \| `free`), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
-| Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown` | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
+| Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown`; plus `from: 'gate'` and `feature` (`export` \| `share`) when a visible gate started the sign-in (§"Gate events") | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
 | Upgrade click | `begin_checkout` (GA4 recommended) | `from`: `profile` \| `export` \| `quota`; `destination`: `checkout` \| `portal` | `goToSubscription` (`Profile/subscriptionNav.js`), which every upgrade CTA goes through |
 | Subscribed | `subscription_started` | — | `BaseRoutes#processAccessToken` on `shareProPendingReauth` (below) |
 | (lapsed) | `subscription_ended` | — | same, on `freePendingReauth` |
 | Engaged | `engaged_use` | `window_days` (7), `opens_in_window`, `threshold` (3), `open_cid` | `src/privacy/engagementTracking.js`, on the 3rd real open in a rolling 7 days; at most once per browser per 30 days (below) |
 | Returned | `return_visit` | `days_since_last_open` (1-14), `open_cid` | same, on an open 1-14 calendar days after the previous one; once per return day |
+
+### Gate events (Share#1964)
+
+A small set of features sits behind sign-in, shown to everyone, and every hit
+is counted, so the paywall axis (bizdev#331) is decided on measured intent.
+The names are `GATE_EVENTS` in `src/privacy/analytics.js`. All are sent
+through `gtagEventWithCid`, the same `open_cid` attachment as the funnel
+events, so a gate hit joins the same client's `real_model_open`, `login` and
+`begin_checkout`.
+
+| Event | Params | Fires |
+|---|---|---|
+| `export_gated` | `reason`: `anonymous` \| `free` | `ExportSection`, when the gate's help opens. `anonymous` is reachable since #1964: the Save dialog opens for a signed-out user, on its Export tab |
+| `export_model` | `format`, `bytes_bucket`, `source_kind`, `portable`, `free_export` | `useExport`, on a delivered download |
+| `export_failed` | `format`, `reason`: `free_limit` \| `denied` \| `unavailable` \| `error` | `useExport`, once per run that delivers no file (`unavailable`: the cached artifact is gone) |
+| `share_gated` | `reason`: `local_file`; `signed_in` | `ShareControl`, when the local-only Share gate's help opens |
+| `share_interest` | `feature`: `save_to_cloud`; `signed_in` | `ShareControl`, the "Save to Google Drive or GitHub to share — coming soon" line; at most once per opening of the help |
+| `quota_soft_limit_exceeded` | `tier`, `used`, `limit`, `route_kind`: `gdrive` \| `github` | `quota/useDirectLinkQuota.js`, when a model opened from its URL is over the limit; the load is not blocked (§"Direct links: soft gate") |
+
+A sign-in started from a gate (`Auth0/gateLogin.js`) adds `from: 'gate'` and
+`feature` to `login`. The gate writes one attempt record to localStorage,
+`{feature, returnTo, attemptId, at}`:
+- **Attribution.** `feature` is taken by whichever tab wins `login`'s
+  cross-tab claim, inside the claim, so it lands on the one `login` sent.
+- **Return.** `returnTo` (the export gate's 'export') reopens the Save dialog
+  on Export, and only in the page that started the attempt.
+- **Lifetime.** The record is dropped on dismissal of the login dialog and
+  when a sign-in starts from the Profile menu. Both parts expire after 10
+  minutes, so an abandoned popup neither labels nor reopens anything for a
+  later sign-in.
+- **No storage.** Without storage it records nothing: no attribution, no
+  return.
+
+GA-side these params need **event-scoped custom dimensions** before they
+appear in reports: `reason`, `signed_in`, `format`, `source_kind`,
+`portable`, `free_export` and `bytes_bucket`. `feature` and `from` are
+already on the funnel's list below; GA4 keys a dimension by parameter name,
+so one registration covers these events too, and the same goes for
+`open_cid`. They are added to the GA4-admin follow-ups at the end of this
+section.
 
 The parts that aren't obvious:
 
@@ -412,7 +608,9 @@ has a backfill, so these only start accruing data once registered:
   series across it.
 
 - Register **event-scoped custom dimensions** for `method`, `tier`, `feature`,
-  `from` and `destination`. `open_cid` needs nothing new: GA4 keys an
+  `from` and `destination`, and, for the gate events (§"Gate events",
+  Share#1964), `reason`, `signed_in`, `format`, `source_kind`, `portable`,
+  `free_export` and `bytes_bucket`. `open_cid` needs nothing new: GA4 keys an
   event-scoped dimension by parameter name, not by event, so the one
   registered for `real_model_open` applies to these events too.
 - Mark **`login`** and **`subscription_started`** as **key events**.
@@ -436,8 +634,9 @@ The per-layer PRs carry the review history; layers 2–4 reached `main` via the
 
 ## Out of scope / follow-ups
 
-- `WidgetApi` / `LoadModelEventHandler` programmatic loads bypass the React hook
-  and are not metered (flagged).
+- `WidgetApi` / `LoadModelEventHandler` programmatic loads bypass the Open
+  dialog; any that end in a CadView load of a Drive or GitHub route are
+  soft-metered like a direct link (§"Direct links: soft gate"), never blocked.
 - Migrate quota storage off Auth0 `app_metadata` to a KV store when
   Management-API limits bite. This also fixes the known read-modify-write
   race: `record-load` has no compare-and-set, so two concurrent loads for

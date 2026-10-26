@@ -234,6 +234,45 @@ describe('Analytics', () => {
   })
 
 
+  // Gate and export events (Share#1964) carry the same join key, so the
+  // dashboard can follow one client from real_model_open to a gate.
+  describe('gtagEventWithCid', () => {
+    beforeEach(() => {
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+      Analytics.setIsAllowed(true)
+      window.gtag = jest.fn()
+    })
+
+    afterEach(() => {
+      delete window.gtag
+    })
+
+    test('attaches the prefixed client id as open_cid', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.gtagEventWithCid(Analytics.GATE_EVENTS.EXPORT_GATED, {reason: 'anonymous'})
+      expect(window.gtag).toHaveBeenCalledWith(
+        'event', 'export_gated', {reason: 'anonymous', open_cid: 'cid.1871520000.1754700000'})
+    })
+
+    test('omits open_cid, rather than sending a blank, when no id resolved', () => {
+      Analytics.gtagEventWithCid(Analytics.GATE_EVENTS.SHARE_GATED, {reason: 'local_file', signed_in: false})
+      expect(window.gtag).toHaveBeenCalledWith('event', 'share_gated', {reason: 'local_file', signed_in: false})
+    })
+
+    test('event names are the ones GA will be queried by', () => {
+      expect(Analytics.GATE_EVENTS).toEqual({
+        EXPORT_GATED: 'export_gated',
+        EXPORT_MODEL: 'export_model',
+        EXPORT_FAILED: 'export_failed',
+        SHARE_GATED: 'share_gated',
+        SHARE_INTEREST: 'share_interest',
+        QUOTA_SOFT_LIMIT_EXCEEDED: 'quota_soft_limit_exceeded',
+      })
+    })
+  })
+
+
   /*
    * Sentry's half of the same id (issue #1767). Bare, because the
    * `cid.` prefix only exists to stop GA4 typing the value as a float,
@@ -377,9 +416,10 @@ describe('Analytics', () => {
     })
 
     test('true for an upload even when isUploadedFile is misdetected', () => {
-      // GitHub Pages installs prefix routes with /Share, defeating
-      // processFile's '/share/v/new' test — the UUID filepath still
-      // distinguishes the upload from the demo.
+      // Before #1959, GitHub Pages installs (routes prefixed /Share)
+      // defeated processFile's '/share/v/new' test. processFile is now
+      // prefix-independent (routes/localOnly.ts), but the UUID filepath
+      // stays an independent backup that distinguishes upload from demo.
       expect(Analytics.isRealModelOpen({
         kind: 'file',
         isUploadedFile: false,

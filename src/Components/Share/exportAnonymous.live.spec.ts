@@ -23,19 +23,27 @@ import {
 test.describe('Live smoke: anonymous', () => {
   skipAllWithoutTarget()
 
-  test('Save is gated for an anonymous visitor, and its help leads to login (step 2)', async ({page, context}, testInfo) => {
+  test('Export is gated for an anonymous visitor, and its help leads to login (step 2)', async ({page, context}, testInfo) => {
     test.setTimeout(LIVE_TEST_TIMEOUT_MS)
     const {target} = requireLive(testInfo)
     await setReturningVisitor(context, target)
     await openLiveModel(page)
 
-    // An anonymous visitor never reaches the Export tab: the Save control
-    // that holds it is gated (#1838), and says what unlocks it.
-    await clickGate(page, 'gated-save')
-    await expect(page.getByTestId('gated-help')).toContainText('Log in to one of your connectors')
+    // Since Share#1964 the Save dialog opens for an anonymous visitor, on
+    // its Export tab, and Export GLB is the gate. Until that deploys, the
+    // hourly prod run still meets the older shape (#1838: Save itself gated),
+    // so both are accepted. Drop the `gated-save` branch once #1964 is live.
+    if (await page.getByTestId('gated-save').count() > 0) {
+      await clickGate(page, 'gated-save')
+      await expect(page.getByTestId('gated-help')).toContainText('Log in to one of your connectors')
+    } else {
+      await page.getByTestId('control-button-save').click()
+      await expect(page.getByTestId('export-section')).toBeVisible()
+      await clickGate(page, 'gated-export-anonymous')
+      await expect(page.getByTestId('gated-help')).toContainText('Log in to export')
+    }
     await page.getByTestId('gated-help-action').click()
     await expect(page.getByTestId('login-with-github')).toBeVisible()
-    await expect(page.getByTestId('export-section')).toHaveCount(0)
   })
 
   test('pro-module answers a request with no token 401, and no module (step 3)', async ({request}, testInfo) => {

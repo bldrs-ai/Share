@@ -50,6 +50,7 @@ import {
 import {reportUploadNotInBrowser} from '../OPFS/reportUploadNotInBrowser'
 import {getBrowser} from '../connections/registry'
 import modelIdentity from '../routes/modelIdentity'
+import useDirectLinkQuota from '../quota/useDirectLinkQuota'
 import useStore from '../store/useStore'
 import {
   expandedIdsForSelection,
@@ -255,6 +256,10 @@ export default function CadView({
   const location = useLocation()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
+  // Soft quota gate for models opened straight from a URL (codex P1 on
+  // Share#1971): records the load, never blocks it. Called after each
+  // successful load below.
+  const meterDirectLinkLoad = useDirectLinkQuota(appPrefix)
   const setOpfsFile = useStore((state) => state.setOpfsFile)
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
@@ -467,7 +472,7 @@ export default function CadView({
         // the next case, where OPFS exists but lacks the entry.
         setAlert(inMemoryUploadGoneAlert())
       } else if (e instanceof UploadNotInBrowserError) {
-        // A /v/new/ URL whose upload this browser never held or no longer
+        // A /v/local-only/ URL whose upload this browser never held or no longer
         // holds (#1955). Explain it and offer to open a file, instead of
         // the worker's raw "Folder <id> not found" under an Error header.
         setAlert(uploadNotInBrowserAlert())
@@ -549,6 +554,10 @@ export default function CadView({
     modelPath.title = tmpModelRef.name // maybe undefined
     setIsViewerLoaded(true)
     setIsModelReady(true)
+    // After the model is on screen, never before: a direct link is metered
+    // but not gated (quota/useDirectLinkQuota.js). The Open dialog already
+    // recorded what it opened, which the hook sees as alreadyCounted.
+    meterDirectLinkLoad(modelPath)
 
     let lastSent = 0
     /** Debounced function to track model interaction for GA. */
@@ -619,7 +628,7 @@ export default function CadView({
     const filepath = isGoogleResult ? routeResult.downloadUrl : (routeResult.downloadUrl || routeResult.filepath)
     const gitpath = routeResult.gitpath
     // Without OPFS a local file lives only in the memory of the page that
-    // opened it (loader/inMemoryUploads.js, #1906). A /v/new/ URL this page
+    // opened it (loader/inMemoryUploads.js, #1906). A /v/local-only/ URL this page
     // doesn't hold — a reload, or the link opened anywhere else — can't load,
     // so say that rather than let the Loader fetch a blob URL that never
     // existed here. The route, not the Loader's `testUuid` heuristic, decides
@@ -679,7 +688,7 @@ export default function CadView({
         loadedModel = await load(filepath, viewer, onProgress,
           (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow,
           // Route provenance, which the loader can't recover from `filepath`
-          // alone: /v/new/<id> and /v/p/<id> give the same URL (#1956).
+          // alone: /v/local-only/<id> and /v/p/<id> give the same URL (#1956).
           {isUploadedRoute: routeResult.isUploadedFile === true})
       }
     } catch (error) {

@@ -220,7 +220,7 @@ export default function useQuota() {
     }
   }, [tier, limit, used, getAccessTokenSilently])
 
-  // Feature-gated: with the `quotas` flag off (the default) the hook reports
+  // Feature-gated: with the `quotas` flag off (on since Share#1970) the hook reports
   // unlimited capacity and record()/check() are no-ops, so every load site
   // bypasses gating and the QuotaBadge (hidden when limit === Infinity) never
   // shows. Enforcement is enabled per-session via `?feature=quotas`, or for

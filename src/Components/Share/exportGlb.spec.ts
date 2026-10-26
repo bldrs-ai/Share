@@ -847,7 +847,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await page.keyboard.press('Escape')
 
     for (const {mode, path} of downloads) {
-      // The upload lands under `/v/new/` and loads from OPFS; the load
+      // The upload lands under `/v/local-only/` and loads from OPFS; the load
       // report's OK is a fresh signal per load (the first one was
       // dismissed above), so it can't be the previous model's.
       await test.step(`${mode} export opens`, async () => {
@@ -929,7 +929,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
     await expect(page.locator('[data-is-selected="true"]')).toHaveCount(1)
     // The URL addresses the element, so the selection is shareable.
-    await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.glb(\/\d+)+/)
+    await expect(page).toHaveURL(/\/share\/v\/local-only\/[^/]+\.glb(\/\d+)+/)
     // And the SCENE carries the highlight. This is the assertion the bug
     // failed: the tree row lit up, the URL grew its element path, and the
     // model showed nothing, because the hydration that owns the instance
@@ -1059,7 +1059,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // highlight. The highlight has no DOM, so it is read off the exposed
     // store.
     await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
-    await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.glb(\/\d+)+/)
+    await expect(page).toHaveURL(/\/share\/v\/local-only\/[^/]+\.glb(\/\d+)+/)
     expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
   })
 
@@ -1148,7 +1148,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // keeps across the Open dialog's navigation.
     await loadModelAndWaitForArtifact(page)
     resetGlbLogs(glbLogs)
-    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
     await waitForGlbLog(glbLogs, 'writer: wrote', EXPORT_TEST_TIMEOUT_MS)
     await setSubscriptionTier(page, 'sharePro')
@@ -1218,7 +1218,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
 
     await loadModelAndWaitForArtifact(page)
     resetGlbLogs(glbLogs)
-    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
     await dismissLoadSnackbar(page)
     await pickShellAndExpectProductRow(page)
@@ -1245,7 +1245,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
 
     await loadModelAndWaitForArtifact(page, 'disableGlbBatched')
     resetGlbLogs(glbLogs)
-    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
     await dismissLoadSnackbar(page)
     // A fresh parse is a BatchedMesh whatever the artifact layout; only the
@@ -1273,7 +1273,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
 
     await loadModelAndWaitForArtifact(page)
     resetGlbLogs(glbLogs)
-    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
     await dismissLoadSnackbar(page)
     await pickShellAndExpectProductRow(page)
@@ -1298,7 +1298,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
 
     await loadModelAndWaitForArtifact(page)
-    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
     await dismissLoadSnackbar(page)
     await pickShellAndExpectProductRow(page)
@@ -1327,7 +1327,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
 
     await loadModelAndWaitForArtifact(page)
-    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
     await dismissLoadSnackbar(page)
     await page.getByTestId('control-button-navigation').click()
@@ -1380,7 +1380,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
 
     await loadModelAndWaitForArtifact(page)
-    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
     await dismissLoadSnackbar(page)
     // A pick of one of the root's own shells narrows to it. (Before the NavTree
@@ -1432,7 +1432,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
 
     await loadModelAndWaitForArtifact(page)
-    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
     await dismissLoadSnackbar(page)
     await doubleClickSelectsAnElement(page, 'any', 'child')
@@ -1462,7 +1462,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
 
     await loadModelAndWaitForArtifact(page)
-    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
     await dismissLoadSnackbar(page)
     await pickShellAndExpectProductRow(page)
@@ -1492,7 +1492,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
 
     await loadModelAndWaitForArtifact(page)
-    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
     await dismissLoadSnackbar(page)
     await page.getByTestId('control-button-navigation').click()
@@ -1531,7 +1531,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await routeProModule(page)
     await loadModelAndWaitForArtifact(page)
     resetGlbLogs(glbLogs)
-    await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
     await waitForGlbLog(glbLogs, 'writer: wrote', EXPORT_TEST_TIMEOUT_MS)
     await setSubscriptionTier(page, 'sharePro')
@@ -1595,7 +1595,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
 
     await loadModelAndWaitForArtifact(page)
     resetGlbLogs(glbLogs)
-    await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
     await dismissLoadSnackbar(page)
     await pickSecondPartShellAndExpectItsRow(page)
@@ -1843,7 +1843,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // addresses it, and the scene paints the highlight.
     await node(LEAF_LABEL).first().getByTestId('NavTreeNodeLabel').click()
     await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
-    await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.glb(\/\d+)+/)
+    await expect(page).toHaveURL(/\/share\/v\/local-only\/[^/]+\.glb(\/\d+)+/)
     expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
   })
 
@@ -1927,17 +1927,20 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(page.getByTestId('export-compression')).toContainText('None')
   })
 
-  test('a signed-out user is told what unlocks Save, and gets no dialog', async ({page}) => {
+  // Share#1964: Save opens for everyone, on Export for a signed-out user,
+  // and the export itself is what is gated. The sign-in round trip and the
+  // events are Components/Open/visibleGates.spec.ts.
+  test('a signed-out user reaches Export, and is told what unlocks it', async ({page}) => {
     test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
 
     await loadModelAndWaitForArtifact(page)
 
-    // Visible for everyone now, in the gated look.
-    await expect(page.getByTestId('gated-save')).toBeVisible()
-    await clickGate(page, 'gated-save')
+    await expect(page.getByTestId('gated-save')).toHaveCount(0)
+    await page.getByTestId('control-button-save').click()
+    await expect(page.getByTestId('export-section')).toBeVisible()
+    await clickGate(page, 'gated-export-anonymous')
 
-    await expect(page.getByTestId('gated-help')).toContainText('Log in to one of your connectors')
-    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page.getByTestId('gated-help')).toContainText('Log in to export')
 
     // And the gate's own action is the way forward.
     await page.getByTestId('gated-help-action').click()

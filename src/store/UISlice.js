@@ -1,6 +1,5 @@
 import {isVisibleInitially as aboutIsVisibleInitially} from '../Components/About/hashState'
 import {isVisibleInitially as helpIsVisibleInitially} from '../Components/Help/hashState'
-import {isVisibleInitially as imagineIsVisibleInitially} from '../Components/Imagine/hashState'
 import {isVisibleInitially as loginIsVisibleInitially} from '../Components/Profile/hashState'
 import {isVisibleInitially as shareIsVisibleInitially} from '../Components/Share/hashState'
 
@@ -54,9 +53,6 @@ export default function createUISlice(set, get) {
 
     isHelpTooltipsVisible: false,
     setIsHelpTooltipsVisible: (is) => set(() => ({isHelpTooltipsVisible: is})),
-
-    isImagineVisible: imagineIsVisibleInitially(),
-    setIsImagineVisible: (is) => set(() => ({isImagineVisible: is})),
 
     isLoginVisible: loginIsVisibleInitially(),
     setIsLoginVisible: (is) => set(() => ({isLoginVisible: is})),

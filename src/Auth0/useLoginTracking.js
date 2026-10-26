@@ -2,6 +2,7 @@ import {useEffect, useRef} from 'react'
 import {FUNNEL_EVENTS, gtagFunnelEvent} from '../privacy/analytics'
 import {withCrossTabLock} from '../privacy/crossTabLock'
 import {useAuth0} from './Auth0Proxy'
+import {takeGateLoginSource} from './gateLogin'
 
 
 /*
@@ -189,6 +190,11 @@ async function readAuthTime(getIdTokenClaims) {
  * double-fire guard is not here but in the hook (sawSignedOutRef /
  * isRedirectLoginPending are cleared synchronously before this is reached).
  *
+ * The winner also takes the gate attribution (`{from: 'gate', feature}`,
+ * gateLogin.js), inside the claim: the gate may have been started in any
+ * signed-out tab, and the attribution belongs to the one `login` that is
+ * actually sent (codex review on Share#1968).
+ *
  * @param {?string} sub
  * @param {?number} authTime
  * @param {string} method `login` event param
@@ -198,7 +204,7 @@ async function readAuthTime(getIdTokenClaims) {
 function claimLogin(sub, authTime, method) {
   if (authTime === null) {
     // No auth_time, no identity for the sign-in: nothing to dedupe on.
-    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method})
+    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method, ...takeGateLoginSource()})
     return Promise.resolve(true)
   }
   const id = `${sub}|${authTime}`
@@ -211,7 +217,7 @@ function claimLogin(sub, authTime, method) {
     } catch {
       // Storage unavailable: no cross-tab dedupe, the in-page edge decides.
     }
-    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method})
+    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method, ...takeGateLoginSource()})
     return true
   })
 }

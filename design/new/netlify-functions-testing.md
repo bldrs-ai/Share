@@ -349,6 +349,18 @@ anyone with the URL run an apply sweep. Item failures are collected and
 reported without stopping the sweep. A failure of the sweep itself (the
 token, a discovery page) returns 500 and goes to Sentry as an error.
 
+**One sweep, two Netlify projects.** Share deploys `main` to two Netlify
+projects, and both run this scheduled function with the same Auth0 and
+Stripe credentials. Only the production project (**`bldrs-share-prod`**,
+which serves bldrs.ai) sweeps, with `RECONCILE_MODE=apply` in its Production
+context. The other (**`bldrs-share-dev`**) sets `RECONCILE_MODE=off`, so its
+run logs one INFO line (`RECONCILE_MODE=off, not sweeping`) and returns
+before reading anything, even if its secrets are missing. `off` must be set
+explicitly: an unset or misspelled value still means report, so production
+can't stop sweeping by losing the variable. Until bldrs-ai/ops#36 the two
+names were swapped, so older logs and Sentry events from before the swap
+read the other way round.
+
 **Time budget.** Netlify stops a scheduled function after about 30 s, cold
 start included, so the sweep keeps two deadlines from the start of the
 handler:

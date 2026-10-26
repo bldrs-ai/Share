@@ -153,7 +153,8 @@ export async function loadModelAndWaitForArtifact(page: Page, extraFlags = '') {
 
 /**
  * Open the Save dialog's Export tab, where the export UI lives as of #1838.
- * Only reachable signed in — the toolbar Save button is gated otherwise.
+ * Signed out, the dialog already opens on Export (Share#1964); the tab click
+ * is then a no-op.
  *
  * @param page Playwright page
  */
@@ -543,7 +544,7 @@ export async function toggleGzip(page: Page): Promise<number> {
  * @param path the file on disk
  */
 export async function reopenLocalGlb(page: Page, path: string) {
-  await openLocalFile(page, path, /\/share\/v\/new\/.+\.glb/)
+  await openLocalFile(page, path, /\/share\/v\/local-only\/.+\.glb/)
 }
 
 

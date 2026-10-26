@@ -5,7 +5,7 @@ import {appMetadataFromToken} from '../Auth0/appMetadata'
 import {glbCacheKey} from '../loader/glbCacheKey'
 import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
-import {gtagEvent} from '../privacy/analytics'
+import {GATE_EVENTS, gtagEventWithCid} from '../privacy/analytics'
 import {TIERS, getTier} from '../quota/quota'
 import useStore from '../store/useStore'
 import {compressedExport, gzippedExport} from './artifactSizes'
@@ -113,11 +113,16 @@ export default function useExport() {
     if (!format || format.status !== 'shipped') {
       throw new Error(`useExport: no shipped export format "${formatId}"`)
     }
+    // One `export_failed` per run that doesn't deliver a file, whichever way
+    // it fails (codex review on Share#1968), beside export_model's one per
+    // delivered file.
+    const reportFailure = (reason) => gtagEventWithCid(GATE_EVENTS.EXPORT_FAILED, {format: format.id, reason})
     const artifact = source || glbArtifact
     if (!artifact) {
       // The button is disabled in this state; reaching here means the
       // artifact went away between render and click.
       setSnackMessage({text: 'The model is still being prepared for export', autoDismiss: true})
+      reportFailure(EXPORT_UNAVAILABLE_REASON)
       return null
     }
 
@@ -132,6 +137,7 @@ export default function useExport() {
         // The artifact was evicted (Clear Local Cache, storage pressure)
         // since the loader published it. Reopening the model rewrites it.
         setSnackMessage({text: 'Export unavailable — reload the model and try again', autoDismiss: true})
+        reportFailure(EXPORT_UNAVAILABLE_REASON)
         return null
       }
 
@@ -224,7 +230,7 @@ export default function useExport() {
           }
         }
       }).catch((recordError) => captureException(recordError))
-      gtagEvent('export_model', {
+      gtagEventWithCid(GATE_EVENTS.EXPORT_MODEL, {
         format: format.id,
         bytes_bucket: bytesBucket(stats?.outputBytes ?? blob.size),
         // The loader's categorical kind, carried on the artifact slot. NOT
@@ -247,6 +253,8 @@ export default function useExport() {
       return {filename, stats}
     } catch (e) {
       setError(e)
+      // `reason` is the same three-way split as the handling below.
+      reportFailure(exportFailureReason(e))
       if (e instanceof ProModuleDeniedError && e.reason === FREE_EXPORT_LIMIT_REASON) {
         // Out of free exports for now. The tier is right (free) — it is the
         // COUNT the client had that was stale — so there is no JWT to
@@ -281,6 +289,26 @@ export default function useExport() {
   }, [glbArtifact, getAccessTokenSilently, isAuthenticated, noteAllowance, refreshAppMetadata, setIsExporting, setSnackMessage, user?.sub])
 
   return {run, isExporting, error}
+}
+
+
+/** `export_failed`'s `reason` when there is no artifact to export from */
+export const EXPORT_UNAVAILABLE_REASON = 'unavailable'
+
+
+/**
+ * The `reason` param of `export_failed` for a run that threw (the other
+ * value, EXPORT_UNAVAILABLE_REASON, is for the artifact being gone).
+ *
+ * @param {Error} error What the export run threw
+ * @return {'free_limit'|'denied'|'error'} out of free exports; refused by
+ *   the server (no Pro); anything else
+ */
+export function exportFailureReason(error) {
+  if (error instanceof ProModuleDeniedError) {
+    return error.reason === FREE_EXPORT_LIMIT_REASON ? 'free_limit' : 'denied'
+  }
+  return 'error'
 }
 
 

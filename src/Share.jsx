@@ -11,6 +11,7 @@ import debug from './utils/debug'
 import {pageTitleForModel} from './utils/modelDisplayName'
 import {navToDefault} from './utils/navigate'
 import {FilenameParseError} from './Filetype'
+import {isLocalOnlyPath} from './routes/localOnly'
 import {UNSUPPORTED_FILE_ALERT, handleRoute} from './routes/routes'
 
 
@@ -90,7 +91,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         navToDefault(navigate, appPrefix)
         return true
       }
-      // `isUploadedFile` is compared too: `/share/v/new/<id>` and
+      // `isUploadedFile` is compared too: `/share/v/local-only/<id>` and
       // `/share/v/p/<id>` parse to the same filepath and no gitpath, so
       // without it a navigation between the two would keep the previous
       // route's upload provenance, which CadView hands the loader as
@@ -138,7 +139,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsVersionsEnabled(false)
       setIsShareEnabled(true)
       setIsNotesEnabled(false)
-    } else if (pathPrefix.startsWith('/share/v/new')) {
+    } else if (isLocalOnlyPath(pathPrefix)) {
       // A file opened from the user's computer: no repository, and a URL
       // that only opens in this browser. The Share button is still shown,
       // but ShareControl renders it gated with the reason, instead of hiding

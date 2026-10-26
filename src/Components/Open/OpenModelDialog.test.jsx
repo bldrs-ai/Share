@@ -15,6 +15,7 @@ import useQuota from '../../hooks/useQuota'
 import {getInMemoryUpload, registerInMemoryUpload} from '../../loader/inMemoryUploads'
 import {navigateToInMemoryModel, navigateToModel} from '../../utils/navigate'
 import useStore from '../../store/useStore'
+import {GATE_RETURN_EXPORT, noteGateLogin, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
 import OpenModelDialog from './OpenModelDialog'
 
 
@@ -112,6 +113,18 @@ describe('OpenModelDialog — GitHub tab', () => {
     act(() => {
       useStore.getState().setCurrentTab(0)
     })
+  })
+
+  // codex review on Share#1968: Connect GitHub is not a gate's sign-in, so a
+  // stale gate attempt must neither label its `login` nor reopen Export.
+  it('drops a stale gate attempt when Connect GitHub starts a sign-in', () => {
+    noteGateLogin('export', GATE_RETURN_EXPORT)
+    renderGithubTab(false)
+
+    fireEvent.click(screen.getByTestId('button-login-github'))
+
+    expect(takeGateLoginSource()).toEqual({})
+    expect(takeGateLoginReturn()).toBeNull()
   })
 
   it('shows login button when not authenticated', () => {
@@ -261,7 +274,7 @@ describe('OpenModelDialog — Google Drive tab', () => {
     })
   })
 
-  it('does not navigate to /v/new/ when onOpenById is called', async () => {
+  it('does not navigate to /v/local-only/ when onOpenById is called', async () => {
     getProvider.mockReturnValue({
       getAccessToken: jest.fn().mockResolvedValue('fresh-token'),
     })
@@ -271,7 +284,7 @@ describe('OpenModelDialog — Google Drive tab', () => {
       expect(navigateToModel).toHaveBeenCalled()
     })
     expect(navigateToModel).not.toHaveBeenCalledWith(
-      expect.stringMatching(/\/v\/new\//),
+      expect.stringMatching(/\/v\/(new|local-only)\//),
       mockNavigate,
     )
   })
@@ -365,17 +378,29 @@ describe('OpenModelDialog — Local tab', () => {
     renderLocalTab([{id: STORAGE_ID, source: 'local', name: 'box.ifc'}])
     fireEvent.click(screen.getByTestId(`link-open-recent-${STORAGE_ID}`))
     await waitFor(() => {
-      expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
+      expect(navigateToModel).toHaveBeenCalledWith(`/share/v/local-only/${STORAGE_ID}`, mockNavigate)
     })
   })
 
   it('navigates to the stored sharePath when the entry carries one', async () => {
     renderLocalTab([
+      {id: STORAGE_ID, source: 'local', name: 'box.ifc', sharePath: `/Share/share/v/local-only/${STORAGE_ID}`},
+    ])
+    fireEvent.click(screen.getByTestId(`link-open-recent-${STORAGE_ID}`))
+    await waitFor(() => {
+      expect(navigateToModel).toHaveBeenCalledWith(`/Share/share/v/local-only/${STORAGE_ID}`, mockNavigate)
+    })
+  })
+
+  // Recents written before #1959 carry the old route. They open at the
+  // canonical path directly rather than through ShareRoutes' redirect.
+  it('rewrites a legacy /v/new/ sharePath to /v/local-only/', async () => {
+    renderLocalTab([
       {id: STORAGE_ID, source: 'local', name: 'box.ifc', sharePath: `/share/v/new/${STORAGE_ID}`},
     ])
     fireEvent.click(screen.getByTestId(`link-open-recent-${STORAGE_ID}`))
     await waitFor(() => {
-      expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
+      expect(navigateToModel).toHaveBeenCalledWith(`/share/v/local-only/${STORAGE_ID}`, mockNavigate)
     })
   })
 
@@ -414,10 +439,10 @@ describe('OpenModelDialog — Local tab', () => {
         source: 'local',
         name: 'box.ifc',
         lastModifiedUtc: lastModified,
-        sharePath: `/share/v/new/${STORAGE_ID}`,
+        sharePath: `/share/v/local-only/${STORAGE_ID}`,
       })
     })
-    expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
+    expect(navigateToModel).toHaveBeenCalledWith(`/share/v/local-only/${STORAGE_ID}`, mockNavigate)
     expect(setPendingModelNameUpdate).toHaveBeenCalledWith(STORAGE_ID)
   })
 
@@ -430,7 +455,7 @@ describe('OpenModelDialog — Local tab', () => {
     renderLocalTab([])
     fireEvent.click(screen.getByTestId('button_open_file'))
     await waitFor(() => {
-      expect(navigateToInMemoryModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
+      expect(navigateToInMemoryModel).toHaveBeenCalledWith(`/share/v/local-only/${STORAGE_ID}`, mockNavigate)
     })
     expect(loadLocalFile).toHaveBeenCalledWith(
       expect.any(Function), false, false, expect.any(Function), {inMemory: true})
@@ -457,7 +482,7 @@ describe('OpenModelDialog — Local tab', () => {
     const {unmount} = renderLocalTab([])
     try {
       fireEvent.click(screen.getByTestId('button_open_file'))
-      await waitFor(() => expect(recordDenied).toHaveBeenCalledWith(`/share/v/new/${heldId}`))
+      await waitFor(() => expect(recordDenied).toHaveBeenCalledWith(`/share/v/local-only/${heldId}`))
       await waitFor(() => expect(getInMemoryUpload(heldId)).toBeUndefined())
       expect(navigateToInMemoryModel).not.toHaveBeenCalled()
     } finally {
