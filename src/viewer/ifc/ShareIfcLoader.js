@@ -624,12 +624,12 @@ export default class ShareIfcLoader {
         const statsApi = ifcAPI.getStatistics(modelID)
         const geometryMemory = statsApi.getGeometryMemory()
         const totalTime = statsApi.getTotalTime()
-        // Not on conway's Statistics yet (conway#740), so both are undefined
-        // today and `loadStats` simply omits them. When conway ships them
-        // they flow to GA as the unqualified stats_errorCount /
-        // stats_warningCount with no Share change; until then those names
-        // are absent and the page-wide tee reports under stats_pageErrorCount
-        // / stats_pageWarnCount (loadProgress#finishReport).
+        // On conway's Statistics from 1.1626.740 (conway#740); they flow to GA
+        // as the unqualified stats_errorCount / stats_warningCount, beside the
+        // page-wide tee's stats_pageErrorCount / stats_pageWarnCount
+        // (loadProgress#finishReport). The optional chain stays for older
+        // engines (the web-ifc shim, pre-#740 conway) and the Jest mocks,
+        // where `loadStats` simply omits them.
         const errorCount = statsApi.getErrorCount?.()
         const warningCount = statsApi.getWarningCount?.()
         // On the Statistics API of the pinned conway, but the Jest mocks of
