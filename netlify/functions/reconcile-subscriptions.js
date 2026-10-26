@@ -43,6 +43,11 @@
  *     nothing. A discrepancy goes to Sentry as a warning.
  *   - 'apply': also writes. Set it in the Netlify UI once a report run has
  *     been read and looks right.
+ *   - 'off': doesn't sweep: one INFO line, nothing read, nothing to Sentry.
+ *     For the Netlify project that isn't production (bldrs-ai/ops#36),
+ *     which deploys the same scheduled function with the same credentials.
+ *     It has to be set explicitly: an unset (or lost) variable still means
+ *     report, so production can't silently stop sweeping.
  *
  * Every item is independent: one customer's failure is recorded in the
  * summary's `errors` and the sweep goes on. Netlify stops a scheduled
@@ -258,6 +263,13 @@ function describeError(err) {
 
 
 export const handler = Sentry.AWSLambda.wrapHandler(async () => {
+  // Before the configuration check: a project that doesn't sweep needn't
+  // carry the sweep's secrets either.
+  if (process.env.RECONCILE_MODE === 'off') {
+    // eslint-disable-next-line no-console -- an expected skip is INFO, not a warning
+    console.log('reconcile-subscriptions: RECONCILE_MODE=off, not sweeping')
+    return {statusCode: HTTP_OK, headers: {'Content-Type': 'application/json'}, body: JSON.stringify({mode: 'off'})}
+  }
   const missingEnv = REQUIRED_ENV.filter((name) => !process.env[name])
   if (missingEnv.length > 0) {
     const message = `reconcile-subscriptions not configured: missing ${missingEnv.join(', ')}`

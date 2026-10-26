@@ -561,6 +561,48 @@ describe('reconcile-subscriptions', () => {
     })
   })
 
+  // The Netlify project that isn't production deploys the same scheduled
+  // function with the same credentials (bldrs-ai/ops#36); `off` stops it
+  // from sweeping at all. Only the exact value: anything else still sweeps.
+  describe('RECONCILE_MODE=off', () => {
+    it('skips the sweep: no Auth0 or Stripe call, nothing to Sentry, one INFO line', async () => {
+      process.env.RECONCILE_MODE = 'off'
+      mockWorld({proUsers: [{user_id: 'auth0|nolink', app_metadata: {subscriptionStatus: 'sharePro'}}]})
+
+      const res = await handler({})
+
+      expect(res.statusCode).toBe(200)
+      expect(JSON.parse(res.body)).toEqual({mode: 'off'})
+      expect(axios.post).not.toHaveBeenCalled()
+      expect(axios.get).not.toHaveBeenCalled()
+      expect(mockStripeClient.subscriptions.list).not.toHaveBeenCalled()
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      // eslint-disable-next-line no-console -- reads the spy
+      expect(console.log).toHaveBeenCalledWith('reconcile-subscriptions: RECONCILE_MODE=off, not sweeping')
+      expect(console.warn).not.toHaveBeenCalled()
+      expect(console.error).not.toHaveBeenCalled()
+    })
+
+    it('skips before the configuration check, so a project without the secrets stays quiet', async () => {
+      process.env = {...savedEnv, RECONCILE_MODE: 'off'}
+
+      const res = await handler({})
+
+      expect(res.statusCode).toBe(200)
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+    })
+
+    it.each(['OFF', 'disabled', ''])('still sweeps (in report mode) for RECONCILE_MODE=%j', async (mode) => {
+      process.env.RECONCILE_MODE = mode
+      mockWorld({proUsers: [proUser(1)], subsByCustomer: {cus_1: [proSub('cus_1')]}, pricePages: [[proSub('cus_1')]]})
+
+      const {summary} = await sweep()
+
+      expect(summary.mode).toBe('report')
+      expect(summary.scanned).toEqual({proUsers: 1, entitledCustomers: 1})
+    })
+  })
+
   // Netlify labels a function log line by the console method that wrote it,
   // so the summary's method IS its level in the log: a clean run logged with
   // console.error read as a daily failure.
