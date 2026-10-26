@@ -46,9 +46,14 @@ export default function AlertDialog({onClose}) {
     if (typeof alert !== 'object') {
       return
     }
-    if (alert.type === 'unsupportedSchema' || alert.type === 'inMemoryUploadGone' || alert.type === 'uploadNotInBrowser') {
-      // Expected outcome, not a defect: analytics only, never Sentry
-      // (alertTracking.js#trackAlertEvent). `inMemoryUploadGone` is a
+    if (alert.type === 'unsupportedSchema' || alert.type === 'inMemoryUploadGone' || alert.type === 'uploadNotInBrowser' ||
+        alert.type === 'engineFailure') {
+      // Analytics only, never Sentry from here (alertTracking.js#trackAlertEvent):
+      // the expected outcomes below are not defects, and `engineFailure` (a
+      // conway open failure with its reason, conway#742) is a real one that
+      // CadView has already captured with the engine's status and reason as
+      // tags — a second capture of this plain alert object would be a
+      // context-less duplicate. `inMemoryUploadGone` is a
       // /v/local-only/ URL whose file, opened without OPFS, was held only by a
       // page that is gone (OPFS/messages.js, #1906); `uploadNotInBrowser` is
       // a /v/local-only/ link, with OPFS available, to an upload this browser
@@ -196,7 +201,7 @@ function createAlertReport(a) {
     return a
   } else if (typeof a === 'object') {
     if (a && (a.type === 'oom' || a.type === 'needsReconnect' || a.type === 'unsupportedSchema' ||
-        a.type === 'inMemoryUploadGone' || a.type === 'uploadNotInBrowser')) {
+        a.type === 'inMemoryUploadGone' || a.type === 'uploadNotInBrowser' || a.type === 'engineFailure')) {
       return a.message
     } else if (a instanceof NotFoundError) {
       return displayPathAlert(a)

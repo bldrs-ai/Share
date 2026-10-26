@@ -13,6 +13,7 @@ import {
   decorateConwayDirectIfcModel,
   parseIfcWithConway,
 } from './conwayDirectIfcLoader'
+import {EngineOpenFailureError} from '../../loader/engineOpenFailure'
 import {UnsupportedSchemaError} from '../../loader/unsupportedSchema'
 
 // Controllable flag surface: defaults to "everything off" (matching
@@ -159,9 +160,10 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
      * sync open leaves the counter where it was).
      *
      * @param {string} status the load status conway would record
+     * @param {string} [reason] the failure reason conway would record
      * @return {object}
      */
-    function failingEngine(status) {
+    function failingEngine(status, reason) {
       const stats = new Map()
       const api = {
         wasmModule: {},
@@ -170,7 +172,11 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
           stats.set(api.globalModelIDCounter, status)
           return -1
         }),
-        getStatistics: (id) => (stats.has(id) ? {getLoadStatus: () => stats.get(id)} : undefined),
+        getStatistics: (id) => (stats.has(id) ? {
+          getLoadStatus: () => stats.get(id),
+          // Absent on a conway older than #742, which is the old-engine case.
+          ...(reason === undefined ? {} : {getLoadFailureReason: () => reason}),
+        } : undefined),
         StreamAllMeshes: jest.fn(),
       }
       return api
@@ -191,6 +197,63 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       const rejection = parseIfcWithConway(ifc4x3Header, failingEngine('FAILED'))
       await expect(rejection).rejects.not.toBeInstanceOf(UnsupportedSchemaError)
       await expect(rejection).rejects.toThrow('parseIfcWithConway: OpenModel returned -1')
+    })
+
+    // conway#742: a failed open records a status and a reason on the
+    // attempt's statistics. A non-schema reason must reach the thrown error
+    // instead of vanishing into the generic -1.
+    it('throws an EngineOpenFailureError carrying conway\'s reason for a non-schema failure', async () => {
+      const ifcAPI = failingEngine('UNRECOGNIZED_FORMAT', 'zip archive (such as .ifczip), not STEP text')
+      const rejection = parseIfcWithConway(ifc4x3Header, ifcAPI)
+      await expect(rejection).rejects.toBeInstanceOf(EngineOpenFailureError)
+      await expect(rejection).rejects.not.toBeInstanceOf(UnsupportedSchemaError)
+      await expect(rejection).rejects.toMatchObject({
+        status: 'UNRECOGNIZED_FORMAT',
+        reason: 'zip archive (such as .ifczip), not STEP text',
+        message: 'parseIfcWithConway: OpenModel returned -1: zip archive (such as .ifczip), not STEP text',
+      })
+      expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
+    })
+
+    it('keeps the schema refusal\'s own error when the status is UNSUPPORTED_SCHEMA and a reason is also set', async () => {
+      const ifcAPI = failingEngine('UNSUPPORTED_SCHEMA', 'IFC4X3 content conway cannot read')
+      await expect(parseIfcWithConway(ifc4x3Header, ifcAPI)).rejects.toBeInstanceOf(UnsupportedSchemaError)
+    })
+
+    // A status without a reason is what a conway older than #742 leaves.
+    it('keeps the generic error when the statistics carry no reason', async () => {
+      const rejection = parseIfcWithConway(ifc4x3Header, failingEngine('OPEN_FAIL'))
+      await expect(rejection).rejects.not.toBeInstanceOf(EngineOpenFailureError)
+      await expect(rejection).rejects.toThrow(/^parseIfcWithConway: OpenModel returned -1$/)
+    })
+
+    it('reads the reason of the LAST open when the store open fails and the buffered fallback does too', async () => {
+      const stats = new Map()
+      const open = (reason) => jest.fn(async () => {
+        const id = api.globalModelIDCounter++
+        stats.set(id, {getLoadStatus: () => 'OPEN_FAIL', getLoadFailureReason: () => reason})
+        await Promise.resolve()
+        return -1
+      })
+      const api = {
+        wasmModule: {},
+        globalModelIDCounter: 0,
+        OpenModel: jest.fn(() => -1),
+        OpenModelStream: open('store open failed'),
+        OpenModelStreamed: open('buffered open failed'),
+        getStatistics: (id) => stats.get(id),
+        StreamAllMeshes: jest.fn(),
+      }
+      await expect(parseIfcWithConway(new Blob([ifc4x3Header]), api)).rejects.toMatchObject({
+        reason: 'buffered open failed',
+      })
+    })
+
+    it('does not take an earlier load\'s reason as this open\'s', async () => {
+      const stats = new Map([[0, {getLoadStatus: () => 'OPEN_FAIL', getLoadFailureReason: () => 'stale'}]])
+      const ifcAPI = conwayLikeEngine(stats, {})
+      const rejection = parseIfcWithConway(new Blob([ifc4x3Header]), ifcAPI)
+      await expect(rejection).rejects.not.toBeInstanceOf(EngineOpenFailureError)
     })
 
     /**

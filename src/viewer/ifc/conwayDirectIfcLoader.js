@@ -55,7 +55,7 @@
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {reportEngineVersion} from '../../loader/loadProgress'
 import {makeBlobByteStore} from '../../loader/opfsSourceByteStore'
-import {beginOpenAttempt, conwayRefusedSchema, openModelFailure} from '../../loader/unsupportedSchema'
+import {beginOpenAttempt, conwayOpenFailure, conwayRefusedSchema, openModelFailure} from '../../loader/unsupportedSchema'
 import debug, {WARN} from '../../utils/debug'
 import {attachInstanceMapSubsets} from '../three/elementSubsets'
 import {instanceMapFromGeometry} from './IfcInstanceMap'
@@ -225,7 +225,8 @@ export async function parseIfcWithConway(
       modelID = await ifcAPI.OpenModelStreamed(openData, deferSettings)
     }
     if (typeof modelID !== 'number' || modelID < 0) {
-      throw await openModelFailure(modelID, buffer, conwayRefusedSchema(ifcAPI, attempt))
+      throw await openModelFailure(modelID, buffer, conwayRefusedSchema(ifcAPI, attempt),
+        conwayOpenFailure(ifcAPI, attempt))
     }
     const captured = []
     // Does this engine expose conway#660's async whole-model ask? That is
@@ -531,7 +532,8 @@ export async function parseIfcWithConway(
     modelID = ifcAPI.OpenModel(data, openSettings)
   }
   if (typeof modelID !== 'number' || modelID < 0) {
-    throw await openModelFailure(modelID, buffer, conwayRefusedSchema(ifcAPI, attempt))
+    throw await openModelFailure(modelID, buffer, conwayRefusedSchema(ifcAPI, attempt),
+      conwayOpenFailure(ifcAPI, attempt))
   }
   const captured = []
   // eslint-disable-next-line new-cap

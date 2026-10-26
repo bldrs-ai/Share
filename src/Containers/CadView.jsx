@@ -39,6 +39,7 @@ import {
 import {buildOutcomeParams, loadFailureParams} from '../loader/loadAnalytics'
 import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
+import {EngineOpenFailureError, engineFailureCaptureContext} from '../loader/engineOpenFailure'
 import {UnsupportedSchemaError, reportUnsupportedSchema} from '../loader/unsupportedSchema'
 import {hasInMemoryUpload} from '../loader/inMemoryUploads'
 import {
@@ -457,6 +458,11 @@ export default function CadView({
           reportedRefusalRef.current = refusalKey
           reportUnsupportedSchema(e, modelPath)
         }
+      } else if (e instanceof EngineOpenFailureError) {
+        // conway said why the open failed (conway#742): a short form of the
+        // reason in place of the raw "OpenModel returned -1". Still a real
+        // failure, so it keeps the help footer and the Sentry capture below.
+        setAlert({type: 'engineFailure', message: e.alertMessage})
       } else if (e instanceof NeedsReconnectError) {
         // Deep-link / reload landed on a Drive route with a stale token, and
         // GIS couldn't escalate to a popup outside a user gesture. Surface a
@@ -510,7 +516,13 @@ export default function CadView({
       if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof InMemoryUploadGoneError) &&
           !(e instanceof UploadNotInBrowserError)) {
         attachLoadFailureContext()
-        captureException(e)
+        if (e instanceof EngineOpenFailureError) {
+          // The engine's status and reason as tags/context on this event
+          // only; the alert's GA count is AlertDialog's (trackAlertEvent).
+          captureException(e, engineFailureCaptureContext(e))
+        } else {
+          captureException(e)
+        }
       }
       return
     } finally {

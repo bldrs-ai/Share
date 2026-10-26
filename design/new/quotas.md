@@ -552,12 +552,15 @@ live on the reporter in `src/loader/loadProgress.js`.
 
 - **`load_failed`** carries only closed-set values, never text from the error,
   file or URL. `reason_class` is `oom` | `parse` | `unsupported_schema` |
-  `other` (`classifyLoadFailure`, a heuristic over the error's type and message:
-  `parse` means the bytes arrived and could not be turned into a model, a
-  network or routing failure is `other`). `size_bucket` is `<1mb` | `1-10mb` |
-  `10-50mb` | `50-200mb` | `200mb+` | `unknown`. `last_phase` is the reporter's
-  last phase as a slug from a fixed list, `other` for anything else, `none` when
-  no load had begun. It is sent from the one catch every failure of an attempt
+  `unrecognized_format` | `other` (`classifyLoadFailure`, a heuristic over the
+  error's type and message: `parse` means the bytes arrived and could not be
+  turned into a model, a network or routing failure is `other`;
+  `unrecognized_format` is conway's own verdict that the bytes are not a STEP
+  file it recognises, read from the load status of an `EngineOpenFailureError`
+  — the reason text itself never reaches GA, it is on the Sentry event).
+  `size_bucket` is `<1mb` | `1-10mb` | `10-50mb` | `50-200mb` | `200mb+` |
+  `unknown`. `last_phase` is the reporter's last phase as a slug from a fixed
+  list, `other` for anything else, `none` when no load had begun. It is sent from the one catch every failure of an attempt
   reaches, not from `loadModel`'s own, which also sees the auth-shaped first try
   that `loadModelWithAuthRetry` retries and may win.
 - **`load_outcome`** is `displayed` or `unusable`, from `classifyLoadOutcome`.

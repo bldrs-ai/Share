@@ -20,6 +20,7 @@ import Clipper from '../viewer/three/Clipper'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
+import {EngineOpenFailureError} from '../loader/engineOpenFailure'
 import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
 import {registerInMemoryUpload, resetInMemoryUploadsForTest} from '../loader/inMemoryUploads'
 import {
@@ -654,6 +655,56 @@ describe('CadView', () => {
     expect(captureMessageSpy).toHaveBeenCalledWith(
       'Unsupported IFC schema: IFC4X3_RC2',
       expect.objectContaining({level: 'info', fingerprint: ['unsupported-schema', 'IFC4X3_RC2']}))
+  })
+
+  // conway#742: an open failure that carries a reason. The alert says it in
+  // short form and Sentry gets it as tags/context — it is still an error,
+  // unlike the schema refusal above.
+  it('alerts with conway\'s failure reason and captures it in Sentry with status and reason', async () => {
+    const engineErr = new EngineOpenFailureError(-1, 'UNRECOGNIZED_FORMAT',
+      'zip archive (such as .ifczip), not STEP text')
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw engineErr
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => {
+      expect(result.current.alert).toEqual({
+        type: 'engineFailure',
+        message: 'Share couldn\'t read this file: zip archive (such as .ifczip), not STEP text.',
+      })
+    })
+    expect(captureExceptionSpy).toHaveBeenCalledWith(engineErr, expect.objectContaining({
+      tags: expect.objectContaining({
+        'engine.load_status': 'UNRECOGNIZED_FORMAT',
+        'engine.failure_reason': 'zip archive (such as .ifczip), not STEP text',
+      }),
+      contexts: {engine_failure: {
+        status: 'UNRECOGNIZED_FORMAT',
+        reason: 'zip archive (such as .ifczip), not STEP text',
+      }},
+    }))
+  })
+
+  it('keeps the generic alert and capture when the engine gave no reason', async () => {
+    const genericErr = new Error('parseIfcWithConway: OpenModel returned -1')
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw genericErr
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(result.current.alert).toBe(genericErr))
+    expect(captureExceptionSpy).toHaveBeenCalledWith(genericErr)
   })
 
   // #1955: SHARE-1NR, the top hard-failure group, was this case reported as

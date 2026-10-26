@@ -11,6 +11,7 @@ import {
   normalizeLoadPhase,
   omitUndefined,
 } from './loadAnalytics'
+import {EngineOpenFailureError} from './engineOpenFailure'
 import {UnsupportedSchemaError} from './unsupportedSchema'
 
 
@@ -52,6 +53,18 @@ describe('loader/loadAnalytics', () => {
     it('the typed schema refusal is unsupported_schema', () => {
       expect(classifyLoadFailure(new UnsupportedSchemaError('IFC4X3_RC2'))).toBe(
         LOAD_FAILURE_REASONS.UNSUPPORTED_SCHEMA)
+    })
+
+    it('an unrecognised file is unrecognized_format, by status and never by reason text', () => {
+      expect(classifyLoadFailure(new EngineOpenFailureError(-1, 'UNRECOGNIZED_FORMAT', 'zip archive'))).toBe(
+        LOAD_FAILURE_REASONS.UNRECOGNIZED_FORMAT)
+    })
+
+    it('any other engine failure with a reason stays parse', () => {
+      expect(classifyLoadFailure(new EngineOpenFailureError(-1, 'OPEN_FAIL', 'bad entity'))).toBe(
+        LOAD_FAILURE_REASONS.PARSE)
+      expect(classifyLoadFailure(new EngineOpenFailureError(-1, 'INDEX_RESTORE_FAIL', 'no model'))).toBe(
+        LOAD_FAILURE_REASONS.PARSE)
     })
 
     it.each([
@@ -128,6 +141,17 @@ describe('loader/loadAnalytics', () => {
         last_phase: 'geometry',
       })
       expect(JSON.stringify(params)).not.toContain('private')
+    })
+
+    it('carries the engine\'s status-derived class but none of its reason text', () => {
+      const params = loadFailureParams({
+        error: new EngineOpenFailureError(-1, 'UNRECOGNIZED_FORMAT', 'unrecognized FILE_SCHEMA SECRET_SCHEMA'),
+        format: 'ifc',
+        fileSize: MB,
+        phase: 'headerparse',
+      })
+      expect(params.reason_class).toBe('unrecognized_format')
+      expect(JSON.stringify(params)).not.toContain('SECRET')
     })
 
     it('degrades to unknown/none when the load never started reporting', () => {

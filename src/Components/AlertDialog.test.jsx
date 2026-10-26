@@ -240,6 +240,39 @@ describe('AlertDialog — unsupportedSchema alert type', () => {
 })
 
 
+describe('AlertDialog — engineFailure alert type (conway#742)', () => {
+  const onClose = jest.fn()
+  const message = 'Share couldn\'t read this file: zip archive (such as .ifczip), not STEP text.'
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  it('shows the engine\'s reason, and keeps the help footer: it is a real failure', () => {
+    act(() => {
+      useStore.getState().setAlert({type: 'engineFailure', message})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(/zip archive \(such as \.ifczip\), not STEP text/)).toBeInTheDocument()
+    expect(screen.getByText(/Discord/i)).toBeInTheDocument()
+  })
+
+  // CadView captures the failure once, with the engine's status and reason;
+  // a second capture of this plain alert object would carry neither.
+  it('counts the alert in analytics only, never through the Sentry path', () => {
+    act(() => {
+      useStore.getState().setAlert({type: 'engineFailure', message})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(trackAlertEvent).toHaveBeenCalledWith(message)
+    expect(trackAlert).not.toHaveBeenCalled()
+  })
+})
+
+
 describe('AlertDialog — inMemoryUploadGone alert type', () => {
   const onClose = jest.fn()
 

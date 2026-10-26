@@ -1,6 +1,7 @@
 import {supportedTypes} from '../Filetype'
 import {prefixObjectKeys} from '../utils/objects'
 import {isOutOfMemoryError} from '../utils/oom'
+import {EngineOpenFailureError, STATUS_UNRECOGNIZED_FORMAT} from './engineOpenFailure'
 import {UnsupportedSchemaError} from './unsupportedSchema'
 
 
@@ -20,6 +21,10 @@ export const LOAD_FAILURE_REASONS = Object.freeze({
   OOM: 'oom',
   PARSE: 'parse',
   UNSUPPORTED_SCHEMA: 'unsupported_schema',
+  // conway could not recognise the bytes as a STEP/IFC file at all (a zip, a
+  // UTF-16 save, an HTML error page, …): conway#742's UNRECOGNIZED_FORMAT.
+  // Split out of `parse` because it is the user's file, not an engine bug.
+  UNRECOGNIZED_FORMAT: 'unrecognized_format',
   OTHER: 'other',
 })
 
@@ -120,6 +125,12 @@ export function classifyLoadFailure(error) {
   }
   if (error instanceof UnsupportedSchemaError) {
     return LOAD_FAILURE_REASONS.UNSUPPORTED_SCHEMA
+  }
+  // Only the status picks the class, never the reason text (free text; see
+  // the closed-set note at the top). Any other engine status stays `parse`
+  // through the message pattern below, as the generic -1 always did.
+  if (error instanceof EngineOpenFailureError && error.status === STATUS_UNRECOGNIZED_FORMAT) {
+    return LOAD_FAILURE_REASONS.UNRECOGNIZED_FORMAT
   }
   const message = typeof error?.message === 'string' ? error.message : ''
   return PARSE_FAILURE_PATTERN.test(message) ?
