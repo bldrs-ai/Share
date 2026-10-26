@@ -23,8 +23,15 @@ import {handler} from '../reconcile-subscriptions.js'
 
 /* eslint-disable no-magic-numbers */
 jest.mock('axios')
+// `mockSentryWrapped` records each entry into the Sentry-wrapped handler, the
+// one that sends a performance transaction per invocation: `off` must never
+// enter it (Codex on #1972).
+const mockSentryWrapped = jest.fn()
 jest.mock('@sentry/serverless', () => ({
-  AWSLambda: {init: jest.fn(), wrapHandler: (fn) => fn},
+  AWSLambda: {init: jest.fn(), wrapHandler: (fn) => (...args) => {
+    mockSentryWrapped()
+    return fn(...args)
+  }},
   captureMessage: jest.fn(),
   captureException: jest.fn(),
   setUser: jest.fn(),
@@ -565,7 +572,7 @@ describe('reconcile-subscriptions', () => {
   // function with the same credentials (bldrs-ai/ops#36); `off` stops it
   // from sweeping at all. Only the exact value: anything else still sweeps.
   describe('RECONCILE_MODE=off', () => {
-    it('skips the sweep: no Auth0 or Stripe call, nothing to Sentry, one INFO line', async () => {
+    it('skips the sweep outside the Sentry wrapper: no Auth0 or Stripe call, nothing to Sentry, one INFO line', async () => {
       process.env.RECONCILE_MODE = 'off'
       mockWorld({proUsers: [{user_id: 'auth0|nolink', app_metadata: {subscriptionStatus: 'sharePro'}}]})
 
@@ -576,6 +583,7 @@ describe('reconcile-subscriptions', () => {
       expect(axios.post).not.toHaveBeenCalled()
       expect(axios.get).not.toHaveBeenCalled()
       expect(mockStripeClient.subscriptions.list).not.toHaveBeenCalled()
+      expect(mockSentryWrapped).not.toHaveBeenCalled()
       expect(Sentry.captureMessage).not.toHaveBeenCalled()
       // eslint-disable-next-line no-console -- reads the spy
       expect(console.log).toHaveBeenCalledWith('reconcile-subscriptions: RECONCILE_MODE=off, not sweeping')
@@ -600,6 +608,7 @@ describe('reconcile-subscriptions', () => {
 
       expect(summary.mode).toBe('report')
       expect(summary.scanned).toEqual({proUsers: 1, entitledCustomers: 1})
+      expect(mockSentryWrapped).toHaveBeenCalledTimes(1)
     })
   })
 

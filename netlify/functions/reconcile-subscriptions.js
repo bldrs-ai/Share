@@ -262,14 +262,7 @@ function describeError(err) {
 }
 
 
-export const handler = Sentry.AWSLambda.wrapHandler(async () => {
-  // Before the configuration check: a project that doesn't sweep needn't
-  // carry the sweep's secrets either.
-  if (process.env.RECONCILE_MODE === 'off') {
-    // eslint-disable-next-line no-console -- an expected skip is INFO, not a warning
-    console.log('reconcile-subscriptions: RECONCILE_MODE=off, not sweeping')
-    return {statusCode: HTTP_OK, headers: {'Content-Type': 'application/json'}, body: JSON.stringify({mode: 'off'})}
-  }
+const sweepHandler = Sentry.AWSLambda.wrapHandler(async () => {
   const missingEnv = REQUIRED_ENV.filter((name) => !process.env[name])
   if (missingEnv.length > 0) {
     const message = `reconcile-subscriptions not configured: missing ${missingEnv.join(', ')}`
@@ -481,3 +474,24 @@ export const handler = Sentry.AWSLambda.wrapHandler(async () => {
   }
   return {statusCode: HTTP_OK, headers: {'Content-Type': 'application/json'}, body: line}
 })
+
+
+/**
+ * RECONCILE_MODE=off: answer without sweeping. Checked outside the Sentry
+ * wrapper, which would otherwise send a performance transaction for every
+ * invocation (`tracesSampleRate: 1.0`; Codex on #1972), and before the
+ * configuration check, so a project that doesn't sweep needn't carry the
+ * sweep's secrets either.
+ *
+ * @param {object} event
+ * @param {object} context
+ * @return {Promise<object>}
+ */
+export function handler(event, context) {
+  if (process.env.RECONCILE_MODE === 'off') {
+    // eslint-disable-next-line no-console -- an expected skip is INFO, not a warning
+    console.log('reconcile-subscriptions: RECONCILE_MODE=off, not sweeping')
+    return Promise.resolve({statusCode: HTTP_OK, headers: {'Content-Type': 'application/json'}, body: JSON.stringify({mode: 'off'})})
+  }
+  return sweepHandler(event, context)
+}
