@@ -8,6 +8,7 @@ import {
   uploadNotInBrowserAlert,
 } from '../OPFS/messages'
 import {getProvider} from '../connections/registry'
+import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import AlertDialog from './AlertDialog'
@@ -262,12 +263,13 @@ describe('AlertDialog — engineFailure alert type (conway#742)', () => {
 
   // CadView captures the failure once, with the engine's status and reason;
   // a second capture of this plain alert object would carry neither.
-  it('counts the alert in analytics only, never through the Sentry path', () => {
+  it('counts the alert in analytics only, never through the Sentry path, by a constant', () => {
     act(() => {
       useStore.getState().setAlert({type: 'engineFailure', message})
     })
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
-    expect(trackAlertEvent).toHaveBeenCalledWith(message)
+    expect(trackAlertEvent).toHaveBeenCalledTimes(1)
+    expect(trackAlertEvent).toHaveBeenCalledWith(ENGINE_FAILURE_ALERT_EVENT)
     expect(trackAlert).not.toHaveBeenCalled()
   })
 })

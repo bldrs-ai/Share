@@ -15,6 +15,15 @@ export const STATUS_UNRECOGNIZED_FORMAT = 'UNRECOGNIZED_FORMAT'
 const MAX_REASON_CHARS = 160
 const MAX_TAG_CHARS = 200
 
+/**
+ * What GA is told when an engine open failure's alert is shown. A constant,
+ * never the alert's text: that text carries conway's free-form reason, which
+ * can hold file-derived or raw exception content and has unbounded
+ * cardinality. The class of failure reaches GA through `load_failed`'s
+ * closed-set `reason_class` (loadAnalytics#classifyLoadFailure).
+ */
+export const ENGINE_FAILURE_ALERT_EVENT = 'Engine open failure'
+
 
 /**
  * Thrown when conway's `OpenModel*` returned -1 and, on that open's
@@ -45,7 +54,10 @@ export class EngineOpenFailureError extends Error {
     super(`parseIfcWithConway: OpenModel returned ${modelID}: ${tidy}`)
     this.name = 'EngineOpenFailureError'
     this.status = status
+    // The tidy form is for people and tags; the engine's own text is kept
+    // for the Sentry context, where the whole diagnostic is the point.
     this.reason = tidy
+    this.rawReason = String(reason)
   }
 
   /**
@@ -100,7 +112,7 @@ export function engineFailureCaptureContext(err) {
       'engine.failure_reason': normalizeMessageDigits(err.reason).slice(0, MAX_TAG_CHARS),
     },
     contexts: {
-      engine_failure: {status: err.status, reason: err.reason},
+      engine_failure: {status: err.status, reason: err.rawReason},
     },
     fingerprint: ['{{ default }}', err.status],
   }

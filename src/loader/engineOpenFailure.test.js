@@ -34,6 +34,15 @@ describe('loader/engineOpenFailure — EngineOpenFailureError', () => {
     expect(err.reason.endsWith('…')).toBe(true)
     expect(new EngineOpenFailureError(-1, 'OPEN_FAIL', 'oops.').reason).toBe('oops')
   })
+
+  it('keeps the engine\'s unabridged text for the Sentry context', () => {
+    const long = `bad\n  thing. ${'x'.repeat(400)}`
+    const err = new EngineOpenFailureError(-1, 'OPEN_FAIL', long)
+    expect(err.rawReason).toBe(long)
+    expect(engineFailureCaptureContext(err).contexts.engine_failure.reason).toBe(long)
+    // …while the tag stays capped for Sentry's search.
+    expect(engineFailureCaptureContext(err).tags['engine.failure_reason'].length).toBeLessThanOrEqual(200)
+  })
 })
 
 
