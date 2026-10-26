@@ -3,7 +3,6 @@ import {ButtonGroup, ListItem, ListItemIcon, ListItemText, SvgIcon, Stack} from 
 import {
   ArrowBack as ArrowBackIcon,
   ArrowForward as ArrowForwardIcon,
-  AutoFixHighOutlined as AutoFixHighOutlinedIcon,
   ChatOutlined as ChatOutlinedIcon,
   Close as CloseIcon,
   CreateNewFolderOutlined as CreateNewFolderOutlinedIcon,
@@ -215,10 +214,6 @@ const HelpList = ({pageIndex}) => {
     <ListItem key='15'>
       <ListItemIcon><ChatOutlinedIcon className='icon-share'/></ListItemIcon>
       <ListItemText primary='Notes' secondary='Attach notes to 3D elements'/>
-    </ListItem>,
-    <ListItem key='16'>
-      <ListItemIcon><AutoFixHighOutlinedIcon className='icon-share'/></ListItemIcon>
-      <ListItemText primary='Imagine' secondary='Create renderings using Bot the BLDR'/>
     </ListItem>,
   ]
 

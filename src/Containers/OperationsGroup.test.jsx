@@ -8,8 +8,8 @@ import OperationsGroup from './OperationsGroup'
 
 window.HTMLElement.prototype.scrollIntoView = jest.fn()
 
-// Instantiates ImagineControl which uses viewer's screenshot function
-// (viewer deps are mocked via the shareViewerTestHarness import above)
+// The controls read the viewer from the store; its deps are mocked via the
+// shareViewerTestHarness import above.
 
 
 describe('OperationsGroup', () => {
