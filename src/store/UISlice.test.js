@@ -23,7 +23,6 @@ describe('store/UISlice', () => {
       // default to true in a clean jest env — see Components/About/hashState.js.
       expect(typeof state.isAboutVisible).toBe('boolean')
       expect(state.isHelpVisible).toBe(false)
-      expect(state.isImagineVisible).toBe(false)
       expect(state.isLoginVisible).toBe(false)
       expect(state.isShareVisible).toBe(false)
     })
@@ -58,7 +57,6 @@ describe('store/UISlice', () => {
       ['setIsAboutVisible', 'isAboutVisible'],
       ['setIsHelpVisible', 'isHelpVisible'],
       ['setIsHelpTooltipsVisible', 'isHelpTooltipsVisible'],
-      ['setIsImagineVisible', 'isImagineVisible'],
       ['setIsLoginVisible', 'isLoginVisible'],
       ['setIsSaveModelVisible', 'isSaveModelVisible'],
       ['setIsShareVisible', 'isShareVisible'],
