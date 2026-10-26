@@ -108,7 +108,7 @@ describe('Quota: usage limit enforcement', () => {
 
 
     test('paid tier never sees the limit dialog, even past the free cap', async ({page}) => {
-      // Mock has 5 prior loads — already past the 4-load free cap.
+      // Mock has 5 prior loads, already past the free cap (2, quota/limits.js).
       await resetMockQuota(page, [
         '/share/v/g/old-1',
         '/share/v/g/old-2',

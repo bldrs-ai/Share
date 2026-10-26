@@ -62,7 +62,7 @@ export default function OpenModelDialog({
   // Safari can refuse once the click's user activation is spent.
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const isMobile = useIsMobile()
-  const {tier, record, check, hasCapacity} = useQuota()
+  const {tier, record, check} = useQuota()
 
   const [pickerToken, setPickerToken] = useState(null)
   const [pickerConnection, setPickerConnection] = useState(null)
@@ -275,10 +275,10 @@ export default function OpenModelDialog({
   }
 
   const openFile = () => {
-    if (!hasCapacity) {
-      setShowQuotaDialog(true)
-      return
-    }
+    // No capacity pre-gate: a local file is free and unmetered (Share#1966),
+    // so a user at their private-model limit can still open one. record()
+    // below passes the /v/local-only/ key, and stays the gate if the
+    // `meterLocalFiles` abuse switch puts local files back in the meter.
     // Without OPFS the pick is held in memory instead (#1906). `false`, not
     // falsy: the store holds `null` until BaseRoutes' probe resolves, which
     // means "not known yet". Browse is disabled while it's `null` (below), so

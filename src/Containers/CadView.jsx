@@ -50,6 +50,7 @@ import {
 import {reportUploadNotInBrowser} from '../OPFS/reportUploadNotInBrowser'
 import {getBrowser} from '../connections/registry'
 import modelIdentity from '../routes/modelIdentity'
+import useDirectLinkQuota from '../quota/useDirectLinkQuota'
 import useStore from '../store/useStore'
 import {
   expandedIdsForSelection,
@@ -255,6 +256,10 @@ export default function CadView({
   const location = useLocation()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
+  // Soft quota gate for models opened straight from a URL (codex P1 on
+  // Share#1971): records the load, never blocks it. Called after each
+  // successful load below.
+  const meterDirectLinkLoad = useDirectLinkQuota(appPrefix)
   const setOpfsFile = useStore((state) => state.setOpfsFile)
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
@@ -549,6 +554,10 @@ export default function CadView({
     modelPath.title = tmpModelRef.name // maybe undefined
     setIsViewerLoaded(true)
     setIsModelReady(true)
+    // After the model is on screen, never before: a direct link is metered
+    // but not gated (quota/useDirectLinkQuota.js). The Open dialog already
+    // recorded what it opened, which the hook sees as alreadyCounted.
+    meterDirectLinkLoad(modelPath)
 
     let lastSent = 0
     /** Debounced function to track model interaction for GA. */
