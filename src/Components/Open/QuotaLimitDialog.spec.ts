@@ -206,8 +206,12 @@ describeMobileAndDesktop('QuotaLimitDialog', () => {
 
   // The window's edge from the user's side: one of the two seeded models was
   // opened 8 days ago, outside the 7-day window, so the 3rd pick is the 2nd
-  // that counts — no dialog, and the server records it and drops the stale
-  // row. Same as a ledger written under the old 30-day window at rollout.
+  // that counts. record-load (its mock prunes to the window, as the real
+  // function does) allows it and the model opens, with no dialog. Same as a
+  // ledger written under the old 30-day window at rollout. The allowed pick
+  // navigates to the model, a full page load, so the mock's in-page ledger
+  // and the response body are gone by then; the status and the navigation
+  // are the evidence (record-load.test.js checks the pruned write-back).
   test('a private model opened 8 days ago doesn\'t count: the next one opens', async ({page}) => {
     await seedServerLoads(page, FREE_LIMIT, [0, WINDOW_DAYS + 1])
     const recordLoad = page.waitForResponse((r) => new URL(r.url()).pathname === '/.netlify/functions/record-load')
@@ -216,10 +220,8 @@ describeMobileAndDesktop('QuotaLimitDialog', () => {
 
     const response = await recordLoad
     expect(response.status()).toBe(HTTP_OK)
-    expect(await response.json()).toMatchObject({allowed: true, used: FREE_LIMIT, limit: FREE_LIMIT})
-    const serverKeys = await page.evaluate(() =>
-      (window as unknown as WindowWithStore).__mockQuotaLoads?.map((l) => l.key))
-    expect(serverKeys).toEqual(['/share/v/g/seeded-0', '/share/v/g/after-the-window'])
+    expect(JSON.parse(response.request().postData() ?? '{}')).toEqual({key: '/share/v/g/after-the-window'})
+    await page.waitForURL((url) => url.pathname === '/share/v/g/after-the-window')
     await expect(page.getByTestId('button-quota-subscribe')).toHaveCount(0)
     expect(await funnelEvents(page, 'quota_limit_reached')).toHaveLength(0)
   })
