@@ -1,5 +1,5 @@
 import {act, renderHook} from '@testing-library/react'
-import {mockedUseAuth0, mockedUserLoggedOut} from '../__mocks__/authentication'
+import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../__mocks__/authentication'
 import {isFeatureEnabled} from '../FeatureFlags'
 import useQuota from './useQuota'
 
@@ -55,10 +55,11 @@ describe('useQuota — quotas feature flag', () => {
 /**
  * In-memory OPFS holding `quota.json`, the shape quota.js reads and writes.
  *
+ * @param {object} [initial] quota to start with, as quota.json holds it
  * @return {{read: Function}} the stored quota, parsed, or null
  */
-function mockOpfs() {
-  let stored = null
+function mockOpfs(initial = null) {
+  let stored = initial === null ? null : JSON.stringify(initial)
   const handle = {
     getFile: () => Promise.resolve({
       text: () => (stored === null ? Promise.reject(new Error('not found')) : Promise.resolve(stored)),
@@ -151,5 +152,40 @@ describe('useQuota — local files (signed out)', () => {
     } finally {
       window.history.pushState({}, '', '/')
     }
+  })
+})
+
+
+/**
+ * The rolling window at the hook (agent review on Share#1974): check()
+ * prunes at call time, so a slot that rolls off while the tab stays open is
+ * free immediately, not at the next record() or remount.
+ */
+describe('useQuota — check() re-prunes at call time', () => {
+  const WINDOW_MS = 604_800_000 // 7 days
+  const SECOND_MS = 1000
+  const NOW = Date.parse('2026-10-26T12:00:00.000Z')
+
+  afterEach(() => {
+    delete global.navigator.storage
+    jest.restoreAllMocks()
+  })
+
+  it('frees a slot that rolls off after mount, without a remount', async () => {
+    isFeatureEnabled.mockImplementation((name) => name === 'quotas')
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(NOW)
+    // Two Drive models: one now, one a second short of rolling off.
+    mockOpfs({tier: 'free', loads: [
+      {key: '/share/v/g/recent', loadedAt: new Date(NOW).toISOString()},
+      {key: '/share/v/g/rolling-off', loadedAt: new Date(NOW - WINDOW_MS + SECOND_MS).toISOString()},
+    ]})
+    const {result} = renderHook(() => useQuota())
+    await act(async () => {})
+
+    expect(result.current.check('/share/v/g/third')).toMatchObject({allowed: false, used: 2})
+
+    nowSpy.mockReturnValue(NOW + SECOND_MS)
+    expect(result.current.check('/share/v/g/third')).toMatchObject({allowed: true, used: 1})
   })
 })

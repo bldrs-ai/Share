@@ -1,6 +1,6 @@
 import {isFeatureEnabled} from '../FeatureFlags'
 import {viewRouteKind} from '../routes/localOnly'
-import {LIMITS, ROLLING_WINDOW_MS, TIERS, isAlwaysPrivateRouteKind} from './limits'
+import {LIMITS, TIERS, isAlwaysPrivateRouteKind, loadsInsideRollingWindow} from './limits'
 import {isProSubscriptionStatus} from './proStatus'
 
 
@@ -136,8 +136,7 @@ export function pruneLoads(loads, tier, now = Date.now()) {
   if (tier === TIERS.ANONYMOUS) {
     return loads
   }
-  const cutoff = now - ROLLING_WINDOW_MS
-  return loads.filter((l) => Date.parse(l.loadedAt) >= cutoff)
+  return loadsInsideRollingWindow(loads, now)
 }
 
 

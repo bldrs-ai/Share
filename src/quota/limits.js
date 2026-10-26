@@ -59,6 +59,33 @@ const MILLIS_PER_SECOND = 1000
 export const ROLLING_WINDOW_MS =
   ROLLING_WINDOW_DAYS * HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MINUTE * MILLIS_PER_SECOND
 
+/**
+ * The ledger rows still inside the rolling window at `now`: THE one
+ * implementation, used by the client (`quota.js#pruneLoads`, which the MSW
+ * mock calls) and by `record-load`, so the two can't disagree about an edge.
+ *
+ * The edge is exclusive: a row counts while `now < loadedAt + window`, so a
+ * row exactly ROLLING_WINDOW_DAYS old no longer counts. Free exports
+ * (`export/freeExports.js#freeExportAllowance`) and engagement tracking use
+ * the same comparison, and it is the one that makes a "next slot frees at
+ * loadedAt + window" statement true at that instant.
+ *
+ * Tier-blind: anonymous ledgers are never pruned, and that exemption is the
+ * caller's (`quota.js#pruneLoads`; `record-load` never sees anonymous).
+ *
+ * @param {Array<{key: string, loadedAt: string}>} loads anything else is
+ *   treated as an empty ledger
+ * @param {number} now millis since epoch
+ * @return {Array<{key: string, loadedAt: string}>}
+ */
+export function loadsInsideRollingWindow(loads, now) {
+  if (!Array.isArray(loads)) {
+    return []
+  }
+  return loads.filter((l) => now < Date.parse(l.loadedAt) + ROLLING_WINDOW_MS)
+}
+
+
 /** Quotable load limits per tier within the rolling window */
 export const LIMITS = {
   [TIERS.ANONYMOUS]: ANONYMOUS_PRIVATE_MODEL_LIMIT,

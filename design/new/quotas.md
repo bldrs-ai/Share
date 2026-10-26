@@ -299,11 +299,17 @@ mirror / offline fallback. It is *not* the authority for signed-in users.
 `ROLLING_WINDOW_DAYS` (7). Anonymous is exempt (lifetime cap). Pruning runs on
 both the client (`useQuota`) and the server (before counting) so the two agree.
 A free user who opened 2 private models gets a slot back exactly 7 days after
-each load, rather than all at once on a calendar reset. The edge is inclusive:
-a load exactly 7 days old still counts, one a millisecond older does not
-(`loadedAt >= now - window`). Free exports use the same constant with the
-opposite edge (a row counts while `now < exportedAt + window`); the two differ
-by that one millisecond and nothing else.
+each load, rather than all at once on a calendar reset. The edge is exclusive:
+a row counts while `now < loadedAt + window`, so a load exactly 7 days old has
+rolled off. That is the comparison free exports (`freeExportAllowance`) and
+engagement tracking use too, and the one that makes "the slot frees at
+`loadedAt + window`" true at that instant. Quotas used the inclusive edge
+until Share#1974 unified them. It is implemented once,
+`limits.js#loadsInsideRollingWindow`, which `quota.js#pruneLoads` (and through
+it the MSW mock) and `record-load` both call, so the client and server can't
+drift apart on it. `useQuota#check()` re-prunes at call time, so an open tab
+stops counting a slot the moment it rolls off rather than at the next
+`record()` or remount.
 
 **One window for private models and exports.** The owner's decision
 (2026-10-26): "month is a long time … weekly will help keep us more

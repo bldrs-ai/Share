@@ -190,18 +190,20 @@ describe('pruneLoads', () => {
     expect(out.map((l) => l.key)).toEqual(['b', 'c'])
   })
 
-  it('keeps loads exactly at the boundary', () => {
+  it('keeps loads just inside the boundary', () => {
     const loads = [{key: 'edge', loadedAt: dayBack(WINDOW_DAYS - DAYS_NEAR_BOUNDARY)}]
     expect(pruneLoads(loads, TIERS.FREE, NOW)).toHaveLength(1)
   })
 
-  // The edge itself, to the millisecond: inclusive at exactly 7 days
-  // (`loadedAt >= now - window`), gone one millisecond later.
-  it('counts a load exactly 7 days old, and not one a millisecond older', () => {
+  // The edge itself, to the millisecond. Exclusive (`now < loadedAt +
+  // window`), the same comparison free exports and engagement tracking use
+  // (agent review on Share#1974): a load exactly 7 days old has rolled off,
+  // one a millisecond younger still counts.
+  it('drops a load exactly 7 days old, and counts one a millisecond younger', () => {
     const exactly = new Date(NOW - (WINDOW_DAYS * DAY_MS)).toISOString()
-    const justOutside = new Date(NOW - (WINDOW_DAYS * DAY_MS) - 1).toISOString()
-    const loads = [{key: 'exactly', loadedAt: exactly}, {key: 'outside', loadedAt: justOutside}]
-    expect(pruneLoads(loads, TIERS.FREE, NOW).map((l) => l.key)).toEqual(['exactly'])
+    const justInside = new Date(NOW - (WINDOW_DAYS * DAY_MS) + 1).toISOString()
+    const loads = [{key: 'exactly', loadedAt: exactly}, {key: 'inside', loadedAt: justInside}]
+    expect(pruneLoads(loads, TIERS.FREE, NOW).map((l) => l.key)).toEqual(['inside'])
   })
 
   it('does not prune anonymous tier (lifetime cap)', () => {

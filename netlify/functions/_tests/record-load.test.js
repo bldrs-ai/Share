@@ -201,6 +201,27 @@ describe('record-load function', () => {
   // is pruned before counting — which is also what happens to a ledger
   // written under the 30-day window at rollout — and the pruned list is what
   // gets written back with the new load.
+  // Exclusive edge, the shared limits.js#loadsInsideRollingWindow: a row
+  // exactly 7 days old has rolled off.
+  it('does not count a private model opened exactly 7 days ago', async () => {
+    const now = Date.parse('2026-10-26T12:00:00.000Z')
+    jest.spyOn(Date, 'now').mockReturnValue(now)
+    try {
+      const loads = [
+        {key: '/share/v/g/recent', loadedAt: new Date(now).toISOString()},
+        {key: '/share/v/g/exactly-seven', loadedAt: new Date(now - (7 * 24 * 60 * 60 * 1000)).toISOString()},
+      ]
+      mockAuth0({usageQuota: {loads}})
+
+      const res = await handler(getEvent({key: '/share/v/g/third-model'}))
+
+      expect(res.statusCode).toBe(200)
+      expect(JSON.parse(res.body)).toMatchObject({allowed: true, used: 2})
+    } finally {
+      Date.now.mockRestore()
+    }
+  })
+
   it('does not count a private model opened 8 days ago', async () => {
     const loads = [
       {key: '/share/v/g/recent', loadedAt: daysAgo(0)},

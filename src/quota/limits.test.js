@@ -33,8 +33,9 @@ describe('quota/limits', () => {
   })
 
   // "Private shares and exports should be on the same timing" (owner,
-  // 2026-10-26): one window, so moving it can't move only one of them.
-  it('gives private models and GLB exports the same window', () => {
+  // 2026-10-26). FREE_EXPORT_WINDOW_* are aliases of ROLLING_WINDOW_*, so
+  // this only guards against someone re-hardcoding a separate export window.
+  it('keeps the export window an alias of the private-model window', () => {
     expect(FREE_EXPORT_WINDOW_DAYS).toBe(ROLLING_WINDOW_DAYS)
     expect(FREE_EXPORT_WINDOW_MS).toBe(ROLLING_WINDOW_MS)
   })
