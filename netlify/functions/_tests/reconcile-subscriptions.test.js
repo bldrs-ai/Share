@@ -23,8 +23,15 @@ import {handler} from '../reconcile-subscriptions.js'
 
 /* eslint-disable no-magic-numbers */
 jest.mock('axios')
+// `mockSentryWrapped` records each entry into the Sentry-wrapped handler, the
+// one that sends a performance transaction per invocation: `off` must never
+// enter it (Codex on #1972).
+const mockSentryWrapped = jest.fn()
 jest.mock('@sentry/serverless', () => ({
-  AWSLambda: {init: jest.fn(), wrapHandler: (fn) => fn},
+  AWSLambda: {init: jest.fn(), wrapHandler: (fn) => (...args) => {
+    mockSentryWrapped()
+    return fn(...args)
+  }},
   captureMessage: jest.fn(),
   captureException: jest.fn(),
   setUser: jest.fn(),
@@ -558,6 +565,50 @@ describe('reconcile-subscriptions', () => {
       expect(summary.testAccounts).toEqual([])
       expect(summary.unverifiable).toEqual([{user: userId, reason: 'pro_without_stripe_customer'}])
       expect(Sentry.captureMessage).toHaveBeenCalledWith(expect.stringContaining('pro_without_stripe_customer'), 'warning')
+    })
+  })
+
+  // The Netlify project that isn't production deploys the same scheduled
+  // function with the same credentials (bldrs-ai/ops#36); `off` stops it
+  // from sweeping at all. Only the exact value: anything else still sweeps.
+  describe('RECONCILE_MODE=off', () => {
+    it('skips the sweep outside the Sentry wrapper: no Auth0 or Stripe call, nothing to Sentry, one INFO line', async () => {
+      process.env.RECONCILE_MODE = 'off'
+      mockWorld({proUsers: [{user_id: 'auth0|nolink', app_metadata: {subscriptionStatus: 'sharePro'}}]})
+
+      const res = await handler({})
+
+      expect(res.statusCode).toBe(200)
+      expect(JSON.parse(res.body)).toEqual({mode: 'off'})
+      expect(axios.post).not.toHaveBeenCalled()
+      expect(axios.get).not.toHaveBeenCalled()
+      expect(mockStripeClient.subscriptions.list).not.toHaveBeenCalled()
+      expect(mockSentryWrapped).not.toHaveBeenCalled()
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      // eslint-disable-next-line no-console -- reads the spy
+      expect(console.log).toHaveBeenCalledWith('reconcile-subscriptions: RECONCILE_MODE=off, not sweeping')
+      expect(console.warn).not.toHaveBeenCalled()
+      expect(console.error).not.toHaveBeenCalled()
+    })
+
+    it('skips before the configuration check, so a project without the secrets stays quiet', async () => {
+      process.env = {...savedEnv, RECONCILE_MODE: 'off'}
+
+      const res = await handler({})
+
+      expect(res.statusCode).toBe(200)
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+    })
+
+    it.each(['OFF', 'disabled', ''])('still sweeps (in report mode) for RECONCILE_MODE=%j', async (mode) => {
+      process.env.RECONCILE_MODE = mode
+      mockWorld({proUsers: [proUser(1)], subsByCustomer: {cus_1: [proSub('cus_1')]}, pricePages: [[proSub('cus_1')]]})
+
+      const {summary} = await sweep()
+
+      expect(summary.mode).toBe('report')
+      expect(summary.scanned).toEqual({proUsers: 1, entitledCustomers: 1})
+      expect(mockSentryWrapped).toHaveBeenCalledTimes(1)
     })
   })
 
