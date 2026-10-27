@@ -111,7 +111,7 @@ are metered for signed-in free users to create an upgrade moment; local
 files, public or sample content, Drive files shared "Anyone with the link",
 and anything opened while signed out are never counted (Share#1966; the `meterLocalFiles` flag can put local files
 back in the meter, see quotas.md §"Metering local files again").
-**The full design — tiers and limits, the 30-day rolling window, the
+**The full design — tiers and limits, the rolling 7-day window, the
 server-authoritative `record-load` gate, GitHub public/private detection, the
 OPFS local fallback, and the `quotas` feature flag — lives in
 [design/new/quotas.md](../../../design/new/quotas.md).** This section covers
@@ -171,4 +171,4 @@ capacity and `record()` is a no-op, so every load site above is inert.
 | `QuotaLimitDialog.jsx` | Over-limit value-prop modal |
 | `src/hooks/useQuota.js` | Hook over the lib + `record-load` |
 | `src/quota/quota.js` | Core lib — see [design/new/quotas.md](../../../design/new/quotas.md) |
-| `src/quota/limits.js` | Tiers, limits, window and the always-private route rule, shared with `record-load` and the marketing pricing plans |
+| `src/quota/limits.js` | Tiers, limits, window and which routes `record-load` counts by kind (`isCountedByRouteKind`), shared with `record-load` and the marketing pricing plans |

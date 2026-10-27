@@ -1,9 +1,10 @@
 # Usage quotas
 
-Server-enforced metering of *private* model loads — tier-aware, with a 30-day
-rolling window, GitHub public/private detection and Drive visibility. Nudges
-free-tier users toward upgrade without ever blocking public or sample content,
-and never meters a signed-out user. Enforcement is the `quotas` feature flag, on in production since
+Server-enforced metering of *private* model loads — tier-aware, with a 7-day
+rolling window (the same one free GLB exports use), GitHub public/private
+detection and Drive visibility. Nudges free-tier users toward upgrade without
+ever blocking public or sample content, and never meters a signed-out user.
+Enforcement is the `quotas` feature flag, on in production since
 Share#1970.
 
 This is the design of record for the feature. The Open-dialog UI wiring is in
@@ -18,7 +19,8 @@ This is the design of record for the feature. The Open-dialog UI wiring is in
   flag on). When off, `useQuota` reports unlimited capacity and `record()` is
   a no-op, so nothing is counted, blocked, or badged.
 - **What turning it on changes in production:** signed-in free users get 2
-  private models (Drive, private GitHub) per rolling 30 days and see
+  private models (Drive, private GitHub) per rolling 7 days (30 until
+  2026-10-26, §"Rolling window") and see
   `QuotaLimitDialog` on the 3rd opened from the Open dialog (a pasted link
   to a 3rd still opens, and is counted in GA: §"Direct links: soft gate");
   signed-out users are never metered; local files, public GitHub and Drive
@@ -60,7 +62,7 @@ Enforcement ships dark behind the `quotas` flag.
 | Tier | Limit | Window | Determined by |
 |---|---|---|---|
 | — (signed out) | not metered | — | `getTier` returns `null` |
-| Free (signed in) | 2 | 30-day rolling | `subscriptionStatus` not a Pro status |
+| Free (signed in) | 2 | 7-day rolling (was 30 until 2026-10-26) | `subscriptionStatus` not a Pro status |
 | Paid (`sharePro`, `shareProPendingReauth`) | Unlimited | — | `isProSubscriptionStatus(subscriptionStatus)` |
 
 The numbers live in one place, `src/quota/limits.js` (`LIMITS`,
@@ -119,11 +121,15 @@ Covered by `useSignedOutDriveCleanup.test.js`, CadView.test.jsx's "Drive
 loads and sign-in", and `signOutForgetsDrive.spec.ts` (desktop and mobile:
 connect Drive, Log out, the token and connection are gone).
 
-The same rolling-window shape meters one more thing: **free GLB exports**, 2
+The same rolling window meters one more thing: **free GLB exports**, 2
 per rolling 7 days for a signed-in free user, counted on the
 `app_metadata.exports` ledger by the `pro-module` function rather than here,
 and live with the `export` flag rather than `quotas`
-([glb-export-premium.md](glb-export-premium.md) §4.8).
+([glb-export-premium.md](glb-export-premium.md) §4.8). It is the same
+constant, not a second 7: `FREE_EXPORT_WINDOW_DAYS` in
+`src/export/freeExports.js` is `ROLLING_WINDOW_DAYS` re-exported, so a free
+account's private models and exports are always on the same timing
+(§"Rolling window").
 
 ## What counts
 
@@ -224,7 +230,7 @@ together so local files aren't left half-metered:
   empty ledger.
 
 Ledgers may still hold `/v/new/` or `/v/local-only/` rows from before. They
-age out of the 30-day window.
+age out of the rolling window.
 
 ### Metering local files again
 
@@ -338,10 +344,10 @@ free user at the limit, loads with no `record-load` call and no event).
 - **Auth:** Bearer token (Auth0), mirroring `unlink-identity.js`.
 - **Store:** `app_metadata.usageQuota` via the Auth0 Management API (management
   token cached module-scope across warm invocations).
-- **Each call:** prune loads older than the 30-day window → classify privacy →
-  if the path counts and a free user is at limit, deny. GitHub privacy is
-  its own lookup; a Drive key counts as sent, since only the client can see
-  Drive sharing (§"Drive visibility", server trust).
+- **Each call:** prune loads older than the rolling window (7 days) → classify
+  privacy → if the path counts and a free user is at limit, deny. GitHub
+  privacy is its own lookup; a Drive key counts as sent, since only the client
+  can see Drive sharing (§"Drive visibility", server trust).
 - **Returns** `{allowed, used, limit, tier, alreadyCounted}`; `limit` is `null`
   for paid (unlimited). HTTP `403` means over quota.
 
@@ -399,16 +405,46 @@ fallback. It is *not* the authority.
 ```
 
 > **No `resetDate`.** Earlier sketches (#1472) used a fixed monthly reset date;
-> this design replaced it with the 30-day rolling window. `loadQuota` silently
+> this design replaced it with a rolling window (30 days, then 7). `loadQuota` silently
 > drops a legacy `resetDate` field if present, so older clients upgrade cleanly.
 
-## 30-day rolling window
+## Rolling window
+
+*Was "30-day rolling window" until 2026-10-26.*
 
 `pruneLoads(loads, now)` drops loads whose `loadedAt` is older than
-`ROLLING_WINDOW_DAYS` (30). Pruning runs on
+`ROLLING_WINDOW_DAYS` (7); it is a thin wrapper over
+`limits.js#loadsInsideRollingWindow`, the one implementation the client, the
+MSW `record-load` mock and `record-load` itself all use. Pruning runs on
 both the client (`useQuota`) and the server (before counting) so the two agree.
-A free user who opened 2 private models gets a slot back exactly 30 days after
-each load, rather than all at once on a calendar reset.
+A free user who opened 2 private models gets a slot back exactly 7 days after
+each load, rather than all at once on a calendar reset. The edge is exclusive:
+a row counts while `now < loadedAt + window`, so a load exactly 7 days old has
+rolled off. That is the comparison free exports (`freeExportAllowance`) and
+engagement tracking use too, and the one that makes "the slot frees at
+`loadedAt + window`" true at that instant. Quotas used the inclusive edge
+until Share#1974 unified them. It is implemented once,
+`limits.js#loadsInsideRollingWindow`, which `quota.js#pruneLoads` (and through
+it the MSW mock) and `record-load` both call, so the client and server can't
+drift apart on it. `useQuota#check()` re-prunes at call time, so an open tab
+stops counting a slot the moment it rolls off rather than at the next
+`record()` or remount.
+
+**One window for private models and exports.** The owner's decision
+(2026-10-26): "month is a long time … weekly will help keep us more
+top-of-mind, and private shares and exports should be on the same timing to
+keep it simple." So the window went from 30 days to 7, and
+`FREE_EXPORT_WINDOW_DAYS` became `ROLLING_WINDOW_DAYS` rather than a second
+literal 7. The pricing page reads "Open and share 2 private models a week"
+beside "2 GLB exports a week" (§"Pricing copy").
+
+**Existing ledgers at the switch.** Nothing is migrated: the ledgers store
+`loadedAt`, not an expiry, so the new window applies to old rows on the next
+check. A row 8–30 days old that counted under the 30-day window is pruned the
+next time `record-load` (server) or `useQuota` (OPFS mirror) looks, so some
+free users get capacity back immediately at rollout — at most the full 2 —
+and nobody loses any. The server writes the pruned list back only when it
+records a new load; until then the old rows sit in `app_metadata` uncounted.
 
 ## UI surfaces
 
@@ -430,8 +466,8 @@ The marketing pricing page is a static Next.js build, and its quota copy can't
 drift from what is enforced, by construction. `PLANS`
 (`marketing/src/lib/pricingPlans.mjs`) is the only place that copy lives, and it
 **builds** the Free account allowances from the enforced constants:
-`FREE_PRIVATE_MODEL_LIMIT` / `ROLLING_WINDOW_DAYS` from `limits.js` ("2 private
-models a month") and `FREE_EXPORT_LIMIT` / `FREE_EXPORT_WINDOW_DAYS` from
+`FREE_PRIVATE_MODEL_LIMIT` / `ROLLING_WINDOW_DAYS` from `limits.js` ("Open and
+share 2 private models a week") and `FREE_EXPORT_LIMIT` / `FREE_EXPORT_WINDOW_DAYS` from
 `src/export/freeExports.js` ("2 GLB exports a week"). `PricingTiers.tsx`
 renders `PLANS` and states no limit of its own; the monthly/yearly toggle only
 changes the price. (`.mjs` because `marketing/package.json` has no `"type":

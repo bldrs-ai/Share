@@ -96,12 +96,12 @@ export function directLinkQuotaKey(modelPath, appPrefix) {
  *
  * Dedup across opens is record()'s own, by key: record-load's ledger for a
  * signed-in user (a key it already holds comes back `alreadyCounted`, with
- * no write), the OPFS ledger for an anonymous one. That is what makes "open
- * from the dialog, then load" one count. The hook deliberately does NOT
- * short-circuit on the local mirror (`check(key).alreadyCounted`): OPFS is
- * per browser, not per user, so a row left by an anonymous open, an offline
- * fallback or another account would silence this user's server call, and
- * with it the meter and the event (codex review on Share#1971).
+ * no write). That is what makes "open from the dialog, then load" one count.
+ * The hook deliberately does NOT short-circuit on the local mirror
+ * (`check(key).alreadyCounted`): OPFS is per browser, not per user, so a row
+ * left by an offline fallback or another account would silence this user's
+ * server call, and with it the meter and the event (codex review on
+ * Share#1971).
  *
  * @param {string} appPrefix e.g. '/share'
  * @return {Function} (modelPath, driveDownload?) => void, fire-and-forget

@@ -178,7 +178,8 @@ describe('quota/useDirectLinkQuota', () => {
 
   it('waits for Auth0 to settle before recording', async () => {
     // While Auth0 is loading, isAuthenticated is still false and record()
-    // would take the anonymous OPFS-only path, off the server's ledger.
+    // would treat the user as signed out (never metered), skipping the
+    // server's ledger.
     mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, isAuthenticated: false, isLoading: true})
     const {record} = mockQuota()
     const hook = await meter(driveRoute())

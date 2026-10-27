@@ -23,6 +23,9 @@ import {PLANS, buildPlans} from '../../marketing/src/lib/pricingPlans.mjs'
 // change to how PLANS words them can't make this agree with itself.
 const WINDOW_WORDS = {7: 'week', 30: 'month'}
 const freePrivateModelsClaim = (n, days) => `${n} private models a ${WINDOW_WORDS[days]}`
+// The Free account's private-model feature line, whole: what the owner asked
+// the page to read (2026-10-26).
+const freePrivateModelsLine = (n, days) => `Open and share ${freePrivateModelsClaim(n, days)}`
 const freeExportsClaim = (n, days) => `${n} GLB exports a ${WINDOW_WORDS[days]}`
 
 // Local files are free and unmetered: any limit wording beside local-file
@@ -119,10 +122,20 @@ function editPlans(from, to) {
 
 
 describe('marketing pricing plans', () => {
-  it('words the enforced allowances: 2 private models a month, 2 GLB exports a week', () => {
-    // The owner's numbers (#1970), so a change to a constant is a decision
-    // someone sees here, not just copy that silently follows it.
-    expect(ENFORCED).toEqual({models: '2 private models a month', exports: '2 GLB exports a week'})
+  it('words the enforced allowances: 2 private models a week, 2 GLB exports a week', () => {
+    // The owner's numbers (#1970; weekly private models 2026-10-26), so a
+    // change to a constant is a decision someone sees here, not just copy
+    // that silently follows it.
+    expect(ENFORCED).toEqual({models: '2 private models a week', exports: '2 GLB exports a week'})
+  })
+
+  it('reads "Open and share 2 private models a week" next to "2 GLB exports a week"', () => {
+    const features = PLANS.find((plan) => plan.name === 'Free account').sections.flatMap((s) => s.features)
+    const models = features.indexOf(freePrivateModelsLine(FREE_PRIVATE_MODEL_LIMIT, ROLLING_WINDOW_DAYS))
+    expect(freePrivateModelsLine(FREE_PRIVATE_MODEL_LIMIT, ROLLING_WINDOW_DAYS))
+      .toBe('Open and share 2 private models a week')
+    expect(models).toBeGreaterThanOrEqual(0)
+    expect(features[models + 1]).toBe('2 GLB exports a week')
   })
 
   it('states the enforced allowances, Pro unlimited, and no limit on local files', () => {
@@ -132,7 +145,10 @@ describe('marketing pricing plans', () => {
 
   // Mutation proofs (STYLE.md §"Assertions must be able to fail").
   it('follows the constants: other allowances produce their own claims', () => {
-    const [models, modelDays, exports, exportDays] = [5, FREE_EXPORT_WINDOW_DAYS, 9, ROLLING_WINDOW_DAYS]
+    // Both windows are 7 now and one constant, so the other window is the
+    // only other one the page can word: 30, for both.
+    const MONTH_DAYS = 30
+    const [models, modelDays, exports, exportDays] = [5, MONTH_DAYS, 9, MONTH_DAYS]
     const plans = buildPlans({
       freePrivateModels: models, privateModelWindowDays: modelDays, freeExports: exports, exportWindowDays: exportDays,
     })
@@ -143,11 +159,14 @@ describe('marketing pricing plans', () => {
   })
 
   it('fails a hard-coded wrong number in PLANS', () => {
-    const problems = planProblems(editPlans('2 private models a month', '3 private models a month'), ENFORCED)
+    const problems = planProblems(editPlans('2 private models a week', '3 private models a week'), ENFORCED)
     expect(problems).toEqual(expect.arrayContaining([
-      'Free account doesn\'t state "2 private models a month"',
-      expect.stringMatching(/a count the viewer doesn't enforce: "Open and share 3 private models a month"/),
+      'Free account doesn\'t state "2 private models a week"',
+      expect.stringMatching(/a count the viewer doesn't enforce: "Open and share 3 private models a week"/),
     ]))
+    // ...and the old monthly wording, now a window the viewer doesn't enforce.
+    expect(planProblems(editPlans('2 private models a week', '2 private models a month'), ENFORCED).join('\n'))
+      .toMatch(/a count the viewer doesn't enforce: "Open and share 2 private models a month"/)
     expect(planProblems(editPlans('2 GLB exports a week', '4 GLB exports a week'), ENFORCED).join('\n'))
       .toMatch(/doesn't state "2 GLB exports a week"/)
   })

@@ -16,7 +16,7 @@ import {
 } from '../export/freeExports'
 import {FREE_PRIVATE_MODEL_LIMIT, isCountedByRouteKind} from '../quota/limits'
 import {isProSubscriptionStatus} from '../quota/proStatus'
-import {isLocalFileMeteringEnabled} from '../quota/quota'
+import {isLocalFileMeteringEnabled, pruneLoads} from '../quota/quota'
 import apiHandlersGithub from './api-handlers-github'
 import apiHandlersOpenrouter from './api-handlers-openrouter'
 
@@ -263,7 +263,12 @@ function netlifyHandlers() {
       if (typeof window !== 'undefined') {
         window.__mockQuotaLoads = window.__mockQuotaLoads || []
       }
-      const loads = (typeof window !== 'undefined' && window.__mockQuotaLoads) || []
+      // Pruned to the rolling window before counting, as the real function
+      // does (limits.js#loadsInsideRollingWindow, which pruneLoads wraps): a
+      // spec can seed a row older than ROLLING_WINDOW_DAYS and watch it stop
+      // counting. The ledger is written back pruned only when a new load is
+      // recorded, also as the real function does.
+      const loads = pruneLoads((typeof window !== 'undefined' && window.__mockQuotaLoads) || [])
       const limit = tier === 'paid' ? null : FREE_LIMIT_MOCK
 
       if (tier === 'paid') {

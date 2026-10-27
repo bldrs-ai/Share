@@ -1,6 +1,6 @@
 import {isFeatureEnabled} from '../FeatureFlags'
 import {viewRouteKind} from '../routes/localOnly'
-import {DRIVE_ROUTE_KIND, LIMITS, ROLLING_WINDOW_MS, TIERS, isMeteredLocalRouteKind} from './limits'
+import {DRIVE_ROUTE_KIND, LIMITS, TIERS, isMeteredLocalRouteKind, loadsInsideRollingWindow} from './limits'
 import {isProSubscriptionStatus} from './proStatus'
 
 
@@ -152,15 +152,16 @@ export function isQuotablePath(key, meterLocalFiles = isLocalFileMeteringEnabled
 
 
 /**
- * Drop loads older than the rolling window.
+ * Drop loads older than the rolling window, by the exclusive-edge rule in
+ * limits.js#loadsInsideRollingWindow, which `record-load` and the MSW mock
+ * share.
  *
  * @param {Array<{key:string,loadedAt:string}>} loads
  * @param {number} [now] millis since epoch — injectable for tests
  * @return {Array<{key:string,loadedAt:string}>}
  */
 export function pruneLoads(loads, now = Date.now()) {
-  const cutoff = now - ROLLING_WINDOW_MS
-  return loads.filter((l) => Date.parse(l.loadedAt) >= cutoff)
+  return loadsInsideRollingWindow(loads, now)
 }
 
 
