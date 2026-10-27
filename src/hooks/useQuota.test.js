@@ -279,16 +279,16 @@ describe('useQuota — Drive visibility (signed in)', () => {
   })
 
   /**
-   * One fetch for both callers: record-load goes to the fake server, the Drive
-   * metadata request the visibility check makes with the API key goes to
-   * `metadata`.
+   * One fetch for both callers: record-load goes to the fake server, the
+   * anonymous Drive download the visibility check tries with the API key goes
+   * to `metadata`.
    *
    * @param {{fetch: Function}} server fakeRecordLoad's
-   * @param {number} metadataStatus HTTP status the API-key metadata check gets
+   * @param {number} metadataStatus HTTP status the API-key download probe gets
    * @return {Function} the metadata request's mock
    */
   function routeFetch(server, metadataStatus) {
-    const metadata = jest.fn(() => Promise.resolve({ok: metadataStatus === HTTP_OK, status: metadataStatus}))
+    const metadata = jest.fn(() => Promise.resolve({status: metadataStatus}))
     global.fetch = jest.fn((url, init) => String(url).startsWith('https://www.googleapis.com/drive/v3/files/') ?
       metadata(url) :
       server.fetch(url, init))

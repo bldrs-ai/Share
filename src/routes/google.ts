@@ -72,32 +72,17 @@ export function processGoogleFileId(originalUrl: URL, fileId: string): GoogleRes
 
 
 /**
- * Gets the download URL for a Google Drive file.
+ * Gets the download URL for a Google Drive file: `alt=media` authorized by
+ * the app's API key alone, which Drive serves only for a file anyone with the
+ * link can download. Also what quota/driveVisibility.js probes.
  *
  * @param fileId - The Google Drive file ID.
  * @return The download URL.
  */
-function getGoogleDownloadUrl(fileId: string): URL {
+export function getGoogleDownloadUrl(fileId: string): URL {
   assertDefined(fileId)
   const apiKey = process.env.GOOGLE_API_KEY
   return new URL(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${apiKey}`)
-}
-
-
-/**
- * Gets the metadata URL for a Google Drive file, authorized by the app's API
- * key alone (no user token), asking only for the id so the response is a few
- * bytes. It answers 200 for the same files `getGoogleDownloadUrl` can fetch:
- * those shared "Anyone with the link" (or published). Used to tell a
- * link-shared file without downloading it (quota/driveVisibility.js).
- *
- * @param fileId - The Google Drive file ID.
- * @return The metadata URL.
- */
-export function getGoogleMetadataUrl(fileId: string): URL {
-  assertDefined(fileId)
-  const apiKey = process.env.GOOGLE_API_KEY
-  return new URL(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id&key=${apiKey}`)
 }
 
 

@@ -1,5 +1,5 @@
 import {getProvider} from '../connections/registry'
-import {getGoogleMetadataUrl} from '../routes/google'
+import {getGoogleDownloadUrl} from '../routes/google'
 
 
 /**
@@ -32,9 +32,10 @@ export const DRIVE_VISIBILITY = Object.freeze({
  *   is not a verdict. Expect it for some files: Drive refuses
  *   `permissions.list` to a user who may only read the file, so a
  *   link-shared file opened through a connection by a non-owner fails the
- *   lookup. One more check settles it: fetch the file's metadata with the
- *   app's API key and no user token (`isLinkShared`). It succeeds only for a
- *   file anyone with the link can open, which is public. If that fails too,
+ *   lookup. One more check settles it: request the first byte of the file's
+ *   media with the app's API key and no user token (`isLinkShared`). That
+ *   succeeds only for a file anyone with the link can download, which is
+ *   public. If that fails too,
  *   the file counts as PRIVATE, as before. A lookup that ANSWERED
  *   (`'public'`, `'private'`, `'org'`) is never second-guessed and costs no
  *   API-key call. Failures are not reported to Sentry: they are expected
@@ -73,17 +74,21 @@ export async function driveFileQuotaVisibility(connection, fileId) {
 // A hung request must not hold the open or the load's meter call; a timeout
 // reads as "not link-shared", i.e. today's private count.
 const LINK_SHARED_CHECK_TIMEOUT_MS = 5000
+const HTTP_OK = 200
+const HTTP_PARTIAL_CONTENT = 206
 
 
 /**
- * Whether anyone with the link can read the file: its metadata is readable
- * with the app's API key alone. Same key and same access rule as CadView's
- * no-connection download, without moving the file. The decision stays on the
- * client, which is all that is sent to record-load (design/new/quotas.md
- * §"Drive visibility", "Server trust"). Never rejects.
+ * Whether anyone with the link can download the file: the anonymous media
+ * request CadView's no-connection path makes (same URL, same API key) is
+ * answered for its first byte. Metadata is not enough: a link-shared file
+ * with downloads disabled for viewers still serves its metadata to the key,
+ * but not its bytes, so the user's own token is what opens it. The decision
+ * stays on the client, which is all that is sent to record-load
+ * (design/new/quotas.md §"Drive visibility", "Server trust"). Never rejects.
  *
  * @param {string} fileId Drive file id
- * @return {Promise<boolean>} true only on a successful response
+ * @return {Promise<boolean>} true only on 200 or 206
  */
 async function isLinkShared(fileId) {
   // No key built in (a local build without GOOGLE_API_KEY): the URL would
@@ -94,11 +99,18 @@ async function isLinkShared(fileId) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), LINK_SHARED_CHECK_TIMEOUT_MS)
   try {
-    const response = await fetch(getGoogleMetadataUrl(fileId).toString(), {signal: controller.signal})
-    return response.ok
+    // A byte range keeps it cheap (206). Drive may ignore it and answer 200;
+    // the abort in `finally` then drops the body unread. `bytes=0-0` is a
+    // CORS-safelisted Range, so no preflight.
+    const response = await fetch(getGoogleDownloadUrl(fileId).toString(), {
+      headers: {Range: 'bytes=0-0'},
+      signal: controller.signal,
+    })
+    return response.status === HTTP_OK || response.status === HTTP_PARTIAL_CONTENT
   } catch {
     return false
   } finally {
     clearTimeout(timer)
+    controller.abort()
   }
 }

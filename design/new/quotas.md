@@ -172,8 +172,8 @@ which never rejects:
 | No `google-drive` connection: `CadView#loadModel` downloads with the app's API key (`routeResult.downloadUrl`) | public: that download only succeeds for a file shared "Anyone with the link" (or published) | No |
 | Through a connection, lookup says `'public'` (an `anyone` permission) | public | No |
 | Through a connection, lookup says `'private'` or `'org'` (domain-only) | private (the lookup answered, so no second check) | **Yes** |
-| Through a connection, lookup says `null` (a domain grant whose domain can't be told), fails, or no provider answers, **and** the API-key metadata check succeeds | public: Drive served the file's metadata to the app's API key alone, which only a link-shared file allows | No |
-| Same, **and** the API-key check fails (or no key is built in) | private: the behaviour before Drive visibility, when every Drive file counted | **Yes** |
+| Through a connection, lookup says `null` (a domain grant whose domain can't be told), fails, or no provider answers, **and** the API-key download probe succeeds (200 or 206) | public: Drive served the file's first byte to the app's API key alone, which only a file anyone with the link can download allows | No |
+| Same, **and** the probe fails (any other status, a network error, a timeout, or no key built in) | private: the behaviour before Drive visibility, when every Drive file counted | **Yes** |
 | Drive key with no resolver (a caller that can't tell) | private | **Yes** |
 
 The lookup is the connection provider's `getVisibility`
@@ -199,19 +199,23 @@ link-shared file opened *through a connection* by someone who isn't its owner
 or an editor fails the lookup. Counting that as private would charge the same
 file that a pasted link opened without a connection does not. So when the
 lookup fails, returns `null`, or no provider answers,
-`driveFileQuotaVisibility` makes one request for the file's metadata with the
-app's API key and no user token
-(`routes/google.ts#getGoogleMetadataUrl`: `files/<id>?fields=id&key=...`, a
-few bytes, never the file). It uses the key and the access rule of the
-no-connection download in `CadView#loadModel`: Drive answers it only for a
-file shared "Anyone with the link" (or published). A success means public and
-the file is not counted; any failure (a non-2xx, a network error, a 5 s
-timeout, or no `GOOGLE_API_KEY` built in) keeps the file private and counted.
-A lookup that *answered* (`'public'`, `'private'`, `'org'`) never triggers the
-check, so it costs nothing for the common cases. Tests:
-`quota/driveVisibility.test.js`. Residual: a link-shared file that needs a
-Drive resource key fails the API-key check, as it already fails the
-no-connection download, and counts.
+`driveFileQuotaVisibility` makes one request for the first byte of the file's
+media with the app's API key and no user token: the very URL of the
+no-connection download in `CadView#loadModel` (`routes/google.ts#getGoogleDownloadUrl`,
+`alt=media`) with `Range: bytes=0-0` (a CORS-safelisted range, so no preflight).
+Drive answers it only for a file anyone with the link can download. 200 or 206
+means public and the file is not counted; anything else (a 403/404, a network
+error, a 5 s timeout, or no `GOOGLE_API_KEY` built in) keeps the file private
+and counted. If Drive ignores the range and answers 200, the body is aborted
+unread. The probe is the download, not the file's metadata, on purpose: a
+link-shared file whose owner disabled downloads for viewers still serves its
+metadata to the key, but not its bytes, so only the user's own token opens
+it and it must count (Codex on #1979). A lookup that *answered* (`'public'`,
+`'private'`, `'org'`) never triggers the check, so it costs nothing for the
+common cases. Tests: `quota/driveVisibility.test.js` (including the
+downloads-disabled case). Residual: a link-shared file that needs a Drive
+resource key fails the probe, as it already fails the no-connection download,
+and counts.
 
 **Server trust (a known gap).** `record-load` decides GitHub privacy itself
 (unauthenticated `api.github.com/repos/{owner}/{repo}`, §"GitHub privacy
