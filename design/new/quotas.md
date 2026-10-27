@@ -660,7 +660,8 @@ the database sense" (owner, 2026-10-26).
   event.
 
 Consent and org users work exactly as for the legacy events.
-`trackModelAction` (`src/privacy/analytics.js`) sends through
+`trackModelAction` (`src/privacy/analytics.js`, always called through
+`trackModelActionWhenAuthSettled`) sends through
 `gtagEventWithCid` → `gtagEvent`, which re-reads the consent cookie on every
 call. Team members are not filtered in the client; the dashboard drops them
 at query time by `open_cid` (`GA_CONFIG.orgUsers`). `model_view` fires inside
@@ -675,7 +676,7 @@ the same handler.
 
 | New event | `gate` | Shadows | Fires | `source` |
 |---|---|---|---|---|
-| `model_view` | `none` | `real_model_open` | `CadView`, every real open; sent once auth settles (`Containers/modelViewTracking.js`) | from the route |
+| `model_view` | `none` | `real_model_open` | `CadView`, every real open; sent once auth settles | from the route |
 | `model_share` | `none` | `share` | `ShareDialog`, when it opens | from the route (always `hosted`: local files get the gate instead) |
 | `model_share` | `upsell` | `share_gated` | `ShareControl`'s local-file gate, when its help opens | `local` |
 | `model_share` | `blocked` | `quota_limit_reached` | `QuotaLimitDialog`, once per showing | `hosted` |
@@ -688,14 +689,26 @@ the same handler.
 no `model_export`: no gate refused anything, the export just did not happen.
 
 Three timing rules keep the cells honest (codex review on Share#1976):
-- **`model_view` waits for auth to settle** (`isAuthResolved`, capped at
-  `AUTH_SETTLE_RETRY_MS`) and reads the tier then. A local, Drive, `/v/p/` or
-  URL model loads without waiting for auth, so its load can finish while
-  Auth0 is still restoring a signed-in session. The auth-change reload is
-  deduped, so the tier would otherwise be the pre-auth `anon`.
-- **`model_export` snapshots its source when the export starts.** The event
-  goes out after the module load and conversion, and navigation isn't locked
-  meanwhile.
+- **Every normalized event waits for auth to settle** (`isAuthResolved`,
+  capped at `AUTH_SETTLE_RETRY_MS`) and reads the tier then. All of them go
+  through `trackModelActionWhenAuthSettled`
+  (`src/privacy/modelActionTracking.js`); a static test keeps
+  `trackModelAction` from being called anywhere else. Share loads models and
+  opens dialogs without waiting for Auth0 to restore a returning user's
+  session: a local, Drive, `/v/p/` or URL model can finish loading, the
+  Share dialog can open, an export gate's help can open, all before the
+  session lands. None of those handlers re-runs when it does (the
+  auth-change reload is deduped; ShareDialog keeps auth out of its effect's
+  deps so a sign-in doesn't count a second share), so the tier would
+  otherwise be the pre-auth `anon`. `tier` is who the user is; `gate` is what
+  they saw. A caller with an explicit tier (QuotaLimitDialog's prop,
+  record-load's answer, `free_limit` below) sends at once: nothing there is
+  read from auth.
+- **`source` is snapshotted at the call, not at emit.** That matters most
+  for `model_export`, whose event goes out after the module load and
+  conversion while navigation isn't locked, but every caller passes the
+  route it read when the action happened, so the wait for auth can't
+  relabel it either.
 - **A free-allowance refusal is `free`**, even when the local claim still
   says Pro. That is the stale-JWT case on a canceled account, which
   `useExport` already refreshes.

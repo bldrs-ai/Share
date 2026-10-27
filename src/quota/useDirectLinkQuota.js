@@ -7,8 +7,8 @@ import {
   MODEL_GATES,
   MODEL_SOURCES,
   gtagEventWithCid,
-  trackModelAction,
 } from '../privacy/analytics'
+import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
 import {navigateBaseOnModelPath} from '../utils/location'
 
 
@@ -142,7 +142,8 @@ export default function useDirectLinkQuota(appPrefix) {
       // tier events"): a private open, the tier model's "share", let through
       // over the limit. The tier is the one record-load acted on. The view
       // itself is model_view {gate: 'none'} from CadView.
-      trackModelAction(MODEL_ACTIONS.SHARE, {
+      // An explicit tier, so it sends at once (privacy/modelActionTracking.js).
+      trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
         gate: MODEL_GATES.SOFT,
         source: MODEL_SOURCES.HOSTED,
         routeKind,

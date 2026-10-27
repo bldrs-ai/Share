@@ -12,7 +12,8 @@ import {HASH_PREFIX_DISPLAY, writeModelDisplayHash} from '../Residency/displayHa
 import {writeVisibilityHash} from '../Residency/visibilityHash'
 import {resolvedAppearance} from '../../viewer/display/DisplayController'
 import {removeHashParams} from '../../utils/location'
-import {MODEL_ACTIONS, MODEL_GATES, gtagEvent, modelRouteSource, trackModelAction} from '../../privacy/analytics'
+import {MODEL_ACTIONS, MODEL_GATES, gtagEvent, modelRouteSource} from '../../privacy/analytics'
+import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
 import Dialog from '../Dialog'
 import Toggle from '../Toggle'
 import {
@@ -119,12 +120,14 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       // normalized tier events"): the dialog opening, link and QR code shown,
       // is the completed share, the ungated counterpart of share_gated on a
       // local file. Not the Copy Link click: a QR share never copies.
-      const {modelPath, appMetadata} = useStore.getState()
-      trackModelAction(MODEL_ACTIONS.SHARE, {
+      // The route is read now; the tier once auth settles, through the ref:
+      // a returning user can click Share while Auth0 is still restoring the
+      // session, and this effect won't re-run when it lands (codex review
+      // on Share#1976, round 2; privacy/modelActionTracking.js).
+      trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
         gate: MODEL_GATES.NONE,
-        ...modelRouteSource(modelPath),
-        isAuthenticated: isAuthenticatedRef.current,
-        appMetadata,
+        ...modelRouteSource(useStore.getState().modelPath),
+        getIsAuthenticated: () => isAuthenticatedRef.current,
       })
     }
   }, [isDialogDisplayed, model])

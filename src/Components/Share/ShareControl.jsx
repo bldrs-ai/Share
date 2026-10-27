@@ -1,4 +1,4 @@
-import React, {ReactElement, useState} from 'react'
+import React, {ReactElement, useRef, useState} from 'react'
 import {Link, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {useStartGateLogin} from '../../Auth0/gateLogin'
@@ -10,8 +10,8 @@ import {
   MODEL_ROUTE_KINDS,
   MODEL_SOURCES,
   gtagEventWithCid,
-  trackModelAction,
 } from '../../privacy/analytics'
+import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
 import {ControlButtonWithHashState, TooltipIconButton} from '../Buttons'
 import GatedAction from '../GatedAction'
 import {HASH_PREFIX_SHARE} from './hashState'
@@ -53,6 +53,10 @@ export default function ShareControl() {
   const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
   const isLocalUpload = useStore((state) => state.modelPath?.isUploadedFile === true)
   const {isAuthenticated} = useAuth0()
+  // The latest auth state, for model_share's tier, which is read once auth
+  // settles rather than at the click (privacy/modelActionTracking.js).
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  isAuthenticatedRef.current = isAuthenticated
   const startGateLogin = useStartGateLogin()
   // Per opening of the help: the interest line becomes a thank-you once
   // clicked, so one opening counts at most one `share_interest`.
@@ -97,12 +101,13 @@ export default function ShareControl() {
           gtagEventWithCid(GATE_EVENTS.SHARE_GATED, {reason: 'local_file', signed_in: isAuthenticated})
           // Its normalized twin: a share the local-file gate turned into an
           // upsell (design/new/quotas.md §"Analytics: normalized tier events").
-          trackModelAction(MODEL_ACTIONS.SHARE, {
+          // Its tier waits for auth to settle: the gate can open while Auth0
+          // is still restoring a signed-in session.
+          trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
             gate: MODEL_GATES.UPSELL,
             source: MODEL_SOURCES.LOCAL,
             routeKind: MODEL_ROUTE_KINDS.LOCAL,
-            isAuthenticated,
-            appMetadata: useStore.getState().appMetadata,
+            getIsAuthenticated: () => isAuthenticatedRef.current,
           })
         }}
       >

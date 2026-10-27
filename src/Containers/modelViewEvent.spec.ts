@@ -94,10 +94,10 @@ describeMobileAndDesktop('model_view GA event', () => {
 /**
  * A signed-in free user's local open is `free`, not `anon`, though a local
  * file loads without waiting for auth. model_view is sent once auth settles
- * (Containers/modelViewTracking.js). The race itself, a load finishing
+ * (privacy/modelActionTracking.js). The race itself, a load finishing
  * before the session restores, doesn't happen here: this build's mock
  * Auth0 restores the session synchronously on the drop's page load. So the
- * race is pinned by modelViewTracking.test.js, and this is the happy path
+ * race is pinned by modelActionTracking.test.js, and this is the happy path
  * end to end.
  */
 describeMobileAndDesktop('model_view GA event, signed in', () => {

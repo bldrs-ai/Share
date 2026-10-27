@@ -1,4 +1,4 @@
-import {useCallback, useState} from 'react'
+import {useCallback, useRef, useState} from 'react'
 import {captureException} from '@sentry/react'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {appMetadataFromToken} from '../Auth0/appMetadata'
@@ -11,8 +11,8 @@ import {
   MODEL_GATES,
   gtagEventWithCid,
   modelRouteSource,
-  trackModelAction,
 } from '../privacy/analytics'
+import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
 import {TIERS, getTier} from '../quota/quota'
 import useStore from '../store/useStore'
 import {compressedExport, gzippedExport} from './artifactSizes'
@@ -80,6 +80,10 @@ export default function useExport() {
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const setFreeExportAllowance = useStore((state) => state.setFreeExportAllowance)
   const {getAccessTokenSilently, isAuthenticated, user} = useAuth0()
+  // The latest auth state, for model_export's tier, which is read once auth
+  // settles rather than when the run's closure was made (reportModelExport).
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  isAuthenticatedRef.current = isAuthenticated
   // In the STORE, not in this hook: `ExportSection` and `ExportsList` each
   // call `useExport`, so per-instance state let one of them start an export
   // while the other's was still running (#1834).
@@ -133,12 +137,16 @@ export default function useExport() {
     // again" of a history row (`source` passed) may be another model, so it
     // sends no source rather than a wrong one.
     const exportSource = source ? {} : modelRouteSource(useStore.getState().modelPath)
-    const reportModelExport = (gate, tier) => trackModelAction(MODEL_ACTIONS.EXPORT, {
+    // The tier, unless the caller fixes it, is read when auth has settled
+    // (privacy/modelActionTracking.js): Auth0 says signed in before
+    // BaseRoutes has written the claims, so an export delivered in that
+    // window would read a Pro user's still-empty claims as free. A fixed
+    // tier (free_limit) sends at once.
+    const reportModelExport = (gate, tier) => trackModelActionWhenAuthSettled(MODEL_ACTIONS.EXPORT, {
       gate,
       ...exportSource,
       tier,
-      isAuthenticated,
-      appMetadata: useStore.getState().appMetadata,
+      getIsAuthenticated: () => isAuthenticatedRef.current,
     })
     const reportFailure = (reason) => {
       gtagEventWithCid(GATE_EVENTS.EXPORT_FAILED, {format: format.id, reason})

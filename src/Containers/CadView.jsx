@@ -10,15 +10,19 @@ import {onHash} from '../Components/Camera/CameraControl'
 import {
   FUNNEL_EVENTS,
   LOCAL_HOUR_PARAM,
+  MODEL_ACTIONS,
+  MODEL_GATES,
   OPEN_CID_PARAM,
   getLocalHour,
   getOpenCid,
   gtagEvent,
   gtagFunnelEvent,
   isRealModelOpen,
+  modelRouteSource,
   startModelEngagement,
 } from '../privacy/analytics'
 import {trackEngagementOnOpen} from '../privacy/engagementTracking'
+import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
 import {getRenderMode} from '../privacy/preferences'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
@@ -98,7 +102,6 @@ import {
   isAuthShapedLoadError,
   waitForAuthSettled,
 } from './authLoadGate'
-import {trackModelViewWhenAuthSettled} from './modelViewTracking'
 import {elementSelection} from './selection'
 import {partsToPath} from './urls'
 import {initViewer} from './viewer'
@@ -259,7 +262,7 @@ export default function CadView({
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
   // The latest auth state, for model_view's tier, which is read after auth
   // settles rather than when the load that sends it began (see the
-  // trackModelViewWhenAuthSettled call in loadModel).
+  // trackModelActionWhenAuthSettled call in loadModel).
   const isAuthenticatedRef = useRef(isAuthenticated)
   isAuthenticatedRef.current = isAuthenticated
   // Soft quota gate for models opened straight from a URL (codex P1 on
@@ -824,8 +827,17 @@ export default function CadView({
       gtagEvent(FUNNEL_EVENTS.REAL_MODEL_OPEN, eventParams)
       // The normalized twin, beside — never instead of — real_model_open,
       // which Ads and the dashboard key on. Sent once auth settles, with the
-      // auth state of then; modelViewTracking.js says why. Not awaited.
-      trackModelViewWhenAuthSettled(routeResult, () => isAuthenticatedRef.current)
+      // auth state of then (privacy/modelActionTracking.js says why: a
+      // non-GitHub load doesn't wait for auth, and the auth-change reload is
+      // deduped). The route is read now, so a later navigation can't
+      // relabel it. Always `gate: 'none'`: a view a soft gate let through
+      // over the limit is still an ungated view; the over-limit fact is
+      // model_share {gate: 'soft'}. Not awaited.
+      trackModelActionWhenAuthSettled(MODEL_ACTIONS.VIEW, {
+        gate: MODEL_GATES.NONE,
+        ...modelRouteSource(routeResult),
+        getIsAuthenticated: () => isAuthenticatedRef.current,
+      })
       // Engaged-use conversions (Share#1960). Same real-open gate as the
       // event above; keyed by model so a theme/view-settings reload of the
       // same model is not a second open. Resolves to the events it sent

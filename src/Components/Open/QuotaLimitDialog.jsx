@@ -9,8 +9,8 @@ import {
   MODEL_GATES,
   MODEL_SOURCES,
   gtagFunnelEvent,
-  trackModelAction,
 } from '../../privacy/analytics'
+import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
 import {LIMITS, QUOTA_FEATURES, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/quota'
 import useStore from '../../store/useStore'
 import {useMock} from '../Profile/ProfileControl'
@@ -67,7 +67,9 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
     // Always hosted: local files are unmetered, so only a Drive or private
     // GitHub open reaches this dialog (with the meterLocalFiles abuse switch
     // on, a local drop could too; the dialog isn't given the key to tell).
-    trackModelAction(MODEL_ACTIONS.SHARE, {
+    // The tier is the gate's own verdict, so this sends at once rather than
+    // waiting for auth (privacy/modelActionTracking.js).
+    trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
       gate: MODEL_GATES.BLOCKED,
       source: MODEL_SOURCES.HOSTED,
       tier: isAnonymous ? TIERS.ANONYMOUS : tier,

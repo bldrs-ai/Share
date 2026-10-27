@@ -435,7 +435,8 @@ export function gtagEventWithCid(eventName, parameters = {}) {
  *
  * These are ADDED beside the legacy events, never instead of them: GA4 has
  * no rename, Ads imports `real_model_open` as its conversion, and the bizdev
- * dashboard queries the old names verbatim. Each call site below fires both.
+ * dashboard queries the old names verbatim. Each call site below fires both,
+ * the new one through modelActionTracking.js#trackModelActionWhenAuthSettled.
  *
  *   model_view    {tier, source, route_kind, gate: 'none', open_cid}
  *                 CadView, beside every real_model_open
@@ -546,6 +547,10 @@ export function modelRouteSource(routeResult) {
  *
  * An unknown action or gate sends nothing: analytics must never throw into
  * a load or a click, and a misspelt cell is worse than a missing one.
+ *
+ * Call sites don't call this directly: they go through
+ * modelActionTracking.js#trackModelActionWhenAuthSettled, which reads the
+ * tier once auth has settled (a static test there enforces it).
  *
  * @param {string} action 'view' | 'share' | 'export' (MODEL_ACTIONS)
  * @param {object} [details]

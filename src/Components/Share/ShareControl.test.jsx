@@ -5,7 +5,7 @@ import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import useStore from '../../store/useStore'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
 import {takeGateLoginSource} from '../../Auth0/gateLogin'
-import {gtagEvent, gtagEventWithCid, trackModelAction} from '../../privacy/analytics'
+import {gtagEvent, gtagEventWithCid, modelActionTier, trackModelAction} from '../../privacy/analytics'
 import ShareControl, {
   MSG_LOCAL_SHARE_BODY,
   MSG_LOCAL_SHARE_TITLE,
@@ -32,8 +32,15 @@ jest.mock('../../privacy/analytics', () => ({
 // `signed_in` on its events). The mocked SDK hook returns undefined until
 // given a value, so every suite starts signed out; cases that need a
 // signed-in user set it themselves.
+//
+// Auth starts SETTLED: the normalized model_share waits for isAuthResolved
+// (privacy/modelActionTracking.js), and only the restore-race case below
+// wants it unsettled.
 beforeEach(() => {
   mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+  act(() => {
+    useStore.setState({isAuthResolved: true, appMetadata: {}})
+  })
 })
 
 
@@ -240,9 +247,9 @@ describe('ShareControl for a local upload (#705)', () => {
     expect(useStore.getState().isShareVisible).toBe(false)
     expect(gtagEventWithCid).toHaveBeenCalledWith('share_gated', {reason: 'local_file', signed_in: false})
     // Its normalized twin: a local share turned into an upsell.
-    expect(trackModelAction).toHaveBeenCalledWith('share', expect.objectContaining({
+    await waitFor(() => expect(trackModelAction).toHaveBeenCalledWith('share', expect.objectContaining({
       gate: 'upsell', source: 'local', routeKind: 'local', isAuthenticated: false,
-    }))
+    })))
   })
 
   // Share#1964: the gate measures intent.
@@ -335,6 +342,49 @@ describe('ShareControl for a local upload (#705)', () => {
       expect(trackModelAction.mock.calls).toEqual([['share', expect.objectContaining({
         gate: 'none', source: 'hosted', routeKind: 'github', isAuthenticated: true,
       })]])
+    } finally {
+      act(() => {
+        useStore.setState({model: null})
+      })
+    }
+  })
+
+  // codex review on Share#1976, round 2: a returning user can click Share
+  // while Auth0 is still restoring the session. The dialog's effect keeps
+  // auth out of its deps (a sign-in mustn't count a second share), so a tier
+  // read at the click was never corrected: a Pro user's share landed as anon.
+  it('counts a share clicked mid-restore under the settled tier, not anon', async () => {
+    mockedUseAuth0.mockReturnValue({...mockedUserLoggedOut, isLoading: true})
+    act(() => {
+      useStore.setState({
+        isAuthResolved: false,
+        appMetadata: {},
+        modelPath: {kind: 'provider', provider: 'github', org: 'o', repo: 'r', branch: 'main', filepath: 'm.ifc'},
+        model: {type: 'IFC'},
+      })
+    })
+    try {
+      const {findByTestId, rerender} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+      fireEvent.click(await findByTestId('control-button-share'))
+      expect(await findByTestId('textfield-link')).toBeInTheDocument()
+      expect(gtagEvent).toHaveBeenCalledWith('share', expect.objectContaining({method: 'url'}))
+      await act(async () => {})
+      expect(trackModelAction).not.toHaveBeenCalled()
+
+      // The session restores: Auth0 re-renders its consumers signed in,
+      // then BaseRoutes writes the claims and flips isAuthResolved.
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+      rerender(<ShareControl/>)
+      act(() => {
+        useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+        useStore.getState().setIsAuthResolved(true)
+      })
+
+      await waitFor(() => expect(trackModelAction).toHaveBeenCalledTimes(1))
+      const [action, details] = trackModelAction.mock.calls[0]
+      expect(action).toBe('share')
+      expect(details).toMatchObject({gate: 'none', source: 'hosted', routeKind: 'github'})
+      expect(modelActionTier(details)).toBe('pro')
     } finally {
       act(() => {
         useStore.setState({model: null})

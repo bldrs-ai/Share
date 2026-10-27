@@ -32,8 +32,8 @@ import {
   MODEL_GATES,
   gtagEventWithCid,
   modelRouteSource,
-  trackModelAction,
 } from '../../privacy/analytics'
+import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
 import {TIERS, getTier} from '../../quota/quota'
 import useStore from '../../store/useStore'
 import GatedAction from '../GatedAction'
@@ -133,6 +133,9 @@ export default function ExportSection() {
   const [isGzipped, setIsGzipped] = useState(false)
 
   const {getAccessTokenSilently, isAuthenticated} = useAuth0()
+  // The latest auth state, for model_export {upsell}'s tier (reportGated).
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  isAuthenticatedRef.current = isAuthenticated
   // `isExporting` is tab-wide, not this button's own (store/UISlice.js): a
   // "Download again" running in the list below must disable this button too,
   // or the user gets two exports racing each other's history write (#1834).
@@ -463,14 +466,16 @@ export default function ExportSection() {
   // (Auth0/gateLogin.js).
   // An export the gate turned into an upsell: export_gated, and its
   // normalized twin model_export {upsell} (design/new/quotas.md §"Analytics:
-  // normalized tier events"), for the model on screen.
+  // normalized tier events"), for the model on screen. The tier is read
+  // once auth settles: while Auth0 restores a returning user's session this
+  // tab shows the anonymous gate, and its help can be opened before the
+  // session lands (privacy/modelActionTracking.js).
   const reportGated = (reason) => {
     gtagEventWithCid(GATE_EVENTS.EXPORT_GATED, {reason})
-    trackModelAction(MODEL_ACTIONS.EXPORT, {
+    trackModelActionWhenAuthSettled(MODEL_ACTIONS.EXPORT, {
       gate: MODEL_GATES.UPSELL,
       ...modelRouteSource(useStore.getState().modelPath),
-      isAuthenticated,
-      appMetadata,
+      getIsAuthenticated: () => isAuthenticatedRef.current,
     })
   }
 

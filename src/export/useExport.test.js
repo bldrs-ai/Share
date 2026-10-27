@@ -89,7 +89,9 @@ describe('useExport', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
-    useStore.setState({modelPath: null})
+    // Auth settled, as after BaseRoutes' token pass: model_export waits for
+    // it (privacy/modelActionTracking.js). The restore-race case unsets it.
+    useStore.setState({modelPath: null, isAuthResolved: true})
     getAccessTokenSilently = jest.fn().mockResolvedValue('test-token')
     mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently})
     recordExport.mockResolvedValue({recorded: true, status: 200, exports: []})
@@ -173,6 +175,33 @@ describe('useExport', () => {
     expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({
       gate: 'none', source: 'local', routeKind: 'local',
     })]])
+  })
+
+  // codex review on Share#1976, round 2 (the export variant): Auth0 says
+  // signed in before BaseRoutes has written the claims, so an export
+  // delivered in that window read a Pro user's still-empty claims as free.
+  // The tier is read once auth settles instead.
+  it('sends model_export {none} with the settled tier, not the claims of mid-restore', async () => {
+    useStore.setState({modelPath: {kind: 'provider', provider: 'github'}, isAuthResolved: false})
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {})
+    })
+    expect(triggerDownload).toHaveBeenCalled()
+    expect(gtagEventWithCid).toHaveBeenCalledWith('export_model', expect.anything())
+    expect(trackModelAction).not.toHaveBeenCalled()
+
+    act(() => {
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      useStore.getState().setIsAuthResolved(true)
+    })
+
+    await waitFor(() => expect(trackModelAction).toHaveBeenCalledTimes(1))
+    const [action, details] = trackModelAction.mock.calls[0]
+    expect(action).toBe('export')
+    expect(details).toMatchObject({gate: 'none', source: 'hosted', routeKind: 'github'})
+    expect(jest.requireActual('../privacy/analytics').modelActionTier(details)).toBe('pro')
   })
 
   it('hands the pro module the very bytes the size line quoted', async () => {
@@ -806,8 +835,14 @@ describe('useExport', () => {
       expect(trackModelAction).toHaveBeenCalledTimes(1)
       const [action, details] = trackModelAction.mock.calls[0]
       expect(action).toBe('export')
-      expect(details).toMatchObject({gate: 'blocked', appMetadata: {subscriptionStatus: 'sharePro'}})
-      expect(jest.requireActual('../privacy/analytics').modelActionTier(details)).toBe('free')
+      // An explicit tier, which trackModelActionWhenAuthSettled sends as is,
+      // never re-derived from the (Pro) claim in the store
+      // (privacy/modelActionTracking.test.js pins that half).
+      expect(details).toMatchObject({gate: 'blocked', tier: 'free'})
+      expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'sharePro'})
+      expect(jest.requireActual('../privacy/analytics').modelActionTier({
+        ...details, appMetadata: useStore.getState().appMetadata, isAuthenticated: true,
+      })).toBe('free')
     })
   })
 
