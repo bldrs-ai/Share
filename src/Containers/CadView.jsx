@@ -262,6 +262,14 @@ export default function CadView({
   const location = useLocation()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
+  // Read at load time by loadModel, which runs from a closure that may
+  // predate auth settling. Synced in an effect: CadView's effects run before
+  // BaseRoutes' (a parent) sets isAuthResolved, so once waitForAuthSettled
+  // returns this already holds the settled value.
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  useEffect(() => {
+    isAuthenticatedRef.current = isAuthenticated
+  }, [isAuthenticated])
   // Soft quota gate for models opened straight from a URL (codex P1 on
   // Share#1971): records the load, never blocks it. Called after each
   // successful load below.
@@ -404,7 +412,14 @@ export default function CadView({
     } catch {
       // Relative/local path — not GitHub-hosted.
     }
-    const isAuthSettledBeforeLoad = needsGithubAuth ?
+    // A Drive route with a Drive connection waits too: loadModel uses the
+    // connection only for a signed-in user (a private model needs a Bldrs
+    // sign-in AND the provider's authorization, design/new/quotas.md §"What
+    // counts"), so it has to know which this user is. Without a connection
+    // there is nothing to decide; the API-key path is public files only.
+    const needsDriveAuth = modelPath.kind === 'provider' && modelPath.provider === 'google' &&
+      connections.some((c) => c.providerId === 'google-drive')
+    const isAuthSettledBeforeLoad = (needsGithubAuth || needsDriveAuth) ?
       await waitForAuthSettled(AUTH_SETTLE_GRACE_MS) :
       true
 
@@ -689,7 +704,18 @@ export default function CadView({
     let loadError = null
     try {
       if (isGoogleResult) {
-        const connection = connections.find((c) => c.providerId === 'google-drive')
+        // Never a Drive connection while signed out: its token may outlive the
+        // Bldrs session (it is in localStorage), and using it would open a
+        // restricted file to someone the quota can't meter. Signed out takes
+        // the API-key path below, which only serves link-shared files, so a
+        // restricted one fails with the usual alert. Sign-out also clears the
+        // connection outright (connections/useSignedOutDriveCleanup.js); this
+        // covers a load that starts before that runs. If auth hadn't settled
+        // within the grace above, this attempt reads as signed out, and the
+        // auth-state effect below re-runs the load once it settles.
+        const connection = isAuthenticatedRef.current ?
+          connections.find((c) => c.providerId === 'google-drive') :
+          undefined
         driveDownloadRef.current = {fileId: routeResult.fileId, connection: connection || null}
         if (connection) {
           // OAuth path: authenticated download for private files

@@ -94,6 +94,30 @@ anonymous ledger in `quota.json`; `loadQuota` drops it whole (`tier:
 local mirror. The GA `tier: 'anon'` dimension on analytics events is a
 different thing (sign-in state) and is unchanged.
 
+**Signing out forgets Drive, so "never metered" can't become a bypass**
+(codex P1 on Share#1977). Drive's access token lives in localStorage and
+outlives the Auth0 session; a user who signed out with Drive connected could
+otherwise keep opening restricted files, unmetered. Two parts:
+
+- `connections/useSignedOutDriveCleanup.js` (mounted in `Share.jsx`) clears
+  every Drive connection, its token and its sources whenever Auth0 settles
+  signed out. Keyed on the settled state rather than one `logout()` call, so
+  ProfileControl, BaseRoutes' `invalid_grant` logout, the Open dialog's
+  GitHub Remove, UserProfile's menu and a session that ended between visits
+  are all covered. Connecting Drive needs a sign-in, so nothing a signed-out
+  user legitimately holds is lost.
+- `CadView#loadModel` never downloads through a Drive connection while signed
+  out; it takes the API-key path, which serves link-shared files only, so a
+  restricted file fails with the usual alert. A Drive route with a connection
+  waits (bounded, `AUTH_SETTLE_GRACE_MS`) for auth to settle first, as GitHub
+  routes do, so a signed-in user's restricted link isn't misread as signed
+  out on a cold load; if auth takes longer, the auth-state effect re-runs the
+  load once it settles.
+
+Covered by `useSignedOutDriveCleanup.test.js`, CadView.test.jsx's "Drive
+loads and sign-in", and `signOutForgetsDrive.spec.ts` (desktop and mobile:
+connect Drive, Log out, the token and connection are gone).
+
 The same rolling-window shape meters one more thing: **free GLB exports**, 2
 per rolling 7 days for a signed-in free user, counted on the
 `app_metadata.exports` ledger by the `pro-module` function rather than here,

@@ -69,6 +69,17 @@ path. **Don't add new auto-refresh paths hidden behind navigation.**
 email hints), also shared across tabs. The matching token in
 `bldrs:gdrive-token:<id>` is keyed by the same `connectionId`.
 
+**Signing out of Bldrs forgets Drive.** The token outlives the Auth0
+session, so `useSignedOutDriveCleanup` (mounted in `Share.jsx`) clears every
+Drive connection, its token (revoked at Google when this page holds it) and
+its sources whenever Auth0 settles signed out, whichever way the user signed
+out. `CadView#loadModel` also never downloads through a Drive connection while
+signed out (the API-key path serves link-shared files only). A private model
+needs a Bldrs sign-in and the provider's authorization; see
+[design/new/quotas.md](../../design/new/quotas.md) §"What counts". GitHub
+connections are left alone: CadView loads GitHub with the Auth0-brokered
+token, which sign-out already removes.
+
 Related keys on the **legacy Auth0-federated GitHub path** (not this
 directory's provider flow — they die with that path; see
 `src/Auth0/githubGrant.js`):
