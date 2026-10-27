@@ -6,7 +6,6 @@ import {TIERS} from '../../quota/quota'
 import useStore from '../../store/useStore'
 import {ThemeCtx} from '../../theme/Theme.fixture'
 import {goToSubscription} from '../Profile/subscriptionNav'
-import {GATE_RETURN_EXPORT, noteGateLogin, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
 import QuotaLimitDialog from './QuotaLimitDialog'
 
 
@@ -56,24 +55,14 @@ describe('QuotaLimitDialog', () => {
     ]])
 
     // Re-rendering while open — even with a new tier — is the same showing.
-    show({tier: TIERS.ANONYMOUS, isOpen: true})
+    show({tier: TIERS.PAID, isOpen: true})
     expect(limitEvents()).toHaveLength(1)
 
     // Close and reopen: a new showing.
-    show({tier: TIERS.ANONYMOUS, isOpen: false})
-    show({tier: TIERS.ANONYMOUS, isOpen: true})
+    show({tier: TIERS.FREE, isOpen: false})
+    show({tier: TIERS.FREE, isOpen: true})
     expect(limitEvents()).toHaveLength(2)
-    expect(limitEvents()[1][2]).toEqual({tier: 'anonymous', feature: 'private_load', open_cid: 'cid.111.222'})
-  })
-
-  // The free window is 7 days (owner, 2026-10-26; was 30), and the dialog
-  // quotes it to both tiers: the free user's limit, and the anonymous user's
-  // sign-up offer.
-  it('quotes the free tier as 2 private models in a rolling 7 days', () => {
-    const {getByText, show} = renderDialog({tier: TIERS.FREE, isOpen: true})
-    expect(getByText(/limit of 2 private models in any rolling 7-day window/)).toBeInTheDocument()
-    show({tier: TIERS.ANONYMOUS, isOpen: true})
-    expect(getByText(/open 2 private models in any rolling 7 days/)).toBeInTheDocument()
+    expect(limitEvents()[1][2]).toEqual({tier: 'free', feature: 'private_load', open_cid: 'cid.111.222'})
   })
 
   it('stays quiet while closed', () => {
@@ -81,22 +70,13 @@ describe('QuotaLimitDialog', () => {
     expect(limitEvents()).toHaveLength(0)
   })
 
-  it('reports a missing tier as anonymous, as the copy reads it', () => {
-    renderDialog({isOpen: true})
-    expect(limitEvents()[0][2]).toEqual({tier: 'anonymous', feature: 'private_load'})
-  })
-
-  // codex review on Share#1968: Sign up is not a gate's sign-in, so a stale
-  // gate attempt must neither label its `login` nor reopen Export after it.
-  it('drops a stale gate attempt when Sign up starts a sign-in', () => {
-    noteGateLogin('export', GATE_RETURN_EXPORT)
-    const {getByTestId} = renderDialog({tier: TIERS.ANONYMOUS, isOpen: true})
-
-    fireEvent.click(getByTestId('button-quota-signup'))
-
-    expect(mockedUserLoggedOut.loginWithRedirect).toHaveBeenCalled()
-    expect(takeGateLoginSource()).toEqual({})
-    expect(takeGateLoginReturn()).toBeNull()
+  // The free window is 7 days (owner, 2026-10-26; was 30). Only a signed-in
+  // free user can be refused now (signed-out users are never metered), so
+  // the anonymous tier's Sign up offer is gone.
+  it('quotes the free limit as 2 private models in a rolling 7 days and offers no sign-up', () => {
+    const {getByText, queryByTestId} = renderDialog({tier: TIERS.FREE, isOpen: true})
+    expect(getByText(/limit of 2 private models in any rolling 7-day window/)).toBeInTheDocument()
+    expect(queryByTestId('button-quota-signup')).toBeNull()
   })
 
   it('sends Subscribe through goToSubscription as the quota entry point', () => {

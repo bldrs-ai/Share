@@ -106,9 +106,10 @@ below).
 
 ## Usage Quotas
 
-Private-model loads from the cloud (Drive, private GitHub) are metered per tier
-to create a sign-up / upgrade moment; local files and public or sample content
-are never counted (Share#1966; the `meterLocalFiles` flag can put local files
+Private-model loads from the cloud (restricted Drive files, private GitHub)
+are metered for signed-in free users to create an upgrade moment; local
+files, public or sample content, Drive files shared "Anyone with the link",
+and anything opened while signed out are never counted (Share#1966; the `meterLocalFiles` flag can put local files
 back in the meter, see quotas.md §"Metering local files again").
 **The full design — tiers and limits, the rolling 7-day window, the
 server-authoritative `record-load` gate, GitHub public/private detection, the
@@ -126,7 +127,7 @@ mid-session on an already-loaded model.
 | 0 % used | Silent — no quota UI |
 | ≥ 50 % | Subtle badge on the Open toolbar button ("N of M used") |
 | ≥ 75 % | Same badge, amber |
-| Over limit | `QuotaLimitDialog` (value prop + sign-up / upgrade CTA) instead of navigating |
+| Over limit | `QuotaLimitDialog` (value prop + upgrade CTA) instead of navigating |
 
 `QuotaBadge` wraps the `OpenModelControl` toolbar button so the dialog stays
 uncluttered; it hides whenever `limit === Infinity` (paid tier, or the `quotas`
@@ -145,15 +146,19 @@ in this order:
    and a `hasCapacity` pre-gate would refuse it for a limit that doesn't apply
    to it, so `record()` (step 3) is its only gate.
    `check` only denies a *known-new, known-private* load: already-counted keys
-   stay openable at limit (mirroring the server's idempotency), and `/v/gh/`
-   paths pass through because only the server can tell public from private.
+   stay openable at limit (mirroring the server's idempotency), `/v/gh/`
+   paths pass through because only the server can tell public from private,
+   and `/v/g/` paths pass through because their visibility takes the lookup
+   `record()` makes.
 2. **`provider.getAccessToken`** (Drive / GitHub only) — token preflight
    *inside* the click handler, before any other `await`, so a GIS consent popup
    keeps its user-gesture activation. Navigating or awaiting `record()` first
    loses the gesture → `popup_failed_to_open`. See the comment in
    `handleOpenById`.
 3. **`record(key)`** — the authoritative gate; on `403` open `QuotaLimitDialog`
-   instead of navigating, otherwise add the recent and navigate.
+   instead of navigating, otherwise add the recent and navigate. Drive opens
+   pass `{resolveDriveVisibility}` (the connection's permission lookup), so a
+   link-shared file is not counted (quotas.md §"Drive visibility").
 
 When the `quotas` flag is off (it is on since Share#1970) `useQuota` reports unlimited
 capacity and `record()` is a no-op, so every load site above is inert.
@@ -166,4 +171,4 @@ capacity and `record()` is a no-op, so every load site above is inert.
 | `QuotaLimitDialog.jsx` | Over-limit value-prop modal |
 | `src/hooks/useQuota.js` | Hook over the lib + `record-load` |
 | `src/quota/quota.js` | Core lib — see [design/new/quotas.md](../../../design/new/quotas.md) |
-| `src/quota/limits.js` | Tiers, limits, window and the always-private route rule, shared with `record-load` and the marketing pricing plans |
+| `src/quota/limits.js` | Tiers, limits, window and which routes `record-load` counts by kind (`isCountedByRouteKind`), shared with `record-load` and the marketing pricing plans |

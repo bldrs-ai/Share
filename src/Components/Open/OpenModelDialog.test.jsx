@@ -274,6 +274,34 @@ describe('OpenModelDialog — Google Drive tab', () => {
     })
   })
 
+  // design/new/quotas.md §"Drive visibility": record() is told how to learn
+  // whether the file is link-shared (public, not counted), through the
+  // connection the user clicked.
+  it('hands record() the Drive visibility lookup for the clicked connection', async () => {
+    const getVisibility = jest.fn().mockResolvedValue('public')
+    getProvider.mockReturnValue({getAccessToken: jest.fn().mockResolvedValue('fresh-token'), getVisibility})
+    const record = jest.fn().mockResolvedValue({allowed: true})
+    const realUseQuota = useQuota.getMockImplementation()
+    useQuota.mockImplementation(() => ({
+      tier: 'free', record, check: jest.fn(() => ({allowed: true})), hasCapacity: true,
+    }))
+    const {unmount} = render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
+    try {
+      fireEvent.click(screen.getByTestId('button-open-by-id'))
+      await waitFor(() => expect(navigateToModel).toHaveBeenCalled())
+      expect(record).toHaveBeenCalledWith(expect.stringMatching(/\/v\/g\/file-id-abc$/), expect.anything())
+      const [, {resolveDriveVisibility}] = record.mock.calls[0]
+      await expect(resolveDriveVisibility()).resolves.toBe('public')
+      expect(getVisibility).toHaveBeenCalledWith(
+        {id: 'conn-1', providerId: 'google-drive'}, {kind: 'drive-file', fileId: 'file-id-abc'})
+    } finally {
+      // Unmount before swapping the real hook back (as the in-memory denial
+      // test below explains).
+      unmount()
+      useQuota.mockImplementation(realUseQuota)
+    }
+  })
+
   it('does not navigate to /v/local-only/ when onOpenById is called', async () => {
     getProvider.mockReturnValue({
       getAccessToken: jest.fn().mockResolvedValue('fresh-token'),

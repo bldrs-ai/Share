@@ -4,9 +4,11 @@ import {useAuth0} from '../Auth0/Auth0Proxy'
 import useStore from '../store/useStore'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {HTTP_FORBIDDEN} from '../net/http'
+import {DRIVE_VISIBILITY} from '../quota/driveVisibility'
 import {
   TIERS,
   LIMITS,
+  isDrivePath,
   isQuotablePath,
   isLocallyQuotable,
   getTier,
@@ -37,8 +39,9 @@ const passthroughRecord = () => Promise.resolve({allowed: true, used: 0, limit: 
  * into OPFS, and the JWT is force-refreshed so other readers (BaseRoutes)
  * see the same app_metadata.
  *
- * For anonymous users there is no server backstop — the hook relies on
- * OPFS only, which is the explicit "lossy nudge to sign in" v1 trade-off.
+ * Signed-out users are never metered: no tier, the same unlimited
+ * passthrough as the flag being off (quota.js#getTier explains why). There
+ * is no anonymous OPFS ledger any more.
  *
  * If the Netlify function is unreachable, the hook falls back to OPFS-only
  * for that load and reports to Sentry. We degrade open rather than block
@@ -61,6 +64,12 @@ export default function useQuota() {
   const {isAuthenticated, getAccessTokenSilently} = useAuth0()
   const appMetadata = useStore((state) => state.appMetadata)
   const tier = getTier(appMetadata, isAuthenticated)
+  // Signed out has no tier and nothing is metered. While Auth0 is still
+  // settling a signed-in user reads as signed out too, so a load in that
+  // first moment goes unmetered; useDirectLinkQuota waits it out, and the
+  // Open dialog's Drive and GitHub sources need a connection, which is
+  // rarely ready sooner.
+  const isMetered = quotasEnabled && tier !== null
   const [quota, setQuota] = useState(null)
 
   useEffect(() => {
@@ -69,7 +78,7 @@ export default function useQuota() {
     // is exactly the kind of unsettled async update that litters every
     // consumer's tests with act() warnings (PLAYBOOK §"Keep the test
     // console clean").
-    if (!quotasEnabled) {
+    if (!isMetered) {
       return undefined
     }
     let cancelled = false
@@ -77,7 +86,7 @@ export default function useQuota() {
       if (cancelled) {
         return
       }
-      const next = {...raw, tier, loads: pruneLoads(raw.loads, tier)}
+      const next = {...raw, tier, loads: pruneLoads(raw.loads)}
       setQuota(next)
       if (next.tier !== raw.tier || next.loads.length !== raw.loads.length) {
         saveQuota(next)
@@ -93,7 +102,7 @@ export default function useQuota() {
       cancelled = true
       unsub()
     }
-  }, [tier, quotasEnabled])
+  }, [tier, isMetered])
 
   const used = quota?.loads.length ?? 0
   const limit = LIMITS[tier] !== undefined ? LIMITS[tier] : LIMITS[TIERS.FREE]
@@ -108,16 +117,17 @@ export default function useQuota() {
     // Re-pruned at call time, not just at mount: a tab left open across a
     // slot's roll-off would otherwise keep counting it until the next
     // record() or remount (agent review on Share#1974).
-    const loads = pruneLoads(quota.loads, tier)
+    const loads = pruneLoads(quota.loads)
     const usedNow = loads.length
     if (key === null || key === undefined || !isQuotablePath(key)) {
       return {allowed: true, used: usedNow, limit, alreadyCounted: false}
     }
     const alreadyCounted = loads.some((l) => l.key === key)
     // Only deny what the client KNOWS is a new private load: /v/gh/ paths
-    // may be public (the server resolves that), so they pass the cheap gate
-    // and record() makes the authoritative call. Already-counted keys stay
-    // openable at limit (server idempotency).
+    // may be public (the server resolves that) and /v/g/ ones too (Drive
+    // visibility takes a lookup, which record() makes), so both pass the
+    // cheap gate and record() makes the authoritative call. Already-counted
+    // keys stay openable at limit (server idempotency).
     return {
       allowed: alreadyCounted || !isLocallyQuotable(key) || usedNow < limit,
       used: usedNow,
@@ -126,15 +136,29 @@ export default function useQuota() {
     }
   }, [quota, used, limit, tier])
 
-  const record = useCallback(async (key) => {
+  /**
+   * Meter one load. For a Drive key, `resolveDriveVisibility` says whether
+   * the file is public (quota/driveVisibility.js#driveFileQuotaVisibility,
+   * which never rejects); a public one is never sent to record-load, so it
+   * is neither counted nor refused. It is called only for a free user, the
+   * one tier that can be refused, so a Pro open costs no lookup. Without it a
+   * Drive key counts as private: the behaviour before Drive visibility was
+   * looked at, and the safe default for a caller that can't tell.
+   *
+   * @param {string} key Share path being loaded
+   * @param {{resolveDriveVisibility?: Function}} [options]
+   * @return {Promise<{allowed:boolean,used:number,limit:number,tier:string,alreadyCounted:boolean}>}
+   */
+  const record = useCallback(async (key, {resolveDriveVisibility} = {}) => {
     if (!isQuotablePath(key)) {
       return {allowed: true, used, limit, tier, alreadyCounted: false}
     }
 
-    // Anonymous: OPFS only — same local flow as the server-unreachable
-    // fallback, just with the anonymous tier.
-    if (tier === TIERS.ANONYMOUS) {
-      return recordLocally(key, tier, limit, setQuota)
+    if (tier === TIERS.FREE && isDrivePath(key)) {
+      const visibility = resolveDriveVisibility ? await resolveDriveVisibility() : DRIVE_VISIBILITY.PRIVATE
+      if (visibility === DRIVE_VISIBILITY.PUBLIC) {
+        return {allowed: true, used, limit, tier, alreadyCounted: false}
+      }
     }
 
     // Authenticated: server is authoritative.
@@ -229,9 +253,11 @@ export default function useQuota() {
   // unlimited capacity and record()/check() are no-ops, so every load site
   // bypasses gating and the QuotaBadge (hidden when limit === Infinity) never
   // shows. Enforcement is enabled per-session via `?feature=quotas`, or for
-  // everyone by flipping the flag's isActive in FeatureFlags.js. All hooks
-  // above run unconditionally, so this early return respects the rules of hooks.
-  if (!quotasEnabled) {
+  // everyone by flipping the flag's isActive in FeatureFlags.js. A signed-out
+  // user gets the same shape: never metered, whatever the flag says. All
+  // hooks above run unconditionally, so this early return respects the rules
+  // of hooks.
+  if (!isMetered) {
     return {
       used: 0,
       limit: Infinity,
@@ -254,11 +280,15 @@ export default function useQuota() {
 
 
 /**
- * OPFS-only record: the anonymous path, and the fallback when the server
- * is unreachable for an authenticated user (whose tier is kept). Applies
- * the same order of operations as the server — dedup, then capacity gate,
- * then persist — so a denied load is never written (writing it would
- * over-report `used` and make the key read as alreadyCounted later).
+ * OPFS-only record: the fallback when the server is unreachable for a
+ * signed-in user (whose tier is kept). Applies the same order of operations
+ * as the server — dedup, then capacity gate, then persist — so a denied load
+ * is never written (writing it would over-report `used` and make the key
+ * read as alreadyCounted later).
+ *
+ * Counts what is known private without the server: a metered local file, or
+ * a Drive file, since record() has already returned for a public one. A
+ * /v/gh/ path passes uncounted: only the server can tell its privacy.
  *
  * @param {string} key Share path being loaded
  * @param {string} tier User's quota tier
@@ -268,22 +298,20 @@ export default function useQuota() {
  */
 async function recordLocally(key, tier, limit, setQuota) {
   const current = await loadQuota()
-  const pruned = pruneLoads(current.loads, tier)
+  const pruned = pruneLoads(current.loads)
   const alreadyCounted = pruned.some((l) => l.key === key)
-  if (!isLocallyQuotable(key) || alreadyCounted) {
+  const isKnownPrivate = isLocallyQuotable(key) || isDrivePath(key)
+  if (!isKnownPrivate || alreadyCounted) {
     return {allowed: true, used: pruned.length, limit, tier, alreadyCounted}
   }
   if (pruned.length >= limit) {
     return {allowed: false, used: pruned.length, limit, tier, alreadyCounted: false}
   }
   const updated = await recordLoad(key)
-  if (updated) {
-    setQuota((prev) => ({...(prev || updated), loads: updated.loads, tier}))
-  }
-  const newUsed = updated?.loads.length ?? pruned.length
+  setQuota((prev) => ({...(prev || updated), loads: updated.loads, tier}))
   return {
     allowed: true,
-    used: newUsed,
+    used: updated.loads.length,
     limit,
     tier,
     alreadyCounted: false,

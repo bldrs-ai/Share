@@ -1,6 +1,6 @@
 import {isFeatureEnabled} from '../FeatureFlags'
 import {viewRouteKind} from '../routes/localOnly'
-import {LIMITS, TIERS, isAlwaysPrivateRouteKind, loadsInsideRollingWindow} from './limits'
+import {DRIVE_ROUTE_KIND, LIMITS, TIERS, isMeteredLocalRouteKind, loadsInsideRollingWindow} from './limits'
 import {isProSubscriptionStatus} from './proStatus'
 
 
@@ -40,6 +40,13 @@ export function subscribeToQuota(cb) {
  * Pure — used client-side (useQuota, the export UI); `record-load` makes the
  * same Pro decision server-side from the same definition.
  *
+ * Signed out is NO tier (null), and is never metered: a signed-out user
+ * can't reach a private model, since private GitHub needs a token and a
+ * restricted Drive file the user's own Google authorization. Signing in is
+ * necessary but not sufficient for a private model; the provider's
+ * authorization of the viewer is what makes it private
+ * (design/new/quotas.md §"What counts").
+ *
  * PAID is either Pro status (`quota/proStatus.js`): `sharePro`, and
  * `shareProPendingReauth` — paid, waiting on a re-login for the GitHub scope
  * (design/new/glb-export-premium.md §7.2). So a pending-reauth user also gets
@@ -47,11 +54,11 @@ export function subscribeToQuota(cb) {
  *
  * @param {object} appMetadata Auth0 app_metadata, may be null
  * @param {boolean} isAuthenticated
- * @return {string} one of TIERS.*
+ * @return {?string} one of TIERS.*, or null when signed out
  */
 export function getTier(appMetadata, isAuthenticated) {
   if (!isAuthenticated) {
-    return TIERS.ANONYMOUS
+    return null
   }
   if (appMetadata && isProSubscriptionStatus(appMetadata.subscriptionStatus)) {
     return TIERS.PAID
@@ -75,12 +82,14 @@ export function isLocalFileMeteringEnabled() {
 
 
 /**
- * Paths whose privacy is unambiguously known client-side without a
- * server round-trip: Drive files (/v/g/) are always private. Local files
- * (/v/local-only/, legacy /v/new/) are NOT counted (Share#1966) unless the
- * `meterLocalFiles` switch is on. The rule itself is
- * limits.js#isAlwaysPrivateRouteKind, which
+ * Paths known to count without any lookup: local files (/v/local-only/,
+ * legacy /v/new/), and only while the `meterLocalFiles` switch is on; they
+ * are NOT counted otherwise (Share#1966). The rule itself is
+ * limits.js#isMeteredLocalRouteKind, which
  * netlify/functions/record-load.js#isQuotableLoad and the MSW mock share.
+ *
+ * Drive is not here: whether a Drive file counts depends on its sharing,
+ * which takes a lookup (isDrivePath below; useQuota#record).
  *
  * By route kind, not substring: a GitHub file path can contain `v/g/` or
  * `v/local-only/` (codex review on Share#1967). viewRouteKind takes the
@@ -92,7 +101,25 @@ export function isLocalFileMeteringEnabled() {
  * @return {boolean}
  */
 export function isLocallyQuotable(key, meterLocalFiles = isLocalFileMeteringEnabled()) {
-  return isAlwaysPrivateRouteKind(viewRouteKind(key), meterLocalFiles)
+  return isMeteredLocalRouteKind(viewRouteKind(key), meterLocalFiles)
+}
+
+
+/**
+ * Drive paths (/v/g/) count only when the file is private: shared with the
+ * viewer's Google account or domain, not "Anyone with the link". The CLIENT
+ * decides, from how the file was downloaded or its permission list
+ * (quota/driveVisibility.js), and sends record-load only the private ones;
+ * the server can't see Drive sharing and counts what it is sent
+ * (limits.js#isCountedByRouteKind; design/new/quotas.md §"Drive visibility").
+ *
+ * By route kind, like isLocallyQuotable.
+ *
+ * @param {string} key Share path
+ * @return {boolean}
+ */
+export function isDrivePath(key) {
+  return viewRouteKind(key) === DRIVE_ROUTE_KIND
 }
 
 
@@ -111,42 +138,43 @@ export function isServerResolvedPath(key) {
 
 /**
  * True if the path is potentially quotable. The server makes the
- * authoritative call for /v/gh/. Use this to decide whether to call
- * record-load at all; use isLocallyQuotable for OPFS-only fallback.
+ * authoritative call for /v/gh/, the client's Drive visibility lookup for
+ * /v/g/. Use this to decide whether to meter at all; use isLocallyQuotable
+ * for what counts with no lookup.
  *
  * @param {string} key
  * @param {boolean} [meterLocalFiles] see isLocallyQuotable
  * @return {boolean}
  */
 export function isQuotablePath(key, meterLocalFiles = isLocalFileMeteringEnabled()) {
-  return isLocallyQuotable(key, meterLocalFiles) || isServerResolvedPath(key)
+  return isLocallyQuotable(key, meterLocalFiles) || isDrivePath(key) || isServerResolvedPath(key)
 }
 
 
 /**
- * Drop loads older than the rolling window. Anonymous tier has a
- * lifetime cap (no reset), so anonymous quotas are never pruned.
+ * Drop loads older than the rolling window, by the exclusive-edge rule in
+ * limits.js#loadsInsideRollingWindow, which `record-load` and the MSW mock
+ * share.
  *
  * @param {Array<{key:string,loadedAt:string}>} loads
- * @param {string} tier
  * @param {number} [now] millis since epoch — injectable for tests
  * @return {Array<{key:string,loadedAt:string}>}
  */
-export function pruneLoads(loads, tier, now = Date.now()) {
-  if (tier === TIERS.ANONYMOUS) {
-    return loads
-  }
+export function pruneLoads(loads, now = Date.now()) {
   return loadsInsideRollingWindow(loads, now)
 }
 
 
-/**
- * @param {string} [tier]
- * @return {{tier: string, loads: Array}}
- */
-function defaultQuota(tier = TIERS.ANONYMOUS) {
-  return {tier, loads: []}
+/** @return {{tier: string, loads: Array}} */
+function defaultQuota() {
+  return {tier: TIERS.FREE, loads: []}
 }
+
+/**
+ * The tier the removed anonymous quota tier stored in `quota.json`. Read
+ * only so its ledger can be dropped (loadQuota).
+ */
+const LEGACY_ANONYMOUS_TIER = 'anonymous'
 
 
 /**
@@ -161,7 +189,11 @@ async function getHandle(create) {
 
 /**
  * Read quota state from OPFS. Returns default on any error. Silently
- * drops the legacy `resetDate` field that earlier versions persisted.
+ * drops the legacy `resetDate` field that earlier versions persisted, and
+ * the whole ledger of the removed anonymous tier: what a signed-out user
+ * opened never counts, so those rows must not follow them into a free
+ * account's local mirror (the badge would show them until record-load's
+ * answer replaced it).
  *
  * @return {Promise<{tier: string, loads: Array}>}
  */
@@ -170,8 +202,11 @@ export async function loadQuota() {
     const handle = await getHandle(false)
     const file = await handle.getFile()
     const parsed = JSON.parse(await file.text())
+    if (parsed.tier === LEGACY_ANONYMOUS_TIER) {
+      return defaultQuota()
+    }
     return {
-      tier: parsed.tier || TIERS.ANONYMOUS,
+      tier: parsed.tier || TIERS.FREE,
       loads: Array.isArray(parsed.loads) ? parsed.loads : [],
     }
   } catch {
@@ -215,7 +250,7 @@ export function checkQuota(quota, key) {
   if (quota.tier === TIERS.PAID) {
     return {allowed: true, used: quota.loads.length, limit, alreadyCounted: false}
   }
-  const pruned = pruneLoads(quota.loads, quota.tier)
+  const pruned = pruneLoads(quota.loads)
   const alreadyCounted = pruned.some((l) => l.key === key)
   const used = pruned.length
   return {
@@ -228,22 +263,22 @@ export function checkQuota(quota, key) {
 
 
 /**
- * Record a locally-quotable model load in OPFS. Used for the anonymous
- * (no-server) path; authenticated callers should call the record-load
- * Netlify function and mirror its response into OPFS via saveQuota.
+ * Record a counted model load in OPFS: the fallback when record-load is
+ * unreachable (useQuota#recordLocally). Normally the record-load response is
+ * mirrored into OPFS via saveQuota instead.
  *
- * Idempotent on key. Returns null when the key is not locally quotable
- * (GitHub paths require server resolution).
+ * Writes whatever key it is given: the caller has already decided the load
+ * counts (a metered local file, or a Drive file found private), which for
+ * Drive took a lookup this module can't repeat.
+ *
+ * Idempotent on key.
  *
  * @param {string} key
- * @return {Promise<{tier: string, loads: Array}|null>}
+ * @return {Promise<{tier: string, loads: Array}>}
  */
 export async function recordLoad(key) {
-  if (!isLocallyQuotable(key)) {
-    return null
-  }
   const raw = await loadQuota()
-  const loads = pruneLoads(raw.loads, raw.tier)
+  const loads = pruneLoads(raw.loads)
   if (loads.some((l) => l.key === key)) {
     return {...raw, loads}
   }

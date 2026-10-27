@@ -244,8 +244,6 @@ describeMobileAndDesktop('QuotaLimitDialog', () => {
 
     const subscribeButton = page.getByTestId('button-quota-subscribe')
     await expect(subscribeButton).toBeVisible()
-    // Free, not anonymous: the sign-up offer is for anonymous users only.
-    await expect(page.getByTestId('button-quota-signup')).toHaveCount(0)
 
     await expect.poll(() => funnelEvents(page, 'quota_limit_reached')).toHaveLength(1)
 

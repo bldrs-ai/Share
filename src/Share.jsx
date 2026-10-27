@@ -4,6 +4,7 @@ import {useNavigate, useParams} from 'react-router-dom'
 import CadView from './Containers/CadView'
 import useConnectionsInit from './connections/useConnectionsInit'
 import useGithubLastModified from './connections/useGithubLastModified'
+import useSignedOutDriveCleanup from './connections/useSignedOutDriveCleanup'
 import {consumePendingModelNameUpdate, updateRecentFileModelTitle} from './connections/persistence'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
@@ -40,6 +41,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
   // Hydrate persisted Connections & Sources from localStorage
   useConnectionsInit()
+  // Signing out of Bldrs forgets Drive (its token outlives the Auth0 session).
+  useSignedOutDriveCleanup()
   useGithubLastModified(modelPath, routeParams['branch'])
 
   useEffect(() => {

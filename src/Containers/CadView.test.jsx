@@ -161,15 +161,13 @@ jest.mock('react-router-dom', () => {
   }
 })
 jest.mock('postprocessing')
+// Signed out unless a test says otherwise (the Drive sign-in guard below).
+// The `mock` prefix lets the hoisted factory read it.
+const mockAuthState = {isLoading: false, isAuthenticated: false}
 jest.mock('@auth0/auth0-react', () => {
   return {
     ...jest.requireActual('@auth0/auth0-react'),
-    useAuth0: () => jest.fn(() => {
-      return {
-        isLoading: () => false,
-        isAuthenticated: () => false,
-      }
-    }),
+    useAuth0: () => mockAuthState,
   }
 })
 
@@ -779,6 +777,120 @@ describe('CadView', () => {
 
   // A hosted file whose NAME is a UUID looks like an upload to the loader's
   // path heuristic; only the route knows it isn't (codex review on #1956).
+  // A private model needs a Bldrs sign-in AND the provider's authorization
+  // (design/new/quotas.md §"What counts"). A Drive token in localStorage can
+  // outlive the Auth0 session, so a signed-out load must never use it: it
+  // takes the API-key path, which only serves link-shared files (codex P1
+  // on Share#1977).
+  describe('Drive loads and sign-in', () => {
+    const DRIVE_ROUTE = {
+      kind: 'provider',
+      provider: 'google',
+      fileId: '1BxDriveFileId00000000000000',
+      downloadUrl: new URL('https://www.googleapis.com/drive/v3/files/1BxDriveFileId00000000000000?alt=media&key=k'),
+    }
+    const DRIVE_CONNECTION = {id: 'gd-1', providerId: 'google-drive', label: 'me@gmail.com', status: 'connected'}
+    // Above AUTH_SETTLE_GRACE_MS (2s), which the slow-auth test waits out.
+    const GRACE_WAIT_TIMEOUT_MS = 5000
+    const RETRY_TEST_TIMEOUT_MS = 15000
+
+    afterEach(() => {
+      mockAuthState.isAuthenticated = false
+      act(() => useStore.setState({connections: []}))
+    })
+
+    /** @return {Promise<{loadSpy: object, getFileDownload: object}>} after CadView's first load attempt */
+    async function loadDriveRoute() {
+      const registry = require('../connections/registry')
+      const getFileDownload = jest.fn().mockResolvedValue({blob: new Blob(['ifc'])})
+      jest.spyOn(registry, 'getBrowser').mockReturnValue({getFileDownload})
+      const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new Error('stop after the call')
+      })
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => {
+        // onViewer only starts once OPFS availability is known.
+        result.current.setIsOpfsAvailable(false)
+        result.current.setIsAuthResolved(true)
+        useStore.setState({connections: [DRIVE_CONNECTION]})
+        result.current.setModelPath(DRIVE_ROUTE)
+      })
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy).toHaveBeenCalled())
+      return {loadSpy, getFileDownload}
+    }
+
+    it('signed out, never downloads through a Drive connection: it loads by API key', async () => {
+      const {loadSpy, getFileDownload} = await loadDriveRoute()
+      expect(getFileDownload).not.toHaveBeenCalled()
+      expect(loadSpy.mock.calls[0][0]).toBe(DRIVE_ROUTE.downloadUrl)
+    })
+
+    // Auth0 slower than onViewerInternal's grace: the first attempt reads as
+    // signed out and goes by API key, which a restricted file refuses. Once
+    // auth settles signed in, the load is retried through the connection
+    // instead of staying failed until a reload (codex review on Share#1977).
+    it('retries through the Drive connection when sign-in settles after the grace', async () => {
+      const registry = require('../connections/registry')
+      const getFileDownload = jest.fn().mockResolvedValue({blob: new Blob(['ifc'])})
+      jest.spyOn(registry, 'getBrowser').mockReturnValue({getFileDownload})
+      // The API-key download is still in flight when auth settles, which is
+      // what drops the auth-state effect's own re-run (its onViewer finds a
+      // load in flight): only loadModelWithAuthRetry can recover it.
+      let refuseApiKeyDownload
+      const apiKeyDownload = new Promise((resolve, reject) => {
+        refuseApiKeyDownload = () => reject(new Error('restricted: the API key cannot read it'))
+      })
+      const loadSpy = jest.spyOn(Loader, 'load')
+        .mockImplementationOnce(() => apiKeyDownload)
+        .mockImplementation(() => {
+          throw new Error('stop after the call')
+        })
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => {
+        result.current.setIsOpfsAvailable(false)
+        result.current.setIsAuthResolved(false)
+        useStore.setState({connections: [DRIVE_CONNECTION]})
+        result.current.setModelPath(DRIVE_ROUTE)
+      })
+      const ui = <ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>
+      const {rerender} = render(ui)
+      // The grace (AUTH_SETTLE_GRACE_MS, 2s) runs out unsettled.
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(1), {timeout: GRACE_WAIT_TIMEOUT_MS})
+      expect(loadSpy.mock.calls[0][0]).toBe(DRIVE_ROUTE.downloadUrl)
+      expect(getFileDownload).not.toHaveBeenCalled()
+
+      // Auth0 lands signed in, then BaseRoutes settles auth — in that order,
+      // as in the app.
+      mockAuthState.isAuthenticated = true
+      rerender(ui)
+      await act(() => result.current.setIsAuthResolved(true))
+      await actAsyncFlush()
+      await act(async () => {
+        refuseApiKeyDownload()
+        await apiKeyDownload.catch(() => {})
+      })
+
+      await waitFor(() => expect(getFileDownload).toHaveBeenCalledWith(DRIVE_CONNECTION, null, DRIVE_ROUTE.fileId))
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+      expect(loadSpy.mock.calls[1][0]).not.toBe(DRIVE_ROUTE.downloadUrl)
+    }, RETRY_TEST_TIMEOUT_MS)
+
+    it('signed in, downloads through the Drive connection', async () => {
+      mockAuthState.isAuthenticated = true
+      const {loadSpy, getFileDownload} = await loadDriveRoute()
+      expect(getFileDownload).toHaveBeenCalledWith(DRIVE_CONNECTION, null, DRIVE_ROUTE.fileId)
+      expect(loadSpy.mock.calls[0][0]).not.toBe(DRIVE_ROUTE.downloadUrl)
+    })
+  })
+
   it('tells the loader a hosted UUID-named file is not an upload route', async () => {
     const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
       throw new Error('stop after the call')
