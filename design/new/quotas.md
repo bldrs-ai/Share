@@ -111,8 +111,9 @@ otherwise keep opening restricted files, unmetered. Two parts:
   restricted file fails with the usual alert. A Drive route with a connection
   waits (bounded, `AUTH_SETTLE_GRACE_MS`) for auth to settle first, as GitHub
   routes do, so a signed-in user's restricted link isn't misread as signed
-  out on a cold load; if auth takes longer, the auth-state effect re-runs the
-  load once it settles.
+  out on a cold load; if auth takes longer, the API-key attempt that fails
+  is retried once through the connection when auth settles signed in
+  (`loadModelWithAuthRetry`, codex review on Share#1977).
 
 Covered by `useSignedOutDriveCleanup.test.js`, CadView.test.jsx's "Drive
 loads and sign-in", and `signOutForgetsDrive.spec.ts` (desktop and mobile:

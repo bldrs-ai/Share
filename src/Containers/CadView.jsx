@@ -620,11 +620,23 @@ export default function CadView({
 
   /**
    * loadModel wrapper for the auth-slow path: when the attempt went out
-   * before auth settled (grace window in onViewerInternal expired, so
-   * probably no token) and failed auth-shaped — GitHub masks private repos
-   * as 404 to anonymous callers and rate-limits anonymous IPs with 403 —
-   * wait for the token to land and retry once with it. Everything else
-   * rethrows to onViewerInternal's catch unchanged.
+   * before auth settled (grace window in onViewerInternal expired), wait for
+   * auth and retry once with what it brings. Per provider:
+   *
+   * - GitHub: only a failure that is auth-shaped — GitHub masks private
+   *   repos as 404 to anonymous callers and rate-limits anonymous IPs with
+   *   403 — and only once a GitHub token has landed.
+   * - Drive: the attempt read as signed out, so it took the API-key path,
+   *   which only serves link-shared files (loadModel never uses a Drive
+   *   connection while signed out). If auth then settles signed in and a
+   *   Drive connection is saved, retry through the connection. Any failure
+   *   qualifies: the API-key download's error has no reliable status, and
+   *   this is one retry. Without it a Google-only user's restricted link
+   *   stayed failed until a reload, because the auth-state effect's
+   *   onViewer is dropped while this load is in flight (codex review on
+   *   Share#1977).
+   *
+   * Everything else rethrows to onViewerInternal's catch unchanged.
    *
    * @param {object} routeResult
    * @param {boolean} isAuthSettledBeforeLoad
@@ -634,7 +646,22 @@ export default function CadView({
     try {
       return await loadModel(routeResult)
     } catch (error) {
-      if (isAuthSettledBeforeLoad || !isAuthShapedLoadError(error)) {
+      if (isAuthSettledBeforeLoad) {
+        throw error
+      }
+      if (routeResult.kind === 'provider' && routeResult.provider === 'google') {
+        setIsModelLoading(true)
+        await waitForAuthSettled(AUTH_SETTLE_RETRY_MS)
+        const hasDriveConnection = useStore.getState().connections.some((c) => c.providerId === 'google-drive')
+        if (!isAuthenticatedRef.current || !hasDriveConnection) {
+          // Settled signed out (or nothing to retry with): the API-key
+          // failure was the real answer.
+          throw error
+        }
+        debug().log('CadView#loadModelWithAuthRetry: Drive load ran before sign-in settled; retrying via connection')
+        return await loadModel(routeResult)
+      }
+      if (!isAuthShapedLoadError(error)) {
         throw error
       }
       // loadModel's finally just cleared the overlay; keep it up while we
@@ -711,8 +738,9 @@ export default function CadView({
         // restricted one fails with the usual alert. Sign-out also clears the
         // connection outright (connections/useSignedOutDriveCleanup.js); this
         // covers a load that starts before that runs. If auth hadn't settled
-        // within the grace above, this attempt reads as signed out, and the
-        // auth-state effect below re-runs the load once it settles.
+        // within onViewerInternal's grace, this attempt reads as signed out,
+        // and loadModelWithAuthRetry retries through the connection once auth
+        // settles signed in.
         const connection = isAuthenticatedRef.current ?
           connections.find((c) => c.providerId === 'google-drive') :
           undefined
