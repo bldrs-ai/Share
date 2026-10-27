@@ -17,30 +17,28 @@
  * count: a Pro user's history never uses up an allowance they would have if
  * they lapsed.
  *
- * The window rolls the way quotas' 30-day window does
- * (design/new/quotas.md §"30-day rolling window"): each free export comes
- * back exactly D days after it was made, rather than all of them at once on
- * a calendar boundary.
+ * D is not its own number: it is the free tier's one rolling window,
+ * `ROLLING_WINDOW_DAYS` in `quota/limits.js`, which private models use too
+ * (design/new/quotas.md §"Rolling window"), so exports and private models
+ * are always on the same timing. Each free export comes back exactly D days
+ * after it was made, rather than all of them at once on a calendar boundary.
  *
- * Dependency-free and imported with its `.js` extension by the functions,
- * which load under plain Node ESM — same constraint as `quota/proStatus.js`.
+ * Imported with its `.js` extension by the functions, which load under plain
+ * Node ESM — same constraint as `quota/proStatus.js`. Its one import,
+ * `quota/limits.js`, is dependency-free under the same constraint.
  */
+
+import {ROLLING_WINDOW_DAYS, ROLLING_WINDOW_MS} from '../quota/limits.js'
 
 
 /** Free exports a signed-in, non-Pro user gets per window. */
 export const FREE_EXPORT_LIMIT = 2
 
-/** Length of the rolling window, in days. */
-export const FREE_EXPORT_WINDOW_DAYS = 7
-
-const HOURS_PER_DAY = 24
-const MINUTES_PER_HOUR = 60
-const SECONDS_PER_MINUTE = 60
-const MILLIS_PER_SECOND = 1000
+/** Length of the rolling window, in days: the free tier's one window. */
+export const FREE_EXPORT_WINDOW_DAYS = ROLLING_WINDOW_DAYS
 
 /** Length of the rolling window, in milliseconds. */
-export const FREE_EXPORT_WINDOW_MS =
-  FREE_EXPORT_WINDOW_DAYS * HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MINUTE * MILLIS_PER_SECOND
+export const FREE_EXPORT_WINDOW_MS = ROLLING_WINDOW_MS
 
 /**
  * The `error` a refusal at the limit carries, from `pro-module` (403) and its

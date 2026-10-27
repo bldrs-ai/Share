@@ -110,7 +110,7 @@ Private-model loads from the cloud (Drive, private GitHub) are metered per tier
 to create a sign-up / upgrade moment; local files and public or sample content
 are never counted (Share#1966; the `meterLocalFiles` flag can put local files
 back in the meter, see quotas.md §"Metering local files again").
-**The full design — tiers and limits, the 30-day rolling window, the
+**The full design — tiers and limits, the rolling 7-day window, the
 server-authoritative `record-load` gate, GitHub public/private detection, the
 OPFS local fallback, and the `quotas` feature flag — lives in
 [design/new/quotas.md](../../../design/new/quotas.md).** This section covers

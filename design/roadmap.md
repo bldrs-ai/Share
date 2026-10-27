@@ -715,8 +715,9 @@ not just a revenue trickle.*
 **Epic `subscribe-120`: Quota tracking** 🟡 (NEW)
 - Shipped (v0.9): the server-side counter keyed by Auth0 `sub`
   (`netlify/functions/record-load.js`, `app_metadata.usageQuota`), metering
-  **private-model loads** on a 30-day window, with enforcement behind the
-  `quotas` flag, **default off** (`src/FeatureFlags.js`; `design/new/quotas.md`);
+  **private-model loads** on a rolling 7-day window (30 until 2026-10-26, now
+  shared with free exports), with enforcement behind the `quotas` flag, **on
+  in production since Share#1970** (`src/FeatureFlags.js`; `design/new/quotas.md`);
   the `share-140` free-export allowance (`src/export/freeExports.js`, charged in
   `pro-module.js`, reported by `record-export.js`); funnel events `quota_limit_reached`,
   `begin_checkout`, `subscription_started`/`_ended`

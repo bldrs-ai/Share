@@ -2527,14 +2527,18 @@ unlimited; anonymous still gets the login prompt. N and D are
 `FREE_EXPORT_LIMIT` and `FREE_EXPORT_WINDOW_DAYS` in
 `src/export/freeExports.js`, the one module the functions, the Export tab and
 the MSW mocks all import, together with the window itself
-(`freeExportAllowance`). Change the allowance there and nowhere else.
+(`freeExportAllowance`). Change the allowance there and nowhere else — except
+that D is not its own number: since 2026-10-26 `FREE_EXPORT_WINDOW_DAYS` is
+`ROLLING_WINDOW_DAYS` from `src/quota/limits.js`, the free tier's one window,
+which private models use too, so moving it moves both.
 
 **The ledger** is the list `record-export` already kept: Auth0
 `app_metadata.exports`. A free export is a row with `free: true`; only those
 rows count, so a lapsed Pro user's history never eats their allowance. A row
 counts while `now < exportedAt + 7 days`, so each one comes back exactly a
-week after it was spent — the rolling shape of quotas' 30-day window
-([quotas.md](quotas.md) §"30-day rolling window"), not a calendar reset.
+week after it was spent — the rolling shape of quotas' window, and since
+2026-10-26 the same constant ([quotas.md](quotas.md) §"Rolling window"),
+not a calendar reset.
 `nextFreeAt` is when the oldest counted row stops counting.
 
 **Where it is counted: at delivery, in `pro-module`.** That is the one step

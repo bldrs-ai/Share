@@ -105,17 +105,22 @@ export default function useQuota() {
     if (tier === TIERS.PAID) {
       return {allowed: true, used, limit, alreadyCounted: false}
     }
+    // Re-pruned at call time, not just at mount: a tab left open across a
+    // slot's roll-off would otherwise keep counting it until the next
+    // record() or remount (agent review on Share#1974).
+    const loads = pruneLoads(quota.loads, tier)
+    const usedNow = loads.length
     if (key === null || key === undefined || !isQuotablePath(key)) {
-      return {allowed: true, used, limit, alreadyCounted: false}
+      return {allowed: true, used: usedNow, limit, alreadyCounted: false}
     }
-    const alreadyCounted = quota.loads.some((l) => l.key === key)
+    const alreadyCounted = loads.some((l) => l.key === key)
     // Only deny what the client KNOWS is a new private load: /v/gh/ paths
     // may be public (the server resolves that), so they pass the cheap gate
     // and record() makes the authoritative call. Already-counted keys stay
     // openable at limit (server idempotency).
     return {
-      allowed: alreadyCounted || !isLocallyQuotable(key) || used < limit,
-      used,
+      allowed: alreadyCounted || !isLocallyQuotable(key) || usedNow < limit,
+      used: usedNow,
       limit,
       alreadyCounted,
     }

@@ -66,6 +66,16 @@ describe('QuotaLimitDialog', () => {
     expect(limitEvents()[1][2]).toEqual({tier: 'anonymous', feature: 'private_load', open_cid: 'cid.111.222'})
   })
 
+  // The free window is 7 days (owner, 2026-10-26; was 30), and the dialog
+  // quotes it to both tiers: the free user's limit, and the anonymous user's
+  // sign-up offer.
+  it('quotes the free tier as 2 private models in a rolling 7 days', () => {
+    const {getByText, show} = renderDialog({tier: TIERS.FREE, isOpen: true})
+    expect(getByText(/limit of 2 private models in any rolling 7-day window/)).toBeInTheDocument()
+    show({tier: TIERS.ANONYMOUS, isOpen: true})
+    expect(getByText(/open 2 private models in any rolling 7 days/)).toBeInTheDocument()
+  })
+
   it('stays quiet while closed', () => {
     renderDialog({tier: TIERS.FREE, isOpen: false})
     expect(limitEvents()).toHaveLength(0)

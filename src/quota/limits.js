@@ -35,12 +35,20 @@ export const ANONYMOUS_PRIVATE_MODEL_LIMIT = 2
 
 /**
  * Private models a signed-in free user may open per ROLLING_WINDOW_DAYS.
- * The pricing page sells this as "2 private models a month".
+ * The pricing page sells this as "Open and share 2 private models a week".
  */
 export const FREE_PRIVATE_MODEL_LIMIT = 2
 
-/** Length of the rolling window for non-anonymous tiers, in days */
-export const ROLLING_WINDOW_DAYS = 30
+/**
+ * Length of the free tier's rolling window, in days: for private models here
+ * and for free GLB exports, whose `FREE_EXPORT_WINDOW_DAYS`
+ * (`export/freeExports.js`) IS this constant. One window, so the pricing
+ * page's "2 private models a week" and "2 GLB exports a week" can't drift
+ * apart. Owner decision 2026-10-26 (was 30): "weekly will help keep us more
+ * top-of-mind, and private shares and exports should be on the same timing
+ * to keep it simple." Anonymous is exempt — a lifetime cap, never pruned.
+ */
+export const ROLLING_WINDOW_DAYS = 7
 
 const HOURS_PER_DAY = 24
 const MINUTES_PER_HOUR = 60
@@ -50,6 +58,33 @@ const MILLIS_PER_SECOND = 1000
 /** Length of the rolling window, in milliseconds */
 export const ROLLING_WINDOW_MS =
   ROLLING_WINDOW_DAYS * HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MINUTE * MILLIS_PER_SECOND
+
+/**
+ * The ledger rows still inside the rolling window at `now`: THE one
+ * implementation, used by the client (`quota.js#pruneLoads`, which the MSW
+ * mock calls) and by `record-load`, so the two can't disagree about an edge.
+ *
+ * The edge is exclusive: a row counts while `now < loadedAt + window`, so a
+ * row exactly ROLLING_WINDOW_DAYS old no longer counts. Free exports
+ * (`export/freeExports.js#freeExportAllowance`) and engagement tracking use
+ * the same comparison, and it is the one that makes a "next slot frees at
+ * loadedAt + window" statement true at that instant.
+ *
+ * Tier-blind: anonymous ledgers are never pruned, and that exemption is the
+ * caller's (`quota.js#pruneLoads`; `record-load` never sees anonymous).
+ *
+ * @param {Array<{key: string, loadedAt: string}>} loads anything else is
+ *   treated as an empty ledger
+ * @param {number} now millis since epoch
+ * @return {Array<{key: string, loadedAt: string}>}
+ */
+export function loadsInsideRollingWindow(loads, now) {
+  if (!Array.isArray(loads)) {
+    return []
+  }
+  return loads.filter((l) => now < Date.parse(l.loadedAt) + ROLLING_WINDOW_MS)
+}
+
 
 /** Quotable load limits per tier within the rolling window */
 export const LIMITS = {
@@ -87,5 +122,8 @@ export function isAlwaysPrivateRouteKind(routeKind, meterLocalFiles) {
   if (routeKind === DRIVE_ROUTE_KIND) {
     return true
   }
-  return meterLocalFiles === true && LOCAL_ROUTE_KINDS.includes(routeKind)
+  // The typeof guard is for tsc, not behavior (a null kind was never in the
+  // list): freeExports.js imports this file now, which puts it in the
+  // typecheck's graph via the TypeScript that imports freeExports.
+  return meterLocalFiles === true && typeof routeKind === 'string' && LOCAL_ROUTE_KINDS.includes(routeKind)
 }

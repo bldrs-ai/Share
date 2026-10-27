@@ -15,6 +15,10 @@ import {
 // mock enforces. A spec can't import app modules, so it's restated here.
 const FREE_LIMIT = 2
 
+// Age of the oldest seeded load: inside ROLLING_WINDOW_DAYS (7).
+const OLDEST_SEEDED_DAYS = 6
+const DAY_MS = 86_400_000
+
 // Any id routes/google.ts accepts (25-44 URL-safe chars); its download is
 // routed to the demo model below.
 const DRIVE_FILE_ID = 'bldrsMockDriveIfcFixture0000001'
@@ -78,11 +82,16 @@ async function gaEvents(page: Page, name: string): Promise<GaEvent[]> {
 describeMobileAndDesktop('Quota: direct links are a soft gate', () => {
   test.beforeEach(async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
-    await page.addInitScript((limit) => {
+    // The oldest seeded model is 6 days old: still inside the 7-day window
+    // (ROLLING_WINDOW_DAYS, which the mock prunes to as record-load does),
+    // so this link is the 3rd within 7 days.
+    await page.addInitScript(({limit, dayMs, oldestDays}) => {
       const w = window as unknown as QuotaWindow
-      const loadedAt = new Date().toISOString()
-      w.__mockQuotaLoads = Array.from({length: limit}, (_, i) => ({key: `/share/v/g/seeded-${i}`, loadedAt}))
-    }, FREE_LIMIT)
+      w.__mockQuotaLoads = Array.from({length: limit}, (_, i) => ({
+        key: `/share/v/g/seeded-${i}`,
+        loadedAt: new Date(Date.now() - ((i === 0 ? oldestDays : 0) * dayMs)).toISOString(),
+      }))
+    }, {limit: FREE_LIMIT, dayMs: DAY_MS, oldestDays: OLDEST_SEEDED_DAYS})
     await homepageSetup(page)
     // The Drive download a `/share/v/g/<id>` link makes with no Drive
     // connection (CadView#loadModel's API-key path), served as the demo

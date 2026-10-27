@@ -31,8 +31,8 @@ export const flags = [
   // reports unlimited capacity and record() is a no-op, so no load is
   // ever counted or blocked and the QuotaBadge stays hidden. ON since
   // Share#1970, which made the pricing page's limits the enforced ones
-  // (local files unmetered, free accounts 2 private models per rolling 30
-  // days). `?feature=` can only turn flags ON, so flipping this back to
+  // (local files unmetered, free accounts 2 private models per rolling 7
+  // days since 2026-10-26, 30 before). `?feature=` can only turn flags ON, so flipping this back to
   // false is the prod-wide off switch.
   // See design/new/quotas.md.
   {name: 'quotas', isActive: true},
