@@ -99,7 +99,20 @@ describe('bldrs.dev domain redirect (real public/_redirects)', () => {
     ])
   })
 
-  it('stays out of the dev proxy\'s SPA allowlist', () => {
-    expect(isSpaPath('/', loadSpaAllowlist())).toBe(false)
+  // The dev proxy reads the same file (tools/esbuild/proxy.js): the domain
+  // rules must parse as non-SPA rules, skipped quietly, not as SPA paths or
+  // as "malformed" lines that warn on every dev-server start.
+  it('is skipped quietly by the dev proxy\'s SPA parser', () => {
+    // A plain recorder, not jest.spyOn: these tests run as ESM, where the
+    // `jest` global isn't defined.
+    const warnings = []
+    const realWarn = console.warn
+    console.warn = (...args) => warnings.push(args)
+    try {
+      expect(parseSpaAllowlist(rules.slice(0, 2).map((parts) => parts.join(' ')).join('\n'))).toEqual([])
+    } finally {
+      console.warn = realWarn
+    }
+    expect(warnings).toEqual([])
   })
 })
