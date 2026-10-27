@@ -278,17 +278,55 @@ describe('useQuota — Drive visibility (signed in)', () => {
     expect(server.keys()).toEqual([seeded[0], DRIVE_KEY])
   })
 
-  it('a failed visibility lookup counts the file as private', async () => {
+  /**
+   * One fetch for both callers: record-load goes to the fake server, the Drive
+   * metadata request the visibility check makes with the API key goes to
+   * `metadata`.
+   *
+   * @param {{fetch: Function}} server fakeRecordLoad's
+   * @param {number} metadataStatus HTTP status the API-key metadata check gets
+   * @return {Function} the metadata request's mock
+   */
+  function routeFetch(server, metadataStatus) {
+    const metadata = jest.fn(() => Promise.resolve({ok: metadataStatus === HTTP_OK, status: metadataStatus}))
+    global.fetch = jest.fn((url, init) => String(url).startsWith('https://www.googleapis.com/drive/v3/files/') ?
+      metadata(url) :
+      server.fetch(url, init))
+    return metadata
+  }
+
+  // Drive refuses permissions.list to a user who can only read the file.
+  const refusedLookup = () => getProvider.mockReturnValue({
+    getVisibility: jest.fn(() => Promise.reject(new Error('403 insufficientFilePermissions'))),
+  })
+
+  it('a refused lookup on a file the API key can read is link-shared: not sent, not counted', async () => {
     const server = fakeRecordLoad(seeded)
-    global.fetch = server.fetch
-    getProvider.mockReturnValue({getVisibility: jest.fn(() => Promise.reject(new Error('403 insufficientFilePermissions')))})
+    const metadata = routeFetch(server, HTTP_OK)
+    refusedLookup()
 
     const outcome = await recordOnce(DRIVE_KEY, {
       resolveDriveVisibility: () => driveFileQuotaVisibility(connection, 'x'),
     })
 
-    expect(global.fetch).toHaveBeenCalledTimes(1)
-    expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({key: DRIVE_KEY})
+    expect(metadata).toHaveBeenCalledTimes(1)
+    expect(server.fetch).not.toHaveBeenCalled()
+    expect(outcome.allowed).toBe(true)
+    expect(server.keys()).toEqual(seeded)
+  })
+
+  it('a refused lookup the API key cannot read either counts the file as private', async () => {
+    const server = fakeRecordLoad(seeded)
+    const metadata = routeFetch(server, HTTP_FORBIDDEN)
+    refusedLookup()
+
+    const outcome = await recordOnce(DRIVE_KEY, {
+      resolveDriveVisibility: () => driveFileQuotaVisibility(connection, 'x'),
+    })
+
+    expect(metadata).toHaveBeenCalledTimes(1)
+    expect(server.fetch).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(server.fetch.mock.calls[0][1].body)).toEqual({key: DRIVE_KEY})
     expect(outcome.allowed).toBe(false)
   })
 
