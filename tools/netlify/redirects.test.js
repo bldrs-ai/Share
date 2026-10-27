@@ -1,3 +1,6 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import {fileURLToPath} from 'node:url'
 import {parseSpaAllowlist, isSpaPath, loadSpaAllowlist} from './redirects.js'
 
 
@@ -75,5 +78,28 @@ describe('loadSpaAllowlist (real public/_redirects)', () => {
   it('does not route arbitrary unknown paths (soft-404 fix)', () => {
     expect(isSpaPath('/abot', m)).toBe(false)
     expect(isSpaPath('/random-typo', m)).toBe(false)
+  })
+})
+
+
+// bldrs.dev is held, not served (bldrs-ai/ops#36). Netlify applies the first
+// matching rule, so the domain redirects must come before every SPA rewrite,
+// or https://bldrs.dev/share/... would be served as a page.
+describe('bldrs.dev domain redirect (real public/_redirects)', () => {
+  const file = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../public/_redirects')
+  const rules = fs.readFileSync(file, 'utf8').split('\n')
+    .map((line) => line.replace(/#.*$/, '').trim())
+    .filter(Boolean)
+    .map((line) => line.split(/\s+/))
+
+  it('sends bldrs.dev and www.bldrs.dev to the same path on bldrs.ai, forced, as the first rules', () => {
+    expect(rules.slice(0, 2)).toEqual([
+      ['https://bldrs.dev/*', 'https://bldrs.ai/:splat', '301!'],
+      ['https://www.bldrs.dev/*', 'https://bldrs.ai/:splat', '301!'],
+    ])
+  })
+
+  it('stays out of the dev proxy\'s SPA allowlist', () => {
+    expect(isSpaPath('/', loadSpaAllowlist())).toBe(false)
   })
 })
