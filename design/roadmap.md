@@ -683,8 +683,9 @@ churns) instrumented well enough to produce decision-grade conversion evidence �
 not just a revenue trickle.*
 
 **Epic `subscribe-100`: Pricing tiers + feature manager** 🟡 (NEW)
-- Shipped (v0.9): three tiers — anonymous / free / Pro — mapped once in
-  `src/quota/quota.js#getTier`, with the Pro statuses defined in
+- Shipped (v0.9): quota tiers free / Pro (signed-out users are never
+  metered; the anonymous tier was removed, quotas.md §"Tiers & limits") —
+  mapped once in `src/quota/quota.js#getTier`, with the Pro statuses defined in
   `src/quota/proStatus.js`; the public pricing page
   (`marketing/src/components/PricingTiers.tsx`). Not shipped: the size/complexity
   axis below — the shipped tiers differ on private-model loads (enforcement off

@@ -208,6 +208,11 @@ export default function CadView({
   // review of Share#1961). The upload-not-in-browser count (#1955) is gated
   // by the same ref, under its own key prefix.
   const reportedRefusalRef = useRef(null)
+  // How loadModel last downloaded a Drive file: `{fileId, connection}`, with
+  // connection null for the API-key path. The direct-link quota meter reads
+  // it to tell a link-shared (public, unmetered) file from a private one
+  // (quota/useDirectLinkQuota.js, design/new/quotas.md §"Drive visibility").
+  const driveDownloadRef = useRef(null)
   // The model identity the two dedupe refs belong to.
   const dedupeModelKeyRef = useRef(null)
   // The model a `load_failed` was last sent for, for the same reason and
@@ -568,8 +573,12 @@ export default function CadView({
     setIsModelReady(true)
     // After the model is on screen, never before: a direct link is metered
     // but not gated (quota/useDirectLinkQuota.js). The Open dialog already
-    // recorded what it opened, which the hook sees as alreadyCounted.
-    meterDirectLinkLoad(modelPath)
+    // recorded what it opened, which the hook sees as alreadyCounted. For
+    // Drive, only a download of THIS file says how it was fetched; anything
+    // else is left undefined, which the meter counts as private.
+    const driveDownload = driveDownloadRef.current?.fileId === modelPath.fileId ?
+      driveDownloadRef.current : undefined
+    meterDirectLinkLoad(modelPath, driveDownload)
 
     let lastSent = 0
     /** Debounced function to track model interaction for GA. */
@@ -681,6 +690,7 @@ export default function CadView({
     try {
       if (isGoogleResult) {
         const connection = connections.find((c) => c.providerId === 'google-drive')
+        driveDownloadRef.current = {fileId: routeResult.fileId, connection: connection || null}
         if (connection) {
           // OAuth path: authenticated download for private files
           const browser = getBrowser('google-drive')
@@ -688,7 +698,10 @@ export default function CadView({
           const blobUrl = URL.createObjectURL(download.blob)
           loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '')
         } else {
-          // API key fallback: works for public files and route tests without a connection
+          // API key fallback: works for public files and route tests without a
+          // connection. Only a file shared "Anyone with the link" (or
+          // published) downloads this way, which is why the quota meter
+          // treats a Drive file loaded here as public.
           loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, setOpfsFile, '')
         }
       } else {

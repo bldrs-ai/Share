@@ -3,6 +3,7 @@ import {useAuth0} from '../Auth0/Auth0Proxy'
 import useQuota from '../hooks/useQuota'
 import {GATE_EVENTS, gtagEventWithCid} from '../privacy/analytics'
 import {navigateBaseOnModelPath} from '../utils/location'
+import {driveFileQuotaVisibility} from './driveVisibility'
 
 
 /**
@@ -26,6 +27,7 @@ export const DIRECT_LINK_ROUTE_KINDS = Object.freeze({
  * - Drive: `${appPrefix}/v/g/${fileId}`, as OpenModelDialog#handleOpenById
  *   and #handlePickerSelect build it. A `/v/g/<drive URL>` route parses to
  *   the same fileId (routes/google.ts), so it lands on the same key.
+ *   Whether it counts is the file's visibility (useDirectLinkQuota below).
  * - GitHub: navigateBaseOnModelPath, as GitHubFileBrowser builds the
  *   sharePath it records and saves to recents. That helper hard-codes
  *   `/share`, not appPrefix; matching it is what keeps the dedup working.
@@ -39,14 +41,18 @@ export const DIRECT_LINK_ROUTE_KINDS = Object.freeze({
  *
  * @param {object|null} modelPath route result (routes/routes.ts#handleRoute)
  * @param {string} appPrefix e.g. '/share'
- * @return {{key: string, routeKind: string}|null}
+ * @return {{key: string, routeKind: string, fileId: (string|undefined)}|null}
  */
 export function directLinkQuotaKey(modelPath, appPrefix) {
   if (!modelPath || modelPath.kind !== 'provider') {
     return null
   }
   if (modelPath.provider === 'google' && modelPath.fileId) {
-    return {key: `${appPrefix}/v/g/${modelPath.fileId}`, routeKind: DIRECT_LINK_ROUTE_KINDS.GDRIVE}
+    return {
+      key: `${appPrefix}/v/g/${modelPath.fileId}`,
+      routeKind: DIRECT_LINK_ROUTE_KINDS.GDRIVE,
+      fileId: modelPath.fileId,
+    }
   }
   if (modelPath.provider === 'github' && modelPath.org && modelPath.repo && modelPath.branch && modelPath.filepath) {
     return {
@@ -72,11 +78,21 @@ export function directLinkQuotaKey(modelPath, appPrefix) {
  * gate").
  *
  * Returns a function CadView calls after each successful load with the
- * route it loaded. Each key is metered at most once per page load (a theme
- * change re-inits the viewer and reloads the same model; navigating A → B →
- * A in-app is one open of A), and not before Auth0 has settled: record()
- * picks the anonymous OPFS-only path while `isAuthenticated` is still false,
- * which would keep a signed-in user's load off the server ledger.
+ * route it loaded and, for Drive, how it downloaded the file. Each key is
+ * metered at most once per page load (a theme change re-inits the viewer and
+ * reloads the same model; navigating A → B → A in-app is one open of A), and
+ * not before Auth0 has settled: while `isAuthenticated` is still false,
+ * record() treats the user as signed out and meters nothing, which would let
+ * a signed-in user's load go uncounted.
+ *
+ * A Drive file counts only when it is private (design/new/quotas.md §"Drive
+ * visibility"). CadView passes `driveDownload`: `{connection: null}` when it
+ * downloaded the file with the API key, which only works for a file anyone
+ * with the link can open, so it is public and nothing is recorded;
+ * `{connection}` when it used the user's Drive connection, so the file's
+ * permissions are looked up (driveVisibility.js). The lookup runs inside
+ * record(), only for a free user. A Drive route with no `driveDownload` counts
+ * as private.
  *
  * Dedup across opens is record()'s own, by key: record-load's ledger for a
  * signed-in user (a key it already holds comes back `alreadyCounted`, with
@@ -88,7 +104,7 @@ export function directLinkQuotaKey(modelPath, appPrefix) {
  * with it the meter and the event (codex review on Share#1971).
  *
  * @param {string} appPrefix e.g. '/share'
- * @return {Function} (modelPath) => void, fire-and-forget
+ * @return {Function} (modelPath, driveDownload?) => void, fire-and-forget
  */
 export default function useDirectLinkQuota(appPrefix) {
   const {record} = useQuota()
@@ -99,10 +115,15 @@ export default function useDirectLinkQuota(appPrefix) {
   // that re-run the effect below can't meter a key twice.
   const meteredKeysRef = useRef(new Set())
 
-  const meterLoadedModel = useCallback((modelPath) => {
-    const target = directLinkQuotaKey(modelPath, appPrefix)
-    if (target === null) {
+  const meterLoadedModel = useCallback((modelPath, driveDownload) => {
+    const quotaKey = directLinkQuotaKey(modelPath, appPrefix)
+    if (quotaKey === null) {
       return
+    }
+    const target = {key: quotaKey.key, routeKind: quotaKey.routeKind}
+    // No driveDownload, no resolver: record() then counts the file as private.
+    if (quotaKey.routeKind === DIRECT_LINK_ROUTE_KINDS.GDRIVE && driveDownload) {
+      target.resolveDriveVisibility = () => driveFileQuotaVisibility(driveDownload.connection, quotaKey.fileId)
     }
     // Functional update keeps the previous object when the key is the same,
     // so a same-model re-init causes no render.
@@ -113,7 +134,7 @@ export default function useDirectLinkQuota(appPrefix) {
     if (pending === null || isAuthLoading) {
       return
     }
-    const {key, routeKind} = pending
+    const {key, routeKind, resolveDriveVisibility} = pending
     if (meteredKeysRef.current.has(key)) {
       return
     }
@@ -121,7 +142,8 @@ export default function useDirectLinkQuota(appPrefix) {
     // record() never rejects: network and token failures fall back to OPFS
     // inside useQuota. Not awaited — the model is already on screen and
     // nothing here may hold it.
-    record(key).then((outcome) => {
+    const outcomePromise = resolveDriveVisibility ? record(key, {resolveDriveVisibility}) : record(key)
+    outcomePromise.then((outcome) => {
       if (outcome.allowed !== false) {
         return
       }

@@ -14,7 +14,7 @@ import {
   freeExportAllowance,
   newFreeExportRow,
 } from '../export/freeExports'
-import {FREE_PRIVATE_MODEL_LIMIT, isAlwaysPrivateRouteKind} from '../quota/limits'
+import {FREE_PRIVATE_MODEL_LIMIT, isCountedByRouteKind} from '../quota/limits'
 import {isProSubscriptionStatus} from '../quota/proStatus'
 import {isLocalFileMeteringEnabled} from '../quota/quota'
 import apiHandlersGithub from './api-handlers-github'
@@ -245,9 +245,10 @@ function netlifyHandlers() {
       // route kind, the segment after the FIRST `/v/`, through the shared
       // rule. Local files count only with `meterLocalFiles` on (Share#1966);
       // the real function also takes METER_LOCAL_FILES, which a browser mock
-      // has no equivalent of, so the flag stands in for both.
+      // has no equivalent of, so the flag stands in for both. Drive keys
+      // count as sent: the client only sends the ones it found private.
       const routeKind = (/\/v\/([^/?#]+)/.exec(key) || [])[1]
-      const isLocallyQuotable = isAlwaysPrivateRouteKind(routeKind, isLocalFileMeteringEnabled())
+      const isLocallyQuotable = isCountedByRouteKind(routeKind, isLocalFileMeteringEnabled())
       const ghMatch = routeKind === 'gh' && key.match(/\/v\/gh\/([^/]+)\/([^/]+)\//)
       let quotable = isLocallyQuotable
       if (ghMatch) {

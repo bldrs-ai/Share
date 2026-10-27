@@ -7,7 +7,8 @@ import {
   LOCAL_ROUTE_KINDS,
   ROLLING_WINDOW_DAYS,
   TIERS,
-  isAlwaysPrivateRouteKind,
+  isCountedByRouteKind,
+  isMeteredLocalRouteKind,
 } from './limits'
 
 
@@ -29,24 +30,43 @@ describe('quota/limits', () => {
     expect(LIMITS[TIERS.PAID]).toBe(Infinity)
   })
 
-  describe('isAlwaysPrivateRouteKind', () => {
+  // Signed-out users are never metered, so there is no tier for them, and no
+  // limit left behind for one (Share PR removing the anonymous tier).
+  it('has exactly the free and paid tiers, each with a limit', () => {
+    expect(Object.values(TIERS).sort()).toEqual(['free', 'paid'])
+    expect(Object.keys(LIMITS).sort()).toEqual(['free', 'paid'])
+  })
+
+  describe('isCountedByRouteKind', () => {
+    // record-load counts every Drive key it is sent: it can't see Drive
+    // sharing, so the client sends only private files (quota.js#isDrivePath).
     it('counts Drive whatever the local meter says', () => {
-      expect(isAlwaysPrivateRouteKind(DRIVE_ROUTE_KIND, false)).toBe(true)
-      expect(isAlwaysPrivateRouteKind(DRIVE_ROUTE_KIND, true)).toBe(true)
+      expect(isCountedByRouteKind(DRIVE_ROUTE_KIND, false)).toBe(true)
+      expect(isCountedByRouteKind(DRIVE_ROUTE_KIND, true)).toBe(true)
     })
 
     it('counts local files only with the local meter on', () => {
       for (const kind of LOCAL_ROUTE_KINDS) {
-        expect(isAlwaysPrivateRouteKind(kind, false)).toBe(false)
-        expect(isAlwaysPrivateRouteKind(kind, undefined)).toBe(false)
-        expect(isAlwaysPrivateRouteKind(kind, true)).toBe(true)
+        expect(isCountedByRouteKind(kind, false)).toBe(false)
+        expect(isCountedByRouteKind(kind, undefined)).toBe(false)
+        expect(isCountedByRouteKind(kind, true)).toBe(true)
       }
     })
 
     it('leaves GitHub, hosted and unknown routes to someone else', () => {
       for (const kind of ['gh', 'p', 'u', null, undefined]) {
-        expect(isAlwaysPrivateRouteKind(kind, true)).toBe(false)
+        expect(isCountedByRouteKind(kind, true)).toBe(false)
       }
+    })
+  })
+
+  describe('isMeteredLocalRouteKind', () => {
+    it('is local files with the meter on, and never Drive', () => {
+      for (const kind of LOCAL_ROUTE_KINDS) {
+        expect(isMeteredLocalRouteKind(kind, true)).toBe(true)
+        expect(isMeteredLocalRouteKind(kind, false)).toBe(false)
+      }
+      expect(isMeteredLocalRouteKind(DRIVE_ROUTE_KIND, true)).toBe(false)
     })
   })
 })

@@ -3,6 +3,7 @@ import {
   LIMITS,
   ROLLING_WINDOW_DAYS,
   isLocalFileMeteringEnabled,
+  isDrivePath,
   isLocallyQuotable,
   isServerResolvedPath,
   isQuotablePath,
@@ -25,7 +26,6 @@ const DAY_MS = HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MIN * MILLIS_PER_S
 const DAYS_OUTSIDE_WINDOW = 40
 const DAYS_INSIDE_WINDOW = 29
 const DAYS_NEAR_BOUNDARY = 0.01
-const DAYS_FAR_PAST = 365
 const DAYS_LONG_PAST = 60
 
 
@@ -78,9 +78,14 @@ describe('isLocallyQuotable', () => {
     }
   })
 
-  it('google drive files are locally quotable, with or without the local meter', () => {
-    expect(isLocallyQuotable('/share/v/g/1BxABCxyz')).toBe(true)
-    expect(isLocallyQuotable('/share/v/g/1BxABCxyz', true)).toBe(true)
+  // A Drive file counts only when it is private, which takes a lookup
+  // (useQuota#record, quota/driveVisibility.js), so it is never counted on
+  // its route alone. It used to be: every Drive file was private.
+  it('google drive files are NOT locally quotable (their visibility decides)', () => {
+    expect(isLocallyQuotable('/share/v/g/1BxABCxyz')).toBe(false)
+    expect(isLocallyQuotable('/share/v/g/1BxABCxyz', true)).toBe(false)
+    expect(isDrivePath('/share/v/g/1BxABCxyz')).toBe(true)
+    expect(isQuotablePath('/share/v/g/1BxABCxyz')).toBe(true)
   })
 
   it('github files are NOT locally quotable (server decides)', () => {
@@ -119,7 +124,8 @@ describe('quota path classification by route kind', () => {
 
   it('is not fooled by a Drive or local key that looks like it holds /v/gh/', () => {
     expect(isServerResolvedPath('/share/v/g/v/gh/x')).toBe(false)
-    expect(isLocallyQuotable('/share/v/g/v/gh/x')).toBe(true)
+    expect(isDrivePath('/share/v/g/v/gh/x')).toBe(true)
+    expect(isDrivePath('/share/v/gh/org/repo/main/v/g/model.ifc')).toBe(false)
   })
 })
 
@@ -161,9 +167,10 @@ describe('getTier', () => {
     expect(getTier(null, true)).toBe(TIERS.FREE)
   })
 
-  it('anonymous when not authenticated, regardless of metadata', () => {
-    expect(getTier(null, false)).toBe(TIERS.ANONYMOUS)
-    expect(getTier({subscriptionStatus: 'sharePro'}, false)).toBe(TIERS.ANONYMOUS)
+  // Signed-out users are never metered: no tier at all.
+  it('no tier when not authenticated, regardless of metadata', () => {
+    expect(getTier(null, false)).toBeNull()
+    expect(getTier({subscriptionStatus: 'sharePro'}, false)).toBeNull()
   })
 })
 
@@ -181,26 +188,21 @@ describe('pruneLoads', () => {
       {key: 'b', loadedAt: dayBack(DAYS_INSIDE_WINDOW)}, // in
       {key: 'c', loadedAt: dayBack(1)}, // in
     ]
-    const out = pruneLoads(loads, TIERS.FREE, NOW)
+    const out = pruneLoads(loads, NOW)
     expect(out.map((l) => l.key)).toEqual(['b', 'c'])
   })
 
   it('keeps loads exactly at the boundary', () => {
     const loads = [{key: 'edge', loadedAt: dayBack(ROLLING_WINDOW_DAYS - DAYS_NEAR_BOUNDARY)}]
-    expect(pruneLoads(loads, TIERS.FREE, NOW)).toHaveLength(1)
+    expect(pruneLoads(loads, NOW)).toHaveLength(1)
   })
 
-  it('does not prune anonymous tier (lifetime cap)', () => {
-    const loads = [{key: 'old', loadedAt: dayBack(DAYS_FAR_PAST)}]
-    expect(pruneLoads(loads, TIERS.ANONYMOUS, NOW)).toHaveLength(1)
-  })
-
-  it('paid tier prunes too (irrelevant for limit but keeps storage bounded)', () => {
+  it('prunes whatever the tier (keeps a paid mirror bounded too)', () => {
     const loads = [
       {key: 'a', loadedAt: dayBack(DAYS_LONG_PAST)},
       {key: 'b', loadedAt: dayBack(5)},
     ]
-    expect(pruneLoads(loads, TIERS.PAID, NOW)).toHaveLength(1)
+    expect(pruneLoads(loads, NOW)).toHaveLength(1)
   })
 })
 
@@ -216,21 +218,15 @@ describe('checkQuota', () => {
     loads: keys.map((key) => ({key, loadedAt: recent()})),
   })
 
-  it('allows first load for anonymous', () => {
-    const {allowed, used, limit} = checkQuota(makeQuota(TIERS.ANONYMOUS), '/v/g/a')
+  it('allows first load for free', () => {
+    const {allowed, used, limit} = checkQuota(makeQuota(TIERS.FREE), '/v/g/a')
     expect(allowed).toBe(true)
     expect(used).toBe(0)
-    expect(limit).toBe(LIMITS[TIERS.ANONYMOUS])
-  })
-
-  it('blocks when anonymous limit reached', () => {
-    const quota = makeQuota(TIERS.ANONYMOUS, ['/v/g/a', '/v/g/b'])
-    const {allowed} = checkQuota(quota, '/v/g/c')
-    expect(allowed).toBe(false)
+    expect(limit).toBe(LIMITS[TIERS.FREE])
   })
 
   it('marks already-counted key as allowed even past the limit', () => {
-    const quota = makeQuota(TIERS.ANONYMOUS, ['/v/g/a', '/v/g/b'])
+    const quota = makeQuota(TIERS.FREE, ['/v/g/a', '/v/g/b'])
     const {allowed, alreadyCounted} = checkQuota(quota, '/v/g/a')
     expect(allowed).toBe(true)
     expect(alreadyCounted).toBe(true)
@@ -311,8 +307,16 @@ describe('loadQuota / saveQuota / recordLoad', () => {
 
   it('loadQuota returns default when no file exists', async () => {
     const quota = await loadQuota()
-    expect(quota.tier).toBe(TIERS.ANONYMOUS)
+    expect(quota.tier).toBe(TIERS.FREE)
     expect(quota.loads).toHaveLength(0)
+  })
+
+  // A ledger the removed anonymous tier wrote: what was opened signed out
+  // never counts, so it must not reach a free account's mirror (or badge).
+  it('loadQuota drops a legacy anonymous ledger', async () => {
+    store = JSON.stringify({tier: 'anonymous', loads: [{key: '/share/v/g/a', loadedAt: new Date().toISOString()}]})
+    const quota = await loadQuota()
+    expect(quota.loads).toEqual([])
   })
 
   it('loadQuota silently drops legacy resetDate field', async () => {
@@ -338,13 +342,16 @@ describe('loadQuota / saveQuota / recordLoad', () => {
   it('subscribeToQuota is called after saveQuota', async () => {
     const cb = jest.fn()
     const unsub = subscribeToQuota(cb)
-    const data = {tier: TIERS.ANONYMOUS, loads: []}
+    const data = {tier: TIERS.FREE, loads: []}
     await saveQuota(data)
     expect(cb).toHaveBeenCalledWith(data)
     unsub()
   })
 
-  it('recordLoad adds a locally-quotable key', async () => {
+  // recordLoad is the server-unreachable fallback's writer: the caller has
+  // already decided the load counts (useQuota#recordLocally), so it writes
+  // any key it is given.
+  it('recordLoad adds the key', async () => {
     const result = await recordLoad('/share/v/g/abc123')
     expect(result.loads).toHaveLength(1)
     expect(result.loads[0].key).toBe('/share/v/g/abc123')
@@ -354,31 +361,5 @@ describe('loadQuota / saveQuota / recordLoad', () => {
     await recordLoad('/share/v/g/abc123')
     const result = await recordLoad('/share/v/g/abc123')
     expect(result.loads).toHaveLength(1)
-  })
-
-  it('recordLoad never records a local file with the local meter off', async () => {
-    expect(await recordLoad('/share/v/local-only/abc.ifc')).toBeNull()
-    expect(await recordLoad('/share/v/new/abc.ifc')).toBeNull()
-    expect((await loadQuota()).loads).toHaveLength(0)
-  })
-
-  it('recordLoad records a local file when meterLocalFiles is on', async () => {
-    window.history.pushState({}, '', '/share/v/p/index.ifc?feature=meterLocalFiles')
-    try {
-      const result = await recordLoad('/share/v/local-only/abc.ifc')
-      expect(result.loads.map((l) => l.key)).toEqual(['/share/v/local-only/abc.ifc'])
-    } finally {
-      window.history.pushState({}, '', '/')
-    }
-  })
-
-  it('recordLoad returns null for github paths (server-resolved)', async () => {
-    const result = await recordLoad('/share/v/gh/bldrs-ai/test/main/foo.ifc')
-    expect(result).toBeNull()
-  })
-
-  it('recordLoad returns null for non-quotable paths', async () => {
-    const result = await recordLoad('/share/v/p/something')
-    expect(result).toBeNull()
   })
 })

@@ -1,9 +1,9 @@
 # Usage quotas
 
 Server-enforced metering of *private* model loads — tier-aware, with a 30-day
-rolling window and GitHub public/private detection. Nudges anonymous and
-free-tier users toward sign-up / upgrade without ever blocking public or sample
-content. Enforcement is the `quotas` feature flag, on in production since
+rolling window, GitHub public/private detection and Drive visibility. Nudges
+free-tier users toward upgrade without ever blocking public or sample content,
+and never meters a signed-out user. Enforcement is the `quotas` feature flag, on in production since
 Share#1970.
 
 This is the design of record for the feature. The Open-dialog UI wiring is in
@@ -20,8 +20,9 @@ This is the design of record for the feature. The Open-dialog UI wiring is in
 - **What turning it on changes in production:** signed-in free users get 2
   private models (Drive, private GitHub) per rolling 30 days and see
   `QuotaLimitDialog` on the 3rd opened from the Open dialog (a pasted link
-  to a 3rd still opens, and is counted in GA: §"Direct links: soft gate"); signed-out users get 2 private links for
-  life; local files and public GitHub stay unlimited. `quota_limit_reached`
+  to a 3rd still opens, and is counted in GA: §"Direct links: soft gate");
+  signed-out users are never metered; local files, public GitHub and Drive
+  files shared "Anyone with the link" stay unlimited. `quota_limit_reached`
   starts firing in production GA (§"Funnel analytics"), and every Drive or
   `/v/gh/` open by a signed-in user now calls `record-load`.
 - **Landed as a 4-PR stack** (supersedes #1494). See the Implementation map.
@@ -58,7 +59,7 @@ Enforcement ships dark behind the `quotas` flag.
 
 | Tier | Limit | Window | Determined by |
 |---|---|---|---|
-| Anonymous (not signed in) | 2 | Lifetime — never resets without sign-in | client only |
+| — (signed out) | not metered | — | `getTier` returns `null` |
 | Free (signed in) | 2 | 30-day rolling | `subscriptionStatus` not a Pro status |
 | Paid (`sharePro`, `shareProPendingReauth`) | Unlimited | — | `isProSubscriptionStatus(subscriptionStatus)` |
 
@@ -76,12 +77,22 @@ mapping on the client. Which statuses are Pro is defined once, in
 `shareProPendingReauth` — paid, waiting on a re-login for the GitHub scope —
 has counted as Pro since the GLB-export S4 decision
 ([glb-export-premium.md](glb-export-premium.md) §7.2), so a pending-reauth
-user gets unlimited loads; that is intended. Anonymous gets a *lifetime* cap
-of 2 rather than a rolling window so the conversion moment lands early, while
-the user is still engaged. With local files unmetered and connecting Drive or
-GitHub requiring sign-in, the anonymous cap now only bites on private *links*:
-a Drive or private-GitHub URL opened while signed out. Its number was left
-alone in Share#1966's PR.
+user gets unlimited loads; that is intended.
+
+**Signed out is not a tier, and is never metered.** There used to be an
+anonymous tier: a *lifetime* cap of 2, kept only in an OPFS ledger that never
+pruned. It was removed because a signed-out user can't reach a private model
+at all (§"What counts"): private GitHub needs a token, and a restricted Drive
+file needs the user's own Google authorization. So all it ever metered was
+link-shared Drive files, which are public. Now `getTier` returns `null` when
+signed out, `useQuota` gives that the same unlimited passthrough as the flag
+being off (no OPFS read or write, `record()` admits everything), `TIERS` and
+`LIMITS` hold only free and paid, and `QuotaLimitDialog` lost the "Sign up
+free" offer that existed only for the cap. A browser may still hold the old
+anonymous ledger in `quota.json`; `loadQuota` drops it whole (`tier:
+"anonymous"`), so those rows never follow the user into a free account's
+local mirror. The GA `tier: 'anon'` dimension on analytics events is a
+different thing (sign-in state) and is unchanged.
 
 The same rolling-window shape meters one more thing: **free GLB exports**, 2
 per rolling 7 days for a signed-in free user, counted on the
@@ -91,26 +102,84 @@ and live with the `export` flag rather than `quotas`
 
 ## What counts
 
-Only *private* loads count. A load is quotable when its share path matches:
+Only *private* loads count. **A private model is one the viewer can only see
+because the provider authorizes *them*:** they are a member of the private
+GitHub repo, or the Drive file is shared with their Google account (or their
+Workspace domain). Signing in to Bldrs is necessary but not sufficient;
+provider authorization is what makes a model private. Anything anyone with
+the URL can open (a public repo, a Drive file shared "Anyone with the link")
+is public and never counted.
+
+A load is quotable when its share path matches:
 
 | Path | Classifier | Privacy |
 |---|---|---|
-| `/v/local-only/<filename>` (legacy `/v/new/`, #1959) | — | local file — **not counted** (Share#1966), unless `meterLocalFiles` is on |
-| `/v/g/<fileId>` | `isLocallyQuotable` | Google Drive — always private |
+| `/v/local-only/<filename>` (legacy `/v/new/`, #1959) | `isLocallyQuotable` | local file — **not counted** (Share#1966), unless `meterLocalFiles` is on |
+| `/v/g/<fileId>` | `isDrivePath` | Google Drive — the **client** looks up its visibility (§"Drive visibility") |
 | `/v/gh/<org>/<repo>/...` | `isServerResolvedPath` | GitHub — **server** resolves public vs private |
 
-`isQuotablePath` is their union. Public GitHub repos and sample models are
-**not** counted. The local and Drive rule is one function,
-`limits.js#isAlwaysPrivateRouteKind(routeKind, meterLocalFiles)`, which
-`isLocallyQuotable`, `record-load#isQuotableLoad` and the MSW mock all call;
-the route kind is the segment after the FIRST `/v/` (#1967).
+`isQuotablePath` is their union. Public GitHub repos, link-shared Drive files
+and sample models are **not** counted. The route-kind rules live in
+`limits.js`: `isMeteredLocalRouteKind(routeKind, meterLocalFiles)` (local
+files, shared by `isLocallyQuotable`, `record-load` and the MSW mock) and
+`isCountedByRouteKind` (what `record-load` and the mock count without a
+lookup of their own: Drive, and metered local files). The route kind is the
+segment after the FIRST `/v/` (#1967). The dedup key is the share path
+itself, so reloading the same model never consumes a new slot (surfaced as
+`alreadyCounted`).
 
-**Drive counts every file as private.** Drive has no cheap public/private
-answer the way GitHub's unauthenticated repo lookup gives one, so a Drive
-file is always metered, even one shared "anyone with the link". That agrees
-with the pricing page, which promises *unlimited* only for public GitHub
-models; Drive is among the "private models" a free account gets 2 of. The dedup key is the share path itself, so reloading the same
-model never consumes a new slot (surfaced as `alreadyCounted`).
+### Drive visibility
+
+A Drive file counts only when it is private. The client decides, in
+`useQuota#record(key, {resolveDriveVisibility})`, and only for a free user
+(Pro is never refused, so it costs no lookup). The answer comes from
+`quota/driveVisibility.js#driveFileQuotaVisibility(connection, fileId)`,
+which never rejects:
+
+| How the file was opened | Visibility | Counted? |
+|---|---|---|
+| No `google-drive` connection: `CadView#loadModel` downloads with the app's API key (`routeResult.downloadUrl`) | public: that download only succeeds for a file shared "Anyone with the link" (or published) | No |
+| Through a connection, lookup says `'public'` (an `anyone` permission) | public | No |
+| Through a connection, lookup says `'private'`, `'org'` (domain-only) or `null` (a domain grant whose domain can't be told) | private | **Yes** |
+| Through a connection, lookup fails (or no provider answers) | private: the behaviour before this change, when every Drive file counted | **Yes** |
+| Drive key with no resolver (a caller that can't tell) | private | **Yes** |
+
+The lookup is the connection provider's `getVisibility`
+(`GoogleDriveSharing#driveGetVisibility`, one `permissions.list` reduced as
+documented on `Visibility` in `src/connections/types.ts`). Who passes it:
+
+- **Open dialog** (`OpenModelDialog#handleOpenById`, `#handlePickerSelect`):
+  the clicked connection. It runs after the token preflight, so it never
+  spends the click's user activation. `check(key)` no longer refuses a Drive
+  key on its own (it can't know the visibility), so a link-shared file opens
+  at the limit and a restricted one is refused by `record()` instead.
+- **Direct links** (`useDirectLinkQuota`): `CadView` keeps how it last
+  downloaded a Drive file (`driveDownloadRef`: `{fileId, connection}`, with
+  `connection: null` for the API-key path) and passes it with the loaded
+  route. A route it has no download for counts as private.
+
+A public Drive file is never sent to `record-load`, so nothing is recorded
+and nothing refused, and the direct-link soft gate stays silent.
+
+**Known gap: the lookup may fail for files the user can only read.** Drive
+can refuse `permissions.list` to a reader, in which case a link-shared file
+opened *through a connection* by someone who isn't its owner or an editor
+still counts. The same file opened without a connection (a pasted link while
+not connected) does not. A follow-up, if that case matters: on lookup failure,
+probe the file's metadata with the API key (no user token); success means
+link-shared. Not built here, pending the owner's call.
+
+**Server trust (a known gap).** `record-load` decides GitHub privacy itself
+(unauthenticated `api.github.com/repos/{owner}/{repo}`, §"GitHub privacy
+detection") and never takes the client's word for it. It can't do the same
+for Drive: seeing a file's sharing needs the user's Drive token, which the
+function doesn't hold, and no server-side Google call was built. So it
+counts every `/v/g/` key it is sent, and the client sends only the Drive
+files it classified private. A modified client could skip the call for a
+restricted file and go uncounted. That is no wider than the gap every load
+already has (whether `record-load` is called at all is the client's choice),
+and nothing is sent as a client-asserted "visibility" field the server would
+have to trust.
 
 **Local files are free and unmetered (Share#1966).** The owner's direction
 (2026-10-22): viewing a file from your own computer is never counted and never
@@ -126,12 +195,11 @@ together so local files aren't left half-metered:
   now goes straight to `record(key)`, which passes the unmetered key.
 - `QuotaLimitDialog.spec.ts` reaches the limit on a Drive pick instead of a
   local drop, and `localFilesUnmetered.spec.ts` drops three local files
-  signed out (one past the anonymous cap) and asserts no dialog and an empty
-  ledger.
+  signed out (one past the old anonymous cap) and asserts no dialog and an
+  empty ledger.
 
 Ledgers may still hold `/v/new/` or `/v/local-only/` rows from before. They
-age out of the 30-day window; an anonymous OPFS ledger never prunes, so such
-rows keep counting toward the lifetime cap until sign-in.
+age out of the 30-day window.
 
 ### Metering local files again
 
@@ -140,8 +208,12 @@ default**: the `meterLocalFiles` flag in `src/FeatureFlags.js`.
 
 - **Client:** `quota.js#isLocalFileMeteringEnabled()` reads it through
   `isFeatureEnabled`, so `?feature=meterLocalFiles` turns it on for one
-  session, and `isActive: true` for everyone. Signed-out counting is
-  client-side (OPFS), so the URL flag alone meters an anonymous session.
+  session, and `isActive: true` for everyone.
+- **Signed-out users stay unmetered with the switch on.** It meters signed-in
+  free users' local files only. The rule that a signed-out user is never
+  metered wins, so a signed-out user can still open local files without
+  limit; if local-file abuse ever needs stopping for them too, the lever is
+  a sign-in requirement for local files, not this switch.
 - **Server:** `record-load` honours the same flag's `isActive`, **or** the
   `METER_LOCAL_FILES=true` Netlify env var, which meters this function alone
   (a URL flag never reaches it). Testing signed-in metering on a deploy
@@ -179,25 +251,27 @@ workaround is used before deciding whether it should be gated:
 
 - **What is metered.** After each successful load, `CadView#onViewerInternal`
   hands the loaded route to `quota/useDirectLinkQuota.js`, which calls the
-  same `useQuota().record(key)` the dialog does: Drive files, and `/v/gh/`
+  same `useQuota().record(key)` the dialog does: private Drive files (a
+  link-shared one, which is what a pasted link with no Drive connection
+  downloads, is public and never counted: §"Drive visibility"), and `/v/gh/`
   files, whose privacy record-load decides (a public repo comes back
   not-quotable and is never counted). Never local files, hosted `/v/p/`
-  models or generic `/v/u/` URLs.
+  models or generic `/v/u/` URLs, and never anything a signed-out user
+  opens.
 - **Same key as the dialog**, so the ledger's dedup by share path holds:
   Drive is `${appPrefix}/v/g/<fileId>` (a `/v/g/<drive URL>` link parses to
   the same id), GitHub is `navigateBaseOnModelPath(org, repo, branch, path)`
   without the element path. A model the dialog already recorded, or one
   reloaded within the window, comes back `alreadyCounted` from `record()`
-  (record-load's ledger signed in, OPFS signed out) and costs no new slot.
+  (record-load's ledger) and costs no new slot.
   The hook does not short-circuit on the local mirror: OPFS is per browser,
-  not per user, so a row from an anonymous open or another account would
+  not per user, so a row from an offline fallback or another account would
   silence this user's server call (codex review on Share#1971). A signed-in
   direct load is therefore one `record-load` call per model per page load.
 - **Once per model per page load**, and only after Auth0 settles: before it
-  does, `record()` would take the anonymous OPFS-only path and keep a
-  signed-in user's load off the server ledger.
+  does, `record()` would treat the user as signed out and meter nothing.
 - **Never blocks.** If `record()` comes back `allowed: false` (record-load's
-  403, or the OPFS fallback at the cap), the model stays loaded,
+  403, or the offline OPFS fallback at the limit), the model stays loaded,
   `QuotaLimitDialog` is not shown, and `quota_soft_limit_exceeded` is sent
   instead (params below). A refused load is not written to the ledger, so the
   same link opened again on a later page load is refused, and counted in GA,
@@ -205,7 +279,15 @@ workaround is used before deciding whether it should be gated:
 
 | Event | Params | Fires |
 |---|---|---|
-| `quota_soft_limit_exceeded` | `tier` (`anonymous` \| `free`), `used`, `limit`, `route_kind` (`gdrive` \| `github`), `open_cid` | `useDirectLinkQuota`, when a direct-link load is over the limit; at most once per model per page load |
+| `quota_soft_limit_exceeded` | `tier` (`free`; `anonymous` before the anonymous tier was removed), `used`, `limit`, `route_kind` (`gdrive` \| `github`), `open_cid` | `useDirectLinkQuota`, when a direct-link load is over the limit; at most once per model per page load |
+
+**What the removal of the anonymous tier and Drive visibility changed in
+these numbers** (bizdev#341's soft-gate count): `tier: anonymous` events stop
+entirely, since signed-out users are never metered; and a free user's Drive
+"Anyone with the link" opens stop counting, so a pasted link to one (the
+API-key path) no longer produces a `route_kind: gdrive` event. What remains
+of `gdrive` is restricted (or unclassifiable) files opened through a Drive
+connection. Compare across the deploy date with that in mind.
 
 Sent through `gtagEventWithCid` (`GATE_EVENTS.QUOTA_SOFT_LIMIT_EXCEEDED`),
 so it joins the same client's `real_model_open`. GA4 side: register `tier`,
@@ -216,9 +298,13 @@ may already exist) and `used` / `limit` as custom metrics.
 mean showing `QuotaLimitDialog` over the loaded model (or before the load)
 from this same seam; the event count is the input to that decision.
 
-Covered by `src/quota/useDirectLinkQuota.test.js` and
+Covered by `src/quota/useDirectLinkQuota.test.js`,
 `src/quota/directLinkSoftGate.spec.ts` (desktop and mobile: a free user at the
-limit opens a private Drive link, it loads, no dialog, one event).
+limit opens a private GitHub link, it loads, no dialog, one event; it used a
+Drive link with no connection until that became public) and
+`src/quota/driveLinkVisibility.spec.ts` (desktop and mobile: a link-shared
+Drive link opened signed out, over an old full anonymous ledger, and by a
+free user at the limit, loads with no `record-load` call and no event).
 
 ## The server is authoritative
 
@@ -228,7 +314,9 @@ limit opens a private Drive link, it loads, no dialog, one event).
 - **Store:** `app_metadata.usageQuota` via the Auth0 Management API (management
   token cached module-scope across warm invocations).
 - **Each call:** prune loads older than the 30-day window → classify privacy →
-  if the path counts and a free user is at limit, deny.
+  if the path counts and a free user is at limit, deny. GitHub privacy is
+  its own lookup; a Drive key counts as sent, since only the client can see
+  Drive sharing (§"Drive visibility", server trust).
 - **Returns** `{allowed, used, limit, tier, alreadyCounted}`; `limit` is `null`
   for paid (unlimited). HTTP `403` means over quota.
 
@@ -244,7 +332,9 @@ limit opens a private Drive link, it loads, no dialog, one event).
   response into OPFS, and force-refreshes the JWT so other `app_metadata`
   readers observe the bumped count. `403` → `{allowed: false}` → the UI shows
   `QuotaLimitDialog`.
-- **Anonymous:** OPFS-only (no server identity to key on).
+- **Signed out:** not metered at all; the same passthrough as the flag off.
+- **Drive:** `record(key, {resolveDriveVisibility})`; a public file returns
+  `allowed` without calling `record-load` (§"Drive visibility").
 - **Server unreachable / `5xx`:** degrades to OPFS-only counting rather than
   blocking — quotas must never make the app *less* available than it is without
   them.
@@ -257,16 +347,17 @@ mount without a router).
 
 ## Local persistence (OPFS)
 
-OPFS is the **local** backend only: the anonymous store, and the signed-in
-mirror / offline fallback. It is *not* the authority for signed-in users.
+OPFS is the **local** backend only: the signed-in mirror and offline
+fallback. It is *not* the authority.
 
 - One file, `quota.json`, at the OPFS root, written via the raw browser API
   (`navigator.storage.getDirectory()` → `getFileHandle('quota.json', {create})`).
   There is **no** dependency on the OPFS *service / worker* modules — which is
   why the lib lives in `src/quota/` (a domain module) rather than `src/OPFS/`
   (storage primitives). OPFS is one backend, not the module's identity.
-- `loadQuota()` → `{tier, loads}`, returning an anonymous/empty default on any
-  error. `saveQuota()` **swallows OPFS errors** so tracking degrades to
+- `loadQuota()` → `{tier, loads}`, returning an empty free default on any
+  error, and dropping a legacy anonymous ledger (§"Tiers & limits").
+  `saveQuota()` **swallows OPFS errors** so tracking degrades to
   in-memory-only when OPFS is unavailable (private browsing), still notifying
   subscribers via `subscribeToQuota`.
 
@@ -275,7 +366,7 @@ mirror / offline fallback. It is *not* the authority for signed-in users.
 ```jsonc
 // quota.json (client, OPFS); app_metadata.usageQuota (server) mirrors it
 {
-  "tier": "anonymous" | "free" | "paid",
+  "tier": "free" | "paid",
   "loads": [
     { "key": "/v/gh/owner/repo/main/m.ifc", "loadedAt": "2026-06-03T10:00:00Z" }
   ]
@@ -288,8 +379,8 @@ mirror / offline fallback. It is *not* the authority for signed-in users.
 
 ## 30-day rolling window
 
-`pruneLoads(loads, tier, now)` drops loads whose `loadedAt` is older than
-`ROLLING_WINDOW_DAYS` (30). Anonymous is exempt (lifetime cap). Pruning runs on
+`pruneLoads(loads, now)` drops loads whose `loadedAt` is older than
+`ROLLING_WINDOW_DAYS` (30). Pruning runs on
 both the client (`useQuota`) and the server (before counting) so the two agree.
 A free user who opened 2 private models gets a slot back exactly 30 days after
 each load, rather than all at once on a calendar reset.
@@ -302,7 +393,8 @@ Summary only; the wiring lives in
 - **`QuotaBadge`** on the Open toolbar button: hidden < 50% used, shown 50–75%,
   amber ≥ 75%; hidden entirely when `limit === Infinity` (paid or flag-off).
 - **`QuotaLimitDialog`** on `403`: states the numeric limit + rolling-window
-  phrasing, links to `/share/quotas`.
+  phrasing, links to `/share/quotas`. Only a signed-in free user can see it,
+  so it offers Subscribe only (the anonymous tier's "Sign up free" is gone).
 - Gated load sites: Drive picker + recents, GitHub recents + browser, sample
   chips (public, so they pass), and local file + recents + drag-and-drop, which
   `record()` passes while local files are unmetered.
@@ -356,7 +448,7 @@ behind the same analytics consent check as every other `gtagEvent`.
 | Visit | `session_start` / `page_view` | — | GA4 sends these itself |
 | Model open | `real_model_open` | `content_id`, `content_type`, `load_outcome`, `stats_*` (below), `local_hour`, `open_cid` | `CadView` after a real (non-demo) load; see `analytics#isRealModelOpen` |
 | (failed open) | `load_failed` | `content_type`, `size_bucket`, `reason_class`, `last_phase`, `open_cid` | `CadView#onViewerInternal`'s catch, once per failed attempt, real (non-demo) models only |
-| Hit a limit | `quota_limit_reached` | `tier` (`anonymous` \| `free`), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
+| Hit a limit | `quota_limit_reached` | `tier` (`free`; `anonymous` before that tier was removed), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
 | Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown`; plus `from: 'gate'` and `feature` (`export` \| `share`) when a visible gate started the sign-in (§"Gate events") | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
 | Upgrade click | `begin_checkout` (GA4 recommended) | `from`: `profile` \| `export` \| `quota`; `destination`: `checkout` \| `portal` | `goToSubscription` (`Profile/subscriptionNav.js`), which every upgrade CTA goes through |
 | Subscribed | `subscription_started` | — | `BaseRoutes#processAccessToken` on `shareProPendingReauth` (below) |

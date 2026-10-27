@@ -13,9 +13,12 @@ export default function Quotas() {
         <Typography variant='h4' gutterBottom>Usage limits</Typography>
         <Typography paragraph>
           Bldrs Share counts the <em>private</em> models you open from the
-          cloud: files from your Google Drive and from private GitHub
-          repositories. Files from your own computer and public GitHub
-          models are free and unlimited.
+          cloud. A model is private when you can see it only because the
+          provider lets <em>you</em> in: you are a member of its private
+          GitHub repository, or its Google Drive file is shared with your
+          Google account. Files from your own computer, public GitHub models
+          and Drive files shared &ldquo;Anyone with the link&rdquo; are free
+          and unlimited.
         </Typography>
 
         <Table sx={{marginTop: '1em'}}>
@@ -28,9 +31,9 @@ export default function Quotas() {
           </TableHead>
           <TableBody>
             <TableRow>
-              <TableCell>Anonymous</TableCell>
-              <TableCell>{LIMITS[TIERS.ANONYMOUS]}</TableCell>
-              <TableCell>Lifetime — sign in to reset</TableCell>
+              <TableCell>Signed out</TableCell>
+              <TableCell>Not counted</TableCell>
+              <TableCell>—</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>Free (signed in)</TableCell>
@@ -56,6 +59,8 @@ export default function Quotas() {
         <Typography component='ul'>
           <li>Files opened from your computer (drag and drop, or Browse)</li>
           <li>Public GitHub repositories (including all sample models)</li>
+          <li>Google Drive files shared &ldquo;Anyone with the link&rdquo;</li>
+          <li>Anything you open while signed out</li>
           <li>Browsing the model viewer itself, navigation, search, etc.</li>
         </Typography>
 
