@@ -136,8 +136,9 @@ describe('quota/useDirectLinkQuota', () => {
     expect(gtagEventWithCid).toHaveBeenCalledWith('quota_soft_limit_exceeded',
       {tier: 'free', used: 2, limit: 2, route_kind: 'gdrive'})
     // Its normalized twin, with the tier record-load acted on.
+    // ...naming the model with real_model_open's value for it (Share#1981).
     expect(trackModelAction.mock.calls).toEqual([['share', {
-      gate: 'soft', source: 'hosted', routeKind: 'gdrive', tier: 'free',
+      gate: 'soft', source: 'hosted', routeKind: 'gdrive', tier: 'free', contentId: String(driveRoute().downloadUrl),
     }]])
     // Fire-and-forget: the meter returns nothing for a caller to await or
     // branch on, so CadView's load cannot be held or undone by it.
@@ -146,6 +147,34 @@ describe('quota/useDirectLinkQuota', () => {
       returned = result.current(driveRoute())
     })
     expect(returned).toBeUndefined()
+  })
+
+  // The id is snapshotted with the route that was metered: record-load
+  // answers after the load, and the user may have opened another model by
+  // then (Share#1981).
+  it('credits the soft-gated share to the model that was metered, not one opened since', async () => {
+    const answers = []
+    const record = jest.fn(() => new Promise((resolve) => {
+      answers.push(resolve)
+    }))
+    useQuota.mockReturnValue({used: 0, limit: 2, tier: 'free', hasCapacity: true, record, check: jest.fn()})
+    const hook = renderHook(() => useDirectLinkQuota(APP_PREFIX))
+    act(() => {
+      hook.result.current(driveRoute())
+    })
+    // The user opens a GitHub model before the Drive load's answer lands.
+    act(() => {
+      hook.result.current(githubRoute())
+    })
+    expect(answers).toHaveLength(2)
+    await act(async () => {
+      answers[0]({allowed: false, used: 2, limit: 2, tier: 'free', alreadyCounted: false})
+      await Promise.resolve()
+    })
+
+    expect(trackModelAction).toHaveBeenCalledTimes(1)
+    expect(trackModelAction.mock.calls[0][1].contentId).toBe(String(driveRoute().downloadUrl))
+    expect(trackModelAction.mock.calls[0][1].contentId).not.toBe(String(githubRoute().downloadUrl))
   })
 
   // Share#1977: signed-out users are never metered, so there is no

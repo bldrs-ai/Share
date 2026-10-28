@@ -31,6 +31,7 @@ import {
   MODEL_ACTIONS,
   MODEL_GATES,
   gtagEventWithCid,
+  modelContentId,
   modelRouteSource,
 } from '../../privacy/analytics'
 import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
@@ -472,9 +473,11 @@ export default function ExportSection() {
   // session lands (privacy/modelActionTracking.js).
   const reportGated = (reason) => {
     gtagEventWithCid(GATE_EVENTS.EXPORT_GATED, {reason})
+    const {modelPath: gatedModelPath} = useStore.getState()
     trackModelActionWhenAuthSettled(MODEL_ACTIONS.EXPORT, {
       gate: MODEL_GATES.UPSELL,
-      ...modelRouteSource(useStore.getState().modelPath),
+      ...modelRouteSource(gatedModelPath),
+      contentId: modelContentId(gatedModelPath),
       getIsAuthenticated: () => isAuthenticatedRef.current,
     })
   }

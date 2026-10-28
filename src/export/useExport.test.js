@@ -21,7 +21,7 @@ jest.mock('./artifactSizes', () => ({compressedExport: jest.fn(), gzippedExport:
 // test is in privacy/analytics.test.js. GATE_EVENTS stays real so the names
 // asserted here are the names that ship.
 // trackModelAction is mocked the same way (its tests are there too);
-// modelRouteSource and the MODEL_* vocabularies stay real.
+// modelRouteSource, modelContentId and the MODEL_* vocabularies stay real.
 jest.mock('../privacy/analytics', () => {
   const actual = jest.requireActual('../privacy/analytics')
   return {
@@ -31,6 +31,7 @@ jest.mock('../privacy/analytics', () => {
     GATE_EVENTS: actual.GATE_EVENTS,
     MODEL_ACTIONS: actual.MODEL_ACTIONS,
     MODEL_GATES: actual.MODEL_GATES,
+    modelContentId: actual.modelContentId,
     modelRouteSource: actual.modelRouteSource,
   }
 })
@@ -58,6 +59,21 @@ const CACHE_KEY_ARGS = {
   sourceHash: 'sha123',
 }
 const SCHEMA_VER = '0.21.0-batched'
+// Two models' routes, as handleRoute gives them: what real_model_open sends
+// as their content_id is the download URL (analytics#modelContentId).
+const GITHUB_ROUTE = {
+  kind: 'provider',
+  provider: 'github',
+  downloadUrl: new URL('https://raw.githubusercontent.com/acme/private/main/box.ifc'),
+}
+const GITHUB_CONTENT_ID = 'https://raw.githubusercontent.com/acme/private/main/box.ifc'
+const LOCAL_ROUTE = {
+  kind: 'file',
+  isUploadedFile: true,
+  filepath: '/u.ifc',
+  downloadUrl: new URL('https://bldrs.ai/u.ifc'),
+}
+const LOCAL_CONTENT_ID = 'https://bldrs.ai/u.ifc'
 const KIND_LABEL = 'github'
 const ARTIFACT_BYTES = new Uint8Array([1, 2, 3, 4])
 const EXPORTED = {
@@ -175,6 +191,68 @@ describe('useExport', () => {
     expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({
       gate: 'none', source: 'local', routeKind: 'local',
     })]])
+  })
+
+  // Share#1981: the delivered export names its model, with the value
+  // real_model_open sends, so GA can count distinct models exported.
+  it('sends model_export with the content_id of the model on screen', async () => {
+    useStore.setState({modelPath: GITHUB_ROUTE})
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {})
+    })
+
+    expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({
+      gate: 'none', contentId: GITHUB_CONTENT_ID,
+    })]])
+  })
+
+  // The id is snapshotted when the user acts, like the source: the event goes
+  // out after the module load, and a navigation meanwhile must not make the
+  // export a "distinct model" of the next one.
+  it('keeps the original model\'s content_id when the user navigates mid-export', async () => {
+    useStore.setState({modelPath: LOCAL_ROUTE})
+    let releaseModule
+    loadProModule.mockImplementation(() => new Promise((resolve) => {
+      releaseModule = () => resolve({namespace: {exportArtifact}, charge: null})
+    }))
+    const {result} = renderHook(() => useExport())
+
+    let running
+    act(() => {
+      running = result.current.run('glb', {})
+    })
+    await waitFor(() => expect(releaseModule).toBeDefined())
+    act(() => {
+      useStore.setState({modelPath: GITHUB_ROUTE})
+    })
+    await act(async () => {
+      releaseModule()
+      await running
+    })
+
+    const [[, details]] = trackModelAction.mock.calls
+    expect(details.contentId).toBe(LOCAL_CONTENT_ID)
+    expect(details.contentId).not.toBe(GITHUB_CONTENT_ID)
+  })
+
+  // "Download again" replays a history row that may be another model, and
+  // the row carries a share-path key, not real_model_open's value. Sending
+  // the model on screen would count the wrong model, so it sends none.
+  it('sends no content_id for a "Download again" of a history row', async () => {
+    useStore.setState({modelPath: GITHUB_ROUTE})
+    const {result} = renderHook(() => useExport())
+    const row = {cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER, key: '/share/v/gh/other/repo/main/x.ifc'}
+
+    await act(async () => {
+      await result.current.run('glb', {}, row)
+    })
+
+    expect(trackModelAction).toHaveBeenCalledTimes(1)
+    const [, details] = trackModelAction.mock.calls[0]
+    expect(details.contentId).toBeUndefined()
+    expect(details.source).toBeUndefined()
   })
 
   // codex review on Share#1976, round 2 (the export variant): Auth0 says
@@ -790,6 +868,24 @@ describe('useExport', () => {
       // model_export {blocked}, free-tier by definition.
       expect(gtagEventWithCid).toHaveBeenCalledWith('export_failed', {format: 'glb', reason: 'free_limit'})
       expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({gate: 'blocked', tier: 'free'})]])
+    })
+
+    // Share#1981: the refused export names the model it was refused for.
+    it('names the model on screen on model_export {blocked}', async () => {
+      useStore.setState({modelPath: GITHUB_ROUTE})
+      loadProModule.mockRejectedValue(new ProModuleDeniedError(403, 'denied', {
+        reason: 'free_export_limit',
+        freeExports: {limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-09T09:00:00.000Z'},
+      }))
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({
+        gate: 'blocked', tier: 'free', contentId: GITHUB_CONTENT_ID,
+      })]])
     })
   })
 

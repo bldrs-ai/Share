@@ -12,7 +12,7 @@ import {HASH_PREFIX_DISPLAY, writeModelDisplayHash} from '../Residency/displayHa
 import {writeVisibilityHash} from '../Residency/visibilityHash'
 import {resolvedAppearance} from '../../viewer/display/DisplayController'
 import {removeHashParams} from '../../utils/location'
-import {MODEL_ACTIONS, MODEL_GATES, gtagEvent, modelRouteSource} from '../../privacy/analytics'
+import {MODEL_ACTIONS, MODEL_GATES, gtagEvent, modelContentId, modelRouteSource} from '../../privacy/analytics'
 import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
 import Dialog from '../Dialog'
 import Toggle from '../Toggle'
@@ -124,9 +124,13 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       // a returning user can click Share while Auth0 is still restoring the
       // session, and this effect won't re-run when it lands (codex review
       // on Share#1976, round 2; privacy/modelActionTracking.js).
+      // The model's content_id is snapshotted with the route (same helper as
+      // real_model_open's), so "distinct models shared" can be counted.
+      const {modelPath} = useStore.getState()
       trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
         gate: MODEL_GATES.NONE,
-        ...modelRouteSource(useStore.getState().modelPath),
+        ...modelRouteSource(modelPath),
+        contentId: modelContentId(modelPath),
         getIsAuthenticated: () => isAuthenticatedRef.current,
       })
     }

@@ -10,6 +10,7 @@ import {
   MODEL_ROUTE_KINDS,
   MODEL_SOURCES,
   gtagEventWithCid,
+  modelContentId,
 } from '../../privacy/analytics'
 import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
 import {ControlButtonWithHashState, TooltipIconButton} from '../Buttons'
@@ -107,6 +108,8 @@ export default function ShareControl() {
             gate: MODEL_GATES.UPSELL,
             source: MODEL_SOURCES.LOCAL,
             routeKind: MODEL_ROUTE_KINDS.LOCAL,
+            // The model on screen, read now (the click, not the send).
+            contentId: modelContentId(useStore.getState().modelPath),
             getIsAuthenticated: () => isAuthenticatedRef.current,
           })
         }}
