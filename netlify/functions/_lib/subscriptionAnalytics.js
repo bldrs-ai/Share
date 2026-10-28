@@ -54,6 +54,15 @@ export const MP_COLLECT_URL = 'https://www.google-analytics.com/mp/collect'
 // 10 s limit, and `settleUser` may already have spent much of it.
 export const GA_LOOKUP_TIMEOUT_MS = 1500
 export const GA_SEND_TIMEOUT_MS = 1500
+// Those caps alone don't keep the webhook inside its budget: a delivery that
+// reaches the report late (a slow settle loop) could still be cut off by the
+// platform mid-POST, which Stripe sees as a failure and redelivers (Codex on
+// #1983). So the whole report runs against the handler's deadline: skipped
+// outright with less than GA_MIN_REMAINING_MS left, and each step's timeout
+// cut down so the report ends GA_RESERVE_MS before the deadline, leaving the
+// handler time to return.
+export const GA_MIN_REMAINING_MS = 3000
+export const GA_RESERVE_MS = 1000
 // Newest first; a customer with more checkouts than this is not a real one.
 const CHECKOUT_SESSIONS_PER_CUSTOMER = 10
 // privacy/analytics.js#OPEN_CID_PREFIX, restated: that module is browser-only.
@@ -143,14 +152,15 @@ export function fallbackClientId(customerId) {
  * @param {string} customerId the customer that decided the transition
  * @param {?string} subscriptionId the event's subscription, when it is that
  *   customer's
+ * @param {number} [timeoutMs] at most GA_LOOKUP_TIMEOUT_MS
  * @return {Promise<{clientId: string, source: string}>} source is a CID_SOURCES value
  */
-export async function resolveGaClientId(stripe, customerId, subscriptionId) {
+export async function resolveGaClientId(stripe, customerId, subscriptionId, timeoutMs = GA_LOOKUP_TIMEOUT_MS) {
   try {
     const page = await stripe.checkout.sessions.list(
       {customer: customerId, limit: CHECKOUT_SESSIONS_PER_CUSTOMER},
       // No retry: a slow Stripe costs the attribution, never the delivery.
-      {timeout: GA_LOOKUP_TIMEOUT_MS, maxNetworkRetries: 0},
+      {timeout: timeoutMs, maxNetworkRetries: 0},
     )
     const carrying = page.data.filter((session) => decodeGaClientReference(session.client_reference_id))
     const session = carrying.find((candidate) => subscriptionId && candidate.subscription === subscriptionId) ||
@@ -251,10 +261,12 @@ function logInfo(message) {
  * @param {Array<object>} [args.changes] settleUser's writes, including those
  *   made before a failure (the error's `changes`)
  * @param {object} [args.env] process.env
+ * @param {number} [args.deadline] epoch ms by which the handler must have
+ *   returned; the report skips, or shortens its timeouts, to stay clear of it
  * @return {Promise<string>} what happened: 'no_transition', 'unconfigured',
- *   'test_mode', 'sent' or 'failed' (for the log and the tests)
+ *   'test_mode', 'no_time', 'sent' or 'failed' (for the log and the tests)
  */
-export async function reportSubscriptionTransition({stripe, stripeEvent, changes, env = process.env}) {
+export async function reportSubscriptionTransition({stripe, stripeEvent, changes, env = process.env, deadline = Infinity}) {
   let label = 'subscription event'
   let config = null
   try {
@@ -276,6 +288,15 @@ export async function reportSubscriptionTransition({stripe, stripeEvent, changes
       logInfo(`stripe-webhook: ${label} not sent to GA: test-mode event`)
       return 'test_mode'
     }
+    // Time left for the report itself, keeping GA_RESERVE_MS for the
+    // handler to return. Too little, and the transition goes unreported:
+    // a missed event is the cheaper failure, a timed-out delivery is
+    // redelivered by Stripe.
+    const budget = () => deadline - GA_RESERVE_MS - Date.now()
+    if (deadline - Date.now() < GA_MIN_REMAINING_MS) {
+      console.warn(`stripe-webhook: ${label} not sent to GA: ${Math.max(0, deadline - Date.now())} ms left of the function's budget`)
+      return 'no_time'
+    }
     // Attribute to the customer that decided the transition. The event's
     // own subscription — its checkout session, its price's interval — speaks
     // for it only when it belongs to that customer; otherwise nothing from
@@ -283,12 +304,20 @@ export async function reportSubscriptionTransition({stripe, stripeEvent, changes
     const payload = (stripeEvent.data && stripeEvent.data.object) || {}
     const customer = decided.customer || payload.customer
     const subscription = payload.customer === customer ? payload : null
-    const attribution = await resolveGaClientId(stripe, customer, subscription ? subscription.id || null : null)
+    // Half the budget at most for the lookup, so the POST always has the
+    // rest (it falls back to the hashed id when the lookup times out).
+    const lookupMs = Math.floor(Math.min(GA_LOOKUP_TIMEOUT_MS, budget() / 2))
+    const attribution = await resolveGaClientId(stripe, customer, subscription ? subscription.id || null : null, lookupMs)
+    const sendMs = Math.floor(Math.min(GA_SEND_TIMEOUT_MS, budget()))
+    if (sendMs <= 0) {
+      throw new Error('no time left for the Measurement Protocol request')
+    }
     await sendMeasurementProtocolEvent({
       config,
       clientId: attribution.clientId,
       name,
       params: subscriptionEventParams(subscription, env.SHARE_PRO_PRICE_ID, attribution),
+      timeoutMs: sendMs,
     })
     logInfo(`stripe-webhook: ${label} sent to GA (client id from ${attribution.source})`)
     return 'sent'

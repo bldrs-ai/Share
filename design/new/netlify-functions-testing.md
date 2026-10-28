@@ -280,7 +280,11 @@ What it relies on, and what holds it to the contract above:
   `{timeout: 1500, maxNetworkRetries: 0}`) and the POST (1.5 s abort) each
   have their own short budget; failures are logged with `console.warn`
   (API secret scrubbed) and swallowed. It is awaited before the handler
-  returns, since Lambda freezes the process after.
+  returns, since Lambda freezes the process after. It also can't push a
+  delivery past the function's limit (a timeout is a non-2xx too): it runs
+  against the handler's deadline (`context.getRemainingTimeInMillis()`,
+  else 10 s), is skipped with under 3 s left, and otherwise shortens both
+  steps to end a second before it.
 - **`GA4_MEASUREMENT_ID` and `GA4_API_SECRET` are optional**, unlike
   `REQUIRED_ENV`: without both, and for a `livemode: false` event, one INFO
   line and nothing sent. So no existing scenario's env changes; the GA
@@ -291,7 +295,8 @@ What it relies on, and what holds it to the contract above:
   without Checkout Session read access),
   `ga-unreachable-still-acknowledges`,
   `redelivered-created-sends-nothing-to-ga`. The unit suite pins the rest:
-  hang/timeout, non-2xx, missing env, test mode, which session wins, the
+  hang/timeout, the deadline (skipped late, shortened near it), non-2xx,
+  missing env, test mode, which session wins and which customer's, the
   fallback's stability, and the net transition of a corrected write.
 
 **Timeouts.** Both subscription functions build the Stripe client with a

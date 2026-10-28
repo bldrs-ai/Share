@@ -736,9 +736,17 @@ who never came back to it — was never counted. The Stripe webhook now sends
   to nothing and sends nothing. A write that lands before a failure is
   reported even though the webhook then answers 500, since the redelivery
   will find it written and send nothing (`settleUser` puts the writes on
-  the error as `changes`). Not covered: a transition only the daily
-  `reconcile-subscriptions` sweep writes (the webhook lost for Stripe's
-  whole retry window) is not reported.
+  the error as `changes`). Known gaps, each a missed event and never a
+  double count, accepted because Stripe — not this column — is the record
+  of revenue:
+  - a transition only the daily `reconcile-subscriptions` sweep writes (the
+    webhook lost for Stripe's whole retry window);
+  - a PATCH that Auth0 applies but whose response is lost (a reset after
+    commit). `settleUser` hasn't recorded it, and the redelivery finds the
+    tier written. Closing it would mean re-reading Auth0 after every
+    ambiguous write failure, on the hot path, for a rare case (Codex on
+    #1983; owner's call: decline);
+  - a delivery that reaches the report with under 3 s of its budget left.
 - **Who: the paying browser's GA client.** `goToSubscription` adds
   `gaRef=gacid_<id with _ for .>` to the `/subscribe/` URL
   (`analytics#getGaClientReference`, consent-gated like the Sentry cid), and
@@ -773,7 +781,12 @@ who never came back to it — was never counted. The Stripe webhook now sends
   Session lookup and the POST each time out after 1.5 s, and any failure is
   logged (`console.warn`, with the API secret scrubbed) and swallowed. A GA
   failure never changes the response code: a 5xx would make Stripe redeliver
-  an update that was applied. Without `GA4_MEASUREMENT_ID` and
+  an update that was applied. Nor may GA push the delivery past the
+  function's time limit, which Stripe sees the same way (Codex on #1983): the
+  report runs against the handler's deadline (Lambda's
+  `getRemainingTimeInMillis()`, else 10 s from the start), is skipped with
+  under 3 s left, and otherwise shortens both timeouts so it finishes a
+  second before the deadline. Without `GA4_MEASUREMENT_ID` and
   `GA4_API_SECRET`, or for a test-mode (`livemode: false`) event, it logs one
   INFO line and sends nothing.
 - **The browser's events were renamed, not removed.** The client-side

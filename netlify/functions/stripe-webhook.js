@@ -69,9 +69,10 @@
  * (`_lib/subscriptionAnalytics.js`): one event per transition, attributed to
  * the paying browser's GA client id from the Checkout Session. It needs
  * GA4_MEASUREMENT_ID and GA4_API_SECRET, and skips with a log line without
- * them. It is best-effort by construction — it never throws and never
- * changes the response code — since a 5xx caused by GA would make Stripe
- * redeliver an update that was applied.
+ * them. It is best-effort by construction — it never throws, never
+ * changes the response code, and is skipped (or its timeouts shortened)
+ * near the function's deadline — since a 5xx or a timeout caused by GA would
+ * make Stripe redeliver an update that was applied.
  *
  * Tests: netlify/functions/_tests/stripe-webhook.test.js (behaviour, mocked),
  * netlify/functions/_tests/replay/stripe-webhook/ (fixtures replayed against
@@ -102,6 +103,8 @@ Sentry.AWSLambda.init({
 const HTTP_OK = 200
 const HTTP_BAD_REQUEST = 400
 const HTTP_INTERNAL_ERROR = 500
+// Netlify's limit for a synchronous function, when the runtime doesn't say.
+const FUNCTION_BUDGET_MS = 10000
 
 const REQUIRED_ENV = [
   'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'SHARE_PRO_PRICE_ID',
@@ -150,7 +153,12 @@ async function syncCustomer(stripe, stripeCustomerId) {
 }
 
 
-export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
+export const handler = Sentry.AWSLambda.wrapHandler(async (event, context) => {
+  // When this delivery must have answered by: Lambda's own remaining time
+  // when the runtime gives it, else Netlify's 10 s sync limit from now. Only
+  // the GA report reads it, to stay clear of a timeout Stripe would redeliver.
+  const deadline = Date.now() + (context && typeof context.getRemainingTimeInMillis === 'function' ?
+    context.getRemainingTimeInMillis() : FUNCTION_BUDGET_MS)
   const missingEnv = REQUIRED_ENV.filter((name) => !process.env[name])
   if (missingEnv.length > 0) {
     // Names only, never values. The function log is the one channel every
@@ -199,12 +207,12 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
       return {statusCode: HTTP_OK, body: 'Acknowledged; not applied'}
     }
     // 4. Tell GA about a tier transition this delivery wrote. Never throws.
-    await reportSubscriptionTransition({stripe, stripeEvent, changes: result.changes})
+    await reportSubscriptionTransition({stripe, stripeEvent, changes: result.changes, deadline})
   } catch (err) {
     // A write that landed before the failure is still a transition, and the
     // redelivery this 500 asks for will find the tier already written and
     // report nothing — so it is reported now, or never. Never throws.
-    await reportSubscriptionTransition({stripe, stripeEvent, changes: err.changes})
+    await reportSubscriptionTransition({stripe, stripeEvent, changes: err.changes, deadline})
     // The status and id go to the function log so a failed delivery can be
     // matched to its cause without Sentry.
     const status = upstreamStatus(err)

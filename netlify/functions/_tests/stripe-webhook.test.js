@@ -933,6 +933,47 @@ describe('stripe-webhook function', () => {
         expect(signal.aborted).toBe(true)
       }, MP_TIMEOUT_TEST_MS)
 
+      // Each step's own cap is not enough: a delivery that reaches the report
+      // late could be cut off by the platform mid-POST, which Stripe sees as
+      // a failure and redelivers (Codex on #1983).
+      it('skips a transition that reaches the report with under 3 s left, and still answers 200 at once', async () => {
+        mockUpstreams()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+        const LATE_MS = 2500
+
+        const startedAt = Date.now()
+        const res = await handler(webhookEvent(), {getRemainingTimeInMillis: () => LATE_MS})
+
+        expect(res).toEqual({statusCode: 200, body: 'Success'})
+        expect(Date.now() - startedAt).toBeLessThan(1000)
+        expect(patches()).toEqual([{subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: CUSTOMER_ID}])
+        expect(mockStripeClient.checkout.sessions.list).not.toHaveBeenCalled()
+        expect(global.fetch).not.toHaveBeenCalled()
+        expect(console.warn.mock.calls.flat().join(' ')).toContain('not sent to GA')
+      })
+
+      it('shortens each step so the report ends a second before the deadline', async () => {
+        mockUpstreams()
+        let signal = null
+        global.fetch.mockImplementation((url, init) => {
+          signal = init.signal
+          return new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))))
+        })
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+        const REMAINING_MS = 3500
+
+        const startedAt = Date.now()
+        const res = await handler(webhookEvent(), {getRemainingTimeInMillis: () => REMAINING_MS})
+
+        expect(res).toEqual({statusCode: 200, body: 'Success'})
+        const [, {timeout}] = mockStripeClient.checkout.sessions.list.mock.calls[0]
+        expect(timeout).toBeLessThan(1500)
+        expect(timeout).toBeGreaterThan(0)
+        expect(signal.aborted).toBe(true)
+        // The hung POST was abandoned in time for the handler to return.
+        expect(Date.now() - startedAt).toBeLessThan(REMAINING_MS - 900)
+      }, MP_TIMEOUT_TEST_MS)
+
       it('answers 200 when an error escapes the client id lookup', async () => {
         mockUpstreams()
         mockStripeClient.checkout.sessions.list.mockImplementation(() => {
