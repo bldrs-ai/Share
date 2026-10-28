@@ -153,9 +153,10 @@ jobs:
     name: playwright-shard ${{ matrix.shard }}/4
     # Headroom on a quarter of the suite plus a tiny Playwright npm
     # install. The margin is for the degraded case — a failure drags a
-    # 30 s timeout plus a retry. With the light/heavy split below, each
-    # shard's two passes were estimated at 5.5-8.5 min of test time from
-    # the per-test durations of run 36732113798 (#1892).
+    # 30 s timeout plus a retry. Tests are assigned to shards by measured
+    # duration (tools/playwrightShards.mjs), which levels the four shards
+    # at about 10 min instead of 9-14.6 (PLAYBOOK.md §"Playwright workers").
+    # This is the hang guard; do not raise it to absorb an imbalance.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -187,37 +188,51 @@ jobs:
       - name: Playwright Info
         run: npx playwright --version
 
+      # Shard by measured duration, not by test count. Playwright 1.56.1's
+      # `--shard=N/M` splits by COUNT in file order
+      # (lib/runner/testGroups.js#filterForShard), and the slow specs (big
+      # STEP/IFC loads, the share-140 exports) cluster by file: shard 1 sat
+      # at 14.5 of 15 min, cancelled twice with every test passing (#1892),
+      # and the light/heavy two-pass split that followed only moved the
+      # export specs. Every shard lists the full suite, then
+      # tools/playwrightShards.mjs packs it into 4 bins longest-first from
+      # tools/playwrightTimings.json and writes this shard's tests as a
+      # `--test-list` file. Same inputs, same plan, so the shards agree
+      # without coordinating. A test with no timing (new, renamed) is
+      # planned at a conservative default, never dropped. The plan is also
+      # written to the job summary.
+      - name: Plan this shard's tests
+        run: |
+          npx playwright test --config=tools/playwright.config.js --list --reporter=json > all-tests.json
+          node tools/playwrightShards.mjs plan --list all-tests.json --shard ${{ matrix.shard }} --of 4 --out shard-tests.txt
+
       # 2 workers on 4 vCPU matches Playwright's vCPU/2 heuristic and the
       # density that stayed green when RAM was the limit. Do not bump this
       # without re-measuring: four SwiftShader heaps on four cores contend.
       #
-      # Two passes, same --shard=N/4, so every shard gets a quarter of the
-      # slow share-140 export specs instead of shard 2 getting all of them.
-      # Playwright 1.56.1 shards by test COUNT in file order, not duration
-      # (lib/runner/testGroups.js#filterForShard), and those specs run
-      # 11 s - 1.6 min per test next to each other in file order: one
-      # unsplit pass had shard 2 at 11-14.5 min vs 4.5-7 min for the rest,
-      # cancelled twice at the 15-min limit (#1892). The heavy list and
-      # why the two sets together are exactly the full suite:
-      # tools/playwrightSpecSets.js.
-      #
-      # The heavy pass writes its own report and output dirs: Playwright
-      # wipes `test-results` (outputDir) and the HTML report folder at the
-      # start of every run, so sharing them would delete the light pass's
-      # traces. `!cancelled()` runs it even when the light pass fails, so a
-      # red shard still reports on every test it owns; the job fails if
-      # either pass does.
-      - name: Run Playwright tests (light specs)
+      # One pass over the shard's list, so both workers stay busy to the end
+      # (the old two passes each had their own idle tail). The JSON report
+      # feeds `verify` and the timings annotation below.
+      - name: Run Playwright tests
         env:
-          PW_SPEC_SET: light
-        run: npx playwright test --config=tools/playwright.config.js --reporter=github,list,html --workers=2 --shard=${{ matrix.shard }}/4
+          PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-results.json
+        run: npx playwright test --config=tools/playwright.config.js --reporter=github,list,html,json --workers=2 --test-list=shard-tests.txt
 
-      - name: Run Playwright tests (heavy specs)
+      # Fails the shard if the tests that ran differ from the plan in either
+      # direction, so a title the `--test-list` matcher mishandled can't
+      # silently drop a test. `!cancelled()` so it also checks a red run.
+      - name: Verify every planned test ran
         if: ${{ !cancelled() }}
-        env:
-          PW_SPEC_SET: heavy
-          PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report-heavy
-        run: npx playwright test --config=tools/playwright.config.js --reporter=github,list,html --workers=2 --shard=${{ matrix.shard }}/4 --output=test-results-heavy
+        run: node tools/playwrightShards.mjs verify --plan shard-tests.txt --report playwright-results.json
+
+      # This shard's per-test seconds, as a check-run annotation: a refresh
+      # of tools/playwrightTimings.json reads them back with the REST API
+      # alone (`node tools/playwrightShards.mjs collect`, PLAYBOOK.md), no
+      # log or artifact download. A run's four shards together are one full
+      # measurement of the suite.
+      - name: Publish per-test timings
+        if: ${{ !cancelled() }}
+        run: node tools/playwrightShards.mjs annotate --report playwright-results.json --shard ${{ matrix.shard }}
 
       # Always upload the HTML report (handy to debug failures)
       - name: Upload Playwright HTML report
@@ -225,9 +240,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ matrix.shard }}
-          path: |
-            playwright-report
-            playwright-report-heavy
+          path: playwright-report
           retention-days: 7
           if-no-files-found: warn
 
@@ -237,9 +250,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces-${{ matrix.shard }}
-          path: |
-            test-results
-            test-results-heavy
+          path: test-results
           retention-days: 7
           if-no-files-found: warn
         # Ensure you have trace: 'on-first-retry' (or similar) in playwright.config.ts

@@ -1996,11 +1996,11 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
   // its first export and is then unlimited; with every slot holding another
   // model, a new one is refused. These are the user's own paths through it.
 
-  // One test for the whole free-tier path, not one per state: the heavy
-  // specs are sharded by test COUNT (tools/playwrightSpecSets.js), and every
-  // extra pair (desktop + mobile) shifts every shard's boundary — two more
-  // pairs pushed shard 1 past its 15-min job limit on #1980. Loading a
-  // model is the expensive part, so the states share the loads.
+  // One test for the whole free-tier path, not one per state: loading a
+  // model is the expensive part and every extra pair (desktop + mobile)
+  // adds that cost to a shard — before CI balanced shards by duration
+  // (tools/playwrightShards.mjs) two more pairs pushed shard 1 past its
+  // 15-min job limit on #1980. The states share the loads.
   const FREE_PATH_TITLE = 'a free user exports a public sample unlimited with no slot; a local file three times, taking one; ' +
     'then meets the gate with the slots full'
   test(FREE_PATH_TITLE, async ({page}) => {

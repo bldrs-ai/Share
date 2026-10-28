@@ -198,14 +198,9 @@ warning) and you can fall back to `--workers=1`.
 **CI:** Share is public, so `ubuntu-24.04` is 4 vCPU / 16 GB and free.
 Each shard still runs `--workers=2` (the density that stayed green on
 the old 8 GB larger runner; packing 4 SwiftShader Chromiums onto 4
-cores contends). The suite is split `--shard=1/4` … `4/4` so eight
-Chromiums run across four free machines. Each shard runs twice with the
-same `--shard`: `PW_SPEC_SET=light`, then `PW_SPEC_SET=heavy` (the
-share-140 export specs listed in `tools/playwrightSpecSets.js`).
-Playwright shards by test count in file order, not duration, so without
-the split those slow specs all landed in shard 2 (#1892). A new spec
-whose tests routinely take close to a minute each belongs on that list.
-One `playwright-build` job
+cores contends). The suite runs as four shards so eight Chromiums run
+across four free machines (the org caps CI at 4 concurrent runners, so
+more shards would starve other PRs). One `playwright-build` job
 produces `docs/` as `yarn test-flows-build` left it; shards set
 `PLAYWRIGHT_SERVE_ONLY=true`, install `@playwright/test@1.56.1` plus
 `http-server`, and run `npx http-server` inside `docs/` (no Share
@@ -213,6 +208,81 @@ produces `docs/` as `yarn test-flows-build` left it; shards set
 check is still `playwright-run` (an aggregator over the shards). The paid
 `ubuntu-24.04-4vcpu-8gb-150gbssd` larger runner is not used here —
 larger runners are billed even on public repos.
+
+### Playwright shards are balanced by measured duration
+
+Playwright's own `--shard=N/M` splits by test COUNT in contiguous file order
+(`playwright/lib/runner/testGroups.js#filterForShard`), but tests run from
+4 s to over a minute and the slow ones (big STEP/IFC loads, the share-140
+export specs) cluster by file. That left shard 1 at 14.5 of its 15 min
+(`timeout-minutes`, the hang guard: **never raise it to absorb an
+imbalance**) and cancelled it twice with every test green (#1892). The
+first fix, a light pass and a heavy pass per shard (`PW_SPEC_SET`), only
+rebalanced the export specs: across 25 green main runs (2026-10-07 to
+10-28) the four shards' jobs averaged 12.7 / 12.1 / 9.5 / 9.2 min. Shard 1
+took 14 min or more in 8 of the 25 runs (max 14.6) and 13 or more in 14;
+shard 2 took 13 or more in 11. The slowest shard averaged 13.3 min and sat
+4.8 min above the fastest. Per-run noise is large on top of that: one
+shard's light pass ranged 3.5-7.9 min and its heavy pass 2.1-7.5 min
+between runs, so a two-minute swing needs no code change to appear.
+
+Now every shard does the same three things (`test-flows.yml`,
+`tools/playwrightShards.mjs`):
+
+1. **Plan.** List the whole suite (`playwright test --list --reporter=json`)
+   and pack it into 4 bins greedily, longest test first, each into the
+   lightest bin so far (ties break on test name, so every shard computes the
+   same partition from the same inputs). Costs come from
+   `tools/playwrightTimings.json`, seconds per test keyed by exactly the
+   `--test-list` line (`[chromium] › file › describes › title`). A test with
+   no entry (new, or renamed) is planned at `defaultSeconds` (the 90th
+   percentile of the measured tests, so an unmeasured test is more likely
+   over- than under-weighted) and is **still run**: the plan comes from the
+   live list, never from the timings file. Files that configure
+   `mode: 'serial'` are kept whole in one shard, as Playwright's own
+   sharding does. The plan, with what the old count split would have given,
+   goes to the job summary.
+2. **Run** one pass over that shard's tests with `--test-list=shard-tests.txt`
+   (one pass, so both workers stay busy to the end).
+3. **Verify** that the tests the JSON report shows ran are exactly the plan,
+   failing the shard on any difference, so a title the `--test-list` matcher
+   mishandled can never silently drop a test. (`plan` itself refuses a title
+   with `›`, edge whitespace or a newline.)
+
+**Keeping the timings fresh.** A stale file costs balance, never
+correctness. Refresh it when the shards drift apart again (compare the four
+`playwright-shard N/4` job durations on a recent main run), and after adding
+a spec whose tests are slow:
+
+```sh
+# every shard of a green run publishes its per-test seconds as a check-run
+# annotation; collect reads them back with the REST API (needs `gh`)
+node tools/playwrightShards.mjs collect --repo bldrs-ai/Share --out /tmp/timings <run id> <run id> ...
+# the current list, so renamed/deleted tests drop out of the file
+CI=true npx playwright test --config=tools/playwright.config.js --list --reporter=json > /tmp/all-tests.json
+node tools/playwrightShards.mjs refresh --out tools/playwrightTimings.json --list /tmp/all-tests.json /tmp/timings/*.json
+```
+
+Use 3-5 recent green `main` runs: each test's value is the median across
+runs, so one slow runner doesn't move it, and failed tests are not measured
+(their duration is a timeout). Local timings are not a substitute: the
+sandbox runs 2 cores and a different network, and a loaded laptop ranks
+tests differently from a 4 vCPU runner. `collect` and `refresh` can also
+take JSON reporter output (`PLAYWRIGHT_JSON_OUTPUT_NAME`) directly.
+
+Reading a plan locally (no browsers needed) shows what the shards would do:
+
+```sh
+CI=true npx playwright test --config=tools/playwright.config.js --list --reporter=json > /tmp/all-tests.json
+node tools/playwrightShards.mjs plan --list /tmp/all-tests.json --shard 1 --of 4 --out /tmp/shard-1.txt
+CI=true yarn test-flows --test-list=/tmp/shard-1.txt   # run that shard's tests
+```
+
+The balance has a floor: a shard's wall time is its summed test time over 2
+workers plus the tail (Playwright dispatches in file order, so a long test
+that starts last runs alone), plus about a minute of container start,
+checkout and npm install. Expect shards within a minute or two of each
+other, not identical.
 
 **Load measurement** (`loadTiming.spec.ts`) still wants `--workers=1` so
 the numbers aren't contended — that's isolation, not the port bug. See

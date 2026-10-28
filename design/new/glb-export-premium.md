@@ -2750,9 +2750,10 @@ records-pending-reauth-export}`; the loader, `useExport`, `useExportSlots`,
 the whole free path — *"a free user exports a public sample unlimited with no
 slot; a local file three times, taking one; then meets the gate with the
 slots full"*, the server's stand-in refusing a bypass at the end. One test,
-not one per state: the heavy specs shard by test COUNT
-(`tools/playwrightSpecSets.js`), and two more pairs pushed shard 1 past its
-15-min job limit on #1980 — and *"a pending-reauth subscriber exports as Pro, with
+not one per state: CI then sharded by test COUNT, and two more pairs pushed
+shard 1 past its 15-min job limit on #1980 (shards are now balanced by measured
+duration, `tools/playwrightShards.mjs`, but a model load is still the
+expensive part) — and *"a pending-reauth subscriber exports as Pro, with
 nothing counted"*. The MSW mocks and the Playwright `page.route` fallbacks
 (`tests/e2e/export.ts`) apply the same decision to the same in-page ledger
 the record-load mock writes, `window.__mockQuotaLoads`. The live smoke's
