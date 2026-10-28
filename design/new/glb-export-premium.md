@@ -2742,11 +2742,13 @@ refuses-private-github-with-slots-full,serves-pending-reauth}` and
 refuses-export-of-model-without-slot,reports-model-slots,
 records-pending-reauth-export}`; the loader, `useExport`, `useExportSlots`,
 `ExportSection` and `ExportsList` suites; and in
-`Components/Share/exportGlb.spec.ts`, desktop and mobile, *"a free user
-exports a public sample unlimited, with both slots full, taking none"*, *"a
-free user exports the same local file three times; only the first takes a
-slot"*, *"a free user whose slots hold other models meets the Pro gate on a
-local file, and the server refuses a bypass"* and *"a pending-reauth subscriber exports as Pro, with
+`Components/Share/exportGlb.spec.ts`, desktop and mobile, one test through
+the whole free path — *"a free user exports a public sample unlimited with no
+slot; a local file three times, taking one; then meets the gate with the
+slots full"*, the server's stand-in refusing a bypass at the end. One test,
+not one per state: the heavy specs shard by test COUNT
+(`tools/playwrightSpecSets.js`), and two more pairs pushed shard 1 past its
+15-min job limit on #1980 — and *"a pending-reauth subscriber exports as Pro, with
 nothing counted"*. The MSW mocks and the Playwright `page.route` fallbacks
 (`tests/e2e/export.ts`) apply the same decision to the same in-page ledger
 the record-load mock writes, `window.__mockQuotaLoads`. The live smoke's

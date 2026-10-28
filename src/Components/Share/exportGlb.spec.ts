@@ -1996,90 +1996,68 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
   // its first export and is then unlimited; with every slot holding another
   // model, a new one is refused. These are the user's own paths through it.
 
-  /**
-   * Open the shells fixture from disk, signed in as a free user, with the
-   * Export tab showing it — a local file, which takes a slot on export.
-   *
-   * @param page Playwright page
-   * @return the local model's slot key (quota/modelSlotKey.js)
-   */
-  async function freeUserWithLocalFile(page: Page): Promise<string> {
-    const glbLogs = captureGlbLogs(page)
-    // Any model first, for the flags the session keeps across the Open
-    // dialog's navigation.
-    await loadModelAndWaitForArtifact(page)
-    resetGlbLogs(glbLogs)
-    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
-    await waitForModelReady(page)
-    await waitForGlbLog(glbLogs, 'writer: wrote', EXPORT_TEST_TIMEOUT_MS)
-    await setSubscriptionTier(page, 'free')
-    await auth0Login(page)
-    // The key is the route without its element path: `<prefix>/v/local-only/<uuid>.step`.
-    return new URL(page.url()).pathname.match(/^.*\/v\/local-only\/[^/]+\.step/)?.[0] ?? ''
-  }
-
-  test('a free user exports a public sample unlimited, with both slots full, taking none', async ({page}) => {
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
+  // One test for the whole free-tier path, not one per state: the heavy
+  // specs are sharded by test COUNT (tools/playwrightSpecSets.js), and every
+  // extra pair (desktop + mobile) shifts every shard's boundary — two more
+  // pairs pushed shard 1 past its 15-min job limit on #1980. Loading a
+  // model is the expensive part, so the states share the loads.
+  const FREE_PATH_TITLE = 'a free user exports a public sample unlimited with no slot; a local file three times, taking one; ' +
+    'then meets the gate with the slots full'
+  test(FREE_PATH_TITLE, async ({page}) => {
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
     const proModuleRequests = watchProModuleRequests(page)
+    const deliveries = () => proModuleRequests.filter((url) => url.includes('pro-module'))
     await routeProModule(page)
     await routeRecordExport(page)
-
+    const glbLogs = captureGlbLogs(page)
     await loadModelAndWaitForArtifact(page)
     await setSubscriptionTier(page, 'free')
     await auth0Login(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    const slotLine = page.getByTestId('export-model-slots')
     // Two private models opened earlier this week hold both slots.
     const now = Date.now()
     const fullSlots = [
       {key: '/share/v/gh/acme/private-a/main/a.ifc', loadedAt: new Date(now - (2 * DAY_MS)).toISOString()},
       {key: '/share/v/g/drive-file-b', loadedAt: new Date(now - DAY_MS).toISOString()},
     ]
-    await setSlotLedger(page, fullSlots)
 
+    // 1. The hosted sample is public: unlimited export, no slot, never
+    //    gated, even with both slots full.
+    await setSlotLedger(page, fullSlots)
     await openExportTab(page)
     await dismissLoadSnackbar(page)
-    const slotLine = page.getByTestId('export-model-slots')
     await expect(slotLine).toHaveText('Public model: unlimited export')
     await expect(slotLine).toHaveAttribute('data-public', 'true')
     await expect(page.getByTestId('gated-export-pro')).toHaveCount(0)
-
-    await waitForCodecSizing(page)
-    await selectCompression(page, 'none')
-    const exportButton = page.getByTestId('export-glb-button')
-    const EXPORTS = 2
-    for (let i = 0; i < EXPORTS; i++) {
-      await expect(exportButton).toBeEnabled({timeout: RECORD_SETTLE_TIMEOUT_MS})
-      const downloadPromise = page.waitForEvent('download')
-      await exportButton.click()
-      const bytes = await readFile(await (await downloadPromise).path())
-      expect(bytes.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
-    }
-
-    // No slot taken: the ledger is the two private models, untouched.
-    expect(await slotLedger(page)).toEqual(fullSlots)
+    const publicDownload = page.waitForEvent('download')
+    await exportButton.click()
+    const publicBytes = await readFile(await (await publicDownload).path())
+    expect(publicBytes.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
     await expect.poll(async () => (await exportLedger(page)).filter((row) => row.key === EXPORT_MODEL_PATH).length,
-      {timeout: RECORD_SETTLE_TIMEOUT_MS}).toBe(EXPORTS)
-    expect(proModuleRequests.filter((url) => url.includes('pro-module'))).toHaveLength(EXPORTS)
-    await expectNoHorizontalScroll(page)
-  })
+      {timeout: RECORD_SETTLE_TIMEOUT_MS}).toBe(1)
+    expect(await slotLedger(page)).toEqual(fullSlots)
+    await page.keyboard.press('Escape')
 
-  test('a free user exports the same local file three times; only the first takes a slot', async ({page}) => {
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    const proModuleRequests = watchProModuleRequests(page)
-    await routeProModule(page)
-    await routeRecordExport(page)
-    const localKey = await freeUserWithLocalFile(page)
+    // 2. A local file takes a slot on its first export, then exports
+    //    unlimited. Slots empty for this part.
+    await setSlotLedger(page, [])
+    resetGlbLogs(glbLogs)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
+    await waitForModelReady(page)
+    await waitForGlbLog(glbLogs, 'writer: wrote', EXPORT_TEST_TIMEOUT_MS)
+    // The key is the route without its element path: `<prefix>/v/local-only/<uuid>.step`.
+    const localKey = new URL(page.url()).pathname.match(/^.*\/v\/local-only\/[^/]+\.step/)?.[0] ?? ''
     expect(localKey).toMatch(/\/v\/local-only\//)
 
     await openExportTab(page)
     await dismissLoadSnackbar(page)
-    const slotLine = page.getByTestId('export-model-slots')
     await expect(slotLine).toHaveText(
       'Exporting takes one of your 2 free model slots (2 left this week), then unlimited export')
     await expect(slotLine).toHaveAttribute('data-held', 'false')
     await expect(page.getByTestId('export-pro-chip')).toBeVisible()
     await expect(page.getByTestId('gated-export-pro')).toHaveCount(0)
 
-    const exportButton = page.getByTestId('export-glb-button')
     const EXPORTS = 3
     for (let i = 0; i < EXPORTS; i++) {
       // The button stays disabled until the previous export's record (and
@@ -2105,26 +2083,13 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // decided each one against the slot. Counting the function URL only —
     // MSW then fetches the `__pro_dev__` copy itself, which is the same
     // delivery.
-    expect(proModuleRequests.filter((url) => url.includes('pro-module'))).toHaveLength(EXPORTS)
-    await expectNoHorizontalScroll(page)
-  })
+    expect(deliveries()).toHaveLength(1 + EXPORTS)
 
-  test('a free user whose slots hold other models meets the Pro gate on a local file, and the server refuses a bypass', async ({page}) => {
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    const proModuleRequests = watchProModuleRequests(page)
-    await routeProModule(page)
-    await routeRecordExport(page)
-    const localKey = await freeUserWithLocalFile(page)
-    // Two private models opened earlier this week hold both slots.
-    const now = Date.now()
-    await setSlotLedger(page, [
-      {key: '/share/v/gh/acme/private-a/main/a.ifc', loadedAt: new Date(now - (2 * DAY_MS)).toISOString()},
-      {key: '/share/v/g/drive-file-b', loadedAt: new Date(now - DAY_MS).toISOString()},
-    ])
-
+    // 3. A week on, say: this file's slot has rolled off and two other private
+    // models hold both slots. Reopening the tab asks the server afresh.
+    await setSlotLedger(page, fullSlots)
+    await page.keyboard.press('Escape')
     await openExportTab(page)
-    await dismissLoadSnackbar(page)
-    const slotLine = page.getByTestId('export-model-slots')
     await expect(slotLine).toHaveAttribute('data-remaining', '0')
     await expect(slotLine).toHaveAttribute('data-held', 'false')
     await expect(slotLine).toContainText('Your 2 free model slots this week hold other models · next one frees up ')
@@ -2155,8 +2120,8 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // `useMock` path writes it into the document rather than navigating,
     // so this is the same assertion Profile/Subscription.spec.ts makes.
     await expect(page.getByText('Mock Subscribe Page')).toBeVisible()
-    // The gate held the click: only the bypass ever asked for the module.
-    expect(proModuleRequests.filter((url) => url.includes('pro-module'))).toHaveLength(1)
+    // The gate held the click: the four exports and the bypass, no more.
+    expect(deliveries()).toHaveLength(1 + EXPORTS + 1)
   })
 
   // The owner's §7.2 decision: `shareProPendingReauth` — paid, waiting on a
