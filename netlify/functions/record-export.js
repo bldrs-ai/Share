@@ -16,7 +16,7 @@
  *   Headers: Authorization: Bearer <Auth0 access token>
  *   Body:    {key, format, bytes, title?, id?}
  *            key    — slot key of the model, e.g. /share/v/gh/o/r/main/x.ifc
- *                     (src/export/exportSlotKey.js) — the key `pro-module`
+ *                     (src/quota/modelSlotKey.js) — the key `pro-module`
  *                     was sent for the same export
  *            format — export format id from src/export/exportRegistry.js
  *            bytes  — size of the downloaded file

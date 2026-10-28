@@ -232,6 +232,19 @@ describe('pro-module function', () => {
       expect(usageQuota.loads.map((row) => row.key)).toEqual([OTHER, LOCAL])
     })
 
+    it('takes a slot for a URL model under its digest key — what a presigned URL is exported as', async () => {
+      // quota/modelSlotKey.js#urlModelKey: never the URL, which can run past
+      // MODEL_KEY_MAX_LENGTH and carries credentials.
+      const urlKey = `/share/v/u/sha256-${'ab'.repeat(32)}`
+      mockAuth0({subscriptionStatus: 'free'})
+      axios.patch.mockResolvedValue({data: {}})
+
+      const res = await handler(getEvent({}, urlKey))
+
+      expect(res.statusCode).toBe(200)
+      expect(axios.patch.mock.calls[0][1].app_metadata.usageQuota.loads.map((row) => row.key)).toEqual([urlKey])
+    })
+
     it('has a public GitHub model take a slot on its first export too, though viewing it is free', async () => {
       mockAuth0({subscriptionStatus: 'free'})
       axios.patch.mockResolvedValue({data: {}})

@@ -13,6 +13,7 @@ import {
   modelRouteSource,
 } from '../privacy/analytics'
 import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
+import {modelSlotKey} from '../quota/modelSlotKey'
 import {TIERS, getTier} from '../quota/quota'
 import useStore from '../store/useStore'
 import {compressedExport, gzippedExport} from './artifactSizes'
@@ -20,7 +21,6 @@ import {triggerDownload} from './download'
 import {recordExport} from './exportHistory'
 import {QUALITY_DEFAULT, isQualityLevel} from './exportQuality'
 import {getExportFormat} from './exportRegistry'
-import {exportSlotKey} from './exportSlotKey'
 import {EXPORT_SLOT_MISSING_REASON, NO_FREE_SLOT_REASON, formatNextFreeSlot} from './exportSlots'
 import {COMPRESSION_NONE, isCompressionMode} from './glbCompression'
 import {isGzipAvailable} from './glbGzip'
@@ -66,7 +66,7 @@ const SIZE_DECIMALS = 1
  *
  * A FREE user's export is decided by MODEL SLOTS (§4.8,
  * src/export/exportSlots.js): the run names the model by its slot key
- * (`exportSlotKey`, snapshotted when the run starts), `pro-module` hands over
+ * (`quota/modelSlotKey.js`, from the route as it was when the run started), `pro-module` hands over
  * the module only if that key holds one of the user's slots or a free slot
  * can be taken for it, and `record-export` records the export under the same
  * key. Every statement of the slots the server makes on the way — the
@@ -147,17 +147,14 @@ export default function useExport() {
     // it fails (codex review on Share#1968), beside export_model's one per
     // delivered file.
     const artifact = source || glbArtifact
-    // The model this run exports, by the key its slot is held under — the
-    // same string for `pro-module` and `record-export`, so the export is
-    // decided and recorded as one model. Snapshotted NOW, not after the
-    // module load: navigation isn't locked meanwhile. A "Download again" row
+    // The model this run exports, named by the key its slot is held under
+    // (quota/modelSlotKey.js) — the same string for `pro-module` and
+    // `record-export`, so the export is decided and recorded as one model.
+    // The route is snapshotted NOW, not after the module load: navigation
+    // isn't locked meanwhile. The key itself resolves in the try below (a
+    // URL model's is a digest, which is async). A "Download again" row
     // carries the key it was recorded under, which may be another model.
-    // The pathname fallback is for a model with no parsed route, which the
-    // server then treats as a model of its own.
-    const modelKey = source?.key || (() => {
-      const {modelPath, appPrefix} = useStore.getState()
-      return exportSlotKey(modelPath, appPrefix) || window.location.pathname
-    })()
+    const {modelPath: runModelPath, appPrefix: runAppPrefix} = useStore.getState()
     // The normalized twin of export_model / export_failed{no_slot}
     // (design/new/quotas.md §"Analytics: normalized tier events"). Source is
     // the model on screen, snapshotted NOW: the event goes out after the
@@ -218,6 +215,11 @@ export default function useExport() {
       // because `modelKey` holds one of the user's slots — or now does,
       // `slots.taken` (§4.8). The loader has already declined to memoise it;
       // what is left here is to show the new slots.
+      // The pathname fallback is for a model with no parsed route, which the
+      // server then treats as a model of its own.
+      const modelKey = source?.key ||
+        (await modelSlotKey(runModelPath, runAppPrefix)) ||
+        window.location.pathname
       const {namespace: proModule, slots} =
         await loadProModule(format.moduleName, () => getAccessTokenSilently(TOKEN_PARAMS), modelKey)
       noteSlots(slots, modelKey)

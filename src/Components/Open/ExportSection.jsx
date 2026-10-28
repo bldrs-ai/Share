@@ -10,7 +10,6 @@ import {
   uncompressedSizes,
 } from '../../export/artifactSizes'
 import {codecToSelect, shouldAutoMeasure} from '../../export/codecSizes'
-import {exportSlotKey} from '../../export/exportSlotKey'
 import {formatNextFreeSlot} from '../../export/exportSlots'
 import {
   QUALITY_DEFAULT,
@@ -35,6 +34,7 @@ import {
   modelRouteSource,
 } from '../../privacy/analytics'
 import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
+import {modelSlotKey} from '../../quota/modelSlotKey'
 import {ROLLING_WINDOW_DAYS, TIERS, getTier} from '../../quota/quota'
 import useStore from '../../store/useStore'
 import GatedAction from '../GatedAction'
@@ -323,9 +323,27 @@ export default function ExportSection() {
   // this in. The model is named by the same slot key `useExport` sends.
   const slots = useExportSlots()
   const isFreeTier = isAuthenticated && !isPro
-  const slotKey = exportSlotKey(modelPath, appPrefix)
-  const isModelInSlot = Boolean(slots && slotKey && slots.keys.includes(slotKey))
-  const isSlotsFull = isFreeTier && Boolean(slots) && !isModelInSlot && slots.remaining === 0
+  // The model on screen's slot key, resolved async (a URL model's is a
+  // digest; quota/modelSlotKey.js). Until it resolves there is no slot line
+  // and no slots-full gate: a model that holds a slot must never flash the
+  // gate while its key is still being worked out.
+  const [slotKey, setSlotKey] = useState(null)
+  useEffect(() => {
+    if (!isFreeTier || !modelPath) {
+      setSlotKey((prev) => (prev === null ? prev : null))
+      return undefined
+    }
+    let isCancelled = false
+    modelSlotKey(modelPath, appPrefix).then(
+      (key) => !isCancelled && setSlotKey(key),
+      () => !isCancelled && setSlotKey(null))
+    return () => {
+      isCancelled = true
+    }
+  }, [isFreeTier, modelPath, appPrefix])
+  const isSlotKnown = Boolean(slots) && slotKey !== null
+  const isModelInSlot = isSlotKnown && slots.keys.includes(slotKey)
+  const isSlotsFull = isFreeTier && isSlotKnown && !isModelInSlot && slots.remaining === 0
   const nextFreeSlot = formatNextFreeSlot(slots?.nextFreeAt)
   // The loader publishes this once the artifact is actually in OPFS — on a
   // cache miss when the writer finishes, on a cache hit right away. Formats
@@ -853,7 +871,7 @@ export default function ExportSection() {
           and the Pro chip, and a caption in it would push the row into a
           wrap. `data-remaining` and `data-held` carry the raw state for the
           E2E. */}
-      {isFreeTier && slots &&
+      {isFreeTier && isSlotKnown &&
        <Typography
          variant='caption'
          color='text.secondary'

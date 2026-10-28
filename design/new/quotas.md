@@ -147,8 +147,12 @@ Two consequences for this ledger:
   reopening such a model is `alreadyCounted` — and the `QuotaBadge` counts
   them like any other slot.
 - The export key must equal the open's key exactly
-  (`src/export/exportSlotKey.js` reuses `directLinkQuotaKey` for GitHub and
+  (`src/quota/modelSlotKey.js` reuses `directLinkQuotaKey` for GitHub and
   Drive), or a private model would take a second slot on export.
+- A URL model's key (`/v/u/`) is `<appPrefix>/v/u/sha256-<hex>`, a digest
+  of the URL, so neither a presigned URL's length nor its credentials ever
+  reach this ledger. record-load has never stored `/v/u/` keys (it doesn't
+  count the `u` route), so nothing older needs reconciling.
 
 The retired export rule — 2 exports per rolling 7 days, counted as `free:
 true` rows in `app_metadata.exports` — gates nothing any more; those rows are

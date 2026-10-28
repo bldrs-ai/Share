@@ -82,7 +82,7 @@ export class ProModuleDeniedError extends Error {
  *   token. Omitted (or resolving to nothing) means an unauthenticated
  *   request, which the server answers with 401.
  * @param {?string} [modelKey] The slot key of the model being exported
- *   (exportSlotKey.js). A free user's request is refused (400) without one;
+ *   (quota/modelSlotKey.js). A free user's request is refused (400) without one;
  *   Pro's never reads it.
  * @return {Promise<{namespace: object, slots: ?{limit: number, used: number,
  *   remaining: number, nextFreeAt: ?string, taken: boolean}}>} the module

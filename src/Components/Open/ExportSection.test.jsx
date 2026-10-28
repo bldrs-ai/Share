@@ -20,6 +20,8 @@ import {actAsyncFlush} from '../../utils/tests'
 import {goToSubscription} from '../Profile/subscriptionNav'
 import ExportSection from './ExportSection'
 import {handleRoute} from '../../routes/routes'
+import {urlModelKey} from '../../quota/modelSlotKey'
+import {webcrypto} from 'node:crypto'
 
 
 // `mock`-prefixed so the jest.mock factory below may close over it.
@@ -698,7 +700,7 @@ describe('ExportSection', () => {
     const FREE = {subscriptionStatus: 'free', stripeCustomerId: null, userEmail: 'a@b.c'}
     const NEXT_FREE_AT = '2026-10-31T09:00:00.000Z'
     // The model on screen is the store's `modelPath`; its slot key is what
-    // the slots' `keys` are compared with (exportSlotKey.js).
+    // the slots' `keys` are compared with (quota/modelSlotKey.js).
     const THIS_MODEL = '/share/v/local-only/0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc'
     const OTHERS = ['/share/v/gh/acme/private/main/a.ifc', '/share/v/g/drive-file-b']
     // In `act`: a component another test left mounted subscribes to the
@@ -717,9 +719,10 @@ describe('ExportSection', () => {
       useExportSlots.mockReturnValue({limit: 2, used: 2, remaining: 0, nextFreeAt: NEXT_FREE_AT, keys: [OTHERS[0], THIS_MODEL]})
       await setStore(ARTIFACT, FREE)
       showThisModel()
-      const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      const {getByTestId, queryByTestId, findByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
-      const line = getByTestId('export-model-slots')
+      // The slot key resolves async (quota/modelSlotKey.js).
+      const line = await findByTestId('export-model-slots')
       expect(line).toHaveTextContent('This model holds one of your 2 free model slots: export it as often as you like')
       expect(line).toHaveAttribute('data-held', 'true')
       // Both slots are taken, but one of them is this model's: no gate.
@@ -733,9 +736,9 @@ describe('ExportSection', () => {
       useExportSlots.mockReturnValue({limit: 2, used: 1, remaining: 1, nextFreeAt: NEXT_FREE_AT, keys: [OTHERS[0]]})
       await setStore(ARTIFACT, FREE)
       showThisModel()
-      const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      const {getByTestId, queryByTestId, findByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
-      expect(getByTestId('export-model-slots')).toHaveTextContent(
+      expect(await findByTestId('export-model-slots')).toHaveTextContent(
         'Exporting takes one of your 2 free model slots (1 left this week), then export it as often as you like')
       expect(getByTestId('export-model-slots')).toHaveAttribute('data-held', 'false')
       expect(queryByTestId('gated-export-pro')).toBeNull()
@@ -747,10 +750,10 @@ describe('ExportSection', () => {
       useExportSlots.mockReturnValue({limit: 2, used: 2, remaining: 0, nextFreeAt: NEXT_FREE_AT, keys: OTHERS})
       await setStore(ARTIFACT, FREE)
       showThisModel()
-      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      const {getByTestId, findByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
       const next = formatNextFreeSlot(NEXT_FREE_AT)
-      expect(getByTestId('export-model-slots'))
+      expect(await findByTestId('export-model-slots'))
         .toHaveTextContent(`Your 2 free model slots this week hold other models · next one frees up ${next}`)
       // The gated look is not the DOM `disabled` attribute: the click has to
       // reach the wrapper, or the help never opens (#1838).
@@ -771,6 +774,28 @@ describe('ExportSection', () => {
       expect(goToSubscription).toHaveBeenCalledWith(
         expect.objectContaining({stripeCustomerId: null, userEmail: 'a@b.c', from: 'export'}))
       expect(mockRun).not.toHaveBeenCalled()
+    })
+
+    it('finds a URL model in its slot by the digest key, never the URL', async () => {
+      // jsdom has no SubtleCrypto; Node's is the same Web Crypto API.
+      const realCrypto = global.crypto
+      Object.defineProperty(global, 'crypto', {value: webcrypto, configurable: true})
+      try {
+        const url = 'https://example.com/models/tower.ifc?X-Amz-Signature=secret'
+        const key = await urlModelKey(url, '/share')
+        useExportSlots.mockReturnValue({limit: 2, used: 2, remaining: 0, nextFreeAt: NEXT_FREE_AT, keys: [OTHERS[0], key]})
+        await setStore(ARTIFACT, FREE)
+        await act(() => {
+          useStore.getState().setAppPrefix('/share')
+          useStore.getState().setModelPath(handleRoute('/share/v/u', {'*': url}))
+        })
+        const {findByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+        expect(await findByTestId('export-model-slots')).toHaveAttribute('data-held', 'true')
+        expect(queryByTestId('gated-export-pro')).toBeNull()
+      } finally {
+        Object.defineProperty(global, 'crypto', {value: realCrypto, configurable: true})
+      }
     })
 
     it('is not gated while the slots are unknown — the server decides that click', async () => {

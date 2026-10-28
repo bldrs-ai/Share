@@ -11,6 +11,8 @@ import {ProModuleDeniedError, forgetProModule, loadProModule} from './proModuleL
 import {NO_FREE_SLOT_REASON} from './exportSlots'
 import useExport, {bytesBucket, exportFailureReason, formatBytes, noFreeSlotMessage} from './useExport'
 import {handleRoute} from '../routes/routes'
+import {modelSlotKey} from '../quota/modelSlotKey'
+import {webcrypto} from 'node:crypto'
 
 
 jest.mock('../OPFS/utils', () => ({readModelByPathFromOPFS: jest.fn()}))
@@ -746,6 +748,32 @@ describe('useExport', () => {
       expect(recordExport.mock.calls[0][0].key).toBe(LOCAL_KEY)
       expect(gtagEventWithCid).toHaveBeenCalledWith('export_model',
         expect.objectContaining({free_export: true, slot_taken: true}))
+    })
+
+    it('exports a model opened from a long presigned URL under a digest key, with no credential in it', async () => {
+      // jsdom has no SubtleCrypto; Node's is the same Web Crypto API.
+      const realCrypto = global.crypto
+      Object.defineProperty(global, 'crypto', {value: webcrypto, configurable: true})
+      try {
+        const url = `https://bucket.s3.amazonaws.com/tower.ifc?X-Amz-Security-Token=${'t0k3n'.repeat(300)}&X-Amz-Signature=abc`
+        useStore.getState().setModelPath(handleRoute('/share/v/u', {'*': url}))
+        const {result} = renderHook(() => useExport())
+
+        await act(async () => {
+          await result.current.run('glb', {})
+        })
+
+        const key = loadProModule.mock.calls[0][2]
+        expect(key).toMatch(/^\/share\/v\/u\/sha256-[0-9a-f]{64}$/)
+        expect(key).not.toMatch(/X-Amz|t0k3n|\?|amazonaws/)
+        // ...the same key the Export tab and an open would compute, and the
+        // one recorded — so the export is decided and recorded as one model.
+        expect(key).toBe(await modelSlotKey(useStore.getState().modelPath, '/share'))
+        expect(recordExport.mock.calls[0][0].key).toBe(key)
+        expect(triggerDownload).toHaveBeenCalled()
+      } finally {
+        Object.defineProperty(global, 'crypto', {value: realCrypto, configurable: true})
+      }
     })
 
     it('snapshots the key when the run starts, so navigating mid-export cannot rename the model', async () => {

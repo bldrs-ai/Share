@@ -1261,9 +1261,10 @@ src/export/
   exportRegistry.js      host: EXPORT_FORMATS matrix (id, label, ext, mime, moduleName, status)
   exportHistory.js       host: OPFS mirror `exports.json` + subscribeToExports (S3); the slots GET
   exportSlots.js         shared (host AND functions): the slot decision, reasons, headers (§4.8)
-  exportSlotKey.js       host: the loaded model's slot key, the string its private open is recorded under (§4.8)
   useExport.js           host: hook: locate artifact → load module → run → download → record
   useExportSlots.js      host: hook: a free user's model slots, for the Export tab's slot line (§4.8)
+src/quota/
+  modelSlotKey.js        host: the loaded model's slot key, the string its open is recorded under; a URL's is a digest (§4.8)
   pro/
     glbExport.entry.js   PRO MODULE entry (built separately; never bundled into index.js)
     glbExport.js         the export itself: container unpack, optional strip, Blob
@@ -2570,7 +2571,7 @@ literally would leave public models unmetered for export too. `pro-module`
 makes no privacy lookup at all, which also keeps a GitHub outage from ever
 deciding an export.
 
-**Keys** (`src/export/exportSlotKey.js`): an export is decided under the
+**Keys** (`src/quota/modelSlotKey.js`, the one function that builds them): an export is decided under the
 model's slot key, which must be the very string a private open of the same
 model is recorded under, because the ledger dedupes by exact key. So each
 route reuses its open's key: GitHub and Drive take
@@ -2580,8 +2581,18 @@ route reuses its open's key: GitHub and Drive take
 uses for local-only models, `<appPrefix>/v/local-only/<uuid>.<ext>`
 (`routes/localOnly.ts#localOnlyPath`, what OpenModelDialog#openFile passes to
 record() and what the `meterLocalFiles` switch would count); hosted files
-`<appPrefix>/v/p/<file>`; URLs `<appPrefix>/v/u/<url>`. None carries the
-element path, so selecting an element is not a new model. The local key's
+`<appPrefix>/v/p/<file>`. A **URL** (`/v/u/`) is keyed
+`<appPrefix>/v/u/sha256-<hex>`, the SHA-256 of the URL as `new URL()`
+normalizes it, fragment dropped (`urlModelKey`, SubtleCrypto — which needs a
+secure context, as the OPFS artifact being exported already does). Never the
+URL itself (codex review on Share#1980): a presigned URL runs past the 1 KB
+key limit, so its exports were all refused, and its query string is a
+credential that must not land in `app_metadata`, a request header or export
+history. The query stays in the digest, since it can tell two files apart; a
+re-signed link to the same object is therefore a new model. No open records a
+`/v/u/` key (record-load never counts the `u` route), so there are no stored
+full-URL rows to reconcile. None of the keys carries the element path, so
+selecting an element is not a new model. The local key's
 uuid is minted per pick: reloading the page or reopening from Recents is the
 same model, picking the same file from disk again is a new one. A "Download
 again" row (`ExportsList`) replays under the key it was recorded with; rows
@@ -2688,7 +2699,7 @@ free slot); `export_model.free_export` now means "exported on the free tier"
 
 **Tests.** `src/export/exportSlots.test.js` (held / take / full, the window
 and its edge, local keys, the retired ledger ignored, the ASCII header);
-`exportSlotKey.test.js` (each route's key equals its open's);
+`quota/modelSlotKey.test.js` (each route's key equals its open's; a long presigned URL keys to a short digest with no query, host or credential in it);
 `netlify/functions/_tests/pro-module.test.js` (a slotted model served three
 times with nothing written, a local file and a public GitHub model each
 taking a slot before serving, a third model refused with both slots full,
