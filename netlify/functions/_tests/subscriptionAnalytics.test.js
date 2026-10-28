@@ -22,14 +22,20 @@ describe('_lib/subscriptionAnalytics', () => {
     it.each([
       ['nothing written', [], null],
       ['a relink only', [{tier: null, from: 'cus_a', to: 'cus_b'}], null],
-      ['a promotion', [{tier: 'promote'}], 'started'],
-      ['a demotion', [{tier: 'demote'}], 'ended'],
+      ['a promotion', [{tier: 'promote', to: 'cus_a'}], 'started'],
+      ['a demotion', [{tier: 'demote', to: 'cus_a'}], 'ended'],
       ['a promotion corrected straight back', [{tier: 'promote'}, {tier: 'demote'}], null],
       ['a demotion corrected straight back', [{tier: 'demote'}, {tier: 'promote'}], null],
-      ['promote, demote, promote (flipping entitlement)', [{tier: 'promote'}, {tier: 'demote'}, {tier: 'promote'}], 'started'],
-      ['a relink, then a promotion', [{tier: null}, {tier: 'promote'}], 'started'],
+      ['promote, demote, promote (flipping entitlement)', [{tier: 'promote'}, {tier: 'demote'}, {tier: 'promote', to: 'cus_a'}], 'started'],
+      ['a relink, then a promotion', [{tier: null, to: 'cus_b'}, {tier: 'promote', to: 'cus_a'}], 'started'],
     ])('%s → %s', (label, changes, expected) => {
-      expect(subscriptionTransition(changes)).toBe(expected)
+      expect(subscriptionTransition(changes)).toEqual(expected ? {transition: expected, customer: 'cus_a'} : null)
+    })
+
+    // A late event for an old customer can promote a user who pays under
+    // their linked one: the transition is that customer's (Codex on #1983).
+    it('names the customer the last tier change left linked, not the event\'s', () => {
+      expect(subscriptionTransition([{tier: 'promote', from: 'cus_old', to: 'cus_linked'}]).customer).toBe('cus_linked')
     })
 
     it('is null for a failure before any write (no changes on the error)', () => {

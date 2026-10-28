@@ -747,9 +747,14 @@ who never came back to it — was never counted. The Stripe webhook now sends
   and Stripe copies it to the Checkout Session's `client_reference_id`. It
   accepts only alphanumerics, `-` and `_`, silently dropping anything else,
   hence the encoding (`src/privacy/gaClientReference.js`, shared by both
-  ends). The webhook lists the customer's Checkout Sessions (one Stripe call,
-  1.5 s, no retry) and decodes the reference from the session that created
-  this subscription, else the newest completed one (a resubscribe through
+  ends). The webhook lists the Checkout Sessions (one Stripe call, 1.5 s, no
+  retry) of the customer that **decided** the transition: the entitled
+  customer for a start, the linked one for an end. That is not always the
+  event's customer, since entitlement is read across the linked customer and
+  the event's — a late event for an old customer can promote a user who pays
+  under the linked one (Codex on #1983) — and the payload is then used for
+  nothing. It decodes the reference from the session that created the
+  event's subscription, else the newest completed one (a resubscribe through
   the billing portal has no session of its own), else the newest of any. That
   id is the Measurement Protocol `client_id`, and also goes out as `open_cid`
   (`cid.<id>`), the same join key every app funnel event carries.
@@ -762,7 +767,8 @@ who never came back to it — was never counted. The Stripe webhook now sends
 - **Params.** `tier: 'pro'`, `source: 'server'`, `cid_source`, `open_cid`
   (checkout only), `interval` (`month` / `year`) from the Pro price on the
   event's subscription, and `plan` = that price's `lookup_key` when one is
-  set. Never an email, a name, or a Stripe id.
+  set — both only when that subscription is the deciding customer's. Never an
+  email, a name, or a Stripe id.
 - **Never breaks the webhook.** Every step is best-effort: the Checkout
   Session lookup and the POST each time out after 1.5 s, and any failure is
   logged (`console.warn`, with the API secret scrubbed) and swallowed. A GA

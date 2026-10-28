@@ -962,6 +962,57 @@ describe('stripe-webhook function', () => {
         expect(mpPosts()[0].body.client_id).toBe('7.7')
       })
 
+      // Entitlement is read across the linked customer and the event's, so
+      // the customer that decided a transition need not be the event's
+      // (Codex on #1983). Its checkout is the paying browser; the event's
+      // payload belongs to another customer, so nothing is taken from it.
+      describe('the customer that decided the transition, not the event\'s', () => {
+        const LINKED = 'cus_linked'
+
+        beforeEach(() => {
+          mockStripeClient.checkout.sessions.list.mockImplementation(({customer}) => Promise.resolve(page(customer === LINKED ?
+            [{client_reference_id: 'gacid_5_5', subscription: 'sub_linked', status: 'complete'}] :
+            [{client_reference_id: 'gacid_1871520000_1754700000', subscription: 'sub_unit', status: 'complete'}])))
+        })
+
+        it('a late event for an old customer promotes a user paying under the linked one: their browser', async () => {
+          mockUpstreams({
+            subscriptions: [proSubscription({status: 'canceled'})],
+            otherCustomers: {[LINKED]: [proSubscription({id: 'sub_linked', customer: LINKED})]},
+            appMetadata: {subscriptionStatus: 'freePendingReauth', stripeCustomerId: LINKED},
+          })
+          mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.deleted'))
+
+          const res = await handler(webhookEvent())
+
+          expect(res.statusCode).toBe(200)
+          expect(patches()).toEqual([{subscriptionStatus: 'shareProPendingReauth'}])
+          const [{body}] = mpPosts()
+          expect(body.client_id).toBe('5.5')
+          expect(body.events[0]).toEqual({
+            name: 'subscription_started',
+            params: {tier: 'pro', source: 'server', cid_source: 'checkout', open_cid: 'cid.5.5'},
+          })
+          expect(mockStripeClient.checkout.sessions.list).toHaveBeenCalledWith(
+            {customer: LINKED, limit: 10}, {timeout: 1500, maxNetworkRetries: 0})
+        })
+
+        it('a demotion is the linked customer\'s lapse, whichever customer\'s event found it', async () => {
+          mockUpstreams({
+            subscriptions: [proSubscription({status: 'canceled'})],
+            otherCustomers: {[LINKED]: [proSubscription({id: 'sub_linked', customer: LINKED, status: 'canceled'})]},
+            appMetadata: {subscriptionStatus: 'sharePro', stripeCustomerId: LINKED},
+          })
+          mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.updated'))
+
+          await handler(webhookEvent())
+
+          const [{body}] = mpPosts()
+          expect(body.events[0].name).toBe('subscription_ended')
+          expect(body.client_id).toBe('5.5')
+        })
+      })
+
       it.each([
         ['no session carries a reference',
           () => mockCheckoutSessions([{client_reference_id: null, subscription: 'sub_unit', status: 'complete'}])],

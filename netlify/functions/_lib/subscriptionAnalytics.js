@@ -20,8 +20,10 @@
  * WHO. The Measurement Protocol `client_id` is the paying browser's GA client
  * id, which the app passes through checkout as the pricing table's
  * `client-reference-id` (src/privacy/gaClientReference.js says why that field
- * and how it's encoded). The webhook finds it on the customer's Checkout
- * Sessions. With none — consent withheld, GA blocked, a subscription made
+ * and how it's encoded). The webhook finds it on the Checkout Sessions of the
+ * customer that decided the transition — the entitled one for a start, the
+ * linked one for an end — which is not always the event's customer
+ * (`subscriptionTransition`). With none — consent withheld, GA blocked, a subscription made
  * outside the pricing table, or a key without Checkout Session read access —
  * the client id is a stable hash of the Stripe customer id, and the event says
  * so (`cid_source: 'fallback'`) and carries no `open_cid`, so it can't be
@@ -77,20 +79,30 @@ const EVENT_FOR_TRANSITION = {
  * ended where it began (a promote corrected straight back by a demote in the
  * same delivery is not a subscription). A relink alone has `tier: null`.
  *
- * @param {Array<{tier: ?string}>} [changes] settleUser's `changes`
- * @return {?string} one of TRANSITIONS, or null
+ * `customer` is the customer that DECIDED it, which need not be the event's:
+ * entitlement is read across the user's linked customer and the event's
+ * (`_lib/subscriptions.js#entitlementAcross`), so a late event for an old
+ * customer can promote a user who pays under the linked one (Codex on
+ * #1983). It is the last tier change's `to`, the link that change left:
+ * `linkFor` puts the entitled customer there on a promote, and leaves the
+ * linked customer (whose lapse it is) in place on a demote.
+ *
+ * @param {Array<{tier: ?string, to: ?string}>} [changes] settleUser's `changes`
+ * @return {?{transition: string, customer: ?string}} transition is one of
+ *   TRANSITIONS; null when there is none
  */
 export function subscriptionTransition(changes) {
-  const tiers = (changes || []).map((change) => change && change.tier).filter(Boolean)
-  if (tiers.length === 0) {
+  const tierChanges = (changes || []).filter((change) => change && change.tier)
+  if (tierChanges.length === 0) {
     return null
   }
-  const wasPro = tiers[0] === 'demote'
-  const isPro = tiers[tiers.length - 1] === 'promote'
+  const last = tierChanges[tierChanges.length - 1]
+  const wasPro = tierChanges[0].tier === 'demote'
+  const isPro = last.tier === 'promote'
   if (wasPro === isPro) {
     return null
   }
-  return isPro ? TRANSITIONS.STARTED : TRANSITIONS.ENDED
+  return {transition: isPro ? TRANSITIONS.STARTED : TRANSITIONS.ENDED, customer: last.to || null}
 }
 
 
@@ -128,8 +140,9 @@ export function fallbackClientId(customerId) {
  * fallback.
  *
  * @param {object} stripe Stripe client
- * @param {string} customerId the event's customer
- * @param {?string} subscriptionId the event's subscription
+ * @param {string} customerId the customer that decided the transition
+ * @param {?string} subscriptionId the event's subscription, when it is that
+ *   customer's
  * @return {Promise<{clientId: string, source: string}>} source is a CID_SOURCES value
  */
 export async function resolveGaClientId(stripe, customerId, subscriptionId) {
@@ -156,7 +169,8 @@ export async function resolveGaClientId(stripe, customerId, subscriptionId) {
 
 
 /**
- * @param {object} subscription the event's Stripe subscription
+ * @param {?object} subscription the event's Stripe subscription, when it
+ *   belongs to the customer the transition is attributed to
  * @param {?string} proPriceId SHARE_PRO_PRICE_ID
  * @param {{clientId: string, source: string}} attribution
  * @return {object} GA event params
@@ -244,11 +258,11 @@ export async function reportSubscriptionTransition({stripe, stripeEvent, changes
   let label = 'subscription event'
   let config = null
   try {
-    const transition = subscriptionTransition(changes)
-    if (!transition) {
+    const decided = subscriptionTransition(changes)
+    if (!decided) {
       return 'no_transition'
     }
-    const name = EVENT_FOR_TRANSITION[transition]
+    const name = EVENT_FOR_TRANSITION[decided.transition]
     label = `${name} for ${stripeEvent.type} ${stripeEvent.id}`
     config = gaMeasurementConfig(env)
     if (!config) {
@@ -262,8 +276,14 @@ export async function reportSubscriptionTransition({stripe, stripeEvent, changes
       logInfo(`stripe-webhook: ${label} not sent to GA: test-mode event`)
       return 'test_mode'
     }
-    const subscription = (stripeEvent.data && stripeEvent.data.object) || {}
-    const attribution = await resolveGaClientId(stripe, subscription.customer, subscription.id || null)
+    // Attribute to the customer that decided the transition. The event's
+    // own subscription — its checkout session, its price's interval — speaks
+    // for it only when it belongs to that customer; otherwise nothing from
+    // the payload is used.
+    const payload = (stripeEvent.data && stripeEvent.data.object) || {}
+    const customer = decided.customer || payload.customer
+    const subscription = payload.customer === customer ? payload : null
+    const attribution = await resolveGaClientId(stripe, customer, subscription ? subscription.id || null : null)
     await sendMeasurementProtocolEvent({
       config,
       clientId: attribution.clientId,
