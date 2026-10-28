@@ -1,0 +1,35 @@
+{
+  "$fixture": "stripe/event.subscription.created.json",
+  "$merge": {
+    "livemode": true,
+    "data": {
+      "object": {
+        "$fixture": "stripe/subscription.json",
+        "$merge": {
+          "livemode": true,
+          "items": {
+            "object": "list",
+            "data": [
+              {
+                "id": "si_Rreplay0001",
+                "object": "subscription_item",
+                "quantity": 1,
+                "subscription": "sub_1QreplayStandard0001",
+                "price": {
+                  "id": "price_1QreplayPro0001",
+                  "object": "price",
+                  "livemode": true,
+                  "lookup_key": "share_pro_monthly",
+                  "recurring": {"interval": "month", "interval_count": 1, "usage_type": "licensed"},
+                  "type": "recurring",
+                  "unit_amount": 1900,
+                  "currency": "usd"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

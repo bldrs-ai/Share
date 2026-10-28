@@ -14,6 +14,9 @@ import {
 // prefills the wrong address (subscriptionNav#goToSubscription).
 const USER_EMAIL = 'cypress+quota@bldrs.ai'
 
+// A GA4 client id, as the `_ga` cookie carries it after `GA1.1.`.
+const GA_CLIENT_ID = '1871520000.1754700000'
+
 // FREE_PRIVATE_MODEL_LIMIT in src/quota/limits.js, which the MSW record-load
 // mock enforces (src/__mocks__/api-handlers.js). The spec can't import it
 // (it would pull the app's module graph into the runner), so the dialog's
@@ -247,6 +250,13 @@ describeMobileAndDesktop('QuotaLimitDialog', () => {
 
     await expect.poll(() => funnelEvents(page, 'quota_limit_reached')).toHaveLength(1)
 
+    // The `_ga` cookie gtag/js writes on prod (it never loads here). The
+    // checkout carries its client id to the pricing table's
+    // client-reference-id, so the stripe-webhook's server-side
+    // subscription_started lands on this browser's GA client
+    // (design/new/quotas.md §"Server-side subscription events").
+    await page.context().addCookies([{name: '_ga', value: `GA1.1.${GA_CLIENT_ID}`, domain: 'localhost', path: '/'}])
+
     const subscribeRequest = page.waitForRequest((req) => new URL(req.url()).pathname === '/subscribe/')
     await subscribeButton.click()
     const subscribeUrl = new URL((await subscribeRequest).url())
@@ -258,6 +268,8 @@ describeMobileAndDesktop('QuotaLimitDialog', () => {
     // The raw query, not just the decoded param: an unencoded `+` would
     // decode above as a space and fail there, but pin the wire form too.
     expect(subscribeUrl.search).toContain(`userEmail=${encodeURIComponent(USER_EMAIL)}`)
+    // Dot-free: Stripe silently drops a client-reference-id with a dot.
+    expect(subscribeUrl.searchParams.get('gaRef')).toBe(`gacid_${GA_CLIENT_ID.replace('.', '_')}`)
 
     const checkoutEvents = await funnelEvents(page, 'begin_checkout')
     expect(checkoutEvents).toHaveLength(1)

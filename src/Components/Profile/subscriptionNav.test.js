@@ -48,7 +48,25 @@ describe('goToSubscription', () => {
     ]])
     // The email is encoded, so the subscribe page's URLSearchParams reads
     // back the `+` rather than a space.
-    expect(window.location.href).toBe('/subscribe/?theme=light&userEmail=a%2Bb%40c.d')
+    // The GA client id rides along for the pricing table's
+    // client-reference-id, which the stripe-webhook attributes its
+    // server-side subscription_started by.
+    expect(window.location.href).toBe('/subscribe/?theme=light&userEmail=a%2Bb%40c.d&gaRef=gacid_111_222')
+  })
+
+  it('sends no gaRef without a client id, or without analytics consent', async () => {
+    const args = {stripeCustomerId: null, userEmail: 'a@b.c', isDay: true, getAccessTokenSilently: jest.fn(), from: 'quota'}
+    await goToSubscription(args)
+    expect(window.location.href).toBe('/subscribe/?theme=light&userEmail=a%40b.c')
+
+    setGaClientId('111.222')
+    Cookies.set('isAnalyticsAllowed', 'false')
+    try {
+      await goToSubscription(args)
+      expect(window.location.href).toBe('/subscribe/?theme=light&userEmail=a%40b.c')
+    } finally {
+      Cookies.remove('isAnalyticsAllowed')
+    }
   })
 
   it('reports a known Stripe customer as a portal destination', async () => {

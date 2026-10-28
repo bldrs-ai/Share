@@ -12,9 +12,17 @@ import {withCrossTabLock} from './crossTabLock'
  * "they just paid" / "they just lapsed" moment — the next state, sharePro,
  * is reached through a reauth and also covers every renewal.
  */
+//
+// Reported under the `_client` names: the funnel's subscription_started /
+// subscription_ended come from the stripe-webhook (server-side, Measurement
+// Protocol), which counts a transition whether or not the user ever comes
+// back to the app. These record the browser SEEING it — the pendingReauth
+// token reaching an open app — which is only useful beside the server count
+// (how many subscribers return, and on which client), and would inflate it
+// under the same name (subscriptionEventNames.js).
 const EVENT_FOR_STATUS = {
-  shareProPendingReauth: FUNNEL_EVENTS.SUBSCRIPTION_STARTED,
-  freePendingReauth: FUNNEL_EVENTS.SUBSCRIPTION_ENDED,
+  shareProPendingReauth: FUNNEL_EVENTS.SUBSCRIPTION_STARTED_CLIENT,
+  freePendingReauth: FUNNEL_EVENTS.SUBSCRIPTION_ENDED_CLIENT,
 }
 
 const MARKER_KEY_PREFIX = 'bldrs.ga.reportedSubscriptionStatus:'
@@ -29,8 +37,8 @@ const reportedThisPage = new Map()
 
 
 /**
- * Report subscription_started / subscription_ended for a token carrying a
- * pendingReauth status, at most once per transition.
+ * Report subscription_started_client / subscription_ended_client for a token
+ * carrying a pendingReauth status, at most once per transition.
  *
  * "Per transition" is the hard part: one pendingReauth token is processed
  * many times before the reauth that clears it — BaseRoutes' cached-token
