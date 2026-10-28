@@ -809,9 +809,9 @@ the database sense" (owner, 2026-10-26).
 
 | Event | Action | Params |
 |---|---|---|
-| `model_view` | a real model open | `tier`, `source`, `route_kind`, `gate: 'none'`, `open_cid` |
-| `model_share` | handing out, or opening, a model in a way the tiers meter as sharing (below) | `tier`, `source`, `route_kind` (where known), `gate`, `open_cid` |
-| `model_export` | a GLB export | `tier`, `source` and `route_kind` (where known), `gate`, `open_cid` |
+| `model_view` | a real model open | `tier`, `source`, `route_kind`, `content_id`, `gate: 'none'`, `open_cid` |
+| `model_share` | handing out, or opening, a model in a way the tiers meter as sharing (below) | `tier`, `source`, `route_kind` and `content_id` (where known), `gate`, `open_cid` |
+| `model_export` | a GLB export | `tier`, `source`, `route_kind` and `content_id` (where known), `gate`, `open_cid` |
 
 - **`tier`**: `anon` \| `free` \| `pro`. Derived the way the quota code
   derives it, `quota.js#getTier` (and so `proStatus.js`:
@@ -837,6 +837,21 @@ the database sense" (owner, 2026-10-26).
 - **`gate`**: `none` (the action happened), `upsell` (a gate showed an upsell
   in place of the action), `blocked` (refused), `soft` (allowed, but over
   the limit and recorded as such).
+- **`content_id`** (Share#1981): the model's key, so GA can count **distinct
+  models** from these events (activity per action is not models: a model
+  already in a slot is opened, shared and exported without limit). It is the
+  value `real_model_open` sends under the same parameter, from the same
+  function, `analytics#modelContentId` (the route's `downloadUrl`, else its
+  `filepath`), which `CadView` calls for both. Nothing new is sent and
+  nothing is stripped: the privacy treatment is `real_model_open`'s, so a
+  local file's id is its UUID-derived upload path (not the name the user's
+  file had) and a Drive id is the file's download URL. `content_id` is
+  already a registered event-scoped custom dimension, and GA keys a
+  dimension by parameter name, so no new registration is needed. It is
+  **omitted rather than wrong** where the model acted on is not the one on
+  screen or has no `real_model_open`: `QuotaLimitDialog`'s `blocked`
+  (the refused model was never loaded) and a "Download again" of a history
+  row (the row carries a share-path key, not this value).
 - **`open_cid`**: attached by `gtagEventWithCid`, as on every funnel and gate
   event.
 
@@ -885,11 +900,13 @@ Three timing rules keep the cells honest (codex review on Share#1976):
   they saw. A caller with an explicit tier (QuotaLimitDialog's prop,
   record-load's answer, `free_limit` below) sends at once: nothing there is
   read from auth.
-- **`source` is snapshotted at the call, not at emit.** That matters most
-  for `model_export`, whose event goes out after the module load and
-  conversion while navigation isn't locked, but every caller passes the
-  route it read when the action happened, so the wait for auth can't
-  relabel it either.
+- **`source` and `content_id` are snapshotted at the call, not at emit.**
+  That matters most for `model_export`, whose event goes out after the
+  module load and conversion while navigation isn't locked, but every
+  caller passes the route it read when the action happened, so the wait for
+  auth can't relabel it either, nor credit it to the next model.
+  `useDirectLinkQuota` snapshots `content_id` with the route it metered,
+  before `record()` answers.
 - **A free-allowance refusal is `free`**, even when the local claim still
   says Pro. That is the stale-JWT case on a canceled account, which
   `useExport` already refreshes.

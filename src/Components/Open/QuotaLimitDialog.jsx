@@ -70,6 +70,9 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
     // free user is ever metered, so `tier` should always be set; if a caller
     // ever passes none, modelActionTracking falls back to the sign-in tier
     // at emit time instead of guessing one.
+    // No `contentId`: the model this wall refused was never loaded, so it has
+    // no real_model_open content_id, and the model on screen is a different
+    // one. Omitted rather than wrong, as for a "Download again" export.
     trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
       gate: MODEL_GATES.BLOCKED,
       source: MODEL_SOURCES.HOSTED,

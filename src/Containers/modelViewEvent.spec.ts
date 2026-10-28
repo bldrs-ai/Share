@@ -1,6 +1,7 @@
 import {readFileSync} from 'fs'
 import {Page, expect, test} from '@playwright/test'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
+import {gaEvents} from '../tests/e2e/ga'
 import {waitForModelReady} from '../tests/e2e/models'
 import {
   auth0Login,
@@ -12,30 +13,8 @@ import {
 
 const DROPPED_FILE = 'public/index.ifc'
 const LOCAL_ONLY_URL = /\/share\/v\/local-only\/[0-9a-f-]{36}\.ifc/
-
-
-type GaEvent = {name: string, params: Record<string, unknown>}
-
-
-/**
- * GA events as gtag queued them. index.html's inline
- * `gtag(){dataLayer.push(arguments)}` runs even with the GA loader skipped in
- * tests, so every gtagEvent lands in window.dataLayer (as
- * realModelOpen.spec.ts reads real_model_open).
- *
- * @param page Playwright page
- * @param name GA event name
- * @return Matching events, params made serializable
- */
-async function gaEvents(page: Page, name: string): Promise<GaEvent[]> {
-  return await page.evaluate((eventName) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const dataLayer: any[] = (window as any).dataLayer || []
-    return dataLayer
-      .filter((entry) => entry?.[0] === 'event' && entry?.[1] === eventName)
-      .map((entry) => ({name: String(entry[1]), params: JSON.parse(JSON.stringify(entry[2] ?? {}))}))
-  }, name)
-}
+// A local upload's content_id: its UUID-derived storage URL, with no file name.
+const LOCAL_ONLY_FILE = /^https?:\/\/[^/]+\/[0-9a-f-]{36}\.ifc$/
 
 
 /**
@@ -84,9 +63,17 @@ describeMobileAndDesktop('model_view GA event', () => {
 
     await expect.poll(() => gaEvents(page, 'model_view')).toHaveLength(1)
     const [view] = await gaEvents(page, 'model_view')
-    expect(view.params).toEqual({tier: 'anon', gate: 'none', source: 'local', route_kind: 'local'})
-    // Beside the legacy event, not instead of it.
-    expect(await gaEvents(page, 'real_model_open')).toHaveLength(1)
+    expect(view.params).toEqual({
+      tier: 'anon', gate: 'none', source: 'local', route_kind: 'local', content_id: expect.stringMatching(LOCAL_ONLY_FILE),
+    })
+    // Beside the legacy event, not instead of it, and keyed to the same model
+    // (Share#1981): the very value real_model_open sends, so GA counts one
+    // model once across both. It is the upload's UUID-derived storage URL,
+    // never the dropped file's own name.
+    const opens = await gaEvents(page, 'real_model_open')
+    expect(opens).toHaveLength(1)
+    expect(opens[0].params.content_id).toMatch(LOCAL_ONLY_FILE)
+    expect(view.params.content_id).toBe(opens[0].params.content_id)
   })
 })
 
@@ -117,6 +104,8 @@ describeMobileAndDesktop('model_view GA event, signed in', () => {
 
     await expect.poll(() => gaEvents(page, 'model_view')).toHaveLength(1)
     const [view] = await gaEvents(page, 'model_view')
-    expect(view.params).toEqual({tier: 'free', gate: 'none', source: 'local', route_kind: 'local'})
+    expect(view.params).toEqual({
+      tier: 'free', gate: 'none', source: 'local', route_kind: 'local', content_id: expect.stringMatching(LOCAL_ONLY_FILE),
+    })
   })
 })

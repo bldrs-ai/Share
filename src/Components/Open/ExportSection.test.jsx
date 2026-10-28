@@ -643,6 +643,23 @@ describe('ExportSection', () => {
     expect(queryByTestId('export-size')).toBeNull()
   })
 
+  // Share#1981: the gate's event names the model on screen, with the value
+  // real_model_open sends for it, read when the help opens.
+  it('names the model on screen on the normalized upsell event', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    await setStore(ARTIFACT, null)
+    act(() => useStore.setState({modelPath: {kind: 'url', downloadUrl: new URL('https://example.com/m/box.ifc')}}))
+    try {
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      fireEvent.click(getByTestId('gated-export-anonymous'))
+      await waitFor(() => expect(trackModelAction).toHaveBeenCalledWith('export', expect.objectContaining({
+        gate: 'upsell', source: 'hosted', routeKind: 'url', contentId: 'https://example.com/m/box.ifc',
+      })))
+    } finally {
+      act(() => useStore.setState({modelPath: null}))
+    }
+  })
+
   it('offers an anonymous user the login gate instead of exporting', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
     await setStore(ARTIFACT, null)

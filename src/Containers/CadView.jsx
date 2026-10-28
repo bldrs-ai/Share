@@ -18,6 +18,7 @@ import {
   gtagEvent,
   gtagFunnelEvent,
   isRealModelOpen,
+  modelContentId,
   modelRouteSource,
   startModelEngagement,
 } from '../privacy/analytics'
@@ -876,7 +877,10 @@ export default function CadView({
     if (isRealModelOpen(routeResult)) {
       const eventParams = {
         content_type: loadedModel.type || 'undefined',
-        content_id: filepath,
+        // The same helper stamps content_id on model_view below, and on
+        // model_share / model_export elsewhere, so GA counts one model the
+        // same way on every event. Equal to `filepath` above, by design.
+        content_id: modelContentId(routeResult),
       }
       // How the load went: the reporter's cross-format snapshot merged with
       // Conway's engine stats for IFC/STEP, plus the displayed/unusable
@@ -913,6 +917,7 @@ export default function CadView({
       trackModelActionWhenAuthSettled(MODEL_ACTIONS.VIEW, {
         gate: MODEL_GATES.NONE,
         ...modelRouteSource(routeResult),
+        contentId: eventParams.content_id,
         getIsAuthenticated: () => isAuthenticatedRef.current,
       })
       // Engaged-use conversions (Share#1960). Same real-open gate as the

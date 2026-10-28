@@ -247,8 +247,11 @@ describe('ShareControl for a local upload (#705)', () => {
     expect(useStore.getState().isShareVisible).toBe(false)
     expect(gtagEventWithCid).toHaveBeenCalledWith('share_gated', {reason: 'local_file', signed_in: false})
     // Its normalized twin: a local share turned into an upsell.
+    // Share#1981: it names the local model on screen with real_model_open's
+    // value for it (its route's path: an upload has no download URL here).
     await waitFor(() => expect(trackModelAction).toHaveBeenCalledWith('share', expect.objectContaining({
       gate: 'upsell', source: 'local', routeKind: 'local', isAuthenticated: false,
+      contentId: uploadedModelPath.filepath,
     })))
   })
 
@@ -329,7 +332,10 @@ describe('ShareControl for a local upload (#705)', () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     act(() => {
       useStore.setState({
-        modelPath: {kind: 'provider', provider: 'github', org: 'o', repo: 'r', branch: 'main', filepath: 'm.ifc'},
+        modelPath: {
+          kind: 'provider', provider: 'github', org: 'o', repo: 'r', branch: 'main', filepath: 'm.ifc',
+          downloadUrl: new URL('https://raw.githubusercontent.com/o/r/main/m.ifc'),
+        },
         model: {type: 'IFC'},
       })
     })
@@ -339,8 +345,10 @@ describe('ShareControl for a local upload (#705)', () => {
       expect(await findByTestId('textfield-link')).toBeInTheDocument()
       await waitFor(() => expect(trackModelAction).toHaveBeenCalled())
       expect(gtagEvent).toHaveBeenCalledWith('share', expect.objectContaining({method: 'url'}))
+      // Share#1981: the model's content_id, real_model_open's value for it.
       expect(trackModelAction.mock.calls).toEqual([['share', expect.objectContaining({
         gate: 'none', source: 'hosted', routeKind: 'github', isAuthenticated: true,
+        contentId: 'https://raw.githubusercontent.com/o/r/main/m.ifc',
       })]])
     } finally {
       act(() => {

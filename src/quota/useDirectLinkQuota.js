@@ -7,6 +7,7 @@ import {
   MODEL_GATES,
   MODEL_SOURCES,
   gtagEventWithCid,
+  modelContentId,
 } from '../privacy/analytics'
 import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
 import {navigateBaseOnModelPath} from '../utils/location'
@@ -132,7 +133,10 @@ export default function useDirectLinkQuota(appPrefix) {
     if (quotaKey === null) {
       return
     }
-    const target = {key: quotaKey.key, routeKind: quotaKey.routeKind}
+    // contentId is snapshotted here, with the route it belongs to: the
+    // outcome arrives after record-load answers, and a navigation meanwhile
+    // must not credit model_share to the next model.
+    const target = {key: quotaKey.key, routeKind: quotaKey.routeKind, contentId: modelContentId(modelPath)}
     // No driveDownload, no resolver: record() then counts the file as private.
     if (quotaKey.routeKind === DIRECT_LINK_ROUTE_KINDS.GDRIVE && driveDownload) {
       target.resolveDriveVisibility = () => driveFileQuotaVisibility(driveDownload.connection, quotaKey.fileId)
@@ -146,7 +150,7 @@ export default function useDirectLinkQuota(appPrefix) {
     if (pending === null || isAuthLoading) {
       return
     }
-    const {key, routeKind, resolveDriveVisibility} = pending
+    const {key, routeKind, contentId, resolveDriveVisibility} = pending
     if (meteredKeysRef.current.has(key)) {
       return
     }
@@ -177,6 +181,7 @@ export default function useDirectLinkQuota(appPrefix) {
         gate: MODEL_GATES.SOFT,
         source: MODEL_SOURCES.HOSTED,
         routeKind,
+        contentId,
         tier: outcome.tier,
         getIsAuthenticated: () => isAuthenticatedRef.current,
       })
