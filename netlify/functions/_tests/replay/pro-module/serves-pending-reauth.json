@@ -1,5 +1,5 @@
 {
-  "description": "shareProPendingReauth (paid, awaiting a re-login) is Pro: served with nothing charged, however many free exports the ledger holds.",
+  "description": "shareProPendingReauth (paid, awaiting a re-login) is Pro: served with no model key and nothing written, however full its model slots.",
   "env": {
     "$fixture": "env/auth0.json",
     "$merge": {
@@ -57,7 +57,19 @@
                   "exportedAt": "2026-10-02T09:00:00.000Z",
                   "free": true
                 }
-              ]
+              ],
+              "usageQuota": {
+                "loads": [
+                  {
+                    "key": "/share/v/gh/acme/private/main/tower.ifc",
+                    "loadedAt": "2026-10-05T10:00:00.000Z"
+                  },
+                  {
+                    "key": "/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz",
+                    "loadedAt": "2026-10-04T10:00:00.000Z"
+                  }
+                ]
+              }
             }
           }
         }

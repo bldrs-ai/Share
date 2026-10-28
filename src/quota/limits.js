@@ -13,7 +13,7 @@
  *
  * Dependency-free and imported with its `.js` extension by the functions,
  * which load under plain Node ESM — same constraint as `proStatus.js` and
- * `export/freeExports.js`.
+ * `export/exportSlots.js`.
  */
 
 
@@ -32,19 +32,23 @@ export const TIERS = {
 }
 
 /**
- * Private models a signed-in free user may open per ROLLING_WINDOW_DAYS.
- * The pricing page sells this as "Open and share 2 private models a week".
+ * Model slots a signed-in free user has per ROLLING_WINDOW_DAYS: private
+ * models they may open, and — since 2026-10-27 — models they may export as
+ * often as they like (`export/exportSlots.js`, where a model that was free to
+ * view takes a slot on its first export). One ledger,
+ * `app_metadata.usageQuota.loads`, for both. The pricing page sells it as
+ * "2 private models a week — open, share and export them as often as you
+ * like".
  */
 export const FREE_PRIVATE_MODEL_LIMIT = 2
 
 /**
- * Length of the free tier's rolling window, in days: for private models here
- * and for free GLB exports, whose `FREE_EXPORT_WINDOW_DAYS`
- * (`export/freeExports.js`) IS this constant. One window, so the pricing
- * page's "2 private models a week" and "2 GLB exports a week" can't drift
- * apart. Owner decision 2026-10-26 (was 30): "weekly will help keep us more
- * top-of-mind, and private shares and exports should be on the same timing
- * to keep it simple."
+ * Length of the free tier's rolling window, in days: how long a model slot is
+ * held, whether a private open or an export took it
+ * (`export/exportSlots.js`). Owner decision 2026-10-26 (was 30): "weekly will
+ * help keep us more top-of-mind, and private shares and exports should be on
+ * the same timing to keep it simple." Since 2026-10-27 they are the same
+ * slots, not just the same timing.
  */
 export const ROLLING_WINDOW_DAYS = 7
 
@@ -63,10 +67,10 @@ export const ROLLING_WINDOW_MS =
  * mock calls) and by `record-load`, so the two can't disagree about an edge.
  *
  * The edge is exclusive: a row counts while `now < loadedAt + window`, so a
- * row exactly ROLLING_WINDOW_DAYS old no longer counts. Free exports
- * (`export/freeExports.js#freeExportAllowance`) and engagement tracking use
- * the same comparison, and it is the one that makes a "next slot frees at
- * loadedAt + window" statement true at that instant.
+ * row exactly ROLLING_WINDOW_DAYS old no longer counts. Export slots
+ * (`export/exportSlots.js#modelSlots`, which calls this) and engagement
+ * tracking use the same comparison, and it is the one that makes a "next
+ * slot frees at loadedAt + window" statement true at that instant.
  *
  * Tier-blind: every tier that has a ledger (free, paid) is pruned the same way.
  *
@@ -114,8 +118,8 @@ export const DRIVE_ROUTE_KIND = 'g'
  */
 export function isMeteredLocalRouteKind(routeKind, meterLocalFiles) {
   // The typeof guard is for tsc, not behavior (a null kind was never in the
-  // list): freeExports.js imports this file now, which puts it in the
-  // typecheck's graph via the TypeScript that imports freeExports.
+  // list): exportSlots.js imports this file now, which puts it in the
+  // typecheck's graph via the TypeScript that imports exportSlots.
   return meterLocalFiles === true && typeof routeKind === 'string' && LOCAL_ROUTE_KINDS.includes(routeKind)
 }
 

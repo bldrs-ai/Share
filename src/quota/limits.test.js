@@ -1,4 +1,4 @@
-import {FREE_EXPORT_LIMIT, FREE_EXPORT_WINDOW_DAYS, FREE_EXPORT_WINDOW_MS} from '../export/freeExports'
+import {FREE_MODEL_SLOTS} from '../export/exportSlots'
 import {LEGACY_UPLOAD_ROUTE, LOCAL_ONLY_ROUTE} from '../routes/localOnly'
 import {
   DRIVE_ROUTE_KIND,
@@ -21,24 +21,21 @@ describe('quota/limits', () => {
     expect([...LOCAL_ROUTE_KINDS].sort()).toEqual([LOCAL_ONLY_ROUTE, LEGACY_UPLOAD_ROUTE].sort())
   })
 
-  // The owner's tiers (Share#1966 PR, window 2026-10-26): what the pricing
-  // page sells.
-  it('allows a free account 2 private models and 2 GLB exports per rolling 7 days', () => {
+  // The owner's tiers (Share#1966 PR, window 2026-10-26, export slots
+  // 2026-10-27): what the pricing page sells.
+  it('gives a free account 2 model slots per rolling 7 days', () => {
     expect(FREE_PRIVATE_MODEL_LIMIT).toBe(2)
     expect(LIMITS[TIERS.FREE]).toBe(FREE_PRIVATE_MODEL_LIMIT)
     expect(ROLLING_WINDOW_DAYS).toBe(7)
     expect(ROLLING_WINDOW_MS).toBe(7 * 24 * 60 * 60 * 1000)
-    expect(FREE_EXPORT_LIMIT).toBe(2)
-    expect(FREE_EXPORT_WINDOW_DAYS).toBe(7)
     expect(LIMITS[TIERS.PAID]).toBe(Infinity)
   })
 
-  // "Private shares and exports should be on the same timing" (owner,
-  // 2026-10-26). FREE_EXPORT_WINDOW_* are aliases of ROLLING_WINDOW_*, so
-  // this only guards against someone re-hardcoding a separate export window.
-  it('keeps the export window an alias of the private-model window', () => {
-    expect(FREE_EXPORT_WINDOW_DAYS).toBe(ROLLING_WINDOW_DAYS)
-    expect(FREE_EXPORT_WINDOW_MS).toBe(ROLLING_WINDOW_MS)
+  // "Ultimately controlled by open slots, not export counts" (owner,
+  // 2026-10-27): exports use the private-model slots, not a count of their
+  // own, so this guards against someone re-adding a separate export number.
+  it('has exports use the private-model slots, not a limit of their own', () => {
+    expect(FREE_MODEL_SLOTS).toBe(FREE_PRIVATE_MODEL_LIMIT)
   })
 
   // Signed-out users are never metered, so there is no tier for them, and no

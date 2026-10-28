@@ -8,8 +8,9 @@ import {compressedExport, gzippedExport} from './artifactSizes'
 import {triggerDownload} from './download'
 import {recordExport} from './exportHistory'
 import {ProModuleDeniedError, forgetProModule, loadProModule} from './proModuleLoader'
-import {FREE_EXPORT_LIMIT_REASON} from './freeExports'
-import useExport, {bytesBucket, exportFailureReason, formatBytes, freeLimitMessage} from './useExport'
+import {NO_FREE_SLOT_REASON} from './exportSlots'
+import useExport, {bytesBucket, exportFailureReason, formatBytes, noFreeSlotMessage} from './useExport'
+import {handleRoute} from '../routes/routes'
 
 
 jest.mock('../OPFS/utils', () => ({readModelByPathFromOPFS: jest.fn()}))
@@ -84,7 +85,7 @@ describe('useExport', () => {
     mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently})
     recordExport.mockResolvedValue({recorded: true, status: 200, exports: []})
     exportArtifact = jest.fn().mockReturnValue(EXPORTED)
-    loadProModule.mockResolvedValue({namespace: {exportArtifact}, charge: null})
+    loadProModule.mockResolvedValue({namespace: {exportArtifact}, slots: null})
     readModelByPathFromOPFS.mockResolvedValue({
       arrayBuffer: () => Promise.resolve(ARTIFACT_BYTES.buffer),
     })
@@ -93,7 +94,9 @@ describe('useExport', () => {
     useStore.getState().setAppMetadata(null)
     useStore.getState().setSnackMessage(null)
     useStore.getState().setIsExportInFlight(false)
-    useStore.getState().setFreeExportAllowance(null)
+    useStore.getState().setModelSlots(null)
+    useStore.getState().setModelPath(null)
+    useStore.getState().setAppPrefix(null)
   })
 
   afterAll(() => {
@@ -111,7 +114,7 @@ describe('useExport', () => {
     // it — this is what makes the store hand-off worth having.
     expect(readModelByPathFromOPFS).toHaveBeenCalledWith(
       `ifc/misc/box.${SCHEMA_VER}.glb`, 'sha123', 'gh-bldrs-ai', 'test-models', 'main')
-    expect(loadProModule).toHaveBeenCalledWith('glbExport', expect.any(Function))
+    expect(loadProModule).toHaveBeenCalledWith('glbExport', expect.any(Function), expect.any(String))
     expect(exportArtifact).toHaveBeenCalledWith({
       bytes: ARTIFACT_BYTES,
       options: {sourceBasename: 'box.ifc', stripBldrsMetadata: false},
@@ -127,6 +130,7 @@ describe('useExport', () => {
       source_kind: KIND_LABEL,
       portable: false,
       free_export: false,
+      slot_taken: false,
     })
   })
 
@@ -469,11 +473,12 @@ describe('useExport', () => {
   })
 
   describe('when record-export refuses an export pro-module already served', () => {
-    const refused = {recorded: false, status: 403, exports: [], reason: 'free_export_not_charged'}
+    const refused = {recorded: false, status: 403, exports: [], reason: 'export_slot_missing'}
 
-    it('forgets the memoised Pro module and refreshes the claims, for an uncharged export', async () => {
+    it('forgets the memoised Pro module and refreshes the claims, for a delivery with no slots header', async () => {
       // The account lost Pro while this page stayed open: the memo would
-      // otherwise keep exporting uncharged for the rest of the session.
+      // otherwise keep exporting models holding no slot for the rest of the
+      // session.
       getAccessTokenSilently.mockImplementation((params) => Promise.resolve(params?.cacheMode === 'off' ?
         jwtWithAppMetadata({subscriptionStatus: 'free'}) :
         'cached-token'))
@@ -489,8 +494,8 @@ describe('useExport', () => {
       await waitFor(() => expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'free'}))
     })
 
-    it('leaves the loader alone for a charged export, which was never memoised', async () => {
-      loadProModule.mockResolvedValue({namespace: {exportArtifact}, charge: {exportId: 'row-1', freeExports: null}})
+    it('leaves the loader alone for a free-tier delivery, which was never memoised', async () => {
+      loadProModule.mockResolvedValue({namespace: {exportArtifact}, slots: {limit: 2, used: 1, remaining: 1, taken: true}})
       recordExport.mockResolvedValue(refused)
       const {result} = renderHook(() => useExport())
 
@@ -556,7 +561,7 @@ describe('useExport', () => {
     // the two exports then raced each other's history write (#1834).
     let release
     loadProModule.mockReturnValue(new Promise((resolve) => {
-      release = () => resolve({namespace: {exportArtifact}, charge: null})
+      release = () => resolve({namespace: {exportArtifact}, slots: null})
     }))
     const {result} = renderHook(() => useExport())
     const other = renderHook(() => useExport())
@@ -640,72 +645,129 @@ describe('useExport', () => {
     expect(result.current.error).toBeInstanceOf(ProModuleDeniedError)
   })
 
-  describe('a free user\'s export (§4.8)', () => {
-    const CHARGE_ID = '7a1c2b3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
-    const AFTER_CHARGE = {limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-10-13T12:00:00.000Z'}
+  describe('a free user\'s export, decided by model slots (§4.8)', () => {
+    const localRoute = () => handleRoute('/share/v/local-only', {'*': '0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc/12/34'})
+    const LOCAL_KEY = '/share/v/local-only/0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc'
+    const TAKEN = {limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-11-03T12:00:00.000Z', taken: true}
 
     beforeEach(() => {
-      loadProModule.mockResolvedValue({namespace: {exportArtifact}, charge: {exportId: CHARGE_ID, freeExports: AFTER_CHARGE}})
+      useStore.getState().setAppPrefix('/share')
+      useStore.getState().setModelPath(localRoute())
+      loadProModule.mockResolvedValue({namespace: {exportArtifact}, slots: TAKEN})
     })
 
-    it('records the export under the id the server charged it under', async () => {
+    it('names the model by its slot key — the same one to pro-module and to record-export', async () => {
+      // The element path in the URL is not part of the key, and the local
+      // file's key is the /v/local-only/ path its open was given.
+      window.history.pushState({}, '', '/share/v/local-only/0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc/12/34')
       const {result} = renderHook(() => useExport())
 
       await act(async () => {
         await result.current.run('glb', {})
       })
 
-      // Any other id and record-export refuses it as an uncharged free row.
-      expect(recordExport.mock.calls[0][0].id).toBe(CHARGE_ID)
-      expect(gtagEventWithCid).toHaveBeenCalledWith('export_model', expect.objectContaining({free_export: true}))
+      expect(loadProModule).toHaveBeenCalledWith('glbExport', expect.any(Function), LOCAL_KEY)
+      expect(recordExport.mock.calls[0][0].key).toBe(LOCAL_KEY)
+      expect(gtagEventWithCid).toHaveBeenCalledWith('export_model',
+        expect.objectContaining({free_export: true, slot_taken: true}))
     })
 
-    it('puts the allowance the charge left into the store, for the count line', async () => {
+    it('snapshots the key when the run starts, so navigating mid-export cannot rename the model', async () => {
+      let release
+      loadProModule.mockReturnValue(new Promise((resolve) => {
+        release = () => resolve({namespace: {exportArtifact}, slots: TAKEN})
+      }))
+      const {result} = renderHook(() => useExport())
+
+      let running
+      act(() => {
+        running = result.current.run('glb', {})
+      })
+      useStore.getState().setModelPath(handleRoute('/share/v/p', {'*': 'other.ifc'}))
+      await act(async () => {
+        release()
+        await running
+      })
+
+      expect(loadProModule.mock.calls[0][2]).toBe(LOCAL_KEY)
+      expect(recordExport.mock.calls[0][0].key).toBe(LOCAL_KEY)
+    })
+
+    it('replays a "Download again" row under the key it was recorded with', async () => {
+      const {result} = renderHook(() => useExport())
+      const source = {cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER, key: '/share/v/g/drive-file'}
+
+      await act(async () => {
+        await result.current.run('glb', {}, source)
+      })
+
+      expect(loadProModule.mock.calls[0][2]).toBe('/share/v/g/drive-file')
+      expect(recordExport.mock.calls[0][0].key).toBe('/share/v/g/drive-file')
+    })
+
+    it('puts the slots the delivery reports into the store, with this model among the held keys', async () => {
+      useStore.getState().setModelSlots(
+        {sub: 'github|1234567', limit: 2, used: 0, remaining: 2, nextFreeAt: null, keys: []})
       const {result} = renderHook(() => useExport())
 
       await act(async () => {
         await result.current.run('glb', {})
       })
 
-      expect(useStore.getState().freeExportAllowance).toEqual({sub: 'github|1234567', ...AFTER_CHARGE})
+      expect(useStore.getState().modelSlots).toEqual({
+        sub: 'github|1234567', limit: 2, used: 1, remaining: 1, nextFreeAt: TAKEN.nextFreeAt, keys: [LOCAL_KEY],
+      })
     })
 
-    it('then takes the figure record-export reports, which is later', async () => {
-      const afterRecord = {...AFTER_CHARGE, used: 2, remaining: 0}
-      recordExport.mockResolvedValue({recorded: true, status: 200, exports: [], freeExports: afterRecord})
+    it('then takes the slots record-export reports, keys and all', async () => {
+      const afterRecord = {limit: 2, used: 2, remaining: 0, nextFreeAt: TAKEN.nextFreeAt, keys: ['/share/v/g/x', LOCAL_KEY]}
+      recordExport.mockResolvedValue({recorded: true, status: 200, exports: [], modelSlots: afterRecord})
       const {result} = renderHook(() => useExport())
 
       await act(async () => {
         await result.current.run('glb', {})
       })
 
-      expect(useStore.getState().freeExportAllowance).toEqual({sub: 'github|1234567', ...afterRecord})
+      expect(useStore.getState().modelSlots).toEqual({sub: 'github|1234567', ...afterRecord})
     })
 
-    it('records a Pro export under a fresh id, as before', async () => {
-      loadProModule.mockResolvedValue({namespace: {exportArtifact}, charge: null})
+    it('reports a re-export of a model already holding a slot as not taking one', async () => {
+      loadProModule.mockResolvedValue({namespace: {exportArtifact}, slots: {...TAKEN, taken: false}})
       const {result} = renderHook(() => useExport())
 
       await act(async () => {
         await result.current.run('glb', {})
       })
 
-      expect(recordExport.mock.calls[0][0].id).toBeUndefined()
-      expect(useStore.getState().freeExportAllowance).toBeNull()
+      expect(gtagEventWithCid).toHaveBeenCalledWith('export_model',
+        expect.objectContaining({free_export: true, slot_taken: false}))
     })
 
-    it('at the limit, says when the next free export frees up, and stores the allowance', async () => {
-      const atLimit = {limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-09T09:00:00.000Z'}
-      loadProModule.mockRejectedValue(new ProModuleDeniedError(403, 'denied', {reason: 'free_export_limit', freeExports: atLimit}))
+    it('stores nothing for a Pro delivery', async () => {
+      loadProModule.mockResolvedValue({namespace: {exportArtifact}, slots: null})
       const {result} = renderHook(() => useExport())
 
       await act(async () => {
         await result.current.run('glb', {})
       })
 
-      expect(useStore.getState().snackMessage.text).toBe(freeLimitMessage(atLimit))
-      expect(useStore.getState().snackMessage.text).toMatch(/^You've used your 2 free exports for this week\. The next one frees up /)
-      expect(useStore.getState().freeExportAllowance).toEqual({sub: 'github|1234567', ...atLimit})
+      expect(useStore.getState().modelSlots).toBeNull()
+    })
+
+    it('with every slot taken by other models, says when one frees up, and stores the slots', async () => {
+      const full = {limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-31T09:00:00.000Z', keys: ['/a/v/p/a.ifc', '/a/v/g/b']}
+      loadProModule.mockRejectedValue(new ProModuleDeniedError(403, 'denied', {reason: NO_FREE_SLOT_REASON, modelSlots: full}))
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(useStore.getState().snackMessage.text).toBe(noFreeSlotMessage(full))
+      expect(useStore.getState().snackMessage.text)
+        .toMatch(/^Your 2 free model slots for this week are taken by other models\. The next one frees up /)
+      expect(useStore.getState().modelSlots).toEqual({sub: 'github|1234567', ...full})
+      expect(gtagEventWithCid).toHaveBeenCalledWith('export_failed', {format: 'glb', reason: 'no_slot'})
       // The tier was right; there is no stale badge to refresh.
       expect(getAccessTokenSilently).not.toHaveBeenCalledWith(expect.objectContaining({cacheMode: 'off'}))
       expect(triggerDownload).not.toHaveBeenCalled()
@@ -713,18 +775,18 @@ describe('useExport', () => {
     })
   })
 
-  describe('a free-limit refusal that contradicts the locally paid tier', () => {
-    const atLimit = {limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-09T09:00:00.000Z'}
+  describe('a slots-full refusal that contradicts the locally paid tier', () => {
+    const full = {limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-31T09:00:00.000Z', keys: ['/a/v/p/a.ifc', '/a/v/g/b']}
 
     beforeEach(() => {
       loadProModule.mockRejectedValue(
-        new ProModuleDeniedError(403, 'denied', {reason: 'free_export_limit', freeExports: atLimit}))
+        new ProModuleDeniedError(403, 'denied', {reason: NO_FREE_SLOT_REASON, modelSlots: full}))
     })
 
     it('refreshes the claim, so the tier flips to free and the gate shows', async () => {
       // The JWT still says Pro for a canceled account; `ExportSection` hides
-      // the allowance and the gate while `getTier` says PAID, so storing the
-      // allowance alone left every click repeating the refusal.
+      // the slots and the gate while `getTier` says PAID, so storing the
+      // slots alone left every click repeating the refusal.
       useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
       getAccessTokenSilently.mockImplementation((params) => Promise.resolve(params?.cacheMode === 'off' ?
         jwtWithAppMetadata({subscriptionStatus: 'canceled'}) :
@@ -738,7 +800,7 @@ describe('useExport', () => {
       expect(getAccessTokenSilently).toHaveBeenCalledWith(
         expect.objectContaining({cacheMode: 'off', useRefreshTokens: true}))
       expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'canceled'})
-      expect(useStore.getState().freeExportAllowance).toEqual({sub: 'github|1234567', ...atLimit})
+      expect(useStore.getState().modelSlots).toEqual({sub: 'github|1234567', ...full})
     })
   })
 
@@ -799,8 +861,8 @@ describe('size reporting', () => {
 // `export_failed`'s `reason` (Share#1964), the same three-way split the
 // hook's catch handles.
 describe('exportFailureReason', () => {
-  it('names the free-export limit, a server denial, and anything else', () => {
-    expect(exportFailureReason(new ProModuleDeniedError(403, 'limit', {reason: FREE_EXPORT_LIMIT_REASON}))).toBe('free_limit')
+  it('names a refusal for want of a free slot, a server denial, and anything else', () => {
+    expect(exportFailureReason(new ProModuleDeniedError(403, 'full', {reason: NO_FREE_SLOT_REASON}))).toBe('no_slot')
     expect(exportFailureReason(new ProModuleDeniedError(403, 'denied'))).toBe('denied')
     expect(exportFailureReason(new Error('encoder blew up'))).toBe('error')
   })

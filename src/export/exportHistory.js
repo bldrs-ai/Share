@@ -394,10 +394,8 @@ function unrecordedLocalRows(serverExports, localExports) {
  * @param {string} entry.format Format id from `exportRegistry.js`
  * @param {number} entry.bytes Size of the downloaded file
  * @param {string} [entry.title] Display label; the key's basename otherwise
- * @param {string} [entry.id] The row id to record under. A free-tier export
- *   passes the id `pro-module` charged it under, so `record-export` fills in
- *   that ledger row rather than refusing an uncharged one; otherwise a fresh
- *   id is minted here
+ * @param {string} [entry.id] The row id to record under; a fresh id is
+ *   minted here when absent
  * @param {object} [entry.cacheKeyArgs] Local-only; enables "Download again"
  * @param {string} [entry.schemaVer] Local-only; pairs with cacheKeyArgs
  * @param {object} [entry.options] Local-only; the options this export RAN
@@ -409,13 +407,13 @@ function unrecordedLocalRows(serverExports, localExports) {
  *   token. Omitted means local-only (no server row).
  * @param {Function} [refreshToken] Force-refreshes the JWT after a server
  *   write, so `app_metadata` readers see the new list (the `useQuota` pattern)
- * @return {Promise<object>} `{recorded, status, exports, freeExports}` —
+ * @return {Promise<object>} `{recorded, status, exports, modelSlots}` —
  *   `recorded` is true only when the server persisted the row, `status` is
  *   the HTTP status when there was one, `exports` is the list now in OPFS,
- *   and `freeExports` is the free-tier allowance the server reported after
- *   recording (null for Pro, or when it reported none). A 401/403 refusal
- *   also carries `reason`, the function's `error` (e.g.
- *   'free_export_not_charged'), or null when its body had none
+ *   and `modelSlots` is the free tier's slots as the server reported them
+ *   (null for Pro, or when it reported none). A 401/403 refusal also carries
+ *   `reason`, the function's `error` (e.g. 'export_slot_missing'), or null
+ *   when its body had none
  */
 export async function recordExport(entry, sub, getAccessToken, refreshToken) {
   const {id, key, format, bytes, title, cacheKeyArgs, schemaVer, options} = entry
@@ -467,9 +465,9 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
   if (response.status === HTTP_AUTHORIZATION_REQUIRED || response.status === HTTP_FORBIDDEN) {
     // The server disagrees about entitlement. The user still got their file,
     // so the local row stays; the caller decides whether to re-check the tier.
-    // A `free_export_not_charged` 403 also carries the authoritative
-    // allowance (record-export.js), which the caller needs because the count
-    // it cached from the charge may be one the ledger no longer holds.
+    // An `export_slot_missing` 403 also carries the authoritative slots
+    // (record-export.js), which the caller stores so the Export tab gates on
+    // what the server holds rather than on what this tab last believed.
     let refusal = null
     try {
       refusal = await response.json()
@@ -480,7 +478,7 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
       recorded: false,
       status: response.status,
       exports: optimistic,
-      freeExports: refusal?.freeExports ?? null,
+      modelSlots: refusal?.modelSlots ?? null,
       reason: refusal?.error ?? null,
     }
   }
@@ -510,21 +508,22 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
       // Non-fatal: the mirrored list above is already what the UI reads.
     }
   }
-  return {recorded: true, status: response.status, exports: mirrored, freeExports: data.freeExports ?? null}
+  return {recorded: true, status: response.status, exports: mirrored, modelSlots: data.modelSlots ?? null}
 }
 
 
 /**
- * The signed-in user's free-export allowance, from `record-export`'s GET.
+ * The signed-in user's model slots (src/export/exportSlots.js#modelSlots),
+ * from `record-export`'s GET.
  *
- * NEVER THROWS: the count on the Export tab is a courtesy, and the gate is
- * `pro-module`'s. Anything short of a clean answer is null, which the tab
- * reads as "unknown" and shows no count for.
+ * NEVER THROWS: the slot line on the Export tab is a courtesy, and the gate
+ * is `pro-module`'s. Anything short of a clean answer is null, which the tab
+ * reads as "unknown" and shows no line for.
  *
  * @param {Function} getAccessToken Returns a Promise of an Auth0 access token
- * @return {Promise<?{tier: string, freeExports: ?object}>} null when unknown
+ * @return {Promise<?{tier: string, modelSlots: ?object}>} null when unknown
  */
-export async function fetchFreeExportAllowance(getAccessToken) {
+export async function fetchModelSlots(getAccessToken) {
   try {
     const token = await getAccessToken()
     const response = await fetch(RECORD_EXPORT_ENDPOINT, {headers: {Authorization: `Bearer ${token}`}})
@@ -535,7 +534,7 @@ export async function fetchFreeExportAllowance(getAccessToken) {
     if (!data || typeof data.tier !== 'string') {
       return null
     }
-    return {tier: data.tier, freeExports: data.freeExports ?? null}
+    return {tier: data.tier, modelSlots: data.modelSlots ?? null}
   } catch {
     return null
   }

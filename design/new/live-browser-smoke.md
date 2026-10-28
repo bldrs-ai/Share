@@ -51,7 +51,8 @@ deploy. That gap includes:
 These are final.
 
 1. **A separate PR off `main`**, not stacked on #1939. #1939 turns the
-   `export` flag on and adds 2 free exports per rolling 7 days. The harness
+   `export` flag on and adds 2 free exports per rolling 7 days (since
+   2026-10-27 replaced by model slots, glb-export-premium.md §4.8). The harness
    targets a deployed URL, so it is run against #1939's deploy preview, and
    #1939 merges once that run passes. Every spec loads its model with
    `?feature=export`, which turns the Export tab on where it is still flagged
@@ -593,9 +594,9 @@ label run uses #1939's merge ref, which includes main's harness.
 | 2 | Anonymous: login prompt | Automated: the gated Save, its help, Log in → `login-with-github` | `exportAnonymous` › Save is gated… |
 | 2 | Free on main: → `/subscribe/` | Automated, on deploys without the allowance | `exportFree` › gated straight to /subscribe/ |
 | 2 | Pro: a `.glb` lands, `glTF` magic, opens in donmccurdy; nothing new on the tab | Automated (framing, size = estimate, no count line, no chip) + replaced (validator, three.js) | `exportPro` › Preparing… |
-| 2b | Free: 2 → 1 → 0, gated look, help + date, Upgrade → `/subscribe/`, date = first export + 7 d, reload still 0 | Automated, including the date three ways: the header's `nextFreeAt` = the first charge row's `exportedAt` (read from Auth0 by row id) + 7 days = what the page formats with the same `toLocaleString` options | `exportFree` › two free exports… |
-| 3 | Pro: `pro-module` 200, `text/javascript`, `private, no-store`, no `x-bldrs-export-id`; memoised | Automated via `page.on('response')` | `exportPro` › Preparing… |
-| 3 | Free: each export its own 200 with `x-bldrs-export-id`; forged request at the limit → 403 `free_export_limit`; ledger rows `free: true` with the model's key | Automated, with the session's own token for the forged request and the Management API for the ledger | `exportFree` › two free exports… |
+| 2b | Free (model slots, 2026-10-27): the sample holds no slot ("Exporting takes one…"); three exports of it, the first taking a slot and the line flipping to "This model holds one…"; with both slots holding other models (set through the Management API), after a reload: gated look, help + date, Upgrade → `/subscribe/` | Automated, including the date three ways: the stamps the spec wrote + 7 days = the slot `pro-module`'s header reports = what the page formats with the same `toLocaleString` options | `exportFree` › one model exported three times… |
+| 3 | Pro: `pro-module` 200, `text/javascript`, `private, no-store`, no `x-bldrs-model-slots`; memoised | Automated via `page.on('response')` | `exportPro` › Preparing… |
+| 3 | Free: each export its own 200 with `x-bldrs-model-slots` (`taken` on the first only); ONE `usageQuota.loads` row for the model (`via: 'export'`) and one history row per export; with both slots full, a forged request for a third model → 403 `no_free_model_slot`, and for the held model → 200 with nothing written | Automated, with the session's own token for the forged requests and the Management API for the ledgers | `exportFree` › one model exported three times… |
 | 3 | No token → 401 | Automated (`missing_auth0_token`) | `exportAnonymous` › pro-module answers… |
 | 4 | Reload: enabled at once (cache hit), export again → same bytes | Automated: `cache HIT`, no writer pass, byte-identical | `exportPro` › a reload hits the cache… |
 | 5 | Metadata off: smaller, no `BLDRS_` in the JSON chunk | Automated (on before, off after) | `exportPro` › Preparing… |
@@ -816,8 +817,9 @@ merged (follow-up PR):
 **Verified since the owner's setup (2026-10-08):** real Auth0 login in
 every project, and the anonymous, free and Pro specs against #1939's
 deploy preview on chromium and mobile-pixel (the pending spec runs on
-chromium only, by design), per the CI rows above. The free-tier spec spends two real free exports per project and
-the reset script restores them before each run.
+chromium only, by design), per the CI rows above. The free-tier spec takes a real model slot per project (and writes two more
+through the Management API), and the reset script empties the account's
+`usageQuota.loads` and `exports` before each run.
 
 **Still unverified:**
 

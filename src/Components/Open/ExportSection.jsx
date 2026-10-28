@@ -10,7 +10,8 @@ import {
   uncompressedSizes,
 } from '../../export/artifactSizes'
 import {codecToSelect, shouldAutoMeasure} from '../../export/codecSizes'
-import {FREE_EXPORT_WINDOW_DAYS, formatNextFreeExport} from '../../export/freeExports'
+import {exportSlotKey} from '../../export/exportSlotKey'
+import {formatNextFreeSlot} from '../../export/exportSlots'
 import {
   QUALITY_DEFAULT,
   QUALITY_LABELS,
@@ -25,9 +26,9 @@ import {
 import {isGzipAvailable} from '../../export/glbGzip'
 import useCodecSizes from '../../export/useCodecSizes'
 import useExport, {formatBytes} from '../../export/useExport'
-import useFreeExports from '../../export/useFreeExports'
+import useExportSlots from '../../export/useExportSlots'
 import {GATE_EVENTS, gtagEventWithCid} from '../../privacy/analytics'
-import {TIERS, getTier} from '../../quota/quota'
+import {ROLLING_WINDOW_DAYS, TIERS, getTier} from '../../quota/quota'
 import useStore from '../../store/useStore'
 import GatedAction from '../GatedAction'
 import Toggle from '../Toggle'
@@ -49,17 +50,18 @@ import {
  *
  * The states resolve in this order (design/new/glb-export-premium.md §4.4):
  * no artifact yet beats everything (there is nothing to download); then
- * anonymous → log in; then a free user with no free exports left in the
- * rolling window → upgrade, saying when the next one frees up; then a free
- * user with exports left, or Pro → the export itself. The gated states render
- * the button in the GATED look — visible, dimmed, and clickable into help that
- * says what unlocks it — rather than as a live button that silently does
- * something else. A free user also sees how many of their free exports are
- * left (§4.8); Pro sees nothing new. The tier check here is `getTier`, the
- * same mapping the server uses, and the count is the server's — but both
- * decide only what is RENDERED: the `pro-module` function re-checks the
- * subscription and the free-export ledger on every request and is the
- * authority.
+ * anonymous → log in; then a free user whose model holds no slot while
+ * every model slot is taken → upgrade, saying when the next slot frees up;
+ * then a free user whose model holds a slot or can take a free one, or Pro →
+ * the export itself. The gated states render the button in the GATED look —
+ * visible, dimmed, and clickable into help that says what unlocks it — rather
+ * than as a live button that silently does something else. A free user also
+ * sees where this model stands with their slots (§4.8): it holds one (export
+ * freely), its first export takes one, or none is free; Pro sees nothing new.
+ * The tier check here is `getTier`, the same mapping the server uses, and the
+ * slots are the server's — but both decide only what is RENDERED: the
+ * `pro-module` function re-checks the subscription and the slots on every
+ * request and is the authority.
  *
  * The controls run in the order the choices COMPOUND: what goes in the file,
  * what shape it is in, how it is squeezed, how hard, and whether the result
@@ -86,6 +88,8 @@ import {
 export default function ExportSection() {
   const appMetadata = useStore((state) => state.appMetadata)
   const glbArtifact = useStore((state) => state.glbArtifact)
+  const modelPath = useStore((state) => state.modelPath)
+  const appPrefix = useStore((state) => state.appPrefix)
   const startGateLogin = useStartGateLogin()
 
   // Default ON: it's the user's own model, so the properties and spatial
@@ -303,13 +307,16 @@ export default function ExportSection() {
   const sizes = estimate?.sizes ?? null
 
   const isPro = getTier(appMetadata, isAuthenticated) === TIERS.PAID
-  // The free tier's allowance as the server last stated it, or null (Pro,
-  // anonymous, or not known yet). Unknown is NOT gated: the click goes to
-  // `pro-module`, which counts for itself, and a refusal there fills this in.
-  const freeAllowance = useFreeExports()
+  // The free tier's model slots as the server last stated them, or null
+  // (Pro, anonymous, or not known yet). Unknown is NOT gated: the click goes
+  // to `pro-module`, which decides for itself, and a refusal there fills
+  // this in. The model is named by the same slot key `useExport` sends.
+  const slots = useExportSlots()
   const isFreeTier = isAuthenticated && !isPro
-  const isAtFreeLimit = isFreeTier && freeAllowance?.remaining === 0
-  const nextFreeExport = formatNextFreeExport(freeAllowance?.nextFreeAt)
+  const slotKey = exportSlotKey(modelPath, appPrefix)
+  const isModelInSlot = Boolean(slots && slotKey && slots.keys.includes(slotKey))
+  const isSlotsFull = isFreeTier && Boolean(slots) && !isModelInSlot && slots.remaining === 0
+  const nextFreeSlot = formatNextFreeSlot(slots?.nextFreeAt)
   // The loader publishes this once the artifact is actually in OPFS — on a
   // cache miss when the writer finishes, on a cache hit right away. Formats
   // that produce no artifact at all — a `.bld` assembly (its children each
@@ -442,7 +449,7 @@ export default function ExportSection() {
       size='small'
       onClick={onExportClick}
       disabled={!isArtifactReady || isExporting}
-      startIcon={isAuthenticated && !isAtFreeLimit ? <FileDownloadIcon/> : <LockIcon/>}
+      startIcon={isAuthenticated && !isSlotsFull ? <FileDownloadIcon/> : <LockIcon/>}
       sx={{textTransform: 'none'}}
       data-testid='export-glb-button'
     >
@@ -468,16 +475,17 @@ export default function ExportSection() {
         {exportButton}
       </GatedAction>
     )
-  } else if (isAtFreeLimit) {
-    // The existing Pro upsell, now reached when the free allowance runs out
-    // rather than on the first click (§7.1). Same slug and `reason` as the
-    // Pro-only gate it replaces, so the funnel's `export_gated` series and
-    // the `from: 'export'` upgrade click carry on unbroken.
+  } else if (isSlotsFull) {
+    // The existing Pro upsell, reached when this model holds no slot and
+    // every slot is taken (§4.8). Same slug and `reason` as the gates it
+    // replaces (Pro-only, then the 2-export cap), so the funnel's
+    // `export_gated {reason: 'free'}` series and the `from: 'export'`
+    // upgrade click carry on unbroken.
     gatedButton = (
       <GatedAction
         slug='export-pro'
-        title='Free exports used'
-        body={freeLimitHelp(freeAllowance.limit, nextFreeExport)}
+        title='Free model slots full'
+        body={slotsFullHelp(slots.limit, nextFreeSlot)}
         actionLabel='Upgrade to Pro'
         onAction={onUpgradeClick}
         onOpen={() => gtagEventWithCid(GATE_EVENTS.EXPORT_GATED, {reason: 'free'})}
@@ -815,19 +823,21 @@ export default function ExportSection() {
          <Chip label='Pro' size='small' color='primary' data-testid='export-pro-chip'/>}
         {gatedButton}
       </Stack>
-      {/* What a free user has left. Under the action rather than beside it:
-          at 390px the row already holds the button and the Pro chip, and a
-          caption in it would push the row into a wrap. `data-remaining`
-          carries the raw count for the E2E. */}
-      {isFreeTier && freeAllowance &&
+      {/* Where this model stands with a free user's slots. Under the action
+          rather than beside it: at 390px the row already holds the button
+          and the Pro chip, and a caption in it would push the row into a
+          wrap. `data-remaining` and `data-held` carry the raw state for the
+          E2E. */}
+      {isFreeTier && slots &&
        <Typography
          variant='caption'
          color='text.secondary'
          sx={{mt: '0.5em', textAlign: 'center'}}
-         data-testid='export-free-remaining'
-         data-remaining={freeAllowance.remaining}
+         data-testid='export-model-slots'
+         data-remaining={slots.remaining}
+         data-held={isModelInSlot ? 'true' : 'false'}
        >
-         {freeRemainingCaption(freeAllowance, nextFreeExport)}
+         {slotCaption(slots, isModelInSlot, nextFreeSlot)}
        </Typography>}
     </Stack>
   )
@@ -835,31 +845,42 @@ export default function ExportSection() {
 
 
 /**
- * The count line under a free user's Export button.
+ * The slot line under a free user's Export button: whether this model holds
+ * one of their model slots, and if not, whether its first export can take
+ * one.
  *
- * @param {{limit: number, remaining: number}} allowance
- * @param {?string} nextFreeExport formatted `nextFreeAt`, or null
- * @return {string} e.g. '1 of 2 free exports left this week'
+ * @param {{limit: number, remaining: number}} slots
+ * @param {boolean} isModelInSlot
+ * @param {?string} nextFreeSlot formatted `nextFreeAt`, or null
+ * @return {string}
  */
-function freeRemainingCaption({limit, remaining}, nextFreeExport) {
-  const count = `${remaining} of ${limit} free exports left this week`
-  // At the limit the line also says when that changes; above it, the help
-  // that names the date is one click away and the line stays short.
-  return remaining === 0 && nextFreeExport ? `${count} · next one ${nextFreeExport}` : count
+export function slotCaption({limit, remaining}, isModelInSlot, nextFreeSlot) {
+  if (isModelInSlot) {
+    return `This model holds one of your ${limit} free model slots: export it as often as you like`
+  }
+  if (remaining > 0) {
+    return `Exporting takes one of your ${limit} free model slots (${remaining} left this week),` +
+      ' then export it as often as you like'
+  }
+  // Full: the line also says when that changes; the help that explains it is
+  // one click away on the gated button.
+  const full = `Your ${limit} free model slots this week hold other models`
+  return nextFreeSlot ? `${full} · next one frees up ${nextFreeSlot}` : full
 }
 
 
 /**
- * The at-the-limit gate's help text.
+ * The slots-full gate's help text.
  *
  * @param {number} limit
- * @param {?string} nextFreeExport formatted `nextFreeAt`, or null
+ * @param {?string} nextFreeSlot formatted `nextFreeAt`, or null
  * @return {string}
  */
-function freeLimitHelp(limit, nextFreeExport) {
-  const used = `You've used your ${limit} free exports for the last ${FREE_EXPORT_WINDOW_DAYS} days.`
-  const next = nextFreeExport ? ` Your next free export is available ${nextFreeExport}.` : ''
-  return `${used}${next} Pro exports are unlimited.`
+export function slotsFullHelp(limit, nextFreeSlot) {
+  const full = `Your ${limit} free model slots for the last ${ROLLING_WINDOW_DAYS} days hold other models.` +
+    ' A model with a slot exports as often as you like; this one needs a free slot.'
+  const next = nextFreeSlot ? ` Your next slot frees up ${nextFreeSlot}.` : ''
+  return `${full}${next} Pro exports are unlimited.`
 }
 
 

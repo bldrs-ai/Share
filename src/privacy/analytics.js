@@ -381,11 +381,16 @@ export function gtagFunnelEvent(eventName, parameters = {}) {
  * fires:
  *
  *   EXPORT_GATED    {reason: 'anonymous'|'free'}  ExportSection, on the gate's
- *                   help opening
+ *                   help opening; 'free' is a free user whose model holds no
+ *                   slot while every model slot is taken (the slot rule,
+ *                   2026-10-27; it was the 2-exports-a-week cap before)
  *   EXPORT_MODEL    {format, bytes_bucket, source_kind, portable,
- *                   free_export}  useExport, on a delivered download
- *   EXPORT_FAILED   {format, reason: 'free_limit'|'denied'|'unavailable'|
- *                   'error'}  useExport, once per run that delivers no file
+ *                   free_export, slot_taken}  useExport, on a delivered
+ *                   download; free_export: exported on the free tier;
+ *                   slot_taken: that export took a new model slot
+ *   EXPORT_FAILED   {format, reason: 'no_slot'|'denied'|'unavailable'|
+ *                   'error'}  useExport, once per run that delivers no file;
+ *                   'no_slot' replaced 'free_limit' with the slot rule
  *   SHARE_GATED     {reason: 'local_file', signed_in}  ShareControl, on the
  *                   local-only Share gate's help opening
  *   SHARE_INTEREST  {feature: 'save_to_cloud', signed_in}  ShareControl, on

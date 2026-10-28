@@ -66,6 +66,10 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
   }
 
   const limitText = `${LIMITS[TIERS.FREE]} private models in any rolling ${ROLLING_WINDOW_DAYS}-day window`
+  // The slots this dialog guards are the ones exports use too
+  // (export/exportSlots.js), so it says so: a user here may also have just
+  // been told no to an export, and the models already in their slots stay
+  // open and exportable.
 
   return (
     <Dialog
@@ -78,13 +82,15 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
       <DialogTitle sx={{pb: 1}}>Open more models</DialogTitle>
       <DialogContent>
         <Typography variant='body2' sx={{mb: 2}}>
-          You&apos;ve reached your limit of {limitText}.
+          You&apos;ve reached your limit of {limitText}. The models you
+          already have open in that window stay yours to open, share and
+          export as often as you like.
           {' '}<Link href='/share/quotas'>What counts?</Link>
         </Typography>
         <Stack divider={<Divider/>} spacing={2}>
           <Stack direction='row' alignItems='center' spacing={2}>
             <Typography variant='body2' sx={{flex: 1}}>
-              Share Pro: unlimited private models and unlimited GLB exports.
+              Share Pro: unlimited private models and exports.
             </Typography>
             <Button
               onClick={handleSubscribe}

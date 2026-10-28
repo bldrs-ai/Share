@@ -1,0 +1,70 @@
+{
+  "description": "A free user asking to export a third model while both slots hold other models is refused, per the Management API rather than their token, whatever the client did to reach the endpoint; told which models hold the slots and when the next frees up. Nothing is written and the module is not read.",
+  "env": {
+    "$fixture": "env/auth0.json"
+  },
+  "now": "2026-10-27T12:00:00.000Z",
+  "request": {
+    "method": "GET",
+    "path": "/.netlify/functions/pro-module",
+    "headers": {
+      "authorization": "Bearer user-access-token",
+      "x-bldrs-model-key": "%2Fshare%2Fv%2Flocal-only%2F0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc"
+    },
+    "query": {
+      "name": "glbExport"
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-userinfo.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "usageQuota": {
+                "loads": [
+                  {
+                    "key": "/share/v/gh/acme/private/main/tower.ifc",
+                    "loadedAt": "2026-10-24T10:00:00.000Z"
+                  },
+                  {
+                    "key": "/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz",
+                    "loadedAt": "2026-10-25T10:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 403,
+    "json": {
+      "error": "no_free_model_slot",
+      "modelSlots": {
+        "limit": 2,
+        "used": 2,
+        "remaining": 0,
+        "nextFreeAt": "2026-10-31T10:00:00.000Z",
+        "keys": [
+          "/share/v/gh/acme/private/main/tower.ifc",
+          "/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz"
+        ]
+      }
+    }
+  }
+}

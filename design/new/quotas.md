@@ -1,11 +1,12 @@
 # Usage quotas
 
 Server-enforced metering of *private* model loads — tier-aware, with a 7-day
-rolling window (the same one free GLB exports use), GitHub public/private
+rolling window, GitHub public/private
 detection and Drive visibility. Nudges free-tier users toward upgrade without
 ever blocking public or sample content, and never meters a signed-out user.
 Enforcement is the `quotas` feature flag, on in production since
-Share#1970.
+Share#1970. Since 2026-10-27 the same model slots also decide a free user's
+GLB exports (§"Exports use the same slots").
 
 This is the design of record for the feature. The Open-dialog UI wiring is in
 [src/Components/Open/README.md](../../src/Components/Open/README.md) §Usage Quotas.
@@ -121,15 +122,38 @@ Covered by `useSignedOutDriveCleanup.test.js`, CadView.test.jsx's "Drive
 loads and sign-in", and `signOutForgetsDrive.spec.ts` (desktop and mobile:
 connect Drive, Log out, the token and connection are gone).
 
-The same rolling window meters one more thing: **free GLB exports**, 2
-per rolling 7 days for a signed-in free user, counted on the
-`app_metadata.exports` ledger by the `pro-module` function rather than here,
-and live with the `export` flag rather than `quotas`
-([glb-export-premium.md](glb-export-premium.md) §4.8). It is the same
-constant, not a second 7: `FREE_EXPORT_WINDOW_DAYS` in
-`src/export/freeExports.js` is `ROLLING_WINDOW_DAYS` re-exported, so a free
-account's private models and exports are always on the same timing
-(§"Rolling window").
+### Exports use the same slots
+
+The slots this ledger holds also decide a signed-in free user's **GLB
+exports** (owner, 2026-10-27: "export your model as much as you want, same
+logic as views ... ultimately controlled by open slots, not export counts";
+[glb-export-premium.md](glb-export-premium.md) §4.8). A model holding a slot
+— a private model opened this week — exports as often as the user likes. A
+model holding none, including one that was free to VIEW (a local file, a
+public GitHub model, a hosted sample, a link-shared Drive file), **takes a
+slot on its first export**: the `pro-module` function appends `{key,
+loadedAt, via: 'export'}` to this same `usageQuota.loads` list, with
+record-load's own write, before it hands over the exporter. With every slot
+holding another model the export is refused (403 `no_free_model_slot`). So
+there is one allowance: a slot an export took counts toward the next private
+open, and a private open's slot covers that model's exports.
+
+Two consequences for this ledger:
+
+- It now holds keys that record-load would never write: local-file keys
+  (`<appPrefix>/v/local-only/<uuid>.<ext>`, the key the viewer already uses
+  for local-only models and the one the `meterLocalFiles` switch would
+  count) and public models' keys. record-load just dedupes against them —
+  reopening such a model is `alreadyCounted` — and the `QuotaBadge` counts
+  them like any other slot.
+- The export key must equal the open's key exactly
+  (`src/export/exportSlotKey.js` reuses `directLinkQuotaKey` for GitHub and
+  Drive), or a private model would take a second slot on export.
+
+The retired export rule — 2 exports per rolling 7 days, counted as `free:
+true` rows in `app_metadata.exports` — gates nothing any more; those rows are
+export history. The window is still `ROLLING_WINDOW_DAYS` (§"Rolling window"),
+now because it is the same slots, not just the same timing.
 
 ## What counts
 
@@ -438,8 +462,8 @@ both the client (`useQuota`) and the server (before counting) so the two agree.
 A free user who opened 2 private models gets a slot back exactly 7 days after
 each load, rather than all at once on a calendar reset. The edge is exclusive:
 a row counts while `now < loadedAt + window`, so a load exactly 7 days old has
-rolled off. That is the comparison free exports (`freeExportAllowance`) and
-engagement tracking use too, and the one that makes "the slot frees at
+rolled off. That is the comparison export slots (`exportSlots.js#modelSlots`,
+which calls it) and engagement tracking use too, and the one that makes "the slot frees at
 `loadedAt + window`" true at that instant. Quotas used the inclusive edge
 until Share#1974 unified them. It is implemented once,
 `limits.js#loadsInsideRollingWindow`, which `quota.js#pruneLoads` (and through
@@ -451,10 +475,11 @@ stops counting a slot the moment it rolls off rather than at the next
 **One window for private models and exports.** The owner's decision
 (2026-10-26): "month is a long time … weekly will help keep us more
 top-of-mind, and private shares and exports should be on the same timing to
-keep it simple." So the window went from 30 days to 7, and
-`FREE_EXPORT_WINDOW_DAYS` became `ROLLING_WINDOW_DAYS` rather than a second
-literal 7. The pricing page reads "Open and share 2 private models a week"
-beside "2 GLB exports a week" (§"Pricing copy").
+keep it simple." So the window went from 30 days to 7, and the export window
+became `ROLLING_WINDOW_DAYS` rather than a second literal 7. On 2026-10-27
+the export count went altogether: exports use these slots
+(§"Exports use the same slots"), and the pricing page reads "2 private models
+a week — open, share and export them as often as you like" (§"Pricing copy").
 
 **Existing ledgers at the switch.** Nothing is migrated: the ledgers store
 `loadedAt`, not an expiry, so the new window applies to old rows on the next
@@ -483,22 +508,26 @@ Summary only; the wiring lives in
 The marketing pricing page is a static Next.js build, and its quota copy can't
 drift from what is enforced, by construction. `PLANS`
 (`marketing/src/lib/pricingPlans.mjs`) is the only place that copy lives, and it
-**builds** the Free account allowances from the enforced constants:
-`FREE_PRIVATE_MODEL_LIMIT` / `ROLLING_WINDOW_DAYS` from `limits.js` ("Open and
-share 2 private models a week") and `FREE_EXPORT_LIMIT` / `FREE_EXPORT_WINDOW_DAYS` from
-`src/export/freeExports.js` ("2 GLB exports a week"). `PricingTiers.tsx`
+**builds** the Free account allowance from the enforced constants:
+`FREE_PRIVATE_MODEL_LIMIT` / `ROLLING_WINDOW_DAYS` from `limits.js` ("2 private
+models a week — open, share and export them as often as you like"; the
+separate "2 GLB exports a week" line went with the export count on
+2026-10-27). Share Pro reads "Unlimited private models and exports".
+`PricingTiers.tsx`
 renders `PLANS` and states no limit of its own; the monthly/yearly toggle only
 changes the price. (`.mjs` because `marketing/package.json` has no `"type":
 "module"`; marketing's tsconfig has `allowJs` for it.)
 
 `tools/marketing/pricingTiers.test.js` is a drift tripwire over that data, not
 a proof against a hostile author. It checks that the Free account plan states
-both claims as worded from the constants, that Pro says unlimited, that no
-plan entry (CTA included) puts a limit on local files, and that every count
-of models/files/exports/loads equals one of the two generated claims exactly,
-window included. It proves itself: `buildPlans()` with
-other allowances yields their claims, and a hard-coded wrong number, a
-removed claim, a local-file limit or load-count copy in `PLANS` each go red.
+the claim as worded from the constants and says its models export freely,
+that Pro says unlimited for both, that no plan entry (CTA included) puts a
+limit on local files, and that every count of models/files/exports/loads
+equals the generated claim exactly, window included — so an export count of
+any wording, the retired cap coming back, goes red. It proves itself:
+`buildPlans()` with other allowances yields their claims, and a hard-coded
+wrong number, a removed claim, a local-file limit or load-count copy in
+`PLANS` each go red.
 Header, enterprise and FAQ copy on the page are reviewed by hand. (Round 1
 and 2 of codex review on #1971 tried source-line scanning and then rendered-HTML
 parsing; both had bypasses, so the copy moved into data built from the
@@ -546,9 +575,9 @@ events, so a gate hit joins the same client's `real_model_open`, `login` and
 
 | Event | Params | Fires |
 |---|---|---|
-| `export_gated` | `reason`: `anonymous` \| `free` | `ExportSection`, when the gate's help opens. `anonymous` is reachable since #1964: the Save dialog opens for a signed-out user, on its Export tab |
-| `export_model` | `format`, `bytes_bucket`, `source_kind`, `portable`, `free_export` | `useExport`, on a delivered download |
-| `export_failed` | `format`, `reason`: `free_limit` \| `denied` \| `unavailable` \| `error` | `useExport`, once per run that delivers no file (`unavailable`: the cached artifact is gone) |
+| `export_gated` | `reason`: `anonymous` \| `free` | `ExportSection`, when the gate's help opens. `anonymous` is reachable since #1964: the Save dialog opens for a signed-out user, on its Export tab. `free` means, since 2026-10-27, a free user whose model holds no slot while every model slot is taken (it was the 2-exports-a-week cap) |
+| `export_model` | `format`, `bytes_bucket`, `source_kind`, `portable`, `free_export`, `slot_taken` | `useExport`, on a delivered download. `free_export`: exported on the free tier (until 2026-10-27: spent one of the 2 free exports). `slot_taken`: that export took a new model slot |
+| `export_failed` | `format`, `reason`: `no_slot` \| `denied` \| `unavailable` \| `error` | `useExport`, once per run that delivers no file (`unavailable`: the cached artifact is gone; `no_slot`: refused for want of a free model slot, replacing `free_limit` on 2026-10-27) |
 | `share_gated` | `reason`: `local_file`; `signed_in` | `ShareControl`, when the local-only Share gate's help opens |
 | `share_interest` | `feature`: `save_to_cloud`; `signed_in` | `ShareControl`, the "Save to Google Drive or GitHub to share — coming soon" line; at most once per opening of the help |
 | `quota_soft_limit_exceeded` | `tier`, `used`, `limit`, `route_kind`: `gdrive` \| `github` | `quota/useDirectLinkQuota.js`, when a model opened from its URL is over the limit; the load is not blocked (§"Direct links: soft gate") |
@@ -569,7 +598,7 @@ A sign-in started from a gate (`Auth0/gateLogin.js`) adds `from: 'gate'` and
 
 GA-side these params need **event-scoped custom dimensions** before they
 appear in reports: `reason`, `signed_in`, `format`, `source_kind`,
-`portable`, `free_export` and `bytes_bucket`. `feature` and `from` are
+`portable`, `free_export`, `slot_taken` and `bytes_bucket`. `feature` and `from` are
 already on the funnel's list below; GA4 keys a dimension by parameter name,
 so one registration covers these events too, and the same goes for
 `open_cid`. They are added to the GA4-admin follow-ups at the end of this
@@ -784,7 +813,7 @@ has a backfill, so these only start accruing data once registered:
 - Register **event-scoped custom dimensions** for `method`, `tier`, `feature`,
   `from` and `destination`, and, for the gate events (§"Gate events",
   Share#1964), `reason`, `signed_in`, `format`, `source_kind`, `portable`,
-  `free_export` and `bytes_bucket`. `open_cid` needs nothing new: GA4 keys an
+  `free_export`, `slot_taken` and `bytes_bucket`. `open_cid` needs nothing new: GA4 keys an
   event-scoped dimension by parameter name, not by event, so the one
   registered for `real_model_open` applies to these events too.
 - Mark **`login`** and **`subscription_started`** as **key events**.

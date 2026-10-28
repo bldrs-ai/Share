@@ -1,31 +1,33 @@
 /**
- * The free tier's export allowance as a deploy shows it — the count line, the
- * charge headers, the ledger rows — read back into numbers and dates a live
- * spec can compare. For #1939's 2 free exports per rolling 7 days
- * (glb-export-premium.md §4.8 on that branch).
+ * The free tier's export rule as a deploy shows it — the slot line, the
+ * `X-Bldrs-Model-Slots` header, the `usageQuota.loads` rows — read back into
+ * numbers and dates a live spec can compare. For the slot rule of 2026-10-27
+ * (glb-export-premium.md §4.8): a free user exports any model holding one of
+ * their 2 model slots as often as they like, and a model holding none takes a
+ * slot on its first export.
  *
- * The allowance's numbers are restated here, NOT imported from #1939's
- * `src/export/freeExports.js`. Partly because that file is not on main, but
- * mostly on purpose: this is the oracle the deploy is checked against, and a
- * check that imports the implementation's constants agrees with whatever the
- * implementation does. If the owner changes the allowance, this file changes
- * with it, in the same PR, as a visible decision.
+ * The rule's numbers and wording are restated here, NOT imported from
+ * `src/export/exportSlots.js` or `ExportSection.jsx`, on purpose: this is the
+ * oracle the deploy is checked against, and a check that imports the
+ * implementation's constants agrees with whatever the implementation does. If
+ * the owner changes the rule, this file changes with it, in the same PR, as a
+ * visible decision.
  *
  * Free of any Playwright import, for `freeAllowance.test.js`.
  */
 
 
-export const FREE_EXPORT_LIMIT = 2
-export const FREE_EXPORT_WINDOW_DAYS = 7
+export const FREE_MODEL_SLOTS = 2
+export const SLOT_WINDOW_DAYS = 7
 const HOURS_PER_DAY = 24
 const MS_PER_HOUR = 3_600_000
-export const FREE_EXPORT_WINDOW_MS = FREE_EXPORT_WINDOW_DAYS * HOURS_PER_DAY * MS_PER_HOUR
+export const SLOT_WINDOW_MS = SLOT_WINDOW_DAYS * HOURS_PER_DAY * MS_PER_HOUR
 
 /**
- * How the Export tab writes "next one <date>", which the spec re-creates IN
- * THE PAGE (same locale, same time zone) with `toLocaleString(undefined,
- * this)` and compares character for character — `formatNextFreeExport` on
- * #1939.
+ * How the Export tab writes "next one frees up <date>", which the spec
+ * re-creates IN THE PAGE (same locale, same time zone) with
+ * `toLocaleString(undefined, this)` and compares character for character —
+ * `exportSlots.js#formatNextFreeSlot`.
  */
 export const NEXT_FREE_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   weekday: 'short',
@@ -35,98 +37,110 @@ export const NEXT_FREE_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   minute: '2-digit',
 }
 
-export type Allowance = {limit: number, used: number, remaining: number, nextFreeAt: string | null}
+export type SlotsHeader = {limit: number, used: number, remaining: number, nextFreeAt: string | null, taken: boolean}
+export type SlotRow = {key?: string, loadedAt?: string, via?: string}
 export type LedgerRow = {id?: string, free?: boolean, exportedAt?: string, key?: string | null,
   bytes?: number | null, format?: string}
 
 
+/** The slot line for a model that already holds a slot. */
+export const HELD_CAPTION =
+  `This model holds one of your ${FREE_MODEL_SLOTS} free model slots: export it as often as you like`
+
+
 /**
- * Read the line under a free user's Export button:
- * "1 of 2 free exports left this week", and at the limit
- * "0 of 2 free exports left this week · next one Thu, Oct 9, 9:00 AM".
- *
- * @param text the line's text content
- * @return the parts, or null when the text is not that line at all
+ * @param remaining slots free
+ * @return the slot line for a model holding no slot while one is free
  */
-export function parseFreeRemainingCaption(text: string | null): {
-  remaining: number, limit: number, next: string | null,
-} | null {
-  if (text === null) {
-    return null
-  }
-  const match = text.trim().match(/^(\d+) of (\d+) free exports left this week(?: · next one (.+))?$/)
-  if (match === null) {
-    return null
-  }
-  return {remaining: Number(match[1]), limit: Number(match[2]), next: match[3] ?? null}
+export function takeCaption(remaining: number): string {
+  return `Exporting takes one of your ${FREE_MODEL_SLOTS} free model slots (${remaining} left this week),` +
+    ' then export it as often as you like'
 }
 
 
 /**
- * Parse `X-Bldrs-Free-Exports`, the allowance after a charge, as `pro-module`
- * sends it. Throws on anything that is not a whole allowance: a header that
- * is present and malformed is a defect, not a missing feature.
+ * @param formattedDate the next free slot, formatted in the page
+ * @return the slot line when every slot holds another model
+ */
+export function fullCaption(formattedDate: string): string {
+  return `Your ${FREE_MODEL_SLOTS} free model slots this week hold other models · next one frees up ${formattedDate}`
+}
+
+
+/**
+ * @param formattedDate the next free slot, formatted in the page
+ * @return the slots-full gate's help, as `ExportSection#slotsFullHelp` writes it
+ */
+export function slotsFullHelpText(formattedDate: string): string {
+  return `Your ${FREE_MODEL_SLOTS} free model slots for the last ${SLOT_WINDOW_DAYS} days hold other models.` +
+    ' A model with a slot exports as often as you like; this one needs a free slot.' +
+    ` Your next slot frees up ${formattedDate}.`
+}
+
+
+/**
+ * Parse `X-Bldrs-Model-Slots`, the slots after a free delivery, as
+ * `pro-module` sends it. Throws on anything that is not a whole slots
+ * statement: a header that is present and malformed is a defect, not a
+ * missing feature.
  *
  * @param value the header's value
- * @return the allowance
+ * @return the slots
  */
-export function parseFreeExportsHeader(value: string | null | undefined): Allowance {
+export function parseSlotsHeader(value: string | null | undefined): SlotsHeader {
   if (value === null || value === undefined) {
-    throw new Error('X-Bldrs-Free-Exports is missing')
+    throw new Error('X-Bldrs-Model-Slots is missing')
   }
   const parsed = JSON.parse(value)
   const isCount = (n: unknown) => Number.isInteger(n) && (n as number) >= 0
-  if (!parsed || !isCount(parsed.limit) || !isCount(parsed.used) || !isCount(parsed.remaining)) {
-    throw new Error(`X-Bldrs-Free-Exports is not an allowance: ${value}`)
+  if (!parsed || !isCount(parsed.limit) || !isCount(parsed.used) || !isCount(parsed.remaining) ||
+      typeof parsed.taken !== 'boolean') {
+    throw new Error(`X-Bldrs-Model-Slots is not a slots statement: ${value}`)
   }
   const nextFreeAt = parsed.nextFreeAt ?? null
   if (nextFreeAt !== null && !Number.isFinite(Date.parse(nextFreeAt))) {
-    throw new Error(`X-Bldrs-Free-Exports has an unreadable nextFreeAt: ${value}`)
+    throw new Error(`X-Bldrs-Model-Slots has an unreadable nextFreeAt: ${value}`)
   }
-  return {limit: parsed.limit, used: parsed.used, remaining: parsed.remaining, nextFreeAt}
+  return {limit: parsed.limit, used: parsed.used, remaining: parsed.remaining, nextFreeAt, taken: parsed.taken}
 }
 
 
 /**
- * When the next free export frees up, worked out independently from the
- * ledger: the OLDEST free row still inside the window, plus the window. For
- * the spec's two exports that is the FIRST one's `exportedAt` + 7 days —
- * which is what the header, the caption and the help text must all say.
+ * The slots held at `now`, worked out independently from the ledger: rows
+ * with a key and a stamp inside the window.
  *
- * @param rows `app_metadata.exports`, read from Auth0
+ * @param rows `app_metadata.usageQuota.loads`, read from Auth0
  * @param now millis since epoch
- * @return ISO timestamp, or null when no free row counts
+ * @return the held rows
  */
-export function expectedNextFreeAt(rows: LedgerRow[], now: number): string | null {
-  const counted = rows
-    .filter((row) => row.free === true && Number.isFinite(Date.parse(row.exportedAt ?? '')))
-    .map((row) => Date.parse(row.exportedAt as string))
-    .filter((at) => at + FREE_EXPORT_WINDOW_MS > now)
-  return counted.length === 0 ? null : new Date(Math.min(...counted) + FREE_EXPORT_WINDOW_MS).toISOString()
+export function heldSlots(rows: SlotRow[], now: number): SlotRow[] {
+  return rows.filter((row) => typeof row.key === 'string' &&
+    Number.isFinite(Date.parse(row.loadedAt ?? '')) && Date.parse(row.loadedAt as string) + SLOT_WINDOW_MS > now)
 }
 
 
 /**
- * The help a free user sees on clicking the gated button at the limit.
+ * When the next slot frees up: the OLDEST held slot plus the window — what
+ * the header, the slot line and the gate's help must all say.
  *
- * @param formattedDate the next free export, formatted in the page
- * @return the full sentence pair, as #1939's `freeLimitHelp` writes it
+ * @param rows `app_metadata.usageQuota.loads`
+ * @param now millis since epoch
+ * @return ISO timestamp, or null when no slot is held
  */
-export function freeLimitHelpText(formattedDate: string): string {
-  return `You've used your ${FREE_EXPORT_LIMIT} free exports for the last ${FREE_EXPORT_WINDOW_DAYS} days. ` +
-    `Your next free export is available ${formattedDate}.`
+export function expectedNextFreeSlot(rows: SlotRow[], now: number): string | null {
+  const held = heldSlots(rows, now).map((row) => Date.parse(row.loadedAt as string))
+  return held.length === 0 ? null : new Date(Math.min(...held) + SLOT_WINDOW_MS).toISOString()
 }
 
 
 /**
- * The free charge rows a step added: in `after`, flagged `free`, and with an
- * id `before` did not have.
+ * The history rows a step added: in `after`, with an id `before` did not have.
  *
- * @param before ledger before the step
- * @param after ledger after it
- * @return the new free rows, in `after`'s order (newest first)
+ * @param before `app_metadata.exports` before the step
+ * @param after the same, after it
+ * @return the new rows, in `after`'s order (newest first)
  */
-export function newFreeRows(before: LedgerRow[], after: LedgerRow[]): LedgerRow[] {
+export function newRows(before: LedgerRow[], after: LedgerRow[]): LedgerRow[] {
   const seen = new Set(before.map((row) => row.id))
-  return after.filter((row) => row.free === true && !seen.has(row.id))
+  return after.filter((row) => !seen.has(row.id))
 }

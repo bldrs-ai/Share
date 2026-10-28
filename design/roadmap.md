@@ -117,7 +117,7 @@ B identity, C sharing, D subscribe+ads, E launch checklist); G = growth funnel
 | Share | `share-110` | Save model to user's hosting (originator share) | 🟡 | C | T2 |
 | Share | `share-120` | Extended Share/Login flow (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>) | 🟡 | C, D | — |
 | Share | `share-130` | Private link sharing + visibility chip | 🟡 | C | T4 |
-| Share | `share-140` | GLB export as a Pro feature (<a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a>), with 2 free exports per rolling 7 days for signed-in free users; on by default since S4 (<a href="https://github.com/bldrs-ai/Share/issues/1835" target="_blank" rel="noopener noreferrer">#1835</a>) merged as <a href="https://github.com/bldrs-ai/Share/pull/1939" target="_blank" rel="noopener noreferrer">#1939</a>, with the cross-browser smoke automated (live smoke) plus a short residual manual list | 🟡 | D | T2, T8 |
+| Share | `share-140` | GLB export as a Pro feature (<a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a>), with free exports for signed-in free users governed by their 2 model slots (unlimited exports of a model holding one; a new model takes a slot on first export, 2026-10-27; was 2 exports per rolling 7 days); on by default since S4 (<a href="https://github.com/bldrs-ai/Share/issues/1835" target="_blank" rel="noopener noreferrer">#1835</a>) merged as <a href="https://github.com/bldrs-ai/Share/pull/1939" target="_blank" rel="noopener noreferrer">#1939</a>, with the cross-browser smoke automated (live smoke) plus a short residual manual list | 🟡 | D | T2, T8 |
 | Share | `share-200` | Grant/revoke per-principal sharing | 🟡 | C | T4 |
 | Share | `share-400` | Folder-scoped boundaries | ⬜ | Post | T4 |
 | Notes | `notes-100` | Anchored notes (GitHub-backed) | ✔ | — | — |
@@ -716,11 +716,12 @@ not just a revenue trickle.*
 **Epic `subscribe-120`: Quota tracking** 🟡 (NEW)
 - Shipped (v0.9): the server-side counter keyed by Auth0 `sub`
   (`netlify/functions/record-load.js`, `app_metadata.usageQuota`), metering
-  **private-model loads** on a rolling 7-day window (30 until 2026-10-26, now
-  shared with free exports), with enforcement behind the `quotas` flag, **on
+  **private-model loads** on a rolling 7-day window (30 until 2026-10-26),
+  with enforcement behind the `quotas` flag, **on
   in production since Share#1970** (`src/FeatureFlags.js`; `design/new/quotas.md`);
-  the `share-140` free-export allowance (`src/export/freeExports.js`, charged in
-  `pro-module.js`, reported by `record-export.js`); funnel events `quota_limit_reached`,
+  since 2026-10-27 the same slots decide `share-140`'s free exports
+  (`src/export/exportSlots.js`, decided and taken in `pro-module.js`,
+  reported by `record-export.js`); funnel events `quota_limit_reached`,
   `begin_checkout`, `subscription_started`/`_ended`
   (`src/privacy/analytics.js#FUNNEL_EVENTS`). Not shipped: enforcement points
   (a)–(d) below, including the size/complexity gate.
@@ -1141,7 +1142,7 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
   (`stripe-webhook.js`, `_lib/subscriptions.js`, the `reconcile-subscriptions.js`
   sweep), portal (`create-portal-session.js`), the entitlement-gated export module
   (`pro-module.js`, `record-export.js`: unlimited for Pro, a small rolling free
-  allowance for signed-in free users — `src/export/freeExports.js`), and private-load quota metering
+  allowance for signed-in free users, governed by their model slots — `src/export/exportSlots.js`), and private-load quota metering
   (`record-load.js`, `src/quota/`; enforcement behind the default-off `quotas`
   flag). Not built: the size/complexity axis below. Detail in §4.9.
 - **Unblocks:** `subscribe-100`, `subscribe-110`, `subscribe-120`. Forward-looking:
