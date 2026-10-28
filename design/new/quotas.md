@@ -520,7 +520,13 @@ drift from what is enforced, by construction. `PLANS`
 `FREE_PRIVATE_MODEL_LIMIT` / `ROLLING_WINDOW_DAYS` from `limits.js` ("2 private
 models a week — unlimited open, share and export"; the
 separate "2 GLB exports a week" line went with the export count on
-2026-10-27). Share Pro reads "Unlimited private models and exports".
+2026-10-27). Share Pro reads "Unlimited private models and exports". The signed-out tier ("Bldrs Share", no login) has
+the owner's four lines (2026-10-28) from `src/quota/tierCopy.js`, which
+`/share/quotas` renders too: local models in the browser with no upload; IFC
+and STEP by Conway, "fastest in the industry", with "see the benchmark"
+linking `/share/about/conway`; USD, GLB, STL, OBJ and more; public Drive and
+GitHub models with unlimited open and share. No export: it starts at a free
+account.
 `PricingTiers.tsx`
 renders `PLANS` and states no limit of its own; the monthly/yearly toggle only
 changes the price. (`.mjs` because `marketing/package.json` has no `"type":

@@ -1,4 +1,5 @@
 import {FREE_PRIVATE_MODEL_LIMIT, ROLLING_WINDOW_DAYS} from '../../../src/quota/limits.js'
+import {SIGNED_OUT_FEATURES} from '../../../src/quota/tierCopy.js'
 
 
 /**
@@ -45,7 +46,8 @@ export function windowWord(days) {
 /**
  * @typedef {object} Section
  * @property {string|null} heading
- * @property {Array<string>} features
+ * @property {Array<import('../../../src/quota/tierCopy.js').FeatureLine>} features
+ *   plain strings, or `{text, link}` for a line that ends in a link
  */
 
 /**
@@ -81,11 +83,9 @@ export function buildPlans({freePrivateModels, privateModelWindowDays}) {
       sections: [
         {
           heading: 'No login required:',
-          features: [
-            'Fast IFC and STEP viewing in your browser',
-            'Your files never leave your computer',
-            'Open and share public GitHub models, unlimited',
-          ],
+          // The owner's four lines (2026-10-28), shared with /share/quotas.
+          // No export here: it starts at a free account.
+          features: [...SIGNED_OUT_FEATURES],
         },
       ],
       cta: 'Get Started',

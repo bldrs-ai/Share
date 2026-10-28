@@ -1,5 +1,6 @@
 import {FREE_PRIVATE_MODEL_LIMIT, ROLLING_WINDOW_DAYS} from '../../src/quota/limits.js'
 import {PLANS, buildPlans} from '../../marketing/src/lib/pricingPlans.mjs'
+import {BENCHMARK_PATH, featureText} from '../../src/quota/tierCopy.js'
 
 
 // A drift tripwire for the pricing page's quota copy. PLANS
@@ -56,7 +57,8 @@ function planCopy(plan) {
     plan.badge,
     // The button label renders too (codex review on Share#1971).
     plan.cta,
-    ...plan.sections.flatMap((section) => [section.heading, ...section.features]),
+    // A line that ends in a link reads as "text (label)" on the page.
+    ...plan.sections.flatMap((section) => [section.heading, ...section.features.map(featureText)]),
   ].filter((text) => typeof text === 'string')
 }
 
@@ -113,9 +115,11 @@ const ENFORCED = {models: freePrivateModelsClaim(FREE_PRIVATE_MODEL_LIMIT, ROLLI
 function editPlans(from, to) {
   const edited = JSON.parse(JSON.stringify(PLANS))
   const sections = edited.flatMap((plan) => plan.sections)
-  expect(sections.flatMap((section) => section.features).filter((f) => f.includes(from))).toHaveLength(1)
+  expect(sections.flatMap((section) => section.features).filter((f) => featureText(f).includes(from))).toHaveLength(1)
   for (const section of sections) {
-    section.features = section.features.map((feature) => feature.replace(from, to))
+    section.features = section.features.map((feature) => (typeof feature === 'string' ?
+      feature.replace(from, to) :
+      {...feature, text: feature.text.replace(from, to)}))
   }
   return edited
 }
@@ -126,7 +130,7 @@ function editPlans(from, to) {
  * @return {Array<string>} the plan's feature lines
  */
 function featuresOf(name) {
-  return PLANS.find((plan) => plan.name === name).sections.flatMap((section) => section.features)
+  return PLANS.find((plan) => plan.name === name).sections.flatMap((section) => section.features).map(featureText)
 }
 
 
@@ -145,6 +149,23 @@ describe('marketing pricing plans', () => {
     // The retired "2 GLB exports a week" line is gone, not reworded.
     expect(featuresOf('Free account').filter((feature) => /GLB exports/i.test(feature))).toEqual([])
     expect(featuresOf('Share Pro')).toEqual([PRO_CLAIM])
+  })
+
+  it('gives the signed-out tier exactly the owner\'s four lines, the benchmark linked, and no export', () => {
+    // Owner's wording, 2026-10-28.
+    expect(featuresOf('Bldrs Share')).toEqual([
+      'Open local models in your browser. No waiting for upload',
+      'IFC and STEP loaded by our Conway engine, fastest in the industry (see the benchmark)',
+      'USD, GLB, STL, OBJ and many others also supported',
+      'Public Google Drive and GitHub models — unlimited open and share',
+    ])
+    const link = PLANS.find((plan) => plan.name === 'Bldrs Share').sections
+      .flatMap((section) => section.features).find((feature) => typeof feature !== 'string').link
+    // An absolute site path: the marketing site and the viewer share the origin.
+    expect(link).toEqual({label: 'see the benchmark', href: '/share/about/conway'})
+    expect(BENCHMARK_PATH).toBe('/share/about/conway')
+    // Export starts at a free account.
+    expect(featuresOf('Bldrs Share').filter((feature) => /export/i.test(feature))).toEqual([])
   })
 
   it('states the enforced allowance, Pro unlimited, and no limit on local files', () => {
@@ -192,11 +213,11 @@ describe('marketing pricing plans', () => {
 
   it('fails a limit on local files', () => {
     for (const claim of [
-      'Your files never leave your computer, 5 a week',
+      'Open local models in your browser, 5 a week',
       'Open local files, up to 3 a month',
       'Drag and drop: limited',
     ]) {
-      expect(planProblems(editPlans('Your files never leave your computer', claim), ENFORCED).join('\n'))
+      expect(planProblems(editPlans('Open local models in your browser. No waiting for upload', claim), ENFORCED).join('\n'))
         .toMatch(/limit on local files/)
     }
   })

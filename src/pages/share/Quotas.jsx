@@ -2,6 +2,7 @@ import React, {ReactElement} from 'react'
 import {Box, Link, Table, TableBody, TableCell, TableHead, TableRow, Typography} from '@mui/material'
 import TitledLayout from '../../layouts/TitledLayout'
 import {LIMITS, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/limits'
+import {SIGNED_OUT_FEATURES} from '../../quota/tierCopy'
 
 
 /** @return {ReactElement} */
@@ -48,6 +49,17 @@ export default function Quotas() {
             </TableRow>
           </TableBody>
         </Table>
+
+        <Typography variant='h6' sx={{marginTop: '2em'}}>Without signing in</Typography>
+        {/* The signed-out tier, worded once for here and the pricing page
+            (quota/tierCopy.js). Export starts at a free account. */}
+        <Typography component='ul' data-testid='quotas-signed-out'>
+          {SIGNED_OUT_FEATURES.map((feature) => (typeof feature === 'string' ?
+            <li key={feature}>{feature}</li> :
+            <li key={feature.text}>
+              {feature.text} (<Link href={feature.link.href}>{feature.link.label}</Link>)
+            </li>))}
+        </Typography>
 
         <Typography variant='h6' sx={{marginTop: '2em'}}>What counts as a load?</Typography>
         <Typography paragraph>

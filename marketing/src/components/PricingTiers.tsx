@@ -8,6 +8,7 @@ import {
   Chip,
   Container,
   Grid,
+  Link,
   Stack,
   Switch,
   Typography,
@@ -123,9 +124,20 @@ export default function PricingTiers() {
                       )}
                       <Stack spacing={1}>
                         {section.features.map((feature) => (
-                          <Stack key={feature} direction="row" spacing={1} alignItems="flex-start">
+                          <Stack
+                            key={typeof feature === 'string' ? feature : feature.text}
+                            direction="row"
+                            spacing={1}
+                            alignItems="flex-start"
+                          >
                             <CheckIcon sx={{fontSize: 18, color: LIME, mt: 0.3, flexShrink: 0}}/>
-                            <Typography variant="body2" sx={{opacity: 0.8}}>{feature}</Typography>
+                            {typeof feature === 'string' ?
+                              <Typography variant="body2" sx={{opacity: 0.8}}>{feature}</Typography> :
+                              <Typography variant="body2" sx={{opacity: 0.8}}>
+                                {feature.text} (
+                                <Link href={feature.link.href} sx={{color: LIME}}>{feature.link.label}</Link>
+                                )
+                              </Typography>}
                           </Stack>
                         ))}
                       </Stack>
