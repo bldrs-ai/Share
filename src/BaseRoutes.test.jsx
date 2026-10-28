@@ -443,6 +443,40 @@ describe('BaseRoutes - in-page sign-in and model-action tiers', () => {
     expect(sent('model_export')).toEqual([{tier: 'pro', gate: 'none', source: 'hosted'}])
   })
 
+  // codex review on Share#1986: OpenModelDialog's GitHub Remove signs out IN
+  // PLACE (`logout({openUrl: false})`). If the signed-in pass's token fetch
+  // is still in flight then, its late .finally must not replace the
+  // signed-out settlement with `true`, or every anon action after it would
+  // wait out the 60 s cap.
+  it('an in-place sign-out during a signed-in fetch keeps the signed-out settlement', async () => {
+    const token = 'late-jwt'
+    tokenClaims[token] = {'https://bldrs.ai/identities': [{connection: 'github', provider: 'github', user_id: '1'}]}
+    let releaseToken
+    const getToken = jest.fn((opts) => opts.cacheMode === 'on' ?
+      new Promise((resolve) => {
+        releaseToken = () => resolve(token)
+      }) :
+      Promise.resolve(token))
+
+    const {rerender} = render(app({...mockedUserLoggedIn, getAccessTokenSilently: getToken}))
+    await waitFor(() => expect(getToken).toHaveBeenCalled())
+    rerender(app(mockedUserLoggedOut))
+    await waitFor(() => expect(useStore.getState().authResolvedFor).toBe(false))
+
+    await act(async () => {
+      releaseToken()
+      await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_STRAY_CALL_MS))
+    })
+    expect(useStore.getState().isAuthResolved).toBe(true)
+    expect(useStore.getState().authResolvedFor).toBe(false)
+    await act(() => trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
+      gate: MODEL_GATES.NONE,
+      source: 'hosted',
+      getIsAuthenticated: () => false,
+    }))
+    expect(sent('model_share')).toEqual([{tier: 'anon', gate: 'none', source: 'hosted'}])
+  })
+
   // The window before the popup finishes is not the race: the user is
   // signed out while it is open, so an action then is `anon`, and is sent
   // at once on the signed-out pass's settlement.

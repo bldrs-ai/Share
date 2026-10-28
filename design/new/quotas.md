@@ -1096,10 +1096,16 @@ Three timing rules keep the cells honest (codex review on Share#1976):
   in as Pro is `pro`. `isAuthResolved` itself is not reset when the popup
   finishes. The load gates read it (CadView, the GitHub hooks), and what
   they need is "the token, if any, is in", not whose claims these are. So
-  only the analytics wait is per sign-in state. One window is left
-  uncovered: an account switch with no sign-out in between keeps
-  `isAuthenticated` true. Share has no such path, because signing out
-  reloads the page.
+  only the analytics wait is per sign-in state. The reverse holds too.
+  Signing out can happen in place, with no reload: the Open dialog's GitHub
+  Remove calls `logout({openUrl: false})`. A signed-in pass whose token
+  fetch was still in flight then must not record its late settlement over
+  the signed-out one. BaseRoutes drops it by generation (`authPassRef`), so
+  anon actions after the sign-out are not held for the 60 s cap (codex
+  review on Share#1986). One case is left uncovered: switching accounts
+  with no signed-out state in between keeps `isAuthenticated` true. Share
+  has no such path, since Log in shows only when signed out, so a switch
+  always goes through `false`.
 - **`source` and `content_id` are snapshotted at the call, not at emit.**
   That matters most for `model_export`, whose event goes out after the
   module load and conversion while navigation isn't locked, but every
