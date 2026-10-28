@@ -25,6 +25,8 @@ const FREE_LIMIT = 2
 // real record-load does.
 const WINDOW_DAYS = 7
 const DAY_MS = 86_400_000
+// SIGNED_OUT_FEATURES in src/quota/tierCopy.js, restated for the same reason.
+const SIGNED_OUT_LINE_COUNT = 4
 const HTTP_OK = 200
 
 // Same fakes GoogleDriveConnect.spec.ts uses: GIS OAuth and the Picker,
@@ -237,6 +239,14 @@ describeMobileAndDesktop('QuotaLimitDialog', () => {
     const freeRow = page.getByRole('row', {name: /Free \(signed in\)/})
     await expect(freeRow).toContainText(`Rolling ${WINDOW_DAYS} days`)
     await expect(freeRow).toContainText(String(FREE_LIMIT))
+    // The signed-out tier's lines (src/quota/tierCopy.js), which the pricing
+    // page lists too: the benchmark link is a site path, so it has to resolve
+    // from here and from the marketing site alike.
+    const signedOut = page.getByTestId('quotas-signed-out')
+    await expect(signedOut.getByRole('listitem')).toHaveCount(SIGNED_OUT_LINE_COUNT)
+    await expect(signedOut).toContainText('Open local models in your browser. No waiting for upload')
+    await expect(signedOut).not.toContainText(/export/i)
+    await expect(signedOut.getByRole('link', {name: 'see the benchmark'})).toHaveAttribute('href', '/share/about/conway')
   })
 
   test('free user at the limit subscribes through checkout', async ({page}) => {
