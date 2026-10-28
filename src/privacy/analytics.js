@@ -360,8 +360,8 @@ export function getGaClientReference() {
  *   SUBSCRIPTION_STARTED / SUBSCRIPTION_ENDED  {tier, source: 'server',
  *                        interval?, plan?, open_cid?, cid_source}
  *                        NOT sent from here: the stripe-webhook function
- *                        sends them through the Measurement Protocol on
- *                        the Auth0 tier write
+ *                        sends them through the Measurement Protocol, once
+ *                        per Pro subscription status transition
  *                        (netlify/functions/_lib/subscriptionAnalytics.js).
  *                        Listed because the dashboard reads them with the rest.
  *   SUBSCRIPTION_STARTED_CLIENT / SUBSCRIPTION_ENDED_CLIENT  {}  BaseRoutes'

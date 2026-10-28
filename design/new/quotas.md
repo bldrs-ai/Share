@@ -725,28 +725,51 @@ who never came back to it — was never counted. The Stripe webhook now sends
 [GA4 Measurement Protocol](https://developers.google.com/analytics/devguides/collection/protocol/ga4)
 (`netlify/functions/_lib/subscriptionAnalytics.js`).
 
-- **When: on the Auth0 tier write, and only then.** `_lib/subscriptions.js#settleUser`
-  writes only when the tier changes, decided from Auth0's stored value
-  (netlify-functions-testing.md §"stripe-webhook's response contract"). The
-  event follows that write: FREE→PRO sends `subscription_started`, PRO→FREE
-  `subscription_ended`. A redelivered or duplicate Stripe event finds the
-  tier already written, writes nothing, and sends nothing, so there is no
-  second dedupe to drift from the entitlement rule. A promotion corrected
-  straight back inside one delivery (subscription cancelled mid-flight) nets
-  to nothing and sends nothing. A write that lands before a failure is
-  reported even though the webhook then answers 500, since the redelivery
-  will find it written and send nothing (`settleUser` puts the writes on
-  the error as `changes`). Known gaps, each a missed event and never a
-  double count, accepted because Stripe — not this column — is the record
-  of revenue:
-  - a transition only the daily `reconcile-subscriptions` sweep writes (the
-    webhook lost for Stripe's whole retry window);
-  - a PATCH that Auth0 applies but whose response is lost (a reset after
-    commit). `settleUser` hasn't recorded it, and the redelivery finds the
-    tier written. Closing it would mean re-reading Auth0 after every
-    ambiguous write failure, on the hot path, for a rare case (Codex on
-    #1983; owner's call: decline);
-  - a delivery that reaches the report with under 3 s of its budget left.
+- **When: once per subscription status transition, read off the Stripe
+  event.** Each Share Pro subscription's move into an entitling status
+  (`active`, `trialing`, `past_due` — `_lib/subscriptions.js`) sends
+  `subscription_started`, and its move out sends `subscription_ended`. Stripe
+  describes each status change in exactly one event, so that event is the
+  trigger (`subscriptionAnalytics.js#subscriptionTransitionOf`):
+
+  | Event | Counts as |
+  |---|---|
+  | `customer.subscription.created`, already entitling (card checkout, trial) | started |
+  | `customer.subscription.updated`, entitling now, `previous_attributes.status` not (incomplete → active after 3-D Secure; unpaid → active) | started |
+  | `customer.subscription.updated`, not entitling now, previous status was (past_due → unpaid, → paused) | ended |
+  | `customer.subscription.deleted`, unless the user was already FREE in Auth0 when it arrived | ended |
+  | anything else: a renewal, past_due ↔ active, incomplete → incomplete_expired, another price | nothing |
+
+  **Why not the Auth0 tier write** (#1983's first design): one checkout
+  sends `created` and `updated` seconds apart, their deliveries overlap, both
+  read FREE, both write PRO — and each would have sent `subscription_started`.
+  GA4 never dedupes a Measurement Protocol event, so the double count would
+  be permanent (Codex P1 on #1983; owner's call, 2026-10-28, to count per
+  subscription). The `deleted` guard is the one read of Auth0: a deleted
+  event carries no previous status, and a subscription canceled after going
+  `unpaid` already ended at `unpaid`, when the user went FREE.
+
+  **Sent only when the webhook answers 200** (applied, or acknowledged as
+  not applicable, e.g. no Auth0 user for the customer: the subscription
+  still changed in Stripe). A delivery answered 500 sends nothing, and
+  Stripe's redelivery of it sends it once.
+
+  **Where this diverges from the user's tier.** A user holding two Share Pro
+  subscriptions at once counts a start for each, and an end when either one
+  ends, though they were Pro throughout. Rare (the billing portal manages one
+  subscription); the tier is still exact in Auth0.
+
+  Known gaps, each a missed event and never a double count unless noted,
+  accepted because Stripe — not this column — is the record of revenue:
+  - a delivery that reaches the report with under 3 s of its budget left;
+  - a `deleted` whose user Auth0 already shows FREE for another reason (a
+    lost promotion) is not counted as an end;
+  - Stripe's at-least-once delivery can, rarely, deliver one event twice even
+    after a 200 (its docs say to dedupe by event id). Nothing here stores
+    event ids, so that rare duplicate would count twice;
+  - a PATCH that Auth0 applies but whose response is lost no longer matters
+    here (the count doesn't depend on Auth0 writes), and the sweep's
+    repairs are not reported, as before.
 - **Who: the paying browser's GA client.** `goToSubscription` adds
   `gaRef=gacid_<id with _ for .>` to the `/subscribe/` URL
   (`analytics#getGaClientReference`, consent-gated like the Sentry cid), and
@@ -755,15 +778,11 @@ who never came back to it — was never counted. The Stripe webhook now sends
   and Stripe copies it to the Checkout Session's `client_reference_id`. It
   accepts only alphanumerics, `-` and `_`, silently dropping anything else,
   hence the encoding (`src/privacy/gaClientReference.js`, shared by both
-  ends). The webhook lists the Checkout Sessions (one Stripe call, 1.5 s, no
-  retry) of the customer that **decided** the transition: the entitled
-  customer for a start, the linked one for an end. That is not always the
-  event's customer, since entitlement is read across the linked customer and
-  the event's — a late event for an old customer can promote a user who pays
-  under the linked one (Codex on #1983) — and the payload is then used for
-  nothing. It decodes the reference from the session that created the
-  event's subscription, else the newest completed one (a resubscribe through
-  the billing portal has no session of its own), else the newest of any. That
+  ends). The webhook lists the event's customer's Checkout Sessions (one
+  Stripe call, 1.5 s, no retry) and decodes the reference from the session
+  that created the event's subscription, else the newest completed one (a
+  resubscribe through the billing portal has no session of its own), else
+  the newest of any. That
   id is the Measurement Protocol `client_id`, and also goes out as `open_cid`
   (`cid.<id>`), the same join key every app funnel event carries.
 - **Fallback.** With no reference (consent withheld, GA blocked, a checkout
@@ -775,13 +794,12 @@ who never came back to it — was never counted. The Stripe webhook now sends
 - **Params.** `tier: 'pro'`, `source: 'server'`, `cid_source`, `open_cid`
   (checkout only), `interval` (`month` / `year`) from the Pro price on the
   event's subscription, and `plan` = that price's `lookup_key` when one is
-  set — both only when that subscription is the deciding customer's. Never an
-  email, a name, or a Stripe id.
+  set. Never an email, a name, or a Stripe id.
 - **Never breaks the webhook.** Every step is best-effort: the Checkout
   Session lookup and the POST each time out after 1.5 s, and any failure is
   logged (`console.warn`, with the API secret scrubbed) and swallowed. A GA
   failure never changes the response code: a 5xx would make Stripe redeliver
-  an update that was applied. Nor may GA push the delivery past the
+  the event, and the redelivery would send it again. Nor may GA push the delivery past the
   function's time limit, which Stripe sees the same way (Codex on #1983): the
   report runs against the handler's deadline (Lambda's
   `getRemainingTimeInMillis()`, else 10 s from the start), is skipped with

@@ -1,5 +1,5 @@
 {
-  "description": "The cancellation of a Pro user's only subscription writes freePendingReauth and reports one subscription_ended. The key may not read Checkout Sessions (403), so the client id is the stable hash of the Stripe customer, flagged cid_source: 'fallback', with no open_cid and no Stripe id anywhere in what GA gets.",
+  "description": "The cancellation of a Pro user's Share Pro subscription (customer.subscription.deleted, its own move out of an entitling status) writes freePendingReauth and reports one subscription_ended. The key may not read Checkout Sessions (403), so the client id is the stable hash of the Stripe customer, flagged cid_source: 'fallback', with no open_cid and no Stripe id anywhere in what GA gets.",
   "env": {
     "$fixture": "env/stripe-ga.json"
   },
@@ -12,10 +12,7 @@
     },
     "sign": "stripe",
     "body": {
-      "$fixture": "stripe/event.subscription.deleted.json",
-      "$merge": {
-        "livemode": true
-      }
+      "$fixture": "stripe/event.subscription.deleted.live.json"
     }
   },
   "exchanges": [
@@ -126,7 +123,9 @@
               "params": {
                 "tier": "pro",
                 "source": "server",
-                "cid_source": "fallback"
+                "cid_source": "fallback",
+                "interval": "month",
+                "plan": "share_pro_monthly"
               }
             }
           ]

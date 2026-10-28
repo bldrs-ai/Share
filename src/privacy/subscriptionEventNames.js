@@ -6,9 +6,9 @@
  * imports of its own, so the function bundle gets nothing else from src/.
  *
  * Since 2026-10 the server is the source of truth for the two funnel
- * names: the webhook sends them through the Measurement Protocol on the
- * Auth0 tier write, which happens whether or not the user ever opens the app
- * again. The browser's own sighting of the same transition (BaseRoutes →
+ * names: the webhook sends them through the Measurement Protocol, once per
+ * Share Pro subscription status transition, whether or not the user ever
+ * opens the app again. The browser's own sighting of the same transition (BaseRoutes →
  * subscriptionTracking.js, on the pendingReauth token) goes out under the
  * `_client` names instead, so the two never add up in one count — see
  * design/new/quotas.md §"Server-side subscription events".

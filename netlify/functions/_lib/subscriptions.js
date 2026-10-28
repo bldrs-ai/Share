@@ -427,7 +427,6 @@ function describeChange(stored, patch) {
  * such failure is marked `retryRequired` — the webhook answers 500 whatever
  * the upstream status — except a 404 on the Auth0 user, which a retry can't
  * fix. Before any write, failures are left for the caller to classify.
- * Either way the error carries `changes`: the writes made before it.
  *
  * @param {object} args
  * @param {string} args.userId Auth0 user_id
@@ -471,10 +470,6 @@ export async function settleUser({userId, stored, read, link, retryDelaysMs, rea
     if (changes.length > 0 && !userGone) {
       err.retryRequired = true
     }
-    // The writes that DID land, for stripe-webhook's GA report
-    // (_lib/subscriptionAnalytics.js): a redelivery finds the tier already
-    // written and sends nothing, so a transition not reported now never is.
-    err.changes = changes
     throw err
   }
 }

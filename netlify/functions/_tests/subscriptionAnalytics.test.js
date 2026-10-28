@@ -13,33 +13,47 @@ import {
   fallbackClientId,
   gaMeasurementConfig,
   subscriptionEventParams,
-  subscriptionTransition,
+  subscriptionTransitionOf,
 } from '../_lib/subscriptionAnalytics.js'
 
 
 describe('_lib/subscriptionAnalytics', () => {
-  describe('subscriptionTransition: the net tier change settleUser wrote', () => {
-    it.each([
-      ['nothing written', [], null],
-      ['a relink only', [{tier: null, from: 'cus_a', to: 'cus_b'}], null],
-      ['a promotion', [{tier: 'promote', to: 'cus_a'}], 'started'],
-      ['a demotion', [{tier: 'demote', to: 'cus_a'}], 'ended'],
-      ['a promotion corrected straight back', [{tier: 'promote'}, {tier: 'demote'}], null],
-      ['a demotion corrected straight back', [{tier: 'demote'}, {tier: 'promote'}], null],
-      ['promote, demote, promote (flipping entitlement)', [{tier: 'promote'}, {tier: 'demote'}, {tier: 'promote', to: 'cus_a'}], 'started'],
-      ['a relink, then a promotion', [{tier: null, to: 'cus_b'}, {tier: 'promote', to: 'cus_a'}], 'started'],
-    ])('%s → %s', (label, changes, expected) => {
-      expect(subscriptionTransition(changes)).toEqual(expected ? {transition: expected, customer: 'cus_a'} : null)
+  // The webhook-level cases (every status pair, the checkout burst) are in
+  // stripe-webhook.test.js; this pins the guards around them.
+  describe('subscriptionTransitionOf: the event\'s own subscription status transition', () => {
+    const PRO = 'price_pro'
+    /**
+     * @param {string} type
+     * @param {string} status
+     * @param {object} [previous]
+     * @return {object} a Stripe event for a Pro subscription
+     */
+    function event(type, status, previous) {
+      const data = {object: {id: 'sub_1', customer: 'cus_1', status, items: {data: [{price: {id: PRO}}]}}}
+      if (previous) {
+        data.previous_attributes = previous
+      }
+      return {type: `customer.subscription.${type}`, data}
+    }
+
+    it('starts on created-entitling and on a crossing into entitling, once each', () => {
+      expect(subscriptionTransitionOf(event('created', 'active'), PRO)).toBe('started')
+      expect(subscriptionTransitionOf(event('updated', 'active', {status: 'incomplete'}), PRO)).toBe('started')
+      expect(subscriptionTransitionOf(event('updated', 'active', {latest_invoice: 'in_1'}), PRO)).toBeNull()
     })
 
-    // A late event for an old customer can promote a user who pays under
-    // their linked one: the transition is that customer's (Codex on #1983).
-    it('names the customer the last tier change left linked, not the event\'s', () => {
-      expect(subscriptionTransition([{tier: 'promote', from: 'cus_old', to: 'cus_linked'}]).customer).toBe('cus_linked')
+    it('ends on a crossing out of entitling, and on deleted unless the user was already FREE', () => {
+      expect(subscriptionTransitionOf(event('updated', 'unpaid', {status: 'past_due'}), PRO)).toBe('ended')
+      expect(subscriptionTransitionOf(event('deleted', 'canceled'), PRO, true)).toBe('ended')
+      expect(subscriptionTransitionOf(event('deleted', 'canceled'), PRO, null)).toBe('ended')
+      expect(subscriptionTransitionOf(event('deleted', 'canceled'), PRO, false)).toBeNull()
     })
 
-    it('is null for a failure before any write (no changes on the error)', () => {
-      expect(subscriptionTransition(undefined)).toBeNull()
+    it('ignores another price, an unhandled type, and a malformed event', () => {
+      expect(subscriptionTransitionOf(event('created', 'active'), 'price_other')).toBeNull()
+      expect(subscriptionTransitionOf({...event('created', 'active'), type: 'invoice.paid'}, PRO)).toBeNull()
+      expect(subscriptionTransitionOf({type: 'customer.subscription.created'}, PRO)).toBeNull()
+      expect(subscriptionTransitionOf(null, PRO)).toBeNull()
     })
   })
 

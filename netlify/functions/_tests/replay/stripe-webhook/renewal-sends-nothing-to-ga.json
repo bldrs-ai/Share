@@ -1,5 +1,5 @@
 {
-  "description": "A redelivered customer.subscription.created for a user already Pro writes nothing and sends nothing to GA, with GA configured: the transition was counted when it was written, and no unlisted request (no Checkout Session lookup, no Measurement Protocol POST) goes out.",
+  "description": "A renewal (customer.subscription.updated with no status in previous_attributes) for a Pro user sends nothing to GA, with GA configured: it is not its subscription's status transition. No unlisted request (no Checkout Session lookup, no Measurement Protocol POST) goes out.",
   "env": {
     "$fixture": "env/stripe-ga.json"
   },
@@ -12,7 +12,7 @@
     },
     "sign": "stripe",
     "body": {
-      "$fixture": "stripe/event.subscription.created.live.json"
+      "$fixture": "stripe/event.subscription.updated.live.json"
     }
   },
   "exchanges": [

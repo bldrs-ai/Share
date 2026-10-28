@@ -2,37 +2,38 @@
  * netlify/functions/_lib/subscriptionAnalytics.js
  * -----------------------------------------------
  * The funnel's "Subscribed" step, sent from the server: `subscription_started`
- * and `subscription_ended` go to GA4 through the Measurement Protocol when
- * stripe-webhook moves a user's Auth0 tier. Before this, only the browser
- * sent them (on the pendingReauth token, src/privacy/subscriptionTracking.js),
- * so a subscription that started or ended while the app wasn't open — or by a
- * user who never came back — was never counted. design/new/quotas.md
- * §"Server-side subscription events" is the design.
+ * and `subscription_ended` go to GA4 through the Measurement Protocol from
+ * stripe-webhook. Before this, only the browser sent them (on the
+ * pendingReauth token, src/privacy/subscriptionTracking.js), so a subscription
+ * that started or ended while the app wasn't open — or by a user who never
+ * came back — was never counted. design/new/quotas.md §"Server-side
+ * subscription events" is the design.
  *
- * WHEN. On the tier writes `_lib/subscriptions.js#settleUser` makes, and only
- * on those: FREE→PRO is `subscription_started`, PRO→FREE is
- * `subscription_ended`. That rule writes only on a tier CHANGE, read from
- * Auth0's stored value, so a redelivered or duplicate Stripe event — which
- * finds the tier already right — writes nothing and sends nothing. The one
- * definition of "transition" is the entitlement rule's own; there is no second
- * dedupe here to drift from it.
+ * WHEN: once per SUBSCRIPTION status transition, read off the Stripe event
+ * itself (`subscriptionTransitionOf`). Not off the Auth0 tier write: one
+ * checkout sends `customer.subscription.created` and `.updated` seconds
+ * apart, both deliveries can read FREE and both write PRO, and GA4 never
+ * dedupes (Codex P1 on #1983; owner's call, 2026-10-28). Stripe describes
+ * each status change in exactly one event: `created` already entitling, or
+ * `updated` whose `previous_attributes.status` crossed the entitling line;
+ * `deleted` (or an `updated` out of entitling) for the end. Sent only when
+ * the webhook answers 200, since a non-2xx is redelivered and the
+ * redelivery sends it.
  *
  * WHO. The Measurement Protocol `client_id` is the paying browser's GA client
  * id, which the app passes through checkout as the pricing table's
  * `client-reference-id` (src/privacy/gaClientReference.js says why that field
  * and how it's encoded). The webhook finds it on the Checkout Sessions of the
- * customer that decided the transition — the entitled one for a start, the
- * linked one for an end — which is not always the event's customer
- * (`subscriptionTransition`). With none — consent withheld, GA blocked, a subscription made
- * outside the pricing table, or a key without Checkout Session read access —
- * the client id is a stable hash of the Stripe customer id, and the event says
- * so (`cid_source: 'fallback'`) and carries no `open_cid`, so it can't be
- * joined to a browser it doesn't belong to.
+ * event's customer. With none — consent withheld, GA blocked, a subscription
+ * made outside the pricing table, or a key without Checkout Session read
+ * access — the client id is a stable hash of the Stripe customer id, and the
+ * event says so (`cid_source: 'fallback'`) and carries no `open_cid`, so it
+ * can't be joined to a browser it doesn't belong to.
  *
- * NEVER BREAKS THE WEBHOOK. Stripe redelivers on any non-2xx, and a
- * redelivery after a tier write is exactly what the webhook's contract uses
- * 500s for (netlify-functions-testing.md §"stripe-webhook's response
- * contract"). So nothing here throws: GA is best-effort, each upstream call
+ * NEVER BREAKS THE WEBHOOK. Stripe redelivers on any non-2xx (the
+ * webhook's contract: netlify-functions-testing.md §"stripe-webhook's
+ * response contract"), and the redelivery would report the event again. So
+ * nothing here throws: GA is best-effort, each upstream call
  * has a short timeout of its own, and every failure is logged and swallowed.
  * It is awaited, not fired and forgotten, because Lambda freezes the process
  * when the handler returns.
@@ -47,6 +48,7 @@
 import {createHash} from 'node:crypto'
 import {decodeGaClientReference} from '../../../src/privacy/gaClientReference.js'
 import {SUBSCRIPTION_EVENT_NAMES} from '../../../src/privacy/subscriptionEventNames.js'
+import {ENTITLING_STRIPE_STATUSES, isEntitlingSubscription} from './subscriptions.js'
 
 
 export const MP_COLLECT_URL = 'https://www.google-analytics.com/mp/collect'
@@ -83,35 +85,53 @@ const EVENT_FOR_TRANSITION = {
 
 
 /**
- * The net tier transition in what `settleUser` wrote: 'started' when the user
- * went FREE→PRO, 'ended' for PRO→FREE, null when the tier was not written or
- * ended where it began (a promote corrected straight back by a demote in the
- * same delivery is not a subscription). A relink alone has `tier: null`.
+ * Whether this Stripe event is the one that moves its own Share Pro
+ * subscription into, or out of, an entitling status
+ * (`_lib/subscriptions.js#ENTITLING_STRIPE_STATUSES`). Each such change is
+ * described by exactly one event, so a burst of events for one checkout
+ * yields one 'started', however their deliveries overlap:
  *
- * `customer` is the customer that DECIDED it, which need not be the event's:
- * entitlement is read across the user's linked customer and the event's
- * (`_lib/subscriptions.js#entitlementAcross`), so a late event for an old
- * customer can promote a user who pays under the linked one (Codex on
- * #1983). It is the last tier change's `to`, the link that change left:
- * `linkFor` puts the entitled customer there on a promote, and leaves the
- * linked customer (whose lapse it is) in place on a demote.
+ *   started  `created` already entitling (a card checkout, a trial), or
+ *            `updated` entitling now whose `previous_attributes.status` was
+ *            not (incomplete → active after 3-D Secure; unpaid → active)
+ *   ended    `updated` not entitling now whose previous status was
+ *            (past_due → unpaid, → paused), or `deleted` — unless the user
+ *            was already FREE when it arrived (`wasPro === false`): a
+ *            deleted event carries no previous status, and a subscription
+ *            canceled after going unpaid already ended at `unpaid`
  *
- * @param {Array<{tier: ?string, to: ?string}>} [changes] settleUser's `changes`
- * @return {?{transition: string, customer: ?string}} transition is one of
- *   TRANSITIONS; null when there is none
+ * Anything else — a renewal, a plan or metadata change, past_due → active
+ * (entitling throughout), a price that isn't Share Pro — is null.
+ *
+ * @param {object} stripeEvent the verified Stripe event
+ * @param {?string} proPriceId SHARE_PRO_PRICE_ID
+ * @param {?boolean} [wasPro] the user's Auth0 tier before this delivery;
+ *   null when no user was found
+ * @return {?string} one of TRANSITIONS, or null
  */
-export function subscriptionTransition(changes) {
-  const tierChanges = (changes || []).filter((change) => change && change.tier)
-  if (tierChanges.length === 0) {
+export function subscriptionTransitionOf(stripeEvent, proPriceId, wasPro = null) {
+  const subscription = stripeEvent && stripeEvent.data && stripeEvent.data.object
+  const isPro = isEntitlingSubscription(subscription && {...subscription, status: 'active'}, proPriceId)
+  if (!isPro) {
     return null
   }
-  const last = tierChanges[tierChanges.length - 1]
-  const wasPro = tierChanges[0].tier === 'demote'
-  const isPro = last.tier === 'promote'
-  if (wasPro === isPro) {
-    return null
+  const entitlingNow = ENTITLING_STRIPE_STATUSES.has(subscription.status)
+  const previous = stripeEvent.data.previous_attributes
+  const statusChanged = Boolean(previous) && Object.prototype.hasOwnProperty.call(previous, 'status')
+  const wasEntitling = statusChanged && ENTITLING_STRIPE_STATUSES.has(previous.status)
+  switch (stripeEvent.type) {
+    case 'customer.subscription.created':
+      return entitlingNow ? TRANSITIONS.STARTED : null
+    case 'customer.subscription.updated':
+      if (!statusChanged || wasEntitling === entitlingNow) {
+        return null
+      }
+      return entitlingNow ? TRANSITIONS.STARTED : TRANSITIONS.ENDED
+    case 'customer.subscription.deleted':
+      return wasPro === false ? null : TRANSITIONS.ENDED
+    default:
+      return null
   }
-  return {transition: isPro ? TRANSITIONS.STARTED : TRANSITIONS.ENDED, customer: last.to || null}
 }
 
 
@@ -149,9 +169,8 @@ export function fallbackClientId(customerId) {
  * fallback.
  *
  * @param {object} stripe Stripe client
- * @param {string} customerId the customer that decided the transition
- * @param {?string} subscriptionId the event's subscription, when it is that
- *   customer's
+ * @param {string} customerId the event's customer
+ * @param {?string} subscriptionId the event's subscription
  * @param {number} [timeoutMs] at most GA_LOOKUP_TIMEOUT_MS
  * @return {Promise<{clientId: string, source: string}>} source is a CID_SOURCES value
  */
@@ -179,8 +198,7 @@ export async function resolveGaClientId(stripe, customerId, subscriptionId, time
 
 
 /**
- * @param {?object} subscription the event's Stripe subscription, when it
- *   belongs to the customer the transition is attributed to
+ * @param {?object} subscription the event's Stripe subscription
  * @param {?string} proPriceId SHARE_PRO_PRICE_ID
  * @param {{clientId: string, source: string}} attribution
  * @return {object} GA event params
@@ -252,29 +270,30 @@ function logInfo(message) {
 
 
 /**
- * Send the GA event for whatever tier transition this delivery wrote, if
- * any. Never throws (see the header).
+ * Send the GA event for the subscription transition this Stripe event
+ * describes, if any. Call it only when the webhook is answering 200. Never
+ * throws (see the header).
  *
  * @param {object} args
  * @param {object} args.stripe Stripe client
  * @param {object} args.stripeEvent the verified Stripe event
- * @param {Array<object>} [args.changes] settleUser's writes, including those
- *   made before a failure (the error's `changes`)
+ * @param {?boolean} [args.wasPro] the user's Auth0 tier before this delivery,
+ *   null when unknown (see subscriptionTransitionOf)
  * @param {object} [args.env] process.env
  * @param {number} [args.deadline] epoch ms by which the handler must have
  *   returned; the report skips, or shortens its timeouts, to stay clear of it
  * @return {Promise<string>} what happened: 'no_transition', 'unconfigured',
  *   'test_mode', 'no_time', 'sent' or 'failed' (for the log and the tests)
  */
-export async function reportSubscriptionTransition({stripe, stripeEvent, changes, env = process.env, deadline = Infinity}) {
+export async function reportSubscriptionTransition({stripe, stripeEvent, wasPro = null, env = process.env, deadline = Infinity}) {
   let label = 'subscription event'
   let config = null
   try {
-    const decided = subscriptionTransition(changes)
-    if (!decided) {
+    const transition = subscriptionTransitionOf(stripeEvent, env.SHARE_PRO_PRICE_ID, wasPro)
+    if (!transition) {
       return 'no_transition'
     }
-    const name = EVENT_FOR_TRANSITION[decided.transition]
+    const name = EVENT_FOR_TRANSITION[transition]
     label = `${name} for ${stripeEvent.type} ${stripeEvent.id}`
     config = gaMeasurementConfig(env)
     if (!config) {
@@ -291,23 +310,17 @@ export async function reportSubscriptionTransition({stripe, stripeEvent, changes
     // Time left for the report itself, keeping GA_RESERVE_MS for the
     // handler to return. Too little, and the transition goes unreported:
     // a missed event is the cheaper failure, a timed-out delivery is
-    // redelivered by Stripe.
+    // redelivered by Stripe — and would send it again.
     const budget = () => deadline - GA_RESERVE_MS - Date.now()
     if (deadline - Date.now() < GA_MIN_REMAINING_MS) {
       console.warn(`stripe-webhook: ${label} not sent to GA: ${Math.max(0, deadline - Date.now())} ms left of the function's budget`)
       return 'no_time'
     }
-    // Attribute to the customer that decided the transition. The event's
-    // own subscription — its checkout session, its price's interval — speaks
-    // for it only when it belongs to that customer; otherwise nothing from
-    // the payload is used.
-    const payload = (stripeEvent.data && stripeEvent.data.object) || {}
-    const customer = decided.customer || payload.customer
-    const subscription = payload.customer === customer ? payload : null
+    const subscription = stripeEvent.data.object
     // Half the budget at most for the lookup, so the POST always has the
     // rest (it falls back to the hashed id when the lookup times out).
     const lookupMs = Math.floor(Math.min(GA_LOOKUP_TIMEOUT_MS, budget() / 2))
-    const attribution = await resolveGaClientId(stripe, customer, subscription ? subscription.id || null : null, lookupMs)
+    const attribution = await resolveGaClientId(stripe, subscription.customer, subscription.id || null, lookupMs)
     const sendMs = Math.floor(Math.min(GA_SEND_TIMEOUT_MS, budget()))
     if (sendMs <= 0) {
       throw new Error('no time left for the Measurement Protocol request')
