@@ -215,7 +215,7 @@ jobs:
       # feeds `verify` and the timings annotation below.
       - name: Run Playwright tests
         env:
-          PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-results.json
+          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-results.json
         run: npx playwright test --config=tools/playwright.config.js --reporter=github,list,html,json --workers=2 --test-list=shard-tests.txt
 
       # Fails the shard if the tests that ran differ from the plan in either
