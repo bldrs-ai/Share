@@ -186,10 +186,17 @@ export default function BaseRoutes({testElt = null}) {
 
     if (process.env.NODE_ENV === 'development' && process.env.GITHUB_API_TOKEN) {
       setAccessToken(process.env.GITHUB_API_TOKEN)
-      setIsAuthResolved(true)
+      setIsAuthResolved(true, isAuthenticated)
     } else if (!isLoading && !isAuthenticated) {
-      setIsAuthResolved(true)
+      setIsAuthResolved(true, false)
     } else if (!isLoading && isAuthenticated) {
+      // isAuthResolved is NOT reset here. On an in-page (popup) sign-in it is
+      // already true from the signed-out pass above, and stays true while
+      // this fetch runs: the load gates that read it only need "the token,
+      // if any, is in", and resetting it would re-run every one of them.
+      // What marks the window is authResolvedFor, still `false` until the
+      // .finally below records this pass (store/RepositorySlice.js), which
+      // is what model-action analytics wait on (modelActionTracking.js).
       const tokenFetchOpts = {
         authorizationParams: {
           // audience: 'https://bldrs.us.auth0.com/userinfo',
@@ -270,7 +277,10 @@ export default function BaseRoutes({testElt = null}) {
           return false
         })
         .finally(() => {
-          setIsAuthResolved(true)
+          // For `true` even when the fetch failed (login_required): this pass
+          // is the signed-in state's settlement, and a reader waiting on it
+          // must not wait for one that never comes.
+          setIsAuthResolved(true, true)
         })
         .then((isSessionLive) => {
           if (isSessionLive) {

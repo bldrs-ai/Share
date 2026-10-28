@@ -39,7 +39,7 @@ jest.mock('../../privacy/analytics', () => ({
 beforeEach(() => {
   mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
   act(() => {
-    useStore.setState({isAuthResolved: true, appMetadata: {}})
+    useStore.setState({isAuthResolved: true, authResolvedFor: false, appMetadata: {}})
   })
 })
 
@@ -285,6 +285,9 @@ describe('ShareControl for a local upload (#705)', () => {
 
   it('reports signed_in and offers no Sign in for a signed-in user', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    // Settled for this signed-in user, or the gate's model_share would wait
+    // past the test and land in the next one's assertions.
+    act(() => useStore.setState({authResolvedFor: true}))
     const {findByTestId, queryByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
     fireEvent.click(await findByTestId('gated-share'))
     expect(await findByTestId('gated-help')).toBeInTheDocument()
@@ -332,6 +335,8 @@ describe('ShareControl for a local upload (#705)', () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     act(() => {
       useStore.setState({
+        // Settled for this signed-in user, as BaseRoutes records it.
+        authResolvedFor: true,
         modelPath: {
           kind: 'provider', provider: 'github', org: 'o', repo: 'r', branch: 'main', filepath: 'm.ifc',
           downloadUrl: new URL('https://raw.githubusercontent.com/o/r/main/m.ifc'),
@@ -385,7 +390,7 @@ describe('ShareControl for a local upload (#705)', () => {
       rerender(<ShareControl/>)
       act(() => {
         useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
-        useStore.getState().setIsAuthResolved(true)
+        useStore.getState().setIsAuthResolved(true, true)
       })
 
       await waitFor(() => expect(trackModelAction).toHaveBeenCalledTimes(1))
