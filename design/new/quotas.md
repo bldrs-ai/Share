@@ -127,11 +127,15 @@ connect Drive, Log out, the token and connection are gone).
 The slots this ledger holds also decide a signed-in free user's **GLB
 exports** (owner, 2026-10-27: "export your model as much as you want, same
 logic as views ... ultimately controlled by open slots, not export counts";
-[glb-export-premium.md](glb-export-premium.md) §4.8). A model holding a slot
-— a private model opened this week — exports as often as the user likes. A
-model holding none, including one that was free to VIEW (a local file, a
-public GitHub model, a hosted sample, a link-shared Drive file), **takes a
-slot on its first export**: the `pro-module` function appends `{key,
+[glb-export-premium.md](glb-export-premium.md) §4.8). A **public** model —
+one this page's rules don't count: public GitHub (the same server lookup,
+now shared from `netlify/functions/_lib/modelVisibility.js`), a Drive file
+the client finds link-shared (§"Drive visibility", the same client-trust
+model, sent as `X-Bldrs-Drive-Public`), a hosted sample, a generic URL —
+exports unlimited and never takes a slot (owner, 2026-10-28). A model
+holding a slot — a private model opened this week — has unlimited export
+too. A private model or a **local file** holding none **takes a slot on its
+first export**: the `pro-module` function appends `{key,
 loadedAt, via: 'export'}` to this same `usageQuota.loads` list, with
 record-load's own write, before it hands over the exporter. With every slot
 holding another model the export is refused (403 `no_free_model_slot`). So
@@ -143,7 +147,7 @@ Two consequences for this ledger:
 - It now holds keys that record-load would never write: local-file keys
   (`<appPrefix>/v/local-only/<uuid>.<ext>`, the key the viewer already uses
   for local-only models and the one the `meterLocalFiles` switch would
-  count) and public models' keys. record-load just dedupes against them —
+  count). record-load just dedupes against them —
   reopening such a model is `alreadyCounted` — and the `QuotaBadge` counts
   them like any other slot.
 - The export key must equal the open's key exactly
@@ -483,7 +487,7 @@ keep it simple." So the window went from 30 days to 7, and the export window
 became `ROLLING_WINDOW_DAYS` rather than a second literal 7. On 2026-10-27
 the export count went altogether: exports use these slots
 (§"Exports use the same slots"), and the pricing page reads "2 private models
-a week — open, share and export them as often as you like" (§"Pricing copy").
+a week — unlimited open, share and export" (§"Pricing copy").
 
 **Existing ledgers at the switch.** Nothing is migrated: the ledgers store
 `loadedAt`, not an expiry, so the new window applies to old rows on the next
@@ -514,7 +518,7 @@ drift from what is enforced, by construction. `PLANS`
 (`marketing/src/lib/pricingPlans.mjs`) is the only place that copy lives, and it
 **builds** the Free account allowance from the enforced constants:
 `FREE_PRIVATE_MODEL_LIMIT` / `ROLLING_WINDOW_DAYS` from `limits.js` ("2 private
-models a week — open, share and export them as often as you like"; the
+models a week — unlimited open, share and export"; the
 separate "2 GLB exports a week" line went with the export count on
 2026-10-27). Share Pro reads "Unlimited private models and exports".
 `PricingTiers.tsx`

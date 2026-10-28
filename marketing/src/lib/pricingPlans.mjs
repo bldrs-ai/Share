@@ -102,10 +102,10 @@ export function buildPlans({freePrivateModels, privateModelWindowDays}) {
           heading: 'Everything in Bldrs Share, plus:',
           features: [
             'Connect Google Drive and GitHub',
-            // Owner-proposed wording, 2026-10-27: one allowance, and what
-            // the user may do with a model inside it.
+            // Owner's wording, 2026-10-28: one allowance, and what the user
+            // may do with a model inside it, in the "unlimited X" style.
             `${freePrivateModels} private models a ${windowWord(privateModelWindowDays)}` +
-              ' — open, share and export them as often as you like',
+              ' — unlimited open, share and export',
           ],
         },
       ],

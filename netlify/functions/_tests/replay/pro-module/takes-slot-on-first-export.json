@@ -113,7 +113,7 @@
     "headers": {
       "content-type": "text/javascript; charset=utf-8",
       "cache-control": "private, no-store",
-      "x-bldrs-model-slots": "{\"limit\":2,\"used\":2,\"remaining\":0,\"nextFreeAt\":\"2026-11-01T10:00:00.000Z\",\"taken\":true}"
+      "x-bldrs-model-slots": "{\"limit\":2,\"used\":2,\"remaining\":0,\"nextFreeAt\":\"2026-11-01T10:00:00.000Z\",\"taken\":true,\"public\":false}"
     }
   }
 }

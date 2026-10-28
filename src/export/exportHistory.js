@@ -1,4 +1,5 @@
 import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
+import {DRIVE_PUBLIC_HEADER, MODEL_KEY_HEADER} from './exportSlots'
 
 
 /**
@@ -416,7 +417,7 @@ function unrecordedLocalRows(serverExports, localExports) {
  *   when its body had none
  */
 export async function recordExport(entry, sub, getAccessToken, refreshToken) {
-  const {id, key, format, bytes, title, cacheKeyArgs, schemaVer, options} = entry
+  const {id, key, format, bytes, title, cacheKeyArgs, schemaVer, options, drivePublic} = entry
   const local = {
     id: id || newLocalId(),
     key,
@@ -455,7 +456,9 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
       // The id goes UP so that it comes back down on the server's row: it is
       // what `withLocalArtifactFields` matches on, and without it two
       // exports of one model and format are indistinguishable in the merge.
-      body: JSON.stringify({id: local.id, key, format, bytes, title: title || null}),
+      // `drivePublic` is the client's word on a Drive file's sharing, which
+      // record-export takes for Drive alone, as pro-module does.
+      body: JSON.stringify({id: local.id, key, format, bytes, title: title || null, ...(drivePublic ? {drivePublic: true} : {})}),
     })
   } catch {
     // Offline, Auth0 unreachable, function down: the optimistic row stands.
@@ -520,13 +523,27 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
  * is `pro-module`'s. Anything short of a clean answer is null, which the tab
  * reads as "unknown" and shows no line for.
  *
+ * With a model named, the server also says whether it is public (exported
+ * unlimited, no slot) — only the server can tell for GitHub.
+ *
  * @param {Function} getAccessToken Returns a Promise of an Auth0 access token
- * @return {Promise<?{tier: string, modelSlots: ?object}>} null when unknown
+ * @param {object} [model]
+ * @param {?string} [model.modelKey] The model on screen's slot key
+ * @param {boolean} [model.drivePublic] The client found that Drive file public
+ * @return {Promise<?{tier: string, modelSlots: ?object, isPublic: ?boolean}>}
+ *   null when unknown
  */
-export async function fetchModelSlots(getAccessToken) {
+export async function fetchModelSlots(getAccessToken, {modelKey = null, drivePublic = false} = {}) {
   try {
     const token = await getAccessToken()
-    const response = await fetch(RECORD_EXPORT_ENDPOINT, {headers: {Authorization: `Bearer ${token}`}})
+    const headers = {Authorization: `Bearer ${token}`}
+    if (modelKey) {
+      headers[MODEL_KEY_HEADER] = encodeURIComponent(modelKey)
+    }
+    if (drivePublic) {
+      headers[DRIVE_PUBLIC_HEADER] = '1'
+    }
+    const response = await fetch(RECORD_EXPORT_ENDPOINT, {headers})
     if (!response.ok) {
       return null
     }
@@ -534,7 +551,7 @@ export async function fetchModelSlots(getAccessToken) {
     if (!data || typeof data.tier !== 'string') {
       return null
     }
-    return {tier: data.tier, modelSlots: data.modelSlots ?? null}
+    return {tier: data.tier, modelSlots: data.modelSlots ?? null, isPublic: data.isPublic ?? null}
   } catch {
     return null
   }

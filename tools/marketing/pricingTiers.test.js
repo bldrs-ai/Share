@@ -24,10 +24,10 @@ import {PLANS, buildPlans} from '../../marketing/src/lib/pricingPlans.mjs'
 // change to how PLANS words it can't make this agree with itself.
 const WINDOW_WORDS = {7: 'week', 30: 'month'}
 const freePrivateModelsClaim = (n, days) => `${n} private models a ${WINDOW_WORDS[days]}`
-// The Free account's allowance line, whole: the wording the owner proposed
-// with the slot rule (2026-10-27).
+// The Free account's allowance line, whole: the owner's wording with the
+// slot rule (2026-10-28, "unlimited X").
 const freePrivateModelsLine = (n, days) =>
-  `${freePrivateModelsClaim(n, days)} — open, share and export them as often as you like`
+  `${freePrivateModelsClaim(n, days)} — unlimited open, share and export`
 const PRO_CLAIM = 'Unlimited private models and exports'
 
 // Local files are free and unmetered to view: any limit wording beside
@@ -138,9 +138,9 @@ describe('marketing pricing plans', () => {
     expect(ENFORCED).toEqual({models: '2 private models a week'})
   })
 
-  it('reads "2 private models a week — open, share and export them as often as you like", with no export count', () => {
+  it('reads "2 private models a week — unlimited open, share and export", with no export count', () => {
     expect(freePrivateModelsLine(FREE_PRIVATE_MODEL_LIMIT, ROLLING_WINDOW_DAYS))
-      .toBe('2 private models a week — open, share and export them as often as you like')
+      .toBe('2 private models a week — unlimited open, share and export')
     expect(featuresOf('Free account')).toContain(freePrivateModelsLine(FREE_PRIVATE_MODEL_LIMIT, ROLLING_WINDOW_DAYS))
     // The retired "2 GLB exports a week" line is gone, not reworded.
     expect(featuresOf('Free account').filter((feature) => /GLB exports/i.test(feature))).toEqual([])
@@ -181,7 +181,7 @@ describe('marketing pricing plans', () => {
   })
 
   it('fails an allowance line that no longer says its models export freely', () => {
-    expect(planProblems(editPlans(' — open, share and export them as often as you like', ''), ENFORCED))
+    expect(planProblems(editPlans(' — unlimited open, share and export', ''), ENFORCED))
       .toEqual(['Free account doesn\'t say its 2 private models a week export freely: "2 private models a week"'])
   })
 

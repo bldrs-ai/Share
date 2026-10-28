@@ -43,9 +43,12 @@ export type LedgerRow = {id?: string, free?: boolean, exportedAt?: string, key?:
   bytes?: number | null, format?: string}
 
 
+/** The slot line for a public model: unlimited export, no slot. */
+export const PUBLIC_CAPTION = 'Public model: unlimited export'
+
 /** The slot line for a model that already holds a slot. */
 export const HELD_CAPTION =
-  `This model holds one of your ${FREE_MODEL_SLOTS} free model slots: export it as often as you like`
+  `This model holds one of your ${FREE_MODEL_SLOTS} free model slots: unlimited export`
 
 
 /**
@@ -54,7 +57,7 @@ export const HELD_CAPTION =
  */
 export function takeCaption(remaining: number): string {
   return `Exporting takes one of your ${FREE_MODEL_SLOTS} free model slots (${remaining} left this week),` +
-    ' then export it as often as you like'
+    ' then unlimited export'
 }
 
 
@@ -73,7 +76,7 @@ export function fullCaption(formattedDate: string): string {
  */
 export function slotsFullHelpText(formattedDate: string): string {
   return `Your ${FREE_MODEL_SLOTS} free model slots for the last ${SLOT_WINDOW_DAYS} days hold other models.` +
-    ' A model with a slot exports as often as you like; this one needs a free slot.' +
+    ' A model with a slot, or a public one: unlimited export. This one needs a free slot.' +
     ` Your next slot frees up ${formattedDate}.`
 }
 

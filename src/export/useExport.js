@@ -14,6 +14,7 @@ import {
   modelRouteSource,
 } from '../privacy/analytics'
 import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
+import {isDriveModelPublic} from '../quota/driveExportVisibility'
 import {modelSlotKey} from '../quota/modelSlotKey'
 import {TIERS, getTier} from '../quota/quota'
 import useStore from '../store/useStore'
@@ -132,11 +133,15 @@ export default function useExport() {
     } else if (previous?.sub === user.sub && Array.isArray(previous.keys)) {
       keys = previous.keys
     }
-    if (heldKey && !keys.includes(heldKey)) {
+    let publicKeys = previous?.sub === user.sub && Array.isArray(previous.publicKeys) ? previous.publicKeys : []
+    if (heldKey && slots.public === true) {
+      // A public model: exported unlimited, holding no slot.
+      publicKeys = publicKeys.includes(heldKey) ? publicKeys : [...publicKeys, heldKey]
+    } else if (heldKey && !keys.includes(heldKey)) {
       keys = [...keys, heldKey]
     }
     const {limit, used, remaining, nextFreeAt} = slots
-    setModelSlots({sub: user.sub, limit, used, remaining, nextFreeAt: nextFreeAt ?? null, keys})
+    setModelSlots({sub: user.sub, limit, used, remaining, nextFreeAt: nextFreeAt ?? null, keys, publicKeys})
   }, [setModelSlots, user?.sub])
 
   const run = useCallback(async (formatId, options = {}, source = null) => {
@@ -155,7 +160,11 @@ export default function useExport() {
     // isn't locked meanwhile. The key itself resolves in the try below (a
     // URL model's is a digest, which is async). A "Download again" row
     // carries the key it was recorded under, which may be another model.
-    const {modelPath: runModelPath, appPrefix: runAppPrefix} = useStore.getState()
+    const {
+      modelPath: runModelPath,
+      appPrefix: runAppPrefix,
+      modelDriveDownload: runDriveDownload,
+    } = useStore.getState()
     // The normalized twin of export_model / export_failed{no_slot}
     // (design/new/quotas.md §"Analytics: normalized tier events"). Source is
     // the model on screen, snapshotted NOW: the event goes out after the
@@ -227,8 +236,12 @@ export default function useExport() {
       const modelKey = source?.key ||
         (await modelSlotKey(runModelPath, runAppPrefix)) ||
         window.location.pathname
-      const {namespace: proModule, slots} =
-        await loadProModule(format.moduleName, () => getAccessTokenSilently(TOKEN_PARAMS), modelKey)
+      // A Drive file's sharing is the client's word (the server can't see
+      // it), classified as its open's meter classifies it. A "Download
+      // again" row carries no download record, so it says nothing.
+      const drivePublic = source ? false : await isDriveModelPublic(runModelPath, runDriveDownload)
+      const {namespace: proModule, slots} = await loadProModule(
+        format.moduleName, () => getAccessTokenSilently(TOKEN_PARAMS), modelKey, {drivePublic})
       noteSlots(slots, modelKey)
       const bytes = new Uint8Array(await file.arrayBuffer())
       const {blob, filename, stats} = await proModule.exportArtifact({
@@ -259,6 +272,7 @@ export default function useExport() {
           // (exportHistory.js) — they are what "Download again" needs and
           // what the server has no use for.
           key: modelKey,
+          drivePublic,
           format: format.id,
           bytes: blob.size,
           title: basename(cacheKeyArgs.sourcePath),

@@ -8,6 +8,7 @@ import {
   HTTP_OK,
 } from '../net/http'
 import {
+  DRIVE_PUBLIC_HEADER,
   EXPORT_SLOT_MISSING_REASON,
   MODEL_KEY_HEADER,
   MODEL_SLOTS_HEADER,
@@ -22,6 +23,7 @@ import {FREE_PRIVATE_MODEL_LIMIT, isCountedByRouteKind} from '../quota/limits'
 import {isProSubscriptionStatus} from '../quota/proStatus'
 import {isLocalFileMeteringEnabled, pruneLoads} from '../quota/quota'
 import apiHandlersGithub from './api-handlers-github'
+import {mockIsPublicGhRepo, mockIsPublicModel} from './mockModelVisibility'
 import apiHandlersOpenrouter from './api-handlers-openrouter'
 
 
@@ -279,9 +281,7 @@ function netlifyHandlers() {
         // Heuristic: repo names containing "Public" (matching our sample
         // models like Momentum-Public) are treated as public; everything
         // else under /v/gh/ is private.
-        const repoName = ghMatch[2]
-        const isPublic = /Public/i.test(repoName)
-        quotable = !isPublic
+        quotable = !mockIsPublicGhRepo(ghMatch[2])
       }
 
       if (typeof window !== 'undefined') {
@@ -347,7 +347,7 @@ function netlifyHandlers() {
       }
 
       const body = await request.json().catch(() => ({}))
-      const {id, key, format, bytes, title} = body || {}
+      const {id, key, format, bytes, title, drivePublic} = body || {}
       if (typeof key !== 'string' || key.length === 0 ||
           typeof format !== 'string' || format.length === 0 ||
           !Number.isInteger(bytes) || bytes < 0) {
@@ -365,7 +365,7 @@ function netlifyHandlers() {
       // A free user's export must name a model holding a slot, as in the
       // function: the pro-module mock takes one before it serves.
       const slots = isMockPro() ? null : modelSlots(mockSlotLedger())
-      if (slots && !slots.keys.includes(key)) {
+      if (slots && !slots.keys.includes(key) && !mockIsPublicModel(key, drivePublic === true)) {
         return jsonMockResponse(HTTP_FORBIDDEN, {error: EXPORT_SLOT_MISSING_REASON, modelSlots: slots})
       }
 
@@ -390,9 +390,14 @@ function netlifyHandlers() {
       if (!/^Bearer\s+.+/i.test(auth)) {
         return jsonMockResponse(HTTP_AUTHORIZATION_REQUIRED, {error: 'missing_auth0_token'})
       }
-      return jsonMockResponse(HTTP_OK, isMockPro() ?
-        {tier: 'paid', modelSlots: null} :
-        {tier: 'free', modelSlots: modelSlots(mockSlotLedger())})
+      if (isMockPro()) {
+        return jsonMockResponse(HTTP_OK, {tier: 'paid', modelSlots: null, isPublic: null})
+      }
+      const modelKey = decodeModelKeyHeader(request.headers.get(MODEL_KEY_HEADER))
+      const isPublic = modelKey !== null && isModelKey(modelKey) ?
+        mockIsPublicModel(modelKey, request.headers.get(DRIVE_PUBLIC_HEADER) === '1') :
+        null
+      return jsonMockResponse(HTTP_OK, {tier: 'free', modelSlots: modelSlots(mockSlotLedger()), isPublic})
     }),
 
     // The dev copy the handler below proxies to. Declared so the built
@@ -435,6 +440,11 @@ function netlifyHandlers() {
           return jsonMockResponse(HTTP_BAD_REQUEST, {error: 'invalid_model_key'})
         }
         decision = exportSlotDecision(mockSlotLedger(), modelKey)
+        // A public model exports unlimited, no slot, as in the function.
+        if (decision.verdict !== 'held' &&
+            mockIsPublicModel(modelKey, request.headers.get(DRIVE_PUBLIC_HEADER) === '1')) {
+          decision = {verdict: 'public', slots: modelSlots(mockSlotLedger()), loads: null}
+        }
         if (decision.verdict === 'full') {
           return jsonMockResponse(HTTP_FORBIDDEN, {error: NO_FREE_SLOT_REASON, modelSlots: decision.slots})
         }
@@ -455,7 +465,8 @@ function netlifyHandlers() {
         if (decision.verdict === 'take') {
           setMockSlotLedger(decision.loads)
         }
-        headers[MODEL_SLOTS_HEADER] = slotsHeaderValue(decision.slots, decision.verdict === 'take')
+        headers[MODEL_SLOTS_HEADER] =
+          slotsHeaderValue(decision.slots, decision.verdict === 'take', decision.verdict === 'public')
       }
       return new Response(await built.text(), {status: HTTP_OK, headers})
     }),

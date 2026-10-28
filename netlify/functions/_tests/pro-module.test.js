@@ -232,30 +232,83 @@ describe('pro-module function', () => {
       expect(usageQuota.loads.map((row) => row.key)).toEqual([OTHER, LOCAL])
     })
 
-    it('takes a slot for a URL model under its digest key — what a presigned URL is exported as', async () => {
+    it('exports a URL model unlimited under its digest key, taking no slot even with slots full', async () => {
       // quota/modelSlotKey.js#urlModelKey: never the URL, which can run past
-      // MODEL_KEY_MAX_LENGTH and carries credentials.
+      // MODEL_KEY_MAX_LENGTH and carries credentials. A generic URL is one
+      // record-load never counts, so it is public.
       const urlKey = `/share/v/u/sha256-${'ab'.repeat(32)}`
-      mockAuth0({subscriptionStatus: 'free'})
-      axios.patch.mockResolvedValue({data: {}})
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo(OTHER, 2)]}})
 
       const res = await handler(getEvent({}, urlKey))
 
       expect(res.statusCode).toBe(200)
-      expect(axios.patch.mock.calls[0][1].app_metadata.usageQuota.loads.map((row) => row.key)).toEqual([urlKey])
+      expect(axios.patch).not.toHaveBeenCalled()
+      expect(JSON.parse(res.headers['X-Bldrs-Model-Slots'])).toMatchObject({public: true, taken: false})
     })
 
-    it('has a public GitHub model take a slot on its first export too, though viewing it is free', async () => {
-      mockAuth0({subscriptionStatus: 'free'})
-      axios.patch.mockResolvedValue({data: {}})
-      const publicModel = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
+    /**
+     * Answer api.github.com's unauthenticated repo lookup — the one
+     * record-load makes (_lib/modelVisibility.js) — with `status`.
+     *
+     * @param {number} status 200 public, 404 private or missing
+     */
+    function mockGithubRepoStatus(status) {
+      const authGet = axios.get.getMockImplementation()
+      axios.get.mockImplementation((url, config) => (url.startsWith('https://api.github.com/repos/') ?
+        Promise.resolve({status, data: {}}) :
+        authGet(url, config)))
+    }
+
+    // Owner decision on Share#1980: public models export unlimited, no slot.
+    it('exports a public GitHub model with both slots full, taking none — the server looks it up', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo(OTHER, 2)]}})
+      mockGithubRepoStatus(200)
+      const publicModel = '/share/v/gh/bldrs-ai/public-pm-1/main/ifc/misc/box.ifc'
 
       const res = await handler(getEvent({}, publicModel))
 
       expect(res.statusCode).toBe(200)
-      expect(axios.patch.mock.calls[0][1].app_metadata.usageQuota.loads.map((row) => row.key)).toEqual([publicModel])
-      // No repo lookup: what is free to view is not free to export.
-      expect(axios.get.mock.calls.map(([url]) => url).filter((url) => url.includes('api.github.com'))).toEqual([])
+      expect(res.body).toBe(MODULE_SOURCE)
+      expect(axios.get).toHaveBeenCalledWith('https://api.github.com/repos/bldrs-ai/public-pm-1', expect.anything())
+      expect(axios.patch).not.toHaveBeenCalled()
+      expect(JSON.parse(res.headers['X-Bldrs-Model-Slots'])).toMatchObject({used: 2, public: true, taken: false})
+    })
+
+    it('refuses a private GitHub model with both slots full, per the same lookup', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo(OTHER, 2)]}})
+      mockGithubRepoStatus(404)
+
+      const res = await handler(getEvent({}, '/share/v/gh/acme/private-pm-2/main/tower.ifc'))
+
+      expect(res.statusCode).toBe(403)
+      expect(JSON.parse(res.body).error).toBe('no_free_model_slot')
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it('exports a hosted sample unlimited, with no lookup and no slot', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo(OTHER, 2)]}})
+
+      const res = await handler(getEvent({}, HOSTED))
+
+      expect(res.statusCode).toBe(200)
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it('takes the client\'s word for a Drive file\'s sharing, and only for Drive', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo('/share/v/g/x', 2)]}})
+      const withDrivePublic = (key) => {
+        const event = getEvent({}, key)
+        event.headers['x-bldrs-drive-public'] = '1'
+        return event
+      }
+
+      // Link-shared, as the client classified it: public.
+      expect((await handler(withDrivePublic('/share/v/g/link-shared-file'))).statusCode).toBe(200)
+      // Without the word: private, and the slots are full.
+      expect((await handler(getEvent({}, '/share/v/g/link-shared-file'))).statusCode).toBe(403)
+      // The flag does nothing for a local file, which always takes a slot.
+      expect((await handler(withDrivePublic(LOCAL))).statusCode).toBe(403)
+      expect(axios.patch).not.toHaveBeenCalled()
     })
 
     it('refuses a third model with both slots taken by others, writing nothing and reading no module', async () => {
@@ -289,7 +342,7 @@ describe('pro-module function', () => {
       mockAuth0({subscriptionStatus: 'free', exports: [oldFreeExportDaysAgo(1), oldFreeExportDaysAgo(2)]})
       axios.patch.mockResolvedValue({data: {}})
 
-      const res = await handler(getEvent({}, HOSTED))
+      const res = await handler(getEvent({}, LOCAL))
 
       expect(res.statusCode).toBe(200)
       // ...and they are not touched, nor counted toward a slot.
@@ -325,7 +378,7 @@ describe('pro-module function', () => {
       mockAuth0({subscriptionStatus: 'free'})
       fs.readFile.mockRejectedValue(new Error('ENOENT'))
 
-      const res = await handler(getEvent())
+      const res = await handler(getEvent({}, LOCAL))
 
       expect(res.statusCode).toBe(404)
       expect(axios.patch).not.toHaveBeenCalled()
@@ -338,7 +391,7 @@ describe('pro-module function', () => {
       axios.patch.mockRejectedValue(Object.assign(new Error('mgmt write failed'), {response: {status: 500}}))
       const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
 
-      const res = await handler(getEvent())
+      const res = await handler(getEvent({}, LOCAL))
 
       expect(res.statusCode).toBe(502)
       expect(JSON.parse(res.body)).toMatchObject({error: 'model_slot_write_failed', step: 'user_patch', upstreamStatus: 500})

@@ -740,7 +740,7 @@ describe('ExportSection', () => {
 
       // The slot key resolves async (quota/modelSlotKey.js).
       const line = await findByTestId('export-model-slots')
-      expect(line).toHaveTextContent('This model holds one of your 2 free model slots: export it as often as you like')
+      expect(line).toHaveTextContent('This model holds one of your 2 free model slots: unlimited export')
       expect(line).toHaveAttribute('data-held', 'true')
       // Both slots are taken, but one of them is this model's: no gate.
       expect(queryByTestId('gated-export-pro')).toBeNull()
@@ -756,7 +756,7 @@ describe('ExportSection', () => {
       const {getByTestId, queryByTestId, findByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
       expect(await findByTestId('export-model-slots')).toHaveTextContent(
-        'Exporting takes one of your 2 free model slots (1 left this week), then export it as often as you like')
+        'Exporting takes one of your 2 free model slots (1 left this week), then unlimited export')
       expect(getByTestId('export-model-slots')).toHaveAttribute('data-held', 'false')
       expect(queryByTestId('gated-export-pro')).toBeNull()
       fireEvent.click(getByTestId('export-glb-button'))
@@ -781,6 +781,7 @@ describe('ExportSection', () => {
       expect(getByTestId('gated-help')).toHaveTextContent('Free model slots full')
       expect(getByTestId('gated-help')).toHaveTextContent(
         'Your 2 free model slots for the last 7 days hold other models.')
+      expect(getByTestId('gated-help')).toHaveTextContent('Pro: unlimited export.')
       expect(getByTestId('gated-help')).toHaveTextContent(`Your next slot frees up ${next}.`)
       // The funnel's series carries on under the same reason.
       expect(gtagEventWithCid).toHaveBeenCalledWith('export_gated', {reason: 'free'})
@@ -791,6 +792,31 @@ describe('ExportSection', () => {
       expect(goToSubscription).toHaveBeenCalledWith(
         expect.objectContaining({stripeCustomerId: null, userEmail: 'a@b.c', from: 'export'}))
       expect(mockRun).not.toHaveBeenCalled()
+    })
+
+    // Owner decision on Share#1980: a public model exports unlimited, no
+    // slot — so full slots never gate it.
+    it('says a public model exports unlimited, and never gates it, however full the slots', async () => {
+      const publicRoute = handleRoute('/share/v/gh', {'*': 'm.ifc', 'org': 'bldrs-ai', 'repo': 'Momentum-Public', 'branch': 'main'})
+      useExportSlots.mockReturnValue({
+        limit: 2, used: 2, remaining: 0, nextFreeAt: NEXT_FREE_AT, keys: OTHERS,
+        publicKeys: ['/share/v/gh/bldrs-ai/Momentum-Public/main/m.ifc'],
+      })
+      await setStore(ARTIFACT, FREE)
+      await act(() => {
+        useStore.getState().setAppPrefix('/share')
+        useStore.getState().setModelPath(publicRoute)
+      })
+      const {getByTestId, findByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+      const line = await findByTestId('export-model-slots')
+      expect(line).toHaveTextContent('Public model: unlimited export')
+      expect(line).toHaveAttribute('data-public', 'true')
+      expect(queryByTestId('gated-export-pro')).toBeNull()
+      // The hook was asked about this very model, so the server classifies it.
+      expect(useExportSlots).toHaveBeenLastCalledWith('/share/v/gh/bldrs-ai/Momentum-Public/main/m.ifc', false)
+      fireEvent.click(getByTestId('export-glb-button'))
+      expect(mockRun).toHaveBeenCalledTimes(1)
     })
 
     it('finds a URL model in its slot by the digest key, never the URL', async () => {

@@ -35,6 +35,7 @@ import {
   modelRouteSource,
 } from '../../privacy/analytics'
 import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
+import {isDriveModelPublic} from '../../quota/driveExportVisibility'
 import {modelSlotKey} from '../../quota/modelSlotKey'
 import {ROLLING_WINDOW_DAYS, TIERS, getTier} from '../../quota/quota'
 import useStore from '../../store/useStore'
@@ -318,33 +319,38 @@ export default function ExportSection() {
   const sizes = estimate?.sizes ?? null
 
   const isPro = getTier(appMetadata, isAuthenticated) === TIERS.PAID
-  // The free tier's model slots as the server last stated them, or null
-  // (Pro, anonymous, or not known yet). Unknown is NOT gated: the click goes
-  // to `pro-module`, which decides for itself, and a refusal there fills
-  // this in. The model is named by the same slot key `useExport` sends.
-  const slots = useExportSlots()
   const isFreeTier = isAuthenticated && !isPro
-  // The model on screen's slot key, resolved async (a URL model's is a
-  // digest; quota/modelSlotKey.js). Until it resolves there is no slot line
-  // and no slots-full gate: a model that holds a slot must never flash the
-  // gate while its key is still being worked out.
-  const [slotKey, setSlotKey] = useState(null)
+  // The model on screen, as an export names it to the server: its slot key,
+  // resolved async (a URL model's is a digest; quota/modelSlotKey.js), and
+  // for a Drive file whether the client finds it public
+  // (quota/driveExportVisibility.js). Until the key resolves there is no
+  // slot line and no slots-full gate: a model that may export freely must
+  // never flash the gate while it is still being worked out.
+  const modelDriveDownload = useStore((state) => state.modelDriveDownload)
+  const [slotModel, setSlotModel] = useState(null)
   useEffect(() => {
     if (!isFreeTier || !modelPath) {
-      setSlotKey((prev) => (prev === null ? prev : null))
+      setSlotModel((prev) => (prev === null ? prev : null))
       return undefined
     }
     let isCancelled = false
-    modelSlotKey(modelPath, appPrefix).then(
-      (key) => !isCancelled && setSlotKey(key),
-      () => !isCancelled && setSlotKey(null))
+    Promise.all([modelSlotKey(modelPath, appPrefix), isDriveModelPublic(modelPath, modelDriveDownload)]).then(
+      ([key, drivePublic]) => !isCancelled && setSlotModel(key === null ? null : {key, drivePublic}),
+      () => !isCancelled && setSlotModel(null))
     return () => {
       isCancelled = true
     }
-  }, [isFreeTier, modelPath, appPrefix])
+  }, [isFreeTier, modelPath, appPrefix, modelDriveDownload])
+  const slotKey = slotModel?.key ?? null
+  // The free tier's model slots as the server last stated them, and whether
+  // this model is public, or null (Pro, anonymous, or not known yet).
+  // Unknown is NOT gated: the click goes to `pro-module`, which decides for
+  // itself, and a refusal there fills this in.
+  const slots = useExportSlots(slotKey, slotModel?.drivePublic ?? false)
   const isSlotKnown = Boolean(slots) && slotKey !== null
+  const isModelPublic = isSlotKnown && (slots.publicKeys || []).includes(slotKey)
   const isModelInSlot = isSlotKnown && slots.keys.includes(slotKey)
-  const isSlotsFull = isFreeTier && isSlotKnown && !isModelInSlot && slots.remaining === 0
+  const isSlotsFull = isFreeTier && isSlotKnown && !isModelPublic && !isModelInSlot && slots.remaining === 0
   const nextFreeSlot = formatNextFreeSlot(slots?.nextFreeAt)
   // The loader publishes this once the artifact is actually in OPFS — on a
   // cache miss when the writer finishes, on a cache hit right away. Formats
@@ -882,8 +888,9 @@ export default function ExportSection() {
          data-testid='export-model-slots'
          data-remaining={slots.remaining}
          data-held={isModelInSlot ? 'true' : 'false'}
+         data-public={isModelPublic ? 'true' : 'false'}
        >
-         {slotCaption(slots, isModelInSlot, nextFreeSlot)}
+         {slotCaption(slots, isModelInSlot, nextFreeSlot, isModelPublic)}
        </Typography>}
     </Stack>
   )
@@ -891,22 +898,27 @@ export default function ExportSection() {
 
 
 /**
- * The slot line under a free user's Export button: whether this model holds
- * one of their model slots, and if not, whether its first export can take
- * one.
+ * The slot line under a free user's Export button: whether this model is
+ * public (unlimited, no slot), holds one of their model slots, and if not,
+ * whether its first export can take one. Worded "unlimited X" (owner,
+ * 2026-10-28).
  *
  * @param {{limit: number, remaining: number}} slots
  * @param {boolean} isModelInSlot
  * @param {?string} nextFreeSlot formatted `nextFreeAt`, or null
+ * @param {boolean} [isModelPublic]
  * @return {string}
  */
-export function slotCaption({limit, remaining}, isModelInSlot, nextFreeSlot) {
+export function slotCaption({limit, remaining}, isModelInSlot, nextFreeSlot, isModelPublic = false) {
+  if (isModelPublic) {
+    return 'Public model: unlimited export'
+  }
   if (isModelInSlot) {
-    return `This model holds one of your ${limit} free model slots: export it as often as you like`
+    return `This model holds one of your ${limit} free model slots: unlimited export`
   }
   if (remaining > 0) {
     return `Exporting takes one of your ${limit} free model slots (${remaining} left this week),` +
-      ' then export it as often as you like'
+      ' then unlimited export'
   }
   // Full: the line also says when that changes; the help that explains it is
   // one click away on the gated button.
@@ -924,9 +936,9 @@ export function slotCaption({limit, remaining}, isModelInSlot, nextFreeSlot) {
  */
 export function slotsFullHelp(limit, nextFreeSlot) {
   const full = `Your ${limit} free model slots for the last ${ROLLING_WINDOW_DAYS} days hold other models.` +
-    ' A model with a slot exports as often as you like; this one needs a free slot.'
+    ' A model with a slot, or a public one: unlimited export. This one needs a free slot.'
   const next = nextFreeSlot ? ` Your next slot frees up ${nextFreeSlot}.` : ''
-  return `${full}${next} Pro exports are unlimited.`
+  return `${full}${next} Pro: unlimited export.`
 }
 
 

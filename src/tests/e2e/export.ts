@@ -1,6 +1,7 @@
 import {Page, Route, expect} from '@playwright/test'
 import {randomUUID} from 'crypto'
 import {
+  DRIVE_PUBLIC_HEADER,
   EXPORT_SLOT_MISSING_REASON,
   MODEL_KEY_HEADER,
   MODEL_SLOTS_HEADER,
@@ -11,6 +12,7 @@ import {
   modelSlots,
   slotsHeaderValue,
 } from '../../export/exportSlots'
+import {mockIsPublicModel} from '../../__mocks__/mockModelVisibility'
 import {isProSubscriptionStatus} from '../../quota/proStatus'
 import {estimateKey, settledEstimateBytes} from './exportEstimate'
 import {captureGlbLogs, waitForGlbLog} from './glbLogs'
@@ -681,7 +683,14 @@ export async function routeProModule(page: Page) {
         await fulfillJson(route, HTTP_BAD_REQUEST, {error: modelKey === null ? 'missing_model_key' : 'invalid_model_key'})
         return
       }
+      const isDrivePublic = route.request().headers()[DRIVE_PUBLIC_HEADER.toLowerCase()] === '1'
       const decision = exportSlotDecision(slots, modelKey)
+      const isPublic = decision.verdict !== 'held' && mockIsPublicModel(modelKey, isDrivePublic)
+      if (isPublic) {
+        headers[MODEL_SLOTS_HEADER] = slotsHeaderValue(modelSlots(slots), false, true)
+        await route.fulfill({path: PRO_MODULE_FILE, contentType: 'text/javascript; charset=utf-8', headers})
+        return
+      }
       if (decision.verdict === 'full') {
         await fulfillJson(route, HTTP_FORBIDDEN, {error: NO_FREE_SLOT_REASON, modelSlots: decision.slots})
         return
@@ -713,11 +722,18 @@ export async function routeRecordExport(page: Page) {
     const {isPro, ledger, slots} = await mockAccount(page)
     const held = modelSlots(slots)
     if (route.request().method() === 'GET') {
-      await fulfillJson(route, HTTP_OK, isPro ? {tier: 'paid', modelSlots: null} : {tier: 'free', modelSlots: held})
+      const requestHeaders = route.request().headers()
+      const modelKey = decodeModelKeyHeader(requestHeaders[MODEL_KEY_HEADER.toLowerCase()])
+      const isPublic = modelKey !== null && isModelKey(modelKey) ?
+        mockIsPublicModel(modelKey, requestHeaders[DRIVE_PUBLIC_HEADER.toLowerCase()] === '1') :
+        null
+      await fulfillJson(route, HTTP_OK, isPro ?
+        {tier: 'paid', modelSlots: null, isPublic: null} :
+        {tier: 'free', modelSlots: held, isPublic})
       return
     }
     const body = route.request().postDataJSON() ?? {}
-    if (!isPro && !held.keys.includes(body.key)) {
+    if (!isPro && !held.keys.includes(body.key) && !mockIsPublicModel(body.key, body.drivePublic === true)) {
       await fulfillJson(route, HTTP_FORBIDDEN, {error: EXPORT_SLOT_MISSING_REASON, modelSlots: held})
       return
     }

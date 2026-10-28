@@ -1,5 +1,6 @@
 import {
   HELD_CAPTION,
+  PUBLIC_CAPTION,
   SLOT_WINDOW_MS,
   expectedNextFreeSlot,
   fullCaption,
@@ -17,14 +18,15 @@ const DAY_MS = 24 * 3600 * 1000
 
 describe('live/freeAllowance', () => {
   it('words the slot line and the gate the way the Export tab does', () => {
-    expect(HELD_CAPTION).toBe('This model holds one of your 2 free model slots: export it as often as you like')
+    expect(PUBLIC_CAPTION).toBe('Public model: unlimited export')
+    expect(HELD_CAPTION).toBe('This model holds one of your 2 free model slots: unlimited export')
     expect(takeCaption(2)).toBe(
-      'Exporting takes one of your 2 free model slots (2 left this week), then export it as often as you like')
+      'Exporting takes one of your 2 free model slots (2 left this week), then unlimited export')
     expect(fullCaption('Fri, Oct 31, 9:00 AM'))
       .toBe('Your 2 free model slots this week hold other models · next one frees up Fri, Oct 31, 9:00 AM')
     expect(slotsFullHelpText('Fri, Oct 31, 9:00 AM')).toBe(
-      'Your 2 free model slots for the last 7 days hold other models. A model with a slot exports as often as ' +
-      'you like; this one needs a free slot. Your next slot frees up Fri, Oct 31, 9:00 AM.')
+      'Your 2 free model slots for the last 7 days hold other models. A model with a slot, or a public one: ' +
+      'unlimited export. This one needs a free slot. Your next slot frees up Fri, Oct 31, 9:00 AM.')
   })
 
   describe('parseSlotsHeader', () => {

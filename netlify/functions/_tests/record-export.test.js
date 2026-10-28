@@ -288,6 +288,27 @@ describe('record-export function', () => {
     })
   })
 
+  describe('a free user exporting a PUBLIC model (no slot)', () => {
+    it('records a public GitHub model without a slot, by the server\'s own lookup', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slot(OTHER, 1)]}})
+      const authGet = axios.get.getMockImplementation()
+      axios.get.mockImplementation((url, config) => (url.startsWith('https://api.github.com/repos/') ?
+        Promise.resolve({status: 200, data: {}}) : authGet(url, config)))
+
+      const res = await handler(getEvent({key: '/share/v/gh/bldrs-ai/re-public-1/main/box.ifc'}))
+
+      expect(res.statusCode).toBe(200)
+      expect(Object.keys(patchedAppMetadata())).toEqual(['exports'])
+    })
+
+    it('records a Drive file the client found public, and refuses one it did not', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: []}})
+
+      expect((await handler(getEvent({key: '/share/v/g/shared-file', drivePublic: true}))).statusCode).toBe(200)
+      expect((await handler(getEvent({key: '/share/v/g/shared-file'}))).statusCode).toBe(403)
+    })
+  })
+
   describe('GET: the caller\'s model slots', () => {
     const getSlots = () => handler({httpMethod: 'GET', headers: {authorization: 'Bearer user-token'}})
 
@@ -303,7 +324,26 @@ describe('record-export function', () => {
       // counts for nothing.
       expect(body.modelSlots).toMatchObject({limit: 2, used: 1, remaining: 1, keys: [KEY]})
       expect(Date.parse(body.modelSlots.nextFreeAt)).toBeGreaterThan(Date.now())
+      // No model named: nothing to say about one.
+      expect(body.isPublic).toBeNull()
       expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it('says whether the model on screen is public: hosted yes, local no, Drive on the client\'s word', async () => {
+      mockAuth0({})
+      const ask = async (key, drivePublic = false) => {
+        const headers = {'authorization': 'Bearer user-token', 'x-bldrs-model-key': encodeURIComponent(key)}
+        if (drivePublic) {
+          headers['x-bldrs-drive-public'] = '1'
+        }
+        return JSON.parse((await handler({httpMethod: 'GET', headers})).body).isPublic
+      }
+
+      expect(await ask('/share/v/p/index.ifc')).toBe(true)
+      expect(await ask('/share/v/local-only/abc.ifc')).toBe(false)
+      expect(await ask('/share/v/local-only/abc.ifc', true)).toBe(false)
+      expect(await ask('/share/v/g/file', true)).toBe(true)
+      expect(await ask('/share/v/g/file')).toBe(false)
     })
 
     it.each(['sharePro', 'shareProPendingReauth'])('reports no slots for %s, which is unlimited', async (status) => {
@@ -311,7 +351,7 @@ describe('record-export function', () => {
 
       const body = JSON.parse((await getSlots()).body)
 
-      expect(body).toEqual({tier: 'paid', modelSlots: null})
+      expect(body).toEqual({tier: 'paid', modelSlots: null, isPublic: null})
     })
 
     it('401s with no bearer token', async () => {

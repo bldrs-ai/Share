@@ -109,6 +109,16 @@ describe('proModuleLoader', () => {
     }})
   })
 
+  it('passes on the client\'s word that a Drive file is public, and never shares that request with one that is not', async () => {
+    await Promise.all([
+      loadProModule('glbExport', getAccessToken, '/share/v/g/f', {drivePublic: true}),
+      loadProModule('glbExport', getAccessToken, '/share/v/g/f'),
+    ])
+
+    expect(fetchMock.mock.calls[0][1].headers['X-Bldrs-Drive-Public']).toBe('1')
+    expect(fetchMock.mock.calls[1][1].headers['X-Bldrs-Drive-Public']).toBeUndefined()
+  })
+
   describe('a free-tier delivery (granted for one model)', () => {
     it('reports the slots the server sent with it', async () => {
       fetchMock.mockResolvedValue(response(HTTP_OK, MODULE_SOURCE, FREE_DELIVERY))

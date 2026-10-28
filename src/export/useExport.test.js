@@ -145,7 +145,7 @@ describe('useExport', () => {
     // it — this is what makes the store hand-off worth having.
     expect(readModelByPathFromOPFS).toHaveBeenCalledWith(
       `ifc/misc/box.${SCHEMA_VER}.glb`, 'sha123', 'gh-bldrs-ai', 'test-models', 'main')
-    expect(loadProModule).toHaveBeenCalledWith('glbExport', expect.any(Function), expect.any(String))
+    expect(loadProModule).toHaveBeenCalledWith('glbExport', expect.any(Function), expect.any(String), {drivePublic: false})
     expect(exportArtifact).toHaveBeenCalledWith({
       bytes: ARTIFACT_BYTES,
       options: {sourceBasename: 'box.ifc', stripBldrsMetadata: false},
@@ -557,6 +557,7 @@ describe('useExport', () => {
     expect(recordExport).toHaveBeenCalledWith(
       {
         key: '/share/v/p/index.ifc',
+        drivePublic: false,
         format: 'glb',
         bytes: EXPORTED.blob.size,
         title: 'box.ifc',
@@ -822,7 +823,7 @@ describe('useExport', () => {
         await result.current.run('glb', {})
       })
 
-      expect(loadProModule).toHaveBeenCalledWith('glbExport', expect.any(Function), LOCAL_KEY)
+      expect(loadProModule).toHaveBeenCalledWith('glbExport', expect.any(Function), LOCAL_KEY, {drivePublic: false})
       expect(recordExport.mock.calls[0][0].key).toBe(LOCAL_KEY)
       expect(gtagEventWithCid).toHaveBeenCalledWith('export_model',
         expect.objectContaining({free_export: true, slot_taken: true}))
@@ -898,7 +899,21 @@ describe('useExport', () => {
 
       expect(useStore.getState().modelSlots).toEqual({
         sub: 'github|1234567', limit: 2, used: 1, remaining: 1, nextFreeAt: TAKEN.nextFreeAt, keys: [LOCAL_KEY],
+        publicKeys: [],
       })
+    })
+
+    it('files a public model\'s delivery under publicKeys, not as a held slot', async () => {
+      loadProModule.mockResolvedValue({namespace: {exportArtifact}, slots: {...TAKEN, taken: false, public: true}})
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(useStore.getState().modelSlots).toMatchObject({keys: [], publicKeys: [LOCAL_KEY]})
+      expect(gtagEventWithCid).toHaveBeenCalledWith('export_model',
+        expect.objectContaining({free_export: true, slot_taken: false}))
     })
 
     it('then takes the slots record-export reports, keys and all', async () => {
@@ -910,7 +925,7 @@ describe('useExport', () => {
         await result.current.run('glb', {})
       })
 
-      expect(useStore.getState().modelSlots).toEqual({sub: 'github|1234567', ...afterRecord})
+      expect(useStore.getState().modelSlots).toEqual({sub: 'github|1234567', ...afterRecord, publicKeys: []})
     })
 
     it('reports a re-export of a model already holding a slot as not taking one', async () => {
@@ -948,7 +963,7 @@ describe('useExport', () => {
       expect(useStore.getState().snackMessage.text).toBe(noFreeSlotMessage(full))
       expect(useStore.getState().snackMessage.text)
         .toMatch(/^Your 2 free model slots for this week are taken by other models\. The next one frees up /)
-      expect(useStore.getState().modelSlots).toEqual({sub: 'github|1234567', ...full})
+      expect(useStore.getState().modelSlots).toEqual({sub: 'github|1234567', ...full, publicKeys: []})
       expect(gtagEventWithCid).toHaveBeenCalledWith('export_failed', {format: 'glb', reason: 'no_slot'})
       // The tier was right; there is no stale badge to refresh.
       expect(getAccessTokenSilently).not.toHaveBeenCalledWith(expect.objectContaining({cacheMode: 'off'}))
@@ -1003,7 +1018,7 @@ describe('useExport', () => {
       expect(getAccessTokenSilently).toHaveBeenCalledWith(
         expect.objectContaining({cacheMode: 'off', useRefreshTokens: true}))
       expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'canceled'})
-      expect(useStore.getState().modelSlots).toEqual({sub: 'github|1234567', ...full})
+      expect(useStore.getState().modelSlots).toEqual({sub: 'github|1234567', ...full, publicKeys: []})
     })
 
     // The refusal proves the free allowance was what blocked it, so the

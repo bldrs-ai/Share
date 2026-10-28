@@ -31,6 +31,13 @@ export default function createRepositorySlice(set, get) {
     modelPath: null,
     setModelPath: (path) => set(() => ({modelPath: path})),
 
+    // How CadView downloaded the loaded Drive file — `{fileId, connection}`,
+    // connection null for an API-key download — so an export can classify
+    // the file's sharing the way its open's meter did
+    // (quota/driveExportVisibility.js). Null for anything else.
+    modelDriveDownload: null,
+    setModelDriveDownload: (download) => set(() => ({modelDriveDownload: download})),
+
     repository: null,
     /**
      * Set or clear the current repository.

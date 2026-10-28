@@ -1,5 +1,5 @@
 import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
-import {MODEL_KEY_HEADER, MODEL_SLOTS_HEADER} from './exportSlots'
+import {DRIVE_PUBLIC_HEADER, MODEL_KEY_HEADER, MODEL_SLOTS_HEADER} from './exportSlots'
 import {importModuleFromUrl} from './importModuleFromUrl'
 
 
@@ -84,23 +84,26 @@ export class ProModuleDeniedError extends Error {
  * @param {?string} [modelKey] The slot key of the model being exported
  *   (quota/modelSlotKey.js). A free user's request is refused (400) without one;
  *   Pro's never reads it.
+ * @param {object} [options]
+ * @param {boolean} [options.drivePublic] The client found this Drive file
+ *   public (quota/driveExportVisibility.js)
  * @return {Promise<{namespace: object, slots: ?{limit: number, used: number,
- *   remaining: number, nextFreeAt: ?string, taken: boolean}}>} the module
+ *   remaining: number, nextFreeAt: ?string, taken: boolean, public: boolean}}>} the module
  *   namespace, and — for a free-tier delivery — the slots after it, and
  *   whether it took one
  * @throws {ProModuleDeniedError} on 401/403; a plain Error otherwise
  */
-export function loadProModule(name, getAccessToken, modelKey = null) {
+export function loadProModule(name, getAccessToken, modelKey = null, {drivePublic = false} = {}) {
   const memoised = loadedModules.get(name)
   if (memoised) {
     return memoised
   }
-  const inFlightKey = `${name}\u0000${modelKey ?? ''}`
+  const inFlightKey = `${name}\u0000${modelKey ?? ''}\u0000${drivePublic ? 'public' : ''}`
   const inFlight = loadedModules.get(inFlightKey)
   if (inFlight) {
     return inFlight
   }
-  const pending = fetchAndImport(name, getAccessToken, modelKey)
+  const pending = fetchAndImport(name, getAccessToken, modelKey, drivePublic)
   // The in-flight entry goes either way once settled. Evicting on failure is
   // what lets the retry after an upgrade (or a network blip) actually
   // re-request instead of replaying the rejection forever; a FREE success
@@ -156,15 +159,21 @@ export function resetProModuleCache() {
  * @param {string} name
  * @param {Function} [getAccessToken]
  * @param {?string} modelKey
+ * @param {boolean} drivePublic
  * @return {Promise<object>} the module namespace
  */
-async function fetchAndImport(name, getAccessToken, modelKey) {
+async function fetchAndImport(name, getAccessToken, modelKey, drivePublic) {
   const token = getAccessToken ? await getAccessToken() : null
   const headers = token ? {Authorization: `Bearer ${token}`} : {}
   if (modelKey) {
     // Encoded: a header value must be ISO-8859-1 and a model path need not
     // be (exportSlots.js#MODEL_KEY_HEADER).
     headers[MODEL_KEY_HEADER] = encodeURIComponent(modelKey)
+  }
+  if (drivePublic) {
+    // The client's word on a Drive file's sharing, which the server takes
+    // for Drive alone (exportSlots.js#DRIVE_PUBLIC_HEADER).
+    headers[DRIVE_PUBLIC_HEADER] = '1'
   }
   const response = await fetch(`${PRO_MODULE_ENDPOINT}?name=${encodeURIComponent(name)}`, {headers})
 

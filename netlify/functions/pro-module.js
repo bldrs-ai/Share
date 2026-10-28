@@ -60,15 +60,18 @@ import fs from 'fs/promises'
 import * as path from 'path'
 import * as Sentry from '@sentry/serverless'
 import {
+  DRIVE_PUBLIC_HEADER,
   MODEL_KEY_HEADER,
   MODEL_SLOTS_HEADER,
   NO_FREE_SLOT_REASON,
   decodeModelKeyHeader,
   exportSlotDecision,
   isModelKey,
+  modelSlots,
   slotsHeaderValue,
 } from '../../src/export/exportSlots.js'
 import {usageQuotaWithLoads} from '../../src/quota/limits.js'
+import {isPublicModel} from './_lib/modelVisibility.js'
 import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
 import {
   getUserAppMetadata,
@@ -196,6 +199,7 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   const isFreeTier = appMetadata !== null && !isProSubscriptionStatus(appMetadata.subscriptionStatus)
 
   let decision = null
+  let publicSlots = null
   if (isFreeTier) {
     // Lambda lowercases header names; the dev server and the tests may not.
     const modelKey = decodeModelKeyHeader(headerValue(event, MODEL_KEY_HEADER))
@@ -205,8 +209,21 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
     if (!isModelKey(modelKey)) {
       return errorResponse(HTTP_BAD_REQUEST, 'invalid_model_key')
     }
+    // A PUBLIC model exports unlimited and takes no slot (owner decision on
+    // Share#1980): what record-load would not count — public GitHub, looked
+    // up here; a Drive file the client found public, on its word; hosted
+    // samples and generic URLs — except a local file, which always takes one
+    // (_lib/modelVisibility.js#isPublicModel).
+    // A model already holding a slot is served on that alone, so the lookup
+    // (a GitHub API call) is made only for a model that would otherwise
+    // take, or be refused, a slot.
     decision = exportSlotDecision(appMetadata.usageQuota?.loads, modelKey)
-    if (decision.verdict === 'full') {
+    if (decision.verdict !== 'held' &&
+        await isPublicModel(modelKey, {drivePublic: headerValue(event, DRIVE_PUBLIC_HEADER) === '1'})) {
+      publicSlots = modelSlots(appMetadata.usageQuota?.loads)
+      decision = null
+    }
+    if (decision?.verdict === 'full') {
       // Refusals are the signal that matters here: the Export tab gates a
       // free user whose slots are full before they can click, so a refusal
       // means stale slots on the client or someone probing the endpoint.
@@ -240,7 +257,9 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
     'X-Content-Type-Options': 'nosniff',
   }
 
-  if (isFreeTier) {
+  if (isFreeTier && publicSlots !== null) {
+    headers[MODEL_SLOTS_HEADER] = slotsHeaderValue(publicSlots, false, true)
+  } else if (isFreeTier) {
     if (decision.verdict === 'take') {
       // Take the slot before serving, and refuse to serve if the write didn't
       // land: a delivery for a model holding no slot is exactly what this

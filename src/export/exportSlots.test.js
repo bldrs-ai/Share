@@ -119,8 +119,9 @@ describe('export/exportSlots', () => {
   it('puts counts in the header, never keys, so the value stays ASCII', () => {
     const value = slotsHeaderValue(modelSlots([slot('/share/v/p/Gebäude.ifc', daysAgo(1))], NOW), true)
     expect(JSON.parse(value)).toEqual({
-      limit: 2, used: 1, remaining: 1, nextFreeAt: new Date(NOW + (6 * DAY_MS)).toISOString(), taken: true,
+      limit: 2, used: 1, remaining: 1, nextFreeAt: new Date(NOW + (6 * DAY_MS)).toISOString(), taken: true, public: false,
     })
+    expect(JSON.parse(slotsHeaderValue(modelSlots([], NOW), false, true))).toMatchObject({taken: false, public: true})
     expect(value).not.toMatch(/Gebäude/)
   })
 

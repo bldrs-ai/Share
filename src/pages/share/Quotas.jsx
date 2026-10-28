@@ -67,13 +67,16 @@ export default function Quotas() {
 
         <Typography variant='h6' sx={{marginTop: '1.5em'}}>GLB exports</Typography>
         <Typography paragraph data-testid='quotas-exports'>
-          Exports use the same {LIMITS[TIERS.FREE]} model slots. Export a
-          model that holds one of your slots as often as you like. A model
-          that holds no slot yet &mdash; a file from your computer, a public
-          GitHub model, a link-shared Drive file &mdash; takes one the first
-          time you export it, and is then yours to export freely for the rest
-          of the {ROLLING_WINDOW_DAYS} days. When every slot holds another
-          model, exporting a new one waits until the oldest slot frees up.
+          Public models: unlimited export, no slot &mdash; public GitHub
+          models (all the samples included), the demo models Bldrs hosts, Drive
+          files shared &ldquo;Anyone with the link&rdquo;, and models opened
+          from a public URL. Private
+          models use the same {LIMITS[TIERS.FREE]} model slots as opening
+          does: a model that holds one of your slots, unlimited export. A file
+          from your computer takes a slot the first time you export it, then
+          unlimited export for the rest of the {ROLLING_WINDOW_DAYS} days.
+          When every slot holds another model, exporting a new private model
+          or file waits until the oldest slot frees up.
         </Typography>
 
         <Typography sx={{marginTop: '2em'}}>

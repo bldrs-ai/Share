@@ -115,8 +115,8 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
       <DialogContent>
         <Typography variant='body2' sx={{mb: 2}}>
           You&apos;ve reached your limit of {limitText}. The models you
-          already have open in that window stay yours to open, share and
-          export as often as you like.
+          already have open in that window stay yours: unlimited open, share
+          and export.
           {' '}<Link href='/share/quotas'>What counts?</Link>
         </Typography>
         <Stack divider={<Divider/>} spacing={2}>

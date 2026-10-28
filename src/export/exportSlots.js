@@ -1,19 +1,22 @@
 /**
  * The free tier's export rule: a signed-in user without Share Pro may export
- * any model that holds one of their model slots, as often as they like, and a
- * model that holds no slot takes one on its first export (owner decision
- * 2026-10-27: "export your model as much as you want, same logic as views ...
- * ultimately controlled by open slots, not export counts";
- * design/new/glb-export-premium.md §4.8 and §7.1).
+ * a PUBLIC model unlimited, with no slot; any model that holds one of their
+ * model slots, unlimited; and a private model or local file that holds no slot
+ * takes one on its first export (owner decisions 2026-10-27/28: "export your
+ * model as much as you want, same logic as views ... ultimately controlled by
+ * open slots, not export counts"; public models exempt;
+ * design/new/glb-export-premium.md §4.8 and §7.1). Which models are public is
+ * the server's `netlify/functions/_lib/modelVisibility.js#isPublicModel`.
  *
  * The slots ARE the private-model allowance: `FREE_PRIVATE_MODEL_LIMIT` per
  * `ROLLING_WINDOW_DAYS` in `quota/limits.js`, kept in Auth0
  * `app_metadata.usageQuota.loads` — the ledger `record-load` writes when a
  * free user opens a private model. There is no second counter. A model opened
- * privately already holds a slot, so its exports cost nothing more; a model
- * that was free to VIEW (a local file, a public GitHub repo, a link-shared
- * Drive file, a hosted sample) takes a slot when it is first exported, so
- * GLB export does not become fully free by way of a local file.
+ * privately already holds a slot, so its exports cost nothing more. A public
+ * model (public GitHub, a link-shared Drive file, a hosted sample, a generic
+ * URL) never takes one. A local file, free to view, takes a slot when it is
+ * first exported, so GLB export does not become free by way of a file from
+ * disk.
  *
  * THE ONE PLACE the export side of that rule lives. `pro-module` decides with
  * `exportSlotDecision` and takes the slot, `record-export` reports `modelSlots`
@@ -65,6 +68,16 @@ export const EXPORT_SLOT_MISSING_REASON = 'export_slot_missing'
  * throws on a raw "Gebäude.ifc").
  */
 export const MODEL_KEY_HEADER = 'X-Bldrs-Model-Key'
+
+/**
+ * Request header carrying the CLIENT's classification of a Drive file
+ * (`quota/driveVisibility.js`): '1' when it found the file public ("Anyone
+ * with the link"). The server can't see Drive sharing, so for `/v/g/` keys
+ * it takes this word — the client-trust model `record-load` already runs on
+ * (design/new/quotas.md §"Drive visibility"); for every other route it is
+ * ignored, and GitHub is looked up server-side.
+ */
+export const DRIVE_PUBLIC_HEADER = 'X-Bldrs-Drive-Public'
 
 /**
  * Response header on every module `pro-module` serves a FREE user: the slots
@@ -201,15 +214,16 @@ export function exportSlotDecision(loads, key, now = Date.now()) {
 
 /**
  * The `MODEL_SLOTS_HEADER` value: the slots without their keys (a header must
- * stay ASCII, and a model path need not be), plus whether this delivery took
- * a new slot.
+ * stay ASCII, and a model path need not be), whether this delivery took a new
+ * slot, and whether the model is public (exported unlimited, no slot).
  *
  * @param {ModelSlots} slots
  * @param {boolean} taken
+ * @param {boolean} [isPublic]
  * @return {string} JSON
  */
-export function slotsHeaderValue({limit, used, remaining, nextFreeAt}, taken) {
-  return JSON.stringify({limit, used, remaining, nextFreeAt, taken: Boolean(taken)})
+export function slotsHeaderValue({limit, used, remaining, nextFreeAt}, taken, isPublic = false) {
+  return JSON.stringify({limit, used, remaining, nextFreeAt, taken: Boolean(taken), public: Boolean(isPublic)})
 }
 
 

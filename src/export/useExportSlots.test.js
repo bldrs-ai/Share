@@ -38,9 +38,29 @@ describe('useExportSlots', () => {
   it('asks the server for a free user\'s model slots, and returns them', async () => {
     const {result} = renderHook(() => useExportSlots())
 
-    await waitFor(() => expect(result.current).toEqual({sub: SUB, ...ALLOWANCE}))
+    await waitFor(() => expect(result.current).toEqual({sub: SUB, ...ALLOWANCE, publicKeys: []}))
     expect(fetchModelSlots).toHaveBeenCalledTimes(1)
-    expect(useStore.getState().modelSlots).toEqual({sub: SUB, ...ALLOWANCE})
+    expect(useStore.getState().modelSlots).toEqual({sub: SUB, ...ALLOWANCE, publicKeys: []})
+  })
+
+  it('asks about the model on screen, and files a public one under publicKeys', async () => {
+    fetchModelSlots.mockResolvedValue({tier: 'free', modelSlots: ALLOWANCE, isPublic: true})
+    const key = '/share/v/gh/bldrs-ai/Momentum-Public/main/m.ifc'
+
+    const {result} = renderHook(() => useExportSlots(key, false))
+
+    await waitFor(() => expect(result.current?.publicKeys).toEqual([key]))
+    expect(fetchModelSlots).toHaveBeenCalledWith(expect.any(Function), {modelKey: key, drivePublic: false})
+  })
+
+  it('asks again when the model on screen changes', async () => {
+    const {rerender} = renderHook(({key}) => useExportSlots(key, false), {initialProps: {key: '/share/v/p/a.ifc'}})
+    await waitFor(() => expect(fetchModelSlots).toHaveBeenCalledTimes(1))
+
+    rerender({key: '/share/v/g/drive-file'})
+
+    await waitFor(() => expect(fetchModelSlots).toHaveBeenCalledTimes(2))
+    expect(fetchModelSlots.mock.calls[1][1]).toEqual({modelKey: '/share/v/g/drive-file', drivePublic: false})
   })
 
   it.each(['sharePro', 'shareProPendingReauth'])('asks nothing and shows nothing for %s, which is unlimited', (status) => {
@@ -109,7 +129,7 @@ describe('useExportSlots', () => {
       fetchModelSlots.mockResolvedValue({tier: 'free', modelSlots: {...ALLOWANCE, used: 0, remaining: 2}})
       const {result} = renderHook(() => useExportSlots())
       await settle()
-      expect(result.current).toEqual({sub: SUB, ...AT_LIMIT})
+      expect(result.current).toEqual({sub: SUB, ...AT_LIMIT, publicKeys: []})
       expect(fetchModelSlots).toHaveBeenCalledTimes(1)
 
       await advance(HOUR_MS - 1)

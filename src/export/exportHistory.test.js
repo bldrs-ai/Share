@@ -647,14 +647,26 @@ describe('exportHistory', () => {
   })
 
   describe('fetchModelSlots', () => {
-    it('GETs record-export with the bearer, and returns the tier and slots', async () => {
+    it('GETs record-export with the bearer, and returns the tier, slots and whether the model is public', async () => {
       const modelSlots = {limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-11-03T12:00:00.000Z', keys: [KEY]}
-      global.fetch.mockResolvedValue({ok: true, status: 200, json: () => Promise.resolve({tier: 'free', modelSlots})})
+      global.fetch.mockResolvedValue({ok: true, status: 200, json: () => Promise.resolve({tier: 'free', modelSlots, isPublic: true})})
 
       const result = await fetchModelSlots(jest.fn().mockResolvedValue('token'))
 
       expect(global.fetch).toHaveBeenCalledWith('/.netlify/functions/record-export', {headers: {Authorization: 'Bearer token'}})
-      expect(result).toEqual({tier: 'free', modelSlots})
+      expect(result).toEqual({tier: 'free', modelSlots, isPublic: true})
+    })
+
+    it('names the model on screen, encoded, and passes on the client\'s word for a Drive file', async () => {
+      global.fetch.mockResolvedValue({ok: true, status: 200, json: () => Promise.resolve({tier: 'free', modelSlots: null})})
+
+      await fetchModelSlots(jest.fn().mockResolvedValue('token'), {modelKey: '/share/v/g/Gebäude', drivePublic: true})
+
+      expect(global.fetch.mock.calls[0][1].headers).toEqual({
+        'Authorization': 'Bearer token',
+        'X-Bldrs-Model-Key': encodeURIComponent('/share/v/g/Gebäude'),
+        'X-Bldrs-Drive-Public': '1',
+      })
     })
 
     it.each([

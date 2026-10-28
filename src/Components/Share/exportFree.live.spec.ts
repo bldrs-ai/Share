@@ -1,15 +1,17 @@
+import {writeFile} from 'node:fs/promises'
 import {ConsoleMessage, Page, Request, Response, expect, test} from '@playwright/test'
 import {
   clickGate,
   dismissLoadSnackbar,
   openExportTab,
+  openLocalFile,
   selectCompression,
   setPortable,
   waitForCodecSizing,
 } from '../../tests/e2e/export'
 import {
   FREE_MODEL_SLOTS,
-  HELD_CAPTION,
+  PUBLIC_CAPTION,
   LedgerRow,
   NEXT_FREE_DATE_OPTIONS,
   SLOT_WINDOW_MS,
@@ -20,9 +22,9 @@ import {
   newRows,
   parseSlotsHeader,
   slotsFullHelpText,
-  takeCaption,
 } from '../../tests/e2e/live/freeAllowance'
 import {glbFramingProblems} from '../../tests/e2e/live/glbBytes'
+import {waitForModelReady} from '../../tests/e2e/models'
 import {LiveAdmin} from '../../tests/e2e/live/liveEnv'
 import {
   HTTP_FORBIDDEN,
@@ -48,7 +50,6 @@ import {
 
 
 const SLOTS_AFTER_RELOAD_MS = 60_000
-const MS_PER_MINUTE = 60_000
 const MS_PER_HOUR = 3_600_000
 
 
@@ -113,10 +114,11 @@ async function expectUpgradeNavigates(page: Page) {
  * Three behaviours have existed, and a run reports which one the deploy has
  * instead of failing the others:
  *
- * - the slot rule (2026-10-27, §4.8): a free user exports any model holding
- *   one of their 2 model slots as often as they like; a model holding none
- *   takes a slot on its first export, decided by `pro-module` (§8 step 2b,
- *   and step 3's free half).
+ * - the slot rule (2026-10-27/28, §4.8): a public model (this hosted
+ *   sample) exports unlimited with no slot; a model holding one of a free
+ *   user's 2 model slots, unlimited; a private model or local file holding
+ *   none takes a slot on its first export, decided by `pro-module` (§8 step
+ *   2b, and step 3's free half).
  * - #1939 until then: 2 free exports per rolling 7 days, counted per export.
  *   Told apart from the slot rule by what an authenticated GET of
  *   `record-export` reports (`freeExports` rather than `modelSlots`), and
@@ -166,7 +168,7 @@ function formatInPage(page: Page, iso: string): Promise<string> {
 test.describe('Live smoke: free', () => {
   skipAllWithoutTarget()
 
-  const SLOTS_TITLE = 'one model exported three times takes one slot; slots full, the gate, its date, the upgrade (steps 2b and 3)'
+  const SLOTS_TITLE = 'a public sample exports unlimited with slots full; a local file meets the gate and its date (steps 2b, 3)'
   test(SLOTS_TITLE, async ({page, context, request}, testInfo) => {
     test.setTimeout(LIVE_TEST_TIMEOUT_MS * 2)
     const {target, account, admin} = requireLive(testInfo, {role: 'free', admin: true, functions: true})
@@ -187,6 +189,12 @@ test.describe('Live smoke: free', () => {
       throw new Error(`${role} holds model slots already: run tools/live-smoke/resetAccounts.mjs first`)
     }
     const startHistory = await history(admin, userId)
+    // Both slots hold OTHER models from the start. The dates are ours, so the
+    // "next one" date is known three ways: these stamps + 7 days, what the
+    // server reports, and the page's text.
+    const older = {key: '/share/v/local-only/live-smoke-a.ifc', loadedAt: new Date(Date.now() - (2 * MS_PER_HOUR)).toISOString()}
+    const newer = {key: '/share/v/local-only/live-smoke-b.ifc', loadedAt: new Date(Date.now() - MS_PER_HOUR).toISOString()}
+    await admin.patchAppMetadata(userId, {usageQuota: {loads: [older, newer]}})
 
     await setReturningVisitor(context, target)
     await loginWithPassword(context, target, account)
@@ -202,26 +210,25 @@ test.describe('Live smoke: free', () => {
     const tierBody = JSON.parse(await tier.text())
     test.skip(!('modelSlots' in tierBody) && 'freeExports' in tierBody,
       'Not applicable on this deploy: it has #1939\'s 2-exports-a-week count, not model slots')
-    expect(tierBody).toMatchObject({tier: 'free', modelSlots: {used: 0, remaining: FREE_MODEL_SLOTS}})
+    expect(tierBody).toMatchObject({tier: 'free', modelSlots: {used: FREE_MODEL_SLOTS, remaining: 0}})
 
     await waitForArtifactWritten(page, glbLogs)
     await openExportTab(page)
     await dismissLoadSnackbar(page)
 
-    // The sample is free to view, so it holds no slot until it is exported.
+    // The hosted sample is public: unlimited export, no slot, never gated —
+    // even with both slots full.
     const line = page.getByTestId('export-model-slots')
-    await expect(line).toHaveAttribute('data-held', 'false')
-    await expect(line).toHaveText(takeCaption(FREE_MODEL_SLOTS))
-    await expect(page.getByTestId('export-pro-chip')).toBeVisible()
+    await expect(line).toHaveText(PUBLIC_CAPTION, {timeout: SLOTS_AFTER_RELOAD_MS})
+    await expect(line).toHaveAttribute('data-public', 'true')
     await expect(page.getByTestId('gated-export-pro')).toHaveCount(0)
 
     await setPortable(page, false)
     await waitForCodecSizing(page)
     const promised = await selectCompression(page, 'none')
 
-    // Three exports of the one model: the first takes a slot, the rest ride
-    // on it — each its own delivery, decided by the server.
     const EXPORTS = 3
+    let lastBytes = new Uint8Array()
     for (let i = 0; i < EXPORTS; i++) {
       const {bytes} = await clickExportAndDownload(page)
       expect(glbFramingProblems(bytes)).toEqual([])
@@ -230,57 +237,46 @@ test.describe('Live smoke: free', () => {
       const delivery: SeenResponse = proModule[i]
       expect(delivery.status).toBe(HTTP_OK)
       expect(parseSlotsHeader(delivery.headers['x-bldrs-model-slots']))
-        .toMatchObject({limit: FREE_MODEL_SLOTS, used: 1, remaining: FREE_MODEL_SLOTS - 1, taken: i === 0})
-      await expect(line).toHaveAttribute('data-held', 'true')
-      await expect(line).toHaveText(HELD_CAPTION)
+        .toMatchObject({limit: FREE_MODEL_SLOTS, used: FREE_MODEL_SLOTS, remaining: 0, taken: false, public: true})
+      lastBytes = bytes
     }
 
-    // The ledgers, read from Auth0: ONE slot for the model, taken by the
-    // export; one history row per export, each naming the same key.
-    // record-export is fire-and-forget after each download (useExport.js).
+    // The ledgers, read from Auth0: the slots untouched; one history row per
+    // export, each naming the sample. record-export is fire-and-forget after
+    // each download (useExport.js).
     await expect.poll(() => records.filter((r) => r.method === 'POST').length).toBeGreaterThanOrEqual(EXPORTS)
     const postedKey = JSON.parse(records.find((r) => r.method === 'POST')?.requestBody ?? '{}').key
     expect(postedKey).toContain(LIVE_MODEL_PATH)
-    const held = heldSlots(await slots(admin, userId), Date.now())
-    expect(held.map((row) => [row.key, row.via])).toEqual([[postedKey, 'export']])
+    expect(heldSlots(await slots(admin, userId), Date.now()).map((row) => row.key)).toEqual([older.key, newer.key])
     await expect.poll(async () => newRows(startHistory, await history(admin, userId)).map((row) => row.key),
       {timeout: 30_000}).toEqual(Array(EXPORTS).fill(postedKey))
-    // The header's date is the slot's own: taken + 7 days.
-    expect(parseSlotsHeader(proModule[0].headers['x-bldrs-model-slots']).nextFreeAt)
-      .toBe(new Date(Date.parse(held[0].loadedAt as string) + SLOT_WINDOW_MS).toISOString())
 
-    // Step 3: fill the other slot, then forge requests with this session's
-    // own token. The held model is still served, with nothing written; a
-    // third model is refused — however the client got there.
+    // Step 3: forged requests with this session's own token. The public
+    // sample is served, writing nothing; a local file holding no slot is
+    // refused — however the client got there.
     const token = await sessionAccessToken(page)
     const forge = (key: string) => request.get(`${target.baseUrl}/.netlify/functions/pro-module?name=glbExport`,
       {headers: {'Authorization': `Bearer ${token}`, 'X-Bldrs-Model-Key': encodeURIComponent(key)}})
-    const otherSlot = {key: '/share/v/p/live-smoke-other.ifc', loadedAt: new Date(Date.now() - MS_PER_MINUTE).toISOString()}
-    await admin.patchAppMetadata(userId, {usageQuota: {loads: [...held, otherSlot]}})
-    const third = await forge('/share/v/p/live-smoke-third.ifc')
-    expect(third.status()).toBe(HTTP_FORBIDDEN)
-    expect(JSON.parse(await third.text())).toMatchObject({error: 'no_free_model_slot',
+    const local = await forge('/share/v/local-only/live-smoke-third.ifc')
+    expect(local.status()).toBe(HTTP_FORBIDDEN)
+    expect(JSON.parse(await local.text())).toMatchObject({error: 'no_free_model_slot',
       modelSlots: {used: FREE_MODEL_SLOTS, remaining: 0}})
-    const again = await forge(postedKey)
-    expect(again.status()).toBe(HTTP_OK)
-    expect(heldSlots(await slots(admin, userId), Date.now()).map((row) => row.key)).toEqual([postedKey, otherSlot.key])
+    expect((await forge(postedKey)).status()).toBe(HTTP_OK)
+    expect(heldSlots(await slots(admin, userId), Date.now()).map((row) => row.key)).toEqual([older.key, newer.key])
 
-    // Now the UI half of a full house: both slots hold OTHER models. The
-    // dates are ours, so the "next one" date is known three ways: these
-    // stamps + 7 days, the slots record-export reports, and the page's text.
-    const older = {key: '/share/v/p/live-smoke-a.ifc', loadedAt: new Date(Date.now() - (2 * MS_PER_HOUR)).toISOString()}
-    const newer = {key: '/share/v/p/live-smoke-b.ifc', loadedAt: new Date(Date.now() - MS_PER_HOUR).toISOString()}
-    await admin.patchAppMetadata(userId, {usageQuota: {loads: [older, newer]}})
-    const nextFreeAt = expectedNextFreeSlot([older, newer], Date.now()) as string
-    expect(nextFreeAt).toBe(new Date(Date.parse(older.loadedAt) + SLOT_WINDOW_MS).toISOString())
-    await page.reload({waitUntil: 'domcontentloaded'})
-    await expect(page.getByTestId('control-button-profile-icon-authenticated')).toBeVisible()
+    // The UI half of a full house: the exported file, opened from disk, is a
+    // local file, which needs a slot.
+    const savedPath = testInfo.outputPath('index.glb')
+    await writeFile(savedPath, lastBytes)
+    await page.keyboard.press('Escape')
+    await openLocalFile(page, savedPath, /\/share\/v\/(?:new|local-only)\/[^/]+\.glb/)
+    await waitForModelReady(page, LIVE_TEST_TIMEOUT_MS)
     await openExportTab(page)
-    // Longer than the default: after a reload the slots are fetched only
-    // once auth resolves, which on the emulated phone took more than 20s
-    // (mobile-pixel, run 37740697840).
     await expect(line).toHaveAttribute('data-remaining', '0', {timeout: SLOTS_AFTER_RELOAD_MS})
     await expect(line).toHaveAttribute('data-held', 'false')
+    await expect(line).toHaveAttribute('data-public', 'false')
+    const nextFreeAt = expectedNextFreeSlot([older, newer], Date.now()) as string
+    expect(nextFreeAt).toBe(new Date(Date.parse(older.loadedAt) + SLOT_WINDOW_MS).toISOString())
     const shown = await formatInPage(page, nextFreeAt)
     await expect(line).toHaveText(fullCaption(shown))
 

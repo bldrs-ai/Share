@@ -76,7 +76,14 @@
 
 import {randomUUID} from 'crypto'
 import * as Sentry from '@sentry/serverless'
-import {EXPORT_SLOT_MISSING_REASON, modelSlots} from '../../src/export/exportSlots.js'
+import {
+  DRIVE_PUBLIC_HEADER,
+  EXPORT_SLOT_MISSING_REASON,
+  MODEL_KEY_HEADER,
+  decodeModelKeyHeader,
+  isModelKey,
+  modelSlots,
+} from '../../src/export/exportSlots.js'
 import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
 import {
   getUserAppMetadata,
@@ -84,6 +91,7 @@ import {
   patchUserAppMetadata,
   verifyAuth0Bearer,
 } from './_lib/auth0.js'
+import {isPublicModel} from './_lib/modelVisibility.js'
 
 
 Sentry.AWSLambda.init({
@@ -162,7 +170,7 @@ function parseBody(event) {
   } catch {
     return {error: 'invalid_json'}
   }
-  const {id, key, format, title, bytes} = body || {}
+  const {id, key, format, title, bytes, drivePublic} = body || {}
   if (typeof key !== 'string' || key.length === 0) {
     return {error: 'missing_key'}
   }
@@ -179,7 +187,7 @@ function parseBody(event) {
   if (id !== undefined && id !== null && (typeof id !== 'string' || !UUID_PATTERN.test(id))) {
     return {error: 'invalid_id'}
   }
-  return {entry: {id: id || null, key, format, title: title || null, bytes}}
+  return {entry: {id: id || null, key, format, title: title || null, bytes}, drivePublic: drivePublic === true}
 }
 
 
@@ -219,7 +227,10 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   const existing = Array.isArray(appMetadata.exports) ? appMetadata.exports : []
   const isPro = isProSubscriptionStatus(appMetadata.subscriptionStatus)
   const slots = isPro ? null : modelSlots(appMetadata.usageQuota?.loads)
-  if (!isPro && !slots.keys.includes(parsed.entry.key)) {
+  // A public model exports without a slot (pro-module serves it unlimited),
+  // so it is recorded without one too — decided by the same classification.
+  if (!isPro && !slots.keys.includes(parsed.entry.key) &&
+      !(await isPublicModel(parsed.entry.key, {drivePublic: parsed.drivePublic}))) {
     // A free user's export of a model holding no slot: `pro-module` never
     // hands the module over for one, so the module came from somewhere
     // else — a Pro delivery memoised before the account lost Pro, a saved
@@ -283,9 +294,31 @@ async function reportAllowance(event) {
     return managementApiFailure(err, 'app_metadata lookup', 'app_metadata_lookup_failed')
   }
   if (isProSubscriptionStatus(appMetadata.subscriptionStatus)) {
-    return jsonResponse(HTTP_OK, {tier: 'paid', modelSlots: null})
+    return jsonResponse(HTTP_OK, {tier: 'paid', modelSlots: null, isPublic: null})
   }
-  return jsonResponse(HTTP_OK, {tier: 'free', modelSlots: modelSlots(appMetadata.usageQuota?.loads)})
+  // With the model on screen named (the same headers pro-module takes),
+  // whether it is public: the Export tab says "Public model: unlimited
+  // export" and never gates one, and only the server can tell for GitHub.
+  const modelKey = decodeModelKeyHeader(headerValue(event, MODEL_KEY_HEADER))
+  const isPublic = modelKey !== null && isModelKey(modelKey) ?
+    await isPublicModel(modelKey, {drivePublic: headerValue(event, DRIVE_PUBLIC_HEADER) === '1'}) :
+    null
+  return jsonResponse(HTTP_OK, {tier: 'free', modelSlots: modelSlots(appMetadata.usageQuota?.loads), isPublic})
+}
+
+
+/**
+ * A request header, whatever case it arrived in.
+ *
+ * @param {object} event Netlify Functions event
+ * @param {string} name
+ * @return {?string}
+ */
+function headerValue(event, name) {
+  const headers = event.headers || {}
+  const wanted = name.toLowerCase()
+  const found = Object.keys(headers).find((header) => header.toLowerCase() === wanted)
+  return found === undefined ? null : headers[found]
 }
 
 

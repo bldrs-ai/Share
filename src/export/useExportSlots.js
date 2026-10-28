@@ -42,14 +42,22 @@ const MIN_REFETCH_DELAY_MS = 10000
  * With every slot taken, a timer refetches at `nextFreeAt` so a tab left
  * open across the window rolling lifts the gate without a remount.
  *
+ * Given the model on screen, it also asks whether that model is PUBLIC — it
+ * then exports unlimited and never takes a slot, and only the server can
+ * tell for GitHub (`_lib/modelVisibility.js`) — and keeps the answer in the
+ * slots' `publicKeys`; a new model on screen asks again.
+ *
  * The slots are DISPLAY ONLY. `pro-module` re-reads the ledger and decides on
  * every request; stale or missing slots here cost at most a click that the
  * server then answers.
  *
- * @return {?{limit: number, used: number, remaining: number, nextFreeAt: ?string, keys: Array<string>}}
- *   null for Pro, anonymous, or while the slots are unknown
+ * @param {?string} [modelKey] The model on screen's slot key (quota/modelSlotKey.js)
+ * @param {boolean} [drivePublic] The client found that Drive file public
+ * @return {?{limit: number, used: number, remaining: number, nextFreeAt: ?string,
+ *   keys: Array<string>, publicKeys: Array<string>}} null for Pro, anonymous,
+ *   or while the slots are unknown
  */
-export default function useExportSlots() {
+export default function useExportSlots(modelKey = null, drivePublic = false) {
   const {isAuthenticated, user, getAccessTokenSilently} = useAuth0()
   const appMetadata = useStore((state) => state.appMetadata)
   const slots = useStore((state) => state.modelSlots)
@@ -65,12 +73,17 @@ export default function useExportSlots() {
       return undefined
     }
     let isCancelled = false
-    fetchModelSlots(() => getAccessTokenSilently(TOKEN_PARAMS)).then((result) => {
+    fetchModelSlots(() => getAccessTokenSilently(TOKEN_PARAMS), {modelKey, drivePublic}).then((result) => {
       if (isCancelled) {
         return
       }
       if (result?.modelSlots) {
-        setModelSlots({sub, ...result.modelSlots})
+        // Read now, not at render: another answer may have landed meanwhile.
+        const previous = useStore.getState().modelSlots
+        const known = previous?.sub === sub && Array.isArray(previous.publicKeys) ? previous.publicKeys : []
+        const others = known.filter((key) => key !== modelKey)
+        const publicKeys = modelKey && result.isPublic === true ? [...others, modelKey] : others
+        setModelSlots({sub, ...result.modelSlots, publicKeys})
       } else if (result?.tier === TIERS.PAID) {
         // The client's tier is stale (an upgrade in another tab, say). The
         // server treats this user as unlimited, so drop any cached slots —
@@ -82,7 +95,7 @@ export default function useExportSlots() {
     return () => {
       isCancelled = true
     }
-  }, [isFreeTier, sub, refetchTick, getAccessTokenSilently, setModelSlots])
+  }, [isFreeTier, sub, modelKey, drivePublic, refetchTick, getAccessTokenSilently, setModelSlots])
 
   // With every slot taken nothing else frees one (the gate intercepts every
   // click on a model holding no slot, so `pro-module` is never asked), so ask
