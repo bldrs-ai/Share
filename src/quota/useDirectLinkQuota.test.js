@@ -3,8 +3,9 @@ import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../__mock
 import {getProvider} from '../connections/registry'
 import useQuota from '../hooks/useQuota'
 import {HTTP_BAD_REQUEST, HTTP_FORBIDDEN, HTTP_OK} from '../net/http'
-import {gtagEventWithCid} from '../privacy/analytics'
+import {gtagEventWithCid, trackModelAction} from '../privacy/analytics'
 import {handleRoute} from '../routes/routes'
+import useStore from '../store/useStore'
 import useDirectLinkQuota, {directLinkQuotaKey} from './useDirectLinkQuota'
 
 
@@ -19,6 +20,7 @@ jest.mock('../hooks/useQuota')
 jest.mock('../privacy/analytics', () => ({
   ...jest.requireActual('../privacy/analytics'),
   gtagEventWithCid: jest.fn(),
+  trackModelAction: jest.fn(),
 }))
 // getProvider only: the Drive visibility lookup's provider, per test.
 jest.mock('../connections/registry', () => ({
@@ -103,6 +105,7 @@ describe('quota/useDirectLinkQuota', () => {
     expect(record).toHaveBeenCalledTimes(1)
     expect(record).toHaveBeenCalledWith(DRIVE_KEY)
     expect(gtagEventWithCid).not.toHaveBeenCalled()
+    expect(trackModelAction).not.toHaveBeenCalled()
   })
 
   it('a Drive file downloaded with the API key is public: record() is told so, without a lookup', async () => {
@@ -132,6 +135,10 @@ describe('quota/useDirectLinkQuota', () => {
     expect(gtagEventWithCid).toHaveBeenCalledTimes(1)
     expect(gtagEventWithCid).toHaveBeenCalledWith('quota_soft_limit_exceeded',
       {tier: 'free', used: 2, limit: 2, route_kind: 'gdrive'})
+    // Its normalized twin, with the tier record-load acted on.
+    expect(trackModelAction.mock.calls).toEqual([['share', {
+      gate: 'soft', source: 'hosted', routeKind: 'gdrive', tier: 'free',
+    }]])
     // Fire-and-forget: the meter returns nothing for a caller to await or
     // branch on, so CadView's load cannot be held or undone by it.
     let returned = null
@@ -139,6 +146,22 @@ describe('quota/useDirectLinkQuota', () => {
       returned = result.current(driveRoute())
     })
     expect(returned).toBeUndefined()
+  })
+
+  // Share#1977: signed-out users are never metered, so there is no
+  // "anonymous" tier for record-load to answer with. Should an outcome carry
+  // no tier, model_share falls back to the sign-in tier at emit time and does
+  // not claim a tier the gate never gave.
+  it('an outcome with no tier sends model_share under the emit-time sign-in tier', async () => {
+    act(() => useStore.setState({isAuthResolved: true, appMetadata: {subscriptionStatus: 'free'}}))
+    mockQuota({recordOutcome: {allowed: false, used: 2, limit: 2, alreadyCounted: false}})
+    await meter(driveRoute())
+    await act(async () => {})
+    expect(trackModelAction).toHaveBeenCalledTimes(1)
+    const [action, details] = trackModelAction.mock.calls[0]
+    expect(action).toBe('share')
+    expect(details).toEqual(expect.objectContaining({gate: 'soft', isAuthenticated: true}))
+    expect(details.tier).toBeUndefined()
   })
 
   it('reports GitHub as route_kind github, keyed like GitHubFileBrowser (no element path)', async () => {

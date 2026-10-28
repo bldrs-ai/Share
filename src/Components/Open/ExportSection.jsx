@@ -27,7 +27,14 @@ import {isGzipAvailable} from '../../export/glbGzip'
 import useCodecSizes from '../../export/useCodecSizes'
 import useExport, {formatBytes} from '../../export/useExport'
 import useExportSlots from '../../export/useExportSlots'
-import {GATE_EVENTS, gtagEventWithCid} from '../../privacy/analytics'
+import {
+  GATE_EVENTS,
+  MODEL_ACTIONS,
+  MODEL_GATES,
+  gtagEventWithCid,
+  modelRouteSource,
+} from '../../privacy/analytics'
+import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
 import {ROLLING_WINDOW_DAYS, TIERS, getTier} from '../../quota/quota'
 import useStore from '../../store/useStore'
 import GatedAction from '../GatedAction'
@@ -130,6 +137,9 @@ export default function ExportSection() {
   const [isGzipped, setIsGzipped] = useState(false)
 
   const {getAccessTokenSilently, isAuthenticated} = useAuth0()
+  // The latest auth state, for model_export {upsell}'s tier (reportGated).
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  isAuthenticatedRef.current = isAuthenticated
   // `isExporting` is tab-wide, not this button's own (store/UISlice.js): a
   // "Download again" running in the list below must disable this button too,
   // or the user gets two exports racing each other's history write (#1834).
@@ -461,6 +471,21 @@ export default function ExportSection() {
   // so this is the gate an anonymous user meets. Its sign-in returns them to
   // this tab (SaveModelControl) and is attributed to the gate in `login`
   // (Auth0/gateLogin.js).
+  // An export the gate turned into an upsell: export_gated, and its
+  // normalized twin model_export {upsell} (design/new/quotas.md §"Analytics:
+  // normalized tier events"), for the model on screen. The tier is read
+  // once auth settles: while Auth0 restores a returning user's session this
+  // tab shows the anonymous gate, and its help can be opened before the
+  // session lands (privacy/modelActionTracking.js).
+  const reportGated = (reason) => {
+    gtagEventWithCid(GATE_EVENTS.EXPORT_GATED, {reason})
+    trackModelActionWhenAuthSettled(MODEL_ACTIONS.EXPORT, {
+      gate: MODEL_GATES.UPSELL,
+      ...modelRouteSource(useStore.getState().modelPath),
+      getIsAuthenticated: () => isAuthenticatedRef.current,
+    })
+  }
+
   let gatedButton = exportButton
   if (!isAuthenticated) {
     gatedButton = (
@@ -470,7 +495,7 @@ export default function ExportSection() {
         body={MSG_LOGIN_TO_EXPORT}
         actionLabel='Log in'
         onAction={() => startGateLogin('export', GATE_RETURN_EXPORT)}
-        onOpen={() => gtagEventWithCid(GATE_EVENTS.EXPORT_GATED, {reason: 'anonymous'})}
+        onOpen={() => reportGated('anonymous')}
       >
         {exportButton}
       </GatedAction>
@@ -488,7 +513,7 @@ export default function ExportSection() {
         body={slotsFullHelp(slots.limit, nextFreeSlot)}
         actionLabel='Upgrade to Pro'
         onAction={onUpgradeClick}
-        onOpen={() => gtagEventWithCid(GATE_EVENTS.EXPORT_GATED, {reason: 'free'})}
+        onOpen={() => reportGated('free')}
       >
         {exportButton}
       </GatedAction>

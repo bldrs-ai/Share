@@ -1,8 +1,9 @@
-import React, {ReactElement, useState, useEffect, createRef} from 'react'
+import React, {ReactElement, useState, useEffect, useRef, createRef} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {QRCode} from 'react-qr-code'
 import {useLocation} from 'react-router-dom'
 import {Box, IconButton, InputAdornment, Stack, TextField, Typography} from '@mui/material'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
 import useStore from '../../store/useStore'
 import {addCameraUrlParams} from '../Camera/CameraControl'
 import {removeCameraUrlParams} from '../Camera/hashState'
@@ -11,7 +12,8 @@ import {HASH_PREFIX_DISPLAY, writeModelDisplayHash} from '../Residency/displayHa
 import {writeVisibilityHash} from '../Residency/visibilityHash'
 import {resolvedAppearance} from '../../viewer/display/DisplayController'
 import {removeHashParams} from '../../utils/location'
-import {gtagEvent} from '../../privacy/analytics'
+import {MODEL_ACTIONS, MODEL_GATES, gtagEvent, modelRouteSource} from '../../privacy/analytics'
+import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
 import Dialog from '../Dialog'
 import Toggle from '../Toggle'
 import {
@@ -57,6 +59,11 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const [isVisibilityInUrl, setIsVisibilityInUrl] = useState(true)
 
   const urlTextFieldRef = createRef()
+  // Read by the share-tracking effect without being one of its deps, so a
+  // sign-in while the dialog is open doesn't count a second share.
+  const {isAuthenticated} = useAuth0()
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  isAuthenticatedRef.current = isAuthenticated
   const location = useLocation()
   // What a `#d:` token would carry right now — the Display menu resolved off
   // the override stack, same source ResidencyControl writes from.
@@ -108,6 +115,19 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
         method: 'url',
         content_type: model.type || 'unknown',
         item_id: window.location.path,
+      })
+      // The normalized twin of `share` (design/new/quotas.md §"Analytics:
+      // normalized tier events"): the dialog opening, link and QR code shown,
+      // is the completed share, the ungated counterpart of share_gated on a
+      // local file. Not the Copy Link click: a QR share never copies.
+      // The route is read now; the tier once auth settles, through the ref:
+      // a returning user can click Share while Auth0 is still restoring the
+      // session, and this effect won't re-run when it lands (codex review
+      // on Share#1976, round 2; privacy/modelActionTracking.js).
+      trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
+        gate: MODEL_GATES.NONE,
+        ...modelRouteSource(useStore.getState().modelPath),
+        getIsAuthenticated: () => isAuthenticatedRef.current,
       })
     }
   }, [isDialogDisplayed, model])

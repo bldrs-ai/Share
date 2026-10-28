@@ -1,6 +1,6 @@
 import {CompressionStream as NodeCompressionStream} from 'node:stream/web'
 import React from 'react'
-import {act, fireEvent, render, renderHook, screen, within} from '@testing-library/react'
+import {act, fireEvent, render, renderHook, screen, waitFor, within} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
 import {
@@ -13,7 +13,7 @@ import {AUTO_MEASURE_MAX_BYTES} from '../../export/codecSizes'
 import {formatNextFreeSlot} from '../../export/exportSlots'
 import useCodecSizes from '../../export/useCodecSizes'
 import useExportSlots from '../../export/useExportSlots'
-import {gtagEventWithCid} from '../../privacy/analytics'
+import {gtagEventWithCid, modelActionTier, trackModelAction} from '../../privacy/analytics'
 import {GATE_RETURN_EXPORT, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
 import useStore from '../../store/useStore'
 import {actAsyncFlush} from '../../utils/tests'
@@ -34,6 +34,7 @@ jest.mock('../../privacy/analytics', () => ({
   ...jest.requireActual('../../privacy/analytics'),
   gtagEvent: jest.fn(),
   gtagEventWithCid: jest.fn(),
+  trackModelAction: jest.fn(),
 }))
 // The size line's source is an OPFS header read (`export/artifactSizes.js`),
 // which needs a worker and a real artifact; the component's job is what it
@@ -134,6 +135,9 @@ async function setStore(artifact, appMetadata, isExportInFlight = false) {
     result.current.setAppMetadata(appMetadata)
     result.current.setIsLoginVisible(false)
     result.current.setIsExportInFlight(isExportInFlight)
+    // Settled, as after BaseRoutes' token pass: model_export {upsell} waits
+    // for it (privacy/modelActionTracking.js). The restore-race case unsets it.
+    result.current.setIsAuthResolved(true)
   })
 }
 
@@ -647,6 +651,9 @@ describe('ExportSection', () => {
 
     fireEvent.click(getByTestId('gated-export-anonymous'))
     expect(gtagEventWithCid).toHaveBeenCalledWith('export_gated', {reason: 'anonymous'})
+    // Its normalized twin.
+    await waitFor(() => expect(trackModelAction)
+      .toHaveBeenCalledWith('export', expect.objectContaining({gate: 'upsell', isAuthenticated: false})))
     fireEvent.click(getByTestId('gated-help-action'))
 
     expect(useStore.getState().isLoginVisible).toBe(true)
@@ -654,6 +661,37 @@ describe('ExportSection', () => {
     // The sign-in is attributed to this gate, and returns to the Export tab.
     expect(takeGateLoginReturn()).toBe(GATE_RETURN_EXPORT)
     expect(takeGateLoginSource()).toEqual({from: 'gate', feature: 'export'})
+  })
+
+  // codex review on Share#1976, round 2 (the export variant): while Auth0
+  // restores a returning user's session this tab shows the anonymous gate,
+  // and its help can be opened before the session lands. A tier read at the
+  // click put a Pro user in the anon cell for good.
+  it('counts the anonymous gate opened mid-restore under the settled tier, not anon', async () => {
+    mockedUseAuth0.mockReturnValue({...mockedUserLoggedOut, isLoading: true})
+    await setStore(ARTIFACT, null)
+    act(() => useStore.setState({isAuthResolved: false}))
+    const {getByTestId, rerender} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+    fireEvent.click(getByTestId('gated-export-anonymous'))
+    expect(gtagEventWithCid).toHaveBeenCalledWith('export_gated', {reason: 'anonymous'})
+    await act(async () => {})
+    expect(trackModelAction).not.toHaveBeenCalled()
+
+    // The session restores: Auth0 re-renders its consumers signed in, then
+    // BaseRoutes writes the claims and flips isAuthResolved.
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    rerender(<ExportSection/>)
+    act(() => {
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      useStore.getState().setIsAuthResolved(true)
+    })
+
+    await waitFor(() => expect(trackModelAction).toHaveBeenCalledTimes(1))
+    const [action, details] = trackModelAction.mock.calls[0]
+    expect(action).toBe('export')
+    expect(details).toMatchObject({gate: 'upsell'})
+    expect(modelActionTier(details)).toBe('pro')
   })
 
   describe('a signed-in free user (exports governed by 2 model slots, §4.8)', () => {
@@ -726,6 +764,8 @@ describe('ExportSection', () => {
       expect(getByTestId('gated-help')).toHaveTextContent(`Your next slot frees up ${next}.`)
       // The funnel's series carries on under the same reason.
       expect(gtagEventWithCid).toHaveBeenCalledWith('export_gated', {reason: 'free'})
+      await waitFor(() => expect(trackModelAction)
+        .toHaveBeenCalledWith('export', expect.objectContaining({gate: 'upsell', isAuthenticated: true})))
 
       fireEvent.click(getByTestId('gated-help-action'))
       expect(goToSubscription).toHaveBeenCalledWith(

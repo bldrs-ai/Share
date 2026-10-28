@@ -273,6 +273,137 @@ describe('Analytics', () => {
   })
 
 
+  // Normalized model-action events (design/new/quotas.md §"Analytics:
+  // normalized tier events"): one event per action, cut by tier × source ×
+  // gate, sent beside the legacy events.
+  describe('trackModelAction', () => {
+    beforeEach(() => {
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+      Analytics.setIsAllowed(true)
+      window.gtag = jest.fn()
+    })
+
+    afterEach(() => {
+      delete window.gtag
+      Analytics.setIsAllowed(true)
+    })
+
+    /** @return {Array} the [name, params] of each gtag event sent */
+    function sent() {
+      return window.gtag.mock.calls.filter(([kind]) => kind === 'event').map(([, name, params]) => [name, params])
+    }
+
+    test('event names are the ones GA will be queried by', () => {
+      expect(Analytics.MODEL_ACTION_EVENTS).toEqual({
+        view: 'model_view',
+        share: 'model_share',
+        export: 'model_export',
+      })
+      expect(Analytics.MODEL_GATES).toEqual({NONE: 'none', UPSELL: 'upsell', BLOCKED: 'blocked', SOFT: 'soft'})
+      expect(Analytics.MODEL_SOURCES).toEqual({LOCAL: 'local', HOSTED: 'hosted'})
+    })
+
+    test('sends tier, source, route_kind, gate and open_cid', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.trackModelAction('view', {gate: 'none', source: 'local', routeKind: 'local', isAuthenticated: false})
+      expect(sent()).toEqual([['model_view', {
+        tier: 'anon', gate: 'none', source: 'local', route_kind: 'local', open_cid: 'cid.1871520000.1754700000',
+      }]])
+    })
+
+    test('omits open_cid, source and route_kind when unknown, rather than sending blanks', () => {
+      Analytics.trackModelAction('export', {gate: 'none', isAuthenticated: false})
+      expect(sent()).toEqual([['model_export', {tier: 'anon', gate: 'none'}]])
+    })
+
+    describe('tier, derived as the quota code derives it', () => {
+      test.each([
+        ['signed out', {isAuthenticated: false, appMetadata: {subscriptionStatus: 'sharePro'}}, 'anon'],
+        ['signed in, no subscription', {isAuthenticated: true, appMetadata: {}}, 'free'],
+        ['signed in, free', {isAuthenticated: true, appMetadata: {subscriptionStatus: 'free'}}, 'free'],
+        ['signed in, Pro', {isAuthenticated: true, appMetadata: {subscriptionStatus: 'sharePro'}}, 'pro'],
+        // Pro everywhere (quota/proStatus.js), so Pro here too.
+        ['signed in, pending reauth', {isAuthenticated: true, appMetadata: {subscriptionStatus: 'shareProPendingReauth'}},
+          'pro'],
+        ['no auth info at all', {}, 'anon'],
+      ])('%s → %s', (_, who, tier) => {
+        expect(Analytics.modelActionTier(who)).toBe(tier)
+      })
+
+      test('a quota tier the caller already has wins over the auth state', () => {
+        expect(Analytics.modelActionTier({tier: 'free', isAuthenticated: false})).toBe('free')
+        expect(Analytics.modelActionTier({tier: 'paid'})).toBe('pro')
+      })
+
+      // Share#1977 removed the anonymous quota tier: getTier is null when
+      // signed out, and `anon` is the sign-in tier, not a quota tier. A
+      // anonymous-tier key in the lookup would have been the string
+      // "undefined", mapping every missing tier to anon.
+      test.each([
+        ['null', null],
+        ['undefined', undefined],
+        ['the retired "anonymous"', 'anonymous'],
+      ])('a %s quota tier is not read as anon: the sign-in state decides', (_, tier) => {
+        expect(Analytics.modelActionTier({tier, isAuthenticated: true, appMetadata: {}})).toBe('free')
+        expect(Analytics.modelActionTier({
+          tier, isAuthenticated: true, appMetadata: {subscriptionStatus: 'sharePro'},
+        })).toBe('pro')
+        expect(Analytics.modelActionTier({tier, isAuthenticated: false})).toBe('anon')
+      })
+
+      test('an unknown quota tier falls back to the auth state', () => {
+        expect(Analytics.modelActionTier({tier: 'bogus', isAuthenticated: true, appMetadata: {}})).toBe('free')
+      })
+    })
+
+    describe('source and route_kind from the route', () => {
+      test.each([
+        ['a local file', {kind: 'file', isUploadedFile: true, filepath: '/abc.ifc'}, {source: 'local', routeKind: 'local'}],
+        ['a hosted project file', {kind: 'file', isUploadedFile: false, filepath: '/index.ifc'},
+          {source: 'hosted', routeKind: 'project'}],
+        ['GitHub', {kind: 'provider', provider: 'github'}, {source: 'hosted', routeKind: 'github'}],
+        ['Google Drive', {kind: 'provider', provider: 'google'}, {source: 'hosted', routeKind: 'gdrive'}],
+        ['a generic URL', {kind: 'url'}, {source: 'hosted', routeKind: 'url'}],
+        ['no route', null, {}],
+      ])('%s', (_, route, expected) => {
+        expect(Analytics.modelRouteSource(route)).toEqual(expected)
+      })
+    })
+
+    // Each cell of the grid, as its call site sends it.
+    test.each([
+      ['view', 'none'], ['share', 'none'], ['share', 'upsell'], ['share', 'blocked'], ['share', 'soft'],
+      ['export', 'none'], ['export', 'upsell'], ['export', 'blocked'],
+    ])('%s / %s', (action, gate) => {
+      Analytics.trackModelAction(action, {gate, source: 'hosted', isAuthenticated: true, appMetadata: {}})
+      expect(sent()).toEqual([[`model_${action}`, {tier: 'free', gate, source: 'hosted'}]])
+    })
+
+    test('respects consent: nothing is sent once analytics is withheld', () => {
+      // setIsAllowed itself clears the sticky user property through gtag;
+      // what matters is that no event goes out.
+      Analytics.setIsAllowed(false)
+      Analytics.trackModelAction('view', {gate: 'none', source: 'local', isAuthenticated: false})
+      expect(sent()).toEqual([])
+    })
+
+    test('sends nothing for an unknown action or gate, and never throws', () => {
+      expect(() => {
+        Analytics.trackModelAction('download', {gate: 'none'})
+        Analytics.trackModelAction('view', {gate: 'maybe'})
+        Analytics.trackModelAction('view')
+      }).not.toThrow()
+      expect(window.gtag).not.toHaveBeenCalled()
+    })
+
+    test('drops a source outside the vocabulary', () => {
+      Analytics.trackModelAction('view', {gate: 'none', source: 'ftp', isAuthenticated: false})
+      expect(sent()).toEqual([['model_view', {tier: 'anon', gate: 'none'}]])
+    })
+  })
+
+
   /*
    * Sentry's half of the same id (issue #1767). Bare, because the
    * `cid.` prefix only exists to stop GA4 typing the value as a float,

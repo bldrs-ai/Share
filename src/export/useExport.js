@@ -1,11 +1,18 @@
-import {useCallback, useState} from 'react'
+import {useCallback, useRef, useState} from 'react'
 import {captureException} from '@sentry/react'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {appMetadataFromToken} from '../Auth0/appMetadata'
 import {glbCacheKey} from '../loader/glbCacheKey'
 import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
-import {GATE_EVENTS, gtagEventWithCid} from '../privacy/analytics'
+import {
+  GATE_EVENTS,
+  MODEL_ACTIONS,
+  MODEL_GATES,
+  gtagEventWithCid,
+  modelRouteSource,
+} from '../privacy/analytics'
+import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
 import {TIERS, getTier} from '../quota/quota'
 import useStore from '../store/useStore'
 import {compressedExport, gzippedExport} from './artifactSizes'
@@ -76,6 +83,10 @@ export default function useExport() {
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const setModelSlots = useStore((state) => state.setModelSlots)
   const {getAccessTokenSilently, isAuthenticated, user} = useAuth0()
+  // The latest auth state, for model_export's tier, which is read once auth
+  // settles rather than when the run's closure was made (reportModelExport).
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  isAuthenticatedRef.current = isAuthenticated
   // In the STORE, not in this hook: `ExportSection` and `ExportsList` each
   // call `useExport`, so per-instance state let one of them start an export
   // while the other's was still running (#1834).
@@ -135,7 +146,6 @@ export default function useExport() {
     // One `export_failed` per run that doesn't deliver a file, whichever way
     // it fails (codex review on Share#1968), beside export_model's one per
     // delivered file.
-    const reportFailure = (reason) => gtagEventWithCid(GATE_EVENTS.EXPORT_FAILED, {format: format.id, reason})
     const artifact = source || glbArtifact
     // The model this run exports, by the key its slot is held under — the
     // same string for `pro-module` and `record-export`, so the export is
@@ -148,6 +158,39 @@ export default function useExport() {
       const {modelPath, appPrefix} = useStore.getState()
       return exportSlotKey(modelPath, appPrefix) || window.location.pathname
     })()
+    // The normalized twin of export_model / export_failed{no_slot}
+    // (design/new/quotas.md §"Analytics: normalized tier events"). Source is
+    // the model on screen, snapshotted NOW: the event goes out after the
+    // module load, the conversion and the history write, and navigation
+    // isn't locked meanwhile, so reading the route then could credit the
+    // export to the next model (codex review on Share#1976). A "Download
+    // again" of a history row (`source` passed) may be another model, so it
+    // sends no source rather than a wrong one.
+    const exportSource = source ? {} : modelRouteSource(useStore.getState().modelPath)
+    // The tier, unless the caller fixes it, is read when auth has settled
+    // (privacy/modelActionTracking.js): Auth0 says signed in before
+    // BaseRoutes has written the claims, so an export delivered in that
+    // window would read a Pro user's still-empty claims as free. A fixed
+    // tier (no_slot) sends at once.
+    const reportModelExport = (gate, tier) => trackModelActionWhenAuthSettled(MODEL_ACTIONS.EXPORT, {
+      gate,
+      ...exportSource,
+      tier,
+      getIsAuthenticated: () => isAuthenticatedRef.current,
+    })
+    const reportFailure = (reason) => {
+      gtagEventWithCid(GATE_EVENTS.EXPORT_FAILED, {format: format.id, reason})
+      // Only the no-free-slot refusal is a gate: model_export {blocked}
+      // means "refused: no free model slot" since the slot rule
+      // (glb-export-premium.md §4.8). `denied`, `unavailable` and `error`
+      // are failures, not gate verdicts, and send no model_export. That
+      // refusal is free-tier by definition, whatever the local claim says:
+      // a stale-Pro JWT on a canceled account (handled below) must not land
+      // in the blocked × pro cell (codex review on Share#1976).
+      if (reason === NO_SLOT_FAILURE_REASON) {
+        reportModelExport(MODEL_GATES.BLOCKED, TIERS.FREE)
+      }
+    }
     if (!artifact) {
       // The button is disabled in this state; reaching here means the
       // artifact went away between render and click.
@@ -283,6 +326,7 @@ export default function useExport() {
         // one exported before — and for Pro.
         slot_taken: Boolean(slots?.taken),
       })
+      reportModelExport(MODEL_GATES.NONE)
       return {filename, stats}
     } catch (e) {
       setError(e)
@@ -331,9 +375,10 @@ export const EXPORT_UNAVAILABLE_REASON = 'unavailable'
 
 /**
  * `export_failed`'s `reason` when `pro-module` refused a free user because
- * the model holds no slot and none is free. Was `free_limit` (2 exports per
- * 7 days) until the slot rule of 2026-10-27; a new value rather than a
- * reused one, because what it counts changed.
+ * the model holds no slot and none is free: the one failure that is a gate's
+ * verdict, so the one that also sends model_export {gate: 'blocked'}. Was
+ * `free_limit` (2 exports per 7 days) until the slot rule of 2026-10-27; a
+ * new value rather than a reused one, because what it counts changed.
  */
 export const NO_SLOT_FAILURE_REASON = 'no_slot'
 
