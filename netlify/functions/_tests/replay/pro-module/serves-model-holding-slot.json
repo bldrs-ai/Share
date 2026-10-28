@@ -1,0 +1,86 @@
+{
+  "description": "A free user re-exporting a model that already holds a slot is served with nothing written, even with both slots taken — exports of a slotted model are unlimited. Two free-export rows from the retired 2-per-week allowance sit in the ledger and refuse nothing.",
+  "env": {
+    "$fixture": "env/auth0.json",
+    "$merge": {
+      "LAMBDA_TASK_ROOT": {
+        "$fixturePath": "task-root"
+      }
+    }
+  },
+  "now": "2026-10-27T12:00:00.000Z",
+  "request": {
+    "method": "GET",
+    "path": "/.netlify/functions/pro-module",
+    "headers": {
+      "authorization": "Bearer user-access-token",
+      "x-bldrs-model-key": "%2Fshare%2Fv%2Fgh%2Facme%2Fprivate%2Fmain%2Ftower.ifc"
+    },
+    "query": {
+      "name": "glbExport"
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-userinfo.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "exports": [
+                {
+                  "id": "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+                  "key": "/share/v/p/index.ifc",
+                  "title": "index.ifc",
+                  "format": "glb",
+                  "bytes": 1024,
+                  "exportedAt": "2026-10-26T08:00:00.000Z",
+                  "free": true
+                },
+                {
+                  "id": "b4a2d3e5-6f7a-4b8c-9d0e-1f2a3b4c5d6e",
+                  "key": "/share/v/p/index.ifc",
+                  "title": "index.ifc",
+                  "format": "glb",
+                  "bytes": 1024,
+                  "exportedAt": "2026-10-25T09:00:00.000Z",
+                  "free": true
+                }
+              ],
+              "usageQuota": {
+                "loads": [
+                  {
+                    "key": "/share/v/gh/acme/private/main/tower.ifc",
+                    "loadedAt": "2026-10-24T10:00:00.000Z"
+                  },
+                  {
+                    "key": "/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz",
+                    "loadedAt": "2026-10-25T10:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "bodyIncludes": "replayStandIn",
+    "headers": {
+      "x-bldrs-model-slots": "{\"limit\":2,\"used\":2,\"remaining\":0,\"nextFreeAt\":\"2026-10-31T10:00:00.000Z\",\"taken\":false,\"public\":false}"
+    }
+  }
+}

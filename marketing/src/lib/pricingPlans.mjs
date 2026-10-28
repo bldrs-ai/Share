@@ -1,19 +1,22 @@
-import {FREE_EXPORT_LIMIT, FREE_EXPORT_WINDOW_DAYS} from '../../../src/export/freeExports.js'
 import {FREE_PRIVATE_MODEL_LIMIT, ROLLING_WINDOW_DAYS} from '../../../src/quota/limits.js'
+import {SIGNED_OUT_FEATURES} from '../../../src/quota/tierCopy.js'
 
 
 /**
  * The pricing page's plans: THE ONLY place its quota copy lives.
  *
- * The allowances are built from the constants the viewer enforces, not typed
+ * The allowance is built from the constants the viewer enforces, not typed
  * as literals: the free private-model limit and its rolling window from
- * src/quota/limits.js (`record-load`), and the free GLB exports and theirs
- * from src/export/freeExports.js (`pro-module`). Change a limit there and
- * this copy follows, so the page can't drift from what is enforced again —
- * it did from June 2026, selling "2 / 4 model loads per month" that nothing
- * counted (#1965). Local files are free and unmetered (Share#1966), so no
- * entry here may put a limit on them. tools/marketing/pricingTiers.test.js
- * checks all of it.
+ * src/quota/limits.js. That one allowance governs opening AND exporting
+ * since 2026-10-27: `record-load` meters private opens against it, and
+ * `pro-module` lets a free user export any model holding one of those slots
+ * as often as they like (src/export/exportSlots.js), so there is no
+ * separate export count to sell. Change a limit there and this copy follows,
+ * so the page can't drift from what is enforced again — it did from June
+ * 2026, selling "2 / 4 model loads per month" that nothing counted (#1965).
+ * Local files are free and unmetered to VIEW (Share#1966), so no entry here
+ * may put a limit on them. tools/marketing/pricingTiers.test.js checks all
+ * of it.
  *
  * Plain state-independent data in an .mjs module, so the test imports it
  * directly under Node ESM (marketing/package.json has no "type": "module",
@@ -43,7 +46,8 @@ export function windowWord(days) {
 /**
  * @typedef {object} Section
  * @property {string|null} heading
- * @property {Array<string>} features
+ * @property {Array<import('../../../src/quota/tierCopy.js').FeatureLine>} features
+ *   plain strings, or `{text, link}` for a line that ends in a link
  */
 
 /**
@@ -66,11 +70,10 @@ export function windowWord(days) {
  * the copy following the constants; the page uses PLANS, built from the
  * enforced ones.
  *
- * @param {{freePrivateModels: number, privateModelWindowDays: number,
- *   freeExports: number, exportWindowDays: number}} allowances
+ * @param {{freePrivateModels: number, privateModelWindowDays: number}} allowances
  * @return {Array<Plan>}
  */
-export function buildPlans({freePrivateModels, privateModelWindowDays, freeExports, exportWindowDays}) {
+export function buildPlans({freePrivateModels, privateModelWindowDays}) {
   return [
     {
       name: 'Bldrs Share',
@@ -80,11 +83,9 @@ export function buildPlans({freePrivateModels, privateModelWindowDays, freeExpor
       sections: [
         {
           heading: 'No login required:',
-          features: [
-            'Fast IFC and STEP viewing in your browser',
-            'Your files never leave your computer',
-            'Open and share public GitHub models, unlimited',
-          ],
+          // The owner's four lines (2026-10-28), shared with /share/quotas.
+          // No export here: it starts at a free account.
+          features: [...SIGNED_OUT_FEATURES],
         },
       ],
       cta: 'Get Started',
@@ -101,8 +102,10 @@ export function buildPlans({freePrivateModels, privateModelWindowDays, freeExpor
           heading: 'Everything in Bldrs Share, plus:',
           features: [
             'Connect Google Drive and GitHub',
-            `Open and share ${freePrivateModels} private models a ${windowWord(privateModelWindowDays)}`,
-            `${freeExports} GLB exports a ${windowWord(exportWindowDays)}`,
+            // Owner's wording, 2026-10-28: one allowance, and what the user
+            // may do with a model inside it, in the "unlimited X" style.
+            `${freePrivateModels} private models a ${windowWord(privateModelWindowDays)}` +
+              ' — unlimited open, share and export',
           ],
         },
       ],
@@ -125,8 +128,7 @@ export function buildPlans({freePrivateModels, privateModelWindowDays, freeExpor
         {
           heading: 'Everything in Free account, plus:',
           features: [
-            'Unlimited private models',
-            'Unlimited GLB exports',
+            'Unlimited private models and exports',
           ],
         },
       ],
@@ -143,6 +145,4 @@ export function buildPlans({freePrivateModels, privateModelWindowDays, freeExpor
 export const PLANS = buildPlans({
   freePrivateModels: FREE_PRIVATE_MODEL_LIMIT,
   privateModelWindowDays: ROLLING_WINDOW_DAYS,
-  freeExports: FREE_EXPORT_LIMIT,
-  exportWindowDays: FREE_EXPORT_WINDOW_DAYS,
 })

@@ -303,7 +303,7 @@ describe('BaseRoutes - auth resolution', () => {
   // design/new/glb-export-premium.md §7.2 / §8 step 12: a pending-reauth
   // account is Pro. The reauth modal short-circuits processAccessToken before
   // the GitHub identity block, but the claim must still reach the store: every
-  // tier reader (getTier -> ExportSection, useFreeExports, useQuota) reads
+  // tier reader (getTier -> ExportSection, useExportSlots, useQuota) reads
   // store.appMetadata, so a skipped write left a paying user on the free UI.
   it('shareProPendingReauth: opens the reauth modal AND records the claim so the tier is paid', async () => {
     const token = 'pending-jwt'

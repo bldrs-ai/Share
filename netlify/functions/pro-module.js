@@ -5,6 +5,7 @@
  *
  *   GET /.netlify/functions/pro-module?name=glbExport
  *   Headers: Authorization: Bearer <Auth0 access token>
+ *            X-Bldrs-Model-Key: <encodeURIComponent(share path of the model)>
  *
  * Flow:
  *   1. Allowlist the requested name (no path ever comes from the query).
@@ -12,26 +13,38 @@
  *   3. Read app_metadata through the Management API — NOT the caller's JWT
  *      claim, which is as stale as the token it was minted into.
  *   4. A Pro status (`sharePro` or `shareProPendingReauth`,
- *      src/quota/proStatus.js) → 200 with the module text, nothing written.
- *   5. Anyone else signed in is on the free tier, which gets
- *      FREE_EXPORT_LIMIT exports per rolling FREE_EXPORT_WINDOW_DAYS
- *      (src/export/freeExports.js). At the limit → 403
- *      `free_export_limit`, with the allowance (and when the next export
- *      frees up) in the body. Under it → a free export is CHARGED here: a
- *      `free: true` row is prepended to `app_metadata.exports` before the
- *      module goes out, and the 200 carries that row's id
- *      (`X-Bldrs-Export-Id`) and the allowance left
- *      (`X-Bldrs-Free-Exports`).
+ *      src/quota/proStatus.js) → 200 with the module text, nothing written,
+ *      no model key needed.
+ *   5. Anyone else signed in is on the free tier, whose exports are governed
+ *      by MODEL SLOTS (src/export/exportSlots.js): the model's key must hold
+ *      one of the user's FREE_MODEL_SLOTS in `app_metadata.usageQuota.loads`
+ *      — the same ledger, window and limit `record-load` meters private
+ *      opens with. A missing or malformed key → 400. Then
+ *      (`exportSlotDecision`):
+ *      - the key already holds a slot → 200, nothing written;
+ *      - it holds none and a slot is free → the slot is TAKEN here (the key
+ *        appended to `usageQuota.loads`, the way record-load appends an
+ *        open) before the module goes out;
+ *      - it holds none and none is free → 403 `no_free_model_slot`, with
+ *        the slots (and when the next frees up) in the body.
+ *      Every free 200 carries `X-Bldrs-Model-Slots`: the slots after the
+ *      delivery and whether it took one.
  *
- * Why the charge is HERE and not in `record-export`: this is the only step
- * the server controls. `record-export` is called by the client after the
- * file is already in the user's Downloads, so a counter there is one blocked
- * request away from unlimited exports. Charging on delivery means every
- * module a free user receives has been paid for out of their allowance; the
- * client must not memoise such a delivery (proModuleLoader.js reads the
- * header to know). What it cannot stop — a user who keeps the module text
- * they were served and replays it — is the same exposure §4.6 accepts for
- * Pro, and is spelled out in design/new/glb-export-premium.md §4.8.
+ * Why the slot is taken HERE and not in `record-export`: this is the only
+ * step the server controls. `record-export` is called by the client after the
+ * file is already in the user's Downloads, so a slot taken there is one
+ * blocked request away from exporting every model for nothing. Deciding on
+ * delivery means every module a free user receives was handed over for a
+ * model holding a slot; the client must not memoise such a delivery
+ * (proModuleLoader.js reads the header to know), since a memo would export
+ * the NEXT model without asking. What this cannot check — which model the
+ * client actually exports, since the export runs in the browser — and what it
+ * cannot stop — a user who keeps the module text and replays it — are the
+ * exposures design/new/glb-export-premium.md §4.8 spells out.
+ *
+ * The retired per-export allowance (2 exports per 7 days, charged as
+ * `free: true` rows in `app_metadata.exports`) is not read here any more;
+ * old rows are history, nothing more.
  *
  * Why a function serves this at all: the module is built OUTSIDE `docs/`
  * (into `_pro-modules/`, gitignored, shipped to the lambda by netlify.toml's
@@ -40,20 +53,25 @@
  * a dynamic `import()` cannot carry an Authorization header, and a token in
  * the query string would land in logs.
  *
- * Design: design/new/glb-export-premium.md §3 (option C), §4.2, §4.6.
+ * Design: design/new/glb-export-premium.md §3 (option C), §4.2, §4.6, §4.8.
  */
 
-import {randomUUID} from 'crypto'
 import fs from 'fs/promises'
 import * as path from 'path'
 import * as Sentry from '@sentry/serverless'
 import {
-  FREE_EXPORTS_HEADER,
-  FREE_EXPORT_ID_HEADER,
-  FREE_EXPORT_LIMIT_REASON,
-  freeExportAllowance,
-  newFreeExportRow,
-} from '../../src/export/freeExports.js'
+  DRIVE_PUBLIC_HEADER,
+  MODEL_KEY_HEADER,
+  MODEL_SLOTS_HEADER,
+  NO_FREE_SLOT_REASON,
+  decodeModelKeyHeader,
+  exportSlotDecision,
+  isModelKey,
+  modelSlots,
+  slotsHeaderValue,
+} from '../../src/export/exportSlots.js'
+import {usageQuotaWithLoads} from '../../src/quota/limits.js'
+import {isPublicModel} from './_lib/modelVisibility.js'
 import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
 import {
   getUserAppMetadata,
@@ -70,22 +88,18 @@ Sentry.AWSLambda.init({
 })
 
 const HTTP_OK = 200
+const HTTP_BAD_REQUEST = 400
 const HTTP_FORBIDDEN = 403
 const HTTP_NOT_FOUND = 404
 const HTTP_METHOD_NOT_ALLOWED = 405
 const HTTP_BAD_GATEWAY = 502
 
 // The complete set of servable module ids, each with the export format it
-// produces (what a free export's ledger row records). The requested name is
-// matched against these keys and the FILENAME is then composed from the
-// matched constant — the query string never reaches the filesystem, so no
-// amount of `../` in it can address a file outside `_pro-modules/`.
+// produces. The requested name is matched against these keys and the
+// FILENAME is then composed from the matched constant — the query string
+// never reaches the filesystem, so no amount of `../` in it can address a
+// file outside `_pro-modules/`.
 const PRO_MODULE_FORMATS = new Map([['glbExport', 'glb']])
-
-// Same cap and same reason as `record-export.js`'s EXPORTS_CAP: the charge
-// row lands in the list that function keeps, under Auth0's 16 KB
-// app_metadata ceiling.
-const EXPORTS_CAP = 100
 
 const PRO_MODULES_DIR_NAME = '_pro-modules'
 
@@ -171,7 +185,7 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
 
   // sub === null is the unconfigured-dev bypass `_lib/auth0.js` documents
   // (AUTH0_DOMAIN unset). It already fired its one-shot Sentry warning; there
-  // is no Management API to ask (or to charge a free export to), so serve —
+  // is no Management API to ask (or to take a model slot in), so serve —
   // same posture as the gh-oauth broker functions, and such a deploy has no
   // paying users to protect.
   let appMetadata = null
@@ -184,24 +198,47 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   }
   const isFreeTier = appMetadata !== null && !isProSubscriptionStatus(appMetadata.subscriptionStatus)
 
-  let allowance = null
+  let decision = null
+  let publicSlots = null
   if (isFreeTier) {
-    allowance = freeExportAllowance(appMetadata.exports)
-    if (allowance.remaining === 0) {
+    // Lambda lowercases header names; the dev server and the tests may not.
+    const modelKey = decodeModelKeyHeader(headerValue(event, MODEL_KEY_HEADER))
+    if (modelKey === null) {
+      return errorResponse(HTTP_BAD_REQUEST, 'missing_model_key')
+    }
+    if (!isModelKey(modelKey)) {
+      return errorResponse(HTTP_BAD_REQUEST, 'invalid_model_key')
+    }
+    // A PUBLIC model exports unlimited and takes no slot (owner decision on
+    // Share#1980): what record-load would not count — public GitHub, looked
+    // up here; a Drive file the client found public, on its word; hosted
+    // samples and generic URLs — except a local file, which always takes one
+    // (_lib/modelVisibility.js#isPublicModel).
+    // A model already holding a slot is served on that alone, so the lookup
+    // (a GitHub API call) is made only for a model that would otherwise
+    // take, or be refused, a slot.
+    decision = exportSlotDecision(appMetadata.usageQuota?.loads, modelKey)
+    if (decision.verdict !== 'held' &&
+        await isPublicModel(modelKey, {drivePublic: headerValue(event, DRIVE_PUBLIC_HEADER) === '1'})) {
+      publicSlots = modelSlots(appMetadata.usageQuota?.loads)
+      decision = null
+    }
+    if (decision?.verdict === 'full') {
       // Refusals are the signal that matters here: the Export tab gates a
-      // free user at the limit before they can click, so a refusal means a
-      // stale count on the client or someone probing the endpoint. Tagged
-      // with the sub so either is attributable.
+      // free user whose slots are full before they can click, so a refusal
+      // means stale slots on the client or someone probing the endpoint.
+      // Tagged with the sub so either is attributable; the key is left out
+      // of the message, since it can name a private repo's file.
       Sentry.captureMessage(
-        `pro-module: free export limit reached for ${auth.sub} (${name}; used ${allowance.used}/${allowance.limit})`,
+        `pro-module: no free model slot for ${auth.sub} (${name}; used ${decision.slots.used}/${decision.slots.limit})`,
         'warning',
       )
-      return errorResponse(HTTP_FORBIDDEN, FREE_EXPORT_LIMIT_REASON, {freeExports: allowance})
+      return errorResponse(HTTP_FORBIDDEN, NO_FREE_SLOT_REASON, {modelSlots: decision.slots})
     }
   }
 
-  // Read BEFORE charging: a module missing from the deploy is a build fault,
-  // and must not cost a free user one of their exports.
+  // Read BEFORE taking a slot: a module missing from the deploy is a build
+  // fault, and must not cost a free user one of their slots.
   const source = await readProModuleSource(name)
   if (source === null) {
     // Built output missing on a deploy that should have it — a build/config
@@ -220,30 +257,49 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
     'X-Content-Type-Options': 'nosniff',
   }
 
-  if (isFreeTier) {
-    // Charge before serving, and refuse to serve if the charge didn't land:
-    // an uncharged delivery is exactly the free export this gate exists to
-    // count. Only the `exports` key is patched, so a concurrent
-    // `record-load` write of `usageQuota` survives (same as record-export).
-    // Read-modify-write with no compare-and-swap, like every app_metadata
-    // writer here: two requests racing from one account can both read the
-    // same count and both be served, and one charge row can be lost to the
-    // other's write. That is a free extra export, never a wrongful refusal
-    // (§4.8 lists it among what stays bypassable).
-    const existing = Array.isArray(appMetadata.exports) ? appMetadata.exports : []
-    const row = newFreeExportRow({id: randomUUID(), format: PRO_MODULE_FORMATS.get(name)})
-    const charged = [row, ...existing].slice(0, EXPORTS_CAP)
-    try {
-      await patchUserAppMetadata(auth.sub, {exports: charged})
-    } catch (err) {
-      return managementApiFailure(err, 'free export charge', 'free_export_charge_failed')
+  if (isFreeTier && publicSlots !== null) {
+    headers[MODEL_SLOTS_HEADER] = slotsHeaderValue(publicSlots, false, true)
+  } else if (isFreeTier) {
+    if (decision.verdict === 'take') {
+      // Take the slot before serving, and refuse to serve if the write didn't
+      // land: a delivery for a model holding no slot is exactly what this
+      // gate exists to prevent. The write is `record-load`'s own — the
+      // window's rows plus this key, under `usageQuota`, with every other
+      // `usageQuota` field written back (Auth0 replaces a top-level key
+      // whole; `usageQuotaWithLoads`) — so the two agree on the ledger and a
+      // later open of this model reads as already counted.
+      // Read-modify-write with no compare-and-swap, like every app_metadata
+      // writer here (record-load included): two requests racing from one
+      // account can both read the same free slot and both be served, and one
+      // slot row can be lost to the other's write. That is a free extra
+      // slot, never a wrongful refusal (§4.8 lists it among what stays
+      // bypassable).
+      try {
+        await patchUserAppMetadata(auth.sub, {usageQuota: usageQuotaWithLoads(appMetadata.usageQuota, decision.loads)})
+      } catch (err) {
+        return managementApiFailure(err, 'model slot write', 'model_slot_write_failed')
+      }
     }
-    headers[FREE_EXPORT_ID_HEADER] = row.id
-    headers[FREE_EXPORTS_HEADER] = JSON.stringify(freeExportAllowance(charged))
+    headers[MODEL_SLOTS_HEADER] = slotsHeaderValue(decision.slots, decision.verdict === 'take')
   }
 
   return {statusCode: HTTP_OK, headers, body: source}
 })
+
+
+/**
+ * A request header, whatever case it arrived in.
+ *
+ * @param {object} event Netlify Functions event
+ * @param {string} name e.g. 'X-Bldrs-Model-Key'
+ * @return {?string}
+ */
+function headerValue(event, name) {
+  const headers = event.headers || {}
+  const wanted = name.toLowerCase()
+  const found = Object.keys(headers).find((header) => header.toLowerCase() === wanted)
+  return found === undefined ? null : headers[found]
+}
 
 
 /**

@@ -34,18 +34,35 @@ jest.mock('@sentry/serverless', () => ({
 const MODULE_SOURCE = 'export const format={id:"glb"}'
 const SUB = 'google-oauth2|1234567890'
 const DAY_MS = 24 * 60 * 60 * 1000
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+const MODEL = '/share/v/gh/acme/private/main/tower.ifc'
+const OTHER = '/share/v/g/drive-file-id'
+const LOCAL = '/share/v/local-only/0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc'
+const HOSTED = '/share/v/p/index.ifc'
 
 
 /**
- * A free export charged `days` ago, as pro-module itself writes it.
+ * A model slot taken `days` ago, as record-load (or pro-module) writes it.
+ *
+ * @param {string} key
+ * @param {number} days
+ * @return {object} an app_metadata.usageQuota.loads row
+ */
+function slotDaysAgo(key, days) {
+  return {key, loadedAt: new Date(Date.now() - (days * DAY_MS)).toISOString()}
+}
+
+
+/**
+ * A free export charged `days` ago under the RETIRED per-export allowance,
+ * as pro-module wrote them before the slot rule. Nothing reads these for
+ * gating any more.
  *
  * @param {number} days
  * @return {object} an app_metadata.exports row
  */
-function freeExportDaysAgo(days) {
+function oldFreeExportDaysAgo(days) {
   return {
-    id: `charged-${days}`, key: '/share/v/p/index.ifc', title: 'index.ifc', format: 'glb', bytes: 10,
+    id: `charged-${days}`, key: HOSTED, title: 'index.ifc', format: 'glb', bytes: 10,
     exportedAt: new Date(Date.now() - (days * DAY_MS)).toISOString(), free: true,
   }
 }
@@ -53,12 +70,18 @@ function freeExportDaysAgo(days) {
 
 /**
  * @param {object} [overrides]
+ * @param {?string} [modelKey] sent encoded in X-Bldrs-Model-Key, as the
+ *   loader sends it; null sends no header
  * @return {object} a Netlify Functions event
  */
-function getEvent(overrides = {}) {
+function getEvent(overrides = {}, modelKey = MODEL) {
+  const headers = {authorization: 'Bearer user-token'}
+  if (modelKey !== null) {
+    headers['x-bldrs-model-key'] = encodeURIComponent(modelKey)
+  }
   return {
     httpMethod: 'GET',
-    headers: {authorization: 'Bearer user-token'},
+    headers,
     queryStringParameters: {name: 'glbExport'},
     ...overrides,
   }
@@ -115,10 +138,20 @@ describe('pro-module function', () => {
     // unentitled request could then be served from.
     expect(res.headers['Cache-Control']).toBe('private, no-store')
     expect(res.headers['X-Content-Type-Options']).toBe('nosniff')
-    // Pro is unlimited: nothing is charged, and with no charge header the
+    // Pro is unlimited: no slot is taken, and with no slots header the
     // client may memoise the module for the rest of the session.
     expect(axios.patch).not.toHaveBeenCalled()
-    expect(res.headers['X-Bldrs-Export-Id']).toBeUndefined()
+    expect(res.headers['X-Bldrs-Model-Slots']).toBeUndefined()
+  })
+
+  it('serves Pro whatever its slots hold, and without a model key at all', async () => {
+    mockAuth0({subscriptionStatus: 'sharePro', usageQuota: {loads: [slotDaysAgo(OTHER, 1), slotDaysAgo(LOCAL, 2)]}})
+
+    const res = await handler(getEvent({}, null))
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toBe(MODULE_SOURCE)
+    expect(axios.patch).not.toHaveBeenCalled()
   })
 
   it('reads the module from where the esbuild bundle puts included files on the lambda', async () => {
@@ -141,106 +174,229 @@ describe('pro-module function', () => {
   })
 
   // Paid, waiting on a re-login for the GitHub scope: Pro (owner decision,
-  // glb-export-premium.md §7.2) — served, and never charged.
-  it('serves `shareProPendingReauth` as Pro, without charging a free export', async () => {
-    mockAuth0({subscriptionStatus: 'shareProPendingReauth', exports: [freeExportDaysAgo(1), freeExportDaysAgo(2)]})
+  // glb-export-premium.md §7.2) — served, and no slot taken.
+  it('serves `shareProPendingReauth` as Pro, taking no slot', async () => {
+    mockAuth0({subscriptionStatus: 'shareProPendingReauth', usageQuota: {loads: [slotDaysAgo(OTHER, 1), slotDaysAgo(LOCAL, 2)]}})
 
     const res = await handler(getEvent())
 
     expect(res.statusCode).toBe(200)
     expect(res.body).toBe(MODULE_SOURCE)
     expect(axios.patch).not.toHaveBeenCalled()
-    expect(res.headers['X-Bldrs-Export-Id']).toBeUndefined()
+    expect(res.headers['X-Bldrs-Model-Slots']).toBeUndefined()
   })
 
-  describe('a free user (2 exports per rolling 7 days)', () => {
-    it('is served under the limit, and the export is charged BEFORE the module goes out', async () => {
-      mockAuth0({subscriptionStatus: 'free'})
+  describe('a free user (exports governed by 2 model slots per rolling 7 days)', () => {
+    it('exports a model holding a slot again and again, writing nothing — even with every slot taken', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo(OTHER, 2)]}})
+
+      for (let i = 0; i < 3; i++) {
+        const res = await handler(getEvent())
+        expect(res.statusCode).toBe(200)
+        expect(res.body).toBe(MODULE_SOURCE)
+        expect(JSON.parse(res.headers['X-Bldrs-Model-Slots'])).toMatchObject({used: 2, remaining: 0, taken: false})
+      }
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it('has a local file take a slot on its first export, BEFORE the module goes out', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(OTHER, 1)]}})
       axios.patch.mockResolvedValue({data: {}})
 
-      const res = await handler(getEvent())
+      const res = await handler(getEvent({}, LOCAL))
 
       expect(res.statusCode).toBe(200)
       expect(res.body).toBe(MODULE_SOURCE)
       expect(axios.patch).toHaveBeenCalledTimes(1)
       const [url, patchBody] = axios.patch.mock.calls[0]
       expect(url).toContain(encodeURIComponent(SUB))
-      // Only `exports` is written, so a concurrent usageQuota write survives.
-      expect(Object.keys(patchBody.app_metadata)).toEqual(['exports'])
-      const [charge] = patchBody.app_metadata.exports
-      expect(charge).toMatchObject({format: 'glb', free: true, key: null, bytes: null})
-      expect(charge.id).toMatch(UUID)
-      // The client records under this id, so record-export fills in this
-      // row rather than counting the export a second time.
-      expect(res.headers['X-Bldrs-Export-Id']).toBe(charge.id)
-      expect(JSON.parse(res.headers['X-Bldrs-Free-Exports'])).toMatchObject({limit: 2, used: 1, remaining: 1})
+      // record-load's own write: only `usageQuota`, so a concurrent
+      // `exports` (history) write survives, and the existing slot is kept.
+      expect(Object.keys(patchBody.app_metadata)).toEqual(['usageQuota'])
+      expect(patchBody.app_metadata.usageQuota.loads.map((row) => row.key)).toEqual([OTHER, LOCAL])
+      expect(patchBody.app_metadata.usageQuota.loads[1]).toMatchObject({key: LOCAL, via: 'export'})
+      expect(JSON.parse(res.headers['X-Bldrs-Model-Slots'])).toMatchObject({used: 2, remaining: 0, taken: true})
     })
 
-    it('charges the second export on top of the first, keeping the history', async () => {
-      const first = freeExportDaysAgo(1)
-      const proEra = {id: 'old-pro', key: '/k', format: 'glb', bytes: 1, exportedAt: new Date().toISOString()}
-      mockAuth0({exports: [first, proEra]})
+    // Auth0 merges app_metadata one top-level key at a time, so the slot
+    // write replaces `usageQuota` whole (codex review on Share#1980).
+    it('keeps the fields beside loads in usageQuota when it takes a slot', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(OTHER, 1)], note: 'kept'}})
       axios.patch.mockResolvedValue({data: {}})
 
-      const res = await handler(getEvent())
+      const res = await handler(getEvent({}, LOCAL))
 
       expect(res.statusCode).toBe(200)
-      const written = axios.patch.mock.calls[0][1].app_metadata.exports
-      expect(written.slice(1)).toEqual([first, proEra])
-      expect(JSON.parse(res.headers['X-Bldrs-Free-Exports'])).toMatchObject({used: 2, remaining: 0})
+      const {usageQuota} = axios.patch.mock.calls[0][1].app_metadata
+      expect(usageQuota.note).toBe('kept')
+      expect(usageQuota.loads.map((row) => row.key)).toEqual([OTHER, LOCAL])
     })
 
-    it('is refused at the limit, with the allowance and when the next export frees up', async () => {
-      mockAuth0({subscriptionStatus: 'free', exports: [freeExportDaysAgo(1), freeExportDaysAgo(3)]})
+    it('exports a URL model unlimited under its digest key, taking no slot even with slots full', async () => {
+      // quota/modelSlotKey.js#urlModelKey: never the URL, which can run past
+      // MODEL_KEY_MAX_LENGTH and carries credentials. A generic URL is one
+      // record-load never counts, so it is public.
+      const urlKey = `/share/v/u/sha256-${'ab'.repeat(32)}`
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo(OTHER, 2)]}})
 
-      const res = await handler(getEvent())
+      const res = await handler(getEvent({}, urlKey))
+
+      expect(res.statusCode).toBe(200)
+      expect(axios.patch).not.toHaveBeenCalled()
+      expect(JSON.parse(res.headers['X-Bldrs-Model-Slots'])).toMatchObject({public: true, taken: false})
+    })
+
+    /**
+     * Answer api.github.com's unauthenticated repo lookup — the one
+     * record-load makes (_lib/modelVisibility.js) — with `status`.
+     *
+     * @param {number} status 200 public, 404 private or missing
+     */
+    function mockGithubRepoStatus(status) {
+      const authGet = axios.get.getMockImplementation()
+      axios.get.mockImplementation((url, config) => (url.startsWith('https://api.github.com/repos/') ?
+        Promise.resolve({status, data: {}}) :
+        authGet(url, config)))
+    }
+
+    // Owner decision on Share#1980: public models export unlimited, no slot.
+    it('exports a public GitHub model with both slots full, taking none — the server looks it up', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo(OTHER, 2)]}})
+      mockGithubRepoStatus(200)
+      const publicModel = '/share/v/gh/bldrs-ai/public-pm-1/main/ifc/misc/box.ifc'
+
+      const res = await handler(getEvent({}, publicModel))
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body).toBe(MODULE_SOURCE)
+      expect(axios.get).toHaveBeenCalledWith('https://api.github.com/repos/bldrs-ai/public-pm-1', expect.anything())
+      expect(axios.patch).not.toHaveBeenCalled()
+      expect(JSON.parse(res.headers['X-Bldrs-Model-Slots'])).toMatchObject({used: 2, public: true, taken: false})
+    })
+
+    it('refuses a private GitHub model with both slots full, per the same lookup', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo(OTHER, 2)]}})
+      mockGithubRepoStatus(404)
+
+      const res = await handler(getEvent({}, '/share/v/gh/acme/private-pm-2/main/tower.ifc'))
+
+      expect(res.statusCode).toBe(403)
+      expect(JSON.parse(res.body).error).toBe('no_free_model_slot')
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it('exports a hosted sample unlimited, with no lookup and no slot', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo(OTHER, 2)]}})
+
+      const res = await handler(getEvent({}, HOSTED))
+
+      expect(res.statusCode).toBe(200)
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it('takes the client\'s word for a Drive file\'s sharing, and only for Drive', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo('/share/v/g/x', 2)]}})
+      const withDrivePublic = (key) => {
+        const event = getEvent({}, key)
+        event.headers['x-bldrs-drive-public'] = '1'
+        return event
+      }
+
+      // Link-shared, as the client classified it: public.
+      expect((await handler(withDrivePublic('/share/v/g/link-shared-file'))).statusCode).toBe(200)
+      // Without the word: private, and the slots are full.
+      expect((await handler(getEvent({}, '/share/v/g/link-shared-file'))).statusCode).toBe(403)
+      // The flag does nothing for a local file, which always takes a slot.
+      expect((await handler(withDrivePublic(LOCAL))).statusCode).toBe(403)
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it('refuses a third model with both slots taken by others, writing nothing and reading no module', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo(OTHER, 3)]}})
+
+      const res = await handler(getEvent({}, LOCAL))
 
       expect(res.statusCode).toBe(403)
       const body = JSON.parse(res.body)
-      expect(body.error).toBe('free_export_limit')
-      expect(body.freeExports).toMatchObject({limit: 2, used: 2, remaining: 0})
-      // The 3-day-old export is the first to leave the 7-day window.
-      const expectedNext = Date.parse(freeExportDaysAgo(3).exportedAt) + (7 * DAY_MS)
-      expect(Math.abs(Date.parse(body.freeExports.nextFreeAt) - expectedNext)).toBeLessThan(1000)
-      // The gate is what stops the read, not the read failing — and nothing
-      // is charged for a refusal.
+      expect(body.error).toBe('no_free_model_slot')
+      expect(body.modelSlots).toMatchObject({limit: 2, used: 2, remaining: 0, keys: [MODEL, OTHER]})
+      // The 3-day-old slot is the first to leave the 7-day window.
+      const expectedNext = Date.parse(slotDaysAgo(OTHER, 3).loadedAt) + (7 * DAY_MS)
+      expect(Math.abs(Date.parse(body.modelSlots.nextFreeAt) - expectedNext)).toBeLessThan(1000)
       expect(fs.readFile).not.toHaveBeenCalled()
       expect(axios.patch).not.toHaveBeenCalled()
     })
 
-    it('gets an export back once one leaves the rolling window', async () => {
-      mockAuth0({exports: [freeExportDaysAgo(1), freeExportDaysAgo(8)]})
+    it('gets a slot back once one leaves the rolling window', async () => {
+      mockAuth0({usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo(OTHER, 8)]}})
       axios.patch.mockResolvedValue({data: {}})
 
-      const res = await handler(getEvent())
+      const res = await handler(getEvent({}, LOCAL))
 
       expect(res.statusCode).toBe(200)
-      expect(JSON.parse(res.headers['X-Bldrs-Free-Exports'])).toMatchObject({used: 2, remaining: 0})
+      // The rolled-off row is dropped from what is written, as record-load does.
+      expect(axios.patch.mock.calls[0][1].app_metadata.usageQuota.loads.map((row) => row.key)).toEqual([MODEL, LOCAL])
     })
 
-    it('is not charged when the module was never built', async () => {
+    it('ignores the retired export ledger: two old free exports this week no longer refuse anyone', async () => {
+      mockAuth0({subscriptionStatus: 'free', exports: [oldFreeExportDaysAgo(1), oldFreeExportDaysAgo(2)]})
+      axios.patch.mockResolvedValue({data: {}})
+
+      const res = await handler(getEvent({}, LOCAL))
+
+      expect(res.statusCode).toBe(200)
+      // ...and they are not touched, nor counted toward a slot.
+      expect(Object.keys(axios.patch.mock.calls[0][1].app_metadata)).toEqual(['usageQuota'])
+      expect(JSON.parse(res.headers['X-Bldrs-Model-Slots'])).toMatchObject({used: 1, remaining: 1, taken: true})
+    })
+
+    it('400s a free request with no model key, or one that is not a share path', async () => {
+      mockAuth0({subscriptionStatus: 'free'})
+
+      const missing = await handler(getEvent({}, null))
+      expect(missing.statusCode).toBe(400)
+      expect(JSON.parse(missing.body).error).toBe('missing_model_key')
+
+      const malformed = await handler(getEvent({}, 'index.ifc'))
+      expect(malformed.statusCode).toBe(400)
+      expect(JSON.parse(malformed.body).error).toBe('invalid_model_key')
+      expect(axios.patch).not.toHaveBeenCalled()
+      expect(fs.readFile).not.toHaveBeenCalled()
+    })
+
+    it('decodes a key with characters a raw header could not carry', async () => {
+      const key = '/share/v/gh/acme/private/main/Gebäude.ifc'
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(key, 1)]}})
+
+      const res = await handler(getEvent({}, key))
+
+      expect(res.statusCode).toBe(200)
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it('takes no slot when the module was never built', async () => {
       mockAuth0({subscriptionStatus: 'free'})
       fs.readFile.mockRejectedValue(new Error('ENOENT'))
 
-      const res = await handler(getEvent())
+      const res = await handler(getEvent({}, LOCAL))
 
       expect(res.statusCode).toBe(404)
       expect(axios.patch).not.toHaveBeenCalled()
     })
 
-    it('is not served when the charge could not be written', async () => {
-      // Serving anyway would be exactly the uncounted free export the gate
-      // exists to prevent; the failure goes the other way.
+    it('is not served when the slot could not be written', async () => {
+      // Serving anyway would be exactly the export of a model holding no
+      // slot that the gate exists to prevent; the failure goes the other way.
       mockAuth0({subscriptionStatus: 'free'})
       axios.patch.mockRejectedValue(Object.assign(new Error('mgmt write failed'), {response: {status: 500}}))
       const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
 
-      const res = await handler(getEvent())
+      const res = await handler(getEvent({}, LOCAL))
 
       expect(res.statusCode).toBe(502)
-      expect(JSON.parse(res.body)).toMatchObject({error: 'free_export_charge_failed', step: 'user_patch', upstreamStatus: 500})
+      expect(JSON.parse(res.body)).toMatchObject({error: 'model_slot_write_failed', step: 'user_patch', upstreamStatus: 500})
       expect(res.body).not.toContain(MODULE_SOURCE)
-      expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('free export charge failed at user_patch'))
+      expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('model slot write failed at user_patch'))
       consoleError.mockRestore()
     })
   })

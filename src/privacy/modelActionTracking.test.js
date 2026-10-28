@@ -143,7 +143,7 @@ describe('trackModelActionWhenAuthSettled', () => {
   })
 
   // A gate's own verdict, or a refusal that is free by definition
-  // (useExport's free_limit), isn't read from auth: nothing to wait for, and
+  // (useExport's no_slot), isn't read from auth: nothing to wait for, and
   // the settled claims must not override it.
   it('sends an explicit tier at once, and keeps it over the claims', () => {
     act(() => useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'}))

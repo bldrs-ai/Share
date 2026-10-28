@@ -416,11 +416,16 @@ export function gtagFunnelEvent(eventName, parameters = {}) {
  * fires:
  *
  *   EXPORT_GATED    {reason: 'anonymous'|'free'}  ExportSection, on the gate's
- *                   help opening
+ *                   help opening; 'free' is a free user whose model holds no
+ *                   slot while every model slot is taken (the slot rule,
+ *                   2026-10-27; it was the 2-exports-a-week cap before)
  *   EXPORT_MODEL    {format, bytes_bucket, source_kind, portable,
- *                   free_export}  useExport, on a delivered download
- *   EXPORT_FAILED   {format, reason: 'free_limit'|'denied'|'unavailable'|
- *                   'error'}  useExport, once per run that delivers no file
+ *                   free_export, slot_taken}  useExport, on a delivered
+ *                   download; free_export: exported on the free tier;
+ *                   slot_taken: that export took a new model slot
+ *   EXPORT_FAILED   {format, reason: 'no_slot'|'denied'|'unavailable'|
+ *                   'error'}  useExport, once per run that delivers no file;
+ *                   'no_slot' replaced 'free_limit' with the slot rule
  *   SHARE_GATED     {reason: 'local_file', signed_in}  ShareControl, on the
  *                   local-only Share gate's help opening
  *   SHARE_INTEREST  {feature: 'save_to_cloud', signed_in}  ShareControl, on
@@ -482,7 +487,9 @@ export function gtagEventWithCid(eventName, parameters = {}) {
  *   model_export  {tier, source?, route_kind?, content_id?, gate, open_cid}
  *                 none     useExport delivery (beside export_model)
  *                 upsell   ExportSection's gates (beside export_gated)
- *                 blocked  useExport, export_failed{reason: 'free_limit'} only
+ *                 blocked  useExport, export_failed{reason: 'no_slot'} only
+ *                          ("refused: no free model slot"; it was
+ *                          'free_limit' before the slot rule, 2026-10-27)
  *
  * `content_id` is the model's key, the value real_model_open sends under the
  * same (registered) dimension, from the same helper (modelContentId), so GA

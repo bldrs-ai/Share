@@ -89,7 +89,8 @@ function healthyTenant() {
     {user_id: 'auth0|pending', email: 'pending@example.test', connection: DB,
       app_metadata: {subscriptionStatus: 'sharePro'}},
     {user_id: 'auth0|free-c', email: 'free-chromium@example.test', connection: DB,
-      app_metadata: {exports: [{id: 'f1', free: true}, {id: 'f2', free: true}], usageQuota: {n: 3}}},
+      app_metadata: {exports: [{id: 'f1', free: true}, {id: 'f2', free: true}],
+        usageQuota: {n: 3, loads: [{key: '/share/v/p/index.ifc', loadedAt: '2026-10-27T00:00:00.000Z'}]}}},
     {user_id: 'auth0|free-f', email: 'free-firefox@example.test', connection: DB, app_metadata: {}},
   ]
 }
@@ -127,18 +128,18 @@ describe('live-smoke/resetAccounts', () => {
     const result = await resetAccounts({accounts: ACCOUNTS, admin: createAuth0Admin(CONFIG, {fetchImpl})})
 
     expect(result.drift).toEqual([])
-    expect(fetchImpl.users.get('auth0|free-c').app_metadata).toEqual({exports: [], usageQuota: {n: 3}})
+    expect(fetchImpl.users.get('auth0|free-c').app_metadata).toEqual({exports: [], usageQuota: {n: 3, loads: []}})
     expect(fetchImpl.users.get('auth0|pending').app_metadata.subscriptionStatus).toBe('shareProPendingReauth')
     // Exactly the two writes that were needed: the empty free ledger and the
     // pro account are not written to at all.
     expect(patches(fetchImpl).map((c) => [c.pathname, c.body])).toEqual([
       ['/api/v2/users/auth0%7Cpending', {app_metadata: {subscriptionStatus: 'shareProPendingReauth'}}],
-      ['/api/v2/users/auth0%7Cfree-c', {app_metadata: {exports: []}}],
+      ['/api/v2/users/auth0%7Cfree-c', {app_metadata: {exports: [], usageQuota: {n: 3, loads: []}}}],
     ])
     expect(result.rows.map((r) => [r.role, r.userId, r.action])).toEqual([
       ['pro', 'auth0|pro', 'verified comped Pro'],
       ['pending', 'auth0|pending', 'set shareProPendingReauth (was sharePro)'],
-      ['free.chromium', 'auth0|free-c', 'cleared 2 export rows'],
+      ['free.chromium', 'auth0|free-c', 'cleared 2 export rows, 1 model slots'],
       ['free.firefox', 'auth0|free-f', 'nothing to clear'],
     ])
   })
@@ -229,7 +230,7 @@ describe('live-smoke/resetAccounts', () => {
     expect(result.drift).toEqual([
       {role: 'pending', userId: 'auth0|pending', reason: 'pending: the write did not land (still "sharePro")'},
       {role: 'free.chromium', userId: 'auth0|free-c',
-        reason: 'free.chromium: the write did not land (2 export rows remain)'},
+        reason: 'free.chromium: the write did not land (2 export rows, 1 model slots remain)'},
     ])
   })
 

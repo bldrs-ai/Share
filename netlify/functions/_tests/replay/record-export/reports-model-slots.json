@@ -1,9 +1,9 @@
 {
-  "description": "GET reports a free user's allowance from the ledger, counting only free rows inside the 7-day window, and writes nothing.",
+  "description": "GET reports a free user's model slots from usageQuota.loads — only rows inside the 7-day window, and none of the retired free-export rows — and writes nothing.",
   "env": {
     "$fixture": "env/auth0.json"
   },
-  "now": "2026-10-06T12:00:00.000Z",
+  "now": "2026-10-27T12:00:00.000Z",
   "request": {
     "method": "GET",
     "path": "/.netlify/functions/record-export",
@@ -36,26 +36,31 @@
                   "title": "index.ifc",
                   "format": "glb",
                   "bytes": 1024,
-                  "exportedAt": "2026-10-05T08:00:00.000Z",
+                  "exportedAt": "2026-10-26T08:00:00.000Z",
                   "free": true
                 },
                 {
-                  "id": "d6c4f5a7-8b9c-4d0e-9f1a-2b3c4d5e6f7a",
+                  "id": "b4a2d3e5-6f7a-4b8c-9d0e-1f2a3b4c5d6e",
                   "key": "/share/v/p/index.ifc",
                   "title": "index.ifc",
                   "format": "glb",
                   "bytes": 1024,
-                  "exportedAt": "2026-09-25T08:00:00.000Z",
+                  "exportedAt": "2026-10-25T09:00:00.000Z",
                   "free": true
-                },
-                {
-                  "id": "e7d5a6b8-9c0d-4e1f-8a2b-3c4d5e6f7a8b",
-                  "key": "/k",
-                  "format": "glb",
-                  "bytes": 1,
-                  "exportedAt": "2026-10-06T08:00:00.000Z"
                 }
-              ]
+              ],
+              "usageQuota": {
+                "loads": [
+                  {
+                    "key": "/share/v/gh/acme/private/main/tower.ifc",
+                    "loadedAt": "2026-10-24T10:00:00.000Z"
+                  },
+                  {
+                    "key": "/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz",
+                    "loadedAt": "2026-10-19T10:00:00.000Z"
+                  }
+                ]
+              }
             }
           }
         }
@@ -66,11 +71,14 @@
     "statusCode": 200,
     "json": {
       "tier": "free",
-      "freeExports": {
+      "modelSlots": {
         "limit": 2,
         "used": 1,
         "remaining": 1,
-        "nextFreeAt": "2026-10-12T08:00:00.000Z"
+        "nextFreeAt": "2026-10-31T10:00:00.000Z",
+        "keys": [
+          "/share/v/gh/acme/private/main/tower.ifc"
+        ]
       }
     }
   }

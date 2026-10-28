@@ -203,6 +203,27 @@ describe('ExportsList', () => {
     )
   })
 
+  // Codex on #1980: the row's own word on a link-shared Drive file goes
+  // with the replay, or pro-module would take a slot for a public file.
+  it('re-downloads a link-shared Drive file as public', async () => {
+    const driveKey = '/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz'
+    loadExports.mockResolvedValue({exports: [aRow({key: driveKey, drivePublic: true})]})
+
+    await renderList()
+
+    fireEvent.click(await screen.findByTestId('exports-download-again'))
+    expect(mockRun).toHaveBeenCalledWith('glb', expect.any(Object), expect.objectContaining({key: driveKey, drivePublic: true}))
+  })
+
+  it('re-downloads a row with no Drive public word as private', async () => {
+    loadExports.mockResolvedValue({exports: [aRow()]})
+
+    await renderList()
+
+    fireEvent.click(await screen.findByTestId('exports-download-again'))
+    expect(mockRun).toHaveBeenCalledWith('glb', expect.any(Object), expect.objectContaining({drivePublic: false}))
+  })
+
   it('disables "Download again" while ANY export in the tab is running', async () => {
     // The in-flight flag is shared (store/UISlice.js) rather than each
     // `useExport` instance's own: an export started by the Export GLB

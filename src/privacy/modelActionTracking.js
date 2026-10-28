@@ -30,7 +30,7 @@ import {trackModelAction} from './analytics'
  * caller snapshots at the call, so a navigation while waiting can't relabel the
  * action. And a caller that passes an explicit `tier` — a gate's own
  * verdict (QuotaLimitDialog's prop, record-load's answer) or a refusal that
- * is free-tier by definition (useExport's free_limit) — sends at once: the
+ * is free-tier by definition (useExport's no_slot) — sends at once: the
  * tier isn't read from auth, so there is nothing to wait for.
  *
  * @param {string} action 'view' | 'share' | 'export' (MODEL_ACTIONS)

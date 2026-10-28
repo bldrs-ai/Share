@@ -753,6 +753,9 @@ export default function CadView({
           connections.find((c) => c.providerId === 'google-drive') :
           undefined
         driveDownloadRef.current = {fileId: routeResult.fileId, connection: connection || null}
+        // The same record for the export side (quota/driveExportVisibility.js),
+        // which classifies a Drive file's sharing from it as the meter does.
+        useStore.getState().setModelDriveDownload(driveDownloadRef.current)
         if (connection) {
           // OAuth path: authenticated download for private files
           const browser = getBrowser('google-drive')

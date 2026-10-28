@@ -2,19 +2,22 @@
  * Netlify Function: record-export.js
  * ----------------------------------
  * Server-side history of what a user has exported, and the free tier's
- * export allowance read off it.
+ * model slots read off `app_metadata.usageQuota.loads`.
  *
  *   GET  /.netlify/functions/record-export
  *   Headers: Authorization: Bearer <Auth0 access token>
- *   → {tier: 'paid', freeExports: null} for Pro, or
- *     {tier: 'free', freeExports: {limit, used, remaining, nextFreeAt}}
- *   What the Export tab shows a free user before they export
- *   (src/export/useFreeExports.js). Read-only.
+ *   → {tier: 'paid', modelSlots: null} for Pro, or
+ *     {tier: 'free', modelSlots: {limit, used, remaining, nextFreeAt, keys}}
+ *   What the Export tab shows a free user before they export — whether the
+ *   model on screen holds a slot, and how many are free
+ *   (src/export/useExportSlots.js). Read-only.
  *
  *   POST /.netlify/functions/record-export
  *   Headers: Authorization: Bearer <Auth0 access token>
  *   Body:    {key, format, bytes, title?, id?}
- *            key    — share path of the model, e.g. /share/v/gh/o/r/main/x.ifc
+ *            key    — slot key of the model, e.g. /share/v/gh/o/r/main/x.ifc
+ *                     (src/quota/modelSlotKey.js) — the key `pro-module`
+ *                     was sent for the same export
  *            format — export format id from src/export/exportRegistry.js
  *            bytes  — size of the downloaded file
  *            title  — display label; falls back to the key's basename in the UI
@@ -33,43 +36,54 @@
  * it was minted into) → then by tier:
  *  - Pro (`sharePro` or `shareProPendingReauth`, src/quota/proStatus.js):
  *    prepend the new entry to `app_metadata.exports` → PATCH.
- *  - Free: the export was already CHARGED, by `pro-module`, which wrote a
- *    `free: true` row before handing over the module and told the client its
- *    id. This fills that row in — key, title, format, bytes — under the same
- *    id, so one free export is one row and is counted once. A body whose id
- *    matches no charged row is refused (403 `free_export_not_charged`): this
- *    function never ADDS a free row, so it is not a way to count, or to
- *    un-count, anything (design/new/glb-export-premium.md §4.8).
- *  → respond `{exports}`, plus `freeExports` for a free user.
+ *  - Free: the export was decided by `pro-module`, which handed over the
+ *    module only for a model holding one of the user's slots (taking a free
+ *    slot when it held none). So the key must hold a slot now: if it does,
+ *    the entry is prepended like a Pro one; if it doesn't, the module did
+ *    not come from `pro-module` for this model — in practice a module
+ *    memoised while the account was Pro, on an account that has since lost
+ *    Pro — and the POST is refused (403 `export_slot_missing`), which is
+ *    the client's signal to drop that memo (design/new/glb-export-premium.md
+ *    §4.8).
+ *  → respond `{exports}`, plus `modelSlots` for a free user.
  *
- * This is deliberately not where free exports are counted. It runs after
- * the file is already in the user's Downloads, so a client that never calls
- * it would never be counted; `pro-module` charges at delivery instead.
+ * This is deliberately not where slots are taken. It runs after the file is
+ * already in the user's Downloads, so a client that never calls it would
+ * never be counted; `pro-module` takes the slot at delivery instead. Nothing
+ * here writes `usageQuota`.
+ *
+ * Rows the retired per-export allowance wrote (`free: true`, charged by
+ * `pro-module` before 2026-10-27) are history like any other row: kept,
+ * listed, and counted for nothing.
  *
  * Response: {exports: [{id, key, title, format, bytes, exportedAt, free?}, …],
- * freeExports?}, newest first, capped at EXPORTS_CAP. The client mirrors
+ * modelSlots?}, newest first, capped at EXPORTS_CAP. The client mirrors
  * `exports` into OPFS (`src/export/exportHistory.js`) as its instant-display
- * copy, and `freeExports` into the Export tab's remaining-count line.
+ * copy, and `modelSlots` into the Export tab's slot line.
  *
  * READ-MODIFY-WRITE CAVEAT, same as `record-load.js`: the list is read,
  * prepended to and written back with no compare-and-swap, so two exports
- * racing from two tabs can lose one row. That loss direction is deliberate —
- * for a Pro user this list is history, never an entitlement, so the worst
- * outcome is a missing row in "My Exports". For a free user it is also the
- * allowance ledger, and a lost write there can only lose a charge row
- * (another tab's `pro-module` charge landing between this read and this
- * write) — a free extra export, never a wrongful refusal. §4.8 lists it.
+ * racing from two tabs can lose one row. That loss direction is deliberate:
+ * this list is history, never an entitlement, so the worst outcome is a
+ * missing row in "My Exports".
  *
  * Only the `exports` key is patched (`patchUserAppMetadata`), so a
- * concurrent `record-load.js` write of `usageQuota` — or the Stripe
- * webhook's `subscriptionStatus` — survives untouched.
+ * concurrent `record-load.js` or `pro-module.js` write of `usageQuota` — or
+ * the Stripe webhook's `subscriptionStatus` — survives untouched.
  *
  * Design: design/new/glb-export-premium.md §4.5.
  */
 
 import {randomUUID} from 'crypto'
 import * as Sentry from '@sentry/serverless'
-import {freeExportAllowance} from '../../src/export/freeExports.js'
+import {
+  DRIVE_PUBLIC_HEADER,
+  EXPORT_SLOT_MISSING_REASON,
+  MODEL_KEY_HEADER,
+  decodeModelKeyHeader,
+  isModelKey,
+  modelSlots,
+} from '../../src/export/exportSlots.js'
 import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
 import {
   getUserAppMetadata,
@@ -77,6 +91,7 @@ import {
   patchUserAppMetadata,
   verifyAuth0Bearer,
 } from './_lib/auth0.js'
+import {isPublicModel} from './_lib/modelVisibility.js'
 
 
 Sentry.AWSLambda.init({
@@ -155,7 +170,7 @@ function parseBody(event) {
   } catch {
     return {error: 'invalid_json'}
   }
-  const {id, key, format, title, bytes} = body || {}
+  const {id, key, format, title, bytes, drivePublic} = body || {}
   if (typeof key !== 'string' || key.length === 0) {
     return {error: 'missing_key'}
   }
@@ -172,7 +187,7 @@ function parseBody(event) {
   if (id !== undefined && id !== null && (typeof id !== 'string' || !UUID_PATTERN.test(id))) {
     return {error: 'invalid_id'}
   }
-  return {entry: {id: id || null, key, format, title: title || null, bytes}}
+  return {entry: {id: id || null, key, format, title: title || null, bytes}, drivePublic: drivePublic === true}
 }
 
 
@@ -211,58 +226,40 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
 
   const existing = Array.isArray(appMetadata.exports) ? appMetadata.exports : []
   const isPro = isProSubscriptionStatus(appMetadata.subscriptionStatus)
+  const slots = isPro ? null : modelSlots(appMetadata.usageQuota?.loads)
+  // A public model exports without a slot (pro-module serves it unlimited),
+  // so it is recorded without one too — decided by the same classification.
+  if (!isPro && !slots.keys.includes(parsed.entry.key) &&
+      !(await isPublicModel(parsed.entry.key, {drivePublic: parsed.drivePublic}))) {
+    // A free user's export of a model holding no slot: `pro-module` never
+    // hands the module over for one, so the module came from somewhere
+    // else — a Pro delivery memoised before the account lost Pro, a saved
+    // module replayed (§4.8), or a faked POST. Refused rather than
+    // recorded; the slots ride along so the client's display catches up.
+    // Attributable either way; the key stays out of the message, since it
+    // can name a private repo's file.
+    Sentry.captureMessage(
+      `record-export: export of a model holding no slot for ${auth.sub}` +
+        ` (subscriptionStatus=${appMetadata.subscriptionStatus || 'none'})`,
+      'warning',
+    )
+    return errorResponse(HTTP_FORBIDDEN, EXPORT_SLOT_MISSING_REASON, {modelSlots: slots})
+  }
   // Not named `exports`: babel-jest transpiles this module to CJS for the
   // unit tests, where that identifier is the module's own binding.
-  let updatedExports
-  if (isPro) {
-    updatedExports = [
-      {
-        // The client's id when it sent one, so its optimistic row and this
-        // one are the same row on both sides of the mirror.
-        id: parsed.entry.id || randomUUID(),
-        key: parsed.entry.key,
-        title: parsed.entry.title,
-        format: parsed.entry.format,
-        bytes: parsed.entry.bytes,
-        exportedAt: new Date().toISOString(),
-      },
-      ...existing,
-    ].slice(0, EXPORTS_CAP)
-  } else {
-    const chargedAt = parsed.entry.id === null ? -1 :
-      existing.findIndex((row) => row && row.free === true && row.id === parsed.entry.id)
-    if (chargedAt === -1) {
-      // A free user's export that `pro-module` never charged: either the
-      // module came from somewhere other than this deploy's gate (saved and
-      // replayed, §4.8) or the client faked the POST. Refused rather than
-      // appended, because an appended row would count — and a free user
-      // must not be able to write their own ledger. Attributable either way.
-      Sentry.captureMessage(
-        `record-export: no charged free export ${parsed.entry.id || '(no id)'} for ${auth.sub}` +
-          ` (subscriptionStatus=${appMetadata.subscriptionStatus || 'none'})`,
-        'warning',
-      )
-      // The allowance rides along because the refusal can be the LOSER of a
-      // two-tab read-modify-write race on the ledger (the other tab's PATCH
-      // overwrote this tab's charge row): the client's cached count — taken
-      // from the charge header, which counted that row — is then too LOW, and
-      // this is the only answer it will get before the next remount. `existing`
-      // is already the authoritative ledger, so it costs nothing to state.
-      return errorResponse(HTTP_FORBIDDEN, 'free_export_not_charged',
-        {freeExports: freeExportAllowance(existing)})
-    }
-    // Fill the charge row in place. Its id, `exportedAt` and `free` are the
-    // server's from the charge and stay: the window counts from when the
-    // module was handed over, not from whatever this request says.
-    const charged = existing[chargedAt]
-    updatedExports = existing.map((row, i) => (i === chargedAt ? {
-      ...charged,
+  const updatedExports = [
+    {
+      // The client's id when it sent one, so its optimistic row and this
+      // one are the same row on both sides of the mirror.
+      id: parsed.entry.id || randomUUID(),
       key: parsed.entry.key,
       title: parsed.entry.title,
       format: parsed.entry.format,
       bytes: parsed.entry.bytes,
-    } : row))
-  }
+      exportedAt: new Date().toISOString(),
+    },
+    ...existing,
+  ].slice(0, EXPORTS_CAP)
 
   try {
     await patchUserAppMetadata(auth.sub, {exports: updatedExports})
@@ -270,14 +267,12 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
     return managementApiFailure(err, 'history write', 'record_export_failed')
   }
 
-  return jsonResponse(HTTP_OK, isPro ?
-    {exports: updatedExports} :
-    {exports: updatedExports, freeExports: freeExportAllowance(updatedExports)})
+  return jsonResponse(HTTP_OK, isPro ? {exports: updatedExports} : {exports: updatedExports, modelSlots: slots})
 })
 
 
 /**
- * GET: the caller's tier and, for a free user, their export allowance.
+ * GET: the caller's tier and, for a free user, their model slots.
  *
  * @param {object} event Netlify Functions event
  * @return {Promise<object>} Netlify Functions response
@@ -288,9 +283,9 @@ async function reportAllowance(event) {
     return auth.response
   }
   // Unconfigured dev bypass: no ledger to read, and pro-module serves
-  // without charging there, so there is no allowance to report.
+  // without a slot check there, so there are no slots to report.
   if (auth.sub === null) {
-    return jsonResponse(HTTP_OK, {tier: 'paid', freeExports: null})
+    return jsonResponse(HTTP_OK, {tier: 'paid', modelSlots: null})
   }
   let appMetadata
   try {
@@ -299,9 +294,31 @@ async function reportAllowance(event) {
     return managementApiFailure(err, 'app_metadata lookup', 'app_metadata_lookup_failed')
   }
   if (isProSubscriptionStatus(appMetadata.subscriptionStatus)) {
-    return jsonResponse(HTTP_OK, {tier: 'paid', freeExports: null})
+    return jsonResponse(HTTP_OK, {tier: 'paid', modelSlots: null, isPublic: null})
   }
-  return jsonResponse(HTTP_OK, {tier: 'free', freeExports: freeExportAllowance(appMetadata.exports)})
+  // With the model on screen named (the same headers pro-module takes),
+  // whether it is public: the Export tab says "Public model: unlimited
+  // export" and never gates one, and only the server can tell for GitHub.
+  const modelKey = decodeModelKeyHeader(headerValue(event, MODEL_KEY_HEADER))
+  const isPublic = modelKey !== null && isModelKey(modelKey) ?
+    await isPublicModel(modelKey, {drivePublic: headerValue(event, DRIVE_PUBLIC_HEADER) === '1'}) :
+    null
+  return jsonResponse(HTTP_OK, {tier: 'free', modelSlots: modelSlots(appMetadata.usageQuota?.loads), isPublic})
+}
+
+
+/**
+ * A request header, whatever case it arrived in.
+ *
+ * @param {object} event Netlify Functions event
+ * @param {string} name
+ * @return {?string}
+ */
+function headerValue(event, name) {
+  const headers = event.headers || {}
+  const wanted = name.toLowerCase()
+  const found = Object.keys(headers).find((header) => header.toLowerCase() === wanted)
+  return found === undefined ? null : headers[found]
 }
 
 

@@ -14,7 +14,7 @@
  *   3. Derive tier: a Pro subscriptionStatus (`sharePro` or
  *      `shareProPendingReauth`, src/quota/proStatus.js) → PAID, else FREE.
  *   4. For /v/gh/, resolve repo privacy via unauth api.github.com
- *      (cached per "owner/repo" in module scope, 15-minute TTL). This
+ *      (cached per "owner/repo", 15-minute TTL; _lib/modelVisibility.js, the classification pro-module and record-export share). This
  *      function does not take the client's word for GitHub.
  *      For /v/g/ (Drive) it does: it can't see a Drive file's sharing (that
  *      would need the user's Drive token), so it counts every Drive key it
@@ -42,10 +42,11 @@ import {flags} from '../../src/FeatureFlags.js'
 import {
   FREE_PRIVATE_MODEL_LIMIT,
   TIERS,
-  isCountedByRouteKind,
   loadsInsideRollingWindow,
+  usageQuotaWithLoads,
 } from '../../src/quota/limits.js'
 import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
+import {isQuotableModel} from './_lib/modelVisibility.js'
 
 
 Sentry.AWSLambda.init({
@@ -60,7 +61,6 @@ const HTTP_BAD_REQUEST = 400
 const HTTP_UNAUTHORIZED = 401
 const HTTP_FORBIDDEN = 403
 const HTTP_METHOD_NOT_ALLOWED = 405
-const HTTP_INTERNAL_SERVER_ERROR = 500
 const HTTP_BAD_GATEWAY = 502
 
 // Tiers, the free limit and the rolling window come from src/quota/limits.js,
@@ -70,20 +70,15 @@ const TIER_PAID = TIERS.PAID
 const FREE_LIMIT = FREE_PRIVATE_MODEL_LIMIT
 
 // Time
-const SECONDS_PER_MIN = 60
 const MILLIS_PER_SECOND = 1000
 
 // Mgmt-token refresh safety margin
 const MGMT_TOKEN_REFRESH_SAFETY_SEC = 60
 
-// GH privacy cache TTL
-const GH_PRIVACY_CACHE_TTL_MIN = 15
-const GH_PRIVACY_CACHE_TTL_MS = GH_PRIVACY_CACHE_TTL_MIN * SECONDS_PER_MIN * MILLIS_PER_SECOND
 
 // Module-scope caches — survive across warm Lambda invocations.
 let cachedMgmtToken = null
 let cachedMgmtTokenExpiresAt = 0
-const ghPrivacyCache = new Map() // "owner/repo" -> {private: bool, fetchedAt: ms}
 
 /**
  * Fetch (or reuse) an Auth0 Management API token via Client Credentials.
@@ -137,15 +132,21 @@ async function getUserRecord(mgmtToken, auth0UserId) {
 }
 
 /**
+ * Auth0 merges `app_metadata` one top-level key at a time, so this writes
+ * the WHOLE `usageQuota` back — its other fields with `loads` replaced
+ * (`limits.js#usageQuotaWithLoads`, the write `pro-module` makes too) — or a
+ * load would erase them (codex review on Share#1980).
+ *
  * @param {string} mgmtToken
  * @param {string} auth0UserId
+ * @param {*} usageQuota The user's current app_metadata.usageQuota
  * @param {Array} loads New loads list to persist under app_metadata.usageQuota
  * @return {Promise<void>}
  */
-async function patchUsageQuota(mgmtToken, auth0UserId, loads) {
+async function patchUsageQuota(mgmtToken, auth0UserId, usageQuota, loads) {
   await axios.patch(
     `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(auth0UserId)}`,
-    {app_metadata: {usageQuota: {loads}}},
+    {app_metadata: {usageQuota: usageQuotaWithLoads(usageQuota, loads)}},
     {
       headers: {
         'Content-Type': 'application/json',
@@ -169,63 +170,6 @@ function getTier(appMetadata) {
 }
 
 /**
- * Resolve whether a `/v/gh/{owner}/{repo}/...` path points at a private
- * repo. Returns true (=quotable) for private/missing/error responses.
- * Cached in module scope per (owner, repo) for GH_PRIVACY_CACHE_TTL_MS.
- *
- * @param {string} owner
- * @param {string} repo
- * @return {Promise<boolean>}
- */
-async function isPrivateGhRepo(owner, repo) {
-  const cacheKey = `${owner.toLowerCase()}/${repo.toLowerCase()}`
-  const now = Date.now()
-  const hit = ghPrivacyCache.get(cacheKey)
-  if (hit && (now - hit.fetchedAt) < GH_PRIVACY_CACHE_TTL_MS) {
-    return hit.private
-  }
-  try {
-    const resp = await axios.get(
-      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
-      {validateStatus: () => true},
-    )
-    let isPrivate
-    if (resp.status === HTTP_OK) {
-      isPrivate = false
-    } else if (resp.status === HTTP_FORBIDDEN || resp.status >= HTTP_INTERNAL_SERVER_ERROR) {
-      // Rate-limited (403) or any 5xx upstream hiccup — don't penalize the
-      // user; treat as not-quotable (design/new/quotas.md §GitHub privacy
-      // detection: "403 / 5xx → No"). Do NOT cache this so we retry next time.
-      Sentry.captureException(new Error(`GH repo lookup status=${resp.status} for ${cacheKey}`))
-      return false
-    } else {
-      // 404 (private or missing) and other 4xx -> count it.
-      isPrivate = true
-    }
-    ghPrivacyCache.set(cacheKey, {private: isPrivate, fetchedAt: now})
-    return isPrivate
-  } catch (err) {
-    Sentry.captureException(err)
-    return false
-  }
-}
-
-/**
- * The view route's kind: the path segment after the FIRST `/v/` of a share
- * path, e.g. 'gh', 'g', 'local-only'. The same rule as
- * src/routes/localOnly.ts#viewRouteKind, which this bundle can't import. Only
- * the first `/v/` is the route: a GitHub file path may itself contain
- * `v/local-only/` or `v/g/` (codex review on Share#1967).
- *
- * @param {string} key Share path
- * @return {?string}
- */
-function viewRouteKind(key) {
-  const match = /\/v\/([^/?#]+)/.exec(key)
-  return match ? match[1] : null
-}
-
-/**
  * Whether local files count: the `meterLocalFiles` flag in
  * src/FeatureFlags.js (the client reads the same flag), or the
  * METER_LOCAL_FILES=true env var, which turns the meter on for this
@@ -243,27 +187,15 @@ function isLocalFileMeteringEnabled() {
 }
 
 /**
+ * The shared classification (`_lib/modelVisibility.js#isQuotableModel`,
+ * which `pro-module` and `record-export` decide exports by too), with this
+ * function's local-file switch.
+ *
  * @param {string} key Share path
  * @return {Promise<boolean>}
  */
-async function isQuotableLoad(key) {
-  const kind = viewRouteKind(key)
-  // Drive (`/v/g/`) counts as sent: the client sends only Drive files it
-  // found private, since this function can't see Drive sharing. Local files
-  // (`/v/local-only/`, legacy `/v/new/`) count only with the local meter
-  // switched on. The one rule, shared with the MSW mock and, for local
-  // files, src/quota/quota.js#isLocallyQuotable.
-  if (isCountedByRouteKind(kind, isLocalFileMeteringEnabled())) {
-    return true
-  }
-  // /v/gh/<owner>/<repo>/<branch>/<path>
-  const ghMatch = kind === 'gh' && key.match(/\/v\/gh\/([^/]+)\/([^/]+)\//)
-  if (ghMatch) {
-    const owner = decodeURIComponent(ghMatch[1])
-    const repo = decodeURIComponent(ghMatch[2])
-    return await isPrivateGhRepo(owner, repo)
-  }
-  return false
+function isQuotableLoad(key) {
+  return isQuotableModel(key, {meterLocalFiles: isLocalFileMeteringEnabled()})
 }
 
 /**
@@ -366,7 +298,7 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
 
   const newLoads = [...existingLoads, {key, loadedAt: new Date(now).toISOString()}]
   try {
-    await patchUsageQuota(mgmtToken, auth0UserId, newLoads)
+    await patchUsageQuota(mgmtToken, auth0UserId, appMetadata.usageQuota, newLoads)
   } catch (err) {
     Sentry.captureException(err)
     return {statusCode: HTTP_BAD_GATEWAY, body: 'Failed to record load'}

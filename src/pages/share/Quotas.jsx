@@ -1,8 +1,8 @@
 import React, {ReactElement} from 'react'
 import {Box, Link, Table, TableBody, TableCell, TableHead, TableRow, Typography} from '@mui/material'
 import TitledLayout from '../../layouts/TitledLayout'
-import {FREE_EXPORT_LIMIT, FREE_EXPORT_WINDOW_DAYS} from '../../export/freeExports'
 import {LIMITS, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/limits'
+import {SIGNED_OUT_FEATURES} from '../../quota/tierCopy'
 
 
 /** @return {ReactElement} */
@@ -18,14 +18,16 @@ export default function Quotas() {
           GitHub repository, or its Google Drive file is shared with your
           Google account. Files from your own computer, public GitHub models
           and Drive files shared &ldquo;Anyone with the link&rdquo; are free
-          and unlimited.
+          and unlimited to view. Each private model you open holds one of
+          your model slots for {ROLLING_WINDOW_DAYS} days, and the same slots
+          cover GLB exports (below).
         </Typography>
 
         <Table sx={{marginTop: '1em'}}>
           <TableHead>
             <TableRow>
               <TableCell><strong>Tier</strong></TableCell>
-              <TableCell><strong>Private model loads</strong></TableCell>
+              <TableCell><strong>Model slots</strong></TableCell>
               <TableCell><strong>Window</strong></TableCell>
             </TableRow>
           </TableHead>
@@ -48,6 +50,17 @@ export default function Quotas() {
           </TableBody>
         </Table>
 
+        <Typography variant='h6' sx={{marginTop: '2em'}}>Without signing in</Typography>
+        {/* The signed-out tier, worded once for here and the pricing page
+            (quota/tierCopy.js). Export starts at a free account. */}
+        <Typography component='ul' data-testid='quotas-signed-out'>
+          {SIGNED_OUT_FEATURES.map((feature) => (typeof feature === 'string' ?
+            <li key={feature}>{feature}</li> :
+            <li key={feature.text}>
+              {feature.text} (<Link href={feature.link.href}>{feature.link.label}</Link>)
+            </li>))}
+        </Typography>
+
         <Typography variant='h6' sx={{marginTop: '2em'}}>What counts as a load?</Typography>
         <Typography paragraph>
           Each unique private model URL counts once. Reloading the same
@@ -55,7 +68,7 @@ export default function Quotas() {
           or a fresh tab — does not consume additional quota.
         </Typography>
 
-        <Typography variant='h6' sx={{marginTop: '1.5em'}}>What does <em>not</em> count?</Typography>
+        <Typography variant='h6' sx={{marginTop: '1.5em'}}>What does <em>not</em> count when you open it?</Typography>
         <Typography component='ul'>
           <li>Files opened from your computer (drag and drop, or Browse)</li>
           <li>Public GitHub repositories (including all sample models)</li>
@@ -65,14 +78,22 @@ export default function Quotas() {
         </Typography>
 
         <Typography variant='h6' sx={{marginTop: '1.5em'}}>GLB exports</Typography>
-        <Typography paragraph>
-          A free account includes {FREE_EXPORT_LIMIT} GLB exports in any
-          rolling {FREE_EXPORT_WINDOW_DAYS} days.
+        <Typography paragraph data-testid='quotas-exports'>
+          Public models: unlimited export, no slot &mdash; public GitHub
+          models (all the samples included), the demo models Bldrs hosts, Drive
+          files shared &ldquo;Anyone with the link&rdquo;, and models opened
+          from a public URL. Private
+          models use the same {LIMITS[TIERS.FREE]} model slots as opening
+          does: a model that holds one of your slots, unlimited export. A file
+          from your computer takes a slot the first time you export it, then
+          unlimited export for the rest of the {ROLLING_WINDOW_DAYS} days.
+          When every slot holds another model, exporting a new private model
+          or file waits until the oldest slot frees up.
         </Typography>
 
         <Typography sx={{marginTop: '2em'}}>
           Need more? <Link href='/subscribe'>Upgrade to Pro</Link> for
-          unlimited private models and unlimited GLB exports.
+          unlimited private models and exports.
         </Typography>
       </Box>
     </TitledLayout>

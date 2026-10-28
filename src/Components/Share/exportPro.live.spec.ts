@@ -144,7 +144,7 @@ test.describe('Live smoke: Pro', () => {
     await expect(button).toHaveText('Export GLB')
 
     // Step 2, Pro: nothing new on the tab — no allowance line, no Pro chip.
-    await expect(page.getByTestId('export-free-remaining')).toHaveCount(0)
+    await expect(page.getByTestId('export-model-slots')).toHaveCount(0)
     await expect(page.getByTestId('export-pro-chip')).toHaveCount(0)
 
     await dismissLoadSnackbar(page)
@@ -181,8 +181,8 @@ test.describe('Live smoke: Pro', () => {
     // Directives, not the string: Netlify's edge re-serializes the header
     // the function set as `private, no-store` to `private,no-store`.
     expect(cacheDirectives(proModule[0].headers['cache-control'])).toEqual(['no-store', 'private'])
-    // A Pro delivery is never charged (#1939 §4.8): no free-export row id.
-    expect(proModule[0].headers['x-bldrs-export-id']).toBeUndefined()
+    // A Pro delivery takes no model slot (§4.8): no slots header.
+    expect(proModule[0].headers['x-bldrs-model-slots']).toBeUndefined()
 
     // Step 5: metadata off is a smaller file with no BLDRS_ anywhere in its
     // JSON — and the first file, with it on, had some.

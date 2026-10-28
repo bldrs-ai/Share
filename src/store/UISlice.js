@@ -35,18 +35,21 @@ export default function createUISlice(set, get) {
     isExportInFlight: false,
     setIsExportInFlight: (inFlight) => set(() => ({isExportInFlight: inFlight})),
 
-    // A free user's export allowance as the server last reported it —
-    // `{sub, limit, used, remaining, nextFreeAt}`, or null while unknown
-    // (src/export/freeExports.js). Written from three answers: record-export's
-    // GET when the Export tab opens (`useFreeExports`), pro-module's charge
-    // header and record-export's POST after an export, and pro-module's
-    // at-the-limit refusal (`useExport`). Store rather than component state
-    // because the hook that exports and the panel that shows the count are
+    // A free user's model slots as the server last reported them —
+    // `{sub, limit, used, remaining, nextFreeAt, keys}`, or null while
+    // unknown (src/export/exportSlots.js#modelSlots). The Export tab reads
+    // whether the model on screen is in `keys` (export it freely), and
+    // otherwise whether a slot `remaining` is free (its first export takes
+    // one) or not (gated). Written from four answers: record-export's GET
+    // when the Export tab opens (`useExportSlots`), pro-module's slots
+    // header after a delivery, record-export's POST, and pro-module's
+    // slots-full refusal (`useExport`). Store rather than component state
+    // because the hook that exports and the panel that shows the slots are
     // different components. Carries the `sub` it belongs to, so a sign-out
-    // and sign-in as someone else never shows them the previous count.
+    // and sign-in as someone else never shows them the previous slots.
     // Design: design/new/glb-export-premium.md §4.8.
-    freeExportAllowance: null,
-    setFreeExportAllowance: (allowance) => set(() => ({freeExportAllowance: allowance})),
+    modelSlots: null,
+    setModelSlots: (slots) => set(() => ({modelSlots: slots})),
 
     isHelpVisible: helpIsVisibleInitially(),
     setIsHelpVisible: (is) => set(() => ({isHelpVisible: is})),
