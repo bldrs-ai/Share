@@ -5,11 +5,20 @@ import Cookies from 'js-cookie'
 import {AUTH_SETTLE_RETRY_MS} from '../Containers/authLoadGate'
 import {TIERS} from '../quota/quota'
 import useStore from '../store/useStore'
-import {MODEL_ACTIONS, MODEL_GATES, _resetGaClientIdForTests, modelRouteSource, setIsAllowed} from './analytics'
+import {
+  MODEL_ACTIONS,
+  MODEL_GATES,
+  _resetGaClientIdForTests,
+  modelContentId,
+  modelRouteSource,
+  setIsAllowed,
+} from './analytics'
 import {trackModelActionWhenAuthSettled} from './modelActionTracking'
 
 
 const LOCAL_ROUTE = {kind: 'file', isUploadedFile: true, filepath: '/0b4c2f1e.ifc'}
+// What real_model_open sends for it: the route's path (no downloadUrl here).
+const LOCAL_CONTENT_ID = '/0b4c2f1e.ifc'
 
 
 /**
@@ -90,6 +99,47 @@ describe('trackModelActionWhenAuthSettled', () => {
     })
     await act(() => done)
     expect(sent('model_view')).toEqual([expect.objectContaining({source: 'local', route_kind: 'local'})])
+  })
+
+  // Share#1981: the model's key rides on all three events, so GA can count
+  // distinct models from them. Both the waiting path and the explicit-tier
+  // path (which sends at once) must carry it.
+  it.each([
+    [MODEL_ACTIONS.VIEW, 'model_view'],
+    [MODEL_ACTIONS.SHARE, 'model_share'],
+    [MODEL_ACTIONS.EXPORT, 'model_export'],
+  ])('%s: sends the content_id it was given, whether it waits or not', async (action, eventName) => {
+    act(() => useStore.getState().setIsAuthResolved(true))
+    await act(() => trackModelActionWhenAuthSettled(action, {
+      gate: MODEL_GATES.NONE,
+      ...modelRouteSource(LOCAL_ROUTE),
+      contentId: modelContentId(LOCAL_ROUTE),
+      getIsAuthenticated: () => false,
+    }))
+    trackModelActionWhenAuthSettled(action, {gate: MODEL_GATES.BLOCKED, tier: TIERS.FREE, contentId: 'explicit-tier-id'})
+
+    expect(sent(eventName)).toEqual([
+      {tier: 'anon', gate: 'none', source: 'local', route_kind: 'local', content_id: LOCAL_CONTENT_ID},
+      {tier: 'free', gate: 'blocked', content_id: 'explicit-tier-id'},
+    ])
+  })
+
+  // The caller snapshots the id with the route; the wait must not re-read
+  // the store, or an export started on model A and finishing on B would be
+  // counted as a distinct model B.
+  it('keeps the content_id it was given, not the one of a model navigated to while waiting', async () => {
+    useStore.setState({modelPath: LOCAL_ROUTE})
+    const done = trackModelActionWhenAuthSettled(MODEL_ACTIONS.EXPORT, {
+      gate: MODEL_GATES.NONE,
+      contentId: modelContentId(useStore.getState().modelPath),
+      getIsAuthenticated: () => false,
+    })
+    act(() => {
+      useStore.setState({modelPath: {kind: 'file', isUploadedFile: true, filepath: '/other.ifc'}})
+      useStore.getState().setIsAuthResolved(true)
+    })
+    await act(() => done)
+    expect(sent('model_export')).toEqual([expect.objectContaining({content_id: LOCAL_CONTENT_ID})])
   })
 
   // A gate's own verdict, or a refusal that is free by definition

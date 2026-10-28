@@ -26,8 +26,8 @@ import {trackModelAction} from './analytics'
  * capped at AUTH_SETTLE_RETRY_MS, like CadView's authed retry, so a stuck
  * token exchange still sends the event, with the best tier known by then.
  *
- * What is NOT deferred: `source` and `routeKind` are values the caller
- * snapshots at the call, so a navigation while waiting can't relabel the
+ * What is NOT deferred: `source`, `routeKind` and `contentId` are values the
+ * caller snapshots at the call, so a navigation while waiting can't relabel the
  * action. And a caller that passes an explicit `tier` — a gate's own
  * verdict (QuotaLimitDialog's prop, record-load's answer) or a refusal that
  * is free-tier by definition (useExport's no_slot) — sends at once: the
@@ -38,14 +38,16 @@ import {trackModelAction} from './analytics'
  * @param {string} details.gate one of MODEL_GATES
  * @param {string} [details.source] snapshotted by the caller
  * @param {string} [details.routeKind] snapshotted by the caller
+ * @param {string} [details.contentId] analytics.js#modelContentId of the
+ *   model acted on, snapshotted by the caller; omitted when unknown
  * @param {string} [details.tier] an explicit quota tier (TIERS); skips the wait
  * @param {Function} [details.getIsAuthenticated] returns the LATEST auth
  *   state when called (callers pass a ref reader); unset reads as signed out
  * @return {Promise<void>} resolves once the event is sent; callers needn't await
  */
-export function trackModelActionWhenAuthSettled(action, {gate, source, routeKind, tier, getIsAuthenticated} = {}) {
+export function trackModelActionWhenAuthSettled(action, {gate, source, routeKind, contentId, tier, getIsAuthenticated} = {}) {
   if (tier) {
-    trackModelAction(action, {gate, source, routeKind, tier})
+    trackModelAction(action, {gate, source, routeKind, contentId, tier})
     return Promise.resolve()
   }
   return waitForAuthSettled(AUTH_SETTLE_RETRY_MS).then(() => {
@@ -53,6 +55,7 @@ export function trackModelActionWhenAuthSettled(action, {gate, source, routeKind
       gate,
       source,
       routeKind,
+      contentId,
       isAuthenticated: getIsAuthenticated ? getIsAuthenticated() === true : false,
       appMetadata: useStore.getState().appMetadata,
     })

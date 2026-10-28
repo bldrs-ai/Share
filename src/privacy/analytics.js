@@ -443,19 +443,24 @@ export function gtagEventWithCid(eventName, parameters = {}) {
  * dashboard queries the old names verbatim. Each call site below fires both,
  * the new one through modelActionTracking.js#trackModelActionWhenAuthSettled.
  *
- *   model_view    {tier, source, route_kind, gate: 'none', open_cid}
+ *   model_view    {tier, source, route_kind, content_id, gate: 'none', open_cid}
  *                 CadView, beside every real_model_open
- *   model_share   {tier, source, route_kind?, gate, open_cid}
+ *   model_share   {tier, source, route_kind?, content_id?, gate, open_cid}
  *                 none     ShareDialog opening (beside `share`)
  *                 upsell   ShareControl's local-file gate (beside share_gated)
  *                 blocked  QuotaLimitDialog (beside quota_limit_reached)
  *                 soft     useDirectLinkQuota (beside quota_soft_limit_exceeded)
- *   model_export  {tier, source?, route_kind?, gate, open_cid}
+ *   model_export  {tier, source?, route_kind?, content_id?, gate, open_cid}
  *                 none     useExport delivery (beside export_model)
  *                 upsell   ExportSection's gates (beside export_gated)
  *                 blocked  useExport, export_failed{reason: 'no_slot'} only
  *                          ("refused: no free model slot"; it was
  *                          'free_limit' before the slot rule, 2026-10-27)
+ *
+ * `content_id` is the model's key, the value real_model_open sends under the
+ * same (registered) dimension, from the same helper (modelContentId), so GA
+ * can count distinct models on any of these events. Optional (`?`) where the
+ * model the action concerns isn't the one on screen or isn't known.
  */
 export const MODEL_ACTION_EVENTS = Object.freeze({
   view: 'model_view',
@@ -558,6 +563,41 @@ export function modelRouteSource(routeResult) {
 
 
 /**
+ * The `content_id` of a model: the value real_model_open (and
+ * model_engagement) send, so a normalized event can be joined to them and
+ * GA can count DISTINCT models from any of them. CadView sends this very
+ * function's result on real_model_open, so the two cannot drift.
+ *
+ * The privacy treatment is real_model_open's, unchanged: the route's
+ * `downloadUrl` (GitHub, Drive built from the file id, generic URL, an
+ * upload's blob-store path), falling back to `filepath`. Nothing is added
+ * and nothing is stripped: a local file's id is its UUID-derived upload
+ * path, not the name the user's file had.
+ *
+ * Callers snapshot it when the user acts, next to modelRouteSource, and not
+ * when the event is sent: the event waits for auth and, for an export, the
+ * conversion, and a navigation meanwhile must not credit the action to the
+ * next model.
+ *
+ * @param {object|null} routeResult routes.ts#handleRoute, the store's `modelPath`
+ * @return {string|undefined} undefined for no route, so a caller that
+ *   can't tell sends no `content_id` rather than a guess
+ */
+export function modelContentId(routeResult) {
+  if (!routeResult) {
+    return undefined
+  }
+  const isGoogle = routeResult.kind === 'provider' && routeResult.provider === 'google'
+  const id = isGoogle ? routeResult.downloadUrl : (routeResult.downloadUrl || routeResult.filepath)
+  // `downloadUrl` is a URL object. gtag serializes a param to its string
+  // form, the href, so that is what GA has always held here; stringifying
+  // makes it the same on every event by construction (and comparable in a
+  // test: Jest's toEqual sees any two URL objects as equal).
+  return id ? String(id) : undefined
+}
+
+
+/**
  * Send one normalized model-action event (MODEL_ACTION_EVENTS) through
  * gtagEventWithCid: consent is checked there (gtagEvent re-reads it on every
  * call) and `open_cid` attached the same way as on every funnel and gate
@@ -576,11 +616,13 @@ export function modelRouteSource(routeResult) {
  * @param {string} details.gate one of MODEL_GATES
  * @param {string} [details.source] one of MODEL_SOURCES; omitted when unknown
  * @param {string} [details.routeKind] sent as `route_kind`; omitted when unknown
+ * @param {string} [details.contentId] modelContentId of the model the
+ *   action concerns, sent as `content_id`; omitted when unknown
  * @param {string} [details.tier] a quota tier the caller already has
  * @param {boolean} [details.isAuthenticated] for deriving the tier
  * @param {object} [details.appMetadata] for deriving the tier
  */
-export function trackModelAction(action, {gate, source, routeKind, tier, isAuthenticated, appMetadata} = {}) {
+export function trackModelAction(action, {gate, source, routeKind, contentId, tier, isAuthenticated, appMetadata} = {}) {
   const eventName = MODEL_ACTION_EVENTS[action]
   if (!eventName || !Object.values(MODEL_GATES).includes(gate)) {
     return
@@ -591,6 +633,9 @@ export function trackModelAction(action, {gate, source, routeKind, tier, isAuthe
   }
   if (routeKind) {
     params.route_kind = routeKind
+  }
+  if (contentId) {
+    params.content_id = contentId
   }
   gtagEventWithCid(eventName, params)
 }

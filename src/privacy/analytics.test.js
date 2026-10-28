@@ -2,6 +2,7 @@ jest.mock('@sentry/react', () => ({setTag: jest.fn()}))
 
 import Cookies from 'js-cookie'
 import {setTag} from '@sentry/react'
+import {handleRoute} from '../routes/routes'
 import * as Analytics from './analytics'
 
 
@@ -312,6 +313,25 @@ describe('Analytics', () => {
       }]])
     })
 
+    // Share#1981: the model's key, so GA can count distinct models from
+    // these events. Same parameter name real_model_open sends, which is why
+    // the existing `content_id` registration covers it.
+    test.each([
+      ['view', 'model_view'], ['share', 'model_share'], ['export', 'model_export'],
+    ])('%s: sends content_id when the caller has one', (action, eventName) => {
+      Analytics.trackModelAction(action, {
+        gate: 'none', source: 'hosted', routeKind: 'github', contentId: 'https://raw.example/a.ifc', isAuthenticated: false,
+      })
+      expect(sent()).toEqual([[eventName, {
+        tier: 'anon', gate: 'none', source: 'hosted', route_kind: 'github', content_id: 'https://raw.example/a.ifc',
+      }]])
+    })
+
+    test.each([[undefined], [''], [null]])('omits content_id for %p, rather than sending a blank', (contentId) => {
+      Analytics.trackModelAction('view', {gate: 'none', contentId, isAuthenticated: false})
+      expect(sent()).toEqual([['model_view', {tier: 'anon', gate: 'none'}]])
+    })
+
     test('omits open_cid, source and route_kind when unknown, rather than sending blanks', () => {
       Analytics.trackModelAction('export', {gate: 'none', isAuthenticated: false})
       expect(sent()).toEqual([['model_export', {tier: 'anon', gate: 'none'}]])
@@ -368,6 +388,51 @@ describe('Analytics', () => {
         ['no route', null, {}],
       ])('%s', (_, route, expected) => {
         expect(Analytics.modelRouteSource(route)).toEqual(expected)
+      })
+    })
+
+    // content_id is real_model_open's value, so its privacy treatment is
+    // too: the route's download URL, else its path, and nothing else — never
+    // a name the user typed, and for an upload the UUID-derived storage
+    // path, not the file's own name.
+    describe('modelContentId, the value real_model_open sends', () => {
+      const ORIGIN = 'https://bldrs.ai'
+
+      test('a local upload is its UUID-derived storage URL, not the name of the user\'s file', () => {
+        const route = handleRoute('/share/v/local-only', {'*': '0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc/7'})
+        const id = Analytics.modelContentId(route)
+        expect(id).toMatch(/\/0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f\.ifc$/)
+        // The route's element path (`/7`) is not part of the model's identity.
+        expect(id).not.toContain('/7')
+      })
+
+      test('a Google Drive file is its download URL', () => {
+        const route = handleRoute('/share/v/g', {'*': '17aKaRB6EU2fJtBpmpmZ87IlwZ-J-4XrU'})
+        expect(Analytics.modelContentId(route)).toBe(String(route.downloadUrl))
+        expect(Analytics.modelContentId(route)).toContain('17aKaRB6EU2fJtBpmpmZ87IlwZ-J-4XrU')
+      })
+
+      test('a GitHub file is its download URL, and a generic URL its own', () => {
+        const gh = handleRoute('/share/v/gh', {'org': 'acme', 'repo': 'r', 'branch': 'main', '*': 'models/a.ifc/12'})
+        expect(Analytics.modelContentId(gh)).toBe(String(gh.downloadUrl))
+        const url = handleRoute('/share/v/u', {'*': 'https://example.com/m/b.ifc'})
+        expect(Analytics.modelContentId(url)).toBe('https://example.com/m/b.ifc')
+      })
+
+      test('a bare {filepath} route falls back to it, and no route is no id', () => {
+        expect(Analytics.modelContentId({filepath: '/index.ifc'})).toBe('/index.ifc')
+        expect(Analytics.modelContentId(null)).toBeUndefined()
+        expect(Analytics.modelContentId({kind: 'url'})).toBeUndefined()
+      })
+
+      // A Drive route is keyed on the download URL alone: its `filepath`
+      // (when it has one) is not the identity real_model_open sends.
+      test('a Drive route ignores filepath', () => {
+        expect(Analytics.modelContentId({kind: 'provider', provider: 'google', filepath: '/secret-name.ifc'}))
+          .toBeUndefined()
+        expect(Analytics.modelContentId({
+          kind: 'provider', provider: 'google', filepath: '/secret-name.ifc', downloadUrl: new URL(`${ORIGIN}/dl`),
+        })).toBe(`${ORIGIN}/dl`)
       })
     })
 

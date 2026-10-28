@@ -10,6 +10,7 @@ import {
   MODEL_ACTIONS,
   MODEL_GATES,
   gtagEventWithCid,
+  modelContentId,
   modelRouteSource,
 } from '../privacy/analytics'
 import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
@@ -162,8 +163,14 @@ export default function useExport() {
     // isn't locked meanwhile, so reading the route then could credit the
     // export to the next model (codex review on Share#1976). A "Download
     // again" of a history row (`source` passed) may be another model, so it
-    // sends no source rather than a wrong one.
-    const exportSource = source ? {} : modelRouteSource(useStore.getState().modelPath)
+    // sends no source rather than a wrong one. The model's content_id (the
+    // value real_model_open sends) is snapshotted the same way and for the
+    // same reasons: a history row carries a share-path key, not that value,
+    // so a re-download sends none rather than the model on screen.
+    const exportSource = source ? {} : (() => {
+      const {modelPath} = useStore.getState()
+      return {...modelRouteSource(modelPath), contentId: modelContentId(modelPath)}
+    })()
     // The tier, unless the caller fixes it, is read when auth has settled
     // (privacy/modelActionTracking.js): Auth0 says signed in before
     // BaseRoutes has written the claims, so an export delivered in that

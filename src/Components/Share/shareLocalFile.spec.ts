@@ -1,7 +1,8 @@
 import {expect, test} from '@playwright/test'
 import {clickGate} from '../../tests/e2e/export'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
-import {waitForModelReady} from '../../tests/e2e/models'
+import {gaEvents} from '../../tests/e2e/ga'
+import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
 
 
@@ -24,6 +25,8 @@ const HELP_TEXT = 'a link to it won\'t open anywhere else'
 // Two model loads (the home model, then the upload) in one test; the default
 // 30s ran out on a loaded machine. Same budget as shareDisplay.spec.ts.
 const TEST_TIMEOUT_MS = 90_000
+// A local upload's content_id: its UUID-derived storage URL, with no file name.
+const UPLOAD_CONTENT_ID = /^https?:\/\/[^/]+\/[0-9a-f-]{36}\.ifc$/
 
 
 describeMobileAndDesktop('Share 110: a model opened from a local file', () => {
@@ -64,5 +67,61 @@ describeMobileAndDesktop('Share 110: a model opened from a local file', () => {
 
     await page.getByTestId('gated-help-action').click()
     await expect(page.getByTestId('dialog-open-model-tabs-stack')).toBeVisible()
+  })
+
+  // Share#1981: the gate's normalized event names the upload that is on
+  // screen, with the very id real_model_open sent when it loaded, so GA can
+  // count distinct models from either event.
+  test('the gate\'s model_share names the upload, as real_model_open does', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    await page.getByTestId('control-button-open').click()
+    await page.getByRole('tab', {name: 'Local'}).click()
+    const chooserEvent = page.waitForEvent('filechooser')
+    await page.getByTestId('button_open_file').click()
+    await (await chooserEvent).setFiles(PICKED_FILE)
+    await expect(page).toHaveURL(/\/share\/v\/local-only\/.+\.ifc/)
+    await waitForModelReady(page)
+    await clickGate(page, 'gated-share')
+    await expect(page.getByTestId('gated-help')).toBeVisible()
+
+    await expect.poll(async () => (await gaEvents(page, 'model_share')).length).toBe(1)
+    const [share] = await gaEvents(page, 'model_share')
+    expect(share.params).toMatchObject({gate: 'upsell', source: 'local', route_kind: 'local'})
+    const opens = await gaEvents(page, 'real_model_open')
+    expect(opens).toHaveLength(1)
+    expect(opens[0].params.content_id).toMatch(UPLOAD_CONTENT_ID)
+    expect(share.params.content_id).toBe(opens[0].params.content_id)
+  })
+})
+
+
+// A hosted model that is not the home demo (the demo sends no
+// real_model_open): the ordinary, ungated Share dialog.
+const HOSTED_MODEL = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
+
+
+describeMobileAndDesktop('Share: a hosted model\'s share event', () => {
+  test.beforeEach(async ({page, context}) => {
+    await homepageSetup(page)
+    await setIsReturningUser(context)
+  })
+
+  // Share#1981: opening the dialog sends model_share {none} naming the model
+  // on screen, with the id real_model_open sent for it.
+  test('model_share carries the content_id real_model_open sent for the model', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    await setupVirtualPathIntercept(page, HOSTED_MODEL, 'box.ifc')
+    await page.goto(HOSTED_MODEL, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    await page.getByTestId('control-button-share').click()
+    await expect(page.getByTestId('textfield-link')).toBeVisible()
+
+    await expect.poll(async () => (await gaEvents(page, 'model_share')).length).toBe(1)
+    const [share] = await gaEvents(page, 'model_share')
+    expect(share.params).toMatchObject({gate: 'none', source: 'hosted', route_kind: 'github'})
+    const opens = await gaEvents(page, 'real_model_open')
+    expect(opens).toHaveLength(1)
+    expect(opens[0].params.content_id).toContain('box.ifc')
+    expect(share.params.content_id).toBe(opens[0].params.content_id)
   })
 })

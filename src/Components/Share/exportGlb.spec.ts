@@ -40,6 +40,7 @@ import {
   watchProModuleRequests,
 } from '../../tests/e2e/export'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
+import {gaEvents} from '../../tests/e2e/ga'
 import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {
@@ -1134,6 +1135,43 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // selected in the store, the NavTree and the URL.
     await doubleClickSelectsAnElement(page, 'any')
     await expectNavTreeFollowsSelection(page)
+  })
+
+  // Share#1981: the delivered export's normalized event names the model that
+  // was exported, with the id real_model_open sent when it loaded.
+  test('model_export carries the content_id real_model_open sent for the exported model', async ({page}) => {
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+
+    await routeProModule(page)
+    await routeRecordExport(page)
+    // Any model first, for the flags the session keeps across the Open
+    // dialog's navigation; the home demo sends no real_model_open.
+    await loadModelAndWaitForArtifact(page)
+    resetGlbLogs(glbLogs)
+    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
+    await waitForModelReady(page)
+    await waitForGlbLog(glbLogs, 'writer: wrote', EXPORT_TEST_TIMEOUT_MS)
+    await setSubscriptionTier(page, 'sharePro')
+    await auth0Login(page)
+
+    await openExportTab(page)
+    await dismissLoadSnackbar(page)
+    const exportButton = page.getByTestId('export-glb-button')
+    await expect(exportButton).toBeEnabled()
+    const downloadPromise = page.waitForEvent('download')
+    await exportButton.click()
+    await downloadPromise
+
+    await expect.poll(async () => (await gaEvents(page, 'model_export')).length).toBe(1)
+    const [exported] = await gaEvents(page, 'model_export')
+    expect(exported.params).toMatchObject({gate: 'none', source: 'local', route_kind: 'local'})
+    const opens = await gaEvents(page, 'real_model_open')
+    expect(opens).toHaveLength(1)
+    // The upload's UUID-derived storage URL, not the name of the user's file.
+    expect(opens[0].params.content_id).toMatch(/^https?:\/\/[^/]+\/[0-9a-f-]{36}\.step$/)
+    expect(exported.params.content_id).toBe(opens[0].params.content_id)
   })
 
   test('the default export of a part made of many shells sits under its product, and reopens with every shell pickable', async ({page}) => {
