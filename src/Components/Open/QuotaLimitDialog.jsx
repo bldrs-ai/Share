@@ -2,7 +2,14 @@ import React, {ReactElement, useEffect, useRef} from 'react'
 import {Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Link, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {FUNNEL_EVENTS, gtagFunnelEvent} from '../../privacy/analytics'
+import {
+  FUNNEL_EVENTS,
+  MODEL_ACTIONS,
+  MODEL_GATES,
+  MODEL_SOURCES,
+  gtagFunnelEvent,
+} from '../../privacy/analytics'
+import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
 import {LIMITS, QUOTA_FEATURES, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/quota'
 import useStore from '../../store/useStore'
 import {useMock} from '../Profile/ProfileControl'
@@ -23,7 +30,12 @@ import {goToSubscription} from '../Profile/subscriptionNav'
  */
 export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA_FEATURES.PRIVATE_LOAD}) {
   const appMetadata = useStore((state) => state.appMetadata)
-  const {getAccessTokenSilently, user} = useAuth0()
+  const {getAccessTokenSilently, isAuthenticated, user} = useAuth0()
+  // The latest sign-in state, read at emit time if `tier` is missing
+  // (trackModelActionWhenAuthSettled's fallback). Not an effect dependency:
+  // a sign-in while the dialog is open must not count a second showing.
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  isAuthenticatedRef.current = isAuthenticated
   const theme = useTheme()
   // Whether the current showing has been reported. A ref rather than a
   // dependency-driven fire because the event means "the dialog appeared",
@@ -47,6 +59,23 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
     // what users actually saw — whatever decided to show it, and whether or
     // not the `quotas` flag is what's enforcing.
     gtagFunnelEvent(FUNNEL_EVENTS.QUOTA_LIMIT_REACHED, {tier, feature})
+    // Its normalized twin (design/new/quotas.md §"Analytics: normalized tier
+    // events"). Private-model opens are the tier model's "share" action ("open
+    // and share N private models"), so the wall is model_share {blocked}.
+    // Always hosted: local files are unmetered, so only a Drive or private
+    // GitHub open reaches this dialog (with the meterLocalFiles abuse switch
+    // on, a local drop could too; the dialog isn't given the key to tell).
+    // The tier is the gate's own verdict (a quota tier: free or paid), so a
+    // real one sends at once rather than waiting for auth. Only a signed-in
+    // free user is ever metered, so `tier` should always be set; if a caller
+    // ever passes none, modelActionTracking falls back to the sign-in tier
+    // at emit time instead of guessing one.
+    trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
+      gate: MODEL_GATES.BLOCKED,
+      source: MODEL_SOURCES.HOSTED,
+      tier,
+      getIsAuthenticated: () => isAuthenticatedRef.current,
+    })
   }, [isOpen, tier, feature])
 
   const handleSubscribe = async () => {

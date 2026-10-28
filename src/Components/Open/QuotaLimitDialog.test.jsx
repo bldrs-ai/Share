@@ -65,6 +65,28 @@ describe('QuotaLimitDialog', () => {
     expect(limitEvents()[1][2]).toEqual({tier: 'free', feature: 'private_load', open_cid: 'cid.111.222'})
   })
 
+  // Its normalized twin: a private open (the tier model's "share") blocked,
+  // with the dialog's tier, once per showing like the legacy event.
+  it('sends model_share {blocked, hosted} beside quota_limit_reached', () => {
+    setGaClientId('111.222')
+    renderDialog({tier: TIERS.FREE, isOpen: true})
+    const shares = window.gtag.mock.calls.filter(([kind, name]) => kind === 'event' && name === 'model_share')
+    expect(shares).toEqual([['event', 'model_share', {
+      tier: 'free', gate: 'blocked', source: 'hosted', open_cid: 'cid.111.222',
+    }]])
+  })
+
+  // Share#1977: only a signed-in free user is metered, so `tier` is always
+  // set in practice. If it ever isn't, the normalized event takes the
+  // sign-in tier at emit time rather than reporting a signed-in user as anon.
+  it('with no tier, model_share carries the signed-in user\'s sign-in tier, not anon', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    act(() => useStore.setState({isAuthResolved: true, appMetadata: {subscriptionStatus: 'sharePro'}}))
+    await act(() => Promise.resolve(renderDialog({tier: undefined, isOpen: true})))
+    const shares = window.gtag.mock.calls.filter(([kind, name]) => kind === 'event' && name === 'model_share')
+    expect(shares.map(([, , params]) => params)).toEqual([expect.objectContaining({tier: 'pro', gate: 'blocked'})])
+  })
+
   it('stays quiet while closed', () => {
     renderDialog({tier: TIERS.FREE, isOpen: false})
     expect(limitEvents()).toHaveLength(0)

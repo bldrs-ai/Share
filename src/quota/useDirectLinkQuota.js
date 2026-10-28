@@ -1,7 +1,14 @@
 import {useCallback, useEffect, useRef, useState} from 'react'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import useQuota from '../hooks/useQuota'
-import {GATE_EVENTS, gtagEventWithCid} from '../privacy/analytics'
+import {
+  GATE_EVENTS,
+  MODEL_ACTIONS,
+  MODEL_GATES,
+  MODEL_SOURCES,
+  gtagEventWithCid,
+} from '../privacy/analytics'
+import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
 import {navigateBaseOnModelPath} from '../utils/location'
 import {driveFileQuotaVisibility} from './driveVisibility'
 
@@ -108,7 +115,12 @@ export function directLinkQuotaKey(modelPath, appPrefix) {
  */
 export default function useDirectLinkQuota(appPrefix) {
   const {record} = useQuota()
-  const {isLoading: isAuthLoading} = useAuth0()
+  const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
+  // The latest sign-in state, for the normalized event's fallback tier: the
+  // record() promise resolves after the effect that started it, so reading
+  // `isAuthenticated` from that closure would be stale.
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  isAuthenticatedRef.current = isAuthenticated
   const [pending, setPending] = useState(null)
   // Keys already metered this page load. A ref, so StrictMode's double
   // effect run and the record identity changes (every quota update)
@@ -152,6 +164,21 @@ export default function useDirectLinkQuota(appPrefix) {
         used: outcome.used,
         limit: outcome.limit,
         route_kind: routeKind,
+      })
+      // Its normalized twin (design/new/quotas.md §"Analytics: normalized
+      // tier events"): a private open, the tier model's "share", let through
+      // over the limit. The tier is the one record-load acted on (free or
+      // paid: only a signed-in user is metered, so this can't be a signed-out
+      // tier), and an explicit one sends at once
+      // (privacy/modelActionTracking.js). If the outcome ever carries none,
+      // the sign-in tier at emit time stands in instead of a guess. The view
+      // itself is model_view {gate: 'none'} from CadView.
+      trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
+        gate: MODEL_GATES.SOFT,
+        source: MODEL_SOURCES.HOSTED,
+        routeKind,
+        tier: outcome.tier,
+        getIsAuthenticated: () => isAuthenticatedRef.current,
       })
     })
   }, [pending, isAuthLoading, record])

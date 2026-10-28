@@ -2,7 +2,7 @@ import {CompressionStream as NodeCompressionStream} from 'node:stream/web'
 import {act, renderHook, waitFor} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn} from '../__mocks__/authentication'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
-import {gtagEventWithCid} from '../privacy/analytics'
+import {gtagEventWithCid, trackModelAction} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {compressedExport, gzippedExport} from './artifactSizes'
 import {triggerDownload} from './download'
@@ -20,11 +20,20 @@ jest.mock('./artifactSizes', () => ({compressedExport: jest.fn(), gzippedExport:
 // gtagEventWithCid is the one that carries open_cid (Share#1964); its own
 // test is in privacy/analytics.test.js. GATE_EVENTS stays real so the names
 // asserted here are the names that ship.
-jest.mock('../privacy/analytics', () => ({
-  gtagEvent: jest.fn(),
-  gtagEventWithCid: jest.fn(),
-  GATE_EVENTS: jest.requireActual('../privacy/analytics').GATE_EVENTS,
-}))
+// trackModelAction is mocked the same way (its tests are there too);
+// modelRouteSource and the MODEL_* vocabularies stay real.
+jest.mock('../privacy/analytics', () => {
+  const actual = jest.requireActual('../privacy/analytics')
+  return {
+    gtagEvent: jest.fn(),
+    gtagEventWithCid: jest.fn(),
+    trackModelAction: jest.fn(),
+    GATE_EVENTS: actual.GATE_EVENTS,
+    MODEL_ACTIONS: actual.MODEL_ACTIONS,
+    MODEL_GATES: actual.MODEL_GATES,
+    modelRouteSource: actual.modelRouteSource,
+  }
+})
 jest.mock('./download', () => ({triggerDownload: jest.fn()}))
 // The history lib has its own suite (exportHistory.test.js); here it stands
 // in for "the export was recorded", and mocking it keeps this suite off OPFS
@@ -80,6 +89,9 @@ describe('useExport', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    // Auth settled, as after BaseRoutes' token pass: model_export waits for
+    // it (privacy/modelActionTracking.js). The restore-race case unsets it.
+    useStore.setState({modelPath: null, isAuthResolved: true})
     getAccessTokenSilently = jest.fn().mockResolvedValue('test-token')
     mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently})
     recordExport.mockResolvedValue({recorded: true, status: 200, exports: []})
@@ -101,6 +113,7 @@ describe('useExport', () => {
   })
 
   it('reads the artifact at the published key, exports it and downloads the result', async () => {
+    useStore.setState({modelPath: {kind: 'provider', provider: 'github'}})
     const {result} = renderHook(() => useExport())
 
     await act(async () => {
@@ -128,6 +141,67 @@ describe('useExport', () => {
       portable: false,
       free_export: false,
     })
+    // ...and its normalized twin, for the model on screen.
+    expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({
+      gate: 'none', source: 'hosted', routeKind: 'github', isAuthenticated: true,
+    })]])
+  })
+
+  // The event goes out after the module load and conversion, and navigation
+  // isn't locked meanwhile: the source is the model the export started on
+  // (codex review on Share#1976).
+  it('attributes the export to the model it started on, even after navigating mid-export', async () => {
+    useStore.setState({modelPath: {kind: 'file', isUploadedFile: true, filepath: '/u.ifc'}})
+    let releaseModule
+    loadProModule.mockImplementation(() => new Promise((resolve) => {
+      releaseModule = () => resolve({namespace: {exportArtifact}, charge: null})
+    }))
+    const {result} = renderHook(() => useExport())
+
+    let running
+    act(() => {
+      running = result.current.run('glb', {})
+    })
+    await waitFor(() => expect(releaseModule).toBeDefined())
+    // The user opens a GitHub model while the export is in flight.
+    act(() => {
+      useStore.setState({modelPath: {kind: 'provider', provider: 'github'}})
+    })
+    await act(async () => {
+      releaseModule()
+      await running
+    })
+
+    expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({
+      gate: 'none', source: 'local', routeKind: 'local',
+    })]])
+  })
+
+  // codex review on Share#1976, round 2 (the export variant): Auth0 says
+  // signed in before BaseRoutes has written the claims, so an export
+  // delivered in that window read a Pro user's still-empty claims as free.
+  // The tier is read once auth settles instead.
+  it('sends model_export {none} with the settled tier, not the claims of mid-restore', async () => {
+    useStore.setState({modelPath: {kind: 'provider', provider: 'github'}, isAuthResolved: false})
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {})
+    })
+    expect(triggerDownload).toHaveBeenCalled()
+    expect(gtagEventWithCid).toHaveBeenCalledWith('export_model', expect.anything())
+    expect(trackModelAction).not.toHaveBeenCalled()
+
+    act(() => {
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      useStore.getState().setIsAuthResolved(true)
+    })
+
+    await waitFor(() => expect(trackModelAction).toHaveBeenCalledTimes(1))
+    const [action, details] = trackModelAction.mock.calls[0]
+    expect(action).toBe('export')
+    expect(details).toMatchObject({gate: 'none', source: 'hosted', routeKind: 'github'})
+    expect(jest.requireActual('../privacy/analytics').modelActionTier(details)).toBe('pro')
   })
 
   it('hands the pro module the very bytes the size line quoted', async () => {
@@ -637,6 +711,8 @@ describe('useExport', () => {
     // No export_model for a file that never landed; one export_failed instead.
     expect(gtagEventWithCid.mock.calls.map(([name]) => name)).toEqual(['export_failed'])
     expect(gtagEventWithCid).toHaveBeenCalledWith('export_failed', {format: 'glb', reason: 'denied'})
+    // Denied is a failure, not a gate verdict: no model_export.
+    expect(trackModelAction).not.toHaveBeenCalled()
     expect(result.current.error).toBeInstanceOf(ProModuleDeniedError)
   })
 
@@ -710,6 +786,10 @@ describe('useExport', () => {
       expect(getAccessTokenSilently).not.toHaveBeenCalledWith(expect.objectContaining({cacheMode: 'off'}))
       expect(triggerDownload).not.toHaveBeenCalled()
       expect(recordExport).not.toHaveBeenCalled()
+      // The allowance refused it: export_failed{free_limit}, shadowed by
+      // model_export {blocked}, free-tier by definition.
+      expect(gtagEventWithCid).toHaveBeenCalledWith('export_failed', {format: 'glb', reason: 'free_limit'})
+      expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({gate: 'blocked', tier: 'free'})]])
     })
   })
 
@@ -740,6 +820,30 @@ describe('useExport', () => {
       expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'canceled'})
       expect(useStore.getState().freeExportAllowance).toEqual({sub: 'github|1234567', ...atLimit})
     })
+
+    // The refusal proves the free allowance was what blocked it, so the
+    // normalized event is free-tier even while the local claim still says
+    // Pro (codex review on Share#1976). Run through the real derivation.
+    it('reports model_export {blocked} as free, not pro', async () => {
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(trackModelAction).toHaveBeenCalledTimes(1)
+      const [action, details] = trackModelAction.mock.calls[0]
+      expect(action).toBe('export')
+      // An explicit tier, which trackModelActionWhenAuthSettled sends as is,
+      // never re-derived from the (Pro) claim in the store
+      // (privacy/modelActionTracking.test.js pins that half).
+      expect(details).toMatchObject({gate: 'blocked', tier: 'free'})
+      expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'sharePro'})
+      expect(jest.requireActual('../privacy/analytics').modelActionTier({
+        ...details, appMetadata: useStore.getState().appMetadata, isAuthenticated: true,
+      })).toBe('free')
+    })
   })
 
   it('does nothing premium when no artifact has been published yet', async () => {
@@ -755,6 +859,7 @@ describe('useExport', () => {
     expect(useStore.getState().snackMessage.text).toMatch(/still being prepared/)
     // A run that delivers nothing is still one export_failed (codex on #1968).
     expect(gtagEventWithCid.mock.calls).toEqual([['export_failed', {format: 'glb', reason: 'unavailable'}]])
+    expect(trackModelAction).not.toHaveBeenCalled()
   })
 
   it('tells the user to reload when the artifact has been evicted from OPFS', async () => {
