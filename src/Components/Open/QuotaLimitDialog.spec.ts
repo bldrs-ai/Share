@@ -255,7 +255,7 @@ describeMobileAndDesktop('QuotaLimitDialog', () => {
     // client-reference-id, so the stripe-webhook's server-side
     // subscription_started lands on this browser's GA client
     // (design/new/quotas.md §"Server-side subscription events").
-    await page.context().addCookies([{name: '_ga', value: `GA1.1.${GA_CLIENT_ID}`, url: page.url()}])
+    await page.context().addCookies([{name: '_ga', value: `GA1.1.${GA_CLIENT_ID}`, domain: 'localhost', path: '/'}])
 
     const subscribeRequest = page.waitForRequest((req) => new URL(req.url()).pathname === '/subscribe/')
     await subscribeButton.click()
