@@ -1,4 +1,5 @@
 import {getProvider} from '../connections/registry'
+import {getGoogleDownloadUrl} from '../routes/google'
 
 
 /**
@@ -25,15 +26,20 @@ export const DRIVE_VISIBILITY = Object.freeze({
  * - With a connection: the provider's visibility lookup
  *   (GoogleDriveSharing#driveGetVisibility, which reduces the file's
  *   permission list). `'public'` (an `anyone` permission) is public;
- *   `'private'`, `'org'` (domain-only) and `null` (a domain grant whose
- *   domain can't be told) are private.
- * - The lookup failing, or no provider able to answer, counts as PRIVATE:
- *   today's behaviour, when every Drive file counted. Expect it to fail
- *   for some files: Drive can refuse `permissions.list` to a user who may
- *   only read the file, and then a link-shared file opened through a
- *   connection still counts (design/new/quotas.md §"Drive visibility" has
- *   the follow-up). Not reported to Sentry: it is an expected answer, not a
- *   defect.
+ *   `'private'` and `'org'` (domain-only) are private; `null` (a domain
+ *   grant whose domain can't be told) is no verdict, see below.
+ * - The lookup failing, no provider able to answer, or the answer `null`
+ *   is not a verdict. Expect it for some files: Drive refuses
+ *   `permissions.list` to a user who may only read the file, so a
+ *   link-shared file opened through a connection by a non-owner fails the
+ *   lookup. One more check settles it: request the first byte of the file's
+ *   media with the app's API key and no user token (`isLinkShared`). That
+ *   succeeds only for a file anyone with the link can download, which is
+ *   public. If that fails too,
+ *   the file counts as PRIVATE, as before. A lookup that ANSWERED
+ *   (`'public'`, `'private'`, `'org'`) is never second-guessed and costs no
+ *   API-key call. Failures are not reported to Sentry: they are expected
+ *   answers, not defects.
  *
  * Never rejects, so a caller can await it inside a gate without a catch.
  *
@@ -46,14 +52,65 @@ export async function driveFileQuotaVisibility(connection, fileId) {
   if (connection === null) {
     return DRIVE_VISIBILITY.PUBLIC
   }
+  let visibility = null
   try {
     const provider = getProvider(connection.providerId)
-    if (!provider?.getVisibility) {
-      return DRIVE_VISIBILITY.PRIVATE
-    }
-    const visibility = await provider.getVisibility(connection, {kind: 'drive-file', fileId})
-    return visibility === 'public' ? DRIVE_VISIBILITY.PUBLIC : DRIVE_VISIBILITY.PRIVATE
+    visibility = provider?.getVisibility ?
+      await provider.getVisibility(connection, {kind: 'drive-file', fileId}) :
+      null
   } catch {
-    return DRIVE_VISIBILITY.PRIVATE
+    // Same as no answer: fall through to the API-key check.
+  }
+  if (visibility === 'public') {
+    return DRIVE_VISIBILITY.PUBLIC
+  }
+  if (visibility === null && await isLinkShared(fileId)) {
+    return DRIVE_VISIBILITY.PUBLIC
+  }
+  return DRIVE_VISIBILITY.PRIVATE
+}
+
+
+// A hung request must not hold the open or the load's meter call; a timeout
+// reads as "not link-shared", i.e. today's private count.
+const LINK_SHARED_CHECK_TIMEOUT_MS = 5000
+const HTTP_OK = 200
+const HTTP_PARTIAL_CONTENT = 206
+
+
+/**
+ * Whether anyone with the link can download the file: the anonymous media
+ * request CadView's no-connection path makes (same URL, same API key) is
+ * answered for its first byte. Metadata is not enough: a link-shared file
+ * with downloads disabled for viewers still serves its metadata to the key,
+ * but not its bytes, so the user's own token is what opens it. The decision
+ * stays on the client, which is all that is sent to record-load
+ * (design/new/quotas.md §"Drive visibility", "Server trust"). Never rejects.
+ *
+ * @param {string} fileId Drive file id
+ * @return {Promise<boolean>} true only on 200 or 206
+ */
+async function isLinkShared(fileId) {
+  // No key built in (a local build without GOOGLE_API_KEY): the URL would
+  // carry "key=undefined", so don't ask.
+  if (!process.env.GOOGLE_API_KEY) {
+    return false
+  }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), LINK_SHARED_CHECK_TIMEOUT_MS)
+  try {
+    // A byte range keeps it cheap (206). Drive may ignore it and answer 200;
+    // the abort in `finally` then drops the body unread. `bytes=0-0` is a
+    // CORS-safelisted Range, so no preflight.
+    const response = await fetch(getGoogleDownloadUrl(fileId).toString(), {
+      headers: {Range: 'bytes=0-0'},
+      signal: controller.signal,
+    })
+    return response.status === HTTP_OK || response.status === HTTP_PARTIAL_CONTENT
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
+    controller.abort()
   }
 }

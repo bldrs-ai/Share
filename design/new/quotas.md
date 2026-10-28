@@ -171,8 +171,9 @@ which never rejects:
 |---|---|---|
 | No `google-drive` connection: `CadView#loadModel` downloads with the app's API key (`routeResult.downloadUrl`) | public: that download only succeeds for a file shared "Anyone with the link" (or published) | No |
 | Through a connection, lookup says `'public'` (an `anyone` permission) | public | No |
-| Through a connection, lookup says `'private'`, `'org'` (domain-only) or `null` (a domain grant whose domain can't be told) | private | **Yes** |
-| Through a connection, lookup fails (or no provider answers) | private: the behaviour before this change, when every Drive file counted | **Yes** |
+| Through a connection, lookup says `'private'` or `'org'` (domain-only) | private (the lookup answered, so no second check) | **Yes** |
+| Through a connection, lookup says `null` (a domain grant whose domain can't be told), fails, or no provider answers, **and** the API-key download probe succeeds (200 or 206) | public: Drive served the file's first byte to the app's API key alone, which only a file anyone with the link can download allows | No |
+| Same, **and** the probe fails (any other status, a network error, a timeout, or no key built in) | private: the behaviour before Drive visibility, when every Drive file counted | **Yes** |
 | Drive key with no resolver (a caller that can't tell) | private | **Yes** |
 
 The lookup is the connection provider's `getVisibility`
@@ -192,13 +193,29 @@ documented on `Visibility` in `src/connections/types.ts`). Who passes it:
 A public Drive file is never sent to `record-load`, so nothing is recorded
 and nothing refused, and the direct-link soft gate stays silent.
 
-**Known gap: the lookup may fail for files the user can only read.** Drive
-can refuse `permissions.list` to a reader, in which case a link-shared file
-opened *through a connection* by someone who isn't its owner or an editor
-still counts. The same file opened without a connection (a pasted link while
-not connected) does not. A follow-up, if that case matters: on lookup failure,
-probe the file's metadata with the API key (no user token); success means
-link-shared. Not built here, pending the owner's call.
+**The lookup may fail for files the user can only read, so a failure gets one
+more check.** Drive can refuse `permissions.list` to a reader, so a
+link-shared file opened *through a connection* by someone who isn't its owner
+or an editor fails the lookup. Counting that as private would charge the same
+file that a pasted link opened without a connection does not. So when the
+lookup fails, returns `null`, or no provider answers,
+`driveFileQuotaVisibility` makes one request for the first byte of the file's
+media with the app's API key and no user token: the very URL of the
+no-connection download in `CadView#loadModel` (`routes/google.ts#getGoogleDownloadUrl`,
+`alt=media`) with `Range: bytes=0-0` (a CORS-safelisted range, so no preflight).
+Drive answers it only for a file anyone with the link can download. 200 or 206
+means public and the file is not counted; anything else (a 403/404, a network
+error, a 5 s timeout, or no `GOOGLE_API_KEY` built in) keeps the file private
+and counted. If Drive ignores the range and answers 200, the body is aborted
+unread. The probe is the download, not the file's metadata, on purpose: a
+link-shared file whose owner disabled downloads for viewers still serves its
+metadata to the key, but not its bytes, so only the user's own token opens
+it and it must count (Codex on #1979). A lookup that *answered* (`'public'`,
+`'private'`, `'org'`) never triggers the check, so it costs nothing for the
+common cases. Tests: `quota/driveVisibility.test.js` (including the
+downloads-disabled case). Residual: a link-shared file that needs a Drive
+resource key fails the probe, as it already fails the no-connection download,
+and counts.
 
 **Server trust (a known gap).** `record-load` decides GitHub privacy itself
 (unauthenticated `api.github.com/repos/{owner}/{repo}`, §"GitHub privacy
@@ -206,8 +223,9 @@ detection") and never takes the client's word for it. It can't do the same
 for Drive: seeing a file's sharing needs the user's Drive token, which the
 function doesn't hold, and no server-side Google call was built. So it
 counts every `/v/g/` key it is sent, and the client sends only the Drive
-files it classified private. A modified client could skip the call for a
-restricted file and go uncounted. That is no wider than the gap every load
+files it classified private (the API-key metadata check above is part of that
+client-side classification; the server trusts it no more than the rest). A
+modified client could skip the call for a restricted file and go uncounted. That is no wider than the gap every load
 already has (whether `record-load` is called at all is the client's choice),
 and nothing is sent as a client-asserted "visibility" field the server would
 have to trust.
