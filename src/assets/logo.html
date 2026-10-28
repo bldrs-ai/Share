@@ -1,5 +1,68 @@
 <!DOCTYPE html>
 <html>
+  <head>
+    <style>
+      /* Grey page so both the white and the black frames have a hard
+         edge to crop to. Every frame in a column is the same size, so a
+         crop taken from one row fits the other. */
+      body {
+        background: #ccc;
+        font: 10pt sans-serif;
+      }
+      table {
+        border-spacing: 2em;
+      }
+      th {
+        font-weight: normal;
+      }
+      td {
+        vertical-align: top;
+      }
+      /* The frame, not the table cell, carries the background and
+         margin: cells stretch to their column header and row height. */
+      .frame {
+        display: inline-block;
+      }
+      .frame img {
+        display: block;
+      }
+      .light {
+        background: white;
+      }
+      .dark {
+        background: black;
+      }
+      .wide {
+        padding: 32px;
+      }
+      .narrow {
+        padding: 8px;
+      }
+    </style>
+  </head>
   <body>
-    <img src="LogoB.svg" style="padding: 2em; margin: 2em; border: solid 1px grey"/>
-    <img src="LogoBWithDomain.svg" style="padding: 2em; margin: 2em; border: solid 1px grey"/>
+    <table>
+      <tr>
+        <th></th>
+        <th>B, wide margin</th>
+        <th>B with domain, wide margin</th>
+        <th>B, narrow margin</th>
+        <th>B with domain, narrow margin</th>
+      </tr>
+      <tr>
+        <th>Light</th>
+        <td><div class="frame light wide"><img src="LogoB.svg"/></div></td>
+        <td><div class="frame light wide"><img src="LogoBWithDomain.svg"/></div></td>
+        <td><div class="frame light narrow"><img src="LogoB.svg"/></div></td>
+        <td><div class="frame light narrow"><img src="LogoBWithDomain.svg"/></div></td>
+      </tr>
+      <tr>
+        <th>Dark</th>
+        <td><div class="frame dark wide"><img src="LogoBOnBlack.svg"/></div></td>
+        <td><div class="frame dark wide"><img src="LogoBWithDomainOnBlack.svg"/></div></td>
+        <td><div class="frame dark narrow"><img src="LogoBOnBlack.svg"/></div></td>
+        <td><div class="frame dark narrow"><img src="LogoBWithDomainOnBlack.svg"/></div></td>
+      </tr>
+    </table>
+  </body>
+</html>
