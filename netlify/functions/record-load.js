@@ -14,8 +14,14 @@
  *   3. Derive tier: a Pro subscriptionStatus (`sharePro` or
  *      `shareProPendingReauth`, src/quota/proStatus.js) → PAID, else FREE.
  *   4. For /v/gh/, resolve repo privacy via unauth api.github.com
- *      (cached per "owner/repo" in module scope, 15-minute TTL).
- *   5. Prune loads outside the rolling 30-day window.
+ *      (cached per "owner/repo" in module scope, 15-minute TTL). This
+ *      function does not take the client's word for GitHub.
+ *      For /v/g/ (Drive) it does: it can't see a Drive file's sharing (that
+ *      would need the user's Drive token), so it counts every Drive key it
+ *      is sent, and the client sends only the files it found private — never
+ *      a link-shared one (src/quota/limits.js#isCountedByRouteKind,
+ *      design/new/quotas.md §"Drive visibility": a known gap).
+ *   5. Prune loads outside the rolling window (ROLLING_WINDOW_DAYS, 7).
  *      Local files (`/v/local-only/`, legacy `/v/new/`) are not quotable:
  *      they're free and unmetered (Share#1966) unless local metering is
  *      switched on (isLocalFileMeteringEnabled below).
@@ -35,9 +41,9 @@ import * as Sentry from '@sentry/serverless'
 import {flags} from '../../src/FeatureFlags.js'
 import {
   FREE_PRIVATE_MODEL_LIMIT,
-  ROLLING_WINDOW_MS,
   TIERS,
-  isAlwaysPrivateRouteKind,
+  isCountedByRouteKind,
+  loadsInsideRollingWindow,
 } from '../../src/quota/limits.js'
 import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
 
@@ -163,19 +169,6 @@ function getTier(appMetadata) {
 }
 
 /**
- * @param {Array} loads
- * @param {number} now
- * @return {Array}
- */
-function pruneLoads(loads, now) {
-  if (!Array.isArray(loads)) {
-    return []
-  }
-  const cutoff = now - ROLLING_WINDOW_MS
-  return loads.filter((l) => Date.parse(l.loadedAt) >= cutoff)
-}
-
-/**
  * Resolve whether a `/v/gh/{owner}/{repo}/...` path points at a private
  * repo. Returns true (=quotable) for private/missing/error responses.
  * Cached in module scope per (owner, repo) for GH_PRIVACY_CACHE_TTL_MS.
@@ -255,10 +248,12 @@ function isLocalFileMeteringEnabled() {
  */
 async function isQuotableLoad(key) {
   const kind = viewRouteKind(key)
-  // Drive (`/v/g/`) is always private. Local files (`/v/local-only/`, legacy
-  // `/v/new/`) count only with the local meter switched on. The one rule,
-  // shared with src/quota/quota.js#isLocallyQuotable and the MSW mock.
-  if (isAlwaysPrivateRouteKind(kind, isLocalFileMeteringEnabled())) {
+  // Drive (`/v/g/`) counts as sent: the client sends only Drive files it
+  // found private, since this function can't see Drive sharing. Local files
+  // (`/v/local-only/`, legacy `/v/new/`) count only with the local meter
+  // switched on. The one rule, shared with the MSW mock and, for local
+  // files, src/quota/quota.js#isLocallyQuotable.
+  if (isCountedByRouteKind(kind, isLocalFileMeteringEnabled())) {
     return true
   }
   // /v/gh/<owner>/<repo>/<branch>/<path>
@@ -341,7 +336,9 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   const appMetadata = userRecord.app_metadata || {}
   const tier = getTier(appMetadata)
   const now = Date.now()
-  const existingLoads = pruneLoads((appMetadata.usageQuota && appMetadata.usageQuota.loads) || [], now)
+  // The client's pruning too (limits.js#loadsInsideRollingWindow), so the
+  // server, the OPFS mirror and the MSW mock share one edge.
+  const existingLoads = loadsInsideRollingWindow((appMetadata.usageQuota && appMetadata.usageQuota.loads) || [], now)
 
   // Paid: never gated, never recorded (no point burning Mgmt API writes).
   if (tier === TIER_PAID) {

@@ -1,8 +1,11 @@
 import {act, renderHook} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../__mocks__/authentication'
+import {getProvider} from '../connections/registry'
 import useQuota from '../hooks/useQuota'
+import {HTTP_BAD_REQUEST, HTTP_FORBIDDEN, HTTP_OK} from '../net/http'
 import {gtagEventWithCid, trackModelAction} from '../privacy/analytics'
 import {handleRoute} from '../routes/routes'
+import useStore from '../store/useStore'
 import useDirectLinkQuota, {directLinkQuotaKey} from './useDirectLinkQuota'
 
 
@@ -19,11 +22,21 @@ jest.mock('../privacy/analytics', () => ({
   gtagEventWithCid: jest.fn(),
   trackModelAction: jest.fn(),
 }))
+// getProvider only: the Drive visibility lookup's provider, per test.
+jest.mock('../connections/registry', () => ({
+  ...jest.requireActual('../connections/registry'),
+  getProvider: jest.fn(),
+}))
 
 
 const APP_PREFIX = '/share'
 const DRIVE_ID = '17aKaRB6EU2fJtBpmpmZ87IlwZ-J-4XrU'
 const DRIVE_KEY = `/share/v/g/${DRIVE_ID}`
+const DRIVE_CONNECTION = {id: 'gd-1', providerId: 'google-drive'}
+// How CadView#loadModel downloaded the file: with the API key (only a
+// link-shared file downloads that way), or through the user's connection.
+const API_KEY_DOWNLOAD = {fileId: DRIVE_ID, connection: null}
+const CONNECTION_DOWNLOAD = {fileId: DRIVE_ID, connection: DRIVE_CONNECTION}
 
 
 /**
@@ -67,8 +80,10 @@ function mockQuota({recordOutcome = {allowed: true, used: 1, limit: 2, tier: 'fr
 async function meter(...routes) {
   const hook = renderHook(() => useDirectLinkQuota(APP_PREFIX))
   for (const route of routes) {
+    // A [route, driveDownload] pair passes CadView's second argument too.
+    const [modelPath, driveDownload] = Array.isArray(route) ? route : [route]
     await act(async () => {
-      hook.result.current(route)
+      hook.result.current(modelPath, driveDownload)
       // Let record()'s resolved promise (and its .then) settle inside act.
       await Promise.resolve()
     })
@@ -93,6 +108,26 @@ describe('quota/useDirectLinkQuota', () => {
     expect(trackModelAction).not.toHaveBeenCalled()
   })
 
+  it('a Drive file downloaded with the API key is public: record() is told so, without a lookup', async () => {
+    const {record} = mockQuota()
+    await meter([driveRoute(), API_KEY_DOWNLOAD])
+    expect(record).toHaveBeenCalledTimes(1)
+    const [key, {resolveDriveVisibility}] = record.mock.calls[0]
+    expect(key).toBe(DRIVE_KEY)
+    await expect(resolveDriveVisibility()).resolves.toBe('public')
+    expect(getProvider).not.toHaveBeenCalled()
+  })
+
+  it('a Drive file downloaded through a connection is looked up with that connection', async () => {
+    const getVisibility = jest.fn(() => Promise.resolve('private'))
+    getProvider.mockReturnValue({getVisibility})
+    const {record} = mockQuota()
+    await meter([driveRoute(), CONNECTION_DOWNLOAD])
+    const [, {resolveDriveVisibility}] = record.mock.calls[0]
+    await expect(resolveDriveVisibility()).resolves.toBe('private')
+    expect(getVisibility).toHaveBeenCalledWith(DRIVE_CONNECTION, {kind: 'drive-file', fileId: DRIVE_ID})
+  })
+
   it('over the limit, sends quota_soft_limit_exceeded and does not block', async () => {
     const {record} = mockQuota({recordOutcome: {allowed: false, used: 2, limit: 2, tier: 'free', alreadyCounted: false}})
     const {result} = await meter(driveRoute())
@@ -111,6 +146,22 @@ describe('quota/useDirectLinkQuota', () => {
       returned = result.current(driveRoute())
     })
     expect(returned).toBeUndefined()
+  })
+
+  // Share#1977: signed-out users are never metered, so there is no
+  // "anonymous" tier for record-load to answer with. Should an outcome carry
+  // no tier, model_share falls back to the sign-in tier at emit time and does
+  // not claim a tier the gate never gave.
+  it('an outcome with no tier sends model_share under the emit-time sign-in tier', async () => {
+    act(() => useStore.setState({isAuthResolved: true, appMetadata: {subscriptionStatus: 'free'}}))
+    mockQuota({recordOutcome: {allowed: false, used: 2, limit: 2, alreadyCounted: false}})
+    await meter(driveRoute())
+    await act(async () => {})
+    expect(trackModelAction).toHaveBeenCalledTimes(1)
+    const [action, details] = trackModelAction.mock.calls[0]
+    expect(action).toBe('share')
+    expect(details).toEqual(expect.objectContaining({gate: 'soft', isAuthenticated: true}))
+    expect(details.tier).toBeUndefined()
   })
 
   it('reports GitHub as route_kind github, keyed like GitHubFileBrowser (no element path)', async () => {
@@ -150,7 +201,8 @@ describe('quota/useDirectLinkQuota', () => {
 
   it('waits for Auth0 to settle before recording', async () => {
     // While Auth0 is loading, isAuthenticated is still false and record()
-    // would take the anonymous OPFS-only path, off the server's ledger.
+    // would treat the user as signed out (never metered), skipping the
+    // server's ledger.
     mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, isAuthenticated: false, isLoading: true})
     const {record} = mockQuota()
     const hook = await meter(driveRoute())
@@ -197,6 +249,32 @@ function mockOpfs(initial = null) {
 
 
 /**
+ * A record-load stand-in for a free user: counts what it is sent, refusing
+ * past the limit with 403 (as hooks/useQuota.test.js fakes it).
+ *
+ * @param {Array<string>} seededKeys keys already on the ledger
+ * @return {{fetch: Function, keys: Function}} the fetch mock, and the ledger
+ */
+function fakeRecordLoad(seededKeys = []) {
+  const limit = 2
+  let loads = seededKeys.map((key) => ({key, loadedAt: new Date().toISOString()}))
+  const respond = (status, body) => Promise.resolve({ok: status < HTTP_BAD_REQUEST, status, json: () => Promise.resolve(body)})
+  const fetch = jest.fn((url, init) => {
+    const {key} = JSON.parse(init.body)
+    if (loads.some((l) => l.key === key)) {
+      return respond(HTTP_OK, {allowed: true, used: loads.length, limit, tier: 'free', alreadyCounted: true, loads})
+    }
+    if (loads.length >= limit) {
+      return respond(HTTP_FORBIDDEN, {allowed: false, used: loads.length, limit, tier: 'free', alreadyCounted: false, loads})
+    }
+    loads = [...loads, {key, loadedAt: new Date().toISOString()}]
+    return respond(HTTP_OK, {allowed: true, used: loads.length, limit, tier: 'free', alreadyCounted: false, loads})
+  })
+  return {fetch, keys: () => loads.map((l) => l.key)}
+}
+
+
+/**
  * The real useQuota under the direct-link hook, as CadView and the Open
  * dialog share it.
  *
@@ -216,6 +294,8 @@ describe('quota/useDirectLinkQuota with the real useQuota', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     useQuota.mockImplementation(jest.requireActual('../hooks/useQuota').default)
+    // A recorded load force-refreshes the token, which needs a promise back.
+    mockedUserLoggedIn.getAccessTokenSilently.mockResolvedValue('token')
   })
 
   afterEach(() => {
@@ -224,32 +304,95 @@ describe('quota/useDirectLinkQuota with the real useQuota', () => {
   })
 
   it('a model opened from the Open dialog, then from a pasted link, is counted once', async () => {
-    // Signed out, so the ledger is OPFS and readable here. The link is the
-    // Drive-URL form, which has to land on the dialog's key to dedup.
-    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
-    const opfs = mockOpfs()
+    // A restricted Drive file. The link is the Drive-URL form, which has to
+    // land on the dialog's key to dedup.
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    mockOpfs()
+    getProvider.mockReturnValue({getVisibility: () => Promise.resolve('private')})
+    const server = fakeRecordLoad()
+    global.fetch = server.fetch
     const {result} = await renderWithRealQuota()
 
     await act(async () => {
-      await result.current.quota.record(DRIVE_KEY)
+      await result.current.quota.record(DRIVE_KEY, {resolveDriveVisibility: () => Promise.resolve('private')})
     })
     await act(async () => {
-      result.current.meter(routeFor('/share/v/g', {'*': `https://drive.google.com/file/d/${DRIVE_ID}/view`}))
+      result.current.meter(routeFor('/share/v/g', {'*': `https://drive.google.com/file/d/${DRIVE_ID}/view`}),
+        CONNECTION_DOWNLOAD)
       await Promise.resolve()
     })
     await act(async () => {})
 
-    expect(opfs.read().loads.map((l) => l.key)).toEqual([DRIVE_KEY])
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+    expect(server.keys()).toEqual([DRIVE_KEY])
     expect(gtagEventWithCid).not.toHaveBeenCalled()
   })
 
+  // The anonymous tier is gone: a signed-out user is never metered. This
+  // browser still holds the old anonymous ledger, at its cap of 2, which
+  // used to refuse a third Drive link and send the soft-limit event.
+  it('a signed-out user opening a link-shared Drive file records nothing and sends nothing', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    const anonymousLedger = {tier: 'anonymous', loads: [0, 1].map((i) => (
+      {key: `/share/v/g/old-${i}`, loadedAt: new Date().toISOString()}))}
+    const opfs = mockOpfs(anonymousLedger)
+    global.fetch = jest.fn()
+    const {result} = await renderWithRealQuota()
+
+    await act(async () => {
+      result.current.meter(driveRoute(), API_KEY_DOWNLOAD)
+      await Promise.resolve()
+    })
+    await act(async () => {})
+
+    expect(opfs.read()).toEqual(anonymousLedger)
+    expect(global.fetch).not.toHaveBeenCalled()
+    expect(gtagEventWithCid).not.toHaveBeenCalled()
+  })
+
+  it('a free user at the limit opening a link-shared Drive file is not counted or flagged', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    mockOpfs()
+    const server = fakeRecordLoad(['/share/v/g/seeded-0', '/share/v/g/seeded-1'])
+    global.fetch = server.fetch
+    const {result} = await renderWithRealQuota()
+
+    await act(async () => {
+      result.current.meter(driveRoute(), API_KEY_DOWNLOAD)
+      await Promise.resolve()
+    })
+    await act(async () => {})
+
+    expect(global.fetch).not.toHaveBeenCalled()
+    expect(gtagEventWithCid).not.toHaveBeenCalled()
+  })
+
+  it('a free user at the limit opening a restricted Drive file through a connection is flagged', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    mockOpfs()
+    getProvider.mockReturnValue({getVisibility: () => Promise.resolve('private')})
+    const server = fakeRecordLoad(['/share/v/g/seeded-0', '/share/v/g/seeded-1'])
+    global.fetch = server.fetch
+    const {result} = await renderWithRealQuota()
+
+    await act(async () => {
+      result.current.meter(driveRoute(), CONNECTION_DOWNLOAD)
+      await Promise.resolve()
+    })
+    await act(async () => {})
+
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    expect(gtagEventWithCid).toHaveBeenCalledWith('quota_soft_limit_exceeded',
+      {tier: 'free', used: 2, limit: 2, route_kind: 'gdrive'})
+  })
+
   it('a signed-in direct load asks the server even when this browser\'s OPFS holds the key', async () => {
-    // The row came from an anonymous open in this browser; this account's
+    // The row came from another account in this browser; this account's
     // server ledger is full without it. Trusting the local mirror would
     // skip record-load, so the load would go unmetered and uncounted
     // (codex review on Share#1971).
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    mockOpfs({tier: 'anonymous', loads: [{key: DRIVE_KEY, loadedAt: new Date().toISOString()}]})
+    mockOpfs({tier: 'free', loads: [{key: DRIVE_KEY, loadedAt: new Date().toISOString()}]})
     const serverLoads = [0, 1].map((i) => ({key: `/share/v/g/other-${i}`, loadedAt: new Date().toISOString()}))
     global.fetch = jest.fn(() => Promise.resolve({
       ok: false,
@@ -277,8 +420,8 @@ describe('quota/useDirectLinkQuota with the real useQuota', () => {
 describe('quota/useDirectLinkQuota#directLinkQuotaKey', () => {
   it('maps a pasted Drive URL to the same key as the bare file id', () => {
     const fromUrl = routeFor('/share/v/g', {'*': `https://drive.google.com/file/d/${DRIVE_ID}/view`})
-    expect(directLinkQuotaKey(fromUrl, APP_PREFIX)).toEqual({key: DRIVE_KEY, routeKind: 'gdrive'})
-    expect(directLinkQuotaKey(driveRoute(), APP_PREFIX)).toEqual({key: DRIVE_KEY, routeKind: 'gdrive'})
+    expect(directLinkQuotaKey(fromUrl, APP_PREFIX)).toEqual({key: DRIVE_KEY, routeKind: 'gdrive', fileId: DRIVE_ID})
+    expect(directLinkQuotaKey(driveRoute(), APP_PREFIX)).toEqual({key: DRIVE_KEY, routeKind: 'gdrive', fileId: DRIVE_ID})
   })
 
   it('is null for no route', () => {

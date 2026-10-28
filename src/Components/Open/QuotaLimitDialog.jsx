@@ -2,7 +2,6 @@ import React, {ReactElement, useEffect, useRef} from 'react'
 import {Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Link, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {startLogin} from '../../Auth0/gateLogin'
 import {
   FUNNEL_EVENTS,
   MODEL_ACTIONS,
@@ -18,9 +17,9 @@ import {goToSubscription} from '../Profile/subscriptionNav'
 
 
 /**
- * Modal shown when the user hits their usage quota.
- * Anonymous users see both Subscribe and Sign up options.
- * Free-tier users see only the Subscribe option.
+ * Modal shown when the user hits their usage quota. Only a signed-in free
+ * user can: signed-out users are never metered (quota.js#getTier), so the
+ * Sign up offer the removed anonymous tier had is gone with it.
  *
  * @property {string} tier One of TIERS.*
  * @property {boolean} isOpen Controls dialog visibility
@@ -31,7 +30,12 @@ import {goToSubscription} from '../Profile/subscriptionNav'
  */
 export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA_FEATURES.PRIVATE_LOAD}) {
   const appMetadata = useStore((state) => state.appMetadata)
-  const {getAccessTokenSilently, loginWithRedirect, user} = useAuth0()
+  const {getAccessTokenSilently, isAuthenticated, user} = useAuth0()
+  // The latest sign-in state, read at emit time if `tier` is missing
+  // (trackModelActionWhenAuthSettled's fallback). Not an effect dependency:
+  // a sign-in while the dialog is open must not count a second showing.
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  isAuthenticatedRef.current = isAuthenticated
   const theme = useTheme()
   // Whether the current showing has been reported. A ref rather than a
   // dependency-driven fire because the event means "the dialog appeared",
@@ -40,8 +44,6 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
   // without being a new showing. Refs survive StrictMode's simulated
   // remount, so the second run sees `true`.
   const reportedShowingRef = useRef(false)
-
-  const isAnonymous = !tier || tier === TIERS.ANONYMOUS
 
   useEffect(() => {
     if (!isOpen) {
@@ -55,26 +57,26 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
     // The funnel's "Hit a limit" step (analytics#FUNNEL_EVENTS). Fired from
     // the dialog itself, not from the three mount sites' gates, so it counts
     // what users actually saw — whatever decided to show it, and whether or
-    // not the `quotas` flag is what's enforcing. A missing tier is reported
-    // as anonymous, matching how the copy below reads it.
-    gtagFunnelEvent(FUNNEL_EVENTS.QUOTA_LIMIT_REACHED, {
-      tier: isAnonymous ? TIERS.ANONYMOUS : tier,
-      feature,
-    })
+    // not the `quotas` flag is what's enforcing.
+    gtagFunnelEvent(FUNNEL_EVENTS.QUOTA_LIMIT_REACHED, {tier, feature})
     // Its normalized twin (design/new/quotas.md §"Analytics: normalized tier
     // events"). Private-model opens are the tier model's "share" action ("open
     // and share N private models"), so the wall is model_share {blocked}.
     // Always hosted: local files are unmetered, so only a Drive or private
     // GitHub open reaches this dialog (with the meterLocalFiles abuse switch
     // on, a local drop could too; the dialog isn't given the key to tell).
-    // The tier is the gate's own verdict, so this sends at once rather than
-    // waiting for auth (privacy/modelActionTracking.js).
+    // The tier is the gate's own verdict (a quota tier: free or paid), so a
+    // real one sends at once rather than waiting for auth. Only a signed-in
+    // free user is ever metered, so `tier` should always be set; if a caller
+    // ever passes none, modelActionTracking falls back to the sign-in tier
+    // at emit time instead of guessing one.
     trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
       gate: MODEL_GATES.BLOCKED,
       source: MODEL_SOURCES.HOSTED,
-      tier: isAnonymous ? TIERS.ANONYMOUS : tier,
+      tier,
+      getIsAuthenticated: () => isAuthenticatedRef.current,
     })
-  }, [isOpen, isAnonymous, tier, feature])
+  }, [isOpen, tier, feature])
 
   const handleSubscribe = async () => {
     onClose()
@@ -92,16 +94,7 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
     })
   }
 
-  const handleSignUp = () => {
-    onClose()
-    // Not a gate's sign-in: drop any stale gate attempt (Auth0/gateLogin.js).
-    startLogin()
-    loginWithRedirect()
-  }
-
-  const limitText = isAnonymous ?
-    `${LIMITS[TIERS.ANONYMOUS]} private models (lifetime)` :
-    `${LIMITS[TIERS.FREE]} private models in any rolling ${ROLLING_WINDOW_DAYS}-day window`
+  const limitText = `${LIMITS[TIERS.FREE]} private models in any rolling ${ROLLING_WINDOW_DAYS}-day window`
 
   return (
     <Dialog
@@ -132,24 +125,6 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
               Subscribe
             </Button>
           </Stack>
-          {isAnonymous && (
-            <Stack direction='row' alignItems='center' spacing={2}>
-              <Typography variant='body2' sx={{flex: 1}}>
-                Sign up free to connect Google Drive and GitHub, and open
-                {' '}{LIMITS[TIERS.FREE]} private models in any rolling
-                {' '}{ROLLING_WINDOW_DAYS} days.
-              </Typography>
-              <Button
-                onClick={handleSignUp}
-                variant='contained'
-                color='accent'
-                sx={{textTransform: 'none', whiteSpace: 'nowrap'}}
-                data-testid='button-quota-signup'
-              >
-                Sign up free
-              </Button>
-            </Stack>
-          )}
         </Stack>
       </DialogContent>
       <DialogActions sx={{px: 3, pb: 2}}>

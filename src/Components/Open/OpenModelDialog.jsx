@@ -6,6 +6,7 @@ import {forgetInMemoryUpload} from '../../loader/inMemoryUploads'
 import {localOnlyPath, toLocalOnlyPath} from '../../routes/localOnly'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
+import {driveFileQuotaVisibility} from '../../quota/driveVisibility'
 import {loadLocalFile} from '../../utils/loader'
 import {NeedsReconnectError} from '../../connections/errors'
 import {
@@ -132,11 +133,12 @@ export default function OpenModelDialog({
   }
 
   const handleOpenById = async (connection, fileId, fileName) => {
-    // Cheap client-side gate first — if we already know we're at limit,
-    // surface the dialog without bothering with token acquisition or a
-    // round-trip to record-load. check(key), not hasCapacity: an
+    // Cheap client-side gate first. check(key), not hasCapacity: an
     // already-counted key stays openable at limit (server idempotency;
-    // /share/quotas promises re-opens from recents are free).
+    // /share/quotas promises re-opens from recents are free). It no longer
+    // refuses a Drive key by itself: whether a Drive file counts is its
+    // visibility, which record() below looks up, so a link-shared file
+    // opens at the limit.
     const key = `${appPrefix}/v/g/${fileId}`
     if (!check(key).allowed) {
       setShowQuotaDialog(true)
@@ -165,7 +167,12 @@ export default function OpenModelDialog({
         return
       }
     }
-    const {allowed} = await record(key)
+    // After the token preflight, so the lookup (one permissions.list) never
+    // spends the click's user activation. Public (link-shared) files are
+    // not counted (design/new/quotas.md §"Drive visibility").
+    const {allowed} = await record(key, {
+      resolveDriveVisibility: () => driveFileQuotaVisibility(connection, fileId),
+    })
     if (!allowed) {
       setShowQuotaDialog(true)
       return
@@ -243,14 +250,17 @@ export default function OpenModelDialog({
     }
     const doc = docs[0]
     const key = `${appPrefix}/v/g/${doc.id}`
-    const {allowed} = await record(key)
+    const connection = pickerConnection
+    // A link-shared pick is public and not counted; see handleOpenById.
+    const {allowed} = await record(key, {
+      resolveDriveVisibility: () => driveFileQuotaVisibility(connection, doc.id),
+    })
     if (!allowed) {
       setPickerToken(null)
       setPickerConnection(null)
       setShowQuotaDialog(true)
       return
     }
-    const connection = pickerConnection
     setPickerToken(null)
     setPickerConnection(null)
     disablePageReloadApprovalCheck()

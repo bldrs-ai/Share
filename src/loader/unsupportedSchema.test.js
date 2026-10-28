@@ -1,8 +1,10 @@
 import {captureMessage} from '@sentry/react'
+import {EngineOpenFailureError} from './engineOpenFailure'
 import {loadFailureCaptureContext} from './loadProgress'
 import {
   UnsupportedSchemaError,
   beginOpenAttempt,
+  conwayOpenFailure,
   conwayRefusedSchema,
   modelSourceOf,
   openModelFailure,
@@ -151,6 +153,67 @@ describe('loader/unsupportedSchema — conway refusal signal', () => {
     expect(conwayRefusedSchema({getStatistics: () => {
       throw new Error('boom')
     }}, {id: 7, before: undefined})).toBe(false)
+  })
+})
+
+
+describe('loader/unsupportedSchema — conway failure reason (conway#742)', () => {
+  const failed = (status, reason) => ({getLoadStatus: () => status, getLoadFailureReason: () => reason})
+  const engine = (stats) => ({globalModelIDCounter: 7, getStatistics: (id) => stats.get(id)})
+
+  it('reads status and reason from THIS open\'s statistics', () => {
+    const stats = new Map()
+    const api = engine(stats)
+    const attempt = beginOpenAttempt(api)
+    stats.set(7, failed('UNRECOGNIZED_FORMAT', 'empty file'))
+    expect(conwayOpenFailure(api, attempt)).toEqual({status: 'UNRECOGNIZED_FORMAT', reason: 'empty file'})
+  })
+
+  it('does not read a reason an earlier open left under the same id', () => {
+    const api = engine(new Map([[7, failed('OPEN_FAIL', 'stale')]]))
+    expect(conwayOpenFailure(api, beginOpenAttempt(api))).toBeUndefined()
+  })
+
+  it('is undefined without a reason: a conway older than #742, or none recorded', () => {
+    const stats = new Map()
+    const api = engine(stats)
+    const attempt = beginOpenAttempt(api)
+    stats.set(7, {getLoadStatus: () => 'OPEN_FAIL'})
+    expect(conwayOpenFailure(api, attempt)).toBeUndefined()
+    stats.set(7, failed('OPEN_FAIL', '  '))
+    expect(conwayOpenFailure(api, attempt)).toBeUndefined()
+    expect(conwayOpenFailure({}, undefined)).toBeUndefined()
+  })
+
+  it('never throws into the load path', () => {
+    const stats = new Map()
+    const api = engine(stats)
+    const attempt = beginOpenAttempt(api)
+    stats.set(7, {getLoadFailureReason: () => {
+      throw new Error('boom')
+    }})
+    expect(conwayOpenFailure(api, attempt)).toBeUndefined()
+  })
+
+  it('openModelFailure carries the reason on a typed error when conway gave one', async () => {
+    const err = await openModelFailure(-1, bytes(part21('IFC4')), false,
+      {status: 'OPEN_FAIL', reason: 'bad entity'})
+    expect(err).toBeInstanceOf(EngineOpenFailureError)
+    expect(err.status).toBe('OPEN_FAIL')
+    expect(err.message).toBe('parseIfcWithConway: OpenModel returned -1: bad entity')
+  })
+
+  it('a schema refusal still wins over a recorded reason, with its own wording', async () => {
+    const err = await openModelFailure(-1, bytes(part21('IFC4X3_RC2')), true,
+      {status: 'UNSUPPORTED_SCHEMA', reason: 'IFC4X3 content'})
+    expect(err).toBeInstanceOf(UnsupportedSchemaError)
+    expect(err.message).toMatch(/IFC4X3_RC2 \(IFC 4\.3\)/)
+  })
+
+  it('keeps today\'s generic error with no reason', async () => {
+    const err = await openModelFailure(-1, bytes(part21('IFC4')), false)
+    expect(err).not.toBeInstanceOf(EngineOpenFailureError)
+    expect(err.message).toBe('parseIfcWithConway: OpenModel returned -1')
   })
 })
 

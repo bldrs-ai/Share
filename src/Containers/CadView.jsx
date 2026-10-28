@@ -43,6 +43,7 @@ import {
 import {buildOutcomeParams, loadFailureParams} from '../loader/loadAnalytics'
 import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
+import {EngineOpenFailureError, engineFailureCaptureContext} from '../loader/engineOpenFailure'
 import {UnsupportedSchemaError, reportUnsupportedSchema} from '../loader/unsupportedSchema'
 import {hasInMemoryUpload} from '../loader/inMemoryUploads'
 import {
@@ -211,6 +212,11 @@ export default function CadView({
   // review of Share#1961). The upload-not-in-browser count (#1955) is gated
   // by the same ref, under its own key prefix.
   const reportedRefusalRef = useRef(null)
+  // How loadModel last downloaded a Drive file: `{fileId, connection}`, with
+  // connection null for the API-key path. The direct-link quota meter reads
+  // it to tell a link-shared (public, unmetered) file from a private one
+  // (quota/useDirectLinkQuota.js, design/new/quotas.md §"Drive visibility").
+  const driveDownloadRef = useRef(null)
   // The model identity the two dedupe refs belong to.
   const dedupeModelKeyRef = useRef(null)
   // The model a `load_failed` was last sent for, for the same reason and
@@ -262,9 +268,15 @@ export default function CadView({
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
   // The latest auth state, for model_view's tier, which is read after auth
   // settles rather than when the load that sends it began (see the
-  // trackModelActionWhenAuthSettled call in loadModel).
+  // trackModelActionWhenAuthSettled call in loadModel), and by loadModel
+  // itself, which runs from a closure that may predate auth settling.
+  // Synced in an effect: CadView's effects run before BaseRoutes' (a parent)
+  // sets isAuthResolved, so once waitForAuthSettled returns this already
+  // holds the settled value.
   const isAuthenticatedRef = useRef(isAuthenticated)
-  isAuthenticatedRef.current = isAuthenticated
+  useEffect(() => {
+    isAuthenticatedRef.current = isAuthenticated
+  }, [isAuthenticated])
   // Soft quota gate for models opened straight from a URL (codex P1 on
   // Share#1971): records the load, never blocks it. Called after each
   // successful load below.
@@ -407,7 +419,14 @@ export default function CadView({
     } catch {
       // Relative/local path — not GitHub-hosted.
     }
-    const isAuthSettledBeforeLoad = needsGithubAuth ?
+    // A Drive route with a Drive connection waits too: loadModel uses the
+    // connection only for a signed-in user (a private model needs a Bldrs
+    // sign-in AND the provider's authorization, design/new/quotas.md §"What
+    // counts"), so it has to know which this user is. Without a connection
+    // there is nothing to decide; the API-key path is public files only.
+    const needsDriveAuth = modelPath.kind === 'provider' && modelPath.provider === 'google' &&
+      connections.some((c) => c.providerId === 'google-drive')
+    const isAuthSettledBeforeLoad = (needsGithubAuth || needsDriveAuth) ?
       await waitForAuthSettled(AUTH_SETTLE_GRACE_MS) :
       true
 
@@ -466,6 +485,11 @@ export default function CadView({
           reportedRefusalRef.current = refusalKey
           reportUnsupportedSchema(e, modelPath)
         }
+      } else if (e instanceof EngineOpenFailureError) {
+        // conway said why the open failed (conway#742): a short form of the
+        // reason in place of the raw "OpenModel returned -1". Still a real
+        // failure, so it keeps the help footer and the Sentry capture below.
+        setAlert({type: 'engineFailure', message: e.alertMessage})
       } else if (e instanceof NeedsReconnectError) {
         // Deep-link / reload landed on a Drive route with a stale token, and
         // GIS couldn't escalate to a popup outside a user gesture. Surface a
@@ -519,7 +543,13 @@ export default function CadView({
       if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof InMemoryUploadGoneError) &&
           !(e instanceof UploadNotInBrowserError)) {
         attachLoadFailureContext()
-        captureException(e)
+        if (e instanceof EngineOpenFailureError) {
+          // The engine's status and reason as tags/context on this event
+          // only; the alert's GA count is AlertDialog's (trackAlertEvent).
+          captureException(e, engineFailureCaptureContext(e))
+        } else {
+          captureException(e)
+        }
       }
       return
     } finally {
@@ -565,8 +595,12 @@ export default function CadView({
     setIsModelReady(true)
     // After the model is on screen, never before: a direct link is metered
     // but not gated (quota/useDirectLinkQuota.js). The Open dialog already
-    // recorded what it opened, which the hook sees as alreadyCounted.
-    meterDirectLinkLoad(modelPath)
+    // recorded what it opened, which the hook sees as alreadyCounted. For
+    // Drive, only a download of THIS file says how it was fetched; anything
+    // else is left undefined, which the meter counts as private.
+    const driveDownload = driveDownloadRef.current?.fileId === modelPath.fileId ?
+      driveDownloadRef.current : undefined
+    meterDirectLinkLoad(modelPath, driveDownload)
 
     let lastSent = 0
     /** Debounced function to track model interaction for GA. */
@@ -593,11 +627,23 @@ export default function CadView({
 
   /**
    * loadModel wrapper for the auth-slow path: when the attempt went out
-   * before auth settled (grace window in onViewerInternal expired, so
-   * probably no token) and failed auth-shaped — GitHub masks private repos
-   * as 404 to anonymous callers and rate-limits anonymous IPs with 403 —
-   * wait for the token to land and retry once with it. Everything else
-   * rethrows to onViewerInternal's catch unchanged.
+   * before auth settled (grace window in onViewerInternal expired), wait for
+   * auth and retry once with what it brings. Per provider:
+   *
+   * - GitHub: only a failure that is auth-shaped — GitHub masks private
+   *   repos as 404 to anonymous callers and rate-limits anonymous IPs with
+   *   403 — and only once a GitHub token has landed.
+   * - Drive: the attempt read as signed out, so it took the API-key path,
+   *   which only serves link-shared files (loadModel never uses a Drive
+   *   connection while signed out). If auth then settles signed in and a
+   *   Drive connection is saved, retry through the connection. Any failure
+   *   qualifies: the API-key download's error has no reliable status, and
+   *   this is one retry. Without it a Google-only user's restricted link
+   *   stayed failed until a reload, because the auth-state effect's
+   *   onViewer is dropped while this load is in flight (codex review on
+   *   Share#1977).
+   *
+   * Everything else rethrows to onViewerInternal's catch unchanged.
    *
    * @param {object} routeResult
    * @param {boolean} isAuthSettledBeforeLoad
@@ -607,7 +653,22 @@ export default function CadView({
     try {
       return await loadModel(routeResult)
     } catch (error) {
-      if (isAuthSettledBeforeLoad || !isAuthShapedLoadError(error)) {
+      if (isAuthSettledBeforeLoad) {
+        throw error
+      }
+      if (routeResult.kind === 'provider' && routeResult.provider === 'google') {
+        setIsModelLoading(true)
+        await waitForAuthSettled(AUTH_SETTLE_RETRY_MS)
+        const hasDriveConnection = useStore.getState().connections.some((c) => c.providerId === 'google-drive')
+        if (!isAuthenticatedRef.current || !hasDriveConnection) {
+          // Settled signed out (or nothing to retry with): the API-key
+          // failure was the real answer.
+          throw error
+        }
+        debug().log('CadView#loadModelWithAuthRetry: Drive load ran before sign-in settled; retrying via connection')
+        return await loadModel(routeResult)
+      }
+      if (!isAuthShapedLoadError(error)) {
         throw error
       }
       // loadModel's finally just cleared the overlay; keep it up while we
@@ -677,7 +738,20 @@ export default function CadView({
     let loadError = null
     try {
       if (isGoogleResult) {
-        const connection = connections.find((c) => c.providerId === 'google-drive')
+        // Never a Drive connection while signed out: its token may outlive the
+        // Bldrs session (it is in localStorage), and using it would open a
+        // restricted file to someone the quota can't meter. Signed out takes
+        // the API-key path below, which only serves link-shared files, so a
+        // restricted one fails with the usual alert. Sign-out also clears the
+        // connection outright (connections/useSignedOutDriveCleanup.js); this
+        // covers a load that starts before that runs. If auth hadn't settled
+        // within onViewerInternal's grace, this attempt reads as signed out,
+        // and loadModelWithAuthRetry retries through the connection once auth
+        // settles signed in.
+        const connection = isAuthenticatedRef.current ?
+          connections.find((c) => c.providerId === 'google-drive') :
+          undefined
+        driveDownloadRef.current = {fileId: routeResult.fileId, connection: connection || null}
         if (connection) {
           // OAuth path: authenticated download for private files
           const browser = getBrowser('google-drive')
@@ -685,7 +759,10 @@ export default function CadView({
           const blobUrl = URL.createObjectURL(download.blob)
           loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '')
         } else {
-          // API key fallback: works for public files and route tests without a connection
+          // API key fallback: works for public files and route tests without a
+          // connection. Only a file shared "Anyone with the link" (or
+          // published) downloads this way, which is why the quota meter
+          // treats a Drive file loaded here as public.
           loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, setOpfsFile, '')
         }
       } else {

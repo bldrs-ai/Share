@@ -333,8 +333,23 @@ describe('Analytics', () => {
 
       test('a quota tier the caller already has wins over the auth state', () => {
         expect(Analytics.modelActionTier({tier: 'free', isAuthenticated: false})).toBe('free')
-        expect(Analytics.modelActionTier({tier: 'anonymous', isAuthenticated: true})).toBe('anon')
         expect(Analytics.modelActionTier({tier: 'paid'})).toBe('pro')
+      })
+
+      // Share#1977 removed the anonymous quota tier: getTier is null when
+      // signed out, and `anon` is the sign-in tier, not a quota tier. A
+      // anonymous-tier key in the lookup would have been the string
+      // "undefined", mapping every missing tier to anon.
+      test.each([
+        ['null', null],
+        ['undefined', undefined],
+        ['the retired "anonymous"', 'anonymous'],
+      ])('a %s quota tier is not read as anon: the sign-in state decides', (_, tier) => {
+        expect(Analytics.modelActionTier({tier, isAuthenticated: true, appMetadata: {}})).toBe('free')
+        expect(Analytics.modelActionTier({
+          tier, isAuthenticated: true, appMetadata: {subscriptionStatus: 'sharePro'},
+        })).toBe('pro')
+        expect(Analytics.modelActionTier({tier, isAuthenticated: false})).toBe('anon')
       })
 
       test('an unknown quota tier falls back to the auth state', () => {

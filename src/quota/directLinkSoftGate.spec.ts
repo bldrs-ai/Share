@@ -1,8 +1,6 @@
-import {readFile} from 'fs/promises'
-import {resolve} from 'path'
 import {Page, expect, test} from '@playwright/test'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
-import {waitForModelReady} from '../tests/e2e/models'
+import {setupVirtualPathIntercept, waitForModelReady} from '../tests/e2e/models'
 import {
   auth0Login,
   homepageSetup,
@@ -15,15 +13,20 @@ import {
 // mock enforces. A spec can't import app modules, so it's restated here.
 const FREE_LIMIT = 2
 
-// Any id routes/google.ts accepts (25-44 URL-safe chars); its download is
-// routed to the demo model below.
-const DRIVE_FILE_ID = 'bldrsMockDriveIfcFixture0000001'
-const DIRECT_LINK = `/share/v/g/${DRIVE_FILE_ID}`
+// A private GitHub file: the MSW record-load mock treats every repo whose
+// name lacks "Public" as private, and bldrs-ai/test-models is served by the
+// dev server's fixtures (tests/e2e/models.ts#setupVirtualPathIntercept).
+// It used to be a Drive link opened with no connection, but that download
+// only works for a link-shared file, which is public and no longer metered
+// (driveLinkVisibility.spec.ts).
+const DIRECT_LINK = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
+
+// Age of the oldest seeded load: inside ROLLING_WINDOW_DAYS (7).
+const OLDEST_SEEDED_DAYS = 6
+const DAY_MS = 86_400_000
 
 const TEST_TIMEOUT_MS = 90_000
 const HTTP_FORBIDDEN = 403
-const HTTP_OK = 200
-const FIXTURE_IFC = resolve(process.cwd(), 'src/tests/fixtures/index.ifc')
 
 
 type QuotaWindow = Window & {
@@ -60,8 +63,8 @@ async function gaEvents(page: Page, name: string): Promise<GaEvent[]> {
 /**
  * Direct links: a soft gate (design/new/quotas.md §"Direct links: soft
  * gate"). A signed-in free user who has already opened FREE_LIMIT private
- * models this window pastes a link to a third, a Drive file. Nothing in
- * the Open dialog runs. The route-load path records it; record-load (its
+ * models this window pastes a link to a third, in a private GitHub repo.
+ * Nothing in the Open dialog runs. The route-load path records it; record-load (its
  * MSW mock) refuses with 403; and still the model opens, QuotaLimitDialog
  * stays away, and one quota_soft_limit_exceeded is sent, so the use of the
  * workaround is measured rather than blocked.
@@ -78,25 +81,24 @@ async function gaEvents(page: Page, name: string): Promise<GaEvent[]> {
 describeMobileAndDesktop('Quota: direct links are a soft gate', () => {
   test.beforeEach(async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
-    await page.addInitScript((limit) => {
+    // The oldest seeded model is 6 days old: still inside the 7-day window
+    // (ROLLING_WINDOW_DAYS, which the mock prunes to as record-load does),
+    // so this link is the 3rd within 7 days.
+    await page.addInitScript(({limit, dayMs, oldestDays}) => {
       const w = window as unknown as QuotaWindow
-      const loadedAt = new Date().toISOString()
-      w.__mockQuotaLoads = Array.from({length: limit}, (_, i) => ({key: `/share/v/g/seeded-${i}`, loadedAt}))
-    }, FREE_LIMIT)
+      w.__mockQuotaLoads = Array.from({length: limit}, (_, i) => ({
+        key: `/share/v/g/seeded-${i}`,
+        loadedAt: new Date(Date.now() - ((i === 0 ? oldestDays : 0) * dayMs)).toISOString(),
+      }))
+    }, {limit: FREE_LIMIT, dayMs: DAY_MS, oldestDays: OLDEST_SEEDED_DAYS})
     await homepageSetup(page)
-    // The Drive download a `/share/v/g/<id>` link makes with no Drive
-    // connection (CadView#loadModel's API-key path), served as the demo
-    // model. On the context, after homepageSetup's real-network guard, so it
-    // wins (as routes/routes.spec.ts serves Drive ids).
-    const fixtureBytes = await readFile(FIXTURE_IFC)
-    await page.context().route(new RegExp(`^https://www\\.googleapis\\.com/drive/v3/files/${DRIVE_FILE_ID}\\?`),
-      (route) => route.fulfill({status: HTTP_OK, body: fixtureBytes, contentType: 'application/octet-stream'}))
+    await setupVirtualPathIntercept(page, DIRECT_LINK, 'box.ifc')
     await setupAuthenticationIntercepts(page)
     await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
     await auth0Login(page)
   })
 
-  test('a free user at the limit opens a private Drive link: it loads, unblocked, and is counted', async ({page}) => {
+  test('a free user at the limit opens a private GitHub link: it loads, unblocked, and is counted', async ({page}) => {
     const recordLoad = page.waitForResponse((r) => new URL(r.url()).pathname === '/.netlify/functions/record-load')
     await page.goto(DIRECT_LINK, {waitUntil: 'domcontentloaded'})
     await waitForModelReady(page)
@@ -109,7 +111,7 @@ describeMobileAndDesktop('Quota: direct links are a soft gate', () => {
 
     await expect.poll(() => gaEvents(page, 'quota_soft_limit_exceeded')).toHaveLength(1)
     const [softLimit] = await gaEvents(page, 'quota_soft_limit_exceeded')
-    expect(softLimit.params).toEqual({tier: 'free', used: FREE_LIMIT, limit: FREE_LIMIT, route_kind: 'gdrive'})
+    expect(softLimit.params).toEqual({tier: 'free', used: FREE_LIMIT, limit: FREE_LIMIT, route_kind: 'github'})
 
     // Not blocked: still on the model, no limit dialog, and the dialog's own
     // event (which fires whenever it shows) never went out.

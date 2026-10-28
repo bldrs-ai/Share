@@ -8,6 +8,7 @@ import {
   uploadNotInBrowserAlert,
 } from '../OPFS/messages'
 import {getProvider} from '../connections/registry'
+import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import AlertDialog from './AlertDialog'
@@ -235,6 +236,40 @@ describe('AlertDialog — unsupportedSchema alert type', () => {
     })
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
     expect(trackAlertEvent).toHaveBeenCalledWith('Not displayable yet.')
+    expect(trackAlert).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('AlertDialog — engineFailure alert type (conway#742)', () => {
+  const onClose = jest.fn()
+  const message = 'Share couldn\'t read this file: zip archive (such as .ifczip), not STEP text.'
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  it('shows the engine\'s reason, and keeps the help footer: it is a real failure', () => {
+    act(() => {
+      useStore.getState().setAlert({type: 'engineFailure', message})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(/zip archive \(such as \.ifczip\), not STEP text/)).toBeInTheDocument()
+    expect(screen.getByText(/Discord/i)).toBeInTheDocument()
+  })
+
+  // CadView captures the failure once, with the engine's status and reason;
+  // a second capture of this plain alert object would carry neither.
+  it('counts the alert in analytics only, never through the Sentry path, by a constant', () => {
+    act(() => {
+      useStore.getState().setAlert({type: 'engineFailure', message})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(trackAlertEvent).toHaveBeenCalledTimes(1)
+    expect(trackAlertEvent).toHaveBeenCalledWith(ENGINE_FAILURE_ALERT_EVENT)
     expect(trackAlert).not.toHaveBeenCalled()
   })
 })

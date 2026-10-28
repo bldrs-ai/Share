@@ -482,29 +482,41 @@ export const MODEL_ROUTE_KINDS = Object.freeze({
   URL: 'url',
 })
 
-/** The `tier` param, from the quota code's tiers (quota/limits.js#TIERS). */
+/**
+ * The `tier` param for a quota tier (quota/limits.js#TIERS: free and paid
+ * only). There is no entry for "signed out": that is not a quota tier since
+ * Share#1977 (quota.js#getTier returns null), and it is the `anon` GA value,
+ * which means sign-in state. Keep the two apart: an entry keyed on a missing
+ * constant would become the key "undefined" and turn every missing tier into
+ * `anon`.
+ */
 const TIER_PARAMS = Object.freeze({
-  [TIERS.ANONYMOUS]: 'anon',
   [TIERS.FREE]: 'free',
   [TIERS.PAID]: 'pro',
 })
 
+/** The `tier` param of a signed-out user: the sign-in tier, not a quota tier. */
+const ANON_TIER_PARAM = 'anon'
+
 
 /**
- * The `tier` param: 'anon' | 'free' | 'pro'. A quota tier the caller already
- * has (QuotaLimitDialog's prop, record-load's answer) is used as is, since
- * it is the verdict the gate acted on; otherwise it is derived exactly as
- * the quota code derives it, quota.js#getTier — which reads Pro off
- * proStatus.js, so `shareProPendingReauth` is 'pro' here too.
+ * The `tier` param: 'anon' | 'free' | 'pro'. This is the user's SIGN-IN tier
+ * — a different concept from the quota tiers, which only signed-in users
+ * have. A quota tier the caller already has (QuotaLimitDialog's prop,
+ * record-load's answer) is used as is, since it is the verdict the gate
+ * acted on; a missing or unrecognised one (null, undefined — nothing to
+ * report, never "anonymous") falls back to deriving the tier exactly as the
+ * quota code does, quota.js#getTier, which reads Pro off proStatus.js, so
+ * `shareProPendingReauth` is 'pro' here too. Signed out is 'anon'.
  *
  * @param {object} [who]
- * @param {string} [who.tier] a quota tier (TIERS) the caller already has
+ * @param {?string} [who.tier] a quota tier (TIERS) the caller already has
  * @param {boolean} [who.isAuthenticated]
  * @param {object} [who.appMetadata]
  * @return {string} 'anon' | 'free' | 'pro'
  */
 export function modelActionTier({tier, isAuthenticated, appMetadata} = {}) {
-  return TIER_PARAMS[tier] || TIER_PARAMS[getTier(appMetadata, isAuthenticated === true)]
+  return TIER_PARAMS[tier] || TIER_PARAMS[getTier(appMetadata, isAuthenticated === true)] || ANON_TIER_PARAM
 }
 
 

@@ -1,3 +1,14 @@
+# bldrs.dev is held, not served: every request to it (and www) is sent to the
+# same path on bldrs.ai. These must stay FIRST — Netlify applies the first
+# matching rule, and the SPA rules below would otherwise serve
+# https://bldrs.dev/share/... as a page instead. `!` forces the redirect even
+# where a static file exists (marketing pages, assets). The domains stay
+# attached to the Netlify project only so it holds their HTTPS certificate:
+# .dev is HSTS-preloaded, so browsers only ever request https://bldrs.dev and
+# the redirect must be served with a valid certificate (bldrs-ai/ops#36).
+https://bldrs.dev/*      https://bldrs.ai/:splat  301!
+https://www.bldrs.dev/*  https://bldrs.ai/:splat  301!
+
 # SPA fallback — explicit allowlist instead of a catch-all so unknown paths
 # return a real 404 rather than the SPA shell with HTTP 200. The catch-all
 # pattern (/* /index.html 200) is a soft-404 SEO trap: Google can index the

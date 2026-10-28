@@ -105,6 +105,35 @@ describe('trackModelActionWhenAuthSettled', () => {
     expect(sent('model_export')).toEqual([{tier: 'free', gate: 'blocked'}])
   })
 
+  // Share#1977: a signed-out user is never metered, so a gate's quota tier
+  // can be missing (null/undefined) where it used to be "anonymous". That
+  // must not become the anon cell for a signed-in user: with no tier, the
+  // event waits and reads the sign-in tier at emit time.
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+  ])('a %s explicit tier falls back to the emit-time sign-in tier', async (_, tier) => {
+    const done = trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
+      gate: MODEL_GATES.BLOCKED,
+      tier,
+      getIsAuthenticated: () => true,
+    })
+    await act(async () => {})
+    expect(sent('model_share')).toEqual([])
+    act(() => {
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      useStore.getState().setIsAuthResolved(true)
+    })
+    await act(() => done)
+    expect(sent('model_share')).toEqual([{tier: 'pro', gate: 'blocked'}])
+  })
+
+  it('a missing tier with no sign-in state is anon', async () => {
+    act(() => useStore.getState().setIsAuthResolved(true))
+    await act(() => trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {gate: MODEL_GATES.SOFT, tier: null}))
+    expect(sent('model_share')).toEqual([{tier: 'anon', gate: 'soft'}])
+  })
+
   it('a stuck token exchange still sends, with the best tier known by then', async () => {
     jest.useFakeTimers()
     const done = trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
