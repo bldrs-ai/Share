@@ -44,6 +44,7 @@ import {
   TIERS,
   isCountedByRouteKind,
   loadsInsideRollingWindow,
+  usageQuotaWithLoads,
 } from '../../src/quota/limits.js'
 import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
 
@@ -137,15 +138,21 @@ async function getUserRecord(mgmtToken, auth0UserId) {
 }
 
 /**
+ * Auth0 merges `app_metadata` one top-level key at a time, so this writes
+ * the WHOLE `usageQuota` back — its other fields with `loads` replaced
+ * (`limits.js#usageQuotaWithLoads`, the write `pro-module` makes too) — or a
+ * load would erase them (codex review on Share#1980).
+ *
  * @param {string} mgmtToken
  * @param {string} auth0UserId
+ * @param {*} usageQuota The user's current app_metadata.usageQuota
  * @param {Array} loads New loads list to persist under app_metadata.usageQuota
  * @return {Promise<void>}
  */
-async function patchUsageQuota(mgmtToken, auth0UserId, loads) {
+async function patchUsageQuota(mgmtToken, auth0UserId, usageQuota, loads) {
   await axios.patch(
     `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(auth0UserId)}`,
-    {app_metadata: {usageQuota: {loads}}},
+    {app_metadata: {usageQuota: usageQuotaWithLoads(usageQuota, loads)}},
     {
       headers: {
         'Content-Type': 'application/json',
@@ -366,7 +373,7 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
 
   const newLoads = [...existingLoads, {key, loadedAt: new Date(now).toISOString()}]
   try {
-    await patchUsageQuota(mgmtToken, auth0UserId, newLoads)
+    await patchUsageQuota(mgmtToken, auth0UserId, appMetadata.usageQuota, newLoads)
   } catch (err) {
     Sentry.captureException(err)
     return {statusCode: HTTP_BAD_GATEWAY, body: 'Failed to record load'}

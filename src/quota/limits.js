@@ -87,6 +87,26 @@ export function loadsInsideRollingWindow(loads, now) {
 }
 
 
+/**
+ * The `usageQuota` object to PATCH when the slot ledger changes: the user's
+ * existing `usageQuota` with `loads` replaced. Auth0 merges `app_metadata`
+ * one top-level key at a time, so writing `{usageQuota: {loads}}` alone
+ * would erase every other field under `usageQuota` (codex review on
+ * Share#1980). The one way `record-load` and `pro-module` build that write.
+ *
+ * @param {*} usageQuota The user's current `app_metadata.usageQuota`;
+ *   anything but a plain object contributes nothing
+ * @param {Array<{key: string, loadedAt: string}>} loads The new ledger
+ * @return {object}
+ */
+export function usageQuotaWithLoads(usageQuota, loads) {
+  const siblings = usageQuota !== null && typeof usageQuota === 'object' && !Array.isArray(usageQuota) ?
+    usageQuota :
+    {}
+  return {...siblings, loads}
+}
+
+
 /** Quotable load limits per tier within the rolling window */
 export const LIMITS = {
   [TIERS.FREE]: FREE_PRIVATE_MODEL_LIMIT,

@@ -68,6 +68,7 @@ import {
   isModelKey,
   slotsHeaderValue,
 } from '../../src/export/exportSlots.js'
+import {usageQuotaWithLoads} from '../../src/quota/limits.js'
 import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
 import {
   getUserAppMetadata,
@@ -244,8 +245,10 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
       // Take the slot before serving, and refuse to serve if the write didn't
       // land: a delivery for a model holding no slot is exactly what this
       // gate exists to prevent. The write is `record-load`'s own — the
-      // window's rows plus this key, under `usageQuota` — so the two agree on
-      // the ledger and a later open of this model reads as already counted.
+      // window's rows plus this key, under `usageQuota`, with every other
+      // `usageQuota` field written back (Auth0 replaces a top-level key
+      // whole; `usageQuotaWithLoads`) — so the two agree on the ledger and a
+      // later open of this model reads as already counted.
       // Read-modify-write with no compare-and-swap, like every app_metadata
       // writer here (record-load included): two requests racing from one
       // account can both read the same free slot and both be served, and one
@@ -253,7 +256,7 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
       // slot, never a wrongful refusal (§4.8 lists it among what stays
       // bypassable).
       try {
-        await patchUserAppMetadata(auth.sub, {usageQuota: {loads: decision.loads}})
+        await patchUserAppMetadata(auth.sub, {usageQuota: usageQuotaWithLoads(appMetadata.usageQuota, decision.loads)})
       } catch (err) {
         return managementApiFailure(err, 'model slot write', 'model_slot_write_failed')
       }

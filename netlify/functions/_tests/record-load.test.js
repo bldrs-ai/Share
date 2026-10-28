@@ -135,6 +135,20 @@ describe('record-load function', () => {
     expect(patched.usageQuota.loads).toEqual([{key: KEY, loadedAt: expect.any(String)}])
   })
 
+  // Auth0 merges app_metadata one top-level key at a time, so a PATCH of
+  // `usageQuota` replaces the whole object: anything beside `loads` must be
+  // written back, or one load erases it (codex review on Share#1980).
+  it('keeps the fields beside loads in usageQuota when it records a load', async () => {
+    mockAuth0({usageQuota: {loads: [], note: 'kept', resetBy: 'support'}})
+
+    const res = await handler(getEvent())
+
+    expect(res.statusCode).toBe(200)
+    expect(axios.patch.mock.calls[0][1].app_metadata.usageQuota).toEqual({
+      note: 'kept', resetBy: 'support', loads: [{key: KEY, loadedAt: expect.any(String)}],
+    })
+  })
+
   const LOCAL_KEYS = [
     ['/share/v/local-only/0b4c2f1e-8d6a-4c3b-9e2f-1a2b3c4d5e6f.ifc'],
     ['/Share/share/v/local-only/0b4c2f1e-8d6a-4c3b-9e2f-1a2b3c4d5e6f.ifc'],

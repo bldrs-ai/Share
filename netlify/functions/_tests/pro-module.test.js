@@ -218,6 +218,20 @@ describe('pro-module function', () => {
       expect(JSON.parse(res.headers['X-Bldrs-Model-Slots'])).toMatchObject({used: 2, remaining: 0, taken: true})
     })
 
+    // Auth0 merges app_metadata one top-level key at a time, so the slot
+    // write replaces `usageQuota` whole (codex review on Share#1980).
+    it('keeps the fields beside loads in usageQuota when it takes a slot', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(OTHER, 1)], note: 'kept'}})
+      axios.patch.mockResolvedValue({data: {}})
+
+      const res = await handler(getEvent({}, LOCAL))
+
+      expect(res.statusCode).toBe(200)
+      const {usageQuota} = axios.patch.mock.calls[0][1].app_metadata
+      expect(usageQuota.note).toBe('kept')
+      expect(usageQuota.loads.map((row) => row.key)).toEqual([OTHER, LOCAL])
+    })
+
     it('has a public GitHub model take a slot on its first export too, though viewing it is free', async () => {
       mockAuth0({subscriptionStatus: 'free'})
       axios.patch.mockResolvedValue({data: {}})

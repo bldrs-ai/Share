@@ -10,6 +10,7 @@ import {
   TIERS,
   isCountedByRouteKind,
   isMeteredLocalRouteKind,
+  usageQuotaWithLoads,
 } from './limits'
 
 
@@ -36,6 +37,13 @@ describe('quota/limits', () => {
   // own, so this guards against someone re-adding a separate export number.
   it('has exports use the private-model slots, not a limit of their own', () => {
     expect(FREE_MODEL_SLOTS).toBe(FREE_PRIVATE_MODEL_LIMIT)
+  })
+
+  it('writes back the fields beside loads, and replaces only loads', () => {
+    const loads = [{key: '/share/v/p/a.ifc', loadedAt: '2026-10-27T00:00:00.000Z'}]
+    expect(usageQuotaWithLoads({loads: [], note: 'kept'}, loads)).toEqual({note: 'kept', loads})
+    expect(usageQuotaWithLoads(undefined, loads)).toEqual({loads})
+    expect(usageQuotaWithLoads(['not', 'an', 'object'], loads)).toEqual({loads})
   })
 
   // Signed-out users are never metered, so there is no tier for them, and no

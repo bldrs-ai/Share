@@ -2604,9 +2604,11 @@ unlimited exports.
    a share path, at most 1 KB). Free with a key: `exportSlotDecision`
    - **held** — the key is in the window: serve, write nothing;
    - **take** — not held, a slot free: read the module first (a missing build
-     must not cost a slot), then PATCH `{usageQuota: {loads}}` — the window's
-     rows plus `{key, loadedAt, via: 'export'}`, record-load's own write — and
-     only then serve. A failed PATCH is a 502 and no module;
+     must not cost a slot), then PATCH `usageQuota` — the window's rows plus
+     `{key, loadedAt, via: 'export'}`, with every other `usageQuota` field
+     written back, since Auth0 replaces a top-level key whole
+     (`limits.js#usageQuotaWithLoads`, record-load's own write) — and only
+     then serve. A failed PATCH is a 502 and no module;
    - **full** — not held, no slot free: **403 `no_free_model_slot`**, body
      `{modelSlots: {limit, used, remaining, nextFreeAt, keys}}`, nothing read
      or written.
