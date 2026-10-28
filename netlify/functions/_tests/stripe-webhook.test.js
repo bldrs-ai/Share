@@ -11,7 +11,9 @@
  * entitlement read across the event's and the linked customer, the
  * write-and-confirm loop and its inline retry,
  * the retry contract (which failures get a 5xx so Stripe redelivers), raw-body
- * handling, and what reaches Sentry.
+ * handling, what reaches Sentry, and the GA4 Measurement Protocol report of
+ * each tier transition (`_lib/subscriptionAnalytics.js`): one event per
+ * transition, none on redelivery, and never a changed response code.
  *
  * In `_tests/` rather than beside its subject: Netlify bundles every
  * top-level `.js` under `netlify/functions/` AS a function.
@@ -39,6 +41,7 @@ const mockStripeClient = {
   webhooks: {constructEvent: jest.fn()},
   subscriptions: {list: jest.fn()},
   customers: {retrieve: jest.fn()},
+  checkout: {sessions: {list: jest.fn()}},
 }
 jest.mock('stripe', () => ({
   __esModule: true,
@@ -196,11 +199,17 @@ describe('stripe-webhook function', () => {
     resetManagementApiTokenCache()
     process.env = {...savedEnv, ...ENV}
     jest.spyOn(console, 'error').mockImplementation(() => {})
+    // The GA report logs every transition, sent or skipped (no GA env here
+    // unless a test adds it).
+    jest.spyOn(console, 'log').mockImplementation(() => {})
+    jest.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
   afterEach(() => {
     process.env = savedEnv
     console.error.mockRestore()
+    console.log.mockRestore() // eslint-disable-line no-console
+    console.warn.mockRestore()
   })
 
   describe('configuration', () => {
@@ -742,6 +751,279 @@ describe('stripe-webhook function', () => {
       expect(message).toContain('invoice.paid')
       expect(message).toContain('evt_invoice')
       expect(message).not.toContain('ada@example.com')
+    })
+  })
+
+  describe('GA4 subscription events (Measurement Protocol)', () => {
+    const GA_ENV = {GA4_MEASUREMENT_ID: 'G-UNIT0001', GA4_API_SECRET: 'mp-secret-unit'}
+    const CLIENT_ID = '1871520000.1754700000'
+    const MP_TIMEOUT_TEST_MS = 10000
+
+    /**
+     * A live-mode event whose payload names the Pro price with its interval
+     * — the only thing the GA params take from the payload.
+     *
+     * @param {string} type
+     * @return {object} what constructEvent returns
+     */
+    function liveEvent(type) {
+      return {
+        id: 'evt_unit',
+        type,
+        livemode: true,
+        data: {object: proSubscription({
+          items: {data: [{price: {id: ENV.SHARE_PRO_PRICE_ID, lookup_key: 'share_pro_monthly', recurring: {interval: 'month'}}}]},
+        })},
+      }
+    }
+
+    /**
+     * @param {Array<object>} sessions the customer's Checkout Sessions, newest first
+     */
+    function mockCheckoutSessions(sessions) {
+      mockStripeClient.checkout.sessions.list.mockResolvedValue(page(sessions))
+    }
+
+    /** @return {Array<{url: string, body: object}>} every Measurement Protocol POST */
+    function mpPosts() {
+      return global.fetch.mock.calls.map(([url, init]) => ({url, body: JSON.parse(init.body)}))
+    }
+
+    beforeEach(() => {
+      Object.assign(process.env, GA_ENV)
+      mockCheckoutSessions([
+        {id: 'cs_unit', client_reference_id: 'gacid_1871520000_1754700000', subscription: 'sub_unit', status: 'complete'},
+      ])
+      jest.spyOn(global, 'fetch').mockResolvedValue({ok: true, status: 204})
+    })
+
+    afterEach(() => {
+      global.fetch.mockRestore()
+    })
+
+    it('sends exactly one subscription_started, to the paying browser\'s GA client, when a user becomes Pro', async () => {
+      mockUpstreams()
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res).toEqual({statusCode: 200, body: 'Success'})
+      expect(mpPosts()).toEqual([{
+        url: 'https://www.google-analytics.com/mp/collect?measurement_id=G-UNIT0001&api_secret=mp-secret-unit',
+        body: {
+          client_id: CLIENT_ID,
+          events: [{
+            name: 'subscription_started',
+            params: {
+              tier: 'pro', source: 'server', cid_source: 'checkout', open_cid: `cid.${CLIENT_ID}`,
+              interval: 'month', plan: 'share_pro_monthly',
+            },
+          }],
+        },
+      }])
+      expect(mockStripeClient.checkout.sessions.list).toHaveBeenCalledWith(
+        {customer: CUSTOMER_ID, limit: 10}, {timeout: 1500, maxNetworkRetries: 0})
+    })
+
+    it('sends exactly one subscription_ended when a Pro user loses entitlement', async () => {
+      mockUpstreams({
+        subscriptions: [proSubscription({status: 'canceled'})],
+        appMetadata: {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID},
+      })
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.deleted'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res.statusCode).toBe(200)
+      expect(mpPosts().map((post) => post.body.events[0].name)).toEqual(['subscription_ended'])
+    })
+
+    // The transition rule is settleUser's: a redelivery, a renewal, or a
+    // duplicate finds the tier already right, writes nothing, sends nothing.
+    it.each([
+      ['a redelivered created for a user already Pro', 'customer.subscription.created', true,
+        {subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: CUSTOMER_ID}],
+      ['a renewal for a sharePro user', 'customer.subscription.updated', true,
+        {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID}],
+      ['a redelivered deleted for a user already demoted', 'customer.subscription.deleted', false,
+        {subscriptionStatus: 'freePendingReauth', stripeCustomerId: CUSTOMER_ID}],
+      ['a relink with no tier change', 'customer.subscription.updated', false, {}],
+    ])('sends nothing for %s', async (label, type, entitled, appMetadata) => {
+      mockUpstreams({subscriptions: [proSubscription({status: entitled ? 'active' : 'canceled'})], appMetadata})
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent(type))
+
+      const res = await handler(webhookEvent())
+
+      expect(res).toEqual({statusCode: 200, body: 'Success'})
+      expect(global.fetch).not.toHaveBeenCalled()
+      expect(mockStripeClient.checkout.sessions.list).not.toHaveBeenCalled()
+    })
+
+    it('counts a first delivery and not its redelivery', async () => {
+      mockUpstreams()
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+      await handler(webhookEvent())
+      // Auth0 now stores what the first delivery wrote.
+      mockUpstreams({appMetadata: storedAppMetadata({})})
+
+      const res = await handler(webhookEvent())
+
+      expect(res.statusCode).toBe(200)
+      expect(mpPosts()).toHaveLength(1)
+    })
+
+    it('sends nothing for a promotion corrected straight back in the same delivery', async () => {
+      mockUpstreams()
+      listSequence(page([proSubscription()]), page([proSubscription({status: 'canceled'})]))
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res.statusCode).toBe(200)
+      expect(patches().map((m) => m.subscriptionStatus)).toEqual(['shareProPendingReauth', 'freePendingReauth'])
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+
+    // The redelivery a 500 asks for finds the tier written and sends nothing,
+    // so a transition written before the failure is reported now or never.
+    it('reports a tier written before a failure that asks Stripe to retry, once', async () => {
+      mockUpstreams()
+      axios.get.mockImplementation((url) => url.startsWith(USER_URL) ?
+        Promise.reject(upstreamError(503)) :
+        Promise.resolve({data: url.includes('/users-by-email') ? [{user_id: USER_ID, app_metadata: {}}] : []}))
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res.statusCode).toBe(500)
+      expect(mpPosts().map((post) => post.body.events[0].name)).toEqual(['subscription_started'])
+    }, CORRECTION_RETRY_TIMEOUT_MS)
+
+    describe('never changes the response', () => {
+      it.each([
+        ['the network fails', () => global.fetch.mockRejectedValue(new TypeError('fetch failed'))],
+        ['GA answers 500', () => global.fetch.mockResolvedValue({ok: false, status: 500})],
+      ])('answers 200 when %s, logging without the API secret', async (label, breakIt) => {
+        mockUpstreams()
+        breakIt()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+        const res = await handler(webhookEvent())
+
+        expect(res).toEqual({statusCode: 200, body: 'Success'})
+        expect(global.fetch).toHaveBeenCalledTimes(1)
+        const warned = console.warn.mock.calls.flat().join(' ')
+        expect(warned).toContain('subscription_started for customer.subscription.created evt_unit not sent to GA')
+        expect(warned).not.toContain(GA_ENV.GA4_API_SECRET)
+        expect(Sentry.captureException).not.toHaveBeenCalled()
+      })
+
+      it('answers 200 when GA hangs, abandoning the request at its timeout', async () => {
+        mockUpstreams()
+        let signal = null
+        global.fetch.mockImplementation((url, init) => {
+          signal = init.signal
+          return new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))))
+        })
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+        const res = await handler(webhookEvent())
+
+        expect(res).toEqual({statusCode: 200, body: 'Success'})
+        expect(signal.aborted).toBe(true)
+      }, MP_TIMEOUT_TEST_MS)
+
+      it('answers 200 when an error escapes the client id lookup', async () => {
+        mockUpstreams()
+        mockStripeClient.checkout.sessions.list.mockImplementation(() => {
+          throw new Error('synchronous SDK failure')
+        })
+        global.fetch.mockRejectedValue(new TypeError('fetch failed'))
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+        const res = await handler(webhookEvent())
+
+        expect(res).toEqual({statusCode: 200, body: 'Success'})
+      })
+    })
+
+    describe('which GA client', () => {
+      it('prefers the session that created this subscription over a newer checkout', async () => {
+        mockCheckoutSessions([
+          {client_reference_id: 'gacid_9_9', subscription: null, status: 'expired'},
+          {client_reference_id: 'gacid_8_8', subscription: 'sub_other', status: 'complete'},
+          {client_reference_id: 'gacid_7_7', subscription: 'sub_unit', status: 'complete'},
+        ])
+        mockUpstreams()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+        await handler(webhookEvent())
+
+        expect(mpPosts()[0].body.client_id).toBe('7.7')
+      })
+
+      it.each([
+        ['no session carries a reference',
+          () => mockCheckoutSessions([{client_reference_id: null, subscription: 'sub_unit', status: 'complete'}])],
+        ['the key may not read Checkout Sessions (403)', () => mockStripeClient.checkout.sessions.list.mockRejectedValue(stripeError(403))],
+      ])('falls back to a hash of the customer, flagged, when %s', async (label, arrange) => {
+        arrange()
+        mockUpstreams()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+        const res = await handler(webhookEvent())
+
+        expect(res.statusCode).toBe(200)
+        const [{body}] = mpPosts()
+        expect(body.client_id).toMatch(/^\d+\.\d+$/)
+        expect(body.events[0].params)
+          .toEqual({tier: 'pro', source: 'server', cid_source: 'fallback', interval: 'month', plan: 'share_pro_monthly'})
+        // Never a Stripe id, an email or a name, anywhere in what GA gets.
+        const sent = JSON.stringify(body)
+        expect(sent).not.toMatch(/cus_|sub_|price_|evt_|@/)
+      })
+
+      it('gives the same customer the same fallback client id on every event', async () => {
+        mockCheckoutSessions([])
+        mockUpstreams()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+        await handler(webhookEvent())
+        mockUpstreams({subscriptions: [proSubscription({status: 'canceled'})], appMetadata: storedAppMetadata({})})
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.deleted'))
+
+        await handler(webhookEvent())
+
+        const [started, ended] = mpPosts()
+        expect(ended.body.events[0].name).toBe('subscription_ended')
+        expect(ended.body.client_id).toBe(started.body.client_id)
+      })
+    })
+
+    describe('configuration', () => {
+      it.each(Object.keys(GA_ENV))('skips sending without %s, with a log line naming it', async (name) => {
+        delete process.env[name]
+        mockUpstreams()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+        const res = await handler(webhookEvent())
+
+        expect(res).toEqual({statusCode: 200, body: 'Success'})
+        expect(global.fetch).not.toHaveBeenCalled()
+        expect(mockStripeClient.checkout.sessions.list).not.toHaveBeenCalled()
+        expect(console.log.mock.calls.flat().join(' ')).toContain(name) // eslint-disable-line no-console
+        expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      })
+
+      it('skips a test-mode event, whichever endpoint it reached', async () => {
+        mockUpstreams()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue({...liveEvent('customer.subscription.created'), livemode: false})
+
+        const res = await handler(webhookEvent())
+
+        expect(res.statusCode).toBe(200)
+        expect(patches()).toHaveLength(1)
+        expect(global.fetch).not.toHaveBeenCalled()
+      })
     })
   })
 })

@@ -64,6 +64,15 @@
  * crash on cold start in any deploy context without STRIPE_SECRET_KEY — the
  * same failure class as bldrs-ai/ops#33.
  *
+ * Every tier write also reports the funnel's `subscription_started` /
+ * `subscription_ended` to GA4 through the Measurement Protocol
+ * (`_lib/subscriptionAnalytics.js`): one event per transition, attributed to
+ * the paying browser's GA client id from the Checkout Session. It needs
+ * GA4_MEASUREMENT_ID and GA4_API_SECRET, and skips with a log line without
+ * them. It is best-effort by construction — it never throws and never
+ * changes the response code — since a 5xx caused by GA would make Stripe
+ * redeliver an update that was applied.
+ *
  * Tests: netlify/functions/_tests/stripe-webhook.test.js (behaviour, mocked),
  * netlify/functions/_tests/replay/stripe-webhook/ (fixtures replayed against
  * the source and against the deployed bundle). Contract summary:
@@ -81,6 +90,7 @@ import {
   settleUser,
   upstreamStatus,
 } from './_lib/subscriptions.js'
+import {reportSubscriptionTransition} from './_lib/subscriptionAnalytics.js'
 
 
 Sentry.AWSLambda.init({
@@ -117,7 +127,8 @@ const CORRECTION_RETRY_DELAYS_MS = [250, 1000] // eslint-disable-line no-magic-n
  *
  * @param {object} stripe Stripe client
  * @param {string} stripeCustomerId the event's customer
- * @return {Promise<object>} `{auth0UserId, status}` or `{permanent: reason}`
+ * @return {Promise<object>} `{auth0UserId, status, changes}` (settleUser's
+ *   writes) or `{permanent: reason}`
  */
 async function syncCustomer(stripe, stripeCustomerId) {
   const proPriceId = process.env.SHARE_PRO_PRICE_ID
@@ -128,14 +139,14 @@ async function syncCustomer(stripe, stripeCustomerId) {
   // From the STORED link each round, listed first: while the linked
   // customer is entitled the link stays put, and a relink written by an
   // overlapping delivery is read back rather than overwritten.
-  const {status} = await settleUser({
+  const {status, changes} = await settleUser({
     userId: user.user_id,
     stored: user.app_metadata || {},
     read: (stored) => entitlementAcross(stripe, [stored.stripeCustomerId, stripeCustomerId], proPriceId),
     link: (reading, stored) => linkFor(reading, stored.stripeCustomerId, stripeCustomerId),
     retryDelaysMs: CORRECTION_RETRY_DELAYS_MS,
   })
-  return {auth0UserId: user.user_id, status}
+  return {auth0UserId: user.user_id, status, changes}
 }
 
 
@@ -187,7 +198,13 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
       Sentry.captureException(new Error(`${result.permanent} (${label})`))
       return {statusCode: HTTP_OK, body: 'Acknowledged; not applied'}
     }
+    // 4. Tell GA about a tier transition this delivery wrote. Never throws.
+    await reportSubscriptionTransition({stripe, stripeEvent, changes: result.changes})
   } catch (err) {
+    // A write that landed before the failure is still a transition, and the
+    // redelivery this 500 asks for will find the tier already written and
+    // report nothing — so it is reported now, or never. Never throws.
+    await reportSubscriptionTransition({stripe, stripeEvent, changes: err.changes})
     // The status and id go to the function log so a failed delivery can be
     // matched to its cause without Sentry.
     const status = upstreamStatus(err)

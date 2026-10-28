@@ -353,9 +353,9 @@ describe('ProfileControl', () => {
       delete window.gtag
     })
 
-    /** @return {number} subscription_started events sent so far */
+    /** @return {number} subscription_started_client events sent so far */
     function startedCount() {
-      return window.gtag.mock.calls.filter(([kind, name]) => kind === 'event' && name === 'subscription_started').length
+      return window.gtag.mock.calls.filter(([kind, name]) => kind === 'event' && name === 'subscription_started_client').length
     }
 
     /**

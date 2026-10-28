@@ -1,0 +1,144 @@
+{
+  "description": "The cancellation of a Pro user's only subscription writes freePendingReauth and reports one subscription_ended. The key may not read Checkout Sessions (403), so the client id is the stable hash of the Stripe customer, flagged cid_source: 'fallback', with no open_cid and no Stripe id anywhere in what GA gets.",
+  "env": {
+    "$fixture": "env/stripe-ga.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/stripe-webhook",
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "user-agent": "Stripe/1.0 (+https://stripe.com/docs/webhooks)"
+    },
+    "sign": "stripe",
+    "body": {
+      "$fixture": "stripe/event.subscription.deleted.json",
+      "$merge": {
+        "livemode": true
+      }
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-search-by-customer-pro.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "subscriptionStatus": "sharePro",
+              "stripeCustomerId": "cus_Rreplay0001"
+            }
+          }
+        }
+      }
+    },
+    {
+      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        },
+        "body": {
+          "app_metadata": {
+            "subscriptionStatus": "freePendingReauth"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "subscriptionStatus": "freePendingReauth",
+              "stripeCustomerId": "cus_Rreplay0001"
+            }
+          }
+        }
+      }
+    },
+    {
+      "$fixture": "exchanges/stripe-subscriptions-pro-canceled.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.stripe.com/v1/checkout/sessions?customer=cus_Rreplay0001&limit=10",
+        "headers": {
+          "authorization": "Bearer sk_test_replay"
+        }
+      },
+      "response": {
+        "status": 403,
+        "json": {
+          "error": {
+            "type": "invalid_request_error",
+            "message": "The provided key 'rk_live_...replay' does not have the required permissions for this endpoint on account 'acct_replay'. Having the 'rak_checkout_session_read' permission would allow this request to continue."
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://www.google-analytics.com/mp/collect?measurement_id=G-REPLAY0001&api_secret=mp-secret-replay",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "client_id": "4045616414.2937455691",
+          "events": [
+            {
+              "name": "subscription_ended",
+              "params": {
+                "tier": "pro",
+                "source": "server",
+                "cid_source": "fallback"
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 204
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "bodyIncludes": "Success"
+  }
+}

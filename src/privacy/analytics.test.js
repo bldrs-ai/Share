@@ -215,8 +215,8 @@ describe('Analytics', () => {
     })
 
     test('omits open_cid, rather than sending a blank, when no id resolved', () => {
-      Analytics.gtagFunnelEvent(Analytics.FUNNEL_EVENTS.SUBSCRIPTION_STARTED)
-      expect(window.gtag).toHaveBeenCalledWith('event', 'subscription_started', {})
+      Analytics.gtagFunnelEvent(Analytics.FUNNEL_EVENTS.SUBSCRIPTION_STARTED_CLIENT)
+      expect(window.gtag).toHaveBeenCalledWith('event', 'subscription_started_client', {})
     })
 
     test('event names are the ones the dashboard queries', () => {
@@ -228,6 +228,10 @@ describe('Analytics', () => {
         BEGIN_CHECKOUT: 'begin_checkout',
         SUBSCRIPTION_STARTED: 'subscription_started',
         SUBSCRIPTION_ENDED: 'subscription_ended',
+        // The browser's sighting, never under the funnel's (server-sent)
+        // names, or the two would add up in one count.
+        SUBSCRIPTION_STARTED_CLIENT: 'subscription_started_client',
+        SUBSCRIPTION_ENDED_CLIENT: 'subscription_ended_client',
         ENGAGED_USE: 'engaged_use',
         RETURN_VISIT: 'return_visit',
       })
@@ -524,6 +528,41 @@ describe('Analytics', () => {
    * merge over the global scope, so a deliberately cid-less event would
    * inherit a stale one (Codex review on #1770).
    */
+  // Checkout's client-reference-id (gaClientReference.js), which the
+  // stripe-webhook decodes to attribute its server-side subscription events.
+  describe('getGaClientReference', () => {
+    beforeEach(() => {
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+      Cookies.remove('isAnalyticsAllowed')
+    })
+
+    afterEach(() => {
+      Cookies.remove('isAnalyticsAllowed')
+    })
+
+    test('encodes the client id with no dot, which Stripe would drop', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      expect(Analytics.getGaClientReference()).toBe('gacid_1871520000_1754700000')
+    })
+
+    test('reads the _ga cookie when gtag has not answered yet', () => {
+      Cookies.set('_ga', 'GA1.1.1871520000.1754700000')
+      expect(Analytics.getGaClientReference()).toBe('gacid_1871520000_1754700000')
+    })
+
+    test('null with no client id', () => {
+      expect(Analytics.getGaClientReference()).toBeNull()
+    })
+
+    test('null when analytics consent is withheld', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.setIsAllowed(false)
+      expect(Analytics.getGaClientReference()).toBeNull()
+    })
+  })
+
+
   describe('syncSentryCidTag', () => {
     beforeEach(() => {
       setTag.mockClear()

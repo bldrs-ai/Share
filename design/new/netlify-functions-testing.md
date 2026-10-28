@@ -165,6 +165,7 @@ So the status code is the retry policy:
 | Missing signature | 400, not reported (probes and scanners) |
 | Bad signature | 400, reported |
 | Missing secret | 500 "not configured", naming the variable in the log |
+| The GA4 report of a tier write fails, hangs or is unconfigured | **Unchanged** — whatever the row above says. GA is best-effort (below) |
 
 Before ops#33 every failure answered 200. That turned each Auth0 blip into
 a subscription update lost with no retry.
@@ -262,6 +263,36 @@ stale. Replays: `cancelled-mid-flight-corrects-its-own-write`,
 `deleted-customer-demotes-linked-user`,
 `old-customer-event-keeps-pro-under-new-customer`,
 `overlapping-write-seen-in-auth0-is-corrected`.
+
+**GA4 subscription events.** Each tier write is also reported to GA4 as
+the funnel's `subscription_started` / `subscription_ended`, through the
+Measurement Protocol (`_lib/subscriptionAnalytics.js`; the design, the
+attribution through the Checkout Session's `client_reference_id`, and the
+owner's setup steps are in quotas.md §"Server-side subscription events").
+What it relies on, and what holds it to the contract above:
+- **One event per transition** because it is driven by `settleUser`'s
+  `changes`, the writes that rule made. A redelivery writes nothing, so it
+  sends nothing; no second dedupe exists to drift from the entitlement rule.
+  `settleUser` also puts its `changes` on any error it throws, so a write
+  that landed before a 500 is reported then: its redelivery won't see it.
+- **It never throws and never changes the status code.** The Checkout
+  Session lookup (`stripe.checkout.sessions.list`, per-request
+  `{timeout: 1500, maxNetworkRetries: 0}`) and the POST (1.5 s abort) each
+  have their own short budget; failures are logged with `console.warn`
+  (API secret scrubbed) and swallowed. It is awaited before the handler
+  returns, since Lambda freezes the process after.
+- **`GA4_MEASUREMENT_ID` and `GA4_API_SECRET` are optional**, unlike
+  `REQUIRED_ENV`: without both, and for a `livemode: false` event, one INFO
+  line and nothing sent. So no existing scenario's env changes; the GA
+  scenarios use `fixtures/env/stripe-ga.json`. Set them in production only.
+- Replays: `created-pro-reports-subscription-started-to-ga` (including the
+  Measurement Protocol POST and its 204),
+  `deleted-reports-subscription-ended-with-fallback-client` (a restricted key
+  without Checkout Session read access),
+  `ga-unreachable-still-acknowledges`,
+  `redelivered-created-sends-nothing-to-ga`. The unit suite pins the rest:
+  hang/timeout, non-2xx, missing env, test mode, which session wins, the
+  fallback's stability, and the net transition of a corrected write.
 
 **Timeouts.** Both subscription functions build the Stripe client with a
 5 s timeout and one network retry (`STRIPE_CLIENT_OPTIONS`), instead of
@@ -436,6 +467,15 @@ apply mode (ops#34).
   it. Setting the Auth0 user id on the Stripe customer at checkout (the
   pricing table's `client-reference-id`, copied to customer metadata)
   would make ownership checkable, and would let the sweep relink safely.
+  That field now carries the GA client id (`gacid_…`); its decoder
+  (`src/privacy/gaClientReference.js`) accepts the component beside others
+  joined by `-`, so a user id can be added without breaking attribution.
+- **The sweep's tier writes aren't reported to GA.** Only the webhook sends
+  `subscription_started` / `subscription_ended`; a transition only the
+  `reconcile-subscriptions` sweep writes (the webhook unreachable for
+  Stripe's whole retry window) is uncounted. `reportSubscriptionTransition`
+  takes `settleUser`'s `changes`, which the sweep has too, if that is ever
+  worth closing.
 - **Duplicate copies of the Management API token flow** remain
   (`record-load.js`, `create-portal-session.js`, `unlink-identity.js` versus
   `_lib/auth0.js`; `stripe-webhook.js` now uses `_lib/auth0.js`). The replays pin their outbound requests, so

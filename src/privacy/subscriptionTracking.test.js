@@ -41,7 +41,7 @@ describe('trackSubscriptionStatus', () => {
     expect(await trackSubscriptionStatus('u', undefined)).toBe(false)
     expect(await trackSubscriptionStatus('u', 'shareProPendingReauth')).toBe(true)
     expect(await trackSubscriptionStatus('u', 'freePendingReauth')).toBe(true)
-    expect(sentEvents()).toEqual(['subscription_started', 'subscription_ended'])
+    expect(sentEvents()).toEqual(['subscription_started_client', 'subscription_ended_client'])
   })
 
   it('still reports at most once per page when storage throws', async () => {
@@ -68,7 +68,7 @@ describe('trackSubscriptionStatus', () => {
       expect(localStorage.getItem(MARKER_KEY)).toBeNull()
       newPage()
       expect(await trackSubscriptionStatus('u', 'shareProPendingReauth', {isFresh: true})).toBe(true)
-      expect(sentEvents()).toEqual(['subscription_started', 'subscription_started'])
+      expect(sentEvents()).toEqual(['subscription_started_client', 'subscription_started_client'])
     })
 
     it('the reset also clears this page\'s in-page guard', async () => {
@@ -85,7 +85,7 @@ describe('trackSubscriptionStatus', () => {
         await trackSubscriptionStatus('u', undefined)
         await trackSubscriptionStatus('u', 'shareProPendingReauth', {isFresh: true})
       }
-      expect(sentEvents()).toEqual(['subscription_started'])
+      expect(sentEvents()).toEqual(['subscription_started_client'])
     })
 
     it('a fresh pending status repeated across reloads is reported once', async () => {
@@ -94,7 +94,7 @@ describe('trackSubscriptionStatus', () => {
         await trackSubscriptionStatus('u', 'shareProPendingReauth')
         await trackSubscriptionStatus('u', 'shareProPendingReauth', {isFresh: true})
       }
-      expect(sentEvents()).toEqual(['subscription_started'])
+      expect(sentEvents()).toEqual(['subscription_started_client'])
     })
   })
 
@@ -113,7 +113,7 @@ describe('trackSubscriptionStatus', () => {
 
       locks.open()
       expect(await Promise.all([tabA, tabB])).toEqual([true, false])
-      expect(sentEvents()).toEqual(['subscription_started'])
+      expect(sentEvents()).toEqual(['subscription_started_client'])
       expect(localStorage.getItem(MARKER_KEY)).toBe('shareProPendingReauth')
     })
 
@@ -131,7 +131,7 @@ describe('trackSubscriptionStatus', () => {
       expect(navigator.locks).toBeUndefined()
       trackSubscriptionStatus('u', 'shareProPendingReauth')
       // No await: the fallback ran the claim before returning.
-      expect(sentEvents()).toEqual(['subscription_started'])
+      expect(sentEvents()).toEqual(['subscription_started_client'])
       expect(localStorage.getItem(MARKER_KEY)).toBe('shareProPendingReauth')
     })
 
@@ -140,7 +140,7 @@ describe('trackSubscriptionStatus', () => {
       expect(await trackSubscriptionStatus('u', 'shareProPendingReauth')).toBe(true)
       newPage()
       expect(await trackSubscriptionStatus('u', 'shareProPendingReauth')).toBe(false)
-      expect(sentEvents()).toEqual(['subscription_started'])
+      expect(sentEvents()).toEqual(['subscription_started_client'])
     })
   })
 
@@ -162,7 +162,7 @@ describe('trackSubscriptionStatus', () => {
     it('reads sub and the app_metadata claim\'s status from the token', async () => {
       expect(await trackSubscriptionFromToken(tokenWith('shareProPendingReauth'))).toBe(true)
       expect(localStorage.getItem(MARKER_KEY)).toBe('shareProPendingReauth')
-      expect(sentEvents()).toEqual(['subscription_started'])
+      expect(sentEvents()).toEqual(['subscription_started_client'])
     })
 
     it('passes isFresh through, so a fresh settled token clears the marker', async () => {

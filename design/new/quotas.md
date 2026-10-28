@@ -530,8 +530,9 @@ behind the same analytics consent check as every other `gtagEvent`.
 | Hit a limit | `quota_limit_reached` | `tier` (`free`; `anonymous` before that tier was removed), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
 | Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown`; plus `from: 'gate'` and `feature` (`export` \| `share`) when a visible gate started the sign-in (§"Gate events") | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
 | Upgrade click | `begin_checkout` (GA4 recommended) | `from`: `profile` \| `export` \| `quota`; `destination`: `checkout` \| `portal` | `goToSubscription` (`Profile/subscriptionNav.js`), which every upgrade CTA goes through |
-| Subscribed | `subscription_started` | — | `BaseRoutes#processAccessToken` on `shareProPendingReauth` (below) |
-| (lapsed) | `subscription_ended` | — | same, on `freePendingReauth` |
+| Subscribed | `subscription_started` | `tier: 'pro'`, `source: 'server'`, `cid_source` (`checkout` \| `fallback`), `open_cid` (checkout only), `interval`, `plan` (when the price says) | **Server:** `stripe-webhook`, through the GA4 Measurement Protocol, on the FREE→PRO Auth0 write (§"Server-side subscription events") |
+| (lapsed) | `subscription_ended` | same | same, on the PRO→FREE write |
+| (seen in app) | `subscription_started_client` / `subscription_ended_client` | `open_cid` | `BaseRoutes#processAccessToken` on `shareProPendingReauth` / `freePendingReauth` (below); the browser *seeing* the transition, not the funnel step |
 | Engaged | `engaged_use` | `window_days` (7), `opens_in_window`, `threshold` (3), `open_cid` | `src/privacy/engagementTracking.js`, on the 3rd real open in a rolling 7 days; at most once per browser per 30 days (below) |
 | Returned | `return_visit` | `days_since_last_open` (1-14), `open_cid` | same, on an open 1-14 calendar days after the previous one; once per return day |
 
@@ -621,7 +622,10 @@ The parts that aren't obvious:
   them apart. For the strict "upgrade click" step, filter to
   `destination = checkout`. `QuotaLimitDialog`'s Subscribe button used to set
   its own `/subscribe/` URL; it now goes through `goToSubscription` too.
-- **`subscription_*` fires once per tier change.** One pending token is
+- **`subscription_*_client` fires once per tier change seen.** These were
+  `subscription_started` / `subscription_ended` until the server took those
+  names (§"Server-side subscription events"); the dedupe below is unchanged.
+  One pending token is
   processed on the cached and fresh-claims passes, again on every reload
   until the reauth, and in every tab. `src/privacy/subscriptionTracking.js`
   keeps the last pending status it reported for each user (Auth0 `sub`) in
@@ -711,6 +715,97 @@ The parts that aren't obvious:
     read-compare-write-emit runs under a Web Lock so two tabs cannot both
     emit.
 
+### Server-side subscription events
+
+Until 2026-10 the funnel's Subscribed step was counted only by the browser,
+when an open app processed the user's `shareProPendingReauth` token. A
+subscription that started or ended while the app wasn't open — or by a user
+who never came back to it — was never counted. The Stripe webhook now sends
+`subscription_started` and `subscription_ended` itself, through the
+[GA4 Measurement Protocol](https://developers.google.com/analytics/devguides/collection/protocol/ga4)
+(`netlify/functions/_lib/subscriptionAnalytics.js`).
+
+- **When: on the Auth0 tier write, and only then.** `_lib/subscriptions.js#settleUser`
+  writes only when the tier changes, decided from Auth0's stored value
+  (netlify-functions-testing.md §"stripe-webhook's response contract"). The
+  event follows that write: FREE→PRO sends `subscription_started`, PRO→FREE
+  `subscription_ended`. A redelivered or duplicate Stripe event finds the
+  tier already written, writes nothing, and sends nothing, so there is no
+  second dedupe to drift from the entitlement rule. A promotion corrected
+  straight back inside one delivery (subscription cancelled mid-flight) nets
+  to nothing and sends nothing. A write that lands before a failure is
+  reported even though the webhook then answers 500, since the redelivery
+  will find it written and send nothing (`settleUser` puts the writes on
+  the error as `changes`). Not covered: a transition only the daily
+  `reconcile-subscriptions` sweep writes (the webhook lost for Stripe's
+  whole retry window) is not reported.
+- **Who: the paying browser's GA client.** `goToSubscription` adds
+  `gaRef=gacid_<id with _ for .>` to the `/subscribe/` URL
+  (`analytics#getGaClientReference`, consent-gated like the Sentry cid), and
+  the page sets it as the Stripe pricing table's `client-reference-id`. That
+  is the pricing table's only per-session field — it cannot set `metadata` —
+  and Stripe copies it to the Checkout Session's `client_reference_id`. It
+  accepts only alphanumerics, `-` and `_`, silently dropping anything else,
+  hence the encoding (`src/privacy/gaClientReference.js`, shared by both
+  ends). The webhook lists the customer's Checkout Sessions (one Stripe call,
+  1.5 s, no retry) and decodes the reference from the session that created
+  this subscription, else the newest completed one (a resubscribe through
+  the billing portal has no session of its own), else the newest of any. That
+  id is the Measurement Protocol `client_id`, and also goes out as `open_cid`
+  (`cid.<id>`), the same join key every app funnel event carries.
+- **Fallback.** With no reference (consent withheld, GA blocked, a checkout
+  that didn't go through the pricing table, or a key that can't read Checkout
+  Sessions) the `client_id` is a SHA-256 of the Stripe customer id
+  (`<uint32>.<uint32>`), stable per customer so a start and its end pair up.
+  The event says so with `cid_source: 'fallback'` and carries no `open_cid`,
+  so it is never joined to a browser it doesn't belong to.
+- **Params.** `tier: 'pro'`, `source: 'server'`, `cid_source`, `open_cid`
+  (checkout only), `interval` (`month` / `year`) from the Pro price on the
+  event's subscription, and `plan` = that price's `lookup_key` when one is
+  set. Never an email, a name, or a Stripe id.
+- **Never breaks the webhook.** Every step is best-effort: the Checkout
+  Session lookup and the POST each time out after 1.5 s, and any failure is
+  logged (`console.warn`, with the API secret scrubbed) and swallowed. A GA
+  failure never changes the response code: a 5xx would make Stripe redeliver
+  an update that was applied. Without `GA4_MEASUREMENT_ID` and
+  `GA4_API_SECRET`, or for a test-mode (`livemode: false`) event, it logs one
+  INFO line and sends nothing.
+- **The browser's events were renamed, not removed.** The client-side
+  sighting (`subscriptionTracking.js`) now reports
+  `subscription_started_client` / `subscription_ended_client`. Under the old
+  names every subscriber who returned to the app would have counted twice.
+  Kept because the gap between the two counts is "subscribers who came back
+  to the app", and the client event rides a real browser session (landing
+  page, source/medium) that a Measurement Protocol event, with no
+  `session_id`, does not. The names live in `src/privacy/subscriptionEventNames.js`,
+  which the app and the function both import.
+- **Reading the series across the change.** Before the deploy,
+  `subscription_started` was the client event; after it, the server's. Mark
+  the date on the dashboard. The server count should run at or above the old
+  one, never below.
+
+**Setup (owner, once).** Nothing is sent until both are done:
+
+1. GA4 → Admin → Data streams → the bldrs.ai web stream (`G-GRLNVMZRGW`,
+   the id in `src/index/ga.js`) → **Measurement Protocol API secrets** →
+   Create. Accept the user data collection acknowledgement if asked, name
+   it `stripe-webhook`, and copy the secret value.
+2. Netlify → **`bldrs-share-prod`** → Site configuration → Environment
+   variables, scoped to **Functions** and the **Production** context only:
+   `GA4_MEASUREMENT_ID` = `G-GRLNVMZRGW`, `GA4_API_SECRET` = the secret.
+   Not on deploy previews or `bldrs-share-dev`: their test traffic must not
+   reach the production property (the `livemode` check is a second guard,
+   not the only one).
+3. If `STRIPE_SECRET_KEY` is a restricted key (`rk_live_…`), give it
+   **Checkout Sessions: Read**. Without it the lookup gets a 403 and every
+   event goes out with the fallback client id.
+4. Redeploy production so the function picks up the variables, then watch
+   the function log for `subscription_started … sent to GA (client id from
+   checkout)` on the next subscription. GA answers 2xx even to a malformed
+   event or a wrong secret, so a one-off check against
+   `https://www.google-analytics.com/debug/mp/collect` (same query and body)
+   is the way to see validation messages.
+
 ### Load outcome (Share#1954)
 
 `real_model_open` only ever sees loads that returned, so GA could not see
@@ -788,6 +883,10 @@ has a backfill, so these only start accruing data once registered:
   event-scoped dimension by parameter name, not by event, so the one
   registered for `real_model_open` applies to these events too.
 - Mark **`login`** and **`subscription_started`** as **key events**.
+- For the server-side subscription events (§"Server-side subscription
+  events"): register **event-scoped custom dimensions** for `cid_source`,
+  `interval` and `plan` (`tier` and `source` are already registered). The
+  Measurement Protocol API secret is set up as described there.
 - For `engaged_use` / `return_visit`: register **event-scoped custom
   dimensions/metrics** for `window_days`, `opens_in_window`, `threshold` and
   `days_since_last_open` (numeric, so metrics), mark both events as **key

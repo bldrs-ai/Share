@@ -1,5 +1,5 @@
 import {captureException} from '@sentry/react'
-import {FUNNEL_EVENTS, gtagFunnelEvent} from '../../privacy/analytics'
+import {FUNNEL_EVENTS, getGaClientReference, gtagFunnelEvent} from '../../privacy/analytics'
 
 
 /**
@@ -89,7 +89,18 @@ export async function goToSubscription({
   const themeParam = isDay ? 'light' : 'dark'
   // Encoded: a `+` in an address would otherwise decode as a space on the
   // subscribe page (URLSearchParams), prefilling the wrong email.
-  const subscribeUrl = `/subscribe/?theme=${themeParam}&userEmail=${encodeURIComponent(userEmail || '')}`
+  let subscribeUrl = `/subscribe/?theme=${themeParam}&userEmail=${encodeURIComponent(userEmail || '')}`
+  // This browser's GA client id, for the pricing table's client-reference-id:
+  // the stripe-webhook reads it back off the Checkout Session to send
+  // subscription_started to the SAME GA client (privacy/gaClientReference.js,
+  // design/new/quotas.md §"Server-side subscription
+  // events"). Passed in the URL because the /subscribe/ page is a separate
+  // bundle with no GA of its own; omitted without consent or a client id,
+  // and the webhook then falls back to an id flagged as such.
+  const gaRef = getGaClientReference()
+  if (gaRef) {
+    subscribeUrl += `&gaRef=${gaRef}`
+  }
   if (useMock) {
     try {
       const res = await fetch(subscribeUrl)

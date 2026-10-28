@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "https://api.stripe.com/v1/checkout/sessions?customer=cus_Rreplay0001&limit=10",
+    "headers": {"authorization": "Bearer sk_test_replay"}
+  },
+  "response": {
+    "status": 200,
+    "json": {
+      "object": "list",
+      "data": [{"$fixture": "stripe/checkout.session.json"}],
+      "has_more": false,
+      "url": "/v1/checkout/sessions"
+    }
+  }
+}
