@@ -238,8 +238,13 @@ export default function useExport() {
         window.location.pathname
       // A Drive file's sharing is the client's word (the server can't see
       // it), classified as its open's meter classifies it. A "Download
-      // again" row carries no download record, so it says nothing.
-      const drivePublic = source ? false : await isDriveModelPublic(runModelPath, runDriveDownload)
+      // again" row carries no download record to classify, so it replays the
+      // word its own export gave, kept on the local row (exportHistory.js):
+      // without it a link-shared file re-downloaded from history would take
+      // a slot, or be refused with the slots full (Codex on #1980).
+      const drivePublic = source ?
+        source.drivePublic === true :
+        await isDriveModelPublic(runModelPath, runDriveDownload)
       const {namespace: proModule, slots} = await loadProModule(
         format.moduleName, () => getAccessTokenSilently(TOKEN_PARAMS), modelKey, {drivePublic})
       noteSlots(slots, modelKey)

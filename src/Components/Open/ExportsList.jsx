@@ -143,10 +143,13 @@ export default function ExportsList({onNavigate}) {
     // is reachable from anywhere. And the options that export RAN with, so
     // this hands back the same file: re-running a stripped export with the
     // defaults would produce a bigger one carrying every BLDRS_* payload.
+    // `drivePublic` is the word that export gave on a link-shared Drive
+    // file, which this row has no download record to re-derive (useExport).
     run(entry.format, entry.options || {}, {
       cacheKeyArgs: entry.cacheKeyArgs,
       schemaVer: entry.schemaVer,
       key: entry.key,
+      drivePublic: entry.drivePublic === true,
     })
   }, [run])
 

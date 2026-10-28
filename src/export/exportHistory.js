@@ -269,7 +269,13 @@ export function withLocalArtifactFields(serverExports, localExports) {
   return serverExports.map((entry, i) => {
     const local = matches[i]
     return local ?
-      {...entry, cacheKeyArgs: local.cacheKeyArgs, schemaVer: local.schemaVer, options: local.options || null} :
+      {
+        ...entry,
+        cacheKeyArgs: local.cacheKeyArgs,
+        schemaVer: local.schemaVer,
+        options: local.options || null,
+        drivePublic: local.drivePublic === true,
+      } :
       entry
   })
 }
@@ -402,6 +408,9 @@ function unrecordedLocalRows(serverExports, localExports) {
  * @param {object} [entry.options] Local-only; the options this export RAN
  *   with, so "Download again" reproduces this file rather than the default
  *   one (a stripped export must not come back with the metadata in it)
+ * @param {boolean} [entry.drivePublic] The client found this Drive file
+ *   public. Sent to record-export, and kept on the local row so "Download
+ *   again" sends pro-module the same word
  * @param {?string} sub Auth0 subject of the signed-in user; addresses this
  *   account's mirror file
  * @param {Function} [getAccessToken] Returns a Promise of an Auth0 access
@@ -434,6 +443,11 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
     cacheKeyArgs: cacheKeyArgs || null,
     schemaVer: schemaVer || null,
     options: options || null,
+    // Sent up to record-export, but its row never echoes it back, so it is
+    // kept here like the three above. "Download again"
+    // replays it to pro-module, because a history row has no Drive download
+    // record to classify the file by (useExport.js).
+    drivePublic: drivePublic === true,
   }
   const current = await loadExports(sub)
   const optimistic = [local, ...current.exports].slice(0, EXPORTS_CAP)

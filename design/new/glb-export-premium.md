@@ -2578,7 +2578,11 @@ out of `record-load` into `netlify/functions/_lib/modelVisibility.js`
   1` (`quota/driveExportVisibility.js`, from how CadView downloaded the
   file). The server can't see Drive sharing, so this is the client-trust
   model record-load already runs on (quotas.md §"Drive visibility"); the
-  header is ignored for every other route.
+  header is ignored for every other route. A "Download again" from My
+  Exports has no download record to classify by, so the export keeps its
+  word on the local history row (`drivePublic`, beside `cacheKeyArgs`) and
+  the replay sends that; without it a link-shared file re-downloaded from
+  history took a slot, or was refused with the slots full (Codex on #1980).
 - **Hosted `/v/p/` files** — the demo models this deploy serves from its own
   origin (`public/`), not user uploads (those are local-only), so public.
 - **Generic `/v/u/` URLs** — never counted by record-load, so public.

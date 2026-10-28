@@ -477,6 +477,34 @@ describe('exportHistory', () => {
       expect(JSON.parse(storedFor(SUB)).exports[0].options).toEqual({stripBldrsMetadata: true})
     })
 
+    // Codex on #1980: a history row has no Drive download record, so the
+    // word its export gave on a link-shared file is what "Download again"
+    // replays to pro-module. It must survive the server's mirror, whose row
+    // never echoes it, or the replay would take a slot for a public file.
+    it('keeps a link-shared Drive file\'s public word on the row, through the server\'s mirror', async () => {
+      const DRIVE_KEY = '/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz'
+      let sentId
+      global.fetch.mockImplementation((url, init) => {
+        sentId = JSON.parse(init.body).id
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({exports: [{
+            id: sentId, key: DRIVE_KEY, title: 'x.ifc', format: 'glb', bytes: 1, exportedAt: '2026-10-28T00:00:00.000Z',
+          }]}),
+        })
+      })
+
+      await recordExport(anEntry({key: DRIVE_KEY, drivePublic: true}), SUB, jest.fn().mockResolvedValue('token'), jest.fn())
+
+      expect(JSON.parse(global.fetch.mock.calls[0][1].body).drivePublic).toBe(true)
+      const [stored] = (await loadExports(SUB)).exports
+      expect(stored).toMatchObject({id: sentId, key: DRIVE_KEY, drivePublic: true})
+      // A row exported without that word is not public.
+      const {exports} = await recordExport(anEntry(), SUB)
+      expect(exports[0].drivePublic).toBe(false)
+    })
+
     it('mirrors the server list over the local one, keeping the artifact fields', async () => {
       // The server's row is authoritative (it may carry rows from another
       // device) but knows nothing about THIS browser's OPFS artifact.

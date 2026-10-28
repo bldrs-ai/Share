@@ -261,6 +261,25 @@ describe('useExport', () => {
     expect(details.source).toBeUndefined()
   })
 
+  // Codex on #1980: a "Download again" row has no Drive download record,
+  // so it replays the public word its own export gave. Without it a
+  // link-shared file re-downloaded from history took a slot, or was refused
+  // with the slots full.
+  it('replays a history row\'s Drive public word to pro-module, and no word as private', async () => {
+    const {result} = renderHook(() => useExport())
+    const row = {cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER, key: '/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz'}
+
+    await act(async () => {
+      await result.current.run('glb', {}, {...row, drivePublic: true})
+    })
+    await act(async () => {
+      await result.current.run('glb', {}, row)
+    })
+
+    expect(loadProModule.mock.calls.map((call) => call[3])).toEqual([{drivePublic: true}, {drivePublic: false}])
+    expect(recordExport.mock.calls[0][0].drivePublic).toBe(true)
+  })
+
   // codex review on Share#1976, round 2 (the export variant): Auth0 says
   // signed in before BaseRoutes has written the claims, so an export
   // delivered in that window read a Pro user's still-empty claims as free.
