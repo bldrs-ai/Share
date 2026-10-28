@@ -1,0 +1,54 @@
+{
+  "description": "A renewal (customer.subscription.updated with no status in previous_attributes) for a Pro user sends nothing to GA, with GA configured: it is not its subscription's status transition. No unlisted request (no Checkout Session lookup, no Measurement Protocol POST) goes out.",
+  "env": {
+    "$fixture": "env/stripe-ga.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/stripe-webhook",
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "user-agent": "Stripe/1.0 (+https://stripe.com/docs/webhooks)"
+    },
+    "sign": "stripe",
+    "body": {
+      "$fixture": "stripe/event.subscription.updated.live.json"
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-search-by-customer-pro.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "subscriptionStatus": "sharePro",
+              "stripeCustomerId": "cus_Rreplay0001"
+            }
+          }
+        }
+      }
+    },
+    {
+      "$fixture": "exchanges/stripe-subscriptions-pro-active.json"
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "bodyIncludes": "Success"
+  }
+}

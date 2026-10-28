@@ -4,6 +4,8 @@ import {assertDefined} from '../utils/assert'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {TIERS, getTier} from '../quota/quota'
 import Expires from './Expires'
+import {encodeGaClientReference} from './gaClientReference'
+import {SUBSCRIPTION_EVENT_NAMES} from './subscriptionEventNames'
 
 
 const COOKIE_NAME = 'isAnalyticsAllowed'
@@ -310,6 +312,26 @@ export function getOpenCid() {
 }
 
 
+/**
+ * The GA4 client id for Stripe Checkout's `client-reference-id`
+ * (privacy/gaClientReference.js has the encoding and why it exists), so the
+ * stripe-webhook's server-side subscription_started / subscription_ended
+ * land on this browser's GA client.
+ *
+ * Null when consent is withheld, for the reason getOpenCidForSentry is: it
+ * is an analytics identifier, and a declined visitor's checkout must not
+ * carry one to a server that will report it to GA. The webhook then falls
+ * back to an id derived from the Stripe customer, flagged as such
+ * (design/new/quotas.md §"Server-side subscription
+ * events"). Also null when no client id has resolved.
+ *
+ * @return {string|null} e.g. 'gacid_1871520000_1754700000'
+ */
+export function getGaClientReference() {
+  return isAllowed() ? encodeGaClientReference(getGaClientId()) : null
+}
+
+
 /*
  * GA4 event names for the growth funnel
  *
@@ -335,10 +357,20 @@ export function getOpenCid() {
  *                        when the sign-in began at a visible gate
  *                        (Auth0/gateLogin.js)
  *   BEGIN_CHECKOUT       {from, destination}  Profile/subscriptionNav
- *   SUBSCRIPTION_STARTED / SUBSCRIPTION_ENDED  {}  BaseRoutes'
+ *   SUBSCRIPTION_STARTED / SUBSCRIPTION_ENDED  {tier, source: 'server',
+ *                        interval?, plan?, open_cid?, cid_source}
+ *                        NOT sent from here: the stripe-webhook function
+ *                        sends them through the Measurement Protocol, once
+ *                        per Pro subscription status transition
+ *                        (netlify/functions/_lib/subscriptionAnalytics.js).
+ *                        Listed because the dashboard reads them with the rest.
+ *   SUBSCRIPTION_STARTED_CLIENT / SUBSCRIPTION_ENDED_CLIENT  {}  BaseRoutes'
  *                        processAccessToken on the pendingReauth statuses,
  *                        deduped per user + status, reset by a settled
- *                        status on a fresh token (subscriptionTracking.js)
+ *                        status on a fresh token (subscriptionTracking.js).
+ *                        The browser SEEING the transition, under its own
+ *                        name so it never adds to the server's count
+ *                        (subscriptionEventNames.js).
  *
  * All but REAL_MODEL_OPEN go out through gtagFunnelEvent, which attaches
  * OPEN_CID_PARAM so the dashboard can follow one client down the funnel.
@@ -353,8 +385,10 @@ export const FUNNEL_EVENTS = Object.freeze({
   // also land in GA4's own standard reports.
   LOGIN: 'login',
   BEGIN_CHECKOUT: 'begin_checkout',
-  SUBSCRIPTION_STARTED: 'subscription_started',
-  SUBSCRIPTION_ENDED: 'subscription_ended',
+  SUBSCRIPTION_STARTED: SUBSCRIPTION_EVENT_NAMES.STARTED,
+  SUBSCRIPTION_ENDED: SUBSCRIPTION_EVENT_NAMES.ENDED,
+  SUBSCRIPTION_STARTED_CLIENT: SUBSCRIPTION_EVENT_NAMES.STARTED_CLIENT,
+  SUBSCRIPTION_ENDED_CLIENT: SUBSCRIPTION_EVENT_NAMES.ENDED_CLIENT,
   // Engaged-use conversions for Google Ads (Share#1960, bizdev#339); sent
   // by privacy/engagementTracking.js from the real-open path.
   ENGAGED_USE: 'engaged_use',

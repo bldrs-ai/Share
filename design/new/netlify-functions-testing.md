@@ -165,6 +165,7 @@ So the status code is the retry policy:
 | Missing signature | 400, not reported (probes and scanners) |
 | Bad signature | 400, reported |
 | Missing secret | 500 "not configured", naming the variable in the log |
+| The GA4 subscription report fails, hangs or is unconfigured | **Unchanged** — whatever the row above says. GA is best-effort (below) |
 
 Before ops#33 every failure answered 200. That turned each Auth0 blip into
 a subscription update lost with no retry.
@@ -262,6 +263,44 @@ stale. Replays: `cancelled-mid-flight-corrects-its-own-write`,
 `deleted-customer-demotes-linked-user`,
 `old-customer-event-keeps-pro-under-new-customer`,
 `overlapping-write-seen-in-auth0-is-corrected`.
+
+**GA4 subscription events.** A delivery answered 200 also reports the
+funnel's `subscription_started` / `subscription_ended` to GA4 through the
+Measurement Protocol (`_lib/subscriptionAnalytics.js`) when the event is its
+own Share Pro subscription's move into or out of an entitling status (the
+design, the event table, the attribution through the Checkout Session's
+`client_reference_id`, and the owner's setup steps are in quotas.md
+§"Server-side subscription events"). What it relies on, and what holds it
+to the contract above:
+- **One event per subscription transition**, read off the event, not off
+  `settleUser`'s writes: one checkout's `created` and `updated` arrive
+  together, both deliveries can write the promotion, and GA4 never dedupes
+  (Codex P1 on #1983). Stripe describes each status change in one event.
+- **200 paths only.** A delivery answered 500 is redelivered, and the
+  redelivery reports it, so a failure and its retry count once.
+- **It never throws and never changes the status code.** The Checkout
+  Session lookup (`stripe.checkout.sessions.list`, per-request
+  `{timeout, maxNetworkRetries: 0}`) and the POST (abort timer) each have
+  their own short budget, at most 1.5 s; failures are logged with
+  `console.warn` (API secret scrubbed) and swallowed. It is awaited before
+  the handler returns, since Lambda freezes the process after. It also can't
+  push a delivery past the function's limit (a timeout is a non-2xx too): it
+  runs against the handler's deadline (`context.getRemainingTimeInMillis()`,
+  else 10 s), is skipped with under 3 s left, and otherwise shortens both
+  steps to end a second before it.
+- **`GA4_MEASUREMENT_ID` and `GA4_API_SECRET` are optional**, unlike
+  `REQUIRED_ENV`: without both, and for a `livemode: false` event, one INFO
+  line and nothing sent. So no existing scenario's env changes; the GA
+  scenarios use `fixtures/env/stripe-ga.json`. Set them in production only.
+- Replays: `created-pro-reports-subscription-started-to-ga` (including the
+  Measurement Protocol POST and its 204),
+  `deleted-reports-subscription-ended-with-fallback-client` (a restricted key
+  without Checkout Session read access),
+  `ga-unreachable-still-acknowledges`, `renewal-sends-nothing-to-ga`,
+  `failed-delivery-sends-nothing-to-ga`. The unit suite pins the rest: every
+  status pair, the checkout burst (two overlapping deliveries, one event),
+  the deadline, hang/timeout, non-2xx, missing env, test mode, which session
+  wins, and the fallback's stability.
 
 **Timeouts.** Both subscription functions build the Stripe client with a
 5 s timeout and one network retry (`STRIPE_CLIENT_OPTIONS`), instead of
@@ -436,6 +475,16 @@ apply mode (ops#34).
   it. Setting the Auth0 user id on the Stripe customer at checkout (the
   pricing table's `client-reference-id`, copied to customer metadata)
   would make ownership checkable, and would let the sweep relink safely.
+  That field now carries the GA client id (`gacid_…`); its decoder
+  (`src/privacy/gaClientReference.js`) accepts the component beside others
+  joined by `-`, so a user id can be added without breaking attribution.
+- **GA subscription events don't dedupe by Stripe event id.** They are
+  tied to the one event that describes each subscription's status change and
+  sent only on 200, which rules out the checkout burst and retries; Stripe's
+  rare at-least-once duplicate of a 200'd event would still count twice. A
+  claim keyed by event id (Netlify Blobs `onlyIfNew`) would close it, and
+  the transitions of an event lost for Stripe's whole retry window are
+  never reported (the sweep repairs the tier, not GA).
 - **Duplicate copies of the Management API token flow** remain
   (`record-load.js`, `create-portal-session.js`, `unlink-identity.js` versus
   `_lib/auth0.js`; `stripe-webhook.js` now uses `_lib/auth0.js`). The replays pin their outbound requests, so

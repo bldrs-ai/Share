@@ -1,0 +1,18 @@
+{
+  "id": "cs_live_replay0001",
+  "object": "checkout.session",
+  "client_reference_id": "gacid_1871520000_1754700000",
+  "created": 1759149950,
+  "currency": "usd",
+  "customer": "cus_Rreplay0001",
+  "customer_details": {"email": "ada@example.com", "name": "Ada Lovelace"},
+  "customer_email": "ada@example.com",
+  "livemode": true,
+  "metadata": {},
+  "mode": "subscription",
+  "payment_status": "paid",
+  "pricing_table": "prctbl_replay0001",
+  "status": "complete",
+  "subscription": "sub_1QreplayStandard0001",
+  "url": null
+}

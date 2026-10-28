@@ -1,0 +1,7 @@
+{
+  "$fixture": "env/stripe.json",
+  "$merge": {
+    "GA4_MEASUREMENT_ID": "G-REPLAY0001",
+    "GA4_API_SECRET": "mp-secret-replay"
+  }
+}

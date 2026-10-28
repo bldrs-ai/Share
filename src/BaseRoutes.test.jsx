@@ -397,23 +397,23 @@ describe('BaseRoutes - subscription funnel events', () => {
     unmount()
   }
 
-  it('subscription_started fires once per transition, across passes and reloads', async () => {
+  it('subscription_started_client fires once per transition, across passes and reloads', async () => {
     setGaClientId('111.222')
     tokenClaims['pro-pending'] = {
       'sub': 'github|1',
       'https://bldrs.ai/app_metadata': {subscriptionStatus: 'shareProPendingReauth'},
     }
     await pageLoad('pro-pending')
-    expect(eventsNamed('subscription_started')).toEqual([
-      ['event', 'subscription_started', {open_cid: 'cid.111.222'}],
+    expect(eventsNamed('subscription_started_client')).toEqual([
+      ['event', 'subscription_started_client', {open_cid: 'cid.111.222'}],
     ])
     // A reload before the reauth: a fresh page, same pending token.
     await pageLoad('pro-pending')
-    expect(eventsNamed('subscription_started')).toHaveLength(1)
-    expect(eventsNamed('subscription_ended')).toHaveLength(0)
+    expect(eventsNamed('subscription_started_client')).toHaveLength(1)
+    expect(eventsNamed('subscription_ended_client')).toHaveLength(0)
   })
 
-  it('subscription_ended fires for freePendingReauth, and a later resubscribe counts again', async () => {
+  it('subscription_ended_client fires for freePendingReauth, and a later resubscribe counts again', async () => {
     tokenClaims['free-pending'] = {
       'sub': 'github|1',
       'https://bldrs.ai/app_metadata': {subscriptionStatus: 'freePendingReauth'},
@@ -423,9 +423,9 @@ describe('BaseRoutes - subscription funnel events', () => {
       'https://bldrs.ai/app_metadata': {subscriptionStatus: 'shareProPendingReauth'},
     }
     await pageLoad('free-pending')
-    expect(eventsNamed('subscription_ended')).toEqual([['event', 'subscription_ended', {}]])
+    expect(eventsNamed('subscription_ended_client')).toEqual([['event', 'subscription_ended_client', {}]])
     await pageLoad('pro-pending')
-    expect(eventsNamed('subscription_started')).toHaveLength(1)
+    expect(eventsNamed('subscription_started_client')).toHaveLength(1)
   })
 
   // codex finding on #1912: subscribe → reauth → lapse → resubscribe, with
@@ -447,8 +447,8 @@ describe('BaseRoutes - subscription funnel events', () => {
     // Lapse and resubscribe both happen elsewhere; this browser next sees
     // the resubscribe's pending status.
     await pageLoad('pro', 'pro-pending')
-    expect(eventsNamed('subscription_started')).toHaveLength(2)
-    expect(eventsNamed('subscription_ended')).toHaveLength(0)
+    expect(eventsNamed('subscription_started_client')).toHaveLength(2)
+    expect(eventsNamed('subscription_ended_client')).toHaveLength(0)
   })
 
   // The reason the reset is fresh-only: every boot runs the cached pass
@@ -463,7 +463,7 @@ describe('BaseRoutes - subscription funnel events', () => {
     for (let boot = 0; boot < 3; boot++) {
       await pageLoad('free', 'pro-pending')
     }
-    expect(eventsNamed('subscription_started')).toHaveLength(1)
+    expect(eventsNamed('subscription_started_client')).toHaveLength(1)
   })
 
   it('dedupes per user: another account on this browser still counts', async () => {
@@ -471,7 +471,7 @@ describe('BaseRoutes - subscription funnel events', () => {
       tokenClaims[sub] = {sub, 'https://bldrs.ai/app_metadata': {subscriptionStatus: 'shareProPendingReauth'}}
       await pageLoad(sub)
     }
-    expect(eventsNamed('subscription_started')).toHaveLength(2)
+    expect(eventsNamed('subscription_started_client')).toHaveLength(2)
   })
 
   it('settled statuses send nothing', async () => {
@@ -481,7 +481,7 @@ describe('BaseRoutes - subscription funnel events', () => {
       'https://bldrs.ai/identities': [{connection: 'github', provider: 'github', user_id: '1'}],
     }
     await pageLoad('pro')
-    expect(eventsNamed('subscription_started')).toHaveLength(0)
-    expect(eventsNamed('subscription_ended')).toHaveLength(0)
+    expect(eventsNamed('subscription_started_client')).toHaveLength(0)
+    expect(eventsNamed('subscription_ended_client')).toHaveLength(0)
   })
 })
