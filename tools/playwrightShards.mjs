@@ -240,8 +240,8 @@ export function countShardSeconds(tests, timings, shards) {
 /**
  * Cost of each test in a run's JSON report: the sum of all its attempts,
  * since a retry occupies the worker too. Only tests that passed (first try
- * or on retry) are measured: a failure's duration is its timeout, not what
- * the test costs, and a skipped test costs nothing worth planning around.
+ * or on retry) and skipped ones are measured: a failure's duration is its
+ * timeout, not what the test costs.
  *
  * @param {object} report Parsed JSON run report, or an annotation payload
  *   from {@link annotationsFor} (already measured, passed through).
@@ -257,7 +257,10 @@ export function measuredSeconds(report) {
     return seconds
   }
   for (const {key, test} of collectTests(report)) {
-    if (test.status !== 'expected' && test.status !== 'flaky') {
+    // 'skipped' is measured too (usually ~0 s): a test that is skipped on
+    // every CI run is cheap, and planning it at the default would overweight
+    // whichever shard holds it.
+    if (test.status !== 'expected' && test.status !== 'flaky' && test.status !== 'skipped') {
       continue
     }
     const ms = (test.results || []).reduce((sum, r) => sum + (r.duration || 0), 0)

@@ -183,7 +183,7 @@ describe('playwrightShards', () => {
   })
 
   describe('timings from run reports', () => {
-    it('sums all attempts of a passing test and skips failures and skips', () => {
+    it('sums all attempts of a passing test, keeps skips (cheap), and drops failures', () => {
       const r = report({'f.spec.ts': {D: {ok: 4}}})
       const flaky = {projectName: 'chromium', status: 'flaky', results: [{duration: 9000}, {duration: 6000}]}
       const failed = {projectName: 'chromium', status: 'unexpected', results: [{duration: 30000}]}
@@ -194,7 +194,7 @@ describe('playwrightShards', () => {
       expect(seconds.get(key('f.spec.ts', 'D', 'ok'))).toBe(4)
       expect(seconds.get(key('f.spec.ts', 'D', 'flaky'))).toBe(15)
       expect(seconds.has(key('f.spec.ts', 'D', 'failed'))).toBe(false)
-      expect(seconds.has(key('f.spec.ts', 'D', 'skipped'))).toBe(false)
+      expect(seconds.get(key('f.spec.ts', 'D', 'skipped'))).toBe(0)
     })
 
     it('takes the median over runs, so one slow runner does not move a test', () => {
