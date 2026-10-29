@@ -38,13 +38,13 @@ describe('trackModelActionWhenAuthSettled', () => {
     Cookies.remove('_ga')
     setIsAllowed(true)
     window.gtag = jest.fn()
-    act(() => useStore.setState({isAuthResolved: false, appMetadata: {}}))
+    act(() => useStore.setState({isAuthResolved: false, authResolvedFor: null, appMetadata: {}}))
   })
 
   afterEach(() => {
     jest.useRealTimers()
     delete window.gtag
-    act(() => useStore.setState({isAuthResolved: false, appMetadata: {}}))
+    act(() => useStore.setState({isAuthResolved: false, authResolvedFor: null, appMetadata: {}}))
   })
 
   // codex review on Share#1976, rounds 1 and 2: a local model can finish
@@ -69,7 +69,7 @@ describe('trackModelActionWhenAuthSettled', () => {
     isAuthenticated = true
     act(() => {
       useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
-      useStore.getState().setIsAuthResolved(true)
+      useStore.getState().setIsAuthResolved(true, true)
     })
     await act(() => done)
 
@@ -77,13 +77,41 @@ describe('trackModelActionWhenAuthSettled', () => {
   })
 
   it('sends at once when auth has already settled', async () => {
-    act(() => useStore.getState().setIsAuthResolved(true))
+    act(() => useStore.getState().setIsAuthResolved(true, false))
     await act(() => trackModelActionWhenAuthSettled(MODEL_ACTIONS.VIEW, {
       gate: MODEL_GATES.NONE,
       ...modelRouteSource(LOCAL_ROUTE),
       getIsAuthenticated: () => false,
     }))
     expect(sent('model_view')).toEqual([{tier: 'anon', gate: 'none', source: 'local', route_kind: 'local'}])
+  })
+
+  // codex review on Share#1976, round 3: a popup sign-in in a page that
+  // already settled as signed out. isAuthResolved stays true throughout, so
+  // waiting on it alone sent the event the moment Auth0 said signed in,
+  // before BaseRoutes had the new session's claims: a Pro user as `free`.
+  // BaseRoutes.test.jsx drives the same window through the real component.
+  it.each([
+    [MODEL_ACTIONS.VIEW, 'model_view', MODEL_GATES.NONE],
+    [MODEL_ACTIONS.SHARE, 'model_share', MODEL_GATES.NONE],
+    [MODEL_ACTIONS.EXPORT, 'model_export', MODEL_GATES.NONE],
+  ])('%s: after a popup sign-in, waits for the new session\'s claims, not the signed-out settlement', async (action, eventName, gate) => {
+    act(() => useStore.getState().setIsAuthResolved(true, false))
+    // The popup finished: Auth0 says signed in, BaseRoutes' fetch is in flight.
+    const done = trackModelActionWhenAuthSettled(action, {
+      gate,
+      source: 'hosted',
+      getIsAuthenticated: () => true,
+    })
+    await act(async () => {})
+    expect(sent(eventName)).toEqual([])
+
+    act(() => {
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      useStore.getState().setIsAuthResolved(true, true)
+    })
+    await act(() => done)
+    expect(sent(eventName)).toEqual([{tier: 'pro', gate, source: 'hosted'}])
   })
 
   // The caller snapshots the route; the wait must not re-read it.
@@ -95,7 +123,7 @@ describe('trackModelActionWhenAuthSettled', () => {
     })
     act(() => {
       useStore.setState({modelPath: {kind: 'provider', provider: 'github'}})
-      useStore.getState().setIsAuthResolved(true)
+      useStore.getState().setIsAuthResolved(true, false)
     })
     await act(() => done)
     expect(sent('model_view')).toEqual([expect.objectContaining({source: 'local', route_kind: 'local'})])
@@ -109,7 +137,7 @@ describe('trackModelActionWhenAuthSettled', () => {
     [MODEL_ACTIONS.SHARE, 'model_share'],
     [MODEL_ACTIONS.EXPORT, 'model_export'],
   ])('%s: sends the content_id it was given, whether it waits or not', async (action, eventName) => {
-    act(() => useStore.getState().setIsAuthResolved(true))
+    act(() => useStore.getState().setIsAuthResolved(true, false))
     await act(() => trackModelActionWhenAuthSettled(action, {
       gate: MODEL_GATES.NONE,
       ...modelRouteSource(LOCAL_ROUTE),
@@ -136,7 +164,7 @@ describe('trackModelActionWhenAuthSettled', () => {
     })
     act(() => {
       useStore.setState({modelPath: {kind: 'file', isUploadedFile: true, filepath: '/other.ifc'}})
-      useStore.getState().setIsAuthResolved(true)
+      useStore.getState().setIsAuthResolved(true, false)
     })
     await act(() => done)
     expect(sent('model_export')).toEqual([expect.objectContaining({content_id: LOCAL_CONTENT_ID})])
@@ -172,14 +200,14 @@ describe('trackModelActionWhenAuthSettled', () => {
     expect(sent('model_share')).toEqual([])
     act(() => {
       useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
-      useStore.getState().setIsAuthResolved(true)
+      useStore.getState().setIsAuthResolved(true, true)
     })
     await act(() => done)
     expect(sent('model_share')).toEqual([{tier: 'pro', gate: 'blocked'}])
   })
 
   it('a missing tier with no sign-in state is anon', async () => {
-    act(() => useStore.getState().setIsAuthResolved(true))
+    act(() => useStore.getState().setIsAuthResolved(true, false))
     await act(() => trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {gate: MODEL_GATES.SOFT, tier: null}))
     expect(sent('model_share')).toEqual([{tier: 'anon', gate: 'soft'}])
   })

@@ -182,7 +182,7 @@ describe('quota/useDirectLinkQuota', () => {
   // no tier, model_share falls back to the sign-in tier at emit time and does
   // not claim a tier the gate never gave.
   it('an outcome with no tier sends model_share under the emit-time sign-in tier', async () => {
-    act(() => useStore.setState({isAuthResolved: true, appMetadata: {subscriptionStatus: 'free'}}))
+    act(() => useStore.setState({isAuthResolved: true, authResolvedFor: true, appMetadata: {subscriptionStatus: 'free'}}))
     mockQuota({recordOutcome: {allowed: false, used: 2, limit: 2, alreadyCounted: false}})
     await meter(driveRoute())
     await act(async () => {})
