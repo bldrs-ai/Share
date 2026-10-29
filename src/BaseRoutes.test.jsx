@@ -7,7 +7,8 @@ import {
   mockedGoogleUserLoggedIn,
   mockedUserLoggedOut,
 } from './__mocks__/authentication'
-import {_resetGaClientIdForTests, setGaClientId} from './privacy/analytics'
+import {MODEL_ACTIONS, MODEL_GATES, _resetGaClientIdForTests, setGaClientId, setIsAllowed} from './privacy/analytics'
+import {trackModelActionWhenAuthSettled} from './privacy/modelActionTracking'
 import * as subscriptionTracking from './privacy/subscriptionTracking'
 import {HelmetThemeCtx} from './Share.fixture'
 import BaseRoutes from './BaseRoutes'
@@ -100,6 +101,7 @@ describe('BaseRoutes - auth resolution', () => {
     }
     useStore.setState({
       isAuthResolved: false,
+      authResolvedFor: null,
       accessToken: '',
       hasGithubIdentity: false,
       appMetadata: {},
@@ -130,6 +132,8 @@ describe('BaseRoutes - auth resolution', () => {
     expect(state.accessToken).toBe('')
     expect(state.hasGithubIdentity).toBe(false)
     expect(mockedUserLoggedOut.getAccessTokenSilently).not.toHaveBeenCalled()
+    // Settled for the signed-out state (modelActionTracking.js reads it).
+    expect(state.authResolvedFor).toBe(false)
   })
 
   it('GitHub-authenticated: token populated, hasGithubIdentity=true, isAuthResolved=true', async () => {
@@ -145,6 +149,7 @@ describe('BaseRoutes - auth resolution', () => {
     const state = await renderAndResolve()
     expect(state.accessToken).toBe(token)
     expect(state.hasGithubIdentity).toBe(true)
+    expect(state.authResolvedFor).toBe(true)
   })
 
   // Regression guard for the Google-only model-load bug: when the only
@@ -175,6 +180,9 @@ describe('BaseRoutes - auth resolution', () => {
     })
     const state = await renderAndResolve()
     expect(state.accessToken).toBe('')
+    // Still the signed-in state's settlement: a reader waiting for it must
+    // not wait for one that never comes.
+    expect(state.authResolvedFor).toBe(true)
     // Signed out as far as the SDK is concerned: a forced refresh could only
     // fail the same way, so the fresh-claims pass is not started.
     await act(() => new Promise((resolve) => setTimeout(resolve, WAIT_FOR_STRAY_CALL_MS)))
@@ -339,6 +347,148 @@ describe('BaseRoutes - auth resolution', () => {
     })
     expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'freePendingReauth'})
     expect(getTier(useStore.getState().appMetadata, true)).toBe(TIERS.FREE)
+  })
+})
+
+
+// codex review on Share#1976 (the finding kept as a follow-up). A popup
+// sign-in happens in a page whose auth has ALREADY settled, as signed out:
+// isAuthResolved is true before the popup opens. When the popup finishes,
+// Auth0 flips isAuthenticated to true (ProfileControl's refreshAuth handler
+// fetches the token the popup cached; auth0-react sets isAuthenticated from
+// it) and BaseRoutes starts the new session's token fetch, but the store
+// still holds the signed-out pass's settlement and no claims. A normalized
+// event sent in that window read `isAuthenticated: true` with empty claims,
+// so a Pro user's action was counted as free. It must wait for the new
+// session's claims instead (privacy/modelActionTracking.js).
+describe('BaseRoutes - in-page sign-in and model-action tiers', () => {
+  beforeEach(() => {
+    for (const k of Object.keys(tokenClaims)) {
+      delete tokenClaims[k]
+    }
+    _resetGaClientIdForTests()
+    setIsAllowed(true)
+    window.gtag = jest.fn()
+    useStore.setState({isAuthResolved: false, authResolvedFor: null, accessToken: '', hasGithubIdentity: false, appMetadata: {}})
+  })
+
+  afterEach(() => {
+    delete window.gtag
+  })
+
+  /**
+   * @param {string} name
+   * @return {Array} params of each such event sent
+   */
+  function sent(name) {
+    return window.gtag.mock.calls
+      .filter(([kind, eventName]) => kind === 'event' && eventName === name)
+      .map(([, , params]) => params)
+  }
+
+  /**
+   * @param {object} auth a mocked useAuth0 value
+   * @return {React.ReactElement}
+   */
+  function app(auth) {
+    mockedUseAuth0.mockReturnValue(auth)
+    return (
+      <MemoryRouter initialEntries={['/about']}>
+        <HelmetThemeCtx>
+          <BaseRoutes/>
+        </HelmetThemeCtx>
+      </MemoryRouter>
+    )
+  }
+
+  it('an action between the popup finishing and the new claims landing is sent with the new tier', async () => {
+    const token = 'pro-jwt'
+    tokenClaims[token] = {
+      'sub': 'github|1',
+      'https://bldrs.ai/app_metadata': {subscriptionStatus: 'sharePro'},
+      'https://bldrs.ai/identities': [{connection: 'github', provider: 'github', user_id: '1'}],
+    }
+    let releaseToken
+    const getToken = jest.fn((opts) => opts.cacheMode === 'on' ?
+      new Promise((resolve) => {
+        releaseToken = () => resolve(token)
+      }) :
+      Promise.resolve(token))
+
+    // Boot signed out: auth settles at once.
+    const {rerender} = render(app(mockedUserLoggedOut))
+    await waitFor(() => expect(useStore.getState().isAuthResolved).toBe(true))
+
+    // The popup finishes. The caller's ref already reads the new state (as
+    // ExportSection's / useExport's do, from the render), and BaseRoutes'
+    // token fetch is in flight.
+    let isAuthenticated = false
+    rerender(app({...mockedUserLoggedIn, getAccessTokenSilently: getToken}))
+    isAuthenticated = true
+    await waitFor(() => expect(getToken).toHaveBeenCalled())
+
+    const done = trackModelActionWhenAuthSettled(MODEL_ACTIONS.EXPORT, {
+      gate: MODEL_GATES.NONE,
+      source: 'hosted',
+      getIsAuthenticated: () => isAuthenticated,
+    })
+    await act(() => new Promise((resolve) => setTimeout(resolve, WAIT_FOR_STRAY_CALL_MS)))
+    // Not before the new session's claims: sent now, it would be `free`.
+    expect(sent('model_export')).toEqual([])
+
+    await act(() => {
+      releaseToken()
+      return done
+    })
+    expect(sent('model_export')).toEqual([{tier: 'pro', gate: 'none', source: 'hosted'}])
+  })
+
+  // codex review on Share#1986: OpenModelDialog's GitHub Remove signs out IN
+  // PLACE (`logout({openUrl: false})`). If the signed-in pass's token fetch
+  // is still in flight then, its late .finally must not replace the
+  // signed-out settlement with `true`, or every anon action after it would
+  // wait out the 60 s cap.
+  it('an in-place sign-out during a signed-in fetch keeps the signed-out settlement', async () => {
+    const token = 'late-jwt'
+    tokenClaims[token] = {'https://bldrs.ai/identities': [{connection: 'github', provider: 'github', user_id: '1'}]}
+    let releaseToken
+    const getToken = jest.fn((opts) => opts.cacheMode === 'on' ?
+      new Promise((resolve) => {
+        releaseToken = () => resolve(token)
+      }) :
+      Promise.resolve(token))
+
+    const {rerender} = render(app({...mockedUserLoggedIn, getAccessTokenSilently: getToken}))
+    await waitFor(() => expect(getToken).toHaveBeenCalled())
+    rerender(app(mockedUserLoggedOut))
+    await waitFor(() => expect(useStore.getState().authResolvedFor).toBe(false))
+
+    await act(async () => {
+      releaseToken()
+      await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_STRAY_CALL_MS))
+    })
+    expect(useStore.getState().isAuthResolved).toBe(true)
+    expect(useStore.getState().authResolvedFor).toBe(false)
+    await act(() => trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
+      gate: MODEL_GATES.NONE,
+      source: 'hosted',
+      getIsAuthenticated: () => false,
+    }))
+    expect(sent('model_share')).toEqual([{tier: 'anon', gate: 'none', source: 'hosted'}])
+  })
+
+  // The window before the popup finishes is not the race: the user is
+  // signed out while it is open, so an action then is `anon`, and is sent
+  // at once on the signed-out pass's settlement.
+  it('an action while the popup is still open is anon, sent at once', async () => {
+    render(app(mockedUserLoggedOut))
+    await waitFor(() => expect(useStore.getState().isAuthResolved).toBe(true))
+    await act(() => trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
+      gate: MODEL_GATES.NONE,
+      source: 'hosted',
+      getIsAuthenticated: () => false,
+    }))
+    expect(sent('model_share')).toEqual([{tier: 'anon', gate: 'none', source: 'hosted'}])
   })
 })
 

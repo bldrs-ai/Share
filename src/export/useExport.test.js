@@ -110,7 +110,7 @@ describe('useExport', () => {
     jest.clearAllMocks()
     // Auth settled, as after BaseRoutes' token pass: model_export waits for
     // it (privacy/modelActionTracking.js). The restore-race case unsets it.
-    useStore.setState({modelPath: null, isAuthResolved: true})
+    useStore.setState({modelPath: null, isAuthResolved: true, authResolvedFor: true})
     getAccessTokenSilently = jest.fn().mockResolvedValue('test-token')
     mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently})
     recordExport.mockResolvedValue({recorded: true, status: 200, exports: []})
@@ -297,7 +297,7 @@ describe('useExport', () => {
 
     act(() => {
       useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
-      useStore.getState().setIsAuthResolved(true)
+      useStore.getState().setIsAuthResolved(true, true)
     })
 
     await waitFor(() => expect(trackModelAction).toHaveBeenCalledTimes(1))

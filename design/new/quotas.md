@@ -1079,6 +1079,33 @@ Three timing rules keep the cells honest (codex review on Share#1976):
   they saw. A caller with an explicit tier (QuotaLimitDialog's prop,
   record-load's answer, `no_slot` below) sends at once: nothing there is
   read from auth.
+- **"Settled" means settled for the sign-in state the user is in now.**
+  The rule: an event's tier is the tier of the sign-in state the user is in
+  when it is sent, read from *that state's own* claims, never from another
+  state's. This matters for an in-page sign-in. The login popup opens in a page that
+  already settled as signed out, so `isAuthResolved` is true the whole
+  time. When the popup finishes, Auth0 flips `isAuthenticated` to true
+  while BaseRoutes is still fetching the new session's token. An event sent
+  in that window read "signed in" with no claims yet, so a Pro user's share,
+  export or view was counted as `free` (codex review on Share#1976, round 3,
+  kept as a follow-up). So BaseRoutes records which state each settlement
+  was for (`authResolvedFor`, `store/RepositorySlice.js`), and the helper
+  waits until that equals the caller's live `isAuthenticated`. An action
+  while the popup is still open is not delayed: the user is signed out
+  then, and `anon` is right. An export allowed because the user just signed
+  in as Pro is `pro`. `isAuthResolved` itself is not reset when the popup
+  finishes. The load gates read it (CadView, the GitHub hooks), and what
+  they need is "the token, if any, is in", not whose claims these are. So
+  only the analytics wait is per sign-in state. The reverse holds too.
+  Signing out can happen in place, with no reload: the Open dialog's GitHub
+  Remove calls `logout({openUrl: false})`. A signed-in pass whose token
+  fetch was still in flight then must not record its late settlement over
+  the signed-out one. BaseRoutes drops it by generation (`authPassRef`), so
+  anon actions after the sign-out are not held for the 60 s cap (codex
+  review on Share#1986). One case is left uncovered: switching accounts
+  with no signed-out state in between keeps `isAuthenticated` true. Share
+  has no such path, since Log in shows only when signed out, so a switch
+  always goes through `false`.
 - **`source` and `content_id` are snapshotted at the call, not at emit.**
   That matters most for `model_export`, whose event goes out after the
   module load and conversion while navigation isn't locked, but every

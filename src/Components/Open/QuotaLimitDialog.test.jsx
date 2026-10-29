@@ -81,7 +81,7 @@ describe('QuotaLimitDialog', () => {
   // sign-in tier at emit time rather than reporting a signed-in user as anon.
   it('with no tier, model_share carries the signed-in user\'s sign-in tier, not anon', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    act(() => useStore.setState({isAuthResolved: true, appMetadata: {subscriptionStatus: 'sharePro'}}))
+    act(() => useStore.setState({isAuthResolved: true, authResolvedFor: true, appMetadata: {subscriptionStatus: 'sharePro'}}))
     await act(() => Promise.resolve(renderDialog({tier: undefined, isOpen: true})))
     const shares = window.gtag.mock.calls.filter(([kind, name]) => kind === 'event' && name === 'model_share')
     expect(shares.map(([, , params]) => params)).toEqual([expect.objectContaining({tier: 'pro', gate: 'blocked'})])

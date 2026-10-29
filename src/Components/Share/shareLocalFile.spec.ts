@@ -3,7 +3,7 @@ import {clickGate} from '../../tests/e2e/export'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {gaEvents} from '../../tests/e2e/ga'
 import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
-import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
+import {auth0Login, homepageSetup, setIsReturningUser, setupAuthenticationIntercepts} from '../../tests/e2e/utils'
 
 
 /**
@@ -123,5 +123,30 @@ describeMobileAndDesktop('Share: a hosted model\'s share event', () => {
     expect(opens).toHaveLength(1)
     expect(opens[0].params.content_id).toContain('box.ifc')
     expect(share.params.content_id).toBe(opens[0].params.content_id)
+  })
+
+  // An in-page sign-in, then Share: the user's own path through the window
+  // codex flagged on Share#1976 (round 3). The page settled signed out first,
+  // so model_share must wait for the NEW session's settlement and read its
+  // tier, `free` here (this build's mock JWT carries no claims), not `anon`.
+  // It also guards BaseRoutes' half of the fix: if the signed-in pass stopped
+  // recording which state it settled (store authResolvedFor), the event would
+  // sit out the 60 s cap and this poll would time out. The race itself (an
+  // action between Auth0 saying signed in and the claims landing) can't be
+  // held open here: the mock Auth0 resolves the token in the same tick, so
+  // it is pinned by BaseRoutes.test.jsx instead.
+  test('after an in-page sign-in, model_share carries the new session\'s tier', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    await setupVirtualPathIntercept(page, HOSTED_MODEL, 'box.ifc')
+    await setupAuthenticationIntercepts(page)
+    await page.goto(HOSTED_MODEL, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    await auth0Login(page)
+    await page.getByTestId('control-button-share').click()
+    await expect(page.getByTestId('textfield-link')).toBeVisible()
+
+    await expect.poll(async () => (await gaEvents(page, 'model_share')).length).toBe(1)
+    const [share] = await gaEvents(page, 'model_share')
+    expect(share.params).toMatchObject({tier: 'free', gate: 'none', source: 'hosted', route_kind: 'github'})
   })
 })

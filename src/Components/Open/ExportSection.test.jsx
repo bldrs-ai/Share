@@ -139,7 +139,10 @@ async function setStore(artifact, appMetadata, isExportInFlight = false) {
     result.current.setIsExportInFlight(isExportInFlight)
     // Settled, as after BaseRoutes' token pass: model_export {upsell} waits
     // for it (privacy/modelActionTracking.js). The restore-race case unsets it.
-    result.current.setIsAuthResolved(true)
+    // Settled FOR the sign-in state the case's mocked Auth0 already reports
+    // (every case sets it before calling this), as BaseRoutes records it:
+    // the helper waits until the two agree.
+    result.current.setIsAuthResolved(true, mockedUseAuth0()?.isAuthenticated === true)
   })
 }
 
@@ -703,7 +706,7 @@ describe('ExportSection', () => {
     rerender(<ExportSection/>)
     act(() => {
       useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
-      useStore.getState().setIsAuthResolved(true)
+      useStore.getState().setIsAuthResolved(true, true)
     })
 
     await waitFor(() => expect(trackModelAction).toHaveBeenCalledTimes(1))
