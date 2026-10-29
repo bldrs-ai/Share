@@ -50,6 +50,7 @@
 import {execFileSync} from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import zlib from 'node:zlib'
 
 
 /** Separates project, file and title segments, as in `--test-list` lines. */
@@ -342,10 +343,15 @@ export function buildTimings(reports, {previous = null, liveKeys = null, source 
 export const ANNOTATION_TITLE = 'playwright-timings'
 
 /**
- * GitHub caps an annotation message at 64 KB; stay well under it, and a step
- * may carry at most 10 notices.
+ * GitHub stores an annotation message truncated at 4096 BYTES (measured on
+ * run 40790813956: a 95-test, multi-byte-title payload came back cut at
+ * 3936 characters, mid-entry, though the runner accepts far more). Titles are
+ * full of multi-byte `›`, so each chunk is gzipped and base64'd (ASCII, one
+ * byte per character) and kept well under that limit. A step may carry at
+ * most 10 notices.
  */
-const ANNOTATION_CHUNK_CHARS = 40_000
+const ANNOTATION_MAX_CHARS = 3000
+const MAX_ANNOTATIONS_PER_STEP = 10
 
 
 /**
@@ -375,22 +381,22 @@ export function escapeCommandData(text) {
  */
 export function annotationsFor(report, shard) {
   const entries = [...measuredSeconds(report)].map(([key, seconds]) => [key, Math.round(seconds * 10) / 10])
-  const chunks = []
-  let current = []
-  let size = 0
-  for (const entry of entries) {
-    const length = JSON.stringify(entry).length
-    if (current.length && size + length > ANNOTATION_CHUNK_CHARS) {
-      chunks.push(current)
-      current = []
-      size = 0
+  const encode = (chunk) => zlib.gzipSync(JSON.stringify(chunk), {level: 9}).toString('base64')
+  // Bisect until every chunk's encoding fits: gzip ratio depends on the
+  // titles, so the entry count per chunk cannot be fixed in advance.
+  const split = (chunk) => {
+    if (chunk.length > 1 && encode(chunk).length > ANNOTATION_MAX_CHARS) {
+      const mid = chunk.length >> 1
+      return [...split(chunk.slice(0, mid)), ...split(chunk.slice(mid))]
     }
-    current.push(entry)
-    size += length
+    return [chunk]
   }
-  chunks.push(current)
-  return chunks.map((seconds, i) => {
-    const payload = JSON.stringify({playwrightTimings: 1, shard, chunk: i + 1, of: chunks.length, seconds})
+  const chunks = split(entries)
+  if (chunks.length > MAX_ANNOTATIONS_PER_STEP) {
+    throw new Error(`shard ${shard}'s timings need ${chunks.length} annotations, over the ${MAX_ANNOTATIONS_PER_STEP} per step`)
+  }
+  return chunks.map((chunk, i) => {
+    const payload = JSON.stringify({playwrightTimings: 1, shard, chunk: i + 1, of: chunks.length, gz: encode(chunk)})
     return `::notice title=${ANNOTATION_TITLE} shard ${shard}::${escapeCommandData(payload)}`
   })
 }
@@ -411,6 +417,10 @@ export function payloadsFromAnnotations(annotations) {
     try {
       const payload = JSON.parse(annotation.message)
       if (payload && payload.playwrightTimings) {
+        if (payload.gz) {
+          payload.seconds = JSON.parse(zlib.gunzipSync(Buffer.from(payload.gz, 'base64')).toString('utf8'))
+          delete payload.gz
+        }
         payloads.push(payload)
       }
     } catch {

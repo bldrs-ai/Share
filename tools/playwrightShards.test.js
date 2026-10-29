@@ -245,15 +245,31 @@ describe('playwrightShards', () => {
       expect(timings.tests[key('f.spec.ts', 'D', 'plain')]).toBe(5)
     })
 
-    it('splits a large shard into several annotations that recombine', () => {
-      const specs = Object.fromEntries(Array.from({length: 600}, (_, i) => [`${'x'.repeat(100)} ${i}`, 1]))
+    it('keeps every annotation under the 4096-byte limit GitHub enforces, and recombines them', () => {
+      // Incompressible-ish multi-byte titles: the worst case for the encoding.
+      const specs = Object.fromEntries(Array.from({length: 600}, (_, i) =>
+        [`› ${Math.random().toString(36).slice(2)} ${'é'.repeat(20)} ${i}`, 1]))
       const lines = annotationsFor(report({'f.spec.ts': {D: specs}}), 1)
       expect(lines.length).toBeGreaterThan(1)
+      expect(lines.length).toBeLessThanOrEqual(10)
       for (const line of lines) {
-        expect(line.length).toBeLessThan(60_000)
+        expect(Buffer.byteLength(line.slice(line.indexOf('::', 2) + 2))).toBeLessThan(4096)
       }
       const payloads = payloadsFromAnnotations(lines.map((l) => ({title: ANNOTATION_TITLE, message: decode(l)})))
       expect(payloads.flatMap((p) => p.seconds)).toHaveLength(600)
+    })
+
+    it('fits a realistic shard (100 long titles) in a few annotations', () => {
+      const specs = Object.fromEntries(Array.from({length: 100}, (_, i) =>
+        [`View 100: a long descriptive title about selecting things in a model number ${i}`, 12.3]))
+      const lines = annotationsFor(report({'Components/Some/Area.spec.ts': {'Group [desktop]': specs}}), 2)
+      expect(lines.length).toBeLessThanOrEqual(3)
+    })
+
+    it('refuses to drop timings when a shard would need more than 10 annotations', () => {
+      const specs = Object.fromEntries(Array.from({length: 20000}, (_, i) =>
+        [`${Math.random().toString(36)} ${Math.random().toString(36)} ${i}`, 1]))
+      expect(() => annotationsFor(report({'f.spec.ts': {D: specs}}), 1)).toThrow(/per step/)
     })
 
     it('escapes the three characters the runner decodes', () => {
