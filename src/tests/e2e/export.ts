@@ -17,6 +17,7 @@ import {isProSubscriptionStatus} from '../../quota/proStatus'
 import {estimateKey, settledEstimateBytes} from './exportEstimate'
 import {captureGlbLogs, waitForGlbLog} from './glbLogs'
 import {waitForModelReady} from './models'
+import {pauseViewerRendering, resumeViewerRendering} from './utils'
 
 
 /**
@@ -184,7 +185,15 @@ export async function loadModelAndWaitForArtifact(page: Page, extraFlags = '') {
   await waitForModelReady(page)
   // The writer is idle-scheduled and fires well after `data-model-ready`;
   // this line is the only signal that the artifact is actually on disk.
+  //
+  // `Loader#scheduleIdleWork` asks for `requestIdleCallback` with a 5 s cap,
+  // and a page that is painting never goes idle (headless CI paints through
+  // SwiftShader, which pins the main thread: `pauseViewerRendering`), so the
+  // writer waits out the cap. Nothing is asserted on the canvas while it
+  // does, so the viewer is paused for the wait and painting again after it.
+  await pauseViewerRendering(page)
   await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT_MS)
+  await resumeViewerRendering(page)
 }
 
 

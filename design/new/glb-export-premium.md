@@ -2522,9 +2522,10 @@ because "not required" is not the same as "no behaviour":
 `DecompressionStream`), `Filetype.test.js` (envelope sniff, `.gz` names,
 name-vs-header), `export/glbGzip.test.js` (the ceiling, including that it
 stops mid-inflate), `Loader.test.js` (a gzipped `cube.glb` through `load()`),
-plus the two upload seams' own suites. E2E: *"a gzipped export opens back in
-Share, with its BLDRS data intact"* in `Components/Share/exportGlb.spec.ts`
-exports a `.glb.gz`, saves it under that name, brings it back through the file
+plus the two upload seams' own suites. E2E: the step *"a gzipped export opens
+back in Share, with its BLDRS data intact"* of *"a Pro user exports index.ifc
+every way the tab offers, and every file opens back in Share"* in
+`Components/Share/exportGlb.spec.ts` exports a `.glb.gz`, saves it under that name, brings it back through the file
 chooser, and walks the NavTree to a leaf it can select — the `BLDRS_*`
 extensions surviving the round trip is the claim, not merely that something
 rendered. The Compress download caption changed with it: *"gzip — saves a

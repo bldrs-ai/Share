@@ -38,8 +38,10 @@ specs. Keep it that way.
 - `utils.ts` — `homepageSetup`, returning-user/auth setup, snackbar/grace
   dismissal, `pauseViewerRendering` (freeze the WebGL loop after the model
   is ready — pass `{pauseRenderer: true}` to `visitHomepageWaitForModel` /
-  `waitForModel` for dialog/panel specs), and the rest of the page-bootstrap
-  helpers.
+  `waitForModel` for dialog/panel specs) and `resumeViewerRendering` (undo
+  it, for a test that wants a paused viewer over a dialog and the real
+  renderer back before it paints, screenshots or moves the camera), and the
+  rest of the page-bootstrap helpers.
 - `homepage.ts`, `workspace.ts` — page-object-ish helpers for those areas.
 - `live/` — the live smoke harness's helpers (`*.live.spec.ts` under
   `tools/playwright.live.config.js`, against a deployed Share with real

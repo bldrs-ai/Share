@@ -288,6 +288,38 @@ other, not identical.
 the numbers aren't contended — that's isolation, not the port bug. See
 [design/new/browser-load-measurement.md](design/new/browser-load-measurement.md).
 
+**Keeping the total down (#1985).** Balancing moves test time between shards;
+it does not remove any. The share-140 export specs (`exportGlb.spec.ts`,
+`exportCollapsed.spec.ts`) were 2,270 of the suite's 5,458 test-seconds
+(42%) and pushed every shard toward its limit, so they were cut two ways,
+neither of which drops an assertion:
+
+- **The viewer is paused while a test works a dialog or reads the store.**
+  Headless CI paints through SwiftShader, which pins the page's main thread,
+  and Playwright's actionability checks wait on rAF, so every click on the
+  Export tab cost about a second. Paused, a click is ~0.1 s: the Export-tab
+  half of the longest test went from 134 s to 12 s on the same box
+  (`pauseViewerRendering`, which the dialog-heavy specs already use; it now
+  has a `resumeViewerRendering` for a test that wants the painter back).
+  Do NOT pause a test whose subject is the canvas: screenshots, the camera,
+  or a highlight asserted on pixels. The picks, selections and highlights in
+  the export specs are asserted through the store and the NavTree, and the
+  mutation checks in the PR show those assertions still go red with the
+  viewer paused.
+- **One page per fixture family, one `test.step` per old test.** Each old
+  test paid its own `index.ifc` load, artifact wait, login and tab open
+  (~30 s on desktop) to look at one thing. The steps now share one page and
+  each carries a `// Was: '<old title>'` comment, so an old test's name
+  still greps to the assertions that replaced it. A step states every
+  control it depends on rather than trusting the one before it, and a pick
+  that follows a reopen in the same page starts from `expectNothingSelected`,
+  because `doubleClickSelectsAnElement` passes on the same element selected
+  twice.
+  Cache-hit steps reload the model's own URL (`reloadFromCache`) instead of
+  paying a fresh parse. When you add an export assertion, add it to the step
+  whose subject it belongs to; open a new page only for a different fixture
+  family or for a flag that must be set before the load.
+
 
 ## Netlify's Lighthouse Best Practices score is flaky — check, don't assume
 
