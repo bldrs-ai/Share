@@ -27,6 +27,11 @@ const SEARCH_MAX_WIDTH = '25em'
 // swap is width-neutral and the path never shifts under the pointer.
 const SEPARATOR_SLOT = '28px'
 
+// The design system's weights: regular for the path, medium (not bold —
+// the DS keeps weights light) for the "you are here" crumb.
+const WEIGHT_REGULAR = 400
+const WEIGHT_MEDIUM = 500
+
 
 /**
  * The workspace TopBar (`?feature=workspace` — story #1663, epic
@@ -189,7 +194,7 @@ export default function TopBar() {
                       variant='body2'
                       noWrap
                       onMouseEnter={isSearchOpen ? () => setHoverIndex(i) : undefined}
-                      sx={{fontWeight: isLastVisible ? 'bold' : 'normal', cursor: 'default'}}
+                      sx={{fontWeight: isLastVisible ? WEIGHT_MEDIUM : WEIGHT_REGULAR, cursor: 'default'}}
                       data-testid={`topbar-breadcrumb-${crumb.key}`}
                     >
                       {crumb.label}

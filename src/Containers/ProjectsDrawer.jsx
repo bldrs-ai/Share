@@ -60,10 +60,23 @@ const COLLAPSED_RAIL_WIDTH = `${ROW_PITCH}px`
 
 // Every row in the drawer is one control row: same square as the icons
 // in the adjacent NavTree/Versions group, same margins, same corner.
+//
+// Selected is the design system's cyan selection wash
+// (`secondary.selected`, as NavTreeNode uses), not MUI's default grey
+// `primary.main` at selectedOpacity — that one was ~1.09:1 against
+// workspaceBackground, i.e. invisible. Cyan on the cyan-tinted drawer is
+// still faint, so the label also steps up to the DS's selected weight
+// (500) and the selection never rests on the wash alone.
 const rowSx = {
-  height: `${CONTROL_SIZE}px`,
-  margin: `${CONTROL_MARGIN}px`,
-  borderRadius: '10px',
+  'height': `${CONTROL_SIZE}px`,
+  'margin': `${CONTROL_MARGIN}px`,
+  'borderRadius': '10px',
+  '&.Mui-selected, &.Mui-selected:hover': {
+    backgroundColor: (theme) => theme.palette.secondary.selected,
+  },
+  '&.Mui-selected .MuiListItemText-primary': {
+    fontWeight: 500,
+  },
 }
 
 
@@ -223,7 +236,7 @@ export default function ProjectsDrawer() {
       data-testid='projects-header'
     >
       {!isCollapsed &&
-       <Typography variant='body1' sx={{fontWeight: 'bold', pl: 1}} noWrap>
+       <Typography variant='body1' sx={{fontWeight: 500, pl: 1}} noWrap>
          bldrs.ai
        </Typography>}
       <TooltipIconButton
@@ -336,7 +349,7 @@ export default function ProjectsDrawer() {
               title={project.name}
               placement='right'
               icon={projectInitials(project.name) ?
-                <Typography variant='body2' sx={{fontWeight: 'bold'}}>
+                <Typography variant='body2' sx={{fontWeight: 500}}>
                   {projectInitials(project.name)}
                 </Typography> :
                 <ApartmentIcon className='icon-share'/>}
@@ -394,8 +407,11 @@ export default function ProjectsDrawer() {
           New project lands on the NavTree row and PROJECTS on the
           Versions row. */}
       <Box sx={{height: ROW_PITCH, flexShrink: 0, px: `${CONTROL_MARGIN}px`, minWidth: 0}}>
+        {/* Accent: the DS spends its one saturated blue on primary
+            actions, as the Open dialog's own CTAs do. */}
         <Button
           variant='contained'
+          color='accent'
           fullWidth
           onClick={() => setIsNewProjectOpen(true)}
           sx={{...rowSx, marginLeft: 0, marginRight: 0, minWidth: 0}}
@@ -590,7 +606,7 @@ export default function ProjectsDrawer() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setIsNewProjectOpen(false)}>Cancel</Button>
-          <Button variant='contained' onClick={onCreateProject} data-testid='projects-new-create'>
+          <Button variant='contained' color='accent' onClick={onCreateProject} data-testid='projects-new-create'>
             Create
           </Button>
         </DialogActions>

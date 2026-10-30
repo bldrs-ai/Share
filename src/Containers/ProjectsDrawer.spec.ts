@@ -168,6 +168,31 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
     await expect(page.locator(MODEL_ROWS)).toHaveCount(1)
   })
 
+  test('design system: primary actions are accent, the open model row is cyan-selected', async ({page}) => {
+    // Pinned to Day so the exact Day token values below apply; the
+    // theme otherwise follows the OS scheme.
+    await page.emulateMedia({colorScheme: 'light'})
+    await visitWithWorkspace(page)
+    await ensureProjectsDrawerOpen(page)
+
+    // accent (#4444ff) — the MUI default would be the grey
+    // primary.main (#c1c1c1), which is what this drawer shipped with.
+    await expect(page.getByTestId('projects-new-button'))
+      .toHaveCSS('background-color', 'rgb(68, 68, 255)')
+    await page.getByTestId('projects-new-button').click()
+    await expect(page.getByTestId('projects-new-create'))
+      .toHaveCSS('background-color', 'rgb(68, 68, 255)')
+    await page.keyboard.press('Escape')
+
+    // The home model we arrived on is the open one, listed Ungrouped.
+    // surface-selected (#00f0ff40), not MUI's grey selected wash, and
+    // the label at the DS's selected weight.
+    const row = page.locator(UNGROUPED_ROWS).first()
+    await expect(row).toHaveClass(/Mui-selected/)
+    await expect(row).toHaveCSS('background-color', 'rgba(0, 240, 255, 0.25)')
+    await expect(row.locator('.MuiListItemText-primary')).toHaveCSS('font-weight', '500')
+  })
+
   test('logo menu: About opens in-app, marketing pages link out', async ({page}) => {
     await visitWithWorkspace(page)
     await ensureProjectsDrawerOpen(page)
