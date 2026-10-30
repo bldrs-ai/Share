@@ -25,9 +25,13 @@ export const day = {
 
   // Primary action buttons (Connect, Browse, Open)
   accent: {
-    main: colors.blue.darkest,
+    // A step softer than the blue ramp's darkest (#4444ff), which read as
+    // too strong on the primary buttons. White on it holds 5.1:1.
+    main: '#5555ff',
     light: colors.blue.dark,
-    dark: '#2222cc',
+    // Hover / press: the same offset below main as before (−0x22 red and
+    // green, −0x33 blue; #4444ff → #2222cc).
+    dark: '#3333cc',
     contrastText: '#ffffff',
   },
 

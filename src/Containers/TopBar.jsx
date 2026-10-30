@@ -263,8 +263,10 @@ export default function TopBar() {
           per design review #1992), out of the OperationsGroup's top row. */}
       <Stack direction='row' sx={{flexShrink: 0}} data-testid='topbar-right-controls'>
         {isLoginEnabled && <ProfileControl/>}
-        {isAppsEnabled && <AppsControl/>}
         {isShareEnabled && <ShareControl/>}
+        {/* Apps sits on the page's right border, directly above the Apps
+            rail it opens. */}
+        {isAppsEnabled && <AppsControl/>}
       </Stack>
     </Paper>
   )

@@ -57,6 +57,11 @@ describeMobileAndDesktop('TopBar (?feature=workspace)', (ff) => {
     await expect(bar.getByTestId('control-button-share')).toBeVisible()
     await expect(page.getByTestId('control-button-open')).toHaveCount(1)
     await expect(page.getByTestId('control-button-share')).toHaveCount(1)
+
+    // Apps sits on the page's right border, after Share.
+    const share = await bar.getByTestId('control-button-share').boundingBox()
+    const apps = await bar.getByTestId('control-button-apps').boundingBox()
+    expect(apps?.x ?? 0).toBeGreaterThan(share?.x ?? 0)
   })
 
   if (!ff.isMobile) {
@@ -84,6 +89,19 @@ describeMobileAndDesktop('TopBar (?feature=workspace)', (ff) => {
       await expect(page.getByTestId('notes-new-button')).toBeVisible()
       await expect(page.getByTestId('notes-section-label')).toHaveText('Notes')
       await expect(page.getByTestId('PanelTitle-Notes')).toHaveCount(0)
+
+      // New note scrolls away with the list rather than staying pinned.
+      const before = await page.getByTestId('notes-new-button').boundingBox()
+      const scrolled = await page.getByTestId('NotesPanel').evaluate((el) => {
+        el.scrollTop = 120
+        return el.scrollTop
+      })
+      expect(scrolled).toBeGreaterThan(0)
+      await expect.poll(async () => (await page.getByTestId('notes-new-button').boundingBox())?.y)
+        .toBeLessThan((before?.y ?? 0) - (scrolled / 2))
+      await page.getByTestId('NotesPanel').evaluate((el) => {
+        el.scrollTop = 0
+      })
 
       // Create mode: signed out, the form's place shows the login prompt,
       // and the lead-in gives way to the back row.
