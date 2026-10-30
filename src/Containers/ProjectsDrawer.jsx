@@ -57,8 +57,9 @@ const RESIZER_THICKNESS = 10
 // One control cell wide, so the rail's icons sit on the same grid as the
 // control groups across the canvas.
 const COLLAPSED_RAIL_WIDTH = `${ROW_PITCH}px`
-// The design system's space-3 / space-4 steps (theme.spacing(1.5) / (2)),
+// The design system's space-2/-3/-4 steps (theme.spacing(1) / (1.5) / (2)),
 // needed as numbers for the layout maths below.
+const SPACE_2 = 8
 const SPACE_3 = 12
 const SPACE_4 = 16
 // New project is shorter than a control (control-size less the DS's
@@ -469,7 +470,11 @@ export default function ProjectsDrawer() {
         display: 'flex',
         flexDirection: 'column',
         borderRadius: 0,
-        backgroundColor: shell.workspaceBackground,
+        // Built like the right-hand Notes/Properties drawer (SideDrawer):
+        // a glass frame, with the list on an opaque panel inset from it,
+        // so a semi-transparent margin of the scene shows around the list.
+        backgroundColor: shell.backgroundColor,
+        backdropFilter: shell.backdropFilter,
         borderRight: `1px solid ${shell.workspaceBorder}`,
       }}
       data-testid='ProjectsDrawer'
@@ -489,123 +494,142 @@ export default function ProjectsDrawer() {
          onCollapse={onCollapse}
        />}
       {topBand}
-      {/* The scrolling list, between the paper bands. New project heads
+      {/* The inset list panel: opaque grey paper with the app's radius and
+          card elevation, space-2 from the bands and space-4 from the sides
+          — the right drawer's gutter. Text only ever sits on this panel or
+          on the bands, never on the glass. */}
+      <Paper
+        elevation={1}
+        sx={{
+          flexGrow: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          margin: `${SPACE_2}px ${SPACE_4}px`,
+          borderRadius: '10px',
+          overflow: 'hidden',
+          backgroundColor: shell.workspaceBackground,
+          backgroundImage: 'none',
+        }}
+        data-testid='projects-panel'
+      >
+        {/* The scrolling list, between the paper bands. New project heads
           it the way a sidebar's New item heads its nav — it adds to this
           list, so it isn't header chrome. Every row is one control row
           tall, so the column stays in step with the control groups
           across the canvas. */}
-      <Box sx={{flexGrow: 1, minHeight: 0, overflowY: 'auto'}} data-testid='projects-scroll'>
-        <Stack
-          justifyContent='center'
-          sx={{height: ROW_PITCH, px: `${NEW_PROJECT_INSET}px`, minWidth: 0}}
-        >
-          {/* Accent: the DS spends its one saturated blue on primary
-              actions, as the Open dialog's own CTAs do. */}
-          <Button
-            variant='contained'
-            color='accent'
-            fullWidth
-            onClick={() => setIsNewProjectOpen(true)}
-            sx={{height: NEW_PROJECT_HEIGHT, borderRadius: '10px', minWidth: 0}}
-            data-testid='projects-new-button'
+        <Box sx={{flexGrow: 1, minHeight: 0, overflowY: 'auto'}} data-testid='projects-scroll'>
+          <Stack
+            justifyContent='center'
+            sx={{height: ROW_PITCH, px: `${NEW_PROJECT_INSET}px`, minWidth: 0}}
           >
-            {/* One line, ellipsized: the drawer resizes down to
+            {/* Accent: the DS spends its one saturated blue on primary
+              actions, as the Open dialog's own CTAs do. */}
+            <Button
+              variant='contained'
+              color='accent'
+              fullWidth
+              onClick={() => setIsNewProjectOpen(true)}
+              sx={{height: NEW_PROJECT_HEIGHT, borderRadius: '10px', minWidth: 0}}
+              data-testid='projects-new-button'
+            >
+              {/* One line, ellipsized: the drawer resizes down to
                 COLLAPSE_AT_WIDTH, where the inset leaves the label too
                 little room, and a wrapped label overflows the fixed
                 36px height. Ellipsis needs a block box, not the
                 Button's inline-flex, hence the span. */}
-            <Box
-              component='span'
-              sx={{minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}
-            >
+              <Box
+                component='span'
+                sx={{minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}
+              >
               New project
-            </Box>
-          </Button>
-        </Stack>
-        {sectionLabel('Projects', 'projects-section-label')}
-        <List dense sx={{paddingTop: 0}} data-testid='projects-list'>
-          {workspaceProjects.map((project) => {
-            const isExpanded = expandedProjectIds.includes(project.id)
-            return (
-              <React.Fragment key={project.id}>
-                <ListItemButton
-                  sx={rowSx}
-                  onClick={() => toggleWorkspaceProjectExpanded(project.id)}
-                  data-testid={`project-${project.id}`}
-                >
-                  <ListItemIcon sx={{minWidth: '2em'}}><ApartmentIcon fontSize='small'/></ListItemIcon>
-                  <ListItemText primary={project.name} primaryTypographyProps={{noWrap: true}}/>
-                  <IconButton
-                    size='small'
-                    aria-label={`Delete project ${project.name}`}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      removeWorkspaceProject(project.id)
-                    }}
+              </Box>
+            </Button>
+          </Stack>
+          {sectionLabel('Projects', 'projects-section-label')}
+          <List dense sx={{paddingTop: 0}} data-testid='projects-list'>
+            {workspaceProjects.map((project) => {
+              const isExpanded = expandedProjectIds.includes(project.id)
+              return (
+                <React.Fragment key={project.id}>
+                  <ListItemButton
+                    sx={rowSx}
+                    onClick={() => toggleWorkspaceProjectExpanded(project.id)}
+                    data-testid={`project-${project.id}`}
                   >
-                    <CloseIcon fontSize='inherit'/>
-                  </IconButton>
-                  {isExpanded ? <ExpandLessIcon fontSize='small'/> : <ExpandMoreIcon fontSize='small'/>}
-                </ListItemButton>
-                {isExpanded && (
-                  <>
-                    {project.models.map((model) => {
-                    // Resolved at render, not read from the stored label:
-                    // a model's name can arrive after it was recorded
-                    // (the loader back-fills modelTitle into recents), and
-                    // entries captured before that resolution existed
-                    // would otherwise stay stuck showing a storage id.
-                      const label = labelForModelPath(model.path) || model.label
-                      return (
-                        <ListItemButton
-                          key={model.id}
-                          sx={{...rowSx, pl: 3, marginLeft: `${CONTROL_SIZE / 2}px`}}
-                          selected={currentModelPath === model.path}
-                          // Disarm first: opening a model that is already
-                          // listed must not be adopted by a still-armed
-                          // capture from some other project.
-                          onClick={() => {
-                            disarmWorkspaceCapture()
-                            navigateToModel(model.path, navigate)
-                          }}
-                          data-testid={`project-model-${model.id}`}
-                        >
-                          <ListItemIcon sx={{minWidth: '2em'}}>
-                            <InsertDriveFileOutlinedIcon fontSize='small'/>
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={label}
-                            primaryTypographyProps={{noWrap: true, fontSize: '.9em'}}
-                          />
-                          <IconButton
-                            size='small'
-                            aria-label={`Remove model ${label}`}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              removeWorkspaceModel(project.id, model.id)
-                            }}
-                          >
-                            <CloseIcon fontSize='inherit'/>
-                          </IconButton>
-                        </ListItemButton>
-                      )
-                    })}
-                    <ListItemButton
-                      sx={{...rowSx, pl: 3, marginLeft: `${CONTROL_SIZE / 2}px`}}
-                      onClick={() => onAddModel(project.id)}
-                      data-testid={`project-add-model-${project.id}`}
+                    <ListItemIcon sx={{minWidth: '2em'}}><ApartmentIcon fontSize='small'/></ListItemIcon>
+                    <ListItemText primary={project.name} primaryTypographyProps={{noWrap: true}}/>
+                    <IconButton
+                      size='small'
+                      aria-label={`Delete project ${project.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        removeWorkspaceProject(project.id)
+                      }}
                     >
-                      <ListItemIcon sx={{minWidth: '2em'}}><AddIcon fontSize='small'/></ListItemIcon>
-                      <ListItemText primary='Add model' primaryTypographyProps={{color: 'text.secondary'}}/>
-                    </ListItemButton>
-                  </>
-                )}
-              </React.Fragment>
-            )
-          })}
-        </List>
-      </Box>
-      {ungroupedModels.length > 0 &&
+                      <CloseIcon fontSize='inherit'/>
+                    </IconButton>
+                    {isExpanded ? <ExpandLessIcon fontSize='small'/> : <ExpandMoreIcon fontSize='small'/>}
+                  </ListItemButton>
+                  {isExpanded && (
+                    <>
+                      {project.models.map((model) => {
+                        // Resolved at render, not read from the stored label:
+                        // a model's name can arrive after it was recorded
+                        // (the loader back-fills modelTitle into recents), and
+                        // entries captured before that resolution existed
+                        // would otherwise stay stuck showing a storage id.
+                        const label = labelForModelPath(model.path) || model.label
+                        return (
+                          <ListItemButton
+                            key={model.id}
+                            sx={{...rowSx, pl: 3, marginLeft: `${CONTROL_SIZE / 2}px`}}
+                            selected={currentModelPath === model.path}
+                            // Disarm first: opening a model that is already
+                            // listed must not be adopted by a still-armed
+                            // capture from some other project.
+                            onClick={() => {
+                              disarmWorkspaceCapture()
+                              navigateToModel(model.path, navigate)
+                            }}
+                            data-testid={`project-model-${model.id}`}
+                          >
+                            <ListItemIcon sx={{minWidth: '2em'}}>
+                              <InsertDriveFileOutlinedIcon fontSize='small'/>
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={label}
+                              primaryTypographyProps={{noWrap: true, fontSize: '.9em'}}
+                            />
+                            <IconButton
+                              size='small'
+                              aria-label={`Remove model ${label}`}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                removeWorkspaceModel(project.id, model.id)
+                              }}
+                            >
+                              <CloseIcon fontSize='inherit'/>
+                            </IconButton>
+                          </ListItemButton>
+                        )
+                      })}
+                      <ListItemButton
+                        sx={{...rowSx, pl: 3, marginLeft: `${CONTROL_SIZE / 2}px`}}
+                        onClick={() => onAddModel(project.id)}
+                        data-testid={`project-add-model-${project.id}`}
+                      >
+                        <ListItemIcon sx={{minWidth: '2em'}}><AddIcon fontSize='small'/></ListItemIcon>
+                        <ListItemText primary='Add model' primaryTypographyProps={{color: 'text.secondary'}}/>
+                      </ListItemButton>
+                    </>
+                  )}
+                </React.Fragment>
+              )
+            })}
+          </List>
+        </Box>
+        {ungroupedModels.length > 0 &&
        <Box sx={{flexShrink: 0}} data-testid='ungrouped-section'>
          <Divider/>
          {sectionLabel('Ungrouped', 'ungrouped-section-label')}
@@ -644,6 +668,7 @@ export default function ProjectsDrawer() {
            })}
          </List>
        </Box>}
+      </Paper>
       {footer}
       <Menu
         anchorEl={rowMenu?.anchorEl ?? null}

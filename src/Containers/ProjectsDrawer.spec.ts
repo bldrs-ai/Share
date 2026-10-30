@@ -199,9 +199,26 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
       .toHaveCSS('background-color', 'rgb(228, 234, 200)')
     await expect(page.getByTestId('projects-footer-band'))
       .toHaveCSS('background-color', 'rgb(228, 234, 200)')
-    await expect(page.getByTestId('ProjectsDrawer'))
+    // The list on an inset grey-paper panel inside a glass frame, like the
+    // right-hand drawer: #F5F5F5 at 0xA0 alpha.
+    await expect(page.getByTestId('projects-panel'))
       .toHaveCSS('background-color', 'rgb(245, 245, 245)')
+    await expect(page.getByTestId('ProjectsDrawer'))
+      .toHaveCSS('background-color', 'rgba(245, 245, 245, 0.627)')
     await expect(page.getByTestId('projects-new-button')).toHaveCSS('height', '36px')
+
+    // The TopBar continues the drawer header's paper band and hairline.
+    await expect(page.getByTestId('TopBar')).toHaveCSS('background-color', 'rgb(228, 234, 200)')
+    await expect(page.getByTestId('TopBar'))
+      .toHaveCSS('border-bottom-color', 'rgba(110, 140, 20, 0.32)')
+
+    // A border hairline divides the centre pane from the right drawer.
+    // Desktop only: on a phone the drawer is the bottom sheet.
+    if (!ff.isMobile) {
+      await page.getByTestId('control-button-notes').click()
+      await expect(page.getByTestId('NotesAndPropertiesDrawer').getByTestId('SideDrawer-Paper'))
+        .toHaveCSS('border-left-color', 'rgba(16, 16, 16, 0.12)')
+    }
   })
 
   test('logo menu: About opens in-app, marketing pages link out', async ({page}) => {

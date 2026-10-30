@@ -1,5 +1,6 @@
 import React from 'react'
 import {act, fireEvent, render, renderHook} from '@testing-library/react'
+import {MemoryRouter} from 'react-router-dom'
 import useStore from '../../store/useStore'
 import {ThemeCtx} from '../../theme/Theme.fixture'
 import SideDrawer from './SideDrawer'
@@ -10,6 +11,14 @@ import {useIsMobile} from '../Hooks'
 jest.mock('../Hooks', () => ({
   useIsMobile: jest.fn(() => false),
 }))
+
+// SideDrawer reads the workspace feature flag from the URL, so it needs a
+// router as well as the theme.
+const wrapperAt = (url) => function Wrapper({children}) {
+  return <MemoryRouter initialEntries={[url]}><ThemeCtx>{children}</ThemeCtx></MemoryRouter>
+}
+const Wrapper = wrapperAt('/')
+
 
 describe('SideDrawer', () => {
   const childText = 'NOTES'
@@ -25,7 +34,7 @@ describe('SideDrawer', () => {
       >
         {childText}
       </SideDrawer>,
-      {wrapper: ThemeCtx},
+      {wrapper: Wrapper},
     )
     expect(await findByText(childText)).toBeVisible()
     const resizeHandle = getByTestId(ID_RESIZE_HANDLE_X)
@@ -35,6 +44,29 @@ describe('SideDrawer', () => {
     fireEvent.mouseMove(document, {clientX: dragEnd})
     fireEvent.mouseUp(document)
     expect(mockSetDrawerWidth).toHaveBeenCalledWith(dragEnd, false)
+  })
+
+  // Workspace shell: a hairline divides the centre pane from each side
+  // drawer, on the edge that faces it.
+  it('borders its centre-facing edge only under ?feature=workspace', () => {
+    const props = {isDrawerVisible: true, drawerWidth: 100, drawerWidthInitial: 100, setDrawerWidth: jest.fn()}
+    const border = '1px solid rgba(16, 16, 16, 0.12)'
+    const {getByTestId, unmount} = render(
+      <SideDrawer {...props} isResizeOnLeft={true}>{childText}</SideDrawer>,
+      {wrapper: wrapperAt('/?feature=workspace')},
+    )
+    expect(getByTestId('SideDrawer-Paper')).toHaveStyle({borderLeft: border})
+    unmount()
+
+    const left = render(
+      <SideDrawer {...props} isResizeOnLeft={false}>{childText}</SideDrawer>,
+      {wrapper: wrapperAt('/?feature=workspace')},
+    )
+    expect(left.getByTestId('SideDrawer-Paper')).toHaveStyle({borderRight: border})
+    left.unmount()
+
+    const off = render(<SideDrawer {...props}>{childText}</SideDrawer>, {wrapper: Wrapper})
+    expect(off.getByTestId('SideDrawer-Paper')).not.toHaveStyle({borderLeft: border})
   })
 
   describe('mobile renders and drags', () => {
@@ -55,7 +87,7 @@ describe('SideDrawer', () => {
         >
           {childText}
         </SideDrawer>,
-        {wrapper: ThemeCtx},
+        {wrapper: Wrapper},
       )
       expect(await findByText(childText)).toBeVisible()
       // TODO(pablo): test component isn't working like in hosted page, so can't

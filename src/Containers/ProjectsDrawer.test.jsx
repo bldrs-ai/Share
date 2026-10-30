@@ -114,8 +114,12 @@ describe('ProjectsDrawer', () => {
     const footerBand = screen.getByTestId('projects-footer-band')
     expect(footerBand).toHaveStyle({backgroundColor: paper})
     expect(within(footerBand).getByTestId('workspace-logo-button')).toBeInTheDocument()
-    // The list ground is the grey paper, not the band colour.
-    expect(screen.getByTestId('ProjectsDrawer')).toHaveStyle({backgroundColor: 'rgb(245, 245, 245)'})
+    // The list sits on an inset grey-paper panel; the frame around it is
+    // the side drawers' glass (secondary.backgroundColor, #F5F5F5A0).
+    const panel = screen.getByTestId('projects-panel')
+    expect(panel).toHaveStyle({backgroundColor: 'rgb(245, 245, 245)'})
+    expect(within(panel).getByTestId('projects-scroll')).toBeInTheDocument()
+    expect(screen.getByTestId('ProjectsDrawer')).not.toHaveStyle({backgroundColor: 'rgb(245, 245, 245)'})
   })
 
   // New project adds to the list, so it heads the list rather than

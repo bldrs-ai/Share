@@ -144,7 +144,12 @@ export default function TopBar() {
           left: 0,
           right: 0,
           height: TOP_BAR_HEIGHT,
-          backgroundColor: theme.palette.secondary.backgroundColor,
+          // The design system's header band: the same opaque
+          // workspacePaper and workspaceEdge hairline as the
+          // ProjectsDrawer's header, so the shell's top edge reads as one
+          // persistent strip rather than glass over the canvas.
+          backgroundColor: theme.palette.secondary.workspacePaper,
+          borderBottom: `1px solid ${theme.palette.secondary.workspaceEdge}`,
           borderRadius: 0,
           display: 'flex',
           alignItems: 'center',
