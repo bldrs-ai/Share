@@ -1,7 +1,7 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.9 — shipped-status refresh against code + relation to the bizdev planning set
-**Date:** 2026-10-20
+**Status:** Draft v0.10 — closed-PR refresh: local files, model-slot quotas, and funnel analytics
+**Date:** 2026-10-29
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022). PDF
 extract preserved in this commit's history; key Epic list inlined in §4.
@@ -14,6 +14,15 @@ It is the single source of truth for Epic/Story/Track structure. The wiki page
 `Planning:-Requirements` and the `epic`-labeled GitHub issues mirror this doc; when they
 disagree, this doc wins and the others get updated.
 
+
+## Refresh scope (2026-10-29)
+
+Reviewed closed Share PRs since the v0.9 refresh (<a href="https://github.com/bldrs-ai/Share/pull/1953" target="_blank" rel="noopener noreferrer">#1953</a>, dated
+2026-10-20 and merged 2026-10-22), including the incremental quota/export
+edits through <a href="https://github.com/bldrs-ai/Share/pull/1980" target="_blank" rel="noopener noreferrer">#1980</a> on 2026-10-28. The only PR closed after that
+last file edit is <a href="https://github.com/bldrs-ai/Share/pull/1986" target="_blank" rel="noopener noreferrer">#1986</a> (2026-10-29). All PRs cited in this refresh
+were merged; closing an unmerged PR would not count as shipped.
+Merged slices below do not imply that the enclosing Epic or Track is done.
 
 ## Relation to the bizdev planning set
 
@@ -117,7 +126,7 @@ B identity, C sharing, D subscribe+ads, E launch checklist); G = growth funnel
 | Share | `share-110` | Save model to user's hosting (originator share) | 🟡 | C | T2 |
 | Share | `share-120` | Extended Share/Login flow (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>) | 🟡 | C, D | — |
 | Share | `share-130` | Private link sharing + visibility chip | 🟡 | C | T4 |
-| Share | `share-140` | GLB export as a Pro feature (<a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a>), with free exports for signed-in free users governed by their 2 model slots (unlimited exports of a model holding one; a new model takes a slot on first export, 2026-10-27; was 2 exports per rolling 7 days); on by default since S4 (<a href="https://github.com/bldrs-ai/Share/issues/1835" target="_blank" rel="noopener noreferrer">#1835</a>) merged as <a href="https://github.com/bldrs-ai/Share/pull/1939" target="_blank" rel="noopener noreferrer">#1939</a>, with the cross-browser smoke automated (live smoke) plus a short residual manual list | 🟡 | D | T2, T8 |
+| Share | `share-140` | GLB export: unlimited for Pro; signed-in free users export public models without a slot, and private/local models through their 2 rolling-7-day model slots (<a href="https://github.com/bldrs-ai/Share/pull/1980" target="_blank" rel="noopener noreferrer">#1980</a>). Default-on; residual manual smoke checks remain. | 🟡 | D | T2, T8 |
 | Share | `share-200` | Grant/revoke per-principal sharing | 🟡 | C | T4 |
 | Share | `share-400` | Folder-scoped boundaries | ⬜ | Post | T4 |
 | Notes | `notes-100` | Anchored notes (GitHub-backed) | ✔ | — | — |
@@ -194,6 +203,12 @@ multi-model composition.
 loader. Recent stability work via OPFS caching (`src/OPFS/`) and Conway-direct parse
 (Track T1).
 - Closed: <a href="https://github.com/bldrs-ai/Share/issues/757" target="_blank" rel="noopener noreferrer">#757</a> Open sample model, <a href="https://github.com/bldrs-ai/Share/issues/934" target="_blank" rel="noopener noreferrer">#934</a> DnD-to-update.
+- Local-file reliability: <a href="https://github.com/bldrs-ai/Share/pull/1957" target="_blank" rel="noopener noreferrer">#1957</a> adds an in-memory fallback when OPFS
+  is unavailable; <a href="https://github.com/bldrs-ai/Share/pull/1956" target="_blank" rel="noopener noreferrer">#1956</a> explains a local link whose file is absent
+  from this browser; <a href="https://github.com/bldrs-ai/Share/pull/1967" target="_blank" rel="noopener noreferrer">#1967</a> moves uploads to `/v/local-only/`
+  with prefix-independent provenance detection (legacy `/v/new/` still works).
+  The in-memory fallback supports the current page; it does not make files
+  durable across reloads or shareable with another browser.
 - No open stories; capability is steady-state.
 
 **Epic `open-110`: Open from GitHub URL / UI** ✔
@@ -320,6 +335,11 @@ multi-worker; etc.*
   `EXT_mesh_gpu_instancing` cache above restores a real `BatchedMesh` on cache
   hit. Planned as `view-140` S6; see
   [`design/new/model-display-controls.md`](new/model-display-controls.md) §5.
+- Load diagnostics landed: <a href="https://github.com/bldrs-ai/Share/pull/1969" target="_blank" rel="noopener noreferrer">#1969</a> pins Conway
+  `1.1626.740-g64c84fc2` (failure reasons and load statistics);
+  <a href="https://github.com/bldrs-ai/Share/pull/1975" target="_blank" rel="noopener noreferrer">#1975</a> surfaces engine failure reasons in the load alert and Sentry.
+  GA receives a bounded reason class, including `unrecognized_format`,
+  rather than the engine's free text.
 - Pre-public-launch gate: 4-angle screenshot harness + GLB bit-level diff (called out
   in `viewer-replacement.md` §3b.iii final paragraph). **Required for MVP.**
 
@@ -463,6 +483,10 @@ publicly — and the recipient sees what was intended.
   locally → upload artifact to Drive/GitHub/Firebase → link).
 
 **Epic `share-120`: Extended Share/Login flow (one-click)** 🟡 (NEW)
+- Landed: local uploads show an explanatory Share gate instead of hiding the
+  control (<a href="https://github.com/bldrs-ai/Share/pull/1958" target="_blank" rel="noopener noreferrer">#1958</a>, <a href="https://github.com/bldrs-ai/Share/pull/1968" target="_blank" rel="noopener noreferrer">#1968</a>); signed-out users can discover
+  export through a login gate. These affordances do not upload a local file
+  or complete the extended hosting/login flow.
 - Open: <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> Share (200) Extended login flow — the dialog that picks between
   anonymous-public-5-day, free-public-long-term, Pro-private, etc. This is the
   surface where the Pro pricing tiers become visible.
@@ -474,6 +498,21 @@ publicly — and the recipient sees what was intended.
   adapter); PR2 (Drive Share dialog UI); PR3 (GitHub sharing adapter).
 - Open: feature flag `sharing` is off; turn-on once PR2 lands.
 - **Required for MVP** (private sharing is a paid feature per <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>).
+
+**Epic `share-140`: GLB export with Pro entitlement and free model slots** 🟡 (NEW)
+- Default-on since S4 (<a href="https://github.com/bldrs-ai/Share/pull/1939" target="_blank" rel="noopener noreferrer">#1939</a>); implementation and smoke checklist in
+  [`new/glb-export-premium.md`](new/glb-export-premium.md).
+- <a href="https://github.com/bldrs-ai/Share/pull/1980" target="_blank" rel="noopener noreferrer">#1980</a> replaces the per-export allowance with the private-model
+  ledger: signed-in free users export public models unlimited without a slot;
+  private models and local files holding a slot export unlimited; otherwise
+  their first export takes one of the 2 slots per rolling 7 days. Full slots
+  block a new private/local model. Local viewing remains unmetered.
+- Public includes public GitHub, link-shared Drive, hosted samples and generic
+  URL models. Pro (including pending reauthentication) exports unlimited;
+  signed-out users see the login gate. Enforcement is in `pro-module.js`,
+  with the same public/private classification as `record-load.js`.
+- Automated live smoke has shipped; the residual manual cross-browser checks
+  in the design doc remain. Keep this Epic in flight until those are cleared.
 
 **Epic `share-200`: Grant/revoke per-principal sharing** 🟡 (NEW)
 *Not in PDF.*
@@ -673,6 +712,11 @@ available.
 here from the existing `Mock Share Dialog B` in <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> ("Pro Subscription ($25/mo)") and
 the quota-tracking notes in `identity-decoupling-decisions.md`.*
 
+**Current execution (v0.10):** private-model slots and export entitlement
+are the implemented paywall, with quotas on by default. The size/complexity
+axis below is the earlier proposal, not an enforced limit; reconciling that
+proposal with the shipped rules remains bizdev#331.
+
 *v0.4 framing (from the ai-strategy synthesis): the paid boundary must align with
 the moat, not against it. **Quota by model size/complexity, never by model
 count** — a per-model quota taxes exactly the commodity users we'd rather keep as
@@ -688,12 +732,17 @@ not just a revenue trickle.*
   mapped once in `src/quota/quota.js#getTier`, with the Pro statuses defined in
   `src/quota/proStatus.js`; the public pricing page
   (`marketing/src/components/PricingTiers.tsx`). Not shipped: the size/complexity
-  axis below — the shipped tiers differ on private-model loads (enforcement off
-  by default, `subscribe-120`) and GLB exports (`share-140`) — and the
+  axis below — the shipped tiers differ on private-model slots (enforcement on
+  by default, `subscribe-120`) and GLB export entitlement (`share-140`) — and the
   `tier`-aware capability map.
+- Pricing now follows the enforced constants: <a href="https://github.com/bldrs-ai/Share/pull/1965" target="_blank" rel="noopener noreferrer">#1965</a> removed an
+  unenforced claim, <a href="https://github.com/bldrs-ai/Share/pull/1971" target="_blank" rel="noopener noreferrer">#1971</a> aligned pricing and enabled quotas,
+  <a href="https://github.com/bldrs-ai/Share/pull/1974" target="_blank" rel="noopener noreferrer">#1974</a> set 2 private models per rolling 7 days, <a href="https://github.com/bldrs-ai/Share/pull/1977" target="_blank" rel="noopener noreferrer">#1977</a>
+  removed the anonymous quota tier, and <a href="https://github.com/bldrs-ai/Share/pull/1980" target="_blank" rel="noopener noreferrer">#1980</a> aligned export copy
+  with model slots. Public models and local viewing are unmetered.
 - Tasks: enumerate features per tier; ship a `tier`-aware capability map; UI in <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>
   mock dialog form.
-- Tier axis (v0.4): small models stay free and unlimited; the Pro boundary is
+- Proposed tier axis (v0.4, not implemented): small models stay free and unlimited; the Pro boundary is
   **model size/complexity** (plus private sharing, multi-account, ad-free).
   Threshold placement is a §10 open question — it wants the model-size
   distribution from telemetry before it's picked.
@@ -707,6 +756,11 @@ not just a revenue trickle.*
   `netlify/functions/_lib/subscriptions.js`) and `reconcile-subscriptions.js` is
   the daily sweep (`design/new/netlify-functions-testing.md`). Not shipped: the
   `create-checkout-session` function below.
+- Billing operations: <a href="https://github.com/bldrs-ai/Share/pull/1972" target="_blank" rel="noopener noreferrer">#1972</a> adds `RECONCILE_MODE=off` to avoid
+  duplicate sweeps on the non-production project; its deployment configuration
+  is an ops follow-up, not established by merging the code.
+  <a href="https://github.com/bldrs-ai/Share/pull/1983" target="_blank" rel="noopener noreferrer">#1983</a> adds server-side subscription conversion events (see
+  `grow-120`); sending them requires production GA4 configuration.
 - Tasks: `create-portal-session` Netlify Function exists already (per identity
   decoupling decisions doc — model pattern for new functions). Add
   `create-checkout-session`; webhook for status changes; persist Pro flag against
@@ -718,13 +772,18 @@ not just a revenue trickle.*
   (`netlify/functions/record-load.js`, `app_metadata.usageQuota`), metering
   **private-model loads** on a rolling 7-day window (30 until 2026-10-26),
   with enforcement behind the `quotas` flag, **on
-  in production since Share#1970** (`src/FeatureFlags.js`; `design/new/quotas.md`);
+  by default in the pricing/quota rollout (<a href="https://github.com/bldrs-ai/Share/pull/1971" target="_blank" rel="noopener noreferrer">#1971</a>)** (`src/FeatureFlags.js`; `design/new/quotas.md`);
   since 2026-10-27 the same slots decide `share-140`'s free exports
   (`src/export/exportSlots.js`, decided and taken in `pro-module.js`,
   reported by `record-export.js`); funnel events `quota_limit_reached`,
   `begin_checkout`, `subscription_started`/`_ended`
   (`src/privacy/analytics.js#FUNNEL_EVENTS`). Not shipped: enforcement points
   (a)–(d) below, including the size/complexity gate.
+- Visibility: <a href="https://github.com/bldrs-ai/Share/pull/1977" target="_blank" rel="noopener noreferrer">#1977</a> exempts link-shared Drive files and removes
+  anonymous metering; <a href="https://github.com/bldrs-ai/Share/pull/1979" target="_blank" rel="noopener noreferrer">#1979</a> adds an API-key fallback when Drive
+  visibility cannot be classified. Drive visibility remains client-classified,
+  a documented enforcement limitation. Local viewing is unmetered unless the
+  default-off `meterLocalFiles` abuse switch is enabled.
 - Tasks: server-side counter keyed by Auth0 `sub` (per identity-decoupling-decisions
   §Q4 Open Question on "Quota tracking"); enforcement points in (a) GLB writer
   Phase-5 share upload, (b) per-connection refresh-token mint, (c) public-share
@@ -790,12 +849,47 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
 - **Phase G.**
 
 **Epic `grow-120`: Funnel instrumentation + analytics hygiene** 🟡 (NEW)
-- Status (v0.9): the hygiene guard, `real_model_open` (with `open_cid`,
-  `local_hour` and `stats_*` load stats), `model_engagement` and the upgrade-funnel
-  events have shipped (✅ items below). Not shipped: `share_link_created`,
-  `share_link_opened`, `model_interacted` (no emitter in `src/`), and bucketed
-  size/complexity — the raw byte count rides as `stats_fileSize`
-  (`src/Containers/CadView.jsx`), with no element count.
+- Status (v0.10): GA hygiene, model-open/engagement, load outcomes,
+  engaged-use/return conversions, normalized model actions, and upgrade-funnel
+  events have landed. The original `share_link_created`,
+  `share_link_opened` and `model_interacted` events remain unimplemented;
+  the normalized events below do not establish recipient-link attribution.
+  Size buckets exist on `load_failed`; the planned model-open
+  size/complexity segmentation remains incomplete.
+- Load quality (<a href="https://github.com/bldrs-ai/Share/pull/1961" target="_blank" rel="noopener noreferrer">#1961</a>, <a href="https://github.com/bldrs-ai/Share/pull/1969" target="_blank" rel="noopener noreferrer">#1969</a>, <a href="https://github.com/bldrs-ai/Share/pull/1975" target="_blank" rel="noopener noreferrer">#1975</a>):
+  `load_failed` carries bounded reason/size/phase fields;
+  `real_model_open` gains `load_outcome`, vertex/triangle/product counts,
+  engine-severity and page-noise fields. `stats_loadTime` is wall time;
+  `stats_openMs` is Conway time, with first-mesh and GLB-cache-hit signals.
+  These replace the v0.9 claim that no element count was emitted.
+- Engaged-use conversions (<a href="https://github.com/bldrs-ai/Share/pull/1963" target="_blank" rel="noopener noreferrer">#1963</a>): `engaged_use` fires on the
+  browser's third real open in 7 days, at most once per 30 days;
+  `return_visit` fires once per return day, 1–14 local calendar days after
+  the previous open. Local-storage failure suppresses these counters/events.
+  Both hosted IFC and STEP demos are excluded. GA4 key-event marking and
+  Google Ads import remain separate configuration work.
+- Normalized actions (<a href="https://github.com/bldrs-ai/Share/pull/1976" target="_blank" rel="noopener noreferrer">#1976</a>, <a href="https://github.com/bldrs-ai/Share/pull/1982" target="_blank" rel="noopener noreferrer">#1982</a>):
+  `model_view`, `model_share`, `model_export` carry sign-in tier
+  (`anon`/`free`/`pro`), source, route kind, gate and `open_cid`,
+  with `content_id` where known. They coexist with legacy events.
+  `model_share {gate:'none'}` counts the Share dialog opening, not link
+  copying or a recipient opening the link; quota walls also use
+  `model_share` (`blocked`/`soft`). See
+  [`new/quotas.md`](new/quotas.md) for the exact grid and omissions.
+- Auth correctness (<a href="https://github.com/bldrs-ai/Share/pull/1986" target="_blank" rel="noopener noreferrer">#1986</a>, the change since the last file edit):
+  model-action events wait for claims belonging to the current sign-in
+  state, so popup login no longer records a Pro user's action as free.
+  Signed-out actions while the popup is open still emit as anonymous;
+  superseded token fetches cannot overwrite a later sign-out settlement.
+  Source/model identity are captured at the action; tier is read at emission,
+  with a bounded auth wait.
+- Subscription conversions (<a href="https://github.com/bldrs-ai/Share/pull/1983" target="_blank" rel="noopener noreferrer">#1983</a>):
+  `subscription_started` / `subscription_ended` now come from the Stripe
+  webhook via GA4 Measurement Protocol, per subscription status transition.
+  Browser sightings are `subscription_started_client` /
+  `subscription_ended_client`. Production Measurement Protocol secrets and
+  Checkout Sessions read access are setup requirements; merge alone does
+  not verify delivery. Mark this definition change on the funnel dashboard.
 - Instrument the funnel stages the growth doc defines (§3 there):
   `share_link_created`, `share_link_opened`, `model_interacted` events in Share;
   `real_model_open` is sent directly by Share (CadView#loadModel, guarded by
@@ -1138,17 +1232,19 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
 
 - **What:** Tier definitions, Stripe integration, quota infrastructure, feature-gate
   plumbing throughout the app.
-- **Status:** Partly built (v0.9). Shipped: Stripe → Auth0 entitlement
-  (`stripe-webhook.js`, `_lib/subscriptions.js`, the `reconcile-subscriptions.js`
-  sweep), portal (`create-portal-session.js`), the entitlement-gated export module
-  (`pro-module.js`, `record-export.js`: unlimited for Pro, a small rolling free
-  allowance for signed-in free users, governed by their model slots — `src/export/exportSlots.js`), and private-load quota metering
-  (`record-load.js`, `src/quota/`; enforcement behind the default-off `quotas`
-  flag). Not built: the size/complexity axis below. Detail in §4.9.
+- **Status:** Partly built (v0.10). Shipped: Stripe → Auth0 entitlement,
+  portal and daily reconciliation; default-on private-model quotas; and GLB
+  export entitlement. Free accounts have 2 private-model slots per rolling
+  7 days; the same ledger governs private/local exports, while public exports
+  use no slot (<a href="https://github.com/bldrs-ai/Share/pull/1971" target="_blank" rel="noopener noreferrer">#1971</a>, <a href="https://github.com/bldrs-ai/Share/pull/1974" target="_blank" rel="noopener noreferrer">#1974</a>, <a href="https://github.com/bldrs-ai/Share/pull/1977" target="_blank" rel="noopener noreferrer">#1977</a>, <a href="https://github.com/bldrs-ai/Share/pull/1980" target="_blank" rel="noopener noreferrer">#1980</a>).
+  Signed-out users are not metered; local viewing is unmetered.
+  Server-side subscription analytics landed in <a href="https://github.com/bldrs-ai/Share/pull/1983" target="_blank" rel="noopener noreferrer">#1983</a>; this refresh does not
+  verify production configuration or delivery. The size/complexity axis remains unbuilt.
+  Detail in §4.9.
 - **Unblocks:** `subscribe-100`, `subscribe-110`, `subscribe-120`. Forward-looking:
   the same quota/metering rails are what §7 AI usage metering hangs off — design
   the counter keying with that consumer in mind.
-- **Quota axis (v0.4):** model size/complexity, never model count — the paywall
+- **Proposed quota axis (v0.4, not implemented):** model size/complexity, never model count — the paywall
   aligns with the moat (small models free + unlimited; the threshold sits where
   Share is the only thing that works). Phase D runs as an instrumented
   experiment; see §4.9.
@@ -1165,10 +1261,12 @@ same list-item order: What, Status, Unblocks, MVP impact, Doc.
   guard on GA init), OG/link-preview metadata on share URLs, the
   `/viewer/<format>` landing pages, and the `grow-400` large-model +
   data-sovereignty positioning page — all on the marketing SSG build.
-- **Status:** In flight. The `grow-120` hygiene guard and model-open/engagement
-  events have shipped (§4.10); the landing pages, OG cards and share-loop events
-  have not. The enabling substrate (Next.js SSG marketing build, PR #1519) is
-  landed; strategy + attribution live in the private bizdev docs.
+- **Status:** In flight. The `grow-120` hygiene guard, model-open/engagement,
+  load-quality, engaged-use/return and normalized model-action events have
+  landed (§4.10), as has server-side subscription reporting (configuration
+  required). Recipient share-loop attribution and size/complexity segmentation
+  remain open, alongside landing pages and OG cards. The enabling substrate
+  (Next.js SSG marketing build, PR #1519) is landed; strategy + attribution live in the private bizdev docs.
 - **Unblocks:** `grow-100`, `grow-200`, `grow-120`, `grow-400`; honest measurement
   of every outreach move in `community-210`; conversion-based bidding for the
   (out-of-repo) acquisition campaigns; the Phase D quota-threshold pick.
@@ -1288,6 +1386,10 @@ landing page — before the MVP launch needs any of it.
 - `grow-120` first slice: GA hygiene guard (`navigator.webdriver` +
   hostname check on GA init) — cleans CI/e2e/preview pollution out of prod
   data (✅ `src/index/ga.js`).
+- `grow-120` shipped slices: load outcomes/failures, `engaged_use`,
+  `return_visit`, normalized model view/share/export by tier, and server-side
+  subscription transitions (§4.10). Remaining: GA4/Ads configuration and
+  verification, recipient-link attribution and size/complexity segmentation.
 - `grow-120` events: `share_link_created`, `share_link_opened`,
   `model_interacted` wired into the share flow + viewer; `real_model_open`
   fires from Share on non-demo model opens (✅), key-event marking GA4-side.
@@ -1371,6 +1473,13 @@ it was pasted.
 
 
 ### Phase D: Subscribe
+**Execution update (v0.10):** Stripe billing is live; pricing and default-on
+private-model quotas now agree, with 2 free model slots per rolling 7 days
+shared by private opens and private/local exports. Public exports need no
+slot, and local viewing is unmetered. These shipped rules differ from the
+v0.4 size/complexity proposal below, which remains unbuilt and subject to
+the paywall-axis decision (bizdev#331). The original experiment and exit
+criteria remain planned work, not a description of current enforcement.
 **Goal:** the Pro tier exists and bills — run as an **instrumented experiment**
 (v0.4): hypotheses stated up front (share of users hitting the size threshold;
 of those, pay vs. churn), events in place to answer them, and the outcome
@@ -1631,10 +1740,11 @@ without sign-off.
 
 ## 10. Open questions
 
-- **Pro tier feature gate definition.** §4.9 sketches `subscribe-100`; the v0.4
-  anchor is decided — the Pro boundary is **model size/complexity** — with
-  private link sharing, ad-free, multi-account, cache retention, and quota
-  uplift around it. Confirm the full list before the T8 design doc.
+- **Pro tier feature gate definition.** §4.9 records the shipped private-model
+  slots/export entitlement and the earlier **model size/complexity** proposal.
+  Reconcile those axes in bizdev#331 before treating the proposal as decided.
+  Confirm the full capability list (private link sharing, ad-free,
+  multi-account, cache retention and quota uplift) before the T8 design doc.
 - **Quota threshold placement.** *Where* the size/complexity threshold sits is
   open — it should fall where free alternatives stop working and Share doesn't.
   Pick from the `grow-120` size-distribution telemetry (Phase G) + the
@@ -1791,6 +1901,29 @@ tools (<a href="https://github.com/bldrs-ai/Share/issues/1919" target="_blank" r
 300 band. The editing loop (§7.4 AI.5) no longer waits on Conway for anything
 but export.
 
+
+**v0.10 (2026-10-29)** refreshes closed-PR execution since v0.9, including
+the incremental quota edits through <a href="https://github.com/bldrs-ai/Share/pull/1980" target="_blank" rel="noopener noreferrer">#1980</a> and the only subsequent
+closure, <a href="https://github.com/bldrs-ai/Share/pull/1986" target="_blank" rel="noopener noreferrer">#1986</a>. Epics remain in flight where their full acceptance
+scope is unfinished.
+
+- Local files: OPFS-free fallback, missing-local-file explanation, explicit
+  local-only routes, and visible Share/export gates (<a href="https://github.com/bldrs-ai/Share/pull/1956" target="_blank" rel="noopener noreferrer">#1956</a>,
+  <a href="https://github.com/bldrs-ai/Share/pull/1957" target="_blank" rel="noopener noreferrer">#1957</a>, <a href="https://github.com/bldrs-ai/Share/pull/1958" target="_blank" rel="noopener noreferrer">#1958</a>, <a href="https://github.com/bldrs-ai/Share/pull/1967" target="_blank" rel="noopener noreferrer">#1967</a>, <a href="https://github.com/bldrs-ai/Share/pull/1968" target="_blank" rel="noopener noreferrer">#1968</a>).
+- Pricing/quotas: enforcement enabled, 2 slots per rolling 7 days, Drive
+  visibility exemptions, and public exports without slots (<a href="https://github.com/bldrs-ai/Share/pull/1965" target="_blank" rel="noopener noreferrer">#1965</a>,
+  <a href="https://github.com/bldrs-ai/Share/pull/1971" target="_blank" rel="noopener noreferrer">#1971</a>, <a href="https://github.com/bldrs-ai/Share/pull/1974" target="_blank" rel="noopener noreferrer">#1974</a>, <a href="https://github.com/bldrs-ai/Share/pull/1977" target="_blank" rel="noopener noreferrer">#1977</a>, <a href="https://github.com/bldrs-ai/Share/pull/1979" target="_blank" rel="noopener noreferrer">#1979</a>, <a href="https://github.com/bldrs-ai/Share/pull/1980" target="_blank" rel="noopener noreferrer">#1980</a>).
+  The size/complexity gate remains a proposal, not current behavior.
+- Diagnostics/measurement: load outcomes and engine reasons; engaged-use and
+  return conversions; normalized model actions with identity and correct
+  post-login tier; server-side subscription conversions (<a href="https://github.com/bldrs-ai/Share/pull/1961" target="_blank" rel="noopener noreferrer">#1961</a>,
+  <a href="https://github.com/bldrs-ai/Share/pull/1963" target="_blank" rel="noopener noreferrer">#1963</a>, <a href="https://github.com/bldrs-ai/Share/pull/1969" target="_blank" rel="noopener noreferrer">#1969</a>, <a href="https://github.com/bldrs-ai/Share/pull/1975" target="_blank" rel="noopener noreferrer">#1975</a>, <a href="https://github.com/bldrs-ai/Share/pull/1976" target="_blank" rel="noopener noreferrer">#1976</a>,
+  <a href="https://github.com/bldrs-ai/Share/pull/1982" target="_blank" rel="noopener noreferrer">#1982</a>, <a href="https://github.com/bldrs-ai/Share/pull/1983" target="_blank" rel="noopener noreferrer">#1983</a>, <a href="https://github.com/bldrs-ai/Share/pull/1986" target="_blank" rel="noopener noreferrer">#1986</a>).
+- Maintenance reviewed: non-production reconciliation off switch
+  (<a href="https://github.com/bldrs-ai/Share/pull/1972" target="_blank" rel="noopener noreferrer">#1972</a>; deployment configuration separate), retired Imagine
+  control/help entry (<a href="https://github.com/bldrs-ai/Share/pull/1973" target="_blank" rel="noopener noreferrer">#1973</a>), path-preserving bldrs.dev → bldrs.ai
+  redirects (<a href="https://github.com/bldrs-ai/Share/pull/1978" target="_blank" rel="noopener noreferrer">#1978</a>), and black-background logo variants
+  (<a href="https://github.com/bldrs-ai/Share/pull/1984" target="_blank" rel="noopener noreferrer">#1984</a>). These do not complete additional Epics.
 
 **v0.9 (2026-10-20)** refreshes shipped status against the code — T8, T9,
 `subscribe-100`/`110`/`120` and `grow-120` move ⬜ → 🟡, each with what shipped

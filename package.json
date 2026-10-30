@@ -1,5 +1,6 @@
 {
   "name": "bldrs",
+  "packageManager": "yarn@1.22.22",
   "version": "1.1865.c6e33e61",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
@@ -8,7 +9,7 @@
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
-    "setup": "yarn install",
+    "setup": "yarn install --frozen-lockfile --non-interactive",
     "build": "yarn build-conway",
     "build-prod": "SHARE_CONFIG=prod yarn build",
     "build-conway": "yarn clean && yarn build-share-conway",
