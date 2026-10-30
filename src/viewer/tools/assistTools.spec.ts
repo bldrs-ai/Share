@@ -89,7 +89,7 @@ describeMobileAndDesktop('Assist view tools', () => {
   // and isolate blanked the model while reporting success.
   test('isolates one part of a root-only multi-root STEP file', async ({page}) => {
     test.setTimeout(TWO_ROOT_TIMEOUT_MS)
-    await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/new\/.+\.step/)
+    await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
     await enableAssistInPlace(page)
     const total = await visibleInstances(page)
