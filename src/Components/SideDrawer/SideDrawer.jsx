@@ -60,7 +60,9 @@ export default function SideDrawer({
       } : {
         top: 0,
         width: drawerWidth,
-        height: '100vh',
+        // Under the workspace shell the drawer sits in a row beneath the
+        // TopBar (#1992), so it fills that row rather than the window.
+        height: isWorkspaceEnabled ? '100%' : '100vh',
         minWidth: '8px',
       })}
       data-testid={dataTestId}

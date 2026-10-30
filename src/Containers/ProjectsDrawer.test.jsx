@@ -107,7 +107,7 @@ describe('ProjectsDrawer', () => {
   it('sets the header and footer on paper bands around the scrolling list', () => {
     render(<ShareMock><ProjectsDrawer/></ShareMock>)
 
-    const paper = 'rgb(228, 234, 200)' // day secondary.workspacePaper, #E4EAC8
+    const paper = 'rgb(245, 245, 245)' // day secondary.workspacePaper: neutral light grey
     const headerBand = screen.getByTestId('projects-header-band')
     expect(headerBand).toHaveStyle({backgroundColor: paper})
     expect(within(headerBand).getByTestId('projects-header')).toBeInTheDocument()

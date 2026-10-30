@@ -48,13 +48,16 @@ export const day = {
     // system's workspace-* tokens. Opaque on purpose: it frames the app
     // rather than floating over the scene like the NavTree/Notes drawers.
     // The scrolling list sits on grey paper a shade off the white scene;
-    // the persistent header and logo footer sit on workspacePaper (a muted
-    // chartreuse sky), set off from the list by workspaceEdge hairlines in
-    // the same hue, so what stays put reads apart from the rows that come
-    // and go. The collapsed rail shares the list's ground.
+    // the persistent header band (drawer header + TopBar) and logo footer
+    // sit on workspacePaper, set off from the content by workspaceEdge
+    // hairlines, so what stays put reads apart from the rows that come
+    // and go. Day keeps both neutral — plain light grey and the standard
+    // hairline (a chartreuse Day band was tried and read as too much
+    // colour); Night carries the tint. The collapsed rail shares the
+    // list's ground.
     workspaceBackground: colors.grey.light,
-    workspacePaper: '#E4EAC8',
-    workspaceEdge: 'rgba(110, 140, 20, 0.32)',
+    workspacePaper: colors.grey.light,
+    workspaceEdge: 'rgba(16, 16, 16, 0.12)',
     // The drawer's outer right edge: the DS's neutral `border` hairline.
     workspaceBorder: 'rgba(16, 16, 16, 0.12)',
   },

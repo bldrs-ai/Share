@@ -192,13 +192,13 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
     await expect(row).toHaveCSS('background-color', 'rgba(0, 240, 255, 0.25)')
     await expect(row.locator('.MuiListItemText-primary')).toHaveCSS('font-weight', '500')
 
-    // The paper layer: header and logo footer on workspacePaper (#e4eac8),
-    // around the list on grey paper; New project heads the list at the
-    // DS's 36px rather than a full control row.
+    // The paper layer: header and logo footer on workspacePaper — neutral
+    // light grey in Day — around the list; New project heads the list at
+    // the DS's 36px rather than a full control row.
     await expect(page.getByTestId('projects-header-band'))
-      .toHaveCSS('background-color', 'rgb(228, 234, 200)')
+      .toHaveCSS('background-color', 'rgb(245, 245, 245)')
     await expect(page.getByTestId('projects-footer-band'))
-      .toHaveCSS('background-color', 'rgb(228, 234, 200)')
+      .toHaveCSS('background-color', 'rgb(245, 245, 245)')
     // The list on an inset grey-paper panel inside a glass frame, like the
     // right-hand drawer: #F5F5F5 at 0xA0 alpha.
     await expect(page.getByTestId('projects-panel'))
@@ -210,9 +210,9 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
     await expect(page.getByTestId('projects-new-button')).toHaveCSS('height', '36px')
 
     // The TopBar continues the drawer header's paper band and hairline.
-    await expect(page.getByTestId('TopBar')).toHaveCSS('background-color', 'rgb(228, 234, 200)')
+    await expect(page.getByTestId('TopBar')).toHaveCSS('background-color', 'rgb(245, 245, 245)')
     await expect(page.getByTestId('TopBar'))
-      .toHaveCSS('border-bottom-color', 'rgba(110, 140, 20, 0.32)')
+      .toHaveCSS('border-bottom-color', 'rgba(16, 16, 16, 0.12)')
 
     // A border hairline divides the centre pane from the right drawer.
     // Desktop only: on a phone the drawer is the bottom sheet.

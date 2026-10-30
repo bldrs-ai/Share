@@ -24,7 +24,7 @@ import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Components/Hooks'
 import useStore from '../store/useStore'
 import {WORKSPACE_DRAWER_WIDTH_INITIAL} from '../store/WorkspaceSlice'
-import {CONTROL_MARGIN, CONTROL_SIZE, ROW_PITCH, TOP_BAR_HEIGHT} from './layoutConstants'
+import {CONTROL_MARGIN, CONTROL_SIZE, NEW_BUTTON_HEIGHT, ROW_PITCH, TOP_BAR_HEIGHT} from './layoutConstants'
 import {hasStoredWorkspaceUiState} from '../workspace/persistence'
 import {modelPathFromPathname} from '../workspace/modelPath'
 import {labelForModelPath} from '../utils/modelDisplayName'
@@ -32,6 +32,8 @@ import {navigateToModel} from '../utils/navigate'
 import {TooltipIconButton} from '../Components/Buttons'
 import HorizonResizerButton from '../Components/SideDrawer/HorizonResizerButton'
 import LogoMenu from '../Components/Workspace/LogoMenu'
+import NewItemButton from '../Components/Workspace/NewItemButton'
+import SectionLabel from '../Components/Workspace/SectionLabel'
 import {LogoB} from '../Components/Logo/Logo'
 import {
   Add as AddIcon,
@@ -57,19 +59,10 @@ const RESIZER_THICKNESS = 10
 // One control cell wide, so the rail's icons sit on the same grid as the
 // control groups across the canvas.
 const COLLAPSED_RAIL_WIDTH = `${ROW_PITCH}px`
-// The design system's space-2/-3/-4 steps (theme.spacing(1) / (1.5) / (2)),
-// needed as numbers for the layout maths below.
+// The design system's space-2 / space-4 steps (theme.spacing(1) / (2)),
+// as numbers for the inset list panel's margin.
 const SPACE_2 = 8
-const SPACE_3 = 12
 const SPACE_4 = 16
-// New project is shorter than a control (control-size less the DS's
-// space-3), so it reads as a button on its row rather than a row itself,
-// and sits 11px below the header band — the rail's New project disc is
-// the same 36px, so both states share the gap.
-const NEW_PROJECT_HEIGHT = CONTROL_SIZE - SPACE_3
-// Inset control-margin + space-4, so the button's edges line up with the
-// project rows' icons instead of running nearly edge to edge.
-const NEW_PROJECT_INSET = CONTROL_MARGIN + SPACE_4
 
 // Every row in the drawer is one control row: same square as the icons
 // in the adjacent NavTree/Versions group, same margins, same corner.
@@ -277,19 +270,6 @@ export default function ProjectsDrawer() {
     </Box>
   )
 
-  // Section headings occupy one control row, like every other row here.
-  const sectionLabel = (text, testId) => (
-    <Stack
-      justifyContent='center'
-      sx={{height: ROW_PITCH, flexShrink: 0, px: 2}}
-      data-testid={testId}
-    >
-      <Typography variant='overline' color='text.secondary'>
-        {text}
-      </Typography>
-    </Stack>
-  )
-
   // Bottom-left logo. While the drawer is closed it is the reopen
   // affordance — the only one on mobile, and the one users reach for on
   // desktop even though the rail header also has a toggle. The marketing
@@ -414,8 +394,8 @@ export default function ProjectsDrawer() {
             icon={
               <Box
                 sx={{
-                  width: NEW_PROJECT_HEIGHT,
-                  height: NEW_PROJECT_HEIGHT,
+                  width: NEW_BUTTON_HEIGHT,
+                  height: NEW_BUTTON_HEIGHT,
                   borderRadius: '50%',
                   backgroundColor: theme.palette.accent.main,
                   color: theme.palette.accent.contrastText,
@@ -521,34 +501,12 @@ export default function ProjectsDrawer() {
           tall, so the column stays in step with the control groups
           across the canvas. */}
         <Box sx={{flexGrow: 1, minHeight: 0, overflowY: 'auto'}} data-testid='projects-scroll'>
-          <Stack
-            justifyContent='center'
-            sx={{height: ROW_PITCH, px: `${NEW_PROJECT_INSET}px`, minWidth: 0}}
-          >
-            {/* Accent: the DS spends its one saturated blue on primary
-              actions, as the Open dialog's own CTAs do. */}
-            <Button
-              variant='contained'
-              color='accent'
-              fullWidth
-              onClick={() => setIsNewProjectOpen(true)}
-              sx={{height: NEW_PROJECT_HEIGHT, borderRadius: '10px', minWidth: 0}}
-              data-testid='projects-new-button'
-            >
-              {/* One line, ellipsized: the drawer resizes down to
-                COLLAPSE_AT_WIDTH, where the inset leaves the label too
-                little room, and a wrapped label overflows the fixed
-                36px height. Ellipsis needs a block box, not the
-                Button's inline-flex, hence the span. */}
-              <Box
-                component='span'
-                sx={{minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}
-              >
-              New project
-              </Box>
-            </Button>
-          </Stack>
-          {sectionLabel('Projects', 'projects-section-label')}
+          <NewItemButton
+            label='New project'
+            onClick={() => setIsNewProjectOpen(true)}
+            dataTestId='projects-new-button'
+          />
+          <SectionLabel text='Projects' dataTestId='projects-section-label'/>
           <List dense sx={{paddingTop: 0}} data-testid='projects-list'>
             {workspaceProjects.map((project) => {
               const isExpanded = expandedProjectIds.includes(project.id)
@@ -634,7 +592,7 @@ export default function ProjectsDrawer() {
         {ungroupedModels.length > 0 &&
        <Box sx={{flexShrink: 0}} data-testid='ungrouped-section'>
          <Divider/>
-         {sectionLabel('Ungrouped', 'ungrouped-section-label')}
+         <SectionLabel text='Ungrouped' dataTestId='ungrouped-section-label'/>
          <List dense sx={{paddingTop: 0}}>
            {ungroupedModels.map((model) => {
              const label = labelForModelPath(model.path) || model.label
