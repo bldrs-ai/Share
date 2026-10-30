@@ -203,6 +203,8 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
     // right-hand drawer: #F5F5F5 at 0xA0 alpha.
     await expect(page.getByTestId('projects-panel'))
       .toHaveCSS('background-color', 'rgb(245, 245, 245)')
+    // Flat, not raised like a Notes card: the list is the drawer's floor.
+    await expect(page.getByTestId('projects-panel')).toHaveCSS('box-shadow', 'none')
     await expect(page.getByTestId('ProjectsDrawer'))
       .toHaveCSS('background-color', 'rgba(245, 245, 245, 0.627)')
     await expect(page.getByTestId('projects-new-button')).toHaveCSS('height', '36px')

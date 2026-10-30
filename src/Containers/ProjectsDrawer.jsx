@@ -494,12 +494,14 @@ export default function ProjectsDrawer() {
          onCollapse={onCollapse}
        />}
       {topBand}
-      {/* The inset list panel: opaque grey paper with the app's radius and
-          card elevation, space-2 from the bands and space-4 from the sides
-          — the right drawer's gutter. Text only ever sits on this panel or
-          on the bands, never on the glass. */}
+      {/* The inset list panel: opaque grey paper with the app's radius,
+          space-2 from the bands and space-4 from the sides — the right
+          drawer's gutter. Flat on purpose, unlike the Notes panel's raised
+          Paper: a note is a sheet of paper, but the project list is the
+          drawer's own floor. Text only ever sits on this panel or on the
+          bands, never on the glass. */}
       <Paper
-        elevation={1}
+        elevation={0}
         sx={{
           flexGrow: 1,
           minHeight: 0,
