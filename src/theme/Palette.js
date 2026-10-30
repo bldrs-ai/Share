@@ -44,20 +44,19 @@ export const day = {
     backgroundColor: `${colors.grey.light}A0`,
     backdropFilter: 'blur(1px)',
     link: colors.blue.darkest,
-    // Workspace shell chrome (ProjectsDrawer). Opaque on purpose — it
-    // frames the app rather than floating over the scene like the
-    // NavTree/Notes drawers. Tinted toward the tron cyan of
-    // primary.sceneHighlight; it has to read as clearly distinct from the
-    // white scene background right next to it, so this is a real tint and
-    // not a near-white wash.
-    workspaceBackground: '#D3E9EE',
-    // Collapsed rail: half-opacity, but pre-doubled against the scene
-    // background so it still *reads* as the workspace tint. Half of the
-    // near-white workspaceBackground over a white scene lands ~4% off
-    // white — invisible. Solving 0.5*C + 0.5*white = workspaceBackground
-    // gives this, so the rail matches the drawer over the default scene
-    // and stays translucent over anything darker.
-    workspaceRailBackground: '#A7D3DD',
+    // Workspace shell chrome (ProjectsDrawer), per the Bldrs Share design
+    // system's workspace-* tokens. Opaque on purpose: it frames the app
+    // rather than floating over the scene like the NavTree/Notes drawers.
+    // The scrolling list sits on grey paper a shade off the white scene;
+    // the persistent header and logo footer sit on workspacePaper (a muted
+    // chartreuse sky), set off from the list by workspaceEdge hairlines in
+    // the same hue, so what stays put reads apart from the rows that come
+    // and go. The collapsed rail shares the list's ground.
+    workspaceBackground: colors.grey.light,
+    workspacePaper: '#E4EAC8',
+    workspaceEdge: 'rgba(110, 140, 20, 0.32)',
+    // The drawer's outer right edge: the DS's neutral `border` hairline.
+    workspaceBorder: 'rgba(16, 16, 16, 0.12)',
   },
 
   success: {
@@ -121,12 +120,12 @@ export const night = {
     backdropFilter: 'blur(1px)',
     link: colors.blue.lightest,
     // Workspace shell chrome — see day.secondary.workspaceBackground.
-    // Tron teal, light enough to read as a lit panel against the black
-    // scene background.
-    workspaceBackground: '#0F2E38',
-    // See day.secondary.workspaceRailBackground — same derivation
-    // against the black night scene.
-    workspaceRailBackground: '#1E5C70',
+    // Near-black list, a step up from the black scene; deep jungle-green
+    // paper bands.
+    workspaceBackground: '#121212',
+    workspacePaper: '#162D25',
+    workspaceEdge: 'rgba(90, 230, 170, 0.3)',
+    workspaceBorder: 'rgba(250, 250, 250, 0.14)',
   },
 
   success: {

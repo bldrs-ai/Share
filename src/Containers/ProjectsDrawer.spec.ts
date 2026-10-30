@@ -191,6 +191,17 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
     await expect(row).toHaveClass(/Mui-selected/)
     await expect(row).toHaveCSS('background-color', 'rgba(0, 240, 255, 0.25)')
     await expect(row.locator('.MuiListItemText-primary')).toHaveCSS('font-weight', '500')
+
+    // The paper layer: header and logo footer on workspacePaper (#e4eac8),
+    // around the list on grey paper; New project heads the list at the
+    // DS's 36px rather than a full control row.
+    await expect(page.getByTestId('projects-header-band'))
+      .toHaveCSS('background-color', 'rgb(228, 234, 200)')
+    await expect(page.getByTestId('projects-footer-band'))
+      .toHaveCSS('background-color', 'rgb(228, 234, 200)')
+    await expect(page.getByTestId('ProjectsDrawer'))
+      .toHaveCSS('background-color', 'rgb(245, 245, 245)')
+    await expect(page.getByTestId('projects-new-button')).toHaveCSS('height', '36px')
   })
 
   test('logo menu: About opens in-app, marketing pages link out', async ({page}) => {
@@ -238,6 +249,13 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
       await page.getByTestId('projects-collapse-toggle').click()
       await expect(page.getByTestId('projects-new-button')).toHaveCount(0)
       await expect(page.getByTestId('ProjectsDrawer')).toContainText('MS')
+
+      // New project stays reachable on the rail, as an accent disc that
+      // opens the same dialog without reopening the drawer.
+      await page.getByTestId('projects-rail-new-button').click()
+      await expect(page.getByTestId('projects-new-name')).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(page.getByTestId('projects-new-name')).toHaveCount(0)
 
       // Collapsed is a preference, not a transient.
       await page.reload({waitUntil: 'domcontentloaded'})
