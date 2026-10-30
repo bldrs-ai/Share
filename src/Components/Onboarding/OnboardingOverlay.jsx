@@ -27,7 +27,7 @@ export default function OnboardingOverlay({isVisible, onClose}) {
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const setAlert = useStore((state) => state.setAlert)
   const navigate = useNavigate()
-  const {tier, hasCapacity, record} = useQuota()
+  const {tier, record} = useQuota()
 
   // Find actual button positions when overlay becomes visible
   useEffect(() => {
@@ -81,10 +81,10 @@ export default function OnboardingOverlay({isVisible, onClose}) {
       // OPFS, unknown type, ...) isn't hidden under its zIndex 9999, same as
       // onExceeded below (codex review on #1905).
       () => onClose(false),
-      // Same quota gate as ViewerContainer's dropzone — a first-visit drop
-      // through the overlay is still a /v/new/ private load and must count.
+      // Same quota wiring as ViewerContainer's dropzone. A /v/local-only/
+      // drop is free and unmetered (Share#1966), so record() passes it; the
+      // wiring stays so the `meterLocalFiles` abuse switch still gates here.
       {
-        hasCapacity,
         record,
         onExceeded: () => {
           // Close the overlay first: its zIndex (9999) sits above MUI's

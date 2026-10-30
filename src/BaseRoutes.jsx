@@ -72,6 +72,17 @@ export default function BaseRoutes({testElt = null}) {
   // reintroduce a network token exchange per SPA route change.
   const freshClaimsRequestedRef = useRef(false)
 
+  // Which sign-in state the auth effect last ran for, and a generation that
+  // advances each time that state changes. A signed-in pass's token fetch
+  // can still be in flight when the state moves on: OpenModelDialog's GitHub
+  // Remove signs out IN PLACE (`logout({openUrl: false})`, no reload). The
+  // signed-out pass then records its settlement at once, and the older
+  // pass's .finally must not overwrite it with `true` when it lands, or
+  // every later model-action event would wait out its cap for a signed-in
+  // settlement that is no longer the state (codex review on Share#1986).
+  // A ref, not state: only the .finally reads it, after the fact.
+  const authPassRef = useRef({isAuthenticated: null, generation: 0})
+
   /**
    * Apply a resolved Auth0 access token to app state: reauth-modal short
    * circuits from app_metadata, appMetadata store, GitHub identity → octokit
@@ -108,6 +119,20 @@ export default function BaseRoutes({testElt = null}) {
     // nothing below depends on it.
     trackSubscriptionFromToken(token, {isFresh})
 
+    // Only overwrite store appMetadata when the JWT actually carries
+    // one — tests (e.g. Subscription.spec) inject appMetadata directly
+    // before login and expect it to stick.
+    //
+    // BEFORE the reauth short circuits below, which return early: the
+    // pending-reauth claim has to reach the store too. `getTier` reads
+    // `store.appMetadata`, and `shareProPendingReauth` is Pro
+    // (design/new/glb-export-premium.md §7.2), so skipping this write left a
+    // paying user on the free tier's Export UI (Pro chip, count caption, the
+    // at-the-limit gate) while the server treated them as Pro.
+    if (appData) {
+      setAppMetadata(appData)
+    }
+
     // Reauth-modal short circuits: show the modal and stop — leave
     // identity/token state as it was.
     if (appData?.subscriptionStatus === 'shareProPendingReauth') {
@@ -119,13 +144,6 @@ export default function BaseRoutes({testElt = null}) {
       setReauthScope('public_repo')
       setReauthModalOpen(true)
       return
-    }
-
-    // Only overwrite store appMetadata when the JWT actually carries
-    // one — tests (e.g. Subscription.spec) inject appMetadata directly
-    // before login and expect it to stick.
-    if (appData) {
-      setAppMetadata(appData)
     }
 
     const identities = decodedToken['https://bldrs.ai/identities'] || decodedToken.identities || []
@@ -177,12 +195,24 @@ export default function BaseRoutes({testElt = null}) {
       navWith(navigate, fwdPath)
     }
 
+    if (authPassRef.current.isAuthenticated !== isAuthenticated) {
+      authPassRef.current = {isAuthenticated, generation: authPassRef.current.generation + 1}
+    }
+    const authPassGeneration = authPassRef.current.generation
+
     if (process.env.NODE_ENV === 'development' && process.env.GITHUB_API_TOKEN) {
       setAccessToken(process.env.GITHUB_API_TOKEN)
-      setIsAuthResolved(true)
+      setIsAuthResolved(true, isAuthenticated)
     } else if (!isLoading && !isAuthenticated) {
-      setIsAuthResolved(true)
+      setIsAuthResolved(true, false)
     } else if (!isLoading && isAuthenticated) {
+      // isAuthResolved is NOT reset here. On an in-page (popup) sign-in it is
+      // already true from the signed-out pass above, and stays true while
+      // this fetch runs: the load gates that read it only need "the token,
+      // if any, is in", and resetting it would re-run every one of them.
+      // What marks the window is authResolvedFor, still `false` until the
+      // .finally below records this pass (store/RepositorySlice.js), which
+      // is what model-action analytics wait on (modelActionTracking.js).
       const tokenFetchOpts = {
         authorizationParams: {
           // audience: 'https://bldrs.us.auth0.com/userinfo',
@@ -263,7 +293,25 @@ export default function BaseRoutes({testElt = null}) {
           return false
         })
         .finally(() => {
-          setIsAuthResolved(true)
+          // Superseded (the user signed out in place while this fetch ran):
+          // the newer pass has recorded its own settlement, so leave it. See
+          // authPassRef. Navigation re-runs of the SAME state don't advance
+          // the generation, so they still settle as before.
+          // isAuthResolved itself is still guaranteed to flip, as
+          // authLoadGate.js relies on ("BaseRoutes always flips
+          // isAuthResolved in its .finally"); it is only the `for` that this
+          // pass can no longer vouch for, so it records none (null matches
+          // no sign-in state, and the newer pass's settlement replaces it).
+          if (authPassRef.current.generation !== authPassGeneration) {
+            if (!useStore.getState().isAuthResolved) {
+              setIsAuthResolved(true, null)
+            }
+            return
+          }
+          // For `true` even when the fetch failed (login_required): this pass
+          // is the signed-in state's settlement, and a reader waiting on it
+          // must not wait for one that never comes.
+          setIsAuthResolved(true, true)
         })
         .then((isSessionLive) => {
           if (isSessionLive) {

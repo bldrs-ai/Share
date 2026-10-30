@@ -1,0 +1,115 @@
+{
+  "description": "A new Share Pro subscription (live mode) writes shareProPendingReauth and reports exactly one subscription_started to GA4 through the Measurement Protocol, attributed to the paying browser's GA client id from the Checkout Session's client_reference_id. GA answers 204 with no body, as the Measurement Protocol does.",
+  "env": {
+    "$fixture": "env/stripe-ga.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/stripe-webhook",
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "user-agent": "Stripe/1.0 (+https://stripe.com/docs/webhooks)"
+    },
+    "sign": "stripe",
+    "body": {
+      "$fixture": "stripe/event.subscription.created.live.json"
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-search-by-customer-none.json"
+    },
+    {
+      "$fixture": "exchanges/stripe-customer.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-users-by-email.json"
+    },
+    {
+      "$fixture": "exchanges/stripe-subscriptions-pro-active.json"
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        },
+        "body": {
+          "app_metadata": {
+            "subscriptionStatus": "shareProPendingReauth",
+            "stripeCustomerId": "cus_Rreplay0001"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "subscriptionStatus": "shareProPendingReauth",
+              "stripeCustomerId": "cus_Rreplay0001"
+            }
+          }
+        }
+      }
+    },
+    {
+      "$fixture": "exchanges/stripe-subscriptions-pro-active.json"
+    },
+    {
+      "$fixture": "exchanges/stripe-checkout-sessions-ga-ref.json"
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://www.google-analytics.com/mp/collect?measurement_id=G-REPLAY0001&api_secret=mp-secret-replay",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "client_id": "1871520000.1754700000",
+          "events": [
+            {
+              "name": "subscription_started",
+              "params": {
+                "tier": "pro",
+                "source": "server",
+                "cid_source": "checkout",
+                "open_cid": "cid.1871520000.1754700000",
+                "interval": "month",
+                "plan": "share_pro_monthly"
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 204
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "bodyIncludes": "Success"
+  }
+}

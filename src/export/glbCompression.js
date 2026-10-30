@@ -273,7 +273,7 @@ function planDraco(json, bin, payloads, quality) {
  */
 async function transformGlb(glbBytes, mode, draco, sourceCodecs = [], quality = QUALITY_DEFAULT) {
   const {Logger, WebIO} = await import('@gltf-transform/core')
-  const {ALL_EXTENSIONS, EXTMeshoptCompression, KHRDracoMeshCompression} =
+  const {ALL_EXTENSIONS, EXTMeshoptCompression, KHRDracoMeshCompression, KHRMeshQuantization} =
     await import('@gltf-transform/extensions')
 
   // Silent, because the one thing this IO is guaranteed to complain about is
@@ -318,6 +318,8 @@ async function transformGlb(glbBytes, mode, draco, sourceCodecs = [], quality = 
     }
   }
   const settings = qualitySettings(quality)
+  declareMeshQuantization(
+    doc, KHRMeshQuantization, mode === COMPRESSION_MESHOPT && settings.isMeshoptFiltered)
   if (mode === COMPRESSION_DRACO) {
     // The read built `listMeshes()` in the file's mesh order, which is what
     // makes the plan's mesh indices — into the source JSON — valid here.
@@ -348,6 +350,92 @@ async function transformGlb(glbBytes, mode, draco, sourceCodecs = [], quality = 
         EXTMeshoptCompression.EncoderMethod.QUANTIZE,
     })
   return new Uint8Array(await io.writeBinary(doc))
+}
+
+
+// glTF accessor component types.
+const FLOAT_COMPONENT_TYPE = 5126
+const UNSIGNED_BYTE_COMPONENT_TYPE = 5121
+const UNSIGNED_SHORT_COMPONENT_TYPE = 5123
+// The vertex attributes `KHR_mesh_quantization` widens the component types of.
+const QUANTIZABLE_SEMANTIC = /^(POSITION|NORMAL|TANGENT|TEXCOORD_\d+)$/
+const TEXCOORD_SEMANTIC = /^TEXCOORD_\d+$/
+
+
+/**
+ * Whether storing this attribute this way needs `KHR_mesh_quantization`, per
+ * core glTF's attribute table: POSITION / NORMAL / TANGENT are FLOAT only,
+ * and TEXCOORD_n additionally allows NORMALIZED unsigned byte / short. A
+ * signed or non-normalized texcoord is outside core too, and so is anything
+ * else that is not a float. Requiring the extension for a format core already
+ * allows would make a viewer without it reject an otherwise-readable file
+ * (codex P2 on #1944).
+ *
+ * @param {string} semantic e.g. 'TEXCOORD_0'
+ * @param {number} componentType glTF accessor component type
+ * @param {boolean} isNormalized the accessor's `normalized` flag
+ * @return {boolean}
+ */
+function needsMeshQuantization(semantic, componentType, isNormalized) {
+  if (!QUANTIZABLE_SEMANTIC.test(semantic) || componentType === FLOAT_COMPONENT_TYPE) {
+    return false
+  }
+  const isCoreTexcoord = TEXCOORD_SEMANTIC.test(semantic) && isNormalized &&
+    (componentType === UNSIGNED_BYTE_COMPONENT_TYPE || componentType === UNSIGNED_SHORT_COMPONENT_TYPE)
+  return !isCoreTexcoord
+}
+
+
+/**
+ * Declare `KHR_mesh_quantization` — used AND required — when the file this
+ * transform is about to write stores any geometry attribute in a format core
+ * glTF does not allow (`needsMeshQuantization`). A viewer that does not know
+ * the extension is entitled to refuse such a file, and glTF-Validator
+ * reports `MESH_PRIMITIVE_ATTRIBUTES_ACCESSOR_INVALID_FORMAT` on every such
+ * primitive (#1943).
+ *
+ * Two sources of such attributes, neither of which `@gltf-transform`
+ * declares for us:
+ *
+ * - The Meshopt FILTER method. `EXTMeshoptCompression` rewrites NORMAL and
+ *   TANGENT to normalized BYTE inside its own `write()`, AFTER the document
+ *   has been built — so the accessors this function can inspect are still
+ *   float, and the filter has to be predicted from the settings. Its
+ *   QUANTIZE method is where `@gltf-transform/functions#quantize()` would
+ *   add the extension, but that transform is deliberately not run here
+ *   (`transformGlb`), and the method then stores the arrays as they are.
+ * - A source that is already quantized: a Meshopt artifact from the cache
+ *   pipeline, or one a previous build of this file wrote with the filter
+ *   and without the declaration. Reading it yields integer accessors, and
+ *   any target codec writes them back as they are — the Draco arm
+ *   included, so this runs for both.
+ *
+ * @param {object} doc the `@gltf-transform` document
+ * @param {Function} KHRMeshQuantization the extension class
+ * @param {boolean} isFilterPending whether the Meshopt FILTER encode will
+ *   rewrite NORMAL / TANGENT on write
+ */
+function declareMeshQuantization(doc, KHRMeshQuantization, isFilterPending) {
+  let isQuantized = false
+  for (const mesh of doc.getRoot().listMeshes()) {
+    for (const primitive of mesh.listPrimitives()) {
+      for (const semantic of primitive.listSemantics()) {
+        const accessor = primitive.getAttribute(semantic)
+        if (needsMeshQuantization(semantic, accessor.getComponentType(), accessor.getNormalized())) {
+          isQuantized = true
+        } else if (isFilterPending && (semantic === 'NORMAL' || semantic === 'TANGENT')) {
+          // Morph-target deltas are not filtered, but they are not read here
+          // either: only the base attribute decides.
+          isQuantized = true
+        }
+      }
+    }
+  }
+  if (isQuantized) {
+    // `createExtension` hands back the one already on the document when the
+    // source declared it, so this never doubles the entry.
+    doc.createExtension(KHRMeshQuantization).setRequired(true)
+  }
 }
 
 

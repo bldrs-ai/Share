@@ -29,21 +29,36 @@ export const flags = [
   // function, the useQuota hook and QuotaLimitDialog all ship
   // unconditionally; this flag gates ENFORCEMENT. When off, useQuota
   // reports unlimited capacity and record() is a no-op, so no load is
-  // ever counted or blocked and the QuotaBadge stays hidden. Off by
-  // default while quotas are validated against real Auth0 + public/private
-  // repos; enable per-session with `?feature=quotas`. Flip isActive to true
-  // to roll the limits out to everyone.
+  // ever counted or blocked and the QuotaBadge stays hidden. ON since
+  // Share#1970, which made the pricing page's limits the enforced ones
+  // (local files unmetered, free accounts 2 private models per rolling 7
+  // days since 2026-10-26, 30 before). `?feature=` can only turn flags ON, so flipping this back to
+  // false is the prod-wide off switch.
   // See design/new/quotas.md.
-  {name: 'quotas', isActive: false},
-  // Model export ("Download GLB" in the Share dialog), sold as a Pro
-  // feature. Gates ONLY the UI section: the pro-module pipeline (the
+  {name: 'quotas', isActive: true},
+  // Puts local files (`/v/local-only/`, legacy `/v/new/`) back in the quota
+  // meter. Off: viewing a local file is free and unmetered (Share#1966, the
+  // owner's 2026-10-22 decision, and what the pricing page promises). This
+  // is the abuse switch, kept so the meter can come back without a code
+  // change to the classifiers: `?feature=meterLocalFiles` turns it on for the
+  // client only (anonymous counting is client-side, so that is enough for a
+  // signed-out test); record-load honours this flag too, or the
+  // METER_LOCAL_FILES=true env var for the function alone. Meaningless if
+  // `quotas` is turned off. Flipping it on also contradicts the pricing copy.
+  // See design/new/quotas.md §"Metering local files again".
+  {name: 'meterLocalFiles', isActive: false},
+  // Model export ("Download GLB" in the Save dialog's Export tab), sold as
+  // a Pro feature. Gates ONLY the UI section: the pro-module pipeline (the
   // `pro-module` Netlify Function, `proModuleLoader`, the separately-built
   // module) ships unconditionally and is gated by the subscription check on
-  // the server, not by this flag. Off by default while the flow is
-  // validated against real Auth0 tiers and a real Stripe subscription;
-  // enable per-session with `?feature=export`.
+  // the server, not by this flag, so turning the UI on for everyone does not
+  // hand the exporter to non-subscribers. Default ON as of the S4 rollout
+  // (#1835); it was opt-in via `?feature=export` while the flow was
+  // validated against real Auth0 tiers and a real Stripe subscription.
+  // `?feature=` can only turn flags ON, so flipping this back to false is the
+  // prod-wide kill switch (the dialog then has no tabs at all, as before).
   // See design/new/glb-export-premium.md.
-  {name: 'export', isActive: false},
+  {name: 'export', isActive: true},
   // GLB runtime artifact pipeline (design/new/glb-model-sharing.md).
   // `glb` enables both the writer (post-IFC-parse cache warm-up) and the
   // reader (skip-IFC-when-GLB-cached fast path in Loader.js).

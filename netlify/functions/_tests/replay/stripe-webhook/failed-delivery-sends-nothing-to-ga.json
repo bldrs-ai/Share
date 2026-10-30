@@ -1,0 +1,37 @@
+{
+  "description": "A new Share Pro subscription whose delivery fails (Auth0 down, answered 500) sends nothing to GA, with GA configured: only a delivery answered 200 reports, so the redelivery Stripe makes counts it once.",
+  "env": {
+    "$fixture": "env/stripe-ga.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/stripe-webhook",
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "user-agent": "Stripe/1.0 (+https://stripe.com/docs/webhooks)"
+    },
+    "sign": "stripe",
+    "body": {
+      "$fixture": "stripe/event.subscription.created.live.json"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://bldrs-replay.us.auth0.com/oauth/token"
+      },
+      "response": {
+        "status": 503,
+        "json": {
+          "error": "temporarily_unavailable",
+          "error_description": "Service Unavailable"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 500,
+    "bodyIncludes": "Stripe will retry"
+  }
+}

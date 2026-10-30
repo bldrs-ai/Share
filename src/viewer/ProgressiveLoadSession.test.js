@@ -1,4 +1,5 @@
 import {Box3, BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, Scene, Sphere, Vector3} from 'three'
+import {beginLoadProgress, endLoadProgress, getCompletedLoadStats} from '../loader/loadProgress'
 import ProgressiveLoadSession, {SessionState} from './ProgressiveLoadSession'
 import {fitDistanceForRadius} from './three/cameraLimits'
 
@@ -116,6 +117,47 @@ describe('ProgressiveLoadSession', () => {
     session.finish()
     expect(session.state).toBe(SessionState.FINISHED)
     expect(scene.children).toHaveLength(0)
+  })
+
+  // The GA `stats_firstMeshMs` timing (Share#1954): the load-clock moment
+  // geometry first reached the scene, on both progressive paths.
+  describe('first-mesh timing', () => {
+    const FIRST_MESH_AT_MS = 250
+    let infoSpy
+
+    beforeEach(() => {
+      jest.useFakeTimers()
+      // The reporter mirrors its report lines to console.info.
+      infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'a.ifc'})
+    })
+
+    afterEach(() => {
+      endLoadProgress()
+      infoSpy.mockRestore()
+      jest.useRealTimers()
+    })
+
+    it('is stamped by the first preview mesh, and only the first', () => {
+      jest.advanceTimersByTime(FIRST_MESH_AT_MS)
+      session.addPreviewMesh(cubeAt(0))
+      jest.advanceTimersByTime(FIRST_MESH_AT_MS)
+      session.addPreviewMesh(cubeAt(1))
+      endLoadProgress()
+      expect(getCompletedLoadStats().firstMeshMs).toBe(FIRST_MESH_AT_MS)
+    })
+
+    it('is stamped by the first streamed batch bounds on the incremental path', () => {
+      jest.advanceTimersByTime(FIRST_MESH_AT_MS)
+      session.notifyBounds(new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1)))
+      endLoadProgress()
+      expect(getCompletedLoadStats().firstMeshMs).toBe(FIRST_MESH_AT_MS)
+    })
+
+    it('is absent when no geometry ever arrived', () => {
+      endLoadProgress()
+      expect(getCompletedLoadStats().firstMeshMs).toBeUndefined()
+    })
   })
 
   it('installs the preview group on first mesh and fits instantly', () => {

@@ -3,10 +3,45 @@ import React from 'react'
 import {act, fireEvent, render, renderHook, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import useStore from '../../store/useStore'
-import ShareControl from './ShareControl'
+import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
+import {takeGateLoginSource} from '../../Auth0/gateLogin'
+import {gtagEvent, gtagEventWithCid, modelActionTier, trackModelAction} from '../../privacy/analytics'
+import ShareControl, {
+  MSG_LOCAL_SHARE_BODY,
+  MSG_LOCAL_SHARE_TITLE,
+  MSG_SHARE_COMING_SOON,
+  MSG_SHARE_INTEREST_NOTED,
+} from './ShareControl'
 import {ColorMode} from '../../viewer/display/colorMode'
 import {ShadingMode} from '../../viewer/display/shadingMode'
 import {DEFAULT_COLOR} from '../../viewer/ifc/flatMeshToBatchedModel'
+
+
+// Only the senders are stubbed, for the same reason as ExportSection.test.jsx:
+// modules pulled in transitively read FUNNEL_EVENTS at import time.
+// gtagEventWithCid attaches open_cid (privacy/analytics.test.js).
+jest.mock('../../privacy/analytics', () => ({
+  ...jest.requireActual('../../privacy/analytics'),
+  gtagEvent: jest.fn(),
+  gtagEventWithCid: jest.fn(),
+  trackModelAction: jest.fn(),
+}))
+
+
+// ShareControl reads the auth state (the local-only gate's Sign in, and
+// `signed_in` on its events). The mocked SDK hook returns undefined until
+// given a value, so every suite starts signed out; cases that need a
+// signed-in user set it themselves.
+//
+// Auth starts SETTLED: the normalized model_share waits for isAuthResolved
+// (privacy/modelActionTracking.js), and only the restore-race case below
+// wants it unsettled.
+beforeEach(() => {
+  mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+  act(() => {
+    useStore.setState({isAuthResolved: true, authResolvedFor: false, appMetadata: {}})
+  })
+})
 
 
 describe('ShareControl', () => {
@@ -162,5 +197,211 @@ describe('ShareDialog display-settings toggle', () => {
     fireEvent.click(await findByTestId('control-button-share'))
     expect(await findByTestId('toggle-display')).toBeInTheDocument()
     expect(window.location.hash).not.toContain('d:')
+  })
+})
+
+
+/**
+ * #705: a model opened from the user's computer lives only in this browser's
+ * OPFS, so the link the Share dialog would hand out opens nowhere else. The
+ * button stays in its slot, gated: a click explains and offers the Open
+ * dialog instead of a link.
+ */
+describe('ShareControl for a local upload (#705)', () => {
+  // Route provenance, as routes.ts#processFile produces it for
+  // `/share/v/new/<id>` and Share.jsx stores it.
+  const uploadedModelPath = {filepath: '/12345678-1234-4abc-9def-123456789abc.ifc', isUploadedFile: true}
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.setState({modelPath: uploadedModelPath, isShareVisible: false, isOpenModelVisible: false})
+    })
+  })
+
+  afterEach(() => {
+    act(() => {
+      useStore.setState({modelPath: null, isShareVisible: false, isOpenModelVisible: false})
+    })
+  })
+
+  it('renders the Share button gated, not as a dialog toggle', async () => {
+    const {findByTestId, queryByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    const gate = await findByTestId('gated-share')
+    expect(gate).toHaveAttribute('aria-disabled', 'true')
+    // Same test id as the live button, inside the gate, so selectors that
+    // look for the toolbar's Share button still find it.
+    expect(gate).toContainElement(await findByTestId('control-button-share'))
+    expect(queryByTestId('textfield-link')).toBeNull()
+  })
+
+  it('explains why on click, without opening the Share dialog', async () => {
+    const {findByTestId, findByText, queryByTestId} = render(
+      <ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(await findByTestId('gated-share'))
+    expect(await findByTestId('gated-help')).toBeInTheDocument()
+    expect(await findByText(MSG_LOCAL_SHARE_TITLE)).toBeInTheDocument()
+    expect(await findByText(MSG_LOCAL_SHARE_BODY)).toBeInTheDocument()
+    expect(queryByTestId('textfield-link')).toBeNull()
+    expect(queryByTestId('img-qrcode')).toBeNull()
+    expect(useStore.getState().isShareVisible).toBe(false)
+    expect(gtagEventWithCid).toHaveBeenCalledWith('share_gated', {reason: 'local_file', signed_in: false})
+    // Its normalized twin: a local share turned into an upsell.
+    // Share#1981: it names the local model on screen with real_model_open's
+    // value for it (its route's path: an upload has no download URL here).
+    await waitFor(() => expect(trackModelAction).toHaveBeenCalledWith('share', expect.objectContaining({
+      gate: 'upsell', source: 'local', routeKind: 'local', isAuthenticated: false,
+      contentId: uploadedModelPath.filepath,
+    })))
+  })
+
+  // Share#1964: the gate measures intent.
+  it('counts one share_interest per opening, from the "coming soon" line', async () => {
+    const {findByTestId, findByText, queryByTestId} = render(
+      <ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(await findByTestId('gated-share'))
+    expect(await findByText(MSG_SHARE_COMING_SOON)).toBeInTheDocument()
+
+    fireEvent.click(await findByTestId('share-interest'))
+    expect(gtagEventWithCid).toHaveBeenCalledWith('share_interest', {feature: 'save_to_cloud', signed_in: false})
+    // A thank-you replaces the link, and the help stays open.
+    expect(await findByText(MSG_SHARE_INTEREST_NOTED)).toBeInTheDocument()
+    expect(queryByTestId('share-interest')).toBeNull()
+    expect(await findByTestId('gated-help')).toBeInTheDocument()
+    expect(gtagEventWithCid.mock.calls.filter(([name]) => name === 'share_interest')).toHaveLength(1)
+  })
+
+  it('offers a signed-out user Sign in, attributed to the gate', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    const {findByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(await findByTestId('gated-share'))
+    const signIn = await findByTestId('gated-help-secondary-action')
+    expect(signIn).toHaveTextContent('Sign in')
+
+    fireEvent.click(signIn)
+    expect(useStore.getState().isLoginVisible).toBe(true)
+    expect(takeGateLoginSource()).toEqual({from: 'gate', feature: 'share'})
+  })
+
+  it('reports signed_in and offers no Sign in for a signed-in user', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    // Settled for this signed-in user, or the gate's model_share would wait
+    // past the test and land in the next one's assertions.
+    act(() => useStore.setState({authResolvedFor: true}))
+    const {findByTestId, queryByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(await findByTestId('gated-share'))
+    expect(await findByTestId('gated-help')).toBeInTheDocument()
+    expect(queryByTestId('gated-help-secondary-action')).toBeNull()
+    expect(gtagEventWithCid).toHaveBeenCalledWith('share_gated', {reason: 'local_file', signed_in: true})
+  })
+
+  it('"Open a file" opens the Open dialog', async () => {
+    const {findByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(await findByTestId('gated-share'))
+    fireEvent.click(await findByTestId('gated-help-action'))
+    expect(useStore.getState().isOpenModelVisible).toBe(true)
+    expect(useStore.getState().isShareVisible).toBe(false)
+  })
+
+  // The dialog is visible-by-store-flag, and the flag is seeded from a
+  // `#share:` hash at startup (UISlice#shareIsVisibleInitially). For an
+  // upload the dialog isn't mounted at all, so that path can't show the
+  // local link either.
+  it('does not show the dialog even when the share flag is already set', async () => {
+    act(() => {
+      useStore.setState({isShareVisible: true})
+    })
+    const {findByTestId, queryByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    expect(await findByTestId('gated-share')).toBeInTheDocument()
+    expect(queryByTestId('textfield-link')).toBeNull()
+  })
+
+  // A hosted model NAMED `<uuid>.ifc` (`/share/v/p/` or GitHub) has a real,
+  // portable URL. Only the route's provenance distinguishes it from an
+  // upload; the loader's UUID-in-the-path heuristic can't.
+  it('leaves a hosted UUID-named model shareable', async () => {
+    act(() => {
+      useStore.setState({modelPath: {...uploadedModelPath, isUploadedFile: false}})
+    })
+    const {findByTestId, queryByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(await findByTestId('control-button-share'))
+    expect(await findByTestId('textfield-link')).toBeInTheDocument()
+    expect(queryByTestId('gated-share')).toBeNull()
+  })
+
+  // The ungated share: the dialog opening, with a model loaded, sends the
+  // legacy `share` and its normalized twin model_share {none}, once.
+  it('counts an opened Share dialog as model_share with gate none', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    act(() => {
+      useStore.setState({
+        // Settled for this signed-in user, as BaseRoutes records it.
+        authResolvedFor: true,
+        modelPath: {
+          kind: 'provider', provider: 'github', org: 'o', repo: 'r', branch: 'main', filepath: 'm.ifc',
+          downloadUrl: new URL('https://raw.githubusercontent.com/o/r/main/m.ifc'),
+        },
+        model: {type: 'IFC'},
+      })
+    })
+    try {
+      const {findByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+      fireEvent.click(await findByTestId('control-button-share'))
+      expect(await findByTestId('textfield-link')).toBeInTheDocument()
+      await waitFor(() => expect(trackModelAction).toHaveBeenCalled())
+      expect(gtagEvent).toHaveBeenCalledWith('share', expect.objectContaining({method: 'url'}))
+      // Share#1981: the model's content_id, real_model_open's value for it.
+      expect(trackModelAction.mock.calls).toEqual([['share', expect.objectContaining({
+        gate: 'none', source: 'hosted', routeKind: 'github', isAuthenticated: true,
+        contentId: 'https://raw.githubusercontent.com/o/r/main/m.ifc',
+      })]])
+    } finally {
+      act(() => {
+        useStore.setState({model: null})
+      })
+    }
+  })
+
+  // codex review on Share#1976, round 2: a returning user can click Share
+  // while Auth0 is still restoring the session. The dialog's effect keeps
+  // auth out of its deps (a sign-in mustn't count a second share), so a tier
+  // read at the click was never corrected: a Pro user's share landed as anon.
+  it('counts a share clicked mid-restore under the settled tier, not anon', async () => {
+    mockedUseAuth0.mockReturnValue({...mockedUserLoggedOut, isLoading: true})
+    act(() => {
+      useStore.setState({
+        isAuthResolved: false,
+        appMetadata: {},
+        modelPath: {kind: 'provider', provider: 'github', org: 'o', repo: 'r', branch: 'main', filepath: 'm.ifc'},
+        model: {type: 'IFC'},
+      })
+    })
+    try {
+      const {findByTestId, rerender} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+      fireEvent.click(await findByTestId('control-button-share'))
+      expect(await findByTestId('textfield-link')).toBeInTheDocument()
+      expect(gtagEvent).toHaveBeenCalledWith('share', expect.objectContaining({method: 'url'}))
+      await act(async () => {})
+      expect(trackModelAction).not.toHaveBeenCalled()
+
+      // The session restores: Auth0 re-renders its consumers signed in,
+      // then BaseRoutes writes the claims and flips isAuthResolved.
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+      rerender(<ShareControl/>)
+      act(() => {
+        useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+        useStore.getState().setIsAuthResolved(true, true)
+      })
+
+      await waitFor(() => expect(trackModelAction).toHaveBeenCalledTimes(1))
+      const [action, details] = trackModelAction.mock.calls[0]
+      expect(action).toBe('share')
+      expect(details).toMatchObject({gate: 'none', source: 'hosted', routeKind: 'github'})
+      expect(modelActionTier(details)).toBe('pro')
+    } finally {
+      act(() => {
+        useStore.setState({model: null})
+      })
+    }
   })
 })

@@ -52,10 +52,15 @@
  * retry for the confirming reads and writes.
  */
 
+import {PRO_SUBSCRIPTION_STATUSES} from '../../../src/quota/proStatus.js'
 import {getUserAppMetadata, getUsersByEmail, patchUserAppMetadata, searchUsers} from './auth0.js'
 
 
-export const PRO_AUTH0_STATUSES = new Set(['sharePro', 'shareProPendingReauth'])
+// Not a copy: the one definition every entitlement check reads, server and
+// browser alike (src/quota/proStatus.js). `pro-module`, `record-export`,
+// `record-load` and `getTier` all honour both statuses since the S4 decision
+// (design/new/glb-export-premium.md §7.2).
+export const PRO_AUTH0_STATUSES = PRO_SUBSCRIPTION_STATUSES
 export const ENTITLING_STRIPE_STATUSES = new Set(['active', 'trialing', 'past_due'])
 export const PRO_PENDING_STATUS = 'shareProPendingReauth'
 export const FREE_PENDING_STATUS = 'freePendingReauth'

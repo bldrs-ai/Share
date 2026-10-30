@@ -378,42 +378,285 @@ export function findSoleRootNode(rootNode) {
 
 
 /**
- * The root a ROOT-ONLY permalink names, or null.
+ * The key a placement and a tree node share under the (occurrence path, owner)
+ * join: the path's `occurrencePathKey`, then the owner's express id.
+ *
+ * @param {Array<number>} path NAUO express ids, root→leaf (`[]` for a root)
+ * @param {number|string} ownerId the placement's owner, the
+ *   `product_definition_shape` its row reports as its parent
+ * @return {string}
+ */
+export function occurrenceOwnerKey(path, ownerId) {
+  return `${occurrencePathKey(path)}|${ownerId}`
+}
+
+
+const ownerIndexCache = new WeakMap()
+
+
+/**
+ * Every tree node, keyed by (occurrence path, owner) for each
+ * `product_definition_shape` the node lists in
+ * `productDefinitionShapeExpressIDs`, plus the own-id aliases below. Null
+ * when that keys nothing: IFC, a scene-graph tree, or a one-product STEP tree
+ * from an engine (or a cache artifact written by one) that predates the lists,
+ * whose only empty-path node is the root.
+ *
+ * Why the pair: a placement reports its geometry's owner, the PDS, while the
+ * tree is keyed on what that PDS describes (the `product_definition` for a
+ * part's own geometry, the NAUO for an occurrence's). Conway lists on each
+ * node the PDSs that describe it (conway#723), so path plus owner names
+ * exactly one node. Neither half does alone: every top-level part of a
+ * multi-root file has the path `[]`, and a part reused at many occurrences
+ * reports one PDS from all of them.
+ *
+ * A placement can also report the part's own `product_definition` as its
+ * owner, when its SDR names the definition directly with no PDS between —
+ * the case `glbPortable.js#rowKeyOf` joins through `emptyPathNodeIds`. So
+ * every empty-path node below the tree root is ALSO keyed by (`[]`, its own
+ * `expressID`). Not the tree root itself: in a multi-root file that is
+ * Conway's synthetic `Model` wrapper, which owns no geometry and must never
+ * be named (in a one-product file it is the sole root, which
+ * `findRootLevelOwnerNode` falls back to anyway). Added whether or not any
+ * node lists a shape: when every part of a multi-root file uses a direct SDR,
+ * no list is non-empty (and `bldrsSpatialTree#serializeNode` drops the empty
+ * ones), yet these aliases are the only join there is. That is safe for a
+ * list-less tree from an older engine or cache too. Express ids are unique
+ * within a file, so an alias matches only a placement that really reports
+ * that `product_definition` as its owner, and a definition's key cannot
+ * collide with a shape's. A placement owned by a PDS the tree does not list
+ * still finds nothing, as before. What a list-less tree does gain is a
+ * `findRootLevelProductNode` answer for each part, so a row click or a
+ * permalink reaches `rootLevelInstancesOfProduct`. Where that partition comes
+ * back empty, its callers fall back to the selection the part had before
+ * (`rootLevelSelectionForAnchors` adds nothing, `resolveRootOnlyElementPath`
+ * hands the link back to the occurrence/scalar path).
+ *
+ * Memoized per root-node object, like `occurrencePathKeySetForTree`.
+ *
+ * @param {object|null|undefined} rootNode spatial-structure root element
+ * @return {Map<string, object>|null}
+ */
+export function occurrenceOwnerIndex(rootNode) {
+  if (!rootNode || typeof rootNode !== 'object') {
+    return null
+  }
+  if (ownerIndexCache.has(rootNode)) {
+    return ownerIndexCache.get(rootNode)
+  }
+  const index = new Map()
+  const emptyPathParts = []
+  const stack = [rootNode]
+  while (stack.length > 0) {
+    const node = stack.pop()
+    const owners = node.productDefinitionShapeExpressIDs
+    if (node !== rootNode && Array.isArray(node.occurrencePath) && node.occurrencePath.length === 0) {
+      emptyPathParts.push(node)
+    }
+    if (Array.isArray(node.occurrencePath) && Array.isArray(owners)) {
+      for (const owner of owners) {
+        const key = occurrenceOwnerKey(node.occurrencePath, owner)
+        // First in walk order wins. Conway's join test holds every row of its
+        // fixtures to exactly one node, so a collision is a malformed tree.
+        if (!index.has(key)) {
+          index.set(key, node)
+        }
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) {
+        if (child && typeof child === 'object') {
+          stack.push(child)
+        }
+      }
+    }
+  }
+  // Not gated on the tree listing any shape: an all-direct-SDR multi-root
+  // file lists none, and these are its only keys (see the doc above).
+  for (const part of emptyPathParts) {
+    const key = occurrenceOwnerKey([], part.expressID)
+    if (!index.has(key)) {
+      index.set(key, part)
+    }
+  }
+  const result = index.size > 0 ? index : null
+  ownerIndexCache.set(rootNode, result)
+  return result
+}
+
+
+/**
+ * The top-level product that owns a ROOT-LEVEL placement (empty occurrence
+ * path), or null.
+ *
+ * The exact answer is the (`[]`, owner) join (`occurrenceOwnerIndex`), which
+ * is what tells the parts of a multi-root file apart: Conway gives each of
+ * them, and the synthetic `Model` wrapper, the empty path (#1901, #1909). When
+ * the join finds nothing — a tree without the owner lists, or an owner the
+ * tree does not list (a free representation) — this falls back to the
+ * one-product rule (`findSoleRootNode`), which is what every caller did
+ * before the lists existed. In a one-product tree the two agree whenever the
+ * join answers at all, since only the root has the empty path, so a
+ * single-root file resolves as it always did.
+ *
+ * @param {object|null|undefined} rootNode spatial-structure root element
+ * @param {number|string} ownerId the placement's owner express id
+ * @return {object|null}
+ */
+export function findRootLevelOwnerNode(rootNode, ownerId) {
+  const index = occurrenceOwnerIndex(rootNode)
+  return index?.get(occurrenceOwnerKey([], ownerId)) ?? findSoleRootNode(rootNode)
+}
+
+
+/**
+ * The top-level product row `id` names, or null: the sole empty-path node of
+ * a one-product tree, or one of the parts of a multi-root tree (an empty-path
+ * node the join keys, which every one below the root is, by its own id if by
+ * nothing else). Never the synthetic `Model` wrapper, which lists no owner
+ * and is never aliased. Naming a part says nothing about whether it has
+ * root-level geometry to select: that is `rootLevelInstancesOfProduct`, and
+ * an empty answer there leaves the row to its pre-#1901 selection.
+ *
+ * @param {object|null|undefined} rootNode spatial-structure root element
+ * @param {number|string} id a row's express id
+ * @return {object|null}
+ */
+export function findRootLevelProductNode(rootNode, id) {
+  const wanted = Number(id)
+  const sole = findSoleRootNode(rootNode)
+  if (sole) {
+    return sole.expressID === wanted ? sole : null
+  }
+  const index = occurrenceOwnerIndex(rootNode)
+  if (!index) {
+    return null
+  }
+  for (const [key, node] of index) {
+    if (key.startsWith('|') && node.expressID === wanted) {
+      return node
+    }
+  }
+  return null
+}
+
+
+/**
+ * The root-level instances of ONE top-level product, out of the model's
+ * (`ShareViewer#getRootLevelInstances`).
+ *
+ * In a one-product tree that is all of them: every empty-path placement
+ * belongs to the sole root, whatever its owner, which is the #1909 rule and
+ * stays it. In a multi-root tree a placement belongs to the part whose
+ * `productDefinitionShapeExpressIDs` lists its owner, or whose own id IS its
+ * owner (a direct SDR, see `occurrenceOwnerIndex`).
+ *
+ * @param {object|null|undefined} rootNode spatial-structure root element
+ * @param {object} productNode a top-level product (`findRootLevelProductNode`)
+ * @param {object} rootLevel `{instanceIds, parentExpressIds, instanceOwners}`:
+ *   the model's root-level instances, the ids owning them, and
+ *   `instanceOwners[i]`, the owner of `instanceIds[i]` (optional)
+ * @return {{instanceIds: Array<number>, ownerIds: Array<number>}}
+ */
+export function rootLevelInstancesOfProduct(rootNode, productNode, rootLevel) {
+  const instanceIds = rootLevel?.instanceIds ?? []
+  const instanceOwners = rootLevel?.instanceOwners ?? []
+  if (findSoleRootNode(rootNode) === productNode) {
+    return {instanceIds: [...instanceIds], ownerIds: [...(rootLevel?.parentExpressIds ?? [])]}
+  }
+  // The part's own id is an owner too: a placement whose SDR names the
+  // product_definition directly reports it in place of a PDS (the direct-SDR
+  // case `occurrenceOwnerIndex` keys the part by).
+  const owners = new Set((productNode?.productDefinitionShapeExpressIDs ?? []).map(Number))
+  if (productNode && productNode.expressID !== undefined) {
+    owners.add(Number(productNode.expressID))
+  }
+  const mine = []
+  const mineOwners = new Set()
+  instanceIds.forEach((id, i) => {
+    const owner = Number(instanceOwners[i])
+    if (owners.has(owner)) {
+      mine.push(id)
+      mineOwners.add(owner)
+    }
+  })
+  return {instanceIds: mine, ownerIds: [...mineOwners]}
+}
+
+
+/**
+ * The top-level product a ROOT-ONLY permalink names, or null.
  *
  * A pick of a root-level STEP placement writes an element path of just the
  * root's id (`part.step/7`, #1909): occurrence paths omit the root and this
  * selection has none. `CadView#selectElementBasedOnFilepath` otherwise reads
- * only paths of two or more segments, so such a link restored nothing. This
- * is the gate for the one-segment case, kept narrow so every other one-segment
- * path stays ignored exactly as before:
+ * only paths of two or more segments as occurrence paths, so such a link
+ * restored nothing. This is the gate, kept narrow so every other path is read
+ * exactly as before:
  *
- *   - the segment is a whole-segment number (app-written paths are pure ids;
+ *   - every segment is a whole-segment number (app-written paths are pure ids;
  *     parseInt's prefix parsing would accept `12abc`),
- *   - it is the root's id, and
- *   - the root is the tree's sole empty-path node (`findSoleRootNode`), which
- *     is what makes "the root's own geometry" mean one thing. Null for IFC
- *     (no occurrence paths) and for several top-level products (the empty
- *     path names no one part).
+ *   - the first is the root's id, and
+ *   - ONE segment: the root is the tree's sole empty-path node
+ *     (`findSoleRootNode`), which is what makes "the root's own geometry" mean
+ *     one thing. Null for IFC (no occurrence paths).
+ *   - TWO segments, in a multi-root file only: a part sits under Conway's
+ *     synthetic wrapper, so the link a pick of its own geometry writes is
+ *     `wrapper/part` (`part.step/0/3007`, the element table's path to the
+ *     row). It names the part when the part is one of the wrapper's children
+ *     (`findRootLevelProductNode`) AND, given `getRootLevel`, claims some of the
+ *     model's root-level instances (`rootLevelInstancesOfProduct`). A part
+ *     that claims none — a multi-root tree without owner lists whose
+ *     placements report shapes, or a part with no geometry of its own — stays
+ *     null, so the link takes the occurrence/scalar path it did before
+ *     (#1901, #1909). A one-product tree never takes this branch, so a
+ *     two-segment link there is still an occurrence path.
  *
  * @param {object|null|undefined} rootNode spatial-structure root element
  * @param {Array<string>} parts the element path split on '/', below the model
  *   file
- * @return {object|null} `rootNode`, or null
+ * @param {Function} [getRootLevel] returns the model's root-level instances
+ *   (`ShareViewer#getRootLevelInstances`) as `rootLevelInstancesOfProduct`
+ *   takes them. A function, so only a two-segment multi-root link pays for
+ *   it; omitted, a part is named without that check.
+ * @return {object|null} the product node, or null
  */
-export function resolveRootOnlyElementPath(rootNode, parts) {
-  if (!rootNode || !Array.isArray(parts) || parts.length !== 1 || !/^\d+$/.test(parts[0])) {
+export function resolveRootOnlyElementPath(rootNode, parts, getRootLevel) {
+  if (!rootNode || !Array.isArray(parts) || !parts.every((part) => /^\d+$/.test(part))) {
     return null
   }
   if (parseInt(parts[0], 10) !== rootNode.expressID) {
     return null
   }
-  return findSoleRootNode(rootNode) === rootNode ? rootNode : null
+  if (parts.length === 1) {
+    return findSoleRootNode(rootNode) === rootNode ? rootNode : null
+  }
+  // A part of a multi-root file sits under Conway's synthetic wrapper, so the
+  // link a pick of its own geometry writes is `wrapper/part` (the element
+  // table's path to the row). It is the same root-only selection one level
+  // down, and needs the owner lists to name the part (#1901, #1909).
+  const twoSegments = 2
+  if (parts.length !== twoSegments || findSoleRootNode(rootNode)) {
+    return null
+  }
+  const part = findRootLevelProductNode(rootNode, parts[1])
+  if (!part || !(rootNode.children ?? []).includes(part)) {
+    return null
+  }
+  if (typeof getRootLevel === 'function' &&
+      rootLevelInstancesOfProduct(rootNode, part, getRootLevel()).instanceIds.length === 0) {
+    return null
+  }
+  return part
 }
 
 
 /**
- * The scene half of a selection that has the sole root product among its
- * anchors: the instances to light and the ids that own the root's own geometry.
+ * The scene half of a selection that has a top-level product among its
+ * anchors: the instances to light and the ids that own the product's own
+ * geometry. A top-level product is the sole root of a one-product file, or one
+ * of the parts of a multi-root file (`findRootLevelProductNode`); several may
+ * be anchored at once, and their instances are unioned.
  *
  * The rule every way of selecting the root agrees on (#1909):
  *   - a scene PICK narrows to the shell(s) clicked: `selectFromInstancePick`
@@ -431,43 +674,64 @@ export function resolveRootOnlyElementPath(rootNode, parts) {
  * already an anchor of the current selection. (A whole-product selection
  * carries whole: all its instances are in that set.)
  *
- * Null when the root isn't among the anchors, isn't the sole empty-path node
- * (`findSoleRootNode`: IFC, several top-level products), or has no root-level
- * geometry. The last is a plain assembly: its root row selects what it always
+ * In a multi-root file a part's own instances are the root-level ones whose
+ * owner its `productDefinitionShapeExpressIDs` lists
+ * (`rootLevelInstancesOfProduct`); in a one-product file they are all of them.
+ *
+ * Null when no anchor is a top-level product (IFC; the synthetic wrapper), or
+ * none of them has root-level geometry it can claim. The last is a plain
+ * assembly, or a part of a multi-root tree without owner lists whose
+ * placements report shapes it cannot name: its row selects what it always
  * did, and this adds nothing.
  *
  * @param {object} args
  * @param {object|null} args.rootNode spatial-structure root element
  * @param {Array<number|string>} args.anchorIds the selection's anchor rows
  * @param {object} args.rootLevel `{instanceIds, parentExpressIds,
- *   descendantInstanceIds}`: the model's root-level instances and their owners
- *   (`ShareViewer#getRootLevelInstances`), and the instances of every
- *   descendant occurrence (optional)
+ *   instanceOwners, descendantInstanceIds, descendantInstanceIdsOf}`: the
+ *   model's root-level instances, their owners (`ShareViewer#
+ *   getRootLevelInstances`), and the instances of every descendant occurrence
+ *   of the sole root, or of a given part (both optional)
  * @param {{anchors: Array, instances: Array}} args.current the selection held now
  * @param {boolean} [args.keepNarrowing] carry the selected instances of the product
  * @return {{instanceIds: Array<number>, ownerIds: Array<number>}|null}
  */
 export function rootLevelSelectionForAnchors({rootNode, anchorIds, rootLevel, current, keepNarrowing = false}) {
-  const root = findSoleRootNode(rootNode)
-  if (!root || !Array.isArray(anchorIds) || !anchorIds.map(Number).includes(root.expressID)) {
+  if (!Array.isArray(anchorIds) || !rootLevel || rootLevel.instanceIds.length === 0) {
     return null
   }
-  if (!rootLevel || rootLevel.instanceIds.length === 0) {
-    return null
-  }
-  const wholeProduct = [...new Set([...rootLevel.instanceIds, ...(rootLevel.descendantInstanceIds ?? [])])]
-  if (keepNarrowing && Array.isArray(current?.anchors) &&
-      current.anchors.map(Number).includes(root.expressID)) {
-    const ofProduct = new Set(wholeProduct)
-    const rootInstances = new Set(rootLevel.instanceIds)
-    const narrowed = (current.instances ?? []).map(Number).filter((id) => ofProduct.has(id))
-    // Only a selection that holds some of the root's OWN geometry is a
-    // selection of the root; descendant instances alone belong to their rows.
-    if (narrowed.some((id) => rootInstances.has(id))) {
-      return {instanceIds: narrowed, ownerIds: rootLevel.parentExpressIds}
+  const products = [...new Set(anchorIds.map((id) => findRootLevelProductNode(rootNode, id)).filter(Boolean))]
+  const instanceIds = []
+  const ownerIds = []
+  for (const product of products) {
+    const own = rootLevelInstancesOfProduct(rootNode, product, rootLevel)
+    if (own.instanceIds.length === 0) {
+      continue
     }
+    const isSole = findSoleRootNode(rootNode) === product
+    const descendants = isSole ?
+      (rootLevel.descendantInstanceIds ?? []) :
+      (rootLevel.descendantInstanceIdsOf?.(product) ?? [])
+    const wholeProduct = [...new Set([...own.instanceIds, ...descendants])]
+    let chosen = wholeProduct
+    if (keepNarrowing && Array.isArray(current?.anchors) &&
+        current.anchors.map(Number).includes(product.expressID)) {
+      const ofProduct = new Set(wholeProduct)
+      const productInstances = new Set(own.instanceIds)
+      const narrowed = (current.instances ?? []).map(Number).filter((id) => ofProduct.has(id))
+      // Only a selection that holds some of the product's OWN geometry is a
+      // selection of the product; descendant instances alone belong to their rows.
+      if (narrowed.some((id) => productInstances.has(id))) {
+        chosen = narrowed
+      }
+    }
+    instanceIds.push(...chosen)
+    ownerIds.push(...own.ownerIds)
   }
-  return {instanceIds: wholeProduct, ownerIds: rootLevel.parentExpressIds}
+  if (instanceIds.length === 0) {
+    return null
+  }
+  return {instanceIds: [...new Set(instanceIds)], ownerIds: [...new Set(ownerIds)]}
 }
 
 

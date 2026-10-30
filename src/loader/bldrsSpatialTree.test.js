@@ -132,6 +132,26 @@ describe('loader/bldrsSpatialTree', () => {
       expect(captured.rawHandle).toBeUndefined()
     })
 
+    it('keeps each STEP node\'s owner list, and drops an empty one (#1901)', async () => {
+      // Conway's multi-root shape (twoRootShells.step): the synthetic wrapper
+      // lists no owner, each part lists the product_definition_shape its rows
+      // report as their parent. Without the list on a cache hit, the parts'
+      // rows could not be told apart again.
+      const mgr = {
+        getSpatialStructure: () => ({
+          expressID: 0, type: 'product_structure', occurrencePath: [],
+          productDefinitionShapeExpressIDs: [],
+          children: [
+            {expressID: 7, type: 'product', occurrencePath: [], productDefinitionShapeExpressIDs: [8], children: []},
+            {expressID: 3007, type: 'product', occurrencePath: [], productDefinitionShapeExpressIDs: [3008], children: []},
+          ],
+        }),
+      }
+      const captured = await captureBldrsSpatialTree(mgr, 0)
+      expect(captured.productDefinitionShapeExpressIDs).toBeUndefined()
+      expect(captured.children.map((node) => node.productDefinitionShapeExpressIDs)).toEqual([[8], [3008]])
+    })
+
     it('threads the modelID through to getSpatialStructure', async () => {
       const mgr = {
         getSpatialStructure: jest.fn(() => ({

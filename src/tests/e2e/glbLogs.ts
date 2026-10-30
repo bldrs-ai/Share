@@ -59,7 +59,7 @@ export function resetGlbLogs(logs: string[]) {
  * @param logs buffer from {@link captureGlbLogs}
  * @return the slice after the last reset marker
  */
-function sinceReset(logs: string[]): string[] {
+export function glbLinesSinceReset(logs: string[]): string[] {
   const at = logs.lastIndexOf(RESET_MARKER)
   return at === -1 ? logs : logs.slice(at + 1)
 }
@@ -95,12 +95,12 @@ function sinceReset(logs: string[]): string[] {
  */
 export async function waitForGlbLog(logs: string[], needle: string, timeout: number) {
   try {
-    await expect.poll(() => sinceReset(logs).some((l) => l.includes(needle)), {timeout}).toBe(true)
+    await expect.poll(() => glbLinesSinceReset(logs).some((l) => l.includes(needle)), {timeout}).toBe(true)
   } catch {
     // `expect.poll`'s own message is only "expected true, received false", so
     // nothing is lost by replacing it rather than chaining it as a `cause`
     // (which is past this project's TS lib target anyway).
-    const captured = sinceReset(logs).map((l) => `  ${l}`).join('\n') || '  (none)'
+    const captured = glbLinesSinceReset(logs).map((l) => `  ${l}`).join('\n') || '  (none)'
     throw new Error(
       `[glb] line matching "${needle}" never arrived within ${timeout}ms. Captured:\n${captured}`)
   }

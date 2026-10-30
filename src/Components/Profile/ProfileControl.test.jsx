@@ -1,6 +1,7 @@
 import React from 'react'
 import {act, fireEvent, render, waitFor, within} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
+import {noteGateLogin, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
 import {clearOPFSCache} from '../../OPFS/utils'
 import {RouteThemeCtx} from '../../Share.fixture'
 import {addRecentFileEntry, loadAllRecentFiles} from '../../connections/persistence'
@@ -34,6 +35,40 @@ describe('ProfileControl', () => {
     expect(Login).toBeInTheDocument()
     expect(JoinGithub).toBeInTheDocument()
     expect(BldrsWiki).toBeInTheDocument()
+  })
+
+
+  // Share#1964: dismissing the login dialog abandons a gate's sign-in, so
+  // neither its `login` attribution nor its return-to carries over to a
+  // later, unrelated sign-in.
+  it('forgets a gate-started sign-in when the login dialog is dismissed', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    noteGateLogin('export', 'export')
+    act(() => {
+      useStore.setState({isLoginVisible: true})
+    })
+    const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+
+    fireEvent.click(await findByTestId('button-close-dialog-sign-in-with'))
+
+    expect(useStore.getState().isLoginVisible).toBe(false)
+    expect(takeGateLoginReturn()).toBeNull()
+    expect(takeGateLoginSource()).toEqual({})
+  })
+
+  // A sign-in started from the Profile menu is not a gate's (codex review on
+  // Share#1968): a gate abandoned earlier must not label it or reopen Save.
+  it('forgets a pending gate attempt when sign-in starts from the Profile menu', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    noteGateLogin('export', 'export')
+    const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+
+    fireEvent.click(await findByTestId('control-button-profile'))
+    fireEvent.click(await findByTestId('menu-open-login-dialog'))
+
+    expect(useStore.getState().isLoginVisible).toBe(true)
+    expect(takeGateLoginReturn()).toBeNull()
+    expect(takeGateLoginSource()).toEqual({})
   })
 
 
@@ -318,9 +353,9 @@ describe('ProfileControl', () => {
       delete window.gtag
     })
 
-    /** @return {number} subscription_started events sent so far */
+    /** @return {number} subscription_started_client events sent so far */
     function startedCount() {
-      return window.gtag.mock.calls.filter(([kind, name]) => kind === 'event' && name === 'subscription_started').length
+      return window.gtag.mock.calls.filter(([kind, name]) => kind === 'event' && name === 'subscription_started_client').length
     }
 
     /**

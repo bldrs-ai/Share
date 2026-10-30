@@ -21,6 +21,9 @@ test-results
 # CI's heavy-spec pass (test-flows.yml, tools/playwrightSpecSets.js)
 test-results-heavy
 playwright-report-heavy
+# Live smoke (tools/playwright.live.config.js)
+tools/playwright-report-live
+tools/test-results-live
 .cache
 
 /coverage

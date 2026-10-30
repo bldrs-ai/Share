@@ -1019,42 +1019,77 @@ describe('portable export of a STEP part with no assembly structure (#1901)', ()
   describe('a file with several disconnected top-level parts', () => {
     // Conway wraps the roots in a synthetic `Model` node and gives the wrapper
     // AND every genuine root `occurrencePath: []`. Each root's rows are owned
-    // by its own product_definition_shape (8 and 3008 here), which nothing in
-    // the file links back to its product_definition (7 and 3007), so the empty
-    // path alone cannot say whose rows they are. Joining on it handed the first
-    // root every root's rows and exported the second empty (codex on #1908).
+    // by its own product_definition_shape (8 and 3008 here), and the empty
+    // path alone cannot say whose rows they are: joining on it handed the
+    // first root every root's rows and exported the second empty (codex on
+    // #1908). Conway lists on each node the PDSs that describe it
+    // (`productDefinitionShapeExpressIDs`, conway#723), and the (path, owner)
+    // join names the part (#1901).
     const SECOND_SHAPE = 3008
     const SECOND_PRODUCT_DEFINITION = 3007
     const SECOND_PART_NAME = 'Plates'
+    const ROWS_PER_PART = ROW_SIZES.length / 2
 
-    /** @return {object} the two-root tree, wrapped the way Conway wraps it */
-    function multiRootTree() {
-      const root = (expressID, name) => ({
-        expressID, type: 'product', Name: {value: name}, occurrencePath: [], droppedSolids: ROW_SIZES.length / 2,
+    /**
+     * @param {boolean} withOwners whether the nodes carry Conway's owner lists
+     *   (false: an artifact written before them)
+     * @return {object} the two-root tree, wrapped the way Conway wraps it
+     */
+    function multiRootTree(withOwners) {
+      const root = (expressID, name, shape) => ({
+        expressID, type: 'product', Name: {value: name}, occurrencePath: [], droppedSolids: ROWS_PER_PART,
+        ...(withOwners ? {productDefinitionShapeExpressIDs: [shape]} : {}),
         children: [],
       })
       return {
         expressID: 0, type: 'product_structure', Name: {value: 'Model'}, occurrencePath: [],
-        children: [root(PRODUCT_DEFINITION, 'Shells'), root(SECOND_PRODUCT_DEFINITION, SECOND_PART_NAME)],
+        children: [root(PRODUCT_DEFINITION, 'Shells', SHAPE), root(SECOND_PRODUCT_DEFINITION, SECOND_PART_NAME, SECOND_SHAPE)],
       }
     }
 
-    /** @return {Promise<Uint8Array>} two parts of three rows each */
-    async function twoPartArtifact() {
+    /**
+     * @param {boolean} [withOwners]
+     * @return {Promise<Uint8Array>} two parts of three rows each
+     */
+    async function twoPartArtifact(withOwners = true) {
       const {model} = livePartModel()
-      model.instanceParents = ROW_SIZES.map((_, i) => (i < ROW_SIZES.length / 2 ? SHAPE : SECOND_SHAPE))
+      model.instanceParents = ROW_SIZES.map((_, i) => (i < ROWS_PER_PART ? SHAPE : SECOND_SHAPE))
       return injectGlbExtensions(await batchedArtifactBytes(model, {collapse: true}),
-        [{name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: multiRootTree(), compress: true}], null, null).bytes
+        [{name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: multiRootTree(withOwners), compress: true}], null, null).bytes
     }
 
-    it('never hands one root the rows of another', async () => {
+    /**
+     * @param {object} json the portable file's glTF JSON
+     * @param {string} name a node name
+     * @return {number} the rows the node and its direct children carry
+     */
+    function rowsOwnedBy(json, name) {
+      const node = json.nodes.find((n) => n.name === name)
+      const rowsOf = (n) => (Number.isInteger(n.extras?.bldrsTableNode) ? (n.extras.bldrsRowCount ?? 1) : 0)
+      return [node, ...(node.children ?? []).map((i) => json.nodes[i])].reduce((rows, n) => rows + rowsOf(n), 0)
+    }
+
+    it('files each part\'s rows under that part, and nothing under Unassigned', async () => {
       const portable = rewriteGlbPortable(await twoPartArtifact())
       const {json} = parseGlb(portable.bytes)
 
-      // The rows cannot be told apart by root, so both parts' rows stay
-      // together under `Unassigned` — and NEITHER root claims them. The
-      // mislabelled shape was `Shells` holding both parts' meshes and `Plates`
-      // empty.
+      expect(portable.stats.unassignedInstances).toBe(0)
+      expect(json.nodes.find((node) => node.name === 'Unassigned')).toBeUndefined()
+      // Exactly its own: the bug this replaced filed both parts' rows under
+      // one of them, and the rule before it filed them under neither.
+      expect(rowsOwnedBy(json, 'Shells')).toBe(ROWS_PER_PART)
+      expect(rowsOwnedBy(json, SECOND_PART_NAME)).toBe(ROWS_PER_PART)
+      // The synthetic wrapper owns nothing of its own.
+      expect(json.nodes.find((node) => node.name === 'Model').mesh).toBeUndefined()
+    })
+
+    it('without the owner lists, never hands one root the rows of another', async () => {
+      // An artifact written before conway#723: the rows cannot be told apart
+      // by root, so both parts' rows stay together under `Unassigned` and
+      // NEITHER root claims them, as before the lists existed.
+      const portable = rewriteGlbPortable(await twoPartArtifact(false))
+      const {json} = parseGlb(portable.bytes)
+
       for (const name of ['Shells', 'Plates', 'Model']) {
         const node = json.nodes.find((n) => n.name === name)
         expect(node.mesh).toBeUndefined()

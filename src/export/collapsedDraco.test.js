@@ -14,7 +14,12 @@ import {
   Vector3,
 } from 'three'
 import {Logger, WebIO} from '@gltf-transform/core'
-import {EXTMeshGPUInstancing, EXTMeshoptCompression, KHRDracoMeshCompression} from '@gltf-transform/extensions'
+import {
+  EXTMeshGPUInstancing,
+  EXTMeshoptCompression,
+  KHRDracoMeshCompression,
+  KHRMeshQuantization,
+} from '@gltf-transform/extensions'
 import * as pako from 'pako'
 import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
@@ -324,7 +329,11 @@ async function loadLikeGltfLoader(bytes) {
   await MeshoptDecoder.ready
   const io = new WebIO()
     .setLogger(new Logger(Logger.Verbosity.SILENT))
-    .registerExtensions([KHRDracoMeshCompression, EXTMeshoptCompression, EXTMeshGPUInstancing])
+    .registerExtensions([
+      KHRDracoMeshCompression, EXTMeshoptCompression, EXTMeshGPUInstancing,
+      // GLTFLoader implements it, and a Meshopt export now requires it (#1943).
+      KHRMeshQuantization,
+    ])
     .registerDependencies({'draco3d.decoder': await loadDracoDecoder(), 'meshopt.decoder': MeshoptDecoder})
   const doc = await io.readBinary(bytes)
   // One geometry per glTF mesh, shared by every node that uses it, as

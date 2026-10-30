@@ -284,7 +284,8 @@ export async function compressGlb(glbBytes, mode, options = {}) {
   const startMs = Date.now()
   try {
     const {WebIO} = await import('@gltf-transform/core')
-    const {KHRDracoMeshCompression, EXTMeshoptCompression} = await import('@gltf-transform/extensions')
+    const {KHRDracoMeshCompression, EXTMeshoptCompression, KHRMeshQuantization} =
+      await import('@gltf-transform/extensions')
 
     const io = new WebIO()
     let transformOp = null
@@ -306,7 +307,11 @@ export async function compressGlb(glbBytes, mode, options = {}) {
       const {MeshoptEncoder} = await import('meshoptimizer/encoder')
       await MeshoptEncoder.ready
       const {meshopt} = await import('@gltf-transform/functions')
-      io.registerExtensions([EXTMeshoptCompression])
+      // `meshopt()` quantizes POSITION / NORMAL / TEXCOORD to SHORT / BYTE
+      // and adds `KHR_mesh_quantization` to the document, but an extension
+      // the IO has not registered is silently left out of the written file —
+      // leaving integer attributes no strict loader may read (#1943).
+      io.registerExtensions([EXTMeshoptCompression, KHRMeshQuantization])
         .registerDependencies({'meshopt.encoder': MeshoptEncoder})
       transformOp = meshopt({encoder: MeshoptEncoder, level: 'medium'})
     } else {

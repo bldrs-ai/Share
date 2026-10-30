@@ -6,6 +6,7 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom'
+import {LOCAL_ONLY_ROUTE, toLocalOnlyPath} from './routes/localOnly'
 import debug from './utils/debug'
 import {disablePageReloadApprovalCheck} from './utils/event'
 import {navWith} from './utils/navigate'
@@ -49,15 +50,16 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
         <Route path='about/conway' element={<Conway/>}/>
         <Route path='quotas' element={<Quotas/>}/>
         <Route
-          path='v/new/*'
+          path={`v/${LOCAL_ONLY_ROUTE}/*`}
           element={
             <Share
               installPrefix={installPrefix}
               appPrefix={appPrefix}
-              pathPrefix={`${appPrefix}/v/new`}
+              pathPrefix={`${appPrefix}/v/${LOCAL_ONLY_ROUTE}`}
             />
           }
         />
+        <Route path='v/new/*' element={<LegacyUploadRedirect/>}/>
         <Route
           path='v/p/*'
           element={
@@ -101,6 +103,35 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
       />
     </Routes>
   )
+}
+
+
+/**
+ * `/v/new/<uuid>.<ext>` was the local-only route's name until #1959. Old
+ * recents, bookmarks and copied links still carry it, so rewrite it in place
+ * to `/v/local-only/…` and let that route render.
+ *
+ * `replace`, i.e. history.replaceState: Back must not return to the old URL,
+ * which would just redirect again. And an in-app navigation, never a page
+ * load: without OPFS a local file lives only in this page's memory
+ * (`loader/inMemoryUploads.js`), and a page load would drop it. Search and
+ * hash (feature flags, camera, selection) are carried over unchanged. A
+ * recipient of an old link still gets #1956's "not in this browser" alert,
+ * from the local-only route.
+ *
+ * @return {null}
+ */
+function LegacyUploadRedirect() {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const dest = toLocalOnlyPath(location.pathname)
+    debug().log('ShareRoutes#LegacyUploadRedirect: forwarding to: ', dest)
+    navigate(`${dest}${location.search}${location.hash}`, {replace: true})
+  }, [location, navigate])
+
+  return null
 }
 
 

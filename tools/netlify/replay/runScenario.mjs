@@ -16,6 +16,10 @@
  *  - process.env is replaced with the scenario's `env` (plus PATH) BEFORE
  *    the function is imported, since functions read env at module scope
  *    (Sentry init) and cache tokens there;
+ *  - `now`, when the scenario has one, freezes the clock at that instant
+ *    before the function is imported, so a function that decides by the
+ *    date (pro-module's rolling free-export window) replays the same way on
+ *    any day the suite runs;
  *  - msw intercepts every outbound request — axios's http adapter, the
  *    Stripe SDK's https client, global fetch — whether it comes from source
  *    or from a bundle, because all of them end at Node's own `http`/`https`/
@@ -54,6 +58,10 @@ for (const name of Object.keys(process.env)) {
   }
 }
 Object.assign(process.env, scenario.env || {})
+
+if (scenario.now !== undefined) {
+  freezeClock(scenario.now)
+}
 
 const exchanges = scenario.exchanges || []
 // 'strict' (default): calls must arrive in the listed order. 'any': for a
@@ -331,4 +339,38 @@ function bodyString(body) {
 function queryString(query) {
   const str = new URLSearchParams(query).toString()
   return str ? `?${str}` : ''
+}
+
+
+/**
+ * Stop the clock at `iso` for everything in this process: `Date.now()` and a
+ * bare `new Date()` both answer it, while `new Date(x)` still parses `x`.
+ * Global, so a bundle under test sees it exactly as the source does. Timers
+ * are untouched; nothing here measures elapsed time by the date.
+ *
+ * @param {string} iso e.g. '2026-10-06T12:00:00.000Z'
+ */
+function freezeClock(iso) {
+  const frozen = Date.parse(iso)
+  if (!Number.isFinite(frozen)) {
+    throw new Error(`scenario.now is not a date: ${JSON.stringify(iso)}`)
+  }
+  const RealDate = Date
+  /** A Date whose "now" is `frozen`. */
+  class FrozenDate extends RealDate {
+    /** @param {...*} args as for Date; none means `frozen` */
+    constructor(...args) {
+      if (args.length === 0) {
+        super(frozen)
+      } else {
+        super(...args)
+      }
+    }
+
+    /** @return {number} `frozen`, always */
+    static now() {
+      return frozen
+    }
+  }
+  globalThis.Date = FrozenDate
 }

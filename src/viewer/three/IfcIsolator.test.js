@@ -1216,6 +1216,33 @@ describe('viewer/three/IfcIsolator', () => {
           useStoreMock.getState.mockReturnValue({...useStoreMock.getState(), selectedAnchorIds: ['10']})
           expect(iso._selectionOccurrences().map(({nodeId}) => nodeId)).toEqual([10])
         })
+
+        it('in a multi-root file, a whole part is that part\'s own geometry and its children\'s only (#1901)', () => {
+          // Two parts under Conway's wrapper (0), every root-level batch at the
+          // empty path: part 7 owns batch 2 (owner 100), part 3007 owns batch 3
+          // (owner 200) and has a child occurrence 10 (batches 0, 1). The
+          // part's owner list says which root-level batches are whose.
+          const {iso, mesh} = setupBatchedIsolator()
+          mesh.occurrencePathToBatchIds = new Map([['10', [0, 1]]])
+          iso.viewer.getInstanceIdsForOccurrencePath = jest.fn((modelId, path) => (path[0] === 10 ? [0, 1] : []))
+          iso.viewer.getRootLevelInstances = jest.fn(() => ({
+            instanceIds: [2, 3], parentExpressIds: [100, 200], instanceOwners: [100, 200],
+          }))
+          const part = (expressID, owner, children = []) => ({
+            expressID, occurrencePath: [], productDefinitionShapeExpressIDs: [owner], children,
+          })
+          useStoreMock.getState.mockReturnValue({
+            elementTypesMap: [], selectedElements: ['3007', '200'], selectedAnchorIds: ['3007'],
+            selectedInstanceIds: [0, 1, 3], selectedOccurrencePath: null, selectedSolidExpressId: null,
+            rootElement: {expressID: 0, occurrencePath: [], children: [
+              part(7, 100),
+              part(3007, 200, [{expressID: 10, occurrencePath: [10], children: []}]),
+            ]},
+          })
+          expect(iso._selectionOccurrences()).toEqual([
+            {nodeId: 3007, occurrencePath: [], solidExpressId: null, instanceIds: [0, 1, 3]},
+          ])
+        })
       })
 
       it('leaves the selection it isolated unpainted until the selection changes', () => {

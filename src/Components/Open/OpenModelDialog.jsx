@@ -1,9 +1,12 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {Box, Button, Divider, Slide, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {noOpfsLocalFileAlert} from '../../OPFS/messages'
+import {startLogin} from '../../Auth0/gateLogin'
+import {forgetInMemoryUpload} from '../../loader/inMemoryUploads'
+import {localOnlyPath, toLocalOnlyPath} from '../../routes/localOnly'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
+import {driveFileQuotaVisibility} from '../../quota/driveVisibility'
 import {loadLocalFile} from '../../utils/loader'
 import {NeedsReconnectError} from '../../connections/errors'
 import {
@@ -14,7 +17,7 @@ import {
 import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
-import {navigateToModel} from '../../utils/navigate'
+import {navigateToInMemoryModel, navigateToModel} from '../../utils/navigate'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import useExistInFeature from '../../hooks/useExistInFeature'
@@ -60,7 +63,7 @@ export default function OpenModelDialog({
   // Safari can refuse once the click's user activation is spent.
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const isMobile = useIsMobile()
-  const {tier, record, check, hasCapacity} = useQuota()
+  const {tier, record, check} = useQuota()
 
   const [pickerToken, setPickerToken] = useState(null)
   const [pickerConnection, setPickerConnection] = useState(null)
@@ -130,11 +133,12 @@ export default function OpenModelDialog({
   }
 
   const handleOpenById = async (connection, fileId, fileName) => {
-    // Cheap client-side gate first — if we already know we're at limit,
-    // surface the dialog without bothering with token acquisition or a
-    // round-trip to record-load. check(key), not hasCapacity: an
+    // Cheap client-side gate first. check(key), not hasCapacity: an
     // already-counted key stays openable at limit (server idempotency;
-    // /share/quotas promises re-opens from recents are free).
+    // /share/quotas promises re-opens from recents are free). It no longer
+    // refuses a Drive key by itself: whether a Drive file counts is its
+    // visibility, which record() below looks up, so a link-shared file
+    // opens at the limit.
     const key = `${appPrefix}/v/g/${fileId}`
     if (!check(key).allowed) {
       setShowQuotaDialog(true)
@@ -163,7 +167,12 @@ export default function OpenModelDialog({
         return
       }
     }
-    const {allowed} = await record(key)
+    // After the token preflight, so the lookup (one permissions.list) never
+    // spends the click's user activation. Public (link-shared) files are
+    // not counted (design/new/quotas.md §"Drive visibility").
+    const {allowed} = await record(key, {
+      resolveDriveVisibility: () => driveFileQuotaVisibility(connection, fileId),
+    })
     if (!allowed) {
       setShowQuotaDialog(true)
       return
@@ -241,14 +250,17 @@ export default function OpenModelDialog({
     }
     const doc = docs[0]
     const key = `${appPrefix}/v/g/${doc.id}`
-    const {allowed} = await record(key)
+    const connection = pickerConnection
+    // A link-shared pick is public and not counted; see handleOpenById.
+    const {allowed} = await record(key, {
+      resolveDriveVisibility: () => driveFileQuotaVisibility(connection, doc.id),
+    })
     if (!allowed) {
       setPickerToken(null)
       setPickerConnection(null)
       setShowQuotaDialog(true)
       return
     }
-    const connection = pickerConnection
     setPickerToken(null)
     setPickerConnection(null)
     disablePageReloadApprovalCheck()
@@ -273,30 +285,36 @@ export default function OpenModelDialog({
   }
 
   const openFile = () => {
-    // `false`, not falsy: the store holds `null` until BaseRoutes' probe
-    // resolves, and that means "not known yet", not "unavailable". Browse is
-    // disabled while it's `null` (below), so this only fires on a real no.
-    if (isOpfsAvailable === false) {
-      // AlertDialog counts it (analytics only); see noOpfsLocalFileAlert.
-      setIsDialogDisplayed(false)
-      setAlert(noOpfsLocalFileAlert())
-      return
-    }
-    if (!hasCapacity) {
-      setShowQuotaDialog(true)
-      return
-    }
+    // No capacity pre-gate: a local file is free and unmetered (Share#1966),
+    // so a user at their private-model limit can still open one. record()
+    // below passes the /v/local-only/ key, and stays the gate if the
+    // `meterLocalFiles` abuse switch puts local files back in the meter.
+    // Without OPFS the pick is held in memory instead (#1906). `false`, not
+    // falsy: the store holds `null` until BaseRoutes' probe resolves, which
+    // means "not known yet". Browse is disabled while it's `null` (below), so
+    // this is decided on a real answer.
+    const isInMemory = isOpfsAvailable === false
     /**
      * @param {string} storageId OPFS storage id, `<blob-uuid>.<ext>` — the
-     *   `/v/new/` path segment the Loader resolves against OPFS.
+     *   `/v/local-only/` path segment the Loader resolves against OPFS — or, when
+     *   `isInMemory`, the same-shaped in-memory id.
      * @param {number} lastModifiedUtc Epoch ms from the picked File.
      * @param {string} [originalName] The user's filename, e.g. `box.ifc`.
      */
     const onLoad = async (storageId, lastModifiedUtc, originalName) => {
-      const sharePath = `${appPrefix}/v/new/${storageId}`
+      const sharePath = localOnlyPath(appPrefix, storageId)
       const {allowed} = await record(sharePath)
       if (!allowed) {
+        if (isInMemory) {
+          forgetInMemoryUpload(storageId)
+        }
         setShowQuotaDialog(true)
+        return
+      }
+      if (isInMemory) {
+        // The file is held only in this page's memory, so no page load, and
+        // no local recent: there is nothing stored to reopen it from.
+        navigateToInMemoryModel(sharePath, navigate)
         return
       }
       disablePageReloadApprovalCheck()
@@ -316,7 +334,7 @@ export default function OpenModelDialog({
     // The dialog closes on pick, so a file that cannot be opened at all —
     // a `.glb.gz` in a browser with no `DecompressionStream`, a name and a
     // header that between them name no format — has no other way to say so.
-    loadLocalFile(onLoad, false, false, (message) => setAlert(message))
+    loadLocalFile(onLoad, false, false, (message) => setAlert(message), {inMemory: isInMemory})
     setIsDialogDisplayed(false)
   }
 
@@ -336,7 +354,12 @@ export default function OpenModelDialog({
    * @param {object} entry A `local` RecentFileEntry.
    */
   const handleOpenLocalRecent = async (entry) => {
-    const key = entry.sharePath || `${appPrefix}/v/new/${entry.id}`
+    // A recent recorded before #1959 carries the legacy `/v/new/` form.
+    // Open it at the canonical path, the key every new open is recorded
+    // under, rather than through the redirect hop. (With `quotas` on, the
+    // first re-open of such a recent counts once under the new key: the
+    // ledger dedupes by exact key.)
+    const key = entry.sharePath ? toLocalOnlyPath(entry.sharePath) : localOnlyPath(appPrefix, entry.id)
     const {allowed} = await record(key)
     if (!allowed) {
       setShowQuotaDialog(true)
@@ -373,6 +396,8 @@ export default function OpenModelDialog({
   const handleGithubRemove = () => logout({openUrl: false})
 
   const handleLoginGithub = () => {
+    // Not a gate's sign-in: drop any stale gate attempt (Auth0/gateLogin.js).
+    startLogin()
     if (useMock) {
       loginWithRedirect('github')
     } else {

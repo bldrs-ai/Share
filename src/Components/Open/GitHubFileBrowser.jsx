@@ -13,14 +13,13 @@ import useStore from '../../store/useStore'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../../connections/persistence'
 import {clearGrantedGithubScope, getGrantedGithubScope, saveGrantedGithubScope} from '../../Auth0/githubGrant'
 import {getOAuthScopes} from '../../net/github/OAuthScopes'
+import {isProSubscriptionStatus} from '../../quota/proStatus'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
 
 
 /** localStorage key for remembering the GitHub browser's last selections. */
 const GH_BROWSER_STATE_KEY = 'bldrs.openDialog.github'
-/** subscriptionStatus values that carry (or will carry) Pro entitlements. */
-const PRO_STATUSES = ['sharePro', 'shareProPendingReauth']
 
 
 /**
@@ -112,7 +111,7 @@ export default function GitHubFileBrowser({
   // refresh + refetch lands — drives the checkbox's transient checked state.
   const [grantPending, setGrantPending] = useState(false)
   const appMetadata = useStore((state) => state.appMetadata)
-  const isProUser = PRO_STATUSES.includes(appMetadata?.subscriptionStatus)
+  const isProUser = isProSubscriptionStatus(appMetadata?.subscriptionStatus)
   // Restore-once + refetch-on-token-change bookkeeping (see effects below).
   const restoredRef = useRef(false)
   const pendingRestoreRef = useRef(null)

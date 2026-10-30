@@ -31,8 +31,12 @@ export default defineConfig({
   // The web-ifc engine smoke runs under tools/playwright.webifc.config.js
   // against an isolated USE_WEBIFC_SHIM=false build; it must never run
   // against this (Conway) build, where its assertions are meaningless.
+  // The live smoke specs run under tools/playwright.live.config.js against a
+  // DEPLOYED Share with real Auth0 accounts; here, against MSW and
+  // http-server, they would only ever skip (design/new/live-browser-smoke.md).
   testIgnore: [
     '**/*.webifc.spec.ts',
+    '**/*.live.spec.ts',
     ...specSet.testIgnore,
   ],
 

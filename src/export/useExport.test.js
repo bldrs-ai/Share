@@ -1,14 +1,18 @@
 import {CompressionStream as NodeCompressionStream} from 'node:stream/web'
-import {act, renderHook} from '@testing-library/react'
+import {act, renderHook, waitFor} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn} from '../__mocks__/authentication'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
-import {gtagEvent} from '../privacy/analytics'
+import {gtagEventWithCid, trackModelAction} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {compressedExport, gzippedExport} from './artifactSizes'
 import {triggerDownload} from './download'
 import {recordExport} from './exportHistory'
-import {ProModuleDeniedError, loadProModule} from './proModuleLoader'
-import useExport, {bytesBucket, formatBytes} from './useExport'
+import {ProModuleDeniedError, forgetProModule, loadProModule} from './proModuleLoader'
+import {NO_FREE_SLOT_REASON} from './exportSlots'
+import useExport, {bytesBucket, exportFailureReason, formatBytes, noFreeSlotMessage} from './useExport'
+import {handleRoute} from '../routes/routes'
+import {modelSlotKey} from '../quota/modelSlotKey'
+import {webcrypto} from 'node:crypto'
 
 
 jest.mock('../OPFS/utils', () => ({readModelByPathFromOPFS: jest.fn()}))
@@ -16,7 +20,24 @@ jest.mock('../OPFS/utils', () => ({readModelByPathFromOPFS: jest.fn()}))
 // here it stands in for "the panel already compressed this", which is the
 // state the hook is written against.
 jest.mock('./artifactSizes', () => ({compressedExport: jest.fn(), gzippedExport: jest.fn()}))
-jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
+// gtagEventWithCid is the one that carries open_cid (Share#1964); its own
+// test is in privacy/analytics.test.js. GATE_EVENTS stays real so the names
+// asserted here are the names that ship.
+// trackModelAction is mocked the same way (its tests are there too);
+// modelRouteSource, modelContentId and the MODEL_* vocabularies stay real.
+jest.mock('../privacy/analytics', () => {
+  const actual = jest.requireActual('../privacy/analytics')
+  return {
+    gtagEvent: jest.fn(),
+    gtagEventWithCid: jest.fn(),
+    trackModelAction: jest.fn(),
+    GATE_EVENTS: actual.GATE_EVENTS,
+    MODEL_ACTIONS: actual.MODEL_ACTIONS,
+    MODEL_GATES: actual.MODEL_GATES,
+    modelContentId: actual.modelContentId,
+    modelRouteSource: actual.modelRouteSource,
+  }
+})
 jest.mock('./download', () => ({triggerDownload: jest.fn()}))
 // The history lib has its own suite (exportHistory.test.js); here it stands
 // in for "the export was recorded", and mocking it keeps this suite off OPFS
@@ -28,6 +49,7 @@ jest.mock('./exportHistory', () => ({recordExport: jest.fn()}))
 jest.mock('./proModuleLoader', () => ({
   ...jest.requireActual('./proModuleLoader'),
   loadProModule: jest.fn(),
+  forgetProModule: jest.fn(),
 }))
 
 
@@ -40,6 +62,21 @@ const CACHE_KEY_ARGS = {
   sourceHash: 'sha123',
 }
 const SCHEMA_VER = '0.21.0-batched'
+// Two models' routes, as handleRoute gives them: what real_model_open sends
+// as their content_id is the download URL (analytics#modelContentId).
+const GITHUB_ROUTE = {
+  kind: 'provider',
+  provider: 'github',
+  downloadUrl: new URL('https://raw.githubusercontent.com/acme/private/main/box.ifc'),
+}
+const GITHUB_CONTENT_ID = 'https://raw.githubusercontent.com/acme/private/main/box.ifc'
+const LOCAL_ROUTE = {
+  kind: 'file',
+  isUploadedFile: true,
+  filepath: '/u.ifc',
+  downloadUrl: new URL('https://bldrs.ai/u.ifc'),
+}
+const LOCAL_CONTENT_ID = 'https://bldrs.ai/u.ifc'
 const KIND_LABEL = 'github'
 const ARTIFACT_BYTES = new Uint8Array([1, 2, 3, 4])
 const EXPORTED = {
@@ -71,11 +108,14 @@ describe('useExport', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    // Auth settled, as after BaseRoutes' token pass: model_export waits for
+    // it (privacy/modelActionTracking.js). The restore-race case unsets it.
+    useStore.setState({modelPath: null, isAuthResolved: true, authResolvedFor: true})
     getAccessTokenSilently = jest.fn().mockResolvedValue('test-token')
     mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently})
     recordExport.mockResolvedValue({recorded: true, status: 200, exports: []})
     exportArtifact = jest.fn().mockReturnValue(EXPORTED)
-    loadProModule.mockResolvedValue({exportArtifact})
+    loadProModule.mockResolvedValue({namespace: {exportArtifact}, slots: null})
     readModelByPathFromOPFS.mockResolvedValue({
       arrayBuffer: () => Promise.resolve(ARTIFACT_BYTES.buffer),
     })
@@ -84,6 +124,9 @@ describe('useExport', () => {
     useStore.getState().setAppMetadata(null)
     useStore.getState().setSnackMessage(null)
     useStore.getState().setIsExportInFlight(false)
+    useStore.getState().setModelSlots(null)
+    useStore.getState().setModelPath(null)
+    useStore.getState().setAppPrefix(null)
   })
 
   afterAll(() => {
@@ -91,6 +134,7 @@ describe('useExport', () => {
   })
 
   it('reads the artifact at the published key, exports it and downloads the result', async () => {
+    useStore.setState({modelPath: {kind: 'provider', provider: 'github'}})
     const {result} = renderHook(() => useExport())
 
     await act(async () => {
@@ -101,7 +145,7 @@ describe('useExport', () => {
     // it — this is what makes the store hand-off worth having.
     expect(readModelByPathFromOPFS).toHaveBeenCalledWith(
       `ifc/misc/box.${SCHEMA_VER}.glb`, 'sha123', 'gh-bldrs-ai', 'test-models', 'main')
-    expect(loadProModule).toHaveBeenCalledWith('glbExport', expect.any(Function))
+    expect(loadProModule).toHaveBeenCalledWith('glbExport', expect.any(Function), expect.any(String), {drivePublic: false})
     expect(exportArtifact).toHaveBeenCalledWith({
       bytes: ARTIFACT_BYTES,
       options: {sourceBasename: 'box.ifc', stripBldrsMetadata: false},
@@ -111,12 +155,156 @@ describe('useExport', () => {
     })
     expect(triggerDownload).toHaveBeenCalledWith(EXPORTED.blob, 'box.glb')
     expect(useStore.getState().snackMessage).toEqual({text: 'Exported box.glb (2.0 KB)', autoDismiss: true})
-    expect(gtagEvent).toHaveBeenCalledWith('export_model', {
+    expect(gtagEventWithCid).toHaveBeenCalledWith('export_model', {
       format: 'glb',
       bytes_bucket: '<1MB',
       source_kind: KIND_LABEL,
       portable: false,
+      free_export: false,
+      slot_taken: false,
     })
+    // ...and its normalized twin, for the model on screen.
+    expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({
+      gate: 'none', source: 'hosted', routeKind: 'github', isAuthenticated: true,
+    })]])
+  })
+
+  // The event goes out after the module load and conversion, and navigation
+  // isn't locked meanwhile: the source is the model the export started on
+  // (codex review on Share#1976).
+  it('attributes the export to the model it started on, even after navigating mid-export', async () => {
+    useStore.setState({modelPath: {kind: 'file', isUploadedFile: true, filepath: '/u.ifc'}})
+    let releaseModule
+    loadProModule.mockImplementation(() => new Promise((resolve) => {
+      releaseModule = () => resolve({namespace: {exportArtifact}, charge: null})
+    }))
+    const {result} = renderHook(() => useExport())
+
+    let running
+    act(() => {
+      running = result.current.run('glb', {})
+    })
+    await waitFor(() => expect(releaseModule).toBeDefined())
+    // The user opens a GitHub model while the export is in flight.
+    act(() => {
+      useStore.setState({modelPath: {kind: 'provider', provider: 'github'}})
+    })
+    await act(async () => {
+      releaseModule()
+      await running
+    })
+
+    expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({
+      gate: 'none', source: 'local', routeKind: 'local',
+    })]])
+  })
+
+  // Share#1981: the delivered export names its model, with the value
+  // real_model_open sends, so GA can count distinct models exported.
+  it('sends model_export with the content_id of the model on screen', async () => {
+    useStore.setState({modelPath: GITHUB_ROUTE})
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {})
+    })
+
+    expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({
+      gate: 'none', contentId: GITHUB_CONTENT_ID,
+    })]])
+  })
+
+  // The id is snapshotted when the user acts, like the source: the event goes
+  // out after the module load, and a navigation meanwhile must not make the
+  // export a "distinct model" of the next one.
+  it('keeps the original model\'s content_id when the user navigates mid-export', async () => {
+    useStore.setState({modelPath: LOCAL_ROUTE})
+    let releaseModule
+    loadProModule.mockImplementation(() => new Promise((resolve) => {
+      releaseModule = () => resolve({namespace: {exportArtifact}, charge: null})
+    }))
+    const {result} = renderHook(() => useExport())
+
+    let running
+    act(() => {
+      running = result.current.run('glb', {})
+    })
+    await waitFor(() => expect(releaseModule).toBeDefined())
+    act(() => {
+      useStore.setState({modelPath: GITHUB_ROUTE})
+    })
+    await act(async () => {
+      releaseModule()
+      await running
+    })
+
+    const [[, details]] = trackModelAction.mock.calls
+    expect(details.contentId).toBe(LOCAL_CONTENT_ID)
+    expect(details.contentId).not.toBe(GITHUB_CONTENT_ID)
+  })
+
+  // "Download again" replays a history row that may be another model, and
+  // the row carries a share-path key, not real_model_open's value. Sending
+  // the model on screen would count the wrong model, so it sends none.
+  it('sends no content_id for a "Download again" of a history row', async () => {
+    useStore.setState({modelPath: GITHUB_ROUTE})
+    const {result} = renderHook(() => useExport())
+    const row = {cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER, key: '/share/v/gh/other/repo/main/x.ifc'}
+
+    await act(async () => {
+      await result.current.run('glb', {}, row)
+    })
+
+    expect(trackModelAction).toHaveBeenCalledTimes(1)
+    const [, details] = trackModelAction.mock.calls[0]
+    expect(details.contentId).toBeUndefined()
+    expect(details.source).toBeUndefined()
+  })
+
+  // Codex on #1980: a "Download again" row has no Drive download record,
+  // so it replays the public word its own export gave. Without it a
+  // link-shared file re-downloaded from history took a slot, or was refused
+  // with the slots full.
+  it('replays a history row\'s Drive public word to pro-module, and no word as private', async () => {
+    const {result} = renderHook(() => useExport())
+    const row = {cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER, key: '/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz'}
+
+    await act(async () => {
+      await result.current.run('glb', {}, {...row, drivePublic: true})
+    })
+    await act(async () => {
+      await result.current.run('glb', {}, row)
+    })
+
+    expect(loadProModule.mock.calls.map((call) => call[3])).toEqual([{drivePublic: true}, {drivePublic: false}])
+    expect(recordExport.mock.calls[0][0].drivePublic).toBe(true)
+  })
+
+  // codex review on Share#1976, round 2 (the export variant): Auth0 says
+  // signed in before BaseRoutes has written the claims, so an export
+  // delivered in that window read a Pro user's still-empty claims as free.
+  // The tier is read once auth settles instead.
+  it('sends model_export {none} with the settled tier, not the claims of mid-restore', async () => {
+    useStore.setState({modelPath: {kind: 'provider', provider: 'github'}, isAuthResolved: false})
+    const {result} = renderHook(() => useExport())
+
+    await act(async () => {
+      await result.current.run('glb', {})
+    })
+    expect(triggerDownload).toHaveBeenCalled()
+    expect(gtagEventWithCid).toHaveBeenCalledWith('export_model', expect.anything())
+    expect(trackModelAction).not.toHaveBeenCalled()
+
+    act(() => {
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      useStore.getState().setIsAuthResolved(true, true)
+    })
+
+    await waitFor(() => expect(trackModelAction).toHaveBeenCalledTimes(1))
+    const [action, details] = trackModelAction.mock.calls[0]
+    expect(action).toBe('export')
+    expect(details).toMatchObject({gate: 'none', source: 'hosted', routeKind: 'github'})
+    expect(jest.requireActual('../privacy/analytics').modelActionTier(details)).toBe('pro')
   })
 
   it('hands the pro module the very bytes the size line quoted', async () => {
@@ -337,7 +525,7 @@ describe('useExport', () => {
         options: {stripBldrsMetadata: true, compression: 'none', portable: true},
       }),
       expect.anything(), expect.any(Function), expect.any(Function))
-    expect(gtagEvent.mock.calls[0][1].portable).toBe(true)
+    expect(gtagEventWithCid.mock.calls[0][1].portable).toBe(true)
   })
 
   it('still runs no hook when neither control asks for one', async () => {
@@ -360,7 +548,7 @@ describe('useExport', () => {
       await result.current.run('glb', {})
     })
 
-    const [, params] = gtagEvent.mock.calls[0]
+    const [, params] = gtagEventWithCid.mock.calls[0]
     expect(params.source_kind).toBe('github')
     expect(Object.values(params)).not.toContain(CACHE_KEY_ARGS.ns1)
   })
@@ -374,7 +562,7 @@ describe('useExport', () => {
       await result.current.run('glb', {})
     })
 
-    expect(gtagEvent.mock.calls[0][1].source_kind).toBe('unknown')
+    expect(gtagEventWithCid.mock.calls[0][1].source_kind).toBe('unknown')
   })
 
   it('records the export in history, with the artifact fields "Download again" needs', async () => {
@@ -388,6 +576,7 @@ describe('useExport', () => {
     expect(recordExport).toHaveBeenCalledWith(
       {
         key: '/share/v/p/index.ifc',
+        drivePublic: false,
         format: 'glb',
         bytes: EXPORTED.blob.size,
         title: 'box.ifc',
@@ -457,6 +646,62 @@ describe('useExport', () => {
     expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'sharePro'})
   })
 
+  describe('when record-export refuses an export pro-module already served', () => {
+    const refused = {recorded: false, status: 403, exports: [], reason: 'export_slot_missing'}
+
+    it('forgets the memoised Pro module and refreshes the claims, for a delivery with no slots header', async () => {
+      // The account lost Pro while this page stayed open: the memo would
+      // otherwise keep exporting models holding no slot for the rest of the
+      // session.
+      getAccessTokenSilently.mockImplementation((params) => Promise.resolve(params?.cacheMode === 'off' ?
+        jwtWithAppMetadata({subscriptionStatus: 'free'}) :
+        'cached-token'))
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      recordExport.mockResolvedValue(refused)
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(forgetProModule).toHaveBeenCalledWith('glbExport')
+      await waitFor(() => expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'free'}))
+    })
+
+    it('leaves the loader alone for a free-tier delivery, which was never memoised', async () => {
+      loadProModule.mockResolvedValue({namespace: {exportArtifact}, slots: {limit: 2, used: 1, remaining: 1, taken: true}})
+      recordExport.mockResolvedValue(refused)
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(forgetProModule).not.toHaveBeenCalled()
+    })
+
+    it('leaves the loader alone on a 401, which an expired token or an Auth0 outage also gives', async () => {
+      recordExport.mockResolvedValue({recorded: false, status: 401, exports: [], reason: 'invalid_auth0_token'})
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(forgetProModule).not.toHaveBeenCalled()
+    })
+
+    it('leaves the loader alone when record-export accepts the export', async () => {
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(forgetProModule).not.toHaveBeenCalled()
+    })
+  })
+
   it('still reports success when recording the export fails', async () => {
     // The file is in the user's Downloads either way; a history write that
     // couldn't happen must not read as a failed export.
@@ -490,7 +735,7 @@ describe('useExport', () => {
     // the two exports then raced each other's history write (#1834).
     let release
     loadProModule.mockReturnValue(new Promise((resolve) => {
-      release = () => resolve({exportArtifact})
+      release = () => resolve({namespace: {exportArtifact}, slots: null})
     }))
     const {result} = renderHook(() => useExport())
     const other = renderHook(() => useExport())
@@ -568,8 +813,256 @@ describe('useExport', () => {
       expect.objectContaining({cacheMode: 'off', useRefreshTokens: true}))
     expect(triggerDownload).not.toHaveBeenCalled()
     expect(recordExport).not.toHaveBeenCalled()
-    expect(gtagEvent).not.toHaveBeenCalled()
+    // No export_model for a file that never landed; one export_failed instead.
+    expect(gtagEventWithCid.mock.calls.map(([name]) => name)).toEqual(['export_failed'])
+    expect(gtagEventWithCid).toHaveBeenCalledWith('export_failed', {format: 'glb', reason: 'denied'})
+    // Denied is a failure, not a gate verdict: no model_export.
+    expect(trackModelAction).not.toHaveBeenCalled()
     expect(result.current.error).toBeInstanceOf(ProModuleDeniedError)
+  })
+
+  describe('a free user\'s export, decided by model slots (§4.8)', () => {
+    const localRoute = () => handleRoute('/share/v/local-only', {'*': '0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc/12/34'})
+    const LOCAL_KEY = '/share/v/local-only/0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc'
+    const TAKEN = {limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-11-03T12:00:00.000Z', taken: true}
+
+    beforeEach(() => {
+      useStore.getState().setAppPrefix('/share')
+      useStore.getState().setModelPath(localRoute())
+      loadProModule.mockResolvedValue({namespace: {exportArtifact}, slots: TAKEN})
+    })
+
+    it('names the model by its slot key — the same one to pro-module and to record-export', async () => {
+      // The element path in the URL is not part of the key, and the local
+      // file's key is the /v/local-only/ path its open was given.
+      window.history.pushState({}, '', '/share/v/local-only/0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc/12/34')
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(loadProModule).toHaveBeenCalledWith('glbExport', expect.any(Function), LOCAL_KEY, {drivePublic: false})
+      expect(recordExport.mock.calls[0][0].key).toBe(LOCAL_KEY)
+      expect(gtagEventWithCid).toHaveBeenCalledWith('export_model',
+        expect.objectContaining({free_export: true, slot_taken: true}))
+    })
+
+    it('exports a model opened from a long presigned URL under a digest key, with no credential in it', async () => {
+      // jsdom has no SubtleCrypto; Node's is the same Web Crypto API.
+      const realCrypto = global.crypto
+      Object.defineProperty(global, 'crypto', {value: webcrypto, configurable: true})
+      try {
+        const url = `https://bucket.s3.amazonaws.com/tower.ifc?X-Amz-Security-Token=${'t0k3n'.repeat(300)}&X-Amz-Signature=abc`
+        useStore.getState().setModelPath(handleRoute('/share/v/u', {'*': url}))
+        const {result} = renderHook(() => useExport())
+
+        await act(async () => {
+          await result.current.run('glb', {})
+        })
+
+        const key = loadProModule.mock.calls[0][2]
+        expect(key).toMatch(/^\/share\/v\/u\/sha256-[0-9a-f]{64}$/)
+        expect(key).not.toMatch(/X-Amz|t0k3n|\?|amazonaws/)
+        // ...the same key the Export tab and an open would compute, and the
+        // one recorded — so the export is decided and recorded as one model.
+        expect(key).toBe(await modelSlotKey(useStore.getState().modelPath, '/share'))
+        expect(recordExport.mock.calls[0][0].key).toBe(key)
+        expect(triggerDownload).toHaveBeenCalled()
+      } finally {
+        Object.defineProperty(global, 'crypto', {value: realCrypto, configurable: true})
+      }
+    })
+
+    it('snapshots the key when the run starts, so navigating mid-export cannot rename the model', async () => {
+      let release
+      loadProModule.mockReturnValue(new Promise((resolve) => {
+        release = () => resolve({namespace: {exportArtifact}, slots: TAKEN})
+      }))
+      const {result} = renderHook(() => useExport())
+
+      let running
+      act(() => {
+        running = result.current.run('glb', {})
+      })
+      useStore.getState().setModelPath(handleRoute('/share/v/p', {'*': 'other.ifc'}))
+      await act(async () => {
+        release()
+        await running
+      })
+
+      expect(loadProModule.mock.calls[0][2]).toBe(LOCAL_KEY)
+      expect(recordExport.mock.calls[0][0].key).toBe(LOCAL_KEY)
+    })
+
+    it('replays a "Download again" row under the key it was recorded with', async () => {
+      const {result} = renderHook(() => useExport())
+      const source = {cacheKeyArgs: CACHE_KEY_ARGS, schemaVer: SCHEMA_VER, key: '/share/v/g/drive-file'}
+
+      await act(async () => {
+        await result.current.run('glb', {}, source)
+      })
+
+      expect(loadProModule.mock.calls[0][2]).toBe('/share/v/g/drive-file')
+      expect(recordExport.mock.calls[0][0].key).toBe('/share/v/g/drive-file')
+    })
+
+    it('puts the slots the delivery reports into the store, with this model among the held keys', async () => {
+      useStore.getState().setModelSlots(
+        {sub: 'github|1234567', limit: 2, used: 0, remaining: 2, nextFreeAt: null, keys: []})
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(useStore.getState().modelSlots).toEqual({
+        sub: 'github|1234567', limit: 2, used: 1, remaining: 1, nextFreeAt: TAKEN.nextFreeAt, keys: [LOCAL_KEY],
+        publicKeys: [],
+      })
+    })
+
+    it('files a public model\'s delivery under publicKeys, not as a held slot', async () => {
+      loadProModule.mockResolvedValue({namespace: {exportArtifact}, slots: {...TAKEN, taken: false, public: true}})
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(useStore.getState().modelSlots).toMatchObject({keys: [], publicKeys: [LOCAL_KEY]})
+      expect(gtagEventWithCid).toHaveBeenCalledWith('export_model',
+        expect.objectContaining({free_export: true, slot_taken: false}))
+    })
+
+    it('then takes the slots record-export reports, keys and all', async () => {
+      const afterRecord = {limit: 2, used: 2, remaining: 0, nextFreeAt: TAKEN.nextFreeAt, keys: ['/share/v/g/x', LOCAL_KEY]}
+      recordExport.mockResolvedValue({recorded: true, status: 200, exports: [], modelSlots: afterRecord})
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(useStore.getState().modelSlots).toEqual({sub: 'github|1234567', ...afterRecord, publicKeys: []})
+    })
+
+    it('reports a re-export of a model already holding a slot as not taking one', async () => {
+      loadProModule.mockResolvedValue({namespace: {exportArtifact}, slots: {...TAKEN, taken: false}})
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(gtagEventWithCid).toHaveBeenCalledWith('export_model',
+        expect.objectContaining({free_export: true, slot_taken: false}))
+    })
+
+    it('stores nothing for a Pro delivery', async () => {
+      loadProModule.mockResolvedValue({namespace: {exportArtifact}, slots: null})
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(useStore.getState().modelSlots).toBeNull()
+    })
+
+    it('with every slot taken by other models, says when one frees up, and stores the slots', async () => {
+      const full = {limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-31T09:00:00.000Z', keys: ['/a/v/p/a.ifc', '/a/v/g/b']}
+      loadProModule.mockRejectedValue(new ProModuleDeniedError(403, 'denied', {reason: NO_FREE_SLOT_REASON, modelSlots: full}))
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(useStore.getState().snackMessage.text).toBe(noFreeSlotMessage(full))
+      expect(useStore.getState().snackMessage.text)
+        .toMatch(/^Your 2 free model slots for this week are taken by other models\. The next one frees up /)
+      expect(useStore.getState().modelSlots).toEqual({sub: 'github|1234567', ...full, publicKeys: []})
+      expect(gtagEventWithCid).toHaveBeenCalledWith('export_failed', {format: 'glb', reason: 'no_slot'})
+      // The tier was right; there is no stale badge to refresh.
+      expect(getAccessTokenSilently).not.toHaveBeenCalledWith(expect.objectContaining({cacheMode: 'off'}))
+      expect(triggerDownload).not.toHaveBeenCalled()
+      expect(recordExport).not.toHaveBeenCalled()
+      // No free slot refused it: export_failed{no_slot}, shadowed by
+      // model_export {blocked}, free-tier by definition.
+      expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({gate: 'blocked', tier: 'free'})]])
+    })
+
+    // Share#1981: the refused export names the model it was refused for.
+    it('names the model on screen on model_export {blocked}', async () => {
+      useStore.setState({modelPath: GITHUB_ROUTE})
+      loadProModule.mockRejectedValue(new ProModuleDeniedError(403, 'denied', {
+        reason: NO_FREE_SLOT_REASON,
+        modelSlots: {limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-09T09:00:00.000Z', keys: []},
+      }))
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(trackModelAction.mock.calls).toEqual([['export', expect.objectContaining({
+        gate: 'blocked', tier: 'free', contentId: GITHUB_CONTENT_ID,
+      })]])
+    })
+  })
+
+  describe('a slots-full refusal that contradicts the locally paid tier', () => {
+    const full = {limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-31T09:00:00.000Z', keys: ['/a/v/p/a.ifc', '/a/v/g/b']}
+
+    beforeEach(() => {
+      loadProModule.mockRejectedValue(
+        new ProModuleDeniedError(403, 'denied', {reason: NO_FREE_SLOT_REASON, modelSlots: full}))
+    })
+
+    it('refreshes the claim, so the tier flips to free and the gate shows', async () => {
+      // The JWT still says Pro for a canceled account; `ExportSection` hides
+      // the slots and the gate while `getTier` says PAID, so storing the
+      // slots alone left every click repeating the refusal.
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      getAccessTokenSilently.mockImplementation((params) => Promise.resolve(params?.cacheMode === 'off' ?
+        jwtWithAppMetadata({subscriptionStatus: 'canceled'}) :
+        'cached-token'))
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(getAccessTokenSilently).toHaveBeenCalledWith(
+        expect.objectContaining({cacheMode: 'off', useRefreshTokens: true}))
+      expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'canceled'})
+      expect(useStore.getState().modelSlots).toEqual({sub: 'github|1234567', ...full, publicKeys: []})
+    })
+
+    // The refusal proves the free allowance was what blocked it, so the
+    // normalized event is free-tier even while the local claim still says
+    // Pro (codex review on Share#1976). Run through the real derivation.
+    it('reports model_export {blocked} as free, not pro', async () => {
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      const {result} = renderHook(() => useExport())
+
+      await act(async () => {
+        await result.current.run('glb', {})
+      })
+
+      expect(trackModelAction).toHaveBeenCalledTimes(1)
+      const [action, details] = trackModelAction.mock.calls[0]
+      expect(action).toBe('export')
+      // An explicit tier, which trackModelActionWhenAuthSettled sends as is,
+      // never re-derived from the (Pro) claim in the store
+      // (privacy/modelActionTracking.test.js pins that half).
+      expect(details).toMatchObject({gate: 'blocked', tier: 'free'})
+      expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'sharePro'})
+      expect(jest.requireActual('../privacy/analytics').modelActionTier({
+        ...details, appMetadata: useStore.getState().appMetadata, isAuthenticated: true,
+      })).toBe('free')
+    })
   })
 
   it('does nothing premium when no artifact has been published yet', async () => {
@@ -583,6 +1076,9 @@ describe('useExport', () => {
     expect(loadProModule).not.toHaveBeenCalled()
     expect(readModelByPathFromOPFS).not.toHaveBeenCalled()
     expect(useStore.getState().snackMessage.text).toMatch(/still being prepared/)
+    // A run that delivers nothing is still one export_failed (codex on #1968).
+    expect(gtagEventWithCid.mock.calls).toEqual([['export_failed', {format: 'glb', reason: 'unavailable'}]])
+    expect(trackModelAction).not.toHaveBeenCalled()
   })
 
   it('tells the user to reload when the artifact has been evicted from OPFS', async () => {
@@ -595,6 +1091,7 @@ describe('useExport', () => {
 
     expect(loadProModule).not.toHaveBeenCalled()
     expect(useStore.getState().snackMessage.text).toMatch(/reload the model/)
+    expect(gtagEventWithCid.mock.calls).toEqual([['export_failed', {format: 'glb', reason: 'unavailable'}]])
   })
 
   it('rejects a format that has not shipped', async () => {
@@ -619,5 +1116,16 @@ describe('size reporting', () => {
     expect(bytesBucket(5 * 1024 * 1024)).toBe('1-10MB')
     expect(bytesBucket(50 * 1024 * 1024)).toBe('10-100MB')
     expect(bytesBucket(500 * 1024 * 1024)).toBe('>100MB')
+  })
+})
+
+
+// `export_failed`'s `reason` (Share#1964), the same three-way split the
+// hook's catch handles.
+describe('exportFailureReason', () => {
+  it('names a refusal for want of a free slot, a server denial, and anything else', () => {
+    expect(exportFailureReason(new ProModuleDeniedError(403, 'full', {reason: NO_FREE_SLOT_REASON}))).toBe('no_slot')
+    expect(exportFailureReason(new ProModuleDeniedError(403, 'denied'))).toBe('denied')
+    expect(exportFailureReason(new Error('encoder blew up'))).toBe('error')
   })
 })

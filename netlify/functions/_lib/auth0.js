@@ -296,7 +296,9 @@ export async function getUserAppMetadata(sub) {
  *
  * Read-modify-write is last-write-wins: two concurrent patches of the SAME
  * key can lose one side's addition. Callers must keep the loss direction
- * harmless (a missing history row, never a wrong entitlement).
+ * harmless: a missing history row, or a free export whose charge row was
+ * lost (pro-module, design/new/glb-export-premium.md §4.8) — the user's
+ * favour, never a wrongful refusal or a wrong subscription.
  *
  * @param {string} sub Auth0 user_id, e.g. 'google-oauth2|123…'
  * @param {object} patch Top-level `app_metadata` keys to write

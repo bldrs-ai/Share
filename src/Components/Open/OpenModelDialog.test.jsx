@@ -2,7 +2,6 @@ import React from 'react'
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {noOpfsLocalFileAlert} from '../../OPFS/messages'
 import {NeedsReconnectError} from '../../connections/errors'
 import {
   addRecentFileEntry,
@@ -12,8 +11,11 @@ import {
 import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
 import {loadLocalFile} from '../../utils/loader'
-import {navigateToModel} from '../../utils/navigate'
+import useQuota from '../../hooks/useQuota'
+import {getInMemoryUpload, registerInMemoryUpload} from '../../loader/inMemoryUploads'
+import {navigateToInMemoryModel, navigateToModel} from '../../utils/navigate'
 import useStore from '../../store/useStore'
+import {GATE_RETURN_EXPORT, noteGateLogin, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
 import OpenModelDialog from './OpenModelDialog'
 
 
@@ -55,8 +57,14 @@ jest.mock('../Connections/GoogleDriveTab', () => function MockGoogleDriveTab({on
 jest.mock('../Connections/GitHubTab', () => function MockGitHubTab() {
   return <div data-testid='mock-github-tab'/>
 })
-jest.mock('../../utils/navigate', () => ({navigateToModel: jest.fn()}))
+jest.mock('../../utils/navigate', () => ({navigateToInMemoryModel: jest.fn(), navigateToModel: jest.fn()}))
 jest.mock('../../utils/loader', () => ({loadLocalFile: jest.fn()}))
+// The real hook, unless a test overrides it for one render (the quota denial
+// below); with the `quotas` flag off it always admits.
+jest.mock('../../hooks/useQuota', () => {
+  const actual = jest.requireActual('../../hooks/useQuota')
+  return {__esModule: true, default: jest.fn(actual.default)}
+})
 
 
 const mockNavigate = jest.fn()
@@ -105,6 +113,18 @@ describe('OpenModelDialog — GitHub tab', () => {
     act(() => {
       useStore.getState().setCurrentTab(0)
     })
+  })
+
+  // codex review on Share#1968: Connect GitHub is not a gate's sign-in, so a
+  // stale gate attempt must neither label its `login` nor reopen Export.
+  it('drops a stale gate attempt when Connect GitHub starts a sign-in', () => {
+    noteGateLogin('export', GATE_RETURN_EXPORT)
+    renderGithubTab(false)
+
+    fireEvent.click(screen.getByTestId('button-login-github'))
+
+    expect(takeGateLoginSource()).toEqual({})
+    expect(takeGateLoginReturn()).toBeNull()
   })
 
   it('shows login button when not authenticated', () => {
@@ -254,7 +274,35 @@ describe('OpenModelDialog — Google Drive tab', () => {
     })
   })
 
-  it('does not navigate to /v/new/ when onOpenById is called', async () => {
+  // design/new/quotas.md §"Drive visibility": record() is told how to learn
+  // whether the file is link-shared (public, not counted), through the
+  // connection the user clicked.
+  it('hands record() the Drive visibility lookup for the clicked connection', async () => {
+    const getVisibility = jest.fn().mockResolvedValue('public')
+    getProvider.mockReturnValue({getAccessToken: jest.fn().mockResolvedValue('fresh-token'), getVisibility})
+    const record = jest.fn().mockResolvedValue({allowed: true})
+    const realUseQuota = useQuota.getMockImplementation()
+    useQuota.mockImplementation(() => ({
+      tier: 'free', record, check: jest.fn(() => ({allowed: true})), hasCapacity: true,
+    }))
+    const {unmount} = render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
+    try {
+      fireEvent.click(screen.getByTestId('button-open-by-id'))
+      await waitFor(() => expect(navigateToModel).toHaveBeenCalled())
+      expect(record).toHaveBeenCalledWith(expect.stringMatching(/\/v\/g\/file-id-abc$/), expect.anything())
+      const [, {resolveDriveVisibility}] = record.mock.calls[0]
+      await expect(resolveDriveVisibility()).resolves.toBe('public')
+      expect(getVisibility).toHaveBeenCalledWith(
+        {id: 'conn-1', providerId: 'google-drive'}, {kind: 'drive-file', fileId: 'file-id-abc'})
+    } finally {
+      // Unmount before swapping the real hook back (as the in-memory denial
+      // test below explains).
+      unmount()
+      useQuota.mockImplementation(realUseQuota)
+    }
+  })
+
+  it('does not navigate to /v/local-only/ when onOpenById is called', async () => {
     getProvider.mockReturnValue({
       getAccessToken: jest.fn().mockResolvedValue('fresh-token'),
     })
@@ -264,7 +312,7 @@ describe('OpenModelDialog — Google Drive tab', () => {
       expect(navigateToModel).toHaveBeenCalled()
     })
     expect(navigateToModel).not.toHaveBeenCalledWith(
-      expect.stringMatching(/\/v\/new\//),
+      expect.stringMatching(/\/v\/(new|local-only)\//),
       mockNavigate,
     )
   })
@@ -348,7 +396,7 @@ describe('OpenModelDialog — Local tab', () => {
    */
   function renderLocalTab(localFiles) {
     loadRecentFilesBySource.mockImplementation((source) => source === 'local' ? localFiles : [])
-    render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
+    return render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
   }
 
   // The recents/openFile handlers await the quota record() gate (a no-op
@@ -358,17 +406,29 @@ describe('OpenModelDialog — Local tab', () => {
     renderLocalTab([{id: STORAGE_ID, source: 'local', name: 'box.ifc'}])
     fireEvent.click(screen.getByTestId(`link-open-recent-${STORAGE_ID}`))
     await waitFor(() => {
-      expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
+      expect(navigateToModel).toHaveBeenCalledWith(`/share/v/local-only/${STORAGE_ID}`, mockNavigate)
     })
   })
 
   it('navigates to the stored sharePath when the entry carries one', async () => {
     renderLocalTab([
+      {id: STORAGE_ID, source: 'local', name: 'box.ifc', sharePath: `/Share/share/v/local-only/${STORAGE_ID}`},
+    ])
+    fireEvent.click(screen.getByTestId(`link-open-recent-${STORAGE_ID}`))
+    await waitFor(() => {
+      expect(navigateToModel).toHaveBeenCalledWith(`/Share/share/v/local-only/${STORAGE_ID}`, mockNavigate)
+    })
+  })
+
+  // Recents written before #1959 carry the old route. They open at the
+  // canonical path directly rather than through ShareRoutes' redirect.
+  it('rewrites a legacy /v/new/ sharePath to /v/local-only/', async () => {
+    renderLocalTab([
       {id: STORAGE_ID, source: 'local', name: 'box.ifc', sharePath: `/share/v/new/${STORAGE_ID}`},
     ])
     fireEvent.click(screen.getByTestId(`link-open-recent-${STORAGE_ID}`))
     await waitFor(() => {
-      expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
+      expect(navigateToModel).toHaveBeenCalledWith(`/share/v/local-only/${STORAGE_ID}`, mockNavigate)
     })
   })
 
@@ -407,25 +467,65 @@ describe('OpenModelDialog — Local tab', () => {
         source: 'local',
         name: 'box.ifc',
         lastModifiedUtc: lastModified,
-        sharePath: `/share/v/new/${STORAGE_ID}`,
+        sharePath: `/share/v/local-only/${STORAGE_ID}`,
       })
     })
-    expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
+    expect(navigateToModel).toHaveBeenCalledWith(`/share/v/local-only/${STORAGE_ID}`, mockNavigate)
     expect(setPendingModelNameUpdate).toHaveBeenCalledWith(STORAGE_ID)
   })
 
-  // `isOpfsAvailable` used to be `checkOPFSAvailability()`'s unawaited
-  // Promise — always truthy — so this branch was unreachable. Without OPFS
-  // the pick can't survive navigateToModel's full page load (#1906).
-  it('alerts instead of opening a picker when the store says OPFS is unavailable', async () => {
+  // Without OPFS the pick is held in memory and opened by an in-app
+  // navigation: a page load would drop it before the Loader could read it,
+  // and nothing is stored to list as a recent (#1906).
+  it('holds the pick in memory and navigates in-app when the store says OPFS is unavailable', async () => {
     act(() => useStore.setState({isOpfsAvailable: false}))
+    loadLocalFile.mockImplementation((onLoad) => onLoad(STORAGE_ID, Date.now(), 'box.ifc'))
     renderLocalTab([])
     fireEvent.click(screen.getByTestId('button_open_file'))
     await waitFor(() => {
-      expect(useStore.getState().alert).toEqual(noOpfsLocalFileAlert())
+      expect(navigateToInMemoryModel).toHaveBeenCalledWith(`/share/v/local-only/${STORAGE_ID}`, mockNavigate)
     })
-    expect(loadLocalFile).not.toHaveBeenCalled()
+    expect(loadLocalFile).toHaveBeenCalledWith(
+      expect.any(Function), false, false, expect.any(Function), {inMemory: true})
     expect(navigateToModel).not.toHaveBeenCalled()
+    expect(addRecentFileEntry).not.toHaveBeenCalled()
+    expect(setPendingModelNameUpdate).not.toHaveBeenCalled()
+    expect(useStore.getState().alert).toBeNull()
+  })
+
+  // The pick is held before the quota's record() answers (its key names the
+  // id), so a denial must drop it: nothing else removes entries.
+  it('drops an in-memory pick the quota denies', async () => {
+    const recordDenied = jest.fn().mockResolvedValue({allowed: false})
+    const realUseQuota = useQuota.getMockImplementation()
+    useQuota.mockImplementation(() => ({
+      tier: 'free', record: recordDenied, check: jest.fn(), hasCapacity: true,
+    }))
+    act(() => useStore.setState({isOpfsAvailable: false}))
+    let heldId
+    loadLocalFile.mockImplementation((onLoad) => {
+      heldId = registerInMemoryUpload(new File(['x'], 'box.ifc'), 'ifc')
+      onLoad(heldId, Date.now(), 'box.ifc')
+    })
+    const {unmount} = renderLocalTab([])
+    try {
+      fireEvent.click(screen.getByTestId('button_open_file'))
+      await waitFor(() => expect(recordDenied).toHaveBeenCalledWith(`/share/v/local-only/${heldId}`))
+      await waitFor(() => expect(getInMemoryUpload(heldId)).toBeUndefined())
+      expect(navigateToInMemoryModel).not.toHaveBeenCalled()
+    } finally {
+      // Unmount before swapping the real hook back: it calls hooks the stub
+      // doesn't, and a re-render across the swap breaks the hook order.
+      unmount()
+      useQuota.mockImplementation(realUseQuota)
+    }
+  })
+
+  it('asks loadLocalFile for OPFS storage when the store says OPFS is available', () => {
+    renderLocalTab([])
+    fireEvent.click(screen.getByTestId('button_open_file'))
+    expect(loadLocalFile).toHaveBeenCalledWith(
+      expect.any(Function), false, false, expect.any(Function), {inMemory: false})
   })
 
   // Every probe would reject (and log) with OPFS known to be missing.

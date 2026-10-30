@@ -165,6 +165,7 @@ So the status code is the retry policy:
 | Missing signature | 400, not reported (probes and scanners) |
 | Bad signature | 400, reported |
 | Missing secret | 500 "not configured", naming the variable in the log |
+| The GA4 subscription report fails, hangs or is unconfigured | **Unchanged** — whatever the row above says. GA is best-effort (below) |
 
 Before ops#33 every failure answered 200. That turned each Auth0 blip into
 a subscription update lost with no retry.
@@ -263,6 +264,44 @@ stale. Replays: `cancelled-mid-flight-corrects-its-own-write`,
 `old-customer-event-keeps-pro-under-new-customer`,
 `overlapping-write-seen-in-auth0-is-corrected`.
 
+**GA4 subscription events.** A delivery answered 200 also reports the
+funnel's `subscription_started` / `subscription_ended` to GA4 through the
+Measurement Protocol (`_lib/subscriptionAnalytics.js`) when the event is its
+own Share Pro subscription's move into or out of an entitling status (the
+design, the event table, the attribution through the Checkout Session's
+`client_reference_id`, and the owner's setup steps are in quotas.md
+§"Server-side subscription events"). What it relies on, and what holds it
+to the contract above:
+- **One event per subscription transition**, read off the event, not off
+  `settleUser`'s writes: one checkout's `created` and `updated` arrive
+  together, both deliveries can write the promotion, and GA4 never dedupes
+  (Codex P1 on #1983). Stripe describes each status change in one event.
+- **200 paths only.** A delivery answered 500 is redelivered, and the
+  redelivery reports it, so a failure and its retry count once.
+- **It never throws and never changes the status code.** The Checkout
+  Session lookup (`stripe.checkout.sessions.list`, per-request
+  `{timeout, maxNetworkRetries: 0}`) and the POST (abort timer) each have
+  their own short budget, at most 1.5 s; failures are logged with
+  `console.warn` (API secret scrubbed) and swallowed. It is awaited before
+  the handler returns, since Lambda freezes the process after. It also can't
+  push a delivery past the function's limit (a timeout is a non-2xx too): it
+  runs against the handler's deadline (`context.getRemainingTimeInMillis()`,
+  else 10 s), is skipped with under 3 s left, and otherwise shortens both
+  steps to end a second before it.
+- **`GA4_MEASUREMENT_ID` and `GA4_API_SECRET` are optional**, unlike
+  `REQUIRED_ENV`: without both, and for a `livemode: false` event, one INFO
+  line and nothing sent. So no existing scenario's env changes; the GA
+  scenarios use `fixtures/env/stripe-ga.json`. Set them in production only.
+- Replays: `created-pro-reports-subscription-started-to-ga` (including the
+  Measurement Protocol POST and its 204),
+  `deleted-reports-subscription-ended-with-fallback-client` (a restricted key
+  without Checkout Session read access),
+  `ga-unreachable-still-acknowledges`, `renewal-sends-nothing-to-ga`,
+  `failed-delivery-sends-nothing-to-ga`. The unit suite pins the rest: every
+  status pair, the checkout burst (two overlapping deliveries, one event),
+  the deadline, hang/timeout, non-2xx, missing env, test mode, which session
+  wins, and the fallback's stability.
+
 **Timeouts.** Both subscription functions build the Stripe client with a
 5 s timeout and one network retry (`STRIPE_CLIENT_OPTIONS`), instead of
 stripe-node's 80 s and two, and the Auth0 lookups they use carry a 5 s
@@ -291,8 +330,14 @@ It works in two directions:
    `comped` with no Sentry warning. Without the marker (it must be exactly
    `true`, with status `sharePro`) they're `unverifiable` and do warn: an
    unexpected grant, or a bug that writes PRO without a link, should reach
-   someone. A comp still at `shareProPendingReauth` has no paid access yet
-   (only `sharePro` gets it), so it warns until the user reauthenticates.
+   someone. A comp left at `shareProPendingReauth` warns too: a hand edit
+   shouldn't leave the transient status that sends the user through the
+   reauth modal. The one other quiet case is the live browser smoke's own
+   accounts: a PRO user whose primary identity is in the `share-live-smoke`
+   connection is listed under `testAccounts`, with no Sentry warning. That
+   covers the pending-reauth test account, which sits at
+   `shareProPendingReauth` with no Stripe customer by design
+   ([live-browser-smoke.md](live-browser-smoke.md)).
 2. **Promote.** A Stripe customer with an entitling Pro subscription whose
    Auth0 user isn't PRO gets `shareProPendingReauth`, with the customer linked.
    The user is found by `stripeCustomerId`, falling back to the customer's
@@ -330,7 +375,10 @@ to repair (`relink` entries come only from there).
 would change as one JSON line (Auth0 user ids and Stripe customer ids, never
 emails) and sends a Sentry warning when there are discrepancies. The line
 also carries `scanned` counts, so a query that silently matched nothing
-doesn't look like a clean run. Entries in `demote` / `promote` / `relink`
+doesn't look like a clean run. The line is logged at the level Sentry gets:
+INFO for a clean run, WARN when there's something to look at, ERROR when an
+item failed. Netlify labels each line by its console method, so an ERROR
+line in the function log always means a failure. Entries in `demote` / `promote` / `relink`
 are what the sweep found; in apply mode a write that failed is also in
 `errors`. Set `RECONCILE_MODE=apply` in the Netlify UI once a report run has
 been read and looks right, **in the production context only**: whether
@@ -339,6 +387,18 @@ verified, and a preview with production secrets and apply mode would let
 anyone with the URL run an apply sweep. Item failures are collected and
 reported without stopping the sweep. A failure of the sweep itself (the
 token, a discovery page) returns 500 and goes to Sentry as an error.
+
+**One sweep, two Netlify projects.** Share deploys `main` to two Netlify
+projects, and both run this scheduled function with the same Auth0 and
+Stripe credentials. Only the production project (**`bldrs-share-prod`**,
+which serves bldrs.ai) sweeps, with `RECONCILE_MODE=apply` in its Production
+context. The other (**`bldrs-share-dev`**) sets `RECONCILE_MODE=off`, so its
+run logs one INFO line (`RECONCILE_MODE=off, not sweeping`) and returns
+before reading anything, even if its secrets are missing. `off` must be set
+explicitly: an unset or misspelled value still means report, so production
+can't stop sweeping by losing the variable. Until bldrs-ai/ops#36 the two
+names were swapped, so older logs and Sentry events from before the swap
+read the other way round.
 
 **Time budget.** Netlify stops a scheduled function after about 30 s, cold
 start included, so the sweep keeps two deadlines from the start of the
@@ -369,13 +429,18 @@ really is scheduled. Its replays run against both the source and the bundle.
 
 **Out of this repo: the Auth0 promotion step.** Something outside the repo,
 presumably an Auth0 Action, promotes `shareProPendingReauth` to `sharePro`
-after the user reauthenticates. `pro-module`, `record-export` and the quota
-tier honour only `sharePro`. That step should confirm, against Stripe, that
-the user's `stripeCustomerId` holds an entitling Pro subscription before
-promoting. With that check in place, a stale `shareProPendingReauth` that
-slips past the webhook can't become paid access. It does **not** cover a
-lost demotion: a user already `sharePro` whose demotion was lost keeps paid
-access until the sweep demotes them, and only in apply mode (ops#34).
+after the user reauthenticates. Since the S4 decision
+(glb-export-premium.md §7.2) `shareProPendingReauth` is itself Pro:
+`pro-module`, `record-export`, `record-load` and `getTier` all read the one
+definition in `src/quota/proStatus.js`, which `_lib/subscriptions.js`'s
+`PRO_AUTH0_STATUSES` is. So a stale `shareProPendingReauth` that slips past
+the webhook IS paid access until the sweep demotes it (in apply mode), not
+only after the promotion. The promotion step should still confirm, against
+Stripe, that the user's `stripeCustomerId` holds an entitling Pro
+subscription before writing `sharePro`. Neither that check nor the
+webhook covers a lost demotion: a user already Pro (either status) whose
+demotion was lost keeps paid access until the sweep demotes them, and only in
+apply mode (ops#34).
 
 ## Known gaps and follow-ups
 
@@ -410,6 +475,16 @@ access until the sweep demotes them, and only in apply mode (ops#34).
   it. Setting the Auth0 user id on the Stripe customer at checkout (the
   pricing table's `client-reference-id`, copied to customer metadata)
   would make ownership checkable, and would let the sweep relink safely.
+  That field now carries the GA client id (`gacid_…`); its decoder
+  (`src/privacy/gaClientReference.js`) accepts the component beside others
+  joined by `-`, so a user id can be added without breaking attribution.
+- **GA subscription events don't dedupe by Stripe event id.** They are
+  tied to the one event that describes each subscription's status change and
+  sent only on 200, which rules out the checkout burst and retries; Stripe's
+  rare at-least-once duplicate of a 200'd event would still count twice. A
+  claim keyed by event id (Netlify Blobs `onlyIfNew`) would close it, and
+  the transitions of an event lost for Stripe's whole retry window are
+  never reported (the sweep repairs the tier, not GA).
 - **Duplicate copies of the Management API token flow** remain
   (`record-load.js`, `create-portal-session.js`, `unlink-identity.js` versus
   `_lib/auth0.js`; `stripe-webhook.js` now uses `_lib/auth0.js`). The replays pin their outbound requests, so

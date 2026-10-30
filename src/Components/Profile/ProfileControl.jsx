@@ -9,6 +9,7 @@ import {
 import {useTheme} from '@mui/material/styles'
 import {captureException} from '@sentry/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {abandonGateLogin, startLogin} from '../../Auth0/gateLogin'
 import {getRenderMode, setRenderMode as saveRenderMode} from '../../privacy/preferences'
 import {trackSubscriptionFromToken} from '../../privacy/subscriptionTracking'
 import useStore from '../../store/useStore'
@@ -203,6 +204,8 @@ export default function ProfileControl() {
         {!isAuthenticated && (
           <MenuItem
             onClick={() => {
+              // A sign-in started here is not a gate's (Auth0/gateLogin.js).
+              startLogin()
               setIsLoginVisible(true)
               onCloseMenu()
             }}
@@ -353,7 +356,16 @@ export default function ProfileControl() {
 
       <LoginDialog
         isDialogDisplayed={isLoginVisible}
-        setIsDialogDisplayed={(isDisplayed) => setIsLoginVisible(isDisplayed)}
+        setIsDialogDisplayed={(isDisplayed) => {
+          // Only a dismissal comes through here (onLoginClick closes the
+          // dialog itself), so a gate's pending sign-in is abandoned:
+          // neither its `login` attribution nor its return-to may carry
+          // over to a later, unrelated sign-in (Auth0/gateLogin.js).
+          if (!isDisplayed) {
+            abandonGateLogin()
+          }
+          setIsLoginVisible(isDisplayed)
+        }}
         onLogin={onLoginClick}
         isGoogleEnabled={isGoogleEnabled}
       />

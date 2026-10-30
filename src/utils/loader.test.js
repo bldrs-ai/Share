@@ -1,6 +1,7 @@
 import {DecompressionStream as NodeDecompressionStream} from 'node:stream/web'
 import {gzipSync} from 'node:zlib'
-import {opfsWriteModel} from '../OPFS/OPFSService.js'
+import {initializeWorker, opfsWriteModel} from '../OPFS/OPFSService.js'
+import {getInMemoryUpload} from '../loader/inMemoryUploads'
 import {loadLocalFile} from './loader'
 
 
@@ -171,6 +172,43 @@ describe('loadLocalFile', () => {
     expect(onError).toHaveBeenCalledWith(expect.stringContaining('Cannot extract filetype'))
     expect(opfsWriteModel).not.toHaveBeenCalled()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('testId')
+  })
+
+  // Without OPFS the pick is held in memory under an id of the same
+  // `<uuid>.<ext>` shape, and nothing touches the OPFS worker (#1906).
+  it('holds an in-memory pick, inflated, under a <uuid>.<ext> id and writes nothing to OPFS', async () => {
+    const onLoad = jest.fn()
+    loadLocalFile(onLoad, true, false, null, {inMemory: true})
+
+    const inputElement = document.querySelector('input[type="file"]')
+    const gzipped = new Uint8Array(gzipSync(Buffer.from(GLB_BYTES)))
+    Object.defineProperty(inputElement, 'files', {value: [pickedFile(gzipped, 'index.glb.gz')]})
+    inputElement.dispatchEvent(new Event('change', {bubbles: true}))
+    await flushPick()
+
+    expect(onLoad).toHaveBeenCalledWith(
+      expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.glb$/),
+      PICKED_AT, 'index.glb.gz')
+    const held = getInMemoryUpload(onLoad.mock.calls[0][0])
+    expect(held.size).toBe(GLB_BYTES.byteLength)
+    expect(initializeWorker).not.toHaveBeenCalled()
+    expect(opfsWriteModel).not.toHaveBeenCalled()
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
+  })
+
+  it('reports an in-memory pick no name and no header can identify, and holds nothing', async () => {
+    const onLoad = jest.fn()
+    const onError = jest.fn()
+    loadLocalFile(onLoad, true, false, onError, {inMemory: true})
+
+    const inputElement = document.querySelector('input[type="file"]')
+    Object.defineProperty(inputElement, 'files',
+      {value: [pickedFile(UNRECOGNIZABLE_BYTES, 'mystery')]})
+    inputElement.dispatchEvent(new Event('change', {bubbles: true}))
+    await flushPick()
+
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('Cannot extract filetype'))
+    expect(onLoad).not.toHaveBeenCalled()
   })
 
   it('removes the file input after click if skipAutoRemove is false', () => {

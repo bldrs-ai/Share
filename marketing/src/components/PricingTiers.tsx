@@ -8,6 +8,7 @@ import {
   Chip,
   Container,
   Grid,
+  Link,
   Stack,
   Switch,
   Typography,
@@ -15,87 +16,20 @@ import {
 import CheckIcon from '@mui/icons-material/Check'
 import RocketIcon from '@mui/icons-material/Rocket'
 import StarIcon from '@mui/icons-material/Star'
-import {SOCIAL, VIEWER_PATH} from '@/lib/site'
+import {PLANS} from '@/lib/pricingPlans.mjs'
+import {VIEWER_PATH} from '@/lib/site'
 import {LIME, LIME_HOVER} from '@/lib/theme'
-
-
-interface Section {
-  heading: string | null
-  features: string[]
-}
-
-interface Plan {
-  name: string
-  monthlyPrice: number
-  yearlyPrice: number
-  perMember?: boolean
-  description: string
-  sections: Section[]
-  cta: string
-  ctaLink: string
-  ctaVariant: 'contained' | 'outlined'
-  highlight: boolean
-  badge?: string
-}
-
-const PLANS: Plan[] = [
-  {
-    name: 'Bldrs Share',
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    description: 'Fastest, browser-first IFC and STEP viewing',
-    sections: [
-      {
-        heading: 'No Login Required:',
-        features: [
-          'Fastest free IFC and STEP viewing',
-          'Bldrs public GitHub repositories',
-          'Basic Bldrs Tools',
-          'Drag and drop',
-          'No data transfer',
-          '2 model loads per month',
-        ],
-      },
-      {
-        heading: 'With Login:',
-        features: [
-          '4 model loads per month',
-        ],
-      },
-    ],
-    cta: 'Get Started',
-    ctaLink: VIEWER_PATH,
-    ctaVariant: 'outlined',
-    highlight: false,
-  },
-  {
-    name: 'Share Pro',
-    monthlyPrice: 25,
-    yearlyPrice: 270,
-    description: 'IFC and STEP sharing and collaboration for individual professionals',
-    sections: [
-      {
-        heading: null,
-        features: [
-          'All Share capabilities plus:',
-          'Private GitHub and Google Drive repositories',
-          'Private collaboration',
-        ],
-      },
-    ],
-    cta: 'Start Pro',
-    ctaLink: VIEWER_PATH,
-    ctaVariant: 'contained',
-    highlight: true,
-    badge: 'Popular',
-  },
-]
 
 
 /**
  * Pricing cards + monthly/yearly toggle. Client component because the toggle
  * needs React state — the surrounding page (metadata, JSON-LD, layout chrome)
  * stays in a server component.
+ *
+ * Every plan's copy comes from PLANS (lib/pricingPlans.mjs), whose allowances
+ * are built from the enforced quota constants. Keep it that way: copy that
+ * states a limit belongs in PLANS, not in this JSX, and the toggle changes
+ * only the price.
  */
 export default function PricingTiers() {
   const [isYearly, setIsYearly] = useState(false)
@@ -190,9 +124,20 @@ export default function PricingTiers() {
                       )}
                       <Stack spacing={1}>
                         {section.features.map((feature) => (
-                          <Stack key={feature} direction="row" spacing={1} alignItems="flex-start">
+                          <Stack
+                            key={typeof feature === 'string' ? feature : feature.text}
+                            direction="row"
+                            spacing={1}
+                            alignItems="flex-start"
+                          >
                             <CheckIcon sx={{fontSize: 18, color: LIME, mt: 0.3, flexShrink: 0}}/>
-                            <Typography variant="body2" sx={{opacity: 0.8}}>{feature}</Typography>
+                            {typeof feature === 'string' ?
+                              <Typography variant="body2" sx={{opacity: 0.8}}>{feature}</Typography> :
+                              <Typography variant="body2" sx={{opacity: 0.8}}>
+                                {feature.text} (
+                                <Link href={feature.link.href} sx={{color: LIME}}>{feature.link.label}</Link>
+                                )
+                              </Typography>}
                           </Stack>
                         ))}
                       </Stack>
@@ -201,7 +146,7 @@ export default function PricingTiers() {
 
                   <Box sx={{mt: 'auto', pt: 2}}>
                     <Button
-                      href={plan.ctaLink}
+                      href={VIEWER_PATH}
                       variant={plan.ctaVariant}
                       fullWidth
                       startIcon={plan.highlight ? <RocketIcon/> : undefined}

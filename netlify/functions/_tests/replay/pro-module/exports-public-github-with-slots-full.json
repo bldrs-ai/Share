@@ -1,0 +1,79 @@
+{
+  "description": "A free user with both slots held by other models exports a PUBLIC GitHub model: the server's own unauthenticated repo lookup (the one record-load meters opens by) says public, so the module is served unlimited and no slot is written.",
+  "env": {
+    "$fixture": "env/auth0.json",
+    "$merge": {
+      "LAMBDA_TASK_ROOT": {
+        "$fixturePath": "task-root"
+      }
+    }
+  },
+  "now": "2026-10-28T12:00:00.000Z",
+  "request": {
+    "method": "GET",
+    "path": "/.netlify/functions/pro-module",
+    "headers": {
+      "authorization": "Bearer user-access-token",
+      "x-bldrs-model-key": "%2Fshare%2Fv%2Fgh%2Fbldrs-ai%2FMomentum-Public%2Fmain%2FMomentum.ifc"
+    },
+    "query": {
+      "name": "glbExport"
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-userinfo.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "usageQuota": {
+                "loads": [
+                  {
+                    "key": "/share/v/gh/acme/private/main/tower.ifc",
+                    "loadedAt": "2026-10-25T10:00:00.000Z"
+                  },
+                  {
+                    "key": "/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz",
+                    "loadedAt": "2026-10-26T10:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/bldrs-ai/Momentum-Public"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "full_name": "bldrs-ai/Momentum-Public",
+          "private": false
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "bodyIncludes": "replayStandIn",
+    "headers": {
+      "x-bldrs-model-slots": "{\"limit\":2,\"used\":2,\"remaining\":0,\"nextFreeAt\":\"2026-11-01T10:00:00.000Z\",\"taken\":false,\"public\":true}"
+    }
+  }
+}

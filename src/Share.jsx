@@ -4,6 +4,7 @@ import {useNavigate, useParams} from 'react-router-dom'
 import CadView from './Containers/CadView'
 import useConnectionsInit from './connections/useConnectionsInit'
 import useGithubLastModified from './connections/useGithubLastModified'
+import useSignedOutDriveCleanup from './connections/useSignedOutDriveCleanup'
 import {consumePendingModelNameUpdate, updateRecentFileModelTitle} from './connections/persistence'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
@@ -11,6 +12,7 @@ import debug from './utils/debug'
 import {pageTitleForModel} from './utils/modelDisplayName'
 import {navToDefault} from './utils/navigate'
 import {FilenameParseError} from './Filetype'
+import {isLocalOnlyPath} from './routes/localOnly'
 import {UNSUPPORTED_FILE_ALERT, handleRoute} from './routes/routes'
 
 
@@ -39,6 +41,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
   // Hydrate persisted Connections & Sources from localStorage
   useConnectionsInit()
+  // Signing out of Bldrs forgets Drive (its token outlives the Auth0 session).
+  useSignedOutDriveCleanup()
   useGithubLastModified(modelPath, routeParams['branch'])
 
   useEffect(() => {
@@ -90,10 +94,17 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         navToDefault(navigate, appPrefix)
         return true
       }
+      // `isUploadedFile` is compared too: `/share/v/local-only/<id>` and
+      // `/share/v/p/<id>` parse to the same filepath and no gitpath, so
+      // without it a navigation between the two would keep the previous
+      // route's upload provenance, which CadView hands the loader as
+      // `isUploadedRoute` (#1955, codex review on #1956). Coerced because
+      // non-file routes don't set it.
       if (modelPath === null ||
           (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
           (modelPath.gitpath && modelPath.gitpath !== mp.gitpath) ||
-          (!modelPath.gitpath && mp.gitpath)) {
+          (!modelPath.gitpath && mp.gitpath) ||
+          Boolean(modelPath.isUploadedFile) !== Boolean(mp.isUploadedFile)) {
         setModelPath(mp)
         debug().log('Share#onChangeUrlParams: new model path: ', mp)
       }
@@ -131,9 +142,17 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsVersionsEnabled(false)
       setIsShareEnabled(true)
       setIsNotesEnabled(false)
+    } else if (isLocalOnlyPath(pathPrefix)) {
+      // A file opened from the user's computer: no repository, and a URL
+      // that only opens in this browser. The Share button is still shown,
+      // but ShareControl renders it gated with the reason, instead of hiding
+      // it with no word on why (#705).
+      setRepository(null, null)
+      setIsVersionsEnabled(false)
+      setIsShareEnabled(true)
+      setIsNotesEnabled(false)
     } else {
       debug().warn('No repository set for project!, ', pathPrefix)
-      // Local /v/new models have no repository
       setRepository(null, null)
       setIsVersionsEnabled(false)
       setIsShareEnabled(false)

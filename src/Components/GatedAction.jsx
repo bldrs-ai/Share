@@ -38,9 +38,19 @@ import {assertDefined} from '../utils/assert'
  * @property {Function} onAction Fired when the unlocking button is clicked
  * @property {ReactElement} children The control being gated
  * @property {Function} [onOpen] Fired when the help opens (analytics)
+ * @property {ReactElement} [extra] Rendered under the body, e.g. a
+ *   "coming soon" line with its own handler. Clicks inside it leave the help
+ *   open.
+ * @property {string} [secondaryActionLabel] A second, outlined button
+ *   beside the main one, e.g. 'Sign in'
+ * @property {Function} [onSecondaryAction] Fired when it is clicked; closes
+ *   the help like the main action
  * @return {ReactElement}
  */
-export default function GatedAction({slug, title, body, actionLabel, onAction, children, onOpen}) {
+export default function GatedAction({
+  slug, title, body, actionLabel, onAction, children, onOpen,
+  extra, secondaryActionLabel, onSecondaryAction,
+}) {
   assertDefined(slug, title, body, actionLabel, onAction, children)
   const anchorRef = useRef(null)
   const [isHelpOpen, setIsHelpOpen] = useState(false)
@@ -63,6 +73,11 @@ export default function GatedAction({slug, title, body, actionLabel, onAction, c
   const onActionClick = () => {
     setIsHelpOpen(false)
     onAction()
+  }
+
+  const onSecondaryActionClick = () => {
+    setIsHelpOpen(false)
+    onSecondaryAction()
   }
 
   // A click that landed on the child rather than on the wrapper: keyboard
@@ -123,7 +138,8 @@ export default function GatedAction({slug, title, body, actionLabel, onAction, c
         <Stack spacing={1} sx={{p: 2, maxWidth: '18em'}} data-testid='gated-help'>
           <Typography variant='subtitle1'>{title}</Typography>
           <Typography variant='body2' color='text.secondary'>{body}</Typography>
-          <Box>
+          {extra}
+          <Stack direction='row' spacing={1}>
             <Button
               variant='contained'
               size='small'
@@ -132,7 +148,16 @@ export default function GatedAction({slug, title, body, actionLabel, onAction, c
             >
               {actionLabel}
             </Button>
-          </Box>
+            {secondaryActionLabel && onSecondaryAction &&
+              <Button
+                variant='outlined'
+                size='small'
+                onClick={onSecondaryActionClick}
+                data-testid='gated-help-secondary-action'
+              >
+                {secondaryActionLabel}
+              </Button>}
+          </Stack>
         </Stack>
       </Popover>
     </>

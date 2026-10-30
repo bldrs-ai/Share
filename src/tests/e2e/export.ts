@@ -1,4 +1,19 @@
-import {Page, expect} from '@playwright/test'
+import {Page, Route, expect} from '@playwright/test'
+import {randomUUID} from 'crypto'
+import {
+  DRIVE_PUBLIC_HEADER,
+  EXPORT_SLOT_MISSING_REASON,
+  MODEL_KEY_HEADER,
+  MODEL_SLOTS_HEADER,
+  NO_FREE_SLOT_REASON,
+  decodeModelKeyHeader,
+  exportSlotDecision,
+  isModelKey,
+  modelSlots,
+  slotsHeaderValue,
+} from '../../export/exportSlots'
+import {mockIsPublicModel} from '../../__mocks__/mockModelVisibility'
+import {isProSubscriptionStatus} from '../../quota/proStatus'
 import {estimateKey, settledEstimateBytes} from './exportEstimate'
 import {captureGlbLogs, waitForGlbLog} from './glbLogs'
 import {waitForModelReady} from './models'
@@ -21,9 +36,10 @@ import {waitForModelReady} from './models'
 
 export const EXPORT_MODEL_PATH = '/share/v/p/index.ifc'
 
-// `export` is off by default (FeatureFlags.js). `glbVerbose` is pure
-// logging, and is how a spec knows the artifact writer finished rather than
-// racing it.
+// `export` has been default-on since the S4 rollout (#1835), so naming it is
+// redundant but harmless, and keeps these specs correct against a build that
+// flips it back off. `glbVerbose` is pure logging, and is how a spec knows
+// the artifact writer finished rather than racing it.
 export const EXPORT_FLAGS = '?feature=export,glbVerbose'
 
 export const PRO_MODULE_PATTERN = '**/.netlify/functions/pro-module*'
@@ -33,6 +49,9 @@ export const PRO_MODULE_PATTERN = '**/.netlify/functions/pro-module*'
 export const PRO_MODULE_FILE = 'netlify/functions/_pro-modules/glbExport.js'
 
 export const GLTF_MAGIC = 'glTF'
+const HTTP_OK = 200
+const HTTP_FORBIDDEN = 403
+const HTTP_BAD_REQUEST = 400
 export const EXPORT_TEST_TIMEOUT_MS = 120_000
 
 const CACHE_TIMEOUT_MS = 60_000
@@ -40,6 +59,8 @@ const CACHE_TIMEOUT_MS = 60_000
 // that has to be fetched and instantiated first — DRACO's arrives as a
 // script tag and a sibling `.wasm` (`loader/glbCompress.js`).
 const COMPRESS_TIMEOUT_MS = 60_000
+// Dismissing the load snackbar is a courtesy click; it may have closed itself.
+const SNACKBAR_CLICK_TIMEOUT_MS = 5_000
 
 // Byte offset of the JSON chunk's length field in a GLB: past the 12-byte
 // file header. The 8 bytes after it are the chunk's own header.
@@ -55,10 +76,23 @@ const SNACKBAR_SELECTOR = '[data-testid="snackbar"]'
 const HALF = 2
 
 
+/** The tiers a spec can put the user in; pending-reauth is Pro (§7.2). */
+export type SubscriptionTier = 'sharePro' | 'shareProPendingReauth' | 'free'
+
 type AppMetadata = {
   userEmail: string
   stripeCustomerId: string | null
-  subscriptionStatus: 'sharePro' | 'free'
+  subscriptionStatus: SubscriptionTier
+}
+
+/** A row of the mocks' export history, `window.__mockExports` (api-handlers.js). */
+export type LedgerRow = {
+  id: string
+  key: string | null
+  format: string
+  bytes: number | null
+  exportedAt: string
+  free?: boolean
 }
 
 type WindowWithStore = Window & {
@@ -74,7 +108,7 @@ type WindowWithStore = Window & {
  * @param page Playwright page
  * @param tier which tier to inject
  */
-export async function setSubscriptionTier(page: Page, tier: 'sharePro' | 'free') {
+export async function setSubscriptionTier(page: Page, tier: SubscriptionTier) {
   await page.evaluate((subscriptionTier) => {
     const store = (window as unknown as WindowWithStore).store
     if (!store) {
@@ -83,9 +117,53 @@ export async function setSubscriptionTier(page: Page, tier: 'sharePro' | 'free')
     store.getState().setAppMetadata({
       userEmail: 'cypress@bldrs.ai',
       stripeCustomerId: null,
-      subscriptionStatus: subscriptionTier as 'sharePro' | 'free',
+      subscriptionStatus: subscriptionTier as SubscriptionTier,
     })
   }, tier)
+}
+
+
+/**
+ * The mocks' export history as it stands — the stand-in for Auth0
+ * `app_metadata.exports` that the record-export mock writes
+ * (src/__mocks__/api-handlers.js). History only: it gates nothing.
+ *
+ * @param page Playwright page
+ * @return the rows, newest first
+ */
+export function exportLedger(page: Page): Promise<LedgerRow[]> {
+  return page.evaluate(() => (window as unknown as {__mockExports?: LedgerRow[]}).__mockExports ?? [])
+}
+
+
+/** A row of the mocks' model-slot ledger, `window.__mockQuotaLoads`. */
+export type SlotRow = {key: string, loadedAt: string, via?: string}
+
+
+/**
+ * The mocks' model slots as they stand — the stand-in for Auth0
+ * `app_metadata.usageQuota.loads` that the record-load and pro-module mocks
+ * share (src/export/exportSlots.js), and so the record of which models a free
+ * user may export freely.
+ *
+ * @param page Playwright page
+ * @return the rows, oldest first
+ */
+export function slotLedger(page: Page): Promise<SlotRow[]> {
+  return page.evaluate(() => (window as unknown as {__mockQuotaLoads?: SlotRow[]}).__mockQuotaLoads ?? [])
+}
+
+
+/**
+ * Seed the mocks' model slots, as a free user's earlier opens would have.
+ *
+ * @param page Playwright page
+ * @param rows the slot ledger to leave in the page
+ */
+export async function setSlotLedger(page: Page, rows: SlotRow[]) {
+  await page.evaluate((next) => {
+    (window as unknown as {__mockQuotaLoads?: SlotRow[]}).__mockQuotaLoads = next
+  }, rows)
 }
 
 
@@ -112,7 +190,8 @@ export async function loadModelAndWaitForArtifact(page: Page, extraFlags = '') {
 
 /**
  * Open the Save dialog's Export tab, where the export UI lives as of #1838.
- * Only reachable signed in — the toolbar Save button is gated otherwise.
+ * Signed out, the dialog already opens on Export (Share#1964); the tab click
+ * is then a no-op.
  *
  * @param page Playwright page
  */
@@ -134,7 +213,10 @@ export async function openExportTab(page: Page) {
 export async function dismissLoadSnackbar(page: Page) {
   const ok = page.getByTestId('LoadStatusOk')
   if (await ok.isVisible()) {
-    await ok.click()
+    // The snackbar can close itself between the check and the click, and a
+    // detached button is retried until the test times out (live run
+    // 37740697840). The assertion below is the one that matters.
+    await ok.click({timeout: SNACKBAR_CLICK_TIMEOUT_MS}).catch(() => undefined)
   }
   await expect(page.getByTestId('snackbar')).toBeHidden()
 }
@@ -197,19 +279,22 @@ export async function clickGate(page: Page, testId: string) {
 export async function expectSnackbarOnTop(page: Page) {
   const content = page.locator(`${SNACKBAR_SELECTOR} .MuiSnackbarContent-root`)
   await expect(content).toBeVisible()
-  const box = await content.boundingBox()
-  if (box === null) {
-    throw new Error('The snackbar content has no layout box')
-  }
-  const isOnTop = await page.evaluate(({x, y, selector}) => {
-    const hit = document.elementFromPoint(x, y)
-    return Boolean(hit && hit.closest(selector))
-  }, {
-    x: box.x + (box.width / HALF),
-    y: box.y + (box.height / HALF),
-    selector: SNACKBAR_SELECTOR,
-  })
-  expect(isOnTop).toBe(true)
+  // Measured and hit-tested in ONE evaluate: a snackbar that auto-hides
+  // between a separate boundingBox() and the hit-test reads as "no layout
+  // box" (mobile-pixel, live run 37742719516).
+  const where = await page.evaluate(({selector, half}) => {
+    const el = document.querySelector(`${selector} .MuiSnackbarContent-root`)
+    if (el === null) {
+      return 'closed before it could be hit-tested'
+    }
+    const rect = el.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) {
+      return 'closed before it could be hit-tested'
+    }
+    const hit = document.elementFromPoint(rect.x + (rect.width / half), rect.y + (rect.height / half))
+    return hit !== null && hit.closest(selector) !== null ? 'on top' : `under ${hit === null ? 'nothing' : hit.tagName}`
+  }, {selector: SNACKBAR_SELECTOR, half: HALF})
+  expect(where).toBe('on top')
 }
 
 
@@ -496,7 +581,7 @@ export async function toggleGzip(page: Page): Promise<number> {
  * @param path the file on disk
  */
 export async function reopenLocalGlb(page: Page, path: string) {
-  await openLocalFile(page, path, /\/share\/v\/new\/.+\.glb/)
+  await openLocalFile(page, path, /\/share\/v\/local-only\/.+\.glb/)
 }
 
 
@@ -586,12 +671,111 @@ export function glbJsonChunk(bytes: Buffer): {
  */
 export async function routeProModule(page: Page) {
   await page.route(PRO_MODULE_PATTERN, async (route) => {
-    await route.fulfill({
-      path: PRO_MODULE_FILE,
-      contentType: 'text/javascript; charset=utf-8',
-      headers: {'Cache-Control': 'private, no-store'},
-    })
+    // The same gate the MSW mock applies, against the same in-page tier and
+    // slots, so a free-tier spec means the same thing whichever half
+    // answers: a fallback that served everyone would hand a free user with
+    // full slots the module the spec expects refused (§4.8).
+    const headers: Record<string, string> = {'Cache-Control': 'private, no-store'}
+    const {isPro, slots} = await mockAccount(page)
+    if (!isPro) {
+      const modelKey = decodeModelKeyHeader(route.request().headers()[MODEL_KEY_HEADER.toLowerCase()])
+      if (modelKey === null || !isModelKey(modelKey)) {
+        await fulfillJson(route, HTTP_BAD_REQUEST, {error: modelKey === null ? 'missing_model_key' : 'invalid_model_key'})
+        return
+      }
+      const isDrivePublic = route.request().headers()[DRIVE_PUBLIC_HEADER.toLowerCase()] === '1'
+      const decision = exportSlotDecision(slots, modelKey)
+      const isPublic = decision.verdict !== 'held' && mockIsPublicModel(modelKey, isDrivePublic)
+      if (isPublic) {
+        headers[MODEL_SLOTS_HEADER] = slotsHeaderValue(modelSlots(slots), false, true)
+        await route.fulfill({path: PRO_MODULE_FILE, contentType: 'text/javascript; charset=utf-8', headers})
+        return
+      }
+      if (decision.verdict === 'full') {
+        await fulfillJson(route, HTTP_FORBIDDEN, {error: NO_FREE_SLOT_REASON, modelSlots: decision.slots})
+        return
+      }
+      if (decision.verdict === 'take') {
+        await setSlotLedger(page, decision.loads as SlotRow[])
+      }
+      headers[MODEL_SLOTS_HEADER] = slotsHeaderValue(decision.slots, decision.verdict === 'take')
+    }
+    await route.fulfill({path: PRO_MODULE_FILE, contentType: 'text/javascript; charset=utf-8', headers})
   })
+}
+
+
+export const RECORD_EXPORT_PATTERN = '**/.netlify/functions/record-export'
+
+
+/**
+ * The `page.route` fallback for `record-export`, for the same reason
+ * `routeProModule` has one: MSW answers first when its worker is up, and this
+ * answers the same way, from the same ledgers, when it isn't. GET reports a
+ * free user's model slots; POST prepends a history row — for a free user only
+ * when the model holds a slot — as the function does (§4.5, §4.8).
+ *
+ * @param page Playwright page
+ */
+export async function routeRecordExport(page: Page) {
+  await page.route(RECORD_EXPORT_PATTERN, async (route) => {
+    const {isPro, ledger, slots} = await mockAccount(page)
+    const held = modelSlots(slots)
+    if (route.request().method() === 'GET') {
+      const requestHeaders = route.request().headers()
+      const modelKey = decodeModelKeyHeader(requestHeaders[MODEL_KEY_HEADER.toLowerCase()])
+      const isPublic = modelKey !== null && isModelKey(modelKey) ?
+        mockIsPublicModel(modelKey, requestHeaders[DRIVE_PUBLIC_HEADER.toLowerCase()] === '1') :
+        null
+      await fulfillJson(route, HTTP_OK, isPro ?
+        {tier: 'paid', modelSlots: null, isPublic: null} :
+        {tier: 'free', modelSlots: held, isPublic})
+      return
+    }
+    const body = route.request().postDataJSON() ?? {}
+    if (!isPro && !held.keys.includes(body.key) && !mockIsPublicModel(body.key, body.drivePublic === true)) {
+      await fulfillJson(route, HTTP_FORBIDDEN, {error: EXPORT_SLOT_MISSING_REASON, modelSlots: held})
+      return
+    }
+    const recorded = [{id: body.id ?? randomUUID(), key: body.key, format: body.format, bytes: body.bytes,
+      exportedAt: new Date().toISOString()}, ...ledger]
+    await setLedger(page, recorded)
+    await fulfillJson(route, HTTP_OK, isPro ? {exports: recorded} : {exports: recorded, modelSlots: held})
+  })
+}
+
+
+/**
+ * @param page Playwright page
+ * @return whether the store's tier is Pro, the export history and the slots
+ */
+async function mockAccount(page: Page): Promise<{isPro: boolean, ledger: LedgerRow[], slots: SlotRow[]}> {
+  const status = await page.evaluate(() => {
+    const store = (window as unknown as {store?: {getState: () => {appMetadata?: {subscriptionStatus?: string}}}}).store
+    return store?.getState().appMetadata?.subscriptionStatus ?? null
+  })
+  return {isPro: isProSubscriptionStatus(status), ledger: await exportLedger(page), slots: await slotLedger(page)}
+}
+
+
+/**
+ * @param page Playwright page
+ * @param rows the ledger to leave in the page
+ */
+async function setLedger(page: Page, rows: LedgerRow[]) {
+  await page.evaluate((next) => {
+    (window as unknown as {__mockExports?: LedgerRow[]}).__mockExports = next
+  }, rows)
+}
+
+
+/**
+ * @param route the route to answer
+ * @param status HTTP status
+ * @param body JSON body
+ */
+async function fulfillJson(route: Route, status: number, body: object) {
+  await route.fulfill({status, contentType: 'application/json', body: JSON.stringify(body)})
 }
 
 
@@ -666,11 +850,13 @@ export type PlacementLevel = 'root' | 'child' | 'any'
  * @param kind which elements to aim at
  * @param level 'root' aims only at the root product's own geometry (empty
  *   occurrence path), 'child' only at a child occurrence's
+ * @param owner aim only at placements whose parent (the geometry's owner)
+ *   is this id, e.g. one part of a multi-root file; any when omitted
  * @return the parent expressID that got selected
  */
 export async function doubleClickSelectsAnElement(
-  page: Page, kind: ElementKind, level: PlacementLevel = 'any'): Promise<number> {
-  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate(({aimAt, level: aimLevel}) => {
+  page: Page, kind: ElementKind, level: PlacementLevel = 'any', owner: number | null = null): Promise<number> {
+  const candidates: Array<{parent: number; x: number; y: number}> = await page.evaluate(({aimAt, level: aimLevel, onlyParent}) => {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const w = window as any
     const state = (w.store ?? w.useStore).getState()
@@ -698,6 +884,9 @@ export async function doubleClickSelectsAnElement(
         if ((aimLevel === 'root' && pathLength !== 0) || (aimLevel === 'child' && !(pathLength > 0))) {
           continue
         }
+        if (onlyParent !== null && mesh.instanceParents[batchId] !== onlyParent) {
+          continue
+        }
         const box = new Box3()
         const matrix = new Matrix4()
         mesh.getBoundingBoxAt(geometryId, box)
@@ -723,7 +912,7 @@ export async function doubleClickSelectsAnElement(
     }
     return out
     /* eslint-enable @typescript-eslint/no-explicit-any */
-  }, {aimAt: kind, level})
+  }, {aimAt: kind, level, onlyParent: owner})
   expect(candidates.length, 'there must be an element of the kind under test on screen')
     .toBeGreaterThan(0)
 

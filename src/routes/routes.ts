@@ -1,5 +1,6 @@
 import {splitAroundExtensionRemoveFirstSlash} from '../Filetype'
 import debug from '../utils/debug'
+import {isLocalOnlyPath} from './localOnly'
 import processGithubParams, {isGithubParams, GithubParams, GithubResult} from './github'
 import processGoogleUrl, {GoogleResult, processGoogleFileId} from './google'
 
@@ -33,7 +34,7 @@ export const UNSUPPORTED_FILE_ALERT =
  *     ...
  *   }
  *
- * @param pathPrefix e.g. /share/v/p or /share/v/new or /share/v/gh or /share/v/u
+ * @param pathPrefix e.g. /share/v/p or /share/v/local-only or /share/v/gh or /share/v/u
  * @param routeParams e.g. from ReactRouter useParams
  * @return RouteResult or null
  * @throws FilenameParseError when the path names no supported model file.
@@ -47,7 +48,9 @@ export function handleRoute(pathPrefix: string, routeParams: RouteParams): Route
   let result: RouteResult = null
   // See ShareRoutes.jsx for filepath, here for quick reference, it's the '*' in each route:
   // - Hosted project file: /share/v/p/*
-  // - New file via DnD or Open: /share/v/new/*
+  // - Local-only file via DnD or Open: /share/v/local-only/* (#1959; the
+  //   legacy /share/v/new/* is redirected there by ShareRoutes, but still
+  //   parses the same in case it is reached before the redirect lands)
   // - GitHub file: /share/v/gh/:org/:repo/:branch/*
   // - Generic URL: /share/v/u/*
   const filepath: string = routeParams['*'] || ''
@@ -55,12 +58,12 @@ export function handleRoute(pathPrefix: string, routeParams: RouteParams): Route
     return null
   }
 
-  // Hosted project file or new file via DnD or Open
+  // Hosted project file or local-only file via DnD or Open
   if (pathPrefix.endsWith('/p')) {
     // hosted project file
     result = processFile(originalUrl, filepath)
-  } else if (pathPrefix.endsWith('/new')) {
-    // new file via DnD or Open
+  } else if (isLocalOnlyPath(pathPrefix)) {
+    // local-only file via DnD or Open
     result = processFile(originalUrl, filepath)
   } else if (pathPrefix.endsWith('/gh')) {
     // github file
@@ -87,7 +90,7 @@ export function handleRoute(pathPrefix: string, routeParams: RouteParams): Route
 
 
 /**
- * Processes a local file path (/new and /p pathPrefixes).
+ * Processes a local file path (/local-only, legacy /new, and /p pathPrefixes).
  *
  * @param originalUrl - The original URL
  * @param filepath - The embedded file path to process
@@ -102,7 +105,10 @@ export function processFile(originalUrl: URL, filepath: string): FileResult {
     originalUrl,
     downloadUrl,
     kind: 'file',
-    isUploadedFile: originalUrl.pathname.startsWith('/share/v/new'),
+    // Prefix-independent (localOnly.ts): a GitHub Pages install serves this
+    // route at /Share/share/v/local-only/, which a `startsWith('/share/…')`
+    // test missed.
+    isUploadedFile: isLocalOnlyPath(originalUrl.pathname),
     filepath,
     ...(parts[1] ? {eltPath: `${parts[1]}`} : {}),
   }

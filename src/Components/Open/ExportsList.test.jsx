@@ -123,6 +123,29 @@ describe('ExportsList', () => {
     expect(await screen.findByTestId('exports-download-again')).toBeInTheDocument()
   })
 
+  // A free export's charge row (pro-module, §4.8) has no key until
+  // record-export fills it in; one whose export failed never gets one. It
+  // still counts against the allowance, but it is not an export to list.
+  it('leaves out a free-export charge whose export never completed', async () => {
+    loadExports.mockResolvedValue({exports: [
+      aRow({id: 'charged-only', key: null, title: null, bytes: null, free: true, cacheKeyArgs: undefined}),
+      aRow({id: 'done', free: true}),
+    ]})
+
+    await renderList()
+
+    expect(await screen.findAllByTestId('exports-row')).toHaveLength(1)
+    expect(screen.getByTestId('exports-row')).toHaveTextContent('/share/v/p/index.ifc')
+  })
+
+  it('shows the empty state when the only rows are uncompleted charges', async () => {
+    loadExports.mockResolvedValue({exports: [aRow({id: 'charged-only', key: null, title: null, free: true})]})
+
+    await renderList()
+
+    expect(await screen.findByTestId('exports-empty')).toBeInTheDocument()
+  })
+
   it('falls back to the share path\'s basename when a row has no title', async () => {
     loadExports.mockResolvedValue({exports: [aRow({title: null, key: '/share/v/p/nested/model.step'})]})
 
@@ -178,6 +201,27 @@ describe('ExportsList', () => {
       {stripBldrsMetadata: true},
       expect.objectContaining({cacheKeyArgs: CACHE_KEY_ARGS, key: '/share/v/p/index.ifc'}),
     )
+  })
+
+  // Codex on #1980: the row's own word on a link-shared Drive file goes
+  // with the replay, or pro-module would take a slot for a public file.
+  it('re-downloads a link-shared Drive file as public', async () => {
+    const driveKey = '/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz'
+    loadExports.mockResolvedValue({exports: [aRow({key: driveKey, drivePublic: true})]})
+
+    await renderList()
+
+    fireEvent.click(await screen.findByTestId('exports-download-again'))
+    expect(mockRun).toHaveBeenCalledWith('glb', expect.any(Object), expect.objectContaining({key: driveKey, drivePublic: true}))
+  })
+
+  it('re-downloads a row with no Drive public word as private', async () => {
+    loadExports.mockResolvedValue({exports: [aRow()]})
+
+    await renderList()
+
+    fireEvent.click(await screen.findByTestId('exports-download-again'))
+    expect(mockRun).toHaveBeenCalledWith('glb', expect.any(Object), expect.objectContaining({drivePublic: false}))
   })
 
   it('disables "Download again" while ANY export in the tab is running', async () => {

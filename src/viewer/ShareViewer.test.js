@@ -529,14 +529,28 @@ describe('viewer/ShareViewer getRootLevelInstances', () => {
     const found = ShareViewer.prototype.getRootLevelInstances.call(makeResolverViewer(mesh), 0)
     expect(found.instanceIds).toEqual([0, 2])
     expect(found.parentExpressIds).toEqual([8])
+    expect(found.instanceOwners).toEqual([8, 8])
+  })
+
+  it('says which owner each root-level instance has, for telling the parts of a multi-root file apart (#1901)', () => {
+    // twoRootShells in miniature: two top-level parts owned by PDS 8 and 3008,
+    // every placement at the empty path.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 8, triangleCount: 1, occurrencePath: []},
+      {parentExpressId: 3008, triangleCount: 1, occurrencePath: []},
+      {parentExpressId: 8, triangleCount: 1, occurrencePath: []},
+    ])
+    const found = ShareViewer.prototype.getRootLevelInstances.call(makeResolverViewer(mesh), 0)
+    expect(found.instanceIds).toEqual([0, 1, 2])
+    expect(found.instanceOwners).toEqual([8, 3008, 8])
   })
 
   it('is empty for a model with no occurrence data (IFC) and for an unknown model', () => {
     const ifc = makeOccurrenceMesh([{parentExpressId: 100, triangleCount: 1}])
     expect(ShareViewer.prototype.getRootLevelInstances.call(makeResolverViewer(ifc), 0))
-      .toEqual({instanceIds: [], parentExpressIds: []})
+      .toEqual({instanceIds: [], parentExpressIds: [], instanceOwners: []})
     expect(ShareViewer.prototype.getRootLevelInstances.call(makeResolverViewer(ifc), 3))
-      .toEqual({instanceIds: [], parentExpressIds: []})
+      .toEqual({instanceIds: [], parentExpressIds: [], instanceOwners: []})
   })
 
   it('reads the batched render path off its per-batch tables', () => {
@@ -546,7 +560,7 @@ describe('viewer/ShareViewer getRootLevelInstances', () => {
     batched.instanceOccurrenceIds = [40, 41, 42]
     batched.instanceParents = [8, 100, 8]
     const found = ShareViewer.prototype.getRootLevelInstances.call(makeResolverViewer(batched), 0)
-    expect(found).toEqual({instanceIds: [40, 42], parentExpressIds: [8]})
+    expect(found).toEqual({instanceIds: [40, 42], parentExpressIds: [8], instanceOwners: [8, 8]})
   })
 })
 

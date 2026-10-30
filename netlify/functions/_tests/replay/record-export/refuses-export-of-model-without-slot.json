@@ -1,0 +1,67 @@
+{
+  "description": "A free user's export of a model holding no slot — which pro-module never serves, so the module came from elsewhere (a memo from when the account was Pro) — is refused with export_slot_missing and the slots, and nothing is written.",
+  "env": {
+    "$fixture": "env/auth0.json"
+  },
+  "now": "2026-10-27T12:00:00.000Z",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/record-export",
+    "headers": {
+      "authorization": "Bearer user-access-token"
+    },
+    "body": {
+      "id": "5f6b1d7e-1a2b-4c3d-9e4f-0a1b2c3d4e5f",
+      "key": "/share/v/local-only/0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc",
+      "format": "glb",
+      "title": "tower.ifc",
+      "bytes": 4096
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-userinfo.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "usageQuota": {
+                "loads": [
+                  {
+                    "key": "/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz",
+                    "loadedAt": "2026-10-25T10:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 403,
+    "json": {
+      "error": "export_slot_missing",
+      "modelSlots": {
+        "limit": 2,
+        "used": 1,
+        "remaining": 1,
+        "keys": [
+          "/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz"
+        ]
+      }
+    }
+  }
+}

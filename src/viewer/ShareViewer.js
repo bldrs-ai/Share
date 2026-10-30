@@ -1212,18 +1212,21 @@ export class ShareViewer {
    * root-only permalink needs (#1909): the same scene selection a pick of that
    * geometry makes, `parentExpressIds` for `setSelection` and `instanceIds`
    * for `setInstanceSelection`. Empty for IFC and any model without
-   * occurrence data. Which row they belong to is the caller's business
-   * (`findSoleRootNode`).
+   * occurrence data. Which row they belong to is the caller's business:
+   * all of them belong to the sole root of a one-product file, and in a
+   * multi-root file `instanceOwners[i]`, the owner of `instanceIds[i]`, says
+   * which part (`utils/occurrencePaths.js#rootLevelInstancesOfProduct`).
    *
    * @param {number} modelID
-   * @return {{instanceIds: number[], parentExpressIds: number[]}}
+   * @return {{instanceIds: number[], parentExpressIds: number[], instanceOwners: number[]}}
    */
   getRootLevelInstances(modelID) {
     const instanceIds = []
+    const instanceOwners = []
     const parentExpressIds = new Set()
     const model = this._modelById(modelID)
     if (!model || typeof model.traverse !== 'function') {
-      return {instanceIds, parentExpressIds: []}
+      return {instanceIds, parentExpressIds: [], instanceOwners}
     }
     model.traverse((obj) => {
       // BatchedMesh render path: per-batch tables, instance id = global
@@ -1232,6 +1235,7 @@ export class ShareViewer {
         for (let batchId = 0; batchId < obj.instanceOccurrencePaths.length; batchId++) {
           if (obj.instanceOccurrencePaths[batchId]?.length === 0) {
             instanceIds.push(obj.instanceOccurrenceIds[batchId])
+            instanceOwners.push(obj.instanceParents[batchId])
             parentExpressIds.add(obj.instanceParents[batchId])
           }
         }
@@ -1243,12 +1247,14 @@ export class ShareViewer {
       }
       for (let instanceId = 0; instanceId < map.instanceIdToOccurrencePath.length; instanceId++) {
         if (map.hasEmptyOccurrencePath(instanceId)) {
+          const owner = map.getParentExpressIdByInstance(instanceId)
           instanceIds.push(instanceId)
-          parentExpressIds.add(map.getParentExpressIdByInstance(instanceId))
+          instanceOwners.push(owner)
+          parentExpressIds.add(owner)
         }
       }
     })
-    return {instanceIds, parentExpressIds: [...parentExpressIds]}
+    return {instanceIds, parentExpressIds: [...parentExpressIds], instanceOwners}
   }
 
 

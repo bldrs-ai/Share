@@ -132,7 +132,7 @@ describe('Google Drive connection', () => {
 
       // Dialog stays open; no navigation
       await expect(page.getByRole('dialog')).toBeVisible()
-      await expect(page).not.toHaveURL(/\/v\/new\//)
+      await expect(page).not.toHaveURL(/\/v\/(?:new|local-only)\//)
     })
   })
 })

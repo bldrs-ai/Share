@@ -7,7 +7,23 @@ import {
   HTTP_NOT_FOUND,
   HTTP_OK,
 } from '../net/http'
+import {
+  DRIVE_PUBLIC_HEADER,
+  EXPORT_SLOT_MISSING_REASON,
+  MODEL_KEY_HEADER,
+  MODEL_SLOTS_HEADER,
+  NO_FREE_SLOT_REASON,
+  decodeModelKeyHeader,
+  exportSlotDecision,
+  isModelKey,
+  modelSlots,
+  slotsHeaderValue,
+} from '../export/exportSlots'
+import {FREE_PRIVATE_MODEL_LIMIT, isCountedByRouteKind} from '../quota/limits'
+import {isProSubscriptionStatus} from '../quota/proStatus'
+import {isLocalFileMeteringEnabled, pruneLoads} from '../quota/quota'
 import apiHandlersGithub from './api-handlers-github'
+import {mockIsPublicGhRepo, mockIsPublicModel} from './mockModelVisibility'
 import apiHandlersOpenrouter from './api-handlers-openrouter'
 
 
@@ -107,16 +123,88 @@ function workersAndWasmPassthrough() {
 }
 
 
-const FREE_LIMIT_MOCK = 4
+// The real function's limit, from the one definition (quota/limits.js).
+const FREE_LIMIT_MOCK = FREE_PRIVATE_MODEL_LIMIT
 
 // Kept in lock-step with `netlify/functions/pro-module.js`'s allowlist.
-const PRO_MODULE_NAMES_MOCK = ['glbExport']
+const PRO_MODULE_FORMATS_MOCK = new Map([['glbExport', 'glb']])
 
 // Kept in lock-step with `netlify/functions/record-export.js`'s EXPORTS_CAP.
 const EXPORTS_CAP_MOCK = 100
 
 // Kept in lock-step with `record-export.js`'s UUID_PATTERN.
 const UUID_PATTERN_MOCK = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+/**
+ * The signed-in tier, as the mocks read it: off the store's app_metadata,
+ * which is where tests put it (`setAppMetadata`), standing in for the
+ * Management API read the real functions make.
+ *
+ * @return {boolean} whether the store says Pro (either Pro status, §7.2)
+ */
+function isMockPro() {
+  try {
+    return isProSubscriptionStatus(window?.store?.getState?.()?.appMetadata?.subscriptionStatus)
+  } catch {
+    // store not exposed in this test build — treat as not subscribed
+    return false
+  }
+}
+
+
+/**
+ * The mocks' stand-in for Auth0 `app_metadata.exports`: export history, on
+ * `window.__mockExports` so a spec can seed or inspect it (reset it between
+ * tests — nothing here clears it). Written by the record-export mock. It
+ * gates nothing: a free user's exports are decided by model slots, the
+ * `window.__mockQuotaLoads` ledger below.
+ *
+ * @return {Array<object>}
+ */
+function mockExportLedger() {
+  return (typeof window !== 'undefined' && window.__mockExports) || []
+}
+
+
+/** @param {Array<object>} rows the new ledger */
+function setMockExportLedger(rows) {
+  if (typeof window !== 'undefined') {
+    window.__mockExports = rows
+  }
+}
+
+
+/**
+ * The mocks' stand-in for Auth0 `app_metadata.usageQuota.loads`, the model
+ * slots: written by the record-load mock on a private open and by the
+ * pro-module mock when an export takes a slot, as the two functions share
+ * the one key (src/export/exportSlots.js).
+ *
+ * @return {Array<object>}
+ */
+function mockSlotLedger() {
+  return (typeof window !== 'undefined' && window.__mockQuotaLoads) || []
+}
+
+
+/** @param {Array<object>} loads the new slot ledger */
+function setMockSlotLedger(loads) {
+  if (typeof window !== 'undefined') {
+    window.__mockQuotaLoads = loads
+  }
+}
+
+
+/**
+ * @param {number} status
+ * @param {object} body
+ * @param {object} [headers]
+ * @return {Response}
+ */
+function jsonMockResponse(status, body, headers = {}) {
+  return new Response(JSON.stringify(body), {status, headers: {'Content-Type': 'application/json', ...headers}})
+}
+
 
 /**
  * Handlers for Netlify functions
@@ -176,34 +264,35 @@ function netlifyHandlers() {
 
       // Tier from the Zustand store (mirrors what the real function reads
       // from Auth0 app_metadata; tests inject metadata via setAppMetadata).
-      let tier = 'free'
-      try {
-        const subscriptionStatus =
-          window?.store?.getState?.()?.appMetadata?.subscriptionStatus
-        if (subscriptionStatus === 'sharePro') {
-          tier = 'paid'
-        }
-      } catch {
-        // store not exposed in this test build — default to free
-      }
+      // Either Pro status, like the real function (src/quota/proStatus.js).
+      const tier = isMockPro() ? 'paid' : 'free'
 
-      // Quotability — same path classification as the real handler.
-      const isLocallyQuotable = key.includes('/v/new/') || key.includes('/v/g/')
-      const ghMatch = key.match(/\/v\/gh\/([^/]+)\/([^/]+)\//)
+      // Quotability — same path classification as the real handler: by the
+      // route kind, the segment after the FIRST `/v/`, through the shared
+      // rule. Local files count only with `meterLocalFiles` on (Share#1966);
+      // the real function also takes METER_LOCAL_FILES, which a browser mock
+      // has no equivalent of, so the flag stands in for both. Drive keys
+      // count as sent: the client only sends the ones it found private.
+      const routeKind = (/\/v\/([^/?#]+)/.exec(key) || [])[1]
+      const isLocallyQuotable = isCountedByRouteKind(routeKind, isLocalFileMeteringEnabled())
+      const ghMatch = routeKind === 'gh' && key.match(/\/v\/gh\/([^/]+)\/([^/]+)\//)
       let quotable = isLocallyQuotable
       if (ghMatch) {
         // Heuristic: repo names containing "Public" (matching our sample
         // models like Momentum-Public) are treated as public; everything
         // else under /v/gh/ is private.
-        const repoName = ghMatch[2]
-        const isPublic = /Public/i.test(repoName)
-        quotable = !isPublic
+        quotable = !mockIsPublicGhRepo(ghMatch[2])
       }
 
       if (typeof window !== 'undefined') {
         window.__mockQuotaLoads = window.__mockQuotaLoads || []
       }
-      const loads = (typeof window !== 'undefined' && window.__mockQuotaLoads) || []
+      // Pruned to the rolling window before counting, as the real function
+      // does (limits.js#loadsInsideRollingWindow, which pruneLoads wraps): a
+      // spec can seed a row older than ROLLING_WINDOW_DAYS and watch it stop
+      // counting. The ledger is written back pruned only when a new load is
+      // recorded, also as the real function does.
+      const loads = pruneLoads((typeof window !== 'undefined' && window.__mockQuotaLoads) || [])
       const limit = tier === 'paid' ? null : FREE_LIMIT_MOCK
 
       if (tier === 'paid') {
@@ -244,56 +333,42 @@ function netlifyHandlers() {
       )
     }),
 
-    // Export history (design/new/glb-export-premium.md §4.5). Like the
-    // pro-module mock above, this IS the gate in dev and Playwright: same
+    // Export history and the free tier's model slots
+    // (design/new/glb-export-premium.md §4.5, §4.8). Like the pro-module mock
+    // below, this stands in for the function in dev and Playwright: same
     // 401/403 bodies as `record-export.js`, the tier read off the store the
-    // way the record-load mock reads it, and the ledger on
-    // `window.__mockExports` so a spec can seed or inspect it (reset it
-    // between tests — nothing here clears it).
+    // way the record-load mock reads it, history on `window.__mockExports`
+    // and slots on `window.__mockQuotaLoads`. A free user's export of a model
+    // holding no slot is refused.
     http.post('/.netlify/functions/record-export', async ({request}) => {
       const auth = request.headers.get('authorization') || ''
       if (!/^Bearer\s+.+/i.test(auth)) {
-        return new Response(
-          JSON.stringify({error: 'missing_auth0_token'}),
-          {status: HTTP_AUTHORIZATION_REQUIRED, headers: {'Content-Type': 'application/json'}},
-        )
+        return jsonMockResponse(HTTP_AUTHORIZATION_REQUIRED, {error: 'missing_auth0_token'})
       }
 
       const body = await request.json().catch(() => ({}))
-      const {id, key, format, bytes, title} = body || {}
+      const {id, key, format, bytes, title, drivePublic} = body || {}
       if (typeof key !== 'string' || key.length === 0 ||
           typeof format !== 'string' || format.length === 0 ||
           !Number.isInteger(bytes) || bytes < 0) {
-        return new Response(
-          JSON.stringify({error: 'invalid_request'}),
-          {status: HTTP_BAD_REQUEST, headers: {'Content-Type': 'application/json'}},
-        )
+        return jsonMockResponse(HTTP_BAD_REQUEST, {error: 'invalid_request'})
       }
       // Same id contract as the function: a well-formed client id is echoed
       // on the stored row (that shared id is what the client's mirror merge
       // matches on), a malformed one is a 400, and an absent one is minted
       // here.
       if (id !== undefined && id !== null && (typeof id !== 'string' || !UUID_PATTERN_MOCK.test(id))) {
-        return new Response(
-          JSON.stringify({error: 'invalid_id'}),
-          {status: HTTP_BAD_REQUEST, headers: {'Content-Type': 'application/json'}},
-        )
+        return jsonMockResponse(HTTP_BAD_REQUEST, {error: 'invalid_id'})
       }
 
-      let subscriptionStatus = null
-      try {
-        subscriptionStatus = window?.store?.getState?.()?.appMetadata?.subscriptionStatus
-      } catch {
-        // store not exposed in this test build — treat as not subscribed
-      }
-      if (subscriptionStatus !== 'sharePro') {
-        return new Response(
-          JSON.stringify({error: 'subscription_required'}),
-          {status: HTTP_FORBIDDEN, headers: {'Content-Type': 'application/json'}},
-        )
+      const existing = mockExportLedger()
+      // A free user's export must name a model holding a slot, as in the
+      // function: the pro-module mock takes one before it serves.
+      const slots = isMockPro() ? null : modelSlots(mockSlotLedger())
+      if (slots && !slots.keys.includes(key) && !mockIsPublicModel(key, drivePublic === true)) {
+        return jsonMockResponse(HTTP_FORBIDDEN, {error: EXPORT_SLOT_MISSING_REASON, modelSlots: slots})
       }
 
-      const existing = (typeof window !== 'undefined' && window.__mockExports) || []
       const newExports = [
         {
           id: id || `mock-export-${existing.length}-${Date.now()}`,
@@ -305,13 +380,24 @@ function netlifyHandlers() {
         },
         ...existing,
       ].slice(0, EXPORTS_CAP_MOCK)
-      if (typeof window !== 'undefined') {
-        window.__mockExports = newExports
+      setMockExportLedger(newExports)
+      return jsonMockResponse(HTTP_OK, slots ? {exports: newExports, modelSlots: slots} : {exports: newExports})
+    }),
+
+    // The slots the Export tab shows a free user (`useExportSlots`).
+    http.get('/.netlify/functions/record-export', ({request}) => {
+      const auth = request.headers.get('authorization') || ''
+      if (!/^Bearer\s+.+/i.test(auth)) {
+        return jsonMockResponse(HTTP_AUTHORIZATION_REQUIRED, {error: 'missing_auth0_token'})
       }
-      return new Response(
-        JSON.stringify({exports: newExports}),
-        {status: HTTP_OK, headers: {'Content-Type': 'application/json'}},
-      )
+      if (isMockPro()) {
+        return jsonMockResponse(HTTP_OK, {tier: 'paid', modelSlots: null, isPublic: null})
+      }
+      const modelKey = decodeModelKeyHeader(request.headers.get(MODEL_KEY_HEADER))
+      const isPublic = modelKey !== null && isModelKey(modelKey) ?
+        mockIsPublicModel(modelKey, request.headers.get(DRIVE_PUBLIC_HEADER) === '1') :
+        null
+      return jsonMockResponse(HTTP_OK, {tier: 'free', modelSlots: modelSlots(mockSlotLedger()), isPublic})
     }),
 
     // The dev copy the handler below proxies to. Declared so the built
@@ -319,13 +405,16 @@ function netlifyHandlers() {
     // reported as an unhandled request.
     http.get('/__pro_dev__/*', () => passthrough()),
 
-    // Pro-module delivery (design/new/glb-export-premium.md §4.2). Neither
-    // dev nor Playwright runs a real Netlify function, so this mock IS the
-    // gate in those builds: same 401/403 shape as `pro-module.js`, tier read
-    // off the store exactly as the record-load mock above does, and the
-    // module bytes proxied from the `docs/__pro_dev__/` copy the dev and
-    // playwright builds emit (never the prod build — see
-    // tools/esbuild/proModules.js).
+    // Pro-module delivery (design/new/glb-export-premium.md §4.2, §4.8).
+    // Neither dev nor Playwright runs a real Netlify function, so this mock
+    // IS the gate in those builds: same 401/403 shape as `pro-module.js`,
+    // tier read off the store exactly as the record-load mock above does,
+    // the free tier decided by model slots on `window.__mockQuotaLoads` the
+    // way the function decides by `app_metadata.usageQuota.loads` (same
+    // decision, same header, same slots-full body), and the module bytes
+    // proxied from the
+    // `docs/__pro_dev__/` copy the dev and playwright builds emit (never the
+    // prod build — see tools/esbuild/proModules.js).
     http.get('/.netlify/functions/pro-module', async ({request}) => {
       const auth = request.headers.get('authorization') || ''
       if (!/^Bearer\s+.+/i.test(auth)) {
@@ -336,41 +425,50 @@ function netlifyHandlers() {
       }
 
       const name = new URL(request.url).searchParams.get('name') || ''
-      if (!PRO_MODULE_NAMES_MOCK.includes(name)) {
-        return new Response(
-          JSON.stringify({error: 'unknown_module'}),
-          {status: HTTP_NOT_FOUND, headers: {'Content-Type': 'application/json'}},
-        )
+      if (!PRO_MODULE_FORMATS_MOCK.has(name)) {
+        return jsonMockResponse(HTTP_NOT_FOUND, {error: 'unknown_module'})
       }
 
-      let subscriptionStatus = null
-      try {
-        subscriptionStatus = window?.store?.getState?.()?.appMetadata?.subscriptionStatus
-      } catch {
-        // store not exposed in this test build — treat as not subscribed
-      }
-      if (subscriptionStatus !== 'sharePro') {
-        return new Response(
-          JSON.stringify({error: 'subscription_required'}),
-          {status: HTTP_FORBIDDEN, headers: {'Content-Type': 'application/json'}},
-        )
+      const isFreeTier = !isMockPro()
+      let decision = null
+      if (isFreeTier) {
+        const modelKey = decodeModelKeyHeader(request.headers.get(MODEL_KEY_HEADER))
+        if (modelKey === null) {
+          return jsonMockResponse(HTTP_BAD_REQUEST, {error: 'missing_model_key'})
+        }
+        if (!isModelKey(modelKey)) {
+          return jsonMockResponse(HTTP_BAD_REQUEST, {error: 'invalid_model_key'})
+        }
+        decision = exportSlotDecision(mockSlotLedger(), modelKey)
+        // A public model exports unlimited, no slot, as in the function.
+        if (decision.verdict !== 'held' &&
+            mockIsPublicModel(modelKey, request.headers.get(DRIVE_PUBLIC_HEADER) === '1')) {
+          decision = {verdict: 'public', slots: modelSlots(mockSlotLedger()), loads: null}
+        }
+        if (decision.verdict === 'full') {
+          return jsonMockResponse(HTTP_FORBIDDEN, {error: NO_FREE_SLOT_REASON, modelSlots: decision.slots})
+        }
       }
 
+      // Read before taking a slot, as the function does: a missing build
+      // must not cost a free user a slot.
       const built = await fetch(`/__pro_dev__/${name}.js`)
       if (!built.ok) {
-        return new Response(
-          JSON.stringify({error: 'module_not_built'}),
-          {status: HTTP_NOT_FOUND, headers: {'Content-Type': 'application/json'}},
-        )
+        return jsonMockResponse(HTTP_NOT_FOUND, {error: 'module_not_built'})
       }
-      return new Response(await built.text(), {
-        status: HTTP_OK,
-        headers: {
-          'Content-Type': 'text/javascript; charset=utf-8',
-          'Cache-Control': 'private, no-store',
-          'X-Content-Type-Options': 'nosniff',
-        },
-      })
+      const headers = {
+        'Content-Type': 'text/javascript; charset=utf-8',
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+      }
+      if (isFreeTier) {
+        if (decision.verdict === 'take') {
+          setMockSlotLedger(decision.loads)
+        }
+        headers[MODEL_SLOTS_HEADER] =
+          slotsHeaderValue(decision.slots, decision.verdict === 'take', decision.verdict === 'public')
+      }
+      return new Response(await built.text(), {status: HTTP_OK, headers})
     }),
   ]
 }

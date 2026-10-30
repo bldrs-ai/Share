@@ -1,0 +1,81 @@
+{
+  "description": "The same request for a PRIVATE GitHub model (the lookup answers 404) with both slots held by other models is refused 403 no_free_model_slot; nothing is written and the module is not read.",
+  "env": {
+    "$fixture": "env/auth0.json"
+  },
+  "now": "2026-10-28T12:00:00.000Z",
+  "request": {
+    "method": "GET",
+    "path": "/.netlify/functions/pro-module",
+    "headers": {
+      "authorization": "Bearer user-access-token",
+      "x-bldrs-model-key": "%2Fshare%2Fv%2Fgh%2Facme%2Fsecret-tower%2Fmain%2Ftower.ifc"
+    },
+    "query": {
+      "name": "glbExport"
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-userinfo.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "usageQuota": {
+                "loads": [
+                  {
+                    "key": "/share/v/gh/acme/private/main/tower.ifc",
+                    "loadedAt": "2026-10-25T10:00:00.000Z"
+                  },
+                  {
+                    "key": "/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz",
+                    "loadedAt": "2026-10-26T10:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/secret-tower"
+      },
+      "response": {
+        "status": 404,
+        "json": {
+          "message": "Not Found"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 403,
+    "json": {
+      "error": "no_free_model_slot",
+      "modelSlots": {
+        "limit": 2,
+        "used": 2,
+        "remaining": 0,
+        "keys": [
+          "/share/v/gh/acme/private/main/tower.ifc",
+          "/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz"
+        ]
+      }
+    }
+  }
+}
