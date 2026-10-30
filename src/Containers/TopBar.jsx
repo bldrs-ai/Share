@@ -3,13 +3,18 @@ import {useLocation} from 'react-router-dom'
 import {Box, IconButton, Paper, Stack, Tooltip, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {decodeIFCString} from '@bldrs-ai/ifclib'
+import AppsControl from '../Components/Apps/AppsControl'
+import OpenModelControl from '../Components/Open/OpenModelControl'
+import SaveModelControl from '../Components/Open/SaveModelControl'
+import ProfileControl from '../Components/Profile/ProfileControl'
 import SearchBar from '../Components/Search/SearchBar'
+import ShareControl from '../Components/Share/ShareControl'
 import {entityTypeName} from '../Components/Properties/itemProperties'
 import useStore from '../store/useStore'
 import {modelPathFromPathname} from '../workspace/modelPath'
 import {prettyType} from '../utils/ifc'
 import {labelForModelPath} from '../utils/modelDisplayName'
-import {ROW_PITCH, TOP_BAR_HEIGHT} from './layoutConstants'
+import {TOP_BAR_HEIGHT} from './layoutConstants'
 import {Search as SearchIcon} from '@mui/icons-material'
 
 
@@ -26,6 +31,11 @@ const SEARCH_MAX_WIDTH = '25em'
 // Separators are sized to the icon that replaces them on hover, so the
 // swap is width-neutral and the path never shifts under the pointer.
 const SEPARATOR_SLOT = '28px'
+
+// The design system's weights: regular for the path, medium (not bold —
+// the DS keeps weights light) for the "you are here" crumb.
+const WEIGHT_REGULAR = 400
+const WEIGHT_MEDIUM = 500
 
 
 /**
@@ -47,6 +57,10 @@ const SEPARATOR_SLOT = '28px'
 export default function TopBar() {
   const workspaceProjects = useStore((state) => state.workspaceProjects)
   const isSearchEnabled = useStore((state) => state.isSearchEnabled)
+  const isOpenEnabled = useStore((state) => state.isOpenEnabled)
+  const isLoginEnabled = useStore((state) => state.isLoginEnabled)
+  const isAppsEnabled = useStore((state) => state.isAppsEnabled)
+  const isShareEnabled = useStore((state) => state.isShareEnabled)
   const model = useStore((state) => state.model)
   const selectedElement = useStore((state) => state.selectedElement)
   const location = useLocation()
@@ -121,81 +135,80 @@ export default function TopBar() {
   const hoveredSeparator = isSearchOpen ? hoverIndex : null
 
   return (
-    // Zero-height positioned anchor: CenterPane is statically
-    // positioned, so an absolute bar would otherwise resolve against
-    // the *viewport* — width:100% then overflowed the window by
-    // exactly the ProjectsDrawer's width, shoving the search field
-    // off-screen. (The flag-off ToolbarPaper gets away with it only
-    // because without the drawer the pane spans the viewport.)
-    <Box sx={{position: 'relative', width: '100%', height: 0}}>
-      <Paper
-        elevation={0}
-        sx={{
-          // The bar floats at the pane's top over the canvas
-          // (positioned elements paint above the earlier-in-DOM
-          // #viewer-container).
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: TOP_BAR_HEIGHT,
-          backgroundColor: theme.palette.secondary.backgroundColor,
-          borderRadius: 0,
-          display: 'flex',
-          alignItems: 'center',
-        }}
-        data-testid='TopBar'
+    // A block in RootLandscape's WorkspaceMain column (#1992), spanning
+    // the NavTree drawer, the centre pane and the right-hand drawers,
+    // which all open beneath it.
+    <Paper
+      elevation={0}
+      sx={{
+        // Positioned so it paints above the absolutely-positioned,
+        // earlier-in-DOM #viewer-container.
+        position: 'relative',
+        flexShrink: 0,
+        // content-box: the hairline sits *below* the 58px bar, exactly
+        // as the ProjectsDrawer header's band does (header + 1px edge),
+        // so the two bottom edges land on the same pixel row.
+        boxSizing: 'content-box',
+        height: TOP_BAR_HEIGHT,
+        // The design system's header band: the same opaque
+        // workspacePaper and workspaceEdge hairline as the
+        // ProjectsDrawer's header, so the shell's top edge reads as one
+        // persistent strip rather than glass over the canvas.
+        backgroundColor: theme.palette.secondary.workspacePaper,
+        borderBottom: `1px solid ${theme.palette.secondary.workspaceEdge}`,
+        borderRadius: 0,
+        display: 'flex',
+        alignItems: 'center',
+      }}
+      data-testid='TopBar'
+    >
+      {/* Open / Save lead the bar; they used to float into its left edge
+          from the ControlsGroup, which collided with the breadcrumb once
+          a side drawer opened beneath the bar. */}
+      {isOpenEnabled &&
+       <Stack direction='row' sx={{flexShrink: 0}} data-testid='topbar-left-controls'>
+         <OpenModelControl/>
+         {/* Save is shown signed-out too, in the gated look (#1838). */}
+         <SaveModelControl/>
+       </Stack>}
+      <Stack
+        direction='row'
+        alignItems='center'
+        spacing={1}
+        sx={{flex: '1 1 auto', minWidth: 0, pl: isOpenEnabled ? 1 : 2}}
       >
-        <Stack
-          direction='row'
-          alignItems='center'
-          spacing={1}
-          sx={{
-            flex: '1 1 auto',
-            minWidth: 0,
-            // The ControlsGroup's first row (Open, and Save when signed
-            // in) paints over the bar's left edge on the shared 58px
-            // grid, so the breadcrumb starts past that column. Goes away
-            // when OpenModelControl retires from the canvas (#1664).
-            pl: `${ROW_PITCH * 2}px`,
-            // Same reservation on the right for the OperationsGroup's
-            // first row (Profile / Apps / Share) until #1665 relocates
-            // those into this bar.
-            pr: `${ROW_PITCH * 3}px`,
-          }}
-        >
-          {/* Own separators rather than MUI's: the slot between two
+        {/* Own separators rather than MUI's: the slot between two
               crumbs is what swaps to the search icon, and it needs a
               fixed width so that swap can't reflow the path. */}
-          <Stack
-            component='nav'
-            direction='row'
-            alignItems='center'
-            aria-label='Workspace location'
-            // Shrinkable on purpose: the labels ellipsize rather than
-            // pushing the trailing search icon out under the
-            // OperationsGroup's controls, which is what a long path did
-            // on a phone. Goes away once #1665 moves those into the bar.
-            sx={{minWidth: 0, flexShrink: 1, overflow: 'hidden', whiteSpace: 'nowrap'}}
-            onMouseLeave={() => setHoverIndex(null)}
-            data-testid='topbar-breadcrumbs'
-          >
-            {visibleCrumbs.map((crumb, i) => {
-              const isLastVisible = i === visibleCrumbs.length - 1
-              return (
-                <React.Fragment key={crumb.key}>
-                  <Tooltip title={crumb.tip || ''} placement='bottom'>
-                    <Typography
-                      variant='body2'
-                      noWrap
-                      onMouseEnter={isSearchOpen ? () => setHoverIndex(i) : undefined}
-                      sx={{fontWeight: isLastVisible ? 'bold' : 'normal', cursor: 'default'}}
-                      data-testid={`topbar-breadcrumb-${crumb.key}`}
-                    >
-                      {crumb.label}
-                    </Typography>
-                  </Tooltip>
-                  {!isLastVisible &&
+        <Stack
+          component='nav'
+          direction='row'
+          alignItems='center'
+          aria-label='Workspace location'
+          // Shrinkable on purpose: the labels ellipsize rather than
+          // pushing the trailing search icon out under the
+          // OperationsGroup's controls, which is what a long path did
+          // on a phone. Goes away once #1665 moves those into the bar.
+          sx={{minWidth: 0, flexShrink: 1, overflow: 'hidden', whiteSpace: 'nowrap'}}
+          onMouseLeave={() => setHoverIndex(null)}
+          data-testid='topbar-breadcrumbs'
+        >
+          {visibleCrumbs.map((crumb, i) => {
+            const isLastVisible = i === visibleCrumbs.length - 1
+            return (
+              <React.Fragment key={crumb.key}>
+                <Tooltip title={crumb.tip || ''} placement='bottom'>
+                  <Typography
+                    variant='body2'
+                    noWrap
+                    onMouseEnter={isSearchOpen ? () => setHoverIndex(i) : undefined}
+                    sx={{fontWeight: isLastVisible ? WEIGHT_MEDIUM : WEIGHT_REGULAR, cursor: 'default'}}
+                    data-testid={`topbar-breadcrumb-${crumb.key}`}
+                  >
+                    {crumb.label}
+                  </Typography>
+                </Tooltip>
+                {!isLastVisible &&
                    <Box
                      onMouseEnter={isSearchOpen ? () => setHoverIndex(i) : undefined}
                      sx={{
@@ -221,10 +234,10 @@ export default function TopBar() {
                        </IconButton> :
                        <Typography variant='body2' sx={{opacity: 0.4}}>/</Typography>}
                    </Box>}
-                </React.Fragment>
-              )
-            })}
-            {isSearchEnabled && !isSearchOpen && crumbs.length > 0 &&
+              </React.Fragment>
+            )
+          })}
+          {isSearchEnabled && !isSearchOpen && crumbs.length > 0 &&
              <Box sx={{width: SEPARATOR_SLOT, flexShrink: 0, display: 'flex', justifyContent: 'center'}}>
                <IconButton
                  size='small'
@@ -235,8 +248,8 @@ export default function TopBar() {
                  <SearchIcon className='icon-share' fontSize='inherit'/>
                </IconButton>
              </Box>}
-          </Stack>
-          {isSearchEnabled && isSearchOpen &&
+        </Stack>
+        {isSearchEnabled && isSearchOpen &&
            <Stack sx={{flexGrow: 1, minWidth: 0, maxWidth: SEARCH_MAX_WIDTH}} data-testid='topbar-search'>
              <SearchBar
                fullWidth
@@ -245,8 +258,14 @@ export default function TopBar() {
                onCancel={resetSearch}
              />
            </Stack>}
-        </Stack>
-      </Paper>
-    </Box>
+      </Stack>
+      {/* Profile / Apps / Share close the bar (#1665; Apps joins them,
+          per design review #1992), out of the OperationsGroup's top row. */}
+      <Stack direction='row' sx={{flexShrink: 0}} data-testid='topbar-right-controls'>
+        {isLoginEnabled && <ProfileControl/>}
+        {isAppsEnabled && <AppsControl/>}
+        {isShareEnabled && <ShareControl/>}
+      </Stack>
+    </Paper>
   )
 }

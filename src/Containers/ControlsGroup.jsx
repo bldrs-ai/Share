@@ -29,7 +29,10 @@ export default function ControlsGroup() {
   return (
     <Stack>
       <Stack direction='row'>
-        {isOpenEnabled &&
+        {/* Under the workspace shell, Open / Save lead the TopBar instead
+            (#1992): floating here they collided with the breadcrumb once a
+            side drawer opened beneath the bar. */}
+        {isOpenEnabled && !isWorkspaceEnabled &&
          <>
            <OpenModelControl/>
            {/* Save is shown signed-out too, in the gated look — it explains

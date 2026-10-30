@@ -24,7 +24,7 @@ import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Components/Hooks'
 import useStore from '../store/useStore'
 import {WORKSPACE_DRAWER_WIDTH_INITIAL} from '../store/WorkspaceSlice'
-import {CONTROL_MARGIN, CONTROL_SIZE, ROW_PITCH, TOP_BAR_HEIGHT} from './layoutConstants'
+import {CONTROL_MARGIN, CONTROL_SIZE, NEW_BUTTON_HEIGHT, ROW_PITCH, TOP_BAR_HEIGHT} from './layoutConstants'
 import {hasStoredWorkspaceUiState} from '../workspace/persistence'
 import {modelPathFromPathname} from '../workspace/modelPath'
 import {labelForModelPath} from '../utils/modelDisplayName'
@@ -32,6 +32,8 @@ import {navigateToModel} from '../utils/navigate'
 import {TooltipIconButton} from '../Components/Buttons'
 import HorizonResizerButton from '../Components/SideDrawer/HorizonResizerButton'
 import LogoMenu from '../Components/Workspace/LogoMenu'
+import NewItemButton from '../Components/Workspace/NewItemButton'
+import SectionLabel from '../Components/Workspace/SectionLabel'
 import {LogoB} from '../Components/Logo/Logo'
 import {
   Add as AddIcon,
@@ -57,13 +59,29 @@ const RESIZER_THICKNESS = 10
 // One control cell wide, so the rail's icons sit on the same grid as the
 // control groups across the canvas.
 const COLLAPSED_RAIL_WIDTH = `${ROW_PITCH}px`
+// The design system's space-2 / space-4 steps (theme.spacing(1) / (2)),
+// as numbers for the inset list panel's margin.
+const SPACE_2 = 8
+const SPACE_4 = 16
 
 // Every row in the drawer is one control row: same square as the icons
 // in the adjacent NavTree/Versions group, same margins, same corner.
+//
+// Selected is the design system's cyan selection wash
+// (`secondary.selected`, as NavTreeNode uses), not MUI's default grey
+// `primary.main` at selectedOpacity — that one was all but invisible on
+// the drawer's ground. The label also steps up to the DS's selected
+// weight (500), so the selection never rests on the wash alone.
 const rowSx = {
-  height: `${CONTROL_SIZE}px`,
-  margin: `${CONTROL_MARGIN}px`,
-  borderRadius: '10px',
+  'height': `${CONTROL_SIZE}px`,
+  'margin': `${CONTROL_MARGIN}px`,
+  'borderRadius': '10px',
+  '&.Mui-selected, &.Mui-selected:hover': {
+    backgroundColor: (theme) => theme.palette.secondary.selected,
+  },
+  '&.Mui-selected .MuiListItemText-primary': {
+    fontWeight: 500,
+  },
 }
 
 
@@ -223,7 +241,7 @@ export default function ProjectsDrawer() {
       data-testid='projects-header'
     >
       {!isCollapsed &&
-       <Typography variant='body1' sx={{fontWeight: 'bold', pl: 1}} noWrap>
+       <Typography variant='body1' sx={{fontWeight: 500, pl: 1}} noWrap>
          bldrs.ai
        </Typography>}
       <TooltipIconButton
@@ -238,17 +256,18 @@ export default function ProjectsDrawer() {
     </Stack>
   )
 
-  // Section headings occupy one control row, like every other row here.
-  const sectionLabel = (text, testId) => (
-    <Stack
-      justifyContent='center'
-      sx={{height: ROW_PITCH, flexShrink: 0, px: 2}}
-      data-testid={testId}
+  // The design system's paper layer: the persistent header and the logo
+  // footer sit on workspacePaper, edged from the list by a workspaceEdge
+  // hairline, so the chrome that stays put reads apart from the rows that
+  // come and go between them. Both drawer states share these bands.
+  const shell = theme.palette.secondary
+  const topBand = (
+    <Box
+      sx={{flexShrink: 0, backgroundColor: shell.workspacePaper, borderBottom: `1px solid ${shell.workspaceEdge}`}}
+      data-testid='projects-header-band'
     >
-      <Typography variant='overline' color='text.secondary'>
-        {text}
-      </Typography>
-    </Stack>
+      {header}
+    </Box>
   )
 
   // Bottom-left logo. While the drawer is closed it is the reopen
@@ -270,10 +289,51 @@ export default function ProjectsDrawer() {
     <Stack
       direction='row'
       justifyContent={isCollapsed ? 'center' : 'flex-start'}
-      sx={{padding: '.5em', flexShrink: 0}}
+      sx={{
+        padding: '.5em',
+        flexShrink: 0,
+        backgroundColor: shell.workspacePaper,
+        borderTop: `1px solid ${shell.workspaceEdge}`,
+      }}
+      data-testid='projects-footer-band'
     >
       {footerLogo}
     </Stack>
+  )
+
+  // Shared by both drawer states: the open drawer's New project button and
+  // the rail's New project disc open the same dialog. It focuses its field
+  // on entry rather than via autoFocus, which jsx-a11y rejects.
+  const newProjectDialog = (
+    <Dialog
+      open={isNewProjectOpen}
+      onClose={() => setIsNewProjectOpen(false)}
+      TransitionProps={{onEntered: () => nameFieldRef.current?.focus()}}
+    >
+      <DialogTitle>New project</DialogTitle>
+      <DialogContent>
+        <TextField
+          inputRef={nameFieldRef}
+          label='Project name'
+          variant='outlined'
+          margin='dense'
+          value={newProjectName}
+          onChange={(event) => setNewProjectName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              onCreateProject()
+            }
+          }}
+          inputProps={{'data-testid': 'projects-new-name'}}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setIsNewProjectOpen(false)}>Cancel</Button>
+        <Button variant='contained' color='accent' onClick={onCreateProject} data-testid='projects-new-create'>
+            Create
+        </Button>
+      </DialogActions>
+    </Dialog>
   )
 
   if (isCollapsed && isMobile) {
@@ -315,28 +375,48 @@ export default function ProjectsDrawer() {
           display: 'flex',
           flexDirection: 'column',
           borderRadius: 0,
-          // Half opacity, over a base chosen so the result matches the
-          // expanded drawer's tint against the scene (see
-          // secondary.workspaceRailBackground) — the rail reads as one
-          // continuous column from the toggle down to the logo.
-          backgroundColor: `${theme.palette.secondary.workspaceRailBackground}80`,
-          borderRight: `1px solid ${theme.palette.primary.sceneHighlight}20`,
+          // The open drawer's list ground, between the same paper bands.
+          backgroundColor: shell.workspaceBackground,
+          borderRight: `1px solid ${shell.workspaceBorder}`,
         }}
         data-testid='ProjectsDrawer'
       >
-        {header}
-        {/* One cell per project, on the control grid. Clicking reopens
-            the drawer with that project expanded; the per-project quick
-            access menu that will live here is the follow-up (wireframe
-            screen 2). */}
+        {topBand}
+        {/* New project leads the rail as it leads the open list: an
+            accent disc, then one cell per project on the control grid.
+            Clicking a project reopens the drawer with it expanded; the
+            per-project quick access menu that will live here is the
+            follow-up (wireframe screen 2). */}
         <Stack alignItems='center' sx={{overflowY: 'auto'}}>
+          <TooltipIconButton
+            title='New project'
+            placement='right'
+            icon={
+              <Box
+                sx={{
+                  width: NEW_BUTTON_HEIGHT,
+                  height: NEW_BUTTON_HEIGHT,
+                  borderRadius: '50%',
+                  backgroundColor: theme.palette.accent.main,
+                  color: theme.palette.accent.contrastText,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <AddIcon fontSize='small'/>
+              </Box>
+            }
+            onClick={() => setIsNewProjectOpen(true)}
+            dataTestId='projects-rail-new-button'
+          />
           {workspaceProjects.map((project) => (
             <TooltipIconButton
               key={project.id}
               title={project.name}
               placement='right'
               icon={projectInitials(project.name) ?
-                <Typography variant='body2' sx={{fontWeight: 'bold'}}>
+                <Typography variant='body2' sx={{fontWeight: 500}}>
                   {projectInitials(project.name)}
                 </Typography> :
                 <ApartmentIcon className='icon-share'/>}
@@ -352,6 +432,7 @@ export default function ProjectsDrawer() {
         </Stack>
         <Box sx={{flexGrow: 1}}/>
         {footer}
+        {newProjectDialog}
       </Paper>
     )
   }
@@ -369,8 +450,12 @@ export default function ProjectsDrawer() {
         display: 'flex',
         flexDirection: 'column',
         borderRadius: 0,
-        backgroundColor: theme.palette.secondary.workspaceBackground,
-        borderRight: `1px solid ${theme.palette.primary.sceneHighlight}20`,
+        // Built like the right-hand Notes/Properties drawer (SideDrawer):
+        // a glass frame, with the list on an opaque panel inset from it,
+        // so a semi-transparent margin of the scene shows around the list.
+        backgroundColor: shell.backgroundColor,
+        backdropFilter: shell.backdropFilter,
+        borderRight: `1px solid ${shell.workspaceBorder}`,
       }}
       data-testid='ProjectsDrawer'
     >
@@ -388,108 +473,126 @@ export default function ProjectsDrawer() {
          minWidth={COLLAPSE_AT_WIDTH}
          onCollapse={onCollapse}
        />}
-      {header}
-      {/* Every row below the header is one control row tall, so this
-          column stays in step with the control groups across the canvas:
-          New project lands on the NavTree row and PROJECTS on the
-          Versions row. */}
-      <Box sx={{height: ROW_PITCH, flexShrink: 0, px: `${CONTROL_MARGIN}px`, minWidth: 0}}>
-        <Button
-          variant='contained'
-          fullWidth
-          onClick={() => setIsNewProjectOpen(true)}
-          sx={{...rowSx, marginLeft: 0, marginRight: 0, minWidth: 0}}
-          data-testid='projects-new-button'
-        >
-          New project
-        </Button>
-      </Box>
-      {sectionLabel('Projects', 'projects-section-label')}
-      <List dense sx={{flexGrow: 1, overflowY: 'auto', paddingTop: 0}} data-testid='projects-list'>
-        {workspaceProjects.map((project) => {
-          const isExpanded = expandedProjectIds.includes(project.id)
-          return (
-            <React.Fragment key={project.id}>
-              <ListItemButton
-                sx={rowSx}
-                onClick={() => toggleWorkspaceProjectExpanded(project.id)}
-                data-testid={`project-${project.id}`}
-              >
-                <ListItemIcon sx={{minWidth: '2em'}}><ApartmentIcon fontSize='small'/></ListItemIcon>
-                <ListItemText primary={project.name} primaryTypographyProps={{noWrap: true}}/>
-                <IconButton
-                  size='small'
-                  aria-label={`Delete project ${project.name}`}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    removeWorkspaceProject(project.id)
-                  }}
-                >
-                  <CloseIcon fontSize='inherit'/>
-                </IconButton>
-                {isExpanded ? <ExpandLessIcon fontSize='small'/> : <ExpandMoreIcon fontSize='small'/>}
-              </ListItemButton>
-              {isExpanded && (
-                <>
-                  {project.models.map((model) => {
-                    // Resolved at render, not read from the stored label:
-                    // a model's name can arrive after it was recorded
-                    // (the loader back-fills modelTitle into recents), and
-                    // entries captured before that resolution existed
-                    // would otherwise stay stuck showing a storage id.
-                    const label = labelForModelPath(model.path) || model.label
-                    return (
-                      <ListItemButton
-                        key={model.id}
-                        sx={{...rowSx, pl: 3, marginLeft: `${CONTROL_SIZE / 2}px`}}
-                        selected={currentModelPath === model.path}
-                        // Disarm first: opening a model that is already
-                        // listed must not be adopted by a still-armed
-                        // capture from some other project.
-                        onClick={() => {
-                          disarmWorkspaceCapture()
-                          navigateToModel(model.path, navigate)
-                        }}
-                        data-testid={`project-model-${model.id}`}
-                      >
-                        <ListItemIcon sx={{minWidth: '2em'}}>
-                          <InsertDriveFileOutlinedIcon fontSize='small'/>
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={label}
-                          primaryTypographyProps={{noWrap: true, fontSize: '.9em'}}
-                        />
-                        <IconButton
-                          size='small'
-                          aria-label={`Remove model ${label}`}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            removeWorkspaceModel(project.id, model.id)
-                          }}
-                        >
-                          <CloseIcon fontSize='inherit'/>
-                        </IconButton>
-                      </ListItemButton>
-                    )
-                  })}
+      {topBand}
+      {/* The inset list panel: opaque grey paper with the app's radius,
+          space-2 from the bands and space-4 from the sides — the right
+          drawer's gutter. Flat on purpose, unlike the Notes panel's raised
+          Paper: a note is a sheet of paper, but the project list is the
+          drawer's own floor. Text only ever sits on this panel or on the
+          bands, never on the glass. */}
+      <Paper
+        elevation={0}
+        sx={{
+          flexGrow: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          margin: `${SPACE_2}px ${SPACE_4}px`,
+          borderRadius: '10px',
+          overflow: 'hidden',
+          backgroundColor: shell.workspaceBackground,
+          backgroundImage: 'none',
+        }}
+        data-testid='projects-panel'
+      >
+        {/* The scrolling list, between the paper bands. New project heads
+          it the way a sidebar's New item heads its nav — it adds to this
+          list, so it isn't header chrome. Every row is one control row
+          tall, so the column stays in step with the control groups
+          across the canvas. */}
+        <Box sx={{flexGrow: 1, minHeight: 0, overflowY: 'auto'}} data-testid='projects-scroll'>
+          <NewItemButton
+            label='New project'
+            onClick={() => setIsNewProjectOpen(true)}
+            dataTestId='projects-new-button'
+          />
+          <SectionLabel text='Projects' dataTestId='projects-section-label'/>
+          <List dense sx={{paddingTop: 0}} data-testid='projects-list'>
+            {workspaceProjects.map((project) => {
+              const isExpanded = expandedProjectIds.includes(project.id)
+              return (
+                <React.Fragment key={project.id}>
                   <ListItemButton
-                    sx={{...rowSx, pl: 3, marginLeft: `${CONTROL_SIZE / 2}px`}}
-                    onClick={() => onAddModel(project.id)}
-                    data-testid={`project-add-model-${project.id}`}
+                    sx={rowSx}
+                    onClick={() => toggleWorkspaceProjectExpanded(project.id)}
+                    data-testid={`project-${project.id}`}
                   >
-                    <ListItemIcon sx={{minWidth: '2em'}}><AddIcon fontSize='small'/></ListItemIcon>
-                    <ListItemText primary='Add model' primaryTypographyProps={{color: 'text.secondary'}}/>
+                    <ListItemIcon sx={{minWidth: '2em'}}><ApartmentIcon fontSize='small'/></ListItemIcon>
+                    <ListItemText primary={project.name} primaryTypographyProps={{noWrap: true}}/>
+                    <IconButton
+                      size='small'
+                      aria-label={`Delete project ${project.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        removeWorkspaceProject(project.id)
+                      }}
+                    >
+                      <CloseIcon fontSize='inherit'/>
+                    </IconButton>
+                    {isExpanded ? <ExpandLessIcon fontSize='small'/> : <ExpandMoreIcon fontSize='small'/>}
                   </ListItemButton>
-                </>
-              )}
-            </React.Fragment>
-          )
-        })}
-      </List>
-      {ungroupedModels.length > 0 &&
+                  {isExpanded && (
+                    <>
+                      {project.models.map((model) => {
+                        // Resolved at render, not read from the stored label:
+                        // a model's name can arrive after it was recorded
+                        // (the loader back-fills modelTitle into recents), and
+                        // entries captured before that resolution existed
+                        // would otherwise stay stuck showing a storage id.
+                        const label = labelForModelPath(model.path) || model.label
+                        return (
+                          <ListItemButton
+                            key={model.id}
+                            sx={{...rowSx, pl: 3, marginLeft: `${CONTROL_SIZE / 2}px`}}
+                            selected={currentModelPath === model.path}
+                            // Disarm first: opening a model that is already
+                            // listed must not be adopted by a still-armed
+                            // capture from some other project.
+                            onClick={() => {
+                              disarmWorkspaceCapture()
+                              navigateToModel(model.path, navigate)
+                            }}
+                            data-testid={`project-model-${model.id}`}
+                          >
+                            <ListItemIcon sx={{minWidth: '2em'}}>
+                              <InsertDriveFileOutlinedIcon fontSize='small'/>
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={label}
+                              primaryTypographyProps={{noWrap: true, fontSize: '.9em'}}
+                            />
+                            <IconButton
+                              size='small'
+                              aria-label={`Remove model ${label}`}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                removeWorkspaceModel(project.id, model.id)
+                              }}
+                            >
+                              <CloseIcon fontSize='inherit'/>
+                            </IconButton>
+                          </ListItemButton>
+                        )
+                      })}
+                      <ListItemButton
+                        sx={{...rowSx, pl: 3, marginLeft: `${CONTROL_SIZE / 2}px`}}
+                        onClick={() => onAddModel(project.id)}
+                        data-testid={`project-add-model-${project.id}`}
+                      >
+                        <ListItemIcon sx={{minWidth: '2em'}}><AddIcon fontSize='small'/></ListItemIcon>
+                        <ListItemText primary='Add model' primaryTypographyProps={{color: 'text.secondary'}}/>
+                      </ListItemButton>
+                    </>
+                  )}
+                </React.Fragment>
+              )
+            })}
+          </List>
+        </Box>
+        {ungroupedModels.length > 0 &&
        <Box sx={{flexShrink: 0}} data-testid='ungrouped-section'>
          <Divider/>
-         {sectionLabel('Ungrouped', 'ungrouped-section-label')}
+         <SectionLabel text='Ungrouped' dataTestId='ungrouped-section-label'/>
          <List dense sx={{paddingTop: 0}}>
            {ungroupedModels.map((model) => {
              const label = labelForModelPath(model.path) || model.label
@@ -525,6 +628,7 @@ export default function ProjectsDrawer() {
            })}
          </List>
        </Box>}
+      </Paper>
       {footer}
       <Menu
         anchorEl={rowMenu?.anchorEl ?? null}
@@ -565,36 +669,7 @@ export default function ProjectsDrawer() {
           Remove
         </MenuItem>
       </Menu>
-      {/* Focus on entry rather than autoFocus, which jsx-a11y rejects. */}
-      <Dialog
-        open={isNewProjectOpen}
-        onClose={() => setIsNewProjectOpen(false)}
-        TransitionProps={{onEntered: () => nameFieldRef.current?.focus()}}
-      >
-        <DialogTitle>New project</DialogTitle>
-        <DialogContent>
-          <TextField
-            inputRef={nameFieldRef}
-            label='Project name'
-            variant='outlined'
-            margin='dense'
-            value={newProjectName}
-            onChange={(event) => setNewProjectName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                onCreateProject()
-              }
-            }}
-            inputProps={{'data-testid': 'projects-new-name'}}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setIsNewProjectOpen(false)}>Cancel</Button>
-          <Button variant='contained' onClick={onCreateProject} data-testid='projects-new-create'>
-            Create
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {newProjectDialog}
     </Paper>
   )
 }
