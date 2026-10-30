@@ -367,8 +367,9 @@ export async function dismissLoadGrace(page: Page) {
  * page keeps ticking normally — it just stops rendering, and the canvas
  * holds its last painted frame. That makes this safe for dialog/panel flows
  * and WRONG for anything that screenshots the scene, moves the camera, or
- * asserts on highlighting. There is no resume: call it after the model is
- * ready and treat the scene as frozen for the rest of the test.
+ * asserts on highlighting — unless the test calls {@link resumeViewerRendering}
+ * first. A test that never does treats the scene as frozen for the rest of
+ * its life.
  *
  * Throws rather than degrading if the seam moves. A silent no-op here would
  * quietly restore the slow path and show up much later as unexplained
@@ -381,18 +382,53 @@ export async function pauseViewerRendering(page: Page) {
     // `window.useStore` is exposed by BaseRoutes under the test client id
     // (see the OAUTH_2_CLIENT_ID guard there); `viewer` is set by CadView
     // once the viewer is initialized.
-    const withStore = window as unknown as {
-      useStore?: {getState: () => {viewer?: {context?: {setRenderUpdate?: (fn: () => void) => void}}}}
-    }
+    const withStore = window as unknown as RenderSeamWindow
     const context = withStore.useStore?.getState().viewer?.context
     if (typeof context?.setRenderUpdate !== 'function') {
       return false
+    }
+    // Keep what was painting, once: pausing twice must not overwrite it with
+    // the no-op below and leave nothing to resume.
+    if (withStore.__bldrsResumeRenderUpdate === undefined) {
+      withStore.__bldrsResumeRenderUpdate = context.getLegacyRendererWrapper?.().update
     }
     // Paused deliberately; see this helper's docstring.
     context.setRenderUpdate(() => undefined)
     return true
   })
   expect(paused, 'pauseViewerRendering: no render seam at window.useStore.getState().viewer.context').toBe(true)
+}
+
+
+/**
+ * Undo {@link pauseViewerRendering}: the viewer paints again, from the next
+ * frame. For a test that wants the speed of a paused viewer over a dialog or
+ * a panel (the clicks of an Export tab cost ~1 s each while the scene paints)
+ * and the real renderer back before it picks, highlights or reopens a model.
+ * A no-op when nothing is paused.
+ *
+ * @param page - Playwright page object
+ */
+export async function resumeViewerRendering(page: Page) {
+  await page.evaluate(() => {
+    const withStore = window as unknown as RenderSeamWindow
+    const painting = withStore.__bldrsResumeRenderUpdate
+    if (typeof painting === 'function') {
+      withStore.useStore?.getState().viewer?.context?.setRenderUpdate?.(painting)
+    }
+    delete withStore.__bldrsResumeRenderUpdate
+  })
+}
+
+
+// `__bldrsResumeRenderUpdate` is where a paused viewer keeps the update
+// function it replaced.
+type RenderSeamWindow = Window & {
+  useStore?: {getState: () => {viewer?: {context?: {
+    setRenderUpdate?: (fn: () => void) => void
+    getLegacyRendererWrapper?: () => {update?: () => void}
+  }}}}
+  __bldrsResumeRenderUpdate?: () => void
 }
 
 
