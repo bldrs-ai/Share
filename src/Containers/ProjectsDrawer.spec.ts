@@ -289,5 +289,31 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
       const boxAfter = await drawer.boundingBox()
       expect(boxAfter?.width).toBeGreaterThan(boxBefore.width)
     })
+
+    test('resize: New project stays on one line at the narrowest width', async ({page}) => {
+      await visitWithWorkspace(page)
+      const drawer = page.getByTestId('ProjectsDrawer')
+      const box = await drawer.getByTestId(ID_RESIZE_HANDLE_X).boundingBox()
+      const drawerBox = await drawer.boundingBox()
+      if (drawerBox === null || box === null) {
+        throw new Error('drawer or its resize grip is not laid out')
+      }
+
+      // Just above the 120px collapse threshold, where the 21px inset
+      // leaves the label far less room than "NEW PROJECT" needs.
+      const narrowWidth = 125
+      const midY = box.y + (box.height / 2)
+      await page.mouse.move(box.x + (box.width / 2), midY)
+      await page.mouse.down()
+      await page.mouse.move(drawerBox.x + narrowWidth, midY, {steps: 10})
+      await page.mouse.up()
+
+      const button = page.getByTestId('projects-new-button')
+      await expect(button).toBeVisible()
+      expect((await drawer.boundingBox())?.width).toBeLessThan(drawerBox.width)
+      // A wrapped label grows past the fixed 36px height and spills out.
+      const overflows = await button.evaluate((el) => el.scrollHeight > el.clientHeight)
+      expect(overflows).toBe(false)
+    })
   }
 })

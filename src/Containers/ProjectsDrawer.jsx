@@ -509,7 +509,17 @@ export default function ProjectsDrawer() {
             sx={{height: NEW_PROJECT_HEIGHT, borderRadius: '10px', minWidth: 0}}
             data-testid='projects-new-button'
           >
-            New project
+            {/* One line, ellipsized: the drawer resizes down to
+                COLLAPSE_AT_WIDTH, where the inset leaves the label too
+                little room, and a wrapped label overflows the fixed
+                36px height. Ellipsis needs a block box, not the
+                Button's inline-flex, hence the span. */}
+            <Box
+              component='span'
+              sx={{minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}
+            >
+              New project
+            </Box>
           </Button>
         </Stack>
         {sectionLabel('Projects', 'projects-section-label')}
