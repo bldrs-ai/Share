@@ -10,16 +10,19 @@ import {USDLoader} from 'three/examples/jsm/loaders/USDLoader.js'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
 import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
-import {reportModelInfo, reportSourceInfo} from './loadProgress'
+import {reportCacheHit, reportModelInfo, reportSourceInfo} from './loadProgress'
 import {
   deleteFileFromOPFS,
   doesFileExistInOPFS,
+  doesUploadExistInOPFS,
   downloadModel,
   downloadToOPFS,
   getModelFromOPFS,
   readModelByPathFromOPFS,
   writeBase64Model,
 } from '../OPFS/utils'
+import {UploadNotInBrowserError} from '../OPFS/messages'
+import {getInMemoryUpload} from './inMemoryUploads'
 import {HTTP_NOT_FOUND} from '../net/http'
 import {looksLikeLfsPointer} from '../net/github/lfs'
 import {assertDefined} from '../utils/assert'
@@ -205,6 +208,12 @@ function probeLfsBytes(data) {
  *   load renders INTO another load's model, so it owns no page-level state:
  *   it takes no artifact generation and publishes no artifact
  *   (glbArtifactPublish.js).
+ * @param {boolean} [options.isUploadedRoute] True only when the ROUTE says
+ *   this is an upload (`FileResult.isUploadedFile`, i.e. a `/share/v/local-only/`
+ *   URL). Gates the "upload isn't in this browser" reclassification below.
+ *   `isUploadedFile` here can't stand in for it: it's `testUuid(path)`, and
+ *   a hosted `/v/p/<uuid>.ifc` reaches this function as the very same URL
+ *   string as `/v/local-only/<uuid>.ifc` (codex review on #1956).
  * @return {object} The model or undefined
  */
 export async function load(
@@ -214,7 +223,7 @@ export async function load(
   isOpfsAvailable,
   setOpfsFile,
   accessToken = '',
-  {isNestedLoad = false} = {},
+  {isNestedLoad = false, isUploadedRoute = false} = {},
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
   // HACK: pathArg can be a URL or a string
@@ -240,7 +249,7 @@ export async function load(
 
   // TODO(pablo): we should pass in the routeResult instead of the path
   // Test for uploaded first
-  // Maybe use path.startsWith('/share/v/new')
+  // The route's own answer is routes/localOnly.ts isLocalOnlyPath (#1959)
   const isUploadedFile = testUuid(path)
   // Human-readable source filename for root-label composition (#1595,
   // "Scene (ISS_stationary.glb)"). For uploads the route carries only
@@ -250,6 +259,18 @@ export async function load(
   // loads (GitHub, external, locally hosted) the trailing path
   // segment is the filename.
   const sourceFileName = isUploadedFile ? uploadedDisplayFileName(path) : fileNameFromPath(path)
+  // The OPFS entry name for an upload — the same final path segment
+  // `constructUploadedBlobPath` keeps and `getModelFromOPFS` reads by. Kept
+  // so a failed read can ask OPFS directly whether the entry exists.
+  const uploadStorageId = isUploadedFile ? path.split('/').pop() : null
+  // A local file opened in a browser without OPFS is held in this page's
+  // memory under its `/v/local-only/` id (`inMemoryUploads.js`, #1906); there is no
+  // blob URL to fetch, since the opener never minted one. Looked up before
+  // the blob-path rewrite below discards the id. Only consulted when OPFS is
+  // unavailable, the only case anything registers there.
+  const inMemoryFile = (isUploadedFile && !isOpfsAvailable) ?
+    getInMemoryUpload(fileNameFromPath(path)) :
+    undefined
   if (isUploadedFile) {
     path = constructUploadedBlobPath(path)
     debug().log('Loader#load: file uploaded, blob path:', path)
@@ -264,7 +285,9 @@ export async function load(
   // Should be true of all locally hosted files, e.g. /index.ifc.  Uploads will have "blob:" prefix
   const isLocallyHostedFile = !path.startsWith('blob:') && !path.startsWith('http')
   debug().log(`Loader#load: isLocallyHostedFile:${isLocallyHostedFile} if path has leading slash:`, path)
-  if (!isOpfsAvailable) {
+  if (inMemoryFile !== undefined) {
+    debug().log('Loader#load: reading in-memory upload:', path)
+  } else if (!isOpfsAvailable) {
     debug().log('Loader#load: download1:', path, accessToken, isOpfsAvailable)
     if (isLocallyHostedFile) {
       derefPath = path
@@ -597,6 +620,31 @@ export async function load(
       // Uploaded files (drag-drop, file picker) only exist in OPFS — there
       // is no remote URL to fall back to. Re-throw so the user sees the
       // error rather than a misleading "fall-through succeeded" outcome.
+      //
+      // The common way to get here is a `/v/local-only/<id>` URL opened in a
+      // browser that never held the upload: a link pasted from another
+      // machine, or one that outlived a storage clear (#1955). The worker
+      // reports that as a bare `Folder <id> not found` string. Rather than
+      // string-match it, ask OPFS directly; only a definitive "absent"
+      // becomes the typed error CadView explains to the user. A probe that
+      // says present, or that itself throws (couldn't look), leaves the
+      // original error in place so real OPFS defects still surface.
+      //
+      // Only for routes that ARE uploads (`isUploadedRoute`). `isUploadedFile`
+      // is a UUID-in-the-path heuristic that also matches a hosted model
+      // named `<uuid>.ifc`; for that misclassification the OPFS entry is
+      // absent too, and the friendly, Sentry-silent alert would hide it.
+      if (isUploadedFile && isUploadedRoute) {
+        let isAbsent = false
+        try {
+          isAbsent = (await doesUploadExistInOPFS(uploadStorageId)) === false
+        } catch (probeError) {
+          debug().warn('Loader#load: could not probe OPFS for upload:', probeError)
+        }
+        if (isAbsent) {
+          throw new UploadNotInBrowserError(uploadStorageId)
+        }
+      }
       if (isUploadedFile) {
         throw opfsError
       }
@@ -623,7 +671,12 @@ export async function load(
     }
   }
 
-  if (modelData === undefined) {
+  if (inMemoryFile !== undefined) {
+    // Same shapes `axiosDownload` returns for its `text` / `arraybuffer`
+    // response types, which is what the rest of this function expects.
+    onProgress('Reading model data...')
+    modelData = isFormatText ? await inMemoryFile.text() : await inMemoryFile.arrayBuffer()
+  } else if (modelData === undefined) {
     // Either OPFS is unavailable in this browser, or the OPFS attempt above
     // failed and we're falling back. Either way, fetch the bytes directly.
     if (isBase64) {
@@ -806,6 +859,12 @@ export async function load(
 
   // Used for GA stats
   model.type = loader.type
+  // `model.type` is 'glb' for both a native GLB and a GLB-artifact cache
+  // hit, because a hit swaps the loader tuple to the GLB loader. Say which
+  // it was, so GA can separate warm opens from cold parses
+  // (`stats_cacheHit`). Read here, after the OPFS block, because the stale
+  // Git LFS pointer path above can still reset it to false.
+  reportCacheHit(cameFromGlbCache)
 
   // ShareModel decoration (see src/viewer/ShareModel.js): adds
   // `format` + `capabilities` so call-sites can branch on intrinsic
@@ -1341,7 +1400,7 @@ function fileNameFromPath(path) {
  * user's original filename in the recent-files entry keyed by that
  * UUID (`utils/dragAndDrop.js#onWritten` → `addRecentFileEntry`).
  * Falls back to the UUID-based storage name when the entry is missing
- * (cleared localStorage, direct navigation to a stale /v/new/ URL).
+ * (cleared localStorage, direct navigation to a stale /v/local-only/ URL).
  *
  * @param {string} uploadPath the pre-blob-rewrite path whose trailing
  *   segment is the upload's storage id (`<uuid>.<type>`)
@@ -1351,6 +1410,12 @@ function uploadedDisplayFileName(uploadPath) {
   const storageId = fileNameFromPath(uploadPath)
   if (storageId === null) {
     return null
+  }
+  // An upload held in memory (no OPFS, #1906) has no recents entry; the
+  // File it holds still knows the user's name for it.
+  const inMemoryName = getInMemoryUpload(storageId)?.name
+  if (typeof inMemoryName === 'string' && inMemoryName !== '') {
+    return inMemoryName
   }
   try {
     const entry = loadAllRecentFiles().find((f) => f.id === storageId)

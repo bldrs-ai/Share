@@ -33,7 +33,6 @@ jest.mock('../OPFS/utils', () => ({saveDnDFileToOpfs: jest.fn()}))
 // We'll import the real dependencies from the mocks above
 import {guessTypeFromFile} from '../Filetype'
 import {saveDnDFileToOpfs} from '../OPFS/utils'
-import {noOpfsLocalFileAlert} from '../OPFS/messages'
 
 
 describe('ViewerContainer', () => {
@@ -175,16 +174,16 @@ describe('ViewerContainer', () => {
 
     dropzone.dispatchEvent(mockEvent)
 
-    // Make sure we navigate to /app/v/new/myUploadedFileName
+    // Make sure we navigate to /app/v/local-only/myUploadedFileName
     await waitFor(() => {
       expect(saveDnDFileToOpfs).toHaveBeenCalledTimes(1)
-      expect(mockNavigate).toHaveBeenCalledWith('/app/v/new/myUploadedFileName')
+      expect(mockNavigate).toHaveBeenCalledWith('/app/v/local-only/myUploadedFileName')
     })
   })
 
-  // Without OPFS the drop can't survive navigateToModel's full page load
-  // (#1906), so the user gets an explanation instead of a failed load.
-  test('alerts instead of opening when isOpfsAvailable = false', async () => {
+  // Without OPFS the drop is held in memory and opened by an in-app
+  // navigation, since a page load would drop it (#1906).
+  test('opens the drop from memory when isOpfsAvailable = false', async () => {
     useStore.mockImplementation((selector) => {
       const state = {
         appPrefix: '/app',
@@ -210,10 +209,10 @@ describe('ViewerContainer', () => {
     dropzone.dispatchEvent(mockEvent)
 
     await waitFor(() => {
-      expect(mockSetAlert).toHaveBeenCalledWith(noOpfsLocalFileAlert())
+      expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/^\/app\/v\/local-only\/[0-9a-f-]{36}\.my-recognized-type$/))
     })
     expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
-    expect(mockNavigate).not.toHaveBeenCalled()
+    expect(mockSetAlert).not.toHaveBeenCalled()
   })
 })
 

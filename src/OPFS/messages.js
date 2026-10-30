@@ -1,34 +1,95 @@
 /**
- * What the user is told when they try to open a file from their computer in
- * a browser without OPFS (Firefox private windows, some embeds).
+ * What the user is told when a `/v/local-only/<id>` URL names a file that was
+ * opened in a browser without OPFS (Firefox private windows, some embeds),
+ * and the page that opened it is gone: a reload, or the link opened anywhere
+ * else (#1906).
  *
- * Uploads are stored in OPFS and loaded back out of it after
- * `navigateToModel`'s full page load, so without OPFS there is nowhere for
- * the file to survive that load. The blob-URL fallbacks that used to run here
- * could never open anything: the URL dies with the page that minted it. Until
- * the File is held in memory across an in-app navigation (#1906), say so
- * plainly instead of failing.
+ * Without OPFS a local file is held only in the memory of the page that
+ * opened it (`loader/inMemoryUploads.js`), so nothing can load it now.
  *
  * Its own module, not `OPFS/utils.js` or `utils/loader.js`, because tests of
- * both call sites mock those wholesale.
+ * the call sites mock those wholesale.
  */
-export const NO_OPFS_LOCAL_FILE_ALERT =
-  'Opening a file from your computer needs browser storage, which isn\'t available here. ' +
-  'Private browsing windows often turn it off. ' +
-  'Try a regular window, or open the model from GitHub or Google Drive.'
+export const IN_MEMORY_UPLOAD_GONE_ALERT =
+  'This file was opened from your computer in a previous page and is no longer available. ' +
+  'This browser has no storage for opened files, so they last only until the page is reloaded or closed. ' +
+  'Open it again from your computer to view it.'
 
 
 /**
- * The alert to raise, as a typed object rather than the bare string, so
- * `AlertDialog` can give it its own header, leave off the "contact us"
- * footer (it is a known limit, not a defect), and count it in analytics
- * only: an expected environment condition doesn't belong in Sentry, the way
- * `unsupportedSchema` stays out of it. `AlertDialog` does the counting, so
- * callers must not `trackAlert` it themselves (that double-counted, #1905
- * review).
+ * Thrown by CadView for a `/v/local-only/` URL, in a browser without OPFS, whose
+ * file this page doesn't hold (`hasInMemoryUpload`).
+ */
+export class InMemoryUploadGoneError extends Error {
+  /** @param {string} storageId `<uuid>.<ext>` */
+  constructor(storageId) {
+    super(IN_MEMORY_UPLOAD_GONE_ALERT)
+    this.name = 'InMemoryUploadGoneError'
+    this.storageId = storageId
+  }
+}
+
+
+/**
+ * Typed alert for {@link InMemoryUploadGoneError}, as an object rather than
+ * the bare string, so `AlertDialog` can give it its own header, leave off the
+ * "contact us" footer (it is a known limit of browsers without OPFS, not a
+ * defect), and count it in analytics only: an expected outcome doesn't belong
+ * in Sentry, the way `unsupportedSchema` stays out of it. `AlertDialog` does
+ * the counting, so callers must not `trackAlert` it themselves.
  *
  * @return {{type: string, message: string}}
  */
-export function noOpfsLocalFileAlert() {
-  return {type: 'noOpfs', message: NO_OPFS_LOCAL_FILE_ALERT}
+export function inMemoryUploadGoneAlert() {
+  return {type: 'inMemoryUploadGone', message: IN_MEMORY_UPLOAD_GONE_ALERT}
+}
+
+
+/**
+ * What the user is told when a `/v/local-only/<storageId>` URL (or a legacy
+ * `/v/new/` one, redirected there) names an upload that isn't in this
+ * browser's OPFS (#1955). It says "local-only", the route's own name since
+ * #1959, so the URL and the explanation use the same word.
+ *
+ * An upload's bytes live only in the OPFS of the browser profile that
+ * dropped it, but its URL is portable: it gets pasted into chats (#705 —
+ * Share still offers it for local files), opened on another device, or
+ * outlives a storage clear. Sentry showed this as the top hard-failure
+ * cause, with one storage id opened from up to 11 IPs. There is nothing to
+ * fall back to, so the load can't succeed; the job here is to say why, in
+ * the user's terms, instead of the worker's `Folder <id> not found` string.
+ */
+export const UPLOAD_NOT_IN_BROWSER_ALERT =
+  'This is a local-only link: the model was opened from a file on someone\'s computer, and ' +
+  'local-only files are kept only in the browser that opened them. It isn\'t in this browser, so it can\'t be shown here. ' +
+  'If it\'s your file, open it again from your computer. ' +
+  'If someone sent you this link, ask them to share the model from GitHub or Google Drive instead.'
+
+
+/**
+ * Thrown by `Loader#load` when an upload's OPFS read failed AND a direct
+ * probe (`doesUploadExistInOPFS`) says the entry is definitively absent.
+ * Any other upload read failure keeps its original error, so real OPFS
+ * defects still reach Sentry. Lives here rather than in `Loader.js` so
+ * `CadView` can test for it without importing the loader.
+ */
+export class UploadNotInBrowserError extends Error {
+  /** @param {string} storageId `<blob-uuid>.<ext>` */
+  constructor(storageId) {
+    super(UPLOAD_NOT_IN_BROWSER_ALERT)
+    this.name = 'UploadNotInBrowserError'
+    this.storageId = storageId
+  }
+}
+
+
+/**
+ * Typed alert for {@link UploadNotInBrowserError}. Like `inMemoryUploadGone`, it is an
+ * expected outcome, not a defect: `AlertDialog` counts it in analytics only,
+ * and `CadView` skips `captureException` for it.
+ *
+ * @return {{type: string, message: string}}
+ */
+export function uploadNotInBrowserAlert() {
+  return {type: 'uploadNotInBrowser', message: UPLOAD_NOT_IN_BROWSER_ALERT}
 }

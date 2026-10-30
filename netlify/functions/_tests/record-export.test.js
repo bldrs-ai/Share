@@ -1,13 +1,15 @@
 /*
  * Tests for the record-export Netlify Function — the server-side history of
- * what a Pro user exported (design/new/glb-export-premium.md §4.5).
+ * what a user exported (design/new/glb-export-premium.md §4.5), and the
+ * free tier's model slots read off `usageQuota.loads` (§4.8).
  *
- * Two things here are worth more than the happy path: the 403, which is the
- * only reason an unentitled client can't write to another user's
- * `app_metadata` at will, and the shape of the PATCH — Auth0 merges
- * `app_metadata` a top-level key at a time, so a patch carrying anything
- * besides `exports` would silently rewrite the quota or subscription state
- * that `record-load.js` and the Stripe webhook own.
+ * Three things here are worth more than the happy path: a free user's export
+ * is recorded only for a model holding a slot; the 403 for one that holds
+ * none (the client's "this memoised module is no longer Pro" signal); and the
+ * shape of the PATCH — Auth0 merges `app_metadata` a top-level key at a time,
+ * so a patch carrying anything besides `exports` would silently rewrite the
+ * slots or subscription state that `record-load.js`, `pro-module.js` and the
+ * Stripe webhook own.
  *
  * In `_tests/` rather than beside its subject: Netlify bundles every
  * top-level `.js` under `netlify/functions/` AS a function, so a test file
@@ -34,6 +36,37 @@ jest.mock('@sentry/serverless', () => ({
 const SUB = 'google-oauth2|1234567890'
 const KEY = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
 const EXPORTS_CAP = 100
+const DAY_MS = 24 * 60 * 60 * 1000
+const CHARGE_ID = '7a1c2b3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
+const OTHER = '/share/v/g/drive-file-id'
+
+
+/**
+ * A row the RETIRED per-export allowance wrote when it charged a free export.
+ * History now, counted for nothing.
+ *
+ * @param {string} id
+ * @param {number} daysAgo
+ * @return {object}
+ */
+function chargeRow(id, daysAgo = 0) {
+  return {
+    id, key: null, title: null, format: 'glb', bytes: null,
+    exportedAt: new Date(Date.now() - (daysAgo * DAY_MS)).toISOString(), free: true,
+  }
+}
+
+
+/**
+ * A model slot taken `daysAgo` days ago.
+ *
+ * @param {string} key
+ * @param {number} daysAgo
+ * @return {object} a usageQuota.loads row
+ */
+function slot(key, daysAgo = 0) {
+  return {key, loadedAt: new Date(Date.now() - (daysAgo * DAY_MS)).toISOString()}
+}
 
 
 /**
@@ -184,14 +217,149 @@ describe('record-export function', () => {
     expect(patchedAppMetadata().exports).toHaveLength(EXPORTS_CAP)
   })
 
-  it('403s a signed-in user without a subscription, and writes nothing', async () => {
-    mockAuth0({})
+  // Paid, waiting on a re-login: Pro (§7.2), so recorded like sharePro —
+  // prepended, never matched against a charge.
+  it('records a pending-reauth subscriber\'s export as Pro', async () => {
+    mockAuth0({subscriptionStatus: 'shareProPendingReauth'})
 
     const res = await handler(getEvent())
 
-    expect(res.statusCode).toBe(403)
-    expect(JSON.parse(res.body).error).toBe('subscription_required')
-    expect(axios.patch).not.toHaveBeenCalled()
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body)
+    expect(body.exports).toHaveLength(1)
+    expect(body.exports[0]).toMatchObject({key: KEY, bytes: 2048})
+    expect(body.exports[0].free).toBeUndefined()
+    expect(body.modelSlots).toBeUndefined()
+  })
+
+  describe('a free user', () => {
+    it('records an export of a model holding a slot, every time, as plain history', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slot(KEY, 1), slot(OTHER, 2)]}})
+
+      const res = await handler(getEvent({id: CHARGE_ID}))
+
+      expect(res.statusCode).toBe(200)
+      const appMetadata = patchedAppMetadata()
+      // History only: `usageQuota` is pro-module's and record-load's.
+      expect(Object.keys(appMetadata)).toEqual(['exports'])
+      expect(appMetadata.exports).toHaveLength(1)
+      expect(appMetadata.exports[0]).toMatchObject({id: CHARGE_ID, key: KEY, bytes: 2048})
+      expect(appMetadata.exports[0].free).toBeUndefined()
+      expect(JSON.parse(res.body).modelSlots).toMatchObject({limit: 2, used: 2, remaining: 0, keys: [KEY, OTHER]})
+    })
+
+    it('refuses an export of a model holding no slot, and writes nothing', async () => {
+      // pro-module never serves a free user for such a model, so this export
+      // ran on a module from somewhere else — most likely one memoised while
+      // the account was Pro.
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slot(OTHER, 1)]}})
+
+      const res = await handler(getEvent())
+
+      expect(res.statusCode).toBe(403)
+      const body = JSON.parse(res.body)
+      expect(body.error).toBe('export_slot_missing')
+      // The slots ride along, so the client's display catches up.
+      expect(body.modelSlots).toMatchObject({limit: 2, used: 1, remaining: 1, keys: [OTHER]})
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it('refuses an export of a model whose slot has rolled off', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slot(KEY, 8)]}})
+
+      const res = await handler(getEvent())
+
+      expect(res.statusCode).toBe(403)
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it('ignores the retired export ledger, and keeps its rows as history', async () => {
+      const old = chargeRow('6b2d3c4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e', 1)
+      mockAuth0({subscriptionStatus: 'free', exports: [old], usageQuota: {loads: [slot(KEY, 0)]}})
+
+      const res = await handler(getEvent())
+
+      expect(res.statusCode).toBe(200)
+      expect(patchedAppMetadata().exports.slice(1)).toEqual([old])
+      // A charge row does not stand in for a slot: with no slot, refused.
+      jest.clearAllMocks()
+      mockAuth0({subscriptionStatus: 'free', exports: [{...old, key: KEY}]})
+      expect((await handler(getEvent({id: old.id}))).statusCode).toBe(403)
+    })
+  })
+
+  describe('a free user exporting a PUBLIC model (no slot)', () => {
+    it('records a public GitHub model without a slot, by the server\'s own lookup', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slot(OTHER, 1)]}})
+      const authGet = axios.get.getMockImplementation()
+      axios.get.mockImplementation((url, config) => (url.startsWith('https://api.github.com/repos/') ?
+        Promise.resolve({status: 200, data: {}}) : authGet(url, config)))
+
+      const res = await handler(getEvent({key: '/share/v/gh/bldrs-ai/re-public-1/main/box.ifc'}))
+
+      expect(res.statusCode).toBe(200)
+      expect(Object.keys(patchedAppMetadata())).toEqual(['exports'])
+    })
+
+    it('records a Drive file the client found public, and refuses one it did not', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: []}})
+
+      expect((await handler(getEvent({key: '/share/v/g/shared-file', drivePublic: true}))).statusCode).toBe(200)
+      expect((await handler(getEvent({key: '/share/v/g/shared-file'}))).statusCode).toBe(403)
+    })
+  })
+
+  describe('GET: the caller\'s model slots', () => {
+    const getSlots = () => handler({httpMethod: 'GET', headers: {authorization: 'Bearer user-token'}})
+
+    it('reports a free user\'s slots in the window, and writes nothing', async () => {
+      mockAuth0({usageQuota: {loads: [slot(KEY, 2), slot(OTHER, 9)]}, exports: [chargeRow(CHARGE_ID, 1)]})
+
+      const res = await getSlots()
+
+      expect(res.statusCode).toBe(200)
+      const body = JSON.parse(res.body)
+      expect(body.tier).toBe('free')
+      // The 9-day-old slot has left the 7-day window, and the old charge row
+      // counts for nothing.
+      expect(body.modelSlots).toMatchObject({limit: 2, used: 1, remaining: 1, keys: [KEY]})
+      expect(Date.parse(body.modelSlots.nextFreeAt)).toBeGreaterThan(Date.now())
+      // No model named: nothing to say about one.
+      expect(body.isPublic).toBeNull()
+      expect(axios.patch).not.toHaveBeenCalled()
+    })
+
+    it('says whether the model on screen is public: hosted yes, local no, Drive on the client\'s word', async () => {
+      mockAuth0({})
+      const ask = async (key, drivePublic = false) => {
+        const headers = {'authorization': 'Bearer user-token', 'x-bldrs-model-key': encodeURIComponent(key)}
+        if (drivePublic) {
+          headers['x-bldrs-drive-public'] = '1'
+        }
+        return JSON.parse((await handler({httpMethod: 'GET', headers})).body).isPublic
+      }
+
+      expect(await ask('/share/v/p/index.ifc')).toBe(true)
+      expect(await ask('/share/v/local-only/abc.ifc')).toBe(false)
+      expect(await ask('/share/v/local-only/abc.ifc', true)).toBe(false)
+      expect(await ask('/share/v/g/file', true)).toBe(true)
+      expect(await ask('/share/v/g/file')).toBe(false)
+    })
+
+    it.each(['sharePro', 'shareProPendingReauth'])('reports no slots for %s, which is unlimited', async (status) => {
+      mockAuth0({subscriptionStatus: status, usageQuota: {loads: [slot(KEY)]}})
+
+      const body = JSON.parse((await getSlots()).body)
+
+      expect(body).toEqual({tier: 'paid', modelSlots: null, isPublic: null})
+    })
+
+    it('401s with no bearer token', async () => {
+      const res = await handler({httpMethod: 'GET', headers: {}})
+
+      expect(res.statusCode).toBe(401)
+      expect(axios.get).not.toHaveBeenCalled()
+    })
   })
 
   it('401s a request with no bearer token', async () => {
@@ -210,8 +378,8 @@ describe('record-export function', () => {
     expect(axios.patch).not.toHaveBeenCalled()
   })
 
-  it('405s a non-POST', async () => {
-    const res = await handler(getEvent({}, {httpMethod: 'GET'}))
+  it('405s anything but GET and POST', async () => {
+    const res = await handler(getEvent({}, {httpMethod: 'PUT'}))
 
     expect(res.statusCode).toBe(405)
     expect(axios.get).not.toHaveBeenCalled()

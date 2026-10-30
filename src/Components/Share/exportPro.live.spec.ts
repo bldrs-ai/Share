@@ -24,6 +24,7 @@ import {
   LIVE_TEST_TIMEOUT_MS,
   PRO_MODULE_URL,
   RECORD_EXPORT_URL,
+  cacheDirectives,
   clickExportAndDownload,
   loginWithPassword,
   noteUnverified,
@@ -36,6 +37,10 @@ import {
   skipAllWithoutTarget,
 } from '../../tests/e2e/live/liveSession'
 import {makeSpz} from '../../tests/e2e/live/spz'
+
+
+// Click to "Exported …": the export itself, on the slowest project.
+const EXPORTED_MESSAGE_TIMEOUT_MS = 120_000
 
 
 /**
@@ -92,7 +97,7 @@ async function expectReopenedModelIsPickable(page: Page) {
   }
   await node(LEAF_LABEL).first().getByTestId('NavTreeNodeLabel').click()
   await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
-  await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.glb(\/\d+)+/)
+  await expect(page).toHaveURL(/\/share\/v\/(?:new|local-only)\/[^/]+\.glb(\/\d+)+/)
   // …and the scene paints it, which is the half a tree that merely rendered
   // would not give (#1844).
   await expect.poll(() => sceneHighlightCount(page)).toBeGreaterThan(0)
@@ -139,7 +144,7 @@ test.describe('Live smoke: Pro', () => {
     await expect(button).toHaveText('Export GLB')
 
     // Step 2, Pro: nothing new on the tab — no allowance line, no Pro chip.
-    await expect(page.getByTestId('export-free-remaining')).toHaveCount(0)
+    await expect(page.getByTestId('export-model-slots')).toHaveCount(0)
     await expect(page.getByTestId('export-pro-chip')).toHaveCount(0)
 
     await dismissLoadSnackbar(page)
@@ -147,7 +152,19 @@ test.describe('Live smoke: Pro', () => {
     await waitForCodecSizing(page)
     const withMetadata = await selectCompression(page, 'none')
 
-    const first = await clickExportAndDownload(page)
+    // Step 8, watched from BEFORE the click: the "Exported …" message reads
+    // over the still-open dialog, and nothing pushes the page sideways (the
+    // mobile projects' half). The message auto-dismisses after 5s
+    // (AlertDialogAndSnackbar), and on mobile-pixel in CI reading the
+    // download back alone outlasted that (live runs 37747107871 and
+    // 37820640515), so it is checked as it appears, alongside the download.
+    const exportedMessage = (async () => {
+      await expect(page.getByTestId('snackbar')).toContainText('Exported', {timeout: EXPORTED_MESSAGE_TIMEOUT_MS})
+      await expect(page.getByRole('dialog')).toBeVisible()
+      await expectSnackbarOnTop(page)
+      await expectNoHorizontalScroll(page)
+    })()
+    const [first] = await Promise.all([clickExportAndDownload(page), exportedMessage])
     expect(first.name).toBe('index.glb')
     expect(glbFramingProblems(first.bytes)).toEqual([])
     expect(first.bytes.byteLength).toBe(withMetadata)
@@ -161,16 +178,11 @@ test.describe('Live smoke: Pro', () => {
     expect(proModule).toHaveLength(1)
     expect(proModule[0].status).toBe(HTTP_OK)
     expect(proModule[0].headers['content-type']).toMatch(/^text\/javascript/)
-    expect(proModule[0].headers['cache-control']).toBe('private, no-store')
-    // A Pro delivery is never charged (#1939 §4.8): no free-export row id.
-    expect(proModule[0].headers['x-bldrs-export-id']).toBeUndefined()
-
-    // Step 8: the "Exported …" message reads over the still-open dialog, and
-    // nothing pushes the page sideways (the mobile projects' half).
-    await expect(page.getByRole('dialog')).toBeVisible()
-    await expect(page.getByTestId('snackbar')).toContainText('Exported')
-    await expectSnackbarOnTop(page)
-    await expectNoHorizontalScroll(page)
+    // Directives, not the string: Netlify's edge re-serializes the header
+    // the function set as `private, no-store` to `private,no-store`.
+    expect(cacheDirectives(proModule[0].headers['cache-control'])).toEqual(['no-store', 'private'])
+    // A Pro delivery takes no model slot (§4.8): no slots header.
+    expect(proModule[0].headers['x-bldrs-model-slots']).toBeUndefined()
 
     // Step 5: metadata off is a smaller file with no BLDRS_ anywhere in its
     // JSON — and the first file, with it on, had some.
@@ -330,7 +342,7 @@ test.describe('Live smoke: Pro', () => {
     await page.keyboard.press('Escape')
 
     // The Open dialog's Local tab.
-    await openLocalFile(page, savedPath, /\/share\/v\/new\/[^/]+\.glb/)
+    await openLocalFile(page, savedPath, /\/share\/v\/(?:new|local-only)\/[^/]+\.glb/)
     await waitForModelReady(page, LIVE_TEST_TIMEOUT_MS)
     await expectReopenedModelIsPickable(page)
 
@@ -339,7 +351,7 @@ test.describe('Live smoke: Pro', () => {
     const beforeDrop = page.url()
     await dropFile(page, savedPath, 'index.glb.gz', 'application/gzip')
     await expect(page).not.toHaveURL(beforeDrop, {timeout: LIVE_TEST_TIMEOUT_MS})
-    await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.glb/)
+    await expect(page).toHaveURL(/\/share\/v\/(?:new|local-only)\/[^/]+\.glb/)
     await waitForModelReady(page, LIVE_TEST_TIMEOUT_MS)
     await expectReopenedModelIsPickable(page)
 
@@ -349,7 +361,7 @@ test.describe('Live smoke: Pro', () => {
     const spzPath = testInfo.outputPath('point.spz')
     await writeFile(spzPath, makeSpz())
     await dropFile(page, spzPath, 'point.spz', 'application/octet-stream')
-    await expect(page).toHaveURL(/\/share\/v\/new\/[^/]+\.spz/, {timeout: LIVE_TEST_TIMEOUT_MS})
+    await expect(page).toHaveURL(/\/share\/v\/(?:new|local-only)\/[^/]+\.spz/, {timeout: LIVE_TEST_TIMEOUT_MS})
     // Ready, and no "Load failed": a .spz the splat loader cannot read shows
     // that alert and never sets data-model-ready (checked against a corrupt
     // one while writing this).

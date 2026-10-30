@@ -7,18 +7,26 @@ import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
 
 /**
  * Opening a file from the user's computer in a browser without OPFS (Firefox
- * private windows, some embeds) explains itself instead of failing.
+ * private windows, some embeds), #1906.
  *
- * Uploads are stored in OPFS and loaded back after `navigateToModel`'s full
- * page load. Without OPFS the old blob-URL fallbacks could never open
- * anything, because the URL dies with the page that minted it. Until the
- * File is held across an in-app navigation (#1906), both ways in say so
- * (`OPFS/messages.js`) and leave the current model where it is.
+ * With OPFS an upload is stored there and loaded back after
+ * `navigateToModel`'s full page load. Without it, the file is held in the
+ * page's memory (`loader/inMemoryUploads.js`) and opened by an in-app
+ * navigation instead, since a page load would drop it. A reload then can't
+ * recover the file, and says so.
  */
 const PICKED_FILE = 'public/index.ifc'
-// A distinctive slice of NO_OPFS_LOCAL_FILE_ALERT, which the spec can't
+// The upload's id, `<uuid>.ifc`, under the `/v/local-only/` route (#1959).
+const UPLOAD_URL = /\/share\/v\/local-only\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.ifc$/
+// A distinctive slice of IN_MEMORY_UPLOAD_GONE_ALERT, which the spec can't
 // import (it would pull the app's module graph into the test runner).
-const ALERT_TEXT = 'needs browser storage, which isn\'t available here'
+const GONE_TEXT = 'opened from your computer in a previous page and is no longer available'
+// Every test here loads a model at least twice (the home model, then the
+// upload), and the reload test boots the app a third time.
+const TWO_LOADS_TIMEOUT_MS = 90_000
+// A reload boots the whole app (OPFS probe, viewer init) before CadView
+// can raise the alert; the default 5s expect is not always enough.
+const APP_BOOT_TIMEOUT_MS = 15_000
 
 
 /**
@@ -44,8 +52,48 @@ function storedLocalIds(): string[] {
 }
 
 
+/**
+ * Drop `PICKED_FILE` on the viewer the way a user's drag would.
+ *
+ * @param page
+ */
+async function dropPickedFile(page: Page) {
+  const bytes = [...readFileSync(PICKED_FILE)]
+  await page.evaluate((bytesArg) => {
+    const dropzone = document.querySelector('[data-testid="cadview-dropzone"]')
+    if (!dropzone) {
+      throw new Error('Drop target not found')
+    }
+    const dt = new DataTransfer()
+    dt.items.add(new File([new Uint8Array(bytesArg)], 'index.ifc'))
+    dropzone.dispatchEvent(new DragEvent('drop', {bubbles: true, cancelable: true, dataTransfer: dt}))
+  }, bytes)
+}
+
+
+/**
+ * The upload loaded and the page is still on it.
+ *
+ * A failed load raises an alert and then redirects to the home model, which
+ * also ends model-ready, so neither "a model is ready" nor "the URL changed"
+ * proves anything alone. What does: the page title takes the uploaded
+ * model's `Local-only: ` form only once that model has loaded, the URL is still the
+ * upload's, and no dialog (the alert) is up.
+ *
+ * @param page
+ */
+async function expectUploadOpened(page: Page) {
+  await expect(page).toHaveURL(UPLOAD_URL)
+  await waitForModelReady(page)
+  await expect(page).toHaveTitle(/^Local-only: /)
+  await expect(page).toHaveURL(UPLOAD_URL)
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+}
+
+
 describeMobileAndDesktop('Open 100: opening a local file without OPFS', () => {
   test.beforeEach(async ({page, context}) => {
+    test.setTimeout(TWO_LOADS_TIMEOUT_MS)
     await homepageSetup(page)
     await setIsReturningUser(context)
     await disableOpfs(page)
@@ -53,34 +101,35 @@ describeMobileAndDesktop('Open 100: opening a local file without OPFS', () => {
     await waitForModelReady(page)
   })
 
-  // What carries these tests is the alert itself: the old fallback raised a
-  // different one ("does not point to a model file") and then redirected to
-  // the home model, at the very URL this page is already on, so a URL check
-  // can't tell the two apart.
-  test('Browse explains that local files need browser storage', async ({page}) => {
+  test('Browse opens the picked file', async ({page}) => {
     await page.getByTestId('control-button-open').click()
     await page.getByRole('tab', {name: 'Local'}).click()
+    const chooser = page.waitForEvent('filechooser')
     await page.getByTestId('button_open_file').click()
+    await (await chooser).setFiles(PICKED_FILE)
 
-    await expect(page.getByText('Not available here')).toBeVisible()
-    await expect(page.getByText(ALERT_TEXT)).toBeVisible()
+    await expectUploadOpened(page)
+    // Nothing is stored, so there is nothing for a recent to reopen.
+    expect(await page.evaluate(storedLocalIds)).toEqual([])
   })
 
-  test('drag-and-drop explains that local files need browser storage', async ({page}) => {
-    const bytes = [...readFileSync(PICKED_FILE)]
-    await page.evaluate((bytesArg) => {
-      const dropzone = document.querySelector('[data-testid="cadview-dropzone"]')
-      if (!dropzone) {
-        throw new Error('Drop target not found')
-      }
-      const dt = new DataTransfer()
-      dt.items.add(new File([new Uint8Array(bytesArg)], 'index.ifc'))
-      dropzone.dispatchEvent(new DragEvent('drop', {bubbles: true, cancelable: true, dataTransfer: dt}))
-    }, bytes)
+  test('drag-and-drop opens the dropped file', async ({page}) => {
+    await dropPickedFile(page)
 
-    await expect(page.getByText('Not available here')).toBeVisible()
-    await expect(page.getByText(ALERT_TEXT)).toBeVisible()
-    // The old fallback recorded a recent for the never-stored blob id.
+    await expectUploadOpened(page)
     expect(await page.evaluate(storedLocalIds)).toEqual([])
+  })
+
+  test('reloading an opened file explains it is no longer available', async ({page}) => {
+    await dropPickedFile(page)
+    await expectUploadOpened(page)
+
+    // The leave-page prompt the Loader arms for uploads would hold the
+    // reload; accepting it is what a user who reloads anyway does.
+    page.on('dialog', (dialog) => dialog.accept())
+    await page.reload({waitUntil: 'domcontentloaded'})
+
+    await expect(page.getByText('File no longer available')).toBeVisible({timeout: APP_BOOT_TIMEOUT_MS})
+    await expect(page.getByText(GONE_TEXT)).toBeVisible()
   })
 })

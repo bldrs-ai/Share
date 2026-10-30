@@ -11,7 +11,10 @@
  * entitlement read across the event's and the linked customer, the
  * write-and-confirm loop and its inline retry,
  * the retry contract (which failures get a 5xx so Stripe redelivers), raw-body
- * handling, and what reaches Sentry.
+ * handling, what reaches Sentry, and the GA4 Measurement Protocol report of
+ * each Pro subscription's status transition (`_lib/subscriptionAnalytics.js`):
+ * one event per transition however a checkout's deliveries overlap, only on
+ * 200, and never a changed response code.
  *
  * In `_tests/` rather than beside its subject: Netlify bundles every
  * top-level `.js` under `netlify/functions/` AS a function.
@@ -39,6 +42,7 @@ const mockStripeClient = {
   webhooks: {constructEvent: jest.fn()},
   subscriptions: {list: jest.fn()},
   customers: {retrieve: jest.fn()},
+  checkout: {sessions: {list: jest.fn()}},
 }
 jest.mock('stripe', () => ({
   __esModule: true,
@@ -196,11 +200,17 @@ describe('stripe-webhook function', () => {
     resetManagementApiTokenCache()
     process.env = {...savedEnv, ...ENV}
     jest.spyOn(console, 'error').mockImplementation(() => {})
+    // The GA report logs every transition, sent or skipped (no GA env here
+    // unless a test adds it).
+    jest.spyOn(console, 'log').mockImplementation(() => {})
+    jest.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
   afterEach(() => {
     process.env = savedEnv
     console.error.mockRestore()
+    console.log.mockRestore() // eslint-disable-line no-console
+    console.warn.mockRestore()
   })
 
   describe('configuration', () => {
@@ -742,6 +752,373 @@ describe('stripe-webhook function', () => {
       expect(message).toContain('invoice.paid')
       expect(message).toContain('evt_invoice')
       expect(message).not.toContain('ada@example.com')
+    })
+  })
+
+  describe('GA4 subscription events (Measurement Protocol)', () => {
+    const GA_ENV = {GA4_MEASUREMENT_ID: 'G-UNIT0001', GA4_API_SECRET: 'mp-secret-unit'}
+    const CLIENT_ID = '1871520000.1754700000'
+    const MP_TIMEOUT_TEST_MS = 10000
+
+    /**
+     * A live-mode event whose payload is a Share Pro subscription with its
+     * interval. The payload decides WHETHER GA hears of it (its own status
+     * transition) and the params; entitlement still comes from the list.
+     *
+     * @param {string} type
+     * @param {object} [options]
+     * @param {string} [options.status] the subscription's status in the payload
+     * @param {object} [options.previous] `data.previous_attributes` (updated only)
+     * @param {string} [options.priceId]
+     * @return {object} what constructEvent returns
+     */
+    function liveEvent(type, {status = 'active', previous, priceId = ENV.SHARE_PRO_PRICE_ID} = {}) {
+      const data = {object: proSubscription({
+        status,
+        items: {data: [{price: {id: priceId, lookup_key: 'share_pro_monthly', recurring: {interval: 'month'}}}]},
+      })}
+      if (previous) {
+        data.previous_attributes = previous
+      }
+      return {id: 'evt_unit', type, livemode: true, data}
+    }
+
+    /**
+     * @param {Array<object>} sessions the customer's Checkout Sessions, newest first
+     */
+    function mockCheckoutSessions(sessions) {
+      mockStripeClient.checkout.sessions.list.mockResolvedValue(page(sessions))
+    }
+
+    /** @return {Array<{url: string, body: object}>} every Measurement Protocol POST */
+    function mpPosts() {
+      return global.fetch.mock.calls.map(([url, init]) => ({url, body: JSON.parse(init.body)}))
+    }
+
+    beforeEach(() => {
+      Object.assign(process.env, GA_ENV)
+      mockCheckoutSessions([
+        {id: 'cs_unit', client_reference_id: 'gacid_1871520000_1754700000', subscription: 'sub_unit', status: 'complete'},
+      ])
+      jest.spyOn(global, 'fetch').mockResolvedValue({ok: true, status: 204})
+    })
+
+    afterEach(() => {
+      global.fetch.mockRestore()
+    })
+
+    it('sends exactly one subscription_started, to the paying browser\'s GA client, when a user becomes Pro', async () => {
+      mockUpstreams()
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res).toEqual({statusCode: 200, body: 'Success'})
+      expect(mpPosts()).toEqual([{
+        url: 'https://www.google-analytics.com/mp/collect?measurement_id=G-UNIT0001&api_secret=mp-secret-unit',
+        body: {
+          client_id: CLIENT_ID,
+          events: [{
+            name: 'subscription_started',
+            params: {
+              tier: 'pro', source: 'server', cid_source: 'checkout', open_cid: `cid.${CLIENT_ID}`,
+              interval: 'month', plan: 'share_pro_monthly',
+            },
+          }],
+        },
+      }])
+      expect(mockStripeClient.checkout.sessions.list).toHaveBeenCalledWith(
+        {customer: CUSTOMER_ID, limit: 10}, {timeout: 1500, maxNetworkRetries: 0})
+    })
+
+    it('sends exactly one subscription_ended when a Pro subscription is canceled', async () => {
+      mockUpstreams({
+        subscriptions: [proSubscription({status: 'canceled'})],
+        appMetadata: {subscriptionStatus: 'sharePro', stripeCustomerId: CUSTOMER_ID},
+      })
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.deleted', {status: 'canceled'}))
+
+      const res = await handler(webhookEvent())
+
+      expect(res.statusCode).toBe(200)
+      expect(mpPosts().map((post) => post.body.events[0].name)).toEqual(['subscription_ended'])
+    })
+
+    // Once per SUBSCRIPTION status transition, read off the event: Stripe
+    // describes each status change in exactly one event, so overlapping
+    // deliveries can't both count it (Codex P1 on #1983).
+    describe('which events count', () => {
+      const CREATED = 'customer.subscription.created'
+      const UPDATED = 'customer.subscription.updated'
+      it.each([
+        ['created already active', CREATED, 'active', undefined, 'subscription_started'],
+        ['created trialing', CREATED, 'trialing', undefined, 'subscription_started'],
+        ['created incomplete (payment pending)', CREATED, 'incomplete', undefined, null],
+        ['updated incomplete → active (3-D Secure done)', UPDATED, 'active', {status: 'incomplete'}, 'subscription_started'],
+        ['updated unpaid → active (paid late)', UPDATED, 'active', {status: 'unpaid'}, 'subscription_started'],
+        ['updated past_due → active (entitling throughout)', UPDATED, 'active', {status: 'past_due'}, null],
+        ['updated active → past_due (dunning keeps access)', UPDATED, 'past_due', {status: 'active'}, null],
+        ['updated past_due → unpaid', UPDATED, 'unpaid', {status: 'past_due'}, 'subscription_ended'],
+        ['updated active → paused', UPDATED, 'paused', {status: 'active'}, 'subscription_ended'],
+        ['updated incomplete → incomplete_expired', UPDATED, 'incomplete_expired', {status: 'incomplete'}, null],
+        ['a renewal (no status change)', UPDATED, 'active', {current_period_end: 1759150000}, null],
+        ['an update with no previous_attributes', UPDATED, 'active', undefined, null],
+      ])('%s → %s', async (label, type, status, previous, expected) => {
+        mockUpstreams({subscriptions: [proSubscription({status})]})
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent(type, {status, previous}))
+
+        const res = await handler(webhookEvent())
+
+        expect(res.statusCode).toBe(200)
+        expect(mpPosts().map((post) => post.body.events[0].name)).toEqual(expected ? [expected] : [])
+      })
+
+      it('counts nothing for a subscription to another price', async () => {
+        mockUpstreams({subscriptions: [proSubscription({items: {data: [{price: {id: 'price_other'}}]}})]})
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent(CREATED, {priceId: 'price_other'}))
+
+        await handler(webhookEvent())
+
+        expect(global.fetch).not.toHaveBeenCalled()
+      })
+
+      // A deleted event carries no previous status; a subscription canceled
+      // after going unpaid already ended at `unpaid`, when the user went FREE.
+      it('counts no second end when a subscription that already ended is deleted', async () => {
+        mockUpstreams({
+          subscriptions: [proSubscription({status: 'canceled'})],
+          appMetadata: {subscriptionStatus: 'freePendingReauth', stripeCustomerId: CUSTOMER_ID},
+        })
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.deleted', {status: 'canceled'}))
+
+        await handler(webhookEvent())
+
+        expect(global.fetch).not.toHaveBeenCalled()
+      })
+    })
+
+    // One checkout sends created and updated seconds apart. Their deliveries
+    // overlap: both read FREE from Auth0 and both write PRO — the race that
+    // made a tier-write trigger double-count (Codex P1 on #1983). Only the
+    // event that is the subscription's own transition counts.
+    describe('a checkout burst: overlapping deliveries for one subscription', () => {
+      it.each([
+        ['created (active) + updated (invoice attached)',
+          ['customer.subscription.created', {status: 'active'}],
+          ['customer.subscription.updated', {status: 'active', previous: {latest_invoice: null}}]],
+        ['created (incomplete) + updated (incomplete → active)',
+          ['customer.subscription.created', {status: 'incomplete'}],
+          ['customer.subscription.updated', {status: 'active', previous: {status: 'incomplete'}}]],
+      ])('%s sends exactly one subscription_started', async (label, first, second) => {
+        mockUpstreams()
+        const events = {first: liveEvent(...first), second: liveEvent(...second)}
+        mockStripeClient.webhooks.constructEvent.mockImplementation((raw) => events[raw])
+
+        const responses = await Promise.all([
+          handler(webhookEvent({body: 'first'})),
+          handler(webhookEvent({body: 'second'})),
+        ])
+
+        expect(responses.map((res) => res.statusCode)).toEqual([200, 200])
+        // The overlap really happened: both deliveries wrote the promotion.
+        expect(patches().filter((patch) => patch.subscriptionStatus === 'shareProPendingReauth')).toHaveLength(2)
+        expect(mpPosts().map((post) => post.body.events[0].name)).toEqual(['subscription_started'])
+      })
+    })
+
+    // Sent on 200 paths only: a 500 is redelivered, and the redelivery
+    // reports it — so a failed delivery and its retry count once.
+    it('sends nothing from a delivery answered 500, and once from its successful redelivery', async () => {
+      mockUpstreams()
+      axios.patch.mockRejectedValueOnce(upstreamError(503))
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+      const failed = await handler(webhookEvent())
+      expect(failed.statusCode).toBe(500)
+      expect(global.fetch).not.toHaveBeenCalled()
+
+      const redelivered = await handler(webhookEvent())
+      expect(redelivered.statusCode).toBe(200)
+      expect(mpPosts().map((post) => post.body.events[0].name)).toEqual(['subscription_started'])
+    })
+
+    it('still counts a subscription with no Auth0 user (acknowledged, 200)', async () => {
+      mockUpstreams()
+      axios.get.mockResolvedValue({data: []})
+      mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+      const res = await handler(webhookEvent())
+
+      expect(res).toEqual({statusCode: 200, body: 'Acknowledged; not applied'})
+      expect(mpPosts().map((post) => post.body.events[0].name)).toEqual(['subscription_started'])
+    })
+
+    describe('never changes the response', () => {
+      it.each([
+        ['the network fails', () => global.fetch.mockRejectedValue(new TypeError('fetch failed'))],
+        ['GA answers 500', () => global.fetch.mockResolvedValue({ok: false, status: 500})],
+      ])('answers 200 when %s, logging without the API secret', async (label, breakIt) => {
+        mockUpstreams()
+        breakIt()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+        const res = await handler(webhookEvent())
+
+        expect(res).toEqual({statusCode: 200, body: 'Success'})
+        expect(global.fetch).toHaveBeenCalledTimes(1)
+        const warned = console.warn.mock.calls.flat().join(' ')
+        expect(warned).toContain('subscription_started for customer.subscription.created evt_unit not sent to GA')
+        expect(warned).not.toContain(GA_ENV.GA4_API_SECRET)
+        expect(Sentry.captureException).not.toHaveBeenCalled()
+      })
+
+      it('answers 200 when GA hangs, abandoning the request at its timeout', async () => {
+        mockUpstreams()
+        let signal = null
+        global.fetch.mockImplementation((url, init) => {
+          signal = init.signal
+          return new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))))
+        })
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+        const res = await handler(webhookEvent())
+
+        expect(res).toEqual({statusCode: 200, body: 'Success'})
+        expect(signal.aborted).toBe(true)
+      }, MP_TIMEOUT_TEST_MS)
+
+      // Each step's own cap is not enough: a delivery that reaches the report
+      // late could be cut off by the platform mid-POST, which Stripe sees as
+      // a failure and redelivers (Codex on #1983).
+      it('skips a transition that reaches the report with under 3 s left, and still answers 200 at once', async () => {
+        mockUpstreams()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+        const LATE_MS = 2500
+
+        const startedAt = Date.now()
+        const res = await handler(webhookEvent(), {getRemainingTimeInMillis: () => LATE_MS})
+
+        expect(res).toEqual({statusCode: 200, body: 'Success'})
+        expect(Date.now() - startedAt).toBeLessThan(1000)
+        expect(patches()).toEqual([{subscriptionStatus: 'shareProPendingReauth', stripeCustomerId: CUSTOMER_ID}])
+        expect(mockStripeClient.checkout.sessions.list).not.toHaveBeenCalled()
+        expect(global.fetch).not.toHaveBeenCalled()
+        expect(console.warn.mock.calls.flat().join(' ')).toContain('not sent to GA')
+      })
+
+      it('shortens each step so the report ends a second before the deadline', async () => {
+        mockUpstreams()
+        let signal = null
+        global.fetch.mockImplementation((url, init) => {
+          signal = init.signal
+          return new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))))
+        })
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+        const REMAINING_MS = 3500
+
+        const startedAt = Date.now()
+        const res = await handler(webhookEvent(), {getRemainingTimeInMillis: () => REMAINING_MS})
+
+        expect(res).toEqual({statusCode: 200, body: 'Success'})
+        const [, {timeout}] = mockStripeClient.checkout.sessions.list.mock.calls[0]
+        expect(timeout).toBeLessThan(1500)
+        expect(timeout).toBeGreaterThan(0)
+        expect(signal.aborted).toBe(true)
+        // The hung POST was abandoned in time for the handler to return.
+        expect(Date.now() - startedAt).toBeLessThan(REMAINING_MS - 900)
+      }, MP_TIMEOUT_TEST_MS)
+
+      it('answers 200 when an error escapes the client id lookup', async () => {
+        mockUpstreams()
+        mockStripeClient.checkout.sessions.list.mockImplementation(() => {
+          throw new Error('synchronous SDK failure')
+        })
+        global.fetch.mockRejectedValue(new TypeError('fetch failed'))
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+        const res = await handler(webhookEvent())
+
+        expect(res).toEqual({statusCode: 200, body: 'Success'})
+      })
+    })
+
+    describe('which GA client', () => {
+      it('prefers the session that created this subscription over a newer checkout', async () => {
+        mockCheckoutSessions([
+          {client_reference_id: 'gacid_9_9', subscription: null, status: 'expired'},
+          {client_reference_id: 'gacid_8_8', subscription: 'sub_other', status: 'complete'},
+          {client_reference_id: 'gacid_7_7', subscription: 'sub_unit', status: 'complete'},
+        ])
+        mockUpstreams()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+        await handler(webhookEvent())
+
+        expect(mpPosts()[0].body.client_id).toBe('7.7')
+      })
+
+      it.each([
+        ['no session carries a reference',
+          () => mockCheckoutSessions([{client_reference_id: null, subscription: 'sub_unit', status: 'complete'}])],
+        ['the key may not read Checkout Sessions (403)', () => mockStripeClient.checkout.sessions.list.mockRejectedValue(stripeError(403))],
+      ])('falls back to a hash of the customer, flagged, when %s', async (label, arrange) => {
+        arrange()
+        mockUpstreams()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+        const res = await handler(webhookEvent())
+
+        expect(res.statusCode).toBe(200)
+        const [{body}] = mpPosts()
+        expect(body.client_id).toMatch(/^\d+\.\d+$/)
+        expect(body.events[0].params)
+          .toEqual({tier: 'pro', source: 'server', cid_source: 'fallback', interval: 'month', plan: 'share_pro_monthly'})
+        // Never a Stripe id, an email or a name, anywhere in what GA gets.
+        const sent = JSON.stringify(body)
+        expect(sent).not.toMatch(/cus_|sub_|price_|evt_|@/)
+      })
+
+      it('gives the same customer the same fallback client id on every event', async () => {
+        mockCheckoutSessions([])
+        mockUpstreams()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+        await handler(webhookEvent())
+        mockUpstreams({subscriptions: [proSubscription({status: 'canceled'})], appMetadata: storedAppMetadata({})})
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.deleted', {status: 'canceled'}))
+
+        await handler(webhookEvent())
+
+        const [started, ended] = mpPosts()
+        expect(ended.body.events[0].name).toBe('subscription_ended')
+        expect(ended.body.client_id).toBe(started.body.client_id)
+      })
+    })
+
+    describe('configuration', () => {
+      it.each(Object.keys(GA_ENV))('skips sending without %s, with a log line naming it', async (name) => {
+        delete process.env[name]
+        mockUpstreams()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue(liveEvent('customer.subscription.created'))
+
+        const res = await handler(webhookEvent())
+
+        expect(res).toEqual({statusCode: 200, body: 'Success'})
+        expect(global.fetch).not.toHaveBeenCalled()
+        expect(mockStripeClient.checkout.sessions.list).not.toHaveBeenCalled()
+        expect(console.log.mock.calls.flat().join(' ')).toContain(name) // eslint-disable-line no-console
+        expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      })
+
+      it('skips a test-mode event, whichever endpoint it reached', async () => {
+        mockUpstreams()
+        mockStripeClient.webhooks.constructEvent.mockReturnValue({...liveEvent('customer.subscription.created'), livemode: false})
+
+        const res = await handler(webhookEvent())
+
+        expect(res.statusCode).toBe(200)
+        expect(patches()).toHaveLength(1)
+        expect(global.fetch).not.toHaveBeenCalled()
+      })
     })
   })
 })

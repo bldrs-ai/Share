@@ -1,6 +1,6 @@
 import {CompressionStream as NodeCompressionStream} from 'node:stream/web'
 import React from 'react'
-import {act, fireEvent, render, renderHook, screen, within} from '@testing-library/react'
+import {act, fireEvent, render, renderHook, screen, waitFor, within} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
 import {
@@ -10,24 +10,33 @@ import {
   uncompressedSizes,
 } from '../../export/artifactSizes'
 import {AUTO_MEASURE_MAX_BYTES} from '../../export/codecSizes'
+import {formatNextFreeSlot} from '../../export/exportSlots'
 import useCodecSizes from '../../export/useCodecSizes'
-import {gtagEvent} from '../../privacy/analytics'
+import useExportSlots from '../../export/useExportSlots'
+import {gtagEventWithCid, modelActionTier, trackModelAction} from '../../privacy/analytics'
+import {GATE_RETURN_EXPORT, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
 import useStore from '../../store/useStore'
 import {actAsyncFlush} from '../../utils/tests'
 import {goToSubscription} from '../Profile/subscriptionNav'
 import ExportSection from './ExportSection'
+import {handleRoute} from '../../routes/routes'
+import {urlModelKey} from '../../quota/modelSlotKey'
+import {webcrypto} from 'node:crypto'
 
 
 // `mock`-prefixed so the jest.mock factory below may close over it.
 const mockUseStore = useStore
 
 
-// Only gtagEvent is stubbed; the rest stays real because modules this one
+// Only the senders are stubbed; the rest stays real because modules this one
 // pulls in (ProfileControl → privacy/subscriptionTracking) read
-// FUNNEL_EVENTS at import time.
+// FUNNEL_EVENTS at import time. gtagEventWithCid is the sender that attaches
+// open_cid (Share#1964; its own test is in privacy/analytics.test.js).
 jest.mock('../../privacy/analytics', () => ({
   ...jest.requireActual('../../privacy/analytics'),
   gtagEvent: jest.fn(),
+  gtagEventWithCid: jest.fn(),
+  trackModelAction: jest.fn(),
 }))
 // The size line's source is an OPFS header read (`export/artifactSizes.js`),
 // which needs a worker and a real artifact; the component's job is what it
@@ -46,6 +55,13 @@ jest.mock('../Profile/subscriptionNav', () => ({goToSubscription: jest.fn()}))
 // these assertions are about what the PANEL does with the figures — which is
 // the auto-selection, the per-option labels and the Stop control.
 jest.mock('../../export/useCodecSizes', () => ({
+  __esModule: true,
+  default: jest.fn(),
+}))
+// The slots' own fetch and store wiring are pinned in
+// `export/useExportSlots.test.js`; here they are a value the test deals, so
+// the assertions are about what the PANEL does with them.
+jest.mock('../../export/useExportSlots', () => ({
   __esModule: true,
   default: jest.fn(),
 }))
@@ -121,6 +137,12 @@ async function setStore(artifact, appMetadata, isExportInFlight = false) {
     result.current.setAppMetadata(appMetadata)
     result.current.setIsLoginVisible(false)
     result.current.setIsExportInFlight(isExportInFlight)
+    // Settled, as after BaseRoutes' token pass: model_export {upsell} waits
+    // for it (privacy/modelActionTracking.js). The restore-race case unsets it.
+    // Settled FOR the sign-in state the case's mocked Auth0 already reports
+    // (every case sets it before calling this), as BaseRoutes records it:
+    // the helper waits until the two agree.
+    result.current.setIsAuthResolved(true, mockedUseAuth0()?.isAuthenticated === true)
   })
 }
 
@@ -175,6 +197,8 @@ describe('ExportSection', () => {
     // one.
     uncompressedSizes.mockResolvedValue({withMetadata: WITH_METADATA_BYTES, withoutMetadata: WITHOUT_METADATA_BYTES})
     useCodecSizes.mockReturnValue(NO_CODEC_SIZES)
+    // No slots unless a test deals them: what Pro and anonymous get.
+    useExportSlots.mockReturnValue(null)
     // jsdom has no `CompressionStream`, and the gzip row is hidden without
     // one — so without this the control under test would simply not be in the
     // DOM and every assertion about it would fail for the wrong reason
@@ -625,51 +649,235 @@ describe('ExportSection', () => {
     expect(queryByTestId('export-size')).toBeNull()
   })
 
+  // Share#1981: the gate's event names the model on screen, with the value
+  // real_model_open sends for it, read when the help opens.
+  it('names the model on screen on the normalized upsell event', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    await setStore(ARTIFACT, null)
+    act(() => useStore.setState({modelPath: {kind: 'url', downloadUrl: new URL('https://example.com/m/box.ifc')}}))
+    try {
+      const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+      fireEvent.click(getByTestId('gated-export-anonymous'))
+      await waitFor(() => expect(trackModelAction).toHaveBeenCalledWith('export', expect.objectContaining({
+        gate: 'upsell', source: 'hosted', routeKind: 'url', contentId: 'https://example.com/m/box.ifc',
+      })))
+    } finally {
+      act(() => useStore.setState({modelPath: null}))
+    }
+  })
+
   it('offers an anonymous user the login gate instead of exporting', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
     await setStore(ARTIFACT, null)
     const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
     fireEvent.click(getByTestId('gated-export-anonymous'))
-    expect(gtagEvent).toHaveBeenCalledWith('export_gated', {reason: 'anonymous'})
+    expect(gtagEventWithCid).toHaveBeenCalledWith('export_gated', {reason: 'anonymous'})
+    // Its normalized twin.
+    await waitFor(() => expect(trackModelAction)
+      .toHaveBeenCalledWith('export', expect.objectContaining({gate: 'upsell', isAuthenticated: false})))
     fireEvent.click(getByTestId('gated-help-action'))
 
     expect(useStore.getState().isLoginVisible).toBe(true)
     expect(mockRun).not.toHaveBeenCalled()
+    // The sign-in is attributed to this gate, and returns to the Export tab.
+    expect(takeGateLoginReturn()).toBe(GATE_RETURN_EXPORT)
+    expect(takeGateLoginSource()).toEqual({from: 'gate', feature: 'export'})
   })
 
-  it('offers a signed-in free user the Pro gate, with a Pro chip', async () => {
-    await setStore(ARTIFACT, {subscriptionStatus: 'free', stripeCustomerId: null, userEmail: 'a@b.c'})
-    const {getByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+  // codex review on Share#1976, round 2 (the export variant): while Auth0
+  // restores a returning user's session this tab shows the anonymous gate,
+  // and its help can be opened before the session lands. A tier read at the
+  // click put a Pro user in the anon cell for good.
+  it('counts the anonymous gate opened mid-restore under the settled tier, not anon', async () => {
+    mockedUseAuth0.mockReturnValue({...mockedUserLoggedOut, isLoading: true})
+    await setStore(ARTIFACT, null)
+    act(() => useStore.setState({isAuthResolved: false}))
+    const {getByTestId, rerender} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
-    expect(getByTestId('export-pro-chip')).toBeInTheDocument()
-    // The gated look is not the DOM `disabled` attribute: the click has to
-    // reach the wrapper, or the help never opens (#1838).
-    const gate = getByTestId('gated-export-pro')
-    expect(gate).toHaveAttribute('aria-disabled', 'true')
-    fireEvent.click(gate)
+    fireEvent.click(getByTestId('gated-export-anonymous'))
+    expect(gtagEventWithCid).toHaveBeenCalledWith('export_gated', {reason: 'anonymous'})
+    await act(async () => {})
+    expect(trackModelAction).not.toHaveBeenCalled()
 
-    expect(getByTestId('gated-help')).toHaveTextContent('Pro subscription')
-    expect(gtagEvent).toHaveBeenCalledWith('export_gated', {reason: 'free'})
+    // The session restores: Auth0 re-renders its consumers signed in, then
+    // BaseRoutes writes the claims and flips isAuthResolved.
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    rerender(<ExportSection/>)
+    act(() => {
+      useStore.getState().setAppMetadata({subscriptionStatus: 'sharePro'})
+      useStore.getState().setIsAuthResolved(true, true)
+    })
 
-    fireEvent.click(getByTestId('gated-help-action'))
-    expect(goToSubscription).toHaveBeenCalledWith(
-      expect.objectContaining({stripeCustomerId: null, userEmail: 'a@b.c', from: 'export'}))
-    expect(mockRun).not.toHaveBeenCalled()
+    await waitFor(() => expect(trackModelAction).toHaveBeenCalledTimes(1))
+    const [action, details] = trackModelAction.mock.calls[0]
+    expect(action).toBe('export')
+    expect(details).toMatchObject({gate: 'upsell'})
+    expect(modelActionTier(details)).toBe('pro')
   })
 
-  it('treats shareProPendingReauth as not-Pro, following getTier', async () => {
-    // getTier is the entitlement authority and the `pro-module` function
-    // mirrors it, so the UI must not offer an export the server will 403.
+  describe('a signed-in free user (exports governed by 2 model slots, §4.8)', () => {
+    const FREE = {subscriptionStatus: 'free', stripeCustomerId: null, userEmail: 'a@b.c'}
+    const NEXT_FREE_AT = '2026-10-31T09:00:00.000Z'
+    // The model on screen is the store's `modelPath`; its slot key is what
+    // the slots' `keys` are compared with (quota/modelSlotKey.js).
+    const THIS_MODEL = '/share/v/local-only/0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc'
+    const OTHERS = ['/share/v/gh/acme/private/main/a.ifc', '/share/v/g/drive-file-b']
+    // In `act`: a component another test left mounted subscribes to the
+    // store, and an update outside `act` is a console warning (PLAYBOOK
+    // §"Keep the test console clean").
+    const showThisModel = () => act(() => {
+      useStore.getState().setAppPrefix('/share')
+      useStore.getState().setModelPath(handleRoute('/share/v/local-only', {'*': '0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc/7'}))
+    })
+
+    afterEach(() => act(() => {
+      useStore.getState().setModelPath(null)
+    }))
+
+    it('exports a model holding a slot, and is told it may do so as often as it likes', async () => {
+      useExportSlots.mockReturnValue({limit: 2, used: 2, remaining: 0, nextFreeAt: NEXT_FREE_AT, keys: [OTHERS[0], THIS_MODEL]})
+      await setStore(ARTIFACT, FREE)
+      showThisModel()
+      const {getByTestId, queryByTestId, findByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+      // The slot key resolves async (quota/modelSlotKey.js).
+      const line = await findByTestId('export-model-slots')
+      expect(line).toHaveTextContent('This model holds one of your 2 free model slots: unlimited export')
+      expect(line).toHaveAttribute('data-held', 'true')
+      // Both slots are taken, but one of them is this model's: no gate.
+      expect(queryByTestId('gated-export-pro')).toBeNull()
+      expect(getByTestId('export-pro-chip')).toBeInTheDocument()
+      fireEvent.click(getByTestId('export-glb-button'))
+      expect(mockRun).toHaveBeenCalledTimes(1)
+    })
+
+    it('exports a model holding no slot while one is free, saying the first export takes it', async () => {
+      useExportSlots.mockReturnValue({limit: 2, used: 1, remaining: 1, nextFreeAt: NEXT_FREE_AT, keys: [OTHERS[0]]})
+      await setStore(ARTIFACT, FREE)
+      showThisModel()
+      const {getByTestId, queryByTestId, findByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+      expect(await findByTestId('export-model-slots')).toHaveTextContent(
+        'Exporting takes one of your 2 free model slots (1 left this week), then unlimited export')
+      expect(getByTestId('export-model-slots')).toHaveAttribute('data-held', 'false')
+      expect(queryByTestId('gated-export-pro')).toBeNull()
+      fireEvent.click(getByTestId('export-glb-button'))
+      expect(mockRun).toHaveBeenCalledTimes(1)
+    })
+
+    it('meets the Pro upsell when every slot holds another model, saying when one frees up', async () => {
+      useExportSlots.mockReturnValue({limit: 2, used: 2, remaining: 0, nextFreeAt: NEXT_FREE_AT, keys: OTHERS})
+      await setStore(ARTIFACT, FREE)
+      showThisModel()
+      const {getByTestId, findByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+      const next = formatNextFreeSlot(NEXT_FREE_AT)
+      expect(await findByTestId('export-model-slots'))
+        .toHaveTextContent(`Your 2 free model slots this week hold other models · next one frees up ${next}`)
+      // The gated look is not the DOM `disabled` attribute: the click has to
+      // reach the wrapper, or the help never opens (#1838).
+      const gate = getByTestId('gated-export-pro')
+      expect(gate).toHaveAttribute('aria-disabled', 'true')
+      fireEvent.click(gate)
+
+      expect(getByTestId('gated-help')).toHaveTextContent('Free model slots full')
+      expect(getByTestId('gated-help')).toHaveTextContent(
+        'Your 2 free model slots for the last 7 days hold other models.')
+      expect(getByTestId('gated-help')).toHaveTextContent('Pro: unlimited export.')
+      expect(getByTestId('gated-help')).toHaveTextContent(`Your next slot frees up ${next}.`)
+      // The funnel's series carries on under the same reason.
+      expect(gtagEventWithCid).toHaveBeenCalledWith('export_gated', {reason: 'free'})
+      await waitFor(() => expect(trackModelAction)
+        .toHaveBeenCalledWith('export', expect.objectContaining({gate: 'upsell', isAuthenticated: true})))
+
+      fireEvent.click(getByTestId('gated-help-action'))
+      expect(goToSubscription).toHaveBeenCalledWith(
+        expect.objectContaining({stripeCustomerId: null, userEmail: 'a@b.c', from: 'export'}))
+      expect(mockRun).not.toHaveBeenCalled()
+    })
+
+    // Owner decision on Share#1980: a public model exports unlimited, no
+    // slot — so full slots never gate it.
+    it('says a public model exports unlimited, and never gates it, however full the slots', async () => {
+      const publicRoute = handleRoute('/share/v/gh', {'*': 'm.ifc', 'org': 'bldrs-ai', 'repo': 'Momentum-Public', 'branch': 'main'})
+      useExportSlots.mockReturnValue({
+        limit: 2, used: 2, remaining: 0, nextFreeAt: NEXT_FREE_AT, keys: OTHERS,
+        publicKeys: ['/share/v/gh/bldrs-ai/Momentum-Public/main/m.ifc'],
+      })
+      await setStore(ARTIFACT, FREE)
+      await act(() => {
+        useStore.getState().setAppPrefix('/share')
+        useStore.getState().setModelPath(publicRoute)
+      })
+      const {getByTestId, findByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+      const line = await findByTestId('export-model-slots')
+      expect(line).toHaveTextContent('Public model: unlimited export')
+      expect(line).toHaveAttribute('data-public', 'true')
+      expect(queryByTestId('gated-export-pro')).toBeNull()
+      // The hook was asked about this very model, so the server classifies it.
+      expect(useExportSlots).toHaveBeenLastCalledWith('/share/v/gh/bldrs-ai/Momentum-Public/main/m.ifc', false)
+      fireEvent.click(getByTestId('export-glb-button'))
+      expect(mockRun).toHaveBeenCalledTimes(1)
+    })
+
+    it('finds a URL model in its slot by the digest key, never the URL', async () => {
+      // jsdom has no SubtleCrypto; Node's is the same Web Crypto API.
+      const realCrypto = global.crypto
+      Object.defineProperty(global, 'crypto', {value: webcrypto, configurable: true})
+      try {
+        const url = 'https://example.com/models/tower.ifc?X-Amz-Signature=secret'
+        const key = await urlModelKey(url, '/share')
+        useExportSlots.mockReturnValue({limit: 2, used: 2, remaining: 0, nextFreeAt: NEXT_FREE_AT, keys: [OTHERS[0], key]})
+        await setStore(ARTIFACT, FREE)
+        await act(() => {
+          useStore.getState().setAppPrefix('/share')
+          useStore.getState().setModelPath(handleRoute('/share/v/u', {'*': url}))
+        })
+        const {findByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+        expect(await findByTestId('export-model-slots')).toHaveAttribute('data-held', 'true')
+        expect(queryByTestId('gated-export-pro')).toBeNull()
+      } finally {
+        Object.defineProperty(global, 'crypto', {value: realCrypto, configurable: true})
+      }
+    })
+
+    it('is not gated while the slots are unknown — the server decides that click', async () => {
+      useExportSlots.mockReturnValue(null)
+      await setStore(ARTIFACT, FREE)
+      showThisModel()
+      const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+      expect(queryByTestId('export-model-slots')).toBeNull()
+      expect(queryByTestId('gated-export-pro')).toBeNull()
+      fireEvent.click(getByTestId('export-glb-button'))
+      expect(mockRun).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('treats shareProPendingReauth as Pro: no gate, no chip, no slot line', async () => {
+    // Paid, waiting on a re-login (owner decision, §7.2). Even handed full
+    // slots, the panel must not gate a Pro user or show them slots.
+    useExportSlots.mockReturnValue({limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-09T09:00:00.000Z', keys: ['/a/v/p/x']})
     await setStore(ARTIFACT, {subscriptionStatus: 'shareProPendingReauth'})
     const {getByTestId, queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
-    expect(queryByTestId('gated-export-pro')).toBeInTheDocument()
-    fireEvent.click(getByTestId('gated-export-pro'))
-    fireEvent.click(getByTestId('gated-help-action'))
+    expect(queryByTestId('gated-export-pro')).toBeNull()
+    expect(queryByTestId('export-pro-chip')).toBeNull()
+    expect(queryByTestId('export-model-slots')).toBeNull()
+    fireEvent.click(getByTestId('export-glb-button'))
+    expect(mockRun).toHaveBeenCalledTimes(1)
+  })
 
-    expect(mockRun).not.toHaveBeenCalled()
-    expect(goToSubscription).toHaveBeenCalled()
+  it('shows a Pro user nothing new', async () => {
+    useExportSlots.mockReturnValue(null)
+    await setStore(ARTIFACT, {subscriptionStatus: 'sharePro'})
+    const {queryByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+    expect(queryByTestId('export-model-slots')).toBeNull()
+    expect(queryByTestId('export-pro-chip')).toBeNull()
   })
 
   describe('the Quality control (#1848)', () => {

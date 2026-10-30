@@ -20,7 +20,22 @@ export default function createRepositorySlice(set, get) {
     // so consumers that gate on auth (e.g. CadView model load) need this
     // flag to know whether they should wait or proceed.
     isAuthResolved: false,
-    setIsAuthResolved: (resolved) => set(() => ({isAuthResolved: resolved})),
+    // Which sign-in state that settlement was FOR: the Auth0
+    // `isAuthenticated` of the BaseRoutes pass that set isAuthResolved, null
+    // when unsettled or when the setter wasn't told. isAuthResolved alone
+    // can't say: a popup sign-in happens after the signed-out pass already
+    // set it true, and BaseRoutes doesn't reset it while the new session's
+    // token fetch runs (every load gate reads it, and it means "the token,
+    // if any, is in"). So for that window isAuthResolved is true while the
+    // claims are still the signed-out pass's. A reader that combines the
+    // LIVE isAuthenticated with the store's claims compares the two first:
+    // privacy/modelActionTracking.js. Set in the same write as
+    // isAuthResolved so no subscriber sees one without the other.
+    authResolvedFor: null,
+    setIsAuthResolved: (resolved, forIsAuthenticated = null) => set(() => ({
+      isAuthResolved: resolved,
+      authResolvedFor: resolved ? forIsAuthenticated : null,
+    })),
 
     appMetadata: {},
     setAppMetadata: (metadata) => set({appMetadata: metadata}),
@@ -30,6 +45,13 @@ export default function createRepositorySlice(set, get) {
 
     modelPath: null,
     setModelPath: (path) => set(() => ({modelPath: path})),
+
+    // How CadView downloaded the loaded Drive file — `{fileId, connection}`,
+    // connection null for an API-key download — so an export can classify
+    // the file's sharing the way its open's meter did
+    // (quota/driveExportVisibility.js). Null for anything else.
+    modelDriveDownload: null,
+    setModelDriveDownload: (download) => set(() => ({modelDriveDownload: download})),
 
     repository: null,
     /**

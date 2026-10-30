@@ -5,6 +5,7 @@ import {MockComponent} from './__mocks__/MockComponent'
 import MockRoutes from './BaseRoutesMock.test'
 import useStore from './store/useStore'
 import {UNSUPPORTED_FILE_ALERT} from './routes/routes'
+import {actAsyncFlush} from './utils/tests'
 // Slice 5d.4: Share renders the app, which loads ShareViewer (→
 // IfcContext / ShareIfc). ShareViewer no longer self-imports the fork to
 // trigger the Jest harness, so load it explicitly before `./Share` so
@@ -94,5 +95,87 @@ describe('Share with an unsupported model path', () => {
   it('does not configure a repository from the params that failed to parse', () => {
     renderGithubRoute('Jetenginestep.st')
     expect(useStore.getState().repository).toBe(null)
+  })
+})
+
+
+/**
+ * #705: a file opened from the user's computer keeps its Share button, so
+ * ShareControl can show it gated with the reason. It used to be hidden here
+ * (`isShareEnabled` false), which told the user nothing.
+ */
+describe('Share for a local upload route', () => {
+  // Seeded false so the assertion can't pass on the slice's default (true).
+  beforeEach(() => {
+    useStore.setState({modelPath: null, repository: null, isShareEnabled: false, isNotesEnabled: true})
+  })
+
+  it('shows the Share button, with upload provenance for ShareControl to gate on', async () => {
+    render(
+      <MockComponent>
+        <MemoryRouter initialEntries={['/share/v/new/12345678-1234-4abc-9def-123456789abc.ifc']}>
+          <Routes>
+            <Route
+              path='/share/v/new/*'
+              element={<Share installPrefix='' appPrefix='/share' pathPrefix='/share/v/new'/>}
+            />
+          </Routes>
+        </MemoryRouter>
+      </MockComponent>)
+    // The route mounts CadView, whose viewer setup settles after the first
+    // render; flush it inside act() so it doesn't land as a stray update.
+    await actAsyncFlush()
+    expect(useStore.getState().isShareEnabled).toBe(true)
+    expect(useStore.getState().modelPath.isUploadedFile).toBe(true)
+    // Unchanged: still no repository, so no notes.
+    expect(useStore.getState().repository).toBe(null)
+    expect(useStore.getState().isNotesEnabled).toBe(false)
+  })
+})
+
+
+/**
+ * `/share/v/new/<id>` and `/share/v/p/<id>` parse to the same filepath and no
+ * gitpath. modelPath lives in the store, so moving between them must replace
+ * it, or the upload provenance CadView hands the loader (`isUploadedRoute`)
+ * is the previous route's (#1955, codex review on #1956).
+ */
+describe('Share when only the upload provenance of the route changes', () => {
+  const storageId = '12345678-1234-4abc-9def-123456789abc.ifc'
+
+  // Before mount, for the same act() reason as above.
+  beforeEach(() => {
+    useStore.setState({alert: null, modelPath: null})
+  })
+
+  /**
+   * @param {string} prefix '/share/v/p' or '/share/v/new'
+   */
+  function renderFileRoute(prefix) {
+    render(
+      <MockComponent>
+        <MemoryRouter initialEntries={[`${prefix}/${storageId}`]}>
+          <Routes>
+            <Route
+              path={`${prefix}/*`}
+              element={<Share installPrefix='' appPrefix='/share' pathPrefix={prefix}/>}
+            />
+          </Routes>
+        </MemoryRouter>
+      </MockComponent>)
+  }
+
+  it('replaces an upload modelPath when the same file is opened as hosted', () => {
+    // What /share/v/new/<id> left in the store.
+    useStore.setState({modelPath: {filepath: storageId, isUploadedFile: true}})
+    renderFileRoute('/share/v/p')
+    expect(useStore.getState().modelPath.filepath).toBe(storageId)
+    expect(useStore.getState().modelPath.isUploadedFile).toBe(false)
+  })
+
+  it('replaces a hosted modelPath when the same file is opened as an upload', () => {
+    useStore.setState({modelPath: {filepath: storageId, isUploadedFile: false}})
+    renderFileRoute('/share/v/new')
+    expect(useStore.getState().modelPath.isUploadedFile).toBe(true)
   })
 })

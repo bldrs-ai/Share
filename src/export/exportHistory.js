@@ -1,4 +1,5 @@
 import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
+import {DRIVE_PUBLIC_HEADER, MODEL_KEY_HEADER} from './exportSlots'
 
 
 /**
@@ -268,7 +269,13 @@ export function withLocalArtifactFields(serverExports, localExports) {
   return serverExports.map((entry, i) => {
     const local = matches[i]
     return local ?
-      {...entry, cacheKeyArgs: local.cacheKeyArgs, schemaVer: local.schemaVer, options: local.options || null} :
+      {
+        ...entry,
+        cacheKeyArgs: local.cacheKeyArgs,
+        schemaVer: local.schemaVer,
+        options: local.options || null,
+        drivePublic: local.drivePublic === true,
+      } :
       entry
   })
 }
@@ -394,25 +401,34 @@ function unrecordedLocalRows(serverExports, localExports) {
  * @param {string} entry.format Format id from `exportRegistry.js`
  * @param {number} entry.bytes Size of the downloaded file
  * @param {string} [entry.title] Display label; the key's basename otherwise
+ * @param {string} [entry.id] The row id to record under; a fresh id is
+ *   minted here when absent
  * @param {object} [entry.cacheKeyArgs] Local-only; enables "Download again"
  * @param {string} [entry.schemaVer] Local-only; pairs with cacheKeyArgs
  * @param {object} [entry.options] Local-only; the options this export RAN
  *   with, so "Download again" reproduces this file rather than the default
  *   one (a stripped export must not come back with the metadata in it)
+ * @param {boolean} [entry.drivePublic] The client found this Drive file
+ *   public. Sent to record-export, and kept on the local row so "Download
+ *   again" sends pro-module the same word
  * @param {?string} sub Auth0 subject of the signed-in user; addresses this
  *   account's mirror file
  * @param {Function} [getAccessToken] Returns a Promise of an Auth0 access
  *   token. Omitted means local-only (no server row).
  * @param {Function} [refreshToken] Force-refreshes the JWT after a server
  *   write, so `app_metadata` readers see the new list (the `useQuota` pattern)
- * @return {Promise<object>} `{recorded, status, exports}` — `recorded` is
- *   true only when the server persisted the row, `status` is the HTTP status
- *   when there was one, and `exports` is the list now in OPFS
+ * @return {Promise<object>} `{recorded, status, exports, modelSlots}` —
+ *   `recorded` is true only when the server persisted the row, `status` is
+ *   the HTTP status when there was one, `exports` is the list now in OPFS,
+ *   and `modelSlots` is the free tier's slots as the server reported them
+ *   (null for Pro, or when it reported none). A 401/403 refusal also carries
+ *   `reason`, the function's `error` (e.g. 'export_slot_missing'), or null
+ *   when its body had none
  */
 export async function recordExport(entry, sub, getAccessToken, refreshToken) {
-  const {key, format, bytes, title, cacheKeyArgs, schemaVer, options} = entry
+  const {id, key, format, bytes, title, cacheKeyArgs, schemaVer, options, drivePublic} = entry
   const local = {
-    id: newLocalId(),
+    id: id || newLocalId(),
     key,
     title: title || null,
     format,
@@ -427,6 +443,11 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
     cacheKeyArgs: cacheKeyArgs || null,
     schemaVer: schemaVer || null,
     options: options || null,
+    // Sent up to record-export, but its row never echoes it back, so it is
+    // kept here like the three above. "Download again"
+    // replays it to pro-module, because a history row has no Drive download
+    // record to classify the file by (useExport.js).
+    drivePublic: drivePublic === true,
   }
   const current = await loadExports(sub)
   const optimistic = [local, ...current.exports].slice(0, EXPORTS_CAP)
@@ -449,7 +470,9 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
       // The id goes UP so that it comes back down on the server's row: it is
       // what `withLocalArtifactFields` matches on, and without it two
       // exports of one model and format are indistinguishable in the merge.
-      body: JSON.stringify({id: local.id, key, format, bytes, title: title || null}),
+      // `drivePublic` is the client's word on a Drive file's sharing, which
+      // record-export takes for Drive alone, as pro-module does.
+      body: JSON.stringify({id: local.id, key, format, bytes, title: title || null, ...(drivePublic ? {drivePublic: true} : {})}),
     })
   } catch {
     // Offline, Auth0 unreachable, function down: the optimistic row stands.
@@ -459,7 +482,22 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
   if (response.status === HTTP_AUTHORIZATION_REQUIRED || response.status === HTTP_FORBIDDEN) {
     // The server disagrees about entitlement. The user still got their file,
     // so the local row stays; the caller decides whether to re-check the tier.
-    return {recorded: false, status: response.status, exports: optimistic}
+    // An `export_slot_missing` 403 also carries the authoritative slots
+    // (record-export.js), which the caller stores so the Export tab gates on
+    // what the server holds rather than on what this tab last believed.
+    let refusal = null
+    try {
+      refusal = await response.json()
+    } catch {
+      refusal = null
+    }
+    return {
+      recorded: false,
+      status: response.status,
+      exports: optimistic,
+      modelSlots: refusal?.modelSlots ?? null,
+      reason: refusal?.error ?? null,
+    }
   }
 
   let data = null
@@ -487,5 +525,48 @@ export async function recordExport(entry, sub, getAccessToken, refreshToken) {
       // Non-fatal: the mirrored list above is already what the UI reads.
     }
   }
-  return {recorded: true, status: response.status, exports: mirrored}
+  return {recorded: true, status: response.status, exports: mirrored, modelSlots: data.modelSlots ?? null}
+}
+
+
+/**
+ * The signed-in user's model slots (src/export/exportSlots.js#modelSlots),
+ * from `record-export`'s GET.
+ *
+ * NEVER THROWS: the slot line on the Export tab is a courtesy, and the gate
+ * is `pro-module`'s. Anything short of a clean answer is null, which the tab
+ * reads as "unknown" and shows no line for.
+ *
+ * With a model named, the server also says whether it is public (exported
+ * unlimited, no slot) — only the server can tell for GitHub.
+ *
+ * @param {Function} getAccessToken Returns a Promise of an Auth0 access token
+ * @param {object} [model]
+ * @param {?string} [model.modelKey] The model on screen's slot key
+ * @param {boolean} [model.drivePublic] The client found that Drive file public
+ * @return {Promise<?{tier: string, modelSlots: ?object, isPublic: ?boolean}>}
+ *   null when unknown
+ */
+export async function fetchModelSlots(getAccessToken, {modelKey = null, drivePublic = false} = {}) {
+  try {
+    const token = await getAccessToken()
+    const headers = {Authorization: `Bearer ${token}`}
+    if (modelKey) {
+      headers[MODEL_KEY_HEADER] = encodeURIComponent(modelKey)
+    }
+    if (drivePublic) {
+      headers[DRIVE_PUBLIC_HEADER] = '1'
+    }
+    const response = await fetch(RECORD_EXPORT_ENDPOINT, {headers})
+    if (!response.ok) {
+      return null
+    }
+    const data = await response.json()
+    if (!data || typeof data.tier !== 'string') {
+      return null
+    }
+    return {tier: data.tier, modelSlots: data.modelSlots ?? null, isPublic: data.isPublic ?? null}
+  } catch {
+    return null
+  }
 }

@@ -1,4 +1,5 @@
 import {
+  fetchModelSlots,
   hydrateExports,
   loadExports,
   recordExport,
@@ -435,6 +436,20 @@ describe('exportHistory', () => {
       expect(optimisticId).toMatch(UUID_PATTERN)
     })
 
+    it('returns the model slots the server reports after recording a free export', async () => {
+      const modelSlots = {limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-11-03T12:00:00.000Z', keys: [KEY]}
+      global.fetch.mockResolvedValue({ok: true, status: 200, json: () => Promise.resolve({
+        exports: [{id: 'r1', key: KEY, format: 'glb', bytes: 2048, exportedAt: '2026-10-27T12:00:00.000Z'}],
+        modelSlots,
+      })})
+
+      const result = await recordExport(anEntry({id: 'r1'}), SUB, jest.fn().mockResolvedValue('token'))
+
+      expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toMatchObject({id: 'r1', key: KEY})
+      // The slots after the record, for the Export tab's line.
+      expect(result.modelSlots).toEqual(modelSlots)
+    })
+
     it('mints a row id the server will accept, even with no crypto.randomUUID', async () => {
       // `record-export.js` 400s an id that isn't a well-formed v4 UUID, so
       // the fallback path (jsdom, or a browser on a non-secure origin) has
@@ -460,6 +475,34 @@ describe('exportHistory', () => {
 
       expect(exports[0].options).toEqual({stripBldrsMetadata: true})
       expect(JSON.parse(storedFor(SUB)).exports[0].options).toEqual({stripBldrsMetadata: true})
+    })
+
+    // Codex on #1980: a history row has no Drive download record, so the
+    // word its export gave on a link-shared file is what "Download again"
+    // replays to pro-module. It must survive the server's mirror, whose row
+    // never echoes it, or the replay would take a slot for a public file.
+    it('keeps a link-shared Drive file\'s public word on the row, through the server\'s mirror', async () => {
+      const DRIVE_KEY = '/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz'
+      let sentId
+      global.fetch.mockImplementation((url, init) => {
+        sentId = JSON.parse(init.body).id
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({exports: [{
+            id: sentId, key: DRIVE_KEY, title: 'x.ifc', format: 'glb', bytes: 1, exportedAt: '2026-10-28T00:00:00.000Z',
+          }]}),
+        })
+      })
+
+      await recordExport(anEntry({key: DRIVE_KEY, drivePublic: true}), SUB, jest.fn().mockResolvedValue('token'), jest.fn())
+
+      expect(JSON.parse(global.fetch.mock.calls[0][1].body).drivePublic).toBe(true)
+      const [stored] = (await loadExports(SUB)).exports
+      expect(stored).toMatchObject({id: sentId, key: DRIVE_KEY, drivePublic: true})
+      // A row exported without that word is not public.
+      const {exports} = await recordExport(anEntry(), SUB)
+      expect(exports[0].drivePublic).toBe(false)
     })
 
     it('mirrors the server list over the local one, keeping the artifact fields', async () => {
@@ -565,6 +608,17 @@ describe('exportHistory', () => {
       expect((await loadExports(SUB)).exports[0]).toMatchObject({key: KEY})
     })
 
+    it('returns the slots and reason an export_slot_missing refusal carries', async () => {
+      const modelSlots = {limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-11-03T12:00:00.000Z', keys: ['/share/v/g/x']}
+      global.fetch.mockResolvedValue({
+        ok: false, status: 403, json: () => Promise.resolve({error: 'export_slot_missing', modelSlots}),
+      })
+
+      const result = await recordExport(anEntry(), SUB, jest.fn().mockResolvedValue('token'))
+
+      expect(result).toMatchObject({recorded: false, status: 403, modelSlots, reason: 'export_slot_missing'})
+    })
+
     it('keeps the local row when the network is down', async () => {
       global.fetch.mockRejectedValue(new Error('offline'))
 
@@ -617,6 +671,40 @@ describe('exportHistory', () => {
       expect(exports[0].key).toBe(KEY)
       expect(exports[exports.length - 1].id).toBe(`old-${EXPORTS_CAP - 2}`)
       expect(exports.some((e) => e.id === `old-${EXPORTS_CAP - 1}`)).toBe(false)
+    })
+  })
+
+  describe('fetchModelSlots', () => {
+    it('GETs record-export with the bearer, and returns the tier, slots and whether the model is public', async () => {
+      const modelSlots = {limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-11-03T12:00:00.000Z', keys: [KEY]}
+      global.fetch.mockResolvedValue({ok: true, status: 200, json: () => Promise.resolve({tier: 'free', modelSlots, isPublic: true})})
+
+      const result = await fetchModelSlots(jest.fn().mockResolvedValue('token'))
+
+      expect(global.fetch).toHaveBeenCalledWith('/.netlify/functions/record-export', {headers: {Authorization: 'Bearer token'}})
+      expect(result).toEqual({tier: 'free', modelSlots, isPublic: true})
+    })
+
+    it('names the model on screen, encoded, and passes on the client\'s word for a Drive file', async () => {
+      global.fetch.mockResolvedValue({ok: true, status: 200, json: () => Promise.resolve({tier: 'free', modelSlots: null})})
+
+      await fetchModelSlots(jest.fn().mockResolvedValue('token'), {modelKey: '/share/v/g/Gebäude', drivePublic: true})
+
+      expect(global.fetch.mock.calls[0][1].headers).toEqual({
+        'Authorization': 'Bearer token',
+        'X-Bldrs-Model-Key': encodeURIComponent('/share/v/g/Gebäude'),
+        'X-Bldrs-Drive-Public': '1',
+      })
+    })
+
+    it.each([
+      ['a non-OK answer', () => global.fetch.mockResolvedValue({ok: false, status: 502, json: () => Promise.resolve({})})],
+      ['a network failure', () => global.fetch.mockRejectedValue(new Error('offline'))],
+      ['a body without a tier', () => global.fetch.mockResolvedValue({ok: true, status: 200, json: () => Promise.resolve({})})],
+    ])('reads %s as unknown rather than throwing', async (_label, arrange) => {
+      arrange()
+
+      await expect(fetchModelSlots(jest.fn().mockResolvedValue('token'))).resolves.toBeNull()
     })
   })
 })

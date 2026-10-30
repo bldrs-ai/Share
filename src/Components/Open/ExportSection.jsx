@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {Box, Button, Chip, MenuItem, Select, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {GATE_RETURN_EXPORT, useStartGateLogin} from '../../Auth0/gateLogin'
 import {
   artifactPositionRange,
   artifactSizes,
@@ -9,6 +10,7 @@ import {
   uncompressedSizes,
 } from '../../export/artifactSizes'
 import {codecToSelect, shouldAutoMeasure} from '../../export/codecSizes'
+import {formatNextFreeSlot} from '../../export/exportSlots'
 import {
   QUALITY_DEFAULT,
   QUALITY_LABELS,
@@ -23,8 +25,19 @@ import {
 import {isGzipAvailable} from '../../export/glbGzip'
 import useCodecSizes from '../../export/useCodecSizes'
 import useExport, {formatBytes} from '../../export/useExport'
-import {gtagEvent} from '../../privacy/analytics'
-import {TIERS, getTier} from '../../quota/quota'
+import useExportSlots from '../../export/useExportSlots'
+import {
+  GATE_EVENTS,
+  MODEL_ACTIONS,
+  MODEL_GATES,
+  gtagEventWithCid,
+  modelContentId,
+  modelRouteSource,
+} from '../../privacy/analytics'
+import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
+import {isDriveModelPublic} from '../../quota/driveExportVisibility'
+import {modelSlotKey} from '../../quota/modelSlotKey'
+import {ROLLING_WINDOW_DAYS, TIERS, getTier} from '../../quota/quota'
 import useStore from '../../store/useStore'
 import GatedAction from '../GatedAction'
 import Toggle from '../Toggle'
@@ -46,13 +59,18 @@ import {
  *
  * The states resolve in this order (design/new/glb-export-premium.md §4.4):
  * no artifact yet beats everything (there is nothing to download); then
- * anonymous → log in; then free → upgrade; then Pro → the export itself. The
- * two non-Pro states render the button in the GATED look — visible, dimmed,
- * and clickable into help that says what unlocks it — rather than as a live
- * button that silently does something else. The tier check here is `getTier`,
- * the same mapping the server uses, but it decides only what is RENDERED —
- * the `pro-module` function re-checks the subscription on every request and
- * is the authority.
+ * anonymous → log in; then a free user whose model holds no slot while
+ * every model slot is taken → upgrade, saying when the next slot frees up;
+ * then a free user whose model holds a slot or can take a free one, or Pro →
+ * the export itself. The gated states render the button in the GATED look —
+ * visible, dimmed, and clickable into help that says what unlocks it — rather
+ * than as a live button that silently does something else. A free user also
+ * sees where this model stands with their slots (§4.8): it holds one (export
+ * freely), its first export takes one, or none is free; Pro sees nothing new.
+ * The tier check here is `getTier`, the same mapping the server uses, and the
+ * slots are the server's — but both decide only what is RENDERED: the
+ * `pro-module` function re-checks the subscription and the slots on every
+ * request and is the authority.
  *
  * The controls run in the order the choices COMPOUND: what goes in the file,
  * what shape it is in, how it is squeezed, how hard, and whether the result
@@ -79,7 +97,9 @@ import {
 export default function ExportSection() {
   const appMetadata = useStore((state) => state.appMetadata)
   const glbArtifact = useStore((state) => state.glbArtifact)
-  const setIsLoginVisible = useStore((state) => state.setIsLoginVisible)
+  const modelPath = useStore((state) => state.modelPath)
+  const appPrefix = useStore((state) => state.appPrefix)
+  const startGateLogin = useStartGateLogin()
 
   // Default ON: it's the user's own model, so the properties and spatial
   // tree ride along unless they're passing the file to someone else.
@@ -119,6 +139,9 @@ export default function ExportSection() {
   const [isGzipped, setIsGzipped] = useState(false)
 
   const {getAccessTokenSilently, isAuthenticated} = useAuth0()
+  // The latest auth state, for model_export {upsell}'s tier (reportGated).
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  isAuthenticatedRef.current = isAuthenticated
   // `isExporting` is tab-wide, not this button's own (store/UISlice.js): a
   // "Download again" running in the list below must disable this button too,
   // or the user gets two exports racing each other's history write (#1834).
@@ -296,6 +319,39 @@ export default function ExportSection() {
   const sizes = estimate?.sizes ?? null
 
   const isPro = getTier(appMetadata, isAuthenticated) === TIERS.PAID
+  const isFreeTier = isAuthenticated && !isPro
+  // The model on screen, as an export names it to the server: its slot key,
+  // resolved async (a URL model's is a digest; quota/modelSlotKey.js), and
+  // for a Drive file whether the client finds it public
+  // (quota/driveExportVisibility.js). Until the key resolves there is no
+  // slot line and no slots-full gate: a model that may export freely must
+  // never flash the gate while it is still being worked out.
+  const modelDriveDownload = useStore((state) => state.modelDriveDownload)
+  const [slotModel, setSlotModel] = useState(null)
+  useEffect(() => {
+    if (!isFreeTier || !modelPath) {
+      setSlotModel((prev) => (prev === null ? prev : null))
+      return undefined
+    }
+    let isCancelled = false
+    Promise.all([modelSlotKey(modelPath, appPrefix), isDriveModelPublic(modelPath, modelDriveDownload)]).then(
+      ([key, drivePublic]) => !isCancelled && setSlotModel(key === null ? null : {key, drivePublic}),
+      () => !isCancelled && setSlotModel(null))
+    return () => {
+      isCancelled = true
+    }
+  }, [isFreeTier, modelPath, appPrefix, modelDriveDownload])
+  const slotKey = slotModel?.key ?? null
+  // The free tier's model slots as the server last stated them, and whether
+  // this model is public, or null (Pro, anonymous, or not known yet).
+  // Unknown is NOT gated: the click goes to `pro-module`, which decides for
+  // itself, and a refusal there fills this in.
+  const slots = useExportSlots(slotKey, slotModel?.drivePublic ?? false)
+  const isSlotKnown = Boolean(slots) && slotKey !== null
+  const isModelPublic = isSlotKnown && (slots.publicKeys || []).includes(slotKey)
+  const isModelInSlot = isSlotKnown && slots.keys.includes(slotKey)
+  const isSlotsFull = isFreeTier && isSlotKnown && !isModelPublic && !isModelInSlot && slots.remaining === 0
+  const nextFreeSlot = formatNextFreeSlot(slots?.nextFreeAt)
   // The loader publishes this once the artifact is actually in OPFS — on a
   // cache miss when the writer finishes, on a cache hit right away. Formats
   // that produce no artifact at all — a `.bld` assembly (its children each
@@ -428,7 +484,7 @@ export default function ExportSection() {
       size='small'
       onClick={onExportClick}
       disabled={!isArtifactReady || isExporting}
-      startIcon={isAuthenticated && isPro ? <FileDownloadIcon/> : <LockIcon/>}
+      startIcon={isAuthenticated && !isSlotsFull ? <FileDownloadIcon/> : <LockIcon/>}
       sx={{textTransform: 'none'}}
       data-testid='export-glb-button'
     >
@@ -436,9 +492,27 @@ export default function ExportSection() {
     </Button>
   )
 
-  // The signed-out branch is defensive: the Save dialog this section lives in
-  // only opens for a signed-in user (an anonymous Save click gets its own
-  // gate). Kept so the section stays correct wherever it is mounted.
+  // Signed out: the Save dialog opens on this tab for everyone (Share#1964),
+  // so this is the gate an anonymous user meets. Its sign-in returns them to
+  // this tab (SaveModelControl) and is attributed to the gate in `login`
+  // (Auth0/gateLogin.js).
+  // An export the gate turned into an upsell: export_gated, and its
+  // normalized twin model_export {upsell} (design/new/quotas.md §"Analytics:
+  // normalized tier events"), for the model on screen. The tier is read
+  // once auth settles: while Auth0 restores a returning user's session this
+  // tab shows the anonymous gate, and its help can be opened before the
+  // session lands (privacy/modelActionTracking.js).
+  const reportGated = (reason) => {
+    gtagEventWithCid(GATE_EVENTS.EXPORT_GATED, {reason})
+    const {modelPath: gatedModelPath} = useStore.getState()
+    trackModelActionWhenAuthSettled(MODEL_ACTIONS.EXPORT, {
+      gate: MODEL_GATES.UPSELL,
+      ...modelRouteSource(gatedModelPath),
+      contentId: modelContentId(gatedModelPath),
+      getIsAuthenticated: () => isAuthenticatedRef.current,
+    })
+  }
+
   let gatedButton = exportButton
   if (!isAuthenticated) {
     gatedButton = (
@@ -447,21 +521,26 @@ export default function ExportSection() {
         title='Log in to export'
         body={MSG_LOGIN_TO_EXPORT}
         actionLabel='Log in'
-        onAction={() => setIsLoginVisible(true)}
-        onOpen={() => gtagEvent('export_gated', {reason: 'anonymous'})}
+        onAction={() => startGateLogin('export', GATE_RETURN_EXPORT)}
+        onOpen={() => reportGated('anonymous')}
       >
         {exportButton}
       </GatedAction>
     )
-  } else if (!isPro) {
+  } else if (isSlotsFull) {
+    // The existing Pro upsell, reached when this model holds no slot and
+    // every slot is taken (§4.8). Same slug and `reason` as the gates it
+    // replaces (Pro-only, then the 2-export cap), so the funnel's
+    // `export_gated {reason: 'free'}` series and the `from: 'export'`
+    // upgrade click carry on unbroken.
     gatedButton = (
       <GatedAction
         slug='export-pro'
-        title='Pro feature'
-        body={MSG_EXPORT_NEEDS_PRO}
+        title='Free model slots full'
+        body={slotsFullHelp(slots.limit, nextFreeSlot)}
         actionLabel='Upgrade to Pro'
         onAction={onUpgradeClick}
-        onOpen={() => gtagEvent('export_gated', {reason: 'free'})}
+        onOpen={() => reportGated('free')}
       >
         {exportButton}
       </GatedAction>
@@ -792,12 +871,74 @@ export default function ExportSection() {
         sx={{mt: '1em', textAlign: 'center'}}
         data-testid='export-action-row'
       >
-        {isAuthenticated && !isPro &&
+        {isFreeTier &&
          <Chip label='Pro' size='small' color='primary' data-testid='export-pro-chip'/>}
         {gatedButton}
       </Stack>
+      {/* Where this model stands with a free user's slots. Under the action
+          rather than beside it: at 390px the row already holds the button
+          and the Pro chip, and a caption in it would push the row into a
+          wrap. `data-remaining` and `data-held` carry the raw state for the
+          E2E. */}
+      {isFreeTier && isSlotKnown &&
+       <Typography
+         variant='caption'
+         color='text.secondary'
+         sx={{mt: '0.5em', textAlign: 'center'}}
+         data-testid='export-model-slots'
+         data-remaining={slots.remaining}
+         data-held={isModelInSlot ? 'true' : 'false'}
+         data-public={isModelPublic ? 'true' : 'false'}
+       >
+         {slotCaption(slots, isModelInSlot, nextFreeSlot, isModelPublic)}
+       </Typography>}
     </Stack>
   )
+}
+
+
+/**
+ * The slot line under a free user's Export button: whether this model is
+ * public (unlimited, no slot), holds one of their model slots, and if not,
+ * whether its first export can take one. Worded "unlimited X" (owner,
+ * 2026-10-28).
+ *
+ * @param {{limit: number, remaining: number}} slots
+ * @param {boolean} isModelInSlot
+ * @param {?string} nextFreeSlot formatted `nextFreeAt`, or null
+ * @param {boolean} [isModelPublic]
+ * @return {string}
+ */
+export function slotCaption({limit, remaining}, isModelInSlot, nextFreeSlot, isModelPublic = false) {
+  if (isModelPublic) {
+    return 'Public model: unlimited export'
+  }
+  if (isModelInSlot) {
+    return `This model holds one of your ${limit} free model slots: unlimited export`
+  }
+  if (remaining > 0) {
+    return `Exporting takes one of your ${limit} free model slots (${remaining} left this week),` +
+      ' then unlimited export'
+  }
+  // Full: the line also says when that changes; the help that explains it is
+  // one click away on the gated button.
+  const full = `Your ${limit} free model slots this week hold other models`
+  return nextFreeSlot ? `${full} · next one frees up ${nextFreeSlot}` : full
+}
+
+
+/**
+ * The slots-full gate's help text.
+ *
+ * @param {number} limit
+ * @param {?string} nextFreeSlot formatted `nextFreeAt`, or null
+ * @return {string}
+ */
+export function slotsFullHelp(limit, nextFreeSlot) {
+  const full = `Your ${limit} free model slots for the last ${ROLLING_WINDOW_DAYS} days hold other models.` +
+    ' A model with a slot, or a public one: unlimited export. This one needs a free slot.'
+  const next = nextFreeSlot ? ` Your next slot frees up ${nextFreeSlot}.` : ''
+  return `${full}${next} Pro: unlimited export.`
 }
 
 
@@ -817,7 +958,6 @@ function codecBytes(sizes, isMetadataIncluded) {
 }
 
 
-const MSG_EXPORT_NEEDS_PRO = 'Exporting a GLB needs a Pro subscription'
 // Above ~50 MB nothing starts on its own: three encoders over an artifact
 // that size is seconds of uninterruptible main-thread work, and the user
 // should be the one who asks for it (`export/codecSizes.js`).

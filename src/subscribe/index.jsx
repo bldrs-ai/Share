@@ -1,27 +1,14 @@
 import React, {useEffect} from 'react'
 import ReactDOM from 'react-dom'
 import PricingTable from '../Components/Stripe/PricingTable'
+import {subscribePageParams} from './subscribeParams'
 import './index.css'
-
-// Utility to get query parameters
-/**
- * @param {string} param - The query parameter name
- * @return {string|null} The value of the query parameter or null if not found.
- */
-function getQueryParam(param) {
-  const params = new URLSearchParams(window.location.search)
-  return params.get(param)
-}
 
 /**
  * @return {React.Component}
  */
 function App() {
-  // Retrieve the theme from the query string, default to 'light' if not provided.
-  const theme = getQueryParam('theme') || 'light'
-
-  // get the signup email
-  const userEmail = getQueryParam('userEmail') || null
+  const {theme, userEmail, clientReferenceId} = subscribePageParams(window.location.search)
 
   useEffect(() => {
     document.body.classList.remove('light', 'dark')
@@ -30,7 +17,7 @@ function App() {
 
   return (
     <div style={{backgroundColor: (theme === 'light') ? '#FFFFFF' : '#414141', minHeight: '100vh'}}>
-      <PricingTable theme={theme} userEmail={userEmail}/>
+      <PricingTable theme={theme} userEmail={userEmail} clientReferenceId={clientReferenceId}/>
     </div>
   )
 }

@@ -2,6 +2,7 @@ jest.mock('@sentry/react', () => ({setTag: jest.fn()}))
 
 import Cookies from 'js-cookie'
 import {setTag} from '@sentry/react'
+import {handleRoute} from '../routes/routes'
 import * as Analytics from './analytics'
 
 
@@ -214,19 +215,260 @@ describe('Analytics', () => {
     })
 
     test('omits open_cid, rather than sending a blank, when no id resolved', () => {
-      Analytics.gtagFunnelEvent(Analytics.FUNNEL_EVENTS.SUBSCRIPTION_STARTED)
-      expect(window.gtag).toHaveBeenCalledWith('event', 'subscription_started', {})
+      Analytics.gtagFunnelEvent(Analytics.FUNNEL_EVENTS.SUBSCRIPTION_STARTED_CLIENT)
+      expect(window.gtag).toHaveBeenCalledWith('event', 'subscription_started_client', {})
     })
 
     test('event names are the ones the dashboard queries', () => {
       expect(Analytics.FUNNEL_EVENTS).toEqual({
         REAL_MODEL_OPEN: 'real_model_open',
+        LOAD_FAILED: 'load_failed',
         QUOTA_LIMIT_REACHED: 'quota_limit_reached',
         LOGIN: 'login',
         BEGIN_CHECKOUT: 'begin_checkout',
         SUBSCRIPTION_STARTED: 'subscription_started',
         SUBSCRIPTION_ENDED: 'subscription_ended',
+        // The browser's sighting, never under the funnel's (server-sent)
+        // names, or the two would add up in one count.
+        SUBSCRIPTION_STARTED_CLIENT: 'subscription_started_client',
+        SUBSCRIPTION_ENDED_CLIENT: 'subscription_ended_client',
+        ENGAGED_USE: 'engaged_use',
+        RETURN_VISIT: 'return_visit',
       })
+    })
+  })
+
+
+  // Gate and export events (Share#1964) carry the same join key, so the
+  // dashboard can follow one client from real_model_open to a gate.
+  describe('gtagEventWithCid', () => {
+    beforeEach(() => {
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+      Analytics.setIsAllowed(true)
+      window.gtag = jest.fn()
+    })
+
+    afterEach(() => {
+      delete window.gtag
+    })
+
+    test('attaches the prefixed client id as open_cid', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.gtagEventWithCid(Analytics.GATE_EVENTS.EXPORT_GATED, {reason: 'anonymous'})
+      expect(window.gtag).toHaveBeenCalledWith(
+        'event', 'export_gated', {reason: 'anonymous', open_cid: 'cid.1871520000.1754700000'})
+    })
+
+    test('omits open_cid, rather than sending a blank, when no id resolved', () => {
+      Analytics.gtagEventWithCid(Analytics.GATE_EVENTS.SHARE_GATED, {reason: 'local_file', signed_in: false})
+      expect(window.gtag).toHaveBeenCalledWith('event', 'share_gated', {reason: 'local_file', signed_in: false})
+    })
+
+    test('event names are the ones GA will be queried by', () => {
+      expect(Analytics.GATE_EVENTS).toEqual({
+        EXPORT_GATED: 'export_gated',
+        EXPORT_MODEL: 'export_model',
+        EXPORT_FAILED: 'export_failed',
+        SHARE_GATED: 'share_gated',
+        SHARE_INTEREST: 'share_interest',
+        QUOTA_SOFT_LIMIT_EXCEEDED: 'quota_soft_limit_exceeded',
+      })
+    })
+  })
+
+
+  // Normalized model-action events (design/new/quotas.md §"Analytics:
+  // normalized tier events"): one event per action, cut by tier × source ×
+  // gate, sent beside the legacy events.
+  describe('trackModelAction', () => {
+    beforeEach(() => {
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+      Analytics.setIsAllowed(true)
+      window.gtag = jest.fn()
+    })
+
+    afterEach(() => {
+      delete window.gtag
+      Analytics.setIsAllowed(true)
+    })
+
+    /** @return {Array} the [name, params] of each gtag event sent */
+    function sent() {
+      return window.gtag.mock.calls.filter(([kind]) => kind === 'event').map(([, name, params]) => [name, params])
+    }
+
+    test('event names are the ones GA will be queried by', () => {
+      expect(Analytics.MODEL_ACTION_EVENTS).toEqual({
+        view: 'model_view',
+        share: 'model_share',
+        export: 'model_export',
+      })
+      expect(Analytics.MODEL_GATES).toEqual({NONE: 'none', UPSELL: 'upsell', BLOCKED: 'blocked', SOFT: 'soft'})
+      expect(Analytics.MODEL_SOURCES).toEqual({LOCAL: 'local', HOSTED: 'hosted'})
+    })
+
+    test('sends tier, source, route_kind, gate and open_cid', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.trackModelAction('view', {gate: 'none', source: 'local', routeKind: 'local', isAuthenticated: false})
+      expect(sent()).toEqual([['model_view', {
+        tier: 'anon', gate: 'none', source: 'local', route_kind: 'local', open_cid: 'cid.1871520000.1754700000',
+      }]])
+    })
+
+    // Share#1981: the model's key, so GA can count distinct models from
+    // these events. Same parameter name real_model_open sends, which is why
+    // the existing `content_id` registration covers it.
+    test.each([
+      ['view', 'model_view'], ['share', 'model_share'], ['export', 'model_export'],
+    ])('%s: sends content_id when the caller has one', (action, eventName) => {
+      Analytics.trackModelAction(action, {
+        gate: 'none', source: 'hosted', routeKind: 'github', contentId: 'https://raw.example/a.ifc', isAuthenticated: false,
+      })
+      expect(sent()).toEqual([[eventName, {
+        tier: 'anon', gate: 'none', source: 'hosted', route_kind: 'github', content_id: 'https://raw.example/a.ifc',
+      }]])
+    })
+
+    test.each([[undefined], [''], [null]])('omits content_id for %p, rather than sending a blank', (contentId) => {
+      Analytics.trackModelAction('view', {gate: 'none', contentId, isAuthenticated: false})
+      expect(sent()).toEqual([['model_view', {tier: 'anon', gate: 'none'}]])
+    })
+
+    test('omits open_cid, source and route_kind when unknown, rather than sending blanks', () => {
+      Analytics.trackModelAction('export', {gate: 'none', isAuthenticated: false})
+      expect(sent()).toEqual([['model_export', {tier: 'anon', gate: 'none'}]])
+    })
+
+    describe('tier, derived as the quota code derives it', () => {
+      test.each([
+        ['signed out', {isAuthenticated: false, appMetadata: {subscriptionStatus: 'sharePro'}}, 'anon'],
+        ['signed in, no subscription', {isAuthenticated: true, appMetadata: {}}, 'free'],
+        ['signed in, free', {isAuthenticated: true, appMetadata: {subscriptionStatus: 'free'}}, 'free'],
+        ['signed in, Pro', {isAuthenticated: true, appMetadata: {subscriptionStatus: 'sharePro'}}, 'pro'],
+        // Pro everywhere (quota/proStatus.js), so Pro here too.
+        ['signed in, pending reauth', {isAuthenticated: true, appMetadata: {subscriptionStatus: 'shareProPendingReauth'}},
+          'pro'],
+        ['no auth info at all', {}, 'anon'],
+      ])('%s → %s', (_, who, tier) => {
+        expect(Analytics.modelActionTier(who)).toBe(tier)
+      })
+
+      test('a quota tier the caller already has wins over the auth state', () => {
+        expect(Analytics.modelActionTier({tier: 'free', isAuthenticated: false})).toBe('free')
+        expect(Analytics.modelActionTier({tier: 'paid'})).toBe('pro')
+      })
+
+      // Share#1977 removed the anonymous quota tier: getTier is null when
+      // signed out, and `anon` is the sign-in tier, not a quota tier. A
+      // anonymous-tier key in the lookup would have been the string
+      // "undefined", mapping every missing tier to anon.
+      test.each([
+        ['null', null],
+        ['undefined', undefined],
+        ['the retired "anonymous"', 'anonymous'],
+      ])('a %s quota tier is not read as anon: the sign-in state decides', (_, tier) => {
+        expect(Analytics.modelActionTier({tier, isAuthenticated: true, appMetadata: {}})).toBe('free')
+        expect(Analytics.modelActionTier({
+          tier, isAuthenticated: true, appMetadata: {subscriptionStatus: 'sharePro'},
+        })).toBe('pro')
+        expect(Analytics.modelActionTier({tier, isAuthenticated: false})).toBe('anon')
+      })
+
+      test('an unknown quota tier falls back to the auth state', () => {
+        expect(Analytics.modelActionTier({tier: 'bogus', isAuthenticated: true, appMetadata: {}})).toBe('free')
+      })
+    })
+
+    describe('source and route_kind from the route', () => {
+      test.each([
+        ['a local file', {kind: 'file', isUploadedFile: true, filepath: '/abc.ifc'}, {source: 'local', routeKind: 'local'}],
+        ['a hosted project file', {kind: 'file', isUploadedFile: false, filepath: '/index.ifc'},
+          {source: 'hosted', routeKind: 'project'}],
+        ['GitHub', {kind: 'provider', provider: 'github'}, {source: 'hosted', routeKind: 'github'}],
+        ['Google Drive', {kind: 'provider', provider: 'google'}, {source: 'hosted', routeKind: 'gdrive'}],
+        ['a generic URL', {kind: 'url'}, {source: 'hosted', routeKind: 'url'}],
+        ['no route', null, {}],
+      ])('%s', (_, route, expected) => {
+        expect(Analytics.modelRouteSource(route)).toEqual(expected)
+      })
+    })
+
+    // content_id is real_model_open's value, so its privacy treatment is
+    // too: the route's download URL, else its path, and nothing else — never
+    // a name the user typed, and for an upload the UUID-derived storage
+    // path, not the file's own name.
+    describe('modelContentId, the value real_model_open sends', () => {
+      const ORIGIN = 'https://bldrs.ai'
+
+      test('a local upload is its UUID-derived storage URL, not the name of the user\'s file', () => {
+        const route = handleRoute('/share/v/local-only', {'*': '0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc/7'})
+        const id = Analytics.modelContentId(route)
+        expect(id).toMatch(/\/0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f\.ifc$/)
+        // The route's element path (`/7`) is not part of the model's identity.
+        expect(id).not.toContain('/7')
+      })
+
+      test('a Google Drive file is its download URL', () => {
+        const route = handleRoute('/share/v/g', {'*': '17aKaRB6EU2fJtBpmpmZ87IlwZ-J-4XrU'})
+        expect(Analytics.modelContentId(route)).toBe(String(route.downloadUrl))
+        expect(Analytics.modelContentId(route)).toContain('17aKaRB6EU2fJtBpmpmZ87IlwZ-J-4XrU')
+      })
+
+      test('a GitHub file is its download URL, and a generic URL its own', () => {
+        const gh = handleRoute('/share/v/gh', {'org': 'acme', 'repo': 'r', 'branch': 'main', '*': 'models/a.ifc/12'})
+        expect(Analytics.modelContentId(gh)).toBe(String(gh.downloadUrl))
+        const url = handleRoute('/share/v/u', {'*': 'https://example.com/m/b.ifc'})
+        expect(Analytics.modelContentId(url)).toBe('https://example.com/m/b.ifc')
+      })
+
+      test('a bare {filepath} route falls back to it, and no route is no id', () => {
+        expect(Analytics.modelContentId({filepath: '/index.ifc'})).toBe('/index.ifc')
+        expect(Analytics.modelContentId(null)).toBeUndefined()
+        expect(Analytics.modelContentId({kind: 'url'})).toBeUndefined()
+      })
+
+      // A Drive route is keyed on the download URL alone: its `filepath`
+      // (when it has one) is not the identity real_model_open sends.
+      test('a Drive route ignores filepath', () => {
+        expect(Analytics.modelContentId({kind: 'provider', provider: 'google', filepath: '/secret-name.ifc'}))
+          .toBeUndefined()
+        expect(Analytics.modelContentId({
+          kind: 'provider', provider: 'google', filepath: '/secret-name.ifc', downloadUrl: new URL(`${ORIGIN}/dl`),
+        })).toBe(`${ORIGIN}/dl`)
+      })
+    })
+
+    // Each cell of the grid, as its call site sends it.
+    test.each([
+      ['view', 'none'], ['share', 'none'], ['share', 'upsell'], ['share', 'blocked'], ['share', 'soft'],
+      ['export', 'none'], ['export', 'upsell'], ['export', 'blocked'],
+    ])('%s / %s', (action, gate) => {
+      Analytics.trackModelAction(action, {gate, source: 'hosted', isAuthenticated: true, appMetadata: {}})
+      expect(sent()).toEqual([[`model_${action}`, {tier: 'free', gate, source: 'hosted'}]])
+    })
+
+    test('respects consent: nothing is sent once analytics is withheld', () => {
+      // setIsAllowed itself clears the sticky user property through gtag;
+      // what matters is that no event goes out.
+      Analytics.setIsAllowed(false)
+      Analytics.trackModelAction('view', {gate: 'none', source: 'local', isAuthenticated: false})
+      expect(sent()).toEqual([])
+    })
+
+    test('sends nothing for an unknown action or gate, and never throws', () => {
+      expect(() => {
+        Analytics.trackModelAction('download', {gate: 'none'})
+        Analytics.trackModelAction('view', {gate: 'maybe'})
+        Analytics.trackModelAction('view')
+      }).not.toThrow()
+      expect(window.gtag).not.toHaveBeenCalled()
+    })
+
+    test('drops a source outside the vocabulary', () => {
+      Analytics.trackModelAction('view', {gate: 'none', source: 'ftp', isAuthenticated: false})
+      expect(sent()).toEqual([['model_view', {tier: 'anon', gate: 'none'}]])
     })
   })
 
@@ -286,6 +528,41 @@ describe('Analytics', () => {
    * merge over the global scope, so a deliberately cid-less event would
    * inherit a stale one (Codex review on #1770).
    */
+  // Checkout's client-reference-id (gaClientReference.js), which the
+  // stripe-webhook decodes to attribute its server-side subscription events.
+  describe('getGaClientReference', () => {
+    beforeEach(() => {
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+      Cookies.remove('isAnalyticsAllowed')
+    })
+
+    afterEach(() => {
+      Cookies.remove('isAnalyticsAllowed')
+    })
+
+    test('encodes the client id with no dot, which Stripe would drop', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      expect(Analytics.getGaClientReference()).toBe('gacid_1871520000_1754700000')
+    })
+
+    test('reads the _ga cookie when gtag has not answered yet', () => {
+      Cookies.set('_ga', 'GA1.1.1871520000.1754700000')
+      expect(Analytics.getGaClientReference()).toBe('gacid_1871520000_1754700000')
+    })
+
+    test('null with no client id', () => {
+      expect(Analytics.getGaClientReference()).toBeNull()
+    })
+
+    test('null when analytics consent is withheld', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.setIsAllowed(false)
+      expect(Analytics.getGaClientReference()).toBeNull()
+    })
+  })
+
+
   describe('syncSentryCidTag', () => {
     beforeEach(() => {
       setTag.mockClear()
@@ -337,6 +614,24 @@ describe('Analytics', () => {
       })).toBe(false)
     })
 
+    // The /viewer/step landing page links here; it is a demo, not a user's
+    // own model, and was counted as a real open before.
+    test('false for the hosted STEP demo (/share/v/p/index.step)', () => {
+      expect(Analytics.isRealModelOpen({
+        kind: 'file',
+        isUploadedFile: false,
+        filepath: 'index.step',
+      })).toBe(false)
+    })
+
+    test('true for a model merely named like the demo, from another source', () => {
+      expect(Analytics.isRealModelOpen({
+        kind: 'provider',
+        provider: 'github',
+        gitpath: 'https://github.com/someone/repo/blob/main/index.step',
+      })).toBe(true)
+    })
+
     test('false for a demo permalink with an element subpath', () => {
       // processFile strips the eltPath, so the demo shape is identical.
       expect(Analytics.isRealModelOpen({
@@ -356,9 +651,10 @@ describe('Analytics', () => {
     })
 
     test('true for an upload even when isUploadedFile is misdetected', () => {
-      // GitHub Pages installs prefix routes with /Share, defeating
-      // processFile's '/share/v/new' test — the UUID filepath still
-      // distinguishes the upload from the demo.
+      // Before #1959, GitHub Pages installs (routes prefixed /Share)
+      // defeated processFile's '/share/v/new' test. processFile is now
+      // prefix-independent (routes/localOnly.ts), but the UUID filepath
+      // stays an independent backup that distinguishes upload from demo.
       expect(Analytics.isRealModelOpen({
         kind: 'file',
         isUploadedFile: false,

@@ -51,7 +51,8 @@ deploy. That gap includes:
 These are final.
 
 1. **A separate PR off `main`**, not stacked on #1939. #1939 turns the
-   `export` flag on and adds 2 free exports per rolling 7 days. The harness
+   `export` flag on and adds 2 free exports per rolling 7 days (since
+   2026-10-27 replaced by model slots, glb-export-premium.md §4.8). The harness
    targets a deployed URL, so it is run against #1939's deploy preview, and
    #1939 merges once that run passes. Every spec loads its model with
    `?feature=export`, which turns the Export tab on where it is still flagged
@@ -197,7 +198,7 @@ its whole value appears.
 Share's login dialog offers only GitHub and Google. Its popup route takes any
 Auth0 connection, though:
 
-1. `<base>/popup-auth?connection=Username-Password-Authentication` calls
+1. `<base>/popup-auth?connection=share-live-smoke` calls
    `loginWithRedirect`.
 2. Auth0's Universal Login asks for the email and password.
 3. Auth0 returns to `<origin>/popup-callback`.
@@ -295,7 +296,7 @@ asks, up to three times.
 **How each account is found and read:**
 
 1. Look the account up by email (`users-by-email`).
-2. Keep only users with a `Username-Password-Authentication` identity, so a
+2. Keep only users with a `share-live-smoke` identity, so a
    GitHub login with the same address is ignored.
 3. There must then be exactly one. None or two is drift.
 4. Read the user back from the primary store.
@@ -366,12 +367,16 @@ this block.
 
 So the comped test account is never demoted and never warned about.
 
-**The pending test account is not comped**, so the sweep reports it as
-`unverifiable` (`pro_without_stripe_customer`) on every run while it sits at
-`shareProPendingReauth`. That means **one daily Sentry warning that names the
-pending test user**. It is never demoted either. Whether to accept that or
-filter it out is an [open question](#open-questions). Nothing in the billing
-code was changed.
+**The pending test account is not comped.** Before it was handled, the sweep
+reported it as `unverifiable` (`pro_without_stripe_customer`) on every run
+while it sat at `shareProPendingReauth`: one daily Sentry warning naming the
+pending test user. The sweep now recognises the smoke's accounts by their
+**primary identity's connection**, `share-live-smoke` (the same key the reset
+uses to find them), and lists such a user under `testAccounts`, logged at
+INFO, with no Sentry warning. It is still never written to. Only the
+primary identity counts, so a real user who linked a smoke identity stays
+loud. The connection must hold nothing but these test accounts for that to
+be safe.
 
 
 ## Secrets
@@ -513,11 +518,10 @@ this one.
 It never runs on every push.
 
 - **`workflow_dispatch`** with an https origin, plus optional projects.
-- **A PR marked ready for review**, but only if it touches export,
-  subscription or harness paths. CI is capped at 4 concurrent jobs, and a full
-  run holds one runner for tens of minutes. This filter is the one change
-  beyond the brief, listed under [open questions](#open-questions).
-- **The `live-smoke` label** on any PR, draft or not.
+- **The `live-smoke` label** on any PR, draft or not. This is the only PR
+  trigger: marking a PR ready does not start a run. CI is capped at 4
+  concurrent jobs and a full run holds one runner for tens of minutes, so a
+  run is always asked for. To re-run, remove the label and add it again.
 
 ### Target
 
@@ -590,9 +594,9 @@ label run uses #1939's merge ref, which includes main's harness.
 | 2 | Anonymous: login prompt | Automated: the gated Save, its help, Log in → `login-with-github` | `exportAnonymous` › Save is gated… |
 | 2 | Free on main: → `/subscribe/` | Automated, on deploys without the allowance | `exportFree` › gated straight to /subscribe/ |
 | 2 | Pro: a `.glb` lands, `glTF` magic, opens in donmccurdy; nothing new on the tab | Automated (framing, size = estimate, no count line, no chip) + replaced (validator, three.js) | `exportPro` › Preparing… |
-| 2b | Free: 2 → 1 → 0, gated look, help + date, Upgrade → `/subscribe/`, date = first export + 7 d, reload still 0 | Automated, including the date three ways: the header's `nextFreeAt` = the first charge row's `exportedAt` (read from Auth0 by row id) + 7 days = what the page formats with the same `toLocaleString` options | `exportFree` › two free exports… |
-| 3 | Pro: `pro-module` 200, `text/javascript`, `private, no-store`, no `x-bldrs-export-id`; memoised | Automated via `page.on('response')` | `exportPro` › Preparing… |
-| 3 | Free: each export its own 200 with `x-bldrs-export-id`; forged request at the limit → 403 `free_export_limit`; ledger rows `free: true` with the model's key | Automated, with the session's own token for the forged request and the Management API for the ledger | `exportFree` › two free exports… |
+| 2b | Free (model slots, 2026-10-27/28): with both slots holding other models (set through the Management API), the hosted sample says "Public model: unlimited export" and exports three times, taking no slot; the exported file reopened from disk is a local file, which meets the gated look, help + date, Upgrade → `/subscribe/` | Automated, including the date three ways: the stamps the spec wrote + 7 days = what the server reports = what the page formats with the same `toLocaleString` options | `exportFree` › a public sample exports unlimited… |
+| 3 | Pro: `pro-module` 200, `text/javascript`, `private, no-store`, no `x-bldrs-model-slots`; memoised | Automated via `page.on('response')` | `exportPro` › Preparing… |
+| 3 | Free: each export of the public sample its own 200 with `x-bldrs-model-slots` (`public`, never `taken`); the slots untouched and one history row per export; with both slots full, a forged request for a local file → 403 `no_free_model_slot`, and for the sample → 200 with nothing written | Automated, with the session's own token for the forged requests and the Management API for the ledgers | `exportFree` › a public sample exports unlimited… |
 | 3 | No token → 401 | Automated (`missing_auth0_token`) | `exportAnonymous` › pro-module answers… |
 | 4 | Reload: enabled at once (cache hit), export again → same bytes | Automated: `cache HIT`, no writer pass, byte-identical | `exportPro` › a reload hits the cache… |
 | 5 | Metadata off: smaller, no `BLDRS_` in the JSON chunk | Automated (on before, off after) | `exportPro` › Preparing… |
@@ -803,17 +807,27 @@ merged (follow-up PR):
 | The WebGL skip, end to end | This sandbox, chromium, temporarily mutated to probe `false` and to treat chromium as WebGL-less | The anonymous spec skipped with the reason in the summary; mutation reverted. Unmutated: no skip on chromium or mobile-pixel |
 | The hung `goto` | This sandbox, chromium, against a socket that accepts and never answers | With no `goto` timeout and a short test timeout: `Test timeout` plus `page.goto: net::ERR_ABORTED; maybe frame was detached?`, the CI signature. With the 60s bound: `Timeout 60000ms exceeded` and "no response to the document request came within 60s" |
 | Live config on a local `test-flows-build`, after this change | This sandbox, `chromium` + `mobile-pixel`; the anonymous spec `--repeat-each=5` on chromium | 6 passed, 20 skipped as not applicable; 10 passed, 5 skipped with the repeats. No WebGL skip |
+| First account-backed run, #1939's preview | CI ([37733161733](https://github.com/bldrs-ai/Share/actions/runs/37733161733)), all 5 projects | Reset clean (7 roles, no drift). 13 passed, 36 failed, 16 skipped: every login clicked Auth0's hidden default submit button. Fixed by submitting with Enter (#1948) |
+| Account-backed runs 2–5, #1939's preview | CI ([37738031064](https://github.com/bldrs-ai/Share/actions/runs/37738031064), [37740697840](https://github.com/bldrs-ai/Share/actions/runs/37740697840), [37742719516](https://github.com/bldrs-ai/Share/actions/runs/37742719516), [37747107871](https://github.com/bldrs-ai/Share/actions/runs/37747107871)) | Logins pass from run 2 on: 23, then 25, 25, 25 passed. The failures were test timing and an exact `Cache-Control` match (fixed in #1948), plus the `/subscribe/` redirect loop, a real bug (#1949) |
+| `/subscribe/` fix, #1949's preview | CI ([37750199168](https://github.com/bldrs-ai/Share/actions/runs/37750199168)), chromium | 11 passed, 2 skipped (the #1939-only specs) |
+| Full run, #1939's preview with #1948 and #1949 merged | CI ([37820640515](https://github.com/bldrs-ai/Share/actions/runs/37820640515)), all 5 projects | 27 passed, 1 failed, 37 skipped. The failure was mobile-pixel's Exported snackbar auto-hiding during the download read (#1950) |
+| mobile-pixel with #1950 | CI ([37823278603](https://github.com/bldrs-ai/Share/actions/runs/37823278603)) | 11 passed, 2 skipped, 0 failed |
+| chromium after #1939's stale-memo fix | CI ([37828097215](https://github.com/bldrs-ai/Share/actions/runs/37828097215)) | 12 passed, 1 skipped, 0 failed |
 
-**Unverified until the owner's setup exists:**
+**Verified since the owner's setup (2026-10-08):** real Auth0 login in
+every project, and the anonymous, free and Pro specs against #1939's
+deploy preview on chromium and mobile-pixel (the pending spec runs on
+chromium only, by design), per the CI rows above. The free-tier spec fills both model slots through the Management API, and the reset script empties the account's
+`usageQuota.loads` and `exports` before each run.
 
-- every tiered spec against a real deploy;
-- real Auth0 login;
-- the free and pending specs entirely;
+**Still unverified:**
+
 - Firefox, entirely: until #1947 lands it only skips. Its coverage is the
-  manual checklist.
+  manual list in [glb-export-premium.md](glb-export-premium.md) §8.
 - WebKit's model-loading specs when WebGL is present, and Safari's OPFS
   cache, which no automated run reaches;
-- the cause of the fourth run's hung `goto`: it has not recurred locally.
+- the cause of the fourth anonymous run's hung `goto`: it has not recurred,
+  locally or in any account-backed run.
 
 This sandbox's network policy blocked the browser download from
 `cdn.playwright.dev` and every Netlify and Auth0 host.
@@ -821,9 +835,12 @@ This sandbox's network policy blocked the browser download from
 
 ## Owner setup
 
-1. **Auth0, Database connection.** `Username-Password-Authentication` must be
-   enabled for the Share SPA application (Applications → the SPA →
-   Connections). Sign-ups can stay off; the owner creates the users.
+1. **Auth0, Database connection.** A dedicated database connection,
+   `share-live-smoke`, holds only the test users. It has sign-ups disabled and
+   Email as the only identifier, and is enabled for the Share SPA application
+   alone (Applications → the SPA → Connections). A connection of their own
+   keeps the test users apart from any real password users, and the reset
+   script only ever touches users with an identity in it.
 2. **Test users**, in that connection, email verified:
    - **5 free:** one per project. No `subscriptionStatus` (or `"free"`).
    - **1 Pro:** app_metadata `{"subscriptionStatus": "sharePro", "comped":
@@ -898,19 +915,13 @@ part of phase 1.
 
 ## Open questions
 
-1. **The pending test account's daily Sentry warning.** The sweep lists it as
-   `unverifiable` while it sits at `shareProPendingReauth`. Options:
-   - accept it;
-   - tag the test users, e.g. an `app_metadata.liveSmoke: true` marker, and
-     have the sweep list them separately;
-   - reset the pending account to `sharePro` after each run instead of
-     before. That only narrows the window.
-
-   This changes billing code, so the owner decides.
-2. **Ready-for-review scoping.** The brief said "PR ready_for_review → that
-   PR's preview". The workflow runs on ready-for-review only for PRs touching
-   export, subscription or harness paths, because of the 4-runner cap; the
-   label runs any PR. Drop the filter if every PR should pay for a run.
+1. **The pending test account's daily Sentry warning.** Resolved: the owner
+   chose to have the sweep list the smoke's accounts separately. It keys on
+   the `share-live-smoke` connection rather than a new `app_metadata`
+   marker, so there is nothing extra to set by hand
+   ([above](#why-comped-pro-is-safe-from-the-sweep)).
+2. **Ready-for-review scoping.** Resolved: the owner chose label-only PR
+   runs. Marking a PR ready no longer starts one.
 3. **Which Netlify project.** PR runs default to `bldrs-share-prod`'s
    preview. If `bldrs-share-dev` uses a different Auth0 tenant or client, the
    accounts must live in the one the chosen project uses.

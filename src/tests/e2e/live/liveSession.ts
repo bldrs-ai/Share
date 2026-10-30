@@ -249,17 +249,24 @@ export async function loginWithPassword(context: BrowserContext, target: LiveTar
     assertLoginPage(page, hosts)
     await failOnAuth0ErrorPage(page)
     // New Universal Login names the field `username`; Classic, `email`.
-    await enterQuietly(page.locator('input[name="username"], input[name="email"]').first(), account.email, hosts)
+    const identifier = page.locator('input[name="username"], input[name="email"]').first()
+    await enterQuietly(identifier, account.email, hosts)
+    // Each form is submitted by Enter in the field just filled, not by
+    // clicking a submit button: New Universal Login puts a hidden
+    // (aria-hidden, tabindex -1) default submit first in the form, there
+    // only so Enter submits, so `button[type="submit"]` finds it before
+    // the visible one and the click never lands (first account-backed run,
+    // #1948).
     const password = page.locator('input[name="password"]')
     if (!await password.isVisible()) {
       // Identifier-first: the password is on the next screen — which is a
       // navigation, so the page is checked again before anything is typed.
-      await page.locator('button[type="submit"]').first().click()
+      await identifier.press('Enter')
       await password.waitFor({timeout: LOGIN_TIMEOUT_MS})
     }
     assertLoginPage(page, hosts)
     await enterQuietly(password, account.password, hosts)
-    await page.locator('button[type="submit"][name="action"], button[type="submit"]').first().click()
+    await password.press('Enter')
     await backOnTargetOrClosed(page, target, (url) => url.pathname.includes('consent'))
     if (!page.isClosed() && new URL(page.url()).pathname.includes('consent')) {
       await page.locator('button[value="accept"]').click()
@@ -762,6 +769,51 @@ async function readRenderState(page: Page): Promise<RenderState> {
     }
   })
 }
+
+
+/**
+ * Keep the reauthentication dialog out of the way for the rest of the test,
+ * however late it opens. BaseRoutes' background fresh-claims pass lands
+ * after the page's first token and opens the dialog whenever the claims it
+ * fetched say pending — including when the spec itself has just set the
+ * account back to pending — so a one-time check right after the load can
+ * miss it, and it then blocks the next click (first account-backed run,
+ * #1948). Playwright runs the handler whenever the dialog would block an
+ * action.
+ *
+ * @param page the page
+ * @return how many times the handler has dismissed it so far
+ */
+export async function dismissReauthDialogWhenShown(page: Page): Promise<() => number> {
+  let dismissed = 0
+  await page.addLocatorHandler(page.getByRole('dialog').filter({hasText: 'Reauthentication Required'}), async () => {
+    dismissed++
+    await page.keyboard.press('Escape')
+  })
+  return () => dismissed
+}
+
+
+/**
+ * A Cache-Control value as its sorted, trimmed directives. Netlify's edge
+ * re-serializes the header a function sets — `private, no-store` arrives as
+ * `private,no-store` — so specs compare directives, not strings.
+ *
+ * @param value the header value, if any
+ * @return its directives, sorted
+ */
+export function cacheDirectives(value: string | undefined): string[] {
+  return (value ?? '').split(',').map((directive) => directive.trim()).filter((directive) => directive !== '').sort()
+}
+
+
+/**
+ * `waitForURL` options for the Upgrade action's full-page navigation to
+ * `/subscribe/`: done at commit. The spec is about where the action goes,
+ * and the subscribe page's own `load` waits on Stripe's embed, which can
+ * outlast what is left of the test's timeout.
+ */
+export const SUBSCRIBE_NAVIGATION = {waitUntil: 'commit' as const, timeout: NAVIGATION_TIMEOUT_MS}
 
 
 /**

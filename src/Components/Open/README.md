@@ -44,7 +44,7 @@ Owns all tab state and model-loading callbacks. Responsibilities:
 | Concern | Detail |
 |---|---|
 | Tab list | `[Local, Google*, GitHub, Samples]`; tab index in Zustand `currentTab` |
-| Local open | `loadLocalFile` → OPFS → navigate `/v/new/<filename>`. Without OPFS, an alert instead (`OPFS/messages.js`, #1906) |
+| Local open | `loadLocalFile` → OPFS → navigate `/v/local-only/<filename>`. Without OPFS, the file is held in memory (`loader/inMemoryUploads.js`) and opened by an in-app navigation, with no local recent; reloading that URL explains the file is gone (`InMemoryUploadGoneError`, `OPFS/messages.js`, #1906). With OPFS, a `/v/local-only/` URL whose upload isn't in this browser's OPFS (a pasted link, a cleared cache) gets the "File not in this browser" alert, whose action opens this dialog (`UploadNotInBrowserError`, #1955) |
 | Local recents | `loadRecentFilesBySource('local')` on dialog open |
 | Google open | Two paths: picker (`handlePickerSelect`) or direct by id (`handleOpenById`) → both navigate to `/v/g/<fileId>` |
 | GitHub recents | `loadRecentFilesBySource('github')` on dialog open |
@@ -106,9 +106,12 @@ below).
 
 ## Usage Quotas
 
-Private-model loads (local, Drive, private GitHub) are metered per tier to
-create a sign-up / upgrade moment; public and sample content is never counted.
-**The full design — tiers and limits, the 30-day rolling window, the
+Private-model loads from the cloud (restricted Drive files, private GitHub)
+are metered for signed-in free users to create an upgrade moment; local
+files, public or sample content, Drive files shared "Anyone with the link",
+and anything opened while signed out are never counted (Share#1966; the `meterLocalFiles` flag can put local files
+back in the meter, see quotas.md §"Metering local files again").
+**The full design — tiers and limits, the rolling 7-day window, the
 server-authoritative `record-load` gate, GitHub public/private detection, the
 OPFS local fallback, and the `quotas` feature flag — lives in
 [design/new/quotas.md](../../../design/new/quotas.md).** This section covers
@@ -124,7 +127,7 @@ mid-session on an already-loaded model.
 | 0 % used | Silent — no quota UI |
 | ≥ 50 % | Subtle badge on the Open toolbar button ("N of M used") |
 | ≥ 75 % | Same badge, amber |
-| Over limit | `QuotaLimitDialog` (value prop + sign-up / upgrade CTA) instead of navigating |
+| Over limit | `QuotaLimitDialog` (value prop + upgrade CTA) instead of navigating |
 
 `QuotaBadge` wraps the `OpenModelControl` toolbar button so the dialog stays
 uncluttered; it hides whenever `limit === Infinity` (paid tier, or the `quotas`
@@ -138,20 +141,26 @@ browser, sample chips, drag-and-drop (viewport and onboarding overlay) — gates
 in this order:
 
 1. **Cheap client check** — `check(key)` when the share path is known up front
-   (recents), `hasCapacity` when it isn't yet (new local file). If denied, open
-   `QuotaLimitDialog` and stop (no consent popup, no server round-trip).
+   (recents). If denied, open `QuotaLimitDialog` and stop (no consent popup, no
+   server round-trip). A new local file has no up-front check: it's unmetered,
+   and a `hasCapacity` pre-gate would refuse it for a limit that doesn't apply
+   to it, so `record()` (step 3) is its only gate.
    `check` only denies a *known-new, known-private* load: already-counted keys
-   stay openable at limit (mirroring the server's idempotency), and `/v/gh/`
-   paths pass through because only the server can tell public from private.
+   stay openable at limit (mirroring the server's idempotency), `/v/gh/`
+   paths pass through because only the server can tell public from private,
+   and `/v/g/` paths pass through because their visibility takes the lookup
+   `record()` makes.
 2. **`provider.getAccessToken`** (Drive / GitHub only) — token preflight
    *inside* the click handler, before any other `await`, so a GIS consent popup
    keeps its user-gesture activation. Navigating or awaiting `record()` first
    loses the gesture → `popup_failed_to_open`. See the comment in
    `handleOpenById`.
 3. **`record(key)`** — the authoritative gate; on `403` open `QuotaLimitDialog`
-   instead of navigating, otherwise add the recent and navigate.
+   instead of navigating, otherwise add the recent and navigate. Drive opens
+   pass `{resolveDriveVisibility}` (the connection's permission lookup), so a
+   link-shared file is not counted (quotas.md §"Drive visibility").
 
-When the `quotas` flag is off (the default) `useQuota` reports unlimited
+When the `quotas` flag is off (it is on since Share#1970) `useQuota` reports unlimited
 capacity and `record()` is a no-op, so every load site above is inert.
 
 ### Files (this subsystem)
@@ -162,3 +171,4 @@ capacity and `record()` is a no-op, so every load site above is inert.
 | `QuotaLimitDialog.jsx` | Over-limit value-prop modal |
 | `src/hooks/useQuota.js` | Hook over the lib + `record-load` |
 | `src/quota/quota.js` | Core lib — see [design/new/quotas.md](../../../design/new/quotas.md) |
+| `src/quota/limits.js` | Tiers, limits, window and which routes `record-load` counts by kind (`isCountedByRouteKind`), shared with `record-load` and the marketing pricing plans |

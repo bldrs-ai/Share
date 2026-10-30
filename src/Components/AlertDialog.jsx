@@ -1,6 +1,7 @@
 import React, {ReactElement, useEffect, useRef} from 'react'
 import {Link} from '@mui/material'
 import {ErrorOutline as ErrorOutlineIcon} from '@mui/icons-material'
+import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
 import {NotFoundError} from '../loader/Loader'
 import {getProvider} from '../connections/registry'
 import useStore from '../store/useStore'
@@ -46,10 +47,22 @@ export default function AlertDialog({onClose}) {
     if (typeof alert !== 'object') {
       return
     }
-    if (alert.type === 'unsupportedSchema' || alert.type === 'noOpfs') {
+    if (alert.type === 'engineFailure') {
+      // A constant, not alert.message: the message carries conway's free-form
+      // reason (file-derived text, unbounded cardinality), which must not
+      // reach GA. CadView already captured the failure in Sentry with the
+      // reason as tags/context, so a second capture of this plain alert
+      // object would be a context-less duplicate; and load_failed carries
+      // the closed-set reason_class.
+      trackAlertEvent(ENGINE_FAILURE_ALERT_EVENT)
+    } else if (alert.type === 'unsupportedSchema' || alert.type === 'inMemoryUploadGone' ||
+        alert.type === 'uploadNotInBrowser') {
       // Expected outcome, not a defect: analytics only, never Sentry
-      // (alertTracking.js#trackAlertEvent). `noOpfs` is a browser without
-      // OPFS opening a local file (OPFS/messages.js, #1906).
+      // (alertTracking.js#trackAlertEvent). `inMemoryUploadGone` is a
+      // /v/local-only/ URL whose file, opened without OPFS, was held only by a
+      // page that is gone (OPFS/messages.js, #1906); `uploadNotInBrowser` is
+      // a /v/local-only/ link, with OPFS available, to an upload this browser
+      // doesn't hold (#1955).
       trackAlertEvent(alert.message)
     } else if (alert.type === 'oom' || alert.type === 'needsReconnect') {
       trackAlert(alert.message, alert)
@@ -69,7 +82,9 @@ export default function AlertDialog({onClose}) {
   const isOom = alert && typeof alert === 'object' && alert.type === 'oom'
   const isNeedsReconnect = alert && typeof alert === 'object' && alert.type === 'needsReconnect'
   const isUnsupportedSchema = alert && typeof alert === 'object' && alert.type === 'unsupportedSchema'
-  const isNoOpfs = alert && typeof alert === 'object' && alert.type === 'noOpfs'
+  const isInMemoryUploadGone = alert && typeof alert === 'object' && alert.type === 'inMemoryUploadGone'
+  const isUploadNotInBrowser = alert && typeof alert === 'object' && alert.type === 'uploadNotInBrowser'
+  const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
 
   const refresh = () => {
     try {
@@ -99,12 +114,15 @@ export default function AlertDialog({onClose}) {
     }
   }
 
-  // A no-OPFS alert reports an action that didn't start, so the model on
-  // screen is still good: clear the alert without onClose, which
-  // AlertDialogAndSnackbar wires to navToDefault for failed loads (codex
-  // review on #1905).
-  const onDismiss = () => setAlert(null)
-  const onCloseDialog = isNoOpfs ? onDismiss : onCloseInner
+  // The upload is gone, so there is no model to stay on: close the way a
+  // failed load does (onClose → navToDefault), then open the Open dialog so
+  // re-opening the file is one click. Visibility is store state that
+  // useHashState re-asserts as `#open` after the navigation, so it survives
+  // the route change.
+  const openAFile = () => {
+    onCloseInner()
+    setIsOpenModelVisible(true)
+  }
 
   let actionCb
   let actionTitle
@@ -114,9 +132,14 @@ export default function AlertDialog({onClose}) {
   } else if (isNeedsReconnect) {
     actionCb = reconnect
     actionTitle = 'Reconnect'
-  } else if (isNoOpfs) {
-    actionCb = onDismiss
+  } else if (isInMemoryUploadGone) {
+    // Nothing loaded, so close the way a failed load does (onClose →
+    // navToDefault); "Reset" would suggest something can be fixed here.
+    actionCb = onCloseInner
     actionTitle = 'OK'
+  } else if (isUploadNotInBrowser) {
+    actionCb = openAFile
+    actionTitle = 'Open a file'
   } else {
     actionCb = onCloseInner
     actionTitle = 'Reset'
@@ -129,21 +152,24 @@ export default function AlertDialog({onClose}) {
     headerText = 'Reconnect required'
   } else if (isUnsupportedSchema) {
     headerText = 'Not supported yet'
-  } else if (isNoOpfs) {
-    headerText = 'Not available here'
+  } else if (isInMemoryUploadGone) {
+    headerText = 'File no longer available'
+  } else if (isUploadNotInBrowser) {
+    headerText = 'File not in this browser'
   } else {
     headerText = 'Error'
   }
 
-  // No "contact us" footer for an unsupported schema or a browser without
-  // OPFS: both are known, documented limits, so there is nothing for support
-  // to diagnose.
-  const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema && !isNoOpfs
+  // No "contact us" footer for an unsupported schema, an in-memory upload
+  // whose page is gone, or an upload this browser doesn't hold: all are
+  // known, documented limits, so there is nothing for support to diagnose.
+  const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema && !isInMemoryUploadGone &&
+    !isUploadNotInBrowser
   return (
     <Dialog
       headerText={headerText}
       isDialogDisplayed={alert !== null}
-      setIsDialogDisplayed={onCloseDialog}
+      setIsDialogDisplayed={onCloseInner}
       actionCb={actionCb}
       headerIcon={<ErrorOutlineIcon className='icon-share'/>}
       actionTitle={actionTitle}
@@ -179,7 +205,8 @@ function createAlertReport(a) {
   if (typeof a === 'string') {
     return a
   } else if (typeof a === 'object') {
-    if (a && (a.type === 'oom' || a.type === 'needsReconnect' || a.type === 'unsupportedSchema' || a.type === 'noOpfs')) {
+    if (a && (a.type === 'oom' || a.type === 'needsReconnect' || a.type === 'unsupportedSchema' ||
+        a.type === 'inMemoryUploadGone' || a.type === 'uploadNotInBrowser' || a.type === 'engineFailure')) {
       return a.message
     } else if (a instanceof NotFoundError) {
       return displayPathAlert(a)

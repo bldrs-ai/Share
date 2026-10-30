@@ -13,7 +13,7 @@ import debug from '../utils/debug'
  *
  * Downloads the file using the provider's OAuth token, writes it to OPFS
  * (or creates a blob URL as fallback), and calls onLoad with the filename
- * for navigation to /v/new/<filename>.
+ * for navigation to /v/local-only/<filename>.
  *
  * @param {object} connection The Connection object
  * @param {object} source The Source object
@@ -148,11 +148,11 @@ async function writeAndOpen(download, fallbackName, provider, connection, onLoad
   }
 
   // Fallback: use blob URL directly (no OPFS). This cannot actually open
-  // the file: `/v/new/` navigation is a full page load, which ends the blob
-  // URL with the page that minted it. The Open dialog and drag-and-drop
-  // replaced the same fallback with NO_OPFS_LOCAL_FILE_ALERT
-  // (OPFS/messages.js); nothing imports this module today, so it's left as
-  // is until #1906 decides how a no-OPFS open should work.
+  // the file: `/v/local-only/` navigation is a full page load, which ends the blob
+  // URL with the page that minted it. The Open dialog and drag-and-drop hold
+  // the File in memory instead and navigate in-app
+  // (`loader/inMemoryUploads.js`, #1906); nothing imports this module today,
+  // so it's left as is rather than ported untested.
   let tmpUrl = URL.createObjectURL(blob)
   const parts = tmpUrl.split('/')
   tmpUrl = parts[parts.length - 1]

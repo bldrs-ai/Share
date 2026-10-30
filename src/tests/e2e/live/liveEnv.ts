@@ -73,8 +73,9 @@ export function liveTargetFrom(raw: string | undefined, env: Record<string, stri
  * `record-export`. No account and no secret needed, so it is the same probe
  * on every target.
  *
- * - `present` — #1939's allowance (2 free exports per rolling 7 days): the
- *   function answers GET with the caller's allowance, so with no token it
+ * - `present` — a free export rule (#1939's 2 exports per rolling 7 days,
+ *   or the model-slot rule that replaced it): the function answers GET with
+ *   the caller's allowance or slots, so with no token it
  *   refuses at the auth check, 401.
  * - `absent` — main before #1939: the function takes POST only and answers
  *   GET with 405 before it ever looks for a token, and a free user is gated

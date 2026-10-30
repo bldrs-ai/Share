@@ -10,13 +10,20 @@ import {onHash} from '../Components/Camera/CameraControl'
 import {
   FUNNEL_EVENTS,
   LOCAL_HOUR_PARAM,
+  MODEL_ACTIONS,
+  MODEL_GATES,
   OPEN_CID_PARAM,
   getLocalHour,
   getOpenCid,
   gtagEvent,
+  gtagFunnelEvent,
   isRealModelOpen,
+  modelContentId,
+  modelRouteSource,
   startModelEngagement,
 } from '../privacy/analytics'
+import {trackEngagementOnOpen} from '../privacy/engagementTracking'
+import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
 import {getRenderMode} from '../privacy/preferences'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
@@ -25,17 +32,32 @@ import {
   attachLoadFailureContext,
   beginLoadProgress,
   captureLoadDiagnostics,
+  currentLoadSerial,
   endLoadProgress,
+  getCompletedLoadOutcome,
   getCompletedLoadStats,
+  getLoadFailureInfo,
+  reportFirstMesh,
   reportFramingExclusion,
   reportLoadProgress,
 } from '../loader/loadProgress'
+import {buildOutcomeParams, loadFailureParams} from '../loader/loadAnalytics'
 import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
+import {EngineOpenFailureError, engineFailureCaptureContext} from '../loader/engineOpenFailure'
 import {UnsupportedSchemaError, reportUnsupportedSchema} from '../loader/unsupportedSchema'
+import {hasInMemoryUpload} from '../loader/inMemoryUploads'
+import {
+  InMemoryUploadGoneError,
+  UploadNotInBrowserError,
+  inMemoryUploadGoneAlert,
+  uploadNotInBrowserAlert,
+} from '../OPFS/messages'
+import {reportUploadNotInBrowser} from '../OPFS/reportUploadNotInBrowser'
 import {getBrowser} from '../connections/registry'
 import modelIdentity from '../routes/modelIdentity'
 import useExistInFeature from '../hooks/useExistInFeature'
+import useDirectLinkQuota from '../quota/useDirectLinkQuota'
 import useStore from '../store/useStore'
 import {
   expandedIdsForSelection,
@@ -48,7 +70,6 @@ import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
 import {navWith} from '../utils/navigate'
-import {addProperties} from '../utils/objects'
 import {labelForGeometryId} from '../utils/geometryLabels'
 import {
   findRootLevelOwnerNode,
@@ -165,17 +186,53 @@ export default function CadView({
   // fire end-to-end → double load. This in-flight ref dedupes overlapping
   // calls; whichever effect tick wins, the other skips.
   const onViewerInFlightRef = useRef(false)
+  // The model the in-flight onViewer is loading, and whether a call for a
+  // DIFFERENT model arrived meanwhile. That is not a duplicate: dropping it
+  // left the URL on the new model while nothing ever loaded it. It became
+  // reachable once a no-OPFS local open switched models by an in-app
+  // navigation instead of a page load (navigateToInMemoryModel, #1906; codex
+  // review on #1957). Such a call is replayed, through `latestOnViewerRef` so
+  // it sees that render's viewer and modelPath, once the in-flight one ends.
+  // Keyed by model identity, not by viewer: the viewer is also re-created
+  // for the SAME model during mount, and those calls must stay deduped (the
+  // Safari double-load above).
+  const inFlightModelKeyRef = useRef(null)
+  const isViewerReloadPendingRef = useRef(false)
+  const latestOnViewerRef = useRef(null)
+  // The alert as it stood when the in-flight load began. If that load is
+  // superseded and fails, the alert it raises belongs to a model the user
+  // has already left; left up, it would sit over the replayed model, and
+  // dismissing it navigates home (codex review on #1957).
+  const alertAtLoadStartRef = useRef(null)
   // The model a schema refusal was last counted in Sentry for
   // (unsupportedSchema.js#reportUnsupportedSchema). The auth-state effect
   // below can re-run onViewer for the SAME route after a refusal —
   // isViewerLoaded stays false on failure — and each re-run would count
   // the refusal again, inflating the demand numbers the report exists for
-  // (codex review of Share#1899). Cleared when the model path changes, so a
-  // new open of any model is counted once.
+  // (codex review of Share#1899). Keyed by model identity and cleared when
+  // the identity changes (dedupeModelKeyRef, in the modelPath effect), not on
+  // every run of it: that effect also re-runs for the same model (Widget API
+  // view settings), and clearing there let one model count twice (codex
+  // review of Share#1961). The upload-not-in-browser count (#1955) is gated
+  // by the same ref, under its own key prefix.
   const reportedRefusalRef = useRef(null)
   // This render's `selectItemsInScene`, for the funnel registered with
   // `viewer/tools/selectionFunnel.js` (see the effect near the end).
   const selectItemsInSceneRef = useRef(null)
+  // How loadModel last downloaded a Drive file: `{fileId, connection}`, with
+  // connection null for the API-key path. The direct-link quota meter reads
+  // it to tell a link-shared (public, unmetered) file from a private one
+  // (quota/useDirectLinkQuota.js, design/new/quotas.md §"Drive visibility").
+  const driveDownloadRef = useRef(null)
+  // The model identity the two dedupe refs belong to.
+  const dedupeModelKeyRef = useRef(null)
+  // The model a `load_failed` was last sent for, for the same reason and
+  // with the same keying as reportedRefusalRef: the auth-state effect and
+  // the customViewSettings effect re-run onViewer for the SAME route after
+  // any failure (isViewerLoaded stays false), and without this each re-run
+  // would send another load_failed for one user open (codex review of
+  // Share#1961).
+  const reportedLoadFailureRef = useRef(null)
 
   // IFCSlice
   const model = useStore((state) => state.model)
@@ -216,6 +273,21 @@ export default function CadView({
   const location = useLocation()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
+  // The latest auth state, for model_view's tier, which is read after auth
+  // settles rather than when the load that sends it began (see the
+  // trackModelActionWhenAuthSettled call in loadModel), and by loadModel
+  // itself, which runs from a closure that may predate auth settling.
+  // Synced in an effect: CadView's effects run before BaseRoutes' (a parent)
+  // sets isAuthResolved, so once waitForAuthSettled returns this already
+  // holds the settled value.
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  useEffect(() => {
+    isAuthenticatedRef.current = isAuthenticated
+  }, [isAuthenticated])
+  // Soft quota gate for models opened straight from a URL (codex P1 on
+  // Share#1971): records the load, never blocks it. Called after each
+  // successful load below.
+  const meterDirectLinkLoad = useDirectLinkQuota(appPrefix)
   const setOpfsFile = useStore((state) => state.setOpfsFile)
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
@@ -281,16 +353,32 @@ export default function CadView({
     // don't accidentally claim the slot and starve the eventual successful
     // load from the [viewer] effect.
     if (onViewerInFlightRef.current) {
+      if (inFlightModelKeyRef.current !== modelIdentity(modelPath, installPrefix)) {
+        debug().warn('CadView#onViewer: model changed mid-load; loading it once the current load ends')
+        isViewerReloadPendingRef.current = true
+        return
+      }
       debug().warn('CadView#onViewer: already in flight; skipping duplicate')
       return
     }
     onViewerInFlightRef.current = true
+    inFlightModelKeyRef.current = modelIdentity(modelPath, installPrefix)
+    alertAtLoadStartRef.current = useStore.getState().alert
     try {
       await onViewerInternal()
     } finally {
       onViewerInFlightRef.current = false
+      inFlightModelKeyRef.current = null
+      if (isViewerReloadPendingRef.current) {
+        isViewerReloadPendingRef.current = false
+        if (useStore.getState().alert !== alertAtLoadStartRef.current) {
+          setAlert(null)
+        }
+        await latestOnViewerRef.current()
+      }
     }
   }
+  latestOnViewerRef.current = onViewer
 
 
   /** Inner load body — preconditions checked + in-flight flag managed by `onViewer`. */
@@ -339,7 +427,14 @@ export default function CadView({
     } catch {
       // Relative/local path — not GitHub-hosted.
     }
-    const isAuthSettledBeforeLoad = needsGithubAuth ?
+    // A Drive route with a Drive connection waits too: loadModel uses the
+    // connection only for a signed-in user (a private model needs a Bldrs
+    // sign-in AND the provider's authorization, design/new/quotas.md §"What
+    // counts"), so it has to know which this user is. Without a connection
+    // there is nothing to decide; the API-key path is public files only.
+    const needsDriveAuth = modelPath.kind === 'provider' && modelPath.provider === 'google' &&
+      connections.some((c) => c.providerId === 'google-drive')
+    const isAuthSettledBeforeLoad = (needsGithubAuth || needsDriveAuth) ?
       await waitForAuthSettled(AUTH_SETTLE_GRACE_MS) :
       true
 
@@ -351,11 +446,30 @@ export default function CadView({
 
     let tmpModelRef
     let isOOM = false
+    // Read before the attempt so the catch can tell whether a load reporter
+    // began for THIS attempt (getLoadFailureInfo).
+    const loadSerialBefore = currentLoadSerial()
     try {
       tmpModelRef = await loadModelWithAuthRetry(modelPath, isAuthSettledBeforeLoad)
     } catch (e) {
       if (isOutOfMemoryError(e)) {
         isOOM = true
+      }
+      // GA's view of a load that did not display: the other half of
+      // real_model_open, which only ever sees successes. Sent from here, the
+      // one place every failure of an attempt lands, and not from loadModel's
+      // own catch, which also sees the auth-shaped first try that
+      // loadModelWithAuthRetry then retries and may well win: that is not a
+      // failed load, and counting it would. The same isRealModelOpen guard as
+      // the success event, so the homepage demo never reports. Deduped per
+      // model like the schema refusal below, because the auth-state effect
+      // re-runs onViewer for the same route after a failure. Closed-set
+      // params only (loadAnalytics#loadFailureParams).
+      const failureKey = modelIdentity(modelPath, installPrefix)
+      if (isRealModelOpen(modelPath) && reportedLoadFailureRef.current !== failureKey) {
+        reportedLoadFailureRef.current = failureKey
+        const {phase, fileSize, format} = getLoadFailureInfo(loadSerialBefore)
+        gtagFunnelEvent(FUNNEL_EVENTS.LOAD_FAILED, loadFailureParams({error: e, format, fileSize, phase}))
       }
       if (isOOM) {
         // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
@@ -379,6 +493,11 @@ export default function CadView({
           reportedRefusalRef.current = refusalKey
           reportUnsupportedSchema(e, modelPath)
         }
+      } else if (e instanceof EngineOpenFailureError) {
+        // conway said why the open failed (conway#742): a short form of the
+        // reason in place of the raw "OpenModel returned -1". Still a real
+        // failure, so it keeps the help footer and the Sentry capture below.
+        setAlert({type: 'engineFailure', message: e.alertMessage})
       } else if (e instanceof NeedsReconnectError) {
         // Deep-link / reload landed on a Drive route with a stale token, and
         // GIS couldn't escalate to a popup outside a user gesture. Surface a
@@ -389,6 +508,22 @@ export default function CadView({
           connection: e.connection,
           message: 'Your Google Drive session expired. Reconnect to load this file.',
         })
+      } else if (e instanceof InMemoryUploadGoneError) {
+        // No OPFS and this page doesn't hold the file (#1906). Distinct from
+        // the next case, where OPFS exists but lacks the entry.
+        setAlert(inMemoryUploadGoneAlert())
+      } else if (e instanceof UploadNotInBrowserError) {
+        // A /v/local-only/ URL whose upload this browser never held or no longer
+        // holds (#1955). Explain it and offer to open a file, instead of
+        // the worker's raw "Folder <id> not found" under an Error header.
+        setAlert(uploadNotInBrowserAlert())
+        // Counted at info level, not captured as a defect: see
+        // reportUploadNotInBrowser. Once per route, like a schema refusal.
+        const goneKey = `upload-not-in-browser:${modelIdentity(modelPath, installPrefix)}`
+        if (reportedRefusalRef.current !== goneKey) {
+          reportedRefusalRef.current = goneKey
+          reportUploadNotInBrowser()
+        }
       } else {
         setAlert(e)
       }
@@ -405,10 +540,24 @@ export default function CadView({
       // instead of landing in one detail-free "model loading failed"
       // bucket (conway #301 §7).
       // Same for an unsupported schema: an intended, documented limit that
-      // is already explained to the user, not a defect for triage.
-      if (!isOOM && !(e instanceof UnsupportedSchemaError)) {
+      // is already explained to the user, not a defect for triage. And for
+      // an in-memory upload whose page is gone: a known limit of browsers
+      // without OPFS (#1906), counted in analytics by AlertDialog. And for
+      // an upload that isn't in this browser (OPFS present, entry absent):
+      // the loader only raises it after OPFS confirmed the entry is absent,
+      // so it's user state, not a bug — and it was SHARE-1NR, the top
+      // hard-failure group (#1955). Its volume is still counted: an
+      // info-level message above, plus AlertDialog's analytics event.
+      if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof InMemoryUploadGoneError) &&
+          !(e instanceof UploadNotInBrowserError)) {
         attachLoadFailureContext()
-        captureException(e)
+        if (e instanceof EngineOpenFailureError) {
+          // The engine's status and reason as tags/context on this event
+          // only; the alert's GA count is AlertDialog's (trackAlertEvent).
+          captureException(e, engineFailureCaptureContext(e))
+        } else {
+          captureException(e)
+        }
       }
       return
     } finally {
@@ -452,6 +601,14 @@ export default function CadView({
     modelPath.title = tmpModelRef.name // maybe undefined
     setIsViewerLoaded(true)
     setIsModelReady(true)
+    // After the model is on screen, never before: a direct link is metered
+    // but not gated (quota/useDirectLinkQuota.js). The Open dialog already
+    // recorded what it opened, which the hook sees as alreadyCounted. For
+    // Drive, only a download of THIS file says how it was fetched; anything
+    // else is left undefined, which the meter counts as private.
+    const driveDownload = driveDownloadRef.current?.fileId === modelPath.fileId ?
+      driveDownloadRef.current : undefined
+    meterDirectLinkLoad(modelPath, driveDownload)
 
     let lastSent = 0
     /** Debounced function to track model interaction for GA. */
@@ -478,11 +635,23 @@ export default function CadView({
 
   /**
    * loadModel wrapper for the auth-slow path: when the attempt went out
-   * before auth settled (grace window in onViewerInternal expired, so
-   * probably no token) and failed auth-shaped — GitHub masks private repos
-   * as 404 to anonymous callers and rate-limits anonymous IPs with 403 —
-   * wait for the token to land and retry once with it. Everything else
-   * rethrows to onViewerInternal's catch unchanged.
+   * before auth settled (grace window in onViewerInternal expired), wait for
+   * auth and retry once with what it brings. Per provider:
+   *
+   * - GitHub: only a failure that is auth-shaped — GitHub masks private
+   *   repos as 404 to anonymous callers and rate-limits anonymous IPs with
+   *   403 — and only once a GitHub token has landed.
+   * - Drive: the attempt read as signed out, so it took the API-key path,
+   *   which only serves link-shared files (loadModel never uses a Drive
+   *   connection while signed out). If auth then settles signed in and a
+   *   Drive connection is saved, retry through the connection. Any failure
+   *   qualifies: the API-key download's error has no reliable status, and
+   *   this is one retry. Without it a Google-only user's restricted link
+   *   stayed failed until a reload, because the auth-state effect's
+   *   onViewer is dropped while this load is in flight (codex review on
+   *   Share#1977).
+   *
+   * Everything else rethrows to onViewerInternal's catch unchanged.
    *
    * @param {object} routeResult
    * @param {boolean} isAuthSettledBeforeLoad
@@ -492,7 +661,22 @@ export default function CadView({
     try {
       return await loadModel(routeResult)
     } catch (error) {
-      if (isAuthSettledBeforeLoad || !isAuthShapedLoadError(error)) {
+      if (isAuthSettledBeforeLoad) {
+        throw error
+      }
+      if (routeResult.kind === 'provider' && routeResult.provider === 'google') {
+        setIsModelLoading(true)
+        await waitForAuthSettled(AUTH_SETTLE_RETRY_MS)
+        const hasDriveConnection = useStore.getState().connections.some((c) => c.providerId === 'google-drive')
+        if (!isAuthenticatedRef.current || !hasDriveConnection) {
+          // Settled signed out (or nothing to retry with): the API-key
+          // failure was the real answer.
+          throw error
+        }
+        debug().log('CadView#loadModelWithAuthRetry: Drive load ran before sign-in settled; retrying via connection')
+        return await loadModel(routeResult)
+      }
+      if (!isAuthShapedLoadError(error)) {
         throw error
       }
       // loadModel's finally just cleared the overlay; keep it up while we
@@ -521,6 +705,19 @@ export default function CadView({
     const isGoogleResult = routeResult.kind === 'provider' && routeResult.provider === 'google'
     const filepath = isGoogleResult ? routeResult.downloadUrl : (routeResult.downloadUrl || routeResult.filepath)
     const gitpath = routeResult.gitpath
+    // Without OPFS a local file lives only in the memory of the page that
+    // opened it (loader/inMemoryUploads.js, #1906). A /v/local-only/ URL this page
+    // doesn't hold — a reload, or the link opened anywhere else — can't load,
+    // so say that rather than let the Loader fetch a blob URL that never
+    // existed here. The route, not the Loader's `testUuid` heuristic, decides
+    // what is an upload: a Drive blob URL and a hosted `<uuid>.ifc` pass that
+    // test too.
+    if (routeResult.isUploadedFile === true && isOpfsAvailable === false) {
+      const storageId = routeResult.filepath.split('/').pop()
+      if (!hasInMemoryUpload(storageId)) {
+        throw new InMemoryUploadGoneError(storageId)
+      }
+    }
     const loadingMessageBase = `Loading ${isGoogleResult ? routeResult.fileId : filepath}`
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
@@ -549,7 +746,23 @@ export default function CadView({
     let loadError = null
     try {
       if (isGoogleResult) {
-        const connection = connections.find((c) => c.providerId === 'google-drive')
+        // Never a Drive connection while signed out: its token may outlive the
+        // Bldrs session (it is in localStorage), and using it would open a
+        // restricted file to someone the quota can't meter. Signed out takes
+        // the API-key path below, which only serves link-shared files, so a
+        // restricted one fails with the usual alert. Sign-out also clears the
+        // connection outright (connections/useSignedOutDriveCleanup.js); this
+        // covers a load that starts before that runs. If auth hadn't settled
+        // within onViewerInternal's grace, this attempt reads as signed out,
+        // and loadModelWithAuthRetry retries through the connection once auth
+        // settles signed in.
+        const connection = isAuthenticatedRef.current ?
+          connections.find((c) => c.providerId === 'google-drive') :
+          undefined
+        driveDownloadRef.current = {fileId: routeResult.fileId, connection: connection || null}
+        // The same record for the export side (quota/driveExportVisibility.js),
+        // which classifies a Drive file's sharing from it as the meter does.
+        useStore.getState().setModelDriveDownload(driveDownloadRef.current)
         if (connection) {
           // OAuth path: authenticated download for private files
           const browser = getBrowser('google-drive')
@@ -557,7 +770,10 @@ export default function CadView({
           const blobUrl = URL.createObjectURL(download.blob)
           loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '')
         } else {
-          // API key fallback: works for public files and route tests without a connection
+          // API key fallback: works for public files and route tests without a
+          // connection. Only a file shared "Anyone with the link" (or
+          // published) downloads this way, which is why the quota meter
+          // treats a Drive file loaded here as public.
           loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, setOpfsFile, '')
         }
       } else {
@@ -567,7 +783,10 @@ export default function CadView({
         // (usually empty) value.
         const tokenNow = useStore.getState().accessToken
         loadedModel = await load(filepath, viewer, onProgress,
-          (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow)
+          (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow,
+          // Route provenance, which the loader can't recover from `filepath`
+          // alone: /v/local-only/<id> and /v/p/<id> give the same URL (#1956).
+          {isUploadedRoute: routeResult.isUploadedFile === true})
       }
     } catch (error) {
       loadError = error
@@ -610,6 +829,10 @@ export default function CadView({
     updateLoadedFileInfo(filepath)
 
     viewer.context.getScene().add(loadedModel)
+    // First geometry in the scene, for formats with no progressive preview
+    // (and GLB cache hits): their one-shot arrival is their first mesh. A
+    // no-op when ProgressiveLoadSession already recorded an earlier one.
+    reportFirstMesh()
 
     // Size the dolly range + near/far clip planes to the model *before*
     // any camera pose is applied, so the first frame is already drawn
@@ -664,15 +887,20 @@ export default function CadView({
     if (isRealModelOpen(routeResult)) {
       const eventParams = {
         content_type: loadedModel.type || 'undefined',
-        content_id: filepath,
+        // The same helper stamps content_id on model_view below, and on
+        // model_share / model_export elsewhere, so GA counts one model the
+        // same way on every event. Equal to `filepath` above, by design.
+        content_id: modelContentId(routeResult),
       }
-      // The progress reporter supplies cross-format fallbacks. Conway's
-      // IFC/STEP engine stats then override memory/time/diagnostic counts
-      // with engine-scoped values from loadedModel.loadStats.
-      addProperties(eventParams, getCompletedLoadStats() ?? {}, 'stats_')
-      if (loadedModel.loadStats) {
-        addProperties(eventParams, loadedModel.loadStats, 'stats_')
-      }
+      // How the load went: the reporter's cross-format snapshot merged with
+      // Conway's engine stats for IFC/STEP, plus the displayed/unusable
+      // verdict. loadTime stays the reporter's wall clock whatever the engine
+      // says; see loadAnalytics#buildOutcomeParams.
+      Object.assign(eventParams, buildOutcomeParams({
+        completedStats: getCompletedLoadStats() ?? undefined,
+        loadStats: loadedModel.loadStats,
+        loadOutcome: getCompletedLoadOutcome(),
+      }))
       // Per-user open depth: GA4 has no user-id dimension, so the
       // client id rides along as an event-scoped custom dimension,
       // prefix-tagged by getOpenCid so GA4 can't type it as a number.
@@ -688,16 +916,36 @@ export default function CadView({
       // keeps it in the text slot; see analytics#getLocalHour.
       eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
       gtagEvent(FUNNEL_EVENTS.REAL_MODEL_OPEN, eventParams)
+      // The normalized twin, beside — never instead of — real_model_open,
+      // which Ads and the dashboard key on. Sent once auth settles, with the
+      // auth state of then (privacy/modelActionTracking.js says why: a
+      // non-GitHub load doesn't wait for auth, and the auth-change reload is
+      // deduped). The route is read now, so a later navigation can't
+      // relabel it. Always `gate: 'none'`: a view a soft gate let through
+      // over the limit is still an ungated view; the over-limit fact is
+      // model_share {gate: 'soft'}. Not awaited.
+      trackModelActionWhenAuthSettled(MODEL_ACTIONS.VIEW, {
+        gate: MODEL_GATES.NONE,
+        ...modelRouteSource(routeResult),
+        contentId: eventParams.content_id,
+        getIsAuthenticated: () => isAuthenticatedRef.current,
+      })
+      // Engaged-use conversions (Share#1960). Same real-open gate as the
+      // event above; keyed by model so a theme/view-settings reload of the
+      // same model is not a second open. Resolves to the events it sent
+      // and never rejects, so it is not awaited.
+      trackEngagementOnOpen(Date.now(), modelIdentity(modelPath, installPrefix))
       // Give a chip with non-zero errors/warnings a Sentry event to link
       // to (issue #1767). Gated on the very counts just assembled above,
-      // because those are what colour the chip — for IFC/STEP they are
-      // Conway's, applied over the reporter's console-tee fallbacks a few
-      // lines up, so gating on the tee would let the event and the chip
-      // disagree. Siting the call here is also what keeps it to real,
-      // successful opens. See loadProgress#captureLoadDiagnostics.
+      // because those are what colour the chip: Conway's own
+      // stats_errorCount / stats_warningCount when it supplies them
+      // (conway#740; it does not yet), else the page-wide console tee the
+      // reporter publishes as stats_pageErrorCount / stats_pageWarnCount.
+      // Siting the call here is also what keeps it to real, successful
+      // opens. See loadProgress#captureLoadDiagnostics.
       captureLoadDiagnostics({
-        errorCount: eventParams.stats_errorCount,
-        warningCount: eventParams.stats_warningCount,
+        errorCount: eventParams.stats_errorCount ?? eventParams.stats_pageErrorCount,
+        warningCount: eventParams.stats_warningCount ?? eventParams.stats_pageWarnCount,
         contentId: eventParams.content_id,
         contentType: eventParams.content_type,
       })
@@ -1653,7 +1901,16 @@ export default function CadView({
   // programmatic navigation (e.g. clicking element links).
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath, modelPath:', modelPath)
-    reportedRefusalRef.current = null
+    // A different model starts a new open, so its failures count again even
+    // when the model in between never touched the dedupe refs (A fails, B
+    // loads, A fails). Reruns of the SAME model (customViewSettings) keep
+    // them, so one failed open stays one event. Share#1961 codex review.
+    const dedupeKey = modelIdentity(modelPath, installPrefix)
+    if (dedupeModelKeyRef.current !== dedupeKey) {
+      dedupeModelKeyRef.current = dedupeKey
+      reportedRefusalRef.current = null
+      reportedLoadFailureRef.current = null
+    }
     onModelPath()
   }, [modelPath, customViewSettings])
 

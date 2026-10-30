@@ -5,6 +5,7 @@ import {
   opfsWriteModel,
 } from '../OPFS/OPFSService.js'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
+import {registerInMemoryUpload} from '../loader/inMemoryUploads'
 import debug from '../utils/debug'
 
 
@@ -49,7 +50,7 @@ function holdUntilPicked(fileInput) {
  * Upload a local file for display.
  *
  * The first `onLoad` arg is the OPFS storage id the worker wrote under
- * (`<blob-uuid>.<ext>`) — that's the `/v/new/` path segment. The third
+ * (`<blob-uuid>.<ext>`) — that's the `/v/local-only/` path segment. The third
  * is the user's original filename, which callers need to keep as the
  * recents display name (they are NOT interchangeable, see #1682).
  *
@@ -61,15 +62,22 @@ function holdUntilPicked(fileInput) {
  *   `DecompressionStream`, or a name and a header that between them name no
  *   format. Without one this path can only log: the picker has already
  *   closed, so nothing else would tell the user why nothing happened.
+ * @param {object} [options]
+ * @param {boolean} [options.inMemory] For a browser without OPFS: hold the
+ *   file in memory (`loader/inMemoryUploads.js`) instead of writing it to
+ *   OPFS, and call `onLoad` with its in-memory id, which has the same
+ *   `<uuid>.<ext>` shape. The caller must then navigate in-app
+ *   (`navigateToInMemoryModel`), since a page load would drop the file (#1906).
  */
-export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisableWebWorker = false, onError = null) {
+export function loadLocalFile(
+  onLoad, testingSkipAutoRemove = false, testingDisableWebWorker = false, onError = null, {inMemory = false} = {}) {
   const viewerContainer = document.getElementById('viewer-container')
   const fileInput = document.createElement('input')
   fileInput.setAttribute('type', 'file')
   let workerRef = null
 
   // TODO(nickcastel50): set up proper testing for web workers and OPFS
-  if (!testingDisableWebWorker) {
+  if (!testingDisableWebWorker && !inMemory) {
     workerRef = initializeWorker()
   }
   fileInput.addEventListener(
@@ -93,6 +101,15 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
         }
         return
       }
+      if (inMemory) {
+        const ext = await guessTypeFromNameOrFile(file)
+        if (ext === null) {
+          reportUnknownType(picked.name, onError)
+          return
+        }
+        onLoad(registerInMemoryUpload(file, ext), lastModifiedUtc, picked.name)
+        return
+      }
       const tmpUrl = URL.createObjectURL(file)
       debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
       // Post message to the worker to handle the file
@@ -106,11 +123,7 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
         const ext = await guessTypeFromNameOrFile(file)
         if (ext === null) {
           URL.revokeObjectURL(tmpUrl)
-          const message = `Cannot extract filetype from filename: ${picked.name}`
-          debug().error('loader#loadLocalFile:', message)
-          if (onError) {
-            onError(message)
-          }
+          reportUnknownType(picked.name, onError)
           return
         }
         // Minted before the listener attaches so it can close over the id.
@@ -164,5 +177,21 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
   fileInput.click()
   if (!testingSkipAutoRemove) {
     viewerContainer.removeChild(fileInput)
+  }
+}
+
+
+/**
+ * Say why a pick can't be opened: neither its name nor its header names a
+ * format `findLoader` knows.
+ *
+ * @param {string} name The picked file's name
+ * @param {Function|null} onError
+ */
+function reportUnknownType(name, onError) {
+  const message = `Cannot extract filetype from filename: ${name}`
+  debug().error('loader#loadLocalFile:', message)
+  if (onError) {
+    onError(message)
   }
 }

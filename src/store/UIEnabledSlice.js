@@ -11,12 +11,10 @@ export default function createUIEnabledSlice(set, get) {
     // NOTE: Nav, Notes, Search and Versions have been moved to their Slices
     isAboutEnabled: true,
     isGoogleEnabled: true,
-    isImagineEnabled: false, // service failing
     isLoginEnabled: true,
     isModelActionsEnabled: true,
     isShareEnabled: true,
     setIsAboutEnabled: (isEnabled) => set(() => ({isAboutEnabled: isEnabled})),
-    setIsImagineEnabled: (isEnabled) => set(() => ({isImagineEnabled: isEnabled})),
     setIsLoginEnabled: (isEnabled) => set(() => ({isLoginEnabled: isEnabled})),
     setIsModelActionsEnabled: (isEnabled) => set(() => ({isModelActionsEnabled: isEnabled})),
     setIsShareEnabled: (isEnabled) => set(() => ({isShareEnabled: isEnabled})),

@@ -24,6 +24,7 @@ One directory per function, named exactly like the function, with one
     "body": {"key": "…"},                                   // object → JSON; string → sent as-is
     "sign": "stripe"                                        // optional: add a fresh Stripe-Signature
   },
+  "now": "2026-10-06T12:00:00.000Z",                        // optional: freeze the clock (below)
   "exchangeOrder": "any",                                   // optional; default "strict"
   "exchanges": [                                            // every outbound call, IN ORDER
     {
@@ -67,6 +68,19 @@ by that file from `fixtures/`, resolved recursively.
 `{"$fixture": "…", "$merge": {…}}` overlays a variant onto it. Objects merge
 key by key; arrays are replaced whole. Reusable exchanges live in
 `fixtures/exchanges/`, and per-context environments in `fixtures/env/`.
+
+**`$fixturePath`.** `{"$fixturePath": "task-root"}` is replaced by the
+absolute path of `fixtures/task-root`, for an env var that must name a
+directory. `pro-module` scenarios that reach the serve step set
+`LAMBDA_TASK_ROOT` to it, so they read `fixtures/task-root/_pro-modules/
+glbExport.js` (a stand-in) and answer the same whether or not a build has
+populated the real, gitignored `netlify/functions/_pro-modules/`.
+
+**`now`.** Freezes the clock in the replay process at that instant —
+`Date.now()` and a bare `new Date()` both answer it — before the function
+loads. For a function that decides by the date, such as `pro-module`'s and
+`record-export`'s rolling 7-day free-export window, so a scenario's
+timestamps mean the same thing on any day the suite runs.
 
 **Signatures.** `"sign": "stripe"` signs the body at replay time with
 `env.STRIPE_WEBHOOK_SECRET`. A recorded `Stripe-Signature` would be rejected

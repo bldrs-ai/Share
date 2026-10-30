@@ -115,8 +115,15 @@
     Cross-Origin-Embedder-Policy = "unsafe-none"
 
 # Redirect /subscribe to /subscribe/ to enforce a trailing slash.
+#
+# NOT forced. Netlify matches `from` ignoring a trailing slash, so this
+# rule also matches /subscribe/ itself; forced, it redirected /subscribe/
+# to /subscribe/ until the browser gave up (ERR_TOO_MANY_REDIRECTS), and
+# every Upgrade / Subscribe click landed on an error page (found by the
+# live smoke, Share#1948). Unforced, a path a file answers wins over the
+# rule: /subscribe/ is served subscribe/index.html, and only a bare
+# /subscribe that no file answers is redirected.
 [[redirects]]
   from = "/subscribe"
   to = "/subscribe/"
   status = 301
-  force = true

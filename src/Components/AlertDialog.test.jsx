@@ -1,8 +1,14 @@
 import React from 'react'
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {StoreRouteThemeCtx} from '../Share.fixture'
-import {NO_OPFS_LOCAL_FILE_ALERT, noOpfsLocalFileAlert} from '../OPFS/messages'
+import {
+  IN_MEMORY_UPLOAD_GONE_ALERT,
+  UPLOAD_NOT_IN_BROWSER_ALERT,
+  inMemoryUploadGoneAlert,
+  uploadNotInBrowserAlert,
+} from '../OPFS/messages'
 import {getProvider} from '../connections/registry'
+import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import AlertDialog from './AlertDialog'
@@ -235,7 +241,41 @@ describe('AlertDialog — unsupportedSchema alert type', () => {
 })
 
 
-describe('AlertDialog — noOpfs alert type', () => {
+describe('AlertDialog — engineFailure alert type (conway#742)', () => {
+  const onClose = jest.fn()
+  const message = 'Share couldn\'t read this file: zip archive (such as .ifczip), not STEP text.'
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  it('shows the engine\'s reason, and keeps the help footer: it is a real failure', () => {
+    act(() => {
+      useStore.getState().setAlert({type: 'engineFailure', message})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(/zip archive \(such as \.ifczip\), not STEP text/)).toBeInTheDocument()
+    expect(screen.getByText(/Discord/i)).toBeInTheDocument()
+  })
+
+  // CadView captures the failure once, with the engine's status and reason;
+  // a second capture of this plain alert object would carry neither.
+  it('counts the alert in analytics only, never through the Sentry path, by a constant', () => {
+    act(() => {
+      useStore.getState().setAlert({type: 'engineFailure', message})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(trackAlertEvent).toHaveBeenCalledTimes(1)
+    expect(trackAlertEvent).toHaveBeenCalledWith(ENGINE_FAILURE_ALERT_EVENT)
+    expect(trackAlert).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('AlertDialog — inMemoryUploadGone alert type', () => {
   const onClose = jest.fn()
 
   beforeEach(() => {
@@ -247,46 +287,83 @@ describe('AlertDialog — noOpfs alert type', () => {
 
   it('explains the limit under its own header, without the Discord footer', () => {
     act(() => {
-      useStore.getState().setAlert(noOpfsLocalFileAlert())
+      useStore.getState().setAlert(inMemoryUploadGoneAlert())
     })
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
-    expect(screen.getByText('Not available here')).toBeInTheDocument()
+    expect(screen.getByText('File no longer available')).toBeInTheDocument()
     expect(screen.queryByText('Error')).not.toBeInTheDocument()
-    expect(screen.getByText(/needs browser storage/)).toBeInTheDocument()
+    expect(screen.getByText(/opened from your computer in a previous page/)).toBeInTheDocument()
     expect(screen.queryByText(/Discord/i)).not.toBeInTheDocument()
   })
 
-  // The model on screen is still good: dismissing must not reach onClose,
-  // which AlertDialogAndSnackbar wires to navToDefault (codex review, #1905).
-  it('dismisses with OK without calling onClose, so the current model stays', () => {
+  // Nothing loaded, so OK closes the way a failed load does: onClose, which
+  // AlertDialogAndSnackbar wires to navToDefault.
+  it('closes with OK through onClose', () => {
     act(() => {
-      useStore.getState().setAlert(noOpfsLocalFileAlert())
+      useStore.getState().setAlert(inMemoryUploadGoneAlert())
     })
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
     fireEvent.click(screen.getByText('OK'))
     expect(useStore.getState().alert).toBeNull()
-    expect(onClose).not.toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('dismisses with the close button without calling onClose', () => {
-    act(() => {
-      useStore.getState().setAlert(noOpfsLocalFileAlert())
-    })
-    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
-    fireEvent.click(screen.getByTestId(/^button-close-dialog/))
-    expect(useStore.getState().alert).toBeNull()
-    expect(onClose).not.toHaveBeenCalled()
-  })
-
-  // An expected environment condition (#1906), counted once and kept out of
-  // Sentry; callers used to trackAlert it as well, which double-counted.
+  // A known limit of browsers without OPFS (#1906): counted once and kept
+  // out of Sentry.
   it('counts the alert once, in analytics only', () => {
     act(() => {
-      useStore.getState().setAlert(noOpfsLocalFileAlert())
+      useStore.getState().setAlert(inMemoryUploadGoneAlert())
     })
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
     expect(trackAlertEvent).toHaveBeenCalledTimes(1)
-    expect(trackAlertEvent).toHaveBeenCalledWith(NO_OPFS_LOCAL_FILE_ALERT)
+    expect(trackAlertEvent).toHaveBeenCalledWith(IN_MEMORY_UPLOAD_GONE_ALERT)
+    expect(trackAlert).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('AlertDialog — uploadNotInBrowser alert type (#1955)', () => {
+  const onClose = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+      useStore.getState().setIsOpenModelVisible(false)
+    })
+  })
+
+  it('explains it under its own header, without the Discord footer', () => {
+    act(() => {
+      useStore.getState().setAlert(uploadNotInBrowserAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('File not in this browser')).toBeInTheDocument()
+    expect(screen.queryByText('Error')).not.toBeInTheDocument()
+    expect(screen.getByText(/isn't in this browser/)).toBeInTheDocument()
+    expect(screen.queryByText(/Discord/i)).not.toBeInTheDocument()
+  })
+
+  // The failed load left no model to stay on, so the action closes the way a
+  // failed load does (onClose → navToDefault) and opens the Open dialog.
+  it('"Open a file" closes the alert through onClose and opens the Open dialog', () => {
+    act(() => {
+      useStore.getState().setAlert(uploadNotInBrowserAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByText('Open a file'))
+    expect(useStore.getState().alert).toBeNull()
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(useStore.getState().isOpenModelVisible).toBe(true)
+  })
+
+  it('counts the alert once, in analytics only', () => {
+    act(() => {
+      useStore.getState().setAlert(uploadNotInBrowserAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(trackAlertEvent).toHaveBeenCalledTimes(1)
+    expect(trackAlertEvent).toHaveBeenCalledWith(UPLOAD_NOT_IN_BROWSER_ALERT)
     expect(trackAlert).not.toHaveBeenCalled()
   })
 })

@@ -7,7 +7,7 @@ jest.mock('./importModuleFromUrl', () => ({
 }))
 
 import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN, HTTP_INTERNAL_SERVER_ERROR, HTTP_OK} from '../net/http'
-import {ProModuleDeniedError, loadProModule, resetProModuleCache} from './proModuleLoader'
+import {ProModuleDeniedError, forgetProModule, loadProModule, resetProModuleCache} from './proModuleLoader'
 
 
 describe('proModuleLoader', () => {
@@ -23,11 +23,25 @@ describe('proModuleLoader', () => {
   /**
    * @param {number} status
    * @param {string} [body]
+   * @param {object} [headers] response headers, by name
    * @return {object} a minimal fetch Response double
    */
-  function response(status, body = MODULE_SOURCE) {
-    return {ok: status === HTTP_OK, status, text: () => Promise.resolve(body)}
+  function response(status, body = MODULE_SOURCE, headers = {}) {
+    const lower = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]))
+    return {
+      ok: status === HTTP_OK,
+      status,
+      text: () => Promise.resolve(body),
+      headers: {get: (name) => lower[name.toLowerCase()] ?? null},
+    }
   }
+
+  // What pro-module sends a free user with the module: the slots after the
+  // delivery, and whether it took one.
+  const SLOTS_AFTER = {limit: 2, used: 1, remaining: 1, nextFreeAt: '2026-11-03T12:00:00.000Z', taken: true}
+  const FREE_DELIVERY = {'X-Bldrs-Model-Slots': JSON.stringify(SLOTS_AFTER)}
+  const MODEL_A = '/share/v/local-only/0b9f4c2e-7d1a-4c55-9f0e-3a1b2c3d4e5f.ifc'
+  const MODEL_B = '/share/v/gh/acme/private/main/Gebäude.ifc'
 
   beforeEach(() => {
     resetProModuleCache()
@@ -43,9 +57,10 @@ describe('proModuleLoader', () => {
   })
 
   it('fetches with a Bearer token and imports the module from a blob URL', async () => {
-    const namespace = await loadProModule('glbExport', getAccessToken)
+    const {namespace, slots} = await loadProModule('glbExport', getAccessToken)
 
     expect(namespace).toBe(MODULE_NAMESPACE)
+    expect(slots).toBeNull()
     expect(fetchMock).toHaveBeenCalledWith(
       '/.netlify/functions/pro-module?name=glbExport',
       {headers: {Authorization: 'Bearer test-token'}},
@@ -68,13 +83,85 @@ describe('proModuleLoader', () => {
     expect(revokeObjectURL).toHaveBeenCalledWith(BLOB_URL)
   })
 
-  it('memoises per name, so a second export costs no request', async () => {
+  it('memoises a Pro delivery per name, so a second export costs no request', async () => {
     const first = await loadProModule('glbExport', getAccessToken)
     const second = await loadProModule('glbExport', getAccessToken)
 
     expect(second).toBe(first)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(mockImportModuleFromUrl).toHaveBeenCalledTimes(1)
+  })
+
+  it('fetches afresh after forgetProModule, for a Pro module the server stopped standing behind', async () => {
+    await loadProModule('glbExport', getAccessToken)
+    forgetProModule('glbExport')
+    await loadProModule('glbExport', getAccessToken)
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('sends the model\'s slot key, encoded, so a path a raw header cannot carry still goes', async () => {
+    await loadProModule('glbExport', getAccessToken, MODEL_B)
+
+    expect(fetchMock).toHaveBeenCalledWith('/.netlify/functions/pro-module?name=glbExport', {headers: {
+      'Authorization': 'Bearer test-token',
+      'X-Bldrs-Model-Key': encodeURIComponent(MODEL_B),
+    }})
+  })
+
+  it('passes on the client\'s word that a Drive file is public, and never shares that request with one that is not', async () => {
+    await Promise.all([
+      loadProModule('glbExport', getAccessToken, '/share/v/g/f', {drivePublic: true}),
+      loadProModule('glbExport', getAccessToken, '/share/v/g/f'),
+    ])
+
+    expect(fetchMock.mock.calls[0][1].headers['X-Bldrs-Drive-Public']).toBe('1')
+    expect(fetchMock.mock.calls[1][1].headers['X-Bldrs-Drive-Public']).toBeUndefined()
+  })
+
+  describe('a free-tier delivery (granted for one model)', () => {
+    it('reports the slots the server sent with it', async () => {
+      fetchMock.mockResolvedValue(response(HTTP_OK, MODULE_SOURCE, FREE_DELIVERY))
+
+      const {namespace, slots} = await loadProModule('glbExport', getAccessToken, MODEL_A)
+
+      expect(namespace).toBe(MODULE_NAMESPACE)
+      expect(slots).toEqual(SLOTS_AFTER)
+    })
+
+    it('is NOT memoised: the next export, of this model or another, asks the server again', async () => {
+      // The soft spot this closes (glb-export-premium.md §4.8): a memoised
+      // free delivery would export the next model without the server ever
+      // asking whether it holds a slot.
+      fetchMock.mockResolvedValue(response(HTTP_OK, MODULE_SOURCE, FREE_DELIVERY))
+
+      await loadProModule('glbExport', getAccessToken, MODEL_A)
+      await loadProModule('glbExport', getAccessToken, MODEL_A)
+      await loadProModule('glbExport', getAccessToken, MODEL_B)
+
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+    })
+
+    it('is still not memoised when the slots header is unreadable', async () => {
+      fetchMock.mockResolvedValue(response(HTTP_OK, MODULE_SOURCE, {'X-Bldrs-Model-Slots': 'not json'}))
+
+      const {slots} = await loadProModule('glbExport', getAccessToken, MODEL_A)
+      await loadProModule('glbExport', getAccessToken, MODEL_A)
+
+      expect(slots).toEqual({})
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('never lets a request for one model ride on the answer about another', async () => {
+      fetchMock.mockResolvedValue(response(HTTP_OK, MODULE_SOURCE, FREE_DELIVERY))
+
+      await Promise.all([
+        loadProModule('glbExport', getAccessToken, MODEL_A),
+        loadProModule('glbExport', getAccessToken, MODEL_B),
+      ])
+
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('shares one fetch between concurrent callers', async () => {
@@ -106,7 +193,7 @@ describe('proModuleLoader', () => {
     await expect(loadProModule('glbExport', getAccessToken)).rejects.toBeInstanceOf(ProModuleDeniedError)
 
     // Same page, now subscribed: the second attempt must reach the server.
-    const namespace = await loadProModule('glbExport', getAccessToken)
+    const {namespace} = await loadProModule('glbExport', getAccessToken)
     expect(namespace).toBe(MODULE_NAMESPACE)
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
@@ -146,6 +233,19 @@ describe('proModuleLoader', () => {
 
     expect(error).toBeInstanceOf(ProModuleDeniedError)
     expect(error.message).toBe('Pro module "glbExport" denied (403: subscription_required)')
+    expect(error.reason).toBe('subscription_required')
+    expect(error.modelSlots).toBeNull()
+  })
+
+  it('hands a free user\'s slots-full refusal its slots, for the "next slot frees up" line', async () => {
+    const modelSlots = {limit: 2, used: 2, remaining: 0, nextFreeAt: '2026-10-31T09:00:00.000Z', keys: [MODEL_B, '/share/v/g/x']}
+    fetchMock.mockResolvedValue(response(HTTP_FORBIDDEN, JSON.stringify({error: 'no_free_model_slot', modelSlots})))
+
+    const error = await loadProModule('glbExport', getAccessToken, MODEL_A).catch((e) => e)
+
+    expect(error).toBeInstanceOf(ProModuleDeniedError)
+    expect(error.reason).toBe('no_free_model_slot')
+    expect(error.modelSlots).toEqual(modelSlots)
   })
 
   it('omits the Authorization header when there is no token getter', async () => {

@@ -3,7 +3,6 @@ import {Divider, Stack} from '@mui/material'
 import AppsControl from '../Components/Apps/AppsControl'
 import CameraControl from '../Components/Camera/CameraControl'
 import MarkerControl from '../Components/Markers/MarkerControl'
-import ImagineControl from '../Components/Imagine/ImagineControl'
 import NotesControl from '../Components/Notes/NotesControl'
 import ProfileControl from '../Components/Profile/ProfileControl'
 import PropertiesControl from '../Components/Properties/PropertiesControl'
@@ -12,14 +11,12 @@ import useStore from '../store/useStore'
 
 
 /**
- * OperationsGroup contains tools for profile, sharing, notes, properties and
- * imagine
+ * OperationsGroup contains tools for profile, sharing, notes and properties
  *
  * @return {ReactElement}
  */
 export default function OperationsGroup() {
   const isAppsEnabled = useStore((state) => state.isAppsEnabled)
-  const isImagineEnabled = useStore((state) => state.isImagineEnabled)
   const isLoginEnabled = useStore((state) => state.isLoginEnabled)
   const isNotesEnabled = useStore((state) => state.isNotesEnabled)
   const isPropertiesEnabled = useStore((state) => state.isPropertiesEnabled)
@@ -56,7 +53,6 @@ export default function OperationsGroup() {
             data-testid='markerControl'
           />
         )}
-        {isImagineEnabled && <ImagineControl/>}
         {/* Invisible */}
         <CameraControl/>
       </Stack>

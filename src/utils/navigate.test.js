@@ -1,4 +1,6 @@
-import {navigateToModel, isTempModelPath, homeModelPath, navToDefault, reloadAfterCacheClear} from './navigate'
+import {
+  navigateToInMemoryModel, navigateToModel, isTempModelPath, homeModelPath, navToDefault, reloadAfterCacheClear,
+} from './navigate'
 
 
 describe('navigateToModel', () => {
@@ -77,8 +79,38 @@ describe('navigateToModel', () => {
 })
 
 
+// A file held only in this page's memory (#1906): a page load would end it,
+// so this must be an in-app navigation even outside tests, where
+// navigateToModel does a full load.
+describe('navigateToInMemoryModel', () => {
+  let locationGetter
+  const assign = jest.fn()
+  const prevEnv = process.env.NODE_ENV
+
+  beforeEach(() => {
+    process.env.NODE_ENV = 'development'
+    locationGetter = jest.spyOn(window, 'location', 'get').mockReturnValue({search: '?feature=look', assign})
+  })
+
+  afterEach(() => {
+    process.env.NODE_ENV = prevEnv
+    locationGetter.mockRestore()
+    assign.mockClear()
+  })
+
+  it('navigates in-app, carrying the query string, and never loads a page', () => {
+    const navigate = jest.fn()
+    navigateToInMemoryModel('/share/v/new/4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc', navigate)
+    expect(navigate).toHaveBeenCalledWith('/share/v/new/4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc?feature=look')
+    expect(assign).not.toHaveBeenCalled()
+  })
+})
+
+
 describe('isTempModelPath', () => {
-  it('is true for uploaded /v/new/ models', () => {
+  it('is true for local-only models, and the legacy /v/new/ route', () => {
+    expect(isTempModelPath('/share/v/local-only/AA77535-D1B6-49A9-915B.ifc')).toBe(true)
+    expect(isTempModelPath('/Share/share/v/local-only/uuid.ifc')).toBe(true)
     expect(isTempModelPath('/share/v/new/AA77535-D1B6-49A9-915B.ifc')).toBe(true)
     expect(isTempModelPath('/Share/share/v/new/uuid.ifc')).toBe(true)
   })

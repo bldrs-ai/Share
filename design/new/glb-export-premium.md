@@ -13,19 +13,38 @@ the browser, how the export code is delivered *only* to subscribed users,
 how a user sees what they have exported, and what each further format (OBJ,
 STL, USD, …) would need.
 
-Sections 1–3 are the investigation; §4–§6 the design; §7 the stages that
-become the epic's sub-issues; §8 the cross-browser smoke checklist.
+Sections 1–3 are the investigation; §4–§6 the design (§4.8 is the free
+tier's export rule: model slots); §5 the stages that became the epic's sub-issues;
+§7 the owner's decisions; §8 the cross-browser smoke checklist.
 
 
 ## Status & remaining work
 
-*Updated 2026-09-16, after #1837/#1851/#1852 landed, the #1855 container
-gzip (§1.1a), today's byte-attribution measurement on #1831, and the
-`.glb.gz` round trip (§4.7), which reverses a decision §4.3 used to record.
-§1.1d was updated 2026-09-30 when `glbCollapse` went default-on.*
+*Updated 2026-10-08, after S4 (#1835) merged as #1939 (4cf2aef5). That PR
+flipped the `export` flag, built the §7 decisions (2 free exports per rolling
+7 days, §4.8; `shareProPendingReauth` counts as Pro), and moved the §8 smoke
+to the automated live smoke plus a residual manual list. The 2026-09-16 status
+it builds on covered #1837/#1851/#1852, the #1855 container gzip (§1.1a), the
+byte-attribution measurement on #1831, and the `.glb.gz` round trip (§4.7),
+which reverses a decision §4.3 used to record. §1.1d was updated 2026-09-30
+when `glbCollapse` went default-on. §4.8 and §7.1 were rewritten 2026-10-27
+for the owner's slot rule, which replaced the 2-exports-a-week count.*
 
 **Where things stand:** the feature described in §1–§6 below is fully built
-and ships behind `?feature=export` (default **off**). Export lives in the
+and on by default. S4 (#1939) flipped `export` to `isActive: true` in
+`src/FeatureFlags.js`, so export is on for everyone (`?feature=export` is
+redundant; flipping the flag back to `false` is the kill switch, since
+`?feature=` can only turn flags on). The flag gates only the UI; the
+`pro-module` function decides who gets the exporter (§1.3, §4.1). What ships:
+Pro (`sharePro` or `shareProPendingReauth`) without limit; a signed-in free
+user exports **public models unlimited, with no slot, and any model holding
+one of their 2 model slots unlimited** — the same slots, ledger and rolling
+7-day window as private opens (`app_metadata.usageQuota.loads`); a private
+model or local file holding no slot takes one on its first export, decided by `pro-module` as the module is handed over (§4.8);
+with every slot holding another model, the upgrade prompt saying when the
+next slot frees up; anonymous users get the login prompt. The cross-browser smoke (§8) is now the automated live smoke
+plus a short residual manual list.
+Export lives in the
 Save dialog's Export tab: the Include Bldrs metadata toggle, Portable
 toggle (on by default since #1831), Compression dropdown (None / Meshopt / Draco), Quality rung,
 Compress download toggle, a Download size line that *is* the file, and a
@@ -122,14 +141,17 @@ arm — the envelope comes off at the upload seam, and a second seam in
    shrink what ships. This is why the win landed at the OPFS **container**
    layer instead (§1.1a, gzip outside the GLB entirely), not as an in-GLB
    JSON transform.
-3. **S4 (#1835) is the ship gate for all of the above, and it is not
-   done.** Outstanding: cross-browser smoke (Firefox, Safari — including
-   OPFS `createWritable` and `CompressionStream` for `.glb.gz` — Edge, iOS
-   Safari, Android Chrome) with real Auth0 accounts per tier, against the
-   §8 checklist; the real Management API path for `record-export`
-   (including whether the `https://bldrs.ai/app_metadata` JWT claim carries
-   `exports` at all — an Auth0 Action outside this repo); and flipping
-   `export` to `isActive: true`. (The site-wide esbuild-bundling decision
+3. **S4 (#1835) shipped as #1939 on 2026-10-08: `export` is on by
+   default.** The cross-browser smoke is now the account-backed live smoke
+   (§8, `design/new/live-browser-smoke.md`), which exercises
+   `record-export`'s real Management API path on every run. Still open:
+   the residual manual checks in §8 (Firefox until #1947, real Safari's
+   download and OPFS cache, real phones, Google Drive `.glb.gz`), and
+   whether the `https://bldrs.ai/app_metadata` JWT claim carries `exports`
+   at all — an Auth0 Action outside this repo, which nothing in the repo can
+   verify (the client reads it through `APP_METADATA_CLAIM` in
+   `src/Auth0/appMetadata.js`; the free count does not depend on it, "My
+   Exports" hydration on a new device does). (The site-wide esbuild-bundling decision
    for every other ESM Netlify function that imports axios —
    `gh-oauth-exchange`, `gh-oauth-refresh`, `unlink-identity`,
    `create-portal-session`, `stripe-webhook`, which shared the latent nft
@@ -157,10 +179,24 @@ arm — the envelope comes off at the upload seam, and a second seam in
    (decimation, deprioritised — it attacks the ~1.2 MB geometry term on
    Snowdon, not the container), S5
    #1836 (further export formats, §6).
-5. **§7's two open questions are still open.** Whether free users get one
-   export as a conversion moment (§7.1) and how `shareProPendingReauth`
-   should be treated (§7.2) are both **owner decisions S4 has not made** —
-   this fold-back records the shipped reality, not those decisions.
+5. **§7's two open questions are decided (owner, 2026-10-06), and built on
+   the S4 branch.** §7.1: a signed-in free user got **2 exports per rolling
+   7 days**, charged per delivery; on 2026-10-27 the owner replaced that
+   count with **model slots** (`src/export/exportSlots.js`): unlimited export
+   of any model holding one of the 2 private-model slots, a private model or
+   local file holding none taking a slot on its first export; and, from
+   2026-10-28, unlimited export of public models with no slot. Pro is unlimited;
+   anonymous still gets the login prompt. `pro-module` decides each free
+   delivery against the slots and refuses when none is free; §4.8 has the
+   design and what stays bypassable. §7.2: `shareProPendingReauth` **is** Pro — for export and, since
+   `getTier` drives quotas, for loads too — through one shared definition,
+   `src/quota/proStatus.js`, that `getTier`, `pro-module`, `record-export`,
+   `record-load` and the Stripe reconciliation all import.
+6. **§8 runs as the live smoke.** It ran against #1939's deploy preview
+   with real Auth0 accounts in every tier (runs linked in §8). It covers
+   chromium and mobile-pixel fully; webkit, mobile-iphone and firefox run
+   only what needs neither OPFS nor WebGL, so §8 keeps a short manual list
+   for those engines.
 
 
 ## 1. What we already have
@@ -1142,8 +1178,12 @@ key.commitHash, key.owner, key.repo, key.branch)` — the reader's own call.
   Auth0 `app_metadata.subscriptionStatus = 'sharePro'` (+ `stripeCustomerId`).
 - **Client:** the JWT carries `https://bldrs.ai/app_metadata`; `BaseRoutes`
   decodes it into `store.appMetadata`. `src/quota/quota.js#getTier` is the
-  tier mapping (`'sharePro'` → PAID); `GitHubFileBrowser` also treats
-  `'shareProPendingReauth'` as Pro.
+  tier mapping: either Pro status → PAID. The Pro statuses are `sharePro` and
+  `shareProPendingReauth` (what the webhook writes on FREE→PRO: paid, waiting
+  on a re-login for the GitHub scope), defined once in `src/quota/proStatus.js`
+  and imported by the browser (`getTier`, `GitHubFileBrowser`, the MSW mocks)
+  and the functions (`_lib/subscriptions.js`, `pro-module`, `record-export`,
+  `record-load`) alike (§7.2).
 - **Server-side gate precedent:** `netlify/functions/record-load.js`
   (Bearer → `/userinfo` → Management API → `app_metadata`), with the shared
   `_lib/auth0.js#verifyAuth0Bearer` helper. `create-portal-session.js` is
@@ -1175,8 +1215,11 @@ page is served COOP `same-origin-allow-popups` without COEP.
 1. A Pro user downloads the current model as a valid, standalone `.glb`
    in one click, from the artifact Share already built — no re-parse.
 2. Non-subscribers see the affordance and are routed to upgrade; they
-   **never receive the export code**, and the server, not the client, is
-   the authority on who does (same principle as quotas).
+   receive the export code **only for a model the server has found holding
+   one of their model slots, or given a free one** (2 per rolling 7 days for
+   a signed-in free user, shared with private opens, §4.8; never for
+   anonymous), and the server, not the client, is the authority on who does
+   (same principle as quotas).
 3. A user can see what they exported (what, when, which format, how big)
    and re-download from the local cache when it is still there.
 4. The design extends to other formats by adding a module, not a
@@ -1214,10 +1257,15 @@ and never touches OPFS, localStorage or the HTTP cache.
 
 ```
 src/export/
-  proModuleLoader.js     host: loadProModule(name, getToken) → module namespace (blob import), memoised per page
+  proModuleLoader.js     host: loadProModule(name, getToken, modelKey) → {namespace, slots} (blob import);
+                         memoised per page for Pro, fetched per export for a free user (§4.8)
   exportRegistry.js      host: EXPORT_FORMATS matrix (id, label, ext, mime, moduleName, status)
-  exportHistory.js       host: OPFS mirror `exports.json` + subscribeToExports (S3)
+  exportHistory.js       host: OPFS mirror `exports.json` + subscribeToExports (S3); the slots GET
+  exportSlots.js         shared (host AND functions): the slot decision, reasons, headers (§4.8)
   useExport.js           host: hook: locate artifact → load module → run → download → record
+  useExportSlots.js      host: hook: a free user's model slots, for the Export tab's slot line (§4.8)
+src/quota/
+  modelSlotKey.js        host: the loaded model's slot key, the string its open is recorded under; a URL's is a digest (§4.8)
   pro/
     glbExport.entry.js   PRO MODULE entry (built separately; never bundled into index.js)
     glbExport.js         the export itself: container unpack, optional strip, Blob
@@ -1227,8 +1275,10 @@ src/Components/                    (as built: the components live with their men
   Open/ExportsList.jsx   host: "My Exports" list (S3), inline under the button (S2b)
   GatedAction.jsx        host: the shared "looks disabled, explains itself" wrapper (S2b)
 netlify/functions/
-  pro-module.js          GET ?name=<id> — Auth0 bearer + Pro check → JS bytes, no-store
-  record-export.js       POST {key, format, title, bytes} → app_metadata.exports (S3)
+  pro-module.js          GET ?name=<id> + X-Bldrs-Model-Key — Auth0 bearer + Pro check, or the model's
+                         slot held / taken → JS bytes, no-store (§4.8)
+  record-export.js       POST {key, format, title, bytes} → app_metadata.exports (S3);
+                         GET → the caller's model slots (§4.8)
   _pro-modules/          BUILD OUTPUT (gitignored): glbExport.js
   _tests/                jest suites for the two functions (§4.2: a top-level
                          .js here would deploy AS a function)
@@ -2010,8 +2060,9 @@ keeps its "Save" title; only the tab is named GitHub, since "Save" as a tab
 label duplicated that title and said nothing about where the save goes
 (further #1837 preview feedback, #1838). The tab bar is `Components/Tabs.jsx`,
 the Open dialog's pattern, and it only exists behind feature flag `export`
-(default off, `?feature=export`) — with the flag off the Save dialog has no
-tabs and is exactly what it was.
+(default on as of S4, #1835; it was `?feature=export` before) — with the flag
+off the Save dialog has no tabs and is exactly what it was, which
+`SaveModelControl.test.jsx` keeps covering by forcing the flag per case.
 
 Both panels share one gutter system: 1em between the tab bar's bottom border
 and the panel's own content (`SaveModelControl.jsx`'s `TAB_PANEL_SX`, applied
@@ -2207,7 +2258,7 @@ button swallows the click, and the help would never open. Test ids:
 | Action | Unlocked by | Help | Unlocking action |
 |---|---|---|---|
 | **Save** (toolbar, signed out) | signing in to a connector (GitHub today; Drive per identity-decoupling) | "Log in to one of your connectors to save models" | Log in → `LoginDialog` |
-| **GLB export** (Save → Export, signed in, free) | Pro subscription | "Exporting a GLB needs a Pro subscription" | Upgrade to Pro → `Profile/subscriptionNav.js` |
+| **GLB export** (Save → Export, signed in, free, **model holds no slot and every slot holds another model**, §4.8) | Pro subscription, or the next slot freeing up | "Your 2 free model slots for the last 7 days hold other models. A model with a slot, or a public one: unlimited export. This one needs a free slot. Your next slot frees up Fri, Oct 31, 9:00 AM. Pro: unlimited export." | Upgrade to Pro → `Profile/subscriptionNav.js` |
 | **GLB export** (signed out — defensive; the dialog only opens signed in) | logging in | "Log in to export this model as a GLB" | Log in → `LoginDialog` |
 | **Private sharing** (Share dialog, `sharing` flag) | Pro subscription | "Private links need a Pro subscription" | Upgrade to Pro |
 
@@ -2221,14 +2272,23 @@ The Export GLB button's own states, resolved in this order:
 |---|---|---|
 | no model / no artifact yet (`glbArtifact` null, writer in flight) | disabled, "Preparing GLB…" | — |
 | not signed in | gated look + lock | help → log in |
-| signed in, not Pro | gated look + lock + `Pro` chip | help → subscription flow |
-| Pro | "Export GLB" | `useExport().run('glb')` → progress → browser download → snackbar "Exported <name> (<size>)" |
-| module load 401/403 | error snackbar "Export requires a Pro subscription" + re-check tier | server said no; the client badge was stale — force-refresh the JWT like `useQuota` does |
+| signed in, free, model holds no slot, every slot holds another model (§4.8) | gated look + lock + `Pro` chip; under it "Your 2 free model slots this week hold other models · next one frees up <date>" | help → subscription flow |
+| signed in, free, public model (public GitHub, link-shared Drive, hosted sample, URL) | "Export GLB" + `Pro` chip; under it "Public model: unlimited export" — never gated | `useExport().run('glb')` → download, nothing taken |
+| signed in, free, model holds no slot, a slot is free | "Export GLB" + `Pro` chip; under it "Exporting takes one of your 2 free model slots (N left this week), then unlimited export" | `useExport().run('glb')`, the server takes the slot → download → the line flips to the one below |
+| signed in, free, model holds a slot (or slots not known yet) | "Export GLB" + `Pro` chip; under it "This model holds one of your 2 free model slots: unlimited export" (no line while unknown) | `useExport().run('glb')` → download, nothing taken |
+| Pro (`sharePro` or `shareProPendingReauth`) | "Export GLB" — nothing new | `useExport().run('glb')` → progress → browser download → snackbar "Exported <name> (<size>)" |
+| module load 403 `no_free_model_slot` | snackbar "Your 2 free model slots for this week are taken by other models. The next one frees up <date>." | the slots were stale — the refusal carries them, which turns the button into the gate above |
+| module load other 401/403 | error snackbar "Export requires a Pro subscription" + re-check tier | server said no; the client badge was stale — force-refresh the JWT like `useQuota` does |
 
 The Pro check on the client uses `getTier(appMetadata, isAuthenticated) ===
-TIERS.PAID` **for the UI only**; the function is the authority.
-`gtagEvent('export_gated', {reason})` fires when the help OPENS, which is the
-moment the user met the gate.
+TIERS.PAID`, and the slots are the server's last answer
+(`useExportSlots`); both are **for the UI only** — the function is the
+authority, and unknown slots are not gated (the click goes to the server,
+which decides for itself).
+`export_gated {reason}` fires when the help OPENS, which is the moment the
+user met the gate. It is sent with `open_cid` (`gtagEventWithCid`, Share#1964),
+and the `anonymous` row is reachable since #1964: the Save dialog opens for a
+signed-out user, on this tab (design/new/quotas.md §"Gate events").
 
 Those status snackbars have to be readable while the dialog that started them
 is still open, so `theme/Theme.jsx` puts `zIndex.snackbar` (2100) above
@@ -2247,12 +2307,15 @@ fallback is `window.open(blobUrl)`.
 Two layers, mirroring quotas (`design/new/quotas.md`):
 
 - **Server (authoritative for signed-in users):** `record-export.js` —
-  Bearer + Pro check, then append `{id, key, title, format, bytes,
+  Bearer, then for Pro append `{id, key, title, format, bytes,
   exportedAt}` to `app_metadata.exports`, newest first, capped at 100
   entries (Auth0 `app_metadata` has a 16 KB soft ceiling; 100 × ~150 B is
-  well under). Returns `{exports}`. Same read-modify-write caveat as
-  `record-load` (last-write-wins; loss direction is a missing history row,
-  never a wrong gate).
+  well under). A free user's export is appended the same way, but only for a
+  model holding one of their slots (`pro-module` took it at delivery); one
+  holding none is refused, `403 export_slot_missing` (§4.8). Returns
+  `{exports}` (+ `modelSlots` for a free user). Same read-modify-write
+  caveat as `record-load` (last-write-wins; loss direction is a missing
+  history row, never a wrongful refusal).
 - **Client:** `src/export/exportHistory.js` keeps one mirror file per
   account, `exports.<encodeURIComponent(sub)>.json`, at the OPFS root (raw
   `navigator.storage.getDirectory()`, no worker dependency — the quota lib's
@@ -2339,11 +2402,13 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   pending, and the same merge runs on the record response so a later
   successful export doesn't wipe it. Hydrated rows the server
   alone knows about offer regeneration, as before.
-- **Analytics:** `gtagEvent('export_model', {format, bytes_bucket,
-  source_kind})` on success — `source_kind` is the loader's categorical kind
+- **Analytics** (all with `open_cid` since Share#1964, plus `export_failed
+  {format, reason}` on a failed run; design/new/quotas.md §"Gate events"):
+  `export_model {format, bytes_bucket,
+  source_kind, portable, free_export, slot_taken}` on success — `source_kind` is the loader's categorical kind
   (`github` / `local` / `upload` / `external`), carried on the `glbArtifact`
   slot by both producers, NOT the cache key's `ns1` (the repo owner on
-  GitHub, a constant everywhere else) and `gtagEvent('export_gated', {reason})` on a
+  GitHub, a constant everywhere else) and `export_gated {reason}` on a
   login/upgrade redirect — the funnel signal for the pricing page.
 
 ### 4.6 Hardening summary
@@ -2353,18 +2418,26 @@ Two layers, mirroring quotas (`design/new/quotas.md`):
   token. No sourcemap, minified.
 - The function verifies the bearer against Auth0 `/userinfo` on every
   request, reads `app_metadata` through the Management API (never trusts
-  the JWT claim the client already has), and answers `403` for non-Pro,
-  `401` for no/invalid token. Denials are Sentry-tagged with the sub.
+  the JWT claim the client already has), and answers `401` for no/invalid
+  token, `400` for a free request with no or a malformed model key,
+  `403 no_free_model_slot` for a free user whose model holds no slot while
+  every slot holds another, and otherwise serves — taking a free slot for a
+  model that holds none before the module leaves (§4.8). Refusals are
+  Sentry-tagged with the sub (never the key, which can name a private
+  repo's file).
 - Response headers: `Content-Type: text/javascript`, `Cache-Control:
-  private, no-store`, `X-Content-Type-Options: nosniff`. The client revokes
-  the blob URL after import and holds the namespace in a module-scope
-  `Map` only (gone on reload).
+  private, no-store`, `X-Content-Type-Options: nosniff`, and on every
+  free delivery `X-Bldrs-Model-Slots`. The client revokes the blob URL after
+  import and holds a Pro namespace in a module-scope `Map` only (gone on
+  reload); a free one it does not hold at all.
 - Dev bypass follows `_lib/auth0.js`: with `AUTH0_DOMAIN` unset the
   function serves the module and fires the existing one-shot Sentry
   warning — same as the OAuth broker functions.
 - What this is not: a Pro user can copy the module text from devtools.
   That's the same exposure as any client-side feature and is accepted; the
-  line held is *distribution*, which is what the pricing depends on.
+  line held is *distribution*, which is what the pricing depends on. Since
+  §7.1 a free user can do the same with a module they were served for a
+  slotted model, and that is the free tier's remaining bypass (§4.8).
 
 
 ### 4.7 The way back in: opening a `.glb.gz`
@@ -2458,6 +2531,234 @@ rendered. The Compress download caption changed with it: *"gzip — saves a
 .glb.gz, reopens in Share"*.
 
 
+### 4.8 Free exports: governed by model slots (§7.1)
+
+The rule since 2026-10-27, in the owner's words: *"export your model as much
+as you want, same logic as views ... ultimately controlled by open slots, not
+export counts."* A signed-in free user has `FREE_PRIVATE_MODEL_LIMIT` = **2
+model slots per rolling `ROLLING_WINDOW_DAYS` = 7 days** (`src/quota/limits.js`),
+the allowance private opens already used. A **public model exports unlimited
+and never takes a slot** (owner, 2026-10-28). A model holding a slot exports
+**unlimited**; a private model or local file holding none **takes a free slot
+on its first export**, and is then unlimited for the rest of its window; with
+every slot holding another model, the export is refused. Pro (§7.2: `sharePro` or
+`shareProPendingReauth`) is unlimited; anonymous still gets the login prompt.
+The export side of the rule is `src/export/exportSlots.js`, the one module the
+functions, the Export tab, the MSW mocks and the Playwright fallbacks all
+import (`exportSlotDecision`, `modelSlots`).
+
+**Superseded:** from 2026-10-06 (#1939) to 2026-10-27 the rule was **2
+exports per rolling 7 days**, counted per delivery: `pro-module` charged each
+free export as a `free: true` row in `app_metadata.exports` and refused at the
+limit, and `record-export` filled that row in under the charge's id. That
+counter is retired for gating. Old `free: true` rows are left where they are —
+no migration — and read as export history only; nothing counts them.
+
+**The ledger** is the one `record-load` already kept: Auth0
+`app_metadata.usageQuota.loads`, `[{key, loadedAt}]`, a row holding its slot
+while `now < loadedAt + 7 days` (`limits.js#loadsInsideRollingWindow`, the
+same edge). A private open writes a row (record-load); an export of a model
+holding no slot writes one too, with `via: 'export'` for attribution. So
+there is one allowance, not two: a private model opened this week already
+holds a slot and exports for nothing more, and a slot an export took is a
+slot a private open can't have — the badge and QuotaLimitDialog count it.
+
+**Which models take a slot on export.** Owner's decision, 2026-10-28: a
+model `record-load` would not count is **public** and exports unlimited with
+no slot; everything else takes one. One classification decides both, moved
+out of `record-load` into `netlify/functions/_lib/modelVisibility.js`
+(`isQuotableModel`, and `isPublicModel` for exports):
+
+- **Public GitHub** — the server's own unauthenticated api.github.com lookup,
+  record-load's (200 public; 404 counts; a rate limit or 5xx is "don't
+  penalize", so it reads public and isn't cached). The server never takes
+  the client's word for GitHub.
+- **Drive** — the client's classification (`quota/driveVisibility.js`, the
+  #1977/#1979 rules: link-shared is public), sent as `X-Bldrs-Drive-Public:
+  1` (`quota/driveExportVisibility.js`, from how CadView downloaded the
+  file). The server can't see Drive sharing, so this is the client-trust
+  model record-load already runs on (quotas.md §"Drive visibility"); the
+  header is ignored for every other route. A "Download again" from My
+  Exports has no download record to classify by, so the export keeps its
+  word on the local history row (`drivePublic`, beside `cacheKeyArgs`) and
+  the replay sends that; without it a link-shared file re-downloaded from
+  history took a slot, or was refused with the slots full (Codex on #1980).
+- **Hosted `/v/p/` files** — the demo models this deploy serves from its own
+  origin (`public/`), not user uploads (those are local-only), so public.
+- **Generic `/v/u/` URLs** — never counted by record-load, so public.
+- **Local files** — free to view, but **always take a slot on first export**
+  (owner): without that, opening a private model's file from disk would make
+  GLB export free.
+
+A model already holding a slot is served on that alone, before any lookup.
+
+**Keys** (`src/quota/modelSlotKey.js`, the one function that builds them): an export is decided under the
+model's slot key, which must be the very string a private open of the same
+model is recorded under, because the ledger dedupes by exact key. So each
+route reuses its open's key: GitHub and Drive take
+`quota/useDirectLinkQuota.js#directLinkQuotaKey` (`/share/v/gh/<org>/<repo>/<branch>/<file>`
+— hard-coded `/share`, as GitHubFileBrowser records it — and
+`<appPrefix>/v/g/<fileId>`); a **local file** takes the key the viewer already
+uses for local-only models, `<appPrefix>/v/local-only/<uuid>.<ext>`
+(`routes/localOnly.ts#localOnlyPath`, what OpenModelDialog#openFile passes to
+record() and what the `meterLocalFiles` switch would count); hosted files
+`<appPrefix>/v/p/<file>`. A **URL** (`/v/u/`) is keyed
+`<appPrefix>/v/u/sha256-<hex>`, the SHA-256 of the URL as `new URL()`
+normalizes it, fragment dropped (`urlModelKey`, SubtleCrypto — which needs a
+secure context, as the OPFS artifact being exported already does). Never the
+URL itself (codex review on Share#1980): a presigned URL runs past the 1 KB
+key limit, so its exports were all refused, and its query string is a
+credential that must not land in `app_metadata`, a request header or export
+history. The query stays in the digest, since it can tell two files apart; a
+re-signed link to the same object is therefore a new model. No open records a
+`/v/u/` key (record-load never counts the `u` route), so there are no stored
+full-URL rows to reconcile. None of the keys carries the element path, so
+selecting an element is not a new model. The local key's
+uuid is minted per pick: reloading the page or reopening from Recents is the
+same model, picking the same file from disk again is a new one. A "Download
+again" row (`ExportsList`) replays under the key it was recorded with; rows
+recorded before this change carry `window.location.pathname`, which may
+include an element path and so take a slot of its own once.
+
+**Where it is decided: at delivery, in `pro-module`.** That is the one step
+the server controls; `record-export` runs after the file is already in
+Downloads, so anything it decided would be one blocked request away from
+unlimited exports.
+
+1. The client (`useExport`) snapshots the slot key when the run starts and
+   sends it to `pro-module` as `X-Bldrs-Model-Key`,
+   `encodeURIComponent`-encoded: a header rather than the query string so a
+   private repo's file path stays out of CDN access logs, encoded because a
+   header value must be ISO-8859-1 and a path need not be.
+2. `pro-module` reads `app_metadata` (Management API). Pro → serve, nothing
+   read or written about slots. Free without a usable key → 400
+   (`missing_model_key` / `invalid_model_key`, `exportSlots.js#isModelKey`:
+   a share path, at most 1 KB). Free with a key: `exportSlotDecision`
+   - **held** — the key is in the window: serve, write nothing;
+   - **public** — not held, and `isPublicModel` says so: serve unlimited,
+     write nothing;
+   - **take** — not held, a slot free: read the module first (a missing build
+     must not cost a slot), then PATCH `usageQuota` — the window's rows plus
+     `{key, loadedAt, via: 'export'}`, with every other `usageQuota` field
+     written back, since Auth0 replaces a top-level key whole
+     (`limits.js#usageQuotaWithLoads`, record-load's own write) — and only
+     then serve. A failed PATCH is a 502 and no module;
+   - **full** — not held, no slot free: **403 `no_free_model_slot`**, body
+     `{modelSlots: {limit, used, remaining, nextFreeAt, keys}}`, nothing read
+     or written.
+
+   Every free 200 carries `X-Bldrs-Model-Slots`: `{limit, used, remaining,
+   nextFreeAt, taken, public}` after the delivery — counts, never keys, so the value
+   stays ASCII.
+3. The client (`proModuleLoader.js`) does **not memoise a free delivery**: it
+   was granted for one model, and a memo would export the next model without
+   the server asking whether it holds a slot. The header's presence decides
+   this, not the client's idea of the tier. In-flight requests are shared
+   only for the same model key. A memoised **Pro** delivery goes stale when
+   the account loses Pro while the page stays open: its next export skips
+   `pro-module`, and if that model holds no slot, `record-export` refuses the
+   export (`export_slot_missing`). `useExport` takes that refusal, and only
+   that one, as the signal: it evicts the memo (`forgetProModule`) and
+   force-refreshes the claim. A 401 is not enough, because an expired token
+   or an Auth0 outage also gives one on an account that may still be Pro. At
+   most the one export already downloaded escapes the check.
+4. `useExport` records the export under the same key (with `drivePublic`
+   for a Drive file). `record-export` appends a free user's row only when the
+   key holds a slot or the model is public — the same classification — and
+   never writes `usageQuota`. The response, and the refusal, carry `modelSlots`.
+5. What the user sees comes from the server: `record-export`'s GET when the
+   Export tab opens or the model on screen changes (`useExportSlots`, which
+   names the model with the same headers, so the answer also says whether it
+   is public — only the server can tell for GitHub), then the delivery header, the record
+   response and any refusal, all into one store slot (`UISlice#modelSlots`,
+   keyed by `sub`; a header adds the exported key to the known keys). It is
+   display only; unknown slots are not gated, because the server decides for
+   itself. When a `no_free_model_slot` refusal arrives while the claim still
+   says Pro, `useExport` force-refreshes the claim as it does for any other
+   denial.
+
+The UI (§4.4), worded "unlimited X" (owner, 2026-10-28): under a free
+user's Export button, a line for the model on screen — "Public model:
+unlimited export"; or it holds a slot ("This model holds one of your 2 free
+model slots: unlimited export"); or its first export takes one ("Exporting
+takes one of your 2 free model slots (N left this week), then unlimited
+export"); or every slot holds another model ("Your 2 free model slots this
+week hold other models · next one frees up <date>"). A public model is never
+gated. In the last state the button takes the
+existing Pro upsell gate (same `gated-export-pro` slug, same `export_gated
+{reason: 'free'}` event, so the funnel series carries on), titled "Free model
+slots full", whose help says when the next slot frees up. Pro sees nothing
+new.
+
+**Analytics** (for the bizdev dashboard, which reads these by name):
+`export_gated {reason: 'free'}` is unchanged in name and value and now means
+"free user, model holds no slot, slots full"; `export_failed`'s `reason`
+`free_limit` is replaced by **`no_slot`** (a server refusal for want of a
+free slot); `export_model.free_export` now means "exported on the free tier"
+(it meant "spent one of the 2 free exports") and gains **`slot_taken`**
+(true when that export took a new slot). Share#1976's normalized
+`model_export {gate: 'blocked'}` fires on the `no_slot` refusal.
+
+**What stays bypassable**, honestly:
+
+- **Naming another model's key.** The export runs in the browser on the
+  client's own artifact, so the server cannot see which model was exported;
+  it trusts the key it is sent. A client that edits the request header can
+  export every model under one slotted key. That takes deliberate devtools
+  work, and it is no wider than the next item, which already gave unlimited
+  exports under the per-export count: both end at "the free tier's floor is
+  a user willing to edit requests". Closing it would mean server-side export
+  (§3 option D), a non-goal.
+- **Keeping the module.** A free user who has been served once holds the
+  exporter's source for that page and can replay it without `pro-module`
+  ever being asked again. §4.6's accepted exposure ("a Pro user can copy the
+  module text"), extended to free users.
+- **Racing requests.** Every `app_metadata` writer here is read-modify-write
+  with no compare-and-swap. Two `pro-module` requests for two new models fired
+  together can both read the same free slot and both be served, and a slot
+  row can be lost to a concurrent write of `usageQuota` (record-load's, or
+  another tab's export). The loss direction is a free extra slot, never a
+  wrongful refusal — the same one `record-load` accepts. The honest client
+  serialises its own exports (`isExportInFlight`), so this takes a script.
+  The fix is the same KV-store migration quotas.md lists.
+- **A slot without an export.** The slot is taken when the module is served,
+  so an export that then fails in the browser has still taken it. The model
+  then holds it, so a retry costs nothing more. No release path exists,
+  deliberately: a release endpoint is a way to un-count a model.
+
+**Tests.** `src/export/exportSlots.test.js` (held / take / full, the window
+and its edge, local keys, the retired ledger ignored, the ASCII header with `public`);
+`quota/modelSlotKey.test.js` (each route's key equals its open's; a long presigned URL keys to a short digest with no query, host or credential in it);
+`netlify/functions/_tests/pro-module.test.js` (a slotted model served three
+times with nothing written, a local file taking a slot before serving, a
+public GitHub model (by the server's own lookup), a hosted sample and a URL
+model served with both slots full and nothing written, a private GitHub
+model refused with both slots full, Drive public only on the client's word,
+a third model refused with both slots full,
+roll-off, the retired ledger ignored, 400 without a key, Pro and
+pending-reauth unaffected, no slot on a missing build, no module on a failed
+write) and `record-export.test.js` (recorded only for a slotted model, the
+`export_slot_missing` refusal, the GET); replay scenarios
+`pro-module/{takes-slot-on-first-export,serves-model-holding-slot,
+refuses-when-slots-full,exports-public-github-with-slots-full,
+refuses-private-github-with-slots-full,serves-pending-reauth}` and
+`record-export/{records-free-export-of-slotted-model,
+refuses-export-of-model-without-slot,reports-model-slots,
+records-pending-reauth-export}`; the loader, `useExport`, `useExportSlots`,
+`ExportSection` and `ExportsList` suites; and in
+`Components/Share/exportGlb.spec.ts`, desktop and mobile, one test through
+the whole free path — *"a free user exports a public sample unlimited with no
+slot; a local file three times, taking one; then meets the gate with the
+slots full"*, the server's stand-in refusing a bypass at the end. One test,
+not one per state: the heavy specs shard by test COUNT
+(`tools/playwrightSpecSets.js`), and two more pairs pushed shard 1 past its
+15-min job limit on #1980 — and *"a pending-reauth subscriber exports as Pro, with
+nothing counted"*. The MSW mocks and the Playwright `page.route` fallbacks
+(`tests/e2e/export.ts`) apply the same decision to the same in-page ledger
+the record-load mock writes, `window.__mockQuotaLoads`. The live smoke's
+`exportFree.live.spec.ts` checks the same against a deploy with a real
+account.
+
 ## 5. Stages (→ sub-issues of the epic)
 
 | # | Title | Delivers | Tests |
@@ -2466,7 +2767,7 @@ rendered. The Compress download caption changed with it: *"gzip — saves a
 | S2 | GLB export | `glbArtifact` store slot (writer + reader set, load clears), `pro/glbExport.entry.js`, `useExport`, `ExportSection` in ShareDialog, `export` flag, `subscriptionNav.js` extraction | jest: container→GLB, strip option; **E2E desktop+mobile** (`describeMobileAndDesktop`): Pro user opens a fixture, waits for the writer, clicks Download GLB, asserts a `.glb` download whose bytes start with `glTF`; gated states for anonymous and free |
 | S3 | Export tracking | `record-export.js`, `exportHistory.js`, `ExportsDialog.jsx`, Profile menu item, analytics events | jest: history lib (prune/cap/OPFS-unavailable), function handler; **E2E desktop+mobile**: after an export the dialog lists it; "Download again" on a cached artifact |
 | S2b | Placement + gated actions (#1838) | Export tab in the Save dialog (`ExportSection` + `ExportsList` moved to `Open/`), Save always visible, `GatedAction.jsx`, `zIndex.snackbar` + mobile dialog inset | jest: gated click still fires, tab hides the Save action, flag-off dialog has no tabs; **E2E desktop+mobile**: signed-out Save shows the help, free Export shows the Pro help, the export snackbar is visible and uncovered over the open dialog |
-| S4 | Rollout | This doc folded back to shipped reality, `quotas.md`-style status block, wiki entry, flag flip, roadmap row `share-140` | smoke checklist §8 run on the deploy preview with a real Pro account |
+| S4 | Rollout | This doc folded back to shipped reality, `quotas.md`-style status block, wiki entry, flag flip, roadmap row `share-140` | §8 live smoke green on the deploy preview with real accounts per tier; residual manual list in §8 |
 | S5 | Further formats (spec only) | §6 matrix → one issue per format when scheduled | — |
 
 S1 and S2 land in one PR (the smoke instance needs both); S3 follows on the
@@ -2529,62 +2830,80 @@ likely second premium format; its module is the one that decides whether
 export module.
 
 
-## 7. Open questions
+## 7. Decisions (were open questions)
 
-1. **Should free users get *one* export?** A single free export is a strong
-   conversion moment (the quota design's "anonymous gets 2 loads" logic).
-   It changes the function's gate from "Pro" to "Pro, or free with no
-   prior export" and adds an `exports` read to the check. Not in v0.1;
-   flagged for S4's rollout decision.
-2. **`shareProPendingReauth`** — `GitHubFileBrowser` counts it as Pro,
-   `getTier` doesn't. The function follows `getTier` (the quota authority);
-   the UI badge follows `getTier` too. If pending-reauth users complain, fix
-   `getTier`, not the export.
+1. **Should free users get free exports?** Decided by the owner for S4
+   (#1835, 2026-10-06): **yes — a signed-in free user gets 2 exports per
+   rolling 7 days.** Pro is unlimited; anonymous still gets the login prompt.
+   (The recommendation drafted before the decision was "no free export,
+   Pro-only at launch"; the owner chose the conversion moment instead.)
+   **Revised by the owner on 2026-10-27:** *"export your model as much as you
+   want, same logic as views ... ultimately controlled by open slots, not
+   export counts."* A free user exports any model holding one of their 2
+   private-model slots, unlimited times; a model holding none takes a slot on
+   its first export (owner's decision, which covers local files so export
+   does not become fully free through them). **Revised again on
+   2026-10-28:** public models — what record-load does not count: public
+   GitHub, link-shared Drive, hosted samples, generic URLs — export
+   unlimited and never take a slot; local files still do. The
+   per-export counter and the `app_metadata.exports` ledger are retired for
+   gating; `pro-module` decides each free delivery against
+   `app_metadata.usageQuota.loads` and takes a free slot as it serves the
+   module. The design, and what a determined user can still get around, are
+   in §4.8. Whether free exports convert is readable from the funnel:
+   `export_model` carries `free_export` and `slot_taken`, and the upgrade
+   click from the slots-full gate still reports `from: 'export'` through
+   `goToSubscription`.
+2. **`shareProPendingReauth` is Pro.** Decided by the owner for S4: it is the
+   status `stripe-webhook.js` writes on FREE→PRO, so the payment is
+   confirmed; it only waits for the user to log in again for the GitHub
+   scope, after which an Auth0 Action promotes it to `sharePro`. The server
+   side already treated it as Pro (`_lib/subscriptions.js`'s
+   `PRO_AUTH0_STATUSES`, the reconcile sweep); `getTier`, `pro-module`,
+   `record-export` and `record-load` did not, each with its own hand-copied
+   `'sharePro'`. All of them now import one definition,
+   `src/quota/proStatus.js`, and `PRO_AUTH0_STATUSES` *is* that set (a test
+   pins the identity). **Side effect, intended:** `getTier` also drives
+   quotas, so a pending-reauth user gets Pro (unlimited) loads as well, and
+   `record-load` agrees. The one place `sharePro` alone still matters is the
+   reconcile sweep's hand-set comp (`comped: true`), which must be the
+   settled `sharePro` so a hand edit never sends a comped user through the
+   reauth modal.
 3. **Auth0 `app_metadata` as the export ledger** inherits the quota
    design's migration note (Netlify Blobs / KV when Management-API limits
    bite). Same table, same move.
 
 
-## 8. Cross-browser smoke checklist (deploy preview, `?feature=export`)
+## 8. Cross-browser smoke: automated live smoke + residual manual checks
 
-For each of Chrome, Firefox, Safari (macOS), Edge, iOS Safari, Android
-Chrome — with a real Auth0 account in each of the three tiers:
+Most of the checklist that used to be run by hand is now automated by the
+account-backed live smoke ([live-browser-smoke.md](live-browser-smoke.md), run
+by `.github/workflows/live-smoke.yml` on the `live-smoke` PR label or by
+workflow_dispatch against a deploy URL). Step-by-step coverage of the former
+12 steps is in that doc's [§8 mapping](live-browser-smoke.md#8-mapping) table.
+Results for #1939: the full run is
+https://github.com/bldrs-ai/Share/actions/runs/37820640515 (27 passed, 1
+failed; the failure was a test-timing bug, fixed in #1950); the mobile-pixel
+re-run is https://github.com/bldrs-ai/Share/actions/runs/37823278603 (11
+passed); the chromium run after the stale-memo fix is
+https://github.com/bldrs-ai/Share/actions/runs/37828097215 (12 passed). The
+live smoke also found the `/subscribe/` redirect loop, fixed by #1949.
 
-1. Open a sample IFC; wait for the load snackbar. Open Share → the Export
-   section shows "Preparing GLB…" until the writer finishes, then enables.
-2. Anonymous: click → login dialog. Free: click → `/subscribe/`. Pro:
-   click → a `.glb` lands in Downloads (check the first 4 bytes are `glTF`
-   and it opens in <https://gltf-viewer.donmccurdy.com/>).
-3. Pro, DevTools → Network: `pro-module?name=glbExport` is `200`,
-   `text/javascript`, `cache-control: private, no-store`; a second click
-   does **not** re-fetch (memoised). Free user forging the request gets
-   `403`; no token gets `401`.
-4. Reload the page: the Export section is enabled immediately (cache-hit
-   sets `glbArtifact`); export again → same bytes.
-5. Toggle "Include Bldrs metadata" off → the file is smaller and its JSON
-   chunk has no `BLDRS_` strings (`strings file.glb | grep BLDRS_`).
-5b. Compression → Meshopt, then Draco: the line says *Estimating…*, then
-   settles smaller; the download weighs exactly what it said; the file opens
-   in <https://gltf-viewer.donmccurdy.com/> and still carries `BLDRS_` with
-   the metadata toggle on. DRACO specifically, because it is the one that
-   fetches a `<script>` and a sibling `.wasm` from `/static/js/draco/` at
-   click time — a blocked or mis-served asset is a per-browser failure the
-   others never see.
-5c. **Portable** — on when the tab opens (#1831) — at codec None: the line
-   says *Estimating…*, then settles; the download weighs exactly what it said;
-   the file opens in <https://3dviewer.net/>, which refuses the native export
-   (Portable off: `Unsupported extension: EXT_mesh_gpu_instancing`), and the
-   three.js editor shows the nested, named hierarchy (Bldrs › Build › Every ›
-   Thing) instead of `mesh_N` — and finishes its autosave (a large model's
-   portable file used to hang it; §4.3 "The vertex layout"). Then Portable + Draco, to confirm the codec preserves the node
-   names. Reopening a portable export in Share shows the nav tree, renders
-   palette-coloured, and picks: clicking a nav-tree row highlights in the
-   scene and vice versa, exactly as the default export does (#1849).
-6. Save → Export lists the exports below the button, with sizes and dates;
-   "Download again" works on the cached one; Clear Local Cache → the row
-   says the model must be reopened.
-7. Safari specifically: the download is a file, not an inline tab (§4.4
-   fallback); OPFS is available (Safari ≥ 17 for `createWritable`).
-8. Mobile: the Save dialog's Export tab fits without horizontal scroll at
-   390 px, the "Exported …" snackbar is readable over the open dialog, and
-   the download lands in Files (iOS) / Downloads (Android).
+**Residual manual checks.** These stay with a person; the mapping table marks
+each one "Residual manual".
+
+- **Firefox, the whole flow**, until #1947 gets WebGL working on the runner.
+  The live specs skip Firefox (`webglSkipReason`), so its own download, OPFS
+  and `CompressionStream`, and the export itself, are checked by hand.
+- **Real iOS Safari and Android Chrome**: the file lands in Files (iOS) or
+  Downloads (Android).
+- **Real desktop Safari**: the download is a file, not an inline tab.
+- **Real Safari's OPFS cache** (the former step 7): the GLB artifact is
+  written, a reload hits it, and Export enables at once. Playwright's WebKit
+  has no `navigator.storage`, so no automated run exercises this path. The
+  sync-access-handle write (#1686) is the part most worth a person's five
+  minutes.
+- **Google Drive `.glb.gz`** (§4.7): the Drive picker and OAuth, which no
+  automated run reaches.
+- **Optional**: the three.js editor's autosave on a large portable file (the
+  former step 5c), and Edge as itself rather than through Chromium.

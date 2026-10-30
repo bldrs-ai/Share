@@ -21,7 +21,7 @@
 
 
 /** The connection the harness logs in through (`/popup-auth?connection=…`). */
-export const DATABASE_CONNECTION = 'Username-Password-Authentication'
+export const DATABASE_CONNECTION = 'share-live-smoke'
 
 const HTTP_TOO_MANY_REQUESTS = 429
 const HTTP_SERVER_ERROR_MIN = 500

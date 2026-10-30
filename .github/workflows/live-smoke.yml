@@ -13,11 +13,9 @@ name: live-smoke
 # draft"):
 #  - `workflow_dispatch` with any https origin: a deploy preview, a branch
 #    deploy, production.
-#  - A PR marked ready for review, IF it touches export, subscription or
-#    harness code (the path check below) — against that PR's Netlify deploy
-#    preview.
-#  - The `live-smoke` label on a PR, whatever it touches — the way to ask for
-#    a run on demand, including on a PR still in draft.
+#  - The `live-smoke` label on a PR, draft or not — against that PR's
+#    Netlify deploy preview. The only PR trigger: marking a PR ready does
+#    not start a run. To re-run, remove the label and add it again.
 #
 # One run at a time, repository-wide: every run logs in as the same test
 # accounts, and the reset at the start of one run would pull the ledger out
@@ -53,7 +51,7 @@ on:
         required: false
         default: ''
   pull_request:
-    types: [ready_for_review, labeled]
+    types: [labeled]
 
 permissions:
   contents: read
@@ -66,7 +64,6 @@ jobs:
   smoke:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      github.event.action == 'ready_for_review' ||
       (github.event.action == 'labeled' && github.event.label.name == 'live-smoke')
     runs-on: ubuntu-24.04
     timeout-minutes: 75
@@ -98,7 +95,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
-          ACTION: ${{ github.event.action }}
           INPUT_URL: ${{ github.event.inputs.base_url }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -114,21 +110,11 @@ jobs:
           fi
           if [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then echo "Unexpected sha: $HEAD_SHA"; exit 1; fi
 
-          # Ready-for-review runs only for PRs that can change what this
-          # smokes. The label runs regardless.
-          if [[ "$ACTION" == ready_for_review ]]; then
-            relevant='^(src/export/|src/Components/Open/(Export|SaveModelControl)|src/Components/Share/|src/Components/GatedAction|src/Auth0/|src/quota/|src/loader/(glb|gzipEnvelope)|src/OPFS/|src/store/|src/BaseRoutes|netlify/functions/(pro-module|record-export|record-load|stripe-webhook|reconcile-subscriptions|_lib/)|tools/esbuild/proModules|src/tests/e2e/(live/|export)|tools/live-smoke/|tools/playwright\.live\.config\.js|\.github/workflows/live-smoke\.yml)'
-            if ! gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' | grep -Eq "$relevant"; then
-              echo "This PR touches nothing the live smoke covers; add the live-smoke label to run it anyway."
-              echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
-            fi
-          fi
-
           # The PR's deploy preview, from the commit status Netlify posts on
           # the head commit. Decided by the NEWEST status of the context
           # (previewStatus.mjs): the preview URL is a stable alias, so an
           # older success on a redeployed head would smoke the previous
-          # deploy (Codex on #1942). Pending waits — a PR marked ready right
+          # deploy (Codex on #1942). Pending waits — a label added right
           # after a push may beat the deploy — and failure stops the run.
           context="netlify/$NETLIFY_PROJECT/deploy-preview"
           url=''

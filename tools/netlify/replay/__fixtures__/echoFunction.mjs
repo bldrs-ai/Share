@@ -2,6 +2,7 @@
 // then a response built from its answer. `?throw=1` makes it throw;
 // `?nothing=1` makes it resolve to undefined; `?also=1` makes a second call
 // (GET https://upstream.test/also) after the first, for the ordering cases.
+// `X-Now` reports the clock, for the `now` cases.
 export const handler = async (event) => {
   const upstream = await fetch('https://upstream.test/thing', {
     method: 'POST',
@@ -18,5 +19,6 @@ export const handler = async (event) => {
   if (event.queryStringParameters && event.queryStringParameters.nothing) {
     return undefined
   }
-  return {statusCode: 200, headers: {'X-Echo': 'yes'}, body: JSON.stringify({got: answer.v, method: event.httpMethod})}
+  const now = `${new Date().toISOString()} ${Date.now()}`
+  return {statusCode: 200, headers: {'X-Echo': 'yes', 'X-Now': now}, body: JSON.stringify({got: answer.v, method: event.httpMethod})}
 }

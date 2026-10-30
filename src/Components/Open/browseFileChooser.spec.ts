@@ -69,7 +69,7 @@ describeMobileAndDesktop('Open 100: Browse opens a file chooser', () => {
     // Past the chooser the pick goes through OPFS and navigates to the stored
     // copy — the proof the input's `change` handler ran on the element Browse
     // made, not merely that a chooser appeared.
-    await expect(page).toHaveURL(/\/share\/v\/new\/.+\.ifc/)
+    await expect(page).toHaveURL(/\/share\/v\/local-only\/.+\.ifc/)
     await waitForModelReady(page)
   })
 })

@@ -11,10 +11,20 @@
  *   1. Validate the access token via Auth0 /userinfo → sub.
  *   2. Read user app_metadata via Auth0 Management API
  *      (mgmt token cached in module scope).
- *   3. Derive tier: subscriptionStatus === 'sharePro' → PAID, else FREE.
+ *   3. Derive tier: a Pro subscriptionStatus (`sharePro` or
+ *      `shareProPendingReauth`, src/quota/proStatus.js) → PAID, else FREE.
  *   4. For /v/gh/, resolve repo privacy via unauth api.github.com
- *      (cached per "owner/repo" in module scope, 15-minute TTL).
- *   5. Prune loads outside the rolling 30-day window.
+ *      (cached per "owner/repo", 15-minute TTL; _lib/modelVisibility.js, the classification pro-module and record-export share). This
+ *      function does not take the client's word for GitHub.
+ *      For /v/g/ (Drive) it does: it can't see a Drive file's sharing (that
+ *      would need the user's Drive token), so it counts every Drive key it
+ *      is sent, and the client sends only the files it found private — never
+ *      a link-shared one (src/quota/limits.js#isCountedByRouteKind,
+ *      design/new/quotas.md §"Drive visibility": a known gap).
+ *   5. Prune loads outside the rolling window (ROLLING_WINDOW_DAYS, 7).
+ *      Local files (`/v/local-only/`, legacy `/v/new/`) are not quotable:
+ *      they're free and unmetered (Share#1966) unless local metering is
+ *      switched on (isLocalFileMeteringEnabled below).
  *   6. Idempotent: if key already counted, return current state.
  *   7. If FREE && used >= limit, return 403 — client surfaces dialog.
  *   8. Otherwise PATCH app_metadata.usageQuota.loads with the new entry.
@@ -28,6 +38,15 @@
 
 import axios from 'axios'
 import * as Sentry from '@sentry/serverless'
+import {flags} from '../../src/FeatureFlags.js'
+import {
+  FREE_PRIVATE_MODEL_LIMIT,
+  TIERS,
+  loadsInsideRollingWindow,
+  usageQuotaWithLoads,
+} from '../../src/quota/limits.js'
+import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
+import {isQuotableModel} from './_lib/modelVisibility.js'
 
 
 Sentry.AWSLambda.init({
@@ -42,34 +61,24 @@ const HTTP_BAD_REQUEST = 400
 const HTTP_UNAUTHORIZED = 401
 const HTTP_FORBIDDEN = 403
 const HTTP_METHOD_NOT_ALLOWED = 405
-const HTTP_INTERNAL_SERVER_ERROR = 500
 const HTTP_BAD_GATEWAY = 502
 
-// Tier constants (kept in lock-step with src/quota/quota.js)
-const TIER_FREE = 'free'
-const TIER_PAID = 'paid'
-const FREE_LIMIT = 4
+// Tiers, the free limit and the rolling window come from src/quota/limits.js,
+// the definition the client, the MSW mock and the pricing-page guard share.
+const TIER_FREE = TIERS.FREE
+const TIER_PAID = TIERS.PAID
+const FREE_LIMIT = FREE_PRIVATE_MODEL_LIMIT
 
 // Time
-const SECONDS_PER_MIN = 60
-const MINUTES_PER_HOUR = 60
-const HOURS_PER_DAY = 24
 const MILLIS_PER_SECOND = 1000
-const ROLLING_WINDOW_DAYS = 30
-const ROLLING_WINDOW_MS =
-  ROLLING_WINDOW_DAYS * HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MIN * MILLIS_PER_SECOND
 
 // Mgmt-token refresh safety margin
 const MGMT_TOKEN_REFRESH_SAFETY_SEC = 60
 
-// GH privacy cache TTL
-const GH_PRIVACY_CACHE_TTL_MIN = 15
-const GH_PRIVACY_CACHE_TTL_MS = GH_PRIVACY_CACHE_TTL_MIN * SECONDS_PER_MIN * MILLIS_PER_SECOND
 
 // Module-scope caches — survive across warm Lambda invocations.
 let cachedMgmtToken = null
 let cachedMgmtTokenExpiresAt = 0
-const ghPrivacyCache = new Map() // "owner/repo" -> {private: bool, fetchedAt: ms}
 
 /**
  * Fetch (or reuse) an Auth0 Management API token via Client Credentials.
@@ -123,15 +132,21 @@ async function getUserRecord(mgmtToken, auth0UserId) {
 }
 
 /**
+ * Auth0 merges `app_metadata` one top-level key at a time, so this writes
+ * the WHOLE `usageQuota` back — its other fields with `loads` replaced
+ * (`limits.js#usageQuotaWithLoads`, the write `pro-module` makes too) — or a
+ * load would erase them (codex review on Share#1980).
+ *
  * @param {string} mgmtToken
  * @param {string} auth0UserId
+ * @param {*} usageQuota The user's current app_metadata.usageQuota
  * @param {Array} loads New loads list to persist under app_metadata.usageQuota
  * @return {Promise<void>}
  */
-async function patchUsageQuota(mgmtToken, auth0UserId, loads) {
+async function patchUsageQuota(mgmtToken, auth0UserId, usageQuota, loads) {
   await axios.patch(
     `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(auth0UserId)}`,
-    {app_metadata: {usageQuota: {loads}}},
+    {app_metadata: {usageQuota: usageQuotaWithLoads(usageQuota, loads)}},
     {
       headers: {
         'Content-Type': 'application/json',
@@ -146,83 +161,41 @@ async function patchUsageQuota(mgmtToken, auth0UserId, loads) {
  * @return {string}
  */
 function getTier(appMetadata) {
-  if (appMetadata && appMetadata.subscriptionStatus === 'sharePro') {
+  // The same Pro definition `src/quota/quota.js#getTier` reads, so the badge
+  // and this gate agree about a pending-reauth user (both: paid).
+  if (appMetadata && isProSubscriptionStatus(appMetadata.subscriptionStatus)) {
     return TIER_PAID
   }
   return TIER_FREE
 }
 
 /**
- * @param {Array} loads
- * @param {number} now
- * @return {Array}
- */
-function pruneLoads(loads, now) {
-  if (!Array.isArray(loads)) {
-    return []
-  }
-  const cutoff = now - ROLLING_WINDOW_MS
-  return loads.filter((l) => Date.parse(l.loadedAt) >= cutoff)
-}
-
-/**
- * Resolve whether a `/v/gh/{owner}/{repo}/...` path points at a private
- * repo. Returns true (=quotable) for private/missing/error responses.
- * Cached in module scope per (owner, repo) for GH_PRIVACY_CACHE_TTL_MS.
+ * Whether local files count: the `meterLocalFiles` flag in
+ * src/FeatureFlags.js (the client reads the same flag), or the
+ * METER_LOCAL_FILES=true env var, which turns the meter on for this
+ * function alone — e.g. on a deploy preview being tested with
+ * `?feature=meterLocalFiles`, since a URL flag only reaches the client. Off
+ * by default: local files are free and unmetered (Share#1966,
+ * design/new/quotas.md §"Metering local files again"). Read per call, not at
+ * module scope, so an env change applies without a cold start.
  *
- * @param {string} owner
- * @param {string} repo
- * @return {Promise<boolean>}
+ * @return {boolean}
  */
-async function isPrivateGhRepo(owner, repo) {
-  const cacheKey = `${owner.toLowerCase()}/${repo.toLowerCase()}`
-  const now = Date.now()
-  const hit = ghPrivacyCache.get(cacheKey)
-  if (hit && (now - hit.fetchedAt) < GH_PRIVACY_CACHE_TTL_MS) {
-    return hit.private
-  }
-  try {
-    const resp = await axios.get(
-      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
-      {validateStatus: () => true},
-    )
-    let isPrivate
-    if (resp.status === HTTP_OK) {
-      isPrivate = false
-    } else if (resp.status === HTTP_FORBIDDEN || resp.status >= HTTP_INTERNAL_SERVER_ERROR) {
-      // Rate-limited (403) or any 5xx upstream hiccup — don't penalize the
-      // user; treat as not-quotable (design/new/quotas.md §GitHub privacy
-      // detection: "403 / 5xx → No"). Do NOT cache this so we retry next time.
-      Sentry.captureException(new Error(`GH repo lookup status=${resp.status} for ${cacheKey}`))
-      return false
-    } else {
-      // 404 (private or missing) and other 4xx -> count it.
-      isPrivate = true
-    }
-    ghPrivacyCache.set(cacheKey, {private: isPrivate, fetchedAt: now})
-    return isPrivate
-  } catch (err) {
-    Sentry.captureException(err)
-    return false
-  }
+function isLocalFileMeteringEnabled() {
+  const flag = flags.find((f) => f.name === 'meterLocalFiles')
+  return Boolean(flag && flag.isActive) || process.env.METER_LOCAL_FILES === 'true'
 }
 
 /**
+ * The shared classification (`_lib/modelVisibility.js#isQuotableModel`,
+ * which `pro-module` and `record-export` decide exports by too), with this
+ * function's local-file switch.
+ *
  * @param {string} key Share path
  * @return {Promise<boolean>}
  */
-async function isQuotableLoad(key) {
-  if (key.includes('/v/new/') || key.includes('/v/g/')) {
-    return true
-  }
-  // /v/gh/<owner>/<repo>/<branch>/<path>
-  const ghMatch = key.match(/\/v\/gh\/([^/]+)\/([^/]+)\//)
-  if (ghMatch) {
-    const owner = decodeURIComponent(ghMatch[1])
-    const repo = decodeURIComponent(ghMatch[2])
-    return await isPrivateGhRepo(owner, repo)
-  }
-  return false
+function isQuotableLoad(key) {
+  return isQuotableModel(key, {meterLocalFiles: isLocalFileMeteringEnabled()})
 }
 
 /**
@@ -295,7 +268,9 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   const appMetadata = userRecord.app_metadata || {}
   const tier = getTier(appMetadata)
   const now = Date.now()
-  const existingLoads = pruneLoads((appMetadata.usageQuota && appMetadata.usageQuota.loads) || [], now)
+  // The client's pruning too (limits.js#loadsInsideRollingWindow), so the
+  // server, the OPFS mirror and the MSW mock share one edge.
+  const existingLoads = loadsInsideRollingWindow((appMetadata.usageQuota && appMetadata.usageQuota.loads) || [], now)
 
   // Paid: never gated, never recorded (no point burning Mgmt API writes).
   if (tier === TIER_PAID) {
@@ -323,7 +298,7 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
 
   const newLoads = [...existingLoads, {key, loadedAt: new Date(now).toISOString()}]
   try {
-    await patchUsageQuota(mgmtToken, auth0UserId, newLoads)
+    await patchUsageQuota(mgmtToken, auth0UserId, appMetadata.usageQuota, newLoads)
   } catch (err) {
     Sentry.captureException(err)
     return {statusCode: HTTP_BAD_GATEWAY, body: 'Failed to record load'}

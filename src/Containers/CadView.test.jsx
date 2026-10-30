@@ -21,7 +21,14 @@ import Clipper from '../viewer/three/Clipper'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
+import {EngineOpenFailureError} from '../loader/engineOpenFailure'
 import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
+import {registerInMemoryUpload, resetInMemoryUploadsForTest} from '../loader/inMemoryUploads'
+import {
+  InMemoryUploadGoneError,
+  UploadNotInBrowserError,
+  inMemoryUploadGoneAlert,
+} from '../OPFS/messages'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
@@ -155,15 +162,13 @@ jest.mock('react-router-dom', () => {
   }
 })
 jest.mock('postprocessing')
+// Signed out unless a test says otherwise (the Drive sign-in guard below).
+// The `mock` prefix lets the hoisted factory read it.
+const mockAuthState = {isLoading: false, isAuthenticated: false}
 jest.mock('@auth0/auth0-react', () => {
   return {
     ...jest.requireActual('@auth0/auth0-react'),
-    useAuth0: () => jest.fn(() => {
-      return {
-        isLoading: () => false,
-        isAuthenticated: () => false,
-      }
-    }),
+    useAuth0: () => mockAuthState,
   }
 })
 
@@ -714,6 +719,335 @@ describe('CadView', () => {
       expect.objectContaining({level: 'info', fingerprint: ['unsupported-schema', 'IFC4X3_RC2']}))
   })
 
+  // conway#742: an open failure that carries a reason. The alert says it in
+  // short form and Sentry gets it as tags/context — it is still an error,
+  // unlike the schema refusal above.
+  it('alerts with conway\'s failure reason and captures it in Sentry with status and reason', async () => {
+    const engineErr = new EngineOpenFailureError(-1, 'UNRECOGNIZED_FORMAT',
+      'zip archive (such as .ifczip), not STEP text')
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw engineErr
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => {
+      expect(result.current.alert).toEqual({
+        type: 'engineFailure',
+        message: 'Share couldn\'t read this file: zip archive (such as .ifczip), not STEP text.',
+      })
+    })
+    expect(captureExceptionSpy).toHaveBeenCalledWith(engineErr, expect.objectContaining({
+      tags: expect.objectContaining({
+        'engine.load_status': 'UNRECOGNIZED_FORMAT',
+        'engine.failure_reason': 'zip archive (such as .ifczip), not STEP text',
+      }),
+      contexts: {engine_failure: {
+        status: 'UNRECOGNIZED_FORMAT',
+        reason: 'zip archive (such as .ifczip), not STEP text',
+      }},
+    }))
+  })
+
+  it('keeps the generic alert and capture when the engine gave no reason', async () => {
+    const genericErr = new Error('parseIfcWithConway: OpenModel returned -1')
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw genericErr
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(result.current.alert).toBe(genericErr))
+    expect(captureExceptionSpy).toHaveBeenCalledWith(genericErr)
+  })
+
+  // #1955: SHARE-1NR, the top hard-failure group, was this case reported as
+  // a defect with the worker's raw "Folder <id> not found" string. The
+  // loader only raises the typed error once OPFS confirms the upload is
+  // absent, so it's user state: explain it, and keep it out of Sentry.
+  it('explains an upload that is not in this browser, and counts it in Sentry as info rather than an error', async () => {
+    const goneErr = new UploadNotInBrowserError('12345678-1234-4abc-9def-123456789abc.ifc')
+    const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw goneErr
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const captureMessageSpy = jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    // OPFS present, entry absent. Without this the state leaks in from an
+    // earlier no-OPFS test, and the route would raise InMemoryUploadGoneError
+    // (#1906) before the loader runs.
+    await act(() => result.current.setIsOpfsAvailable(true))
+    await act(() => result.current.setModelPath({
+      filepath: '12345678-1234-4abc-9def-123456789abc.ifc',
+      isUploadedFile: true,
+    }))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => {
+      const alert = result.current.alert
+      expect(alert).toBeTruthy()
+      expect(alert.type).toBe('uploadNotInBrowser')
+      expect(alert.message).toMatch(/isn't in this browser/)
+    })
+    expect(captureExceptionSpy).not.toHaveBeenCalledWith(goneErr)
+    // …but its volume stays visible in Sentry, as info, in one issue (#1956).
+    expect(captureMessageSpy).toHaveBeenCalledWith(
+      'Upload not in this browser',
+      expect.objectContaining({level: 'info', fingerprint: ['upload-not-in-browser']}))
+    // The route's provenance is what lets the loader reclassify at all.
+    expect(loadSpy.mock.calls[0][6]).toEqual({isUploadedRoute: true})
+  })
+
+  // Same dedupe as a schema refusal: the auth-state effect re-runs the load
+  // for the same route, and each re-run must not count again.
+  it('counts an upload not in this browser once, even when an auth change reloads it', async () => {
+    const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw new UploadNotInBrowserError('12345678-1234-4abc-9def-123456789abc.ifc')
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const captureMessageSpy = jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    // OPFS present, entry absent. Without this the state leaks in from an
+    // earlier no-OPFS test, and the route would raise InMemoryUploadGoneError
+    // (#1906) before the loader runs.
+    await act(() => result.current.setIsOpfsAvailable(true))
+    await act(() => result.current.setModelPath({
+      filepath: '12345678-1234-4abc-9def-123456789abc.ifc',
+      isUploadedFile: true,
+    }))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(result.current.alert?.type).toBe('uploadNotInBrowser'))
+    const loadsBefore = loadSpy.mock.calls.length
+    await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+    await actAsyncFlush()
+    await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+    const reports = captureMessageSpy.mock.calls
+      .filter(([title]) => title === 'Upload not in this browser')
+    expect(reports).toHaveLength(1)
+  })
+
+  // A hosted file whose NAME is a UUID looks like an upload to the loader's
+  // path heuristic; only the route knows it isn't (codex review on #1956).
+  // A private model needs a Bldrs sign-in AND the provider's authorization
+  // (design/new/quotas.md §"What counts"). A Drive token in localStorage can
+  // outlive the Auth0 session, so a signed-out load must never use it: it
+  // takes the API-key path, which only serves link-shared files (codex P1
+  // on Share#1977).
+  describe('Drive loads and sign-in', () => {
+    const DRIVE_ROUTE = {
+      kind: 'provider',
+      provider: 'google',
+      fileId: '1BxDriveFileId00000000000000',
+      downloadUrl: new URL('https://www.googleapis.com/drive/v3/files/1BxDriveFileId00000000000000?alt=media&key=k'),
+    }
+    const DRIVE_CONNECTION = {id: 'gd-1', providerId: 'google-drive', label: 'me@gmail.com', status: 'connected'}
+    // Above AUTH_SETTLE_GRACE_MS (2s), which the slow-auth test waits out.
+    const GRACE_WAIT_TIMEOUT_MS = 5000
+    const RETRY_TEST_TIMEOUT_MS = 15000
+
+    afterEach(() => {
+      mockAuthState.isAuthenticated = false
+      act(() => useStore.setState({connections: []}))
+    })
+
+    /** @return {Promise<{loadSpy: object, getFileDownload: object}>} after CadView's first load attempt */
+    async function loadDriveRoute() {
+      const registry = require('../connections/registry')
+      const getFileDownload = jest.fn().mockResolvedValue({blob: new Blob(['ifc'])})
+      jest.spyOn(registry, 'getBrowser').mockReturnValue({getFileDownload})
+      const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new Error('stop after the call')
+      })
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => {
+        // onViewer only starts once OPFS availability is known.
+        result.current.setIsOpfsAvailable(false)
+        result.current.setIsAuthResolved(true)
+        useStore.setState({connections: [DRIVE_CONNECTION]})
+        result.current.setModelPath(DRIVE_ROUTE)
+      })
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy).toHaveBeenCalled())
+      return {loadSpy, getFileDownload}
+    }
+
+    it('signed out, never downloads through a Drive connection: it loads by API key', async () => {
+      const {loadSpy, getFileDownload} = await loadDriveRoute()
+      expect(getFileDownload).not.toHaveBeenCalled()
+      expect(loadSpy.mock.calls[0][0]).toBe(DRIVE_ROUTE.downloadUrl)
+    })
+
+    // Auth0 slower than onViewerInternal's grace: the first attempt reads as
+    // signed out and goes by API key, which a restricted file refuses. Once
+    // auth settles signed in, the load is retried through the connection
+    // instead of staying failed until a reload (codex review on Share#1977).
+    it('retries through the Drive connection when sign-in settles after the grace', async () => {
+      const registry = require('../connections/registry')
+      const getFileDownload = jest.fn().mockResolvedValue({blob: new Blob(['ifc'])})
+      jest.spyOn(registry, 'getBrowser').mockReturnValue({getFileDownload})
+      // The API-key download is still in flight when auth settles, which is
+      // what drops the auth-state effect's own re-run (its onViewer finds a
+      // load in flight): only loadModelWithAuthRetry can recover it.
+      let refuseApiKeyDownload
+      const apiKeyDownload = new Promise((resolve, reject) => {
+        refuseApiKeyDownload = () => reject(new Error('restricted: the API key cannot read it'))
+      })
+      const loadSpy = jest.spyOn(Loader, 'load')
+        .mockImplementationOnce(() => apiKeyDownload)
+        .mockImplementation(() => {
+          throw new Error('stop after the call')
+        })
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => {
+        result.current.setIsOpfsAvailable(false)
+        result.current.setIsAuthResolved(false)
+        useStore.setState({connections: [DRIVE_CONNECTION]})
+        result.current.setModelPath(DRIVE_ROUTE)
+      })
+      const ui = <ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>
+      const {rerender} = render(ui)
+      // The grace (AUTH_SETTLE_GRACE_MS, 2s) runs out unsettled.
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(1), {timeout: GRACE_WAIT_TIMEOUT_MS})
+      expect(loadSpy.mock.calls[0][0]).toBe(DRIVE_ROUTE.downloadUrl)
+      expect(getFileDownload).not.toHaveBeenCalled()
+
+      // Auth0 lands signed in, then BaseRoutes settles auth — in that order,
+      // as in the app.
+      mockAuthState.isAuthenticated = true
+      rerender(ui)
+      await act(() => result.current.setIsAuthResolved(true))
+      await actAsyncFlush()
+      await act(async () => {
+        refuseApiKeyDownload()
+        await apiKeyDownload.catch(() => {})
+      })
+
+      await waitFor(() => expect(getFileDownload).toHaveBeenCalledWith(DRIVE_CONNECTION, null, DRIVE_ROUTE.fileId))
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+      expect(loadSpy.mock.calls[1][0]).not.toBe(DRIVE_ROUTE.downloadUrl)
+    }, RETRY_TEST_TIMEOUT_MS)
+
+    it('signed in, downloads through the Drive connection', async () => {
+      mockAuthState.isAuthenticated = true
+      const {loadSpy, getFileDownload} = await loadDriveRoute()
+      expect(getFileDownload).toHaveBeenCalledWith(DRIVE_CONNECTION, null, DRIVE_ROUTE.fileId)
+      expect(loadSpy.mock.calls[0][0]).not.toBe(DRIVE_ROUTE.downloadUrl)
+    })
+  })
+
+  it('tells the loader a hosted UUID-named file is not an upload route', async () => {
+    const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw new Error('stop after the call')
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({
+      filepath: '12345678-1234-4abc-9def-123456789abc.ifc',
+      isUploadedFile: false,
+    }))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(loadSpy).toHaveBeenCalled())
+    expect(loadSpy.mock.calls[0][6]).toEqual({isUploadedRoute: false})
+  })
+
+  // A model change that lands while another load is in flight is not a
+  // duplicate to drop: the in-flight guard used to skip it, leaving the URL
+  // on the new model while nothing loaded it. A no-OPFS local open reaches
+  // this by navigating in-app instead of a page load (#1906, codex review on
+  // #1957), so it is replayed once the in-flight load ends.
+  it('loads a model the path changed to while another load was in flight', async () => {
+    let failFirstLoad
+    const loadSpy = jest.spyOn(Loader, 'load')
+      .mockImplementationOnce(() => new Promise((resolve, reject) => {
+        failFirstLoad = reject
+      }))
+      .mockImplementation(() => new Promise(() => {}))
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setAlert(null))
+    await act(() => result.current.setIsOpfsAvailable(false))
+    await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(1))
+
+    // Mid-load, the user opens another model.
+    await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+    await actAsyncFlush()
+    expect(loadSpy).toHaveBeenCalledTimes(1)
+
+    await act(() => failFirstLoad(new Error('first load ends')))
+    await actAsyncFlush()
+    await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+    expect(String(loadSpy.mock.calls[1][0])).toContain('other.ifc')
+    // The superseded load's failure is about a model the user left; its
+    // alert must not sit over the replayed one, whose OK would navigate home.
+    expect(result.current.alert).toBeNull()
+  })
+
+  // Without OPFS a local file lives only in the memory of the page that
+  // opened it (#1906). A /v/new/ route this page doesn't hold — a reload, or
+  // the link opened elsewhere — says so instead of fetching a blob URL that
+  // never existed here, and stays out of Sentry.
+  it('explains a /v/new/ upload this page no longer holds, without loading or reporting it', async () => {
+    resetInMemoryUploadsForTest()
+    const loadSpy = jest.spyOn(Loader, 'load')
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setIsOpfsAvailable(false))
+    await act(() => result.current.setModelPath({
+      kind: 'file', isUploadedFile: true, filepath: '4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc'}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix='/v/new'/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(result.current.alert).toEqual(inMemoryUploadGoneAlert()))
+    expect(loadSpy).not.toHaveBeenCalled()
+    expect(captureExceptionSpy).not.toHaveBeenCalledWith(expect.any(InMemoryUploadGoneError))
+  })
+
+  it('loads a /v/new/ upload this page holds in memory', async () => {
+    resetInMemoryUploadsForTest()
+    const storageId = registerInMemoryUpload(new File([], 'box.ifc'), 'ifc')
+    // Reaching the Loader is the point; what it does with the bytes is
+    // Loader.inMemoryUpload.test.js's.
+    const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => new Promise(() => {}))
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setAlert(null))
+    await act(() => result.current.setIsOpfsAvailable(false))
+    await act(() => result.current.setModelPath({kind: 'file', isUploadedFile: true, filepath: storageId}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix='/v/new'/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(loadSpy).toHaveBeenCalled())
+    expect(loadSpy.mock.calls[0][0]).toContain(storageId)
+    expect(result.current.alert).toBeNull()
+  })
+
   // The auth-state effect re-runs onViewer for the same route after a
   // refusal (isViewerLoaded stays false on failure). Each re-run is refused
   // again, but must not be counted again: the counts are the demand signal
@@ -741,6 +1075,212 @@ describe('CadView', () => {
     const refusalReports = captureMessageSpy.mock.calls
       .filter(([title]) => title === 'Unsupported IFC schema: IFC4X3_RC2')
     expect(refusalReports).toHaveLength(1)
+  })
+
+  // Same dedupe, for the other rerun trigger: view settings from the Widget
+  // API re-run the load for the same model.
+  it('counts a refused model once, even when view settings reload it', async () => {
+    const schemaErr = new UnsupportedSchemaError('IFC4X3_RC2')
+    const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw schemaErr
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const captureMessageSpy = jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(result.current.alert?.type).toBe('unsupportedSchema'))
+    const loadsBefore = loadSpy.mock.calls.length
+    await act(() => result.current.setCustomViewSettings({foo: 'bar'}))
+    await actAsyncFlush()
+    await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+    const refusalReports = captureMessageSpy.mock.calls
+      .filter(([title]) => title === 'Unsupported IFC schema: IFC4X3_RC2')
+    expect(refusalReports).toHaveLength(1)
+  })
+
+  // Share#1954: GA must see loads that fail and loads that display nothing,
+  // not only the ones that succeed.
+  describe('load outcome analytics (Share#1954)', () => {
+    let loadSpy
+
+    /** @return {Array<[string, object]>} [name, params] of every gtag event sent */
+    function gaEvents() {
+      return window.gtag.mock.calls.map(([, name, params]) => [name, params])
+    }
+
+    beforeEach(() => {
+      window.gtag = jest.fn()
+      // '../Filetype' is automocked for this whole file, which leaves
+      // supportedTypes empty; load_failed's content_type is allowlisted
+      // against it, so seed the one format these tests load.
+      Filetype.supportedTypes.push('ifc')
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    })
+
+    afterEach(() => {
+      delete window.gtag
+      Filetype.supportedTypes.splice(0)
+      // Each test spies Loader.load differently; a spy left over would feed
+      // the next test the previous one's failure. Only this one is restored:
+      // restoreAllMocks would also reset the file-level jest.fn() doubles.
+      loadSpy?.mockRestore()
+      loadSpy = undefined
+    })
+
+    it('sends exactly one load_failed, with closed-set params and no free text', async () => {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new Error('OpenModel returned -1 for /private/secret-house.ifc')
+      })
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      const failures = gaEvents().filter(([name]) => name === 'load_failed')
+      expect(failures).toEqual([['load_failed', {
+        content_type: 'ifc',
+        size_bucket: 'unknown',
+        reason_class: 'parse',
+        last_phase: 'none',
+      }]])
+      expect(JSON.stringify(failures)).not.toContain('secret')
+      expect(gaEvents().filter(([name]) => name === 'real_model_open')).toHaveLength(0)
+    })
+
+    // The success half (real_model_open's load_outcome and timings) cannot
+    // run here: this file's ShareViewer double shares one ThreeContext across
+    // tests and the first unmount disposes it, so loadModel never gets past
+    // `viewer.context.getScene()`. That half is pinned by
+    // loadAnalytics.test.js (the param assembly), loadProgress.test.js (the
+    // reporter) and realModelOpen.spec.ts (the real pipeline in a browser).
+
+    // The auth-state effect re-runs onViewer for the same route after a
+    // failure (isViewerLoaded stays false). One user open is one failure.
+    it('sends one load_failed for a model, even when an auth change reloads it', async () => {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new Error('OpenModel returned -1')
+      })
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1))
+      const loadsBefore = loadSpy.mock.calls.length
+      await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+      await actAsyncFlush()
+      // The reload really happened, so the single event below is the dedupe
+      // at work and not a reload that never ran.
+      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+      expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1)
+    })
+
+    // The [modelPath, customViewSettings] effect re-runs the load for the
+    // same model when the Widget API changes view settings.
+    it('sends one load_failed for a model, even when view settings reload it', async () => {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new Error('OpenModel returned -1')
+      })
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1))
+      const loadsBefore = loadSpy.mock.calls.length
+      await act(() => result.current.setCustomViewSettings({foo: 'bar'}))
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+      expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1)
+    })
+
+    it('sends load_failed again for a different model', async () => {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new Error('OpenModel returned -1')
+      })
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1))
+      await act(() => result.current.setModelPath({filepath: `/other.ifc`}))
+      await actAsyncFlush()
+      await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(2))
+    })
+
+    // A fails, a model that reports nothing opens (the demo is excluded from
+    // load_failed), A fails again: that is a second open of A. Without the
+    // reset on a model change, A's key was still held and the event dropped.
+    it('sends load_failed again when a model is reopened after another one', async () => {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new Error('OpenModel returned -1')
+      })
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1))
+      const loadsBeforeDemo = loadSpy.mock.calls.length
+      await act(() => result.current.setModelPath({kind: 'file', isUploadedFile: false, filepath: 'index.ifc'}))
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBeforeDemo))
+      expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1)
+      const loadsBeforeA = loadSpy.mock.calls.length
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBeforeA))
+      await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(2))
+    })
+
+    it('classifies a refused schema as unsupported_schema', async () => {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new UnsupportedSchemaError('IFC4X3_RC2')
+      })
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert?.type).toBe('unsupportedSchema'))
+      expect(gaEvents().find(([name]) => name === 'load_failed')[1].reason_class)
+        .toBe('unsupported_schema')
+    })
+
+    it('does not report a failure to load the bundled demo model', async () => {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new Error('OpenModel returned -1')
+      })
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({kind: 'file', isUploadedFile: false, filepath: 'index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(0)
+    })
+
+    it('does not borrow the previous load\'s phase for a failure before any load began', async () => {
+      resetInMemoryUploadsForTest()
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({
+        kind: 'file', isUploadedFile: true, filepath: '4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix='/v/new'/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).toEqual(inMemoryUploadGoneAlert()))
+      // Thrown before beginLoadProgress ran for this attempt: no phase, no
+      // size and no format, whatever an earlier test's reporter left behind.
+      expect(gaEvents().filter(([name]) => name === 'load_failed')).toEqual([['load_failed', {
+        content_type: 'unknown',
+        size_bucket: 'unknown',
+        reason_class: 'other',
+        last_phase: 'none',
+      }]])
+    })
   })
 
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing

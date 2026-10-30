@@ -1,20 +1,32 @@
-import {useCallback, useState} from 'react'
+import {useCallback, useRef, useState} from 'react'
 import {captureException} from '@sentry/react'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {appMetadataFromToken} from '../Auth0/appMetadata'
 import {glbCacheKey} from '../loader/glbCacheKey'
 import {HTTP_AUTHORIZATION_REQUIRED, HTTP_FORBIDDEN} from '../net/http'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
-import {gtagEvent} from '../privacy/analytics'
+import {
+  GATE_EVENTS,
+  MODEL_ACTIONS,
+  MODEL_GATES,
+  gtagEventWithCid,
+  modelContentId,
+  modelRouteSource,
+} from '../privacy/analytics'
+import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
+import {isDriveModelPublic} from '../quota/driveExportVisibility'
+import {modelSlotKey} from '../quota/modelSlotKey'
+import {TIERS, getTier} from '../quota/quota'
 import useStore from '../store/useStore'
 import {compressedExport, gzippedExport} from './artifactSizes'
 import {triggerDownload} from './download'
 import {recordExport} from './exportHistory'
 import {QUALITY_DEFAULT, isQualityLevel} from './exportQuality'
 import {getExportFormat} from './exportRegistry'
+import {EXPORT_SLOT_MISSING_REASON, NO_FREE_SLOT_REASON, formatNextFreeSlot} from './exportSlots'
 import {COMPRESSION_NONE, isCompressionMode} from './glbCompression'
 import {isGzipAvailable} from './glbGzip'
-import {ProModuleDeniedError, loadProModule} from './proModuleLoader'
+import {ProModuleDeniedError, forgetProModule, loadProModule} from './proModuleLoader'
 
 
 // The Auth0 audience/scope every token call site in the app uses; kept
@@ -54,7 +66,16 @@ const SIZE_DECIMALS = 1
  * `ExportsList`, which holds the `{cacheKeyArgs, schemaVer}` of a model that
  * may not be the one on screen (§4.5).
  *
- * Design: design/new/glb-export-premium.md §4.4.
+ * A FREE user's export is decided by MODEL SLOTS (§4.8,
+ * src/export/exportSlots.js): the run names the model by its slot key
+ * (`quota/modelSlotKey.js`, from the route as it was when the run started), `pro-module` hands over
+ * the module only if that key holds one of the user's slots or a free slot
+ * can be taken for it, and `record-export` records the export under the same
+ * key. Every statement of the slots the server makes on the way — the
+ * delivery's header, the record response, a slots-full refusal — goes into
+ * the store slot the Export tab's slot line reads (`useExportSlots`).
+ *
+ * Design: design/new/glb-export-premium.md §4.4, §4.8.
  *
  * @return {{run: Function, isExporting: boolean, error: ?Error}}
  */
@@ -62,7 +83,12 @@ export default function useExport() {
   const glbArtifact = useStore((state) => state.glbArtifact)
   const setAppMetadata = useStore((state) => state.setAppMetadata)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-  const {getAccessTokenSilently, user} = useAuth0()
+  const setModelSlots = useStore((state) => state.setModelSlots)
+  const {getAccessTokenSilently, isAuthenticated, user} = useAuth0()
+  // The latest auth state, for model_export's tier, which is read once auth
+  // settles rather than when the run's closure was made (reportModelExport).
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  isAuthenticatedRef.current = isAuthenticated
   // In the STORE, not in this hook: `ExportSection` and `ExportsList` each
   // call `useExport`, so per-instance state let one of them start an export
   // while the other's was still running (#1834).
@@ -91,16 +117,98 @@ export default function useExport() {
     return token
   }, [getAccessTokenSilently, setAppMetadata])
 
+  // The slots as the server last stated them, for this account only. A
+  // delivery's header carries counts but no keys (a header must stay ASCII,
+  // exportSlots.js#slotsHeaderValue), so `heldKey` — the model it was just
+  // granted for — is added to the keys already known; a body (record-export,
+  // a refusal) carries the full list and replaces them.
+  const noteSlots = useCallback((slots, heldKey = null) => {
+    if (!slots || !user?.sub) {
+      return
+    }
+    const previous = useStore.getState().modelSlots
+    let keys = []
+    if (Array.isArray(slots.keys)) {
+      keys = slots.keys
+    } else if (previous?.sub === user.sub && Array.isArray(previous.keys)) {
+      keys = previous.keys
+    }
+    let publicKeys = previous?.sub === user.sub && Array.isArray(previous.publicKeys) ? previous.publicKeys : []
+    if (heldKey && slots.public === true) {
+      // A public model: exported unlimited, holding no slot.
+      publicKeys = publicKeys.includes(heldKey) ? publicKeys : [...publicKeys, heldKey]
+    } else if (heldKey && !keys.includes(heldKey)) {
+      keys = [...keys, heldKey]
+    }
+    const {limit, used, remaining, nextFreeAt} = slots
+    setModelSlots({sub: user.sub, limit, used, remaining, nextFreeAt: nextFreeAt ?? null, keys, publicKeys})
+  }, [setModelSlots, user?.sub])
+
   const run = useCallback(async (formatId, options = {}, source = null) => {
     const format = getExportFormat(formatId)
     if (!format || format.status !== 'shipped') {
       throw new Error(`useExport: no shipped export format "${formatId}"`)
     }
+    // One `export_failed` per run that doesn't deliver a file, whichever way
+    // it fails (codex review on Share#1968), beside export_model's one per
+    // delivered file.
     const artifact = source || glbArtifact
+    // The model this run exports, named by the key its slot is held under
+    // (quota/modelSlotKey.js) — the same string for `pro-module` and
+    // `record-export`, so the export is decided and recorded as one model.
+    // The route is snapshotted NOW, not after the module load: navigation
+    // isn't locked meanwhile. The key itself resolves in the try below (a
+    // URL model's is a digest, which is async). A "Download again" row
+    // carries the key it was recorded under, which may be another model.
+    const {
+      modelPath: runModelPath,
+      appPrefix: runAppPrefix,
+      modelDriveDownload: runDriveDownload,
+    } = useStore.getState()
+    // The normalized twin of export_model / export_failed{no_slot}
+    // (design/new/quotas.md §"Analytics: normalized tier events"). Source is
+    // the model on screen, snapshotted NOW: the event goes out after the
+    // module load, the conversion and the history write, and navigation
+    // isn't locked meanwhile, so reading the route then could credit the
+    // export to the next model (codex review on Share#1976). A "Download
+    // again" of a history row (`source` passed) may be another model, so it
+    // sends no source rather than a wrong one. The model's content_id (the
+    // value real_model_open sends) is snapshotted the same way and for the
+    // same reasons: a history row carries a share-path key, not that value,
+    // so a re-download sends none rather than the model on screen.
+    const exportSource = source ? {} : (() => {
+      const {modelPath} = useStore.getState()
+      return {...modelRouteSource(modelPath), contentId: modelContentId(modelPath)}
+    })()
+    // The tier, unless the caller fixes it, is read when auth has settled
+    // (privacy/modelActionTracking.js): Auth0 says signed in before
+    // BaseRoutes has written the claims, so an export delivered in that
+    // window would read a Pro user's still-empty claims as free. A fixed
+    // tier (no_slot) sends at once.
+    const reportModelExport = (gate, tier) => trackModelActionWhenAuthSettled(MODEL_ACTIONS.EXPORT, {
+      gate,
+      ...exportSource,
+      tier,
+      getIsAuthenticated: () => isAuthenticatedRef.current,
+    })
+    const reportFailure = (reason) => {
+      gtagEventWithCid(GATE_EVENTS.EXPORT_FAILED, {format: format.id, reason})
+      // Only the no-free-slot refusal is a gate: model_export {blocked}
+      // means "refused: no free model slot" since the slot rule
+      // (glb-export-premium.md §4.8). `denied`, `unavailable` and `error`
+      // are failures, not gate verdicts, and send no model_export. That
+      // refusal is free-tier by definition, whatever the local claim says:
+      // a stale-Pro JWT on a canceled account (handled below) must not land
+      // in the blocked × pro cell (codex review on Share#1976).
+      if (reason === NO_SLOT_FAILURE_REASON) {
+        reportModelExport(MODEL_GATES.BLOCKED, TIERS.FREE)
+      }
+    }
     if (!artifact) {
       // The button is disabled in this state; reaching here means the
       // artifact went away between render and click.
       setSnackMessage({text: 'The model is still being prepared for export', autoDismiss: true})
+      reportFailure(EXPORT_UNAVAILABLE_REASON)
       return null
     }
 
@@ -115,10 +223,31 @@ export default function useExport() {
         // The artifact was evicted (Clear Local Cache, storage pressure)
         // since the loader published it. Reopening the model rewrites it.
         setSnackMessage({text: 'Export unavailable — reload the model and try again', autoDismiss: true})
+        reportFailure(EXPORT_UNAVAILABLE_REASON)
         return null
       }
 
-      const proModule = await loadProModule(format.moduleName, () => getAccessTokenSilently(TOKEN_PARAMS))
+      // `slots` is non-null for a free-tier delivery, which the server made
+      // because `modelKey` holds one of the user's slots — or now does,
+      // `slots.taken` (§4.8). The loader has already declined to memoise it;
+      // what is left here is to show the new slots.
+      // The pathname fallback is for a model with no parsed route, which the
+      // server then treats as a model of its own.
+      const modelKey = source?.key ||
+        (await modelSlotKey(runModelPath, runAppPrefix)) ||
+        window.location.pathname
+      // A Drive file's sharing is the client's word (the server can't see
+      // it), classified as its open's meter classifies it. A "Download
+      // again" row carries no download record to classify, so it replays the
+      // word its own export gave, kept on the local row (exportHistory.js):
+      // without it a link-shared file re-downloaded from history would take
+      // a slot, or be refused with the slots full (Codex on #1980).
+      const drivePublic = source ?
+        source.drivePublic === true :
+        await isDriveModelPublic(runModelPath, runDriveDownload)
+      const {namespace: proModule, slots} = await loadProModule(
+        format.moduleName, () => getAccessTokenSilently(TOKEN_PARAMS), modelKey, {drivePublic})
+      noteSlots(slots, modelKey)
       const bytes = new Uint8Array(await file.arrayBuffer())
       const {blob, filename, stats} = await proModule.exportArtifact({
         bytes,
@@ -142,12 +271,13 @@ export default function useExport() {
       // rejects (exportHistory.js), and the catch below is belt and braces.
       await recordExport(
         {
-          // The share path, the same key shape record-load counts loads
-          // under. The cache-key fields beside it stay in this browser
+          // The slot key `pro-module` was sent: for a free user,
+          // `record-export` refuses an export of a model holding no slot.
+          // The cache-key fields beside it stay in this browser
           // (exportHistory.js) — they are what "Download again" needs and
-          // what the server has no use for. A re-download carries the key of
-          // the model it recorded, which is not necessarily the one on screen.
-          key: source?.key || window.location.pathname,
+          // what the server has no use for.
+          key: modelKey,
+          drivePublic,
           format: format.id,
           bytes: blob.size,
           title: basename(cacheKeyArgs.sourcePath),
@@ -175,13 +305,30 @@ export default function useExport() {
         () => getAccessTokenSilently(TOKEN_PARAMS),
         refreshAppMetadata,
       ).then((recordResult) => {
+        noteSlots(recordResult.modelSlots)
         if (recordResult.status === HTTP_AUTHORIZATION_REQUIRED || recordResult.status === HTTP_FORBIDDEN) {
           // `pro-module` already said yes to this user moments ago, so a
           // denial HERE means the two gates disagree — worth seeing.
           captureException(new Error(`record-export refused the export (${recordResult.status})`))
+          if (!slots && recordResult.reason === EXPORT_SLOT_MISSING_REASON) {
+            // A delivery with no slots header is the loader's memoised Pro
+            // module, and the server just refused its export as a free
+            // user's export of a model holding no slot: the account lost Pro
+            // while this page stayed open. Without this every later export
+            // would reuse the memo and skip `pro-module`'s slot check for
+            // the rest of the session. Forget it so the next export is
+            // decided afresh, and refresh the claims so the UI gates the
+            // button now rather than after a reload. Only on this 403: a 401
+            // also comes from a token that expired mid-export or an Auth0
+            // outage, on an account that may still be Pro, and evicting then
+            // would make every export wait on `pro-module` for the length of
+            // the outage.
+            forgetProModule(format.moduleName)
+            refreshAppMetadata().catch((refreshError) => captureException(refreshError))
+          }
         }
       }).catch((recordError) => captureException(recordError))
-      gtagEvent('export_model', {
+      gtagEventWithCid(GATE_EVENTS.EXPORT_MODEL, {
         format: format.id,
         bytes_bucket: bytesBucket(stats?.outputBytes ?? blob.size),
         // The loader's categorical kind, carried on the artifact slot. NOT
@@ -197,11 +344,40 @@ export default function useExport() {
         // one at the same codec, and the funnel question #1843 asks is
         // whether anyone chooses it.
         portable: Boolean(options.portable),
+        // A free-tier export rather than a Pro one: the funnel's "do free
+        // exports convert" question (§7.1). Since the slot rule (2026-10-27)
+        // it means "exported on the free tier", no longer "spent one of the
+        // 2 free exports".
+        free_export: Boolean(slots),
+        // This export took a new model slot (its model held none). False for
+        // a model already holding one — a private model opened earlier, or
+        // one exported before — and for Pro.
+        slot_taken: Boolean(slots?.taken),
       })
+      reportModelExport(MODEL_GATES.NONE)
       return {filename, stats}
     } catch (e) {
       setError(e)
-      if (e instanceof ProModuleDeniedError) {
+      // `reason` is the same three-way split as the handling below.
+      reportFailure(exportFailureReason(e))
+      if (e instanceof ProModuleDeniedError && e.reason === NO_FREE_SLOT_REASON) {
+        // The model holds no slot and every slot is taken. The tier is right
+        // (free) — it is the SLOTS the client had that were stale — so there
+        // is no JWT to refresh; the refusal carries the slots, and storing
+        // them turns the Export button into the slots-full gate on this
+        // render.
+        noteSlots(e.modelSlots)
+        setSnackMessage({text: noFreeSlotMessage(e.modelSlots), autoDismiss: true})
+        // ...unless the tier is NOT right: a JWT still saying Pro for an
+        // account that was canceled or demoted (stale claim) renders an
+        // ungated button and hides the slots (`ExportSection` only gates
+        // `isFreeTier`), so every click would repeat this refusal. Read the
+        // store NOW rather than a render-time closure, and refresh so the
+        // claim flips to free and the gate these slots feed appears.
+        if (getTier(useStore.getState().appMetadata, isAuthenticated) === TIERS.PAID) {
+          refreshAppMetadata().catch((refreshError) => captureException(refreshError))
+        }
+      } else if (e instanceof ProModuleDeniedError) {
         // The server is the authority and it said no, so the badge that let
         // this click through is stale. Refresh the JWT and apply its claims,
         // so every app_metadata reader (the tier check above, the Profile
@@ -216,9 +392,55 @@ export default function useExport() {
     } finally {
       setIsExporting(false)
     }
-  }, [glbArtifact, getAccessTokenSilently, refreshAppMetadata, setIsExporting, setSnackMessage, user?.sub])
+  }, [glbArtifact, getAccessTokenSilently, isAuthenticated, noteSlots, refreshAppMetadata, setIsExporting, setSnackMessage, user?.sub])
 
   return {run, isExporting, error}
+}
+
+
+/** `export_failed`'s `reason` when there is no artifact to export from */
+export const EXPORT_UNAVAILABLE_REASON = 'unavailable'
+
+/**
+ * `export_failed`'s `reason` when `pro-module` refused a free user because
+ * the model holds no slot and none is free: the one failure that is a gate's
+ * verdict, so the one that also sends model_export {gate: 'blocked'}. Was
+ * `free_limit` (2 exports per 7 days) until the slot rule of 2026-10-27; a
+ * new value rather than a reused one, because what it counts changed.
+ */
+export const NO_SLOT_FAILURE_REASON = 'no_slot'
+
+
+/**
+ * The `reason` param of `export_failed` for a run that threw (the other
+ * value, EXPORT_UNAVAILABLE_REASON, is for the artifact being gone).
+ *
+ * @param {Error} error What the export run threw
+ * @return {'no_slot'|'denied'|'error'} no free model slot for this model;
+ *   refused by the server otherwise (no Pro); anything else
+ */
+export function exportFailureReason(error) {
+  if (error instanceof ProModuleDeniedError) {
+    return error.reason === NO_FREE_SLOT_REASON ? NO_SLOT_FAILURE_REASON : 'denied'
+  }
+  return 'error'
+}
+
+
+/**
+ * The snackbar for a free user the server refused because every model slot
+ * is taken by other models.
+ *
+ * @param {?object} modelSlots The slots the refusal carried
+ * @return {string}
+ */
+export function noFreeSlotMessage(modelSlots) {
+  const limit = modelSlots?.limit
+  const next = formatNextFreeSlot(modelSlots?.nextFreeAt)
+  const full = limit ?
+    `Your ${limit} free model slots for this week are taken by other models.` :
+    'Your free model slots are taken by other models for now.'
+  return next ? `${full} The next one frees up ${next}.` : full
 }
 
 

@@ -17,12 +17,17 @@ import {
   beginLoadProgress,
   captureLoadDiagnostics,
   classifyLoadOutcome,
+  currentLoadSerial,
   endLoadProgress,
+  getCompletedLoadOutcome,
   getCompletedLoadStats,
+  getLoadFailureInfo,
   isModelInfoProgress,
   isStructuredProgress,
   loadFailureCaptureContext,
+  reportCacheHit,
   reportEngineVersion,
+  reportFirstMesh,
   reportFramingExclusion,
   reportGeometryStats,
   reportLoadProgress,
@@ -129,8 +134,10 @@ describe('loadProgress', () => {
         fileSize: 39_950_000,
         memoryUsed: HEAP_MB * BYTES_PER_MB,
         loadTime: LOAD_TIME_MS,
-        errorCount: 1,
-        warningCount: 2,
+        // The console tee is page noise, so it is named for that. The
+        // unqualified errorCount/warningCount are reserved for the engine.
+        pageErrorCount: 1,
+        pageWarnCount: 2,
       })
       delete performance.memory
       consoleWarnSpy.mockRestore()
@@ -280,6 +287,236 @@ describe('loadProgress', () => {
       endLoadProgress()
       beginLoadProgress({fileInfo: 'b.ifc'})
       expect(reportLines()).not.toContain('Conway v1')
+    })
+  })
+
+  // Share#1954: the per-load numbers GA gets on real_model_open.
+  describe('load analytics signals', () => {
+    const DEFECT = 'Skipping representation items with an unresolved or mistyped STEP reference'
+    let warnSpy
+    let errorSpy
+
+    beforeEach(() => {
+      warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      Logger.clearLogs()
+    })
+
+    afterEach(() => {
+      Logger.clearLogs()
+      warnSpy.mockRestore()
+      errorSpy.mockRestore()
+    })
+
+    describe('engine severity tally', () => {
+      it('counts engine errors total and distinct, warnings distinct, defects apart', () => {
+        beginLoadProgress({fileInfo: 'part.step'})
+        reportGeometryStats({vertexCount: 8, triangleCount: 4})
+        Logger.error('Error extracting face', 1)
+        Logger.error('Error extracting face', 2)
+        Logger.error('Error extracting face', 3)
+        Logger.error('Error extracting product', 4)
+        Logger.warning('Unsupported type: IfcFoo', 5)
+        Logger.warning('Unsupported type: IfcFoo', 6)
+        Logger.warning('Unsupported type: IfcBar', 7)
+        Logger.error(DEFECT, 8, DATA_DEFECT)
+        Logger.warning(DEFECT, 9, DATA_DEFECT)
+        endLoadProgress()
+
+        expect(getCompletedLoadStats()).toMatchObject({
+          engineErrorTotal: 4,
+          engineErrorDistinct: 2,
+          engineWarnDistinct: 2,
+          dataDefectTotal: 2,
+        })
+      })
+
+      it('counts every occurrence, not just the first conway echoes', () => {
+        beginLoadProgress({fileInfo: 'part.step'})
+        reportGeometryStats({vertexCount: 1})
+        for (let i = 0; i < 50; i++) { // eslint-disable-line no-magic-numbers
+          Logger.error('Error extracting face', i)
+        }
+        endLoadProgress()
+        // The console tee sees one echo, because conway echoes only a message's
+        // first occurrence; the engine tally sees all 50.
+        expect(getCompletedLoadStats().pageErrorCount).toBe(1)
+        expect(getCompletedLoadStats().engineErrorTotal).toBe(50) // eslint-disable-line no-magic-numbers
+      })
+
+      it('counts the unmarked data-defect fallback messages as defects, not engine errors', () => {
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        reportGeometryStats({vertexCount: 1})
+        Logger.error('No IfcProjects found?')
+        Logger.warning('No units defined.')
+        endLoadProgress()
+        expect(getCompletedLoadStats()).toMatchObject({
+          engineErrorTotal: 0, engineWarnDistinct: 0, dataDefectTotal: 2,
+        })
+      })
+
+      it('ignores debug and info entries', () => {
+        // Logger echoes info through console.log; divert it so the test
+        // console stays clean.
+        const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        reportGeometryStats({vertexCount: 1})
+        Logger.info('Model loaded')
+        Logger.debug('detail')
+        endLoadProgress()
+        logSpy.mockRestore()
+        expect(getCompletedLoadStats()).toMatchObject({
+          engineErrorTotal: 0, engineErrorDistinct: 0, engineWarnDistinct: 0, dataDefectTotal: 0,
+        })
+      })
+
+      it('is absent, not zero, for a load no engine reported on', () => {
+        beginLoadProgress({fileInfo: 'a.obj'})
+        Logger.error('conway message from some other load, not this format')
+        endLoadProgress()
+        const stats = getCompletedLoadStats()
+        expect(stats.engineErrorTotal).toBeUndefined()
+        expect(stats.engineErrorDistinct).toBeUndefined()
+        expect(stats.engineWarnDistinct).toBeUndefined()
+        expect(stats.dataDefectTotal).toBeUndefined()
+      })
+
+      it('does not count what conway logs after the load window closed', () => {
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        reportGeometryStats({vertexCount: 1})
+        endLoadProgress()
+        Logger.error('late demand-geometry error')
+        expect(getCompletedLoadStats().engineErrorTotal).toBe(0)
+      })
+
+      it('keeps page noise separate from the engine tally', () => {
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        reportGeometryStats({vertexCount: 1})
+        console.warn('some third-party script')
+        console.error('three.js complained')
+        endLoadProgress()
+        expect(getCompletedLoadStats()).toMatchObject({
+          pageWarnCount: 1, pageErrorCount: 1, engineErrorTotal: 0, engineWarnDistinct: 0,
+        })
+      })
+    })
+
+    describe('geometry counts and outcome', () => {
+      it('carries vertex and triangle counts when the loader reported them', () => {
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        reportGeometryStats({vertexCount: 120, triangleCount: 40})
+        endLoadProgress()
+        expect(getCompletedLoadStats()).toMatchObject({vertexCount: 120, triangleCount: 40})
+        expect(getCompletedLoadOutcome()).toBe('displayed')
+      })
+
+      it('an empty build is unusable', () => {
+        beginLoadProgress({fileInfo: 'nist.stp'})
+        reportGeometryStats({vertexCount: 0, triangleCount: 0})
+        endLoadProgress()
+        expect(getCompletedLoadOutcome()).toBe('unusable')
+        expect(getCompletedLoadStats()).toMatchObject({vertexCount: 0, triangleCount: 0})
+      })
+
+      it('omits counts for formats that reported none', () => {
+        beginLoadProgress({fileInfo: 'a.obj'})
+        endLoadProgress()
+        expect(getCompletedLoadStats().vertexCount).toBeUndefined()
+        expect(getCompletedLoadOutcome()).toBe('displayed')
+      })
+
+      it('has no completed stats until the load ends', () => {
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        expect(getCompletedLoadStats()).toBeNull()
+      })
+    })
+
+    describe('cacheHit', () => {
+      it.each([[true, 'true'], [false, 'false']])('reports %s as the string %s', (isHit, expected) => {
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        reportCacheHit(isHit)
+        endLoadProgress()
+        expect(getCompletedLoadStats().cacheHit).toBe(expected)
+      })
+
+      it('is absent when the loader never said', () => {
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        endLoadProgress()
+        expect(getCompletedLoadStats().cacheHit).toBeUndefined()
+      })
+    })
+
+    describe('firstMeshMs', () => {
+      it('is the load-clock time of the first mesh and latches', () => {
+        const FIRST_MS = 400
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        jest.advanceTimersByTime(FIRST_MS)
+        reportFirstMesh()
+        jest.advanceTimersByTime(FIRST_MS * 3)
+        reportFirstMesh()
+        endLoadProgress()
+        expect(getCompletedLoadStats().firstMeshMs).toBe(FIRST_MS)
+      })
+
+      it('can still be recorded after the report froze, for one-shot formats', () => {
+        const LOAD_MS = 900
+        const SCENE_ADD_MS = 50
+        beginLoadProgress({fileInfo: 'a.glb'})
+        jest.advanceTimersByTime(LOAD_MS)
+        endLoadProgress()
+        expect(getCompletedLoadStats().firstMeshMs).toBeUndefined()
+        jest.advanceTimersByTime(SCENE_ADD_MS)
+        reportFirstMesh()
+        expect(getCompletedLoadStats().firstMeshMs).toBe(LOAD_MS + SCENE_ADD_MS)
+        // And it shares loadTime's clock, so the two are comparable.
+        expect(getCompletedLoadStats().firstMeshMs).toBeGreaterThanOrEqual(getCompletedLoadStats().loadTime)
+      })
+
+      it('is absent when nothing ever reported a mesh', () => {
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        endLoadProgress()
+        expect(getCompletedLoadStats().firstMeshMs).toBeUndefined()
+      })
+    })
+
+    describe('getLoadFailureInfo', () => {
+      it('reads the last phase, size and format of the load that began since the serial', () => {
+        const before = currentLoadSerial()
+        beginLoadProgress({fileInfo: 'https://host/models/house.ifc?x=1'})
+        reportModelInfo({fileName: 'house.ifc', byteLength: 5000})
+        reportLoadProgress({phase: 'geometry', completed: 3, total: 10})
+        expect(getLoadFailureInfo(before)).toEqual({phase: 'geometry', fileSize: 5000, format: 'ifc'})
+      })
+
+      it('reads the format off a URL object, which is what a GitHub route passes', () => {
+        const before = currentLoadSerial()
+        beginLoadProgress({fileInfo: new URL('https://github.com/bldrs-ai/test-models/main/ifc/misc/box.ifc')})
+        expect(getLoadFailureInfo(before).format).toBe('ifc')
+      })
+
+      it.each([
+        ['https://host/models/box.glb.gz', 'glb'],
+        ['https://host/models/BOX.GLB.GZ?x=1', 'glb'],
+        // A bare .gz names no format underneath.
+        ['https://host/models/archive.gz', undefined],
+      ])('strips the gzip envelope: %s -> %s', (fileInfo, expected) => {
+        const before = currentLoadSerial()
+        beginLoadProgress({fileInfo})
+        expect(getLoadFailureInfo(before).format).toBe(expected)
+      })
+
+      it('reports nothing for a failure that came before any load began', () => {
+        beginLoadProgress({fileInfo: 'previous.ifc'})
+        reportModelInfo({fileName: 'previous.ifc', byteLength: 5000})
+        reportLoadProgress({phase: 'geometry', completed: 3, total: 10})
+        endLoadProgress()
+        // The reporter lingers after its load. A failure thrown before the
+        // NEXT beginLoadProgress must not borrow its phase and size.
+        const before = currentLoadSerial()
+        expect(getLoadFailureInfo(before)).toEqual({
+          phase: undefined, fileSize: undefined, format: undefined,
+        })
+      })
     })
   })
 

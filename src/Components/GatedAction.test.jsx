@@ -119,4 +119,38 @@ describe('GatedAction', () => {
 
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
+
+  it('offers no second action unless given one', () => {
+    const {getByTestId, queryByTestId} = render(aGate(), {wrapper: ThemeCtx})
+    fireEvent.click(getByTestId('gated-save'))
+    expect(queryByTestId('gated-help-secondary-action')).toBeNull()
+  })
+
+  it('fires the secondary action from the help, then closes it', async () => {
+    const onAction = jest.fn()
+    const onSecondaryAction = jest.fn()
+    const {getByTestId, queryByTestId} = render(
+      aGate({onAction, secondaryActionLabel: 'Sign in', onSecondaryAction}), {wrapper: ThemeCtx})
+
+    fireEvent.click(getByTestId('gated-save'))
+    const secondary = getByTestId('gated-help-secondary-action')
+    expect(secondary).toHaveTextContent('Sign in')
+    fireEvent.click(secondary)
+
+    expect(onSecondaryAction).toHaveBeenCalledTimes(1)
+    expect(onAction).not.toHaveBeenCalled()
+    await waitFor(() => expect(queryByTestId('gated-help')).toBeNull())
+  })
+
+  it('renders extra content in the help, and a click inside it leaves the help open', () => {
+    const onExtraClick = jest.fn()
+    const extra = <button type='button' onClick={onExtraClick} data-testid='extra'>Coming soon</button>
+    const {getByTestId} = render(aGate({extra}), {wrapper: ThemeCtx})
+
+    fireEvent.click(getByTestId('gated-save'))
+    fireEvent.click(getByTestId('extra'))
+
+    expect(onExtraClick).toHaveBeenCalledTimes(1)
+    expect(getByTestId('gated-help')).toBeInTheDocument()
+  })
 })

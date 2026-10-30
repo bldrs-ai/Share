@@ -23,8 +23,15 @@ import {handler} from '../reconcile-subscriptions.js'
 
 /* eslint-disable no-magic-numbers */
 jest.mock('axios')
+// `mockSentryWrapped` records each entry into the Sentry-wrapped handler, the
+// one that sends a performance transaction per invocation: `off` must never
+// enter it (Codex on #1972).
+const mockSentryWrapped = jest.fn()
 jest.mock('@sentry/serverless', () => ({
-  AWSLambda: {init: jest.fn(), wrapHandler: (fn) => fn},
+  AWSLambda: {init: jest.fn(), wrapHandler: (fn) => (...args) => {
+    mockSentryWrapped()
+    return fn(...args)
+  }},
   captureMessage: jest.fn(),
   captureException: jest.fn(),
   setUser: jest.fn(),
@@ -83,8 +90,10 @@ function mockWorld({
   axios.post.mockResolvedValue({data: {access_token: 'mgmt-token', expires_in: 86400}})
   axios.patch.mockResolvedValue({data: {}})
   const initialMetadata = {}
+  const identities = {}
   for (const user of [...proUsers, ...Object.values(usersByEmail).flat(), ...Object.values(linkedUsers)]) {
     initialMetadata[user.user_id] = user.app_metadata || {}
+    identities[user.user_id] = user.identities
   }
   Object.assign(initialMetadata, storedMetadata)
   axios.get.mockImplementation((url) => {
@@ -97,7 +106,7 @@ function mockWorld({
       const stored = axios.patch.mock.calls
         .filter(([patchUrl]) => patchUrl === url)
         .reduce((metadata, [, body]) => ({...metadata, ...body.app_metadata}), {...initialMetadata[userId]})
-      return Promise.resolve({data: {user_id: userId, email: storedEmails[userId], app_metadata: stored}})
+      return Promise.resolve({data: {user_id: userId, email: storedEmails[userId], identities: identities[userId], app_metadata: stored}})
     }
     if (parsed.pathname.endsWith('/users-by-email')) {
       return Promise.resolve({data: usersByEmail[parsed.searchParams.get('email')] || []})
@@ -147,6 +156,8 @@ describe('reconcile-subscriptions', () => {
     resetManagementApiTokenCache()
     process.env = {...savedEnv, ...ENV}
     jest.spyOn(console, 'error').mockImplementation(() => {})
+    jest.spyOn(console, 'warn').mockImplementation(() => {})
+    jest.spyOn(console, 'log').mockImplementation(() => {})
   })
 
   afterEach(() => {
@@ -516,6 +527,145 @@ describe('reconcile-subscriptions', () => {
       expect(summary.unverifiable).toEqual([{user: 'auth0|nolink', reason: 'pro_without_stripe_customer'}])
       expect(axios.patch).not.toHaveBeenCalled()
       expect(Sentry.captureMessage).toHaveBeenCalledWith(expect.stringContaining('pro_without_stripe_customer'), 'warning')
+    })
+  })
+
+  // The live smoke's pending-reauth account (design/new/live-browser-smoke.md)
+  // is PRO with no Stripe customer and no comp by design: reset to
+  // shareProPendingReauth before every run. Known by its primary identity's
+  // connection, it's listed, never written, and kept out of Sentry.
+  describe('live smoke test accounts', () => {
+    const smokeIdentity = {provider: 'auth0', user_id: 'smoke1', connection: 'share-live-smoke'}
+
+    it('lists a PRO account whose primary identity is in share-live-smoke under `testAccounts`, quietly', async () => {
+      const pending = {subscriptionStatus: 'shareProPendingReauth'}
+      mockWorld({proUsers: [{user_id: 'auth0|smoke1', identities: [smokeIdentity], app_metadata: pending}]})
+
+      const {summary} = await sweep()
+
+      expect(summary.testAccounts).toEqual(['auth0|smoke1'])
+      expect(summary.unverifiable).toEqual([])
+      expect(axios.patch).not.toHaveBeenCalled()
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['another database connection', 'auth0|other',
+        [{provider: 'auth0', user_id: 'other', connection: 'Username-Password-Authentication'}]],
+      // A smoke identity linked as a SECONDARY doesn't make a real user a test account.
+      ['share-live-smoke only as a linked secondary', 'github|42',
+        [{provider: 'github', user_id: '42', connection: 'github'}, smokeIdentity]],
+      ['no identities', 'auth0|bare', undefined],
+    ])('keeps a PRO user without a Stripe customer loud with %s', async (label, userId, userIdentities) => {
+      const pending = {subscriptionStatus: 'shareProPendingReauth'}
+      mockWorld({proUsers: [{user_id: userId, identities: userIdentities, app_metadata: pending}]})
+
+      const {summary} = await sweep()
+
+      expect(summary.testAccounts).toEqual([])
+      expect(summary.unverifiable).toEqual([{user: userId, reason: 'pro_without_stripe_customer'}])
+      expect(Sentry.captureMessage).toHaveBeenCalledWith(expect.stringContaining('pro_without_stripe_customer'), 'warning')
+    })
+  })
+
+  // The Netlify project that isn't production deploys the same scheduled
+  // function with the same credentials (bldrs-ai/ops#36); `off` stops it
+  // from sweeping at all. Only the exact value: anything else still sweeps.
+  describe('RECONCILE_MODE=off', () => {
+    it('skips the sweep outside the Sentry wrapper: no Auth0 or Stripe call, nothing to Sentry, one INFO line', async () => {
+      process.env.RECONCILE_MODE = 'off'
+      mockWorld({proUsers: [{user_id: 'auth0|nolink', app_metadata: {subscriptionStatus: 'sharePro'}}]})
+
+      const res = await handler({})
+
+      expect(res.statusCode).toBe(200)
+      expect(JSON.parse(res.body)).toEqual({mode: 'off'})
+      expect(axios.post).not.toHaveBeenCalled()
+      expect(axios.get).not.toHaveBeenCalled()
+      expect(mockStripeClient.subscriptions.list).not.toHaveBeenCalled()
+      expect(mockSentryWrapped).not.toHaveBeenCalled()
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      // eslint-disable-next-line no-console -- reads the spy
+      expect(console.log).toHaveBeenCalledWith('reconcile-subscriptions: RECONCILE_MODE=off, not sweeping')
+      expect(console.warn).not.toHaveBeenCalled()
+      expect(console.error).not.toHaveBeenCalled()
+    })
+
+    it('skips before the configuration check, so a project without the secrets stays quiet', async () => {
+      process.env = {...savedEnv, RECONCILE_MODE: 'off'}
+
+      const res = await handler({})
+
+      expect(res.statusCode).toBe(200)
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+    })
+
+    it.each(['OFF', 'disabled', ''])('still sweeps (in report mode) for RECONCILE_MODE=%j', async (mode) => {
+      process.env.RECONCILE_MODE = mode
+      mockWorld({proUsers: [proUser(1)], subsByCustomer: {cus_1: [proSub('cus_1')]}, pricePages: [[proSub('cus_1')]]})
+
+      const {summary} = await sweep()
+
+      expect(summary.mode).toBe('report')
+      expect(summary.scanned).toEqual({proUsers: 1, entitledCustomers: 1})
+      expect(mockSentryWrapped).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // Netlify labels a function log line by the console method that wrote it,
+  // so the summary's method IS its level in the log: a clean run logged with
+  // console.error read as a daily failure.
+  describe('summary log level', () => {
+    /**
+     * @param {string} method a console method
+     * @return {Array<string>} the summary lines it wrote
+     */
+    function summaryLines(method) {
+      // eslint-disable-next-line no-console -- reads the spies, including console.log's
+      return console[method].mock.calls.map(([msg]) => String(msg)).filter((msg) => msg.startsWith('reconcile-subscriptions: {'))
+    }
+
+    it('logs a clean run as INFO (console.log)', async () => {
+      mockWorld({proUsers: [proUser(1)], subsByCustomer: {cus_1: [proSub('cus_1')]}, pricePages: [[proSub('cus_1')]]})
+
+      await sweep()
+
+      expect(summaryLines('log')).toHaveLength(1)
+      expect(summaryLines('warn')).toEqual([])
+      expect(summaryLines('error')).toEqual([])
+    })
+
+    it('logs a run whose only no-Stripe PRO user is a live smoke account as INFO', async () => {
+      const identities = [{provider: 'auth0', user_id: 'smoke1', connection: 'share-live-smoke'}]
+      mockWorld({proUsers: [{user_id: 'auth0|smoke1', identities, app_metadata: {subscriptionStatus: 'shareProPendingReauth'}}]})
+
+      await sweep()
+
+      expect(summaryLines('log')).toEqual([expect.stringContaining('"testAccounts":["auth0|smoke1"]')])
+      expect(summaryLines('warn')).toEqual([])
+    })
+
+    it('logs a run with something to look at as WARN (console.warn)', async () => {
+      mockWorld({proUsers: [{user_id: 'auth0|nolink', app_metadata: {subscriptionStatus: 'sharePro'}}]})
+
+      await sweep()
+
+      expect(summaryLines('warn')).toEqual([expect.stringContaining('pro_without_stripe_customer')])
+      expect(summaryLines('log')).toEqual([])
+      expect(summaryLines('error')).toEqual([])
+    })
+
+    it('logs a run with a failed item as ERROR (console.error)', async () => {
+      mockWorld({proUsers: [proUser(1)]})
+      const inner = mockStripeClient.subscriptions.list.getMockImplementation()
+      mockStripeClient.subscriptions.list.mockImplementation((params) => (params.customer === 'cus_1' ?
+        Promise.reject(Object.assign(new Error('Stripe answered 500'), {statusCode: 500})) : inner(params)))
+
+      await sweep()
+
+      expect(summaryLines('error')).toEqual([expect.stringContaining('Stripe answered 500')])
+      expect(summaryLines('log')).toEqual([])
+      expect(summaryLines('warn')).toEqual([])
     })
   })
 })

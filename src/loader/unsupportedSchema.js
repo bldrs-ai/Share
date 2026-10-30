@@ -1,5 +1,7 @@
 import {captureMessage} from '@sentry/react'
 import {stepSchemaName} from '../Filetype'
+import {isLocalOnlyPath} from '../routes/localOnly'
+import {EngineOpenFailureError} from './engineOpenFailure'
 import {loadFailureCaptureContext} from './loadProgress'
 
 
@@ -190,11 +192,8 @@ export function beginOpenAttempt(ifcAPI) {
  * @return {boolean}
  */
 export function conwayRefusedSchema(ifcAPI, attempt) {
-  if (attempt === undefined) {
-    return false
-  }
-  const after = statisticsFor(ifcAPI, attempt.id)
-  if (after === undefined || after === attempt.before) {
+  const after = attemptStatistics(ifcAPI, attempt)
+  if (after === undefined) {
     return false
   }
   try {
@@ -202,6 +201,57 @@ export function conwayRefusedSchema(ifcAPI, attempt) {
   } catch (_) {
     return false
   }
+}
+
+
+/**
+ * What conway recorded about WHY the open marked by `attempt` failed
+ * (conway#742): its load status (`UNRECOGNIZED_FORMAT`, `OPEN_FAIL`,
+ * `INDEX_RESTORE_FAIL`, …) and `getLoadFailureReason()`, read from the same
+ * attempt-owned statistics object {@link conwayRefusedSchema} trusts, so an
+ * earlier load's leftovers are never read as this open's.
+ *
+ * Undefined when there is nothing to report: an engine without the counter
+ * or the statistics, a pre-#742 conway (no `getLoadFailureReason`), an open
+ * that wrote no statistics, or no reason recorded. Callers then keep the
+ * generic error.
+ *
+ * @param {object} ifcAPI
+ * @param {OpenAttempt|undefined} attempt from {@link beginOpenAttempt}
+ * @return {{status: string, reason: string}|undefined}
+ */
+export function conwayOpenFailure(ifcAPI, attempt) {
+  const after = attemptStatistics(ifcAPI, attempt)
+  if (after === undefined) {
+    return undefined
+  }
+  try {
+    const reason = after.getLoadFailureReason?.()
+    if (typeof reason !== 'string' || reason.trim() === '') {
+      return undefined
+    }
+    const status = after.getLoadStatus?.()
+    return {status: typeof status === 'string' ? status : 'UNKNOWN', reason}
+  } catch (_) {
+    return undefined
+  }
+}
+
+
+/**
+ * The statistics object THIS open created, as opposed to none or a
+ * leftover (see {@link beginOpenAttempt} on why that distinction matters).
+ *
+ * @param {object} ifcAPI
+ * @param {OpenAttempt|undefined} attempt
+ * @return {object|undefined}
+ */
+function attemptStatistics(ifcAPI, attempt) {
+  if (attempt === undefined) {
+    return undefined
+  }
+  const after = statisticsFor(ifcAPI, attempt.id)
+  return after === undefined || after === attempt.before ? undefined : after
 }
 
 
@@ -241,12 +291,17 @@ function statisticsFor(ifcAPI, id) {
  * @param {number|undefined} modelID what OpenModel* returned
  * @param {ArrayBuffer|Uint8Array|Blob} source the bytes that were opened
  * @param {boolean} refused {@link conwayRefusedSchema} for this open
- * @return {Promise<Error>} an UnsupportedSchemaError, or the generic open error
+ * @param {{status: string, reason: string}} [failure]
+ *   {@link conwayOpenFailure} for this open, when conway recorded a reason
+ * @return {Promise<Error>} an UnsupportedSchemaError; else, when conway gave
+ *   a reason, an EngineOpenFailureError carrying it; else the generic open
+ *   error (older conway, or no statistics for this open)
  */
-export async function openModelFailure(modelID, source, refused) {
-  const generic = new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
+export async function openModelFailure(modelID, source, refused, failure) {
   if (!refused) {
-    return generic
+    return failure === undefined ?
+      new Error(`parseIfcWithConway: OpenModel returned ${modelID}`) :
+      new EngineOpenFailureError(modelID, failure.status, failure.reason)
   }
   let schema = null
   try {
@@ -287,28 +342,18 @@ async function headerText(source) {
 
 
 /**
- * Is this an upload route (`/share/v/new/…`), whatever the install prefix?
- *
- * routes.ts#processFile sets `isUploadedFile` with a `startsWith('/share/v/new')`
- * test, which misses GitHub Pages-style installs served under a prefix
- * (`/Share/share/v/new/…`) — analytics.js#isRealModelOpen documents the
- * same gap. Matching the segment anywhere in the path keeps those uploads
- * from being tagged `hosted` (codex review of Share#1899).
+ * Is this an upload route (`/share/v/local-only/…`, or the legacy
+ * `/share/v/new/…`), whatever the install prefix? `routes/localOnly.ts` is
+ * the one test; it already covers GitHub Pages-style installs served under a
+ * prefix (`/Share/share/v/…`, codex review of Share#1899), and since #1959
+ * routes.ts#processFile's `isUploadedFile` uses it too. This stays as the
+ * fallback for a route result that doesn't carry the flag.
  *
  * @param {URL|string|undefined} originalUrl
  * @return {boolean}
  */
 function isUploadRoute(originalUrl) {
-  if (originalUrl === undefined || originalUrl === null) {
-    return false
-  }
-  let pathname
-  try {
-    pathname = new URL(String(originalUrl), 'http://localhost').pathname
-  } catch (_) {
-    return false
-  }
-  return /\/share\/v\/new(\/|$)/.test(pathname)
+  return isLocalOnlyPath(originalUrl)
 }
 
 

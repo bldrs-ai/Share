@@ -23,7 +23,6 @@ describe('store/UISlice', () => {
       // default to true in a clean jest env — see Components/About/hashState.js.
       expect(typeof state.isAboutVisible).toBe('boolean')
       expect(state.isHelpVisible).toBe(false)
-      expect(state.isImagineVisible).toBe(false)
       expect(state.isLoginVisible).toBe(false)
       expect(state.isShareVisible).toBe(false)
     })
@@ -58,7 +57,6 @@ describe('store/UISlice', () => {
       ['setIsAboutVisible', 'isAboutVisible'],
       ['setIsHelpVisible', 'isHelpVisible'],
       ['setIsHelpTooltipsVisible', 'isHelpTooltipsVisible'],
-      ['setIsImagineVisible', 'isImagineVisible'],
       ['setIsLoginVisible', 'isLoginVisible'],
       ['setIsSaveModelVisible', 'isSaveModelVisible'],
       ['setIsShareVisible', 'isShareVisible'],
@@ -99,6 +97,14 @@ describe('store/UISlice', () => {
       expect(store.getState().isExportInFlight).toBe(true)
       store.getState().setIsExportInFlight(false)
       expect(store.getState().isExportInFlight).toBe(false)
+    })
+
+    it('starts with no model slots, and stores the ones it is given', () => {
+      const store = makeStore()
+      expect(store.getState().modelSlots).toBeNull()
+      const slots = {sub: 'github|1', limit: 2, used: 1, remaining: 1, nextFreeAt: null, keys: ['/share/v/p/index.ifc']}
+      store.getState().setModelSlots(slots)
+      expect(store.getState().modelSlots).toBe(slots)
     })
 
     it('setSnackMessage stores the snack message', () => {

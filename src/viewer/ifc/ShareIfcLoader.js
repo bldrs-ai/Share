@@ -624,8 +624,17 @@ export default class ShareIfcLoader {
         const statsApi = ifcAPI.getStatistics(modelID)
         const geometryMemory = statsApi.getGeometryMemory()
         const totalTime = statsApi.getTotalTime()
+        // On conway's Statistics from 1.1626.740 (conway#740); they flow to GA
+        // as the unqualified stats_errorCount / stats_warningCount, beside the
+        // page-wide tee's stats_pageErrorCount / stats_pageWarnCount
+        // (loadProgress#finishReport). The optional chain stays for older
+        // engines (the web-ifc shim, pre-#740 conway) and the Jest mocks,
+        // where `loadStats` simply omits them.
         const errorCount = statsApi.getErrorCount?.()
         const warningCount = statsApi.getWarningCount?.()
+        // On the Statistics API of the pinned conway, but the Jest mocks of
+        // it (Loader*.test.js) predate the call, hence the optional chain.
+        const productCount = statsApi.getProductCount?.()
         ifcModel.name = statsApi.projectName ?? undefined
         ifcModel.loadStats = {
           loaderVersion: ifcAPI.getConwayVersion?.(),
@@ -641,7 +650,15 @@ export default class ShareIfcLoader {
           // For IFC/STEP they must describe Conway itself, rather than the
           // browser-wide heap and console tee used as other-format fallbacks.
           memoryUsed: geometryMemory,
-          loadTime: totalTime,
+          // Conway's own total is a parse timer, NOT the wall clock. With
+          // demand geometry it covers open + parse + demand-prep and excludes
+          // download, wasm init, the geometry pump, the batched build and the
+          // scene add (ops#28 §4). It used to be published as `loadTime`,
+          // overwriting the reporter's wall clock for IFC/STEP only, so the
+          // GA metric mixed two definitions. It is `openMs` now, and
+          // `loadTime` stays the reporter's (loadAnalytics#buildOutcomeParams).
+          openMs: totalTime,
+          ...(productCount === undefined ? {} : {productCount}),
           ...(errorCount === undefined ? {} : {errorCount}),
           ...(warningCount === undefined ? {} : {warningCount}),
         }

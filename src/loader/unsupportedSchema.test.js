@@ -1,8 +1,10 @@
 import {captureMessage} from '@sentry/react'
+import {EngineOpenFailureError} from './engineOpenFailure'
 import {loadFailureCaptureContext} from './loadProgress'
 import {
   UnsupportedSchemaError,
   beginOpenAttempt,
+  conwayOpenFailure,
   conwayRefusedSchema,
   modelSourceOf,
   openModelFailure,
@@ -155,6 +157,67 @@ describe('loader/unsupportedSchema — conway refusal signal', () => {
 })
 
 
+describe('loader/unsupportedSchema — conway failure reason (conway#742)', () => {
+  const failed = (status, reason) => ({getLoadStatus: () => status, getLoadFailureReason: () => reason})
+  const engine = (stats) => ({globalModelIDCounter: 7, getStatistics: (id) => stats.get(id)})
+
+  it('reads status and reason from THIS open\'s statistics', () => {
+    const stats = new Map()
+    const api = engine(stats)
+    const attempt = beginOpenAttempt(api)
+    stats.set(7, failed('UNRECOGNIZED_FORMAT', 'empty file'))
+    expect(conwayOpenFailure(api, attempt)).toEqual({status: 'UNRECOGNIZED_FORMAT', reason: 'empty file'})
+  })
+
+  it('does not read a reason an earlier open left under the same id', () => {
+    const api = engine(new Map([[7, failed('OPEN_FAIL', 'stale')]]))
+    expect(conwayOpenFailure(api, beginOpenAttempt(api))).toBeUndefined()
+  })
+
+  it('is undefined without a reason: a conway older than #742, or none recorded', () => {
+    const stats = new Map()
+    const api = engine(stats)
+    const attempt = beginOpenAttempt(api)
+    stats.set(7, {getLoadStatus: () => 'OPEN_FAIL'})
+    expect(conwayOpenFailure(api, attempt)).toBeUndefined()
+    stats.set(7, failed('OPEN_FAIL', '  '))
+    expect(conwayOpenFailure(api, attempt)).toBeUndefined()
+    expect(conwayOpenFailure({}, undefined)).toBeUndefined()
+  })
+
+  it('never throws into the load path', () => {
+    const stats = new Map()
+    const api = engine(stats)
+    const attempt = beginOpenAttempt(api)
+    stats.set(7, {getLoadFailureReason: () => {
+      throw new Error('boom')
+    }})
+    expect(conwayOpenFailure(api, attempt)).toBeUndefined()
+  })
+
+  it('openModelFailure carries the reason on a typed error when conway gave one', async () => {
+    const err = await openModelFailure(-1, bytes(part21('IFC4')), false,
+      {status: 'OPEN_FAIL', reason: 'bad entity'})
+    expect(err).toBeInstanceOf(EngineOpenFailureError)
+    expect(err.status).toBe('OPEN_FAIL')
+    expect(err.message).toBe('parseIfcWithConway: OpenModel returned -1: bad entity')
+  })
+
+  it('a schema refusal still wins over a recorded reason, with its own wording', async () => {
+    const err = await openModelFailure(-1, bytes(part21('IFC4X3_RC2')), true,
+      {status: 'UNSUPPORTED_SCHEMA', reason: 'IFC4X3 content'})
+    expect(err).toBeInstanceOf(UnsupportedSchemaError)
+    expect(err.message).toMatch(/IFC4X3_RC2 \(IFC 4\.3\)/)
+  })
+
+  it('keeps today\'s generic error with no reason', async () => {
+    const err = await openModelFailure(-1, bytes(part21('IFC4')), false)
+    expect(err).not.toBeInstanceOf(EngineOpenFailureError)
+    expect(err.message).toBe('parseIfcWithConway: OpenModel returned -1')
+  })
+})
+
+
 describe('loader/unsupportedSchema — size of the refused file', () => {
   it('records the source size on the error, for every source shape', async () => {
     const data = bytes(part21('IFC4X3_RC2'))
@@ -218,15 +281,21 @@ describe('loader/unsupportedSchema — modelSourceOf', () => {
 })
 
 
-// routes.ts#processFile's upload test is `startsWith('/share/v/new')`, so
-// on a GitHub Pages-style install under a prefix an upload arrives with
-// isUploadedFile false (codex review of Share#1899).
+// A route result without a trustworthy `isUploadedFile` still classifies by
+// its URL, whatever the install prefix (codex review of Share#1899). Since
+// #1959 processFile itself is prefix-independent (routes/localOnly.ts); this
+// is the fallback.
 describe('loader/unsupportedSchema — uploads under an install prefix', () => {
   it('still classifies them as uploads', () => {
     expect(modelSourceOf({
       kind: 'file',
       isUploadedFile: false,
       originalUrl: new URL('https://bldrs-ai.github.io/Share/share/v/new/0b4c2f.ifc'),
+    })).toBe('upload')
+    expect(modelSourceOf({
+      kind: 'file',
+      isUploadedFile: false,
+      originalUrl: new URL('https://bldrs-ai.github.io/Share/share/v/local-only/0b4c2f.ifc'),
     })).toBe('upload')
   })
 })

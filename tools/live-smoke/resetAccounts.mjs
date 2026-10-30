@@ -11,9 +11,10 @@
  * machine-to-machine application with `read:users` and
  * `update:users_app_metadata`). Per role:
  *
- * - **free.<project>**: empty `app_metadata.exports`, the ledger the free
- *   tier's 2-per-7-days allowance is counted from (§4.8 on #1939), so each
- *   run starts at "2 of 2". Fails, without writing, on an account that is
+ * - **free.<project>**: empty `app_metadata.exports` (export history) and
+ *   `app_metadata.usageQuota.loads` (the model slots a free user's exports
+ *   are decided by, glb-export-premium.md §4.8), so each run starts with no
+ *   slot held. Fails, without writing, on an account that is
  *   Pro, reauth-pending or linked to a Stripe customer: the free spec would
  *   be testing the wrong tier.
  * - **pending**: `subscriptionStatus` back to `shareProPendingReauth`. An
@@ -22,8 +23,8 @@
  *   reset. Anything else (a free status, a Stripe customer, which the daily
  *   sweep would demote) is drift and fails without writing.
  * - **pro**: verified, never written. It must be comped Pro — `comped:
- *   true`, `sharePro`, no `stripeCustomerId` — because that is the one shape
- *   `reconcile-subscriptions` neither demotes nor warns about
+ *   true`, `sharePro`, no `stripeCustomerId` — because that is the shape
+ *   `reconcile-subscriptions` neither demotes nor warns about for any user
  *   (design/new/live-browser-smoke.md §"Why comped Pro is safe" cites the
  *   code). Comping is an owner action in the Auth0 dashboard; a script that
  *   could set `comped` could also hand out Pro.
@@ -192,20 +193,27 @@ async function resetFree({role, userId, meta, admin, dryRun}) {
   if (!FREE_STATUSES.includes(meta.subscriptionStatus)) {
     return {drift: `${role} has subscriptionStatus ${JSON.stringify(meta.subscriptionStatus)}; a free account must have none, or "free"`}
   }
+  // Both ledgers the free spec starts from: the export history, and the
+  // model slots (`usageQuota.loads`) that decide a free user's exports since
+  // the slot rule — the spec's first export must find no slot held.
   const rowCount = Array.isArray(meta.exports) ? meta.exports.length : 0
-  if (rowCount === 0) {
+  const slotCount = Array.isArray(meta.usageQuota?.loads) ? meta.usageQuota.loads.length : 0
+  const what = (rows, slots) => `${rows} export rows, ${slots} model slots`
+  if (rowCount === 0 && slotCount === 0) {
     return {action: 'nothing to clear'}
   }
   if (dryRun) {
-    return {action: `would clear ${rowCount} export rows`}
+    return {action: `would clear ${what(rowCount, slotCount)}`}
   }
-  await admin.patchAppMetadata(userId, {exports: []})
+  // Any other usageQuota field is kept: Auth0 replaces a top-level key whole.
+  await admin.patchAppMetadata(userId, {exports: [], usageQuota: {...(meta.usageQuota || {}), loads: []}})
   const after = (await admin.getUser(userId)).app_metadata || {}
-  const remaining = Array.isArray(after.exports) ? after.exports.length : 0
-  if (remaining !== 0) {
-    return {drift: `${role}: the write did not land (${remaining} export rows remain)`}
+  const rowsLeft = Array.isArray(after.exports) ? after.exports.length : 0
+  const slotsLeft = Array.isArray(after.usageQuota?.loads) ? after.usageQuota.loads.length : 0
+  if (rowsLeft !== 0 || slotsLeft !== 0) {
+    return {drift: `${role}: the write did not land (${what(rowsLeft, slotsLeft)} remain)`}
   }
-  return {action: `cleared ${rowCount} export rows`}
+  return {action: `cleared ${what(rowCount, slotCount)}`}
 }
 
 

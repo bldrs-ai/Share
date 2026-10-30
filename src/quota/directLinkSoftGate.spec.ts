@@ -1,0 +1,126 @@
+import {Page, expect, test} from '@playwright/test'
+import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
+import {setupVirtualPathIntercept, waitForModelReady} from '../tests/e2e/models'
+import {
+  auth0Login,
+  homepageSetup,
+  returningUserVisitsHomepageWaitForModel,
+  setupAuthenticationIntercepts,
+} from '../tests/e2e/utils'
+
+
+// FREE_PRIVATE_MODEL_LIMIT in src/quota/limits.js, which the MSW record-load
+// mock enforces. A spec can't import app modules, so it's restated here.
+const FREE_LIMIT = 2
+
+// A private GitHub file: the MSW record-load mock treats every repo whose
+// name lacks "Public" as private, and bldrs-ai/test-models is served by the
+// dev server's fixtures (tests/e2e/models.ts#setupVirtualPathIntercept).
+// It used to be a Drive link opened with no connection, but that download
+// only works for a link-shared file, which is public and no longer metered
+// (driveLinkVisibility.spec.ts).
+const DIRECT_LINK = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
+
+// Age of the oldest seeded load: inside ROLLING_WINDOW_DAYS (7).
+const OLDEST_SEEDED_DAYS = 6
+const DAY_MS = 86_400_000
+
+const TEST_TIMEOUT_MS = 90_000
+const HTTP_FORBIDDEN = 403
+
+
+type QuotaWindow = Window & {
+  __mockQuotaLoads?: Array<{key: string, loadedAt: string}>
+}
+
+
+interface GaEvent {
+  name: string,
+  params: Record<string, unknown>,
+}
+
+
+/**
+ * GA events as gtag queued them: with the GA loader skipped in tests, every
+ * gtagEvent lands in window.dataLayer (as visibleGates.spec.ts and
+ * QuotaLimitDialog.spec.ts read them).
+ *
+ * @param page
+ * @param name GA event name
+ * @return Matching events, params made serializable
+ */
+async function gaEvents(page: Page, name: string): Promise<GaEvent[]> {
+  return await page.evaluate((eventName) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dataLayer: any[] = (window as any).dataLayer || []
+    return dataLayer
+      .filter((entry) => entry?.[0] === 'event' && entry?.[1] === eventName)
+      .map((entry) => ({name: String(entry[1]), params: JSON.parse(JSON.stringify(entry[2] ?? {}))}))
+  }, name)
+}
+
+
+/**
+ * Direct links: a soft gate (design/new/quotas.md §"Direct links: soft
+ * gate"). A signed-in free user who has already opened FREE_LIMIT private
+ * models this window pastes a link to a third, in a private GitHub repo.
+ * Nothing in the Open dialog runs. The route-load path records it; record-load (its
+ * MSW mock) refuses with 403; and still the model opens, QuotaLimitDialog
+ * stays away, and one quota_soft_limit_exceeded is sent, so the use of the
+ * workaround is measured rather than blocked.
+ *
+ * The link is a full page load, as a pasted or clicked one is. That resets
+ * the mock's in-page ledger, so an init script seeds it on every document
+ * this test opens, and Auth0 restores the session by silent refresh
+ * (setupAuthenticationIntercepts).
+ *
+ * `open_cid` rides along only where GA has a client id, which it never has
+ * on localhost under automation; its attachment is pinned by
+ * privacy/analytics.test.js, as for every gtagEventWithCid event.
+ */
+describeMobileAndDesktop('Quota: direct links are a soft gate', () => {
+  test.beforeEach(async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    // The oldest seeded model is 6 days old: still inside the 7-day window
+    // (ROLLING_WINDOW_DAYS, which the mock prunes to as record-load does),
+    // so this link is the 3rd within 7 days.
+    await page.addInitScript(({limit, dayMs, oldestDays}) => {
+      const w = window as unknown as QuotaWindow
+      w.__mockQuotaLoads = Array.from({length: limit}, (_, i) => ({
+        key: `/share/v/g/seeded-${i}`,
+        loadedAt: new Date(Date.now() - ((i === 0 ? oldestDays : 0) * dayMs)).toISOString(),
+      }))
+    }, {limit: FREE_LIMIT, dayMs: DAY_MS, oldestDays: OLDEST_SEEDED_DAYS})
+    await homepageSetup(page)
+    await setupVirtualPathIntercept(page, DIRECT_LINK, 'box.ifc')
+    await setupAuthenticationIntercepts(page)
+    await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
+    await auth0Login(page)
+  })
+
+  test('a free user at the limit opens a private GitHub link: it loads, unblocked, and is counted', async ({page}) => {
+    const recordLoad = page.waitForResponse((r) => new URL(r.url()).pathname === '/.netlify/functions/record-load')
+    await page.goto(DIRECT_LINK, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    await expect(page.getByTestId('control-button-profile-icon-authenticated')).toBeVisible()
+
+    // The server's answer was the refusal the Open dialog would have shown.
+    const response = await recordLoad
+    expect(response.status()).toBe(HTTP_FORBIDDEN)
+    expect(JSON.parse(response.request().postData() ?? '{}')).toEqual({key: DIRECT_LINK})
+
+    await expect.poll(() => gaEvents(page, 'quota_soft_limit_exceeded')).toHaveLength(1)
+    const [softLimit] = await gaEvents(page, 'quota_soft_limit_exceeded')
+    expect(softLimit.params).toEqual({tier: 'free', used: FREE_LIMIT, limit: FREE_LIMIT, route_kind: 'github'})
+
+    // Not blocked: still on the model, no limit dialog, and the dialog's own
+    // event (which fires whenever it shows) never went out.
+    expect(new URL(page.url()).pathname).toBe(DIRECT_LINK)
+    await expect(page.getByTestId('cadview-dropzone')).toHaveAttribute('data-model-ready', 'true')
+    await expect(page.getByTestId('button-quota-subscribe')).toHaveCount(0)
+    expect(await gaEvents(page, 'quota_limit_reached')).toHaveLength(0)
+    // A refused load is not written to the ledger.
+    const serverLoads = await page.evaluate(() => (window as unknown as QuotaWindow).__mockQuotaLoads?.length)
+    expect(serverLoads).toBe(FREE_LIMIT)
+  })
+})
