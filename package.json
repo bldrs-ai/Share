@@ -1,5 +1,6 @@
 {
   "name": "bldrs",
+  "packageManager": "yarn@1.22.22",
   "version": "1.1865.c6e33e61",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
