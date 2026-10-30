@@ -878,6 +878,9 @@ export async function expectNothingSelected(page: Page) {
       .map((ids) => (ids ?? []).length)
     /* eslint-enable @typescript-eslint/no-explicit-any */
   }), 'the selection the model opened with').toEqual([0, 0, 0])
+  // The store and the permalink are written separately; a stale pick shows
+  // in either one.
+  await expect(page).not.toHaveURL(/\.(ifc|glb|step|stp)(\/\d+)+(\?|#|$)/)
 }
 
 

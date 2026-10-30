@@ -293,6 +293,7 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     const hydrated = glbLogs.find((l) => l.includes('collapsed table(s)')) ?? ''
     expect(Number(/(\d+) collapsed table/.exec(hydrated)?.[1]), 'no collapsed tables in the baseline')
       .toBe(0)
+    await expectNothingSelected(page)
     await doubleClickSelectsAnElement(page, 'any')
     await expectNavTreeFollowsSelection(page)
   })
