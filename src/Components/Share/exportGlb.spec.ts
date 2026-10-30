@@ -5,12 +5,14 @@ import {
   EXPORT_TEST_TIMEOUT_MS,
   GLTF_MAGIC,
   clickGate,
+  closeExportDialog,
   disableDracoEncoder,
   dismissLoadSnackbar,
   doubleClickSelectsAMergedInstance,
   doubleClickSelectsAnElement,
   expectNavTreeFollowsSelection,
   expectNoHorizontalScroll,
+  expectNothingSelected,
   expectProductRowSelected,
   expectSnackbarOnTop,
   exportLedger,
@@ -508,25 +510,6 @@ async function closeNavTree(page: Page) {
     await page.getByTestId('control-button-navigation').click()
   }
   await expect(panel).toBeHidden()
-}
-
-
-/**
- * Expect the store to hold no selection at all. A step that picks after
- * another step's pick must start from nothing, or "the pick selected X" could
- * be the previous pick still standing: `doubleClickSelectsAnElement` would
- * pass on the same element selected twice.
- *
- * @param page Playwright page
- */
-async function expectNothingSelected(page: Page) {
-  await expect.poll(() => page.evaluate(() => {
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    const state = ((window as any).store ?? (window as any).useStore).getState()
-    return [state.selectedElements, state.selectedInstanceIds, state.selectedAnchorIds]
-      .map((ids) => (ids ?? []).length)
-    /* eslint-enable @typescript-eslint/no-explicit-any */
-  }), 'the selection the model opened with').toEqual([0, 0, 0])
 }
 
 
@@ -1133,7 +1116,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
 
     // Reopening navigates away from the Export tab, so every file comes back
     // in after the last download, and the dialog goes first.
-    await page.keyboard.press('Escape')
+    await closeExportDialog(page)
 
     // Was: 'a compressed export opens back in Share'. Share is one of the
     // viewers a compressed export has to open in, and it didn't: the
@@ -1524,7 +1507,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       expect(nodeNames.filter((name) => name === SHELLS_PART_NAME)).toHaveLength(1)
     })
 
-    await page.keyboard.press('Escape')
+    await closeExportDialog(page)
     await test.step('the export reopens with every shell pickable, and the pick lands on the product row', async () => {
       resetGlbLogs(glbLogs)
       await reopenLocalGlb(page, savedPath)
@@ -1792,7 +1775,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // ...and nothing is left unnamed.
     expect(nodes.find((node) => node.name === 'Unassigned')).toBeUndefined()
 
-    await page.keyboard.press('Escape')
+    await closeExportDialog(page)
     resetGlbLogs(glbLogs)
     await reopenLocalGlb(page, savedPath)
     await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
@@ -1873,7 +1856,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect.poll(async () => (await exportLedger(page)).filter((row) => row.key === EXPORT_MODEL_PATH).length,
       {timeout: RECORD_SETTLE_TIMEOUT_MS}).toBe(1)
     expect(await slotLedger(page)).toEqual(fullSlots)
-    await page.keyboard.press('Escape')
+    await closeExportDialog(page)
 
     // 2. A local file takes a slot on its first export, then exports
     //    unlimited. Slots empty for this part.
@@ -1925,7 +1908,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // 3. A week on, say: this file's slot has rolled off and two other private
     // models hold both slots. Reopening the tab asks the server afresh.
     await setSlotLedger(page, fullSlots)
-    await page.keyboard.press('Escape')
+    await closeExportDialog(page)
     await openExportTab(page)
     await expect(slotLine).toHaveAttribute('data-remaining', '0')
     await expect(slotLine).toHaveAttribute('data-held', 'false')

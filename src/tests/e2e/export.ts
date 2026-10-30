@@ -212,6 +212,24 @@ export async function openExportTab(page: Page) {
 
 
 /**
+ * Close the Save dialog and wait until it is gone.
+ *
+ * Not `Escape`: MUI's Dialog only hears the key while focus is inside it, and
+ * an export click leaves focus on `<body>` (the button disables while the
+ * download runs) until the dialog's focus trap pulls it back. Pressed in that
+ * window, the key does nothing and the dialog stays up over the Open button,
+ * so the next `reopenLocalGlb` waits out the test (#1985, mobile, reliably on
+ * a paused viewer). The Close button doesn't depend on where focus is.
+ *
+ * @param page Playwright page
+ */
+export async function closeExportDialog(page: Page) {
+  await page.getByTestId('button-close-dialog-save').click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+}
+
+
+/**
  * Clear the post-load "Loaded <model>" snackbar so a later assertion is
  * about the EXPORT's status message and not the load's. The load view owns
  * the snackbar while it is up (AlertDialogAndSnackbar.jsx), and OK ends it
@@ -842,6 +860,25 @@ export type ElementKind = 'collapsed' | 'instanced' | 'any'
 
 /** Whose geometry: the root product's own, a child occurrence's, or either. */
 export type PlacementLevel = 'root' | 'child' | 'any'
+
+
+/**
+ * Expect the store to hold no selection at all. A step that picks after
+ * another step's pick must start from nothing, or "the pick selected X" could
+ * be the previous pick still standing: `doubleClickSelectsAnElement` would
+ * pass on the same element selected twice.
+ *
+ * @param page Playwright page
+ */
+export async function expectNothingSelected(page: Page) {
+  await expect.poll(() => page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const state = ((window as any).store ?? (window as any).useStore).getState()
+    return [state.selectedElements, state.selectedInstanceIds, state.selectedAnchorIds]
+      .map((ids) => (ids ?? []).length)
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }), 'the selection the model opened with').toEqual([0, 0, 0])
+}
 
 
 /**

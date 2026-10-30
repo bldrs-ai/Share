@@ -4,6 +4,7 @@ import {
   EXPORT_MODEL_PATH,
   EXPORT_FLAGS,
   EXPORT_TEST_TIMEOUT_MS,
+  closeExportDialog,
   dismissLoadSnackbar,
   glbJsonChunk,
   loadModelAndWaitForArtifact,
@@ -12,6 +13,7 @@ import {
   routeProModule,
   doubleClickSelectsAnElement,
   expectNavTreeFollowsSelection,
+  expectNothingSelected,
   selectCompression,
   setPortable,
   setSubscriptionTier,
@@ -212,7 +214,7 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     for (const mode of CODECS) {
       paths.push({mode, path: await exportWith(page, mode, 'collapsed')})
     }
-    await page.keyboard.press('Escape')
+    await closeExportDialog(page)
 
     // The Draco file is EDGEBREAKER throughout, and every collapsed primitive
     // is row-tagged: what the file actually holds, not what the encoder was
@@ -242,6 +244,11 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
           expect(glbLogs.some((l) => /regrouped [1-9]\d* row-tagged triangle/.test(l)),
             'the reader regrouped by the row tag').toBe(true)
         }
+        // The previous codec's reopen left its pick selected, and an in-app
+        // file open is not a page load, so nothing guarantees the store was
+        // reset. Start from no selection, or the pick below could pass on
+        // that leftover element without the double-click doing anything.
+        await expectNothingSelected(page)
         const collapsed = await doubleClickSelectsAnElement(page, 'collapsed')
         await expectNavTreeFollowsSelection(page)
         if (mode === 'draco') {
@@ -276,7 +283,7 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     await setPortable(page, false)
     await waitForCodecSizing(page)
     const path = await exportWith(page, 'draco', 'instanced')
-    await page.keyboard.press('Escape')
+    await closeExportDialog(page)
 
     resetGlbLogs(glbLogs)
     await reopenLocalGlb(page, path)
