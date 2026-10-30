@@ -69,7 +69,7 @@ export default function LogoMenu() {
         transformOrigin={{vertical: 'bottom', horizontal: 'left'}}
         data-testid='workspace-logo-menu'
       >
-        <Typography variant='subtitle2' sx={{fontWeight: 'bold', px: 2, py: 1}}>
+        <Typography variant='subtitle2' sx={{fontWeight: 500, px: 2, py: 1}}>
           Build Every Thing Together
         </Typography>
         <MenuItem

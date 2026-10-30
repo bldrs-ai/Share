@@ -7,6 +7,7 @@ import NotesControl from '../Components/Notes/NotesControl'
 import ProfileControl from '../Components/Profile/ProfileControl'
 import PropertiesControl from '../Components/Properties/PropertiesControl'
 import ShareControl from '../Components/Share/ShareControl'
+import useExistInFeature from '../hooks/useExistInFeature'
 import useStore from '../store/useStore'
 
 
@@ -23,6 +24,9 @@ export default function OperationsGroup() {
   const isShareEnabled = useStore((state) => state.isShareEnabled)
   const selectedElement = useStore((state) => state.selectedElement)
   const isAnElementSelected = selectedElement !== null
+  // Under the workspace shell, Profile / Apps / Share close the TopBar
+  // instead of heading this column (#1665, #1992).
+  const isWorkspaceEnabled = useExistInFeature('workspace')
 
   // required for MarkerControl
   const viewer = useStore((state) => state.viewer)
@@ -36,11 +40,12 @@ export default function OperationsGroup() {
         alignItems: 'flex-end',
       }}
     >
-      <Stack direction='row' sx={{pointerEvents: 'auto'}}>
-        {isLoginEnabled && <ProfileControl/>}
-        {isAppsEnabled && <AppsControl/>}
-        {isShareEnabled && <ShareControl/>}
-      </Stack>
+      {!isWorkspaceEnabled &&
+       <Stack direction='row' sx={{pointerEvents: 'auto'}}>
+         {isLoginEnabled && <ProfileControl/>}
+         {isAppsEnabled && <AppsControl/>}
+         {isShareEnabled && <ShareControl/>}
+       </Stack>}
       <Stack sx={{pointerEvents: 'auto', height: '100%'}}>
         <Divider/>
         {isNotesEnabled && <NotesControl/>}

@@ -6,7 +6,7 @@ import {
   waitForModel,
 } from '../tests/e2e/utils'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
-import {HOME_MODEL, WORKSPACE_FLAG, visitWithWorkspace} from '../tests/e2e/workspace'
+import {HOME_MODEL, WORKSPACE_FLAG, ensureProjectsDrawerOpen, visitWithWorkspace} from '../tests/e2e/workspace'
 
 
 const {beforeEach} = test
@@ -19,7 +19,7 @@ const {beforeEach} = test
  * relocated SearchBar. The scope mechanic and provider seam are later
  * slices (#1669/#1699) with their own specs.
  */
-describeMobileAndDesktop('TopBar (?feature=workspace)', () => {
+describeMobileAndDesktop('TopBar (?feature=workspace)', (ff) => {
   beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setIsReturningUser(page.context())
@@ -46,6 +46,53 @@ describeMobileAndDesktop('TopBar (?feature=workspace)', () => {
     const searchBox = await page.getByTestId('topbar-search').boundingBox()
     expect((searchBox?.x ?? 0) + (searchBox?.width ?? 0)).toBeLessThanOrEqual(viewportWidth)
   })
+
+  // #1992: the bar carries the controls that used to float into it —
+  // Open / Save at its left end, Profile / Apps / Share at its right —
+  // so they move out of the floating groups rather than being doubled.
+  test('the bar carries Open / Save and Share, out of the floating groups', async ({page}) => {
+    await visitWithWorkspace(page)
+    const bar = page.getByTestId('TopBar')
+    await expect(bar.getByTestId('control-button-open')).toBeVisible()
+    await expect(bar.getByTestId('control-button-share')).toBeVisible()
+    await expect(page.getByTestId('control-button-open')).toHaveCount(1)
+    await expect(page.getByTestId('control-button-share')).toHaveCount(1)
+  })
+
+  if (!ff.isMobile) {
+    // #1992: one header band — the drawer header's hairline and the bar's
+    // land on the same pixel row.
+    test('the bar and the drawer header end on the same row', async ({page}) => {
+      await visitWithWorkspace(page)
+      await ensureProjectsDrawerOpen(page)
+      const band = await page.getByTestId('projects-header-band').boundingBox()
+      const bar = await page.getByTestId('TopBar').boundingBox()
+      expect((bar?.y ?? 0) + (bar?.height ?? 0)).toBe((band?.y ?? 1) + (band?.height ?? 1))
+    })
+
+    // #1992: side drawers open beneath the bar, and Notes leads the way
+    // the ProjectsDrawer's list does. (On a phone Notes is the bottom
+    // sheet, unchanged.)
+    test('Notes opens beneath the bar, led by New note and a NOTES label', async ({page}) => {
+      await visitWithWorkspace(page)
+      await page.getByTestId('control-button-notes').click()
+
+      const drawer = await page.getByTestId('NotesAndPropertiesDrawer').boundingBox()
+      const bar = await page.getByTestId('TopBar').boundingBox()
+      expect(drawer?.y ?? 0).toBeGreaterThanOrEqual((bar?.y ?? 0) + (bar?.height ?? 0))
+
+      await expect(page.getByTestId('notes-new-button')).toBeVisible()
+      await expect(page.getByTestId('notes-section-label')).toHaveText('Notes')
+      await expect(page.getByTestId('PanelTitle-Notes')).toHaveCount(0)
+
+      // Create mode: signed out, the form's place shows the login prompt,
+      // and the lead-in gives way to the back row.
+      await page.getByTestId('notes-new-button').click()
+      await expect(page.getByText('Please login to create notes.')).toBeVisible()
+      await expect(page.getByTestId('notes-nav-row')).toBeVisible()
+      await expect(page.getByTestId('notes-new-button')).toHaveCount(0)
+    })
+  }
 
   test('element permalinks put the selection on the breadcrumb', async ({page}) => {
     // 'Together' (IfcBuildingElementProxy, expressID 396) in the home
