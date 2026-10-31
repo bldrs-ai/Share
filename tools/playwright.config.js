@@ -1,5 +1,4 @@
 import {defineConfig, devices} from '@playwright/test'
-import {resolveSpecSet} from './playwrightSpecSets'
 import {runGetPortPlease} from './utils'
 
 
@@ -15,16 +14,12 @@ const url = `http://localhost:${port}`
 console.warn('Using test server:', url, serveOnly ? '(serve-only)' : '')
 const serveOnlyTimeoutMs = 30_000
 const fullBuildTimeoutMs = 180_000
-// CI runs each shard as a `light` pass then a `heavy` pass so the slow
-// share-140 export specs spread over every shard instead of all landing in
-// one (#1892). Unset locally: all specs. See tools/playwrightSpecSets.js.
-const specSet = resolveSpecSet(process.env.PW_SPEC_SET)
 
 export default defineConfig({
   // Look for test files in the "src" directory, relative to this configuration file.
   testDir: '../src',
 
-  testMatch: specSet.testMatch ?? [
+  testMatch: [
     '**/*.spec.ts',
   ],
 
@@ -37,7 +32,6 @@ export default defineConfig({
   testIgnore: [
     '**/*.webifc.spec.ts',
     '**/*.live.spec.ts',
-    ...specSet.testIgnore,
   ],
 
   // Run all tests in parallel.
@@ -45,9 +39,10 @@ export default defineConfig({
 
   retries: isCI ? 1 : 0,
 
-  // Local default. CI overrides to `--workers=2 --shard=N/4` (twice per
-  // shard, once per PW_SPEC_SET) on free ubuntu-24.04 (16 GB); see
-  // test-flows.yml.
+  // Local default. CI overrides to `--workers=2 --test-list=<shard's tests>`
+  // on free ubuntu-24.04 (16 GB); the lists come from duration-balanced
+  // packing in tools/playwrightShards.mjs, not Playwright's count-based
+  // `--shard`. See test-flows.yml.
   workers: 4,
 
   // Reporter to use

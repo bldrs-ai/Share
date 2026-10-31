@@ -18,9 +18,10 @@ cypress/e2e/logs
 tools/playwright-report
 tools/test-results
 test-results
-# CI's heavy-spec pass (test-flows.yml, tools/playwrightSpecSets.js)
-test-results-heavy
-playwright-report-heavy
+# CI's per-shard plan and JSON report (test-flows.yml, tools/playwrightShards.mjs)
+all-tests.json
+shard-tests.txt
+playwright-results.json
 # Live smoke (tools/playwright.live.config.js)
 tools/playwright-report-live
 tools/test-results-live
