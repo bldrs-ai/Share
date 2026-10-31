@@ -2,6 +2,7 @@ import {BrowserContext, Page, Request, Response, Route, expect} from '@playwrigh
 import {readFile} from 'fs/promises'
 import {resolve} from 'path'
 import {isBlockedRealNetworkHost} from './networkGuard'
+import type {CanvasFrame} from './canvasFrame'
 
 
 /**
@@ -369,7 +370,8 @@ export async function dismissLoadGrace(page: Page) {
  * and WRONG for anything that screenshots the scene, moves the camera, or
  * asserts on highlighting — unless the test calls {@link resumeViewerRendering}
  * first. A test that never does treats the scene as frozen for the rest of
- * its life.
+ * its life; to check what is on the canvas without giving up the pause, use
+ * {@link captureRenderedFrame}.
  *
  * Throws rather than degrading if the seam moves. A silent no-op here would
  * quietly restore the slow path and show up much later as unexplained
@@ -421,14 +423,125 @@ export async function resumeViewerRendering(page: Page) {
 }
 
 
+/**
+ * What the viewer draws for the scene as it is NOW, read off the drawing
+ * buffer right after one of the app's own frames (see `canvasFrame.ts` for
+ * what the grid is and how specs judge it).
+ *
+ * A paused viewer (see {@link pauseViewerRendering}) keeps its last painted
+ * frame, so neither a screenshot nor a store/scene assertion can tell a model
+ * that renders from one that never reached the canvas. This resumes the
+ * app's own loop for a few frames and reads what its real update closure
+ * (DESIGN.md §"Render loop & perf monitor" — the only per-frame render path)
+ * drew, so the answer is about the current scene and its real render path.
+ * It returns once two consecutive frames agree, so a frame mid-transition
+ * (an outline pass, a camera settling) is not the one judged; and it leaves
+ * the viewer paused again if it found it paused.
+ *
+ * The buffer is read inside the frame's own task, before the compositor
+ * takes it: the renderer is created without `preserveDrawingBuffer`
+ * (`viewer/three/context/renderer/renderer.js`), so a read from a later task
+ * would see a cleared buffer, not the frame. It reads the WebGL buffer, not
+ * the composited page, so a panel over the canvas (the NavTree drawer on a
+ * phone) is not mistaken for geometry.
+ *
+ * @param page - Playwright page object
+ * @return the frame, as a `CanvasFrame`
+ */
+export async function captureRenderedFrame(page: Page): Promise<CanvasFrame> {
+  const wasPaused = await page.evaluate(() =>
+    typeof (window as unknown as RenderSeamWindow).__bldrsResumeRenderUpdate === 'function')
+  await resumeViewerRendering(page)
+  try {
+    return await page.evaluate(({cols, settleFrames, timeoutMs}) => new Promise<CanvasFrame>((resolveFrame, rejectFrame) => {
+      const context = (window as unknown as RenderSeamWindow).useStore?.getState().viewer?.context
+      const painting = context?.getLegacyRendererWrapper?.().update
+      const gl = context?.getRenderer?.().getContext()
+      if (!context?.setRenderUpdate || typeof painting !== 'function' || !gl) {
+        rejectFrame(new Error('captureRenderedFrame: no render seam or WebGL context on window.useStore.getState().viewer'))
+        return
+      }
+      // A method on ThreeContext (it reads `this`), so call it on the context.
+      const setUpdate = (fn: (...args: unknown[]) => void) => context.setRenderUpdate?.(fn)
+      const read = (): CanvasFrame => {
+        const width = gl.drawingBufferWidth
+        const height = gl.drawingBufferHeight
+        const pixels = new Uint8Array(width * height * 4)
+        // The default framebuffer, whatever the last pass left bound; put
+        // three's binding back so its state cache stays true.
+        const bound = gl.getParameter(gl.FRAMEBUFFER_BINDING)
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+        gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+        gl.bindFramebuffer(gl.FRAMEBUFFER, bound)
+        const rows = Math.max(1, Math.round(cols * height / width))
+        const rgb = new Array(cols * rows * 3).fill(0)
+        const counts = new Array(cols * rows).fill(0)
+        for (let py = 0; py < height; py++) {
+          const cy = Math.min(rows - 1, Math.floor(py * rows / height))
+          for (let px = 0; px < width; px++) {
+            const cell = (cy * cols) + Math.min(cols - 1, Math.floor(px * cols / width))
+            const at = ((py * width) + px) * 4
+            rgb[cell * 3] += pixels[at]
+            rgb[(cell * 3) + 1] += pixels[at + 1]
+            rgb[(cell * 3) + 2] += pixels[at + 2]
+            counts[cell]++
+          }
+        }
+        for (let cell = 0; cell < counts.length; cell++) {
+          for (let c = 0; c < 3; c++) {
+            rgb[(cell * 3) + c] = Math.round(rgb[(cell * 3) + c] / Math.max(1, counts[cell]))
+          }
+        }
+        return {cols, rows, rgb}
+      }
+      let frames = 0
+      let previous: CanvasFrame | null = null
+      const timer = setTimeout(() => {
+        setUpdate(painting)
+        rejectFrame(new Error(`captureRenderedFrame: no two matching frames within ${timeoutMs} ms ` +
+          `(${frames} frame(s) rendered) — the render loop is not running, or every frame differs`))
+      }, timeoutMs)
+      setUpdate((...args: unknown[]) => {
+        painting(...args)
+        frames++
+        if (frames < settleFrames) {
+          return
+        }
+        const frame = read()
+        if (previous !== null && previous.rgb.every((v, i) => v === frame.rgb[i])) {
+          clearTimeout(timer)
+          setUpdate(painting)
+          resolveFrame(frame)
+          return
+        }
+        previous = frame
+      })
+    }), {cols: CANVAS_FRAME_COLS, settleFrames: CANVAS_SETTLE_FRAMES, timeoutMs: CANVAS_CAPTURE_TIMEOUT_MS})
+  } finally {
+    if (wasPaused) {
+      await pauseViewerRendering(page)
+    }
+  }
+}
+
+
+/** Cells across a captured frame; rows follow the canvas aspect. */
+const CANVAS_FRAME_COLS = 64
+/** Frames to let pass after resuming before the first read. */
+const CANVAS_SETTLE_FRAMES = 3
+/** How long a capture may wait for two matching frames. */
+const CANVAS_CAPTURE_TIMEOUT_MS = 20000
+
+
 // `__bldrsResumeRenderUpdate` is where a paused viewer keeps the update
 // function it replaced.
 type RenderSeamWindow = Window & {
   useStore?: {getState: () => {viewer?: {context?: {
-    setRenderUpdate?: (fn: () => void) => void
-    getLegacyRendererWrapper?: () => {update?: () => void}
+    setRenderUpdate?: (fn: (...args: unknown[]) => void) => void
+    getLegacyRendererWrapper?: () => {update?: (...args: unknown[]) => void}
+    getRenderer?: () => {getContext: () => WebGLRenderingContext}
   }}}}
-  __bldrsResumeRenderUpdate?: () => void
+  __bldrsResumeRenderUpdate?: (...args: unknown[]) => void
 }
 
 

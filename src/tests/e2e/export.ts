@@ -14,10 +14,11 @@ import {
 } from '../../export/exportSlots'
 import {mockIsPublicModel} from '../../__mocks__/mockModelVisibility'
 import {isProSubscriptionStatus} from '../../quota/proStatus'
+import {CanvasFrame, MIN_MODEL_EDGE_FRACTION, edgeFraction} from './canvasFrame'
 import {estimateKey, settledEstimateBytes} from './exportEstimate'
 import {captureGlbLogs, waitForGlbLog} from './glbLogs'
 import {waitForModelReady} from './models'
-import {pauseViewerRendering, resumeViewerRendering} from './utils'
+import {captureRenderedFrame, pauseViewerRendering, resumeViewerRendering} from './utils'
 
 
 /**
@@ -609,6 +610,31 @@ export async function toggleGzip(page: Page): Promise<number> {
  */
 export async function reopenLocalGlb(page: Page, path: string) {
   await openLocalFile(page, path, /\/share\/v\/local-only\/.+\.glb/)
+}
+
+
+/**
+ * Expect the model now loaded to be ON THE CANVAS: a fresh frame of the
+ * current scene, from the app's own render path, shows geometry rather than
+ * an empty background (`utils.ts#captureRenderedFrame`,
+ * `canvasFrame.ts#edgeFraction`).
+ *
+ * The export specs judge a reopened file by its picks, NavTree, URL and
+ * highlight state, all read off the scene and the store, and they run with
+ * the viewer paused, so the canvas still shows the frame painted before the
+ * reopen. Without this, a reopen whose geometry never reached the renderer
+ * (or rendered as nothing) passes every one of those checks (codex on #1985).
+ *
+ * @param page Playwright page
+ * @param what what is on screen, for the failure message
+ * @return the frame it judged, for a later comparison
+ */
+export async function expectModelOnCanvas(page: Page, what: string): Promise<CanvasFrame> {
+  const frame = await captureRenderedFrame(page)
+  const edges = edgeFraction(frame)
+  expect(edges, `${what}: the canvas shows geometry, not an empty background`)
+    .toBeGreaterThan(MIN_MODEL_EDGE_FRACTION)
+  return frame
 }
 
 

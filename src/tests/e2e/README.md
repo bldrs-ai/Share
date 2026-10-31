@@ -27,10 +27,18 @@ specs. Keep it that way.
   selection the Export tab's size line is quoting (`data-estimate-key`), and
   the decision `export.ts#waitForEstimate` polls on. Keyed on the selection
   and never on the byte count, which two selections can share.
+- `canvasFrame.ts` — `edgeFraction` / `frameDifference`: whether a frame the
+  viewer drew shows a model or an empty background, and whether two frames
+  show the same thing, over the coarse RGB grid
+  `utils.ts#captureRenderedFrame` reads. A paused viewer keeps its last
+  frame, so store/scene assertions alone pass on a model that never reached
+  the canvas; `export.ts#expectModelOnCanvas` is the check the export specs
+  make after every reopen (#1985).
 
-  All five are deliberately free of any Playwright import so they can be
+  All six are deliberately free of any Playwright import so they can be
   unit-tested under Jest (`loadProbe.test.js`, `loadReport.test.js`,
-  `networkGuard.test.js`, `loadRun.test.js`, `exportEstimate.test.js`). That
+  `networkGuard.test.js`, `loadRun.test.js`, `exportEstimate.test.js`,
+  `canvasFrame.test.js`). That
   is load-bearing, not tidy: importing
   `@playwright/test` into a module a Jest suite loads brings Playwright's
   own `expect` along, and every `toEqual` in that suite then dies with
@@ -40,8 +48,10 @@ specs. Keep it that way.
   is ready — pass `{pauseRenderer: true}` to `visitHomepageWaitForModel` /
   `waitForModel` for dialog/panel specs) and `resumeViewerRendering` (undo
   it, for a test that wants a paused viewer over a dialog and the real
-  renderer back before it paints, screenshots or moves the camera), and the
-  rest of the page-bootstrap helpers.
+  renderer back before it paints, screenshots or moves the camera),
+  `captureRenderedFrame` (a fresh frame of the current scene, from the app's
+  own render path, read off the drawing buffer; works on a paused viewer),
+  and the rest of the page-bootstrap helpers.
 - `homepage.ts`, `workspace.ts` — page-object-ish helpers for those areas.
 - `live/` — the live smoke harness's helpers (`*.live.spec.ts` under
   `tools/playwright.live.config.js`, against a deployed Share with real

@@ -13,6 +13,7 @@ import {
   routeProModule,
   doubleClickSelectsAnElement,
   expectNavTreeFollowsSelection,
+  expectModelOnCanvas,
   expectNothingSelected,
   selectCompression,
   setPortable,
@@ -197,6 +198,7 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     // A painting viewer pins the page's main thread (SwiftShader); see
     // `pauseViewerRendering`.
     await pauseViewerRendering(page)
+    await expectModelOnCanvas(page, 'the collapsed cache hit')
     await doubleClickSelectsAnElement(page, 'collapsed')
     await expectNavTreeFollowsSelection(page)
 
@@ -244,6 +246,7 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
           expect(glbLogs.some((l) => /regrouped [1-9]\d* row-tagged triangle/.test(l)),
             'the reader regrouped by the row tag').toBe(true)
         }
+        await expectModelOnCanvas(page, `the reopened ${mode} export`)
         // The previous codec's reopen left its pick selected, and an in-app
         // file open is not a page load, so nothing guarantees the store was
         // reset. Start from no selection, or the pick below could pass on
@@ -293,6 +296,7 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     const hydrated = glbLogs.find((l) => l.includes('collapsed table(s)')) ?? ''
     expect(Number(/(\d+) collapsed table/.exec(hydrated)?.[1]), 'no collapsed tables in the baseline')
       .toBe(0)
+    await expectModelOnCanvas(page, 'the reopened un-collapsed Draco export')
     await expectNothingSelected(page)
     await doubleClickSelectsAnElement(page, 'any')
     await expectNavTreeFollowsSelection(page)

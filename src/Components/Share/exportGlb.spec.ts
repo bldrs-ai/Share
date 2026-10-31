@@ -10,6 +10,7 @@ import {
   dismissLoadSnackbar,
   doubleClickSelectsAMergedInstance,
   doubleClickSelectsAnElement,
+  expectModelOnCanvas,
   expectNavTreeFollowsSelection,
   expectNoHorizontalScroll,
   expectNothingSelected,
@@ -41,12 +42,14 @@ import {
   waitForEstimate,
   watchProModuleRequests,
 } from '../../tests/e2e/export'
+import {MIN_MODEL_EDGE_FRACTION, SAME_FRAME_TOLERANCE, edgeFraction, frameDifference} from '../../tests/e2e/canvasFrame'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {gaEvents} from '../../tests/e2e/ga'
 import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {
   auth0Login,
+  captureRenderedFrame,
   clearOpfs,
   homepageSetup,
   pauseViewerRendering,
@@ -1135,6 +1138,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
           .toHaveCount(0)
         await waitForModelReady(page)
         await dismissLoadSnackbar(page)
+        await expectModelOnCanvas(page, `the reopened ${mode} export`)
       })
     }
 
@@ -1153,6 +1157,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       await reopenLocalGlb(page, files.native)
       await waitForModelReady(page)
       await dismissLoadSnackbar(page)
+      await expectModelOnCanvas(page, 'the reopened native export')
       await expectReopenedModelPickableFromNavTree(page, {isOnlyRowSelected: true})
     })
 
@@ -1174,6 +1179,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
         .toHaveCount(0)
       await waitForModelReady(page)
       await dismissLoadSnackbar(page)
+      await expectModelOnCanvas(page, 'the reopened gzipped export')
       // `BLDRS_spatial_tree` came through the gzip: a GLB that inflated to
       // anything but the exported bytes would not draw the chain.
       await expectReopenedModelPickableFromNavTree(page)
@@ -1191,6 +1197,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
       await waitForModelReady(page)
       await dismissLoadSnackbar(page)
+      await expectModelOnCanvas(page, 'the reopened portable export')
       await expectReopenedModelPickableFromNavTree(page)
     })
 
@@ -1203,6 +1210,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
       await waitForModelReady(page)
       await dismissLoadSnackbar(page)
+      await expectModelOnCanvas(page, 'the reopened default export')
       // Hydrated from the portable file's stamped nodes back into the decorated
       // BatchedMesh — not the plain-GLTF fallback, which renders and picks
       // nothing.
@@ -1514,6 +1522,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
       await waitForModelReady(page)
       await dismissLoadSnackbar(page)
+      await expectModelOnCanvas(page, 'the reopened shells export')
       // Hydrated back into the decorated BatchedMesh, every shell its own
       // range — not the plain-GLTF fallback, which picks nothing.
       await waitForGlbLog(glbLogs, `${SHELLS_FIXTURE_ROWS} instance(s), 1 collapsed table(s)`, EXPORT_TEST_TIMEOUT_MS)
@@ -1661,6 +1670,13 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       await pauseViewerRendering(page)
       // The model's own URL carries no selection.
       await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(0)
+      // Each state below is checked on the canvas as well as in the
+      // BatchedMesh's visibility state: the viewer is paused, so a Hide that
+      // updated the state but drew nothing different would pass on the state
+      // alone (codex on #1985). Every frame is a fresh one of the current
+      // scene (`captureRenderedFrame`), judged against the two references
+      // here: the model as loaded, in its own colours, and as selected.
+      const asLoaded = await expectModelOnCanvas(page, 'the assembly as loaded')
 
       await openNavTree(page)
       await page.locator(`[data-node-label="${ASSEMBLY_ROOT_NAME}"]`).click()
@@ -1669,18 +1685,31 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
       // Out of the way of the controls on a phone.
       await closeNavTree(page)
       await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
+      const selected = await captureRenderedFrame(page)
+      expect(frameDifference(asLoaded, selected), 'the row click lit the assembly up on the canvas')
+        .toBeGreaterThan(SAME_FRAME_TOLERANCE)
 
       await page.getByTestId('Hide').click()
       await expect.poll(() => visibleBatchedInstances(page)).toBe(0)
-      // Hiding again brings the whole assembly back.
+      expect(edgeFraction(await captureRenderedFrame(page)), 'Hide took the whole assembly off the canvas')
+        .toBeLessThan(MIN_MODEL_EDGE_FRACTION)
+      // Hiding again brings the whole assembly back, still selected.
       await page.getByTestId('Hide').click()
       await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
+      expect(frameDifference(selected, await captureRenderedFrame(page)),
+        'the second Hide put the same assembly back on the canvas').toBeLessThan(SAME_FRAME_TOLERANCE)
 
       // Isolate shows the same whole assembly: nothing is left out, and the
       // children are not hidden as "other" elements.
       await page.getByTestId('Isolate').click()
       await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
       expect(await isolatedInstanceCount(page)).toBe(ASSEMBLY_INSTANCES)
+      // On the canvas, the frame the model loaded with: isolating drops the
+      // selection's cyan so the parts show their own colours
+      // (`IfcIsolator.isSelectionPaintSuppressed`, Share#1806), and with the
+      // whole assembly isolated none of it is left out.
+      expect(frameDifference(asLoaded, await captureRenderedFrame(page)),
+        'Isolate left the whole assembly on the canvas, in its own colours').toBeLessThan(SAME_FRAME_TOLERANCE)
     })
 
     // Was: 'the root row of an assembly with geometry of its own means the whole
@@ -1781,6 +1810,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
     await waitForModelReady(page)
     await dismissLoadSnackbar(page)
+    await expectModelOnCanvas(page, 'the reopened two-part export')
     await waitForGlbLog(glbLogs, `${2 * SHELLS_FIXTURE_ROWS} instance(s), 1 collapsed table(s)`, EXPORT_TEST_TIMEOUT_MS)
     await expectNothingSelected(page)
     await doubleClickSelectsAnElement(page, 'collapsed')
