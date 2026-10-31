@@ -26,6 +26,39 @@ describe('store/AppsSlice', () => {
   })
 
 
+  // #1993: the workspace Apps bar docks apps opened this session and
+  // apps the user pinned.
+  describe('running and pinned apps', () => {
+    beforeEach(() => localStorage.clear())
+
+    it('marks a selected app running, once, and keeps it after deselecting', () => {
+      const store = makeStore()
+      const app = {appName: 'Calc'}
+      store.getState().setSelectedApp(app)
+      store.getState().setSelectedApp(app)
+      store.getState().setSelectedApp(null)
+      expect(store.getState().runningApps).toEqual([app])
+    })
+
+    it('closes a running app, returning the drawer to the listing if it was showing', () => {
+      const store = makeStore()
+      store.getState().setSelectedApp({appName: 'Calc'})
+      store.getState().closeRunningApp('Calc')
+      expect(store.getState().runningApps).toEqual([])
+      expect(store.getState().selectedApp).toBeNull()
+    })
+
+    it('toggles a pin and persists it for the next load', () => {
+      const store = makeStore()
+      store.getState().togglePinnedApp('Calc')
+      expect(store.getState().pinnedAppNames).toEqual(['Calc'])
+      expect(makeStore().getState().pinnedAppNames).toEqual(['Calc'])
+      store.getState().togglePinnedApp('Calc')
+      expect(makeStore().getState().pinnedAppNames).toEqual([])
+    })
+  })
+
+
   describe('setters', () => {
     it('setIsAppsVisible sets visibility', () => {
       const store = makeStore()

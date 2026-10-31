@@ -3,6 +3,7 @@ import {Box, Paper, Stack} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
+import AppsRail from '../Components/Apps/AppsRail'
 import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
 import BottomBar from './BottomBar'
 import ControlsGroup from './ControlsGroup'
@@ -136,6 +137,9 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
             {navDrawer}
             {centerPane}
             {rightDrawers}
+            {/* The Apps drawer docked on the right border (#1993); a phone
+                keeps the bottom sheet. */}
+            {!isMobile && <AppsRail/>}
           </Stack>
         </Stack> :
         <>
