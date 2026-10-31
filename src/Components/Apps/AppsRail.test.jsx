@@ -15,6 +15,7 @@ describe('AppsRail', () => {
   beforeEach(() => {
     store = renderHook(() => useStore((state) => state)).result
     act(() => {
+      useStore.setState({isAppsEnabled: true})
       store.current.setIsAppsVisible(false)
       store.current.setSelectedApp(null)
       store.current.runningApps.forEach((app) => store.current.closeRunningApp(app.appName))
@@ -62,6 +63,16 @@ describe('AppsRail', () => {
     const {getByTestId, queryByTestId} = render(<ShareMock><AppsRail/></ShareMock>)
     expect(getByTestId(`apps-rail-${exampleApp.appName}`)).toBeInTheDocument()
     expect(queryByTestId(`apps-rail-close-${exampleApp.appName}`)).toBeNull()
+  })
+
+
+  it('renders nothing while Apps is disabled, even with a pinned app', () => {
+    act(() => {
+      store.current.togglePinnedApp(exampleApp.appName)
+      useStore.setState({isAppsEnabled: false})
+    })
+    const {queryByTestId} = render(<ShareMock><AppsRail/></ShareMock>)
+    expect(queryByTestId('AppsRail')).toBeNull()
   })
 
 

@@ -25,6 +25,7 @@ const CLOSE_BADGE_INSET = 2
  * @return {ReactElement|null}
  */
 export default function AppsRail() {
+  const isAppsEnabled = useStore((state) => state.isAppsEnabled)
   const isAppsVisible = useStore((state) => state.isAppsVisible)
   const setIsAppsVisible = useStore((state) => state.setIsAppsVisible)
   const setSelectedApp = useStore((state) => state.setSelectedApp)
@@ -41,7 +42,10 @@ export default function AppsRail() {
   const running = runningApps.filter((app) => !pinnedAppNames.includes(app.appName))
   const docked = [...pinned.map((app) => ({app, isPinned: true})), ...running.map((app) => ({app, isPinned: false}))]
 
-  if (isAppsVisible || docked.length === 0) {
+  // isAppsEnabled is the Apps kill switch: TopBar and OperationsGroup hide
+  // their Apps controls behind it, and a pin left in localStorage from a
+  // deploy that had Apps on must not reopen the drawer through the bar.
+  if (!isAppsEnabled || isAppsVisible || docked.length === 0) {
     return null
   }
 
