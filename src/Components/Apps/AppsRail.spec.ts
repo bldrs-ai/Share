@@ -58,6 +58,28 @@ describeMobileAndDesktop('Apps bar (?feature=workspace)', (ff) => {
   })
 
   if (!ff.isMobile) {
+    // Codex review on #1994: the ViewCube is positioned against the
+    // full-width viewer container at zIndex 100, so in a right-hand
+    // corner it covered the bar's cells until it learned the bar's width.
+    test('the ViewCube sits clear of the bar', async ({page}) => {
+      await page.evaluate(() => localStorage.setItem('bldrs-viewcube-position', 'upper-right'))
+      await page.getByTestId('control-button-apps').click()
+      await page.getByTestId(`app-pin-${APP}`).click()
+      await page.getByTestId('control-button-apps').click()
+      const rail = page.getByTestId('AppsRail')
+      await expect(rail).toBeVisible()
+
+      await page.getByTestId('control-button-view-cube').click()
+      const cube = page.getByTestId('view-cube')
+      await expect(cube).toBeVisible()
+      // The inset animates (transition: right 0.2s), so poll the settle.
+      await expect.poll(async () => {
+        const cubeBox = await cube.boundingBox()
+        const railBox = await rail.boundingBox()
+        return (cubeBox?.x ?? 0) + (cubeBox?.width ?? 0) <= (railBox?.x ?? 0)
+      }).toBe(true)
+    })
+
     test('an opened app docks until closed from the bar', async ({page}) => {
       await page.getByTestId('control-button-apps').click()
       await page.getByTestId('AppsDrawer').getByText(APP_CARD_TEXT).click()

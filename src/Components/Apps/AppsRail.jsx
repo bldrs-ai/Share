@@ -4,7 +4,7 @@ import {useTheme} from '@mui/material/styles'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
 import {ROW_PITCH} from '../../Containers/layoutConstants'
-import AppsRegistry from './AppsRegistry.json'
+import useAppsRail from './useAppsRail'
 import {Close as CloseIcon} from '@mui/icons-material'
 
 
@@ -19,33 +19,19 @@ const CLOSE_BADGE_INSET = 2
  * right border, the way the ProjectsDrawer collapses to its rail. One
  * control cell wide, under the TopBar's Apps button. Lists pinned apps,
  * then apps running this session; clicking one opens the Apps drawer on
- * it. Shown only while the drawer is closed and there is something to
- * dock — an empty bar would just take width from the model.
+ * it. When it shows is useAppsRail's call — shared with the ViewCube,
+ * which insets itself by the bar's width.
  *
  * @return {ReactElement|null}
  */
 export default function AppsRail() {
-  const isAppsEnabled = useStore((state) => state.isAppsEnabled)
-  const isAppsVisible = useStore((state) => state.isAppsVisible)
   const setIsAppsVisible = useStore((state) => state.setIsAppsVisible)
   const setSelectedApp = useStore((state) => state.setSelectedApp)
-  const runningApps = useStore((state) => state.runningApps)
   const closeRunningApp = useStore((state) => state.closeRunningApp)
-  const pinnedAppNames = useStore((state) => state.pinnedAppNames)
+  const {isVisible, docked} = useAppsRail()
   const theme = useTheme()
 
-  // Pinned first, in pin order, from the registry (they may not have been
-  // opened this session); then running apps that aren't pinned.
-  const pinned = pinnedAppNames
-    .map((name) => AppsRegistry.find((app) => app.appName === name))
-    .filter(Boolean)
-  const running = runningApps.filter((app) => !pinnedAppNames.includes(app.appName))
-  const docked = [...pinned.map((app) => ({app, isPinned: true})), ...running.map((app) => ({app, isPinned: false}))]
-
-  // isAppsEnabled is the Apps kill switch: TopBar and OperationsGroup hide
-  // their Apps controls behind it, and a pin left in localStorage from a
-  // deploy that had Apps on must not reopen the drawer through the bar.
-  if (!isAppsEnabled || isAppsVisible || docked.length === 0) {
+  if (!isVisible) {
     return null
   }
 

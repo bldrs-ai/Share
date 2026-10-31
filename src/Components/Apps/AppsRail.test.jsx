@@ -8,6 +8,8 @@ import AppsRegistry from './AppsRegistry.json'
 
 
 const exampleApp = AppsRegistry[0]
+// The bar is part of the workspace shell; without the flag it never shows.
+const WORKSPACE = ['/?feature=workspace']
 
 
 describe('AppsRail', () => {
@@ -25,7 +27,7 @@ describe('AppsRail', () => {
 
 
   it('renders nothing when no app is running or pinned', () => {
-    const {queryByTestId} = render(<ShareMock><AppsRail/></ShareMock>)
+    const {queryByTestId} = render(<ShareMock initialEntries={WORKSPACE}><AppsRail/></ShareMock>)
     expect(queryByTestId('AppsRail')).toBeNull()
   })
 
@@ -34,7 +36,7 @@ describe('AppsRail', () => {
     act(() => {
       store.current.setSelectedApp(exampleApp)
     })
-    const {getByTestId, queryByTestId} = render(<ShareMock><AppsRail/></ShareMock>)
+    const {getByTestId, queryByTestId} = render(<ShareMock initialEntries={WORKSPACE}><AppsRail/></ShareMock>)
     expect(getByTestId(`apps-rail-${exampleApp.appName}`)).toBeInTheDocument()
 
     act(() => {
@@ -60,7 +62,7 @@ describe('AppsRail', () => {
     act(() => {
       store.current.togglePinnedApp(exampleApp.appName)
     })
-    const {getByTestId, queryByTestId} = render(<ShareMock><AppsRail/></ShareMock>)
+    const {getByTestId, queryByTestId} = render(<ShareMock initialEntries={WORKSPACE}><AppsRail/></ShareMock>)
     expect(getByTestId(`apps-rail-${exampleApp.appName}`)).toBeInTheDocument()
     expect(queryByTestId(`apps-rail-close-${exampleApp.appName}`)).toBeNull()
   })
@@ -70,6 +72,15 @@ describe('AppsRail', () => {
     act(() => {
       store.current.togglePinnedApp(exampleApp.appName)
       useStore.setState({isAppsEnabled: false})
+    })
+    const {queryByTestId} = render(<ShareMock initialEntries={WORKSPACE}><AppsRail/></ShareMock>)
+    expect(queryByTestId('AppsRail')).toBeNull()
+  })
+
+
+  it('renders nothing without the workspace flag', () => {
+    act(() => {
+      store.current.togglePinnedApp(exampleApp.appName)
     })
     const {queryByTestId} = render(<ShareMock><AppsRail/></ShareMock>)
     expect(queryByTestId('AppsRail')).toBeNull()
