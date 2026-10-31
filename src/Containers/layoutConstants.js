@@ -35,3 +35,26 @@ export const ROW_PITCH = CONTROL_SIZE + (2 * CONTROL_MARGIN)
  * exactly one control row, so the two columns start together.
  */
 export const TOP_BAR_HEIGHT = ROW_PITCH
+
+
+/**
+ * The design system's space-3 / space-4 steps (theme.spacing(1.5) / (2)),
+ * as numbers for the layout maths below.
+ */
+const SPACE_3 = 12
+const SPACE_4 = 16
+
+
+/**
+ * A drawer's "New …" button (New project, New note): shorter than a
+ * control (control-size less space-3) so it reads as a button on its row
+ * rather than a row itself, sitting 11px below the header band.
+ */
+export const NEW_BUTTON_HEIGHT = CONTROL_SIZE - SPACE_3
+
+
+/**
+ * Side inset of a drawer's "New …" button, control-margin + space-4, so
+ * its edges line up with the list rows' icons.
+ */
+export const NEW_BUTTON_INSET = CONTROL_MARGIN + SPACE_4

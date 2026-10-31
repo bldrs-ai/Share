@@ -2,6 +2,7 @@ import React, {ReactElement, useRef} from 'react'
 import {Box, Paper} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Hooks'
+import useExistInFeature from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import HorizonResizerButton from './HorizonResizerButton'
@@ -36,6 +37,12 @@ export default function SideDrawer({
   const setDrawerHeight = useStore((state) => state.setDrawerHeight)
   const isMobile = useIsMobile()
   const theme = useTheme()
+  // Workspace shell: the design system divides each pair of columns with
+  // the same neutral hairline the ProjectsDrawer has on its right edge, so
+  // a side drawer takes one on the edge that faces the centre pane. Desktop
+  // only: on a phone this is the bottom sheet.
+  const isWorkspaceEnabled = useExistInFeature('workspace')
+  const centreEdge = isResizeOnLeft ? 'borderLeft' : 'borderRight'
   const drawerRef = useRef(null)
   const resizeButtonThickness = 10
   const resizeMargin = isResizeOnLeft ? '0 0 0 1em' : '0 1em 0 0'
@@ -53,7 +60,9 @@ export default function SideDrawer({
       } : {
         top: 0,
         width: drawerWidth,
-        height: '100vh',
+        // Under the workspace shell the drawer sits in a row beneath the
+        // TopBar (#1992), so it fills that row rather than the window.
+        height: isWorkspaceEnabled ? '100%' : '100vh',
         minWidth: '8px',
       })}
       data-testid={dataTestId}
@@ -67,6 +76,9 @@ export default function SideDrawer({
           borderRadius: 0,
           backgroundColor: theme.palette.secondary.backgroundColor,
           backdropFilter: theme.palette.secondary.backdropFilter,
+          ...(isWorkspaceEnabled && !isMobile ?
+            {[centreEdge]: `1px solid ${theme.palette.secondary.workspaceBorder}`} :
+            {}),
         }}
         ref={drawerRef}
         data-testid='SideDrawer-Paper'
