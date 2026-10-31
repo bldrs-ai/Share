@@ -36,9 +36,12 @@ export default function NotesPanel() {
   // next as a compact row. The panel closes from the Notes control.
   if (isWorkspaceEnabled && !isMobile) {
     const isListView = !selectedNoteId && !isCreateNoteVisible
+    // One scroll container for the whole column, so New note and the
+    // NOTES label scroll away with the list rather than staying pinned,
+    // the same as New project in the ProjectsDrawer.
     return (
       <Box
-        sx={{height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden'}}
+        sx={{height: '100%', overflowX: 'hidden', overflowY: 'auto'}}
         data-testid='NotesPanel'
       >
         {isListView ?
@@ -50,14 +53,14 @@ export default function NotesPanel() {
             />
             <SectionLabel text='Notes' dataTestId='notes-section-label'/>
           </> :
-          <Box sx={{flexShrink: 0}} data-testid='notes-nav-row'>
+          <Box data-testid='notes-nav-row'>
             <NotesNavBar/>
           </Box>}
         {/* Notes stay raised paper — a note is a sheet — unlike the
             ProjectsDrawer's flat list. */}
         <Paper
           elevation={1}
-          sx={{flex: '1 1 auto', minHeight: 0, overflow: 'auto', padding: '0.5em'}}
+          sx={{padding: '0.5em'}}
           data-testid='SideDrawerPanel-Paper-Notes'
         >
           <Notes/>

@@ -8,6 +8,8 @@ import AppsRegistry from './AppsRegistry.json'
 /** @return {ReactElement} */
 export default function AppsListing() {
   const setSelectedApp = useStore((state) => state.setSelectedApp)
+  const pinnedAppNames = useStore((state) => state.pinnedAppNames)
+  const togglePinnedApp = useStore((state) => state.togglePinnedApp)
   return (
     <Grid container spacing={1}>
       {AppsRegistry.map((itemJson, index) => (
@@ -15,6 +17,8 @@ export default function AppsListing() {
           <AppEntry
             onClickCb={() => setSelectedApp(itemJson)}
             itemJson={itemJson}
+            isPinned={pinnedAppNames.includes(itemJson.appName)}
+            onTogglePin={() => togglePinnedApp(itemJson.appName)}
           />
         </Grid>
       ))}

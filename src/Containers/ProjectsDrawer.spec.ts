@@ -175,13 +175,16 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
     await visitWithWorkspace(page)
     await ensureProjectsDrawerOpen(page)
 
-    // accent (#4444ff) — the MUI default would be the grey
-    // primary.main (#c1c1c1), which is what this drawer shipped with.
+    // accent (#5555ff) — the MUI default would be the grey
+    // primary.main (#c1c1c1), which is what this drawer shipped with —
+    // in sentence case, as the design system's Button sets it, not MUI's
+    // upper-cased default.
     await expect(page.getByTestId('projects-new-button'))
-      .toHaveCSS('background-color', 'rgb(68, 68, 255)')
+      .toHaveCSS('background-color', 'rgb(85, 85, 255)')
+    await expect(page.getByTestId('projects-new-button')).toHaveCSS('text-transform', 'none')
     await page.getByTestId('projects-new-button').click()
     await expect(page.getByTestId('projects-new-create'))
-      .toHaveCSS('background-color', 'rgb(68, 68, 255)')
+      .toHaveCSS('background-color', 'rgb(85, 85, 255)')
     await page.keyboard.press('Escape')
 
     // The home model we arrived on is the open one, listed Ungrouped.
@@ -232,9 +235,9 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
     await expect(menu).toContainText('Build Every Thing Together')
     await expect(menu).toContainText('Fastest browser-based CAD')
     await expect(page.getByTestId('workspace-logo-menu-pricing'))
-      .toHaveAttribute('href', 'https://bldrs.ai/pricing')
+      .toHaveAttribute('href', '/pricing/')
     await expect(page.getByTestId('workspace-logo-menu-news'))
-      .toHaveAttribute('href', 'https://bldrs.ai/blog')
+      .toHaveAttribute('href', '/blog/')
 
     await page.getByTestId('workspace-logo-menu-about').click()
     await expect(page.getByRole('dialog')).toBeVisible()
@@ -307,6 +310,28 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
 
       const boxAfter = await drawer.boundingBox()
       expect(boxAfter?.width).toBeGreaterThan(boxBefore.width)
+    })
+
+    test('New project scrolls with a long project list', async ({page}) => {
+      // Enough projects to overflow the drawer, seeded straight into the
+      // workspace store (src/workspace/persistence.ts) before load.
+      const projectCount = 15
+      await page.addInitScript((count) => {
+        const projects = Array.from({length: count}, (_, i) => ({id: `seed-${i}`, name: `Project ${i}`, models: []}))
+        localStorage.setItem('bldrs:workspace-projects', JSON.stringify({version: 1, projects, ungrouped: []}))
+      }, projectCount)
+      await visitWithWorkspace(page)
+      const scroll = page.getByTestId('projects-scroll')
+      await expect(page.locator('[data-testid^="project-seed-"]')).toHaveCount(projectCount)
+
+      const before = await page.getByTestId('projects-new-button').boundingBox()
+      const scrolled = await scroll.evaluate((el) => {
+        el.scrollTop = 120
+        return el.scrollTop
+      })
+      expect(scrolled).toBeGreaterThan(0)
+      await expect.poll(async () => (await page.getByTestId('projects-new-button').boundingBox())?.y)
+        .toBeLessThan((before?.y ?? 0) - (scrolled / 2))
     })
 
     test('resize: New project stays on one line at the narrowest width', async ({page}) => {
