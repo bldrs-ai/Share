@@ -642,8 +642,26 @@ describe('utils/occurrencePaths', () => {
       expect(rows(coverInstancesByOccurrences(children, new Set([1]), instancesOf))).toEqual([[12, [1]]])
     })
 
-    it('keeps what a part-wanted child holds at its own path on that child', () => {
-      expect(rows(coverInstancesByOccurrences(children, new Set([0, 4]), instancesOf))).toEqual([[11, [0]], [10, [4]]])
+    it('names what a part-wanted child holds at its own path by the geometry pieces that are just it', () => {
+      // `o10` would read back as 10's children too (codex on #2001); the
+      // piece `o10.500` reads back as instance 4 alone.
+      const piecesOf = (node) => (node.expressID === 10 ?
+        [{geometryExpressId: 600, instanceIds: [0, 1]}, {geometryExpressId: 500, instanceIds: [4]}] : [])
+      expect(coverInstancesByOccurrences(children, new Set([0, 4]), instancesOf, piecesOf)).toEqual([
+        {nodeId: 11, occurrencePath: [10, 11], solidExpressId: null, instanceIds: [0]},
+        {nodeId: 500, occurrencePath: [10], solidExpressId: 500, instanceIds: [4]},
+      ])
+    })
+
+    it('marks what no piece names alone inexact, rather than naming the whole child', () => {
+      // 4 shares its geometry with 0 and 1, so no ref reads back as 4 alone.
+      const piecesOf = () => [{geometryExpressId: 600, instanceIds: [0, 1, 4]}]
+      expect(coverInstancesByOccurrences(children, new Set([0, 4]), instancesOf, piecesOf)).toEqual([
+        {nodeId: 11, occurrencePath: [10, 11], solidExpressId: null, instanceIds: [0]},
+        {nodeId: 10, occurrencePath: [10], solidExpressId: null, instanceIds: [4], inexact: true},
+      ])
+      // And so without pieces to ask.
+      expect(coverInstancesByOccurrences(children, new Set([0, 4]), instancesOf).pop().inexact).toBe(true)
     })
 
     it('is nothing for nothing wanted, and skips rows without a path', () => {

@@ -478,8 +478,16 @@ order; BVH permutes only the index buffer, not the numbering).
      Everything below it goes to the fewest occurrences that hold exactly
      those instances (`occurrencePaths.coverInstancesByOccurrences`): a child
      that is wholly in the selection is one entry, and the walk goes below a
-     child only when part of it is out. The instances are the same, so what
-     the scene shows does not change. Every row now reads its own state, and
+     child only when part of it is out. Every entry reads back from the link
+     as exactly its instances. A row's `o<path>` reads back as everything at
+     and below the path. So geometry placed at a part-selected assembly's own
+     path, beside its children, can't be written as that assembly's row:
+     the link would reopen its other children too (codex on #2001). It is
+     named by the assembly's geometry pieces that lie wholly inside it,
+     `o<path>.<geometry id>`, the anonymous-geometry ref (conway#387). Any
+     part that no piece names alone is marked `inexact`. The instances are
+     the same, so what the scene shows does not change. Every row now reads
+     its own state, and
      a child's eye shows just that child while the rest stays hidden. The gate
      that decides when the selection is the whole product
      (`_wholeRootOccurrences`, all of the product's own instances selected) is
@@ -487,8 +495,19 @@ order; BVH permutes only the index buffer, not the numbering).
    - **The root's eye is the whole product.** On the row of a top-level
      product with root-level geometry of its own, `HideToggleButton` calls
      `IfcIsolator#hideProduct` and `#unHideProduct`. Hide takes what a row
-     click selects. Show takes the product's own entry and every occurrence
-     hidden under it, however it was hidden (H, its own eye, a link). Every
+     click selects. Show takes the product's own entry and the occurrences
+     below it that were hidden with it, in the same call
+     (`IfcIsolator#_productParts`). An occurrence the user hid on its own eye
+     first stays hidden. That follows the STEP occurrence eyes: showing an
+     assembly occurrence removes only its own key (`unHideOccurrences`), so
+     a child hidden on its own eye stays hidden. It is also what main's
+     whole-product H did with its one `#<row>` entry (codex on #2001). H
+     again on a whole product shows the same set: the rows the selection
+     names itself, and the rows hidden with the product. The IFC eye is the
+     other precedent: it clears its whole subtree's ids. A link can't say
+     which rows were hidden on their own, so a product reopened from
+     `hide=e<row>+o…` counts every row the link lists under it as hidden
+     with it. Every
      other row, a plain assembly's root (no root-level geometry, #1924 item
      6) among them, keeps the route it had. Which rows get an eye is
      unchanged (`NavTreePanel`, `canBeHidden`).
@@ -505,13 +524,19 @@ order; BVH permutes only the index buffer, not the numbering).
      hidden. A product with many direct children writes a ref for each, and
      the 1500-character cap (model-display-controls §6.2) can drop the
      visibility terms. The Share dialog says so when it does.
-   - **Not exact everywhere.** The root's own geometry has no stable id of
-     its own, so `e<row>` always means all of it. The gate guarantees that
-     today. A narrower pathless entry (#1924 item 2's possible fix) would
-     write as the whole of it. A child only partly in the selection, whose
-     children don't account for the rest, keeps the rest as an entry under
-     its own row. The hide stays exact, but that row's eye and its `o` ref
-     speak for all of it.
+   - **What no ref can name stays out of the link.** The root's own
+     geometry has no stable id of its own, so `e<row>` always means all of
+     it, which the gate guarantees today. A product entry holding only some
+     of it would be marked `inexact`, as #1924 item 2's possible fix would
+     make it. So would geometry at a part-selected assembly's own path that
+     shares its geometry id with a sibling's. An `inexact` entry is hidden
+     or isolated exactly in the session, but its ref would reopen more. A
+     link written with one would reopen something other than what is on
+     screen, while looking complete. So while any entry is `inexact`, the
+     link carries no visibility terms, as past the size cap
+     (`visibilityHash.js#visibilityRefsAreExact`). The Share dialog then
+     says the state is not in the link. Every link that is written reopens
+     exactly the hidden or isolated set it was written from.
 
    The root's empty path is no key for `selectedOccurrences`/
    `getInstanceIdsForOccurrencePath`, so every row-driven path needs the

@@ -907,21 +907,32 @@ export function selectedOccurrences({rootNode, anchorIds, occurrencePath = null,
  * to, so each row's eye reads its own state and each is written to the `#d:`
  * link by its path.
  *
- * Each entry carries its `instanceIds`, so the instance set it stands for is
- * exactly the part of `wanted` it covers. A node only partly wanted whose
- * children don't account for the rest (geometry placed at the node's own
- * path, beside children) keeps that rest as an entry of its own, which then
- * names the node though not all of it: the hide stays exact, and its eye and
- * its link ref speak for the whole node.
+ * Every entry stands for exactly the instances its ref reads back as: a row's
+ * `o<path>` resolves to everything at and below the path, and a geometry
+ * piece's `o<path>.<geometry id>` to that geometry at and below it
+ * (`visibilityHash.js#resolveOccurrence`). So a node that is only partly
+ * wanted, whose children don't account for the rest (geometry placed at the
+ * node's own path, beside children), can't keep that rest as its own row:
+ * its row reads back as all of it, children included (codex on #2001). The
+ * rest is named by the node's geometry pieces (`piecesOf`) that lie wholly
+ * inside it. What no piece names exactly is left as one entry marked
+ * `inexact`: hidden exactly in the session, but with no ref that reads back
+ * as just it, so the link leaves the state out (`visibilityHash.js`).
  *
  * @param {Array<object>} nodes tree nodes (a product's children)
  * @param {Set<number>} wanted instance ids to cover
  * @param {Function} instancesOf `(node) => Array<number>`: a node's
  *   instances, its descendants' included (`getInstanceIdsForOccurrencePath`)
+ * @param {Function} [piecesOf] `(node) => Array<{geometryExpressId,
+ *   instanceIds}>`: the geometry pieces at and below a node, each with the
+ *   instances it resolves to the way the link reads it back. Without it,
+ *   every such rest is `inexact`.
  * @return {Array<object>} `{nodeId, occurrencePath, solidExpressId,
- *   instanceIds}`, the same row identity `selectedOccurrences` gives
+ *   instanceIds}`, the same row identity `selectedOccurrences` gives (for a
+ *   piece, the geometry id is the node id and the solid id), plus
+ *   `inexact: true` on a rest no ref names
  */
-export function coverInstancesByOccurrences(nodes, wanted, instancesOf) {
+export function coverInstancesByOccurrences(nodes, wanted, instancesOf, piecesOf = null) {
   const out = []
   if (!(wanted?.size > 0)) {
     return out
@@ -937,17 +948,26 @@ export function coverInstancesByOccurrences(nodes, wanted, instancesOf) {
     }
     const id = Number(node.expressID)
     const solid = node.ephemeral === true ? id : null
-    const entry = (instanceIds) => ({nodeId: id, occurrencePath: node.occurrencePath, solidExpressId: solid, instanceIds})
+    const path = node.occurrencePath
     if (hit.length === ids.length) {
-      out.push(entry(ids))
+      out.push({nodeId: id, occurrencePath: path, solidExpressId: solid, instanceIds: ids})
       continue
     }
-    const below = coverInstancesByOccurrences(node.children, new Set(hit), instancesOf)
-    const covered = new Set(below.flatMap(({instanceIds}) => instanceIds))
-    const rest = hit.filter((instanceId) => !covered.has(instanceId))
+    const below = coverInstancesByOccurrences(node.children, new Set(hit), instancesOf, piecesOf)
     out.push(...below)
-    if (rest.length > 0) {
-      out.push(entry(rest))
+    const rest = new Set(hit)
+    below.forEach(({instanceIds}) => instanceIds.forEach((instanceId) => rest.delete(instanceId)))
+    for (const {geometryExpressId, instanceIds} of (rest.size > 0 && piecesOf ? piecesOf(node) : [])) {
+      if (instanceIds.length > 0 && instanceIds.every((instanceId) => rest.has(instanceId))) {
+        out.push({nodeId: geometryExpressId, occurrencePath: path, solidExpressId: geometryExpressId, instanceIds})
+        instanceIds.forEach((instanceId) => rest.delete(instanceId))
+      }
+    }
+    if (rest.size > 0) {
+      out.push({
+        nodeId: id, occurrencePath: path, solidExpressId: solid,
+        instanceIds: hit.filter((instanceId) => rest.has(instanceId)), inexact: true,
+      })
     }
   }
   return out

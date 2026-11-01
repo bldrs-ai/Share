@@ -132,12 +132,40 @@ export function writeVisibilityHash(location, viewer) {
     return true
   }
   const terms = visibilityTerms(visibilityRefs(viewer))
-  const fits = visibilityTermsFit(terms)
-  if (!fits) {
+  const exact = visibilityRefsAreExact(viewer)
+  const fits = exact && visibilityTermsFit(terms)
+  if (!exact) {
+    console.warn('visibilityHash: part of the hidden / isolated state has no exact ref; leaving it out')
+  } else if (!fits) {
     console.warn('visibilityHash: hidden / isolated state is too large for the link; leaving it out')
   }
   mergeDisplayTerms(location, fits ? terms : Object.fromEntries(VISIBILITY_KEYS.map((key) => [key, null])))
   return fits
+}
+
+
+/**
+ * Whether the refs `visibilityRefs` writes read back as exactly the state
+ * held. A STEP occurrence entry marked `inexact` holds some of what its ref
+ * names and not the rest: geometry at an assembly's own path, split from a
+ * whole-product selection, that no row or geometry piece names alone
+ * (`occurrencePaths.coverInstancesByOccurrences`, codex on #2001). Written
+ * anyway, its ref would reopen more than was hidden. The link then carries
+ * none of the state, as past the size cap, rather than a state that looks
+ * complete.
+ *
+ * @param {object} viewer ShareViewer
+ * @return {boolean}
+ */
+export function visibilityRefsAreExact(viewer) {
+  const isolator = viewer?.isolator
+  if (!isolator) {
+    return true
+  }
+  const hiddenExact = [...(isolator.hiddenOccurrencePaths?.values() ?? [])].every(({inexact}) => inexact !== true)
+  const isolatedExact = !isolator.tempIsolationModeOn ||
+    (isolator.isolatedOccurrences ?? []).every(({inexact}) => inexact !== true)
+  return hiddenExact && isolatedExact
 }
 
 
