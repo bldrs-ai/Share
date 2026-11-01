@@ -2,7 +2,7 @@ import {ToolError, createRegistry} from '../../assist'
 import useStore from '../../store/useStore'
 import {createShareToolProvider} from './shareTools'
 import {createViewContextSource} from './viewContext'
-import {createViewToolProvider} from './viewTools'
+import {createModelToolProvider, createViewToolProvider} from './viewTools'
 
 
 /**
@@ -15,7 +15,7 @@ import {createViewToolProvider} from './viewTools'
  */
 export function createShareAssistRegistry() {
   return createRegistry(
-    [createViewToolProvider(), createShareToolProvider()],
+    [createModelToolProvider(), createViewToolProvider(), createShareToolProvider()],
     {contextSources: [createViewContextSource()]})
 }
 

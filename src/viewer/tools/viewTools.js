@@ -20,11 +20,24 @@ import {captureVisibility, restoreVisibility} from './visibilityState'
 
 
 /**
- * The `view` tool provider, v0 read/annotate tools (#1674;
+ * The `model` and `view` tool providers, v0 read/annotate tools (#1674;
  * ai-workspace.md §9 "v0 tools"). Share-side: everything here couples to
  * live viewer state (the store, the ShareViewer, the IfcIsolator, the
  * selection funnel), and Assist sees only the JSON going in and out. This
  * directory moves to the View repo with the viewer (§2.1).
+ *
+ * Two providers because a tool's `<provider>.<verb>` prefix names who
+ * answers it, not what it may do (that is the annotations' job, assist/policy):
+ *
+ * - `model.query` / `model.properties` read the document. The MVC-core
+ *   review (design/new/reviews/2026-10-29-mvc-core-review_grok-4.7.md §7.1)
+ *   puts that list / get-by-ref in a headless session with no viewer, so
+ *   they are named for the document they read, not the view that serves
+ *   them today.
+ * - `view.*` acts on what the user is looking at: selection, visibility,
+ *   camera.
+ *
+ * Both share this file's helpers, since today both read the same store.
  *
  * Rules every tool here keeps (§9 "Rules for every tool"):
  * - Results are JSON summaries: refs, types, names, counts, and — only in
@@ -45,7 +58,7 @@ export const MAX_RESULT_REFS = 200
 const DEFAULT_QUERY_LIMIT = 50
 /** Most refs a mutating call accepts (select / hide / isolate / focus). */
 const MAX_INPUT_REFS = 1000
-/** Most elements `view.properties` reads in one call. */
+/** Most elements `model.properties` reads in one call. */
 const MAX_PROPERTY_REFS = 20
 const MAX_ATTRIBUTES = 40
 const MAX_PSETS = 20
@@ -63,17 +76,17 @@ const REFS_SCHEMA = {
   type: 'array',
   items: {type: 'string', minLength: 1, maxLength: 512},
   maxItems: MAX_INPUT_REFS,
-  description: 'Element refs, as view.query returns them: e<id>, o<id>.<id>…, n<path>, or g<GlobalId>.',
+  description: 'Element refs, as model.query returns them: e<id>, o<id>.<id>…, n<path>, or g<GlobalId>.',
 }
 
 
 /**
- * @return {object} the `view` ToolProvider
+ * @return {object} the `model` ToolProvider: read-only document queries
  */
-export function createViewToolProvider() {
+export function createModelToolProvider() {
   const tools = [
     {
-      name: 'view.query',
+      name: 'model.query',
       description:
         'Find elements in the loaded model. Every filter is optional and filters combine: ' +
         'ifcType (e.g. "IfcWindow" or "window"), level (a storey name or ref; elements on that level), ' +
@@ -96,7 +109,7 @@ export function createViewToolProvider() {
       run: asTool(query),
     },
     {
-      name: 'view.properties',
+      name: 'model.properties',
       description:
         `Attributes and property sets of up to ${MAX_PROPERTY_REFS} elements, as name → value. ` +
         'Values are summarized: entity references read "#<id>", long strings and lists are cut. ' +
@@ -110,6 +123,16 @@ export function createViewToolProvider() {
       annotations: {readOnly: true},
       run: properties,
     },
+  ]
+  return {id: 'model', tools: () => tools}
+}
+
+
+/**
+ * @return {object} the `view` ToolProvider: selection, visibility and camera
+ */
+export function createViewToolProvider() {
+  const tools = [
     {
       name: 'view.select',
       description:

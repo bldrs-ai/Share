@@ -29,7 +29,7 @@ async function rejection(promise) {
 }
 
 
-describe('viewer/tools (view + share providers)', () => {
+describe('viewer/tools (model, view and share providers)', () => {
   let fixture
   let registry
   let funnel
@@ -52,8 +52,8 @@ describe('viewer/tools (view + share providers)', () => {
 
   it('registers the v0 tools with their policies', () => {
     expect(registry.list().map(({name, policy}) => [name, policy])).toEqual([
-      ['view.query', 'run'],
-      ['view.properties', 'run'],
+      ['model.query', 'run'],
+      ['model.properties', 'run'],
       ['view.select', 'runWithUndo'],
       ['view.isolate', 'runWithUndo'],
       ['view.hide', 'runWithUndo'],
@@ -64,9 +64,27 @@ describe('viewer/tools (view + share providers)', () => {
   })
 
 
+  // The document reads moved from `view.*` to `model.*` (the prefix names
+  // who answers: a headless document session, MVC-core review §7.1). The old
+  // names must be gone, not aliased, and the new ones read-only with no undo.
+  it('serves the document reads as model.*, not view.*', async () => {
+    const names = registry.list().map(({name}) => name)
+    expect(names).not.toContain('view.query')
+    expect(names).not.toContain('view.properties')
+    expect(registry.has('view.query')).toBe(false)
+    expect((await rejection(registry.call('view.query', {}))).code).toBe('unknown_tool')
+    for (const name of ['model.query', 'model.properties']) {
+      expect(registry.list().find((tool) => tool.name === name)?.annotations).toEqual({readOnly: true})
+    }
+    const result = await registry.call('model.query', {ifcType: 'IfcDoor'})
+    expect(result.refs).toEqual(['e202'])
+    expect(result.undo).toBeUndefined()
+  })
+
+
   it('reports not_ready without a loaded model', async () => {
     useStore.setState({model: null})
-    const error = await rejection(registry.call('view.query', {}))
+    const error = await rejection(registry.call('model.query', {}))
     expect(error).toBeInstanceOf(ToolError)
     expect(error.code).toBe('not_ready')
   })
@@ -77,8 +95,8 @@ describe('viewer/tools (view + share providers)', () => {
   // Float32Array in `content`, and this would name it.
   it('returns plain JSON from every tool, never geometry', async () => {
     const calls = [
-      ['view.query', {}],
-      ['view.properties', {refs: ['e100', 'e102']}],
+      ['model.query', {}],
+      ['model.properties', {refs: ['e100', 'e102']}],
       ['view.select', {refs: ['e100']}],
       ['view.hide', {refs: ['e100']}],
       ['view.showAll', {}],
@@ -94,13 +112,13 @@ describe('viewer/tools (view + share providers)', () => {
   })
 
 
-  describe('view.query', () => {
+  describe('model.query', () => {
     it.each([
       ['IfcWindow'],
       ['IFCWINDOW'],
       ['window'],
     ])('matches ifcType %s loosely', async (ifcType) => {
-      const result = await registry.call('view.query', {ifcType})
+      const result = await registry.call('model.query', {ifcType})
       expect(result.content).toEqual({
         total: 3,
         returned: 3,
@@ -116,49 +134,49 @@ describe('viewer/tools (view + share providers)', () => {
     })
 
     it('matches the NavTree\'s pretty type name', async () => {
-      const result = await registry.call('view.query', {ifcType: 'Building Storey'})
+      const result = await registry.call('model.query', {ifcType: 'Building Storey'})
       expect(result.refs).toEqual(['e10', 'e20'])
     })
 
     it('filters by level, by name or by ref, combined with type', async () => {
-      expect((await registry.call('view.query', {level: 'Level 2', ifcType: 'IfcWall'})).refs).toEqual(['e200'])
-      expect((await registry.call('view.query', {level: 'level 1'})).refs).toEqual(['e100', 'e101', 'e102', 'e103'])
-      expect((await registry.call('view.query', {level: 'e20'})).refs).toEqual(['e200', 'e201', 'e202'])
+      expect((await registry.call('model.query', {level: 'Level 2', ifcType: 'IfcWall'})).refs).toEqual(['e200'])
+      expect((await registry.call('model.query', {level: 'level 1'})).refs).toEqual(['e100', 'e101', 'e102', 'e103'])
+      expect((await registry.call('model.query', {level: 'e20'})).refs).toEqual(['e200', 'e201', 'e202'])
     })
 
     it('lists the valid levels when none matches', async () => {
-      const error = await rejection(registry.call('view.query', {level: 'Roof'}))
+      const error = await rejection(registry.call('model.query', {level: 'Roof'}))
       expect(error.code).toBe('rejected')
       expect(error.details.levels).toEqual([{ref: 'e10', name: 'Level 1'}, {ref: 'e20', name: 'Level 2'}])
     })
 
     it('filters by name substring and by search text', async () => {
-      expect((await registry.call('view.query', {name: 'wall'})).refs).toEqual(['e100', 'e101', 'e200'])
-      expect((await registry.call('view.query', {text: 'Door'})).refs).toEqual(['e202'])
-      expect((await registry.call('view.query', {text: globalIdOf(201)})).refs).toEqual(['e201'])
+      expect((await registry.call('model.query', {name: 'wall'})).refs).toEqual(['e100', 'e101', 'e200'])
+      expect((await registry.call('model.query', {text: 'Door'})).refs).toEqual(['e202'])
+      expect((await registry.call('model.query', {text: globalIdOf(201)})).refs).toEqual(['e201'])
     })
 
     it('needs no arguments at all (eval #1929), and caps with a total', async () => {
-      const all = await registry.call('view.query')
+      const all = await registry.call('model.query')
       expect(all.content.total).toBe(11)
       expect(all.content.truncated).toBe(false)
-      const capped = await registry.call('view.query', {limit: 2})
+      const capped = await registry.call('model.query', {limit: 2})
       expect(capped.content).toMatchObject({total: 11, returned: 2, truncated: true})
       expect(capped.content.hint).toMatch(/narrow the query/)
       expect(capped.refs).toEqual(['e2', 'e3'])
     })
 
     it('rejects an argument it doesn\'t have, naming the ones it does', async () => {
-      const error = await rejection(registry.call('view.query', {query: 'windows'}))
+      const error = await rejection(registry.call('model.query', {query: 'windows'}))
       expect(error.code).toBe('invalid_input')
       expect(error.message).toMatch(/unknown property 'query' \(allowed: ifcType, level, name, text, limit\)/)
     })
   })
 
 
-  describe('view.properties', () => {
+  describe('model.properties', () => {
     it('summarizes attributes and property sets', async () => {
-      const result = await registry.call('view.properties', {refs: ['e102']})
+      const result = await registry.call('model.properties', {refs: ['e102']})
       const [item] = result.content.items
       expect(item.ref).toBe('e102')
       expect(item.type).toBe('IFCWINDOW')
@@ -174,7 +192,7 @@ describe('viewer/tools (view + share providers)', () => {
     })
 
     it('reads references as #ids, decodes IFC strings, and drops buffers', async () => {
-      const result = await registry.call('view.properties', {refs: ['e100']})
+      const result = await registry.call('model.properties', {refs: ['e100']})
       const {attributes} = result.content.items[0]
       expect(attributes.ObjectPlacement).toBe('#500')
       expect(attributes.Tag).toBe('Wé-A')
@@ -183,12 +201,12 @@ describe('viewer/tools (view + share providers)', () => {
     })
 
     it('accepts GlobalIds, prefixed or bare', async () => {
-      const result = await registry.call('view.properties', {refs: [`g${globalIdOf(102)}`, globalIdOf(100)]})
+      const result = await registry.call('model.properties', {refs: [`g${globalIdOf(102)}`, globalIdOf(100)]})
       expect(result.content.items.map(({name}) => name)).toEqual(['Window 1', 'Wall A'])
     })
 
     it('fails the call on refs that don\'t resolve, listing each with a reason', async () => {
-      const error = await rejection(registry.call('view.properties', {refs: ['e102', 'e9999', 'zzz', 'nLevel%201', 'o10.100']}))
+      const error = await rejection(registry.call('model.properties', {refs: ['e102', 'e9999', 'zzz', 'nLevel%201', 'o10.100']}))
       expect(error.code).toBe('unresolved_refs')
       expect(error.details.unresolved.map(({ref}) => ref)).toEqual(['e9999', 'zzz', 'nLevel%201', 'o10.100'])
       expect(error.details.unresolved[1].reason).toBe('not a ref')

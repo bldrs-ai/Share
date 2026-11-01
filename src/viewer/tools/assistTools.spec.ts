@@ -51,7 +51,7 @@ describeMobileAndDesktop('Assist view tools', () => {
   })
 
   test('query finds the proxies; select highlights the row; isolate and undo change what is drawn', async ({page}) => {
-    const query = await callTool(page, 'view.query', {ifcType: PROXY_TYPE})
+    const query = await callTool(page, 'model.query', {ifcType: PROXY_TYPE})
     expect(query.ok, JSON.stringify(query.error)).toBe(true)
     expect(query.content?.total).toBe(PROXY_COUNT)
     expect(query.content?.items?.every(({name}) => name === PROXY_LABEL)).toBe(true)

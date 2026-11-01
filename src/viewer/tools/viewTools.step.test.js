@@ -60,10 +60,10 @@ describe('viewer/tools on a STEP assembly', () => {
   })
 
   // Codex review round 4 on #1946: a one-product file's root IS the product.
-  it('lists the top-level product of a one-product file in view.query', async () => {
-    const all = await registry.call('view.query', {})
+  it('lists the top-level product of a one-product file in model.query', async () => {
+    const all = await registry.call('model.query', {})
     expect(all.refs).toEqual(['e1', 'o10', 'o10.11', 'o10.12', 'o20'])
-    expect((await registry.call('view.query', {name: 'Assembly'})).refs).toEqual(['e1'])
+    expect((await registry.call('model.query', {name: 'Assembly'})).refs).toEqual(['e1'])
   })
 
   it('isolates a row by its occurrences', async () => {
@@ -152,8 +152,8 @@ describe('viewer/tools on a root-only multi-root STEP file (twoRootShells.step)'
     expect((await registry.call('view.focus', {refs: ['e3007']})).content.center).toEqual([25.5, 0.5, 0])
   })
 
-  it('lists both parts in view.query but not the synthetic wrapper', async () => {
-    expect((await registry.call('view.query', {})).refs).toEqual(['e7', 'e3007'])
+  it('lists both parts in model.query but not the synthetic wrapper', async () => {
+    expect((await registry.call('model.query', {})).refs).toEqual(['e7', 'e3007'])
   })
 
   it('isolates both parts through the synthetic wrapper', async () => {
@@ -197,7 +197,7 @@ describe('viewer/tools on a reused STEP sub-assembly', () => {
     expect((await registry.call('view.focus', {refs: ['o40.10.11']})).content.center).toEqual([10.5, 0.5, 0])
   })
 
-  it('lists each copy by its own occurrence ref in view.query', async () => {
-    expect((await registry.call('view.query', {name: 'Bolt'})).refs).toEqual(['o30.10.11', 'o40.10.11'])
+  it('lists each copy by its own occurrence ref in model.query', async () => {
+    expect((await registry.call('model.query', {name: 'Bolt'})).refs).toEqual(['o30.10.11', 'o40.10.11'])
   })
 })
