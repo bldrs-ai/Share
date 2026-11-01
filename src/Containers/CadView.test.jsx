@@ -579,8 +579,11 @@ describe('CadView', () => {
     expect(deleteAllSpy).toHaveBeenCalled()
     expect(result.current.selectedElements).toHaveLength(0)
     expect(result.current.selectedElement).toBe(null)
-    // TODO(pablo): hack after refactor, was 0, but UI looks right
-    expect(result.current.cutPlanes.length).toBe(2)
+    // The store follows the scene: no planes, and the menu not active. This
+    // was pinned at 2 while CadView passed resetCutPlaneState its arguments
+    // one slot off, which made the reset a no-op (open-205, #2014).
+    expect(result.current.cutPlanes).toHaveLength(0)
+    expect(result.current.isCutPlaneActive).toBe(false)
     await actAsyncFlush()
   })
 

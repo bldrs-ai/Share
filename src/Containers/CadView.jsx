@@ -1447,7 +1447,12 @@ export default function CadView({
     setLevelInstance(null)
 
     resetSelection()
-    resetCutPlaneState(location, viewer, setCutPlaneDirections, setIsCutPlaneActive)
+    // `resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive)`. This
+    // call once passed `location` first, which landed in the viewer slot, so
+    // its guard failed and nothing reset: after Clear (deselectItems, which
+    // deletes the planes itself) the store still reported the planes and the
+    // menu showed them checked (open-205, #2014).
+    resetCutPlaneState(viewer, setCutPlaneDirections, setIsCutPlaneActive)
     setIsSearchBarVisible(false)
     setIsNavTreeVisible(false)
     setIsPropertiesVisible(false)
