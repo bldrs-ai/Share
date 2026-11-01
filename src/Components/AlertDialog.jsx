@@ -2,10 +2,14 @@ import React, {ReactElement, useEffect, useRef} from 'react'
 import {Link} from '@mui/material'
 import {ErrorOutline as ErrorOutlineIcon, InfoOutlined as InfoOutlinedIcon} from '@mui/icons-material'
 import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
+import {archiveGuidance, formatGuidance} from '../loader/formatGuidance'
+import {ARCHIVE_ENTRY_CHOICE, ARCHIVE_UNREADABLE} from '../loader/modelArchive'
 import {NotFoundError} from '../loader/Loader'
+import {UNRECOGNIZED_FORMAT_ALERT_EVENT, reportUnrecognizedFormat} from '../loader/unrecognizedFormat'
 import {getProvider} from '../connections/registry'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
+import ArchiveEntryChoice from './ArchiveEntryChoice'
 import Dialog from './Dialog'
 
 
@@ -47,6 +51,11 @@ export default function AlertDialog({onClose}) {
     if (typeof alert !== 'object') {
       return
     }
+    if (alert.type === ARCHIVE_ENTRY_CHOICE) {
+      // A question, not a failure: nothing to count. Its entry names are the
+      // user's file names, which must not reach Sentry or GA anyway.
+      return
+    }
     if (alert.type === 'engineFailure') {
       // A constant, not alert.message: the message carries conway's free-form
       // reason (file-derived text, unbounded cardinality), which must not
@@ -56,7 +65,7 @@ export default function AlertDialog({onClose}) {
       // the closed-set reason_class.
       trackAlertEvent(ENGINE_FAILURE_ALERT_EVENT)
     } else if (alert.type === 'unsupportedSchema' || alert.type === 'inMemoryUploadGone' ||
-        alert.type === 'uploadNotInBrowser' || alert.type === 'noGeometry') {
+        alert.type === 'uploadNotInBrowser' || alert.type === 'noGeometry' || alert.type === ARCHIVE_UNREADABLE) {
       // Expected outcome, not a defect: analytics only, never Sentry
       // (alertTracking.js#trackAlertEvent). `inMemoryUploadGone` is a
       // /v/local-only/ URL whose file, opened without OPFS, was held only by a
@@ -64,7 +73,15 @@ export default function AlertDialog({onClose}) {
       // a /v/local-only/ link, with OPFS available, to an upload this browser
       // doesn't hold (#1955). `noGeometry` is a model conway read fine that
       // has nothing to draw (loadProgress#classifyLoadOutcome, #1962).
+      // `archiveUnreadable` is a hosted `.ifczip` that isn't one readable
+      // IFC (loader/modelArchive.js); its message never names the file.
       trackAlertEvent(alert.message)
+    } else if (alert.type === 'unrecognizedFormat') {
+      // Also an expected outcome, but counted in Sentry too, as one info
+      // issue tagged by extension (loader/unrecognizedFormat.js). GA gets the
+      // constant, since the picker's message names the user's file.
+      reportUnrecognizedFormat(alert)
+      trackAlertEvent(UNRECOGNIZED_FORMAT_ALERT_EVENT)
     } else if (alert.type === 'oom' || alert.type === 'needsReconnect') {
       trackAlert(alert.message, alert)
     } else if (alert instanceof NotFoundError || alert instanceof Error) {
@@ -86,6 +103,22 @@ export default function AlertDialog({onClose}) {
   const isInMemoryUploadGone = alert && typeof alert === 'object' && alert.type === 'inMemoryUploadGone'
   const isUploadNotInBrowser = alert && typeof alert === 'object' && alert.type === 'uploadNotInBrowser'
   const isNoGeometry = alert && typeof alert === 'object' && alert.type === 'noGeometry'
+  const isEntryChoice = alert && typeof alert === 'object' && alert.type === ARCHIVE_ENTRY_CHOICE
+  // A rejected file whose extension we can say something useful about: a
+  // Revit project, a SolidWorks part, a PDF (loader/formatGuidance.js). Only
+  // the header and body change; it is still an unrecognizedFormat alert, so
+  // the effect above reports it exactly as it does every other rejection.
+  //
+  // A zip Share looked inside and couldn't open (loader/modelArchive.js)
+  // carries `archive`, what it holds or why it can't be read. The file's own
+  // extension still wins: a .docx is a zip, and NOT_A_MODEL says it better.
+  // A hosted `.ifczip` that couldn't be opened gets the same "why" text.
+  let guidance = null
+  if (alert && typeof alert === 'object' && alert.type === 'unrecognizedFormat') {
+    guidance = formatGuidance(alert.ext) ?? (alert.archive ? archiveGuidance(alert.archive) : null)
+  } else if (alert && typeof alert === 'object' && alert.type === ARCHIVE_UNREADABLE) {
+    guidance = archiveGuidance({problem: alert.message})
+  }
   const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
 
   const refresh = () => {
@@ -151,6 +184,10 @@ export default function AlertDialog({onClose}) {
   } else if (isNoGeometry) {
     actionCb = dismiss
     actionTitle = 'OK'
+  } else if (isEntryChoice) {
+    // The rows are the actions; the close button is the way out.
+    actionCb = undefined
+    actionTitle = undefined
   } else {
     actionCb = onCloseInner
     actionTitle = 'Reset'
@@ -169,6 +206,10 @@ export default function AlertDialog({onClose}) {
     headerText = 'File not in this browser'
   } else if (isNoGeometry) {
     headerText = 'No 3D geometry'
+  } else if (isEntryChoice) {
+    headerText = 'Choose a model'
+  } else if (guidance) {
+    headerText = guidance.header
   } else {
     headerText = 'Error'
   }
@@ -176,32 +217,72 @@ export default function AlertDialog({onClose}) {
   // No "contact us" footer for an unsupported schema, an in-memory upload
   // whose page is gone, an upload this browser doesn't hold, or a file with
   // no geometry: all are known, documented limits or properties of the input,
-  // so there is nothing for support to diagnose.
+  // so there is nothing for support to diagnose. A guided format is the same:
+  // the guidance, and its help link, is the help.
   const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema && !isInMemoryUploadGone &&
-    !isUploadNotInBrowser && !isNoGeometry
+    !isUploadNotInBrowser && !isNoGeometry && !guidance && !isEntryChoice
+  // Choosing finishes the drop or pick that raised the chooser, from inside
+  // this click; closing leaves whatever model is open, as the user had it.
+  const chooseEntry = (entry) => {
+    const onChoose = alert.onChoose
+    setAlert(null)
+    Promise.resolve(onChoose(entry)).catch((e) => setAlert(e))
+  }
   return (
     <Dialog
       headerText={headerText}
       isDialogDisplayed={alert !== null}
-      setIsDialogDisplayed={isNoGeometry ? dismiss : onCloseInner}
+      setIsDialogDisplayed={isNoGeometry || isEntryChoice ? dismiss : onCloseInner}
       actionCb={actionCb}
-      headerIcon={isNoGeometry ?
+      headerIcon={isNoGeometry || isEntryChoice ?
         <InfoOutlinedIcon className='icon-share'/> :
         <ErrorOutlineIcon className='icon-share'/>}
       actionTitle={actionTitle}
     >
-      <p>
-        {createAlertReport(alert)}<br/>
-        {showHelpFooter && (
-          <>For more help contact us on our{' '}
-            <Link href='https://discord.gg/9SxguBkFfQ' target='_blank' rel='noopener noreferrer'>
-              Discord
-            </Link>{' '}
-            for help
-          </>
-        )}
-      </p>
+      {isEntryChoice ? (
+        <ArchiveEntryChoice
+          entries={alert.entries}
+          revitTextSiblings={alert.revitTextSiblings}
+          onChoose={chooseEntry}
+        />
+      ) : guidance ? <FormatGuidanceReport guidance={guidance}/> : (
+        <p>
+          {createAlertReport(alert)}<br/>
+          {showHelpFooter && (
+            <>For more help contact us on our{' '}
+              <Link href='https://discord.gg/9SxguBkFfQ' target='_blank' rel='noopener noreferrer'>
+                Discord
+              </Link>{' '}
+              for help
+            </>
+          )}
+        </p>
+      )}
     </Dialog>
+  )
+}
+
+
+/**
+ * The body for a rejected file with format guidance: one paragraph per line,
+ * then the help link. The link opens a new tab, as the Discord one does, so
+ * reading the export steps doesn't cost the user the page they were on.
+ *
+ * @property {object} guidance A `FormatGuidance` from loader/formatGuidance.js
+ * @return {ReactElement}
+ */
+function FormatGuidanceReport({guidance}) {
+  return (
+    <>
+      {guidance.lines.map((line) => <p key={line}>{line}</p>)}
+      {guidance.help && (
+        <p>
+          <Link href={guidance.help.href} target='_blank' rel='noopener noreferrer'>
+            {guidance.help.label}
+          </Link>
+        </p>
+      )}
+    </>
   )
 }
 
@@ -223,7 +304,7 @@ function createAlertReport(a) {
   } else if (typeof a === 'object') {
     if (a && (a.type === 'oom' || a.type === 'needsReconnect' || a.type === 'unsupportedSchema' ||
         a.type === 'inMemoryUploadGone' || a.type === 'uploadNotInBrowser' || a.type === 'engineFailure' ||
-        a.type === 'noGeometry')) {
+        a.type === 'noGeometry' || a.type === 'unrecognizedFormat')) {
       return a.message
     } else if (a instanceof NotFoundError) {
       return displayPathAlert(a)

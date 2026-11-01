@@ -2,8 +2,10 @@ import {DecompressionStream as NodeDecompressionStream} from 'node:stream/web'
 import {gzipSync} from 'node:zlib'
 import {Box3, Object3D, Mesh, BufferGeometry, Material, BufferAttribute, Raycaster, Vector3} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
+import {zipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
+import * as contentHash from '../utils/contentHash'
 import {load, readModel} from './Loader'
 
 
@@ -454,6 +456,61 @@ describe('Loader', () => {
       }])
     } finally {
       restoreArrayBuffer()
+    }
+  })
+
+  it('loads a hosted .ifczip as the IFC inside it', async () => {
+    // Share#2006. Uploads arrive unwrapped; a `.ifczip` by URL (GitHub, a
+    // locally hosted file, a pasted link) reaches `load` as the zip, takes
+    // findLoader's IFC arm, and is unwrapped one line before `readModel`
+    // (`loader/modelArchive.js#unwrapIfcZip`). Conway must get the part-21
+    // text, not the zip.
+    mockViewer.IFC.type = 'ifc'
+    const ifcText = readTestDataFile('ifc/index.ifc')
+    const ifczip = zipSync({'index.ifc': new Uint8Array(Buffer.from(ifcText))})
+    const restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(ifczip))
+    try {
+      const model = await load(testPathToUrl('ifc/index.ifczip'), mockViewer, jest.fn(), true, jest.fn(), '')
+      const {OpenModel} = mockViewer.IFC.loader.ifcManager.ifcAPI
+      expect(OpenModel).toHaveBeenCalledTimes(1)
+      const opened = new TextDecoder().decode(OpenModel.mock.calls[0][0])
+      expect(opened).toBe(ifcText)
+      // The model is an IFC from here on, whatever the URL said.
+      expect(model.type).toBe('ifc')
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  // The GLB cache (feature `glb`, on by default) hashes the source and keeps
+  // its handle for the writer, which later backs conway's reads with it
+  // (`spillModelSource`). For a hosted `.ifczip` that handle is the zip, so
+  // the whole cache path is skipped (`wantGlb`). The plain IFC beside it is
+  // the control: the same load with the cache on hashes its source.
+  it('keeps a hosted .ifczip out of the GLB cache, which an .ifc enters', async () => {
+    mockViewer.IFC.type = 'ifc'
+    const ifcText = readTestDataFile('ifc/index.ifc')
+    const hashSpy = jest.spyOn(contentHash, 'sha1Hex')
+    const blobHashSpy = jest.spyOn(contentHash, 'sha1HexFromBlob')
+    let restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(ifcText))
+    try {
+      await load(testPathToUrl('ifc/index.ifc'), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(hashSpy.mock.calls.length + blobHashSpy.mock.calls.length).toBeGreaterThan(0)
+    } finally {
+      restoreArrayBuffer()
+    }
+    hashSpy.mockClear()
+    blobHashSpy.mockClear()
+    const ifczip = zipSync({'index.ifc': new Uint8Array(Buffer.from(ifcText))})
+    restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(ifczip))
+    try {
+      await load(testPathToUrl('ifc/index.ifczip'), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(hashSpy).not.toHaveBeenCalled()
+      expect(blobHashSpy).not.toHaveBeenCalled()
+    } finally {
+      restoreArrayBuffer()
+      hashSpy.mockRestore()
+      blobHashSpy.mockRestore()
     }
   })
 

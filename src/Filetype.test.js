@@ -412,6 +412,22 @@ describe('Filetype', () => {
       expect(() => getValidExtension('gz')).toThrow(FilenameParseError)
     })
 
+    it('reads .ifczip as itself, not as its .ifc prefix', () => {
+      // `ifc` is a prefix of `ifczip`, the same trap as the USD family below.
+      // Before Share#2006 there was no `ifczip` entry, so this read `ifc` and
+      // a zip went to conway as part-21 text.
+      expect(getValidExtension('Tower.ifczip')).toBe('ifczip')
+      expect(getValidExtension('Tower.IFCZIP')).toBe('ifczip')
+      expect(getValidExtension('Tower.ifc')).toBe('ifc')
+      expect(splitAroundExtension('a/Tower.ifczip/12/34')).toStrictEqual(
+        {parts: ['a/Tower', '/12/34'], extension: '.ifczip'})
+      expect('/share/v/gh/o/r/main/ifc/Tower.ifczip/12'.split(fileSuffixBoundaryRegex)).toStrictEqual(
+        ['/share/v/gh/o/r/main/ifc/Tower', '/12'])
+      // Still only an extension at a path boundary: an `.ifczip` that runs on
+      // into more name is not one.
+      expect('/share/v/p/Tower.ifczipx/1'.split(fileSuffixBoundaryRegex)).toStrictEqual(['/share/v/p/Tower.ifczipx/1'])
+    })
+
     it('validates the USD family, matching the longest extension', () => {
       // 'usd' is a prefix of the other three — the alternation must not
       // stop at the prefix (typeRegexStr sorts longest-first).

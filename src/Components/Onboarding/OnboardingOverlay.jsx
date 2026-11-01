@@ -76,7 +76,10 @@ export default function OnboardingOverlay({isVisible, onClose}) {
       appPrefix,
       isOpfsAvailable,
       setAlert,
-      () => onClose(true), // onSuccess callback - close overlay and skip help dialog
+      // onSuccess: close the overlay and skip the help dialog. Also how a zip
+      // with several models hands over to the entry chooser (with a null id),
+      // so Help doesn't open over the chooser (Share#2006).
+      () => onClose(true),
       // onError: close the overlay so the alert handleFileDrop raised (no
       // OPFS, unknown type, ...) isn't hidden under its zIndex 9999, same as
       // onExceeded below (codex review on #1905).

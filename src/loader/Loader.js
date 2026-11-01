@@ -54,6 +54,7 @@ import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import glbToThree from './glb'
 import {decodeGzipEnvelope} from './gzipEnvelope'
+import {unwrapIfcZip} from './modelArchive'
 import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
 import {
   APPLIED_COORDINATION_KEY,
@@ -325,7 +326,11 @@ export async function load(
   // Set when we swap the IFC source with a cached GLB. Drives post-parse
   // diagnostics so the user can see what the GLTF parser produced.
   let cameFromGlbCache = false
-  const wantGlb = isFeatureEnabled('glb') && isIfc
+  // Not for a hosted `.ifczip`: every handle the cache path keeps is the
+  // source file, which here is the zip — `spillModelSource` would back
+  // conway's later reads of the IFC with it. It still opens, uncached. An
+  // UPLOADED `.ifczip` is stored as the `.ifc` inside it and caches as one.
+  const wantGlb = isFeatureEnabled('glb') && isIfc && loader.type !== 'ifczip'
   if (wantGlb) {
     glbVerbose('feature enabled')
   }
@@ -718,6 +723,18 @@ export async function load(
   // locally hosted `/x.glb.gz`, a pasted URL. `.spz` is excluded inside —
   // gzip is that format's own container. See `loader/gzipEnvelope.js`.
   modelData = await decodeGzipEnvelope(modelData, loader.type)
+
+  // A hosted `.ifczip` is still the zip here (uploads were unwrapped before
+  // OPFS); conway gets the `.ifc` inside it. The type is the inner model's
+  // from here on, so the model and everything that reads `loader.type` after
+  // this — capabilities, analytics — see an IFC. The arms before this that
+  // key on it (`canOpenFromStore`, the truncated-part-21 check, `wantGlb`)
+  // correctly saw a zip. See `loader/modelArchive.js`.
+  if (loader.type === 'ifczip') {
+    const unwrapped = await unwrapIfcZip(modelData)
+    modelData = unwrapped.modelData
+    loader.type = unwrapped.type
+  }
 
   // Provide basePath for multi-file models.  Keep the last '/' for
   // correct resolution of subpaths with '../'.
@@ -2107,7 +2124,10 @@ async function findLoader(pathname, viewer) {
     }
     case 'step':
     case 'stp':
-    case 'ifc': {
+    case 'ifc':
+    case 'ifczip': {
+      // A `.ifczip` shares this arm and is unwrapped to its `.ifc` before
+      // `readModel` (`load`, beside the gzip net; `modelArchive.js`).
       // ShareIfcLoader (`src/viewer/ifc/ShareIfcLoader.js`) is wired
       // up as `viewer.ifcLoader` at viewer construction (see
       // `src/viewer/ShareViewer.js`). It owns the Conway-direct parse

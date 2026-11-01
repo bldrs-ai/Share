@@ -23,6 +23,7 @@ import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
 import {EngineOpenFailureError} from '../loader/engineOpenFailure'
 import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
+import {ZipArchiveError} from '../loader/zipArchive'
 import {registerInMemoryUpload, resetInMemoryUploadsForTest} from '../loader/inMemoryUploads'
 import {
   InMemoryUploadGoneError,
@@ -751,6 +752,26 @@ describe('CadView', () => {
         reason: 'zip archive (such as .ifczip), not STEP text',
       }},
     }))
+  })
+
+  // Share#2006: a hosted `.ifczip` that isn't one readable IFC is the user's
+  // file, not a defect — its own alert, and no Sentry exception.
+  it('alerts on an unopenable hosted .ifczip without capturing it as a defect', async () => {
+    const zipErr = new ZipArchiveError('This .ifczip holds no IFC model.')
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw zipErr
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => {
+      expect(result.current.alert).toEqual({type: 'archiveUnreadable', message: 'This .ifczip holds no IFC model.'})
+    })
+    expect(captureExceptionSpy).not.toHaveBeenCalled()
   })
 
   it('keeps the generic alert and capture when the engine gave no reason', async () => {

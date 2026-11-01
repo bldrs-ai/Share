@@ -87,7 +87,6 @@ describe('dragAndDrop utility', () => {
         mockOnError,
       )
 
-      expect(trackAlert).toHaveBeenCalledWith('File upload initiated but found no data')
       expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated but found no data')
       expect(mockOnError).toHaveBeenCalledWith('File upload initiated but found no data')
       expect(mockNavigate).not.toHaveBeenCalled()
@@ -106,7 +105,6 @@ describe('dragAndDrop utility', () => {
         mockOnError,
       )
 
-      expect(trackAlert).toHaveBeenCalledWith('File upload initiated for more than 1 file')
       expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated for more than 1 file')
       expect(mockOnError).toHaveBeenCalledWith('File upload initiated for more than 1 file')
       expect(mockNavigate).not.toHaveBeenCalled()
@@ -128,8 +126,10 @@ describe('dragAndDrop utility', () => {
       )
 
       const expectedMessage = `File upload of unknown type: type(${mockFile.type}) size(${mockFile.size})`
-      expect(trackAlert).toHaveBeenCalledWith(expectedMessage)
-      expect(mockSetAlert).toHaveBeenCalledWith(expectedMessage)
+      // An alert object AlertDialog reports as one info issue, carrying the
+      // extension but never the file name (loader/unrecognizedFormat.js).
+      expect(mockSetAlert).toHaveBeenCalledWith(
+        {type: 'unrecognizedFormat', message: expectedMessage, ext: 'unknown', entry: 'drop'})
       expect(mockOnError).toHaveBeenCalledWith(expectedMessage)
       expect(mockNavigate).not.toHaveBeenCalled()
       // And the console hears about it, at a level prod prints — naming the
@@ -389,11 +389,28 @@ describe('dragAndDrop utility', () => {
 
       await handleFileDrop(mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError)
 
-      expect(trackAlert).toHaveBeenCalledWith(message)
       expect(mockSetAlert).toHaveBeenCalledWith(message)
       expect(mockOnError).toHaveBeenCalledWith(message)
       expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
       expect(mockNavigate).not.toHaveBeenCalled()
+    })
+
+    // Every rejected drop used to reach Sentry twice in the same second:
+    // once from here and once from AlertDialog's effect, which captures what
+    // setAlert hands it. AlertDialog is the single capture point now.
+    it('leaves Sentry capture to AlertDialog for every rejected drop', async () => {
+      const unknown = {name: 'plan.dwg', type: '', size: 305}
+      guessTypeFromFile.mockResolvedValue(null)
+      for (const files of [[], [{name: 'a.ifc'}, {name: 'b.ifc'}], [unknown]]) {
+        mockEvent.dataTransfer.files = files
+        await handleFileDrop(mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError)
+      }
+      inflateIfGzipEnvelope.mockRejectedValue(new Error('Cannot open a compressed (.gz) model in this browser.'))
+      mockEvent.dataTransfer.files = [{name: 'index.glb.gz', type: 'application/gzip', size: 512}]
+      await handleFileDrop(mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError)
+
+      expect(mockSetAlert).toHaveBeenCalledTimes(4)
+      expect(trackAlert).not.toHaveBeenCalled()
     })
 
     it('should handle error without onError callback', async () => {
@@ -407,7 +424,6 @@ describe('dragAndDrop utility', () => {
         mockSetAlert,
       )
 
-      expect(trackAlert).toHaveBeenCalledWith('File upload initiated but found no data')
       expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated but found no data')
       // Should not throw errors when onError callback is not provided
     })
