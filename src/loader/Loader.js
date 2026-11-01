@@ -2093,6 +2093,11 @@ async function findLoader(pathname, viewer) {
     }
     case 'bld': {
       loader = new BLDLoader(viewer)
+      // `parse` is async — it awaits one nested `load()` per referenced
+      // object — so `readModel` must await it. As a sync loader its promise
+      // was read as the model, and `assertDefined(model.children)` threw
+      // while the children were still loading (#1839).
+      isLoaderAsync = true
       isFormatText = true
       break
     }

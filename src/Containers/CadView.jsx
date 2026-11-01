@@ -56,6 +56,7 @@ import {
 import {reportUploadNotInBrowser} from '../OPFS/reportUploadNotInBrowser'
 import {getBrowser} from '../connections/registry'
 import modelIdentity from '../routes/modelIdentity'
+import useExistInFeature from '../hooks/useExistInFeature'
 import useDirectLinkQuota from '../quota/useDirectLinkQuota'
 import useStore from '../store/useStore'
 import {
@@ -91,6 +92,8 @@ import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
 import {DEFAULT_LOOK} from '../viewer/looks'
+import {installAssistDevHook} from '../viewer/tools/assistHost'
+import {registerSelectionFunnel} from '../viewer/tools/selectionFunnel'
 import ViewCube from '../Components/ViewCube/ViewCube'
 import {applyVisibilityHash} from '../Components/Residency/visibilityHash'
 import VisibilityHashWriter from '../Components/Residency/VisibilityHashWriter'
@@ -213,6 +216,9 @@ export default function CadView({
   // review of Share#1961). The upload-not-in-browser count (#1955) is gated
   // by the same ref, under its own key prefix.
   const reportedRefusalRef = useRef(null)
+  // This render's `selectItemsInScene`, for the funnel registered with
+  // `viewer/tools/selectionFunnel.js` (see the effect near the end).
+  const selectItemsInSceneRef = useRef(null)
   // How loadModel last downloaded a Drive file: `{fileId, connection}`, with
   // connection null for the API-key path. The direct-link quota meter reads
   // it to tell a link-shared (public, unmetered) file from a private one
@@ -286,6 +292,7 @@ export default function CadView({
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
   const [searchParams] = useSearchParams()
+  const isAssistEnabled = useExistInFeature('assist')
 
   // Begin helpers //
   /**
@@ -2107,6 +2114,20 @@ export default function CadView({
   }, [])
 
   useEffect(() => () => stopModelEngagementRef.current?.(), [])
+
+  // Expose the selection funnel to non-React callers — the Assist view tools
+  // (src/viewer/tools/, ai-workspace.md §9). `selectItemsInScene` is a fresh
+  // closure every render, so the registered wrapper reads the ref, refreshed
+  // each render: a tool call reaches the same funnel a NavTree click does,
+  // with this render's viewer, element table and router. Registered once per
+  // mount and cleared on unmount.
+  selectItemsInSceneRef.current = selectItemsInScene
+  useEffect(() => registerSelectionFunnel((...args) => selectItemsInSceneRef.current(...args)), [])
+  // `window.__bldrsAssistTools`, the tool registry's dev hook, under
+  // `?feature=assist` only. Follows the URL, not just the mount: CadView
+  // stays mounted across navigation, so the hook installs when the flag
+  // appears and the cleanup uninstalls it when the flag goes.
+  useEffect(() => (isAssistEnabled ? installAssistDevHook() : undefined), [isAssistEnabled])
 
 
   const abs = {position: 'absolute'}
