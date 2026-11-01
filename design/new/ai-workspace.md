@@ -962,7 +962,7 @@ session.abort(); session.undo(stepId)
 
 | Namespace | Owner | Tools |
 |---|---|---|
-| `model.*` | Share, backed by the view today (→ the document session, §2.1) | query, properties (shipped in #1946 as `view.query` / `view.properties`); later: document writes through the op log (`create-310`) |
+| `model.*` | Share, backed by the view today (→ the document session, §2.1) | query, properties (#1946); later: document writes through the op log (`create-310`) |
 | `view.*` | Share (→ View) | select, isolate, hide, showAll, focus (#1946); later: show, explode, highlight, cutPlane, display, screenshot |
 | `notes.*`, `share.*` | Share | notes.add, share.permalink, versions.commit / versions.pr |
 | `collab.*` | Collab | post, requestReview |
@@ -979,8 +979,7 @@ elements by ref. Today Share answers them from the view (NavTree,
 `SearchIndex`, `getItemProperties`). Once the document session exists
 (§2.1) they are re-pointed at it with the same names and result shapes, and
 they are available headless (CLI, MCP), where no view exists. `view.*` stays
-the canvas. #1946 shipped the two reads as `view.query` / `view.properties`;
-the rename to `model.*` follows on bldrs-ai/Share#1946.
+the canvas. #1946 ships the two reads under `model.*`.
 
 **Worked example (use case A2.1).** "Show me the supplier X prefab":
 `model.query{IfcWindow, level 2}` → `view.select` → `view.explode` →
@@ -1017,7 +1016,7 @@ and "the user clicked it" are the same navigation.
 **v0 tools (read/annotate; #1674),** in the namespaced form. Annotation
 column: R = `readOnly`, V = `viewState`, P = `sendsPixels`.
 
-The v0 slice is implemented in #1946 (`src/viewer/tools/`, `src/assist/`). The names below are the ones it ships, except `model.query` and `model.properties`, which #1946 ships as `view.query` / `view.properties` until the rename lands (namespaces above).
+The v0 slice is implemented in #1946 (`src/viewer/tools/`, `src/assist/`). The names below are the ones it ships.
 
 | Tool | Ann. | Does | Backing seam |
 |---|---|---|---|
