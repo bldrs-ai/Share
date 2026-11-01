@@ -470,6 +470,33 @@ async function inflateCounted(stored, expectedSize) {
 
 
 /**
+ * Whether the signature at `at` in the tail is a real end-of-central-
+ * directory record rather than the same four bytes in a comment or a stored
+ * payload. A classic record's central directory ends where the record
+ * begins: offsets are absolute in the file, as this reader assumes
+ * throughout (`readDirectory` slices at `directoryOffset` unshifted). A
+ * zip64 archive puts its zip64 record and locator between the directory
+ * and this record, so there the locator right before it is the check
+ * instead; that holds whether or not the writer saturated the classic
+ * fields (some fill in the ones that fit).
+ *
+ * @param {DataView} tail
+ * @param {number} at the signature's offset within the tail
+ * @param {number} tailStart the tail's offset within the file
+ * @return {boolean}
+ */
+function isEndOfDirectoryAt(tail, at, tailStart) {
+  const locator = at - ZIP64_LOCATOR_BYTES
+  if (locator >= 0 && tail.getUint32(locator, true) === SIG_ZIP64_LOCATOR) {
+    return true
+  }
+  const directorySize = tail.getUint32(at + EOCD_DIRECTORY_SIZE, true)
+  const directoryOffset = tail.getUint32(at + EOCD_DIRECTORY_OFFSET, true)
+  return directoryOffset + directorySize === tailStart + at
+}
+
+
+/**
  * The end-of-central-directory record, through its zip64 twin when the
  * classic one is saturated.
  *
@@ -480,31 +507,40 @@ async function inflateCounted(stored, expectedSize) {
 async function readEndOfDirectory(blob) {
   const tailStart = Math.max(0, blob.size - EOCD_BYTES - EOCD_MAX_COMMENT - ZIP64_LOCATOR_BYTES)
   const tail = new DataView(await blob.slice(tailStart).arrayBuffer())
-  // The comment after the record is free text and can itself contain the
-  // signature, so the first hit scanning back from EOF may be a fake inside
-  // it, which typically read as an empty archive (codex review of
-  // Share#2010). A hit is consistent when its own comment length makes it
-  // end exactly at EOF. A fake at the very end of a comment, with a zero
-  // length after it, is consistent too, but it always lies inside the real
-  // record's comment, so the EARLIEST consistent hit is the real one; the
-  // scan therefore runs the whole tail (at most ~64 KiB) rather than
-  // stopping at the first. With no consistent hit at all (bytes appended
-  // after the record), the latest hit is used, as before this check.
+  // The signature is only four bytes, and the tail holds free text that can
+  // contain it: the archive comment after the record, and for a small
+  // archive the stored entries before it. A hit by position alone can be a
+  // fake that typically reads as an empty archive (codex review of
+  // Share#2010, twice: a fake in the comment, then one in a stored payload
+  // once the earliest-consistent rule let it outrank the real record). So a
+  // hit is checked against its own structure (`isEndOfDirectoryAt`), and
+  // among the ones that pass, the latest whose comment length ends it
+  // exactly at EOF wins. Failing that, the latest that passes (bytes
+  // appended after the archive), and failing that, the latest hit, which
+  // is what this did before any check.
   let eocd = -1
-  let fallback = -1
+  let valid = -1
+  let latest = -1
   for (let at = tail.byteLength - EOCD_BYTES; at >= 0; at--) {
     if (tail.getUint32(at, true) !== SIG_END_OF_DIRECTORY) {
       continue
     }
-    if (fallback < 0) {
-      fallback = at
+    if (latest < 0) {
+      latest = at
+    }
+    if (!isEndOfDirectoryAt(tail, at, tailStart)) {
+      continue
+    }
+    if (valid < 0) {
+      valid = at
     }
     if (at + EOCD_BYTES + tail.getUint16(at + EOCD_COMMENT_LENGTH, true) === tail.byteLength) {
       eocd = at
+      break
     }
   }
   if (eocd < 0) {
-    eocd = fallback
+    eocd = valid >= 0 ? valid : latest
   }
   if (eocd < 0) {
     throw new ZipArchiveError(DAMAGED_MESSAGE)

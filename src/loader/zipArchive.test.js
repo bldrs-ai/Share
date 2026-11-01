@@ -240,6 +240,33 @@ describe('zipArchive', () => {
       expect(entries.map(({path}) => path)).toEqual(['a.ifc'])
     })
 
+    // Codex's second review of Share#2010: with "earliest consistent hit
+    // wins", a stored payload holding the signature, whose bytes at +20
+    // happen to equal its distance to EOF, outranked the real record. A hit
+    // must now carry a directory that ends where it begins.
+    it('skips an end-of-directory signature inside a stored entry', async () => {
+      const fake = new Uint8Array(EOCD_BYTES)
+      new DataView(fake.buffer).setUint32(0, 0x06054b50, true)
+      const payload = new Uint8Array(IFC_TEXT.length + fake.length)
+      payload.set(IFC_TEXT)
+      payload.set(fake, IFC_TEXT.length)
+      const zip = zipSync({'a.ifc': [payload, {level: 0}]})
+      // Find the fake in the stored bytes and make its comment length reach
+      // exactly to EOF, so position and length alone can't tell it apart.
+      const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength)
+      let at = -1
+      for (let i = 0; i + EOCD_BYTES <= zip.length - EOCD_BYTES; i++) {
+        if (view.getUint32(i, true) === 0x06054b50) {
+          at = i
+          break
+        }
+      }
+      expect(at).toBeGreaterThan(0)
+      view.setUint16(at + 20, zip.length - (at + EOCD_BYTES), true)
+      const entries = await readZipDirectory(blobOf(zip))
+      expect(entries.map(({path}) => path)).toEqual(['a.ifc'])
+    })
+
     it('still opens an archive with bytes appended after its record', async () => {
       const zip = zipSync({'a.ifc': IFC_TEXT})
       const padded = new Uint8Array(zip.length + 7)
