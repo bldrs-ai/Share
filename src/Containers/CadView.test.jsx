@@ -39,8 +39,9 @@ import CadView from './CadView'
 window.HTMLElement.prototype.scrollIntoView = jest.fn()
 const mockedUseNavigate = jest.fn()
 const defaultLocationValue = {pathname: '/index.ifc', search: '', hash: '', state: null, key: 'default'}
-// mock createObjectURL
+// mock createObjectURL, and revokeObjectURL, which jsdom lacks too
 global.URL.createObjectURL = jest.fn(() => '1111111111111111111111111111111111111111')
+global.URL.revokeObjectURL = jest.fn()
 
 jest.mock('axios')
 jest.mock('@bldrs-ai/ifclib')
@@ -977,6 +978,18 @@ describe('CadView', () => {
       const {loadSpy, getFileDownload} = await loadDriveRoute()
       expect(getFileDownload).toHaveBeenCalledWith(DRIVE_CONNECTION, null, DRIVE_ROUTE.fileId)
       expect(loadSpy.mock.calls[0][0]).not.toBe(DRIVE_ROUTE.downloadUrl)
+    })
+
+    // open-205 #2018: the blob URL a Drive download is loaded through pinned
+    // the whole file for the life of the page, one more copy per load (a
+    // theme toggle reloads the model). Released once `load` settles; this
+    // load fails, which must release it too.
+    it('releases the downloaded file\'s blob URL once the load settles', async () => {
+      mockAuthState.isAuthenticated = true
+      const {loadSpy} = await loadDriveRoute()
+      const blobUrl = loadSpy.mock.calls[0][0]
+      expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
+      await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith(blobUrl))
     })
   })
 

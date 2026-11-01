@@ -780,7 +780,16 @@ export default function CadView({
           const browser = getBrowser('google-drive')
           const download = await browser.getFileDownload(connection, null, routeResult.fileId)
           const blobUrl = URL.createObjectURL(download.blob)
-          loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '')
+          try {
+            loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '')
+          } finally {
+            // The URL pins the whole download for the life of the page, and
+            // each load mints a new one (a theme toggle reloads the model).
+            // `load` has read the bytes into memory by the time it settles,
+            // and a retry downloads again, so nothing needs this URL after
+            // (open-205, #2018).
+            URL.revokeObjectURL(blobUrl)
+          }
         } else {
           // API key fallback: works for public files and route tests without a
           // connection. Only a file shared "Anyone with the link" (or
