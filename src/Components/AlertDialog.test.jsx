@@ -15,6 +15,8 @@ import {
   reportUnrecognizedFormat,
   unrecognizedFormatAlert,
 } from '../loader/unrecognizedFormat'
+import {REVIT} from '../loader/formatGuidance'
+import {ARCHIVE_ENTRY_CHOICE, ARCHIVE_UNREADABLE, noModelInArchiveAlert} from '../loader/modelArchive'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import AlertDialog from './AlertDialog'
@@ -435,12 +437,68 @@ describe('AlertDialog — unrecognizedFormat alert type', () => {
     })
   })
 
-  it('shows the alert\'s own text', () => {
+  // An extension with no guidance (loader/formatGuidance.js) keeps the
+  // generic dialog: the alert's own text, the Error header, the Discord
+  // footer. This used Tower.rvt until Revit got its own text (Share#2007).
+  it('shows the alert\'s own text for a format with no guidance', () => {
+    act(() => {
+      useStore.getState().setAlert(
+        unrecognizedFormatAlert('Cannot extract filetype from filename: Tower.bin', 'Tower.bin', 'picker'))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(/Cannot extract filetype from filename: Tower\.bin/)).toBeInTheDocument()
+    expect(screen.getByText('Error')).toBeInTheDocument()
+    expect(screen.getByText(/Discord/)).toBeInTheDocument()
+  })
+
+  it('guides a Revit file to IFC export instead of the generic text', () => {
     act(() => {
       useStore.getState().setAlert(unrecognizedFormatAlert(message, 'Tower.rvt', 'picker'))
     })
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
-    expect(screen.getByText(/Cannot extract filetype from filename: Tower\.rvt/)).toBeInTheDocument()
+    expect(screen.getByText('Revit file')).toBeInTheDocument()
+    for (const line of REVIT.lines) {
+      expect(screen.getByText(line)).toBeInTheDocument()
+    }
+    const help = screen.getByRole('link', {name: 'How to export IFC from Revit'})
+    expect(help).toHaveAttribute('href', '/help/native-cad-files/#revit')
+    expect(help).toHaveAttribute('target', '_blank')
+    // The guidance replaces the generic sentence, header and footer.
+    expect(screen.queryByText(/Cannot extract filetype/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Error')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Discord/)).not.toBeInTheDocument()
+  })
+
+  // The drop path's message is different (it names the type and size, not
+  // the file), and the guidance comes from `ext` alone, so it lands the same.
+  it('guides a dropped file by its extension too', () => {
+    act(() => {
+      useStore.getState().setAlert(
+        unrecognizedFormatAlert('File upload of unknown type: type() size(42)', 'Bracket.SLDPRT', 'drop'))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('SolidWorks file')).toBeInTheDocument()
+    expect(screen.queryByText(/File upload of unknown type/)).not.toBeInTheDocument()
+  })
+
+  // A guidance entry need not carry a link; the archive one doesn't.
+  it('renders guidance with no help link', () => {
+    act(() => {
+      useStore.getState().setAlert(unrecognizedFormatAlert('x', 'plans.rar', 'drop'))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('Compressed archive')).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  it('Reset still closes a guided alert the way a failed load does', () => {
+    act(() => {
+      useStore.getState().setAlert(unrecognizedFormatAlert(message, 'Tower.rvt', 'picker'))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByText('Reset'))
+    expect(useStore.getState().alert).toBeNull()
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   // As a string this went through trackAlert, whose fingerprint is the
@@ -456,5 +514,190 @@ describe('AlertDialog — unrecognizedFormat alert type', () => {
     expect(trackAlertEvent).toHaveBeenCalledTimes(1)
     expect(trackAlertEvent).toHaveBeenCalledWith(UNRECOGNIZED_FORMAT_ALERT_EVENT)
     expect(trackAlert).not.toHaveBeenCalled()
+  })
+})
+
+
+// Share#2006: a zip Share looked inside (loader/modelArchive.js).
+describe('AlertDialog — archives', () => {
+  const onClose = jest.fn()
+  const entries = [
+    {path: 'export/Tower.ifc', name: 'Tower.ifc', ext: 'ifc'},
+    {path: 'part.glb', name: 'part.glb', ext: 'glb'},
+  ]
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  /**
+   * @param {object} [overrides]
+   * @return {object} a chooser alert with a mock onChoose
+   */
+  function chooser(overrides = {}) {
+    return {type: ARCHIVE_ENTRY_CHOICE, entries, revitTextSiblings: [], onChoose: jest.fn(), ...overrides}
+  }
+
+  it('lists the models to choose from, each by name and folder', () => {
+    act(() => {
+      useStore.getState().setAlert(chooser())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('Choose a model')).toBeInTheDocument()
+    expect(screen.getByText('This archive holds 2 models Share can open. Choose one:')).toBeInTheDocument()
+    expect(screen.getByTestId('archive-entry-export/Tower.ifc')).toHaveTextContent('Tower.ifcexport')
+    expect(screen.getByTestId('archive-entry-part.glb')).toHaveTextContent(/^part\.glb$/)
+    // A question, not an error: no error header, no Reset, no Discord.
+    expect(screen.queryByText('Error')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reset')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Discord/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Revit writes/)).not.toBeInTheDocument()
+  })
+
+  it('opens the model chosen, and takes the chooser down', () => {
+    const alert = chooser()
+    act(() => {
+      useStore.getState().setAlert(alert)
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByText('part.glb'))
+    expect(alert.onChoose).toHaveBeenCalledTimes(1)
+    expect(alert.onChoose).toHaveBeenCalledWith(entries[1])
+    expect(useStore.getState().alert).toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  // The chooser was raised over whatever model was open; closing it must not
+  // navigate away from that model (onClose → navToDefault).
+  it('closing it leaves the open model where it is', () => {
+    const alert = chooser()
+    act(() => {
+      useStore.getState().setAlert(alert)
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByTestId('button-close-dialog-choose-a-model'))
+    expect(useStore.getState().alert).toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(alert.onChoose).not.toHaveBeenCalled()
+  })
+
+  it('names a Revit export\'s .txt sibling, which it doesn\'t list', () => {
+    act(() => {
+      useStore.getState().setAlert(chooser({revitTextSiblings: ['export/Tower.ifc']}))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(/The \.txt next to export\/Tower\.ifc is the file Revit writes beside an IFC export/))
+      .toBeInTheDocument()
+  })
+
+  // Entry names are the user's file names; nothing about a chooser is counted.
+  it('reports nothing for a chooser', () => {
+    act(() => {
+      useStore.getState().setAlert(chooser())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(trackAlert).not.toHaveBeenCalled()
+    expect(trackAlertEvent).not.toHaveBeenCalled()
+    expect(reportUnrecognizedFormat).not.toHaveBeenCalled()
+  })
+
+  it('says what an archive with no model holds, and is counted as an unrecognized format', () => {
+    const alert = noModelInArchiveAlert('drawings.zip', 'drop', ['dwg', 'pdf'])
+    act(() => {
+      useStore.getState().setAlert(alert)
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('No model in this archive')).toBeInTheDocument()
+    expect(screen.getByText('This archive has no model Share can open (it contains .dwg and .pdf).'))
+      .toBeInTheDocument()
+    expect(reportUnrecognizedFormat).toHaveBeenCalledWith(alert)
+    expect(trackAlertEvent).toHaveBeenCalledWith(UNRECOGNIZED_FORMAT_ALERT_EVENT)
+  })
+
+  // An archive of only empty files — a 0-byte a.ifc among them — reads as
+  // empty, not as one that "contains .ifc" and has no model.
+  it('says an archive of empty files is empty', () => {
+    act(() => {
+      useStore.getState().setAlert(noModelInArchiveAlert('x.zip', 'drop', []))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('Empty archive')).toBeInTheDocument()
+    expect(screen.getByText('This archive is empty.')).toBeInTheDocument()
+    expect(screen.queryByText(/contains/)).not.toBeInTheDocument()
+  })
+
+  // A .docx is a zip with no model in it; its own guidance says it better.
+  it('keeps a guided extension\'s own text for an archive that is one', () => {
+    act(() => {
+      useStore.getState().setAlert(noModelInArchiveAlert('Spec.docx', 'drop', ['xml', 'rels']))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('Not a 3D model')).toBeInTheDocument()
+    expect(screen.queryByText(/This archive/)).not.toBeInTheDocument()
+  })
+
+  // The click finishes the drop or pick; a failure there must still reach
+  // the dialog rather than vanish as an unhandled rejection.
+  it('shows what a choice failed with', async () => {
+    const failure = new Error('OPFS said no')
+    act(() => {
+      useStore.getState().setAlert(chooser({onChoose: jest.fn().mockRejectedValue(failure)}))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByText('part.glb'))
+    await waitFor(() => expect(useStore.getState().alert).toBe(failure))
+  })
+
+  it('lists the first 50 models and counts the rest', () => {
+    const LISTED = 50
+    const MODELS = 60
+    const many = Array.from({length: MODELS}, (_, i) => ({path: `parts/p${i}.stl`, name: `p${i}.stl`, ext: 'stl'}))
+    act(() => {
+      useStore.getState().setAlert(chooser({entries: many}))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('This archive holds 60 models Share can open. Choose one:')).toBeInTheDocument()
+    expect(screen.getAllByRole('button').filter((b) => b.dataset.testid?.startsWith('archive-entry-'))).toHaveLength(LISTED)
+    expect(screen.getByTestId('archive-entry-unlisted')).toHaveTextContent('And 10 more.')
+  })
+
+  it('lists two entries of one path as two rows, without a key collision', () => {
+    console.error.mockClear()
+    const twins = [entries[1], {...entries[1]}]
+    act(() => {
+      useStore.getState().setAlert(chooser({entries: twins}))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getAllByTestId('archive-entry-part.glb')).toHaveLength(2)
+    const keyWarnings = console.error.mock.calls.filter((args) => String(args[0]).includes('same key'))
+    expect(keyWarnings).toEqual([])
+  })
+
+  // A hosted .ifczip that isn't one readable IFC (CadView raises it).
+  it('says why a hosted .ifczip can\'t be opened, counted in analytics only', () => {
+    const message = 'This .ifczip holds no IFC model.'
+    act(() => {
+      useStore.getState().setAlert({type: ARCHIVE_UNREADABLE, message})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('Can\'t open this archive')).toBeInTheDocument()
+    expect(screen.getByText(message)).toBeInTheDocument()
+    expect(screen.queryByText(/Discord/)).not.toBeInTheDocument()
+    expect(trackAlertEvent).toHaveBeenCalledWith(message)
+    expect(trackAlert).not.toHaveBeenCalled()
+    expect(reportUnrecognizedFormat).not.toHaveBeenCalled()
+  })
+
+  it('says why an archive can\'t be read', () => {
+    const problem = 'This archive is password-protected. Unpack it first, then open the model inside.'
+    act(() => {
+      useStore.getState().setAlert({...unrecognizedFormatAlert(problem, 'Tower.zip', 'picker'), archive: {problem}})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('Can\'t open this archive')).toBeInTheDocument()
+    expect(screen.getByText(problem)).toBeInTheDocument()
   })
 })

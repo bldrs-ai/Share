@@ -6,6 +6,7 @@ import {
 } from '../OPFS/OPFSService.js'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {registerInMemoryUpload} from '../loader/inMemoryUploads'
+import {openUploadThroughArchive} from '../loader/modelArchive'
 import {unrecognizedFormatAlert} from '../loader/unrecognizedFormat'
 import debug from '../utils/debug'
 
@@ -62,8 +63,13 @@ function holdUntilPicked(fileInput) {
  *   opened at all, to hand to `setAlert`: a message string for a compressed
  *   file in a browser with no `DecompressionStream`, or an
  *   `unrecognizedFormatAlert` object for a name and a header that between
- *   them name no format. Without one this path can only log: the picker has already
- *   closed, so nothing else would tell the user why nothing happened.
+ *   them name no format, or for a zip with no model in it. Without one this
+ *   path can only log: the picker has already closed, so nothing else would
+ *   tell the user why nothing happened. It is this path's only way to the
+ *   dialog, so it also carries the entry chooser for a zip holding several
+ *   models (`loader/modelArchive.js`); the pick then finishes, with `onLoad`,
+ *   when the user chooses. Without `onError` there is no chooser to show,
+ *   and such a pick opens nothing.
  * @param {object} [options]
  * @param {boolean} [options.inMemory] For a browser without OPFS: hold the
  *   file in memory (`loader/inMemoryUploads.js`) instead of writing it to
@@ -87,15 +93,14 @@ export function loadLocalFile(
     async (event) => {
       debug().log('loader#loadLocalFile#event:', event)
       const picked = event.target.files[0]
-      const lastModifiedUtc = picked.lastModified
       // A `.glb.gz` — Share's own compressed export (#1854) — is unwrapped
       // before the blob URL is minted, because that URL is all the OPFS
       // worker gets: what it writes is what the loader will later parse.
       // Nothing else in this function then has to know about `.gz`
       // (`loader/gzipEnvelope.js`).
-      let file
+      let unwrapped
       try {
-        file = await inflateIfGzipEnvelope(picked)
+        unwrapped = await inflateIfGzipEnvelope(picked)
       } catch (e) {
         debug().error('loader#loadLocalFile: cannot open the picked file:', e.message)
         if (onError) {
@@ -103,76 +108,107 @@ export function loadLocalFile(
         }
         return
       }
-      if (inMemory) {
-        const ext = await guessTypeFromNameOrFile(file)
-        if (ext === null) {
-          reportUnknownType(picked.name, onError)
-          return
-        }
-        onLoad(registerInMemoryUpload(file, ext), lastModifiedUtc, picked.name)
-        return
-      }
-      const tmpUrl = URL.createObjectURL(file)
-      debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
-      // Post message to the worker to handle the file
-      const parts = tmpUrl.split('/')
-      const fileNametmpUrl = parts[parts.length - 1]
-      if (!testingDisableWebWorker) {
-        // The storage extension is what `findLoader` will resolve this upload
-        // by, so it has to survive names the old `split('.').pop()` could not
-        // parse: `model.glb.gz` (a glb), `MODEL.GLB.GZ`, and a file called
-        // just `.gz`, which only its header can answer for.
-        const ext = await guessTypeFromNameOrFile(file)
-        if (ext === null) {
-          URL.revokeObjectURL(tmpUrl)
-          reportUnknownType(picked.name, onError)
-          return
-        }
-        // Minted before the listener attaches so it can close over the id.
-        const requestId = nextRequestId()
-        // Listener for messages from the worker.  We can't revoke
-        // tmpUrl until the worker is done with it, so revoke when the
-        // listener detaches (success or error path).
-        const listener = (workerEvent) => {
-          // Only this request's replies. Without the filter this accepts ANY
-          // error from the shared worker, so once the OPFS/utils.js helpers
-          // became correlated (#1785) an unrelated request's failure would
-          // detach this listener and revoke `tmpUrl` while its own write was
-          // still in flight — the upload then silently never calls onLoad.
-          if (workerEvent.data.requestId !== requestId) {
-            return
+      // A zip is opened from inside: its one model, a choice of several, or a
+      // refusal saying what it holds (`loader/modelArchive.js`). The model's
+      // name — the entry's, for one taken out of an archive — is what recents
+      // and the load report show; the archive's `lastModified` stays.
+      await openUploadThroughArchive(unwrapped, {
+        entry: 'picker',
+        alert: (alert) => {
+          debug().log('loader#loadLocalFile: archive alert:', alert?.type ?? alert)
+          if (onError) {
+            onError(alert)
           }
-          if (workerEvent.data.error || workerEvent.data.requestFinished) {
-            const message = workerEvent.data.error ??
-              `OPFS worker finished ${requestId} without a reply`
-            debug().error('Error from worker:', message)
-            workerRef.removeEventListener('message', listener)
-            URL.revokeObjectURL(tmpUrl)
-          } else if (workerEvent.data.completed) {
-            if (workerEvent.data.event === 'write') {
-              debug().log('Worker finished writing file')
-              workerRef.removeEventListener('message', listener)
-              URL.revokeObjectURL(tmpUrl)
-              onLoad(workerEvent.data.fileName, lastModifiedUtc, picked.name)
-            } else if (workerEvent.data.event === 'read') {
-              debug().log('Worker finished reading file')
-              workerRef.removeEventListener('message', listener)
-              URL.revokeObjectURL(tmpUrl)
-              onLoad(workerEvent.data.file.name, lastModifiedUtc, picked.name)
-            }
-          }
-        }
-        workerRef.addEventListener('message', listener)
-        // The user's own filename, envelope and all: it is the display name
-        // for recents and the load report, not something to resolve against.
-        opfsWriteModel(tmpUrl, picked.name, `${fileNametmpUrl}.${ext}`, requestId)
-      } else {
-        URL.revokeObjectURL(tmpUrl)
-        onLoad(fileNametmpUrl, lastModifiedUtc, picked.name)
-      }
+        },
+        open: (model, entryType) => openPicked(model, entryType),
+      })
     },
     false,
   )
+
+  /**
+   * The pick's own open of one model file: the picked file itself, or the
+   * entry taken out of the archive it was.
+   *
+   * @param {File} file
+   * @param {string} [entryType] An archive entry's extension, which IS its
+   *   storage type (the entry was chosen by it); unset for the picked file
+   *   itself, which is typed by name then header as before.
+   */
+  async function openPicked(file, entryType) {
+    // The display name: the user's own filename, envelope and all — the
+    // gzip seam keeps it on the inflated file — or an archive entry's. Its
+    // `lastModified` is the pick's either way: both seams carry it over.
+    const displayName = file.name
+    const lastModifiedUtc = file.lastModified
+    if (inMemory) {
+      const ext = entryType ?? await guessTypeFromNameOrFile(file)
+      if (ext === null) {
+        reportUnknownType(displayName, onError)
+        return
+      }
+      onLoad(registerInMemoryUpload(file, ext), lastModifiedUtc, displayName)
+      return
+    }
+    const tmpUrl = URL.createObjectURL(file)
+    debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
+    // Post message to the worker to handle the file
+    const parts = tmpUrl.split('/')
+    const fileNametmpUrl = parts[parts.length - 1]
+    if (!testingDisableWebWorker) {
+      // The storage extension is what `findLoader` will resolve this upload
+      // by, so it has to survive names the old `split('.').pop()` could not
+      // parse: `model.glb.gz` (a glb), `MODEL.GLB.GZ`, and a file called
+      // just `.gz`, which only its header can answer for.
+      const ext = entryType ?? await guessTypeFromNameOrFile(file)
+      if (ext === null) {
+        URL.revokeObjectURL(tmpUrl)
+        reportUnknownType(displayName, onError)
+        return
+      }
+      // Minted before the listener attaches so it can close over the id.
+      const requestId = nextRequestId()
+      // Listener for messages from the worker.  We can't revoke
+      // tmpUrl until the worker is done with it, so revoke when the
+      // listener detaches (success or error path).
+      const listener = (workerEvent) => {
+        // Only this request's replies. Without the filter this accepts ANY
+        // error from the shared worker, so once the OPFS/utils.js helpers
+        // became correlated (#1785) an unrelated request's failure would
+        // detach this listener and revoke `tmpUrl` while its own write was
+        // still in flight — the upload then silently never calls onLoad.
+        if (workerEvent.data.requestId !== requestId) {
+          return
+        }
+        if (workerEvent.data.error || workerEvent.data.requestFinished) {
+          const message = workerEvent.data.error ??
+            `OPFS worker finished ${requestId} without a reply`
+          debug().error('Error from worker:', message)
+          workerRef.removeEventListener('message', listener)
+          URL.revokeObjectURL(tmpUrl)
+        } else if (workerEvent.data.completed) {
+          if (workerEvent.data.event === 'write') {
+            debug().log('Worker finished writing file')
+            workerRef.removeEventListener('message', listener)
+            URL.revokeObjectURL(tmpUrl)
+            onLoad(workerEvent.data.fileName, lastModifiedUtc, displayName)
+          } else if (workerEvent.data.event === 'read') {
+            debug().log('Worker finished reading file')
+            workerRef.removeEventListener('message', listener)
+            URL.revokeObjectURL(tmpUrl)
+            onLoad(workerEvent.data.file.name, lastModifiedUtc, displayName)
+          }
+        }
+      }
+      workerRef.addEventListener('message', listener)
+      // The user's own filename, envelope and all: it is the display name
+      // for recents and the load report, not something to resolve against.
+      opfsWriteModel(tmpUrl, displayName, `${fileNametmpUrl}.${ext}`, requestId)
+    } else {
+      URL.revokeObjectURL(tmpUrl)
+      onLoad(fileNametmpUrl, lastModifiedUtc, displayName)
+    }
+  }
 
   viewerContainer.appendChild(fileInput)
   holdUntilPicked(fileInput)

@@ -49,6 +49,8 @@ import {NeedsReconnectError} from '../connections/errors'
 import {EngineOpenFailureError, engineFailureCaptureContext} from '../loader/engineOpenFailure'
 import {UnsupportedSchemaError, reportUnsupportedSchema} from '../loader/unsupportedSchema'
 import {hasInMemoryUpload} from '../loader/inMemoryUploads'
+import {ARCHIVE_UNREADABLE} from '../loader/modelArchive'
+import {ZipArchiveError} from '../loader/zipArchive'
 import {
   InMemoryUploadGoneError,
   UploadNotInBrowserError,
@@ -496,6 +498,13 @@ export default function CadView({
           reportedRefusalRef.current = refusalKey
           reportUnsupportedSchema(e, modelPath)
         }
+      } else if (e instanceof ZipArchiveError) {
+        // A hosted `.ifczip` that isn't one IFC in a readable zip
+        // (loader/modelArchive.js#unwrapIfcZip). The user's file, not a
+        // defect: say why under its own header, counted in analytics only
+        // (AlertDialog), and kept out of the captureException below. The
+        // message never names the file.
+        setAlert({type: ARCHIVE_UNREADABLE, message: e.message})
       } else if (e instanceof EngineOpenFailureError) {
         // conway said why the open failed (conway#742): a short form of the
         // reason in place of the raw "OpenModel returned -1". Still a real
@@ -552,7 +561,7 @@ export default function CadView({
       // hard-failure group (#1955). Its volume is still counted: an
       // info-level message above, plus AlertDialog's analytics event.
       if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof InMemoryUploadGoneError) &&
-          !(e instanceof UploadNotInBrowserError)) {
+          !(e instanceof UploadNotInBrowserError) && !(e instanceof ZipArchiveError)) {
         attachLoadFailureContext()
         if (e instanceof EngineOpenFailureError) {
           // The engine's status and reason as tags/context on this event
