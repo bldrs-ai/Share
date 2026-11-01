@@ -1376,6 +1376,64 @@ describe('CadView', () => {
       await actAsyncFlush()
     }
 
+    /**
+     * Like loadAThenSwitchToB, but the switch lands while A is still in its
+     * post-parse tail (onModel awaiting the spatial structure), and A then
+     * runs to the end anyway: nothing cancels a superseded load (#2019). B
+     * replays once A ends and fails.
+     *
+     * @param {object} result renderHook result over the whole store
+     */
+    async function supersedeAWithB(result) {
+      let releaseTree
+      getHarness()._loadedModel.ifcManager.getSpatialStructure.mockImplementationOnce(
+        () => new Promise((resolve) => {
+          releaseTree = () => resolve(makeTestTree())
+        }))
+      loadSpy = jest.spyOn(Loader, 'load')
+        .mockImplementationOnce(() => Promise.resolve(getHarness()._loadedModel))
+        .mockImplementation(() => {
+          throw new Error('OpenModel returned -1')
+        })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(releaseTree).toBeDefined())
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      await act(() => releaseTree())
+      await actAsyncFlush()
+      await waitFor(() => expect(String(loadSpy.mock.calls.at(-1)[0])).toContain('other.ifc'))
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+    }
+
+    // codex review on #2026: the superseded A marks itself loaded after the
+    // switch cleared the flag, which silenced B's retry all over again.
+    it('retries the new model on an auth change when the old load ran on past the switch', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      await supersedeAWithB(result)
+      const loadsBefore = loadSpy.mock.calls.length
+      await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+      expect(String(loadSpy.mock.calls.at(-1)[0])).toContain('other.ifc')
+    })
+
+    // codex review on #2026: the superseded A refills the element table with
+    // its tree after the switch cleared it.
+    it('no longer resolves the old model\'s element ids when the old load ran on past the switch', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      await supersedeAWithB(result)
+      const leafOfA = makeTestTree().children[0].children[0].expressID
+      await act(() => result.current.setExpandedElements([]))
+      await act(() => result.current.setSelectedElements([`${leafOfA}`]))
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
+      await actAsyncFlush()
+      expect(result.current.expandedElements).toEqual([])
+    })
+
     // #2014 follow-up (codex review on #2026): the reset on a model change
     // runs after the location already shows the destination, so the `cp:`
     // term there is the new model's for CutPlaneMenu to restore. The old

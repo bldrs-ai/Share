@@ -379,11 +379,36 @@ export default function CadView({
         if (useStore.getState().alert !== alertAtLoadStartRef.current) {
           setAlert(null)
         }
+        // The load that just ended was for the model the user left, and
+        // nothing cancels it (#2019): it may have run on past the model
+        // change, marked itself loaded and refilled the element table with its
+        // own tree after the change cleared them (codex review on #2026).
+        forgetLoadedModel()
         await latestOnViewerRef.current()
       }
     }
   }
   latestOnViewerRef.current = onViewer
+
+
+  /**
+   * Drop the state that belongs to the model this CadView last loaded:
+   * - `isViewerLoaded`, which gates the auth/OPFS retry effect. Left true from
+   *   the previous model, it kept that effect from ever retrying a later one
+   *   (open-205, #2015).
+   * - The element lookup, that model's tree (#2016). Cleared in place: it is
+   *   one object for the life of this CadView, and the handlers that read it
+   *   hold that object. onModel refills it.
+   *
+   * Runs when the model identity changes, and again just before a load that
+   * replaced an in-flight one starts (onViewer's finally).
+   */
+  function forgetLoadedModel() {
+    setIsViewerLoaded(false)
+    for (const id of Object.keys(elementsById)) {
+      delete elementsById[id]
+    }
+  }
 
 
   /** Inner load body — preconditions checked + in-flight flag managed by `onViewer`. */
@@ -1954,17 +1979,9 @@ export default function CadView({
       dedupeModelKeyRef.current = dedupeKey
       reportedRefusalRef.current = null
       reportedLoadFailureRef.current = null
-      // "Loaded" is about one model. Left true from the previous model, it
-      // kept the auth/OPFS effect below from ever retrying this one (open-205,
-      // #2015). Only on an identity change: re-runs for the same model (view
-      // settings) keep it, as they keep the dedupe refs above.
-      setIsViewerLoaded(false)
-      // The element lookup is the previous model's tree. Cleared in place:
-      // it is one object for the life of this CadView, and the handlers that
-      // read it hold that object (open-205, #2016). onModel refills it.
-      for (const id of Object.keys(elementsById)) {
-        delete elementsById[id]
-      }
+      // Only on an identity change: re-runs for the same model (view
+      // settings) keep this state, as they keep the dedupe refs above.
+      forgetLoadedModel()
     }
     onModelPath()
   }, [modelPath, customViewSettings])
