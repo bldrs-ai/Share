@@ -25,7 +25,7 @@ import {
 import {trackEngagementOnOpen} from '../privacy/engagementTracking'
 import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
 import {getRenderMode} from '../privacy/preferences'
-import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
+import {resetPlanes as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
 import {
@@ -229,7 +229,11 @@ export default function CadView({
   // it to tell a link-shared (public, unmetered) file from a private one
   // (quota/useDirectLinkQuota.js, design/new/quotas.md §"Drive visibility").
   const driveDownloadRef = useRef(null)
-  // The model identity the two dedupe refs belong to.
+  // The identity of the model this CadView is showing now: the one the two
+  // dedupe refs belong to, set synchronously when modelPath changes. A load
+  // compares it with its own model's identity before writing per-model state,
+  // so a load the user has navigated away from, which nothing cancels
+  // (#2019), cannot write over the model that replaced it (open-205).
   const dedupeModelKeyRef = useRef(null)
   // The model a `load_failed` was last sent for, for the same reason and
   // with the same keying as reportedRefusalRef: the auth-state effect and
@@ -379,6 +383,15 @@ export default function CadView({
         if (useStore.getState().alert !== alertAtLoadStartRef.current) {
           setAlert(null)
         }
+        // The load that just ended was superseded. If the replay is for
+        // another model, its isLoadSuperseded guard already kept it from
+        // writing the per-model state. But after A → B → A the replay is for
+        // the SAME model, so the guard counted the ended load as current
+        // again, and it may have marked itself loaded for geometry it put into
+        // a viewer that has since been disposed. Clear that state before the
+        // replay, so a replay that fails, or an auth change during it, still
+        // gets retried (codex review on #2026).
+        forgetLoadedModel()
         await latestOnViewerRef.current()
       }
     }
@@ -386,8 +399,44 @@ export default function CadView({
   latestOnViewerRef.current = onViewer
 
 
+  /**
+   * Drop the state that belongs to the model this CadView last loaded:
+   * - `isViewerLoaded`, which gates the auth/OPFS retry effect. Left true from
+   *   the previous model, it kept that effect from ever retrying a later one
+   *   (open-205, #2015).
+   * - The element lookup, that model's tree (#2016). Cleared in place: it is
+   *   one object for the life of this CadView, and the handlers that read it
+   *   hold that object. onModel refills it.
+   *
+   * Runs when the model identity changes, and again just before a replay
+   * of a load that a model change superseded (onViewer's finally). Two
+   * mechanisms, because a superseded load is not cancelled (#2019): its
+   * `isLoadSuperseded` guard (onViewerInternal) keeps it from writing this
+   * state back while another model is shown, and the replay-time call
+   * covers a return to its own model (A → B → A), where the guard sees it as
+   * current again.
+   */
+  function forgetLoadedModel() {
+    setIsViewerLoaded(false)
+    for (const id of Object.keys(elementsById)) {
+      delete elementsById[id]
+    }
+  }
+
+
   /** Inner load body — preconditions checked + in-flight flag managed by `onViewer`. */
   async function onViewerInternal() {
+    // Whether the model shown now is another one. Nothing cancels this load
+    // when the user moves on (#2019), and it can still settle at any await
+    // below, before or after the replacement's own load begins; checked at
+    // each write of the per-model state forgetLoadedModel drops, so a
+    // superseded load leaves that state to the model shown (codex review on
+    // #2026). By identity, so it reads current again after A → B → A; the
+    // replay-time forgetLoadedModel in onViewer covers that case. Read at the
+    // write, not here: on mount the [modelPath] effect, which sets the shown
+    // identity, runs after the auth effect that may start this load.
+    const loadModelKey = modelIdentity(modelPath, installPrefix)
+    const isLoadSuperseded = () => dedupeModelKeyRef.current !== loadModelKey
     setIsModelReady(false)
 
     // define mesh colors for selected and preselected element
@@ -587,7 +636,7 @@ export default function CadView({
     }
 
     debug().log('CadView#onViewer: pathToLoad(${pathToLoad}), tmpModelRef: ', tmpModelRef)
-    await onModel(tmpModelRef)
+    await onModel(tmpModelRef, isLoadSuperseded)
 
     const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     selectElementBasedOnFilepath(pathToLoad)
@@ -611,7 +660,9 @@ export default function CadView({
     }
 
     modelPath.title = tmpModelRef.name // maybe undefined
-    setIsViewerLoaded(true)
+    if (!isLoadSuperseded()) {
+      setIsViewerLoaded(true)
+    }
     setIsModelReady(true)
     // After the model is on screen, never before: a direct link is metered
     // but not gated (quota/useDirectLinkQuota.js). The Open dialog already
@@ -780,7 +831,16 @@ export default function CadView({
           const browser = getBrowser('google-drive')
           const download = await browser.getFileDownload(connection, null, routeResult.fileId)
           const blobUrl = URL.createObjectURL(download.blob)
-          loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '')
+          try {
+            loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '')
+          } finally {
+            // The URL pins the whole download for the life of the page, and
+            // each load mints a new one (a theme toggle reloads the model).
+            // `load` has read the bytes into memory by the time it settles,
+            // and a retry downloads again, so nothing needs this URL after
+            // (open-205, #2018).
+            URL.revokeObjectURL(blobUrl)
+          }
         } else {
           // API key fallback: works for public files and route tests without a
           // connection. Only a file shared "Anyone with the link" (or
@@ -992,8 +1052,10 @@ export default function CadView({
    * Analyze loaded IFC model to configure UI elements.
    *
    * @param {object} m IFCjs loaded model.
+   * @param {Function} isLoadSuperseded True once the user has moved to another
+   *   model; see onViewerInternal.
    */
-  async function onModel(m) {
+  async function onModel(m, isLoadSuperseded) {
     assertDefined(m)
     debug().log('CadView#onModel', m)
     // TODO(pablo): centralize capability check somewhere
@@ -1050,7 +1112,9 @@ export default function CadView({
     if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
     }
-    setupLookupAndParentLinks(rootElt, elementsById)
+    if (!isLoadSuperseded()) {
+      setupLookupAndParentLinks(rootElt, elementsById)
+    }
     initSearch(m, rootElt)
     // Root display name, in preference order: real properties from the
     // parser (IFC project Name/LongName), then whatever the tree root
@@ -1447,7 +1511,13 @@ export default function CadView({
     setLevelInstance(null)
 
     resetSelection()
-    resetCutPlaneState(location, viewer, setCutPlaneDirections, setIsCutPlaneActive)
+    // Scene and store only. This call once passed `location` first, which
+    // landed in the viewer slot, so its guard failed and nothing reset: after
+    // Clear (deselectItems, which deletes the planes itself) the store still
+    // reported the planes and the menu showed them checked (open-205, #2014).
+    // The `cp:` hash term is left alone: on a model or view-settings change it
+    // already belongs to the destination, and Clear's navigation drops it.
+    resetCutPlaneState(viewer, setCutPlaneDirections, setIsCutPlaneActive)
     setIsSearchBarVisible(false)
     setIsNavTreeVisible(false)
     setIsPropertiesVisible(false)
@@ -1939,6 +2009,9 @@ export default function CadView({
       dedupeModelKeyRef.current = dedupeKey
       reportedRefusalRef.current = null
       reportedLoadFailureRef.current = null
+      // Only on an identity change: re-runs for the same model (view
+      // settings) keep this state, as they keep the dedupe refs above.
+      forgetLoadedModel()
     }
     onModelPath()
   }, [modelPath, customViewSettings])
