@@ -708,7 +708,7 @@ export async function measureLoad(page: Page, options: MeasureOptions): Promise<
   // aborted, which for iteration 0 can be nothing at all.
   const {summary, iterationsOk, iterationsFailed} = summarizeSamples(samples, SUMMARY_METRICS)
   const first = samples.find((sample) => sample.ok) ?? samples[0]
-  const engineLine = first?.report?.lines.find((l) => /^Conway\b|^web-ifc\b/i.test(l)) ?? null
+  const engineLine = first?.report?.lines.find((l) => /^Conway\b/i.test(l)) ?? null
   const probe = await readProbe(page)
   const record: LoadMeasurementRecord = {
     schema: 'bldrs.loadMeasure/1',

@@ -91,7 +91,7 @@ import {instanceMapFromGeometry} from './IfcInstanceMap'
  * @param {Function} [onProgress] receives conway's structured
  *   ProgressEvents ({phase, completed, total?, unit, elapsedMs}) during
  *   the parse — a conway `Loadersettings.ON_PROGRESS` extension (#301);
- *   silently ignored by engines that predate it (real web-ifc, old pins).
+ *   silently ignored by engine pins that predate it.
  * @param {Function} [onMeshBatch] demand/tiled slice A: receives
  *   `(flatMeshes, modelID, {done, total})` — the batch, its model, and
  *   the pump's product progress — for each extracted batch as it lands (only
@@ -125,7 +125,7 @@ export async function parseIfcWithConway(
   }
   applyEngineLogLevel(ifcAPI)
   // Engine identity line for the load report (log line 2) — e.g.
-  // "Conway v1.379.1190". Feature-detected; real web-ifc lacks it.
+  // "Conway v1.379.1190". Feature-detected, like the other engine extensions.
   if (typeof ifcAPI.getConwayVersion === 'function') {
     reportEngineVersion(ifcAPI.getConwayVersion())
   }
@@ -234,7 +234,7 @@ export async function parseIfcWithConway(
     // decides the retention question below. Feature-detected rather than
     // version-gated: the pin this landed on (1.1578.666-g39d59784) does NOT
     // have it, so the new regime is dormant until the next routine bump,
-    // and an engine swap (real web-ifc, an older pin, a future one) picks
+    // and an engine swap (an older pin, a future one) picks
     // its regime by what it actually implements.
     const hasAsyncWholeModelAsk = typeof ifcAPI.StreamAllMeshesAsync === 'function'
     // Retention decision (conway#638, completed by conway#660). `captured`
@@ -501,7 +501,7 @@ export async function parseIfcWithConway(
   //   2. OpenModelAsync (conway #301 §2): yields to the event loop
   //      between progress ticks, so the backdrop/snackbar actually
   //      repaint and the browser stops flagging the tab as stalled.
-  //   3. OpenModel: classic synchronous open (real web-ifc, old pins).
+  //   3. OpenModel: classic synchronous open (old pins).
   // All feature-detected, so any engine pin keeps loading.
   let modelID
   // As in the deferred path above: the last open, marked immediately
@@ -799,8 +799,8 @@ function yieldToEventLoop() {
 }
 
 
-// web-ifc numeric log levels (conway's SetLogLevel shim uses the same
-// numbering so an engine swap keeps working).
+// web-ifc numeric log levels (conway's SetLogLevel shim keeps web-ifc's
+// numbering).
 const ENGINE_LOG_LEVEL_DEBUG = 1
 const ENGINE_LOG_LEVEL_WARN = 3
 
@@ -808,8 +808,8 @@ const ENGINE_LOG_LEVEL_WARN = 3
 /**
  * Quiet the engine's console for a clean load (#301 §6): warnings/errors
  * only by default, everything (deduped log table included) under the
- * `glbVerbose` diagnostics flag. Feature-detected — old engine pins and
- * real web-ifc's wasm-side SetLogLevel both tolerate or lack this call.
+ * `glbVerbose` diagnostics flag. Feature-detected — old engine pins may
+ * lack this call.
  *
  * @param {object} ifcAPI
  */

@@ -70,16 +70,16 @@ test travels with its subject and a reader finds it where they'd look:
 |---|---|
 | A component | `src/Components/<Area>/` (e.g. `src/Components/Camera/permalinkCamera.spec.ts`) |
 | A container / page-level flow | `src/Containers/` (e.g. `src/Containers/sceneHighlightPermalink.spec.ts`) |
-| Engine / viewer internals with no component home | `src/viewer/` (e.g. `src/viewer/webIfcEngine.webifc.spec.ts`) |
+| Engine / viewer internals with no component home | `src/viewer/` (e.g. `src/viewer/loadTiming.spec.ts`) |
 
 Co-location is already the norm across `src/Components/**` — match it.
 Only add files here when they are genuinely **shared** across specs.
 
 ## How this still works after co-locating
 
-Both Playwright configs set `testDir: ../src` with a `**/*.spec.ts`
-(and `**/*.webifc.spec.ts`) glob, so a spec anywhere under `src/` is
-discovered — location is purely organizational.
+The Playwright configs set `testDir: ../src` with a `**/*.spec.ts`
+glob, so a spec anywhere under `src/` is discovered — location is
+purely organizational.
 
 Import the helpers by their path back to this directory, e.g. from a spec
 in `src/Components/<Area>/`:

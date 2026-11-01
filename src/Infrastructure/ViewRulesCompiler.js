@@ -1,6 +1,6 @@
 import IfcColor from './IfcColor'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
-import {IFCPROPERTYSET, IFCRELDEFINESBYPROPERTIES} from 'web-ifc'
+import {IFCPROPERTYSET, IFCRELDEFINESBYPROPERTIES} from '@bldrs-ai/conway/web-ifc'
 import {interpolateColors, parseColor} from './ColorHelperFunctions'
 
 

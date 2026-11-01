@@ -1,5 +1,5 @@
 import IfcCustomViewSettings from './IfcCustomViewSettings'
-import {IFCPRODUCTDEFINITIONSHAPE} from 'web-ifc'
+import {IFCPRODUCTDEFINITIONSHAPE} from '@bldrs-ai/conway/web-ifc'
 import {compileViewRules} from './ViewRulesCompiler'
 
 

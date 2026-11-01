@@ -326,9 +326,9 @@ describe('viewer/ifc/ShareIfcLoader engine coordination stamp (Share#1634)', () 
   })
 
   it('loads unstamped against an engine that predates the frame contract', async () => {
-    // Feature-detect, as conway's doc comment instructs: stock web-ifc (the
-    // USE_WEBIFC_SHIM=false engine) and any pin before conway#702 have no
-    // such method, and a missing diagnostic must never cost a load.
+    // Feature-detect, as conway's doc comment instructs: any pin before
+    // conway#702 has no such method, and a missing diagnostic must never
+    // cost a load.
     const model = await parseWith(makeIfcAPI(null))
 
     expect(model.tag).toBe('incremental')

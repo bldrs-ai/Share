@@ -6,7 +6,6 @@ This doc describes how to work in the project as a developer and in our team.
 
 ### Build Commands
 - `yarn build` / `yarn build-conway` - Main production build using Conway engine
-- `yarn build-webifc` - Build using web-ifc instead of Conway
 - `yarn build-cosmos` - Build React Cosmos component library documentation
 - `yarn build-share-analyze` - Build with bundle analysis enabled
 - `yarn clean` - Remove build artifacts in `docs/` directory
