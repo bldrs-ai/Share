@@ -106,7 +106,7 @@ async function logInstancedModelStats(ifcAPI, modelID, getCaptured, force = fals
  * @property {Function} GetCoordinationMatrix Get the coord matrix.
  * @property {Function} [GetAppliedCoordinationMatrix] conway#702: the frame
  *   the engine ACTUALLY composed into the placements it emitted. Absent on
- *   pins predating it and on stock web-ifc — feature-detect, never assume
+ *   pins predating it — feature-detect, never assume
  *   (conway's own doc comment says so).
  * @property {Function} getStatistics Per-load load statistics.
  * @property {Function} getConwayVersion Conway engine version string.
@@ -613,9 +613,10 @@ export default class ShareIfcLoader {
       // scene/camera management uniform across formats: no format-specific
       // fit lives in the loader.
 
-      // `getStatistics` / `getConwayVersion` are Conway-adapter extensions
-      // (Logger-backed); stock web-ifc (the USE_WEBIFC_SHIM=false engine)
-      // doesn't expose them. The model mesh is already built + added above,
+      // `getStatistics` / `getConwayVersion` are Conway extensions to the
+      // web-ifc-shaped API (Logger-backed), not part of web-ifc's own
+      // surface, so the guard keeps an engine or mock without them from
+      // failing the load. The model mesh is already built + added above,
       // so per-load stats are best-effort diagnostics — skip them when the
       // engine lacks the API rather than letting a missing method throw and
       // discard a successful load. `CadView` already guards on
@@ -635,7 +636,7 @@ export default class ShareIfcLoader {
         // as the unqualified stats_errorCount / stats_warningCount, beside the
         // page-wide tee's stats_pageErrorCount / stats_pageWarnCount
         // (loadProgress#finishReport). The optional chain stays for older
-        // engines (the web-ifc shim, pre-#740 conway) and the Jest mocks,
+        // engines (pre-#740 conway) and the Jest mocks,
         // where `loadStats` simply omits them.
         const errorCount = statsApi.getErrorCount?.()
         const warningCount = statsApi.getWarningCount?.()

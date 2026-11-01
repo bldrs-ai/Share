@@ -42,6 +42,5 @@ export const excludedNodeModules = [
   'uuid',
   'vfile',
   'vfile-message',
-  'web-ifc',
   'use-double-tap',
 ].join('|')

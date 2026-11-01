@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Bldrs Share — IFC/CAD model viewer in the browser, with multiple cloud sources (GitHub, Google Drive). React + MUI front end, Conway and web-ifc engines.
+Bldrs Share — IFC/CAD model viewer in the browser, with multiple cloud sources (GitHub, Google Drive). React + MUI front end, Conway engine.
 
 This file is the router for AI assistants working in this repo. Keep it small. Topic docs are linked below; read on demand, not eagerly.
 
@@ -42,8 +42,8 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   then close or narrow its issues (partly-addressed → a comment saying
   what's left, not a close).
   **What the gate covers:** `build` (main.yml) and the `test-flows` jobs
-  (`playwright-run` — the required aggregator over four shards — and
-  `playwright-webifc-run`) are skipped on drafts. **Netlify deploy previews still run** —
+  (`playwright-run` — the required aggregator over four shards) are
+  skipped on drafts. **Netlify deploy previews still run** —
   they come from Netlify's GitHub integration, not Actions — so a draft
   normally has a preview URL to click through. (`tools/netlify/ignore-build.sh`
   skips the deploy when every changed file matches `.md` / `design/` /
@@ -134,7 +134,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Generating geometry for `create-320` (#1921): why not CADAM as engine / iframe / service, the Tier 1 extrusion and Tier 2 OpenSCAD-WASM generators and their op payloads, GlobalId minting, Conway's missing writer and the smallest splice-writer slice | [design/new/create-engine.md](design/new/create-engine.md) |
 | STEP occurrence-keyed selection (NavTree↔scene per-occurrence), `PlacedGeometry.occurrencePath`, why one nut highlights all | [design/new/step-occurrence-selection.md](design/new/step-occurrence-selection.md) |
 | The `?feature=look` render look — PBR materials + gradient IBL + tone-mapping, Neutral/Flat toggle, `looks.js`/`lookMaterial.js`, `LightingGui`, why it's all behind one flag (default off) | [design/new/viewer-replacement.md](design/new/viewer-replacement.md) §6e |
-| Removing the `conway-web-ifc-adapter` shim, the `web-ifc` engine seam (`webIfcShimAlias`/`USE_WEBIFC_SHIM`), Conway version-lag, runtime engine swap | [design/new/adapter-removal.md](design/new/adapter-removal.md) |
+| The retired `conway-web-ifc-adapter` shim and real-`web-ifc` engine (both removed; Share imports `@bldrs-ai/conway/web-ifc`), why a `web-ifc` → Conway esbuild alias remains for ifclib, Conway version-lag | [design/new/adapter-removal.md](design/new/adapter-removal.md) |
 | Load-log report format (CLI + console + snackbar expando + "i" report dialog), stage/Total line semantics, per-format cascade, `loadProgress.js` (deep-imports conway `core/progress_log`)/`AlertDialogAndSnackbar.jsx` (live expando)/`LoadReportControl` | [design/new/load-log-format.md](design/new/load-log-format.md) |
 | Model display controls (`view-140`): auto-color toggle + wireframe, scoped to sub-tree/part/mesh, residency backends for non-batched formats, the `#d:` permalink token, incl. hide/isolate state (`hide=`/`show=`/`iso=` with `e`/`o`/`n` refs — IFC ids, STEP occurrence paths, scene-graph name paths; §6.3, #1250) | [design/new/model-display-controls.md](design/new/model-display-controls.md) |
 | Why a model renders wrong (spikes, missing or exploded parts); geometry-health signals and which ones to surface in Share (load-report health lines, diagnostics attached to a bug report, outlier-robust auto-framing) | conway repo: `scripts/debug/README.md` (the tool — start here before writing a tracer), [conway `design/new/model-diagnostics.md`](https://github.com/bldrs-ai/conway/blob/main/design/new/model-diagnostics.md) (the signals + Share candidates) |

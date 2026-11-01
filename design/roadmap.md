@@ -314,7 +314,8 @@ multi-worker; etc.*
     Share depends on `@bldrs-ai/conway` directly via the `@bldrs-ai/conway/web-ifc`
     subpath export, and the release chain collapsed to Conway → Share (no more
     three-hop republish / 22-minor-version lag). Real-`web-ifc` engine-swap
-    comparison retained. See `design/new/adapter-removal.md`.
+    comparison retained, then removed 2026-11-01 by product-owner decision.
+    See `design/new/adapter-removal.md`.
   - **GPU-instancing arc 🟡 (behind `?feature=batchedMesh`).** Grouper + measured
     analysis (#1568: ~60% vertex-memory reduction on instancing-dense Revit models,
     ~26% on STEP), `BatchedMesh` render path with recolor-based highlight, isolate,
