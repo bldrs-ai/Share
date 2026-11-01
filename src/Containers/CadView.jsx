@@ -25,7 +25,7 @@ import {
 import {trackEngagementOnOpen} from '../privacy/engagementTracking'
 import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
 import {getRenderMode} from '../privacy/preferences'
-import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
+import {resetPlanes as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
 import {
@@ -1456,11 +1456,12 @@ export default function CadView({
     setLevelInstance(null)
 
     resetSelection()
-    // `resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive)`. This
-    // call once passed `location` first, which landed in the viewer slot, so
-    // its guard failed and nothing reset: after Clear (deselectItems, which
-    // deletes the planes itself) the store still reported the planes and the
-    // menu showed them checked (open-205, #2014).
+    // Scene and store only. This call once passed `location` first, which
+    // landed in the viewer slot, so its guard failed and nothing reset: after
+    // Clear (deselectItems, which deletes the planes itself) the store still
+    // reported the planes and the menu showed them checked (open-205, #2014).
+    // The `cp:` hash term is left alone: on a model or view-settings change it
+    // already belongs to the destination, and Clear's navigation drops it.
     resetCutPlaneState(viewer, setCutPlaneDirections, setIsCutPlaneActive)
     setIsSearchBarVisible(false)
     setIsNavTreeVisible(false)

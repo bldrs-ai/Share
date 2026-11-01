@@ -1360,8 +1360,9 @@ describe('CadView', () => {
      *
      * @param {object} result renderHook result over the whole store
      * @param {Function} laterLoad Loader.load implementation for B
+     * @param {Function} [beforeSwitch] Awaited once A is ready, before the switch
      */
-    async function loadAThenSwitchToB(result, laterLoad) {
+    async function loadAThenSwitchToB(result, laterLoad, beforeSwitch) {
       loadSpy = jest.spyOn(Loader, 'load')
         .mockImplementationOnce(() => Promise.resolve(getHarness()._loadedModel))
         .mockImplementation(laterLoad)
@@ -1370,9 +1371,28 @@ describe('CadView', () => {
       render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
       await actAsyncFlush()
       await waitFor(() => expect(result.current.isModelReady).toBe(true))
+      await beforeSwitch?.()
       await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
       await actAsyncFlush()
     }
+
+    // #2014 follow-up (codex review on #2026): the reset on a model change
+    // runs after the location already shows the destination, so the `cp:`
+    // term there is the new model's for CutPlaneMenu to restore. The old
+    // planes still leave the store.
+    it('keeps the destination\'s cut-plane hash term while clearing the old planes', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      try {
+        await loadAThenSwitchToB(result, () => new Promise(() => {}), async () => {
+          await act(() => result.current.setCutPlaneDirections([{direction: 'y', offset: 0}]))
+          window.location.hash = `#${HASH_PREFIX_CUT_PLANE}:x=1`
+        })
+        expect(result.current.cutPlanes).toEqual([])
+        expect(window.location.hash).toBe(`#${HASH_PREFIX_CUT_PLANE}:x=1`)
+      } finally {
+        window.location.hash = ''
+      }
+    })
 
     // #2015: `isViewerLoaded` gates the auth/OPFS retry effect. Set by A's
     // success and never cleared, it silenced that effect for every later
