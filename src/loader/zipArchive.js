@@ -80,6 +80,7 @@ const EOCD_DIRECTORY_DISK = 6
 const EOCD_ENTRY_COUNT = 10
 const EOCD_DIRECTORY_SIZE = 12
 const EOCD_DIRECTORY_OFFSET = 16
+const EOCD_COMMENT_LENGTH = 20
 // The zip64 locator sits immediately before the EOCD.
 const ZIP64_LOCATOR_BYTES = 20
 const ZIP64_LOCATOR_EOCD_OFFSET = 8
@@ -479,14 +480,31 @@ async function inflateCounted(stored, expectedSize) {
 async function readEndOfDirectory(blob) {
   const tailStart = Math.max(0, blob.size - EOCD_BYTES - EOCD_MAX_COMMENT - ZIP64_LOCATOR_BYTES)
   const tail = new DataView(await blob.slice(tailStart).arrayBuffer())
-  // Backwards from the latest place it can start: the comment after it is
-  // free text and could itself contain the signature.
+  // The comment after the record is free text and can itself contain the
+  // signature, so the first hit scanning back from EOF may be a fake inside
+  // it, which typically read as an empty archive (codex review of
+  // Share#2010). A hit is consistent when its own comment length makes it
+  // end exactly at EOF. A fake at the very end of a comment, with a zero
+  // length after it, is consistent too, but it always lies inside the real
+  // record's comment, so the EARLIEST consistent hit is the real one; the
+  // scan therefore runs the whole tail (at most ~64 KiB) rather than
+  // stopping at the first. With no consistent hit at all (bytes appended
+  // after the record), the latest hit is used, as before this check.
   let eocd = -1
+  let fallback = -1
   for (let at = tail.byteLength - EOCD_BYTES; at >= 0; at--) {
-    if (tail.getUint32(at, true) === SIG_END_OF_DIRECTORY) {
-      eocd = at
-      break
+    if (tail.getUint32(at, true) !== SIG_END_OF_DIRECTORY) {
+      continue
     }
+    if (fallback < 0) {
+      fallback = at
+    }
+    if (at + EOCD_BYTES + tail.getUint16(at + EOCD_COMMENT_LENGTH, true) === tail.byteLength) {
+      eocd = at
+    }
+  }
+  if (eocd < 0) {
+    eocd = fallback
   }
   if (eocd < 0) {
     throw new ZipArchiveError(DAMAGED_MESSAGE)

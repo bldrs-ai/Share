@@ -225,6 +225,29 @@ describe('zipArchive', () => {
       expect(await readZipDirectory(blobOf(zipSync({})))).toEqual([])
     })
 
+    // Codex review of Share#2010: the backward scan took the first signature
+    // it met, so one inside a valid archive comment read as the record and
+    // the archive came back empty.
+    it('skips an end-of-directory signature inside the archive comment', async () => {
+      const zip = zipSync({'a.ifc': IFC_TEXT})
+      const comment = new Uint8Array(EOCD_BYTES)
+      new DataView(comment.buffer).setUint32(0, 0x06054b50, true)
+      const commented = new Uint8Array(zip.length + comment.length)
+      commented.set(zip)
+      commented.set(comment, zip.length)
+      new DataView(commented.buffer).setUint16(zip.length - EOCD_BYTES + 20, comment.length, true)
+      const entries = await readZipDirectory(blobOf(commented))
+      expect(entries.map(({path}) => path)).toEqual(['a.ifc'])
+    })
+
+    it('still opens an archive with bytes appended after its record', async () => {
+      const zip = zipSync({'a.ifc': IFC_TEXT})
+      const padded = new Uint8Array(zip.length + 7)
+      padded.set(zip)
+      const entries = await readZipDirectory(blobOf(padded))
+      expect(entries.map(({path}) => path)).toEqual(['a.ifc'])
+    })
+
     it('refuses an archive cut short, which has no directory to read', async () => {
       const zip = zipSync({'a.ifc': IFC_TEXT})
       expect(await refusal(readZipDirectory(blobOf(zip.subarray(0, zip.length - 30)))))
