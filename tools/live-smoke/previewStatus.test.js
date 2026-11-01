@@ -49,7 +49,7 @@ describe('live-smoke/previewStatus', () => {
   })
 
   it('waits when the context has no status yet, and ignores other contexts', () => {
-    const other = status(9, 'success', '2026-10-07T14:00:00Z', {context: 'netlify/bldrs-share-dev/deploy-preview'})
+    const other = status(9, 'success', '2026-10-07T14:00:00Z', {context: 'netlify/some-other-project/deploy-preview'})
     expect(newestPreviewStatus([other], CONTEXT)).toEqual({verdict: 'wait', url: null, state: null,
       reason: `no ${CONTEXT} status yet`})
   })

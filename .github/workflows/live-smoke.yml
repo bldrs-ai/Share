@@ -23,8 +23,8 @@ name: live-smoke
 # keeps the newest pending run.
 #
 # The target is an ALLOW-LIST, not any https origin
-# (tools/live-smoke/targets.js: deploy previews of the allowed Netlify
-# projects, and production): a run logs real test accounts in, so a dispatch
+# (tools/live-smoke/targets.js: deploy previews of the bldrs-share-prod
+# Netlify project, and production): a run logs real test accounts in, so a dispatch
 # pointed at someone else's origin must stop before any step is given a
 # secret (Codex on #1942). `Check the target against the allow-list` below
 # is that gate; every step that sees a secret comes after it and uses its
@@ -72,10 +72,11 @@ jobs:
       pull-requests: read
       statuses: read
     env:
-      # Which Netlify project's deploy preview a PR run targets. Both post a
+      # The Netlify project whose deploy preview a PR run targets. It posts a
       # `netlify/<project>/deploy-preview` status (functions-smoke.yml); the
-      # test accounts live in the Auth0 tenant that project's deploys use.
-      NETLIFY_PROJECT: ${{ vars.LIVE_SMOKE_NETLIFY_PROJECT || 'bldrs-share-prod' }}
+      # test accounts live in the Auth0 tenant its deploys use. Share has one
+      # project, so this is fixed rather than a repository variable.
+      NETLIFY_PROJECT: bldrs-share-prod
     steps:
       # First, and without a secret: the resolve step below runs a script
       # from the checkout (tools/live-smoke/previewStatus.mjs).

@@ -1,5 +1,5 @@
 {
-  "description": "RECONCILE_MODE=off (the non-production Netlify project, ops#36) answers 200 {mode: off} without reading Auth0 or Stripe, even with no secrets configured.",
+  "description": "RECONCILE_MODE=off (a deploy that must not sweep, ops#36) answers 200 {mode: off} without reading Auth0 or Stripe, even with no secrets configured.",
   "env": {
     "NODE_ENV": "test",
     "RECONCILE_MODE": "off"
