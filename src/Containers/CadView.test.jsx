@@ -1408,8 +1408,10 @@ describe('CadView', () => {
       await waitFor(() => expect(result.current.alert).not.toBeNull())
     }
 
-    // codex review on #2026: the superseded A marks itself loaded after the
-    // switch cleared the flag, which silenced B's retry all over again.
+    // codex review on #2026: the superseded A marked itself loaded after the
+    // switch cleared the flag, which silenced B's retry all over again. A
+    // superseded load no longer writes the flag (onViewerInternal's
+    // isLoadSuperseded).
     it('retries the new model on an auth change when the old load ran on past the switch', async () => {
       const {result} = renderHook(() => useStore((state) => state))
       await supersedeAWithB(result)
@@ -1420,8 +1422,9 @@ describe('CadView', () => {
       expect(String(loadSpy.mock.calls.at(-1)[0])).toContain('other.ifc')
     })
 
-    // codex review on #2026: the superseded A refills the element table with
-    // its tree after the switch cleared it.
+    // codex review on #2026: the superseded A refilled the element table with
+    // its tree after the switch cleared it. A superseded load no longer fills
+    // it.
     it('no longer resolves the old model\'s element ids when the old load ran on past the switch', async () => {
       const {result} = renderHook(() => useStore((state) => state))
       await supersedeAWithB(result)

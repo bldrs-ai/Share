@@ -229,7 +229,11 @@ export default function CadView({
   // it to tell a link-shared (public, unmetered) file from a private one
   // (quota/useDirectLinkQuota.js, design/new/quotas.md §"Drive visibility").
   const driveDownloadRef = useRef(null)
-  // The model identity the two dedupe refs belong to.
+  // The identity of the model this CadView is showing now: the one the two
+  // dedupe refs belong to, set synchronously when modelPath changes. A load
+  // compares it with its own model's identity before writing per-model state,
+  // so a load the user has navigated away from, which nothing cancels
+  // (#2019), cannot write over the model that replaced it (open-205).
   const dedupeModelKeyRef = useRef(null)
   // The model a `load_failed` was last sent for, for the same reason and
   // with the same keying as reportedRefusalRef: the auth-state effect and
@@ -379,11 +383,6 @@ export default function CadView({
         if (useStore.getState().alert !== alertAtLoadStartRef.current) {
           setAlert(null)
         }
-        // The load that just ended was for the model the user left, and
-        // nothing cancels it (#2019): it may have run on past the model
-        // change, marked itself loaded and refilled the element table with its
-        // own tree after the change cleared them (codex review on #2026).
-        forgetLoadedModel()
         await latestOnViewerRef.current()
       }
     }
@@ -400,8 +399,9 @@ export default function CadView({
    *   one object for the life of this CadView, and the handlers that read it
    *   hold that object. onModel refills it.
    *
-   * Runs when the model identity changes, and again just before a load that
-   * replaced an in-flight one starts (onViewer's finally).
+   * Runs when the model identity changes. A load still in flight for the
+   * previous model does not write either of them back: see
+   * `isLoadSuperseded` in onViewerInternal.
    */
   function forgetLoadedModel() {
     setIsViewerLoaded(false)
@@ -413,6 +413,15 @@ export default function CadView({
 
   /** Inner load body — preconditions checked + in-flight flag managed by `onViewer`. */
   async function onViewerInternal() {
+    // Whether the user has since moved to another model. Nothing cancels this
+    // load then (#2019), and it can still settle at any await below, before
+    // or after the replacement's own load begins; checked at each write of
+    // the per-model state forgetLoadedModel drops, so a superseded load
+    // leaves that state to the model shown (codex review on #2026). Read at
+    // the write, not here: on mount the [modelPath] effect, which sets the
+    // shown identity, runs after the auth effect that may start this load.
+    const loadModelKey = modelIdentity(modelPath, installPrefix)
+    const isLoadSuperseded = () => dedupeModelKeyRef.current !== loadModelKey
     setIsModelReady(false)
 
     // define mesh colors for selected and preselected element
@@ -612,7 +621,7 @@ export default function CadView({
     }
 
     debug().log('CadView#onViewer: pathToLoad(${pathToLoad}), tmpModelRef: ', tmpModelRef)
-    await onModel(tmpModelRef)
+    await onModel(tmpModelRef, isLoadSuperseded)
 
     const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     selectElementBasedOnFilepath(pathToLoad)
@@ -636,7 +645,9 @@ export default function CadView({
     }
 
     modelPath.title = tmpModelRef.name // maybe undefined
-    setIsViewerLoaded(true)
+    if (!isLoadSuperseded()) {
+      setIsViewerLoaded(true)
+    }
     setIsModelReady(true)
     // After the model is on screen, never before: a direct link is metered
     // but not gated (quota/useDirectLinkQuota.js). The Open dialog already
@@ -1026,8 +1037,10 @@ export default function CadView({
    * Analyze loaded IFC model to configure UI elements.
    *
    * @param {object} m IFCjs loaded model.
+   * @param {Function} isLoadSuperseded True once the user has moved to another
+   *   model; see onViewerInternal.
    */
-  async function onModel(m) {
+  async function onModel(m, isLoadSuperseded) {
     assertDefined(m)
     debug().log('CadView#onModel', m)
     // TODO(pablo): centralize capability check somewhere
@@ -1084,7 +1097,9 @@ export default function CadView({
     if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
     }
-    setupLookupAndParentLinks(rootElt, elementsById)
+    if (!isLoadSuperseded()) {
+      setupLookupAndParentLinks(rootElt, elementsById)
+    }
     initSearch(m, rootElt)
     // Root display name, in preference order: real properties from the
     // parser (IFC project Name/LongName), then whatever the tree root
