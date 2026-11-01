@@ -4,7 +4,7 @@ import {MemoryRouter, Route, Routes} from 'react-router-dom'
 import {MockComponent} from './__mocks__/MockComponent'
 import MockRoutes from './BaseRoutesMock.test'
 import useStore from './store/useStore'
-import {UNSUPPORTED_FILE_ALERT} from './routes/routes'
+import {UNSUPPORTED_FILE_ALERT, processFile} from './routes/routes'
 import {processGoogleFileId} from './routes/google'
 import {actAsyncFlush} from './utils/tests'
 // Slice 5d.4: Share renders the app, which loads ShareViewer (→
@@ -183,15 +183,16 @@ describe('Share when only the upload provenance of the route changes', () => {
 
 
 /**
- * open-205 #2013: "a different model" is `modelIdentity`, not a comparison of
- * `filepath`/`gitpath`. Drive and generic-URL routes carry neither, so from a
- * Drive model an in-app navigation — today, the alert's Reset after a failed
- * Drive load (`navToDefault`) — left the Drive modelPath in the store and the
- * remounted CadView loaded the Drive file again under an index.ifc URL.
- * The seeds are real parsed routes (`processGoogleFileId`), not hand-built
- * objects, so they carry the `downloadUrl` every production route has.
+ * open-205 #2013: "a different model" is `modelIdentity` plus the route's
+ * provenance, not a comparison of `filepath`/`gitpath`. Drive and generic-URL
+ * routes carry neither, so from a Drive model an in-app navigation — today,
+ * the alert's Reset after a failed Drive load (`navToDefault`) — left the
+ * Drive modelPath in the store and the remounted CadView loaded the Drive
+ * file again under an index.ifc URL. The seeds are real parsed routes
+ * (`processGoogleFileId`, `processFile`), not hand-built objects, so they
+ * carry the `downloadUrl` every production route has.
  */
-describe('Share when the previous model came from Google Drive', () => {
+describe('Share deciding whether a route names a new model', () => {
   const driveFileIdA = '1AbCdEfGhIjKlMnOpQrStUvWxYz012345'
   const driveFileIdB = '1ZyXwVuTsRqPoNmLkJiHgFeDcBa543210'
 
@@ -238,6 +239,15 @@ describe('Share when the previous model came from Google Drive', () => {
     renderRoute('/share/v/g', driveFileIdB)
     await actAsyncFlush()
     expect(useStore.getState().modelPath.fileId).toBe(driveFileIdB)
+  })
+
+  // Same downloadUrl, different route: the provenance quota and analytics
+  // classify by must follow the route (codex review on #2026).
+  it('replaces a hosted-file modelPath with a generic-URL route to the same file', async () => {
+    useStore.setState({modelPath: processFile(new URL('http://localhost/share/v/p'), 'index.ifc')})
+    renderRoute('/share/v/u', 'http://localhost/index.ifc')
+    await actAsyncFlush()
+    expect(useStore.getState().modelPath.kind).toBe('url')
   })
 
   it('keeps the modelPath when the route names the same Drive file', async () => {
