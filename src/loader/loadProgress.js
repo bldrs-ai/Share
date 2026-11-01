@@ -794,7 +794,14 @@ class LoadProgressReporter {
       tags.data_defect = 'true'
     }
     captureMessage(diagnosticsTitle(summary.topText), {
-      level: loadOutcome === 'unusable' ? 'error' : 'warning',
+      // A file with nothing to draw is an input property, not a defect, so
+      // it stays out of the error stream like the 4.3 refusal does; the
+      // event is still sent because the chip it backs is coloured by the
+      // same counts (Share#1962).
+      level: {
+        [LOAD_OUTCOMES.UNUSABLE]: 'error',
+        [LOAD_OUTCOMES.NO_GEOMETRY]: 'info',
+      }[loadOutcome] ?? 'warning',
       tags,
       contexts: {
         loadDiagnostics: {
@@ -803,6 +810,14 @@ class LoadProgressReporter {
           // today), otherwise this reporter's page-wide console tee.
           errorCount,
           warningCount,
+          // conway's own tallies of what the load found, which split the
+          // "built nothing" population by cause instead of leaving it to be
+          // inferred (Share#1962): products in the file, how many of them
+          // got drawable geometry, and the occurrences of bad input it
+          // skipped. Absent (undefined) when the engine did not report them.
+          productCount: this.geometryStats?.productCount,
+          productsWithGeometryCount: this.geometryStats?.productsWithGeometryCount,
+          dataDefectCount: this.geometryStats?.dataDefectCount,
           // The console tee's own view, which on IFC/STEP can disagree
           // with the counts above — these two describe the messages
           // carried below, not the chip.
@@ -993,13 +1008,79 @@ const DATA_DEFECT_FALLBACK_MESSAGES = new Set([
 
 
 /**
- * How bad this load was for the person who asked for it (ops#27 T0), which
- * is what the diagnostics event's severity reports:
+ * What `classifyLoadOutcome` returns, which is also the GA `load_outcome`
+ * value and the Sentry `load_outcome` tag.
+ */
+export const LOAD_OUTCOMES = Object.freeze({
+  DISPLAYED: 'displayed',
+  NO_GEOMETRY: 'no_geometry',
+  UNUSABLE: 'unusable',
+})
+
+
+/**
+ * What the user is told for a `no_geometry` load, and what GA is told the
+ * alert was (a constant: AlertDialog counts it by this text, so it must never
+ * carry anything file-derived).
+ */
+export const NO_GEOMETRY_ALERT = 'This file contains no 3D geometry.'
+
+
+/**
+ * Typed alert for a `no_geometry` load. An expected outcome and not a
+ * failure, so `AlertDialog` counts it in analytics only, shows it without the
+ * error header or the Discord footer, and `CadView` never captures it
+ * (Share#1962). Unlike the failure alerts the model did load, so dismissing it
+ * leaves the model where it is.
+ *
+ * @return {{type: string, message: string}}
+ */
+export function noGeometryAlert() {
+  return {type: 'noGeometry', message: NO_GEOMETRY_ALERT}
+}
+
+
+/**
+ * Whether conway's own counts say the file simply has nothing to draw, as
+ * opposed to the engine failing to draw something that is there
+ * (Share#1962, the table in that issue):
+ *
+ * - no products at all (`productCount === 0`), or
+ * - products, none with a drawable representation
+ *   (`productsWithGeometryCount === 0`), and conway logged no error doing so.
+ *
+ * Each count is `undefined` when the engine did not supply it (the web-ifc
+ * shim, a conway older than 1.1626.740, formats that never reach conway), and
+ * unknown is not zero: the second arm needs all three to be present, and the
+ * first arm needs `productCount` itself. So an engine that does not say stays
+ * `unusable`, the pre-existing answer. A file that had products with
+ * geometry, or any error alongside none, is also left to the failure path,
+ * which is where those belong.
+ *
+ * @param {object} geometry what the loader reported (see classifyLoadOutcome)
+ * @return {boolean}
+ */
+function isGeometrylessFile({productCount, productsWithGeometryCount, errorCount}) {
+  if (productCount === 0) {
+    return true
+  }
+  return productCount > 0 && productsWithGeometryCount === 0 && errorCount === 0
+}
+
+
+/**
+ * How this load went for the person who asked for it (ops#27 T0), which is
+ * what the diagnostics event's severity and the GA `load_outcome` report:
  *
  * - `displayed` — geometry reached the scene, so the model is on screen.
  *   A regular bug, however noisy the load was.
- * - `unusable` — the load ran to completion and built nothing. Whatever the
- *   diagnostics say, the user is looking at an empty viewer. Major.
+ * - `no_geometry` — the load ran to completion, built nothing, and conway's
+ *   counts say that is because the file has nothing to draw (see
+ *   isGeometrylessFile). The viewer is empty, correctly; this is an input
+ *   property and not a defect, so it is not an error (Share#1962).
+ * - `unusable` — the load ran to completion and built nothing, and nothing
+ *   says the file was empty. Whatever the diagnostics say, the user is looking
+ *   at an empty viewer. Major.
  *
  * Ambiguity resolves to `displayed`, deliberately. Most formats report no
  * geometry counts at all (only the conway engine path calls
@@ -1008,15 +1089,17 @@ const DATA_DEFECT_FALLBACK_MESSAGES = new Set([
  * this split is for.
  *
  * @param {object} [geometry] {vertexCount, triangleCount} as reported by the
- *   loader; undefined when the loader reported nothing
- * @return {string} 'displayed' | 'unusable'
+ *   loader, plus conway's {productCount, productsWithGeometryCount,
+ *   errorCount} when the engine supplied them; undefined when the loader
+ *   reported nothing
+ * @return {string} one of LOAD_OUTCOMES
  */
 export function classifyLoadOutcome(geometry) {
   const counted = [geometry?.vertexCount, geometry?.triangleCount].filter(Number.isFinite)
-  if (counted.length === 0) {
-    return 'displayed'
+  if (counted.length === 0 || counted.some((count) => count > 0)) {
+    return LOAD_OUTCOMES.DISPLAYED
   }
-  return counted.some((count) => count > 0) ? 'displayed' : 'unusable'
+  return isGeometrylessFile(geometry) ? LOAD_OUTCOMES.NO_GEOMETRY : LOAD_OUTCOMES.UNUSABLE
 }
 
 
@@ -1215,7 +1298,8 @@ export function getCompletedLoadStats() {
 
 /**
  * The GA `load_outcome` of the most recently completed load: `displayed` or
- * `unusable`, from classifyLoadOutcome over what the loader reported.
+ * `unusable` or `no_geometry`, from classifyLoadOutcome over what the loader
+ * reported.
  * Undefined with no reporter, so the param is omitted rather than invented.
  *
  * @return {string|undefined}

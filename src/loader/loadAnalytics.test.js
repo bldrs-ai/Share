@@ -226,6 +226,22 @@ describe('loader/loadAnalytics buildOutcomeParams', () => {
     expect(params.stats_warningCount).toBe(3)
   })
 
+  it('sends products-with-geometry beside productCount, absent when unknown', () => {
+    const known = buildOutcomeParams({
+      completedStats: COMPLETED,
+      loadStats: {productCount: 9, productsWithGeometryCount: 0},
+    })
+    // Zero is a real answer (products, none drawn) and must reach GA.
+    expect(known.stats_productCount).toBe(9)
+    expect(known.stats_productsWithGeometryCount).toBe(0)
+
+    const unknown = buildOutcomeParams({
+      completedStats: COMPLETED,
+      loadStats: {productCount: 9, productsWithGeometryCount: undefined},
+    })
+    expect(Object.keys(unknown)).not.toContain('stats_productsWithGeometryCount')
+  })
+
   it('tolerates a load that has neither source', () => {
     expect(buildOutcomeParams({})).toEqual({})
   })

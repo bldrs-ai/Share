@@ -16,6 +16,7 @@ import {
   attachLoadFailureContext,
   beginLoadProgress,
   captureLoadDiagnostics,
+  NO_GEOMETRY_ALERT,
   classifyLoadOutcome,
   currentLoadSerial,
   endLoadProgress,
@@ -25,6 +26,7 @@ import {
   isModelInfoProgress,
   isStructuredProgress,
   loadFailureCaptureContext,
+  noGeometryAlert,
   reportCacheHit,
   reportEngineVersion,
   reportFirstMesh,
@@ -88,6 +90,50 @@ describe('loadProgress', () => {
       expect(classifyLoadOutcome(undefined)).toBe('displayed')
       expect(classifyLoadOutcome({})).toBe('displayed')
       expect(classifyLoadOutcome({vertexCount: undefined, triangleCount: null})).toBe('displayed')
+    })
+
+    // Share#1962's table. Every case builds nothing (vertexCount 0); only
+    // conway's own counts decide whether that is the file or the engine.
+    describe('an empty build, split by conway\'s counts (Share#1962)', () => {
+      const EMPTY = {vertexCount: 0, triangleCount: 0}
+
+      it('is no_geometry when the file has no products', () => {
+        expect(classifyLoadOutcome({...EMPTY, productCount: 0})).toBe('no_geometry')
+        // With errors too: the table's first row has no error condition.
+        expect(classifyLoadOutcome({...EMPTY, productCount: 0, errorCount: 3})).toBe('no_geometry')
+      })
+
+      it('is no_geometry for products with none drawable and no engine error', () => {
+        expect(classifyLoadOutcome({
+          ...EMPTY, productCount: 12, productsWithGeometryCount: 0, errorCount: 0,
+        })).toBe('no_geometry')
+      })
+
+      it('stays unusable when products had no geometry and conway logged errors', () => {
+        expect(classifyLoadOutcome({
+          ...EMPTY, productCount: 12, productsWithGeometryCount: 0, errorCount: 2,
+        })).toBe('unusable')
+      })
+
+      it('stays unusable when conway counted geometry yet nothing was built', () => {
+        expect(classifyLoadOutcome({
+          ...EMPTY, productCount: 12, productsWithGeometryCount: 5, errorCount: 0,
+        })).toBe('unusable')
+      })
+
+      // An engine that does not report a count has not said zero.
+      it('stays unusable when the engine did not report the counts the verdict needs', () => {
+        expect(classifyLoadOutcome(EMPTY)).toBe('unusable')
+        expect(classifyLoadOutcome({...EMPTY, productCount: 12})).toBe('unusable')
+        expect(classifyLoadOutcome({...EMPTY, productCount: 12, productsWithGeometryCount: 0})).toBe('unusable')
+        expect(classifyLoadOutcome({...EMPTY, productCount: 12, errorCount: 0})).toBe('unusable')
+      })
+
+      it('is displayed whenever geometry was built, whatever the counts say', () => {
+        expect(classifyLoadOutcome({
+          vertexCount: 8, triangleCount: 4, productCount: 0, productsWithGeometryCount: 0, errorCount: 0,
+        })).toBe('displayed')
+      })
     })
   })
 
@@ -416,6 +462,19 @@ describe('loadProgress', () => {
         endLoadProgress()
         expect(getCompletedLoadOutcome()).toBe('unusable')
         expect(getCompletedLoadStats()).toMatchObject({vertexCount: 0, triangleCount: 0})
+      })
+
+      it('an empty build of a file with no products is no_geometry, counts kept', () => {
+        beginLoadProgress({fileInfo: 'shell.ifc'})
+        reportGeometryStats({vertexCount: 0, triangleCount: 0, productCount: 0})
+        endLoadProgress()
+        expect(getCompletedLoadOutcome()).toBe('no_geometry')
+        expect(getCompletedLoadStats()).toMatchObject({vertexCount: 0, triangleCount: 0})
+      })
+
+      it('has a typed, constant alert for the no_geometry outcome', () => {
+        expect(noGeometryAlert()).toEqual({type: 'noGeometry', message: NO_GEOMETRY_ALERT})
+        expect(NO_GEOMETRY_ALERT).toBe('This file contains no 3D geometry.')
       })
 
       it('omits counts for formats that reported none', () => {
@@ -761,6 +820,67 @@ describe('loadProgress', () => {
 
         expect(diagnosticsCall()[1].level).toBe('error')
         expect(diagnosticsCall()[1].tags.load_outcome).toBe('unusable')
+        errorSpy.mockRestore()
+      })
+
+      /*
+       * Share#1962: a file with nothing to draw is an input property, so its
+       * diagnostics event must not land in Sentry's error stream, while an
+       * empty build the file does not explain still must. The counts that
+       * separate the two ride on the event either way.
+       */
+      it('keeps a no-geometry load out of the error stream, with the counts', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'tiny.ifc'})
+        console.warn('No units defined.')
+        reportGeometryStats({
+          vertexCount: 0, triangleCount: 0,
+          productCount: 3, productsWithGeometryCount: 0, errorCount: 0, dataDefectCount: 1,
+        })
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+
+        const [, context] = diagnosticsCall()
+        expect(context.level).toBe('info')
+        expect(context.tags.load_outcome).toBe('no_geometry')
+        expect(context.contexts.loadDiagnostics).toMatchObject({
+          productCount: 3, productsWithGeometryCount: 0, dataDefectCount: 1,
+        })
+        warnSpy.mockRestore()
+      })
+
+      it('puts the same counts on the error event of an empty build the file does not explain', () => {
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'index.stp'})
+        console.error('CDT Exception (hemisphere: 0)')
+        reportGeometryStats({
+          vertexCount: 0, triangleCount: 0,
+          productCount: 3, productsWithGeometryCount: 0, errorCount: 4, dataDefectCount: 2,
+        })
+        endLoadProgress()
+        captureLoadDiagnostics({errorCount: 4})
+
+        const [, context] = diagnosticsCall()
+        expect(context.level).toBe('error')
+        expect(context.tags.load_outcome).toBe('unusable')
+        expect(context.contexts.loadDiagnostics).toMatchObject({
+          productCount: 3, productsWithGeometryCount: 0, dataDefectCount: 2,
+        })
+        errorSpy.mockRestore()
+      })
+
+      it('leaves the counts absent, not zero, when the engine reported none', () => {
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'index.stp'})
+        console.error('boom')
+        reportGeometryStats({vertexCount: 5, triangleCount: 2})
+        endLoadProgress()
+        captureLoadDiagnostics({errorCount: 1})
+
+        const loadDiagnostics = diagnosticsCall()[1].contexts.loadDiagnostics
+        expect(loadDiagnostics.productCount).toBeUndefined()
+        expect(loadDiagnostics.productsWithGeometryCount).toBeUndefined()
+        expect(loadDiagnostics.dataDefectCount).toBeUndefined()
         errorSpy.mockRestore()
       })
 
