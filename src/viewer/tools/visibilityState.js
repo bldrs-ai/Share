@@ -46,19 +46,13 @@ export function captureVisibility(isolator) {
       // the link is written from). A whole top-level STEP product is there
       // as its rows (`IfcIsolator#splitProductOccurrences`, #1924): its own
       // geometry as an empty-path entry carrying its instances, its children
-      // by path. A row isolated without a path is not in the list; those are
-      // the isolated rows missing from it, and their instances are inside
-      // `isolatedInstanceIds`.
+      // by path. Every caller of `isolateOccurrences` passes a path, so
+      // every isolated occurrence is in the list.
       const occurrences = (isolator.isolatedOccurrences ?? []).map((occurrence) => ({
         ...occurrence,
         ...(Array.isArray(occurrence.instanceIds) ? {instanceIds: [...occurrence.instanceIds]} : {}),
       }))
-      const pathful = new Set(occurrences.map(({nodeId}) => nodeId))
-      isolation = {
-        occurrences,
-        pathlessNodeIds: [...new Set(isolator.isolatedIds.filter((nodeId) => !pathful.has(nodeId)))],
-        instanceIds: [...isolator.isolatedInstanceIds],
-      }
+      isolation = {occurrences}
     } else {
       isolation = {ids: [...isolator.isolatedIds]}
     }
@@ -92,17 +86,7 @@ export function restoreVisibility(isolator, snapshot) {
     isolator.isolateElementsById(isolation.ids)
     return
   }
-  // The pathful occurrences resolve their own instances by path. Each
-  // pathless row comes back as a pathless occurrence, so it keeps its row in
-  // `isolatedIds` and its isolation glasses; the snapshot's whole instance set
-  // rides on the first of them, which covers every pathless product's
-  // instances (the union is all the isolator shows). Codex review on #1946:
-  // restoring the pathful ones alone dropped the products.
-  const pathless = isolation.pathlessNodeIds.map((nodeId, i) => ({
-    nodeId,
-    occurrencePath: [],
-    solidExpressId: null,
-    instanceIds: i === 0 ? isolation.instanceIds : [],
-  }))
-  isolator.isolateOccurrences([...isolation.occurrences, ...pathless])
+  // Each occurrence resolves its instances by path, or carries them where
+  // its path doesn't: a product's own geometry, or an `inexact` entry.
+  isolator.isolateOccurrences(isolation.occurrences)
 }

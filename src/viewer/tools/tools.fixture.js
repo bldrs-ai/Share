@@ -248,31 +248,41 @@ export function makeReusedStepModel() {
  * No row has a pathful key. Two placements per part, in emission order:
  * 8, 8, 3008, 3008.
  *
+ * With `withChild`, Plates also has a child occurrence (NAUO 3100, a part
+ * whose placement reports owner 9008, path [3100]), placed fifth: a wrapper
+ * whose part has children.
+ *
+ * @param {object} [opts]
+ * @param {boolean} [opts.withChild]
  * @return {object} `{model, tree, batch}`
  */
-export function makeTwoRootStepModel() {
-  const owners = [8, 8, 3008, 3008]
+export function makeTwoRootStepModel({withChild = false} = {}) {
+  const owners = [8, 8, 3008, 3008, ...(withChild ? [9008] : [])]
   const flatMeshes = owners.map((expressID, i) => ({
     expressID,
     geometries: [{
       geometryExpressID: SHAPE_ID,
       flatTransformation: translateX(i * SPACING),
       color: {x: 0.5, y: 0.5, z: 0.5, w: 1},
-      occurrencePath: [],
+      occurrencePath: expressID === 9008 ? [3100] : [],
     }],
   }))
   const {batches} = flatMeshToBatchedModel(flatMeshes, unitTriangleApi(), 0)
   decorateBatchMeshes(batches)
   const model = new Group()
   batches.forEach(({mesh}) => model.add(mesh))
-  const part = (expressID, name, shape) => ({
+  const part = (expressID, name, shape, children = []) => ({
     expressID, type: 'product', Name: {type: 1, value: name}, occurrencePath: [],
-    productDefinitionShapeExpressIDs: [shape], children: [],
+    productDefinitionShapeExpressIDs: [shape], children,
   })
+  const child = {
+    expressID: 3100, type: 'NEXT_ASSEMBLY_USAGE_OCCURRENCE', Name: {type: 1, value: 'Bolt'},
+    occurrencePath: [3100], children: [],
+  }
   const tree = {
     expressID: 0, type: 'product_structure', Name: {type: 1, value: 'Model'}, occurrencePath: [],
     productDefinitionShapeExpressIDs: [],
-    children: [part(7, 'Shells', 8), part(3007, 'Plates', 3008)],
+    children: [part(7, 'Shells', 8), part(3007, 'Plates', 3008, withChild ? [child] : [])],
   }
   model.format = 'step'
   model.getSpatialStructure = () => Promise.resolve(tree)
