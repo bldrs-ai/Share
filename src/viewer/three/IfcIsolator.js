@@ -11,6 +11,7 @@ import {
   sceneGraphElementIds,
 } from './sceneGraphVisibility'
 import {
+  coverInstancesByOccurrences,
   findRootLevelProductNode,
   occurrenceKey,
   occurrencePathKey,
@@ -860,12 +861,15 @@ export default class IfcIsolator {
       if (!Array.isArray(instanceIds) || instanceIds.length === 0) {
         continue
       }
-      const hasPath = Array.isArray(occurrencePath) && occurrencePath.length > 0
       const key = occurrenceKey(occurrencePath, solidExpressId, nodeId)
       this.hiddenOccurrences.set(key, [...instanceIds])
+      // An empty path is kept as one: it is a top-level product's own
+      // root-level geometry (`_splitProductOccurrences`), which the link
+      // writes by the product's row id. No path at all (null) is an
+      // occurrence hidden without one, which the link can't name.
       this.hiddenOccurrencePaths.set(key, {
         nodeId,
-        occurrencePath: hasPath ? [...occurrencePath] : null,
+        occurrencePath: Array.isArray(occurrencePath) ? [...occurrencePath] : null,
         solidExpressId: solidExpressId ?? null,
       })
       changed = true
@@ -1097,7 +1101,8 @@ export default class IfcIsolator {
    * shells is not the whole product and keeps the owner-id route.
    *
    * It has no path of its own, so it carries its instances (see
-   * `_occurrenceInstanceIds`), and isn't written to the link.
+   * `_occurrenceInstanceIds`). Hide and Isolate split it into rows before
+   * acting on it (`_splitProductOccurrences`, #1924).
    *
    * @param {object} state the store state
    * @param {Array<number|string>} anchors the selection's anchor rows
@@ -1118,26 +1123,220 @@ export default class IfcIsolator {
     const selected = new Set(state.selectedInstanceIds ?? [])
     const out = []
     for (const root of products) {
-      const own = rootLevelInstancesOfProduct(state.rootElement, root, rootLevel).instanceIds
+      const {own, whole} = this._productInstances(state.rootElement, root, rootLevel)
       if (own.length === 0 || !own.every((id) => selected.has(id))) {
         continue
-      }
-      const product = new Set(own)
-      for (const child of root.children ?? []) {
-        if (Array.isArray(child.occurrencePath) && child.occurrencePath.length > 0) {
-          this.viewer.getInstanceIdsForOccurrencePath(0, child.occurrencePath, {
-            geometryExpressId: child.ephemeral === true ? child.expressID : null,
-          }).forEach((id) => product.add(id))
-        }
       }
       out.push({
         nodeId: root.expressID,
         occurrencePath: [],
         solidExpressId: null,
-        instanceIds: [...selected].filter((id) => product.has(id)),
+        instanceIds: [...selected].filter((id) => whole.has(id)),
       })
     }
     return out
+  }
+
+
+  /**
+   * A top-level product's instances: its `own` root-level ones
+   * (`rootLevelInstancesOfProduct`), and the `whole` product, those plus
+   * every descendant occurrence's — what a row click on it selects (#1909).
+   *
+   * @param {object} rootElement the NavTree root
+   * @param {object} product a top-level product (`findRootLevelProductNode`)
+   * @param {object} rootLevel `ShareViewer#getRootLevelInstances`
+   * @return {{own: Array<number>, whole: Set<number>}}
+   * @private
+   */
+  _productInstances(rootElement, product, rootLevel) {
+    const own = rootLevelInstancesOfProduct(rootElement, product, rootLevel).instanceIds
+    const whole = new Set(own)
+    for (const child of product.children ?? []) {
+      this._nodeInstanceIds(child).forEach((id) => whole.add(id))
+    }
+    return {own, whole}
+  }
+
+
+  /**
+   * @param {object} node a NavTree node
+   * @return {Array<number>} the instances at its occurrence path and below
+   *   (narrowed to the body, for a named body's row); none without a path
+   * @private
+   */
+  _nodeInstanceIds(node) {
+    if (!Array.isArray(node?.occurrencePath) || node.occurrencePath.length === 0) {
+      return []
+    }
+    return this.viewer.getInstanceIdsForOccurrencePath(0, node.occurrencePath, {
+      geometryExpressId: node.ephemeral === true ? node.expressID : null,
+    })
+  }
+
+
+  /**
+   * Split each whole top-level product in `occurrences` (the pathless entries
+   * `_wholeRootOccurrences` adds, which carry their instances) into rows
+   * (#1924): the product's own root-level instances stay on the product's
+   * row, with its empty path, and the rest go to the descendant occurrences
+   * that hold them (`coverInstancesByOccurrences`). The instances are the
+   * same, so what Hide and Isolate show doesn't change. What changes is that
+   * each row is hidden or isolated as itself: a child's eye then reads
+   * hidden while the product is, and shows just that child when clicked, and
+   * the `#d:` link writes the children by path and the product by its row id
+   * (`visibilityHash`), where the one pathless entry had nothing to write.
+   *
+   * An occurrence the selection names itself (a child row shift-clicked
+   * beside the product) is kept as it is, and not repeated.
+   *
+   * @param {Array<object>} occurrences from `_selectionOccurrences`
+   * @param {object} [rootElement] the NavTree root; the store's by default
+   * @return {Array<object>}
+   * @private
+   */
+  _splitProductOccurrences(occurrences, rootElement = useStore.getState().rootElement) {
+    const out = []
+    const seen = new Set()
+    const add = (occurrence) => {
+      const key = occurrenceKey(occurrence.occurrencePath, occurrence.solidExpressId, occurrence.nodeId)
+      if (!seen.has(key)) {
+        seen.add(key)
+        out.push(occurrence)
+      }
+    }
+    const products = []
+    for (const occurrence of occurrences) {
+      const isProduct = Array.isArray(occurrence.occurrencePath) && occurrence.occurrencePath.length === 0 &&
+        Array.isArray(occurrence.instanceIds)
+      if (isProduct) {
+        products.push(occurrence)
+      } else {
+        add(occurrence)
+      }
+    }
+    if (products.length === 0) {
+      return out
+    }
+    const rootLevel = this.viewer.getRootLevelInstances(0)
+    for (const occurrence of products) {
+      const product = findRootLevelProductNode(rootElement, occurrence.nodeId)
+      if (!product) {
+        add(occurrence)
+        continue
+      }
+      const own = new Set(rootLevelInstancesOfProduct(rootElement, product, rootLevel).instanceIds)
+      const mine = occurrence.instanceIds.filter((id) => own.has(id))
+      if (mine.length > 0) {
+        add({...occurrence, instanceIds: mine})
+      }
+      const below = new Set(occurrence.instanceIds.filter((id) => !own.has(id)))
+      coverInstancesByOccurrences(product.children, below, (node) => this._nodeInstanceIds(node)).forEach(add)
+    }
+    return out
+  }
+
+
+  /**
+   * The whole of a top-level product with root-level geometry of its own, as
+   * rows (`_splitProductOccurrences`): what its row's eye hides. Empty for
+   * any other row: IFC, a part below the root, the synthetic `Model`
+   * wrapper, and a root with no root-level geometry (a plain assembly), whose
+   * eye keeps the element-id route.
+   *
+   * @param {number|string} nodeId a row's express id
+   * @return {Array<object>} `{nodeId, occurrencePath, solidExpressId, instanceIds}`
+   * @private
+   */
+  _wholeProductOccurrences(nodeId) {
+    if (typeof this.viewer.getRootLevelInstances !== 'function' ||
+        typeof this.viewer.getInstanceIdsForOccurrencePath !== 'function') {
+      return []
+    }
+    const rootElement = useStore.getState().rootElement
+    const product = findRootLevelProductNode(rootElement, nodeId)
+    if (!product) {
+      return []
+    }
+    const {own, whole} = this._productInstances(rootElement, product, this.viewer.getRootLevelInstances(0))
+    if (own.length === 0) {
+      return []
+    }
+    return this._splitProductOccurrences([{
+      nodeId: product.expressID, occurrencePath: [], solidExpressId: null, instanceIds: [...whole],
+    }], rootElement)
+  }
+
+
+  /**
+   * The NavTree eye of a top-level product's row (#1924): hide the whole
+   * product, as a row click selects it and `H` hides it. The row's id owns
+   * no geometry, so the element-id route the eye takes otherwise marked the
+   * row hidden and hid nothing.
+   *
+   * @param {number|string} nodeId the row's express id
+   * @return {boolean} false when the row is not such a product, for the
+   *   caller's own route
+   */
+  hideProduct(nodeId) {
+    const occurrences = this._wholeProductOccurrences(nodeId)
+    if (occurrences.length === 0) {
+      return false
+    }
+    this.hideOccurrences(occurrences)
+    return true
+  }
+
+
+  /**
+   * Reverse `hideProduct`, and a whole-product `H`: show the product's own
+   * geometry and every occurrence hidden below it, however each was hidden.
+   * The row's eye reads hidden from the product's own entry, so without this
+   * its click took the element-id route, which held none of it, and did
+   * nothing.
+   *
+   * @param {number|string} nodeId the row's express id
+   * @return {boolean} false when the row is not such a product
+   */
+  unHideProduct(nodeId) {
+    if (this._wholeProductOccurrences(nodeId).length === 0) {
+      return false
+    }
+    const product = findRootLevelProductNode(useStore.getState().rootElement, nodeId)
+    // Every path below the product starts with one of its children's first
+    // segments: a sole root's children start every path in the file, and a
+    // part of a multi-root file's children the paths under it.
+    const firstSegments = new Set((product.children ?? [])
+      .filter((child) => Array.isArray(child.occurrencePath) && child.occurrencePath.length > 0)
+      .map((child) => child.occurrencePath[0]))
+    const below = [...this.hiddenOccurrencePaths.values()].filter(({occurrencePath}) =>
+      Array.isArray(occurrencePath) && occurrencePath.length > 0 && firstSegments.has(occurrencePath[0]))
+    this.unHideOccurrences([{nodeId: product.expressID}, ...below])
+    return true
+  }
+
+
+  /**
+   * A top-level product's own root-level geometry, as the occurrence a `#d:`
+   * link's `e<id>` ref for its row stands for (visibilityHash, #1924). Null
+   * for any other id, which the link reads as an element id as before.
+   *
+   * @param {number} nodeId the ref's id
+   * @param {object} rootElement the NavTree root
+   * @return {object|null} `{nodeId, occurrencePath: [], solidExpressId: null, instanceIds}`
+   */
+  productRootLevelOccurrence(nodeId, rootElement) {
+    if (typeof this.viewer.getRootLevelInstances !== 'function') {
+      return null
+    }
+    const product = findRootLevelProductNode(rootElement, nodeId)
+    if (!product) {
+      return null
+    }
+    const own = rootLevelInstancesOfProduct(rootElement, product, this.viewer.getRootLevelInstances(0)).instanceIds
+    return own.length > 0 ?
+      {nodeId: product.expressID, occurrencePath: [], solidExpressId: null, instanceIds: own} :
+      null
   }
 
 
@@ -1200,7 +1399,7 @@ export default class IfcIsolator {
     // required where a body shares its part's occurrence path (pre-conway#628
     // solids, anonymous pieces). Toggles on repeat H: when every selected
     // occurrence is already hidden, they come back.
-    const occurrences = this._selectionOccurrences()
+    const occurrences = this._splitProductOccurrences(this._selectionOccurrences())
     if (occurrences.length > 0) {
       const isHidden = ({nodeId, occurrencePath, solidExpressId}) =>
         this.hiddenOccurrences.has(occurrenceKey(occurrencePath, solidExpressId, nodeId))
@@ -1549,8 +1748,9 @@ export default class IfcIsolator {
    */
   isolateSelectedElements() {
     // STEP: isolate the selected occurrences' own instances. Their tree ids
-    // own no geometry, so isolating them by id showed nothing at all.
-    const occurrences = this._selectionOccurrences()
+    // own no geometry, so isolating them by id showed nothing at all. A whole
+    // product is isolated as its rows, as it is hidden (`hideSelectedElements`).
+    const occurrences = this._splitProductOccurrences(this._selectionOccurrences())
     if (occurrences.length > 0) {
       this.isolateOccurrences(occurrences)
       return
@@ -1583,10 +1783,10 @@ export default class IfcIsolator {
     useStore.setState({isTempIsolationModeOn: true})
     this.isolatedIds = occurrences.map(({nodeId}) => nodeId)
     this.isolatedInstanceIds = instanceIds
-    // Pathless (the whole root product) can't be written to the link, so it
-    // stays out of the list the link is built from.
+    // What the link is built from. An empty path is a top-level product's own
+    // root-level geometry, written by its row id (`_splitProductOccurrences`).
     this.isolatedOccurrences = occurrences
-      .filter(({occurrencePath}) => occurrencePath.length > 0)
+      .filter(({occurrencePath}) => Array.isArray(occurrencePath))
       .map(({nodeId, occurrencePath, solidExpressId}) =>
         ({nodeId, occurrencePath: [...occurrencePath], solidExpressId: solidExpressId ?? null}))
     // The rows' ids, for everything that reads isolated ids; and each

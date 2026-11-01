@@ -1,4 +1,5 @@
 import {Page, expect, test} from '@playwright/test'
+import {openLocalFile} from '../../tests/e2e/export'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {homepageSetup, pauseViewerRendering, setIsReturningUser} from '../../tests/e2e/utils'
@@ -118,6 +119,70 @@ describeMobileAndDesktop('STEP hide / isolate / multi-select', () => {
     await expect.poll(async () => (await selection(page)).anchors.slice().sort()).toEqual(selected.anchors.slice().sort())
     expect((await selection(page)).instances.slice().sort()).toEqual(selected.instances.slice().sort())
   })
+  // #1924 items 1 and 3. A root row whose product has geometry of its own
+  // stands for the whole product (#1909): its own shells, which have an empty
+  // occurrence path, and every child occurrence. A whole-product Hide marked
+  // the root's eye hidden while its click went to the element-id route, which
+  // held none of it, and so did nothing; the children's eyes stayed "visible"
+  // over hidden geometry; and neither that Hide nor an Isolate reached the
+  // `#d:` link, which reopened the model as if nothing had been done.
+  test('the root row of an assembly with geometry of its own: H, its eye and the link all mean the whole product', async ({page}) => {
+    test.setTimeout(ASSEMBLY_TEST_TIMEOUT_MS)
+    await page.goto(IFC_PATH)
+    await waitForModelReady(page)
+    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
+    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+    await pauseViewerRendering(page)
+    const rootId = await page.evaluate(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).useStore.getState().rootElement.expressID)
+    const {root, children} = await openAssemblyTree(page)
+    await expect(children).toHaveCount(ASSEMBLY_CHILD_COUNT)
+
+    // H on the row: the whole product goes, and every row of it says so.
+    await root.getByTestId('NavTreeNodeLabel').click()
+    await expect.poll(async () => (await selection(page)).instances).toHaveLength(ASSEMBLY_INSTANCES)
+    await closeTree(page)
+    await page.getByTestId('Hide').click()
+    await expect.poll(() => visibleInstances(page)).toBe(0)
+    // The root's own shells by its row id (they have no path), each child
+    // occurrence by its path.
+    await expect.poll(() => displayRefs(page, 'hide')).toEqual(wholeProductRefs(rootId))
+    await openAssemblyTree(page)
+    await expect(children.getByTestId('unhide-icon')).toHaveCount(ASSEMBLY_CHILD_COUNT)
+    // The root's eye brings it back: all of it.
+    await root.getByTestId('unhide-icon').click()
+    await expect.poll(() => visibleInstances(page)).toBe(ASSEMBLY_INSTANCES)
+    await expect(children.getByTestId('hide-icon')).toHaveCount(ASSEMBLY_CHILD_COUNT)
+    await expect.poll(() => displayRefs(page, 'hide')).toEqual({e: [], o: 0})
+
+    // The eye hides what H does, and the link reopens it that way.
+    await root.getByTestId('hide-icon').click()
+    await expect.poll(() => visibleInstances(page)).toBe(0)
+    await expect(children.getByTestId('unhide-icon')).toHaveCount(ASSEMBLY_CHILD_COUNT)
+    await expect.poll(() => displayRefs(page, 'hide')).toEqual(wholeProductRefs(rootId))
+    await page.reload()
+    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+    await pauseViewerRendering(page)
+    await expect.poll(() => visibleInstances(page)).toBe(0)
+    await openAssemblyTree(page)
+    await expect(root.getByTestId('unhide-icon')).toHaveCount(1)
+    await expect(children.getByTestId('unhide-icon')).toHaveCount(ASSEMBLY_CHILD_COUNT)
+    await root.getByTestId('unhide-icon').click()
+    await expect.poll(() => visibleInstances(page)).toBe(ASSEMBLY_INSTANCES)
+
+    // Isolate on the row is written to the link too, and reopens isolated.
+    await root.getByTestId('NavTreeNodeLabel').click()
+    await expect.poll(async () => (await selection(page)).instances).toHaveLength(ASSEMBLY_INSTANCES)
+    await closeTree(page)
+    await page.getByTestId('Isolate').click()
+    await expect.poll(() => isolatedInstances(page)).toBe(ASSEMBLY_INSTANCES)
+    await expect.poll(() => displayRefs(page, 'iso')).toEqual(wholeProductRefs(rootId))
+    await page.reload()
+    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+    await expect.poll(() => isolatedInstances(page)).toBe(ASSEMBLY_INSTANCES)
+    await expect.poll(() => visibleInstances(page)).toBe(ASSEMBLY_INSTANCES)
+  })
 })
 
 
@@ -177,6 +242,18 @@ describeMobileAndDesktop('IFC scene multi-select', () => {
 // Tests that load the model two or three times.
 const TWO_LOADS_TIMEOUT_MS = 90_000
 const THREE_LOADS_TIMEOUT_MS = 120_000
+// An assembly whose ROOT product has geometry of its own: 40 shells on the
+// root, with empty occurrence paths, beside two occurrences of a one-shell
+// part (`Widget`). Shared with `Share/exportGlb.spec.ts`.
+const ASSEMBLY_FIXTURE = 'src/tests/fixtures/assemblyWithRootGeometry.step'
+const ASSEMBLY_ROOT = 'Assembly'
+const ASSEMBLY_CHILD = 'Widget'
+const ASSEMBLY_CHILD_COUNT = 2
+const ASSEMBLY_INSTANCES = 42
+// Parsing it takes longer than the shared model-ready default allows.
+const ASSEMBLY_READY_TIMEOUT_MS = 60_000
+// index.ifc, then the assembly parsed and reloaded twice.
+const ASSEMBLY_TEST_TIMEOUT_MS = 300_000
 // Long enough for the effects a location change triggers to have run.
 const SETTLE_MS = 1000
 
@@ -207,6 +284,27 @@ async function loadStepTree(page: Page) {
   const leaves = panel.locator(`[data-node-label="${LEAF}"]`)
   await expect(leaves).toHaveCount(LEAF_COUNT)
   return {leaves}
+}
+
+
+/**
+ * Open the NavTree on the assembly fixture, down to its child occurrences.
+ *
+ * @param page Playwright page
+ * @return the root row, and its child occurrence rows
+ */
+async function openAssemblyTree(page: Page) {
+  const panel = page.getByTestId('NavTreePanel')
+  if (!await panel.isVisible()) {
+    await page.getByTestId('control-button-navigation').click()
+  }
+  await expect(panel).toBeVisible()
+  const root = panel.locator(`[data-node-label="${ASSEMBLY_ROOT}"]`)
+  await expect(root).toHaveCount(1)
+  if (await root.getAttribute('data-is-expanded') === 'false') {
+    await root.getByTestId('NavTreeNodeToggle').click()
+  }
+  return {root, children: panel.locator(`[data-node-label="${ASSEMBLY_CHILD}"]`)}
 }
 
 
@@ -333,6 +431,42 @@ async function instancePoints(page: Page, count: number): Promise<Array<{x: numb
   }, count)
   expect(points, 'enough products on screen to click').toHaveLength(count)
   return points
+}
+
+
+/**
+ * @param page Playwright page
+ * @return how many instances the isolator holds isolated
+ */
+function isolatedInstances(page: Page): Promise<number> {
+  return page.evaluate(() =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).useStore.getState().viewer.isolator.isolatedInstanceIds?.size ?? 0)
+}
+
+
+/**
+ * One `#d:` term's refs, by kind, so a test can say what the term names
+ * without depending on the order they were written in.
+ *
+ * @param page Playwright page
+ * @param key `hide`, `show` or `iso`
+ * @return how many `e` refs (with their ids) and `o` refs the term has
+ */
+function displayRefs(page: Page, key: string): {e: string[], o: number} {
+  const term = (displayToken(page) ?? '').split(',').find((part) => part.startsWith(`${key}=`))
+  const refs = term ? term.substring(key.length + 1).split('+') : []
+  return {e: refs.filter((ref) => ref.startsWith('e')), o: refs.filter((ref) => ref.startsWith('o')).length}
+}
+
+
+/**
+ * @param rootId the assembly's root row id
+ * @return the refs the whole assembly is written as: its row for its own
+ *   shells, and one occurrence ref per child
+ */
+function wholeProductRefs(rootId: number): {e: string[], o: number} {
+  return {e: [`e${rootId}`], o: ASSEMBLY_CHILD_COUNT}
 }
 
 

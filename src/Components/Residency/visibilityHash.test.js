@@ -315,6 +315,71 @@ describe('Components/Residency/visibilityHash', () => {
         [expect.objectContaining({nodeId: 200, occurrencePath: [100, 200], solidExpressId: null})])
     })
 
+    describe('a whole top-level STEP product (#1924)', () => {
+      // Root 1 has geometry of its own (instances 7, 8, empty path) and a
+      // child occurrence 100. A whole-product hide or isolate holds the
+      // root's own geometry under its row id with an EMPTY path, and the
+      // child by its path (`IfcIsolator#_splitProductOccurrences`).
+      const rootElement = {expressID: 1, occurrencePath: [], children: [
+        {expressID: 100, occurrencePath: [100], children: []},
+      ]}
+      const product = {nodeId: 1, occurrencePath: [], solidExpressId: null}
+      const child = {nodeId: 100, occurrencePath: [100], solidExpressId: null}
+
+      /**
+       * @return {object} a receiving viewer whose isolator names the root's own geometry
+       */
+      function productReceiver() {
+        const receiver = stubViewer({
+          productRootLevelOccurrence: jest.fn((id) => (id === 1 ? {...product, instanceIds: [7, 8]} : null)),
+        })
+        receiver.getInstanceIdsForOccurrencePath = jest.fn((modelId, path) => (path.join('/') === '100' ? [9] : []))
+        return receiver
+      }
+
+      it('writes a whole-product hide as the root\'s row and its child\'s path, and hides both again', () => {
+        const viewer = stubViewer({hiddenOccurrencePaths: new Map([['#1', product], ['100#', child]])})
+        // As one pathless entry, nothing was written: the link reopened with the product shown.
+        expect(visibilityRefs(viewer).hide).toEqual(['e1', 'o100'])
+        const location = loc()
+        writeVisibilityHash(location, viewer)
+        expect(location.hash).toBe('#d:hide=e1+o100')
+
+        const receiver = productReceiver()
+        expect(applyVisibilityHash(location, receiver, rootElement)).toEqual([])
+        // The root's id owns no geometry: hidden by id, the product stayed on screen.
+        expect(receiver.isolator.hideElementsById).not.toHaveBeenCalled()
+        expect(receiver.isolator.hideOccurrences).toHaveBeenCalledWith([
+          {...product, instanceIds: [7, 8]},
+          expect.objectContaining({nodeId: 100, occurrencePath: [100], instanceIds: [9]}),
+        ])
+      })
+
+      it('writes a whole-product isolate the same way, and isolates both again', () => {
+        const viewer = stubViewer({tempIsolationModeOn: true, isolatedIds: [1, 100], isolatedOccurrences: [product, child]})
+        expect(visibilityRefs(viewer).iso).toEqual(['e1', 'o100'])
+        const location = loc()
+        writeVisibilityHash(location, viewer)
+        expect(location.hash).toBe('#d:iso=e1+o100')
+
+        const receiver = productReceiver()
+        expect(applyVisibilityHash(location, receiver, rootElement)).toEqual([])
+        expect(receiver.isolator.isolateElementsById).not.toHaveBeenCalled()
+        expect(receiver.isolator.isolateOccurrences).toHaveBeenCalledWith([
+          {...product, instanceIds: [7, 8]},
+          expect.objectContaining({nodeId: 100, occurrencePath: [100]}),
+        ])
+      })
+
+      it('reads an `e` ref to any other id as an element, as before', () => {
+        const receiver = productReceiver()
+        applyVisibilityHash(loc('#d:hide=e3'), receiver, rootElement)
+        expect(receiver.isolator.productRootLevelOccurrence).toHaveBeenCalledWith(3, rootElement)
+        expect(receiver.isolator.hideElementsById).toHaveBeenCalledWith([3])
+        expect(receiver.isolator.hideOccurrences).not.toHaveBeenCalled()
+      })
+    })
+
     it('leaves the state out of the link past the size cap', () => {
       const many = Array.from({length: VISIBILITY_TERMS_MAX_CHARS}, (_, i) => 1000 + i)
       const viewer = stubViewer({hiddenIds: many, visualElementsIds: many})

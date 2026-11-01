@@ -897,6 +897,64 @@ export function selectedOccurrences({rootNode, anchorIds, occurrencePath = null,
 
 
 /**
+ * The occurrences under `nodes` that together hold exactly the instances in
+ * `wanted`, as few as the tree allows: a node all of whose instances (its
+ * descendants' included) are wanted is one entry, and the walk goes below a
+ * node only when some of them are not. This is how a whole-product hide or
+ * isolate of a top-level STEP product is split into rows (#1924): the
+ * product's own root-level instances have no path and stay with the
+ * product's row, and everything below it goes to the occurrences it belongs
+ * to, so each row's eye reads its own state and each is written to the `#d:`
+ * link by its path.
+ *
+ * Each entry carries its `instanceIds`, so the instance set it stands for is
+ * exactly the part of `wanted` it covers. A node only partly wanted whose
+ * children don't account for the rest (geometry placed at the node's own
+ * path, beside children) keeps that rest as an entry of its own, which then
+ * names the node though not all of it: the hide stays exact, and its eye and
+ * its link ref speak for the whole node.
+ *
+ * @param {Array<object>} nodes tree nodes (a product's children)
+ * @param {Set<number>} wanted instance ids to cover
+ * @param {Function} instancesOf `(node) => Array<number>`: a node's
+ *   instances, its descendants' included (`getInstanceIdsForOccurrencePath`)
+ * @return {Array<object>} `{nodeId, occurrencePath, solidExpressId,
+ *   instanceIds}`, the same row identity `selectedOccurrences` gives
+ */
+export function coverInstancesByOccurrences(nodes, wanted, instancesOf) {
+  const out = []
+  if (!(wanted?.size > 0)) {
+    return out
+  }
+  for (const node of nodes ?? []) {
+    if (!node || !Array.isArray(node.occurrencePath) || node.occurrencePath.length === 0) {
+      continue
+    }
+    const ids = instancesOf(node)
+    const hit = ids.filter((id) => wanted.has(id))
+    if (hit.length === 0) {
+      continue
+    }
+    const id = Number(node.expressID)
+    const solid = node.ephemeral === true ? id : null
+    const entry = (instanceIds) => ({nodeId: id, occurrencePath: node.occurrencePath, solidExpressId: solid, instanceIds})
+    if (hit.length === ids.length) {
+      out.push(entry(ids))
+      continue
+    }
+    const below = coverInstancesByOccurrences(node.children, new Set(hit), instancesOf)
+    const covered = new Set(below.flatMap(({instanceIds}) => instanceIds))
+    const rest = hit.filter((instanceId) => !covered.has(instanceId))
+    out.push(...below)
+    if (rest.length > 0) {
+      out.push(entry(rest))
+    }
+  }
+  return out
+}
+
+
+/**
  * One occurrence's identity, as a map key: its path plus, for a named body,
  * the solid's id. A row id can't be the key: the duplicates of a reused
  * sub-assembly share theirs, and each copy hides on its own.

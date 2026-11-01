@@ -22,6 +22,9 @@ import {HASH_PREFIX_DISPLAY, mergeDisplayTerms} from './displayHash'
  *   #d:show=nUpper%20Jaw/facc            ADF: a default-hidden overlay shown
  *   #d:iso=e1234                         isolating one element
  *   #d:iso=o1020254.367733               isolating one STEP occurrence
+ *   #d:hide=e7+o12+o13                   STEP: a whole product hidden, its
+ *                                        own root-level geometry by its row
+ *                                        id, its two children by path
  *   #d:color=src,hide=e12,iso=e34        with display terms
  *
  * Each term is a `+`-separated list of refs; visibilityRefs.js has the ref
@@ -70,8 +73,14 @@ export function visibilityRefs(viewer) {
   refs.hide = hide.map(refOf)
   refs.show = show.map(refOf)
   // The root is the selection permalink's first id; this token has no root.
-  const occurrenceRefOf = ({occurrencePath, solidExpressId}) =>
-    occurrenceRef(occurrenceElementPathIds(0, occurrencePath, solidExpressId).slice(1))
+  // An EMPTY path is a top-level STEP product's own root-level geometry,
+  // which has no path to write: it goes by the product's row id, an `e` ref
+  // `applyVisibilityHash` reads back as that geometry (#1924). Its children
+  // were split off into occurrences of their own, written by path
+  // (`IfcIsolator#_splitProductOccurrences`).
+  const occurrenceRefOf = ({nodeId, occurrencePath, solidExpressId}) => (occurrencePath.length === 0 ?
+    elementRef(nodeId) :
+    occurrenceRef(occurrenceElementPathIds(0, occurrencePath, solidExpressId).slice(1)))
   for (const occurrence of isolator.hiddenOccurrencePaths.values()) {
     if (occurrence.occurrencePath) {
       refs.hide.push(occurrenceRefOf(occurrence))
@@ -182,6 +191,16 @@ export function applyVisibilityHash(location, viewer, rootElement) {
     children.forEach((child) => known.add(child))
   }
   const unresolved = []
+  // An `e` ref to a top-level STEP product with geometry of its own is that
+  // geometry, which hides and isolates as an occurrence (see
+  // `visibilityRefs`); its id owns none of it, and a one-row part's root is
+  // not even in `known`.
+  const productOf = (text) => {
+    const ref = parseRef(text)
+    return ref?.kind === 'e' && typeof isolator.productRootLevelOccurrence === 'function' ?
+      isolator.productRootLevelOccurrence(ref.id, rootElement) :
+      null
+  }
   const resolveId = (text) => {
     const ref = parseRef(text)
     const id = ref?.kind === 'e' ? ref.id : (ref?.kind === 'n' && names ? names.idOf(ref.segments) : null)
@@ -194,6 +213,11 @@ export function applyVisibilityHash(location, viewer, rootElement) {
   const occurrences = []
   const hideIds = []
   for (const text of refs.hide) {
+    const product = productOf(text)
+    if (product) {
+      occurrences.push(product)
+      continue
+    }
     if (text.startsWith('o')) {
       const occurrence = resolveOccurrence(viewer, rootElement, parseRef(text))
       if (occurrence) {
@@ -212,6 +236,11 @@ export function applyVisibilityHash(location, viewer, rootElement) {
   const isoOccurrences = []
   const isoIds = []
   for (const text of refs.iso) {
+    const product = productOf(text)
+    if (product) {
+      isoOccurrences.push(product)
+      continue
+    }
     if (text.startsWith('o')) {
       const occurrence = resolveOccurrence(viewer, rootElement, parseRef(text))
       if (occurrence) {

@@ -1,5 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {
+  coverInstancesByOccurrences,
   findNodeByOccurrencePath,
   findRootLevelOwnerNode,
   findRootLevelProductNode,
@@ -611,6 +612,44 @@ describe('utils/occurrencePaths', () => {
       expect(resolve({rootNode: wrapper, anchorIds: [-1]})).toBeNull()
       expect(resolve({rootLevel: {instanceIds: [], parentExpressIds: []}})).toBeNull()
       expect(resolve({rootLevel: null})).toBeNull()
+    })
+  })
+
+  describe('coverInstancesByOccurrences (#1924)', () => {
+    // Two children of a root: assembly 10 (leaves 11 → instance 0, 12 → 1,
+    // and instance 4 at 10's own path) and 20 → instance 2, whose row is a
+    // named body (an ephemeral solid).
+    const byPath = {'10': [0, 1, 4], '10/11': [0], '10/12': [1], '20': [2]}
+    const instancesOf = (node) => byPath[node.occurrencePath.join('/')] ?? []
+    const children = [
+      {expressID: 10, occurrencePath: [10], children: [
+        {expressID: 11, occurrencePath: [10, 11], children: []},
+        {expressID: 12, occurrencePath: [10, 12], children: []},
+      ]},
+      {expressID: 20, occurrencePath: [20], ephemeral: true, children: []},
+    ]
+    const rows = (entries) => entries.map(({nodeId, instanceIds}) => [nodeId, instanceIds])
+
+    it('names a child all of whose instances are wanted as one row, not its descendants', () => {
+      const entries = coverInstancesByOccurrences(children, new Set([0, 1, 4, 2]), instancesOf)
+      expect(rows(entries)).toEqual([[10, [0, 1, 4]], [20, [2]]])
+      expect(entries[0]).toEqual({nodeId: 10, occurrencePath: [10], solidExpressId: null, instanceIds: [0, 1, 4]})
+      // A named body's row keeps its solid id, as its eye keys on it.
+      expect(entries[1].solidExpressId).toBe(20)
+    })
+
+    it('goes below a child only part of which is wanted', () => {
+      expect(rows(coverInstancesByOccurrences(children, new Set([1]), instancesOf))).toEqual([[12, [1]]])
+    })
+
+    it('keeps what a part-wanted child holds at its own path on that child', () => {
+      expect(rows(coverInstancesByOccurrences(children, new Set([0, 4]), instancesOf))).toEqual([[11, [0]], [10, [4]]])
+    })
+
+    it('is nothing for nothing wanted, and skips rows without a path', () => {
+      expect(coverInstancesByOccurrences(children, new Set(), instancesOf)).toEqual([])
+      expect(coverInstancesByOccurrences([{expressID: 1, occurrencePath: [], children}], new Set([2]), instancesOf))
+        .toEqual([])
     })
   })
 

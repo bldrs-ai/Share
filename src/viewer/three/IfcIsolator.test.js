@@ -1197,13 +1197,79 @@ describe('viewer/three/IfcIsolator', () => {
           expect(iso.hiddenOccurrences.size).toBe(0)
         })
 
-        it('isolates the whole product, and keeps the pathless root out of the link', () => {
+        it('isolates the whole product as its rows: the root\'s own geometry, and each child (#1924)', () => {
           const {iso} = setupRoot([0, 1, 2, 3])
           iso.isolateSelectedElements()
           expect([...iso.isolatedInstanceIds].sort()).toEqual([0, 1, 2, 3])
-          expect(iso.isolatedOccurrences).toEqual([])
+          // The link is built from this list. Isolated as one pathless entry,
+          // the product was left out of it, and the link reopened unisolated.
+          expect(iso.isolatedOccurrences).toEqual([
+            {nodeId: 1, occurrencePath: [], solidExpressId: null},
+            {nodeId: 10, occurrencePath: [10], solidExpressId: null},
+          ])
           expect(useStoreMock.setState).toHaveBeenCalledWith(
-            expect.objectContaining({isolatedOccurrenceKeys: {'#1': true}}))
+            expect.objectContaining({isolatedOccurrenceKeys: {'#1': true, '10#': true}}))
+        })
+
+        it('hides the whole product as its rows, so the children\'s eyes read hidden too (#1924)', () => {
+          const {iso, mesh} = setupRoot([0, 1, 2, 3])
+          iso.hideSelectedElements()
+          expect(visibility(mesh)).toEqual([false, false, false, false])
+          // As one pathless entry only the root's row was marked, and the
+          // child's eye read "visible" over hidden geometry.
+          expect(useStoreMock.setState).toHaveBeenLastCalledWith({
+            hiddenElements: {1: true, 10: true}, hiddenOccurrenceKeys: {'#1': true, '10#': true},
+          })
+          expect(iso.hiddenOccurrences.get('#1')).toEqual([2, 3])
+          expect(iso.hiddenOccurrences.get('10#')).toEqual([0, 1])
+          // The child's eye shows just the child.
+          iso.unHideOccurrence(10, {occurrencePath: [10], solidExpressId: null})
+          expect(visibility(mesh)).toEqual([true, true, false, false])
+        })
+
+        it('the root row\'s eye hides the whole product, and shows what H hid (#1924)', () => {
+          const {iso, mesh} = setupRoot([])
+          expect(iso.hideProduct(1)).toBe(true)
+          expect(visibility(mesh)).toEqual([false, false, false, false])
+          expect(useStoreMock.setState).toHaveBeenLastCalledWith({
+            hiddenElements: {1: true, 10: true}, hiddenOccurrenceKeys: {'#1': true, '10#': true},
+          })
+          expect(iso.unHideProduct(1)).toBe(true)
+          expect(visibility(mesh)).toEqual([true, true, true, true])
+          expect(iso.hiddenOccurrences.size).toBe(0)
+
+          // After a whole-product H. Its click went to the element-id route,
+          // found none of the product's ids hidden, and did nothing.
+          useStoreMock.getState.mockReturnValue({...useStoreMock.getState(), selectedInstanceIds: [0, 1, 2, 3]})
+          iso.hideSelectedElements()
+          expect(visibility(mesh)).toEqual([false, false, false, false])
+          expect(iso.unHideProduct(1)).toBe(true)
+          expect(visibility(mesh)).toEqual([true, true, true, true])
+          expect(iso.hiddenOccurrences.size).toBe(0)
+        })
+
+        it('is no product eye on any other row', () => {
+          const {iso, mesh} = setupRoot([])
+          // A child row: its own path is what its eye hides.
+          expect(iso.hideProduct(10)).toBe(false)
+          expect(iso.unHideProduct(10)).toBe(false)
+          // A root with no root-level geometry (a plain assembly): the id route, as before.
+          iso.viewer.getRootLevelInstances = jest.fn(() => ({instanceIds: [], parentExpressIds: []}))
+          expect(iso.hideProduct(1)).toBe(false)
+          // IFC: the viewer has no root-level instances to ask for.
+          delete iso.viewer.getRootLevelInstances
+          expect(iso.hideProduct(1)).toBe(false)
+          expect(visibility(mesh)).toEqual([true, true, true, true])
+        })
+
+        it('names a top-level product\'s own root-level geometry for the link, and no other row', () => {
+          const {iso} = setupRoot([])
+          const {rootElement} = useStoreMock.getState()
+          expect(iso.productRootLevelOccurrence(1, rootElement))
+            .toEqual({nodeId: 1, occurrencePath: [], solidExpressId: null, instanceIds: [2, 3]})
+          expect(iso.productRootLevelOccurrence(10, rootElement)).toBeNull()
+          iso.viewer.getRootLevelInstances = jest.fn(() => ({instanceIds: [], parentExpressIds: []}))
+          expect(iso.productRootLevelOccurrence(1, rootElement)).toBeNull()
         })
 
         it('a pick narrowed to some of the root-level geometry keeps the owner-id route', () => {
