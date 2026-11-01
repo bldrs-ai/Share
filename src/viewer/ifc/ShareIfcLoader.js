@@ -621,6 +621,13 @@ export default class ShareIfcLoader {
       // engine lacks the API rather than letting a missing method throw and
       // discard a successful load. `CadView` already guards on
       // `loadedModel.loadStats` before reading it.
+      //
+      // The counts that tell "the file has nothing to draw" from "the engine
+      // failed" ride to the load reporter beside the vertex counts below
+      // (classifyLoadOutcome, Share#1962), so they are collected here, where
+      // the statistics object is already in hand, and stay empty when there
+      // is none.
+      let emptinessCounts = {}
       if (typeof ifcAPI.getStatistics === 'function') {
         const statsApi = ifcAPI.getStatistics(modelID)
         const geometryMemory = statsApi.getGeometryMemory()
@@ -636,6 +643,23 @@ export default class ShareIfcLoader {
         // On the Statistics API of the pinned conway, but the Jest mocks of
         // it (Loader*.test.js) predate the call, hence the optional chain.
         const productCount = statsApi.getProductCount?.()
+        // conway#740, same optional chain. Read here, after the build, because
+        // the demand pump refreshes the products-with-geometry count as it
+        // runs and it is final once the pump has drained. It goes to GA as
+        // stats_productsWithGeometryCount (via `loadStats` below, beside
+        // stats_productCount; GA derives the partial-load fraction), and with
+        // the other counts to the load reporter for the diagnostics event and
+        // the no-geometry verdict. `dataDefectCount` is reporter-only: the
+        // reporter's own `dataDefectTotal` is what GA already carries. A count
+        // the engine did not supply stays absent, because classifyLoadOutcome
+        // reads absent as unknown.
+        const productsWithGeometryCount = statsApi.getProductsWithGeometryCount?.()
+        emptinessCounts = Object.fromEntries(Object.entries({
+          productCount,
+          productsWithGeometryCount,
+          errorCount,
+          dataDefectCount: statsApi.getDataDefectCount?.(),
+        }).filter(([, count]) => count !== undefined))
         ifcModel.name = statsApi.projectName ?? undefined
         ifcModel.loadStats = {
           loaderVersion: ifcAPI.getConwayVersion?.(),
@@ -660,6 +684,7 @@ export default class ShareIfcLoader {
           // `loadTime` stays the reporter's (loadAnalytics#buildOutcomeParams).
           openMs: totalTime,
           ...(productCount === undefined ? {} : {productCount}),
+          ...(productsWithGeometryCount === undefined ? {} : {productsWithGeometryCount}),
           ...(errorCount === undefined ? {} : {errorCount}),
           ...(warningCount === undefined ? {} : {warningCount}),
         }
@@ -681,6 +706,7 @@ export default class ShareIfcLoader {
           reportGeometryStats({
             vertexCount: buildStats.vertexCount ?? buildStats.totalVerts,
             triangleCount: buildStats.triangleCount ?? buildStats.totalTriangles,
+            ...emptinessCounts,
           })
         }
         if (typeof ifcAPI.GetLinearScalingFactor === 'function') {

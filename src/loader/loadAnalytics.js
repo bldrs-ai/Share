@@ -206,7 +206,7 @@ export function omitUndefined(obj) {
  * @param {object} opts
  * @param {object} [opts.completedStats] reporter snapshot, unprefixed keys
  * @param {object} [opts.loadStats] engine stats, unprefixed keys
- * @param {string} [opts.loadOutcome] 'displayed' | 'unusable'
+ * @param {string} [opts.loadOutcome] 'displayed' | 'no_geometry' | 'unusable'
  * @return {Record<string, any>} params, `stats_`-prefixed except `load_outcome`
  */
 export function buildOutcomeParams({completedStats, loadStats, loadOutcome}) {
