@@ -5,7 +5,6 @@ import {useTheme} from '@mui/material/styles'
 import {FileUpload as FileUploadIcon} from '@mui/icons-material'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
-import QuotaLimitDialog from '../Open/QuotaLimitDialog'
 import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from '../../utils/dragAndDrop'
 
 
@@ -20,14 +19,14 @@ export default function OnboardingOverlay({isVisible, onClose}) {
   const [openButtonPosition, setOpenButtonPosition] = useState(null)
   const [shareButtonPosition, setShareButtonPosition] = useState(null)
   const [isDragActive, setIsDragActive] = useState(false)
-  const [showQuotaDialog, setShowQuotaDialog] = useState(false)
 
   // Store state and navigation
   const appPrefix = useStore((state) => state.appPrefix)
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const setAlert = useStore((state) => state.setAlert)
+  const setIsDropQuotaDialogVisible = useStore((state) => state.setIsDropQuotaDialogVisible)
   const navigate = useNavigate()
-  const {tier, record} = useQuota()
+  const {record} = useQuota()
 
   // Find actual button positions when overlay becomes visible
   useEffect(() => {
@@ -90,27 +89,25 @@ export default function OnboardingOverlay({isVisible, onClose}) {
       {
         record,
         onExceeded: () => {
-          // Close the overlay first: its zIndex (9999) sits above MUI's
-          // modal layer, so the dialog would otherwise open underneath it.
-          onClose(false)
-          setShowQuotaDialog(true)
+          // The dialog is ViewerContainer's, raised through the store: this
+          // component unmounts as the overlay closes (HelpControl and
+          // AboutControl render it only while it has a source), so a dialog
+          // kept in its own state went with it and the refusal showed
+          // nothing (bldrs-ai/ops#39).
+          setIsDropQuotaDialogVisible(true)
+          // The overlay has to close anyway: its zIndex (9999) sits above
+          // MUI's modal layer, so the dialog would open underneath it.
+          // `true` skips the Help dialog, as a successful drop does: Help
+          // opening after the dialog would stack on top of the one answer
+          // to the user's drop.
+          onClose(true)
         },
       },
     )
   }
 
-  // Rendered outside the isVisible guard so the limit dialog survives the
-  // overlay closing itself in onExceeded above.
-  const quotaDialog = (
-    <QuotaLimitDialog
-      tier={tier}
-      isOpen={showQuotaDialog}
-      onClose={() => setShowQuotaDialog(false)}
-    />
-  )
-
   if (!isVisible) {
-    return quotaDialog
+    return null
   }
 
   return (
@@ -233,7 +230,6 @@ export default function OnboardingOverlay({isVisible, onClose}) {
           </Box>
         </Box>
       </Fade>
-      {quotaDialog}
     </>
   )
 }

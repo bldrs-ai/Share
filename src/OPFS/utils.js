@@ -570,8 +570,7 @@ export function saveDnDFileToOpfs(file, type, callback) {
  */
 export async function doesUploadExistInOPFS(storageId) {
   const root = await navigator.storage.getDirectory()
-  if (typeof storageId !== 'string' || storageId === '' || storageId === '.' ||
-      storageId === '..' || /[/\\]/.test(storageId)) {
+  if (!isLegalUploadEntryName(storageId)) {
     return false
   }
   try {
@@ -585,6 +584,52 @@ export async function doesUploadExistInOPFS(storageId) {
     throw err
   }
 }
+
+/**
+ * Delete a local upload from OPFS: the root-level `<storageId>` folder that
+ * `OPFS.worker.js` `writeModelToOPFS` writes, and the file of the same name in
+ * it (the layout {@link doesUploadExistInOPFS} probes). For an upload that
+ * `record()` refused under the `meterLocalFiles` switch: the drop and the
+ * Open dialog's pick write before the quota answers, and a refused one left
+ * behind still opened by its `/v/local-only/` URL (bldrs-ai/ops#39).
+ *
+ * Not {@link deleteFileFromOPFS}: that walks the `<owner>/<repo>/<branch>`
+ * layout of a cached GitHub model, which an upload doesn't have. On the main
+ * thread for the reason the probe is: the async handle API works outside
+ * workers, and a request to the shared worker would queue behind its writes.
+ *
+ * @param {string} storageId `<blob-uuid>.<ext>`
+ * @return {Promise<boolean>} true if it was deleted, false if it wasn't
+ *   there (or the id can't name an entry); rejects if OPFS couldn't be asked
+ */
+export async function deleteUploadFromOPFS(storageId) {
+  if (!isLegalUploadEntryName(storageId)) {
+    return false
+  }
+  const root = await navigator.storage.getDirectory()
+  try {
+    await root.removeEntry(storageId, {recursive: true})
+    return true
+  } catch (err) {
+    if (err?.name === 'NotFoundError') {
+      return false
+    }
+    throw err
+  }
+}
+
+
+/**
+ * @param {string} storageId
+ * @return {boolean} whether it can name a root-level OPFS entry: a non-empty
+ *   string, not `.`/`..`, with no path separator. One that can't was never
+ *   written, and must not reach a lookup or a delete as a path.
+ */
+function isLegalUploadEntryName(storageId) {
+  return typeof storageId === 'string' && storageId !== '' && storageId !== '.' &&
+    storageId !== '..' && !/[/\\]/.test(storageId)
+}
+
 
 /**
  * Checks if OPFS is available on the browser

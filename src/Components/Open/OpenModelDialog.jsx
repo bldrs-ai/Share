@@ -4,6 +4,7 @@ import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {startLogin} from '../../Auth0/gateLogin'
 import {endSessionLogoutOptions} from '../../Auth0/logoutOptions'
 import {forgetInMemoryUpload} from '../../loader/inMemoryUploads'
+import {deleteUploadFromOPFS} from '../../OPFS/utils'
 import {localOnlyPath, toLocalOnlyPath} from '../../routes/localOnly'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
@@ -17,6 +18,7 @@ import {
 } from '../../connections/persistence'
 import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
+import debug, {WARN} from '../../utils/debug'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToInMemoryModel, navigateToModel} from '../../utils/navigate'
 import Dialog from '../Dialog'
@@ -306,8 +308,15 @@ export default function OpenModelDialog({
       const sharePath = localOnlyPath(appPrefix, storageId)
       const {allowed} = await record(sharePath)
       if (!allowed) {
+        // The pick was stored before the quota could answer, so a refusal
+        // takes it back out. Left in OPFS, the refused file still opened
+        // from its /v/local-only/ URL (bldrs-ai/ops#39). The delete isn't
+        // awaited: a failure must not swallow the dialog.
         if (isInMemory) {
           forgetInMemoryUpload(storageId)
+        } else {
+          deleteUploadFromOPFS(storageId).catch((err) =>
+            debug(WARN).warn('OpenModelDialog: could not delete the refused upload', storageId, err))
         }
         setShowQuotaDialog(true)
         return
