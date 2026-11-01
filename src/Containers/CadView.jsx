@@ -1944,6 +1944,17 @@ export default function CadView({
       dedupeModelKeyRef.current = dedupeKey
       reportedRefusalRef.current = null
       reportedLoadFailureRef.current = null
+      // "Loaded" is about one model. Left true from the previous model, it
+      // kept the auth/OPFS effect below from ever retrying this one (open-205,
+      // #2015). Only on an identity change: re-runs for the same model (view
+      // settings) keep it, as they keep the dedupe refs above.
+      setIsViewerLoaded(false)
+      // The element lookup is the previous model's tree. Cleared in place:
+      // it is one object for the life of this CadView, and the handlers that
+      // read it hold that object (open-205, #2016). onModel refills it.
+      for (const id of Object.keys(elementsById)) {
+        delete elementsById[id]
+      }
     }
     onModelPath()
   }, [modelPath, customViewSettings])

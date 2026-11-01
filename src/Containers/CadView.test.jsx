@@ -18,6 +18,7 @@ import '../../__mocks__/shareViewerTestHarness'
 import {ShareViewer} from '../viewer/ShareViewer'
 import {getSelectionFunnel} from '../viewer/tools/selectionFunnel'
 import Clipper from '../viewer/three/Clipper'
+import ThreeContext from '../viewer/three/ThreeContext'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
@@ -1306,6 +1307,96 @@ describe('CadView', () => {
       }]])
     })
   })
+
+  // State that belongs to one model must not outlive it in a CadView that
+  // stays mounted across a model switch. Latent while opening a model reloads
+  // the page; reachable once it doesn't (open-205, #2021).
+  describe('after switching away from a model that loaded (open-205)', () => {
+    let getHarness
+    let loadSpy
+    let cameraControlsSpy
+
+    beforeEach(() => {
+      getHarness = require('../../__mocks__/shareViewerTestHarness').__getShareViewerMockSingleton
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+      // A's load can finish on a viewer the mount has already disposed (a
+      // pre-existing race, open-205 #2019), whose context then hands back no
+      // camera controls, and the tail of onViewerInternal throws. Sidestep
+      // it: these tests are about what happens after A has loaded.
+      cameraControlsSpy = jest.spyOn(ThreeContext.prototype, 'getCameraControls')
+        .mockImplementation(() => getHarness().IFC.context.ifcCamera.cameraControls)
+      // Earlier tests in this file leave view settings and auth state behind;
+      // either one re-runs a load on its own and muddies the counts below.
+      useStore.setState({
+        alert: null, customViewSettings: null, isAuthResolved: false, isModelReady: false,
+        expandedElements: [], selectedElements: [], selectedAnchorIds: [], selectedOccurrencePath: null,
+      })
+    })
+
+    afterEach(() => {
+      cameraControlsSpy.mockRestore()
+      loadSpy?.mockRestore()
+      loadSpy = undefined
+    })
+
+    /**
+     * Mount CadView on A (`/index.ifc`, the harness's a → b → c tree), let it
+     * load, then switch to B (`/other.ifc`), whose loads run `laterLoad`.
+     *
+     * @param {object} result renderHook result over the whole store
+     * @param {Function} laterLoad Loader.load implementation for B
+     */
+    async function loadAThenSwitchToB(result, laterLoad) {
+      loadSpy = jest.spyOn(Loader, 'load')
+        .mockImplementationOnce(() => Promise.resolve(getHarness()._loadedModel))
+        .mockImplementation(laterLoad)
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.isModelReady).toBe(true))
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+    }
+
+    // #2015: `isViewerLoaded` gates the auth/OPFS retry effect. Set by A's
+    // success and never cleared, it silenced that effect for every later
+    // model, so a B whose first attempt failed (e.g. a private GitHub file
+    // tried before auth settled) was never retried.
+    it('retries the new model on an auth change', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      await loadAThenSwitchToB(result, () => {
+        throw new Error('OpenModel returned -1')
+      })
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      const loadsBefore = loadSpy.mock.calls.length
+      await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+      expect(String(loadSpy.mock.calls.at(-1)[0])).toContain('other.ifc')
+    })
+
+    // #2016: the element lookup table is per model. Never cleared, A's ids
+    // still resolved while B loaded, so selecting one opened A's ancestors in
+    // the NavTree (and A's whole tree stayed reachable).
+    it('no longer resolves the old model\'s element ids', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      // B never finishes, so nothing of B's refills the table.
+      await loadAThenSwitchToB(result, () => new Promise(() => {}))
+      const leafOfA = makeTestTree().children[0].children[0].expressID
+      await act(() => result.current.setExpandedElements([]))
+      await act(() => result.current.setSelectedElements([`${leafOfA}`]))
+      await actAsyncFlush()
+      // The selection effect has run to the end: it sets the properties and
+      // then the NavTree expansion.
+      await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
+      await actAsyncFlush()
+      expect(result.current.expandedElements).toEqual([])
+    })
+  })
+
 
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing
   /*
