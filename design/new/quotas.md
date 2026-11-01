@@ -639,18 +639,21 @@ The parts that aren't obvious:
   `auth0|`). For a linked account that is the *primary* identity, not
   necessarily the button the user pressed.
   - **A sign-out forgets the reported sign-in.** `auth_time` alone can't
-    tell a sign-in apart from the one before a sign-out that leaves the
-    Auth0 session alive. `OpenModelDialog`'s GitHub Remove passes
-    `openUrl: false`, so auth0-spa-js clears only its local cache and never
-    visits `/v2/logout`; the next popup sign-in (no `prompt: 'login'` unless
-    a scope is being changed) completes from that live session and its ID
-    token carries the same `auth_time`. (`ProfileControl`'s Log out and the
-    `invalid_grant` logout do end the session, via `/v2/logout` and back to
-    the origin, since Share#1923: `src/Auth0/logoutOptions.js`.) So whenever
-    a tab settles signed out — in place, or on a page load that comes up
-    signed out, as on the return from `/v2/logout` — it clears the marker,
-    under the same Web Lock, whichever kind of sign-out it was. A cached-session boot never passes through signed out, so it
-    never clears. Other tabs aren't told about a sign-out (the SDK doesn't
+    tell a sign-in apart from the one before a signed-out period that left
+    the Auth0 session alive: the next popup sign-in (no `prompt: 'login'`
+    unless a scope is being changed) completes from that live session and
+    its ID token carries the same `auth_time`. The app's own sign-outs —
+    Profile → Log out, the Open dialog's GitHub Remove and the
+    `invalid_grant` logout — all end the session, via `/v2/logout` and back
+    to the origin (`src/Auth0/logoutOptions.js`, Share#1923). A tab can
+    still settle signed out with the session alive, though: auth0-react
+    re-derives `isAuthenticated` from the SDK's cached user after every
+    token call, and a `logout` passing `openUrl` flips it in place without
+    visiting `/v2/logout`. So whenever a tab settles signed out — in place,
+    or on a page load that comes up signed out, as on the return from
+    `/v2/logout` — it clears the marker, under the same Web Lock, whichever
+    way it got there. A cached-session boot never passes through signed out,
+    so it never clears. Other tabs aren't told about a sign-out (the SDK doesn't
     broadcast it): a tab still signed in in memory makes no edge for the
     next sign-in, so it neither clears nor claims. The tabs that do claim
     are signed out themselves and cleared on the way in, well before the
@@ -1098,10 +1101,12 @@ Three timing rules keep the cells honest (codex review on Share#1976):
   finishes. The load gates read it (CadView, the GitHub hooks), and what
   they need is "the token, if any, is in", not whose claims these are. So
   only the analytics wait is per sign-in state. The reverse holds too.
-  Signing out can happen in place, with no reload: the Open dialog's GitHub
-  Remove calls `logout({openUrl: false})`. A signed-in pass whose token
-  fetch was still in flight then must not record its late settlement over
-  the signed-out one. BaseRoutes drops it by generation (`authPassRef`), so
+  Signing out can happen in place, with no reload. The app's own sign-outs
+  navigate to `/v2/logout` (Share#1923), but auth0-react still flips
+  `isAuthenticated` in place when the SDK's cached user is gone after a
+  token call, or on a `logout` that passes `openUrl`. A signed-in pass
+  whose token fetch was still in flight then must not record its late
+  settlement over the signed-out one. BaseRoutes drops it by generation (`authPassRef`), so
   anon actions after the sign-out are not held for the 60 s cap (codex
   review on Share#1986). One case is left uncovered: switching accounts
   with no signed-out state in between keeps `isAuthenticated` true. Share

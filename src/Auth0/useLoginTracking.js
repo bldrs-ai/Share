@@ -43,22 +43,24 @@ import {takeGateLoginSource} from './gateLogin'
  * getIdTokenClaims) there is no cross-tab dedupe and the in-page edge alone
  * decides.
  *
- * `auth_time` alone does NOT tell two sign-ins apart across a sign-out that
- * leaves the Auth0 session alive. OpenModelDialog's GitHub Remove passes
- * `openUrl: false`, so auth0-spa-js (2.0.2, `logout`) clears only its local
- * cache and never visits /v2/logout. The next popup sign-in (PopupAuth sends
- * `prompt: 'login'` only for an explicit scope change) is then completed from
- * that live session — no credentials asked for — and its ID token carries the
- * SAME auth_time, so a marker left from before the sign-out would swallow it.
- * ProfileControl's Log out and BaseRoutes' invalid_grant logout do end the
- * session (Auth0/logoutOptions.js, Share#1923), and the next sign-in then
- * mints a new auth_time; clearing on those too costs nothing and doesn't
- * depend on which kind of sign-out it was. Hence forgetReportedLogin: entering
- * a settled signed-out state clears the marker, so the next completed sign-in
- * claims afresh. That covers both shapes a sign-out reaches this hook in — an
- * in-page true → false (openUrl:false) and a page load that comes up signed
- * out (the return from /v2/logout) — and never a cached-session boot, which
- * is never signed out.
+ * `auth_time` alone does NOT tell two sign-ins apart across a signed-out
+ * period that leaves the Auth0 session alive: the next popup sign-in
+ * (PopupAuth sends `prompt: 'login'` only for an explicit scope change) is
+ * completed from that live session — no credentials asked for — and its ID
+ * token carries the SAME auth_time, so a marker left from before would
+ * swallow it. The app's own sign-outs (Profile → Log out, the Open dialog's
+ * GitHub Remove, BaseRoutes' invalid_grant logout) all end the session
+ * through /v2/logout since Share#1923 (Auth0/logoutOptions.js), so the
+ * sign-in after one mints a new auth_time. A tab can still settle signed out
+ * with the session alive: auth0-react re-derives `isAuthenticated` from the
+ * SDK's cached user after every token call (GET_ACCESS_TOKEN_COMPLETE), and
+ * any `logout` that passes `openUrl` flips it in place without visiting
+ * /v2/logout. Hence forgetReportedLogin, which does not depend on how the
+ * signed-out state came about: entering a settled signed-out state clears
+ * the marker, so the next completed sign-in claims afresh. That covers both
+ * shapes a sign-out reaches this hook in — an in-page true → false and a page
+ * load that comes up signed out (the return from /v2/logout) — and never a
+ * cached-session boot, which is never signed out.
  *
  * Other tabs and a sign-out: the SDK does not broadcast logout, so a tab that
  * was signed in stays signed in in memory (until it reloads) and never makes

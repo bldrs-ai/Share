@@ -21,8 +21,9 @@
  * is what every sign-out in the app already named, so each origin Share is
  * served from (prod, deploy previews, localhost) needs an entry there.
  *
- * In-place, local-only sign-outs (OpenModelDialog's GitHub Remove,
- * `openUrl: false`) deliberately do not use this.
+ * Used by every sign-out the app offers: Profile → Log out, the Open
+ * dialog's GitHub Remove (GitHub is the Auth0 identity, so removing it is
+ * signing out), and BaseRoutes' invalid_grant logout.
  *
  * @return {{logoutParams: {returnTo: string}}}
  */

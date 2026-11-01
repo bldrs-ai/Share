@@ -75,12 +75,17 @@ export default function BaseRoutes({testElt = null}) {
 
   // Which sign-in state the auth effect last ran for, and a generation that
   // advances each time that state changes. A signed-in pass's token fetch
-  // can still be in flight when the state moves on: OpenModelDialog's GitHub
-  // Remove signs out IN PLACE (`logout({openUrl: false})`, no reload). The
-  // signed-out pass then records its settlement at once, and the older
-  // pass's .finally must not overwrite it with `true` when it lands, or
-  // every later model-action event would wait out its cap for a signed-in
-  // settlement that is no longer the state (codex review on Share#1986).
+  // can still be in flight when the state moves on to signed out IN PLACE,
+  // with no reload. The app's own sign-outs all navigate to /v2/logout
+  // (Auth0/logoutOptions.js), but an in-place flip is still reachable:
+  // auth0-react re-derives isAuthenticated from the SDK's cached user after
+  // every token call (GET_ACCESS_TOKEN_COMPLETE), and any `logout` passing
+  // `openUrl` dispatches LOGOUT in place (so does the Playwright mock, which
+  // follows the same rules: mockLogout.js). The signed-out pass then records
+  // its settlement at once, and the older pass's .finally must not overwrite
+  // it with `true` when it lands, or every later model-action event would
+  // wait out its cap for a signed-in settlement that is no longer the state
+  // (codex review on Share#1986).
   // A ref, not state: only the .finally reads it, after the fact.
   const authPassRef = useRef({isAuthenticated: null, generation: 0})
 

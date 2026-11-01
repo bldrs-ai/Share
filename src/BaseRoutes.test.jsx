@@ -479,11 +479,11 @@ describe('BaseRoutes - in-page sign-in and model-action tiers', () => {
     expect(sent('model_export')).toEqual([{tier: 'pro', gate: 'none', source: 'hosted'}])
   })
 
-  // codex review on Share#1986: OpenModelDialog's GitHub Remove signs out IN
-  // PLACE (`logout({openUrl: false})`). If the signed-in pass's token fetch
-  // is still in flight then, its late .finally must not replace the
-  // signed-out settlement with `true`, or every anon action after it would
-  // wait out the 60 s cap.
+  // codex review on Share#1986: a sign-out IN PLACE, with no reload (see
+  // BaseRoutes' authPassRef for what can produce one). If the signed-in
+  // pass's token fetch is still in flight then, its late .finally must not
+  // replace the signed-out settlement with `true`, or every anon action after
+  // it would wait out the 60 s cap.
   it('an in-place sign-out during a signed-in fetch keeps the signed-out settlement', async () => {
     const token = 'late-jwt'
     tokenClaims[token] = {'https://bldrs.ai/identities': [{connection: 'github', provider: 'github', user_id: '1'}]}

@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect, useState} from 'react'
 import {Box, Button, Divider, Slide, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {startLogin} from '../../Auth0/gateLogin'
+import {endSessionLogoutOptions} from '../../Auth0/logoutOptions'
 import {forgetInMemoryUpload} from '../../loader/inMemoryUploads'
 import {localOnlyPath, toLocalOnlyPath} from '../../routes/localOnly'
 import useStore from '../../store/useStore'
@@ -393,15 +394,13 @@ export default function OpenModelDialog({
   const githubIdentity = user?.[BLDRS_IDENTITIES_CLAIM]?.find((id) => id.connection === 'github')
   const githubUsername = githubIdentity?.profileData?.nickname || user?.nickname
 
-  // Local-only, in place: `openUrl: false` clears the SDK's token cache and
-  // signs this page out without a reload, but never visits /v2/logout, so the
-  // Auth0 session survives and the next sign-in completes from it silently.
-  // GitHub is the Auth0 identity here, so "Remove" is a full Bldrs sign-out
-  // in all but that. Left as is on purpose until the owner decides whether
-  // Remove should end the session like Log out does (Share#1923; Log out is
-  // ProfileControl's, Auth0/logoutOptions.js). BaseRoutes' authPassRef guard
-  // exists for this in-place path.
-  const handleGithubRemove = () => logout({openUrl: false})
+  // A full sign-out, the same as Profile → Log out (Auth0/logoutOptions.js):
+  // through /v2/logout, ending the Auth0 session, and back to the origin.
+  // GitHub is the account's Auth0 identity, so there is no "disconnect
+  // GitHub, stay signed in" to offer without account linking. A local-only
+  // sign-out would leave the session alive, and the next sign-in would
+  // complete silently as the same user (Share#1923).
+  const handleGithubRemove = () => logout(endSessionLogoutOptions())
 
   const handleLoginGithub = () => {
     // Not a gate's sign-in: drop any stale gate attempt (Auth0/gateLogin.js).

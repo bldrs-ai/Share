@@ -209,10 +209,10 @@ describe('useLoginTracking', () => {
     }
   })
 
-  // codex finding on #1912. OpenModelDialog's GitHub Remove (openUrl:false)
-  // keeps the Auth0 session, so the popup sign-in after it is completed from
-  // that session and its ID token carries the same auth_time as the sign-in
-  // before.
+  // codex finding on #1912. An in-page sign-out that keeps the Auth0 session
+  // (the SDK dropping its cached user, or any logout passing `openUrl`) is
+  // followed by a popup sign-in completed from that session, whose ID token
+  // carries the same auth_time as the sign-in before.
   it('a sign-in after an in-page sign-out counts again, even with the same auth_time', async () => {
     const step = mountWith(mockedUserLoggedOut)
     step(withClaims(FIRST_SIGN_IN))
