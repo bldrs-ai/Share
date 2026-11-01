@@ -319,7 +319,7 @@ describe('Components/Residency/visibilityHash', () => {
       // Root 1 has geometry of its own (instances 7, 8, empty path) and a
       // child occurrence 100. A whole-product hide or isolate holds the
       // root's own geometry under its row id with an EMPTY path, and the
-      // child by its path (`IfcIsolator#_splitProductOccurrences`).
+      // child by its path (`IfcIsolator#splitProductOccurrences`).
       const rootElement = {expressID: 1, occurrencePath: [], children: [
         {expressID: 100, occurrencePath: [100], children: []},
       ]}

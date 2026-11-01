@@ -1204,8 +1204,10 @@ describe('viewer/three/IfcIsolator', () => {
           expect([...iso.isolatedInstanceIds].sort()).toEqual([0, 1, 2, 3])
           // The link is built from this list. Isolated as one pathless entry,
           // the product was left out of it, and the link reopened unisolated.
+          // The root's own geometry has no path to resolve, so it keeps its
+          // instances (what a snapshot restores it from).
           expect(iso.isolatedOccurrences).toEqual([
-            {nodeId: 1, occurrencePath: [], solidExpressId: null},
+            {nodeId: 1, occurrencePath: [], solidExpressId: null, instanceIds: [2, 3]},
             {nodeId: 10, occurrencePath: [10], solidExpressId: null},
           ])
           expect(useStoreMock.setState).toHaveBeenCalledWith(

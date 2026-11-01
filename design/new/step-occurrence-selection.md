@@ -473,7 +473,7 @@ order; BVH permutes only the index buffer, not the numbering).
    clicked, still 0 visible. The rule now:
 
    - **A whole product is hidden or isolated as its rows**
-     (`IfcIsolator#_splitProductOccurrences`). The product's own root-level
+     (`IfcIsolator#splitProductOccurrences`). The product's own root-level
      instances stay on the product's row, keyed `#<row>` with an empty path.
      Everything below it goes to the fewest occurrences that hold exactly
      those instances (`occurrencePaths.coverInstancesByOccurrences`): a child
@@ -537,6 +537,18 @@ order; BVH permutes only the index buffer, not the numbering).
      (`visibilityHash.js#visibilityRefsAreExact`). The Share dialog then
      says the state is not in the link. Every link that is written reopens
      exactly the hidden or isolated set it was written from.
+   - **The assistant's view tools go the same way** (`viewer/tools/`,
+     #1946). `view.hide` and `view.isolate` on a product's row name the
+     whole product as one pathless entry, and on a multi-root file's
+     `Model` wrapper as one entry for all its parts. They hand those to
+     `IfcIsolator#splitProductOccurrences`, which splits a wrapper into its
+     parts and each part into rows. Undo's snapshot
+     (`visibilityState.js`) keeps every entry as the isolator holds it: an
+     empty path (the product's own geometry) is not the same as none,
+     `inexact` is kept, and so is what each product hid with it
+     (`productHidePartsSnapshot`). An isolated product's own entry keeps
+     its instances in `isolatedOccurrences`, since it has no path to
+     resolve them by.
 
    The root's empty path is no key for `selectedOccurrences`/
    `getInstanceIdsForOccurrencePath`, so every row-driven path needs the

@@ -77,7 +77,7 @@ export function visibilityRefs(viewer) {
   // which has no path to write: it goes by the product's row id, an `e` ref
   // `applyVisibilityHash` reads back as that geometry (#1924). Its children
   // were split off into occurrences of their own, written by path
-  // (`IfcIsolator#_splitProductOccurrences`).
+  // (`IfcIsolator#splitProductOccurrences`).
   const occurrenceRefOf = ({nodeId, occurrencePath, solidExpressId}) => (occurrencePath.length === 0 ?
     elementRef(nodeId) :
     occurrenceRef(occurrenceElementPathIds(0, occurrencePath, solidExpressId).slice(1)))

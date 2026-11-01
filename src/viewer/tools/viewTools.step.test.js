@@ -6,6 +6,7 @@
 jest.mock('three', () => jest.requireActual('three'))
 jest.mock('../three/IfcIsolator', () => jest.requireActual('../three/IfcIsolator'))
 import '../../../__mocks__/shareViewerTestHarness'
+import {visibilityRefs} from '../../Components/Residency/visibilityHash'
 import useStore from '../../store/useStore'
 import {ShareViewer} from '../ShareViewer'
 import {createShareAssistRegistry} from './assistHost'
@@ -109,8 +110,36 @@ describe('viewer/tools on a STEP assembly', () => {
 
     expect(visibleProducts(fixture.batch)).toEqual([200, 500])
     expect(useStore.getState().isolatedElements).toEqual(isolatedBefore)
-    // The link still carries the pathful occurrence (a pathless one has no ref).
-    expect(isolator.isolatedOccurrences.map(({nodeId}) => nodeId)).toEqual([20])
+    // The link carries both: the occurrence by its path, the product's own
+    // geometry by its row (an empty path, written `e1`, #1924).
+    expect(isolator.isolatedOccurrences.map(({nodeId}) => nodeId)).toEqual([20, 1])
+  })
+
+  // #2001 after #1946: the tools hid the product as one pathless entry, so
+  // its rows' eyes read visible and the `#d:` link wrote only `e1`, the
+  // product's own geometry, which reopens without its children.
+  it('hides the top-level product as its rows, so the link names all of it', async () => {
+    const {isolator} = fixture.viewer
+    await registry.call('view.hide', {refs: ['e1']})
+    expect(visibleProducts(fixture.batch)).toEqual([])
+    expect(visibilityRefs(fixture.viewer).hide.sort()).toEqual(['e1', 'o10', 'o20'])
+    expect(isolator.unHideProduct(1)).toBe(true)
+    expect(visibleProducts(fixture.batch)).toEqual(ALL)
+  })
+
+  // #2001: undo restored the hides in one call, which counted every row as
+  // hidden with the product, so the product's eye then showed a row the user
+  // had hidden on its own.
+  it('undo keeps a row hidden on its own apart from the product hidden after it', async () => {
+    const {isolator} = fixture.viewer
+    await registry.call('view.hide', {refs: ['o20']})
+    await registry.call('view.hide', {refs: ['e1']})
+    const result = await registry.call('view.showAll', {})
+    expect(visibleProducts(fixture.batch)).toEqual(ALL)
+    await result.undo()
+    expect(visibleProducts(fixture.batch)).toEqual([])
+    isolator.unHideProduct(1)
+    expect(visibleProducts(fixture.batch)).toEqual([100, 100, 500])
   })
 })
 
@@ -160,6 +189,9 @@ describe('viewer/tools on a root-only multi-root STEP file (twoRootShells.step)'
     await registry.call('view.isolate', {refs: ['e0']})
     expect(visibleProducts(fixture.batch)).toEqual([8, 8, 3008, 3008])
     expect(useStore.getState().isTempIsolationModeOn).toBe(true)
+    // As each part (#2001): `e0` names no geometry, so a link that wrote
+    // the wrapper reopened isolating nothing.
+    expect(visibilityRefs(fixture.viewer).iso.sort()).toEqual(['e3007', 'e7'])
   })
 })
 
