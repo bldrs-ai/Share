@@ -9,6 +9,11 @@ import {
 } from '../OPFS/messages'
 import {getProvider} from '../connections/registry'
 import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
+import {
+  UNRECOGNIZED_FORMAT_ALERT_EVENT,
+  reportUnrecognizedFormat,
+  unrecognizedFormatAlert,
+} from '../loader/unrecognizedFormat'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import AlertDialog from './AlertDialog'
@@ -16,6 +21,10 @@ import AlertDialog from './AlertDialog'
 
 jest.mock('../connections/registry')
 jest.mock('../utils/alertTracking', () => ({trackAlert: jest.fn(), trackAlertEvent: jest.fn()}))
+jest.mock('../loader/unrecognizedFormat', () => ({
+  ...jest.requireActual('../loader/unrecognizedFormat'),
+  reportUnrecognizedFormat: jest.fn(),
+}))
 
 
 /**
@@ -364,6 +373,42 @@ describe('AlertDialog — uploadNotInBrowser alert type (#1955)', () => {
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
     expect(trackAlertEvent).toHaveBeenCalledTimes(1)
     expect(trackAlertEvent).toHaveBeenCalledWith(UPLOAD_NOT_IN_BROWSER_ALERT)
+    expect(trackAlert).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('AlertDialog — unrecognizedFormat alert type', () => {
+  const onClose = jest.fn()
+  const message = 'Cannot extract filetype from filename: Tower.rvt'
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  it('shows the alert\'s own text', () => {
+    act(() => {
+      useStore.getState().setAlert(unrecognizedFormatAlert(message, 'Tower.rvt', 'picker'))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(/Cannot extract filetype from filename: Tower\.rvt/)).toBeInTheDocument()
+  })
+
+  // As a string this went through trackAlert, whose fingerprint is the
+  // message text — with the file name in it, one Sentry issue per pick.
+  it('counts the alert once as an info report, with a constant analytics label', () => {
+    const alert = unrecognizedFormatAlert(message, 'Tower.rvt', 'picker')
+    act(() => {
+      useStore.getState().setAlert(alert)
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(reportUnrecognizedFormat).toHaveBeenCalledTimes(1)
+    expect(reportUnrecognizedFormat).toHaveBeenCalledWith(alert)
+    expect(trackAlertEvent).toHaveBeenCalledTimes(1)
+    expect(trackAlertEvent).toHaveBeenCalledWith(UNRECOGNIZED_FORMAT_ALERT_EVENT)
     expect(trackAlert).not.toHaveBeenCalled()
   })
 })
