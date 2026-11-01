@@ -756,7 +756,16 @@ function visibilityTargets(targets, {viewer, rootElement}) {
     }
     isolator.flattenChildren(target.id).forEach((id) => ids.add(id))
   }
-  return {ids: [...ids], occurrences}
+  // A whole product goes to the isolator as its rows, as the NavTree's Hide
+  // and Isolate send it (#1924): its own geometry on its row, its children by
+  // path. Held as one pathless entry, its children's eyes read visible and
+  // the `#d:` link wrote only its own geometry (`e<row>`), so the link
+  // reopened without the children (#2001).
+  return {
+    ids: [...ids],
+    occurrences: typeof isolator.splitProductOccurrences === 'function' ?
+      isolator.splitProductOccurrences(occurrences, rootElement) : occurrences,
+  }
 }
 
 

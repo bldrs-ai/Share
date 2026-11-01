@@ -1,5 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {
+  coverInstancesByOccurrences,
   findNodeByOccurrencePath,
   findRootLevelOwnerNode,
   findRootLevelProductNode,
@@ -611,6 +612,62 @@ describe('utils/occurrencePaths', () => {
       expect(resolve({rootNode: wrapper, anchorIds: [-1]})).toBeNull()
       expect(resolve({rootLevel: {instanceIds: [], parentExpressIds: []}})).toBeNull()
       expect(resolve({rootLevel: null})).toBeNull()
+    })
+  })
+
+  describe('coverInstancesByOccurrences (#1924)', () => {
+    // Two children of a root: assembly 10 (leaves 11 → instance 0, 12 → 1,
+    // and instance 4 at 10's own path) and 20 → instance 2, whose row is a
+    // named body (an ephemeral solid).
+    const byPath = {'10': [0, 1, 4], '10/11': [0], '10/12': [1], '20': [2]}
+    const instancesOf = (node) => byPath[node.occurrencePath.join('/')] ?? []
+    const children = [
+      {expressID: 10, occurrencePath: [10], children: [
+        {expressID: 11, occurrencePath: [10, 11], children: []},
+        {expressID: 12, occurrencePath: [10, 12], children: []},
+      ]},
+      {expressID: 20, occurrencePath: [20], ephemeral: true, children: []},
+    ]
+    const rows = (entries) => entries.map(({nodeId, instanceIds}) => [nodeId, instanceIds])
+
+    it('names a child all of whose instances are wanted as one row, not its descendants', () => {
+      const entries = coverInstancesByOccurrences(children, new Set([0, 1, 4, 2]), instancesOf)
+      expect(rows(entries)).toEqual([[10, [0, 1, 4]], [20, [2]]])
+      expect(entries[0]).toEqual({nodeId: 10, occurrencePath: [10], solidExpressId: null, instanceIds: [0, 1, 4]})
+      // A named body's row keeps its solid id, as its eye keys on it.
+      expect(entries[1].solidExpressId).toBe(20)
+    })
+
+    it('goes below a child only part of which is wanted', () => {
+      expect(rows(coverInstancesByOccurrences(children, new Set([1]), instancesOf))).toEqual([[12, [1]]])
+    })
+
+    it('names what a part-wanted child holds at its own path by the geometry pieces that are just it', () => {
+      // `o10` would read back as 10's children too (codex on #2001); the
+      // piece `o10.500` reads back as instance 4 alone.
+      const piecesOf = (node) => (node.expressID === 10 ?
+        [{geometryExpressId: 600, instanceIds: [0, 1]}, {geometryExpressId: 500, instanceIds: [4]}] : [])
+      expect(coverInstancesByOccurrences(children, new Set([0, 4]), instancesOf, piecesOf)).toEqual([
+        {nodeId: 11, occurrencePath: [10, 11], solidExpressId: null, instanceIds: [0]},
+        {nodeId: 500, occurrencePath: [10], solidExpressId: 500, instanceIds: [4]},
+      ])
+    })
+
+    it('marks what no piece names alone inexact, rather than naming the whole child', () => {
+      // 4 shares its geometry with 0 and 1, so no ref reads back as 4 alone.
+      const piecesOf = () => [{geometryExpressId: 600, instanceIds: [0, 1, 4]}]
+      expect(coverInstancesByOccurrences(children, new Set([0, 4]), instancesOf, piecesOf)).toEqual([
+        {nodeId: 11, occurrencePath: [10, 11], solidExpressId: null, instanceIds: [0]},
+        {nodeId: 10, occurrencePath: [10], solidExpressId: null, instanceIds: [4], inexact: true},
+      ])
+      // And so without pieces to ask.
+      expect(coverInstancesByOccurrences(children, new Set([0, 4]), instancesOf).pop().inexact).toBe(true)
+    })
+
+    it('is nothing for nothing wanted, and skips rows without a path', () => {
+      expect(coverInstancesByOccurrences(children, new Set(), instancesOf)).toEqual([])
+      expect(coverInstancesByOccurrences([{expressID: 1, occurrencePath: [], children}], new Set([2]), instancesOf))
+        .toEqual([])
     })
   })
 

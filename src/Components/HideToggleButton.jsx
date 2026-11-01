@@ -54,6 +54,14 @@ export default function HideToggleButton({elementId, occurrencePath = null, geom
       }
       return
     }
+    // The row of a top-level STEP product with geometry of its own (its own
+    // shells have an empty occurrence path) means the whole product, as a row
+    // click and H do (#1909). Its id and its children's own no geometry, so
+    // the id route below hid nothing, and could not show what H had hidden
+    // (#1924). Every other row answers false here.
+    if (isHidden ? viewer.isolator.unHideProduct?.(elementId) : viewer.isolator.hideProduct?.(elementId)) {
+      return
+    }
     const toBeHidden = viewer.isolator.flattenChildren(elementId)
     if (!isHidden) {
       viewer.isolator.hideElementsById(toBeHidden)
