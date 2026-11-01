@@ -3,6 +3,7 @@ import {Link} from '@mui/material'
 import {ErrorOutline as ErrorOutlineIcon, InfoOutlined as InfoOutlinedIcon} from '@mui/icons-material'
 import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
 import {NotFoundError} from '../loader/Loader'
+import {UNRECOGNIZED_FORMAT_ALERT_EVENT, reportUnrecognizedFormat} from '../loader/unrecognizedFormat'
 import {getProvider} from '../connections/registry'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
@@ -65,6 +66,12 @@ export default function AlertDialog({onClose}) {
       // doesn't hold (#1955). `noGeometry` is a model conway read fine that
       // has nothing to draw (loadProgress#classifyLoadOutcome, #1962).
       trackAlertEvent(alert.message)
+    } else if (alert.type === 'unrecognizedFormat') {
+      // Also an expected outcome, but counted in Sentry too, as one info
+      // issue tagged by extension (loader/unrecognizedFormat.js). GA gets the
+      // constant, since the picker's message names the user's file.
+      reportUnrecognizedFormat(alert)
+      trackAlertEvent(UNRECOGNIZED_FORMAT_ALERT_EVENT)
     } else if (alert.type === 'oom' || alert.type === 'needsReconnect') {
       trackAlert(alert.message, alert)
     } else if (alert instanceof NotFoundError || alert instanceof Error) {
@@ -223,7 +230,7 @@ function createAlertReport(a) {
   } else if (typeof a === 'object') {
     if (a && (a.type === 'oom' || a.type === 'needsReconnect' || a.type === 'unsupportedSchema' ||
         a.type === 'inMemoryUploadGone' || a.type === 'uploadNotInBrowser' || a.type === 'engineFailure' ||
-        a.type === 'noGeometry')) {
+        a.type === 'noGeometry' || a.type === 'unrecognizedFormat')) {
       return a.message
     } else if (a instanceof NotFoundError) {
       return displayPathAlert(a)

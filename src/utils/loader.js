@@ -6,6 +6,7 @@ import {
 } from '../OPFS/OPFSService.js'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {registerInMemoryUpload} from '../loader/inMemoryUploads'
+import {unrecognizedFormatAlert} from '../loader/unrecognizedFormat'
 import debug from '../utils/debug'
 
 
@@ -57,10 +58,11 @@ function holdUntilPicked(fileInput) {
  * @param {Function} onLoad Called with (storageId, lastModifiedUtc, originalName)
  * @param {boolean} testingSkipAutoRemove
  * @param {boolean} testingDisableWebWorker
- * @param {Function} [onError] Called with a message for a pick that cannot be
- *   opened at all — a compressed file in a browser with no
- *   `DecompressionStream`, or a name and a header that between them name no
- *   format. Without one this path can only log: the picker has already
+ * @param {Function} [onError] Called with an alert for a pick that cannot be
+ *   opened at all, to hand to `setAlert`: a message string for a compressed
+ *   file in a browser with no `DecompressionStream`, or an
+ *   `unrecognizedFormatAlert` object for a name and a header that between
+ *   them name no format. Without one this path can only log: the picker has already
  *   closed, so nothing else would tell the user why nothing happened.
  * @param {object} [options]
  * @param {boolean} [options.inMemory] For a browser without OPFS: hold the
@@ -192,6 +194,9 @@ function reportUnknownType(name, onError) {
   const message = `Cannot extract filetype from filename: ${name}`
   debug().error('loader#loadLocalFile:', message)
   if (onError) {
-    onError(message)
+    // An alert object, not the message: as a string it reached Sentry with
+    // the file name in its grouping key, one issue per pick
+    // (`loader/unrecognizedFormat.js`). The dialog still shows `message`.
+    onError(unrecognizedFormatAlert(message, name, 'picker'))
   }
 }

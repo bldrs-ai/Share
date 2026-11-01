@@ -3,9 +3,9 @@ import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {forgetInMemoryUpload, registerInMemoryUpload} from '../loader/inMemoryUploads'
+import {unrecognizedFormatAlert} from '../loader/unrecognizedFormat'
 import {localOnlyPath} from '../routes/localOnly'
 import {disablePageReloadApprovalCheck} from './event'
-import {trackAlert} from './alertTracking'
 import {navigateToInMemoryModel, navigateToModel} from './navigate'
 import debug, {WARN} from './debug'
 
@@ -35,9 +35,14 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
   event.preventDefault()
   const files = event.dataTransfer.files
 
+  // None of the alerts below is reported to Sentry from here. Each goes to
+  // setAlert, and AlertDialog's effect is the one place an alert is
+  // captured; this function used to call trackAlert too, so every rejected
+  // drop landed in Sentry twice in the same second (one event from this
+  // stack, one from AlertDialog's) and the drop families' counts read double.
+
   if (files.length === 0) {
     const message = 'File upload initiated but found no data'
-    trackAlert(message)
     setAlert(message)
     if (onError) {
       onError(message)
@@ -46,7 +51,6 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
   }
   if (files.length > 1) {
     const message = 'File upload initiated for more than 1 file'
-    trackAlert(message)
     setAlert(message)
     if (onError) {
       onError(message)
@@ -74,7 +78,6 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     uploadedFile = await inflateIfGzipEnvelope(dropped)
   } catch (e) {
     const message = e.message
-    trackAlert(message)
     setAlert(message)
     if (onError) {
       onError(message)
@@ -86,14 +89,16 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     const message = `File upload of unknown type: type(${uploadedFile.type}) size(${uploadedFile.size})`
     // The alert is the user's signal; this is the console's, which had none —
     // a rejected drop left nothing to go on when reported (test-models#69).
-    // It names the file, which the alert deliberately does not: the alert's
-    // text is also its Sentry grouping key (`trackAlert`), and a per-file
-    // name would split that family into one issue per upload. At WARN, the
-    // level prod logs at; a bare `debug()` is INFO and prints nothing there.
+    // It names the file, which the alert deliberately does not: the alert
+    // keeps only the extension (`loader/unrecognizedFormat.js`), so the name
+    // stays out of the Sentry event's title, grouping and tags, and out of GA.
+    // It does still reach Sentry through this line: the default breadcrumbs
+    // integration records console output, so the event AlertDialog captures
+    // carries it as a console breadcrumb. At WARN, the level prod logs at; a
+    // bare `debug()` is INFO and prints nothing there.
     debug(WARN).warn(
       `handleFileDrop: "${uploadedFile.name}" (${uploadedFile.size} bytes) is not a recognized model format`)
-    trackAlert(message)
-    setAlert(message)
+    setAlert(unrecognizedFormatAlert(message, uploadedFile.name, 'drop'))
     if (onError) {
       onError(message)
     }

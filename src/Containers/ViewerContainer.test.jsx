@@ -149,9 +149,11 @@ describe('ViewerContainer', () => {
 
     dropzone.dispatchEvent(mockEvent)
     await waitFor(() => {
-      expect(mockSetAlert).toHaveBeenCalledWith(
-        `File upload of unknown type: type(${file.type}) size(${file.size})`,
-      )
+      expect(mockSetAlert).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'unrecognizedFormat',
+        message: `File upload of unknown type: type(${file.type}) size(${file.size})`,
+        ext: 'abc',
+      }))
     })
   })
 

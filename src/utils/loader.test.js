@@ -169,7 +169,14 @@ describe('loadLocalFile', () => {
     inputElement.dispatchEvent(new Event('change', {bubbles: true}))
     await flushPick()
 
-    expect(onError).toHaveBeenCalledWith(expect.stringContaining('Cannot extract filetype'))
+    // An alert object, so AlertDialog can count it as one info issue; the
+    // name stays in the dialog's text and out of the tag.
+    expect(onError).toHaveBeenCalledWith({
+      type: 'unrecognizedFormat',
+      message: 'Cannot extract filetype from filename: mystery',
+      ext: 'none',
+      entry: 'picker',
+    })
     expect(opfsWriteModel).not.toHaveBeenCalled()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('testId')
   })
@@ -207,7 +214,7 @@ describe('loadLocalFile', () => {
     inputElement.dispatchEvent(new Event('change', {bubbles: true}))
     await flushPick()
 
-    expect(onError).toHaveBeenCalledWith(expect.stringContaining('Cannot extract filetype'))
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({type: 'unrecognizedFormat', entry: 'picker'}))
     expect(onLoad).not.toHaveBeenCalled()
   })
 
