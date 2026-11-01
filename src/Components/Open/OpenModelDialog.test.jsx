@@ -221,11 +221,16 @@ describe('OpenModelDialog — GitHub tab', () => {
       expect(screen.getByTestId('button-github-account-settings')).toBeInTheDocument()
     })
 
-    it('Remove menu item calls logout', () => {
+    // Share#1923: GitHub is the Auth0 identity, so Remove is a full sign-out
+    // through /v2/logout, like Profile → Log out. `toHaveBeenCalledWith` on
+    // the whole options object, so an `openUrl` (false skips the /v2/logout
+    // visit, a function replaces it) fails this too.
+    it('Remove menu item signs out through /v2/logout back to the origin', () => {
       renderGithubTab(true)
       fireEvent.click(screen.getByTestId('button-github-account-settings'))
       fireEvent.click(screen.getByTestId('menu-item-github-remove'))
-      expect(mockLogout).toHaveBeenCalledWith({openUrl: false})
+      expect(mockLogout).toHaveBeenCalledTimes(1)
+      expect(mockLogout).toHaveBeenCalledWith({logoutParams: {returnTo: window.location.origin}})
     })
   })
 })

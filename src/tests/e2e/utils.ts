@@ -1,4 +1,4 @@
-import {BrowserContext, Page, Request, Response, Route, expect} from '@playwright/test'
+import {BrowserContext, Page, Request, Response, Route, expect, test} from '@playwright/test'
 import {readFile} from 'fs/promises'
 import {resolve} from 'path'
 import {isBlockedRealNetworkHost} from './networkGuard'
@@ -621,10 +621,33 @@ export async function setupAuthenticationIntercepts(
   // Route patterns: catch both HTTP(s) and any host
   const AUTHORIZE = /\/authorize(\?|$)/
   const TOKEN = /\/oauth\/token(\?|$)/
+  const LOGOUT = /\/v2\/logout(\?|$)/
 
   // Unroute existing handlers first to avoid conflicts
   await context.unroute(AUTHORIZE)
   await context.unroute(TOKEN)
+  await context.unroute(LOGOUT)
+
+  // Auth0's /v2/logout, which the mock provider navigates to the way the real
+  // SDK does (src/Auth0/mockLogout.js; Share#1923). Answered the way Auth0
+  // answers it, with the app's own origin as the one Allowed Logout URL: a
+  // listed `returnTo` is redirected to, an unlisted one gets an error page
+  // instead of a way back, and none at all falls back to the first listed
+  // URL. Specs that care what was sent assert on the request itself.
+  const allowedLogoutUrl = new URL(test.info().project.use.baseURL as string).origin
+  await context.route(LOGOUT, async (route: Route) => {
+    const returnTo = new URL(route.request().url()).searchParams.get('returnTo')
+    if (returnTo !== null && returnTo !== allowedLogoutUrl) {
+      await route.fulfill({
+        status: HTTP_BAD_REQUEST,
+        contentType: 'text/html; charset=utf-8',
+        body: `<!DOCTYPE html><title>Logout error</title><p data-testid="auth0-logout-error">returnTo ${returnTo} is not ` +
+          'in Allowed Logout URLs</p>',
+      })
+      return
+    }
+    await route.fulfill({status: HTTP_FOUND, headers: {location: returnTo ?? allowedLogoutUrl}})
+  })
 
   // Seed contextState with the caller-declared connection. The /authorize
   // handler below may override it with whatever Auth0 actually sends on the
@@ -798,4 +821,6 @@ function base64url(obj: unknown): string {
 
 const DEFAULT_PORT = 8080
 const HTTP_OK = 200
+const HTTP_FOUND = 302
+const HTTP_BAD_REQUEST = 400
 export const LONG_TEST_TIMEOUT_SECONDS = 60_000

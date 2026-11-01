@@ -1,6 +1,7 @@
 import React, {useState} from 'react'
 import {Auth0Provider as OriginalAuth0Provider} from '@auth0/auth0-react'
 import {MockAuth0Context, mockGitHubUser, mockGoogleUser} from './Auth0Proxy'
+import {mockLogout} from './mockLogout'
 
 
 const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
@@ -117,14 +118,20 @@ export const Auth0Provider = ({children, onRedirectCallback, ...props}) => {
     })
   }
 
-  const logout = () => {
-    localStorage.removeItem(MOCK_AUTH_KEY)
-    setState({
+  // Honours the options the way the real SDK does: navigates to /v2/logout
+  // unless `openUrl` says otherwise, and signs out in place only when it does
+  // (mockLogout.js). The specs answer that navigation with
+  // setupAuthenticationIntercepts' /v2/logout route.
+  const logout = (options) => mockLogout(options, {
+    domain: process.env.AUTH0_DOMAIN,
+    clientId: OAUTH_2_CLIENT_ID,
+    clearSession: () => localStorage.removeItem(MOCK_AUTH_KEY),
+    dispatchLogout: () => setState({
       isAuthenticated: false,
       user: null,
       token: '',
-    })
-  }
+    }),
+  })
 
   const providerValue = {
     ...state,
