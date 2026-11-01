@@ -12,29 +12,9 @@ jest.mock('./Loader', () => ({
 }))
 
 
-// TODO: BLDLoader.parse() ends with `debug().trace('returning root:')`
-// at BLDLoader.js:65. The project's `debug()` helper returns `mockLog`
-// whenever the debug level is below the configured threshold, which is
-// the default in production — and mockLog in utils/debug.js does NOT
-// define a `trace` method. So the final log call blows up with
-// "debug(...).trace is not a function" every time BLDLoader finishes
-// parsing a .bld model in prod. This is the only `.trace()` call in
-// the codebase. Fix: either drop the trace line or add a no-op `trace`
-// to mockLog. For now the tests mock `../utils/debug` to a full
-// console-shaped stub so the current behavior can be exercised.
-jest.mock('../utils/debug', () => ({
-  __esModule: true,
-  default: () => ({
-    log: () => {},
-    warn: () => {},
-    error: () => {},
-    time: () => {},
-    timeEnd: () => {},
-    trace: () => {},
-  }),
-  disableDebug: () => {},
-  setDebugLevel: () => {},
-}))
+// No `../utils/debug` mock here on purpose: `parse` runs against the real
+// log stub, which has no `trace` method (#1839) — this suite is what notices
+// if a log call outside `log`/`warn`/`error`/`time`/`timeEnd` creeps back in.
 
 
 /**

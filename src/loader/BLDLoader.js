@@ -68,7 +68,7 @@ export default class BLDLoader {
         subModel.scale.setScalar(model.objScale)
       }
     }
-    debug().trace('returning root:')
+    debug().log('BLDLoader#parse: returning root:', root)
     return root
   }
 }
