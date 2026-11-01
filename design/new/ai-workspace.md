@@ -3,7 +3,9 @@
 **Status:** v0.3 draft (2026-10-06; §12 rewritten after Jev research; D7
 confirmed by spike #1927; D3 allowlist, free list and D14 calibration
 set by eval #1929; D15 repo plan, use-case map and Assist API surface
-added). Story
+added; amended 2026-11-01 to place the document session in D15, add the
+`model.*` namespace and fix the op-log write path, after the
+[MVC-core review](reviews/2026-10-29-mvc-core-review_grok-4.7.md)). Story
 [#1671](https://github.com/bldrs-ai/Share/issues/1671) under epic `assist-310`
 [#1659](https://github.com/bldrs-ai/Share/issues/1659). Roadmap §7.4 AI.0,
 Tracks T10 and T11.
@@ -65,16 +67,16 @@ generative-CAD engine, §11). Most of them are Assist.
 | Use case | Runs where | Needs |
 |---|---|---|
 | A1 FAQs, contact bizdev | Assist (no model needed) | `knowledge.docs.search` + a `bizdev.contact` tool |
-| A2.1–2 select/explode/highlight prefab from supplier X; note anything not in the BOM | Assist, in browser | `view.*` tools, `notes.*`, project knowledge |
+| A2.1–2 select/explode/highlight prefab from supplier X; note anything not in the BOM | Assist, in browser | `model.*` and `view.*` tools, `notes.*`, project knowledge |
 | A2.3–4 share a view link; mark as ordered, open a PR, send to accounting for review | Assist, in browser | `share.*` (permalink, versions/PR) + `collab.*` (request review) |
-| B1.1–2 model provenance (created when/by whom/last edits), ontology & stats (window system, window count on level 2) | Assist, in browser | the same `view.*` query tools as A2.1 |
+| B1.1–2 model provenance (created when/by whom/last edits), ontology & stats (window system, window count on level 2) | Assist, in browser | the same `model.*` query tools as A2.1 |
 | B1.3 logistics: part versions, sourcing, product sheets | Assist + server-side tools | `knowledge.web.lookup`, `knowledge.productSheet` |
 | B2 standards/regulations (e.g. Swiss code beam sizing); B3 engineering FAQs | Assist + server-side tools | `knowledge.codes.search` and retrieval over standards/product data |
 | B4 direct text-to-CAD synthesis (iterative, reviewed, buildable assemblies) | **Create**, headless, long-running | its own design→build→verify loop |
 
 **B1–B3 are "Assist with more tools", not Create.** "How many windows on
 level 2" is the same query whether it is framed as analysis or as UI
-control: one `view.query` call, one answer. Create is distinct only for B4,
+control: one `model.query` call, one answer. Create is distinct only for B4,
 because that loop runs for minutes, iterates, checkpoints for review, and
 runs headless (replicad → STEP → conway verify), none of which fits a
 browser chat turn. Worked example: §9 "Worked example".
@@ -98,7 +100,7 @@ browser chat turn. Worked example: §9 "Worked example".
 | D12 | Flag `assist`, with `bot` aliased via `FEATURE_IMPLICATIONS` during the port, then removed | Matches #1659/#1672. Fixes the `convo` drift |
 | D13 | Port `?feature=bot`: keep the tray, slice, bubbles, MSW mocks and network guard. Evolve the client and settings. Delete the eval and the plaintext key | The scope outgrew the prototype, but its UI and test scaffolding are sound |
 | D14 | **DECIDED (product owner, 2026-10-06).** **Jev is the fast intent/command layer: natural language → viewer action, dispatched through the registry, promoted to the LLM agent loop on low confidence, a free-text or numeric argument, or a multi-step utterance.** Through the relay. Router and tool-call gate are follow-on uses. Generative UI is separate and later (declarative renderer) | Jev is a non-generative decision model: ~210 ms and near-free for one-step commands over enumerable arguments, 97% exact first action. Its confidence did not separate its errors (eval #1929), so Undo and the visible "did X" echo are the safety net, not a threshold (§12.1). UI generation needs an LLM and a spec renderer, not Jev |
-| D15 | **Repo structure and dependency direction (§2.1).** Targets: conway, View, Share (app shell, cross-repo E2E), Collab, Assist, Create. **Assist never imports Share, View or Collab**: hosts import Assist and inject tool providers. Built now as a package-shaped `src/assist/` inside Share with an enforced import boundary and its own esbuild entry; extracted to `bldrs-ai/Assist` once #1675 settles | Coupling to live viewer state belongs in the tool implementations, behind JSON-in/JSON-out tools. A boundary enforced from day one makes the later move a `git mv` + `package.json` |
+| D15 | **Repo structure and dependency direction (§2.1).** Targets: conway, View, Share (app shell, cross-repo E2E), Collab, Assist, Create. **Assist never imports Share, View or Collab**: hosts import Assist and inject tool providers. The headless **document session** lives inside Share as a `src/` module and is extracted only once both `CadView` and a CLI call `apply`/`save`. Assist is built now as a package-shaped `src/assist/` inside Share with an enforced import boundary and its own esbuild entry; extracted to `bldrs-ai/Assist` once #1675 settles | Coupling to live viewer state belongs in the tool implementations, behind JSON-in/JSON-out tools. A boundary enforced from day one makes the later move a `git mv` + `package.json` |
 
 
 ### 2.1 D15 — Repo structure and dependency direction
@@ -108,8 +110,9 @@ browser chat turn. Worked example: §9 "Worked example".
 | Repo | Role |
 |---|---|
 | conway | Engine (IFC/STEP parse, geometry). Exists |
-| **View** | Viewer library plus the `view.*` tool provider. Extracted from Share's `src/viewer` + `src/loader` (~77k of Share's ~191k src LOC), as its own epic **after Assist v0**, starting with a coupling spike: zustand store, MUI, `CadView` |
-| **Share** | App shell: routing, auth, sources, billing, sharing, the Netlify functions host. **Home of cross-repo E2E** |
+| **View** | Viewer library plus the `view.*` tool provider. The web projection of the document, not the document itself: `src/loader` + `src/viewer` are one pipeline (review §3), so they extract together. Extracted from Share's `src/viewer` + `src/loader` (~77k of Share's ~191k src LOC), as its own epic **after Assist v0**, starting with a coupling spike: zustand store, MUI, `CadView` |
+| **Share** | App shell: routing, auth, sources, billing, sharing, the Netlify functions host. **Home of cross-repo E2E**, and for now of the document session below |
+| **Document session** | The headless document: open a file over Conway, answer `list` / `get` / `select` by `e` / `o` / `n` / `g` ref ([model-edit.md](model-edit.md) §5), take the op log ([model-edit.md](model-edit.md) L1) as the only write API, and `save` to `*.ops.jsonl` + `manifest.json`. No Three, no Zustand. **Not a repo yet:** a `src/` module in Share, extracted only once both `CadView` and a CLI call `apply`/`save` ([MVC-core review](reviews/2026-10-29-mvc-core-review_grok-4.7.md) §7 and §8; [workspace-store.md](workspace-store.md) §3). Where it goes after extraction is undecided (review §8) |
 | **Collab** | Exists: threads, permissions, persistence/ChannelProvider. Assist conversations go through a Collab conversation-store interface (local implementation first), which supersedes D10's storage location |
 | **Assist** | Agent core, tray UI package, relay handler, knowledge tools |
 | **Create** | Exists: synthesis engine, tool server, and its own long-running agent loop built on Assist's core |
@@ -118,6 +121,19 @@ browser chat turn. Worked example: §9 "Worked example".
 import Assist and inject tool providers (§9). The tight coupling to live
 viewer state lives entirely in the tool implementations (Share now, View
 later), behind JSON-in/JSON-out tools.
+
+The document session sits below all three. It never imports Three, View or
+Assist. View subscribes to it: document ops project into the canvas through
+`batchedEdit` (review §7.2, "View apply"). Assist reaches it only through
+an injected tool provider, like every other host.
+
+**Write path.** `create-310` model-edit tools append ops to the session's
+op log ([model-edit.md](model-edit.md) L1). They never call `batchedEdit`
+directly: that is the canvas's apply path, reached as a subscriber to the
+log. The prerequisite for any model-mutating tool is the L1 op log (review
+§7.5 step 1), ideally the read-only session too (step 2). Notes, versions
+and PR tools are `mutatesDocument` but do not touch the model, so they are
+unaffected.
 
 **Assist ↔ Create is loose.** Assist hands B4 (§1.1) to Create as tools:
 `create.design(intent, context) → job`, `create.job.status`,
@@ -140,6 +156,7 @@ a `git mv` + `package.json`.
 | Change | Lands in |
 |---|---|
 | Add or adjust a viewer tool | Share only (View later) |
+| Read or write the document with no view (CLI, MCP) | The document session (Share `src/` for now) |
 | Prompting, loop, providers, Jev, credits | Assist only |
 | Tray look | Assist (the host passes its theme) |
 | Change the `Tool` / `ToolResult` contract | Both (small, versioned, rare) |
@@ -911,7 +928,7 @@ context sources and a conversation store:
 ```ts
 const assist = createAssist({
   transport: hosted({ relayUrl, getToken }) | byok({ provider, keyStore }),
-  providers: [viewTools, shareTools, notesTools, collabTools, knowledgeTools, createTools],
+  providers: [modelTools, viewTools, shareTools, notesTools, collabTools, knowledgeTools, createTools],
   context:   [viewContext, projectContext],
   store:     conversationStore,          // Collab interface; local implementation first
   intent:    jev({ threshold }),         // optional fast path (D14)
@@ -945,15 +962,28 @@ session.abort(); session.undo(stepId)
 
 | Namespace | Owner | Tools |
 |---|---|---|
-| `view.*` | Share (→ View) | query, properties, select, isolate, hide, showAll, focus (#1946); later: show, explode, highlight, cutPlane, display |
+| `model.*` | Share, backed by the view today (→ the document session, §2.1) | query, properties (shipped in #1946 as `view.query` / `view.properties`); later: document writes through the op log (`create-310`) |
+| `view.*` | Share (→ View) | select, isolate, hide, showAll, focus (#1946); later: show, explode, highlight, cutPlane, display, screenshot |
 | `notes.*`, `share.*` | Share | notes.add, share.permalink, versions.commit / versions.pr |
 | `collab.*` | Collab | post, requestReview |
 | `knowledge.*` | Assist, server-side | docs.search, web.lookup, productSheet, codes.search |
 | `create.*` | Create | design, job.status, job.review |
 | `bizdev.contact` | Share | one tool |
 
+**`model.*` versus `view.*`.** The prefix names the provider that answers,
+because the registry requires `<provider id>.<verb>`. It does not name the
+access mode: the `readOnly` / `viewState` / `mutatesDocument` annotations
+drive approval policy (above), so `model.*` can later hold document writes
+with no rename. `model.query` and `model.properties` read the document's
+elements by ref. Today Share answers them from the view (NavTree,
+`SearchIndex`, `getItemProperties`). Once the document session exists
+(§2.1) they are re-pointed at it with the same names and result shapes, and
+they are available headless (CLI, MCP), where no view exists. `view.*` stays
+the canvas. #1946 shipped the two reads as `view.query` / `view.properties`;
+the rename to `model.*` follows on bldrs-ai/Share#1946.
+
 **Worked example (use case A2.1).** "Show me the supplier X prefab":
-`view.query{IfcWindow, level 2}` → `view.select` → `view.explode` →
+`model.query{IfcWindow, level 2}` → `view.select` → `view.explode` →
 `knowledge.project("supplier X prefab")` → `view.highlight(refs)`. Every
 call is `readOnly` or `viewState`, so there are no prompts and each step is
 undoable. A2.4 ("mark as ordered, open a PR, send to accounting") ends in
@@ -987,12 +1017,12 @@ and "the user clicked it" are the same navigation.
 **v0 tools (read/annotate; #1674),** in the namespaced form. Annotation
 column: R = `readOnly`, V = `viewState`, P = `sendsPixels`.
 
-The v0 slice is implemented in #1946 (`src/viewer/tools/`, `src/assist/`); the names below are the ones it ships.
+The v0 slice is implemented in #1946 (`src/viewer/tools/`, `src/assist/`). The names below are the ones it ships, except `model.query` and `model.properties`, which #1946 ships as `view.query` / `view.properties` until the rename lands (namespaces above).
 
 | Tool | Ann. | Does | Backing seam |
 |---|---|---|---|
-| `view.query` | R | Optional `ifcType`, `level`, `name` and `text` filters, to refs + names. ≤200 refs, with `total` and `truncated`. Every filter is optional (below) | `SearchIndex.search:138` |
-| `view.properties` | R | Attributes and psets for ≤20 refs | `getItemProperties:129`, `getPropertySets:140`, `ShareViewer.getProperties:836` |
+| `model.query` | R | Optional `ifcType`, `level`, `name` and `text` filters, to refs + names. ≤200 refs, with `total` and `truncated`. Every filter is optional (below) | `SearchIndex.search:138` |
+| `model.properties` | R | Attributes and psets for ≤20 refs | `getItemProperties:129`, `getPropertySets:140`, `ShareViewer.getProperties:836` |
 | `view.select` | V | Select refs (replace, add, or clear) | exposed `selectItemsInScene` |
 | `view.isolate` / `view.hide` / `view.showAll` | V | Visibility by refs, IFC ids or STEP occurrences; `showAll` unhides everything | `IfcIsolator.isolateElementsById:1591`, `hideElementsById:1295`, `unHideAllElements:1379`, `hideOccurrences:848`, `isolateOccurrences:1551` |
 | `view.focus` | V | Frame refs, or the whole model when `refs` is omitted; returns center and radius | `Selector.pickByIds(…, focus)`, `fitToFrame` (`context/context.js:215`), `setCameraFromParams` (`CameraControl.jsx:123`) |
@@ -1011,7 +1041,7 @@ later providers (§14), each behind its approval annotation.
 
 **What eval #1929 says about the tool surface** (eval #1929, 2026-10-06):
 
-- **`view.query`'s text filter optional**, now `text` in #1946 with every filter optional (eval #1929 called the tool `search_elements`). A required `query` caused most
+- **`model.query`'s text filter optional**, now `text` in #1946 with every filter optional (eval #1929 called the tool `search_elements`). A required `query` caused most
   schema-invalid calls (deepseek, gemini-2.5-flash-lite) and sank
   flash-lite to 44%. Re-run with it optional, gpt-5-nano went to 12/12.
   Every model that omitted it was punished for something the description
@@ -1046,7 +1076,8 @@ later providers (§14), each behind its approval annotation.
   so they go through an approval card, because they post to GitHub as the
   user.
 - **Model-edit tools are `create-310`**, through the op log with
-  preview-before-apply.
+  preview-before-apply. They append ops to the document session's op log
+  and never call `batchedEdit` directly (§2.1, "Write path").
 
 
 ## 10. D9 + D10 — Sovereignty boundary and conversation store
@@ -1151,7 +1182,7 @@ Assist, never the reverse, and owns and versions its own tool schemas.
 - **Share → Create:** `{intent, context}`. The context carries the selected
   element refs (§9), model units and up axis, a placement frame (an origin
   and axes from the selection or a pick), relevant dimensions from
-  `view.properties`, and constraints ("fits the opening `e123`").
+  `model.properties`, and constraints ("fits the opening `e123`").
 - **Create → Share:** `{artifact: STEP bytes or a ref, params, provenance:
   {kernelVersion, paramsHash, checks: {bbox, volume, closed}}, preview?}`.
 - **Landing.** The artifact enters as `create-320` `create` ops in the
@@ -1404,7 +1435,7 @@ Dependencies are in brackets.
 | #1671 | this doc | AI.0 decisions | — |
 | #1672 | tray UI + drawer threads | Tray, threads, local JSONL log (D10). Introduces the `assist` flag + `bot` alias (D12) and renames the Bot components (D13 keep rows) | — |
 | #1673 | message anchors + element chips | Chips over permalink refs | #1672 |
-| #1674 | viewer tool surface v0 | Tool contract (`src/assist/types`), registry + annotation-driven policy, `src/assist/` package boundary (lint rule + separate esbuild entry), expose `selectItemsInScene`, v0 `view.*` tools + `share.permalink`, dev hook for E2E (§2.1, §9) | — |
+| #1674 | viewer tool surface v0 | Tool contract (`src/assist/types`), registry + annotation-driven policy, `src/assist/` package boundary (lint rule + separate esbuild entry), expose `selectItemsInScene`, v0 `model.*` / `view.*` tools + `share.permalink`, dev hook for E2E (§2.1, §9) | — |
 | #1675 | agent loop v0 + streaming | AI SDK loop over the registry, on the pinned set in §9. Deletes the eval path. Ships first on BYOK. **Build requirement (§9 Amendment 1):** `tools/esbuild/common.js:71` has `splitting: false`, so a dynamic `import()` is inlined (+196 KB gz on cold load). Ship assist as a separate entry like `proModules.js`, or enable splitting. Verify with a cold-load size check. Also: pin `.chat()`/`.responses()` for OpenAI, pass the Anthropic header, system prompt via `instructions` (§8, §9) | #1674, #1927 (done), #1930 |
 | #1676 | W7 reduced tool set | unchanged, droppable | #1672 |
 | #1677 | large-model fixture + E2E | unchanged | #1675 |
@@ -1489,6 +1520,8 @@ because it rides the quota and billing rails.
 - **Notes vs channels; shared conversation store** (`assist-400`, T10).
   ChannelProvider, and workspace-store.md's record/stream split.
 - **Write tools** (`create-310`). Permissioning and preview-before-apply
-  (model-edit.md §9).
+  (model-edit.md §9). They append to the document session's op log, never
+  call `batchedEdit` (§2.1, "Write path"), and wait on the L1 op log (review
+  §7.5 step 1).
 - **Local models** (Ollama, LM Studio at `http://localhost`). Fit the BYOK
   shape, but need CSP and mixed-content thought. Not requested.
