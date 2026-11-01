@@ -1,7 +1,9 @@
 import {DecompressionStream as NodeDecompressionStream} from 'node:stream/web'
 import {gzipSync} from 'node:zlib'
+import {zipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {initializeWorker, opfsWriteModel} from '../OPFS/OPFSService.js'
 import {getInMemoryUpload} from '../loader/inMemoryUploads'
+import {ARCHIVE_ENTRY_CHOICE} from '../loader/modelArchive'
 import {loadLocalFile} from './loader'
 
 
@@ -222,5 +224,81 @@ describe('loadLocalFile', () => {
     loadLocalFile(jest.fn(), false, true)
     const inputElement = document.querySelector('input[type="file"]')
     expect(inputElement).toBeNull()
+  })
+})
+
+
+// Share#2006: a picked zip opens the model inside it (loader/modelArchive.js).
+describe('loadLocalFile — archives', () => {
+  // UTF-8 in this realm's Uint8Array: fflate tells files from folders by
+  // `instanceof`, and TextEncoder's arrays are Node's under jest-fixed-jsdom.
+  const utf8 = (text) => new Uint8Array(new TextEncoder().encode(text))
+  const IFC = utf8('ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'IFC4\'));\nENDSEC;\n')
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    document.body.innerHTML = `<div id="viewer-container"></div>`
+    URL.createObjectURL = jest.fn(() => 'testId')
+    URL.revokeObjectURL = jest.fn()
+  })
+
+  /**
+   * @param {Blob} picked
+   * @param {Function} [onError]
+   * @param {object} [options] loadLocalFile's
+   */
+  async function pick(picked, onError = jest.fn(), options = {}) {
+    loadLocalFile(jest.fn(), true, false, onError, options)
+    const inputElement = document.querySelector('input[type="file"]')
+    Object.defineProperty(inputElement, 'files', {value: [picked]})
+    inputElement.dispatchEvent(new Event('change', {bubbles: true}))
+    await flushPick()
+  }
+
+  it('stores the one model in a picked zip under its own name and type', async () => {
+    const zip = zipSync({'export/Tower.ifc': IFC, 'export/notes.pdf': utf8('%PDF')})
+    await pick(pickedFile(zip, 'Tower ifc.zip'))
+    // Storage `<blob-uuid>.ifc`, and the ENTRY's name for recents and the
+    // load report: the user opened Tower.ifc, not the zip.
+    expect(opfsWriteModel).toHaveBeenCalledWith('testId', 'Tower.ifc', 'testId.ifc', 7)
+    const written = URL.createObjectURL.mock.calls[0][0]
+    expect(written.size).toBe(IFC.length)
+  })
+
+  it('opens a picked .ifczip as the .ifc inside it', async () => {
+    await pick(pickedFile(zipSync({'Tower.ifc': IFC}), 'Tower.ifczip'))
+    expect(opfsWriteModel).toHaveBeenCalledWith('testId', 'Tower.ifc', 'testId.ifc', 7)
+  })
+
+  it('asks which model when there are several, and stores the one chosen', async () => {
+    const onError = jest.fn()
+    const zip = zipSync({'Tower.ifc': IFC, 'Bracket.stp': utf8('ISO-10303-21;\nHEADER;\nENDSEC;\n')})
+    await pick(pickedFile(zip, 'models.zip'), onError)
+    expect(opfsWriteModel).not.toHaveBeenCalled()
+    const [choice] = onError.mock.calls[0]
+    expect(choice.type).toBe(ARCHIVE_ENTRY_CHOICE)
+    expect(choice.entries.map((e) => e.name)).toEqual(['Tower.ifc', 'Bracket.stp'])
+    await choice.onChoose(choice.entries[1])
+    expect(opfsWriteModel).toHaveBeenCalledWith('testId', 'Bracket.stp', 'testId.stp', 7)
+  })
+
+  it('says what a picked zip holds when it holds no model', async () => {
+    const onError = jest.fn()
+    await pick(pickedFile(zipSync({'plan.pdf': utf8('%PDF')}), 'plans.zip'), onError)
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'unrecognizedFormat', ext: 'zip', entry: 'picker', archive: {exts: ['pdf']},
+    }))
+    expect(opfsWriteModel).not.toHaveBeenCalled()
+  })
+
+  it('holds the model from a zip in memory without OPFS', async () => {
+    const onLoad = jest.fn()
+    loadLocalFile(onLoad, true, false, null, {inMemory: true})
+    const inputElement = document.querySelector('input[type="file"]')
+    Object.defineProperty(inputElement, 'files', {value: [pickedFile(zipSync({'Tower.ifc': IFC}), 'Tower.zip')]})
+    inputElement.dispatchEvent(new Event('change', {bubbles: true}))
+    await flushPick()
+    expect(onLoad).toHaveBeenCalledWith(expect.stringMatching(/\.ifc$/), PICKED_AT, 'Tower.ifc')
+    expect(getInMemoryUpload(onLoad.mock.calls[0][0]).name).toBe('Tower.ifc')
   })
 })

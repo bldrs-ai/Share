@@ -2,12 +2,14 @@ import React, {ReactElement, useEffect, useRef} from 'react'
 import {Link} from '@mui/material'
 import {ErrorOutline as ErrorOutlineIcon, InfoOutlined as InfoOutlinedIcon} from '@mui/icons-material'
 import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
-import {formatGuidance} from '../loader/formatGuidance'
+import {archiveGuidance, formatGuidance} from '../loader/formatGuidance'
+import {ARCHIVE_ENTRY_CHOICE} from '../loader/modelArchive'
 import {NotFoundError} from '../loader/Loader'
 import {UNRECOGNIZED_FORMAT_ALERT_EVENT, reportUnrecognizedFormat} from '../loader/unrecognizedFormat'
 import {getProvider} from '../connections/registry'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
+import ArchiveEntryChoice from './ArchiveEntryChoice'
 import Dialog from './Dialog'
 
 
@@ -47,6 +49,11 @@ export default function AlertDialog({onClose}) {
       return
     }
     if (typeof alert !== 'object') {
+      return
+    }
+    if (alert.type === ARCHIVE_ENTRY_CHOICE) {
+      // A question, not a failure: nothing to count. Its entry names are the
+      // user's file names, which must not reach Sentry or GA anyway.
       return
     }
     if (alert.type === 'engineFailure') {
@@ -94,12 +101,17 @@ export default function AlertDialog({onClose}) {
   const isInMemoryUploadGone = alert && typeof alert === 'object' && alert.type === 'inMemoryUploadGone'
   const isUploadNotInBrowser = alert && typeof alert === 'object' && alert.type === 'uploadNotInBrowser'
   const isNoGeometry = alert && typeof alert === 'object' && alert.type === 'noGeometry'
+  const isEntryChoice = alert && typeof alert === 'object' && alert.type === ARCHIVE_ENTRY_CHOICE
   // A rejected file whose extension we can say something useful about: a
   // Revit project, a SolidWorks part, a PDF (loader/formatGuidance.js). Only
   // the header and body change; it is still an unrecognizedFormat alert, so
   // the effect above reports it exactly as it does every other rejection.
+  //
+  // A zip Share looked inside and couldn't open (loader/modelArchive.js)
+  // carries `archive`, what it holds or why it can't be read. The file's own
+  // extension still wins: a .docx is a zip, and NOT_A_MODEL says it better.
   const guidance = alert && typeof alert === 'object' && alert.type === 'unrecognizedFormat' ?
-    formatGuidance(alert.ext) : null
+    (formatGuidance(alert.ext) ?? (alert.archive ? archiveGuidance(alert.archive) : null)) : null
   const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
 
   const refresh = () => {
@@ -165,6 +177,10 @@ export default function AlertDialog({onClose}) {
   } else if (isNoGeometry) {
     actionCb = dismiss
     actionTitle = 'OK'
+  } else if (isEntryChoice) {
+    // The rows are the actions; the close button is the way out.
+    actionCb = undefined
+    actionTitle = undefined
   } else {
     actionCb = onCloseInner
     actionTitle = 'Reset'
@@ -183,6 +199,8 @@ export default function AlertDialog({onClose}) {
     headerText = 'File not in this browser'
   } else if (isNoGeometry) {
     headerText = 'No 3D geometry'
+  } else if (isEntryChoice) {
+    headerText = 'Choose a model'
   } else if (guidance) {
     headerText = guidance.header
   } else {
@@ -195,19 +213,32 @@ export default function AlertDialog({onClose}) {
   // so there is nothing for support to diagnose. A guided format is the same:
   // the guidance, and its help link, is the help.
   const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema && !isInMemoryUploadGone &&
-    !isUploadNotInBrowser && !isNoGeometry && !guidance
+    !isUploadNotInBrowser && !isNoGeometry && !guidance && !isEntryChoice
+  // Choosing finishes the drop or pick that raised the chooser, from inside
+  // this click; closing leaves whatever model is open, as the user had it.
+  const chooseEntry = (entry) => {
+    const onChoose = alert.onChoose
+    setAlert(null)
+    Promise.resolve(onChoose(entry)).catch((e) => setAlert(e))
+  }
   return (
     <Dialog
       headerText={headerText}
       isDialogDisplayed={alert !== null}
-      setIsDialogDisplayed={isNoGeometry ? dismiss : onCloseInner}
+      setIsDialogDisplayed={isNoGeometry || isEntryChoice ? dismiss : onCloseInner}
       actionCb={actionCb}
-      headerIcon={isNoGeometry ?
+      headerIcon={isNoGeometry || isEntryChoice ?
         <InfoOutlinedIcon className='icon-share'/> :
         <ErrorOutlineIcon className='icon-share'/>}
       actionTitle={actionTitle}
     >
-      {guidance ? <FormatGuidanceReport guidance={guidance}/> : (
+      {isEntryChoice ? (
+        <ArchiveEntryChoice
+          entries={alert.entries}
+          revitTextSiblings={alert.revitTextSiblings}
+          onChoose={chooseEntry}
+        />
+      ) : guidance ? <FormatGuidanceReport guidance={guidance}/> : (
         <p>
           {createAlertReport(alert)}<br/>
           {showHelpFooter && (

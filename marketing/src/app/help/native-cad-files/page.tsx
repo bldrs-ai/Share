@@ -76,7 +76,7 @@ export default function NativeCadFilesPage() {
           <Bullets>
             <Item><strong>IFC version:</strong> IFC4 Reference View. Use IFC 2x3 Coordination
               View 2.0 if the people you share with need IFC 2x3.</Item>
-            <Item><strong>File type:</strong> IFC. Not IFC XML, and not zipped.</Item>
+            <Item><strong>File type:</strong> IFC, or Zipped IFC (.ifczip). Not IFC XML.</Item>
             <Item><strong>Export only elements visible in view:</strong> on, so the file
               holds what the 3D view shows and no more.</Item>
           </Bullets>
@@ -114,7 +114,7 @@ export default function NativeCadFilesPage() {
 
       <Section id="supported-formats">What Share opens</Section>
       <Bullets>
-        <Item><strong>BIM:</strong> IFC (.ifc)</Item>
+        <Item><strong>BIM:</strong> IFC (.ifc), and zipped IFC (.ifczip)</Item>
         <Item><strong>CAD:</strong> STEP (.step, .stp)</Item>
         <Item><strong>Meshes:</strong> glTF (.gltf, .glb), OBJ (.obj), STL (.stl),
           FBX (.fbx), PLY (.ply), USD (.usd, .usda, .usdc, .usdz)</Item>
@@ -123,7 +123,9 @@ export default function NativeCadFilesPage() {
         <Item><strong>Other:</strong> molecules (.pdb), Align dental scans (.adf)</Item>
       </Bullets>
       <Typography variant="body1">
-        A gzipped copy of any of these, such as model.glb.gz, opens too.{' '}
+        A gzipped copy of any of these, such as model.glb.gz, opens too, and so
+        does a .zip with one inside: Share opens the model, or asks which one when
+        there are several.{' '}
         <MuiLink href="/">Open Share</MuiLink>.
       </Typography>
     </PageShell>

@@ -3,6 +3,7 @@ import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {forgetInMemoryUpload, registerInMemoryUpload} from '../loader/inMemoryUploads'
+import {openUploadThroughArchive} from '../loader/modelArchive'
 import {unrecognizedFormatAlert} from '../loader/unrecognizedFormat'
 import {localOnlyPath} from '../routes/localOnly'
 import {disablePageReloadApprovalCheck} from './event'
@@ -20,7 +21,12 @@ import debug, {WARN} from './debug'
  *   while the startup probe is still running, in which case it is asked here
  * @param {Function} setAlert Function to set alert messages
  * @param {Function} [onSuccess] Optional callback when file is successfully processed
- * @param {Function} [onError] Optional callback when an error occurs
+ * @param {Function} [onError] Optional callback when an error occurs — and
+ *   also when a zip with several models hands the drop to the entry chooser
+ *   (`loader/modelArchive.js`). Either way the drop ends here with a dialog
+ *   up, and the caller's cue is the same: get out of the dialog's way (the
+ *   onboarding overlay sits above MUI's modal layer). A choice made later
+ *   finishes the drop from the chooser, through `onSuccess` or `onError`.
  * @param {{record: Function, onExceeded: Function}} [quotaOptions]
  *   Optional quota integration: records the load key via record() once the
  *   file is stored, and calls onExceeded instead of navigating if refused.
@@ -73,9 +79,9 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
   // describe the model rather than its transport encoding
   // (`loader/gzipEnvelope.js`). Anything that isn't a gzip envelope around a
   // model comes back as-is, `.spz` included.
-  let uploadedFile
+  let unwrapped
   try {
-    uploadedFile = await inflateIfGzipEnvelope(dropped)
+    unwrapped = await inflateIfGzipEnvelope(dropped)
   } catch (e) {
     const message = e.message
     setAlert(message)
@@ -84,90 +90,114 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     }
     return
   }
-  const type = await guessTypeFromFile(uploadedFile)
-  if (type === null) {
-    const message = `File upload of unknown type: type(${uploadedFile.type}) size(${uploadedFile.size})`
-    // The alert is the user's signal; this is the console's, which had none —
-    // a rejected drop left nothing to go on when reported (test-models#69).
-    // It names the file, which the alert deliberately does not: the alert
-    // keeps only the extension (`loader/unrecognizedFormat.js`), so the name
-    // stays out of the Sentry event's title, grouping and tags, and out of GA.
-    // It does still reach Sentry through this line: the default breadcrumbs
-    // integration records console output, so the event AlertDialog captures
-    // carries it as a console breadcrumb. At WARN, the level prod logs at; a
-    // bare `debug()` is INFO and prints nothing there.
-    debug(WARN).warn(
-      `handleFileDrop: "${uploadedFile.name}" (${uploadedFile.size} bytes) is not a recognized model format`)
-    setAlert(unrecognizedFormatAlert(message, uploadedFile.name, 'drop'))
-    if (onError) {
-      onError(message)
-    }
-    return
+  // A zip is opened from inside: its one model straight away, a choice of
+  // several through the chooser, or a refusal that says what it holds
+  // (`loader/modelArchive.js`). Anything else goes on to `openDropped`
+  // exactly as it did before, typed by its header alone.
+  const outcome = await openUploadThroughArchive(unwrapped, {
+    entry: 'drop',
+    alert: setAlert,
+    open: openDropped,
+  })
+  if (outcome !== 'opening' && onError) {
+    onError(outcome === 'choosing' ? 'Waiting for a choice of model in the archive' : 'Archive holds no model to open')
   }
 
   /**
-   * @param {string} fileName The OPFS storage id the upload was written
-   *   under (`<blob-uuid>.<ext>`) — the `/v/local-only/` segment the Loader
-   *   resolves, distinct from the user's `uploadedFile.name`.
-   */
-  async function onWritten(fileName) {
-    const key = localOnlyPath(appPrefix, fileName)
-    if (quotaOptions) {
-      const result = await quotaOptions.record(key)
-      if (result && result.allowed === false) {
-        quotaOptions.onExceeded()
-        return
-      }
-    }
-    disablePageReloadApprovalCheck()
-    debug().log('handleFileDrop: navigate to:', fileName)
-    navigateToModel(key, navigate)
-    addRecentFileEntry({
-      id: fileName,
-      source: 'local',
-      name: uploadedFile.name,
-      // Epoch ms, matching RecentFileEntry and RecentFilesList's
-      // `Date.now() - utcMs` arithmetic — an ISO string here rendered
-      // as "NaNm ago" in the Last-modified column (#1682).
-      lastModifiedUtc: uploadedFile.lastModified || null,
-      sharePath: key,
-    })
-    setPendingModelNameUpdate(fileName)
-    if (onSuccess) {
-      onSuccess(fileName)
-    }
-  }
-
-  /**
-   * The no-OPFS path: hold the file in this page's memory and navigate
-   * in-app, since a page load would drop it (`loader/inMemoryUploads.js`).
-   * No local recent: nothing is stored to reopen it from.
+   * The drop's own open of one model file: the dropped file itself, or the
+   * entry taken out of the archive it was.
    *
-   * @param {string} storageId `<uuid>.<ext>`, the in-memory id
+   * @param {File} uploadedFile
+   * @param {string} [entryType] An archive entry's extension, which IS its
+   *   type: the entry was chosen by it. Unset for a file that was dropped as
+   *   itself, which is typed by its bytes alone, as every drop always was.
    */
-  async function onHeldInMemory(storageId) {
-    const key = localOnlyPath(appPrefix, storageId)
-    if (quotaOptions) {
-      const result = await quotaOptions.record(key)
-      if (result && result.allowed === false) {
-        // Registered before the quota could answer (the key names the id),
-        // so drop it: nothing else would (codex review on #1957).
-        forgetInMemoryUpload(storageId)
-        quotaOptions.onExceeded()
-        return
+  async function openDropped(uploadedFile, entryType) {
+    const type = entryType ?? await guessTypeFromFile(uploadedFile)
+    if (type === null) {
+      const message = `File upload of unknown type: type(${uploadedFile.type}) size(${uploadedFile.size})`
+      // The alert is the user's signal; this is the console's, which had none —
+      // a rejected drop left nothing to go on when reported (test-models#69).
+      // It names the file, which the alert deliberately does not: the alert
+      // keeps only the extension (`loader/unrecognizedFormat.js`), so the name
+      // stays out of the Sentry event's title, grouping and tags, and out of GA.
+      // It does still reach Sentry through this line: the default breadcrumbs
+      // integration records console output, so the event AlertDialog captures
+      // carries it as a console breadcrumb. At WARN, the level prod logs at; a
+      // bare `debug()` is INFO and prints nothing there.
+      debug(WARN).warn(
+        `handleFileDrop: "${uploadedFile.name}" (${uploadedFile.size} bytes) is not a recognized model format`)
+      setAlert(unrecognizedFormatAlert(message, uploadedFile.name, 'drop'))
+      if (onError) {
+        onError(message)
+      }
+      return
+    }
+
+    /**
+     * @param {string} fileName The OPFS storage id the upload was written
+     *   under (`<blob-uuid>.<ext>`) — the `/v/local-only/` segment the Loader
+     *   resolves, distinct from the user's `uploadedFile.name`.
+     */
+    async function onWritten(fileName) {
+      const key = localOnlyPath(appPrefix, fileName)
+      if (quotaOptions) {
+        const result = await quotaOptions.record(key)
+        if (result && result.allowed === false) {
+          quotaOptions.onExceeded()
+          return
+        }
+      }
+      disablePageReloadApprovalCheck()
+      debug().log('handleFileDrop: navigate to:', fileName)
+      navigateToModel(key, navigate)
+      addRecentFileEntry({
+        id: fileName,
+        source: 'local',
+        name: uploadedFile.name,
+        // Epoch ms, matching RecentFileEntry and RecentFilesList's
+        // `Date.now() - utcMs` arithmetic — an ISO string here rendered
+        // as "NaNm ago" in the Last-modified column (#1682).
+        lastModifiedUtc: uploadedFile.lastModified || null,
+        sharePath: key,
+      })
+      setPendingModelNameUpdate(fileName)
+      if (onSuccess) {
+        onSuccess(fileName)
       }
     }
-    debug().log('handleFileDrop: navigate in-app to in-memory upload:', storageId)
-    navigateToInMemoryModel(key, navigate)
-    if (onSuccess) {
-      onSuccess(storageId)
-    }
-  }
 
-  if (hasOpfs) {
-    saveDnDFileToOpfs(uploadedFile, type, onWritten)
-  } else {
-    await onHeldInMemory(registerInMemoryUpload(uploadedFile, type))
+    /**
+     * The no-OPFS path: hold the file in this page's memory and navigate
+     * in-app, since a page load would drop it (`loader/inMemoryUploads.js`).
+     * No local recent: nothing is stored to reopen it from.
+     *
+     * @param {string} storageId `<uuid>.<ext>`, the in-memory id
+     */
+    async function onHeldInMemory(storageId) {
+      const key = localOnlyPath(appPrefix, storageId)
+      if (quotaOptions) {
+        const result = await quotaOptions.record(key)
+        if (result && result.allowed === false) {
+          // Registered before the quota could answer (the key names the id),
+          // so drop it: nothing else would (codex review on #1957).
+          forgetInMemoryUpload(storageId)
+          quotaOptions.onExceeded()
+          return
+        }
+      }
+      debug().log('handleFileDrop: navigate in-app to in-memory upload:', storageId)
+      navigateToInMemoryModel(key, navigate)
+      if (onSuccess) {
+        onSuccess(storageId)
+      }
+    }
+
+    if (hasOpfs) {
+      saveDnDFileToOpfs(uploadedFile, type, onWritten)
+    } else {
+      await onHeldInMemory(registerInMemoryUpload(uploadedFile, type))
+    }
   }
 }
 

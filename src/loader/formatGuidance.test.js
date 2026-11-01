@@ -10,6 +10,7 @@ import {
   REVIT,
   SOLIDWORKS,
   TEXT_FILE,
+  archiveGuidance,
   formatGuidance,
   guidedExtensions,
 } from './formatGuidance'
@@ -98,6 +99,46 @@ describe('loader/formatGuidance', () => {
       expect(g.header).toMatch(/\S/)
       expect(g.lines.length).toBeGreaterThanOrEqual(2)
     }
+  })
+
+  // Share#2006: a zip Share looked inside and found no model in.
+  describe('archiveGuidance', () => {
+    it('says what the archive holds, then what Share opens', () => {
+      const guidance = archiveGuidance({exts: ['pdf', 'png']})
+      expect(guidance.header).toBe('No model in this archive')
+      expect(guidance.lines[0]).toBe('This archive has no model Share can open (it contains .pdf and .png).')
+      expect(guidance.lines[1]).toBe(NOT_A_MODEL.lines[1])
+      expect(guidance.help).toBe(NOT_A_MODEL.help)
+    })
+
+    it('counts the rest past six types, and names files with no extension', () => {
+      const exts = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', '']
+      expect(archiveGuidance({exts}).lines[0]).toBe(
+        'This archive has no model Share can open (it contains .a, .b, .c, .d, .e, .f, ' +
+        '2 other file types and files with no extension).')
+      expect(archiveGuidance({exts: ['']}).lines[0]).toBe(
+        'This archive has no model Share can open (it contains files with no extension).')
+    })
+
+    it('gives a zipped native file that format\'s own way out', () => {
+      const guidance = archiveGuidance({exts: ['pdf', 'rvt']})
+      expect(guidance.lines).toEqual([
+        'This archive has no model Share can open (it contains .pdf and .rvt).',
+        REVIT.lines[1],
+      ])
+      expect(guidance.help).toBe(REVIT.help)
+      // The issue's own example: a .dwg is AutoCAD's.
+      expect(archiveGuidance({exts: ['dwg', 'pdf']}).lines).toEqual([
+        'This archive has no model Share can open (it contains .dwg and .pdf).',
+        AUTOCAD.lines[1],
+      ])
+    })
+
+    it('says an empty archive is empty, and passes a reading problem through', () => {
+      expect(archiveGuidance({exts: []})).toEqual({header: 'Empty archive', lines: ['This archive is empty.']})
+      expect(archiveGuidance({problem: 'This archive is password-protected.'})).toEqual(
+        {header: 'Can\'t open this archive', lines: ['This archive is password-protected.']})
+    })
   })
 
   // The links are only as good as the page behind them. The marketing site

@@ -136,9 +136,10 @@ export const TEXT_FILE = Object.freeze({
 
 
 /**
- * Archives Share can't look inside. `.zip` is not here: opening a model
- * inside a zip is Share#2006's to decide, and until then a zip that isn't a
- * USDZ or SOG package gets the generic text.
+ * Archives Share can't look inside. `.zip` is not here, because Share looks
+ * inside a zip (`modelArchive.js`, Share#2006): one that holds a model opens
+ * it, and one that doesn't is described by {@link archiveGuidance} from what
+ * it does hold. `.rar` and `.7z` have no small browser decoder.
  *
  * @type {FormatGuidance}
  */
@@ -169,6 +170,69 @@ const GUIDANCE_BY_EXT = new Map([
   ['txt', TEXT_FILE],
   ['rar', ARCHIVE], ['7z', ARCHIVE],
 ])
+
+
+// Distinct extensions named in the no-model sentence before the rest are
+// counted instead; a WeTransfer bundle can hold dozens.
+const MAX_LISTED_EXTENSIONS = 6
+
+// The native formats whose own "how to export" line beats the generic list
+// when they turn up inside an archive: a zipped .rvt is still a Revit file.
+const NATIVE_CAD_GUIDANCE = new Set([REVIT, AUTOCAD, SOLIDWORKS, CATIA])
+
+
+/**
+ * What to say about a zip Share looked inside and could not open a model
+ * from (`modelArchive.js`). Built from what the archive holds rather than
+ * looked up, so it is not in `GUIDANCE_BY_EXT`; AlertDialog asks for it only
+ * when the file's own extension has no guidance — a `.docx` is a zip, and
+ * "This doesn't look like a 3D model" is the better thing to say about it.
+ *
+ * Extensions only, never entry names: the text is the dialog's, but keeping
+ * names out of it keeps them out of anything that copies the alert.
+ *
+ * @param {object} archive One of the two below
+ * @param {Array<string>} [archive.exts] The distinct extensions of the
+ *   archive's files (`''` for a file with none)
+ * @param {string} [archive.problem] Why the archive could not be read at all
+ *   (a `ZipArchiveError`'s message: password-protected, an unsupported
+ *   compression method, past the size ceiling, damaged)
+ * @return {FormatGuidance}
+ */
+export function archiveGuidance({exts, problem}) {
+  if (problem !== undefined) {
+    return {header: 'Can\'t open this archive', lines: [problem]}
+  }
+  if (exts.length === 0) {
+    return {header: 'Empty archive', lines: ['This archive is empty.']}
+  }
+  const contains = `This archive has no model Share can open (it contains ${describeExtensions(exts)}).`
+  const native = exts.map((ext) => GUIDANCE_BY_EXT.get(ext)).find((g) => NATIVE_CAD_GUIDANCE.has(g))
+  if (native) {
+    // The second line of each native entry is its "what to do instead".
+    return {header: 'No model in this archive', lines: [contains, native.lines[1]], help: native.help}
+  }
+  return {header: 'No model in this archive', lines: [contains, `Share opens ${SUPPORTED_LIST}.`], help: NOT_A_MODEL.help}
+}
+
+
+/**
+ * @param {Array<string>} exts distinct, `''` for no extension
+ * @return {string} e.g. `.dwg, .pdf and files with no extension`
+ */
+function describeExtensions(exts) {
+  const named = exts.filter((ext) => ext !== '').map((ext) => `.${ext}`)
+  const listed = named.slice(0, MAX_LISTED_EXTENSIONS)
+  const more = named.length - listed.length
+  const parts = [...listed]
+  if (more > 0) {
+    parts.push(`${more} other file type${more === 1 ? '' : 's'}`)
+  }
+  if (exts.includes('')) {
+    parts.push('files with no extension')
+  }
+  return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+}
 
 
 /**
