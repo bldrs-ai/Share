@@ -1187,8 +1187,10 @@ Assist, never the reverse, and owns and versions its own tool schemas.
   {kernelVersion, paramsHash, checks: {bbox, volume, closed}}, preview?}`.
 - **Landing.** The artifact enters as `create-320` `create` ops in the
   `create-300` op log ([model-edit.md](model-edit.md) §8,
-  [create-engine.md](create-engine.md)). It gets a minted `g<GlobalId>`,
-  and it is undoable and reviewable like a human edit.
+  [create-engine.md](create-engine.md)), appended through the document
+  session like every other model edit (§2.1 "Write path"); the canvas shows
+  it through `batchedEdit`, which Create never calls. It gets a minted
+  `g<GlobalId>`, and it is undoable and reviewable like a human edit.
 
 **Credits.** Create's LLM usage (its design/self-review loop, like CADAM's,
 create-engine.md §A4) uses Assist core's `Provider` abstraction and the same
@@ -1451,7 +1453,7 @@ Dependencies are in brackets.
 | [#1936](https://github.com/bldrs-ai/Share/issues/1936) | Create seam contract | Interface + doc only (§11), agreed with Create's E1 MCP surface | #1674 |
 | [#1937](https://github.com/bldrs-ai/Share/issues/1937) | assist: Jev intent layer + router (System One decisions) | §12.1. Relay route for the Decisions API, `decide()` client, intent Choice over registry tool names (one-step commands over enumerable arguments only), "did X" tray message with Undo as the safety net, and LLM escalation on low confidence, a free-text or numeric argument, or a multi-step utterance. The Jev-vs-LLM eval is done (#1929: 97% exact, ~210 ms, confidence did not separate errors), so its scope is now **calibration on real user utterances** (shadow mode, per tool family), **out-of-catalogue detection** ("none of these" option or a Noul question), and the CORS spike. Reuses #1929's harness | #1674 (tool registry), #1932 (relay) |
 | [#1938](https://github.com/bldrs-ai/Share/issues/1938) | assist: generative UI — declarative spec renderer (json-render + MUI catalog) | §12.2. Share-owned MUI catalog, spec validation, in-tray render, actions bound to registry tool names. Executable code stays with `assist-320` | #1674 (tool registry) |
-| to file | View extraction epic (coupling spike first) | Extract `src/viewer` + `src/loader` and the `view.*` provider into the View repo (§2.1). Starts with a coupling spike: zustand store, MUI, `CadView` | after Assist v0 (#1674, #1675) |
+| to file | View extraction epic (coupling spike first) | Extract `src/viewer` + `src/loader` and the `view.*` provider into the View repo (§2.1). The document session stays out of it: it is the document, not the view, and has its own extraction rule (§2.1). Starts with a coupling spike: zustand store, MUI, `CadView` | after Assist v0 (#1674, #1675) |
 | to file | Assist repo extraction | `git mv` `src/assist/` to `bldrs-ai/Assist` + `package.json`; Share consumes it as a dependency (§2.1) | after #1675 |
 
 **Why these cuts.**
