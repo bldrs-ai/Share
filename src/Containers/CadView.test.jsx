@@ -1437,6 +1437,46 @@ describe('CadView', () => {
       expect(result.current.expandedElements).toEqual([])
     })
 
+    // codex review on #2026, round 3: A → B → A while the first A is held
+    // in onModel. Back on A, the identity guard counts that first load as
+    // current, so it marks itself loaded (for a viewer since disposed), and
+    // the replay of A must not start with the flag already set: if the replay
+    // fails, an auth change has to retry it.
+    it('retries the model the user returned to when the replay of its load fails', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      let releaseTree
+      getHarness()._loadedModel.ifcManager.getSpatialStructure.mockImplementationOnce(
+        () => new Promise((resolve) => {
+          releaseTree = () => resolve(makeTestTree())
+        }))
+      // The first A loads; everything after it (the replay of A) fails.
+      loadSpy = jest.spyOn(Loader, 'load')
+        .mockImplementationOnce(() => Promise.resolve(getHarness()._loadedModel))
+        .mockImplementation(() => {
+          throw new Error('OpenModel returned -1')
+        })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(releaseTree).toBeDefined())
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      await actAsyncFlush()
+      await act(() => releaseTree())
+      await actAsyncFlush()
+      // The replay is of A (the model shown), and it failed.
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+      expect(String(loadSpy.mock.calls[1][0])).toContain('index.ifc')
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+
+      await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(3))
+      expect(String(loadSpy.mock.calls[2][0])).toContain('index.ifc')
+    })
+
     // #2014 follow-up (codex review on #2026): the reset on a model change
     // runs after the location already shows the destination, so the `cp:`
     // term there is the new model's for CutPlaneMenu to restore. The old

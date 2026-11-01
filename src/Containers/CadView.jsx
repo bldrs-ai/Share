@@ -383,6 +383,15 @@ export default function CadView({
         if (useStore.getState().alert !== alertAtLoadStartRef.current) {
           setAlert(null)
         }
+        // The load that just ended was superseded. If the replay is for
+        // another model, its isLoadSuperseded guard already kept it from
+        // writing the per-model state. But after A → B → A the replay is for
+        // the SAME model, so the guard counted the ended load as current
+        // again, and it may have marked itself loaded for geometry it put into
+        // a viewer that has since been disposed. Clear that state before the
+        // replay, so a replay that fails, or an auth change during it, still
+        // gets retried (codex review on #2026).
+        forgetLoadedModel()
         await latestOnViewerRef.current()
       }
     }
@@ -399,9 +408,13 @@ export default function CadView({
    *   one object for the life of this CadView, and the handlers that read it
    *   hold that object. onModel refills it.
    *
-   * Runs when the model identity changes. A load still in flight for the
-   * previous model does not write either of them back: see
-   * `isLoadSuperseded` in onViewerInternal.
+   * Runs when the model identity changes, and again just before a replay
+   * of a load that a model change superseded (onViewer's finally). Two
+   * mechanisms, because a superseded load is not cancelled (#2019): its
+   * `isLoadSuperseded` guard (onViewerInternal) keeps it from writing this
+   * state back while another model is shown, and the replay-time call
+   * covers a return to its own model (A → B → A), where the guard sees it as
+   * current again.
    */
   function forgetLoadedModel() {
     setIsViewerLoaded(false)
@@ -413,13 +426,15 @@ export default function CadView({
 
   /** Inner load body — preconditions checked + in-flight flag managed by `onViewer`. */
   async function onViewerInternal() {
-    // Whether the user has since moved to another model. Nothing cancels this
-    // load then (#2019), and it can still settle at any await below, before
-    // or after the replacement's own load begins; checked at each write of
-    // the per-model state forgetLoadedModel drops, so a superseded load
-    // leaves that state to the model shown (codex review on #2026). Read at
-    // the write, not here: on mount the [modelPath] effect, which sets the
-    // shown identity, runs after the auth effect that may start this load.
+    // Whether the model shown now is another one. Nothing cancels this load
+    // when the user moves on (#2019), and it can still settle at any await
+    // below, before or after the replacement's own load begins; checked at
+    // each write of the per-model state forgetLoadedModel drops, so a
+    // superseded load leaves that state to the model shown (codex review on
+    // #2026). By identity, so it reads current again after A → B → A; the
+    // replay-time forgetLoadedModel in onViewer covers that case. Read at the
+    // write, not here: on mount the [modelPath] effect, which sets the shown
+    // identity, runs after the auth effect that may start this load.
     const loadModelKey = modelIdentity(modelPath, installPrefix)
     const isLoadSuperseded = () => dedupeModelKeyRef.current !== loadModelKey
     setIsModelReady(false)
