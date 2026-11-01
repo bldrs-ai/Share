@@ -29,6 +29,7 @@ import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneM
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
 import {
+  LOAD_OUTCOMES,
   attachLoadFailureContext,
   beginLoadProgress,
   captureLoadDiagnostics,
@@ -37,6 +38,7 @@ import {
   getCompletedLoadOutcome,
   getCompletedLoadStats,
   getLoadFailureInfo,
+  noGeometryAlert,
   reportFirstMesh,
   reportFramingExclusion,
   reportLoadProgress,
@@ -56,6 +58,7 @@ import {
 import {reportUploadNotInBrowser} from '../OPFS/reportUploadNotInBrowser'
 import {getBrowser} from '../connections/registry'
 import modelIdentity from '../routes/modelIdentity'
+import useExistInFeature from '../hooks/useExistInFeature'
 import useDirectLinkQuota from '../quota/useDirectLinkQuota'
 import useStore from '../store/useStore'
 import {
@@ -91,6 +94,8 @@ import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
 import {DEFAULT_LOOK} from '../viewer/looks'
+import {installAssistDevHook} from '../viewer/tools/assistHost'
+import {registerSelectionFunnel} from '../viewer/tools/selectionFunnel'
 import ViewCube from '../Components/ViewCube/ViewCube'
 import {applyVisibilityHash} from '../Components/Residency/visibilityHash'
 import VisibilityHashWriter from '../Components/Residency/VisibilityHashWriter'
@@ -211,8 +216,12 @@ export default function CadView({
   // every run of it: that effect also re-runs for the same model (Widget API
   // view settings), and clearing there let one model count twice (codex
   // review of Share#1961). The upload-not-in-browser count (#1955) is gated
-  // by the same ref, under its own key prefix.
+  // by the same ref, under its own key prefix, and so is the no-geometry
+  // alert (#1962), which is shown once per model rather than counted.
   const reportedRefusalRef = useRef(null)
+  // This render's `selectItemsInScene`, for the funnel registered with
+  // `viewer/tools/selectionFunnel.js` (see the effect near the end).
+  const selectItemsInSceneRef = useRef(null)
   // How loadModel last downloaded a Drive file: `{fileId, connection}`, with
   // connection null for the API-key path. The direct-link quota meter reads
   // it to tell a link-shared (public, unmetered) file from a private one
@@ -286,6 +295,7 @@ export default function CadView({
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
   const [searchParams] = useSearchParams()
+  const isAssistEnabled = useExistInFeature('assist')
 
   // Begin helpers //
   /**
@@ -877,6 +887,23 @@ export default function CadView({
     // including when this load is the bundled demo (which is never tracked).
     stopModelEngagementRef.current?.()
     stopModelEngagementRef.current = null
+    // The verdict the real_model_open below reports (load_outcome), read once
+    // so the user's message and GA's count cannot disagree about this load.
+    const loadOutcome = getCompletedLoadOutcome()
+    if (loadOutcome === LOAD_OUTCOMES.NO_GEOMETRY) {
+      // The engine read the file and it has nothing to draw (Share#1962): say
+      // so in place of leaving an empty viewer unexplained. Not a failure, so
+      // no captureException and no load_failed; GA still gets the open, as
+      // real_model_open with load_outcome 'no_geometry', and AlertDialog
+      // counts the alert. Once per model: the auth-state and view-settings
+      // effects re-run onViewerInternal for the same route, and the user has
+      // already dismissed it.
+      const noGeometryKey = `no-geometry:${modelIdentity(routeResult, installPrefix)}`
+      if (reportedRefusalRef.current !== noGeometryKey) {
+        reportedRefusalRef.current = noGeometryKey
+        setAlert(noGeometryAlert())
+      }
+    }
     if (isRealModelOpen(routeResult)) {
       const eventParams = {
         content_type: loadedModel.type || 'undefined',
@@ -886,13 +913,13 @@ export default function CadView({
         content_id: modelContentId(routeResult),
       }
       // How the load went: the reporter's cross-format snapshot merged with
-      // Conway's engine stats for IFC/STEP, plus the displayed/unusable
-      // verdict. loadTime stays the reporter's wall clock whatever the engine
-      // says; see loadAnalytics#buildOutcomeParams.
+      // Conway's engine stats for IFC/STEP, plus the displayed/no_geometry/
+      // unusable verdict. loadTime stays the reporter's wall clock whatever
+      // the engine says; see loadAnalytics#buildOutcomeParams.
       Object.assign(eventParams, buildOutcomeParams({
         completedStats: getCompletedLoadStats() ?? undefined,
         loadStats: loadedModel.loadStats,
-        loadOutcome: getCompletedLoadOutcome(),
+        loadOutcome,
       }))
       // Per-user open depth: GA4 has no user-id dimension, so the
       // client id rides along as an event-scoped custom dimension,
@@ -2107,6 +2134,20 @@ export default function CadView({
   }, [])
 
   useEffect(() => () => stopModelEngagementRef.current?.(), [])
+
+  // Expose the selection funnel to non-React callers — the Assist view tools
+  // (src/viewer/tools/, ai-workspace.md §9). `selectItemsInScene` is a fresh
+  // closure every render, so the registered wrapper reads the ref, refreshed
+  // each render: a tool call reaches the same funnel a NavTree click does,
+  // with this render's viewer, element table and router. Registered once per
+  // mount and cleared on unmount.
+  selectItemsInSceneRef.current = selectItemsInScene
+  useEffect(() => registerSelectionFunnel((...args) => selectItemsInSceneRef.current(...args)), [])
+  // `window.__bldrsAssistTools`, the tool registry's dev hook, under
+  // `?feature=assist` only. Follows the URL, not just the mount: CadView
+  // stays mounted across navigation, so the hook installs when the flag
+  // appears and the cleanup uninstalls it when the flag goes.
+  useEffect(() => (isAssistEnabled ? installAssistDevHook() : undefined), [isAssistEnabled])
 
 
   const abs = {position: 'absolute'}

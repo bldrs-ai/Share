@@ -27,7 +27,9 @@ import {batchEditRevision} from '../ifc/batchedEdit'
  *
  * Granularity follows the scene type. The conway-direct path places one
  * `BatchedMesh` instance per shape — instances are measured (and
- * excluded) whole, via their world AABBs. Other meshes (the web-ifc path
+ * excluded) whole, via their exact world AABBs (`placedShapeBox`; the
+ * streaming builder records the same boxes, so the follow and the final
+ * fit agree on rotated instances too). Other meshes (the web-ifc path
  * merges every product into one geometry) offer no per-element seam, so
  * their vertices are classified individually.
  *
@@ -37,10 +39,11 @@ import {batchEditRevision} from '../ifc/batchedEdit'
  * envelope on some axis. Anything a rooftop antenna, site wing, or crane
  * could plausibly reach stays in. On a clean model nothing trips the
  * fence and the result matches `Box3().setFromObject` (vertex-exact, so
- * marginally tighter for rotated meshes, whose world-transformed local
- * AABBs over-cover); as a second guard, if more of the model lands
- * outside the fences than MAX_EXCLUDED_FRACTION allows, the distribution
- * isn't "model + strays" and the exact box is returned instead.
+ * tighter for rotated meshes and rotated batch instances, whose
+ * world-transformed local AABBs over-cover); as a second guard, if more
+ * of the model lands outside the fences than MAX_EXCLUDED_FRACTION
+ * allows, the distribution isn't "model + strays" and the exact box is
+ * returned instead.
  *
  * Two passes: pass 1 takes exact bounds plus a coordinate sample for the
  * quantiles; pass 2 reclassifies everything and grows the robust box only
@@ -94,6 +97,8 @@ const BOX_FLOATS = 6
 /** Offset of the max triple within one element's slot. */
 const MAX_OFFSET = 3
 const HALF = 0.5
+/** placedShapeBox's running min[3] + max[3]; module scratch, no allocation. */
+const placedBounds = new Float64Array(BOX_FLOATS)
 
 /**
  * Cache: framing recomputes bounds at least twice per load (explicit
@@ -445,9 +450,10 @@ function collectParts(object) {
 
 
 /**
- * One world-space box per BatchedMesh instance. Geometry-local boxes are
- * computed once per shared shape (getBoundingBoxAt walks the vertex
- * range), then placed by instance matrix × mesh matrixWorld.
+ * One world-space box per BatchedMesh instance, exact for each (see
+ * `placedShapeBox`). Geometry-local boxes are computed once per shared
+ * shape (getBoundingBoxAt walks the index range), then placed by instance
+ * matrix × mesh matrixWorld.
  *
  * @param {object} mesh THREE.BatchedMesh
  * @param {ElementBoxes} out world boxes are appended here
@@ -457,9 +463,21 @@ function collectBatchedElementBoxes(mesh, out) {
   const instanceMatrix = new Matrix4()
   const placed = new Matrix4()
   const worldBox = new Box3()
+  const position = mesh.geometry.attributes.position
+  const index = mesh.geometry.index
+  // Read for each shape's draw range, `start` / `count`: its index range on
+  // an indexed batch, its vertex range on a non-indexed one — the range
+  // getBoundingBoxAt walks (BatchedMesh.js:992), and the one
+  // batchedGeometryRanges synthesises for a collapsed slice. Private, like
+  // _instanceInfo below — which this module already depends on — and
+  // batchedGeometryRanges version-guards the entry's field set.
+  const geometryInfo = mesh._geometryInfo
   // Same iteration as BatchedMesh#computeBoundingBox: _instanceInfo with
   // an active check (there is no public instance iterator — getGeometryIdAt
-  // throws on deleted ids), so our exact box matches setFromObject's.
+  // throws on deleted ids). It visits the instances setFromObject does, so
+  // the two boxes are equal for axis-aligned placements; for rotated ones
+  // this one is the tighter, vertex-exact box (three's is the box of each
+  // placed local box, which over-covers, #1896).
   const instanceInfo = mesh._instanceInfo
   for (let i = 0; i < instanceInfo.length; i++) {
     if (instanceInfo[i].active === false) {
@@ -477,8 +495,148 @@ function collectBatchedElementBoxes(mesh, out) {
     }
     mesh.getMatrixAt(i, instanceMatrix)
     placed.multiplyMatrices(mesh.matrixWorld, instanceMatrix)
-    out.push(worldBox.copy(geometryBox).applyMatrix4(placed))
+    const {start, count} = geometryInfo[geometryId]
+    out.push(placedShapeBox(geometryBox, position, index, start, count, placed, worldBox))
   }
+}
+
+
+/**
+ * World AABB of one placed shape, exact: the box of its vertices, each
+ * transformed by `matrix`.
+ *
+ * The cheap form, `localBox.applyMatrix4(matrix)`, is the box of a placed
+ * BOX. It is exact only when the matrix maps axes onto axes (translation,
+ * scale, quarter turns, mirrors); under any other rotation the local box's
+ * corners swing out past the shape — by up to a member's length when its
+ * local frame is turned against its placement. That over-framed Snowdon
+ * (#1896): 63.3 m wide through the un-collapsed artifact against 59.8 m
+ * true. The collapsed artifact was right only because it bakes placement
+ * into the vertices, which leaves every range a translation-only matrix as
+ * loaded (glb-export-premium.md §1.1d).
+ *
+ * So an axis-aligned placement keeps the corner transform, which is exact
+ * for it and bit-for-bit what was returned before, and only a rotated one
+ * pays the walk: one pass over its draw range, no allocation. The branch is
+ * about cost, not bits — on an axis-aligned matrix the walk lands on the
+ * same doubles, since rounding is monotone — and every collapsed range is
+ * on the corner side of it as loaded, so that artifact's framing costs what
+ * it did. A range CAN reach the walk: `batchedEdit#setBatchedInstanceMatrix`
+ * (the model-edit move op) gives it any matrix.
+ *
+ * The walk reads the index range, the same vertices getBoundingBoxAt
+ * measures the local box from, not the whole vertex block: nothing makes a
+ * block hold only referenced vertices (`addGeometryRanges` checks that a
+ * range's indices stay inside its block, not that they cover it), and an
+ * unreferenced position there is invisible geometry that would otherwise
+ * frame — or, far enough out, make the element a stray (codex on #1996).
+ * Worst case, every placement rotated, the walk is one pass over the
+ * model's drawn index entries: ~43–45 ms for a Snowdon-sized 2.7M vertices
+ * at 1.5 index entries each (4.1M) in a Node micro-benchmark, against
+ * ~6 ms for the corner transform over its 37k placements (the vertex-block
+ * walk this replaced measured ~32 ms on the same run, reading fewer
+ * entries). That holds because the loop reads the typed arrays directly;
+ * through `getX` the same walk measured ~70–110 ms. It is paid by the
+ * end-of-load fit, which `robustBoundsFor` caches per model, and by the
+ * streaming builder once per placement, never per refit.
+ *
+ * @param {Box3} localBox the shape's local bounds (axis-aligned path)
+ * @param {object} position BufferAttribute holding the shape's vertices.
+ *   Read through `.array` / `.itemSize`, so it must be a plain,
+ *   non-normalized attribute: a BatchedMesh allocates its own buffer that
+ *   way (BatchedMesh.js:390-393, copying the first geometry's array type and
+ *   flag), and every position this repo uploads is float32 — Draco decodes
+ *   to float, Meshopt leaves positions unquantized (exportQuality.js).
+ * @param {object|null} index BufferAttribute of vertex indices, or null for
+ *   a non-indexed geometry, whose range then addresses vertices directly
+ * @param {number} start first entry of the shape's draw range
+ * @param {number} count entries in that range
+ * @param {Matrix4} matrix local → world placement (affine)
+ * @param {Box3} target written and returned
+ * @return {Box3} target
+ */
+export function placedShapeBox(localBox, position, index, start, count, matrix, target) {
+  const e = matrix.elements
+  if (mapsAxesToAxes(e)) {
+    return target.copy(localBox).applyMatrix4(matrix)
+  }
+  const points = position.array
+  const stride = position.itemSize
+  const end = start + count
+  placedBounds.fill(Infinity, 0, MAX_OFFSET)
+  placedBounds.fill(-Infinity, MAX_OFFSET, BOX_FLOATS)
+  // Two loops rather than one with an `index ?` per entry: the per-entry
+  // test measured ~60 ms against ~44 ms for the split on the benchmark above.
+  if (index) {
+    const indices = index.array
+    for (let i = start; i < end; i++) {
+      growPlacedBounds(points, indices[i] * stride, e)
+    }
+  } else {
+    for (let i = start; i < end; i++) {
+      growPlacedBounds(points, i * stride, e)
+    }
+  }
+  target.min.set(placedBounds[X], placedBounds[Y], placedBounds[Z])
+  target.max.set(
+    placedBounds[MAX_OFFSET + X], placedBounds[MAX_OFFSET + Y], placedBounds[MAX_OFFSET + Z])
+  return target
+}
+
+
+/**
+ * Grow `placedBounds` by the vertex at `at` in `points`, transformed by `e`.
+ *
+ * @param {Float32Array} points flat xyz vertex array (a position `.array`)
+ * @param {number} at offset of the vertex's x
+ * @param {Array<number>} e Matrix4 elements (affine)
+ */
+function growPlacedBounds(points, at, e) {
+  const x = points[at]
+  const y = points[at + 1]
+  const z = points[at + 2]
+  const wx = (e[0] * x) + (e[4] * y) + (e[8] * z) + e[12]
+  const wy = (e[1] * x) + (e[5] * y) + (e[9] * z) + e[13]
+  const wz = (e[2] * x) + (e[6] * y) + (e[10] * z) + e[14]
+  placedBounds[X] = Math.min(placedBounds[X], wx)
+  placedBounds[Y] = Math.min(placedBounds[Y], wy)
+  placedBounds[Z] = Math.min(placedBounds[Z], wz)
+  placedBounds[MAX_OFFSET + X] = Math.max(placedBounds[MAX_OFFSET + X], wx)
+  placedBounds[MAX_OFFSET + Y] = Math.max(placedBounds[MAX_OFFSET + Y], wy)
+  placedBounds[MAX_OFFSET + Z] = Math.max(placedBounds[MAX_OFFSET + Z], wz)
+}
+
+
+/**
+ * Does the linear part of a column-major 4×4 send each axis onto one axis
+ * (a scaled signed permutation)? Exact-zero test on purpose: the box-corner
+ * transform is exact only then, and a near-miss (a quarter turn whose cosine
+ * came out 6e-17) merely takes the exact walk.
+ *
+ * @param {Array<number>} e Matrix4 elements
+ * @return {boolean}
+ */
+function mapsAxesToAxes(e) {
+  for (let k = 0; k < 3; k++) {
+    // Column k is e[4k..4k+2]; row k is e[k], e[k+4], e[k+8].
+    const column = 4 * k
+    if (nonZeroCount(e[column], e[column + 1], e[column + 2]) > 1 ||
+        nonZeroCount(e[k], e[k + 4], e[k + 8]) > 1) {
+      return false
+    }
+  }
+  return true
+}
+
+
+/**
+ * @param {number} a
+ * @param {number} b
+ * @param {number} c
+ * @return {number} how many of the three are non-zero
+ */
+function nonZeroCount(a, b, c) {
+  return (a === 0 ? 0 : 1) + (b === 0 ? 0 : 1) + (c === 0 ? 0 : 1)
 }
 
 

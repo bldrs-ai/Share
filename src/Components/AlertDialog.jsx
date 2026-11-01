@@ -1,6 +1,6 @@
 import React, {ReactElement, useEffect, useRef} from 'react'
 import {Link} from '@mui/material'
-import {ErrorOutline as ErrorOutlineIcon} from '@mui/icons-material'
+import {ErrorOutline as ErrorOutlineIcon, InfoOutlined as InfoOutlinedIcon} from '@mui/icons-material'
 import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
 import {NotFoundError} from '../loader/Loader'
 import {getProvider} from '../connections/registry'
@@ -56,13 +56,14 @@ export default function AlertDialog({onClose}) {
       // the closed-set reason_class.
       trackAlertEvent(ENGINE_FAILURE_ALERT_EVENT)
     } else if (alert.type === 'unsupportedSchema' || alert.type === 'inMemoryUploadGone' ||
-        alert.type === 'uploadNotInBrowser') {
+        alert.type === 'uploadNotInBrowser' || alert.type === 'noGeometry') {
       // Expected outcome, not a defect: analytics only, never Sentry
       // (alertTracking.js#trackAlertEvent). `inMemoryUploadGone` is a
       // /v/local-only/ URL whose file, opened without OPFS, was held only by a
       // page that is gone (OPFS/messages.js, #1906); `uploadNotInBrowser` is
       // a /v/local-only/ link, with OPFS available, to an upload this browser
-      // doesn't hold (#1955).
+      // doesn't hold (#1955). `noGeometry` is a model conway read fine that
+      // has nothing to draw (loadProgress#classifyLoadOutcome, #1962).
       trackAlertEvent(alert.message)
     } else if (alert.type === 'oom' || alert.type === 'needsReconnect') {
       trackAlert(alert.message, alert)
@@ -84,6 +85,7 @@ export default function AlertDialog({onClose}) {
   const isUnsupportedSchema = alert && typeof alert === 'object' && alert.type === 'unsupportedSchema'
   const isInMemoryUploadGone = alert && typeof alert === 'object' && alert.type === 'inMemoryUploadGone'
   const isUploadNotInBrowser = alert && typeof alert === 'object' && alert.type === 'uploadNotInBrowser'
+  const isNoGeometry = alert && typeof alert === 'object' && alert.type === 'noGeometry'
   const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
 
   const refresh = () => {
@@ -124,6 +126,12 @@ export default function AlertDialog({onClose}) {
     setIsOpenModelVisible(true)
   }
 
+  // Dismiss without leaving the model. Every other alert here reports a load
+  // that produced nothing to stay on, so closing it goes through onClose
+  // (navToDefault); a no-geometry model did load, and its tree and properties
+  // are still there to look at.
+  const dismiss = () => setAlert(null)
+
   let actionCb
   let actionTitle
   if (isOom) {
@@ -140,6 +148,9 @@ export default function AlertDialog({onClose}) {
   } else if (isUploadNotInBrowser) {
     actionCb = openAFile
     actionTitle = 'Open a file'
+  } else if (isNoGeometry) {
+    actionCb = dismiss
+    actionTitle = 'OK'
   } else {
     actionCb = onCloseInner
     actionTitle = 'Reset'
@@ -156,22 +167,27 @@ export default function AlertDialog({onClose}) {
     headerText = 'File no longer available'
   } else if (isUploadNotInBrowser) {
     headerText = 'File not in this browser'
+  } else if (isNoGeometry) {
+    headerText = 'No 3D geometry'
   } else {
     headerText = 'Error'
   }
 
   // No "contact us" footer for an unsupported schema, an in-memory upload
-  // whose page is gone, or an upload this browser doesn't hold: all are
-  // known, documented limits, so there is nothing for support to diagnose.
+  // whose page is gone, an upload this browser doesn't hold, or a file with
+  // no geometry: all are known, documented limits or properties of the input,
+  // so there is nothing for support to diagnose.
   const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema && !isInMemoryUploadGone &&
-    !isUploadNotInBrowser
+    !isUploadNotInBrowser && !isNoGeometry
   return (
     <Dialog
       headerText={headerText}
       isDialogDisplayed={alert !== null}
-      setIsDialogDisplayed={onCloseInner}
+      setIsDialogDisplayed={isNoGeometry ? dismiss : onCloseInner}
       actionCb={actionCb}
-      headerIcon={<ErrorOutlineIcon className='icon-share'/>}
+      headerIcon={isNoGeometry ?
+        <InfoOutlinedIcon className='icon-share'/> :
+        <ErrorOutlineIcon className='icon-share'/>}
       actionTitle={actionTitle}
     >
       <p>
@@ -206,7 +222,8 @@ function createAlertReport(a) {
     return a
   } else if (typeof a === 'object') {
     if (a && (a.type === 'oom' || a.type === 'needsReconnect' || a.type === 'unsupportedSchema' ||
-        a.type === 'inMemoryUploadGone' || a.type === 'uploadNotInBrowser' || a.type === 'engineFailure')) {
+        a.type === 'inMemoryUploadGone' || a.type === 'uploadNotInBrowser' || a.type === 'engineFailure' ||
+        a.type === 'noGeometry')) {
       return a.message
     } else if (a instanceof NotFoundError) {
       return displayPathAlert(a)

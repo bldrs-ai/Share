@@ -909,9 +909,26 @@ live on the reporter in `src/loader/loadProgress.js`.
   list, `other` for anything else, `none` when no load had begun. It is sent from the one catch every failure of an attempt
   reaches, not from `loadModel`'s own, which also sees the auth-shaped first try
   that `loadModelWithAuthRetry` retries and may win.
-- **`load_outcome`** is `displayed` or `unusable`, from `classifyLoadOutcome`.
-  Only the conway path reports geometry counts, so every other format reads
-  `displayed` (the same default the Sentry tag has).
+- **`load_outcome`** is `displayed`, `no_geometry` or `unusable`, from
+  `classifyLoadOutcome`. Only the conway path reports geometry counts, so every
+  other format reads `displayed` (the same default the Sentry tag has). A build
+  of 0 vertices is `no_geometry` when conway's own counts say the file has
+  nothing to draw (Share#1962): no products (`getProductCount() === 0`), or
+  products none of which has a drawable representation
+  (`getProductsWithGeometryCount() === 0`), in both cases with a confirmed
+  `getErrorCount() === 0` and no errors in the reporter's Logger tally
+  (`engineErrorTotal`, for errors `getErrorCount()` can omit). It is `unusable`
+  when conway logged errors alongside (zero products with errors is a parse that
+  died before recording any), when it counted geometry yet nothing was built,
+  and whenever a count the verdict needs is absent (an engine that does not say
+  has not said zero). A `no_geometry` open is still a
+  `real_model_open`, so it counts as an open, and not a `load_failed`; the user
+  gets a non-error "No 3D geometry" dialog (`AlertDialog`, `noGeometry`) that
+  leaves the model in place, counted as an `alert` event under a constant
+  message. Its Sentry diagnostics event, when the load had warnings, is sent at
+  `info` level instead of `error`, tagged `load_outcome:no_geometry`. `load_outcome`
+  is a text dimension, so the new value needs no GA4 admin change; any dashboard
+  query that read `unusable` as "empty viewer" now needs `no_geometry` too.
 - **Severity.** `stats_engineErrorTotal` / `stats_engineErrorDistinct` /
   `stats_engineWarnDistinct` / `stats_dataDefectTotal` come from conway's
   `Logger` through the reporter's proxy, which sees every occurrence, not only
@@ -936,9 +953,20 @@ live on the reporter in `src/loader/loadProgress.js`.
   model is added to the scene. `stats_cacheHit` is `"true"` when the GLB
   artifact cache served the model (which `content_type` reports as plain `glb`),
   `"false"` otherwise, including every format that has no artifact cache.
+- **Sentry-only counts.** The load diagnostics event's `loadDiagnostics` context
+  carries `productCount`, `productsWithGeometryCount` and `dataDefectCount`
+  (conway's `getProductCount`, `getProductsWithGeometryCount`,
+  `getDataDefectCount`, absent when the engine does not report them), so the
+  "built nothing" population can be split by cause from data. Of the three
+  only `productCount` and `productsWithGeometryCount` are also GA params (below);
+  the data-defect count stays reporter-only, because `stats_dataDefectTotal`
+  already carries the reporter's own tally.
 - **Counts.** `stats_vertexCount`, `stats_triangleCount` (conway path only),
-  `stats_productCount` (`Statistics.getProductCount`). Products-with-geometry,
-  and so a partial-load fraction, needs conway#740 and is not sent.
+  `stats_productCount` (`Statistics.getProductCount`) and
+  `stats_productsWithGeometryCount` (`Statistics.getProductsWithGeometryCount`,
+  conway#740; absent, not 0, when the engine does not report it). The
+  partial-load fraction is not computed client-side: GA derives it as
+  `stats_productsWithGeometryCount / stats_productCount`.
 - **Not covered.** A GLB cache hit has no geometry counts, so it reports no
   vertex or triangle counts and `load_outcome` defaults to `displayed`.
 
@@ -948,7 +976,8 @@ has a backfill, so these only start accruing data once registered:
 - Load outcome (Share#1954), event-scoped, **dimensions** (text): `load_outcome`,
   `reason_class`, `size_bucket`, `last_phase`, `stats_cacheHit`. **Metrics**
   (standard, numeric): `stats_vertexCount`, `stats_triangleCount`,
-  `stats_productCount`, `stats_firstMeshMs` and `stats_openMs` (unit:
+  `stats_productCount`, `stats_productsWithGeometryCount`, `stats_firstMeshMs`
+  and `stats_openMs` (unit:
   milliseconds), `stats_engineErrorDistinct`, `stats_engineErrorTotal`,
   `stats_engineWarnDistinct`, `stats_dataDefectTotal`, `stats_pageErrorCount`,
   `stats_pageWarnCount`. `content_type` is shared with `real_model_open`.

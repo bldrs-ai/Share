@@ -8,6 +8,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   Object3D,
+  Quaternion,
   Vector3,
 } from 'three'
 import {
@@ -16,6 +17,7 @@ import {
   robustBoundsFor,
   robustBoundsFromElements,
 } from './robustBounds'
+import {addGeometryRanges} from '../ifc/batchedGeometryRanges'
 
 
 /** Building-scale stand-in span, in scene units. */
@@ -220,6 +222,180 @@ describe('viewer/three/robustBounds', () => {
 
     expect(result.excludedVertices).toBe(0)
     expect(result.box.max.x).toBeLessThanOrEqual(MODEL_SIZE + 1)
+  })
+
+  describe('rotated BatchedMesh instances (#1896)', () => {
+    /** The turn between a member's local frame and its placement: ~37°. */
+    const TURN = Math.atan2(3, 4)
+    const BEAM_LENGTH = 10
+    const BEAM_SECTION = 0.3
+    /** Off-grid scale and offset values, so no rounding is trivially exact. */
+    const ODD_SCALE = 0.3
+    const ODD_OFFSET = 1.7
+    /** A georeferenced-scale coordinate, where float rounding bites. */
+    const FAR = (MODEL_SIZE ** 2) * 10 / 3
+
+    /**
+     * A beam modelled diagonally in its own local frame and placed with the
+     * opposite turn, so it lands along world x — the shape that over-framed
+     * Snowdon's un-collapsed artifact. Its local AABB is a fat 8 × 6 m box
+     * around a 0.3 m section; that box, placed, is what the old code framed.
+     *
+     * @return {BufferGeometry}
+     */
+    function turnedBeam() {
+      return new BoxGeometry(BEAM_LENGTH, BEAM_SECTION, BEAM_SECTION).rotateZ(-TURN)
+    }
+
+    /**
+     * @param {BufferGeometry} geometry
+     * @param {Matrix4} placement the instance matrix
+     * @return {{root: Object3D, mesh: BatchedMesh}} one instance in a batch
+     */
+    function oneInstance(geometry, placement) {
+      const mesh = new BatchedMesh(
+        1, geometry.attributes.position.count, geometry.index.count, new MeshBasicMaterial())
+      mesh.setMatrixAt(mesh.addInstance(mesh.addGeometry(geometry)), placement)
+      const root = new Object3D()
+      root.add(mesh)
+      root.updateWorldMatrix(true, true)
+      return {root, mesh}
+    }
+
+    /**
+     * What `collectBatchedElementBoxes` returned before #1896, kept here as
+     * the reference: the instance's local box, placed.
+     *
+     * @param {BatchedMesh} mesh one-instance batch
+     * @return {Box3}
+     */
+    function placedLocalBox(mesh) {
+      const instance = new Matrix4()
+      mesh.getMatrixAt(0, instance)
+      const placed = new Matrix4().multiplyMatrices(mesh.matrixWorld, instance)
+      return mesh.getBoundingBoxAt(0, new Box3()).applyMatrix4(placed)
+    }
+
+    /**
+     * @param {BufferGeometry} geometry
+     * @param {Matrix4} matrix local → world
+     * @return {Box3} the box of the transformed vertices
+     */
+    function vertexBox(geometry, matrix) {
+      return new Box3().setFromBufferAttribute(
+        geometry.clone().applyMatrix4(matrix).attributes.position)
+    }
+
+    it('measures a rotated instance by its vertices, not its placed local box', () => {
+      const geometry = turnedBeam()
+      const placement = new Matrix4().compose(
+        new Vector3(5, 2, 1),
+        new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), TURN),
+        new Vector3(1, 1, 1))
+      const {root, mesh} = oneInstance(geometry, placement)
+      // The batch's own transform is part of the placement too.
+      mesh.position.set(MODEL_SIZE, 0, 0)
+      root.updateWorldMatrix(true, true)
+      const world = new Matrix4().multiplyMatrices(mesh.matrixWorld, placement)
+      const exact = vertexBox(geometry, world)
+      const overCovering = placedLocalBox(mesh)
+      // The fixture has to tell the two answers apart, or the assertions
+      // below could pass on the bug: ~9.9 m of y against a 0.3 m section.
+      const exactSpanY = exact.max.y - exact.min.y
+      expect(overCovering.max.y - overCovering.min.y).toBeGreaterThan(exactSpanY + (BEAM_LENGTH / 2))
+
+      const result = computeRobustBounds(root)
+
+      const digits = 5
+      exact.min.toArray().forEach((v, axis) => expect(result.exactBox.min.getComponent(axis)).toBeCloseTo(v, digits))
+      exact.max.toArray().forEach((v, axis) => expect(result.exactBox.max.getComponent(axis)).toBeCloseTo(v, digits))
+      expect(result.box.max.y - result.box.min.y).toBeCloseTo(BEAM_SECTION, digits)
+    })
+
+    it('walks only the vertices a rotated range draws, not its whole vertex block', () => {
+      // A collapsed slice's `vertexStart` / `vertexCount` are its OWN block
+      // of the merged upload, but nothing makes every vertex in that block
+      // referenced: `addGeometryRanges` checks that a range's indices stay
+      // inside it, not that they cover it. Here range 0's block holds one
+      // unreferenced position a stray's distance out. Under a rotation (the
+      // model-edit move op can give a range any matrix) the walk must not
+      // see it, as getBoundingBoxAt — the local box — does not.
+      const positions = new Float32Array([
+        0, 0, 0, 1, 0, 0, 0, 1, 0, STRAY_DISTANCE, STRAY_DISTANCE, 0,
+        3, 0, 0, 4, 0, 0, 3, 1, 0,
+      ])
+      const merged = new BufferGeometry()
+      merged.setAttribute('position', new BufferAttribute(positions, 3))
+      merged.setIndex(new BufferAttribute(new Uint32Array([0, 1, 2, 4, 5, 6]), 1))
+      const ranges = [
+        {vertexStart: 0, vertexCount: 4, indexStart: 0, indexCount: 3},
+        {vertexStart: 4, vertexCount: 3, indexStart: 3, indexCount: 3},
+      ]
+      const vertexTotal = 7
+      const mesh = new BatchedMesh(2, vertexTotal, ranges.length * 3, new MeshBasicMaterial())
+      const ids = addGeometryRanges(mesh, merged, ranges)
+      // The block is the range's own, not the whole upload.
+      expect(ids).toHaveLength(2)
+      expect(mesh._geometryInfo[ids[0]].vertexStart).toBe(0)
+      expect(mesh._geometryInfo[ids[0]].vertexCount).toBe(4)
+      expect(mesh._geometryInfo[ids[1]].vertexStart).toBe(4)
+      const turn = new Matrix4().makeRotationZ(TURN)
+      mesh.setMatrixAt(mesh.addInstance(ids[0]), turn)
+      const root = new Object3D()
+      root.add(mesh)
+
+      const result = computeRobustBounds(root)
+
+      const firstTriangle = new BufferGeometry()
+      firstTriangle.setAttribute('position', new BufferAttribute(positions.slice(0, 9), 3))
+      const drawn = vertexBox(firstTriangle, turn)
+      const digits = 5
+      drawn.min.toArray().forEach((v, axis) => expect(result.exactBox.min.getComponent(axis)).toBeCloseTo(v, digits))
+      drawn.max.toArray().forEach((v, axis) => expect(result.exactBox.max.getComponent(axis)).toBeCloseTo(v, digits))
+    })
+
+    it('walks the vertex range of a non-indexed batch', () => {
+      const geometry = turnedBeam().toNonIndexed()
+      const placement = new Matrix4().makeRotationZ(TURN)
+      const mesh = new BatchedMesh(
+        1, geometry.attributes.position.count, 0, new MeshBasicMaterial())
+      mesh.setMatrixAt(mesh.addInstance(mesh.addGeometry(geometry)), placement)
+      const root = new Object3D()
+      root.add(mesh)
+
+      const result = computeRobustBounds(root)
+
+      const exact = vertexBox(geometry, placement)
+      const digits = 5
+      exact.min.toArray().forEach((v, axis) => expect(result.exactBox.min.getComponent(axis)).toBeCloseTo(v, digits))
+      exact.max.toArray().forEach((v, axis) => expect(result.exactBox.max.getComponent(axis)).toBeCloseTo(v, digits))
+    })
+
+    it('keeps an axis-aligned placement bit-for-bit (the collapsed path)', () => {
+      // Every collapsed range carries a translation-only matrix (placement
+      // is baked, glb-export-premium.md §1.1d), so this is the path the
+      // collapsed artifact takes, and its boxes must not move by one bit.
+      // Passes before #1896 too: it pins the output the fix leaves alone.
+      // It does not pin WHICH branch produced it — the vertex walk lands on
+      // the same doubles for these matrices (checked by forcing it).
+      const quarterTurnAndMirror = new Matrix4().set(
+        0, -1, 0, 3,
+        -1, 0, 0, -4,
+        0, 0, ODD_OFFSET, 7,
+        0, 0, 0, 1)
+      const placements = [
+        new Matrix4().makeTranslation(ODD_OFFSET, -ODD_SCALE, FAR),
+        new Matrix4().makeScale(ODD_SCALE, ODD_OFFSET, -ODD_SCALE).setPosition(FAR, 7, -ODD_OFFSET),
+        quarterTurnAndMirror,
+      ]
+      for (const placement of placements) {
+        const {root, mesh} = oneInstance(turnedBeam(), placement)
+        const result = computeRobustBounds(root)
+        const reference = placedLocalBox(mesh)
+        expect(result.exactBox.min.toArray()).toEqual(reference.min.toArray())
+        expect(result.exactBox.max.toArray()).toEqual(reference.max.toArray())
+      }
+    })
   })
 
   describe('robustBoundsFromElements (streaming follow)', () => {

@@ -9,6 +9,7 @@ import {
 } from '../OPFS/messages'
 import {getProvider} from '../connections/registry'
 import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
+import {NO_GEOMETRY_ALERT, noGeometryAlert} from '../loader/loadProgress'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import AlertDialog from './AlertDialog'
@@ -364,6 +365,51 @@ describe('AlertDialog — uploadNotInBrowser alert type (#1955)', () => {
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
     expect(trackAlertEvent).toHaveBeenCalledTimes(1)
     expect(trackAlertEvent).toHaveBeenCalledWith(UPLOAD_NOT_IN_BROWSER_ALERT)
+    expect(trackAlert).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('AlertDialog — noGeometry alert type (#1962)', () => {
+  const onClose = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  it('says so under a non-error header, without the Discord footer', () => {
+    act(() => {
+      useStore.getState().setAlert(noGeometryAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('No 3D geometry')).toBeInTheDocument()
+    expect(screen.getByText(NO_GEOMETRY_ALERT)).toBeInTheDocument()
+    expect(screen.queryByText('Error')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Discord/i)).not.toBeInTheDocument()
+  })
+
+  // The model did load, unlike every other alert here, so OK must not run
+  // onClose (CadView's navToDefault would replace the model with the demo).
+  it('OK dismisses the alert and leaves the model where it is', () => {
+    act(() => {
+      useStore.getState().setAlert(noGeometryAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByText('OK'))
+    expect(useStore.getState().alert).toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('counts the alert once, in analytics only', () => {
+    act(() => {
+      useStore.getState().setAlert(noGeometryAlert())
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(trackAlertEvent).toHaveBeenCalledTimes(1)
+    expect(trackAlertEvent).toHaveBeenCalledWith(NO_GEOMETRY_ALERT)
     expect(trackAlert).not.toHaveBeenCalled()
   })
 })
