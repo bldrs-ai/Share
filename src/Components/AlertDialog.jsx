@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect, useRef} from 'react'
 import {Link} from '@mui/material'
 import {ErrorOutline as ErrorOutlineIcon, InfoOutlined as InfoOutlinedIcon} from '@mui/icons-material'
 import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
+import {formatGuidance} from '../loader/formatGuidance'
 import {NotFoundError} from '../loader/Loader'
 import {UNRECOGNIZED_FORMAT_ALERT_EVENT, reportUnrecognizedFormat} from '../loader/unrecognizedFormat'
 import {getProvider} from '../connections/registry'
@@ -93,6 +94,12 @@ export default function AlertDialog({onClose}) {
   const isInMemoryUploadGone = alert && typeof alert === 'object' && alert.type === 'inMemoryUploadGone'
   const isUploadNotInBrowser = alert && typeof alert === 'object' && alert.type === 'uploadNotInBrowser'
   const isNoGeometry = alert && typeof alert === 'object' && alert.type === 'noGeometry'
+  // A rejected file whose extension we can say something useful about: a
+  // Revit project, a SolidWorks part, a PDF (loader/formatGuidance.js). Only
+  // the header and body change; it is still an unrecognizedFormat alert, so
+  // the effect above reports it exactly as it does every other rejection.
+  const guidance = alert && typeof alert === 'object' && alert.type === 'unrecognizedFormat' ?
+    formatGuidance(alert.ext) : null
   const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
 
   const refresh = () => {
@@ -176,6 +183,8 @@ export default function AlertDialog({onClose}) {
     headerText = 'File not in this browser'
   } else if (isNoGeometry) {
     headerText = 'No 3D geometry'
+  } else if (guidance) {
+    headerText = guidance.header
   } else {
     headerText = 'Error'
   }
@@ -183,9 +192,10 @@ export default function AlertDialog({onClose}) {
   // No "contact us" footer for an unsupported schema, an in-memory upload
   // whose page is gone, an upload this browser doesn't hold, or a file with
   // no geometry: all are known, documented limits or properties of the input,
-  // so there is nothing for support to diagnose.
+  // so there is nothing for support to diagnose. A guided format is the same:
+  // the guidance, and its help link, is the help.
   const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema && !isInMemoryUploadGone &&
-    !isUploadNotInBrowser && !isNoGeometry
+    !isUploadNotInBrowser && !isNoGeometry && !guidance
   return (
     <Dialog
       headerText={headerText}
@@ -197,18 +207,44 @@ export default function AlertDialog({onClose}) {
         <ErrorOutlineIcon className='icon-share'/>}
       actionTitle={actionTitle}
     >
-      <p>
-        {createAlertReport(alert)}<br/>
-        {showHelpFooter && (
-          <>For more help contact us on our{' '}
-            <Link href='https://discord.gg/9SxguBkFfQ' target='_blank' rel='noopener noreferrer'>
-              Discord
-            </Link>{' '}
-            for help
-          </>
-        )}
-      </p>
+      {guidance ? <FormatGuidanceReport guidance={guidance}/> : (
+        <p>
+          {createAlertReport(alert)}<br/>
+          {showHelpFooter && (
+            <>For more help contact us on our{' '}
+              <Link href='https://discord.gg/9SxguBkFfQ' target='_blank' rel='noopener noreferrer'>
+                Discord
+              </Link>{' '}
+              for help
+            </>
+          )}
+        </p>
+      )}
     </Dialog>
+  )
+}
+
+
+/**
+ * The body for a rejected file with format guidance: one paragraph per line,
+ * then the help link. The link opens a new tab, as the Discord one does, so
+ * reading the export steps doesn't cost the user the page they were on.
+ *
+ * @property {object} guidance A `FormatGuidance` from loader/formatGuidance.js
+ * @return {ReactElement}
+ */
+function FormatGuidanceReport({guidance}) {
+  return (
+    <>
+      {guidance.lines.map((line) => <p key={line}>{line}</p>)}
+      {guidance.help && (
+        <p>
+          <Link href={guidance.help.href} target='_blank' rel='noopener noreferrer'>
+            {guidance.help.label}
+          </Link>
+        </p>
+      )}
+    </>
   )
 }
 

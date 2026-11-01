@@ -15,6 +15,7 @@ import {
   reportUnrecognizedFormat,
   unrecognizedFormatAlert,
 } from '../loader/unrecognizedFormat'
+import {REVIT} from '../loader/formatGuidance'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import AlertDialog from './AlertDialog'
@@ -435,12 +436,68 @@ describe('AlertDialog — unrecognizedFormat alert type', () => {
     })
   })
 
-  it('shows the alert\'s own text', () => {
+  // An extension with no guidance (loader/formatGuidance.js) keeps the
+  // generic dialog: the alert's own text, the Error header, the Discord
+  // footer. This used Tower.rvt until Revit got its own text (Share#2007).
+  it('shows the alert\'s own text for a format with no guidance', () => {
+    act(() => {
+      useStore.getState().setAlert(
+        unrecognizedFormatAlert('Cannot extract filetype from filename: Tower.bin', 'Tower.bin', 'picker'))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(/Cannot extract filetype from filename: Tower\.bin/)).toBeInTheDocument()
+    expect(screen.getByText('Error')).toBeInTheDocument()
+    expect(screen.getByText(/Discord/)).toBeInTheDocument()
+  })
+
+  it('guides a Revit file to IFC export instead of the generic text', () => {
     act(() => {
       useStore.getState().setAlert(unrecognizedFormatAlert(message, 'Tower.rvt', 'picker'))
     })
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
-    expect(screen.getByText(/Cannot extract filetype from filename: Tower\.rvt/)).toBeInTheDocument()
+    expect(screen.getByText('Revit file')).toBeInTheDocument()
+    for (const line of REVIT.lines) {
+      expect(screen.getByText(line)).toBeInTheDocument()
+    }
+    const help = screen.getByRole('link', {name: 'How to export IFC from Revit'})
+    expect(help).toHaveAttribute('href', '/help/native-cad-files/#revit')
+    expect(help).toHaveAttribute('target', '_blank')
+    // The guidance replaces the generic sentence, header and footer.
+    expect(screen.queryByText(/Cannot extract filetype/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Error')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Discord/)).not.toBeInTheDocument()
+  })
+
+  // The drop path's message is different (it names the type and size, not
+  // the file), and the guidance comes from `ext` alone, so it lands the same.
+  it('guides a dropped file by its extension too', () => {
+    act(() => {
+      useStore.getState().setAlert(
+        unrecognizedFormatAlert('File upload of unknown type: type() size(42)', 'Bracket.SLDPRT', 'drop'))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('SolidWorks file')).toBeInTheDocument()
+    expect(screen.queryByText(/File upload of unknown type/)).not.toBeInTheDocument()
+  })
+
+  // A guidance entry need not carry a link; the archive one doesn't.
+  it('renders guidance with no help link', () => {
+    act(() => {
+      useStore.getState().setAlert(unrecognizedFormatAlert('x', 'plans.rar', 'drop'))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('Compressed archive')).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  it('Reset still closes a guided alert the way a failed load does', () => {
+    act(() => {
+      useStore.getState().setAlert(unrecognizedFormatAlert(message, 'Tower.rvt', 'picker'))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByText('Reset'))
+    expect(useStore.getState().alert).toBeNull()
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   // As a string this went through trackAlert, whose fingerprint is the
