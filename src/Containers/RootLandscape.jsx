@@ -3,6 +3,7 @@ import {Box, Paper, Stack} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
+import AppsRail from '../Components/Apps/AppsRail'
 import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
 import BottomBar from './BottomBar'
 import ControlsGroup from './ControlsGroup'
@@ -32,6 +33,75 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
   // the NavTree/Versions drawer. Desktop-only for now, like that drawer.
   const isWorkspaceEnabled = useExistInFeature('workspace')
 
+  const navDrawer = !isMobile &&
+    <Box
+      sx={{
+        // Left drawer should take only its own width.
+        flex: '0 0 auto',
+        flexShrink: 0,
+      }}
+    >
+      <NavTreeAndVersionsDrawer
+        pathPrefix={pathPrefix}
+        branch={branch}
+        selectWithShiftClickEvents={selectWithShiftClickEvents}
+      />
+    </Box>
+
+  const centerPane = (
+    <Stack
+      justifyContent='space-between'
+      sx={{flex: '1 1 auto', minWidth: 0, height: '100%'}}
+      data-testid='CenterPane'
+    >
+      {!isWorkspaceEnabled &&
+       <Box sx={{opacity: 0.5}}>
+         <Paper
+           elevation={0}
+           sx={{
+             position: 'absolute',
+             top: 0,
+             height: TOP_BAR_HEIGHT,
+             width: '100%',
+             backgroundColor: theme.palette.secondary.backgroundColor,
+             borderRadius: 0,
+           }}
+           data-testid='RootLandscape-ToolbarPaper'
+         />
+       </Box>}
+      <Stack
+        direction='row'
+        justifyContent='space-between'
+        // This pushes bottom bar down
+        flexGrow={1}
+        sx={{width: '100%', minWidth: 0}}
+        data-testid='RootLandscape-CenterPaneTopStack'
+      >
+        <ControlsGroup/>
+        <OperationsGroup/>
+      </Stack>
+      <Box
+        sx={{
+          width: '100%',
+        }}
+        data-testid='RootLandscape-CenterPaneBottomBox'
+      >
+        <BottomBar deselectItems={deselectItems}/>
+        <AlertDialogAndSnackbar/>
+        <LoadingBackdrop/>
+      </Box>
+    </Stack>
+  )
+
+  const rightDrawers = isMobile ?
+    <TabbedPanels
+      pathPrefix={pathPrefix}
+      branch={branch}
+      selectWithShiftClickEvents={selectWithShiftClickEvents}
+    /> :
+    // On non-mobile, use RightSideDrawers for the combined drawer logic
+    <RightSideDrawers/>
+
   return (
     <Stack
       direction='row'
@@ -48,73 +118,35 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
          <ProjectsDrawer/>
        </Box>
       }
-      {!isMobile &&
-       <Box
-         sx={{
-           // Left drawer should take only its own width.
-           flex: '0 0 auto',
-           flexShrink: 0,
-         }}
-       >
-         <NavTreeAndVersionsDrawer
-           pathPrefix={pathPrefix}
-           branch={branch}
-           selectWithShiftClickEvents={selectWithShiftClickEvents}
-         />
-       </Box>
-      }
-      <Stack
-        justifyContent='space-between'
-        sx={{flex: '1 1 auto', minWidth: 0, height: '100%'}}
-        data-testid='CenterPane'
-      >
-        {isWorkspaceEnabled ?
-          <TopBar/> :
-          <Box sx={{opacity: 0.5}}>
-            <Paper
-              elevation={0}
-              sx={{
-                position: 'absolute',
-                top: 0,
-                height: TOP_BAR_HEIGHT,
-                width: '100%',
-                backgroundColor: theme.palette.secondary.backgroundColor,
-                borderRadius: 0,
-              }}
-              data-testid='RootLandscape-ToolbarPaper'
-            />
-          </Box>}
+      {isWorkspaceEnabled ?
+        // Workspace shell (#1992): the TopBar spans everything right of
+        // the ProjectsDrawer, and the side drawers open *beneath* it
+        // rather than up to the top edge — so the bar is a block in the
+        // layout here, not an overlay inside the centre pane.
         <Stack
-          direction='row'
-          justifyContent='space-between'
-          // This pushes bottom bar down
-          flexGrow={1}
-          sx={{width: '100%', minWidth: 0}}
-          data-testid='RootLandscape-CenterPaneTopStack'
+          sx={{flex: '1 1 auto', minWidth: 0, height: '100%'}}
+          data-testid='WorkspaceMain'
         >
-          <ControlsGroup/>
-          <OperationsGroup/>
-        </Stack>
-        <Box
-          sx={{
-            width: '100%',
-          }}
-          data-testid='RootLandscape-CenterPaneBottomBox'
-        >
-          <BottomBar deselectItems={deselectItems}/>
-          <AlertDialogAndSnackbar/>
-          <LoadingBackdrop/>
-        </Box>
-      </Stack>
-      {isMobile ?
-        <TabbedPanels
-          pathPrefix={pathPrefix}
-          branch={branch}
-          selectWithShiftClickEvents={selectWithShiftClickEvents}
-        /> :
-      // On non-mobile, use RightSideDrawers for the combined drawer logic
-        <RightSideDrawers/>
-      }
+          <TopBar/>
+          <Stack
+            direction='row'
+            alignItems='stretch'
+            sx={{flex: '1 1 auto', minHeight: 0}}
+            data-testid='WorkspaceMain-Columns'
+          >
+            {navDrawer}
+            {centerPane}
+            {rightDrawers}
+            {/* The Apps drawer docked on the right border (#1993); a phone
+                keeps the bottom sheet. */}
+            {!isMobile && <AppsRail/>}
+          </Stack>
+        </Stack> :
+        <>
+          {navDrawer}
+          {centerPane}
+          {rightDrawers}
+        </>}
     </Stack>
   )
 }

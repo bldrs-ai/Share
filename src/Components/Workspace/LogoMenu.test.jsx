@@ -19,8 +19,8 @@ describe('LogoMenu', () => {
     expect(menu.getByText('Fastest browser-based CAD')).toBeInTheDocument()
 
     const expectedLinks = [
-      ['workspace-logo-menu-pricing', 'https://bldrs.ai/pricing'],
-      ['workspace-logo-menu-news', 'https://bldrs.ai/blog'],
+      ['workspace-logo-menu-pricing', '/pricing/'],
+      ['workspace-logo-menu-news', '/blog/'],
     ]
     for (const [testId, href] of expectedLinks) {
       const link = screen.getByTestId(testId)

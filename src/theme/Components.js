@@ -27,6 +27,9 @@ export function getComponentOverrides(palette, typography) {
       styleOverrides: {
         root: {
           fontWeight: 400,
+          // Sentence case, as written, matching the Bldrs Share design
+          // system's Button; MUI upper-cases button labels by default.
+          textTransform: 'none',
         },
       },
       variants: [{

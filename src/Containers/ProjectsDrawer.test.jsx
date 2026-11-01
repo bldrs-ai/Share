@@ -102,7 +102,60 @@ describe('ProjectsDrawer', () => {
     expect(screen.getByTestId('workspace-logo-button')).toBeInTheDocument()
   })
 
+  // The design system's paper layer: the persistent header and logo footer
+  // sit on workspacePaper, apart from the scrolling list between them.
+  it('sets the header and footer on paper bands around the scrolling list', () => {
+    render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+    const paper = 'rgb(245, 245, 245)' // day secondary.workspacePaper: neutral light grey
+    const headerBand = screen.getByTestId('projects-header-band')
+    expect(headerBand).toHaveStyle({backgroundColor: paper})
+    expect(within(headerBand).getByTestId('projects-header')).toBeInTheDocument()
+    const footerBand = screen.getByTestId('projects-footer-band')
+    expect(footerBand).toHaveStyle({backgroundColor: paper})
+    expect(within(footerBand).getByTestId('workspace-logo-button')).toBeInTheDocument()
+    // The list sits on an inset grey-paper panel; the frame around it is
+    // the side drawers' glass (secondary.backgroundColor, #F5F5F5A0).
+    const panel = screen.getByTestId('projects-panel')
+    expect(panel).toHaveStyle({backgroundColor: 'rgb(245, 245, 245)'})
+    expect(within(panel).getByTestId('projects-scroll')).toBeInTheDocument()
+    expect(screen.getByTestId('ProjectsDrawer')).not.toHaveStyle({backgroundColor: 'rgb(245, 245, 245)'})
+  })
+
+  // New project adds to the list, so it heads the list rather than
+  // riding in the header band; shorter than a control and inset so its
+  // edges line up with the rows' icons.
+  it('heads the scrolling list with an inset, 36px New project button', () => {
+    render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+    const button = screen.getByTestId('projects-new-button')
+    expect(within(screen.getByTestId('projects-scroll')).getByTestId('projects-new-button'))
+      .toBe(button)
+    expect(within(screen.getByTestId('projects-header-band')).queryByTestId('projects-new-button'))
+      .toBeNull()
+    const spaceThree = 12
+    const spaceFour = 16
+    expect(button).toHaveStyle({height: `${CONTROL_SIZE - spaceThree}px`})
+    expect(button.parentElement).toHaveStyle({
+      paddingLeft: `${CONTROL_MARGIN + spaceFour}px`,
+      paddingRight: `${CONTROL_MARGIN + spaceFour}px`,
+    })
+  })
+
   describe('collapse', () => {
+    it('keeps New project on the rail as a disc that opens the dialog', () => {
+      act(() => {
+        useStore.getState().setIsWorkspaceDrawerCollapsed(true)
+      })
+      render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+      expect(screen.getByTestId('projects-header-band')).toBeInTheDocument()
+      expect(screen.getByTestId('projects-footer-band')).toBeInTheDocument()
+      expect(screen.queryByTestId('projects-new-name')).toBeNull()
+      fireEvent.click(screen.getByTestId('projects-rail-new-button'))
+      expect(screen.getByTestId('projects-new-name')).toBeInTheDocument()
+    })
+
     it('collapses to a rail and back, persisting the choice', () => {
       render(<ShareMock><ProjectsDrawer/></ShareMock>)
 

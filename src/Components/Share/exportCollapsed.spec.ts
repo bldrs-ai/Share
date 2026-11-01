@@ -4,6 +4,7 @@ import {
   EXPORT_MODEL_PATH,
   EXPORT_FLAGS,
   EXPORT_TEST_TIMEOUT_MS,
+  closeExportDialog,
   dismissLoadSnackbar,
   glbJsonChunk,
   loadModelAndWaitForArtifact,
@@ -12,6 +13,8 @@ import {
   routeProModule,
   doubleClickSelectsAnElement,
   expectNavTreeFollowsSelection,
+  expectModelOnCanvas,
+  expectNothingSelected,
   selectCompression,
   setPortable,
   setSubscriptionTier,
@@ -24,6 +27,7 @@ import {
   auth0Login,
   clearOpfs,
   homepageSetup,
+  pauseViewerRendering,
   setIsReturningUser,
   setupAuthenticationIntercepts,
 } from '../../tests/e2e/utils'
@@ -148,16 +152,39 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     await clearOpfs(page)
   })
 
+  // Two earlier tests, one page: 'cache hit and every export codec reopen with
+  // double-click selection' and 'a hybrid Draco export is one EDGEBREAKER
+  // write, and both kinds of element reopen selectable'. Both loaded
+  // `index.ifc` under `glbCollapse`, logged in as Pro, and exported Draco with
+  // Portable off; the hybrid test's file is the Draco file of the three here,
+  // so its checks ride on that download and on its reopen.
+  //
+  // `index.ifc` under the collapse is HYBRID — five single-placement elements
+  // merge into one primitive while one shape placed twice stays an instanced
+  // node. Every primitive of the Draco file is EDGEBREAKER, the collapsed one
+  // carrying the per-vertex row tag its reader regroups triangles by
+  // (`loader/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`), so this is the browser
+  // test of the tag through three's own DRACOLoader: the method bytes and the
+  // attribute prove the file is the tagged layout, the `regrouped` log proves
+  // the reader took the tag path rather than the untagged one, and a
+  // double-click on each kind proves the rows it rebuilt are the elements they
+  // claim to be.
   test('cache hit and every export codec reopen with double-click selection', async ({page}) => {
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 4)
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 5)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
     const glbLogs = captureGlbLogs(page)
 
     await routeProModule(page)
     await loadModelAndWaitForArtifact(page, 'glbCollapse')
-    // The writer collapsed something, or nothing below tests the ranges.
+    // The writer collapsed something, or nothing below tests the ranges, and
+    // it kept an instanced node beside the collapsed rows, or the hybrid
+    // assertions below have no second kind to pick.
     expect(glbLogs.some((l) => /batched writer: collapsed [1-9]\d* single-placement/.test(l)))
       .toBe(true)
+    const writer = glbLogs.find((l) => l.includes('batched writer: collapsed')) ?? ''
+    const [, rows, kept] = /collapsed (\d+) single-placement.*; (\d+) instanced node/.exec(writer) ?? []
+    expect(Number(rows), 'collapsed rows in the artifact').toBeGreaterThan(0)
+    expect(Number(kept), 'instanced nodes kept beside them').toBeGreaterThan(0)
 
     // Cache HIT: the collapsed slot, hydrated through ranges.
     resetGlbLogs(glbLogs)
@@ -166,6 +193,12 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     await waitForGlbLog(glbLogs, 'cache HIT', EXPORT_TEST_TIMEOUT_MS)
     await waitForGlbLog(glbLogs, 'collapsed table(s)', EXPORT_TEST_TIMEOUT_MS)
     await dismissLoadSnackbar(page)
+    // Nothing below asserts on a painted frame: picks are read off the store,
+    // the NavTree and the URL, and the Export tab is a dialog over the canvas.
+    // A painting viewer pins the page's main thread (SwiftShader); see
+    // `pauseViewerRendering`.
+    await pauseViewerRendering(page)
+    await expectModelOnCanvas(page, 'the collapsed cache hit')
     await doubleClickSelectsAnElement(page, 'collapsed')
     await expectNavTreeFollowsSelection(page)
 
@@ -183,7 +216,19 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     for (const mode of CODECS) {
       paths.push({mode, path: await exportWith(page, mode, 'collapsed')})
     }
-    await page.keyboard.press('Escape')
+    await closeExportDialog(page)
+
+    // The Draco file is EDGEBREAKER throughout, and every collapsed primitive
+    // is row-tagged: what the file actually holds, not what the encoder was
+    // asked for.
+    const draco = paths.find(({mode}) => mode === 'draco')
+    expect(draco, 'a Draco export to inspect').toBeDefined()
+    const kinds = dracoByNodeKind(await readFile(draco?.path ?? ''))
+    expect([...kinds.collapsed.methods], 'collapsed primitives: EDGEBREAKER').toEqual([DRACO_EDGEBREAKER])
+    expect([...kinds.instanced.methods], 'instanced primitives: EDGEBREAKER').toEqual([DRACO_EDGEBREAKER])
+    expect(kinds.collapsed.primitives, 'collapsed primitives in the file').toBeGreaterThan(0)
+    expect(kinds.collapsed.tagged, 'every collapsed primitive row-tagged').toBe(kinds.collapsed.primitives)
+    expect(kinds.instanced.tagged, 'no instanced primitive row-tagged').toBe(0)
 
     for (const {mode, path} of paths) {
       await test.step(`reopen the ${mode} export`, async () => {
@@ -197,72 +242,29 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
         const hydrated = glbLogs.find((l) => l.includes('collapsed table(s)')) ?? ''
         expect(Number(/(\d+) collapsed table/.exec(hydrated)?.[1]), `${mode}: collapsed tables hydrated`)
           .toBeGreaterThan(0)
-        await doubleClickSelectsAnElement(page, 'collapsed')
+        if (mode === 'draco') {
+          expect(glbLogs.some((l) => /regrouped [1-9]\d* row-tagged triangle/.test(l)),
+            'the reader regrouped by the row tag').toBe(true)
+        }
+        await expectModelOnCanvas(page, `the reopened ${mode} export`)
+        // The previous codec's reopen left its pick selected, and an in-app
+        // file open is not a page load, so nothing guarantees the store was
+        // reset. Start from no selection, or the pick below could pass on
+        // that leftover element without the double-click doing anything.
+        await expectNothingSelected(page)
+        const collapsed = await doubleClickSelectsAnElement(page, 'collapsed')
         await expectNavTreeFollowsSelection(page)
+        if (mode === 'draco') {
+          // On the mobile form factor the NavTree panel covers the canvas, so
+          // the second pick would land on it; close it before aiming again.
+          await page.getByTestId('control-button-navigation').click()
+          await expect(page.getByTestId('NavTreePanel')).toBeHidden()
+          const instanced = await doubleClickSelectsAnElement(page, 'instanced')
+          await expectNavTreeFollowsSelection(page)
+          expect(instanced, 'the second pick is a different element').not.toBe(collapsed)
+        }
       })
     }
-  })
-
-  test('a hybrid Draco export is one EDGEBREAKER write, and both kinds of element reopen selectable', async ({page}) => {
-    // `index.ifc` under the collapse is HYBRID — five single-placement
-    // elements merge into one primitive while one shape placed twice stays an
-    // instanced node. Every primitive is EDGEBREAKER, the collapsed one
-    // carrying the per-vertex row tag its reader regroups triangles by
-    // (`loader/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`), so this is the
-    // browser test of the tag through three's own DRACOLoader: the method
-    // bytes and the attribute prove the file is the tagged layout, the
-    // `regrouped` log proves the reader took the tag path rather than the
-    // untagged one, and a double-click on each kind proves the rows it rebuilt
-    // are the elements they claim to be.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-    const glbLogs = captureGlbLogs(page)
-
-    await routeProModule(page)
-    await loadModelAndWaitForArtifact(page, 'glbCollapse')
-    const writer = glbLogs.find((l) => l.includes('batched writer: collapsed')) ?? ''
-    const [, rows, kept] = /collapsed (\d+) single-placement.*; (\d+) instanced node/.exec(writer) ?? []
-    expect(Number(rows), 'collapsed rows in the artifact').toBeGreaterThan(0)
-    expect(Number(kept), 'instanced nodes kept beside them').toBeGreaterThan(0)
-
-    await setSubscriptionTier(page, 'sharePro')
-    await auth0Login(page)
-    await openExportTab(page)
-    await dismissLoadSnackbar(page)
-    // The batched-native download: the collapsed ranges, their canary and
-    // the per-primitive Draco method all live in its instance tables and its
-    // EXT_mesh_gpu_instancing nodes, which Portable (the default) rewrites.
-    await setPortable(page, false)
-    await waitForCodecSizing(page)
-    const path = await exportWith(page, 'draco', 'hybrid')
-    await page.keyboard.press('Escape')
-
-    const kinds = dracoByNodeKind(await readFile(path))
-    expect([...kinds.collapsed.methods], 'collapsed primitives: EDGEBREAKER').toEqual([DRACO_EDGEBREAKER])
-    expect([...kinds.instanced.methods], 'instanced primitives: EDGEBREAKER').toEqual([DRACO_EDGEBREAKER])
-    expect(kinds.collapsed.primitives, 'collapsed primitives in the file').toBeGreaterThan(0)
-    expect(kinds.collapsed.tagged, 'every collapsed primitive row-tagged').toBe(kinds.collapsed.primitives)
-    expect(kinds.instanced.tagged, 'no instanced primitive row-tagged').toBe(0)
-
-    resetGlbLogs(glbLogs)
-    await reopenLocalGlb(page, path)
-    await waitForModelReady(page)
-    await dismissLoadSnackbar(page)
-    await waitForGlbLog(glbLogs, 'hydrated instance-table', EXPORT_TEST_TIMEOUT_MS)
-    const hydrated = glbLogs.find((l) => l.includes('collapsed table(s)')) ?? ''
-    expect(Number(/(\d+) collapsed table/.exec(hydrated)?.[1]), 'collapsed tables hydrated')
-      .toBeGreaterThan(0)
-    expect(glbLogs.some((l) => /regrouped [1-9]\d* row-tagged triangle/.test(l)),
-      'the reader regrouped by the row tag').toBe(true)
-    const collapsed = await doubleClickSelectsAnElement(page, 'collapsed')
-    await expectNavTreeFollowsSelection(page)
-    // On the mobile form factor the NavTree panel covers the canvas, so the
-    // second pick would land on it; close it before aiming again.
-    await page.getByTestId('control-button-navigation').click()
-    await expect(page.getByTestId('NavTreePanel')).toBeHidden()
-    const instanced = await doubleClickSelectsAnElement(page, 'instanced')
-    await expectNavTreeFollowsSelection(page)
-    expect(instanced, 'the second pick is a different element').not.toBe(collapsed)
   })
 
   test('baseline: an un-collapsed Draco export reopens with selection', async ({page}) => {
@@ -273,6 +275,7 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     await loadModelAndWaitForArtifact(page, 'disableGlbCollapse')
     // A baseline that quietly collapsed would be a second collapsed test.
     expect(glbLogs.some((l) => l.includes('batched writer: collapsed'))).toBe(false)
+    await pauseViewerRendering(page)
     await setSubscriptionTier(page, 'sharePro')
     await auth0Login(page)
     await openExportTab(page)
@@ -283,7 +286,7 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     await setPortable(page, false)
     await waitForCodecSizing(page)
     const path = await exportWith(page, 'draco', 'instanced')
-    await page.keyboard.press('Escape')
+    await closeExportDialog(page)
 
     resetGlbLogs(glbLogs)
     await reopenLocalGlb(page, path)
@@ -293,6 +296,8 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
     const hydrated = glbLogs.find((l) => l.includes('collapsed table(s)')) ?? ''
     expect(Number(/(\d+) collapsed table/.exec(hydrated)?.[1]), 'no collapsed tables in the baseline')
       .toBe(0)
+    await expectModelOnCanvas(page, 'the reopened un-collapsed Draco export')
+    await expectNothingSelected(page)
     await doubleClickSelectsAnElement(page, 'any')
     await expectNavTreeFollowsSelection(page)
   })

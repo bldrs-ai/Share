@@ -5,12 +5,15 @@ import {
   EXPORT_TEST_TIMEOUT_MS,
   GLTF_MAGIC,
   clickGate,
+  closeExportDialog,
   disableDracoEncoder,
   dismissLoadSnackbar,
   doubleClickSelectsAMergedInstance,
   doubleClickSelectsAnElement,
+  expectModelOnCanvas,
   expectNavTreeFollowsSelection,
   expectNoHorizontalScroll,
+  expectNothingSelected,
   expectProductRowSelected,
   expectSnackbarOnTop,
   exportLedger,
@@ -39,14 +42,17 @@ import {
   waitForEstimate,
   watchProModuleRequests,
 } from '../../tests/e2e/export'
+import {MIN_MODEL_EDGE_FRACTION, SAME_FRAME_TOLERANCE, edgeFraction, frameDifference} from '../../tests/e2e/canvasFrame'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {gaEvents} from '../../tests/e2e/ga'
 import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {
   auth0Login,
+  captureRenderedFrame,
   clearOpfs,
   homepageSetup,
+  pauseViewerRendering,
   setIsReturningUser,
   setupAuthenticationIntercepts,
 } from '../../tests/e2e/utils'
@@ -153,6 +159,9 @@ async function reloadFromCache(
     await page.goto(target, {waitUntil: 'domcontentloaded'})
   }
   await waitForModelReady(page)
+  // The selection checks that follow read the store and the NavTree, never a
+  // painted frame; see {@link pauseViewerRendering}.
+  await pauseViewerRendering(page)
   await waitForGlbLog(glbLogs, 'cache HIT', EXPORT_TEST_TIMEOUT_MS)
   await dismissLoadSnackbar(page)
 }
@@ -477,6 +486,77 @@ async function sceneHighlightCount(page: Page): Promise<number> {
 }
 
 
+/**
+ * Open the NavTree if it is shut, and expect it up. A click on the control
+ * TOGGLES it, so a step that follows another cannot click blindly.
+ *
+ * @param page Playwright page
+ */
+async function openNavTree(page: Page) {
+  const panel = page.getByTestId('NavTreePanel')
+  if (!await panel.isVisible()) {
+    await page.getByTestId('control-button-navigation').click()
+  }
+  await expect(panel).toBeVisible()
+}
+
+
+/**
+ * Shut the NavTree if it is open. On a phone its drawer covers the canvas, so
+ * a double-click aimed at the scene would land on it.
+ *
+ * @param page Playwright page
+ */
+async function closeNavTree(page: Page) {
+  const panel = page.getByTestId('NavTreePanel')
+  if (await panel.isVisible()) {
+    await page.getByTestId('control-button-navigation').click()
+  }
+  await expect(panel).toBeHidden()
+}
+
+
+/**
+ * The way a reopened export is shown to be a model and not just geometry: the
+ * spatial chain `BLDRS_spatial_tree` carries over from the IFC (project, site,
+ * building, storey, one child each, then the leaves), then a leaf is selected
+ * from the tree, the row highlights, the URL addresses the element so the
+ * selection is shareable, and the SCENE carries the highlight. That last one is
+ * what #1844 failed: the tree row lit up, the URL grew its element path, and the
+ * model showed nothing, because the hydration that owns the instance tables
+ * never ran. The highlight has no DOM, so it is read off the exposed store
+ * (`sceneHighlightCount`).
+ *
+ * The chain's presence is the half that already worked before that fix, and it
+ * is what makes the selection assertions about PICKING rather than about the
+ * tree having rendered at all.
+ *
+ * @param page Playwright page, with a reopened `index.ifc` export loaded
+ * @param opts `isOnlyRowSelected` also asserts the leaf's row is the only one
+ *   highlighted
+ */
+async function expectReopenedModelPickableFromNavTree(page: Page, {isOnlyRowSelected = false} = {}) {
+  await openNavTree(page)
+  const node = (label: string) => page.locator(`[data-node-label="${label}"]`)
+  for (const name of SPATIAL_CHAIN) {
+    await expect(node(name)).toHaveCount(1)
+    await node(name).getByTestId('NavTreeNodeToggle').click()
+  }
+  await expect(node(LEAF_LABEL).first()).toBeVisible()
+  await expectNothingSelected(page)
+
+  await node(LEAF_LABEL).first().getByTestId('NavTreeNodeLabel').click()
+
+  await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
+  if (isOnlyRowSelected) {
+    // The row highlights, and only that row.
+    await expect(page.locator('[data-is-selected="true"]')).toHaveCount(1)
+  }
+  await expect(page).toHaveURL(/\/share\/v\/local-only\/[^/]+\.glb(\/\d+)+/)
+  expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
+}
+
+
 // How long an export's history record may take to settle — the record-export
 // round trip plus the JWT refresh after it, which `isExportInFlight` waits on
 // (useExport.js). Seconds when idle; well past the 5 s default on a busy box.
@@ -497,9 +577,24 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await clearOpfs(page)
   })
 
-  test('a Pro user downloads a valid standalone .glb', async ({page}) => {
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
+
+  // Ten earlier tests, one page. Each opened `index.ifc`, waited for the
+  // artifact, logged in, and opened the Export tab (~30 s on desktop) to look
+  // at one thing in it; they now take one turn at a single Export tab. See the
+  // coverage table in the PR for which `test.step` carries which old test.
+  //
+  // Why this is safe to chain: nothing here needs a pristine page except the
+  // DEFAULT state of the tab (portable on, the sweep choosing the smallest
+  // codec), and that step comes first. After it each step states every control
+  // it depends on (`setPortable`, `selectCompression('none')`, gzip off) rather
+  // than trusting what the step before left, and each step puts the controls
+  // back where it found them. Every file is downloaded while the tab is open
+  // and REOPENED at the end, after the dialog closes, because reopening
+  // navigates the page away from the Export tab.
+  test('a Pro user exports index.ifc every way the tab offers, and every file opens back in Share', async ({page}) => {
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 6)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
 
     const proModuleRequests = watchProModuleRequests(page)
     await routeProModule(page)
@@ -508,238 +603,36 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await setSubscriptionTier(page, 'sharePro')
     await auth0Login(page)
 
+    // Nothing here asserts on a painted frame: the Export tab is a dialog over
+    // the canvas, and the reopened models are checked through the store and
+    // the NavTree. A painting viewer pins the page's main thread (SwiftShader)
+    // and every click below costs ~1 s; paused, ~0.1 s (`pauseViewerRendering`).
+    await pauseViewerRendering(page)
     await openExportTab(page)
     // The load's own "Loaded index.ifc" line owns the snackbar until it is
-    // dismissed; clearing it makes the assertion below about the EXPORT.
+    // dismissed; clearing it makes the assertions below about the EXPORT.
     await dismissLoadSnackbar(page)
     const exportButton = page.getByTestId('export-glb-button')
     await expect(exportButton).toBeEnabled()
-    // The batched-native file: the size line's header read (#1841) and the
-    // metadata strip are its subject, and Portable (the default since #1831)
-    // takes the whole-file path instead.
-    await setPortable(page, false)
-    await expect(exportButton).toHaveText('Export GLB')
-
-    // Pin the codec before reading anything. Since #1850 the panel measures
-    // every codec in the background and defaults to the smallest, so the
-    // selection is in motion for the first seconds the tab is open. Let the
-    // sweep finish, then choose explicitly — an explicit choice is never
-    // overridden, so from here the selection is this test's.
-    await waitForCodecSizing(page)
-    await selectCompression(page, 'none')
-
-    // What the file will weigh, before anything is downloaded (#1841). The
-    // figure is read from the artifact's header; `data-bytes` carries the
-    // raw count the label rounds, so the comparison with the saved file
-    // below is exact rather than "both say 1.2 MB".
     const sizeLine = page.getByTestId('export-size')
-    await expect(sizeLine).toBeVisible()
-    const withMetadataBytes = await sizeBytes(sizeLine)
-    const withMetadataLabel = (await sizeLine.textContent())?.trim()
-    expect(withMetadataBytes).toBeGreaterThan(0)
+    const compression = page.getByTestId('export-compression')
+    const portableToggle = page.getByTestId('export-portable').locator('input')
 
-    // Turning the metadata off has to move the number, which is the half of
-    // this feature that was missing: through v0.1 the strip dropped the JSON
-    // entries and left their payloads in the BIN chunk.
-    const strippedBytes = await toggleMetadata(page)
-    expect(strippedBytes).toBeLessThan(withMetadataBytes)
-    expect(await toggleMetadata(page)).toBe(withMetadataBytes)
-    // The action is the LAST thing in the panel and centred, with the Pro
-    // chip riding beside it for a free user (#1838). On the mobile
-    // projection that row is the dialog's widest, so this is where a
-    // regression would show up as a sideways scroll rather than as a
-    // missing element.
-    await expectNoHorizontalScroll(page)
-
-    const downloadPromise = page.waitForEvent('download')
-    await exportButton.click()
-    const download = await downloadPromise
-
-    expect(download.suggestedFilename()).toBe('index.glb')
-    const savedPath = await download.path()
-    const bytes = await readFile(savedPath)
-    // The point of the feature: what lands in Downloads is a GLB, not the
-    // Bldrs container (which starts with "BLDR" and no third-party viewer
-    // can read).
-    expect(bytes.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
-    // The size the panel promised is the size that landed in Downloads.
-    expect(bytes.byteLength).toBe(withMetadataBytes)
-    // The export really did go through the gated delivery path rather than
-    // through anything already in the page bundle.
-    expect(proModuleRequests.length).toBeGreaterThan(0)
-
-    // The dialog is still open — the export doesn't close it — so this is
-    // the layering case that was broken: the "Exported …" message has to be
-    // readable over the dialog, on mobile especially, where the dialog fills
-    // the viewport.
-    await expect(page.getByRole('dialog')).toBeVisible()
-    await expect(page.getByTestId('snackbar')).toContainText('Exported')
-    // …and it reports the same figure the panel showed before the click:
-    // `blob.size` there, the header estimate here, one computation
-    // (`loader/glbArtifactSize.js`).
-    await expect(page.getByTestId('snackbar')).toContainText(`(${withMetadataLabel})`)
-    await expectSnackbarOnTop(page)
-
-    // Now the other toggle state, end to end: the stripped file really is
-    // the smaller size the panel quoted, which is only true once the strip
-    // drops the metadata's bufferViews and their bytes (#1841).
-    expect(await toggleMetadata(page)).toBe(strippedBytes)
-    const strippedDownloadPromise = page.waitForEvent('download')
-    await exportButton.click()
-    const strippedDownload = await strippedDownloadPromise
-    const strippedFile = await readFile(await strippedDownload.path())
-
-    expect(strippedFile.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
-    expect(strippedFile.byteLength).toBe(strippedBytes)
-  })
-
-  test('a Pro user downloads a Meshopt and a Draco compressed .glb', async ({page}) => {
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-
-    await routeProModule(page)
-    await loadModelAndWaitForArtifact(page)
-    await setSubscriptionTier(page, 'sharePro')
-    await auth0Login(page)
-
-    await openExportTab(page)
-    await dismissLoadSnackbar(page)
-    const exportButton = page.getByTestId('export-glb-button')
-    await expect(exportButton).toBeEnabled()
-    // Batched-native: the view-count arithmetic below is this artifact's.
-    await setPortable(page, false)
-
-    // Pin the codec before reading anything. Since #1850 the panel measures
-    // every codec in the background and defaults to the smallest, so the
-    // selection is in motion for the first seconds the tab is open. Let the
-    // sweep finish, then choose explicitly — an explicit choice is never
-    // overridden, so from here the selection is this test's.
-    await waitForCodecSizing(page)
-    await selectCompression(page, 'none')
-
-    // Uncompressed is the baseline each codec is read against.
-    const sizeLine = page.getByTestId('export-size')
-    await expect(sizeLine).toBeVisible()
-    await expect(page.getByTestId('export-compression')).toContainText('None')
-    const uncompressedBytes = await sizeBytes(sizeLine)
-    expect(uncompressedBytes).toBeGreaterThan(0)
-    const uncompressedMetadataBytes = await metadataDelta(uncompressedBytes)
-
-    // What the payloads themselves weigh, read off the uncompressed download.
-    // That figure is the part of the toggle's worth a codec cannot move, and
-    // it is asserted exactly against every codec below.
-    const uncompressedDownload = page.waitForEvent('download')
-    await exportButton.click()
-    const uncompressedJson = glbJsonChunk(await readFile(await (await uncompressedDownload).path()))
-    const uncompressedPayloadBytes = bldrsPayloadBytes(uncompressedJson)
-    const tablesBytes = (json: ReturnType<typeof glbJsonChunk>) =>
-      bldrsPayloadBytes(json) - bldrsPayloadBytes(json, WITNESSED_TABLES)
-    const uncompressedDescriptors = bldrsDescriptors(uncompressedJson)
-    expect(uncompressedPayloadBytes).toBeGreaterThan(0)
-    // Guards the per-codec descriptor comparison below against passing
-    // vacuously on an empty set.
-    expect(Object.keys(uncompressedDescriptors).length).toBeGreaterThan(0)
-
-    for (const codec of COMPRESSION_CODECS) {
-      // The encoders are real wasm and only exist in a browser: the unit
-      // suite runs them under jsdom with the wasm handed over as bytes, which
-      // cannot tell us that the DRACO script tag loads from the page's own
-      // `/static/js/draco/` or that Meshopt's module resolves in the bundle.
-      const compressedBytes = await selectCompression(page, codec.mode)
-      expect(compressedBytes, `${codec.mode} should re-encode the file`).not.toBe(uncompressedBytes)
-      if (codec.isSmallerOnThisFixture) {
-        expect(compressedBytes, `${codec.mode} should shrink the download`).toBeLessThan(uncompressedBytes)
-      }
-      const codecMetadataBytes = await metadataDelta(compressedBytes)
-      // Three toggle buttons plus their label are the widest control row in
-      // the dialog, and on the mobile projection that is where a layout
-      // regression shows up as a sideways scroll (#1838).
-      await expectNoHorizontalScroll(page)
-
+    /**
+     * Click Export, save the download under a name the local-file loader
+     * recognises (Playwright's temp file has no extension), and read it back.
+     *
+     * @param name the file name to save under
+     * @return the download, where it was saved and its bytes
+     */
+    const exportAs = async (name: string) => {
       const downloadPromise = page.waitForEvent('download')
       await exportButton.click()
-      const file = await readFile(await (await downloadPromise).path())
-
-      expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
-      // The figure on the line is the file: the panel encoded once, cached
-      // the bytes, and the export handed over those very bytes (#1842).
-      expect(file.byteLength, `${codec.mode} download should weigh what the panel said`)
-        .toBe(compressedBytes)
-      const json = glbJsonChunk(file)
-
-      // One encode serves both states of the metadata toggle: the payloads
-      // pass through untouched and are re-added by arithmetic (#1842). THIS
-      // half is exact — a codec that re-encoded or re-compressed them would
-      // move it.
-      // The instance tables are the exception for Draco alone, pinned below.
-      expect(bldrsPayloadBytes(json, WITNESSED_TABLES), `${codec.mode} must not re-encode the payloads`)
-        .toBe(uncompressedPayloadBytes - tablesBytes(uncompressedJson))
-      const witnessBytes = tablesBytes(json) - tablesBytes(uncompressedJson)
-      if (codec.mode === 'draco') {
-        // The default artifact is collapsed, so the Draco file must carry the
-        // witness — without it the reader refuses the table and picking is
-        // lost on reopen (exportCollapsed.spec.ts performs the pick itself).
-        expect(witnessBytes, 'draco adds a lossy witness to the collapsed tables').toBeGreaterThan(0)
-      } else {
-        expect(witnessBytes, `${codec.mode} leaves the instance tables exact`).toBe(0)
-      }
-
-      // Also exact: every descriptor survives the codec unchanged APART from
-      // the bufferView index it names. This is what makes the bound below
-      // safe to state — without it, a descriptor regression that left the
-      // payload bytes alone (reattaching one as `compressed: false`, say,
-      // which costs 3 characters and renders that metadata unreadable) could
-      // hide inside the slack.
-      const codecDescriptors = bldrsDescriptors(json)
-      expect(Object.keys(codecDescriptors)).toEqual(Object.keys(uncompressedDescriptors))
-      for (const [name, descriptor] of Object.entries(codecDescriptors)) {
-        expect({...descriptor, bufferView: undefined}, `${codec.mode} changed ${name}`)
-          .toEqual({...uncompressedDescriptors[name], bufferView: undefined})
-      }
-
-      // What is left to differ is the INDEX WIDTH, and nothing else: since
-      // #1862 merges the geometry views this artifact carries 3 bufferViews
-      // uncompressed against 15 Draco'd, so three single-digit indices become
-      // double-digit. Measured when this was written: 4,476 B against 4,480 B,
-      // every byte of it in `extensions`, with the payloads identical. (Since
-      // the collapse went default-on, Draco's payloads differ by the witness
-      // alone, which is added to the bound for that reason.)
-      // Bound it by the EXACT width difference these descriptors cost rather
-      // than by the width they could cost, plus the most two independently
-      // 4-byte-padded JSON chunks can differ by.
-      // …plus the witness bytes, which are metadata too and so move the
-      // toggle's worth by exactly what they weigh.
-      const indexWidthDelta = Math.abs(
-        JSON.stringify(codecDescriptors).length - JSON.stringify(uncompressedDescriptors).length)
-      expect(Math.abs(codecMetadataBytes - uncompressedMetadataBytes),
-        `${codec.mode} moved the metadata toggle's worth beyond its index width`)
-        .toBeLessThanOrEqual(indexWidthDelta + GLB_CHUNK_PADDING_SLACK_BYTES + witnessBytes)
-
-      expect(json.extensionsUsed).toContain(codec.extension)
-      expect(json.extensionsRequired).toContain(codec.extension)
-      // Meshopt's default rung rewrites NORMAL as normalized BYTE, which core
-      // glTF does not allow: the file must say so or a strict loader (and
-      // glTF-Validator) rejects it (#1943). Counted first, so the assertion
-      // below cannot pass for want of a quantized normal to check.
-      const quantizedNormals = (json.meshes ?? []).flatMap((mesh) => mesh.primitives)
-        .filter((primitive) => primitive.attributes.NORMAL !== undefined)
-        .filter((primitive) => json.accessors?.[primitive.attributes.NORMAL].componentType === BYTE_COMPONENT_TYPE)
-      if (codec.mode === 'meshopt') {
-        expect(quantizedNormals.length, 'meshopt quantizes this fixture\'s normals').toBeGreaterThan(0)
-      }
-      if (quantizedNormals.length > 0) {
-        expect(json.extensionsUsed, `${codec.mode} stores BYTE normals`).toContain('KHR_mesh_quantization')
-        expect(json.extensionsRequired, `${codec.mode} stores BYTE normals`).toContain('KHR_mesh_quantization')
-      }
-      // …and the Bldrs metadata is still in there, which is the half
-      // `@gltf-transform` drops unless it is detached and re-attached around
-      // the transform.
-      expect(json.extensionsUsed?.some((name) => name.startsWith('BLDRS_'))).toBe(true)
+      const download = await downloadPromise
+      const path = test.info().outputPath(name)
+      await download.saveAs(path)
+      return {download, path, bytes: await readFile(path)}
     }
-    // Back to None, and the panel is exactly where it started — the cached
-    // uncompressed figure, not a third encode.
-    expect(await selectCompression(page, 'none')).toBe(uncompressedBytes)
-
     /**
      * What "Include Bldrs metadata" is worth right now: toggle it off, read
      * the line, toggle it back.
@@ -747,11 +640,590 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
      * @param withMetadataBytes the figure the line carries with it on
      * @return the difference the toggle makes
      */
-    async function metadataDelta(withMetadataBytes: number): Promise<number> {
+    const metadataDelta = async (withMetadataBytes: number): Promise<number> => {
       const stripped = await toggleMetadata(page)
       expect(await toggleMetadata(page)).toBe(withMetadataBytes)
       return withMetadataBytes - stripped
     }
+
+    // The files the steps below bring back in Share, in the order they reopen.
+    const files = {
+      meshopt: '', draco: '', native: '', gzipped: '', portable: '', defaulted: '',
+    }
+
+    // Was: 'the default export is portable, and reopens with selection working'
+    // (the download half) and 'the panel measures every codec and defaults to
+    // the smallest'. Both are about the tab as it opens, untouched.
+    await test.step('the default is portable, every codec is measured, and the smallest is chosen', async () => {
+      await expect(portableToggle).toBeChecked()
+      // The trade-off is on screen under the toggle, not only in a tooltip.
+      await expect(page.getByTestId('export-portable-help')).toContainText('more glTF viewers can open them')
+      await expect(page.getByTestId('export-portable-help')).toBeVisible()
+      await expectNoHorizontalScroll(page)
+
+      // No interaction: opening the tab is the whole trigger. Portable is the
+      // default (#1831), so what the sweep measures — and auto-selects on —
+      // is the portable file, the one the default click downloads. A sweep of
+      // the native file would pick a codec on bytes the user never gets.
+      const codecSizes = await waitForCodecSizes(page)
+      for (const mode of ['none', 'meshopt', 'draco']) {
+        expect(codecSizes[mode], `${mode} should have a measured size`).toBeGreaterThan(0)
+      }
+      // On `index.ifc`'s native file Draco won — 13,084 B, against Meshopt's
+      // 21,480 and 17,244 uncompressed, measured before Portable became the
+      // default (#1831) — but the assertion is about the RULE, not about this
+      // fixture or shape: whichever option is smallest is the one selected.
+      const smallest = smallestCodecIn(codecSizes)
+      await expect(compression).toContainText(smallest.charAt(0).toUpperCase() + smallest.slice(1))
+      // The dialog took the sweep without seizing up — every control above is
+      // still live, and the layout still fits the mobile projection.
+      await expect(page.getByTestId('export-include-metadata').locator('input')).toBeEnabled()
+      await expectNoHorizontalScroll(page)
+
+      // The size line agrees with the option that won it…
+      const quotedBytes = await waitForEstimate(page)
+      expect(quotedBytes).toBe(codecSizes[smallest])
+
+      // …and so does the file. This is a CACHE HIT, not a re-encode: the
+      // winner's cell is precisely the one the sweep keeps
+      // (`export/codecSizes.js`). So what it pins is that the panel hands over
+      // the bytes it measured — which is the point of keeping the winner.
+      const {download, bytes, path} = await exportAs('index-default.glb')
+      files.defaulted = path
+      expect(download.suggestedFilename()).toBe('index.glb')
+      expect(bytes.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+      expect(bytes.byteLength).toBe(quotedBytes)
+      expect(bytes.byteLength).toBe(codecSizes[smallest])
+      // The export really did go through the gated delivery path rather than
+      // through anything already in the page bundle. This is the first
+      // delivery of the page, so it can only have come from this click.
+      expect(proModuleRequests.length).toBeGreaterThan(0)
+
+      // Portable: no instancing extension to refuse (from BOTH arrays —
+      // `extensionsRequired` is the one that made 3dviewer.net reject the
+      // file rather than degrade), and the NavTree's names on the nodes. It is
+      // the portable file the sweep measured, not the native one.
+      const json = glbJsonChunk(bytes)
+      expect(json.extensionsUsed ?? []).not.toContain('EXT_mesh_gpu_instancing')
+      expect(json.extensionsRequired ?? []).not.toContain('EXT_mesh_gpu_instancing')
+      const nodeNames = (json.nodes ?? []).map((node) => node.name)
+      for (const name of SPATIAL_CHAIN) {
+        expect(nodeNames, `the default export should name ${name}`).toContain(name)
+      }
+
+      // The other half, which the download above cannot reach on any fixture:
+      // the sweep RELEASED the codecs it did not keep, so picking one now runs
+      // the encoder a second time, and the figure it lands on has to be the
+      // one the dropdown option was carrying. That equality is what makes
+      // releasing safe — the encoders are deterministic, so a dropped cell
+      // costs CPU and never a wrong number.
+      expect(await selectCompression(page, 'meshopt')).toBe(codecSizes.meshopt)
+
+      // An explicit choice is never overridden, however small a figure the
+      // panel is holding for something else.
+      expect(await selectCompression(page, 'none')).toBe(codecSizes.none)
+      await expect(compression).toContainText('None')
+    })
+
+    // Was: 'a Pro user downloads a valid standalone .glb'.
+    let withMetadataBytes = 0
+    let strippedBytes = 0
+    let nativeFile: Buffer = Buffer.alloc(0)
+    await test.step('a valid standalone .glb, at the size the panel promised, with and without the metadata', async () => {
+      // The batched-native file: the size line's header read (#1841) and the
+      // metadata strip are its subject, and Portable (the default since #1831)
+      // takes the whole-file path instead.
+      await setPortable(page, false)
+      await expect(exportButton).toHaveText('Export GLB')
+
+      // Pin the codec before reading anything. Since #1850 the panel measures
+      // every codec in the background and defaults to the smallest, and
+      // changing Portable restarts that sweep. Let it finish, then choose
+      // explicitly — an explicit choice is never overridden, so from here the
+      // selection is this test's.
+      await waitForCodecSizing(page)
+      await selectCompression(page, 'none')
+
+      // What the file will weigh, before anything is downloaded (#1841). The
+      // figure is read from the artifact's header; `data-bytes` carries the
+      // raw count the label rounds, so the comparison with the saved file
+      // below is exact rather than "both say 1.2 MB".
+      await expect(sizeLine).toBeVisible()
+      withMetadataBytes = await sizeBytes(sizeLine)
+      const withMetadataLabel = (await sizeLine.textContent())?.trim()
+      expect(withMetadataBytes).toBeGreaterThan(0)
+
+      // Turning the metadata off has to move the number, which is the half of
+      // this feature that was missing: through v0.1 the strip dropped the JSON
+      // entries and left their payloads in the BIN chunk.
+      strippedBytes = await toggleMetadata(page)
+      expect(strippedBytes).toBeLessThan(withMetadataBytes)
+      expect(await toggleMetadata(page)).toBe(withMetadataBytes)
+      // The action is the LAST thing in the panel and centred, with the Pro
+      // chip riding beside it for a free user (#1838). On the mobile
+      // projection that row is the dialog's widest, so this is where a
+      // regression would show up as a sideways scroll rather than as a
+      // missing element.
+      await expectNoHorizontalScroll(page)
+
+      const {download, bytes, path} = await exportAs('index-native.glb')
+      files.native = path
+      nativeFile = bytes
+      expect(download.suggestedFilename()).toBe('index.glb')
+      // The point of the feature: what lands in Downloads is a GLB, not the
+      // Bldrs container (which starts with "BLDR" and no third-party viewer
+      // can read).
+      expect(bytes.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+      // The size the panel promised is the size that landed in Downloads.
+      expect(bytes.byteLength).toBe(withMetadataBytes)
+
+      // The dialog is still open — the export doesn't close it — so this is
+      // the layering case that was broken: the "Exported …" message has to be
+      // readable over the dialog, on mobile especially, where the dialog fills
+      // the viewport.
+      await expect(page.getByRole('dialog')).toBeVisible()
+      await expect(page.getByTestId('snackbar')).toContainText('Exported')
+      // …and it reports the same figure the panel showed before the click:
+      // `blob.size` there, the header estimate here, one computation
+      // (`loader/glbArtifactSize.js`). The default export's snackbar is still
+      // up from the step before, and quotes a different figure, so this can
+      // only be satisfied by THIS export's.
+      await expect(page.getByTestId('snackbar')).toContainText(`(${withMetadataLabel})`)
+      await expectSnackbarOnTop(page)
+
+      // Now the other toggle state, end to end: the stripped file really is
+      // the smaller size the panel quoted, which is only true once the strip
+      // drops the metadata's bufferViews and their bytes (#1841).
+      expect(await toggleMetadata(page)).toBe(strippedBytes)
+      const stripped = await exportAs('index-native-stripped.glb')
+      expect(stripped.bytes.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+      expect(stripped.bytes.byteLength).toBe(strippedBytes)
+      // Back to the metadata on, for every step after this one.
+      expect(await toggleMetadata(page)).toBe(withMetadataBytes)
+    })
+
+    // Was: 'a Pro user downloads a Meshopt and a Draco compressed .glb'. The
+    // uncompressed baseline each codec is read against is the native download
+    // of the step above — the same selection (None, native, metadata on).
+    await test.step('a Meshopt and a Draco compressed .glb, each at the size the panel promised', async () => {
+      await expect(compression).toContainText('None')
+      const uncompressedBytes = withMetadataBytes
+      const uncompressedMetadataBytes = withMetadataBytes - strippedBytes
+
+      // What the payloads themselves weigh, read off the uncompressed
+      // download. That figure is the part of the toggle's worth a codec cannot
+      // move, and it is asserted exactly against every codec below.
+      const uncompressedJson = glbJsonChunk(nativeFile)
+      const uncompressedPayloadBytes = bldrsPayloadBytes(uncompressedJson)
+      const tablesBytes = (json: ReturnType<typeof glbJsonChunk>) =>
+        bldrsPayloadBytes(json) - bldrsPayloadBytes(json, WITNESSED_TABLES)
+      const uncompressedDescriptors = bldrsDescriptors(uncompressedJson)
+      expect(uncompressedPayloadBytes).toBeGreaterThan(0)
+      // Guards the per-codec descriptor comparison below against passing
+      // vacuously on an empty set.
+      expect(Object.keys(uncompressedDescriptors).length).toBeGreaterThan(0)
+
+      for (const codec of COMPRESSION_CODECS) {
+        // The encoders are real wasm and only exist in a browser: the unit
+        // suite runs them under jsdom with the wasm handed over as bytes, which
+        // cannot tell us that the DRACO script tag loads from the page's own
+        // `/static/js/draco/` or that Meshopt's module resolves in the bundle.
+        const compressedBytes = await selectCompression(page, codec.mode)
+        expect(compressedBytes, `${codec.mode} should re-encode the file`).not.toBe(uncompressedBytes)
+        if (codec.isSmallerOnThisFixture) {
+          expect(compressedBytes, `${codec.mode} should shrink the download`).toBeLessThan(uncompressedBytes)
+        }
+        const codecMetadataBytes = await metadataDelta(compressedBytes)
+        // Three toggle buttons plus their label are the widest control row in
+        // the dialog, and on the mobile projection that is where a layout
+        // regression shows up as a sideways scroll (#1838).
+        await expectNoHorizontalScroll(page)
+
+        const {bytes: file, path} = await exportAs(`index-${codec.mode}.glb`)
+        files[codec.mode as 'meshopt' | 'draco'] = path
+
+        expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+        // The figure on the line is the file: the panel encoded once, cached
+        // the bytes, and the export handed over those very bytes (#1842).
+        expect(file.byteLength, `${codec.mode} download should weigh what the panel said`)
+          .toBe(compressedBytes)
+        const json = glbJsonChunk(file)
+
+        // One encode serves both states of the metadata toggle: the payloads
+        // pass through untouched and are re-added by arithmetic (#1842). THIS
+        // half is exact — a codec that re-encoded or re-compressed them would
+        // move it.
+        // The instance tables are the exception for Draco alone, pinned below.
+        expect(bldrsPayloadBytes(json, WITNESSED_TABLES), `${codec.mode} must not re-encode the payloads`)
+          .toBe(uncompressedPayloadBytes - tablesBytes(uncompressedJson))
+        const witnessBytes = tablesBytes(json) - tablesBytes(uncompressedJson)
+        if (codec.mode === 'draco') {
+          // The default artifact is collapsed, so the Draco file must carry the
+          // witness — without it the reader refuses the table and picking is
+          // lost on reopen (exportCollapsed.spec.ts performs the pick itself).
+          expect(witnessBytes, 'draco adds a lossy witness to the collapsed tables').toBeGreaterThan(0)
+        } else {
+          expect(witnessBytes, `${codec.mode} leaves the instance tables exact`).toBe(0)
+        }
+
+        // Also exact: every descriptor survives the codec unchanged APART from
+        // the bufferView index it names. This is what makes the bound below
+        // safe to state — without it, a descriptor regression that left the
+        // payload bytes alone (reattaching one as `compressed: false`, say,
+        // which costs 3 characters and renders that metadata unreadable) could
+        // hide inside the slack.
+        const codecDescriptors = bldrsDescriptors(json)
+        expect(Object.keys(codecDescriptors)).toEqual(Object.keys(uncompressedDescriptors))
+        for (const [name, descriptor] of Object.entries(codecDescriptors)) {
+          expect({...descriptor, bufferView: undefined}, `${codec.mode} changed ${name}`)
+            .toEqual({...uncompressedDescriptors[name], bufferView: undefined})
+        }
+
+        // What is left to differ is the INDEX WIDTH, and nothing else: since
+        // #1862 merges the geometry views this artifact carries 3 bufferViews
+        // uncompressed against 15 Draco'd, so three single-digit indices become
+        // double-digit. Measured when this was written: 4,476 B against 4,480 B,
+        // every byte of it in `extensions`, with the payloads identical. (Since
+        // the collapse went default-on, Draco's payloads differ by the witness
+        // alone, which is added to the bound for that reason.)
+        // Bound it by the EXACT width difference these descriptors cost rather
+        // than by the width they could cost, plus the most two independently
+        // 4-byte-padded JSON chunks can differ by.
+        // …plus the witness bytes, which are metadata too and so move the
+        // toggle's worth by exactly what they weigh.
+        const indexWidthDelta = Math.abs(
+          JSON.stringify(codecDescriptors).length - JSON.stringify(uncompressedDescriptors).length)
+        expect(Math.abs(codecMetadataBytes - uncompressedMetadataBytes),
+          `${codec.mode} moved the metadata toggle's worth beyond its index width`)
+          .toBeLessThanOrEqual(indexWidthDelta + GLB_CHUNK_PADDING_SLACK_BYTES + witnessBytes)
+
+        expect(json.extensionsUsed).toContain(codec.extension)
+        expect(json.extensionsRequired).toContain(codec.extension)
+        // Meshopt's default rung rewrites NORMAL as normalized BYTE, which core
+        // glTF does not allow: the file must say so or a strict loader (and
+        // glTF-Validator) rejects it (#1943). Counted first, so the assertion
+        // below cannot pass for want of a quantized normal to check.
+        const quantizedNormals = (json.meshes ?? []).flatMap((mesh) => mesh.primitives)
+          .filter((primitive) => primitive.attributes.NORMAL !== undefined)
+          .filter((primitive) => json.accessors?.[primitive.attributes.NORMAL].componentType === BYTE_COMPONENT_TYPE)
+        if (codec.mode === 'meshopt') {
+          expect(quantizedNormals.length, 'meshopt quantizes this fixture\'s normals').toBeGreaterThan(0)
+        }
+        if (quantizedNormals.length > 0) {
+          expect(json.extensionsUsed, `${codec.mode} stores BYTE normals`).toContain('KHR_mesh_quantization')
+          expect(json.extensionsRequired, `${codec.mode} stores BYTE normals`).toContain('KHR_mesh_quantization')
+        }
+        // …and the Bldrs metadata is still in there, which is the half
+        // `@gltf-transform` drops unless it is detached and re-attached around
+        // the transform.
+        expect(json.extensionsUsed?.some((name) => name.startsWith('BLDRS_'))).toBe(true)
+      }
+      // Back to None, and the panel is exactly where it started — the cached
+      // uncompressed figure, not a third encode.
+      expect(await selectCompression(page, 'none')).toBe(uncompressedBytes)
+    })
+
+    // Was: 'a Pro user picks a Quality rung, and the panel says what it costs'.
+    await test.step('a Quality rung reaches the encoder, and the panel says what it costs', async () => {
+      // #1848. The rungs are encoder settings, so what only a browser can show
+      // is that they reach the real wasm encoders and change the file the user
+      // gets — and that the millimetre caption beside them is computed off THIS
+      // model's own bounds rather than being a constant.
+      //
+      // Balanced by default, and inert until a codec is chosen — there is
+      // nothing for a rung to mean while the file is being handed over as it is.
+      const qualityControl = page.getByTestId('export-quality')
+      await expect(qualityControl).toContainText('Balanced')
+      await expect(qualityControl.getByRole('combobox')).toHaveAttribute('aria-disabled', 'true')
+      await expect(page.getByTestId('export-quality-caption')).toHaveCount(0)
+
+      const balancedBytes = await selectCompression(page, 'draco')
+      await expect(qualityControl.getByRole('combobox')).not.toHaveAttribute('aria-disabled')
+      // The caption is a promise about the user's model, in the unit they
+      // decide in.
+      const balancedCaption = await page.getByTestId('export-quality-caption').textContent()
+      expect(balancedCaption).toMatch(/parts may move up to [\d.]+ mm/)
+
+      const smallestBytes = await selectQuality(page, 'smallest')
+
+      // Fewer POSITION bits is a coarser grid, so the figure has to grow — the
+      // one thing about the caption that cannot be a constant.
+      const smallestCaption = await page.getByTestId('export-quality-caption').textContent()
+      expect(smallestCaption).toMatch(/parts may move up to [\d.]+ mm/)
+      expect(millimetresIn(smallestCaption)).toBeGreaterThan(millimetresIn(balancedCaption))
+
+      // Reduced is the last rung there is. #1852 shipped two lossy rungs below
+      // it and #1854 removed them again — the whole ladder measured −12.4% on
+      // Snowdon, where the container and not the geometry is the file — so the
+      // panel must not still be offering one.
+      await expect(page.getByTestId('export-quality-squashed')).toHaveCount(0)
+      await expect(page.getByTestId('export-quality-smooshed')).toHaveCount(0)
+
+      // Two rungs are two different files. On a fixture this small they need
+      // not differ in SIZE — the encoder-effort half of a rung is model-shaped
+      // (#1848) — so what is asserted is what the panel promises: the figure on
+      // the line is the file that lands in Downloads, at the rung now chosen.
+      const {bytes: file} = await exportAs('index-draco-smallest.glb')
+      expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+      expect(file.byteLength).toBe(smallestBytes)
+      expect(glbJsonChunk(file).extensionsRequired).toContain('KHR_draco_mesh_compression')
+      // A fourth control row is where a mobile layout regression would show up
+      // as a sideways scroll rather than a missing element (#1838), and at
+      // 390px "Balanced (medium)" beside "Compression type" is the pair that
+      // would push the dialog sideways if the row stopped wrapping.
+      await expectNoHorizontalScroll(page)
+
+      // Meshopt has ONE coarser setting and Balanced already spends it, so
+      // Reduced re-encodes to Balanced's file. The panel says that rather than
+      // leaving a "small" option beside a size line that does not move
+      // (`exportQuality.js#isDracoOnlyRung`).
+      await selectCompression(page, 'meshopt')
+      await expect(page.getByTestId('export-quality-caption'))
+        .toContainText('Meshopt has no coarser setting')
+      await selectCompression(page, 'draco')
+
+      // Back to Balanced and the panel is exactly where it was — the cached
+      // figure for that rung, not a third encode.
+      expect(await selectQuality(page, 'balanced')).toBe(balancedBytes)
+    })
+
+    // Was: 'a Pro user downloads a gzipped .glb.gz, at the size the panel
+    // promised' (the download half; 'a gzipped export opens back in Share' is
+    // the reopen below).
+    await test.step('a gzipped .glb.gz, at the size the panel promised', async () => {
+      // #1854. The lossless win that beats the whole quality ladder, because on
+      // a real model the container — JSON node graph plus raw float32 instance
+      // transforms — is where the bytes are, and no mesh codec touches it.
+      //
+      // Only a browser can show this end to end: `CompressionStream` is a
+      // browser API, the figure on the size line comes from one call to it and
+      // the downloaded bytes from another, and the invariant this panel is
+      // built on is that those two agree.
+      //
+      // No codec, which is the selection the measurement is about: gzip alone,
+      // over a file nothing else has squeezed. Uncompressed + gzipped: per-
+      // vertex picking ids do not survive the codecs, which would make the
+      // reopen's selection assertion a different claim.
+      const rawBytes = await selectCompression(page, 'none')
+      expect(rawBytes).toBeGreaterThan(0)
+
+      // The toggle says what the user gets before they get it — a `.glb.gz` is
+      // not a `.glb` and will not drop into the three.js editor.
+      const gzipRow = page.getByTestId('export-gzip-row')
+      await expect(gzipRow).toContainText('Compress download')
+      await expect(gzipRow).toContainText('.glb.gz')
+
+      const gzippedBytes = await toggleGzip(page)
+
+      // The figure on the line is now the `.glb.gz`, not the `.glb` inside it.
+      // `index.ifc` is ~17 KB of mostly JSON, so this is a large margin rather
+      // than a knife edge — and it is the same direction the 6× on Snowdon is.
+      expect(gzippedBytes).toBeLessThan(rawBytes)
+
+      // Saved under its own name: the point of the reopen is the DOUBLE
+      // extension — `.glb.gz` is the shape that defeats a last-dot filetype
+      // parse.
+      const {download, bytes: file, path} = await exportAs('index-reopened.glb.gz')
+      files.gzipped = path
+
+      // Three separate claims, and each has its own way of being wrong. The
+      // NAME must carry both extensions; the LENGTH must be the figure the user
+      // read, which is where a non-deterministic gzip would show up; and the
+      // CONTENTS must be a gzip member of a real GLB, which is what stops an
+      // uncompressed file from being shipped under a `.gz`.
+      expect(download.suggestedFilename()).toMatch(/\.glb\.gz$/)
+      expect(file.byteLength).toBe(gzippedBytes)
+
+      const inflated = gunzipSync(file)
+      expect(inflated.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+      expect(inflated.byteLength).toBe(rawBytes)
+      // …and the GLB inside is the whole model, not a truncated stream: its
+      // JSON chunk parses and still declares the Bldrs payloads the metadata
+      // toggle was left on for.
+      expect(glbJsonChunk(inflated).extensionsUsed).toContain('BLDRS_spatial_tree')
+
+      await expectSnackbarOnTop(page)
+      // A fifth control row, and the one carrying the longest caption in the
+      // panel — at 390px "gzip — saves a .glb.gz, reopens in Share" beside the
+      // toggle is what would push the dialog sideways if the row stopped
+      // wrapping (#1838).
+      await expectNoHorizontalScroll(page)
+
+      // Gzip off again: the line is back on the plain `.glb`'s figure.
+      expect(await toggleGzip(page)).toBe(rawBytes)
+    })
+
+    // Was: 'a portable .glb names its elements, and reopens as a pickable
+    // model' (the download half).
+    await test.step('a portable .glb names its elements, at the size the panel promised', async () => {
+      // #1843: the native export IS the batched-native cache artifact, and its
+      // `EXT_mesh_gpu_instancing` is `extensionsRequired` — so 3dviewer.net
+      // refuses the file outright, and the three.js editor shows a flat list of
+      // `mesh_N` where Share shows the named IFC hierarchy. Portable rewrites it
+      // into a plain scene graph: one named node per element, nested, each
+      // placement a child referencing the shared mesh.
+      //
+      // What only a browser can show, and the jest suite cannot: that the toggle
+      // is wired to the estimate and to the export through the same cache, so
+      // the figure on the line is the file that lands in Downloads.
+      //
+      // Native first, for the figure to compare against — then Portable. Both
+      // stated explicitly rather than read off the default.
+      await expect(compression).toContainText('None')
+      await expect(sizeLine).toBeVisible()
+      const nativeBytes = await sizeBytes(sizeLine)
+      expect(nativeBytes).toBe(withMetadataBytes)
+
+      await setPortable(page, true)
+      const portableBytes = await waitForEstimate(page)
+      await expect(portableToggle).toBeChecked()
+      expect(portableBytes).toBeGreaterThan(0)
+      // One node per placement plus its name and TRS is JSON the batched shape
+      // does not carry, and no codec compresses the JSON chunk. On `index.ifc`
+      // that is a handful of elements; on a 100k-instance model it is ~100 B per
+      // instance net of the TRS accessors the rewrite reclaims — the trade the
+      // helper text under the toggle describes.
+      expect(portableBytes).not.toBe(nativeBytes)
+      // A third control row in the dialog is where a mobile layout regression
+      // would show up as a sideways scroll rather than a missing element (#1838).
+      await expectNoHorizontalScroll(page)
+
+      const {bytes: file, path} = await exportAs('index-portable.glb')
+      files.portable = path
+
+      expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
+      // The figure on the line is the file: the panel rewrote once, cached the
+      // bytes, and the export handed over those very bytes (§4.4).
+      expect(file.byteLength).toBe(portableBytes)
+
+      const json = glbJsonChunk(file)
+      // The refusal, gone — from BOTH arrays.
+      expect(json.extensionsUsed ?? []).not.toContain('EXT_mesh_gpu_instancing')
+      expect(json.extensionsRequired ?? []).not.toContain('EXT_mesh_gpu_instancing')
+      // …and the names the three.js editor showed as `mesh_N` are the nav tree's.
+      // Read off the FILE, not off a three parse: `GLTFLoader` runs every node
+      // name through `PropertyBinding.sanitizeNodeName`, which turns spaces into
+      // underscores — three's mangling, not the file's.
+      const nodeNames = (json.nodes ?? []).map((node) => node.name)
+      for (const name of SPATIAL_CHAIN) {
+        expect(nodeNames, `portable export should name ${name}`).toContain(name)
+      }
+      expect(nodeNames).toContain(LEAF_LABEL)
+      // Every element node is a real node, and the placements carry the meshes.
+      expect((json.nodes ?? []).filter((node) => Number.isInteger(node.mesh)).length).toBeGreaterThan(0)
+      // …over vertex data three reads as plain BufferAttributes: no view with a
+      // stride wider than one element, which is what made the three.js editor's
+      // autosave serialise the whole shared view once per geometry (§4.3).
+      expectNoInterleavedVertexViews(json)
+    })
+
+    // Reopening navigates away from the Export tab, so every file comes back
+    // in after the last download, and the dialog goes first.
+    await closeExportDialog(page)
+
+    // Was: 'a compressed export opens back in Share'. Share is one of the
+    // viewers a compressed export has to open in, and it didn't: the
+    // GLTFLoader's DRACO and Meshopt decoders were gated on the cache WRITER's
+    // feature flags, so a file the user brought failed with
+    // "setMeshoptDecoder must be called before loading compressed files" /
+    // "No DRACOLoader instance provided" (#1837 smoke). Both codecs' files come
+    // back in through the Open dialog's file chooser, the way a user would.
+    for (const mode of ['meshopt', 'draco'] as const) {
+      // The upload lands under `/v/local-only/` and loads from OPFS; the load
+      // report's OK is a fresh signal per load, so it can't be the previous
+      // model's.
+      await test.step(`the ${mode} export opens back in Share`, async () => {
+        await reopenLocalGlb(page, files[mode])
+        await expect(page.getByText(/Loader error|Unhandled error in parse|DRACOLoader|setMeshoptDecoder/))
+          .toHaveCount(0)
+        await waitForModelReady(page)
+        await dismissLoadSnackbar(page)
+        await expectModelOnCanvas(page, `the reopened ${mode} export`)
+      })
+    }
+
+    // Was: 'an exported .glb reopens as a pickable model, not just geometry'.
+    // #1844: the export IS the batched-native cache artifact, and reopening it
+    // rendered the model and even drew the NavTree — the `BLDRS_*` reader
+    // plugins park their payloads on `userData` whatever the source — while
+    // hover, click and NavTree→scene selection all did nothing. The hydration
+    // that rebuilds the decorated BatchedMesh, and the picking restore after
+    // it, were gated on `cameFromGlbCache`: on where the BYTES came from, not
+    // on what the FILE is. So the one thing this has to do that the compressed
+    // reopen does not is go on to USE the reopened model. Uncompressed on
+    // purpose: per-vertex ids do not survive the codecs — a compressed
+    // artifact's picking rides on `BLDRS_face_ids` instead, a different claim.
+    await test.step('an exported .glb reopens as a pickable model, not just geometry', async () => {
+      await reopenLocalGlb(page, files.native)
+      await waitForModelReady(page)
+      await dismissLoadSnackbar(page)
+      await expectModelOnCanvas(page, 'the reopened native export')
+      await expectReopenedModelPickableFromNavTree(page, {isOnlyRowSelected: true})
+    })
+
+    // Was: 'a gzipped export opens back in Share, with its BLDRS data intact'.
+    // The round trip closed (#1831). #1854 shipped the `.glb.gz` and argued the
+    // way back was out of scope, so Share could write a file it could not read.
+    // Only a browser can show the whole loop: `CompressionStream` writes the
+    // file, `DecompressionStream` opens it, and the two are the browser's, not
+    // this repo's. What makes it more than "it loaded" is the last part: the
+    // inflated bytes have to be the SAME GLB, so the `BLDRS_*` extensions
+    // survive and the model comes back pickable, not just visible.
+    await test.step('a gzipped export opens back in Share, with its BLDRS data intact', async () => {
+      // Back in through the Open dialog's file chooser, the way a user would.
+      // The URL it lands on ends `.glb`, not `.glb.gz`: the envelope comes off
+      // at the upload seam, so what OPFS holds and what the route names is the
+      // model (`loader/gzipEnvelope.js`).
+      await reopenLocalGlb(page, files.gzipped)
+      await expect(page.getByText(/Loader error|Unhandled error in parse|Could not guess filetype|decompress/))
+        .toHaveCount(0)
+      await waitForModelReady(page)
+      await dismissLoadSnackbar(page)
+      await expectModelOnCanvas(page, 'the reopened gzipped export')
+      // `BLDRS_spatial_tree` came through the gzip: a GLB that inflated to
+      // anything but the exported bytes would not draw the chain.
+      await expectReopenedModelPickableFromNavTree(page)
+    })
+
+    // Was: 'a portable .glb names its elements, and reopens as a pickable
+    // model' (the reopen half). The nav tree survives — it hydrates from
+    // `BLDRS_spatial_tree`, which is indifferent to the node graph — and since
+    // #1849 so does picking: `joinPortableNodesToTables` regroups the stamped
+    // plain Meshes per table row, so the file rehydrates to the same decorated
+    // BatchedMesh the batched-native artifact does. Before it, this reopened
+    // as a plain, grey, un-pickable GLB.
+    await test.step('a portable .glb reopens as a pickable model', async () => {
+      await reopenLocalGlb(page, files.portable)
+      await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
+      await waitForModelReady(page)
+      await dismissLoadSnackbar(page)
+      await expectModelOnCanvas(page, 'the reopened portable export')
+      await expectReopenedModelPickableFromNavTree(page)
+    })
+
+    // Was: 'the default export is portable, and reopens with selection
+    // working' (the reopen half). The user's own action with nothing touched:
+    // the file back into Share, and a double-click in the scene.
+    await test.step('the default export reopens with selection working', async () => {
+      resetGlbLogs(glbLogs)
+      await reopenLocalGlb(page, files.defaulted)
+      await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
+      await waitForModelReady(page)
+      await dismissLoadSnackbar(page)
+      await expectModelOnCanvas(page, 'the reopened default export')
+      // Hydrated from the portable file's stamped nodes back into the decorated
+      // BatchedMesh — not the plain-GLTF fallback, which renders and picks
+      // nothing.
+      await waitForGlbLog(glbLogs, 'hydrated instance-table', EXPORT_TEST_TIMEOUT_MS)
+
+      // The user's action: double-click an element in the scene, and it is
+      // selected in the store, the NavTree and the URL. The NavTree the step
+      // before left open would cover the canvas on a phone.
+      await closeNavTree(page)
+      await expectNothingSelected(page)
+      await doubleClickSelectsAnElement(page, 'any')
+      await expectNavTreeFollowsSelection(page)
+    })
   })
 
   test('a codec with no encoder in the browser falls back, and says so', async ({page}) => {
@@ -773,6 +1245,8 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // page by the time the page's own scripts are.
     await disableDracoEncoder(page)
     await loadModelAndWaitForArtifact(page)
+    // A dialog over the canvas; see `pauseViewerRendering`.
+    await pauseViewerRendering(page)
     await setSubscriptionTier(page, 'sharePro')
     await auth0Login(page)
 
@@ -816,385 +1290,174 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     expect(glbJsonChunk(file).extensionsRequired ?? []).not.toContain('KHR_draco_mesh_compression')
   })
 
-  test('a compressed export opens back in Share', async ({page}) => {
-    // Share is one of the viewers a compressed export has to open in, and it
-    // didn't: the GLTFLoader's DRACO and Meshopt decoders were gated on the
-    // cache WRITER's feature flags, so a file the user brought failed with
-    // "setMeshoptDecoder must be called before loading compressed files" /
-    // "No DRACOLoader instance provided" (#1837 smoke). Both codecs' files
-    // come back in through the Open dialog's file chooser, the way a user
-    // would bring them.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-
-    await routeProModule(page)
-    await loadModelAndWaitForArtifact(page)
-    await setSubscriptionTier(page, 'sharePro')
-    await auth0Login(page)
-
-    await openExportTab(page)
-    await dismissLoadSnackbar(page)
-    const exportButton = page.getByTestId('export-glb-button')
-    await expect(exportButton).toBeEnabled()
-    // Batched-native: the decoders are the subject. The default (portable)
-    // file's reopen has its own test below.
-    await setPortable(page, false)
-
-    const downloads: Array<{mode: string; path: string}> = []
-    for (const codec of COMPRESSION_CODECS) {
-      await selectCompression(page, codec.mode)
-      const downloadPromise = page.waitForEvent('download')
-      await exportButton.click()
-      // Saved under its own name: Playwright's download temp file has no
-      // extension, and the local-file loader needs one to know what it is.
-      const path = test.info().outputPath(`index-${codec.mode}.glb`)
-      await (await downloadPromise).saveAs(path)
-      downloads.push({mode: codec.mode, path})
-    }
-    await page.keyboard.press('Escape')
-
-    for (const {mode, path} of downloads) {
-      // The upload lands under `/v/local-only/` and loads from OPFS; the load
-      // report's OK is a fresh signal per load (the first one was
-      // dismissed above), so it can't be the previous model's.
-      await test.step(`${mode} export opens`, async () => {
-        await reopenLocalGlb(page, path)
-        await expect(page.getByText(/Loader error|Unhandled error in parse|DRACOLoader|setMeshoptDecoder/))
-          .toHaveCount(0)
-        await waitForModelReady(page)
-        await dismissLoadSnackbar(page)
-      })
-    }
-  })
-
-  test('an exported .glb reopens as a pickable model, not just geometry', async ({page}) => {
-    // #1844: the export IS the batched-native cache artifact, and reopening it
-    // rendered the model and even drew the NavTree — the `BLDRS_*` reader
-    // plugins park their payloads on `userData` whatever the source — while
-    // hover, click and NavTree→scene selection all did nothing. The hydration
-    // that rebuilds the decorated BatchedMesh, and the picking restore after
-    // it, were gated on `cameFromGlbCache`: on where the BYTES came from, not
-    // on what the FILE is. So the one thing this test has to do that
-    // "a compressed export opens back in Share" does not is go on to USE the
-    // reopened model.
-    //
-    // Uncompressed on purpose. The codecs are the sibling test's subject, and
-    // per-vertex ids do not survive them — a compressed artifact's picking
-    // rides on `BLDRS_face_ids` instead, which is a different claim.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-
-    await routeProModule(page)
-    await loadModelAndWaitForArtifact(page)
-    await setSubscriptionTier(page, 'sharePro')
-    await auth0Login(page)
-
-    await openExportTab(page)
-    await dismissLoadSnackbar(page)
-    const exportButton = page.getByTestId('export-glb-button')
-    await expect(exportButton).toBeEnabled()
-    // Batched-native: #1844 is the native file's reopen.
-    await setPortable(page, false)
-    // Pin the codec before reading anything. Since #1850 the panel measures
-    // every codec in the background and defaults to the smallest, so the
-    // selection is in motion for the first seconds the tab is open. Let the
-    // sweep finish, then choose explicitly — an explicit choice is never
-    // overridden, so from here the selection is this test's.
-    await waitForCodecSizing(page)
-    await selectCompression(page, 'none')
-    await expect(page.getByTestId('export-compression')).toContainText('None')
-
-    const downloadPromise = page.waitForEvent('download')
-    await exportButton.click()
-    // Saved under its own name: Playwright's download temp file has no
-    // extension, and the local-file loader needs one to know what it is.
-    const savedPath = test.info().outputPath('index-reopened.glb')
-    await (await downloadPromise).saveAs(savedPath)
-    await page.keyboard.press('Escape')
-
-    await reopenLocalGlb(page, savedPath)
-    await waitForModelReady(page)
-    await dismissLoadSnackbar(page)
-
-    await page.getByTestId('control-button-navigation').click()
-    await expect(page.getByTestId('NavTreePanel')).toBeVisible()
-    const node = (label: string) => page.locator(`[data-node-label="${label}"]`)
-
-    // The spatial chain `BLDRS_spatial_tree` carries over from the IFC:
-    // project → site → building → storey, one child each, then the leaves.
-    // Their presence is the half that already worked before the fix, and it
-    // is what makes the selection assertions below about PICKING rather than
-    // about the tree having rendered at all.
-    for (const name of SPATIAL_CHAIN) {
-      await expect(node(name)).toHaveCount(1)
-      await node(name).getByTestId('NavTreeNodeToggle').click()
-    }
-    await expect(node(LEAF_LABEL).first()).toBeVisible()
-
-    await node(LEAF_LABEL).first().getByTestId('NavTreeNodeLabel').click()
-
-    // The row highlights, and only that row.
-    await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
-    await expect(page.locator('[data-is-selected="true"]')).toHaveCount(1)
-    // The URL addresses the element, so the selection is shareable.
-    await expect(page).toHaveURL(/\/share\/v\/local-only\/[^/]+\.glb(\/\d+)+/)
-    // And the SCENE carries the highlight. This is the assertion the bug
-    // failed: the tree row lit up, the URL grew its element path, and the
-    // model showed nothing, because the hydration that owns the instance
-    // tables never ran. The highlight has no DOM, so it is read off the
-    // exposed store the way `Containers/sceneHighlightPermalink.spec.ts`
-    // reads it — batched selection sets for the hydrated artifact, merged
-    // selection subsets for anything that fell back.
-    expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
-  })
-
-  test('a portable .glb names its elements, and reopens as a pickable model', async ({page}) => {
-    // #1843: the native export IS the batched-native cache artifact, and its
-    // `EXT_mesh_gpu_instancing` is `extensionsRequired` — so 3dviewer.net
-    // refuses the file outright, and the three.js editor shows a flat list of
-    // `mesh_N` where Share shows the named IFC hierarchy. Portable rewrites it
-    // into a plain scene graph: one named node per element, nested, each
-    // placement a child referencing the shared mesh.
-    //
-    // What only a browser can show, and the jest suite cannot: that the toggle
-    // is wired to the estimate and to the export through the same cache, so
-    // the figure on the line is the file that lands in Downloads.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-
-    await routeProModule(page)
-    await loadModelAndWaitForArtifact(page)
-    await setSubscriptionTier(page, 'sharePro')
-    await auth0Login(page)
-
-    await openExportTab(page)
-    await dismissLoadSnackbar(page)
-    const exportButton = page.getByTestId('export-glb-button')
-    await expect(exportButton).toBeEnabled()
-
-    // Native first, for the figure to compare against — then Portable. Both
-    // stated explicitly rather than read off the default, which is ON since
-    // #1831; the default's own download is the next test's subject.
-    await setPortable(page, false)
-    // Pin the codec before reading anything. Since #1850 the panel measures
-    // every codec in the background and defaults to the smallest, so the
-    // selection is in motion for the first seconds the tab is open. Let the
-    // sweep finish, then choose explicitly — an explicit choice is never
-    // overridden, so from here the selection is this test's.
-    await waitForCodecSizing(page)
-    await selectCompression(page, 'none')
-
-    const portableToggle = page.getByTestId('export-portable').locator('input')
-    const sizeLine = page.getByTestId('export-size')
-    await expect(sizeLine).toBeVisible()
-    const nativeBytes = await sizeBytes(sizeLine)
-
-    await setPortable(page, true)
-    const portableBytes = await waitForEstimate(page)
-    await expect(portableToggle).toBeChecked()
-    expect(portableBytes).toBeGreaterThan(0)
-    // One node per placement plus its name and TRS is JSON the batched shape
-    // does not carry, and no codec compresses the JSON chunk. On `index.ifc`
-    // that is a handful of elements; on a 100k-instance model it is ~100 B per
-    // instance net of the TRS accessors the rewrite reclaims — the trade the
-    // helper text under the toggle describes.
-    expect(portableBytes).not.toBe(nativeBytes)
-    // A third control row in the dialog is where a mobile layout regression
-    // would show up as a sideways scroll rather than a missing element (#1838).
-    await expectNoHorizontalScroll(page)
-
-    const downloadPromise = page.waitForEvent('download')
-    await exportButton.click()
-    // Saved under its own name: Playwright's download temp file has no
-    // extension, and the local-file loader needs one to know what it is.
-    const savedPath = test.info().outputPath('index-portable.glb')
-    const download = await downloadPromise
-    await download.saveAs(savedPath)
-    const file = await readFile(savedPath)
-
-    expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
-    // The figure on the line is the file: the panel rewrote once, cached the
-    // bytes, and the export handed over those very bytes (§4.4).
-    expect(file.byteLength).toBe(portableBytes)
-
-    const json = glbJsonChunk(file)
-    // The refusal, gone — from BOTH arrays. `extensionsRequired` is the one
-    // that made 3dviewer.net reject the file rather than degrade.
-    expect(json.extensionsUsed ?? []).not.toContain('EXT_mesh_gpu_instancing')
-    expect(json.extensionsRequired ?? []).not.toContain('EXT_mesh_gpu_instancing')
-    // …and the names the three.js editor showed as `mesh_N` are the nav tree's.
-    // Read off the FILE, not off a three parse: `GLTFLoader` runs every node
-    // name through `PropertyBinding.sanitizeNodeName`, which turns spaces into
-    // underscores — three's mangling, not the file's.
-    const nodeNames = (json.nodes ?? []).map((node) => node.name)
-    for (const name of SPATIAL_CHAIN) {
-      expect(nodeNames, `portable export should name ${name}`).toContain(name)
-    }
-    expect(nodeNames).toContain(LEAF_LABEL)
-    // Every element node is a real node, and the placements carry the meshes.
-    expect((json.nodes ?? []).filter((node) => Number.isInteger(node.mesh)).length).toBeGreaterThan(0)
-    // …over vertex data three reads as plain BufferAttributes: no view with a
-    // stride wider than one element, which is what made the three.js editor's
-    // autosave serialise the whole shared view once per geometry (§4.3).
-    expectNoInterleavedVertexViews(json)
-
-    // Back into Share. The nav tree survives — it hydrates from
-    // `BLDRS_spatial_tree`, which is indifferent to the node graph — and since
-    // #1849 so does picking: `joinPortableNodesToTables` regroups the stamped
-    // plain Meshes per table row, so the file rehydrates to the same decorated
-    // BatchedMesh the batched-native artifact does. Before it, this reopened
-    // as a plain, grey, un-pickable GLB.
-    await page.keyboard.press('Escape')
-    await reopenLocalGlb(page, savedPath)
-    await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
-    await waitForModelReady(page)
-    await dismissLoadSnackbar(page)
-
-    await page.getByTestId('control-button-navigation').click()
-    await expect(page.getByTestId('NavTreePanel')).toBeVisible()
-    const node = (label: string) => page.locator(`[data-node-label="${label}"]`)
-    for (const name of SPATIAL_CHAIN) {
-      await expect(node(name)).toHaveCount(1)
-      await node(name).getByTestId('NavTreeNodeToggle').click()
-    }
-    await expect(node(LEAF_LABEL).first()).toBeVisible()
-
-    await node(LEAF_LABEL).first().getByTestId('NavTreeNodeLabel').click()
-
-    // The same three assertions the batched-native reopen makes (#1844): the
-    // row selects, the URL addresses the element so the selection is
-    // shareable, and — the one that was failing — the SCENE carries the
-    // highlight. The highlight has no DOM, so it is read off the exposed
-    // store.
-    await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
-    await expect(page).toHaveURL(/\/share\/v\/local-only\/[^/]+\.glb(\/\d+)+/)
-    expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
-  })
-
-  test('the default export is portable, and reopens with selection working', async ({page}) => {
-    // #1831: Portable became the default. This is the user's own action with
-    // nothing touched — open the tab, let the panel settle, click Export —
-    // then the file back into Share, and a double-click in the scene. Every
-    // other export spec pins the toggle to the variant it is about; this one
-    // is about the default, so it must not.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-    const glbLogs = captureGlbLogs(page)
-
-    await routeProModule(page)
-    await loadModelAndWaitForArtifact(page)
-    await setSubscriptionTier(page, 'sharePro')
-    await auth0Login(page)
-
-    await openExportTab(page)
-    await dismissLoadSnackbar(page)
-    const exportButton = page.getByTestId('export-glb-button')
-    await expect(exportButton).toBeEnabled()
-
-    await expect(page.getByTestId('export-portable').locator('input')).toBeChecked()
-    // The trade-off is on screen under the toggle, not only in a tooltip.
-    await expect(page.getByTestId('export-portable-help')).toContainText('more glTF viewers can open them')
-    await expect(page.getByTestId('export-portable-help')).toBeVisible()
-    await expectNoHorizontalScroll(page)
-
-    // The panel settles on its own — the sweep picks the codec — and the line
-    // then quotes the file the click produces.
-    await waitForCodecSizing(page)
-    const quotedBytes = await waitForEstimate(page)
-
-    const downloadPromise = page.waitForEvent('download')
-    await exportButton.click()
-    const download = await downloadPromise
-    expect(download.suggestedFilename()).toBe('index.glb')
-    const savedPath = test.info().outputPath('index-default.glb')
-    await download.saveAs(savedPath)
-    const file = await readFile(savedPath)
-    expect(file.byteLength).toBe(quotedBytes)
-
-    // Portable: no instancing extension to refuse, and the NavTree's names on
-    // the nodes.
-    const json = glbJsonChunk(file)
-    expect(json.extensionsUsed ?? []).not.toContain('EXT_mesh_gpu_instancing')
-    expect(json.extensionsRequired ?? []).not.toContain('EXT_mesh_gpu_instancing')
-    const nodeNames = (json.nodes ?? []).map((node) => node.name)
-    for (const name of SPATIAL_CHAIN) {
-      expect(nodeNames, `the default export should name ${name}`).toContain(name)
-    }
-
-    await page.keyboard.press('Escape')
-    resetGlbLogs(glbLogs)
-    await reopenLocalGlb(page, savedPath)
-    await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
-    await waitForModelReady(page)
-    await dismissLoadSnackbar(page)
-    // Hydrated from the portable file's stamped nodes back into the decorated
-    // BatchedMesh — not the plain-GLTF fallback, which renders and picks
-    // nothing.
-    await waitForGlbLog(glbLogs, 'hydrated instance-table', EXPORT_TEST_TIMEOUT_MS)
-
-    // The user's action: double-click an element in the scene, and it is
-    // selected in the store, the NavTree and the URL.
-    await doubleClickSelectsAnElement(page, 'any')
-    await expectNavTreeFollowsSelection(page)
-  })
-
-  // Share#1981: the delivered export's normalized event names the model that
-  // was exported, with the id real_model_open sent when it loaded.
-  test('model_export carries the content_id real_model_open sent for the exported model', async ({page}) => {
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+  // Seven earlier tests, one page. Each opened `index.ifc` only for the flags
+  // the session keeps across the Open dialog's navigation, then opened
+  // `sameIdentityShells.step` and looked at one thing about it. The part is
+  // opened once; every step that needs a pristine model gets one by reloading
+  // the model's own URL, which is a cache hit (a second or two) and clears
+  // the selection, the NavTree and the URL's element path exactly as a new page
+  // does. The anonymous steps come first and the Pro login last, so the picks
+  // run as the signed-out visitor they always did.
+  test('a STEP part of many unnamed shells: its picks and permalinks, then its export, and the way back', async ({page}) => {
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 6)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
     const glbLogs = captureGlbLogs(page)
 
     await routeProModule(page)
     await routeRecordExport(page)
-    // Any model first, for the flags the session keeps across the Open
-    // dialog's navigation; the home demo sends no real_model_open.
-    await loadModelAndWaitForArtifact(page)
-    resetGlbLogs(glbLogs)
-    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
-    await waitForModelReady(page)
-    await waitForGlbLog(glbLogs, 'writer: wrote', EXPORT_TEST_TIMEOUT_MS)
-    await setSubscriptionTier(page, 'sharePro')
-    await auth0Login(page)
-
-    await openExportTab(page)
-    await dismissLoadSnackbar(page)
-    const exportButton = page.getByTestId('export-glb-button')
-    await expect(exportButton).toBeEnabled()
-    const downloadPromise = page.waitForEvent('download')
-    await exportButton.click()
-    await downloadPromise
-
-    await expect.poll(async () => (await gaEvents(page, 'model_export')).length).toBe(1)
-    const [exported] = await gaEvents(page, 'model_export')
-    expect(exported.params).toMatchObject({gate: 'none', source: 'local', route_kind: 'local'})
-    const opens = await gaEvents(page, 'real_model_open')
-    expect(opens).toHaveLength(1)
-    // The upload's UUID-derived storage URL, not the name of the user's file.
-    expect(opens[0].params.content_id).toMatch(/^https?:\/\/[^/]+\/[0-9a-f-]{36}\.step$/)
-    expect(exported.params.content_id).toBe(opens[0].params.content_id)
-  })
-
-  test('the default export of a part made of many shells sits under its product, and reopens with every shell pickable', async ({page}) => {
-    // #1900. A STEP part whose body is many unnamed shells — 80 single-
-    // triangle `shell_based_surface_model`s under one product, past conway's
-    // ceiling for giving unnamed solids identities of their own — collapses
-    // to 80 rows that are all ONE element: same parent, same occurrence path.
-    // The portable export used to give each row its own node and mesh, which
-    // is what made a 28,674-row part crawl in other viewers; it now gives the
-    // part one. The user's actions, untouched defaults throughout: open the
-    // file, Export, open the download back, double-click a shell.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-    const glbLogs = captureGlbLogs(page)
-
-    await routeProModule(page)
     // Any model first, for the flags (`export`, `glbVerbose`) the session
-    // keeps across the Open dialog's navigation.
+    // keeps across the Open dialog's navigation; the home demo sends no
+    // real_model_open.
     await loadModelAndWaitForArtifact(page)
     resetGlbLogs(glbLogs)
     await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
-    await waitForGlbLog(glbLogs, 'writer: wrote', EXPORT_TEST_TIMEOUT_MS)
+    await pauseViewerRendering(page)
+    await dismissLoadSnackbar(page)
+
+    // The permalink of the pick below, for the step that loads it.
+    let permalink = ''
+
+    // Was: 'a shell picked in a freshly opened part highlights its product in
+    // the NavTree' (first half), 'the permalink of a shell picked in a part
+    // reopens with its product selected' (the pick and the link it wrote), and
+    // 'shift-picking shells of a one-product part adds and drops each shell,
+    // not the product'.
+    await test.step('a shell picked in a freshly opened part highlights its product, and shift-picks add and drop shells', async () => {
+      // #1909, before any export is involved: the same part opened straight
+      // from the STEP file. The pick's owner is the product_definition_shape,
+      // the tree's only row is the product_definition, and the empty
+      // occurrence path joins neither, so this was broken on a first load too.
+      await pickShellAndExpectProductRow(page)
+      // One pick narrows the scene to one shell; the link must restore the
+      // whole product, since it cannot say which shell was clicked.
+      expect((await selectionState(page)).instanceCount).toBe(1)
+      permalink = page.url()
+      expect(permalink).toMatch(/\.step\/\d+(\?|#|$)/)
+
+      // #1909 (codex on #1910). A root-level shell's owner is the
+      // product_definition_shape, which is no tree row, so `elementSelection`
+      // found nothing for it and a shift-double-click did nothing at all. The
+      // row is the product's, shared by every shell: toggling the ROW would
+      // drop the product on the second shell. Each shift-pick toggles its own
+      // instance, and the product's row stays selected while any is.
+      const first = await selectedInstancesAndAnchors(page)
+      expect(first.instances).toHaveLength(1)
+
+      // A second shell joins. (Only the shells in front at a pixel can be hit,
+      // and on the mobile viewport that is two.)
+      const second = await shiftDoubleClickAnotherInstance(page, first.instances)
+      const both = await selectedInstancesAndAnchors(page)
+      expect(both.instances.sort()).toEqual([...first.instances, second.instanceId].sort())
+      expect(both.anchors).toEqual(first.anchors)
+      await expectProductRowSelected(page, SHELLS_PART_NAME)
+
+      // Shift-picking it again drops just it: not the product, and not both.
+      await shiftDoubleClickAt(page, second)
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances).toEqual(first.instances)
+      await expectProductRowSelected(page, SHELLS_PART_NAME)
+    })
+
+    // Was: 'a shell picked in a freshly opened part highlights its product in
+    // the NavTree' (second half). The cached artifact (the batched layout,
+    // hydrated from its per-batch tables). The model's own URL is reloaded, not
+    // the permalink the pick wrote, so the row can only light up through a
+    // pick. The first reload after a cache-miss load waits for the artifact's
+    // write; the ones after it are hits and write nothing.
+    await test.step('a shell picked after reopening the part from the cache highlights its product', async () => {
+      await reloadFromCache(page, glbLogs)
+      await pickShellAndExpectProductRow(page)
+    })
+
+    // Was: 'the permalink of a shell picked in a part reopens with its product
+    // selected' (the load half). #1909 (codex on #1910): the pick writes the
+    // root's id alone as the element path, `part.step/7`. The permalink reader
+    // only took paths of two or more segments, so the link restored nothing.
+    // Loading it now selects what the pick does: the product's row, and the
+    // scene on the product's own geometry.
+    await test.step('the permalink of a shell picked in a part reopens with its product selected', async () => {
+      await reloadFromCache(page, glbLogs, {url: permalink, waitForWrite: false})
+      await expectRootSelectedFromPermalink(page)
+    })
+
+    // Was: 'the product row means the whole product; a pick, the shells picked'.
+    await test.step('the product row means the whole product; a pick, the shells picked', async () => {
+      // #1909 (codex on #1910), one rule for every way of selecting the root of
+      // a one-product part. A scene PICK narrows to the shell(s) clicked. A ROW
+      // click means the whole product, as loading its permalink does.
+      await reloadFromCache(page, glbLogs, {waitForWrite: false})
+      await openNavTree(page)
+      const row = page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)
+      await expect(row).toHaveCount(1)
+      const everyShell = (await page.evaluate(() => {
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        const w = window as any
+        const meshes: any[] = []
+        ;((w.store ?? w.useStore).getState().model).traverse((m: any) => {
+          if (m.isBatchedMesh && m.instanceOccurrencePaths) {
+            meshes.push(m)
+          }
+        })
+        return meshes.flatMap((m) => m.instanceOccurrencePaths
+          .map((path: number[] | null, batchId: number) => (path?.length === 0 ? m.instanceOccurrenceIds[batchId] : -1))
+          .filter((id: number) => id >= 0))
+        /* eslint-enable @typescript-eslint/no-explicit-any */
+      })).length
+      expect(everyShell).toBeGreaterThan(2)
+
+      // A click on the row: the whole product, and it stays so once the URL the
+      // click wrote has been read back.
+      await row.click()
+      await expectProductRowSelected(page, SHELLS_PART_NAME)
+      await expect(page).toHaveURL(/\.step\/\d+(\?|#|$)/)
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(everyShell)
+      await page.waitForTimeout(SELECTION_SETTLE_MS)
+      expect((await selectedInstancesAndAnchors(page)).instances).toHaveLength(everyShell)
+
+      // A pick narrows to the shell, and a second joins it.
+      await doubleClickSelectsAnElement(page, 'any')
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(1)
+      const picked = (await selectedInstancesAndAnchors(page)).instances
+      await shiftDoubleClickAnotherInstance(page, picked)
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(2)
+      // (A shift-click on ANOTHER row keeps both shells: the assembly test below.)
+
+      // A plain click on the row after a pick is the whole product again.
+      await row.click()
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(everyShell)
+    })
+
+    // Was: 'shift-clicking the selected root row drops the product from the
+    // selection'. #1909 (codex on #1910). After a shell pick the root row is an
+    // anchor, but the viewer's selected ids hold the shell's owner, not the
+    // row: the shift-click read that as "not selected yet" and added it again,
+    // so the row could not be toggled off. Same for a row click's whole product.
+    await test.step('shift-clicking the selected root row drops the product from the selection', async () => {
+      await reloadFromCache(page, glbLogs, {waitForWrite: false})
+      await pickShellAndExpectProductRow(page)
+      const row = page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)
+
+      await row.click({modifiers: ['Shift']})
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(0)
+      expect((await selectedInstancesAndAnchors(page)).anchors).toEqual([])
+      await expect(page.locator('[data-is-selected="true"]')).toHaveCount(0)
+
+      // The whole product from a row click goes the same way.
+      await row.click()
+      await expectProductRowSelected(page, SHELLS_PART_NAME)
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
+        .toBe(SHELLS_FIXTURE_ROWS)
+      await row.click({modifiers: ['Shift']})
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(0)
+      await expect(page.locator('[data-is-selected="true"]')).toHaveCount(0)
+    })
+
+    // Was: 'model_export carries the content_id real_model_open sent for the
+    // exported model' and 'the default export of a part made of many shells sits
+    // under its product, and reopens with every shell pickable'. The login is
+    // last so every step above ran signed out. The export is of the model as the
+    // cache serves it: the artifact on disk is the one the fresh parse wrote.
+    await reloadFromCache(page, glbLogs, {waitForWrite: false})
     await setSubscriptionTier(page, 'sharePro')
     await auth0Login(page)
 
@@ -1210,68 +1473,72 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     const savedPath = test.info().outputPath('shells-default.glb')
     await download.saveAs(savedPath)
 
-    // One node holds every shell, stamped with the run it covers; no node
-    // per shell.
-    const json = glbJsonChunk(await readFile(savedPath))
-    const stamped = (json.nodes ?? []).filter((node) => Number.isInteger(node.extras?.bldrsTableNode))
-    expect(stamped).toHaveLength(1)
-    expect(stamped[0].extras?.bldrsRowCount).toBe(SHELLS_FIXTURE_ROWS)
+    // Share#1981: the delivered export's normalized event names the model that
+    // was exported, with the id real_model_open sent when it loaded.
+    await test.step('model_export carries the content_id real_model_open sent for the exported model', async () => {
+      await expect.poll(async () => (await gaEvents(page, 'model_export')).length,
+        {timeout: RECORD_SETTLE_TIMEOUT_MS}).toBe(1)
+      const [exported] = await gaEvents(page, 'model_export')
+      expect(exported.params).toMatchObject({gate: 'none', source: 'local', route_kind: 'local'})
+      const opens = await gaEvents(page, 'real_model_open')
+      expect(opens).toHaveLength(1)
+      // The upload's UUID-derived storage URL, not the name of the user's file.
+      expect(opens[0].params.content_id).toMatch(/^https?:\/\/[^/]+\/[0-9a-f-]{36}\.step$/)
+      expect(exported.params.content_id).toBe(opens[0].params.content_id)
+    })
 
-    // #1901: and that node IS the part. The rows are owned by the part's
-    // product_definition_shape while the tree's only node is the
-    // product_definition, so with an empty occurrence path the two ids never
-    // met and the shells hung off a synthetic `Unassigned` node, named by the
-    // shape's id, beside an empty node for the part. What a user sees in the
-    // three.js editor, 3dviewer.net, or Share's own scene graph.
-    const nodeNames = (json.nodes ?? []).map((node) => node.name)
-    expect(nodeNames).not.toContain('Unassigned')
-    expect(stamped[0].name).toBe(SHELLS_PART_NAME)
-    expect(nodeNames.filter((name) => name === SHELLS_PART_NAME)).toHaveLength(1)
+    // #1900. A STEP part whose body is many unnamed shells — 80 single-
+    // triangle `shell_based_surface_model`s under one product, past conway's
+    // ceiling for giving unnamed solids identities of their own — collapses to
+    // 80 rows that are all ONE element: same parent, same occurrence path. The
+    // portable export used to give each row its own node and mesh, which is
+    // what made a 28,674-row part crawl in other viewers; it now gives the part
+    // one. The user's actions, untouched defaults throughout: open the file,
+    // Export, open the download back, double-click a shell.
+    await test.step('the default export of the part sits under its product, one node for every shell', async () => {
+      // One node holds every shell, stamped with the run it covers; no node
+      // per shell.
+      const json = glbJsonChunk(await readFile(savedPath))
+      const stamped = (json.nodes ?? []).filter((node) => Number.isInteger(node.extras?.bldrsTableNode))
+      expect(stamped).toHaveLength(1)
+      expect(stamped[0].extras?.bldrsRowCount).toBe(SHELLS_FIXTURE_ROWS)
 
-    await page.keyboard.press('Escape')
-    resetGlbLogs(glbLogs)
-    await reopenLocalGlb(page, savedPath)
-    await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
-    await waitForModelReady(page)
-    await dismissLoadSnackbar(page)
-    // Hydrated back into the decorated BatchedMesh, every shell its own
-    // range — not the plain-GLTF fallback, which picks nothing.
-    await waitForGlbLog(glbLogs, `${SHELLS_FIXTURE_ROWS} instance(s), 1 collapsed table(s)`, EXPORT_TEST_TIMEOUT_MS)
+      // #1901: and that node IS the part. The rows are owned by the part's
+      // product_definition_shape while the tree's only node is the
+      // product_definition, so with an empty occurrence path the two ids never
+      // met and the shells hung off a synthetic `Unassigned` node, named by the
+      // shape's id, beside an empty node for the part. What a user sees in the
+      // three.js editor, 3dviewer.net, or Share's own scene graph.
+      const nodeNames = (json.nodes ?? []).map((node) => node.name)
+      expect(nodeNames).not.toContain('Unassigned')
+      expect(stamped[0].name).toBe(SHELLS_PART_NAME)
+      expect(nodeNames.filter((name) => name === SHELLS_PART_NAME)).toHaveLength(1)
+    })
 
-    // The NavTree names the part, and has no `Unassigned` branch.
-    await page.getByTestId('control-button-navigation').click()
-    await expect(page.getByTestId('NavTreePanel')).toBeVisible()
-    await expect(page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)).toHaveCount(1)
-    await expect(page.locator('[data-node-label="Unassigned"]')).toHaveCount(0)
-    await doubleClickSelectsAnElement(page, 'collapsed')
-    // #1909: and the pick lands on that row. The shells' owner is the
-    // product_definition_shape, the row is the product_definition, and their
-    // occurrence path is empty, so nothing joined them and no row lit up.
-    await expectProductRowSelected(page, SHELLS_PART_NAME)
-    await expectNavTreeFollowsSelection(page)
-  })
+    await closeExportDialog(page)
+    await test.step('the export reopens with every shell pickable, and the pick lands on the product row', async () => {
+      resetGlbLogs(glbLogs)
+      await reopenLocalGlb(page, savedPath)
+      await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
+      await waitForModelReady(page)
+      await dismissLoadSnackbar(page)
+      await expectModelOnCanvas(page, 'the reopened shells export')
+      // Hydrated back into the decorated BatchedMesh, every shell its own
+      // range — not the plain-GLTF fallback, which picks nothing.
+      await waitForGlbLog(glbLogs, `${SHELLS_FIXTURE_ROWS} instance(s), 1 collapsed table(s)`, EXPORT_TEST_TIMEOUT_MS)
 
-  test('a shell picked in a freshly opened part highlights its product in the NavTree', async ({page}) => {
-    // #1909, before any export is involved: the same part opened straight
-    // from the STEP file. The pick's owner is the product_definition_shape,
-    // the tree's only row is the product_definition, and the empty
-    // occurrence path joins neither, so this was broken on a first load too.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-    const glbLogs = captureGlbLogs(page)
-
-    await loadModelAndWaitForArtifact(page)
-    resetGlbLogs(glbLogs)
-    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
-    await waitForModelReady(page)
-    await dismissLoadSnackbar(page)
-    await pickShellAndExpectProductRow(page)
-
-    // And again from the cached artifact (the batched layout, hydrated from
-    // its per-batch tables). The model's own URL is reloaded, not the
-    // permalink the pick wrote, so the row can only light up through a pick.
-    await reloadFromCache(page, glbLogs)
-    await pickShellAndExpectProductRow(page)
+      // The NavTree names the part, and has no `Unassigned` branch.
+      await openNavTree(page)
+      await expect(page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)).toHaveCount(1)
+      await expect(page.locator('[data-node-label="Unassigned"]')).toHaveCount(0)
+      await expectNothingSelected(page)
+      await doubleClickSelectsAnElement(page, 'collapsed')
+      // #1909: and the pick lands on that row. The shells' owner is the
+      // product_definition_shape, the row is the product_definition, and their
+      // occurrence path is empty, so nothing joined them and no row lit up.
+      await expectProductRowSelected(page, SHELLS_PART_NAME)
+      await expectNavTreeFollowsSelection(page)
+    })
   })
 
   test('a shell picked after reopening a part from the merged-layout cache highlights its product', async ({page}) => {
@@ -1291,6 +1558,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     resetGlbLogs(glbLogs)
     await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
+    await pauseViewerRendering(page)
     await dismissLoadSnackbar(page)
     // A fresh parse is a BatchedMesh whatever the artifact layout; only the
     // cache-hit model is the merged one.
@@ -1305,270 +1573,167 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expectRootSelectedFromPermalink(page)
   })
 
-  test('the permalink of a shell picked in a part reopens with its product selected', async ({page}) => {
-    // #1909 (codex on #1910): the pick writes the root's id alone as the
-    // element path, `part.step/7`. The permalink reader only took paths of
-    // two or more segments, so the link restored nothing. Loading it now
-    // selects what the pick does: the product's row, and the scene on the
-    // product's own geometry.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-    const glbLogs = captureGlbLogs(page)
-
-    await loadModelAndWaitForArtifact(page)
-    resetGlbLogs(glbLogs)
-    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
-    await waitForModelReady(page)
-    await dismissLoadSnackbar(page)
-    await pickShellAndExpectProductRow(page)
-    // One pick narrows the scene to one shell; the link must restore the
-    // whole product, since it cannot say which shell was clicked.
-    expect((await selectionState(page)).instanceCount).toBe(1)
-    const permalink = page.url()
-    expect(permalink).toMatch(/\.step\/\d+(\?|#|$)/)
-
-    await reloadFromCache(page, glbLogs, {url: permalink})
-    await expectRootSelectedFromPermalink(page)
-  })
-
-  test('shift-picking shells of a one-product part adds and drops each shell, not the product', async ({page}) => {
-    // #1909 (codex on #1910). A root-level shell's owner is the
-    // product_definition_shape, which is no tree row, so `elementSelection`
-    // found nothing for it and a shift-double-click did nothing at all. The
-    // row is the product's, shared by every shell: toggling the ROW would drop
-    // the product on the second shell. Each shift-pick toggles its own
-    // instance, and the product's row stays selected while any is.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-
-    await loadModelAndWaitForArtifact(page)
-    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
-    await waitForModelReady(page)
-    await dismissLoadSnackbar(page)
-    await pickShellAndExpectProductRow(page)
-    const first = await selectedInstancesAndAnchors(page)
-    expect(first.instances).toHaveLength(1)
-
-    // A second shell joins. (Only the shells in front at a pixel can be hit,
-    // and on the mobile viewport that is two.)
-    const second = await shiftDoubleClickAnotherInstance(page, first.instances)
-    const both = await selectedInstancesAndAnchors(page)
-    expect(both.instances.sort()).toEqual([...first.instances, second.instanceId].sort())
-    expect(both.anchors).toEqual(first.anchors)
-    await expectProductRowSelected(page, SHELLS_PART_NAME)
-
-    // Shift-picking it again drops just it: not the product, and not both.
-    await shiftDoubleClickAt(page, second)
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances).toEqual(first.instances)
-    await expectProductRowSelected(page, SHELLS_PART_NAME)
-  })
-
-  test('the product row means the whole product; a pick, the shells picked', async ({page}) => {
-    // #1909 (codex on #1910), one rule for every way of selecting the root of a
-    // one-product part. A scene PICK narrows to the shell(s) clicked. A ROW
-    // click means the whole product, as loading its permalink does.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-
-    await loadModelAndWaitForArtifact(page)
-    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
-    await waitForModelReady(page)
-    await dismissLoadSnackbar(page)
-    await page.getByTestId('control-button-navigation').click()
-    const row = page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)
-    await expect(row).toHaveCount(1)
-    const everyShell = (await page.evaluate(() => {
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      const w = window as any
-      const meshes: any[] = []
-      ;((w.store ?? w.useStore).getState().model).traverse((m: any) => {
-        if (m.isBatchedMesh && m.instanceOccurrencePaths) {
-          meshes.push(m)
-        }
-      })
-      return meshes.flatMap((m) => m.instanceOccurrencePaths
-        .map((path: number[] | null, batchId: number) => (path?.length === 0 ? m.instanceOccurrenceIds[batchId] : -1))
-        .filter((id: number) => id >= 0))
-      /* eslint-enable @typescript-eslint/no-explicit-any */
-    })).length
-    expect(everyShell).toBeGreaterThan(2)
-
-    // A click on the row: the whole product, and it stays so once the URL the
-    // click wrote has been read back.
-    await row.click()
-    await expectProductRowSelected(page, SHELLS_PART_NAME)
-    await expect(page).toHaveURL(/\.step\/\d+(\?|#|$)/)
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(everyShell)
-    await page.waitForTimeout(SELECTION_SETTLE_MS)
-    expect((await selectedInstancesAndAnchors(page)).instances).toHaveLength(everyShell)
-
-    // A pick narrows to the shell, and a second joins it.
-    await doubleClickSelectsAnElement(page, 'any')
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(1)
-    const picked = (await selectedInstancesAndAnchors(page)).instances
-    await shiftDoubleClickAnotherInstance(page, picked)
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(2)
-    // (A shift-click on ANOTHER row keeps both shells: the assembly test below.)
-
-    // A plain click on the row after a pick is the whole product again.
-    await row.click()
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(everyShell)
-  })
-
-  test('the root row of an assembly with geometry of its own means the whole assembly', async ({page}) => {
-    // #1909 (codex on #1910). The root's own shells have an empty occurrence
-    // path, every child occurrence a non-empty one. A row click or a permalink
-    // on the root is the whole product: its own shells AND the children,
-    // not just the shells the empty path names. A pick still narrows.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+  // Three earlier tests, one parse of the assembly. Each opened `index.ifc`
+  // for the flags, then parsed `assemblyWithRootGeometry.step` (the slow part:
+  // `ASSEMBLY_READY_TIMEOUT_MS`) to look at one thing about its root row. The
+  // steps run in an order that hands each the state it needs: the pick of a
+  // child needs no selection to start from, the row click replaces whatever
+  // the pick left, and the Hide/Isolate step takes the freshly reloaded model
+  // the permalink step passes through anyway.
+  test('the root row of an assembly with geometry of its own means the whole assembly: select, hide, isolate, link', async ({page}) => {
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 4)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
 
     await loadModelAndWaitForArtifact(page)
     await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+    await pauseViewerRendering(page)
     await dismissLoadSnackbar(page)
-    // A pick of one of the root's own shells narrows to it. (Before the NavTree
-    // is open: on a phone it covers the part of the canvas the shells are in.)
-    await doubleClickSelectsAnElement(page, 'any', 'root')
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(1)
-    const shell = (await selectedInstancesAndAnchors(page)).instances
+    await expectNothingSelected(page)
 
-    // A shift-click on a child's row then adds that occurrence and keeps the shell.
-    await page.getByTestId('control-button-navigation').click()
-    const root = page.locator(`[data-node-label="${ASSEMBLY_ROOT_NAME}"]`)
-    await expect(root).toHaveCount(1)
-    const modelUrl = page.url().replace(/(\.step)(?:\/\d+)+/, '$1')
-    await page.locator('[data-node-label="Widget"]').first().click({modifiers: ['Shift']})
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBeGreaterThan(1)
-    const mixed = (await selectedInstancesAndAnchors(page)).instances
-    expect(mixed).toEqual(expect.arrayContaining(shell))
-    expect(mixed.length).toBeLessThan(ASSEMBLY_INSTANCES)
+    // Was: 'a root shell shift-picked onto a picked child occurrence keeps that
+    // occurrence's row'. #1909 (codex on #1910). A scene pick of a child
+    // occurrence is anchored on the geometry's owner (no tree row) and carries
+    // its row in the occurrence path. Shift-picking a root-level shell cleared
+    // that path while keeping the owner as the anchor: the child stayed lit,
+    // with no NavTree row and no place in the permalink. The row has to come
+    // across as the anchor.
+    await test.step('a root shell shift-picked onto a picked child occurrence keeps that occurrence\'s row', async () => {
+      await doubleClickSelectsAnElement(page, 'any', 'child')
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(1)
+      const child = (await selectedInstancesAndAnchors(page)).instances
 
-    // A click on the root row: the shells and the children, still so once the
-    // URL it wrote has been read back.
-    await root.click()
-    await expectProductRowSelected(page, ASSEMBLY_ROOT_NAME)
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
-      .toBe(ASSEMBLY_INSTANCES)
-    await page.waitForTimeout(SELECTION_SETTLE_MS)
-    expect((await selectedInstancesAndAnchors(page)).instances).toHaveLength(ASSEMBLY_INSTANCES)
-    const permalink = page.url()
-    expect(permalink).toMatch(/\.step\/\d+(\?|#|$)/)
+      // Without the row as the anchor, the `#sel:` link written from the two
+      // anchors drops the owner (it names rows only) and re-selects just the
+      // root: the whole product, so the shell never joins as one more instance.
+      await shiftDoubleClickAnotherInstance(page, child, 'root')
+      const both = await selectedInstancesAndAnchors(page)
+      expect(both.instances).toHaveLength(2)
+      expect(both.instances).toEqual(expect.arrayContaining(child))
+      // Every anchor is a row of the tree: the child's own, and the root's.
+      expect(await anchorsNotInTree(page)).toEqual([])
+      expect(both.anchors).toHaveLength(2)
+      await openNavTree(page)
+      await expect(page.locator('[data-is-selected="true"]')).toHaveCount(2)
+    })
 
-    // The permalink the click wrote, loaded fresh: the whole assembly as well.
-    await page.goto(modelUrl, {waitUntil: 'domcontentloaded'})
-    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(0)
-    await page.goto(permalink, {waitUntil: 'domcontentloaded'})
-    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
-    await expectProductRowSelected(page, ASSEMBLY_ROOT_NAME)
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
-      .toBe(ASSEMBLY_INSTANCES)
+    // Was: 'the root row of an assembly with geometry of its own means the whole
+    // assembly' (up to the permalink it writes). #1909 (codex on #1910). The
+    // root's own shells have an empty occurrence path, every child occurrence a
+    // non-empty one. A row click or a permalink on the root is the whole
+    // product: its own shells AND the children, not just the shells the empty
+    // path names. A pick still narrows.
+    let modelUrl = ''
+    let permalink = ''
+    await test.step('a pick narrows to a shell; the root row means the whole assembly', async () => {
+      // A pick of one of the root's own shells narrows to it, replacing the two
+      // instances the step above left. (With the NavTree shut: on a phone it
+      // covers the part of the canvas the shells are in.)
+      await closeNavTree(page)
+      await doubleClickSelectsAnElement(page, 'any', 'root')
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(1)
+      const shell = (await selectedInstancesAndAnchors(page)).instances
+
+      // A shift-click on a child's row then adds that occurrence and keeps the shell.
+      await openNavTree(page)
+      const root = page.locator(`[data-node-label="${ASSEMBLY_ROOT_NAME}"]`)
+      await expect(root).toHaveCount(1)
+      modelUrl = page.url().replace(/(\.step)(?:\/\d+)+/, '$1')
+      await page.locator('[data-node-label="Widget"]').first().click({modifiers: ['Shift']})
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBeGreaterThan(1)
+      const mixed = (await selectedInstancesAndAnchors(page)).instances
+      expect(mixed).toEqual(expect.arrayContaining(shell))
+      expect(mixed.length).toBeLessThan(ASSEMBLY_INSTANCES)
+
+      // A click on the root row: the shells and the children, still so once the
+      // URL it wrote has been read back.
+      await root.click()
+      await expectProductRowSelected(page, ASSEMBLY_ROOT_NAME)
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
+        .toBe(ASSEMBLY_INSTANCES)
+      await page.waitForTimeout(SELECTION_SETTLE_MS)
+      expect((await selectedInstancesAndAnchors(page)).instances).toHaveLength(ASSEMBLY_INSTANCES)
+      permalink = page.url()
+      expect(permalink).toMatch(/\.step\/\d+(\?|#|$)/)
+    })
+
+    // Was: 'Hide and Isolate on the root row of an assembly act on the whole
+    // assembly'. #1909 (codex on #1910). The row click lights the root's shells
+    // and the children; hide and isolate resolve their targets from the anchors
+    // by path, which the root's empty path defeats, so they fell back to the
+    // root's owner ids and left the highlighted children alone. The model's own
+    // URL is loaded again (nothing selected, as the permalink step needs it
+    // anyway) so the row click here starts from nothing.
+    await test.step('Hide and Isolate on the root row of an assembly act on the whole assembly', async () => {
+      await page.goto(modelUrl, {waitUntil: 'domcontentloaded'})
+      await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+      await pauseViewerRendering(page)
+      // The model's own URL carries no selection.
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(0)
+      // Each state below is checked on the canvas as well as in the
+      // BatchedMesh's visibility state: the viewer is paused, so a Hide that
+      // updated the state but drew nothing different would pass on the state
+      // alone (codex on #1985). Every frame is a fresh one of the current
+      // scene (`captureRenderedFrame`), judged against the two references
+      // here: the model as loaded, in its own colours, and as selected.
+      const asLoaded = await expectModelOnCanvas(page, 'the assembly as loaded')
+
+      await openNavTree(page)
+      await page.locator(`[data-node-label="${ASSEMBLY_ROOT_NAME}"]`).click()
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
+        .toBe(ASSEMBLY_INSTANCES)
+      // Out of the way of the controls on a phone.
+      await closeNavTree(page)
+      await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
+      const selected = await captureRenderedFrame(page)
+      expect(frameDifference(asLoaded, selected), 'the row click lit the assembly up on the canvas')
+        .toBeGreaterThan(SAME_FRAME_TOLERANCE)
+
+      await page.getByTestId('Hide').click()
+      await expect.poll(() => visibleBatchedInstances(page)).toBe(0)
+      expect(edgeFraction(await captureRenderedFrame(page)), 'Hide took the whole assembly off the canvas')
+        .toBeLessThan(MIN_MODEL_EDGE_FRACTION)
+      // Hiding again brings the whole assembly back, still selected.
+      await page.getByTestId('Hide').click()
+      await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
+      expect(frameDifference(selected, await captureRenderedFrame(page)),
+        'the second Hide put the same assembly back on the canvas').toBeLessThan(SAME_FRAME_TOLERANCE)
+
+      // Isolate shows the same whole assembly: nothing is left out, and the
+      // children are not hidden as "other" elements.
+      await page.getByTestId('Isolate').click()
+      await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
+      expect(await isolatedInstanceCount(page)).toBe(ASSEMBLY_INSTANCES)
+      // On the canvas, the frame the model loaded with: isolating drops the
+      // selection's cyan so the parts show their own colours
+      // (`IfcIsolator.isSelectionPaintSuppressed`, Share#1806), and with the
+      // whole assembly isolated none of it is left out.
+      expect(frameDifference(asLoaded, await captureRenderedFrame(page)),
+        'Isolate left the whole assembly on the canvas, in its own colours').toBeLessThan(SAME_FRAME_TOLERANCE)
+    })
+
+    // Was: 'the root row of an assembly with geometry of its own means the whole
+    // assembly' (the link). The permalink the click wrote, loaded fresh: the
+    // whole assembly as well.
+    await test.step('the permalink the root row wrote selects the whole assembly', async () => {
+      await page.goto(permalink, {waitUntil: 'domcontentloaded'})
+      await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
+      await pauseViewerRendering(page)
+      await expectProductRowSelected(page, ASSEMBLY_ROOT_NAME)
+      await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
+        .toBe(ASSEMBLY_INSTANCES)
+    })
   })
 
-  test('a root shell shift-picked onto a picked child occurrence keeps that occurrence\'s row', async ({page}) => {
-    // #1909 (codex on #1910). A scene pick of a child occurrence is anchored on
-    // the geometry's owner (no tree row) and carries its row in the occurrence
-    // path. Shift-picking a root-level shell cleared that path while keeping
-    // the owner as the anchor: the child stayed lit, with no NavTree row and
-    // no place in the permalink. The row has to come across as the anchor.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-
-    await loadModelAndWaitForArtifact(page)
-    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
-    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
-    await dismissLoadSnackbar(page)
-    await doubleClickSelectsAnElement(page, 'any', 'child')
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(1)
-    const child = (await selectedInstancesAndAnchors(page)).instances
-
-    // Without the row as the anchor, the `#sel:` link written from the two
-    // anchors drops the owner (it names rows only) and re-selects just the
-    // root: the whole product, so the shell never joins as one more instance.
-    await shiftDoubleClickAnotherInstance(page, child, 'root')
-    const both = await selectedInstancesAndAnchors(page)
-    expect(both.instances).toHaveLength(2)
-    expect(both.instances).toEqual(expect.arrayContaining(child))
-    // Every anchor is a row of the tree: the child's own, and the root's.
-    expect(await anchorsNotInTree(page)).toEqual([])
-    expect(both.anchors).toHaveLength(2)
-    await page.getByTestId('control-button-navigation').click()
-    await expect(page.locator('[data-is-selected="true"]')).toHaveCount(2)
-  })
-
-  test('shift-clicking the selected root row drops the product from the selection', async ({page}) => {
-    // #1909 (codex on #1910). After a shell pick the root row is an anchor, but
-    // the viewer's selected ids hold the shell's owner, not the row: the
-    // shift-click read that as "not selected yet" and added it again, so the
-    // row could not be toggled off. Same for a row click's whole product.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-
-    await loadModelAndWaitForArtifact(page)
-    await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
-    await waitForModelReady(page)
-    await dismissLoadSnackbar(page)
-    await pickShellAndExpectProductRow(page)
-    const row = page.locator(`[data-node-label="${SHELLS_PART_NAME}"]`)
-
-    await row.click({modifiers: ['Shift']})
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(0)
-    expect((await selectedInstancesAndAnchors(page)).anchors).toEqual([])
-    await expect(page.locator('[data-is-selected="true"]')).toHaveCount(0)
-
-    // The whole product from a row click goes the same way.
-    await row.click()
-    await expectProductRowSelected(page, SHELLS_PART_NAME)
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
-      .toBe(SHELLS_FIXTURE_ROWS)
-    await row.click({modifiers: ['Shift']})
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length).toBe(0)
-    await expect(page.locator('[data-is-selected="true"]')).toHaveCount(0)
-  })
-
-  test('Hide and Isolate on the root row of an assembly act on the whole assembly', async ({page}) => {
-    // #1909 (codex on #1910). The row click lights the root's shells and the
-    // children; hide and isolate resolve their targets from the anchors by
-    // path, which the root's empty path defeats, so they fell back to the
-    // root's owner ids and left the highlighted children alone.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-
-    await loadModelAndWaitForArtifact(page)
-    await openLocalFile(page, ASSEMBLY_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
-    await waitForModelReady(page, ASSEMBLY_READY_TIMEOUT_MS)
-    await dismissLoadSnackbar(page)
-    await page.getByTestId('control-button-navigation').click()
-    await page.locator(`[data-node-label="${ASSEMBLY_ROOT_NAME}"]`).click()
-    await expect.poll(async () => (await selectedInstancesAndAnchors(page)).instances.length)
-      .toBe(ASSEMBLY_INSTANCES)
-    // Out of the way of the controls on a phone.
-    await page.getByTestId('control-button-navigation').click()
-    await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
-
-    await page.getByTestId('Hide').click()
-    await expect.poll(() => visibleBatchedInstances(page)).toBe(0)
-    // Hiding again brings the whole assembly back.
-    await page.getByTestId('Hide').click()
-    await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
-
-    // Isolate shows the same whole assembly: nothing is left out, and the
-    // children are not hidden as "other" elements.
-    await page.getByTestId('Isolate').click()
-    await expect.poll(() => visibleBatchedInstances(page)).toBe(ASSEMBLY_INSTANCES)
-    expect(await isolatedInstanceCount(page)).toBe(ASSEMBLY_INSTANCES)
-  })
-
-  test('a file of several top-level parts gives each part exactly its own shells', async ({page}) => {
-    // #1901. Two disconnected parts, each a body of 80 unnamed shells, so
-    // every row of both has an EMPTY occurrence path. Joining the rows to the
-    // tree on the empty path alone handed the first part all 160 rows and
-    // exported the second empty (codex on #1908); not joining them at all left
-    // all 160 under `Unassigned`. The rows' owner and each part's owner list
-    // (conway#723) name the part. The user's actions are those of the
-    // single-part test above.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
+  // Two earlier tests, one page. #1901: two disconnected parts, each a body of
+  // 80 unnamed shells, so every row of both has an EMPTY occurrence path.
+  // Joining the rows to the tree on the empty path alone handed the first part
+  // all 160 rows and exported the second empty (codex on #1908); not joining
+  // them at all left all 160 under `Unassigned`. The rows' owner and each
+  // part's owner list (conway#723) name the part. The picks run signed out and
+  // the Pro login comes last, as in the single-part test above.
+  test('a file of several top-level parts: a pick in the second part, then each part exports exactly its own shells', async ({page}) => {
+    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 4)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
     const glbLogs = captureGlbLogs(page)
 
@@ -1577,7 +1742,30 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     resetGlbLogs(glbLogs)
     await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
-    await waitForGlbLog(glbLogs, 'writer: wrote', EXPORT_TEST_TIMEOUT_MS)
+    await pauseViewerRendering(page)
+    await dismissLoadSnackbar(page)
+
+    // Was: 'a shell picked in the second of two top-level parts highlights that
+    // part in the NavTree'. #1909's multi-root case (#1901). Every shell of both
+    // parts sits at the empty occurrence path, and so do both parts' rows and
+    // Conway's `Model` wrapper, so the path names no row; the shell's owner
+    // (#3008) is no row either. Each part's owner list (conway#723) joins the
+    // two. A file with one part was already handled by the one-empty-path rule;
+    // this one was left unselected.
+    await test.step('a shell picked in the second of two top-level parts highlights that part in the NavTree', async () => {
+      await pickSecondPartShellAndExpectItsRow(page)
+
+      // And again from the cached artifact, whose tree must have kept the owner
+      // lists: the model's own URL, not the permalink the pick wrote, so the
+      // row can only light up through the pick.
+      await reloadFromCache(page, glbLogs)
+      await pickSecondPartShellAndExpectItsRow(page)
+    })
+
+    // Was: 'a file of several top-level parts gives each part exactly its own
+    // shells'. The user's actions are those of the single-part test above, on
+    // the model as the cache serves it.
+    await reloadFromCache(page, glbLogs, {waitForWrite: false})
     await setSubscriptionTier(page, 'sharePro')
     await auth0Login(page)
 
@@ -1616,359 +1804,16 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // ...and nothing is left unnamed.
     expect(nodes.find((node) => node.name === 'Unassigned')).toBeUndefined()
 
-    await page.keyboard.press('Escape')
+    await closeExportDialog(page)
     resetGlbLogs(glbLogs)
     await reopenLocalGlb(page, savedPath)
     await expect(page.getByText(/Loader error|Unhandled error in parse/)).toHaveCount(0)
     await waitForModelReady(page)
     await dismissLoadSnackbar(page)
+    await expectModelOnCanvas(page, 'the reopened two-part export')
     await waitForGlbLog(glbLogs, `${2 * SHELLS_FIXTURE_ROWS} instance(s), 1 collapsed table(s)`, EXPORT_TEST_TIMEOUT_MS)
+    await expectNothingSelected(page)
     await doubleClickSelectsAnElement(page, 'collapsed')
-  })
-
-  test('a shell picked in the second of two top-level parts highlights that part in the NavTree', async ({page}) => {
-    // #1909's multi-root case (#1901). Every shell of both parts sits at the
-    // empty occurrence path, and so do both parts' rows and Conway's `Model`
-    // wrapper, so the path names no row; the shell's owner (#3008) is no row
-    // either. Each part's owner list (conway#723) joins the two. A file with
-    // one part was already handled by the one-empty-path rule; this one was
-    // left unselected.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-    const glbLogs = captureGlbLogs(page)
-
-    await loadModelAndWaitForArtifact(page)
-    resetGlbLogs(glbLogs)
-    await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
-    await waitForModelReady(page)
-    await dismissLoadSnackbar(page)
-    await pickSecondPartShellAndExpectItsRow(page)
-
-    // And again from the cached artifact, whose tree must have kept the owner
-    // lists: the model's own URL, not the permalink the pick wrote, so the row
-    // can only light up through the pick.
-    await reloadFromCache(page, glbLogs)
-    await pickSecondPartShellAndExpectItsRow(page)
-  })
-
-  test('a Pro user picks a Quality rung, and the panel says what it costs', async ({page}) => {
-    // #1848. The rungs are encoder settings, so what only a browser can show
-    // is that they reach the real wasm encoders and change the file the user
-    // gets — and that the millimetre caption beside them is computed off THIS
-    // model's own bounds rather than being a constant.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-
-    await routeProModule(page)
-    await loadModelAndWaitForArtifact(page)
-    await setSubscriptionTier(page, 'sharePro')
-    await auth0Login(page)
-
-    await openExportTab(page)
-    await dismissLoadSnackbar(page)
-    const exportButton = page.getByTestId('export-glb-button')
-    await expect(exportButton).toBeEnabled()
-    // Batched-native, as measured when the rungs were set; the rungs are
-    // encoder settings and indifferent to the shape.
-    await setPortable(page, false)
-
-    // Pin the codec before reading anything. Since #1850 the panel measures
-    // every codec in the background and defaults to the smallest, so the
-    // selection is in motion for the first seconds the tab is open. Let the
-    // sweep finish, then choose explicitly — an explicit choice is never
-    // overridden, so from here the selection is this test's.
-    await waitForCodecSizing(page)
-    await selectCompression(page, 'none')
-
-    // Balanced by default, and inert until a codec is chosen — there is
-    // nothing for a rung to mean while the file is being handed over as it is.
-    const qualityControl = page.getByTestId('export-quality')
-    await expect(qualityControl).toContainText('Balanced')
-    await expect(qualityControl.getByRole('combobox')).toHaveAttribute('aria-disabled', 'true')
-    await expect(page.getByTestId('export-quality-caption')).toHaveCount(0)
-
-    const balancedBytes = await selectCompression(page, 'draco')
-    await expect(qualityControl.getByRole('combobox')).not.toHaveAttribute('aria-disabled')
-    // The caption is a promise about the user's model, in the unit they
-    // decide in.
-    const balancedCaption = await page.getByTestId('export-quality-caption').textContent()
-    expect(balancedCaption).toMatch(/parts may move up to [\d.]+ mm/)
-
-    const smallestBytes = await selectQuality(page, 'smallest')
-
-    // Fewer POSITION bits is a coarser grid, so the figure has to grow — the
-    // one thing about the caption that cannot be a constant.
-    const smallestCaption = await page.getByTestId('export-quality-caption').textContent()
-    expect(smallestCaption).toMatch(/parts may move up to [\d.]+ mm/)
-    expect(millimetresIn(smallestCaption)).toBeGreaterThan(millimetresIn(balancedCaption))
-
-    // Reduced is the last rung there is. #1852 shipped two lossy rungs below
-    // it and #1854 removed them again — the whole ladder measured −12.4% on
-    // Snowdon, where the container and not the geometry is the file — so the
-    // panel must not still be offering one.
-    await expect(page.getByTestId('export-quality-squashed')).toHaveCount(0)
-    await expect(page.getByTestId('export-quality-smooshed')).toHaveCount(0)
-
-    // Two rungs are two different files. On a fixture this small they need
-    // not differ in SIZE — the encoder-effort half of a rung is model-shaped
-    // (#1848) — so what is asserted is what the panel promises: the figure on
-    // the line is the file that lands in Downloads, at the rung now chosen.
-    const downloadPromise = page.waitForEvent('download')
-    await exportButton.click()
-    const file = await readFile(await (await downloadPromise).path())
-
-    expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
-    expect(file.byteLength).toBe(smallestBytes)
-    expect(glbJsonChunk(file).extensionsRequired).toContain('KHR_draco_mesh_compression')
-    // A fourth control row is where a mobile layout regression would show up
-    // as a sideways scroll rather than a missing element (#1838), and at
-    // 390px "Balanced (medium)" beside "Compression type" is the pair that
-    // would push the dialog sideways if the row stopped wrapping.
-    await expectNoHorizontalScroll(page)
-
-    // Meshopt has ONE coarser setting and Balanced already spends it, so
-    // Reduced re-encodes to Balanced's file. The panel says that rather than
-    // leaving a "small" option beside a size line that does not move
-    // (`exportQuality.js#isDracoOnlyRung`).
-    await selectCompression(page, 'meshopt')
-    await expect(page.getByTestId('export-quality-caption'))
-      .toContainText('Meshopt has no coarser setting')
-    await selectCompression(page, 'draco')
-
-    // Back to Balanced and the panel is exactly where it was — the cached
-    // figure for that rung, not a third encode.
-    expect(await selectQuality(page, 'balanced')).toBe(balancedBytes)
-  })
-
-  test('a Pro user downloads a gzipped .glb.gz, at the size the panel promised', async ({page}) => {
-    // #1854. The lossless win that beats the whole quality ladder, because on
-    // a real model the container — JSON node graph plus raw float32 instance
-    // transforms — is where the bytes are, and no mesh codec touches it.
-    //
-    // Only a browser can show this end to end: `CompressionStream` is a
-    // browser API, the figure on the size line comes from one call to it and
-    // the downloaded bytes from another, and the invariant this panel is
-    // built on is that those two agree. A unit test can assert both halves
-    // and still miss that they disagree in Chromium.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-
-    await routeProModule(page)
-    await loadModelAndWaitForArtifact(page)
-    await setSubscriptionTier(page, 'sharePro')
-    await auth0Login(page)
-
-    await openExportTab(page)
-    await dismissLoadSnackbar(page)
-    const exportButton = page.getByTestId('export-glb-button')
-    await expect(exportButton).toBeEnabled()
-    // Batched-native, as #1854 measured it; gzip wraps either shape.
-    await setPortable(page, false)
-
-    // No codec, which is the selection the measurement is about: gzip alone,
-    // over a file nothing else has squeezed. Pinned after the sweep so the
-    // auto-selection cannot move it later (#1850).
-    await waitForCodecSizing(page)
-    const rawBytes = await selectCompression(page, 'none')
-    expect(rawBytes).toBeGreaterThan(0)
-
-    // The toggle says what the user gets before they get it — a `.glb.gz` is
-    // not a `.glb` and will not drop into the three.js editor.
-    const gzipRow = page.getByTestId('export-gzip-row')
-    await expect(gzipRow).toContainText('Compress download')
-    await expect(gzipRow).toContainText('.glb.gz')
-
-    const gzippedBytes = await toggleGzip(page)
-
-    // The figure on the line is now the `.glb.gz`, not the `.glb` inside it.
-    // `index.ifc` is ~17 KB of mostly JSON, so this is a large margin rather
-    // than a knife edge — and it is the same direction the 6× on Snowdon is.
-    expect(gzippedBytes).toBeLessThan(rawBytes)
-
-    const downloadPromise = page.waitForEvent('download')
-    await exportButton.click()
-    const download = await downloadPromise
-    const file = await readFile(await download.path())
-
-    // Three separate claims, and each has its own way of being wrong. The
-    // NAME must carry both extensions; the LENGTH must be the figure the user
-    // read, which is where a non-deterministic gzip would show up; and the
-    // CONTENTS must be a gzip member of a real GLB, which is what stops an
-    // uncompressed file from being shipped under a `.gz`.
-    expect(download.suggestedFilename()).toMatch(/\.glb\.gz$/)
-    expect(file.byteLength).toBe(gzippedBytes)
-
-    const inflated = gunzipSync(file)
-    expect(inflated.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
-    expect(inflated.byteLength).toBe(rawBytes)
-    // …and the GLB inside is the whole model, not a truncated stream: its
-    // JSON chunk parses and still declares the Bldrs payloads the metadata
-    // toggle was left on for.
-    expect(glbJsonChunk(inflated).extensionsUsed).toContain('BLDRS_spatial_tree')
-
-    await expectSnackbarOnTop(page)
-    // A fifth control row, and the one carrying the longest caption in the
-    // panel — at 390px "gzip — saves a .glb.gz, reopens in Share" beside the
-    // toggle is what would push the dialog sideways if the row stopped
-    // wrapping (#1838).
-    await expectNoHorizontalScroll(page)
-  })
-
-  test('a gzipped export opens back in Share, with its BLDRS data intact', async ({page}) => {
-    // The round trip closed (#1831). #1854 shipped the `.glb.gz` and
-    // argued the way back was out of scope, so Share could write a file it
-    // could not read — and the caption above had to say "unarchive to open".
-    // Only a browser can show the whole loop: `CompressionStream` writes the
-    // file, `DecompressionStream` opens it, and the two are the browser's,
-    // not this repo's.
-    //
-    // What makes this more than "it loaded" is the last third: the inflated
-    // bytes have to be the SAME GLB, so the `BLDRS_*` extensions survive and
-    // the model comes back pickable, not just visible.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS * 2)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-
-    await routeProModule(page)
-    await loadModelAndWaitForArtifact(page)
-    await setSubscriptionTier(page, 'sharePro')
-    await auth0Login(page)
-
-    await openExportTab(page)
-    await dismissLoadSnackbar(page)
-    const exportButton = page.getByTestId('export-glb-button')
-    await expect(exportButton).toBeEnabled()
-    // Batched-native, as #1831's round trip was verified; gzip wraps either.
-    await setPortable(page, false)
-
-    // Uncompressed + gzipped: the codecs are the sibling tests' subject, and
-    // per-vertex picking ids do not survive them, which would make the
-    // selection assertion below a different claim. Pinned after the sweep so
-    // the auto-selection cannot move it later (#1850).
-    await waitForCodecSizing(page)
-    const rawBytes = await selectCompression(page, 'none')
-    const gzippedBytes = await toggleGzip(page)
-    expect(gzippedBytes).toBeLessThan(rawBytes)
-
-    const downloadPromise = page.waitForEvent('download')
-    await exportButton.click()
-    const download = await downloadPromise
-    // Saved under its own name: Playwright's download temp file has no
-    // extension at all, and the point here is the DOUBLE one — `.glb.gz` is
-    // the shape that defeats a last-dot filetype parse.
-    expect(download.suggestedFilename()).toMatch(/\.glb\.gz$/)
-    const savedPath = test.info().outputPath('index-reopened.glb.gz')
-    await download.saveAs(savedPath)
-    await page.keyboard.press('Escape')
-
-    // Back in through the Open dialog's file chooser, the way a user would.
-    // The URL it lands on ends `.glb`, not `.glb.gz`: the envelope comes off
-    // at the upload seam, so what OPFS holds and what the route names is the
-    // model (`loader/gzipEnvelope.js`).
-    await reopenLocalGlb(page, savedPath)
-    await expect(page.getByText(/Loader error|Unhandled error in parse|Could not guess filetype|decompress/))
-      .toHaveCount(0)
-    await waitForModelReady(page)
-    await dismissLoadSnackbar(page)
-
-    await page.getByTestId('control-button-navigation').click()
-    await expect(page.getByTestId('NavTreePanel')).toBeVisible()
-    const node = (label: string) => page.locator(`[data-node-label="${label}"]`)
-
-    // `BLDRS_spatial_tree` came through the gzip: project → site → building
-    // → storey, one child each, then the leaves. A GLB that inflated to
-    // anything but the exported bytes would not draw this.
-    for (const name of SPATIAL_CHAIN) {
-      await expect(node(name)).toHaveCount(1)
-      await node(name).getByTestId('NavTreeNodeToggle').click()
-    }
-    await expect(node(LEAF_LABEL).first()).toBeVisible()
-
-    // And it is a model, not just geometry: the leaf selects, the URL
-    // addresses it, and the scene paints the highlight.
-    await node(LEAF_LABEL).first().getByTestId('NavTreeNodeLabel').click()
-    await expect(node(LEAF_LABEL).first()).toHaveAttribute('data-is-selected', 'true')
-    await expect(page).toHaveURL(/\/share\/v\/local-only\/[^/]+\.glb(\/\d+)+/)
-    expect(await sceneHighlightCount(page)).toBeGreaterThan(0)
-  })
-
-  test('the panel measures every codec and defaults to the smallest', async ({page}) => {
-    // #1850. Which codec wins swings enormously with model shape — Draco by
-    // 5× on a geometry-heavy building model, Meshopt by 2.6× on an
-    // instance-heavy one, which is exactly what Share's batched writer
-    // produces — so a user picking on reputation picks wrong about half the
-    // time. The panel measures instead.
-    //
-    // Only a browser can show this: the figures are three REAL encoder runs
-    // against the wasm the page ships, done in the background while the
-    // dialog stays usable, and what is asserted at the end is that the
-    // download weighs exactly the figure the winning option carried.
-    test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
-    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
-
-    await routeProModule(page)
-    await loadModelAndWaitForArtifact(page)
-    await setSubscriptionTier(page, 'sharePro')
-    await auth0Login(page)
-
-    await openExportTab(page)
-    await dismissLoadSnackbar(page)
-    const exportButton = page.getByTestId('export-glb-button')
-    await expect(exportButton).toBeEnabled()
-    // Portable is the default (#1831), so what the sweep measures — and
-    // auto-selects on — is the portable file, the one the default click
-    // downloads. A sweep of the native file would pick a codec on bytes the
-    // user never gets.
-    await expect(page.getByTestId('export-portable').locator('input')).toBeChecked()
-
-    // No interaction: opening the tab is the whole trigger.
-    const codecSizes = await waitForCodecSizes(page)
-    for (const mode of ['none', 'meshopt', 'draco']) {
-      expect(codecSizes[mode], `${mode} should have a measured size`).toBeGreaterThan(0)
-    }
-    // On `index.ifc`'s native file Draco won — 13,084 B, against Meshopt's
-    // 21,480 and 17,244 uncompressed, measured through this very spec before
-    // Portable became the default (#1831) — but the assertion is about the
-    // RULE, not about this fixture or shape: whichever option is smallest is
-    // the one selected.
-    const smallest = smallestCodecIn(codecSizes)
-    await expect(page.getByTestId('export-compression'))
-      .toContainText(smallest.charAt(0).toUpperCase() + smallest.slice(1))
-    // The dialog took the sweep without seizing up — every control above is
-    // still live, and the layout still fits the mobile projection.
-    await expect(page.getByTestId('export-include-metadata').locator('input')).toBeEnabled()
-    await expectNoHorizontalScroll(page)
-
-    // The size line agrees with the option that won it…
-    expect(await waitForEstimate(page)).toBe(codecSizes[smallest])
-
-    const downloadPromise = page.waitForEvent('download')
-    await exportButton.click()
-    const file = await readFile(await (await downloadPromise).path())
-
-    expect(file.subarray(0, GLTF_MAGIC.length).toString('ascii')).toBe(GLTF_MAGIC)
-    // …and so does the file. This is a CACHE HIT, not a re-encode: the
-    // winner's cell is precisely the one the sweep keeps
-    // (`export/codecSizes.js`). So what it pins is that
-    // the panel hands over the bytes it measured — which is the point of
-    // keeping the winner — and nothing about re-encoding.
-    expect(file.byteLength).toBe(codecSizes[smallest])
-    // …and it is the portable file the sweep measured, not the native one.
-    expect(glbJsonChunk(file).extensionsUsed ?? []).not.toContain('EXT_mesh_gpu_instancing')
-
-    // The other half, which the download above cannot reach on any fixture:
-    // the sweep RELEASED Meshopt when Draco beat it, so picking it now runs
-    // the encoder a second time, and the figure it lands on has to be the one
-    // the dropdown option was carrying. That equality is what makes releasing
-    // safe — the encoders are deterministic, so a dropped cell costs CPU and
-    // never a wrong number.
-    const meshoptBytes = await selectCompression(page, 'meshopt')
-    expect(meshoptBytes).toBe(codecSizes.meshopt)
-
-    // An explicit choice is never overridden, however small a figure the
-    // panel is holding for something else.
-    const uncompressedBytes = await selectCompression(page, 'none')
-    expect(uncompressedBytes).toBe(codecSizes.none)
-    await expect(page.getByTestId('export-compression')).toContainText('None')
   })
 
   // Share#1964: Save opens for everyone, on Export for a signed-out user,
@@ -1978,6 +1823,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     test.setTimeout(EXPORT_TEST_TIMEOUT_MS)
 
     await loadModelAndWaitForArtifact(page)
+    await pauseViewerRendering(page)
 
     await expect(page.getByTestId('gated-save')).toHaveCount(0)
     await page.getByTestId('control-button-save').click()
@@ -1996,11 +1842,11 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
   // its first export and is then unlimited; with every slot holding another
   // model, a new one is refused. These are the user's own paths through it.
 
-  // One test for the whole free-tier path, not one per state: the heavy
-  // specs are sharded by test COUNT (tools/playwrightSpecSets.js), and every
-  // extra pair (desktop + mobile) shifts every shard's boundary — two more
-  // pairs pushed shard 1 past its 15-min job limit on #1980. Loading a
-  // model is the expensive part, so the states share the loads.
+  // One test for the whole free-tier path, not one per state: loading a
+  // model is the expensive part and every extra pair (desktop + mobile)
+  // adds that cost to a shard — before CI balanced shards by duration
+  // (tools/playwrightShards.mjs) two more pairs pushed shard 1 past its
+  // 15-min job limit on #1980. The states share the loads.
   const FREE_PATH_TITLE = 'a free user exports a public sample unlimited with no slot; a local file three times, taking one; ' +
     'then meets the gate with the slots full'
   test(FREE_PATH_TITLE, async ({page}) => {
@@ -2011,6 +1857,9 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await routeRecordExport(page)
     const glbLogs = captureGlbLogs(page)
     await loadModelAndWaitForArtifact(page)
+    // Export tab and gates only: a dialog over the canvas, and the local file
+    // below is exported, not looked at (`pauseViewerRendering`).
+    await pauseViewerRendering(page)
     await setSubscriptionTier(page, 'free')
     await auth0Login(page)
     const exportButton = page.getByTestId('export-glb-button')
@@ -2037,7 +1886,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await expect.poll(async () => (await exportLedger(page)).filter((row) => row.key === EXPORT_MODEL_PATH).length,
       {timeout: RECORD_SETTLE_TIMEOUT_MS}).toBe(1)
     expect(await slotLedger(page)).toEqual(fullSlots)
-    await page.keyboard.press('Escape')
+    await closeExportDialog(page)
 
     // 2. A local file takes a slot on its first export, then exports
     //    unlimited. Slots empty for this part.
@@ -2045,6 +1894,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     resetGlbLogs(glbLogs)
     await openLocalFile(page, SHELLS_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
+    await pauseViewerRendering(page)
     await waitForGlbLog(glbLogs, 'writer: wrote', EXPORT_TEST_TIMEOUT_MS)
     // The key is the route without its element path: `<prefix>/v/local-only/<uuid>.step`.
     const localKey = new URL(page.url()).pathname.match(/^.*\/v\/local-only\/[^/]+\.step/)?.[0] ?? ''
@@ -2088,7 +1938,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // 3. A week on, say: this file's slot has rolled off and two other private
     // models hold both slots. Reopening the tab asks the server afresh.
     await setSlotLedger(page, fullSlots)
-    await page.keyboard.press('Escape')
+    await closeExportDialog(page)
     await openExportTab(page)
     await expect(slotLine).toHaveAttribute('data-remaining', '0')
     await expect(slotLine).toHaveAttribute('data-held', 'false')
@@ -2133,6 +1983,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await routeRecordExport(page)
 
     await loadModelAndWaitForArtifact(page)
+    await pauseViewerRendering(page)
     await setSubscriptionTier(page, 'shareProPendingReauth')
     await auth0Login(page)
 

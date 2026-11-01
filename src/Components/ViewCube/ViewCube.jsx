@@ -34,6 +34,8 @@ import useExistInFeature from '../../hooks/useExistInFeature'
 import {removeCameraUrlParams} from '../Camera/hashState'
 import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
+import useAppsRail from '../Apps/useAppsRail'
+import {ROW_PITCH} from '../../Containers/layoutConstants'
 import debug from '../../utils/debug'
 
 
@@ -71,6 +73,7 @@ export default function ViewCube() {
   const isAppsVisible = useStore((state) => state.isAppsVisible)
   const rightDrawerWidth = useStore((state) => state.rightDrawerWidth)
   const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
+  const {isVisible: isAppsRailVisible} = useAppsRail()
   // On mobile the drawers are bottom sheets, so they don't push the widget aside.
   const isMobile = useIsMobile()
 
@@ -387,7 +390,11 @@ export default function ViewCube() {
   // visibility predicate as NotesAndPropertiesDrawer's isDrawerVisible.
   const isRightDrawerVisible = isNotesVisible || isPropertiesVisible || (isBotEnabled && isBotVisible)
   const drawerInset = isMobile ? 0 :
-    (isRightDrawerVisible ? rightDrawerWidth : 0) + (isAppsVisible ? appsDrawerWidth : 0)
+    (isRightDrawerVisible ? rightDrawerWidth : 0) + (isAppsVisible ? appsDrawerWidth : 0) +
+    // The workspace Apps bar (#1993) is a ROW_PITCH column on the right
+    // border; this widget is positioned against the full-width viewer
+    // container at zIndex 100, so without this it covers the bar's cells.
+    (isAppsRailVisible ? ROW_PITCH : 0)
   const rightInset = MARGIN_PX + drawerInset
 
   return (
@@ -728,7 +735,7 @@ const THREE_AXES = 3 // axis indices 0, 1, 2 sum to 3
 const CUBE_HALF = 0.5 // half the cube's edge length
 const CHAMFER = 0.16 // how far faces are inset to form the chamfer
 const FACE_HALF = CUBE_HALF - CHAMFER // face half-span
-const BLDRS_GREEN_HEX = 0x459a47 // brand green (Logo_Buildings.svg)
+const BLDRS_GREEN_HEX = 0x459a47 // brand building-green (the Pro tier's; DS token logo-lime)
 const CHAMFER_GREY_HEX = 0xd8d8d8 // edge/corner bevel base color
 const FACE_BASE_HEX = 0xffffff // face texture shown untinted
 const FACE_HOVER_OPACITY = 0.6 // translucent green wash for a hovered face

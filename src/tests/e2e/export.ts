@@ -14,9 +14,11 @@ import {
 } from '../../export/exportSlots'
 import {mockIsPublicModel} from '../../__mocks__/mockModelVisibility'
 import {isProSubscriptionStatus} from '../../quota/proStatus'
+import {CanvasFrame, MIN_MODEL_EDGE_FRACTION, edgeFraction} from './canvasFrame'
 import {estimateKey, settledEstimateBytes} from './exportEstimate'
 import {captureGlbLogs, waitForGlbLog} from './glbLogs'
 import {waitForModelReady} from './models'
+import {captureRenderedFrame, pauseViewerRendering, resumeViewerRendering} from './utils'
 
 
 /**
@@ -184,7 +186,15 @@ export async function loadModelAndWaitForArtifact(page: Page, extraFlags = '') {
   await waitForModelReady(page)
   // The writer is idle-scheduled and fires well after `data-model-ready`;
   // this line is the only signal that the artifact is actually on disk.
+  //
+  // `Loader#scheduleIdleWork` asks for `requestIdleCallback` with a 5 s cap,
+  // and a page that is painting never goes idle (headless CI paints through
+  // SwiftShader, which pins the main thread: `pauseViewerRendering`), so the
+  // writer waits out the cap. Nothing is asserted on the canvas while it
+  // does, so the viewer is paused for the wait and painting again after it.
+  await pauseViewerRendering(page)
   await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT_MS)
+  await resumeViewerRendering(page)
 }
 
 
@@ -199,6 +209,24 @@ export async function openExportTab(page: Page) {
   await page.getByTestId('control-button-save').click()
   await page.getByTestId('tab-export').click()
   await expect(page.getByTestId('export-section')).toBeVisible()
+}
+
+
+/**
+ * Close the Save dialog and wait until it is gone.
+ *
+ * Not `Escape`: MUI's Dialog only hears the key while focus is inside it, and
+ * an export click leaves focus on `<body>` (the button disables while the
+ * download runs) until the dialog's focus trap pulls it back. Pressed in that
+ * window, the key does nothing and the dialog stays up over the Open button,
+ * so the next `reopenLocalGlb` waits out the test (#1985, mobile, reliably on
+ * a paused viewer). The Close button doesn't depend on where focus is.
+ *
+ * @param page Playwright page
+ */
+export async function closeExportDialog(page: Page) {
+  await page.getByTestId('button-close-dialog-save').click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 }
 
 
@@ -586,6 +614,31 @@ export async function reopenLocalGlb(page: Page, path: string) {
 
 
 /**
+ * Expect the model now loaded to be ON THE CANVAS: a fresh frame of the
+ * current scene, from the app's own render path, shows geometry rather than
+ * an empty background (`utils.ts#captureRenderedFrame`,
+ * `canvasFrame.ts#edgeFraction`).
+ *
+ * The export specs judge a reopened file by its picks, NavTree, URL and
+ * highlight state, all read off the scene and the store, and they run with
+ * the viewer paused, so the canvas still shows the frame painted before the
+ * reopen. Without this, a reopen whose geometry never reached the renderer
+ * (or rendered as nothing) passes every one of those checks (codex on #1985).
+ *
+ * @param page Playwright page
+ * @param what what is on screen, for the failure message
+ * @return the frame it judged, for a later comparison
+ */
+export async function expectModelOnCanvas(page: Page, what: string): Promise<CanvasFrame> {
+  const frame = await captureRenderedFrame(page)
+  const edges = edgeFraction(frame)
+  expect(edges, `${what}: the canvas shows geometry, not an empty background`)
+    .toBeGreaterThan(MIN_MODEL_EDGE_FRACTION)
+  return frame
+}
+
+
+/**
  * Open a file from disk through the Open dialog's Local tab — Browse, then
  * the file chooser — and wait until it has loaded. What {@link reopenLocalGlb}
  * does for a downloaded `.glb`, for any format the loader takes.
@@ -833,6 +886,28 @@ export type ElementKind = 'collapsed' | 'instanced' | 'any'
 
 /** Whose geometry: the root product's own, a child occurrence's, or either. */
 export type PlacementLevel = 'root' | 'child' | 'any'
+
+
+/**
+ * Expect the store to hold no selection at all. A step that picks after
+ * another step's pick must start from nothing, or "the pick selected X" could
+ * be the previous pick still standing: `doubleClickSelectsAnElement` would
+ * pass on the same element selected twice.
+ *
+ * @param page Playwright page
+ */
+export async function expectNothingSelected(page: Page) {
+  await expect.poll(() => page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const state = ((window as any).store ?? (window as any).useStore).getState()
+    return [state.selectedElements, state.selectedInstanceIds, state.selectedAnchorIds]
+      .map((ids) => (ids ?? []).length)
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }), 'the selection the model opened with').toEqual([0, 0, 0])
+  // The store and the permalink are written separately; a stale pick shows
+  // in either one.
+  await expect(page).not.toHaveURL(/\.(ifc|glb|step|stp)(\/\d+)+(\?|#|$)/)
+}
 
 
 /**
