@@ -516,6 +516,20 @@ class LoadProgressReporter {
   }
 
   /**
+   * What classifyLoadOutcome reads: the loader's geometry stats plus this
+   * reporter's own tally of conway Logger errors, which the loader cannot know
+   * and which vetoes a no-geometry verdict (isGeometrylessFile). Undefined when
+   * the loader reported nothing, so a format with no engine stays `displayed`.
+   *
+   * @return {object|undefined}
+   */
+  outcomeInputs() {
+    return this.geometryStats === undefined ?
+      undefined :
+      {...this.geometryStats, engineErrorTotal: this.engineErrorTotal}
+  }
+
+  /**
    * Record what the loader built, for classifyLoadOutcome.
    *
    * @param {object} stats {vertexCount, triangleCount}; either may be absent
@@ -733,7 +747,7 @@ class LoadProgressReporter {
     // model the user is looking at is a regular bug however many warnings it
     // took to get there, and only a load that produced nothing to look at is
     // a major one. This is why errorCount no longer decides the level.
-    const loadOutcome = classifyLoadOutcome(this.geometryStats)
+    const loadOutcome = classifyLoadOutcome(this.outcomeInputs())
     tags.load_outcome = loadOutcome
     // Also set on the global scope at init by index/ga.js. Re-read here
     // because this reads later: a first-ever visitor's id only resolves
@@ -1047,24 +1061,34 @@ export function noGeometryAlert() {
  *
  * - no products at all (`productCount === 0`), or
  * - products, none with a drawable representation
- *   (`productsWithGeometryCount === 0`), and conway logged no error doing so.
+ *   (`productsWithGeometryCount === 0`),
  *
- * Each count is `undefined` when the engine did not supply it (the web-ifc
- * shim, a conway older than 1.1626.740, formats that never reach conway), and
- * unknown is not zero: the second arm needs all three to be present, and the
- * first arm needs `productCount` itself. So an engine that does not say stays
- * `unusable`, the pre-existing answer. A file that had products with
- * geometry, or any error alongside none, is also left to the failure path,
- * which is where those belong.
+ * and in BOTH cases conway logged no error. Zero products with errors is what
+ * a parse or extraction that died before recording any product looks like
+ * (Share#1998 review), so the error condition is not specific to the second
+ * arm. It takes two confirmations:
+ *
+ * - `errorCount === 0`: Statistics#getErrorCount, which must be PRESENT and
+ *   zero. Absent is unknown, not zero.
+ * - `engineErrorTotal`, when present, is not above 0: the reporter's own tally
+ *   of the errors the conway Logger emitted (tallySeverity: every Logger error
+ *   that is not a data defect), a second source because Statistics#getErrorCount
+ *   can omit Logger errors. It is always present on a reporter; absent only
+ *   when a caller classifies bare geometry stats.
+ *
+ * Each other count is `undefined` when the engine did not supply it (the
+ * web-ifc shim, a conway older than 1.1626.740, formats that never reach
+ * conway), and unknown is not zero either: an engine that does not say stays
+ * `unusable`, the pre-existing answer.
  *
  * @param {object} geometry what the loader reported (see classifyLoadOutcome)
  * @return {boolean}
  */
-function isGeometrylessFile({productCount, productsWithGeometryCount, errorCount}) {
-  if (productCount === 0) {
-    return true
+function isGeometrylessFile({productCount, productsWithGeometryCount, errorCount, engineErrorTotal}) {
+  if (errorCount !== 0 || engineErrorTotal > 0) {
+    return false
   }
-  return productCount > 0 && productsWithGeometryCount === 0 && errorCount === 0
+  return productCount === 0 || (productCount > 0 && productsWithGeometryCount === 0)
 }
 
 
@@ -1090,8 +1114,9 @@ function isGeometrylessFile({productCount, productsWithGeometryCount, errorCount
  *
  * @param {object} [geometry] {vertexCount, triangleCount} as reported by the
  *   loader, plus conway's {productCount, productsWithGeometryCount,
- *   errorCount} when the engine supplied them; undefined when the loader
- *   reported nothing
+ *   errorCount} when the engine supplied them, and the reporter's
+ *   {engineErrorTotal} logger tally (LoadProgressReporter#outcomeInputs);
+ *   undefined when the loader reported nothing
  * @return {string} one of LOAD_OUTCOMES
  */
 export function classifyLoadOutcome(geometry) {
@@ -1305,7 +1330,7 @@ export function getCompletedLoadStats() {
  * @return {string|undefined}
  */
 export function getCompletedLoadOutcome() {
-  return activeReporter ? classifyLoadOutcome(activeReporter.geometryStats) : undefined
+  return activeReporter ? classifyLoadOutcome(activeReporter.outcomeInputs()) : undefined
 }
 
 

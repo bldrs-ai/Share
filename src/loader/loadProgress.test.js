@@ -97,10 +97,34 @@ describe('loadProgress', () => {
     describe('an empty build, split by conway\'s counts (Share#1962)', () => {
       const EMPTY = {vertexCount: 0, triangleCount: 0}
 
-      it('is no_geometry when the file has no products', () => {
-        expect(classifyLoadOutcome({...EMPTY, productCount: 0})).toBe('no_geometry')
-        // With errors too: the table's first row has no error condition.
-        expect(classifyLoadOutcome({...EMPTY, productCount: 0, errorCount: 3})).toBe('no_geometry')
+      it('is no_geometry when the file has no products and conway confirms no errors', () => {
+        expect(classifyLoadOutcome({...EMPTY, productCount: 0, errorCount: 0})).toBe('no_geometry')
+      })
+
+      // Zero products with errors is what a parse or extraction that died
+      // before recording any product looks like, so it is the engine's
+      // failure, not an empty file.
+      it('stays unusable for no products when conway logged errors', () => {
+        expect(classifyLoadOutcome({...EMPTY, productCount: 0, errorCount: 3})).toBe('unusable')
+      })
+
+      it('stays unusable for no products when the error count is unknown', () => {
+        expect(classifyLoadOutcome({...EMPTY, productCount: 0})).toBe('unusable')
+      })
+
+      // Statistics#getErrorCount can leave out errors the Logger saw; the
+      // reporter's own tally of the Logger's errors (engineErrorTotal) vetoes.
+      it('stays unusable when the logger tally has errors Statistics did not count', () => {
+        expect(classifyLoadOutcome({
+          ...EMPTY, productCount: 0, errorCount: 0, engineErrorTotal: 2,
+        })).toBe('unusable')
+        expect(classifyLoadOutcome({
+          ...EMPTY, productCount: 12, productsWithGeometryCount: 0, errorCount: 0, engineErrorTotal: 2,
+        })).toBe('unusable')
+        // A zero tally is no veto.
+        expect(classifyLoadOutcome({
+          ...EMPTY, productCount: 0, errorCount: 0, engineErrorTotal: 0,
+        })).toBe('no_geometry')
       })
 
       it('is no_geometry for products with none drawable and no engine error', () => {
@@ -355,6 +379,25 @@ describe('loadProgress', () => {
     })
 
     describe('engine severity tally', () => {
+      // The reporter's tally reaches the verdict: Statistics says 0 errors, the
+      // Logger saw one (Share#1998 review).
+      it('an empty build is unusable when the logger saw an error Statistics did not count', () => {
+        beginLoadProgress({fileInfo: 'shell.ifc'})
+        reportGeometryStats({vertexCount: 0, triangleCount: 0, productCount: 0, errorCount: 0})
+        Logger.error('Error extracting product', 1)
+        endLoadProgress()
+        expect(getCompletedLoadOutcome()).toBe('unusable')
+      })
+
+      it('an empty build with a quiet logger and zero Statistics errors is no_geometry', () => {
+        beginLoadProgress({fileInfo: 'shell.ifc'})
+        reportGeometryStats({vertexCount: 0, triangleCount: 0, productCount: 0, errorCount: 0})
+        Logger.warning('Unsupported type: IfcFoo', 1)
+        Logger.error(DEFECT, 2, DATA_DEFECT)
+        endLoadProgress()
+        expect(getCompletedLoadOutcome()).toBe('no_geometry')
+      })
+
       it('counts engine errors total and distinct, warnings distinct, defects apart', () => {
         beginLoadProgress({fileInfo: 'part.step'})
         reportGeometryStats({vertexCount: 8, triangleCount: 4})
@@ -466,7 +509,7 @@ describe('loadProgress', () => {
 
       it('an empty build of a file with no products is no_geometry, counts kept', () => {
         beginLoadProgress({fileInfo: 'shell.ifc'})
-        reportGeometryStats({vertexCount: 0, triangleCount: 0, productCount: 0})
+        reportGeometryStats({vertexCount: 0, triangleCount: 0, productCount: 0, errorCount: 0})
         endLoadProgress()
         expect(getCompletedLoadOutcome()).toBe('no_geometry')
         expect(getCompletedLoadStats()).toMatchObject({vertexCount: 0, triangleCount: 0})

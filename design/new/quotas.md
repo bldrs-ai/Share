@@ -915,10 +915,13 @@ live on the reporter in `src/loader/loadProgress.js`.
   of 0 vertices is `no_geometry` when conway's own counts say the file has
   nothing to draw (Share#1962): no products (`getProductCount() === 0`), or
   products none of which has a drawable representation
-  (`getProductsWithGeometryCount() === 0`) with `getErrorCount() === 0`. It is
-  `unusable` when conway logged errors alongside, when it counted geometry yet
-  nothing was built, and whenever a count the verdict needs is absent (an engine
-  that does not say has not said zero). A `no_geometry` open is still a
+  (`getProductsWithGeometryCount() === 0`), in both cases with a confirmed
+  `getErrorCount() === 0` and no errors in the reporter's Logger tally
+  (`engineErrorTotal`, for errors `getErrorCount()` can omit). It is `unusable`
+  when conway logged errors alongside (zero products with errors is a parse that
+  died before recording any), when it counted geometry yet nothing was built,
+  and whenever a count the verdict needs is absent (an engine that does not say
+  has not said zero). A `no_geometry` open is still a
   `real_model_open`, so it counts as an open, and not a `load_failed`; the user
   gets a non-error "No 3D geometry" dialog (`AlertDialog`, `noGeometry`) that
   leaves the model in place, counted as an `alert` event under a constant
