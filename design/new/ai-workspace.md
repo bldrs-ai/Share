@@ -532,7 +532,7 @@ set**. The windows mirror quotas.md: 30-day rolling for signed-in tiers.
 | Pro (`sharePro`) | allowlist + priced picker, or free models | $5.00 | ~135–270 Sonnet 5.5, ~70–135 Opus 5.5, ~25–55 Fable 5.1, ~10,000 on allowlist | 30-day rolling | Auth0 `sub` |
 | Free models (any tier, opt-in) | `openrouter/free` or curated `:free` | $0 (no credits) | ≈300 a day (≈1,000 requests) **in total**, shared by every user | UTC day (OpenRouter's) | caller's tier identity |
 | BYOK | anything the user's key allows | none from Bldrs | — | — | none needed |
-| Global breaker | — | $1 / day for all anonymous paid-model traffic (≈ 7× today's expected spend, = today's ad budget; sizing below); past it, anonymous traffic overflows to free models | — | UTC day | relay-wide |
+| Global breaker | — | *B* per day for all anonymous paid-model traffic (3–7× expected spend, never above the daily ad budget; method below, values in the private bizdev doc); past it, anonymous traffic overflows to free models | — | UTC day | relay-wide |
 
 The dollar budgets can't limit free-model traffic, because it costs $0.
 So the ledger also counts free-model requests per identity (anonymous
@@ -540,52 +540,54 @@ token, IP hash, `sub`) against a small daily cap (placeholder: 30 requests,
 ~9 turns). Without it, one client could drain the shared daily pool for
 everyone.
 
-**Sizing against today's traffic: AI spend as acquisition cost.** Share sees
-about **100 users a day** today, against about **$1 a day of ad spend**.
-Hosted AI for anonymous and free users is a marketing cost of the same kind
-as that ad spend, so it is sized next to it. Placeholder assumptions:
+**Sizing method: AI spend as acquisition cost.** Hosted AI for anonymous
+and free users is a marketing cost of the same kind as paid acquisition,
+so its budgets and breakers are sized against traffic and ad spend. The
+actual traffic and spend figures are business metrics and stay in the
+private bizdev growth-strategy doc (roadmap §11 privacy firewall). This
+doc carries only the method and the per-unit inputs that are already
+public:
 
-| Input | Value | Note |
+| Input | Symbol | Source |
 |---|---|---|
-| Daily users | 100 | today's traffic |
-| Share who try the assistant | 30% → 30 users | placeholder; `assist_open` (§7) measures it |
-| Turns per trying user | 10 | placeholder; `assist_turn` measures it |
-| Cost per turn, cheap default | ~$0.0005 | planning figure $0.0003–0.0006; measured $0.00015 on qwen3.7-flash (eval #1929) |
-| **Expected anonymous + free spend** | **30 × 10 × $0.0005 ≈ $0.15 / day** | ≈ $4.50 / month |
-| Expected, if all traffic ran on fallback 1 | 300 × $0.0023 ≈ $0.70 / day | deepseek-v4-flash, measured $0.00058 at 4× |
+| Daily users | *V* | private bizdev doc |
+| Daily ad budget | *A* | private bizdev doc |
+| Share of users who try the assistant | *p* | placeholder; `assist_open` (§7) measures it |
+| Turns per trying user | *t* | placeholder; `assist_turn` measures it |
+| Cost per turn, cheap default | *c* ≈ $0.0005 | planning figure $0.0003–0.0006; measured $0.00015 on qwen3.7-flash (eval #1929) |
+| Cost per turn, fallback 1 | ≈ $0.0023 | deepseek-v4-flash, measured $0.00058 at 4× |
+| **Expected anonymous + free spend per day** | ***E* = *V* · *p* · *t* · *c*** | |
 
 What follows from that:
 
-- **AI cost per engaged user ≲ ad cost per visitor.** $0.15 for 30
-  assistant users is about $0.005 each. $1 of ads for ~100 visitors is about
-  $0.01 each, if all traffic were paid, which it isn't, so ads are really
-  cheaper per visitor than that. A user who has worked with the assistant
-  on their own model is a stronger conversion signal than a visit, for the
-  same cent.
+- **Compare AI cost per engaged user with ad cost per visitor.** *E* / (*V*·*p*)
+  against *A* / *V*. At planning-figure costs a ten-turn trial is about
+  half a cent, so the comparison is expected to favour the assistant. A
+  user who has worked with the assistant on their own model is also a
+  stronger conversion signal than a visit. Re-check it with the real *V*
+  and *A* in the bizdev doc.
 - **Per-user budgets cover a trial with headroom.** The anonymous $0.02 is
-  35–65 cheap turns against the assumed 10. A signed-in free user's $0.50 a
-  month is ~800–1,700 turns. Ten fully active free users would cost ~$5 a
-  month, about $0.17 a day.
-- **The breaker is a multiple of expected spend, at the ad budget.**
-  - The anonymous breaker sits at **$1 a day**: about 7× the expected
-    $0.15 (3× would be $0.45) and equal to the daily ad budget, which stays
-    the ceiling. The worst anonymous day, viral
-    or abusive, then costs no more than one day of ads. The overflow
-    (free models, then a sign-in prompt) keeps the assistant answering past
-    that point.
-  - A 10× viral day (1,000 users, ~$1.50 of expected demand) trips the
-    breaker at about two-thirds of the day's traffic. That is the intended trade.
-  - **Re-size the breaker as traffic grows.** Rule of thumb: about 3× the
-    trailing 7-day median anonymous spend, never above a hard ceiling set
-    by hand next to the ad budget. Both numbers are placeholders.
+  35–65 cheap turns, against an assumed trial of about 10. A signed-in
+  free user's $0.50 a month is ~800–1,700 turns. Ten fully active free
+  users would cost ~$5 a month. None of this depends on traffic.
+- **The breaker *B* is a multiple of expected spend, capped by the ad budget.**
+  - Set the anonymous breaker *B* at about 3–7× *E*, and never above *A*,
+    so the worst anonymous day, viral or abusive, costs no more than one
+    day of ads. The overflow (free models, then a sign-in prompt) keeps the
+    assistant answering past that point.
+  - A viral day of *k*× normal traffic trips the breaker after roughly
+    *B* / (*k*·*E*) of that day's demand. That is the intended trade.
+  - **Re-size *B* as traffic grows.** Rule of thumb: about 3× the trailing
+    7-day median anonymous spend, never above a hard ceiling set by hand
+    next to *A*. The ledger's own daily totals provide the median.
 - **A signed-in free-tier breaker too** (added here, not in the planning
   decisions). Per-user budgets bound one account, but free Auth0 accounts
   are cheap to create, so the free tier gets the same daily breaker
-  mechanism. Placeholder: $2 a day (≈ 10× today's expected free spend). Past
-  it, free users overflow to free models with the same notice.
-- **The free-model pool can't carry even today's traffic as the default.**
-  ~300 expected turns a day against ≈300 free turns a day for the whole
-  account (above), which would leave nothing for anyone else. That is the D3 rationale in numbers.
+  mechanism, sized the same way against expected free-tier spend. Past it,
+  free users overflow to free models with the same notice.
+- **The free-model pool can't be the default.** It holds ≈300 turns a day
+  for the whole account (above), so it saturates as soon as *V* · *p* · *t*
+  approaches 300. That is the D3 rationale in numbers.
 
 At the $25/mo Pro price mocked in #1421 (roadmap §4.9), a $5 AI budget is
 20% of revenue, plus OpenRouter's 5.5% credit-purchase fee
@@ -632,14 +634,33 @@ Per-message metering would multiply that write rate by roughly 100.
 - **Key:** `ai/<tier-scope>/<sub | anonId>`. **Value:** `{days:
   {'2026-10-06': microUsd, …}}`. The window sum is the last 30 day buckets,
   or 1 for anonymous. Pruning works like `pruneLoads` in quotas.md.
-- **Check then debit.** The relay checks remaining budget > 0 before
-  calling upstream, and debits the actual `usage.cost` after, including for
-  aborted turns, which upstreams often bill in full (§5 Amendment 3).
-  Concurrent requests can overshoot by at most (in-flight requests × one
-  capped request). `max_tokens` bounds that, so a lock isn't needed for v0.
-  Whether Blobs offers conditional writes or atomic increments is
-  **UNVERIFIED** (spike #1928). Lost-update races under-count, the same
-  "free extra, never wrongful block" direction quotas.md accepts.
+- **Reserve, then settle.** A check-then-debit relay is not enough. If an
+  identity's requests run concurrently, each one sees a positive balance,
+  calls the paid upstream, and debits afterwards, and with last-write-wins
+  only one charge may stick. With no cap on how many run at once, a client
+  could fire arbitrarily large parallel batches and defeat both its own
+  budget and the global breaker; `max_tokens` bounds each request, not the
+  total. So, before calling upstream, the relay:
+  - **Reserves** the request's worst-case cost (`max_tokens` × the model's
+    output price, plus the prompt's input cost) against the identity's
+    remaining budget, and refuses when the reservation doesn't fit.
+  - **Caps concurrency per identity** (placeholder: 2 in-flight requests
+    per anonymous token, IP hash or `sub`), which also bounds the
+    reservations.
+  - Does the same for the **global breaker**: it reserves against *B*, so
+    parallel anonymous traffic can't overshoot it either.
+  - After the stream, **settles** the reservation to the actual
+    `usage.cost`, including for aborted turns, which upstreams often bill
+    in full (§5 Amendment 3), and releases the difference.
+- **The reservation must be atomic.** That needs a conditional write
+  (compare-and-swap on an ETag/version) or an atomic increment in the
+  store. Whether Netlify Blobs offers either is **UNVERIFIED** and is a
+  gating question for spike #1928. If Blobs can't, the ledger moves to a
+  store that can (for example a KV with atomic counters, or a small
+  Postgres row with `UPDATE … WHERE balance >= cost`) before #1932 ships.
+  The direction is "never more spend than budgeted", unlike quotas.md's
+  "free extra, never wrongful block": for model loads an under-count costs
+  nothing, but for AI credits it costs real money.
 - **Reuse.** Add `QUOTA_FEATURES.AI_CREDITS = 'ai_credits'`
   (`src/quota/quota.js:21`, whose comment already invites a new value per
   metered feature). Reuse `getTier`, `QuotaBadge`-style usage display and
@@ -670,7 +691,7 @@ Per-message metering would multiply that write rate by roughly 100.
   rotates daily, so the hashes don't link across days.
 - **Global breaker.** A relay-wide daily spend counter for the anonymous
   tier's paid models, sized at about 3× expected spend and capped near the
-  daily ad budget (placeholder $1 a day, §6 sizing). Past the threshold, anonymous traffic **degrades to
+  daily ad budget (§6 sizing method; the value lives in the private bizdev doc). Past the threshold, anonymous traffic **degrades to
   the free-models path** (§6) with an in-tray notice, rather than being
   refused. Only when that pool is also exhausted do anonymous requests get
   "free assistant busy, sign in to continue", which is itself a conversion
@@ -905,8 +926,12 @@ session.abort(); session.undo(stepId)
   `echo`/`refs`/`undo`), `intent-dispatched`, `escalated`,
   `approval-request`, `usage`, `error`, `done`.
 - **Approval policy is derived from annotations.** `readOnly` runs.
-  `viewState` runs with undo. `mutatesDocument` and `external` go through an
-  approval card (`policy.confirm`).
+  `viewState` runs with undo. `mutatesDocument`, `external` and
+  `sendsPixels` go through an approval card (`policy.confirm`), and so does
+  a tool with no annotations at all. `sendsPixels` is mandatory approval,
+  not an implementation choice: a screenshot sends model imagery to the
+  provider, so the user approves each one (or opts in for the session).
+  This matches `src/assist/policy` in #1946.
 - **Adapters.**
   - `@bldrs-ai/assist/react`: `<AssistProvider>`, `useAssistSession(id)` →
     `{messages, send, abort, status, usage}`, and `<AssistTray>` themed via
@@ -1384,7 +1409,7 @@ Dependencies are in brackets.
 | #1676 | W7 reduced tool set | unchanged, droppable | #1672 |
 | #1677 | large-model fixture + E2E | unchanged | #1675 |
 | [#1927](https://github.com/bldrs-ai/Share/issues/1927) | spike: providers + client library | **Done (2026-10-06).** D7 confirmed with three amendments (§9, §8, §5); results posted on #1927. Real-key success paths for the four direct providers remain open (§9 "Still unverified"). Original scope: provider matrix (§9), AI SDK vs TanStack AI, token-per-turn measurement (not recorded; see §6) | — |
-| [#1928](https://github.com/bldrs-ai/Share/issues/1928) | spike: relay vehicle + OpenRouter routing | Edge vs v2 Function limits, streaming, `verifyAuth0Bearer` adapter, Blobs atomicity, **abort metering (§5 Amendment 3):** after a client abort no usage reaches the client and Bedrock/Google/Alibaba bill the full generation with `cancelled:false`, so the relay must keep reading upstream to the final usage chunk, or reconcile via `X-Generation-Id` + `/api/v1/generation` (404 for >20 s, present by ~5 min). Prefer cancel-capable upstreams in `provider.order` | — |
+| [#1928](https://github.com/bldrs-ai/Share/issues/1928) | spike: relay vehicle + OpenRouter routing | Edge vs v2 Function limits, streaming, `verifyAuth0Bearer` adapter, **Blobs atomicity: gating, because the ledger must reserve atomically (§7 "Reserve, then settle")**, **abort metering (§5 Amendment 3):** after a client abort no usage reaches the client and Bedrock/Google/Alibaba bill the full generation with `cancelled:false`, so the relay must keep reading upstream to the final usage chunk, or reconcile via `X-Generation-Id` + `/api/v1/generation` (404 for >20 s, present by ~5 min). Prefer cancel-capable upstreams in `provider.order` | — |
 | [#1929](https://github.com/bldrs-ai/Share/issues/1929) | spike: free/cheap model eval | **Done, first run (2026-10-06); results on #1929.** Picked the default allowlist and the curated `:free` list (§6): $0.00015 a turn measured, deny routing confirmed for all 8 paid models, the free path keeps deny except the optional NVIDIA entry. Findings feed §9 (`query` optional) and §12.1 (Jev calibration). A **follow-up run on a real large-model scene** is wanted: the first used a synthetic 63-element scene. Original scope: tool-calling scorecard over the 17 free tool-capable models + 3–5 cheap paid ones, v0 tool schemas, deny-routing check | #1674 schemas (drafts are enough) |
 | [#1930](https://github.com/bldrs-ai/Share/issues/1930) | provider abstraction + BYOK key store + settings UI | `Provider` interface, four direct providers, key custody, Test/Forget, disclosure panel (§10). Evolves `BotSettings` | #1927 |
 | [#1931](https://github.com/bldrs-ai/Share/issues/1931) | OpenRouter PKCE connect | Connect/disconnect, callback route, key into #1930's store | #1930 |
@@ -1427,12 +1452,11 @@ because it rides the quota and billing rails.
    global breaker.
 2. **Pro beyond the budget.** Top-ups (buy credit packs), pay-as-you-go
    metered to Stripe, or a hard stop until the window rolls?
-3. **Anonymous exposure appetite.** The sizing in §6 puts the anonymous
-   breaker at $1 a day (one day of ads) and the free-tier breaker at $2 a
-   day (the anonymous one is now about 7× the measured-cost expectation of
-   $0.15). Are those the right multiples of expected spend, and what is the
-   hard ceiling as traffic grows? Captcha on token mint from day one, or
-   only when the breaker trips?
+3. **Anonymous exposure appetite.** §6 sizes the anonymous breaker *B* at
+   3–7× expected spend, capped by the daily ad budget, with the same
+   mechanism for the free tier. Which multiple, and what hard ceiling as
+   traffic grows? The values go in the private bizdev doc. Captcha on
+   token mint from day one, or only when the breaker trips?
 4. **Naming.** The user-facing name for the assistant (roadmap §10 still
    says "unpicked"), and whether budgets show as dollars, credits or a
    percentage.
