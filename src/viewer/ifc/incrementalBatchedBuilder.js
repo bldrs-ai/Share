@@ -608,9 +608,9 @@ export class IncrementalBatchedBuilder {
         // (`placedShapeBox`), so a rotated placement is framed alike while
         // streaming and once the load settles (#1896) — the follow's
         // no-correction-at-settle contract (ProgressiveLoadSession).
-        const position = entry.geometry.attributes.position
-        this.onBounds(
-          placedShapeBox(entry.box, position, 0, position.count, matrix, this.scratchBox))
+        const {attributes, index} = entry.geometry
+        this.onBounds(placedShapeBox(
+          entry.box, attributes.position, index, 0, index.count, matrix, this.scratchBox))
       } catch {
         // Camera follow is best-effort — never break the append.
       }

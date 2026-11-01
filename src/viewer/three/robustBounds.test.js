@@ -17,6 +17,7 @@ import {
   robustBoundsFor,
   robustBoundsFromElements,
 } from './robustBounds'
+import {addGeometryRanges} from '../ifc/batchedGeometryRanges'
 
 
 /** Building-scale stand-in span, in scene units. */
@@ -309,6 +310,65 @@ describe('viewer/three/robustBounds', () => {
       exact.min.toArray().forEach((v, axis) => expect(result.exactBox.min.getComponent(axis)).toBeCloseTo(v, digits))
       exact.max.toArray().forEach((v, axis) => expect(result.exactBox.max.getComponent(axis)).toBeCloseTo(v, digits))
       expect(result.box.max.y - result.box.min.y).toBeCloseTo(BEAM_SECTION, digits)
+    })
+
+    it('walks only the vertices a rotated range draws, not its whole vertex block', () => {
+      // A collapsed slice's `vertexStart` / `vertexCount` are its OWN block
+      // of the merged upload, but nothing makes every vertex in that block
+      // referenced: `addGeometryRanges` checks that a range's indices stay
+      // inside it, not that they cover it. Here range 0's block holds one
+      // unreferenced position a stray's distance out. Under a rotation (the
+      // model-edit move op can give a range any matrix) the walk must not
+      // see it, as getBoundingBoxAt — the local box — does not.
+      const positions = new Float32Array([
+        0, 0, 0, 1, 0, 0, 0, 1, 0, STRAY_DISTANCE, STRAY_DISTANCE, 0,
+        3, 0, 0, 4, 0, 0, 3, 1, 0,
+      ])
+      const merged = new BufferGeometry()
+      merged.setAttribute('position', new BufferAttribute(positions, 3))
+      merged.setIndex(new BufferAttribute(new Uint32Array([0, 1, 2, 4, 5, 6]), 1))
+      const ranges = [
+        {vertexStart: 0, vertexCount: 4, indexStart: 0, indexCount: 3},
+        {vertexStart: 4, vertexCount: 3, indexStart: 3, indexCount: 3},
+      ]
+      const vertexTotal = 7
+      const mesh = new BatchedMesh(2, vertexTotal, ranges.length * 3, new MeshBasicMaterial())
+      const ids = addGeometryRanges(mesh, merged, ranges)
+      // The block is the range's own, not the whole upload.
+      expect(ids).toHaveLength(2)
+      expect(mesh._geometryInfo[ids[0]].vertexStart).toBe(0)
+      expect(mesh._geometryInfo[ids[0]].vertexCount).toBe(4)
+      expect(mesh._geometryInfo[ids[1]].vertexStart).toBe(4)
+      const turn = new Matrix4().makeRotationZ(TURN)
+      mesh.setMatrixAt(mesh.addInstance(ids[0]), turn)
+      const root = new Object3D()
+      root.add(mesh)
+
+      const result = computeRobustBounds(root)
+
+      const firstTriangle = new BufferGeometry()
+      firstTriangle.setAttribute('position', new BufferAttribute(positions.slice(0, 9), 3))
+      const drawn = vertexBox(firstTriangle, turn)
+      const digits = 5
+      drawn.min.toArray().forEach((v, axis) => expect(result.exactBox.min.getComponent(axis)).toBeCloseTo(v, digits))
+      drawn.max.toArray().forEach((v, axis) => expect(result.exactBox.max.getComponent(axis)).toBeCloseTo(v, digits))
+    })
+
+    it('walks the vertex range of a non-indexed batch', () => {
+      const geometry = turnedBeam().toNonIndexed()
+      const placement = new Matrix4().makeRotationZ(TURN)
+      const mesh = new BatchedMesh(
+        1, geometry.attributes.position.count, 0, new MeshBasicMaterial())
+      mesh.setMatrixAt(mesh.addInstance(mesh.addGeometry(geometry)), placement)
+      const root = new Object3D()
+      root.add(mesh)
+
+      const result = computeRobustBounds(root)
+
+      const exact = vertexBox(geometry, placement)
+      const digits = 5
+      exact.min.toArray().forEach((v, axis) => expect(result.exactBox.min.getComponent(axis)).toBeCloseTo(v, digits))
+      exact.max.toArray().forEach((v, axis) => expect(result.exactBox.max.getComponent(axis)).toBeCloseTo(v, digits))
     })
 
     it('keeps an axis-aligned placement bit-for-bit (the collapsed path)', () => {
