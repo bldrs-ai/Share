@@ -9,11 +9,13 @@ import PkgJson from '../../../package.json'
 
 
 // Marketing pages live on the Next.js SSG build (marketing/ — see
-// marketing/README.md), served from the apex domain, so these are
-// plain external links rather than SPA routes.
+// marketing/README.md), which the build overlays onto the same deploy as
+// the app (netlify.toml: /pricing/, /blog/ are file matches), so these
+// are origin-relative: a deploy preview links to its own marketing pages
+// rather than production's. Plain links, not SPA routes.
 const MARKETING_LINKS = [
-  {label: 'Pricing', href: 'https://bldrs.ai/pricing'},
-  {label: 'News', href: 'https://bldrs.ai/blog'},
+  {label: 'Pricing', href: '/pricing/'},
+  {label: 'News', href: '/blog/'},
 ]
 
 
@@ -69,7 +71,7 @@ export default function LogoMenu() {
         transformOrigin={{vertical: 'bottom', horizontal: 'left'}}
         data-testid='workspace-logo-menu'
       >
-        <Typography variant='subtitle2' sx={{fontWeight: 'bold', px: 2, py: 1}}>
+        <Typography variant='subtitle2' sx={{fontWeight: 500, px: 2, py: 1}}>
           Build Every Thing Together
         </Typography>
         <MenuItem

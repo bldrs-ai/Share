@@ -2522,9 +2522,10 @@ because "not required" is not the same as "no behaviour":
 `DecompressionStream`), `Filetype.test.js` (envelope sniff, `.gz` names,
 name-vs-header), `export/glbGzip.test.js` (the ceiling, including that it
 stops mid-inflate), `Loader.test.js` (a gzipped `cube.glb` through `load()`),
-plus the two upload seams' own suites. E2E: *"a gzipped export opens back in
-Share, with its BLDRS data intact"* in `Components/Share/exportGlb.spec.ts`
-exports a `.glb.gz`, saves it under that name, brings it back through the file
+plus the two upload seams' own suites. E2E: the step *"a gzipped export opens
+back in Share, with its BLDRS data intact"* of *"a Pro user exports index.ifc
+every way the tab offers, and every file opens back in Share"* in
+`Components/Share/exportGlb.spec.ts` exports a `.glb.gz`, saves it under that name, brings it back through the file
 chooser, and walks the NavTree to a leaf it can select — the `BLDRS_*`
 extensions surviving the round trip is the claim, not merely that something
 rendered. The Compress download caption changed with it: *"gzip — saves a
@@ -2750,9 +2751,10 @@ records-pending-reauth-export}`; the loader, `useExport`, `useExportSlots`,
 the whole free path — *"a free user exports a public sample unlimited with no
 slot; a local file three times, taking one; then meets the gate with the
 slots full"*, the server's stand-in refusing a bypass at the end. One test,
-not one per state: the heavy specs shard by test COUNT
-(`tools/playwrightSpecSets.js`), and two more pairs pushed shard 1 past its
-15-min job limit on #1980 — and *"a pending-reauth subscriber exports as Pro, with
+not one per state: CI then sharded by test COUNT, and two more pairs pushed
+shard 1 past its 15-min job limit on #1980 (shards are now balanced by measured
+duration, `tools/playwrightShards.mjs`, but a model load is still the
+expensive part) — and *"a pending-reauth subscriber exports as Pro, with
 nothing counted"*. The MSW mocks and the Playwright `page.route` fallbacks
 (`tests/e2e/export.ts`) apply the same decision to the same in-page ledger
 the record-load mock writes, `window.__mockQuotaLoads`. The live smoke's

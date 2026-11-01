@@ -168,6 +168,64 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
     await expect(page.locator(MODEL_ROWS)).toHaveCount(1)
   })
 
+  test('design system: primary actions are accent, the open model row is cyan-selected', async ({page}) => {
+    // Pinned to Day so the exact Day token values below apply; the
+    // theme otherwise follows the OS scheme.
+    await page.emulateMedia({colorScheme: 'light'})
+    await visitWithWorkspace(page)
+    await ensureProjectsDrawerOpen(page)
+
+    // accent (#5555ff) — the MUI default would be the grey
+    // primary.main (#c1c1c1), which is what this drawer shipped with —
+    // in sentence case, as the design system's Button sets it, not MUI's
+    // upper-cased default.
+    await expect(page.getByTestId('projects-new-button'))
+      .toHaveCSS('background-color', 'rgb(85, 85, 255)')
+    await expect(page.getByTestId('projects-new-button')).toHaveCSS('text-transform', 'none')
+    await page.getByTestId('projects-new-button').click()
+    await expect(page.getByTestId('projects-new-create'))
+      .toHaveCSS('background-color', 'rgb(85, 85, 255)')
+    await page.keyboard.press('Escape')
+
+    // The home model we arrived on is the open one, listed Ungrouped.
+    // surface-selected (#00f0ff40), not MUI's grey selected wash, and
+    // the label at the DS's selected weight.
+    const row = page.locator(UNGROUPED_ROWS).first()
+    await expect(row).toHaveClass(/Mui-selected/)
+    await expect(row).toHaveCSS('background-color', 'rgba(0, 240, 255, 0.25)')
+    await expect(row.locator('.MuiListItemText-primary')).toHaveCSS('font-weight', '500')
+
+    // The paper layer: header and logo footer on workspacePaper — neutral
+    // light grey in Day — around the list; New project heads the list at
+    // the DS's 36px rather than a full control row.
+    await expect(page.getByTestId('projects-header-band'))
+      .toHaveCSS('background-color', 'rgb(245, 245, 245)')
+    await expect(page.getByTestId('projects-footer-band'))
+      .toHaveCSS('background-color', 'rgb(245, 245, 245)')
+    // The list on an inset grey-paper panel inside a glass frame, like the
+    // right-hand drawer: #F5F5F5 at 0xA0 alpha.
+    await expect(page.getByTestId('projects-panel'))
+      .toHaveCSS('background-color', 'rgb(245, 245, 245)')
+    // Flat, not raised like a Notes card: the list is the drawer's floor.
+    await expect(page.getByTestId('projects-panel')).toHaveCSS('box-shadow', 'none')
+    await expect(page.getByTestId('ProjectsDrawer'))
+      .toHaveCSS('background-color', 'rgba(245, 245, 245, 0.627)')
+    await expect(page.getByTestId('projects-new-button')).toHaveCSS('height', '36px')
+
+    // The TopBar continues the drawer header's paper band and hairline.
+    await expect(page.getByTestId('TopBar')).toHaveCSS('background-color', 'rgb(245, 245, 245)')
+    await expect(page.getByTestId('TopBar'))
+      .toHaveCSS('border-bottom-color', 'rgba(16, 16, 16, 0.12)')
+
+    // A border hairline divides the centre pane from the right drawer.
+    // Desktop only: on a phone the drawer is the bottom sheet.
+    if (!ff.isMobile) {
+      await page.getByTestId('control-button-notes').click()
+      await expect(page.getByTestId('NotesAndPropertiesDrawer').getByTestId('SideDrawer-Paper'))
+        .toHaveCSS('border-left-color', 'rgba(16, 16, 16, 0.12)')
+    }
+  })
+
   test('logo menu: About opens in-app, marketing pages link out', async ({page}) => {
     await visitWithWorkspace(page)
     await ensureProjectsDrawerOpen(page)
@@ -177,9 +235,9 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
     await expect(menu).toContainText('Build Every Thing Together')
     await expect(menu).toContainText('Fastest browser-based CAD')
     await expect(page.getByTestId('workspace-logo-menu-pricing'))
-      .toHaveAttribute('href', 'https://bldrs.ai/pricing')
+      .toHaveAttribute('href', '/pricing/')
     await expect(page.getByTestId('workspace-logo-menu-news'))
-      .toHaveAttribute('href', 'https://bldrs.ai/blog')
+      .toHaveAttribute('href', '/blog/')
 
     await page.getByTestId('workspace-logo-menu-about').click()
     await expect(page.getByRole('dialog')).toBeVisible()
@@ -214,6 +272,13 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
       await expect(page.getByTestId('projects-new-button')).toHaveCount(0)
       await expect(page.getByTestId('ProjectsDrawer')).toContainText('MS')
 
+      // New project stays reachable on the rail, as an accent disc that
+      // opens the same dialog without reopening the drawer.
+      await page.getByTestId('projects-rail-new-button').click()
+      await expect(page.getByTestId('projects-new-name')).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(page.getByTestId('projects-new-name')).toHaveCount(0)
+
       // Collapsed is a preference, not a transient.
       await page.reload({waitUntil: 'domcontentloaded'})
       await waitForModel(page)
@@ -245,6 +310,54 @@ describeMobileAndDesktop('ProjectsDrawer (?feature=workspace)', (ff) => {
 
       const boxAfter = await drawer.boundingBox()
       expect(boxAfter?.width).toBeGreaterThan(boxBefore.width)
+    })
+
+    test('New project scrolls with a long project list', async ({page}) => {
+      // Enough projects to overflow the drawer, seeded straight into the
+      // workspace store (src/workspace/persistence.ts) before load.
+      const projectCount = 15
+      await page.addInitScript((count) => {
+        const projects = Array.from({length: count}, (_, i) => ({id: `seed-${i}`, name: `Project ${i}`, models: []}))
+        localStorage.setItem('bldrs:workspace-projects', JSON.stringify({version: 1, projects, ungrouped: []}))
+      }, projectCount)
+      await visitWithWorkspace(page)
+      const scroll = page.getByTestId('projects-scroll')
+      await expect(page.locator('[data-testid^="project-seed-"]')).toHaveCount(projectCount)
+
+      const before = await page.getByTestId('projects-new-button').boundingBox()
+      const scrolled = await scroll.evaluate((el) => {
+        el.scrollTop = 120
+        return el.scrollTop
+      })
+      expect(scrolled).toBeGreaterThan(0)
+      await expect.poll(async () => (await page.getByTestId('projects-new-button').boundingBox())?.y)
+        .toBeLessThan((before?.y ?? 0) - (scrolled / 2))
+    })
+
+    test('resize: New project stays on one line at the narrowest width', async ({page}) => {
+      await visitWithWorkspace(page)
+      const drawer = page.getByTestId('ProjectsDrawer')
+      const box = await drawer.getByTestId(ID_RESIZE_HANDLE_X).boundingBox()
+      const drawerBox = await drawer.boundingBox()
+      if (drawerBox === null || box === null) {
+        throw new Error('drawer or its resize grip is not laid out')
+      }
+
+      // Just above the 120px collapse threshold, where the 21px inset
+      // leaves the label far less room than "NEW PROJECT" needs.
+      const narrowWidth = 125
+      const midY = box.y + (box.height / 2)
+      await page.mouse.move(box.x + (box.width / 2), midY)
+      await page.mouse.down()
+      await page.mouse.move(drawerBox.x + narrowWidth, midY, {steps: 10})
+      await page.mouse.up()
+
+      const button = page.getByTestId('projects-new-button')
+      await expect(button).toBeVisible()
+      expect((await drawer.boundingBox())?.width).toBeLessThan(drawerBox.width)
+      // A wrapped label grows past the fixed 36px height and spills out.
+      const overflows = await button.evaluate((el) => el.scrollHeight > el.clientHeight)
+      expect(overflows).toBe(false)
     })
   }
 })
