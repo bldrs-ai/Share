@@ -259,13 +259,15 @@ export function applyVisibilityHash(location, viewer, rootElement) {
 /**
  * Resolve an `o` ref the way the selection permalink resolves its element
  * path (`resolveElementPathOccurrence`), down to the instances to hide.
+ * Also how the Assist view tools resolve `o` refs (viewer/tools/refs.js), so a
+ * ref a tool accepts is one a permalink would.
  *
  * @param {object} viewer
  * @param {object|null} rootElement
  * @param {object|null} ref parsed `o` ref
  * @return {object|null} `{nodeId, instanceIds, occurrencePath, solidExpressId}`
  */
-function resolveOccurrence(viewer, rootElement, ref) {
+export function resolveOccurrence(viewer, rootElement, ref) {
   if (ref?.kind !== 'o' || typeof viewer.getInstanceIdsForOccurrencePath !== 'function') {
     return null
   }
