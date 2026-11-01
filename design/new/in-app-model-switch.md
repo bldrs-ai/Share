@@ -28,9 +28,11 @@ already gets its own Conway WASM instance, and a dropped instance is
 ordinary garbage. The work is in Share: stop holding the old instance, cancel
 work still running against it, and reset per-model state.
 
-For **multi-model in one engine**, Conway needs a non-destructive close
-(§7). One engine per model avoids that at the cost of a WASM baseline per
-model.
+For **multi-model**, start with one engine per model (decided
+2026-11-01, §7). That needs no Conway change; it costs one WASM baseline per
+model. A shared engine would need Conway to close a model without killing
+the engine, and we ask for that only if the per-instance overhead turns out
+to matter.
 
 
 ## 2. What the reload frees today
@@ -226,8 +228,11 @@ construction.
 ### 4.3 `navigateToModel` in-app, behind a flag (#2021)
 
 `navigate()` instead of `location.assign`, keeping `withCurrentSearch`;
-`navigateToInMemoryModel` folds in. A dedicated flag (rather than riding
-`workspace`) lets the switch burn in and roll back independently. Also:
+`navigateToInMemoryModel` folds in.
+
+**Decided 2026-11-01: its own flag, `?feature=spaModelNav`, not
+`?feature=workspace`.** That way the switch can burn in and roll back
+without touching the workspace shell. Also:
 disarm the `beforeunload` guard on switch (armed for uploads at
 `Loader.js:278`, `src/utils/event.js`; today only navigation helpers
 disarm it), check Back/Forward through `Share.jsx`'s route effect (needs
@@ -238,10 +243,34 @@ disarm it), check Back/Forward through `Share.jsx`'s route effect (needs
 
 ## 5. "Once per page load" needs a per-open answer (#2022)
 
+### 5.1 Decided 2026-11-01: a return to A is a new open
+
+In-app A → B → A counts the return to A as a **new open**, for the quota
+meter and for analytics alike.
+
+- **The direct-link meter *is* the quota metric.** `useDirectLinkQuota`
+  (`src/quota/useDirectLinkQuota.js:80-135`) calls `record-load`. That is
+  the rolling 7-day count of private-model loads, and it shares its slots
+  with free GLB exports (`quotas.md` §"Direct links: soft gate", §"Exports
+  use the same slots").
+- **Counting again costs no slot.** `record-load`'s ledger dedupes by key,
+  so a key the user already holds comes back `alreadyCounted`
+  (`netlify/functions/record-load.js:32`).
+- **What it does cost:**
+  - one extra `record-load` call per return;
+  - `quota_soft_limit_exceeded` fires again on each revisit while the user
+    is over the limit.
+- **Phase 1 change:** `meteredKeysRef` (`useDirectLinkQuota.js:129`)
+  currently dedupes per page. It becomes per open, keeping the dedupe
+  *within* one open (theme re-init, StrictMode's double effect).
+- **Engagement already behaves this way:** `lastCountedModelKey`
+  (`src/privacy/engagementTracking.js:60, 141`) counts A → B → A as two
+  opens, because B clears the key.
+
+### 5.2 Still to decide
+
 | Behaviour | Where | Decision needed |
 |---|---|---|
-| Direct-link quota meter | `src/quota/useDirectLinkQuota.js:90, 126` | A → B → A in-app meters A once — intended? (`quotas.md` §"Direct links: soft gate") |
-| Engagement dedupe | `src/privacy/engagementTracking.js:60, 141` | Already per consecutive key; confirm and fix `quotas.md`'s wording |
 | Fresh-claims refresh | `src/BaseRoutes.jsx:70-74` | Pro status across many in-app opens |
 | `?view=` | `src/viewer/ShareViewer.js:157` (module load) | Ignored on an in-app open |
 | `?feature=perf` | `src/utils/PerfMonitor.js:40-46` (module load) | Likely fine (dev flag) |
@@ -276,12 +305,13 @@ dispose calls against a mocked ShareViewer.
   CadView `:1039, 1041, 1062, 1086-1088, 1827, 1967, 2028, 2050, 2075`;
   ShareViewer `:726, 756` and `_modelById` (`:1600`); IfcIsolator
   `:340, 342, 544, 1009, 1117, 1128, 1300, 1304, 1458`.
-- **Engine per model or shared?** Per model works today; dropping a model
-  is dropping its instance, at one WASM baseline each. Shared needs Conway
-  to provide a close that frees the model's native geometry, parse buffers
-  and source copy *without* `freeGeometryProcessor()`. Measure the
-  per-instance baseline before choosing; if shared wins, the Conway change is
-  part of this chain (CLAUDE.md "The chain is yours to drive").
+- **Engine: one `IfcAPI` per model first (decided 2026-11-01).** This works
+  today: dropping a model means dropping its instance, at the cost of one
+  WASM baseline each. A shared engine would need Conway to close a model
+  in a way that frees its native geometry, parse buffers and source copy
+  *without* calling `freeGeometryProcessor()`. We ask Conway for that only
+  if measurement shows the per-instance overhead matters. It does not
+  block anything.
 - **Store shape.** Selection, isolation, NavTree, properties and display
   overrides are single-model. Keyed per model, or one active model with
   read-only overlays — the latter may be enough for #1251's first cut.
@@ -293,6 +323,9 @@ dispose calls against a mocked ShareViewer.
 Phase 0 defect, the Phase 1 inventories, the writer's run-time `ifcManager`
 read, the literal-0 sites, `CloseModel`'s body and the smoke test's note,
 COEP and `pThreadsAllowed`.
+
+**Decisions** (2026-11-01, from the user): §4.3 flag, §5.1 return-is-a-new-open,
+§7 engine per model.
 
 **Not measured or reproduced:** that an unreferenced single-threaded
 Emscripten instance's memory is reclaimed promptly in practice (§6 is how
