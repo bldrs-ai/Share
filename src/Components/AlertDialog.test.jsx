@@ -617,6 +617,18 @@ describe('AlertDialog — archives', () => {
     expect(trackAlertEvent).toHaveBeenCalledWith(UNRECOGNIZED_FORMAT_ALERT_EVENT)
   })
 
+  // An archive of only empty files — a 0-byte a.ifc among them — reads as
+  // empty, not as one that "contains .ifc" and has no model.
+  it('says an archive of empty files is empty', () => {
+    act(() => {
+      useStore.getState().setAlert(noModelInArchiveAlert('x.zip', 'drop', []))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('Empty archive')).toBeInTheDocument()
+    expect(screen.getByText('This archive is empty.')).toBeInTheDocument()
+    expect(screen.queryByText(/contains/)).not.toBeInTheDocument()
+  })
+
   // A .docx is a zip with no model in it; its own guidance says it better.
   it('keeps a guided extension\'s own text for an archive that is one', () => {
     act(() => {

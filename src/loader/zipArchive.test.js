@@ -6,6 +6,7 @@
 // here) and, for the records fflate never writes — zip64, a lying directory —
 // a byte-level builder below.
 import {zipSync} from 'three/examples/jsm/libs/fflate.module.js'
+import debug, {WARN} from '../utils/debug'
 import {
   MAX_ENTRY_INFLATED_BYTES,
   MAX_TOTAL_INFLATED_BYTES,
@@ -33,6 +34,12 @@ function utf8(text) {
 // bomb test asserts on what was PRODUCED, not only on the refusal at the end,
 // which a reader that inflated the whole bomb first would also reach.
 let mockInflatedBytes = 0
+
+// The console line a mapped error leaves behind (a Sentry breadcrumb in prod).
+jest.mock('../utils/debug', () => {
+  const logger = {log: jest.fn(), warn: jest.fn(), error: jest.fn()}
+  return {__esModule: true, ...jest.requireActual('../utils/debug'), default: jest.fn(() => logger)}
+})
 jest.mock('three/examples/jsm/libs/fflate.module.js', () => {
   const actual = jest.requireActual('three/examples/jsm/libs/fflate.module.js')
   /** fflate's Inflate, counting what it emits. */
@@ -325,6 +332,34 @@ describe('zipArchive', () => {
         entry, freshBudget()))).toMatch(/damaged or incomplete/)
       const defect = new TypeError('not the archive\'s fault')
       await expect(extractZipEntry(failing(defect), entry, freshBudget())).rejects.toBe(defect)
+    })
+
+    // Review of Share#2010: the mapping dropped the original with no trace,
+    // so a bug in our own DataView reads would pass as user damage.
+    it('keeps the original of an error it maps as a WARN line', async () => {
+      const blob = blobOf(zipSync({'a.ifc': IFC_TEXT}))
+      const [entry] = await readZipDirectory(blob)
+      const failing = {size: blob.size, slice: () => ({arrayBuffer: () =>
+        Promise.reject(new RangeError('Offset is outside the bounds of the DataView'))})}
+      debug.mockClear()
+      debug().warn.mockClear()
+      expect(await refusal(extractZipEntry(failing, entry, freshBudget()))).toMatch(/damaged or incomplete/)
+      expect(debug).toHaveBeenCalledWith(WARN)
+      expect(debug().warn).toHaveBeenCalledTimes(1)
+      expect(debug().warn.mock.calls[0][0]).toMatch(/^zipArchive: RangeError: Offset is outside the bounds of the DataView/)
+    })
+
+    // A file the browser can't read partway through (a cloud placeholder, a
+    // permission lost since the pick) is the user's to fix, not a defect.
+    it('refuses a file the browser can\'t read as an expected outcome', async () => {
+      const blob = blobOf(zipSync({'a.ifc': IFC_TEXT}))
+      const [entry] = await readZipDirectory(blob)
+      const unreadable = {size: blob.size, slice: () => ({arrayBuffer: () =>
+        Promise.reject(new DOMException('The file could not be read', 'NotReadableError'))})}
+      expect(await refusal(extractZipEntry(unreadable, entry, freshBudget()))).toBe(
+        'Share couldn\'t read this file. If it is in a cloud folder, make sure it is downloaded to this device, ' +
+        'then open it again.')
+      expect(await refusal(readZipDirectory(unreadable))).toMatch(/couldn't read this file/)
     })
 
     it('inflates an empty deflate stream to nothing, which only a 0-byte entry accepts', async () => {

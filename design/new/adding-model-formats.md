@@ -140,20 +140,39 @@ Deflate64/bzip2/LZMA, split `.z01`, damaged, past the ceiling, or past
 what this browser could allocate) is the same alert with `archive:
 {problem}`, and the dialog gives the reason.
 
-So is a `.gltf` that names its buffers or textures by a relative URI (the
-Sketchfab download shape: `scene.gltf`, `scene.bin`, `textures/`). Out of
+So is a `.gltf` that names its buffers or textures by any URI that isn't
+`data:` (matched as three's LoaderUtils does, `/^data:/i`). That covers the
+Sketchfab download shape (`scene.gltf`, `scene.bin`, `textures/`): out of
 the archive it is one file at `/share/v/local-only/<uuid>.gltf`, and
-`scene.bin` would resolve to a URL the SPA answers with `index.html`. It is
-refused with *"Export the model as a single .glb, then open that"*. A
-`.gltf` whose data is all `data:` URIs opens.
+`scene.bin` would resolve to a URL the SPA answers with `index.html`. It
+covers absolute `https://` URIs too, which is the simpler rule and the
+safer one. It is refused with *"This glTF loads its data from other files
+or links … Export the model as a single .glb, then open that"*. A `.gltf`
+whose data is all `data:` URIs opens. A model entry of 0 bytes is skipped,
+and so are empty files in the "it contains …" list. An archive of nothing
+but empty files therefore reads as *"This archive is empty"*, not as an
+archive "containing .ifc" with no model in it.
 
-**Every failure ends in a dialog.** The reader turns everything an archive
-can cause into a `ZipArchiveError`. A `RangeError` from a DataView or a
-typed-array length is a record whose numbers don't fit its bytes, so it is
-damage. An allocation failure (`utils/oom.js`'s patterns) is the device's
-limit. Anything else is a defect. `openUploadThroughArchive` still ends it
-as an alert of the Error itself (AlertDialog reports it to Sentry) and
-`refused`, so both seams always end in a dialog, and the drop in `onError`.
+**Every failure while looking inside ends in a dialog.** The reader turns
+everything an archive can cause into a `ZipArchiveError`, through
+`zipArchive.js#asArchiveError`:
+
+- A `RangeError` from a DataView or a typed-array length is a record whose
+  numbers don't fit its bytes, so it is damage.
+- An allocation failure (`utils/oom.js`'s patterns) is the device's limit.
+  That includes `modelArchive.js` copying the entry into its `File`.
+- A `NotReadableError` (a cloud placeholder not on the disk, a permission
+  lost since the pick) is *"Share couldn't read this file"*.
+
+Each mapping first logs the original error's name and message at WARN, so
+a bug in our own reads leaves a Sentry breadcrumb instead of passing
+silently as user damage. Anything else is a defect.
+`openUploadThroughArchive` still ends it as an alert of the Error itself
+(AlertDialog reports it to Sentry) and `refused`. So a failure *while
+looking inside the archive* always ends in a dialog, and for a drop in
+`onError`. An error from the seam's own open of the model file it is
+handed (the OPFS write, the type sniff) is not caught here. It propagates
+exactly as it did before archives existed.
 
 **The ceiling, and what it trusts.** 512 MiB per entry, which is the gzip
 envelope's figure and reason (glb-export-premium.md §4.7). 512 MiB is also

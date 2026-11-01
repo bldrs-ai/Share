@@ -182,8 +182,14 @@ describe('modelArchive', () => {
       const zip = zipSync({'a.ifc': new Uint8Array(0), 'b.glb': GLB})
       expect(summary(await resolveArchiveUpload(upload(zip, 'x.zip'))))
         .toEqual({kind: 'model', ext: 'glb', name: 'b.glb', isInput: false})
-      expect(summary(await resolveArchiveUpload(upload(zipSync({'a.ifc': new Uint8Array(0)}), 'x.zip'))))
-        .toEqual({kind: 'none', exts: ['ifc']})
+      // Empty files aren't listed either, or the dialog would say an archive
+      // with "no model" contains .ifc.
+      const onlyEmpty = zipSync({'a.ifc': new Uint8Array(0), 'notes.txt': new Uint8Array(0), 'plan.pdf': PDF})
+      expect(summary(await resolveArchiveUpload(upload(onlyEmpty, 'x.zip')))).toEqual({kind: 'none', exts: ['pdf']})
+      const alert = jest.fn()
+      await openUploadThroughArchive(upload(zipSync({'a.ifc': new Uint8Array(0)}), 'x.zip'), {entry: 'drop', alert, open: jest.fn()})
+      expect(alert.mock.calls[0][0].message).toBe('This archive is empty.')
+      expect(alert.mock.calls[0][0].archive).toEqual({exts: []})
     })
 
     it('refuses a .gltf whose data sits in files beside it, which can\'t be found once it is out', async () => {
@@ -196,8 +202,11 @@ describe('modelArchive', () => {
         'textures/base.png': PDF,
       })
       await expect(resolveArchiveUpload(upload(sketchfab, 'model.zip'))).rejects.toThrow(
-        'This glTF keeps its data in separate files (a .bin, textures), which Share can\'t open from inside ' +
-        'an archive. Export the model as a single .glb, then open that.')
+        'This glTF loads its data from other files or links (a .bin, textures), which Share can\'t follow from ' +
+        'inside an archive. Export the model as a single .glb, then open that.')
+      // An absolute URL is refused too: the simpler rule, and the safer.
+      const linked = zipSync({'a.gltf': gltf({buffers: [{uri: 'https://example.test/a.bin', byteLength: 4}]})})
+      await expect(resolveArchiveUpload(upload(linked, 'a.zip'))).rejects.toThrow(ZipArchiveError)
       const texturesOnly = zipSync({'a.gltf': gltf({images: [{uri: 'textures/base.png'}]})})
       await expect(resolveArchiveUpload(upload(texturesOnly, 'a.zip'))).rejects.toThrow(ZipArchiveError)
       // Everything inline (`data:` URIs) is a whole model, and opens.
@@ -207,6 +216,27 @@ describe('modelArchive', () => {
       })})
       expect(summary(await resolveArchiveUpload(upload(inline, 'a.zip'))))
         .toEqual({kind: 'model', ext: 'gltf', name: 'a.gltf', isInput: false})
+    })
+
+    it('takes a `DATA:` URI as inline, in any case, as three\'s loader does', async () => {
+      const gltf = utf8(JSON.stringify({asset: {version: '2.0'},
+        buffers: [{uri: 'DATA:application/octet-stream;base64,AAAAAA==', byteLength: 4}],
+        images: [{uri: 'Data:image/png;base64,AAAA'}]}))
+      expect(summary(await resolveArchiveUpload(upload(zipSync({'a.gltf': gltf}), 'a.zip'))))
+        .toEqual({kind: 'model', ext: 'gltf', name: 'a.gltf', isInput: false})
+    })
+
+    it('says the device is out of room when copying the entry into its File fails', async () => {
+      const RealFile = global.File
+      global.File = function() {
+        throw new RangeError('Array buffer allocation failed')
+      }
+      try {
+        await expect(resolveArchiveUpload(upload(zipSync({'Tower.ifc': IFC}), 'Tower.zip'))).rejects.toThrow(
+          'This model is too large to unpack in this browser.')
+      } finally {
+        global.File = RealFile
+      }
     })
 
     it('tags what an archive holds as extensions only, never name text', async () => {

@@ -22,6 +22,7 @@
 // The inflate itself is still fflate's (`Inflate`, the streaming class), so
 // this adds no dependency and no bundle weight.
 import {Inflate} from 'three/examples/jsm/libs/fflate.module.js'
+import debug, {WARN} from '../utils/debug'
 import {isOutOfMemoryError} from '../utils/oom'
 import {MAX_INFLATED_BYTES} from './gzipEnvelope'
 
@@ -168,27 +169,48 @@ const TOO_LARGE_FOR_DEVICE_MESSAGE = 'This model is too large to unpack in this 
   'Unpack the archive and open the model directly, or try a desktop browser.'
 
 
+// The browser couldn't read the upload's bytes partway through: a cloud
+// placeholder (OneDrive, iCloud) that isn't on the disk, a permission lost
+// since the pick, a file changed underneath. The user's to fix, not ours.
+const UNREADABLE_MESSAGE = 'Share couldn\'t read this file. If it is in a cloud folder, ' +
+  'make sure it is downloaded to this device, then open it again.'
+
+
 /**
  * What a reader failure means to the user. A `ZipArchiveError` is already
  * that. An allocation failure is the device's limit. A `RangeError` from a
  * DataView or a typed-array length is a record whose numbers don't fit the
- * bytes: damage, whatever produced it. Anything else is not the archive's
- * fault and is left as it is, for the seam to report as a defect.
+ * bytes: damage, whatever produced it. A `NotReadableError` is the browser
+ * losing the file. Anything else is not the archive's fault and is left as
+ * it is, for the seam to report as a defect.
+ *
+ * Exported for `modelArchive.js`, whose own allocations (the entry's `File`)
+ * fail the same way.
  *
  * @param {any} e
  * @return {any}
  */
-function asArchiveError(e) {
+export function asArchiveError(e) {
   if (e instanceof ZipArchiveError) {
     return e
   }
+  let mapped = null
   if (isOutOfMemoryError(e)) {
-    return new ZipArchiveError(TOO_LARGE_FOR_DEVICE_MESSAGE)
+    mapped = TOO_LARGE_FOR_DEVICE_MESSAGE
+  } else if (e instanceof RangeError) {
+    mapped = DAMAGED_MESSAGE
+  } else if (e?.name === 'NotReadableError') {
+    mapped = UNREADABLE_MESSAGE
   }
-  if (e instanceof RangeError) {
-    return new ZipArchiveError(DAMAGED_MESSAGE)
+  if (mapped === null) {
+    return e
   }
-  return e
+  // The original, before it becomes the user's sentence: a RangeError here
+  // may as well be a bug in our own DataView reads as damage in the file, and
+  // this line (a Sentry breadcrumb from the console) is what tells them
+  // apart later. Name and message only; neither holds a file name.
+  debug(WARN).warn(`zipArchive: ${e?.name ?? typeof e}: ${e?.message ?? String(e)} — refusing as: ${mapped}`)
+  return new ZipArchiveError(mapped)
 }
 
 

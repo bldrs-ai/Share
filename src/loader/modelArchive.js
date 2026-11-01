@@ -29,6 +29,7 @@ import {extensionTag, unrecognizedFormatAlert} from './unrecognizedFormat'
 import {
   MAX_TOTAL_INFLATED_BYTES,
   ZipArchiveError,
+  asArchiveError,
   extractZipEntry,
   looksLikeZipBytes,
   readZipDirectory,
@@ -67,12 +68,14 @@ const IFC_ZIP = 'ifczip'
 const PART21_TYPES = new Set(['ifc', 'step', 'stp'])
 
 
-// A `.gltf` names its buffers and textures by relative URI. Out of an
-// archive it is one file at `/share/v/local-only/<uuid>.gltf`, so a
-// `scene.bin` beside it resolves to a URL the SPA answers with index.html
-// (Sketchfab's download shape: scene.gltf, scene.bin, textures/).
-const GLTF_SIDE_FILES_MESSAGE = 'This glTF keeps its data in separate files (a .bin, textures), ' +
-  'which Share can\'t open from inside an archive. Export the model as a single .glb, then open that.'
+// A `.gltf` names its buffers and textures by URI. Out of an archive it is
+// one file at `/share/v/local-only/<uuid>.gltf`, so a relative `scene.bin`
+// resolves to a URL the SPA answers with index.html (Sketchfab's download
+// shape: scene.gltf, scene.bin, textures/). Any URI but `data:` is refused,
+// absolute ones included: simpler, and an archive that leans on the network
+// for half its model isn't one Share should half-open.
+const GLTF_SIDE_FILES_MESSAGE = 'This glTF loads its data from other files or links (a .bin, textures), ' +
+  'which Share can\'t follow from inside an archive. Export the model as a single .glb, then open that.'
 
 
 /**
@@ -153,7 +156,11 @@ async function resolveArchive(file, depth, budget) {
   if (models.length === 0) {
     // Tagged as `uploadExtension` tags a file's own: the text after an
     // entry's last dot can be a name fragment, and this goes on the alert.
-    const exts = files.map((entry) => (entry.ext === '' ? '' : extensionTag(entry.ext)))
+    // Empty files are left out: "it contains .ifc" about a 0-byte a.ifc
+    // would contradict the "no model" before it, and an archive of nothing
+    // but empty files reads, truly, as empty.
+    const exts = files.filter((entry) => entry.size > 0)
+      .map((entry) => (entry.ext === '' ? '' : extensionTag(entry.ext)))
     return {kind: 'none', exts: [...new Set(exts)]}
   }
   const open = async (entry) => {
@@ -164,9 +171,13 @@ async function resolveArchive(file, depth, budget) {
     // The entry's own name — it is what recents and the load report show —
     // and the archive's timestamp, since the entry's DOS time is local time
     // with no zone.
-    const asFile = () => new File([bytes], entry.name, {lastModified: file.lastModified})
+    // Each a copy of the entry's bytes, so each an allocation that can fail
+    // as the reader's can: mapped the same way, to "too large to unpack in
+    // this browser" rather than a defect.
+    const asFile = () => withArchiveErrors(() => new File([bytes], entry.name, {lastModified: file.lastModified}))
     if (entry.ext === IFC_ZIP) {
-      const inner = await resolveArchive(namedBlob(bytes, entry.name, file.lastModified), depth + 1, budget)
+      const inner = await resolveArchive(
+        withArchiveErrors(() => namedBlob(bytes, entry.name, file.lastModified)), depth + 1, budget)
       // Not a zip after all: the entry is handed on as the file it is, for
       // the seam to type as it would any upload.
       return inner.kind === 'model' && inner.ext === undefined ? {kind: 'model', file: asFile()} : inner
@@ -326,8 +337,8 @@ function withoutExtension(path) {
 
 
 /**
- * Whether a `.gltf`'s JSON points at files beside it rather than carrying its
- * data inline. Only `data:` URIs are inline; a buffer with no `uri` is a GLB's
+ * Whether a `.gltf`'s JSON loads data from anywhere but itself — a file
+ * beside it, or a URL — rather than carrying it all inline. Only `data:` URIs are inline; a buffer with no `uri` is a GLB's
  * own chunk, which a `.gltf` has none of. JSON that doesn't parse is left for
  * the loader to refuse: it says more than this would.
  *
@@ -343,7 +354,27 @@ function gltfReferencesSideFiles(bytes) {
   }
   const listed = (key) => (Array.isArray(json?.[key]) ? json[key] : [])
   return [...listed('buffers'), ...listed('images')]
-    .some((item) => typeof item?.uri === 'string' && !item.uri.startsWith('data:'))
+    // `data:` in any case, as three's LoaderUtils matches it (`/^data:/i`).
+    // Everything else — relative paths and absolute URLs alike — is a file
+    // this entry doesn't carry.
+    .some((item) => typeof item?.uri === 'string' && !/^data:/i.test(item.uri))
+}
+
+
+/**
+ * Run an allocation, as a reader failure would be mapped if it failed
+ * (`zipArchive.js#asArchiveError`).
+ *
+ * @param {Function} allocate
+ * @return {any} what it returned
+ * @throws {ZipArchiveError} for a failure the archive or the device caused
+ */
+function withArchiveErrors(allocate) {
+  try {
+    return allocate()
+  } catch (e) {
+    throw asArchiveError(e)
+  }
 }
 
 
