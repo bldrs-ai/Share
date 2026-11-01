@@ -1,6 +1,6 @@
 import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from './dragAndDrop'
 import {guessTypeFromFile} from '../Filetype'
-import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
+import {checkOPFSAvailability, deleteUploadFromOPFS, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {getInMemoryUpload} from '../loader/inMemoryUploads'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
@@ -216,6 +216,65 @@ describe('dragAndDrop utility', () => {
       expect(getInMemoryUpload(deniedId)).toBeUndefined()
       expect(mockNavigate).not.toHaveBeenCalled()
       expect(mockOnSuccess).not.toHaveBeenCalled()
+    })
+
+    // bldrs-ai/ops#39: with `meterLocalFiles` on, an OPFS drop is written
+    // before record() answers. Left there on a refusal, its storage id still
+    // opened from the /v/local-only/ URL, past the refusal.
+    describe('with the drop written to OPFS before the quota answers', () => {
+      const STORAGE_ID = 'blob-uuid.ifc'
+      let written
+
+      beforeEach(() => {
+        mockEvent.dataTransfer.files = [{name: 'test.ifc', type: 'application/octet-stream', size: 1024}]
+        guessTypeFromFile.mockResolvedValue('ifc')
+        deleteUploadFromOPFS.mockResolvedValue(true)
+        // onWritten is async and handleFileDrop doesn't await the write, so
+        // keep its promise to settle the record() answer on.
+        saveDnDFileToOpfs.mockImplementation((file, type, onWritten) => {
+          written = onWritten(STORAGE_ID)
+        })
+      })
+
+      it('deletes a refused drop from OPFS', async () => {
+        const quotaOptions = {record: jest.fn().mockResolvedValue({allowed: false}), onExceeded: jest.fn()}
+
+        await handleFileDrop(
+          mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError, quotaOptions)
+        await written
+
+        expect(quotaOptions.record).toHaveBeenCalledWith(`/prefix/v/local-only/${STORAGE_ID}`)
+        expect(deleteUploadFromOPFS.mock.calls).toEqual([[STORAGE_ID]])
+        expect(quotaOptions.onExceeded).toHaveBeenCalledTimes(1)
+        expect(mockNavigate).not.toHaveBeenCalled()
+        expect(addRecentFileEntry).not.toHaveBeenCalled()
+      })
+
+      it('still raises the limit dialog when the delete fails', async () => {
+        deleteUploadFromOPFS.mockRejectedValue(new Error('SecurityError'))
+        const quotaOptions = {record: jest.fn().mockResolvedValue({allowed: false}), onExceeded: jest.fn()}
+
+        await handleFileDrop(
+          mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError, quotaOptions)
+        await written
+        // Let the rejected delete's catch run.
+        await Promise.resolve()
+
+        expect(quotaOptions.onExceeded).toHaveBeenCalledTimes(1)
+        expect(mockDebug.warn).toHaveBeenCalledWith(
+          'handleFileDrop: could not delete the refused upload', STORAGE_ID, expect.any(Error))
+      })
+
+      it('keeps an allowed drop in OPFS', async () => {
+        const quotaOptions = {record: jest.fn().mockResolvedValue({allowed: true}), onExceeded: jest.fn()}
+
+        await handleFileDrop(
+          mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError, quotaOptions)
+        await written
+
+        expect(deleteUploadFromOPFS).not.toHaveBeenCalled()
+        expect(mockNavigate).toHaveBeenCalledWith(`/prefix/v/local-only/${STORAGE_ID}`)
+      })
     })
 
     // Share#1966: a local file is free and unmetered, so a user at their
