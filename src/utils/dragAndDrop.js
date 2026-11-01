@@ -1,5 +1,5 @@
 import {guessTypeFromFile} from '../Filetype'
-import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
+import {checkOPFSAvailability, deleteUploadFromOPFS, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {forgetInMemoryUpload, registerInMemoryUpload} from '../loader/inMemoryUploads'
@@ -38,7 +38,7 @@ import debug, {WARN} from './debug'
  *   and a pre-gate on the user's private-model count would refuse a local
  *   file for being at a limit that doesn't apply to it. With
  *   `meterLocalFiles` switched on, record() is still the gate; the file is
- *   stored first, as for an allowed drop, and left in OPFS on a refusal.
+ *   stored first, as for an allowed drop, and deleted again on a refusal.
  */
 export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert, onSuccess, onError, quotaOptions) {
   event.preventDefault()
@@ -149,6 +149,13 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
       if (quotaOptions) {
         const result = await quotaOptions.record(key)
         if (result && result.allowed === false) {
+          // Written before the quota could answer, so delete it, as
+          // onHeldInMemory below forgets its copy: left in OPFS, the refused
+          // file still opened from its /v/local-only/ URL (bldrs-ai/ops#39).
+          // Not awaited: the refusal is already decided, and a failed delete
+          // must not swallow the dialog that explains it.
+          deleteUploadFromOPFS(fileName).catch((err) =>
+            debug(WARN).warn('handleFileDrop: could not delete the refused upload', fileName, err))
           quotaOptions.onExceeded()
           return
         }
