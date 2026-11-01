@@ -118,6 +118,10 @@ describe('loader/formatGuidance', () => {
         '2 other file types and files with no extension).')
       expect(archiveGuidance({exts: ['']}).lines[0]).toBe(
         'This archive has no model Share can open (it contains files with no extension).')
+      // `other` is the tag for an extension that isn't a short token; it is
+      // counted, never printed as `.other`.
+      expect(archiveGuidance({exts: ['other']}).lines[0]).toBe(
+        'This archive has no model Share can open (it contains files of 1 unlisted type).')
     })
 
     it('gives a zipped native file that format\'s own way out', () => {

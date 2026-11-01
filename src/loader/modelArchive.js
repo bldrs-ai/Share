@@ -25,7 +25,7 @@
 import {analyzeHeader, supportedTypes} from '../Filetype'
 import debug, {WARN} from '../utils/debug'
 import {archiveGuidance} from './formatGuidance'
-import {unrecognizedFormatAlert} from './unrecognizedFormat'
+import {extensionTag, unrecognizedFormatAlert} from './unrecognizedFormat'
 import {
   MAX_TOTAL_INFLATED_BYTES,
   ZipArchiveError,
@@ -37,6 +37,16 @@ import {
 
 /** The alert type of the entry chooser, rendered by AlertDialog. */
 export const ARCHIVE_ENTRY_CHOICE = 'archiveEntryChoice'
+
+
+/**
+ * The alert type for a hosted `.ifczip` that can't be opened
+ * ({@link unwrapIfcZip}, raised by CadView): `{type, message}`, where the
+ * message is a `ZipArchiveError`'s, which never names a file. An expected
+ * outcome, counted in analytics only. Uploads don't use it: theirs are
+ * `unrecognizedFormat` alerts, tagged by the upload's extension.
+ */
+export const ARCHIVE_UNREADABLE = 'archiveUnreadable'
 
 
 // Enough of the file to sniff with; `analyzeHeader`'s own window.
@@ -55,6 +65,14 @@ const IFC_ZIP = 'ifczip'
 // What a `.ifczip` may hold: conway's part-21 formats, the ones the IFC arm
 // of `findLoader` that it shares can parse.
 const PART21_TYPES = new Set(['ifc', 'step', 'stp'])
+
+
+// A `.gltf` names its buffers and textures by relative URI. Out of an
+// archive it is one file at `/share/v/local-only/<uuid>.gltf`, so a
+// `scene.bin` beside it resolves to a URL the SPA answers with index.html
+// (Sketchfab's download shape: scene.gltf, scene.bin, textures/).
+const GLTF_SIDE_FILES_MESSAGE = 'This glTF keeps its data in separate files (a .bin, textures), ' +
+  'which Share can\'t open from inside an archive. Export the model as a single .glb, then open that.'
 
 
 /**
@@ -128,12 +146,21 @@ async function resolveArchive(file, depth, budget) {
     return {kind: 'model', file}
   }
   const files = await readZipDirectory(file)
-  const models = files.filter((entry) => supportedTypes.includes(entry.ext) && !(depth > 0 && entry.ext === IFC_ZIP))
+  // A 0-byte entry is no model, whatever its name: fflate inflates an empty
+  // stream to nothing without complaint, and conway would be handed it.
+  const models = files.filter((entry) => entry.size > 0 &&
+    supportedTypes.includes(entry.ext) && !(depth > 0 && entry.ext === IFC_ZIP))
   if (models.length === 0) {
-    return {kind: 'none', exts: [...new Set(files.map((entry) => entry.ext))]}
+    // Tagged as `uploadExtension` tags a file's own: the text after an
+    // entry's last dot can be a name fragment, and this goes on the alert.
+    const exts = files.map((entry) => (entry.ext === '' ? '' : extensionTag(entry.ext)))
+    return {kind: 'none', exts: [...new Set(exts)]}
   }
   const open = async (entry) => {
     const bytes = await extractZipEntry(file, entry, budget)
+    if (entry.ext === 'gltf' && gltfReferencesSideFiles(bytes)) {
+      throw new ZipArchiveError(GLTF_SIDE_FILES_MESSAGE)
+    }
     // The entry's own name — it is what recents and the load report show —
     // and the archive's timestamp, since the entry's DOS time is local time
     // with no zone.
@@ -159,7 +186,8 @@ async function resolveArchive(file, depth, budget) {
  *
  * A file that is not an archive reaches `open` exactly as it did before this
  * existed, with no `ext`, and whatever `open` throws for it still propagates
- * to the seam.
+ * to the seam. Looking inside the archive never throws: every failure there
+ * ends in an alert and `refused`.
  *
  * @param {File} file an upload, after the gzip envelope
  * @param {object} seam
@@ -178,7 +206,14 @@ export function openUploadThroughArchive(file, {entry, alert, open}) {
       resolution = await pending
     } catch (e) {
       if (!(e instanceof ZipArchiveError)) {
-        throw e
+        // A defect, not the archive's fault (the reader maps everything an
+        // archive can cause to a ZipArchiveError). Still the end of this
+        // upload, so it still ends in the dialog — as the Error it is, which
+        // AlertDialog reports to Sentry — rather than escaping the seam and
+        // leaving the user with nothing.
+        debug().error('modelArchive#openUploadThroughArchive: could not look inside the upload:', e)
+        alert(e instanceof Error ? e : new Error(String(e)))
+        return 'refused'
       }
       // A refusal of the user's input, not a defect: one info event like
       // every other unopenable upload (`unrecognizedFormat.js`), and the
@@ -287,6 +322,28 @@ function revitTextSiblings(models, files) {
 function withoutExtension(path) {
   const dot = path.lastIndexOf('.')
   return dot > path.lastIndexOf('/') ? path.slice(0, dot) : path
+}
+
+
+/**
+ * Whether a `.gltf`'s JSON points at files beside it rather than carrying its
+ * data inline. Only `data:` URIs are inline; a buffer with no `uri` is a GLB's
+ * own chunk, which a `.gltf` has none of. JSON that doesn't parse is left for
+ * the loader to refuse: it says more than this would.
+ *
+ * @param {Uint8Array} bytes the entry
+ * @return {boolean}
+ */
+function gltfReferencesSideFiles(bytes) {
+  let json
+  try {
+    json = JSON.parse(new TextDecoder('utf-8').decode(bytes))
+  } catch {
+    return false
+  }
+  const listed = (key) => (Array.isArray(json?.[key]) ? json[key] : [])
+  return [...listed('buffers'), ...listed('images')]
+    .some((item) => typeof item?.uri === 'string' && !item.uri.startsWith('data:'))
 }
 
 

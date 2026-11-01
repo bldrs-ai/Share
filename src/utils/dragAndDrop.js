@@ -20,13 +20,16 @@ import debug, {WARN} from './debug'
  * @param {boolean|null} isOpfsAvailable Whether OPFS is available; `null`
  *   while the startup probe is still running, in which case it is asked here
  * @param {Function} setAlert Function to set alert messages
- * @param {Function} [onSuccess] Optional callback when file is successfully processed
- * @param {Function} [onError] Optional callback when an error occurs — and
- *   also when a zip with several models hands the drop to the entry chooser
- *   (`loader/modelArchive.js`). Either way the drop ends here with a dialog
- *   up, and the caller's cue is the same: get out of the dialog's way (the
- *   onboarding overlay sits above MUI's modal layer). A choice made later
- *   finishes the drop from the chooser, through `onSuccess` or `onError`.
+ * @param {Function} [onSuccess] Optional callback when file is successfully
+ *   processed, with its storage id. Also called with `null` when a zip with
+ *   several models hands the drop to the entry chooser
+ *   (`loader/modelArchive.js`): nothing has failed, but the caller has to get
+ *   out of the chooser's way (the onboarding overlay sits above MUI's modal
+ *   layer) without treating it as an error, which would open Help over it.
+ *   A choice made later finishes the drop from the chooser, through
+ *   `onSuccess` with the id or `onError`.
+ * @param {Function} [onError] Optional callback when an error occurs, a zip
+ *   that can't be opened included: every such drop ends in a dialog and here.
  * @param {{record: Function, onExceeded: Function}} [quotaOptions]
  *   Optional quota integration: records the load key via record() once the
  *   file is stored, and calls onExceeded instead of navigating if refused.
@@ -99,8 +102,10 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     alert: setAlert,
     open: openDropped,
   })
-  if (outcome !== 'opening' && onError) {
-    onError(outcome === 'choosing' ? 'Waiting for a choice of model in the archive' : 'Archive holds no model to open')
+  if (outcome === 'choosing' && onSuccess) {
+    onSuccess(null)
+  } else if (outcome === 'refused' && onError) {
+    onError('The dropped archive could not be opened')
   }
 
   /**

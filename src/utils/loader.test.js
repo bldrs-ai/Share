@@ -4,12 +4,18 @@ import {zipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {initializeWorker, opfsWriteModel} from '../OPFS/OPFSService.js'
 import {getInMemoryUpload} from '../loader/inMemoryUploads'
 import {ARCHIVE_ENTRY_CHOICE} from '../loader/modelArchive'
+import {readZipDirectory} from '../loader/zipArchive'
 import {loadLocalFile} from './loader'
 
 
 // The OPFS worker is a real shared worker in the browser; what matters here
 // is the storage name the file is written under, which is the `/v/new/`
 // segment `findLoader` later resolves the upload by.
+// Real, but able to fail on demand the way a defect would.
+jest.mock('../loader/zipArchive', () => {
+  const actual = jest.requireActual('../loader/zipArchive')
+  return {...actual, readZipDirectory: jest.fn(actual.readZipDirectory)}
+})
 jest.mock('../OPFS/OPFSService.js', () => ({
   initializeWorker: jest.fn(() => ({addEventListener: jest.fn(), removeEventListener: jest.fn()})),
   nextRequestId: jest.fn(() => 7),
@@ -288,6 +294,18 @@ describe('loadLocalFile — archives', () => {
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({
       type: 'unrecognizedFormat', ext: 'zip', entry: 'picker', archive: {exts: ['pdf']},
     }))
+    expect(opfsWriteModel).not.toHaveBeenCalled()
+  })
+
+  // Review of Share#2010: a failure that isn't the archive's escaped the
+  // change handler as an unhandled rejection, and the pick did nothing.
+  it('alerts when looking inside a picked zip fails for a reason that isn\'t the archive', async () => {
+    const defect = new TypeError('a defect')
+    readZipDirectory.mockRejectedValueOnce(defect)
+    const onError = jest.fn()
+    await pick(pickedFile(zipSync({'Tower.ifc': IFC}), 'Tower.zip'), onError)
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError.mock.calls[0][0]).toBe(defect)
     expect(opfsWriteModel).not.toHaveBeenCalled()
   })
 

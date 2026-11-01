@@ -5,6 +5,7 @@ import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
 import {zipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
+import * as contentHash from '../utils/contentHash'
 import {load, readModel} from './Loader'
 
 
@@ -478,6 +479,38 @@ describe('Loader', () => {
       expect(model.type).toBe('ifc')
     } finally {
       restoreArrayBuffer()
+    }
+  })
+
+  // The GLB cache (feature `glb`, on by default) hashes the source and keeps
+  // its handle for the writer, which later backs conway's reads with it
+  // (`spillModelSource`). For a hosted `.ifczip` that handle is the zip, so
+  // the whole cache path is skipped (`wantGlb`). The plain IFC beside it is
+  // the control: the same load with the cache on hashes its source.
+  it('keeps a hosted .ifczip out of the GLB cache, which an .ifc enters', async () => {
+    mockViewer.IFC.type = 'ifc'
+    const ifcText = readTestDataFile('ifc/index.ifc')
+    const hashSpy = jest.spyOn(contentHash, 'sha1Hex')
+    const blobHashSpy = jest.spyOn(contentHash, 'sha1HexFromBlob')
+    let restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(ifcText))
+    try {
+      await load(testPathToUrl('ifc/index.ifc'), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(hashSpy.mock.calls.length + blobHashSpy.mock.calls.length).toBeGreaterThan(0)
+    } finally {
+      restoreArrayBuffer()
+    }
+    hashSpy.mockClear()
+    blobHashSpy.mockClear()
+    const ifczip = zipSync({'index.ifc': new Uint8Array(Buffer.from(ifcText))})
+    restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(ifczip))
+    try {
+      await load(testPathToUrl('ifc/index.ifczip'), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(hashSpy).not.toHaveBeenCalled()
+      expect(blobHashSpy).not.toHaveBeenCalled()
+    } finally {
+      restoreArrayBuffer()
+      hashSpy.mockRestore()
+      blobHashSpy.mockRestore()
     }
   })
 

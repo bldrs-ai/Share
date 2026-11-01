@@ -29,11 +29,35 @@ function utf8(text) {
 }
 
 
+// Every byte fflate's streaming inflate hands back, across the file: the
+// bomb test asserts on what was PRODUCED, not only on the refusal at the end,
+// which a reader that inflated the whole bomb first would also reach.
+let mockInflatedBytes = 0
+jest.mock('three/examples/jsm/libs/fflate.module.js', () => {
+  const actual = jest.requireActual('three/examples/jsm/libs/fflate.module.js')
+  /** fflate's Inflate, counting what it emits. */
+  class CountingInflate extends actual.Inflate {
+    /** @param {Function} ondata */
+    constructor(ondata) {
+      super((chunk, final) => {
+        mockInflatedBytes += chunk.length
+        ondata(chunk, final)
+      })
+    }
+  }
+  return {...actual, Inflate: CountingInflate}
+})
+
+
 const IFC_TEXT = utf8('ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'IFC4\'));\nENDSEC;\n')
 const BYTES_PER_MIB = 1024 * 1024
 // Enough zeros that deflate shrinks them ~1000:1 — the shape of a bomb.
 const ZEROS_MIB = 4
 const ZEROS = new Uint8Array(ZEROS_MIB * BYTES_PER_MIB)
+// Big enough that inflating all of it can't pass for one push's worth.
+const BOMB_MIB = 64
+// The most one 16 KiB push of deflate can expand to (~1032:1).
+const ONE_PUSH_MAX_OUTPUT = 16 * 1024 * 1033
 
 
 /**
@@ -101,12 +125,16 @@ function withDeclaredSize(zip, path, size) {
  *
  * @param {string} path
  * @param {Uint8Array} data stored, uncompressed
+ * @param {object} [lie] for a malformed record
+ * @param {number} [lie.extraBytes] the extra field the record declares;
+ *   below 28 the sizes don't fit and are left out
+ * @param {number} [lie.claimed] the length the zip64 sub-field claims
  * @return {Uint8Array}
  */
-function zip64StoredArchive(path, data) {
+function zip64StoredArchive(path, data, {extraBytes = 28, claimed = 24} = {}) {
   const name = utf8(path)
   const SATURATED = 0xffffffff
-  const ZIP64_EXTRA_BYTES = 28
+  const ZIP64_EXTRA_BYTES = extraBytes
   const local = new Uint8Array(30 + name.length + data.length)
   const lv = new DataView(local.buffer)
   lv.setUint32(0, 0x04034b50, true)
@@ -124,10 +152,12 @@ function zip64StoredArchive(path, data) {
   central.set(name, CDH_BYTES)
   const extra = CDH_BYTES + name.length
   cv.setUint16(extra, 0x0001, true)
-  cv.setUint16(extra + 2, 24, true)
-  cv.setBigUint64(extra + 4, BigInt(data.length), true)
-  cv.setBigUint64(extra + 12, BigInt(data.length), true)
-  cv.setBigUint64(extra + 20, 0n, true)
+  cv.setUint16(extra + 2, claimed, true)
+  if (extraBytes >= 28) {
+    cv.setBigUint64(extra + 4, BigInt(data.length), true)
+    cv.setBigUint64(extra + 12, BigInt(data.length), true)
+    cv.setBigUint64(extra + 20, 0n, true)
+  }
   const end = new Uint8Array(EOCD_BYTES)
   const ev = new DataView(end.buffer)
   ev.setUint32(0, 0x06054b50, true)
@@ -194,6 +224,22 @@ describe('zipArchive', () => {
         .toMatch(/damaged or incomplete/)
     })
 
+    // Review of Share#2010: the zip64 sub-field's claimed length was the
+    // bound, so a claim past the record read off the end of the directory
+    // and escaped as a RangeError, which no seam caught.
+    it('refuses a zip64 field that claims more than its record holds, as damage', async () => {
+      const overlong = zip64StoredArchive('a.ifc', IFC_TEXT, {extraBytes: 4, claimed: 0xffff})
+      expect(await refusal(readZipDirectory(blobOf(overlong)))).toMatch(/damaged or incomplete/)
+      const short = zip64StoredArchive('a.ifc', IFC_TEXT, {extraBytes: 28, claimed: 0xffff})
+      expect(await refusal(readZipDirectory(blobOf(short)))).toMatch(/damaged or incomplete/)
+    })
+
+    it('reads a Windows tool\'s backslashes as folders', async () => {
+      const [entry] = await readZipDirectory(blobOf(zipSync({'export\\Tower.ifc': IFC_TEXT})))
+      expect({path: entry.path, name: entry.name, ext: entry.ext}).toEqual(
+        {path: 'export/Tower.ifc', name: 'Tower.ifc', ext: 'ifc'})
+    })
+
     it('reads sizes and offsets from a zip64 extra field', async () => {
       const entries = await readZipDirectory(blobOf(zip64StoredArchive('big.stl', IFC_TEXT)))
       expect(entries).toHaveLength(1)
@@ -239,16 +285,56 @@ describe('zipArchive', () => {
       expect(slice).not.toHaveBeenCalled()
     })
 
-    it('counts what the inflate produces: an entry that lies low about its size is refused', async () => {
-      // The bomb's shape: 4 MiB of zeros in ~4 KiB, declaring 1 KiB. Trusting
-      // the declaration would allocate 1 KiB and inflate 4 MiB into it.
-      const zip = withDeclaredSize(zipSync({'bomb.stl': ZEROS}), 'bomb.stl', 1024)
+    it('counts what the inflate produces: a bomb that lies low stops at its lie, plus one push', async () => {
+      // 64 MiB of zeros in ~64 KiB, declaring 1 KiB. Trusting the declaration
+      // would allocate 1 KiB and inflate 64 MiB into it; refusing only after
+      // the inflate would still have produced all 64 MiB. One 16 KiB push of
+      // this stream expands to at most ~16.5 MiB (deflate's ~1032:1).
+      const bomb = new Uint8Array(BOMB_MIB * BYTES_PER_MIB)
+      const zip = withDeclaredSize(zipSync({'bomb.stl': bomb}), 'bomb.stl', 1024)
       const blob = blobOf(zip)
       const [entry] = await readZipDirectory(blob)
       expect(entry.size).toBe(1024)
       const budget = freshBudget()
+      mockInflatedBytes = 0
       expect(await refusal(extractZipEntry(blob, entry, budget))).toMatch(/damaged or incomplete/)
+      expect(mockInflatedBytes).toBeGreaterThan(0)
+      expect(mockInflatedBytes).toBeLessThanOrEqual(1024 + ONE_PUSH_MAX_OUTPUT)
       expect(budget.remaining).toBe(MAX_TOTAL_INFLATED_BYTES)
+    })
+
+    it('says the device is out of room, not that the archive is damaged, when an allocation fails', async () => {
+      const blob = blobOf(zipSync({'a.ifc': [IFC_TEXT, {level: 0}]}))
+      const [entry] = await readZipDirectory(blob)
+      // The entry's bytes are the one read this big; Chrome refuses it so.
+      const slice = blob.slice.bind(blob)
+      jest.spyOn(blob, 'slice').mockImplementation((start, end) => (end - start === entry.compressedSize ?
+        {arrayBuffer: () => Promise.reject(new RangeError('Array buffer allocation failed'))} :
+        slice(start, end)))
+      expect(await refusal(extractZipEntry(blob, entry, freshBudget()))).toBe(
+        'This model is too large to unpack in this browser. ' +
+        'Unpack the archive and open the model directly, or try a desktop browser.')
+    })
+
+    it('maps a record whose numbers don\'t fit its bytes to damage, and leaves other failures alone', async () => {
+      const blob = blobOf(zipSync({'a.ifc': IFC_TEXT}))
+      const [entry] = await readZipDirectory(blob)
+      // A Blob-shaped stand-in whose every read fails the given way.
+      const failing = (error) => ({size: blob.size, slice: () => ({arrayBuffer: () => Promise.reject(error)})})
+      expect(await refusal(extractZipEntry(failing(new RangeError('Offset is outside the bounds of the DataView')),
+        entry, freshBudget()))).toMatch(/damaged or incomplete/)
+      const defect = new TypeError('not the archive\'s fault')
+      await expect(extractZipEntry(failing(defect), entry, freshBudget())).rejects.toBe(defect)
+    })
+
+    it('inflates an empty deflate stream to nothing, which only a 0-byte entry accepts', async () => {
+      // fflate takes an empty final push as a complete, empty stream, so a
+      // 0-byte entry extracts to 0 bytes (modelArchive.js never picks one),
+      // and anything declaring more is short.
+      const blob = blobOf(zipSync({'empty.ifc': [new Uint8Array(0), {level: 6}]}))
+      const [entry] = await readZipDirectory(blob)
+      expect((await extractZipEntry(blob, entry, freshBudget())).length).toBe(0)
+      expect(await refusal(extractZipEntry(blob, {...entry, size: 1}, freshBudget()))).toMatch(/damaged or incomplete/)
     })
 
     it('refuses an entry that inflates to less than it declared', async () => {

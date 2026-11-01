@@ -3,7 +3,7 @@ import {Link} from '@mui/material'
 import {ErrorOutline as ErrorOutlineIcon, InfoOutlined as InfoOutlinedIcon} from '@mui/icons-material'
 import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
 import {archiveGuidance, formatGuidance} from '../loader/formatGuidance'
-import {ARCHIVE_ENTRY_CHOICE} from '../loader/modelArchive'
+import {ARCHIVE_ENTRY_CHOICE, ARCHIVE_UNREADABLE} from '../loader/modelArchive'
 import {NotFoundError} from '../loader/Loader'
 import {UNRECOGNIZED_FORMAT_ALERT_EVENT, reportUnrecognizedFormat} from '../loader/unrecognizedFormat'
 import {getProvider} from '../connections/registry'
@@ -65,7 +65,7 @@ export default function AlertDialog({onClose}) {
       // the closed-set reason_class.
       trackAlertEvent(ENGINE_FAILURE_ALERT_EVENT)
     } else if (alert.type === 'unsupportedSchema' || alert.type === 'inMemoryUploadGone' ||
-        alert.type === 'uploadNotInBrowser' || alert.type === 'noGeometry') {
+        alert.type === 'uploadNotInBrowser' || alert.type === 'noGeometry' || alert.type === ARCHIVE_UNREADABLE) {
       // Expected outcome, not a defect: analytics only, never Sentry
       // (alertTracking.js#trackAlertEvent). `inMemoryUploadGone` is a
       // /v/local-only/ URL whose file, opened without OPFS, was held only by a
@@ -73,6 +73,8 @@ export default function AlertDialog({onClose}) {
       // a /v/local-only/ link, with OPFS available, to an upload this browser
       // doesn't hold (#1955). `noGeometry` is a model conway read fine that
       // has nothing to draw (loadProgress#classifyLoadOutcome, #1962).
+      // `archiveUnreadable` is a hosted `.ifczip` that isn't one readable
+      // IFC (loader/modelArchive.js); its message never names the file.
       trackAlertEvent(alert.message)
     } else if (alert.type === 'unrecognizedFormat') {
       // Also an expected outcome, but counted in Sentry too, as one info
@@ -110,8 +112,13 @@ export default function AlertDialog({onClose}) {
   // A zip Share looked inside and couldn't open (loader/modelArchive.js)
   // carries `archive`, what it holds or why it can't be read. The file's own
   // extension still wins: a .docx is a zip, and NOT_A_MODEL says it better.
-  const guidance = alert && typeof alert === 'object' && alert.type === 'unrecognizedFormat' ?
-    (formatGuidance(alert.ext) ?? (alert.archive ? archiveGuidance(alert.archive) : null)) : null
+  // A hosted `.ifczip` that couldn't be opened gets the same "why" text.
+  let guidance = null
+  if (alert && typeof alert === 'object' && alert.type === 'unrecognizedFormat') {
+    guidance = formatGuidance(alert.ext) ?? (alert.archive ? archiveGuidance(alert.archive) : null)
+  } else if (alert && typeof alert === 'object' && alert.type === ARCHIVE_UNREADABLE) {
+    guidance = archiveGuidance({problem: alert.message})
+  }
   const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
 
   const refresh = () => {

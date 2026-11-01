@@ -16,7 +16,7 @@ import {
   unrecognizedFormatAlert,
 } from '../loader/unrecognizedFormat'
 import {REVIT} from '../loader/formatGuidance'
-import {ARCHIVE_ENTRY_CHOICE, noModelInArchiveAlert} from '../loader/modelArchive'
+import {ARCHIVE_ENTRY_CHOICE, ARCHIVE_UNREADABLE, noModelInArchiveAlert} from '../loader/modelArchive'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import AlertDialog from './AlertDialog'
@@ -625,6 +625,58 @@ describe('AlertDialog — archives', () => {
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
     expect(screen.getByText('Not a 3D model')).toBeInTheDocument()
     expect(screen.queryByText(/This archive/)).not.toBeInTheDocument()
+  })
+
+  // The click finishes the drop or pick; a failure there must still reach
+  // the dialog rather than vanish as an unhandled rejection.
+  it('shows what a choice failed with', async () => {
+    const failure = new Error('OPFS said no')
+    act(() => {
+      useStore.getState().setAlert(chooser({onChoose: jest.fn().mockRejectedValue(failure)}))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByText('part.glb'))
+    await waitFor(() => expect(useStore.getState().alert).toBe(failure))
+  })
+
+  it('lists the first 50 models and counts the rest', () => {
+    const LISTED = 50
+    const MODELS = 60
+    const many = Array.from({length: MODELS}, (_, i) => ({path: `parts/p${i}.stl`, name: `p${i}.stl`, ext: 'stl'}))
+    act(() => {
+      useStore.getState().setAlert(chooser({entries: many}))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('This archive holds 60 models Share can open. Choose one:')).toBeInTheDocument()
+    expect(screen.getAllByRole('button').filter((b) => b.dataset.testid?.startsWith('archive-entry-'))).toHaveLength(LISTED)
+    expect(screen.getByTestId('archive-entry-unlisted')).toHaveTextContent('And 10 more.')
+  })
+
+  it('lists two entries of one path as two rows, without a key collision', () => {
+    console.error.mockClear()
+    const twins = [entries[1], {...entries[1]}]
+    act(() => {
+      useStore.getState().setAlert(chooser({entries: twins}))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getAllByTestId('archive-entry-part.glb')).toHaveLength(2)
+    const keyWarnings = console.error.mock.calls.filter((args) => String(args[0]).includes('same key'))
+    expect(keyWarnings).toEqual([])
+  })
+
+  // A hosted .ifczip that isn't one readable IFC (CadView raises it).
+  it('says why a hosted .ifczip can\'t be opened, counted in analytics only', () => {
+    const message = 'This .ifczip holds no IFC model.'
+    act(() => {
+      useStore.getState().setAlert({type: ARCHIVE_UNREADABLE, message})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('Can\'t open this archive')).toBeInTheDocument()
+    expect(screen.getByText(message)).toBeInTheDocument()
+    expect(screen.queryByText(/Discord/)).not.toBeInTheDocument()
+    expect(trackAlertEvent).toHaveBeenCalledWith(message)
+    expect(trackAlert).not.toHaveBeenCalled()
+    expect(reportUnrecognizedFormat).not.toHaveBeenCalled()
   })
 
   it('says why an archive can\'t be read', () => {

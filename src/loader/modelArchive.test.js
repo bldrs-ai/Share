@@ -16,6 +16,10 @@ import {ZipArchiveError} from './zipArchive'
 // without inflating 512 MiB. Read through a getter because modelArchive reads
 // the constant at call time.
 let mockTotalInflatedBytes
+// And a failure the directory read can be made to throw, standing in for a
+// defect that isn't the archive's: the reader maps everything an archive can
+// cause to a ZipArchiveError, so a real one can't be produced from bytes.
+let mockDirectoryError
 jest.mock('./zipArchive', () => {
   const actual = jest.requireActual('./zipArchive')
   return {
@@ -23,6 +27,8 @@ jest.mock('./zipArchive', () => {
     get MAX_TOTAL_INFLATED_BYTES() {
       return mockTotalInflatedBytes ?? actual.MAX_TOTAL_INFLATED_BYTES
     },
+    readZipDirectory: (...args) => (mockDirectoryError ?
+      Promise.reject(mockDirectoryError) : actual.readZipDirectory(...args)),
   }
 })
 
@@ -101,6 +107,7 @@ function summary(resolution, input) {
 describe('modelArchive', () => {
   afterEach(() => {
     mockTotalInflatedBytes = undefined
+    mockDirectoryError = undefined
   })
 
   describe('resolveArchiveUpload', () => {
@@ -167,6 +174,48 @@ describe('modelArchive', () => {
       // entry it is not a model. `__MACOSX/._Tower.ifc` is not one either.
       const zip = zipSync({'Tower.ifcxml': IFC, '__MACOSX/._Tower.ifc': PDF, '._Tower.ifc': PDF})
       expect(summary(await resolveArchiveUpload(upload(zip, 'x.zip')))).toEqual({kind: 'none', exts: ['ifcxml']})
+    })
+
+    it('passes over a 0-byte entry, which is no model whatever its name', async () => {
+      // fflate inflates an empty deflate stream to nothing, without error, so
+      // this used to hand conway an empty "a.ifc".
+      const zip = zipSync({'a.ifc': new Uint8Array(0), 'b.glb': GLB})
+      expect(summary(await resolveArchiveUpload(upload(zip, 'x.zip'))))
+        .toEqual({kind: 'model', ext: 'glb', name: 'b.glb', isInput: false})
+      expect(summary(await resolveArchiveUpload(upload(zipSync({'a.ifc': new Uint8Array(0)}), 'x.zip'))))
+        .toEqual({kind: 'none', exts: ['ifc']})
+    })
+
+    it('refuses a .gltf whose data sits in files beside it, which can\'t be found once it is out', async () => {
+      // Sketchfab's download shape. Out of the archive, `scene.bin` resolves
+      // to a /share/v/local-only/ URL the SPA answers with index.html.
+      const gltf = (json) => utf8(JSON.stringify({asset: {version: '2.0'}, ...json}))
+      const sketchfab = zipSync({
+        'scene.gltf': gltf({buffers: [{uri: 'scene.bin', byteLength: 4}]}),
+        'scene.bin': new Uint8Array(4),
+        'textures/base.png': PDF,
+      })
+      await expect(resolveArchiveUpload(upload(sketchfab, 'model.zip'))).rejects.toThrow(
+        'This glTF keeps its data in separate files (a .bin, textures), which Share can\'t open from inside ' +
+        'an archive. Export the model as a single .glb, then open that.')
+      const texturesOnly = zipSync({'a.gltf': gltf({images: [{uri: 'textures/base.png'}]})})
+      await expect(resolveArchiveUpload(upload(texturesOnly, 'a.zip'))).rejects.toThrow(ZipArchiveError)
+      // Everything inline (`data:` URIs) is a whole model, and opens.
+      const inline = zipSync({'a.gltf': gltf({
+        buffers: [{uri: 'data:application/octet-stream;base64,AAAAAA==', byteLength: 4}],
+        images: [{uri: 'data:image/png;base64,AAAA'}],
+      })})
+      expect(summary(await resolveArchiveUpload(upload(inline, 'a.zip'))))
+        .toEqual({kind: 'model', ext: 'gltf', name: 'a.gltf', isInput: false})
+    })
+
+    it('tags what an archive holds as extensions only, never name text', async () => {
+      // The text after an entry's last dot can be part of a name; it goes on
+      // the alert as `other`, the same tag a file's own would get.
+      const zip = zipSync({'Client.Acme Corp Tower Final': PDF, 'plan.PDF': PDF, 'x.thisistoolongtobeone': PDF})
+      expect(summary(await resolveArchiveUpload(upload(zip, 'x.zip')))).toEqual({kind: 'none', exts: ['other', 'pdf']})
+      expect(noModelInArchiveAlert('x.zip', 'drop', ['other', 'pdf']).message).toBe(
+        'This archive has no model Share can open (it contains .pdf and 1 other file type).')
     })
 
     it('leaves zip-based model formats to their own loaders', async () => {
@@ -238,6 +287,20 @@ describe('modelArchive', () => {
       expect(refusal).toMatchObject({type: 'unrecognizedFormat', ext: 'zip', entry: 'picker'})
       expect(refusal.archive.problem).toMatch(/damaged or incomplete/)
       expect(refusal.message).toBe(refusal.archive.problem)
+    })
+
+    it('ends in a dialog even when looking inside fails for a reason that isn\'t the archive', async () => {
+      // Review of Share#2010: this used to escape both seams, leaving no
+      // dialog and no `onError` (so the onboarding overlay stayed up).
+      const defect = new TypeError('a defect')
+      mockDirectoryError = defect
+      const alert = jest.fn()
+      const open = jest.fn()
+      const zip = zipSync({'a.ifc': IFC})
+      expect(await openUploadThroughArchive(upload(zip, 'a.zip'), {entry: 'drop', alert, open})).toBe('refused')
+      expect(alert).toHaveBeenCalledTimes(1)
+      expect(alert.mock.calls[0][0]).toBe(defect)
+      expect(open).not.toHaveBeenCalled()
     })
 
     it('lets the seam\'s own failures propagate', async () => {

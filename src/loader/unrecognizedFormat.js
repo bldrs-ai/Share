@@ -89,6 +89,20 @@ export function uploadExtension(fileName) {
   if (dot < 0 || dot === name.length - 1) {
     return 'none'
   }
-  const ext = name.slice(dot + 1).toLowerCase()
-  return /^[a-z0-9]+$/.test(ext) && ext.length <= MAX_EXT_LENGTH ? ext : 'other'
+  return extensionTag(name.slice(dot + 1))
+}
+
+
+/**
+ * An extension as a closed-ish token: lowercased, and `other` unless it is a
+ * short ASCII alphanumeric. The same rule for a file's own extension and for
+ * the ones inside an archive (`modelArchive.js`), where the text after an
+ * entry's last dot can be a name fragment (`Client.Acme Corp Tower`).
+ *
+ * @param {string} ext the text after the last dot, non-empty
+ * @return {string}
+ */
+export function extensionTag(ext) {
+  const lower = String(ext).toLowerCase()
+  return /^[a-z0-9]+$/.test(lower) && lower.length <= MAX_EXT_LENGTH ? lower : 'other'
 }

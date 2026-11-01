@@ -217,16 +217,20 @@ export function archiveGuidance({exts, problem}) {
 
 
 /**
- * @param {Array<string>} exts distinct, `''` for no extension
+ * @param {Array<string>} exts distinct tags, `''` for no extension and
+ *   `other` for one that isn't a short token
  * @return {string} e.g. `.dwg, .pdf and files with no extension`
  */
 function describeExtensions(exts) {
-  const named = exts.filter((ext) => ext !== '').map((ext) => `.${ext}`)
+  // `other` is the tag for an extension that isn't a short token (see
+  // `unrecognizedFormat.js#extensionTag`): one more type, never shown as `.other`.
+  const named = exts.filter((ext) => ext !== '' && ext !== 'other').map((ext) => `.${ext}`)
   const listed = named.slice(0, MAX_LISTED_EXTENSIONS)
-  const more = named.length - listed.length
+  const more = named.length - listed.length + (exts.includes('other') ? 1 : 0)
   const parts = [...listed]
   if (more > 0) {
-    parts.push(`${more} other file type${more === 1 ? '' : 's'}`)
+    const plural = more === 1 ? '' : 's'
+    parts.push(listed.length > 0 ? `${more} other file type${plural}` : `files of ${more} unlisted type${plural}`)
   }
   if (exts.includes('')) {
     parts.push('files with no extension')

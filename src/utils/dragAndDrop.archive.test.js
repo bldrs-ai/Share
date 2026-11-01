@@ -9,6 +9,7 @@ import {saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry} from '../connections/persistence'
 import {getInMemoryUpload} from '../loader/inMemoryUploads'
 import {ARCHIVE_ENTRY_CHOICE} from '../loader/modelArchive'
+import {readZipDirectory} from '../loader/zipArchive'
 import {handleFileDrop} from './dragAndDrop'
 
 
@@ -20,6 +21,11 @@ jest.mock('../OPFS/utils', () => ({
 }))
 jest.mock('../connections/persistence')
 jest.mock('./event')
+// Real, but able to fail on demand the way a defect would.
+jest.mock('../loader/zipArchive', () => {
+  const actual = jest.requireActual('../loader/zipArchive')
+  return {...actual, readZipDirectory: jest.fn(actual.readZipDirectory)}
+})
 
 
 const DROPPED_AT = 1_700_000_000_000
@@ -106,8 +112,11 @@ describe('handleFileDrop — archives', () => {
     const {setAlert, onSuccess, onError} = await drop(dropOf(zipSync({'Tower.ifc': IFC, 'part.glb': GLB}), 'models.zip'))
     expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
     // The chooser is up, so the overlay that dropped it has to get out of
-    // its way: `onError` is that cue.
-    expect(onError).toHaveBeenCalledTimes(1)
+    // its way — as a success with no id yet, so it doesn't open Help over
+    // the chooser the way its `onError` does.
+    expect(onSuccess).toHaveBeenCalledTimes(1)
+    expect(onSuccess).toHaveBeenCalledWith(null)
+    expect(onError).not.toHaveBeenCalled()
     const [choice] = setAlert.mock.calls[0]
     expect(choice.type).toBe(ARCHIVE_ENTRY_CHOICE)
     await choice.onChoose(choice.entries.find((e) => e.name === 'part.glb'))
@@ -126,6 +135,27 @@ describe('handleFileDrop — archives', () => {
     })
     expect(onError).toHaveBeenCalledTimes(1)
     expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('ends a drop of a damaged zip in the dialog and onError', async () => {
+    const zip = zipSync({'Tower.ifc': IFC})
+    const {setAlert, onError, onSuccess} = await drop(dropOf(zip.subarray(0, zip.length - 10), 'Tower.zip'))
+    expect(setAlert).toHaveBeenCalledWith(expect.objectContaining({type: 'unrecognizedFormat', ext: 'zip', entry: 'drop'}))
+    expect(setAlert.mock.calls[0][0].archive.problem).toMatch(/damaged or incomplete/)
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onSuccess).not.toHaveBeenCalled()
+  })
+
+  // Review of Share#2010: a failure that isn't the archive's escaped the
+  // seam, so nothing told the user and the onboarding overlay stayed up.
+  it('ends a drop in the dialog and onError when looking inside fails for another reason', async () => {
+    const defect = new TypeError('a defect')
+    readZipDirectory.mockRejectedValueOnce(defect)
+    const {setAlert, onError, navigate} = await drop(dropOf(zipSync({'Tower.ifc': IFC}), 'Tower.zip'))
+    expect(setAlert).toHaveBeenCalledTimes(1)
+    expect(setAlert.mock.calls[0][0]).toBe(defect)
+    expect(onError).toHaveBeenCalledTimes(1)
     expect(navigate).not.toHaveBeenCalled()
   })
 

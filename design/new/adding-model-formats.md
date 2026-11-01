@@ -110,27 +110,50 @@ name. A `.docx` is a zip too. It is read, and its own guidance
 
 **Which entries are models.** An entry is a model when its extension is in
 `supportedTypes` *exactly*. That is deliberately not `isExtensionSupported`,
-whose unanchored match reads `ifcxml` as `ifc`. Folders are skipped, and so
-is Finder's `__MACOSX/` and `._name` metadata, which carries model
-extensions. One model opens straight away. Several put up the **entry
+whose unanchored match reads `ifcxml` as `ifc`. A 0-byte entry is never
+a model: fflate inflates an empty stream to nothing without complaint.
+Folders are skipped, and so is Finder's `__MACOSX/` and `._name` metadata,
+which carries model extensions. A Windows tool's `folder\model.ifc` reads
+as a folder. One model opens straight away. Several put up the **entry
 chooser**: an `archiveEntryChoice` alert that AlertDialog renders as a list
 (`Components/ArchiveEntryChoice.jsx`, rows after the ProjectsDrawer's model
 rows). It is AlertDialog because that is the one dialog both seams reach:
 the Open dialog closes on pick, and a drop never had a dialog. The click
 resumes the seam, and closing the chooser leaves the open model where it is.
-The chooser names any `.ifc` with a same-named `.txt` beside it, the
+It lists the first 50 and counts the rest ("And 10 more"), since a bundle
+can hold a model per part. A drop hands over to it through `onSuccess(null)`,
+not `onError`: the onboarding overlay has to close for the chooser to show,
+and its `onError` would open Help on top. The chooser names any `.ifc` with a same-named `.txt` beside it, the
 sibling a Revit export writes (#1087). The `.txt` is not listed, and the
 note says why.
 
 **No model.** It stays an `unrecognizedFormat` alert, so it is one info
 event tagged `upload.ext` from the archive's own name (`zip` for a `.zip`)
-and never an entry name. It carries `archive: {exts}`, from which
+and never an entry name. It carries `archive: {exts}` — each tagged by
+`unrecognizedFormat.js#extensionTag`, so a short alphanumeric or `other`,
+because the text after an entry's last dot can be a name fragment — from which
 `formatGuidance.js#archiveGuidance` says *"This archive has no model Share
 can open (it contains .dwg and .pdf)"*. A native CAD file inside (`.rvt`,
 `.dwg`, `.sldprt`, `.catpart`) adds that format's "export from it" line and
 help link. An archive that can't be read at all (password-protected,
-Deflate64/bzip2/LZMA, split `.z01`, damaged, past the ceiling) is the same
-alert with `archive: {problem}`, and the dialog gives the reason.
+Deflate64/bzip2/LZMA, split `.z01`, damaged, past the ceiling, or past
+what this browser could allocate) is the same alert with `archive:
+{problem}`, and the dialog gives the reason.
+
+So is a `.gltf` that names its buffers or textures by a relative URI (the
+Sketchfab download shape: `scene.gltf`, `scene.bin`, `textures/`). Out of
+the archive it is one file at `/share/v/local-only/<uuid>.gltf`, and
+`scene.bin` would resolve to a URL the SPA answers with `index.html`. It is
+refused with *"Export the model as a single .glb, then open that"*. A
+`.gltf` whose data is all `data:` URIs opens.
+
+**Every failure ends in a dialog.** The reader turns everything an archive
+can cause into a `ZipArchiveError`. A `RangeError` from a DataView or a
+typed-array length is a record whose numbers don't fit its bytes, so it is
+damage. An allocation failure (`utils/oom.js`'s patterns) is the device's
+limit. Anything else is a defect. `openUploadThroughArchive` still ends it
+as an alert of the Error itself (AlertDialog reports it to Sentry) and
+`refused`, so both seams always end in a dialog, and the drop in `onError`.
 
 **The ceiling, and what it trusts.** 512 MiB per entry, which is the gzip
 envelope's figure and reason (glb-export-premium.md §4.7). 512 MiB is also
@@ -162,27 +185,37 @@ and analytics see an IFC). The arms before that line correctly see a zip:
 hosted `.ifczip` is excluded from the GLB cache (`wantGlb`), because that
 path's source handle would be the zip, and `spillModelSource` would back
 conway's later reads of the IFC with zip bytes. It opens uncached. An
-uploaded one caches as the `.ifc` it was stored as.
+uploaded one caches as the `.ifc` it was stored as. A hosted one that isn't
+exactly one readable IFC throws a `ZipArchiveError`. CadView raises it as an
+`archiveUnreadable` alert ("Can't open this archive", with the reason), which
+is counted in analytics only and kept out of `captureException`, like an
+unsupported schema. `load_failed` still fires for it, as it does for that
+schema refusal: it is a failed open.
 
 **Out of scope, and what happens.** A `.zip` from GitHub or Drive is not
 routed (`zip` is not a type), so it never reaches these seams. That is the
 follow-up, and `connections/loadFromSource.js` is untouched. `.rar` and
 `.7z` have no small browser decoder. They get `ARCHIVE` guidance (*"Unpack
 it first"*). A `.zip.gz` is not unwrapped: the gzip seam inflates only a
-member whose inside sniffs as a model, and a zip doesn't. A `.gltf` whose
-buffers sit beside it in the archive opens without them, because only the
-chosen entry is extracted. The inflate is synchronous fflate on the main
+member whose inside sniffs as a model, and a zip doesn't. A multi-file
+`.gltf` is refused (above) rather than opened from its side files: only the
+chosen entry is ever extracted. The inflate is synchronous fflate on the main
 thread. It yields every 4 MiB of input, but a very large entry still costs
 the page a few busy seconds. `DecompressionStream('deflate-raw')` would move
 that off the thread.
 
-**Tests.** `zipArchive.test.js` covers the directory, zip64, both
-ceilings, and a lying-low bomb. `modelArchive.test.js` covers entry
+**Tests.** `zipArchive.test.js` covers the directory, zip64 (including a
+sub-field that claims more than its record), both ceilings, a lying-low bomb
+(counting what the inflate produced, not only the refusal), allocation
+failure and the error mapping. `modelArchive.test.js` covers entry
 selection, the pass-throughs, nesting under one total, the seam outcomes
-and `unwrapIfcZip`. `formatGuidance.test.js` covers the no-model text.
-`AlertDialog.test.jsx` covers the chooser. Each seam has its own suite
+and `unwrapIfcZip`, plus 0-byte entries, multi-file glTF, extension tags and
+a defect ending in the dialog. `formatGuidance.test.js` covers the no-model
+text. `AlertDialog.test.jsx` covers the chooser (its cap, repeated paths, a
+choice that fails) and `archiveUnreadable`, which `CadView.test.jsx` raises. Each seam has its own suite
 (`dragAndDrop.archive.test.js` and `loader.test.js`). `Loader.test.js`
-covers a hosted `.ifczip` through `load()`. `routes.test.ts` and
+covers a hosted `.ifczip` through `load()`, and that it never reaches the
+GLB cache. `routes.test.ts` and
 `Filetype.test.js` cover `ifczip` ahead of its `ifc` prefix. E2E:
 `loader/modelArchive.spec.ts`, desktop and mobile, covers a drop and a pick
 of one model, a drop and a pick of several, and a drop of none.

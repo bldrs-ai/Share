@@ -22,6 +22,7 @@
 // The inflate itself is still fflate's (`Inflate`, the streaming class), so
 // this adds no dependency and no bundle weight.
 import {Inflate} from 'three/examples/jsm/libs/fflate.module.js'
+import {isOutOfMemoryError} from '../utils/oom'
 import {MAX_INFLATED_BYTES} from './gzipEnvelope'
 
 
@@ -159,6 +160,38 @@ function expandsPastMessage() {
 }
 
 
+// An allocation the browser refused: the entry fit under the ceiling, but
+// not in this tab's memory. Not an OOM-pattern message on purpose — the
+// refusal is an expected outcome the dialog explains, as CadView's `oom`
+// alert is, and is never reported as a defect.
+const TOO_LARGE_FOR_DEVICE_MESSAGE = 'This model is too large to unpack in this browser. ' +
+  'Unpack the archive and open the model directly, or try a desktop browser.'
+
+
+/**
+ * What a reader failure means to the user. A `ZipArchiveError` is already
+ * that. An allocation failure is the device's limit. A `RangeError` from a
+ * DataView or a typed-array length is a record whose numbers don't fit the
+ * bytes: damage, whatever produced it. Anything else is not the archive's
+ * fault and is left as it is, for the seam to report as a defect.
+ *
+ * @param {any} e
+ * @return {any}
+ */
+function asArchiveError(e) {
+  if (e instanceof ZipArchiveError) {
+    return e
+  }
+  if (isOutOfMemoryError(e)) {
+    return new ZipArchiveError(TOO_LARGE_FOR_DEVICE_MESSAGE)
+  }
+  if (e instanceof RangeError) {
+    return new ZipArchiveError(DAMAGED_MESSAGE)
+  }
+  return e
+}
+
+
 /**
  * One file in an archive, as its central directory describes it. Sizes are
  * what the archive CLAIMS; {@link extractZipEntry} trusts them only to refuse
@@ -211,6 +244,22 @@ export function looksLikeZipBytes(bytes) {
  *   across files, or too large
  */
 export async function readZipDirectory(blob) {
+  try {
+    return await readDirectory(blob)
+  } catch (e) {
+    throw asArchiveError(e)
+  }
+}
+
+
+/**
+ * {@link readZipDirectory}'s body, which may throw anything a malformed
+ * archive can make a DataView or an allocation throw.
+ *
+ * @param {Blob} blob
+ * @return {Promise<Array<ZipEntry>>}
+ */
+async function readDirectory(blob) {
   const {entryCount, directorySize, directoryOffset} = await readEndOfDirectory(blob)
   if (directorySize > MAX_DIRECTORY_BYTES) {
     throw new ZipArchiveError('This archive lists too many files to open.')
@@ -240,7 +289,10 @@ export async function readZipDirectory(blob) {
     // it the spec says CP437, which agrees with UTF-8 on ASCII; a non-ASCII
     // name from an old tool shows garbled in the chooser, and an extension —
     // all that selection reads — is ASCII either way.
+    // Backslashes as `/`: some Windows tools write `folder\model.ifc`, which
+    // the spec forbids and every unzip reads as a folder anyway.
     const path = decoder.decode(new Uint8Array(dir.buffer, dir.byteOffset + nameStart, nameLength))
+      .replace(/\\/g, '/')
     const sizes = resolveZip64Sizes(dir, record, extraStart, extraLength)
     at = next
     if (path.endsWith('/') || isMacMetadata(path)) {
@@ -283,6 +335,23 @@ export async function readZipDirectory(blob) {
  * @throws {ZipArchiveError}
  */
 export async function extractZipEntry(blob, entry, budget) {
+  try {
+    return await extractEntry(blob, entry, budget)
+  } catch (e) {
+    throw asArchiveError(e)
+  }
+}
+
+
+/**
+ * {@link extractZipEntry}'s body.
+ *
+ * @param {Blob} blob
+ * @param {ZipEntry} entry
+ * @param {{remaining: number}} budget
+ * @return {Promise<Uint8Array>}
+ */
+async function extractEntry(blob, entry, budget) {
   if (entry.flags & FLAG_ENCRYPTED) {
     throw new ZipArchiveError('This archive is password-protected. Unpack it first, then open the model inside.')
   }
@@ -349,8 +418,10 @@ async function inflateCounted(stored, expectedSize) {
   try {
     let at = 0
     let sinceYield = 0
-    // do/while so an empty stream still gets its one final push, and fails
-    // as the truncated deflate stream it is.
+    // do/while so an empty stream still gets its one final push. fflate
+    // accepts an empty final push as a complete, empty stream, so that is no
+    // error here; the size check below is what refuses it, unless the entry
+    // declared 0 bytes (`modelArchive.js` never picks such an entry).
     do {
       const end = Math.min(at + INFLATE_INPUT_CHUNK, stored.length)
       inflater.push(stored.subarray(at, end), end === stored.length)
@@ -362,7 +433,7 @@ async function inflateCounted(stored, expectedSize) {
       }
     } while (at < stored.length)
   } catch (e) {
-    if (e instanceof ZipArchiveError) {
+    if (e instanceof ZipArchiveError || isOutOfMemoryError(e)) {
       throw e
     }
     // fflate's own: invalid block type, unexpected EOF, a bad distance.
@@ -450,10 +521,17 @@ function resolveZip64Sizes(dir, at, extraStart, extraLength) {
   for (let field = extraStart; field + EXTRA_HEADER_BYTES <= extraEnd;) {
     const id = dir.getUint16(field, true)
     const length = dir.getUint16(field + U16_BYTES, true)
+    // Bounded by the extra field the record declares, not by the length this
+    // sub-field claims: a claimed 0xFFFF in a 4-byte field would otherwise
+    // read past the record, and off the end of the directory.
+    const fieldEnd = field + EXTRA_HEADER_BYTES + length
+    if (fieldEnd > extraEnd) {
+      throw new ZipArchiveError(DAMAGED_MESSAGE)
+    }
     if (id === ZIP64_EXTRA_ID) {
       let value = field + EXTRA_HEADER_BYTES
       for (const key of saturated) {
-        if (value + U64_BYTES > field + EXTRA_HEADER_BYTES + length) {
+        if (value + U64_BYTES > fieldEnd) {
           throw new ZipArchiveError(DAMAGED_MESSAGE)
         }
         sizes[key] = readU64(dir, value)
@@ -461,7 +539,7 @@ function resolveZip64Sizes(dir, at, extraStart, extraLength) {
       }
       return sizes
     }
-    field += EXTRA_HEADER_BYTES + length
+    field = fieldEnd
   }
   throw new ZipArchiveError(DAMAGED_MESSAGE)
 }
