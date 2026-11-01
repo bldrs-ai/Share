@@ -393,6 +393,14 @@ export default function OpenModelDialog({
   const githubIdentity = user?.[BLDRS_IDENTITIES_CLAIM]?.find((id) => id.connection === 'github')
   const githubUsername = githubIdentity?.profileData?.nickname || user?.nickname
 
+  // Local-only, in place: `openUrl: false` clears the SDK's token cache and
+  // signs this page out without a reload, but never visits /v2/logout, so the
+  // Auth0 session survives and the next sign-in completes from it silently.
+  // GitHub is the Auth0 identity here, so "Remove" is a full Bldrs sign-out
+  // in all but that. Left as is on purpose until the owner decides whether
+  // Remove should end the session like Log out does (Share#1923; Log out is
+  // ProfileControl's, Auth0/logoutOptions.js). BaseRoutes' authPassRef guard
+  // exists for this in-place path.
   const handleGithubRemove = () => logout({openUrl: false})
 
   const handleLoginGithub = () => {

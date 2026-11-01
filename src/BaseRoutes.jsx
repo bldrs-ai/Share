@@ -5,6 +5,7 @@ import {Button, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, 
 import * as Sentry from '@sentry/react'
 import {useAuth0} from './Auth0/Auth0Proxy'
 import {APP_METADATA_CLAIM} from './Auth0/appMetadata'
+import {endSessionLogoutOptions} from './Auth0/logoutOptions'
 import useLoginTracking from './Auth0/useLoginTracking'
 import PopupAuth from './Components/Auth/PopupAuth'
 import PopupCallback from './Components/Auth/PopupCallback'
@@ -249,7 +250,7 @@ export default function BaseRoutes({testElt = null}) {
           .then((token) => processAccessToken(token, {isFresh: true}))
           .catch((err) => {
             if (err.error === 'invalid_grant') {
-              logout({returnTo: window.location.origin})
+              logout(endSessionLogoutOptions())
             }
             // Anything else is non-fatal here: the cached-token pass
             // already established a working session; this pass only exists
@@ -286,7 +287,11 @@ export default function BaseRoutes({testElt = null}) {
         })
         .catch((err) => {
           if (err.error === 'invalid_grant') {
-            logout({returnTo: window.location.origin})
+            // The refresh token is dead, so end the Auth0 session too and
+            // come back to the origin signed out (Auth0/logoutOptions.js).
+            // A full navigation, so the in-place authPassRef race above
+            // does not arise here.
+            logout(endSessionLogoutOptions())
           } else if (err.error !== 'login_required') {
             throw err
           }

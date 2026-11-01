@@ -73,7 +73,12 @@ const UserProfile = () => {
           </ListItemIcon>
         </MenuItem>
         <Divider/>
-        <MenuItem onClick={() => logout({returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin})}>
+        {/* Nothing imports this component (Share#1923). Only the option shape
+            is moved to 2.x here, keeping its own returnTo, so it can't be
+            copied back with the top-level `returnTo` the SDK ignores. */}
+        <MenuItem
+          onClick={() => logout({logoutParams: {returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin}})}
+        >
           <ListItemIcon>
             <LogoutIcon/>
             <Typography sx={{paddingLeft: '11px'}}>

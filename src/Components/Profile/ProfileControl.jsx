@@ -10,6 +10,7 @@ import {useTheme} from '@mui/material/styles'
 import {captureException} from '@sentry/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {abandonGateLogin, startLogin} from '../../Auth0/gateLogin'
+import {endSessionLogoutOptions} from '../../Auth0/logoutOptions'
 import {getRenderMode, setRenderMode as saveRenderMode} from '../../privacy/preferences'
 import {trackSubscriptionFromToken} from '../../privacy/subscriptionTracking'
 import useStore from '../../store/useStore'
@@ -154,13 +155,15 @@ export default function ProfileControl() {
     onCloseMenu()
   }
 
+  // A real sign-out: the SDK clears its cache, then navigates to Auth0's
+  // /v2/logout, which ends the server session and comes back to the origin
+  // (Auth0/logoutOptions.js). No `openUrl` override: one that only reloaded
+  // the origin used to swallow that visit and leave the session alive, so the
+  // next sign-in skipped the credentials prompt (Share#1923). The page lands
+  // signed out, which is where useLoginTracking and useSignedOutDriveCleanup
+  // do their sign-out work.
   const onLogoutClick = () => {
-    logout({
-      returnTo: window.location.origin,
-      openUrl: () => {
-        window.location.href = window.location.origin
-      },
-    })
+    logout(endSessionLogoutOptions())
     onCloseMenu()
   }
 

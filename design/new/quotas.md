@@ -639,16 +639,17 @@ The parts that aren't obvious:
   `auth0|`). For a linked account that is the *primary* identity, not
   necessarily the button the user pressed.
   - **A sign-out forgets the reported sign-in.** `auth_time` alone can't
-    tell a sign-in apart from the one before a sign-out, because none of
-    the app's logouts end the Auth0 session: `ProfileControl` passes an
-    `openUrl` that only reloads the origin, `OpenModelDialog` passes
-    `openUrl: false`, and auth0-spa-js then clears only its local cache and
-    never visits `/v2/logout`. The next popup sign-in (no `prompt: 'login'`
-    unless a scope is being changed) completes from that live session and
-    its ID token carries the same `auth_time`. So whenever a tab settles
-    signed out — in place, or on a page load that comes up signed out, as
-    after `ProfileControl`'s reload — it clears the marker, under the same
-    Web Lock. A cached-session boot never passes through signed out, so it
+    tell a sign-in apart from the one before a sign-out that leaves the
+    Auth0 session alive. `OpenModelDialog`'s GitHub Remove passes
+    `openUrl: false`, so auth0-spa-js clears only its local cache and never
+    visits `/v2/logout`; the next popup sign-in (no `prompt: 'login'` unless
+    a scope is being changed) completes from that live session and its ID
+    token carries the same `auth_time`. (`ProfileControl`'s Log out and the
+    `invalid_grant` logout do end the session, via `/v2/logout` and back to
+    the origin, since Share#1923: `src/Auth0/logoutOptions.js`.) So whenever
+    a tab settles signed out — in place, or on a page load that comes up
+    signed out, as on the return from `/v2/logout` — it clears the marker,
+    under the same Web Lock, whichever kind of sign-out it was. A cached-session boot never passes through signed out, so it
     never clears. Other tabs aren't told about a sign-out (the SDK doesn't
     broadcast it): a tab still signed in in memory makes no edge for the
     next sign-in, so it neither clears nor claims. The tabs that do claim

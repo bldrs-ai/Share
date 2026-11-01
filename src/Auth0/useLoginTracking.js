@@ -43,20 +43,22 @@ import {takeGateLoginSource} from './gateLogin'
  * getIdTokenClaims) there is no cross-tab dedupe and the in-page edge alone
  * decides.
  *
- * `auth_time` alone does NOT tell two sign-ins apart across a sign-out: none
- * of the app's own logouts end the Auth0 session. ProfileControl's passes a
- * custom `openUrl` that just reloads the origin, and OpenModelDialog's
- * passes `openUrl: false`; either way auth0-spa-js (2.0.2, `logout`) clears
- * only its local cache and never visits /v2/logout. The next popup sign-in
- * (PopupAuth sends `prompt: 'login'` only for an explicit scope change) is
- * then completed from that live session — no credentials asked for — and its
- * ID token carries the SAME auth_time, so a marker left from before the
- * sign-out would swallow it. Hence forgetReportedLogin: entering a settled
- * signed-out state clears the marker, so the next completed sign-in claims
- * afresh. That covers both shapes a sign-out reaches this hook in — an
- * in-page true → false (openUrl:false, the SDK's own local logout on a dead
- * refresh token) and a page load that comes up signed out (ProfileControl's
- * reload) — and never a cached-session boot, which is never signed out.
+ * `auth_time` alone does NOT tell two sign-ins apart across a sign-out that
+ * leaves the Auth0 session alive. OpenModelDialog's GitHub Remove passes
+ * `openUrl: false`, so auth0-spa-js (2.0.2, `logout`) clears only its local
+ * cache and never visits /v2/logout. The next popup sign-in (PopupAuth sends
+ * `prompt: 'login'` only for an explicit scope change) is then completed from
+ * that live session — no credentials asked for — and its ID token carries the
+ * SAME auth_time, so a marker left from before the sign-out would swallow it.
+ * ProfileControl's Log out and BaseRoutes' invalid_grant logout do end the
+ * session (Auth0/logoutOptions.js, Share#1923), and the next sign-in then
+ * mints a new auth_time; clearing on those too costs nothing and doesn't
+ * depend on which kind of sign-out it was. Hence forgetReportedLogin: entering
+ * a settled signed-out state clears the marker, so the next completed sign-in
+ * claims afresh. That covers both shapes a sign-out reaches this hook in — an
+ * in-page true → false (openUrl:false) and a page load that comes up signed
+ * out (the return from /v2/logout) — and never a cached-session boot, which
+ * is never signed out.
  *
  * Other tabs and a sign-out: the SDK does not broadcast logout, so a tab that
  * was signed in stays signed in in memory (until it reloads) and never makes
