@@ -8,6 +8,7 @@ import {
 } from './batchedInstanceTables'
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
+import {placedShapeBox} from '../three/robustBounds'
 import {
   CoincidenceSet,
   DEFAULT_COLOR,
@@ -603,7 +604,13 @@ export class IncrementalBatchedBuilder {
     }
     if (this.onBounds !== null) {
       try {
-        this.onBounds(this.scratchBox.copy(entry.box).applyMatrix4(matrix))
+        // The same exact box robustBounds measures on the finished batch
+        // (`placedShapeBox`), so a rotated placement is framed alike while
+        // streaming and once the load settles (#1896) — the follow's
+        // no-correction-at-settle contract (ProgressiveLoadSession).
+        const position = entry.geometry.attributes.position
+        this.onBounds(
+          placedShapeBox(entry.box, position, 0, position.count, matrix, this.scratchBox))
       } catch {
         // Camera follow is best-effort — never break the append.
       }

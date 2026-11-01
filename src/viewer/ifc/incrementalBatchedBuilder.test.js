@@ -1,11 +1,12 @@
 /* eslint-disable no-magic-numbers */
-import {BatchedMesh, BufferGeometry, Matrix4} from 'three'
+import {BatchedMesh, Box3, BufferGeometry, Matrix4, Vector3} from 'three'
 import {clearConwayDirectLogs, getConwayDirectLogs}
   from '../../../tools/jest/conwayDirectLogCapture'
 import {IncrementalBatchedBuilder, PRESIZE_FROM_GEOMETRIES, probeSpreadLimit}
   from './incrementalBatchedBuilder'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 import {payloadToPreviewMesh} from './parsePreviewMesh'
+import {computeRobustBounds} from '../three/robustBounds'
 
 
 const IDENTITY_MAT = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
@@ -387,6 +388,34 @@ describe('IncrementalBatchedBuilder', () => {
     const {stats} = builder.finalize()
     expect(stats.skippedPlacedGeometries).toBe(1)
     expect(builder.hasContent()).toBe(true)
+  })
+
+  it('streams the same exact box for a rotated placement as the final fit measures (#1896)', () => {
+    // The camera follow frames these boxes and the end-of-load fit frames
+    // robustBounds' boxes of the finished batch; they must agree, or a
+    // rotated model visibly re-frames when the load settles. And the box
+    // must be the vertices', not the placed local box's: the triangle's
+    // local box corner (1, 1) turns to y = 1.4, its vertices reach 0.8.
+    const turn = new Matrix4().makeRotationZ(Math.atan2(3, 4))
+    const boxes = []
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0, {
+      onBounds: (box) => boxes.push(box.clone()),
+    })
+    builder.appendBatch([{
+      expressID: 1,
+      geometries: [{geometryExpressID: 999, flatTransformation: turn.elements, color: OPAQUE}],
+    }])
+    builder.finalize()
+
+    expect(boxes).toHaveLength(1)
+    expect(boxes[0].max.y).toBeCloseTo(0.8)
+    expect(boxes[0].max.y).toBeLessThan(new Box3(new Vector3(), new Vector3(1, 1, 0)).applyMatrix4(turn).max.y)
+    // Close, not equal: the batch stores its instance matrices as float32
+    // (three's matrices texture), and the settled walk reads them back.
+    const settled = computeRobustBounds(builder.root).exactBox
+    const digits = 6
+    boxes[0].min.toArray().forEach((v, axis) => expect(settled.min.getComponent(axis)).toBeCloseTo(v, digits))
+    boxes[0].max.toArray().forEach((v, axis) => expect(settled.max.getComponent(axis)).toBeCloseTo(v, digits))
   })
 
   it('skips one budget-evicted geometry without dropping the rest of the batch (SHARE-1NK)', () => {

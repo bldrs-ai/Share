@@ -27,7 +27,9 @@ import {batchEditRevision} from '../ifc/batchedEdit'
  *
  * Granularity follows the scene type. The conway-direct path places one
  * `BatchedMesh` instance per shape — instances are measured (and
- * excluded) whole, via their world AABBs. Other meshes (the web-ifc path
+ * excluded) whole, via their exact world AABBs (`placedShapeBox`; the
+ * streaming builder records the same boxes, so the follow and the final
+ * fit agree on rotated instances too). Other meshes (the web-ifc path
  * merges every product into one geometry) offer no per-element seam, so
  * their vertices are classified individually.
  *
@@ -37,10 +39,11 @@ import {batchEditRevision} from '../ifc/batchedEdit'
  * envelope on some axis. Anything a rooftop antenna, site wing, or crane
  * could plausibly reach stays in. On a clean model nothing trips the
  * fence and the result matches `Box3().setFromObject` (vertex-exact, so
- * marginally tighter for rotated meshes, whose world-transformed local
- * AABBs over-cover); as a second guard, if more of the model lands
- * outside the fences than MAX_EXCLUDED_FRACTION allows, the distribution
- * isn't "model + strays" and the exact box is returned instead.
+ * tighter for rotated meshes and rotated batch instances, whose
+ * world-transformed local AABBs over-cover); as a second guard, if more
+ * of the model lands outside the fences than MAX_EXCLUDED_FRACTION
+ * allows, the distribution isn't "model + strays" and the exact box is
+ * returned instead.
  *
  * Two passes: pass 1 takes exact bounds plus a coordinate sample for the
  * quantiles; pass 2 reclassifies everything and grows the robust box only
@@ -445,9 +448,10 @@ function collectParts(object) {
 
 
 /**
- * One world-space box per BatchedMesh instance. Geometry-local boxes are
- * computed once per shared shape (getBoundingBoxAt walks the vertex
- * range), then placed by instance matrix × mesh matrixWorld.
+ * One world-space box per BatchedMesh instance, exact for each (see
+ * `placedShapeBox`). Geometry-local boxes are computed once per shared
+ * shape (getBoundingBoxAt walks the index range), then placed by instance
+ * matrix × mesh matrixWorld.
  *
  * @param {object} mesh THREE.BatchedMesh
  * @param {ElementBoxes} out world boxes are appended here
@@ -457,9 +461,19 @@ function collectBatchedElementBoxes(mesh, out) {
   const instanceMatrix = new Matrix4()
   const placed = new Matrix4()
   const worldBox = new Box3()
+  const position = mesh.geometry.attributes.position
+  // Read for each shape's `vertexStart` / `vertexCount`: the block
+  // `setGeometryAt` copied its vertices into (BatchedMesh.js:741), and the
+  // one batchedGeometryRanges synthesises for a collapsed slice. Private,
+  // like _instanceInfo below — which this module already depends on — and
+  // batchedGeometryRanges version-guards the entry's field set.
+  const geometryInfo = mesh._geometryInfo
   // Same iteration as BatchedMesh#computeBoundingBox: _instanceInfo with
   // an active check (there is no public instance iterator — getGeometryIdAt
-  // throws on deleted ids), so our exact box matches setFromObject's.
+  // throws on deleted ids). It visits the instances setFromObject does, so
+  // the two boxes are equal for axis-aligned placements; for rotated ones
+  // this one is the tighter, vertex-exact box (three's is the box of each
+  // placed local box, which over-covers, #1896).
   const instanceInfo = mesh._instanceInfo
   for (let i = 0; i < instanceInfo.length; i++) {
     if (instanceInfo[i].active === false) {
@@ -477,8 +491,114 @@ function collectBatchedElementBoxes(mesh, out) {
     }
     mesh.getMatrixAt(i, instanceMatrix)
     placed.multiplyMatrices(mesh.matrixWorld, instanceMatrix)
-    out.push(worldBox.copy(geometryBox).applyMatrix4(placed))
+    const {vertexStart, vertexCount} = geometryInfo[geometryId]
+    out.push(placedShapeBox(geometryBox, position, vertexStart, vertexCount, placed, worldBox))
   }
+}
+
+
+/**
+ * World AABB of one placed shape, exact: the box of its vertices, each
+ * transformed by `matrix`.
+ *
+ * The cheap form, `localBox.applyMatrix4(matrix)`, is the box of a placed
+ * BOX. It is exact only when the matrix maps axes onto axes (translation,
+ * scale, quarter turns, mirrors); under any other rotation the local box's
+ * corners swing out past the shape — by up to a member's length when its
+ * local frame is turned against its placement. That over-framed Snowdon
+ * (#1896): 63.3 m wide through the un-collapsed artifact against 59.8 m
+ * true. The collapsed artifact was right only because it bakes placement
+ * into the vertices, which leaves every range a translation-only matrix
+ * (glb-export-premium.md §1.1d).
+ *
+ * So an axis-aligned placement keeps the corner transform, which is exact
+ * for it and bit-for-bit what was returned before, and only a rotated one
+ * pays the walk: one pass over its vertex block, no allocation. The branch
+ * is about cost, not bits — on an axis-aligned matrix the walk lands on the
+ * same doubles, since rounding is monotone — and every collapsed range is
+ * on the corner side of it, so that artifact's framing costs what it did.
+ * Worst case, every placement rotated, the walk is one pass over the
+ * model's world vertices: ~35–45 ms for a Snowdon-sized 2.7M in a Node
+ * micro-benchmark, against ~6 ms for the corner transform over its 37k
+ * placements. It is paid by the
+ * end-of-load fit, which `robustBoundsFor` caches per model, and by the
+ * streaming builder once per placement, never per refit.
+ *
+ * The walk reads the vertex block, not the index range getBoundingBoxAt
+ * walks: an indexed mesh names each vertex from several triangles, so the
+ * block is the shorter read. It is also the set
+ * `BufferGeometry#computeBoundingBox` measures, which is what the
+ * streaming builder's local box already is.
+ *
+ * @param {Box3} localBox the shape's local bounds (axis-aligned path)
+ * @param {object} position BufferAttribute holding the shape's vertices
+ * @param {number} vertexStart first vertex of the shape's block
+ * @param {number} vertexCount vertices in the block
+ * @param {Matrix4} matrix local → world placement (affine)
+ * @param {Box3} target written and returned
+ * @return {Box3} target
+ */
+export function placedShapeBox(localBox, position, vertexStart, vertexCount, matrix, target) {
+  const e = matrix.elements
+  if (mapsAxesToAxes(e)) {
+    return target.copy(localBox).applyMatrix4(matrix)
+  }
+  let minX = Infinity
+  let minY = Infinity
+  let minZ = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  let maxZ = -Infinity
+  for (let v = vertexStart, end = vertexStart + vertexCount; v < end; v++) {
+    const x = position.getX(v)
+    const y = position.getY(v)
+    const z = position.getZ(v)
+    const wx = (e[0] * x) + (e[4] * y) + (e[8] * z) + e[12]
+    const wy = (e[1] * x) + (e[5] * y) + (e[9] * z) + e[13]
+    const wz = (e[2] * x) + (e[6] * y) + (e[10] * z) + e[14]
+    minX = Math.min(minX, wx)
+    minY = Math.min(minY, wy)
+    minZ = Math.min(minZ, wz)
+    maxX = Math.max(maxX, wx)
+    maxY = Math.max(maxY, wy)
+    maxZ = Math.max(maxZ, wz)
+  }
+  target.min.set(minX, minY, minZ)
+  target.max.set(maxX, maxY, maxZ)
+  return target
+}
+
+
+/**
+ * Does the linear part of a column-major 4×4 send each axis onto one axis
+ * (a scaled signed permutation)? Exact-zero test on purpose: the box-corner
+ * transform is exact only then, and a near-miss (a quarter turn whose cosine
+ * came out 6e-17) merely takes the exact walk.
+ *
+ * @param {Array<number>} e Matrix4 elements
+ * @return {boolean}
+ */
+function mapsAxesToAxes(e) {
+  for (let k = 0; k < 3; k++) {
+    // Column k is e[4k..4k+2]; row k is e[k], e[k+4], e[k+8].
+    const column = 4 * k
+    if (nonZeroCount(e[column], e[column + 1], e[column + 2]) > 1 ||
+        nonZeroCount(e[k], e[k + 4], e[k + 8]) > 1) {
+      return false
+    }
+  }
+  return true
+}
+
+
+/**
+ * @param {number} a
+ * @param {number} b
+ * @param {number} c
+ * @return {number} how many of the three are non-zero
+ */
+function nonZeroCount(a, b, c) {
+  return (a === 0 ? 0 : 1) + (b === 0 ? 0 : 1) + (c === 0 ? 0 : 1)
 }
 
 

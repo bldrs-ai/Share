@@ -23,6 +23,7 @@ import {isPortableRewritable, rewriteGlbPortable} from '../export/glbPortable'
 import {ResidencyController} from '../viewer/residency/ResidencyController'
 import {makeInstanceGeometryReader} from '../viewer/ifc/batchedInstanceGeometry'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
+import {computeRobustBounds} from '../viewer/three/robustBounds'
 
 
 jest.mock('@sentry/react', () => ({captureException: jest.fn()}))
@@ -422,6 +423,118 @@ describe('collapsed batched artifact (#1871)', () => {
     expect(hydrated).not.toBeNull()
     expect(hydrated.capabilities.batchedPicking).toBe(true)
     expect(hydrated.instanceParents).toHaveLength(7)
+  }, TIMEOUT_MS)
+})
+
+
+describe('framing bounds, through either artifact (#1896)', () => {
+  /** A placement turn no box corner survives: 37°, as in a 3-4-5 triangle. */
+  const TURN = Math.atan2(3, 4)
+
+  /**
+   * Single-placement triangles, every one turned — the case that framed
+   * Snowdon's un-collapsed artifact 63.3 m wide against 59.8 m true. A
+   * placed triangle's local box corner (s, s) turns to y = 1.4s while its
+   * vertices reach 0.8s, so the two boxes differ by 0.6 of the largest leg.
+   *
+   * @param {boolean} withInstancedPair add one shape placed twice, which the
+   *   collapse leaves an instanced node with its rotation intact
+   * @return {BatchedMesh}
+   */
+  function turnedModel(withInstancedPair) {
+    const sizes = [2, 3, 4, 5, 6]
+    const mesh = new BatchedMesh(sizes.length + 2, 30, 30)
+    const layout = sizes.map((size, k) =>
+      ({geometryId: mesh.addGeometry(triangleGeometry(size)), slot: k}))
+    if (withInstancedPair) {
+      const shared = mesh.addGeometry(triangleGeometry(7))
+      layout.push({geometryId: shared, slot: 5}, {geometryId: shared, slot: 6})
+    }
+    for (const {geometryId, slot} of layout) {
+      mesh.setMatrixAt(mesh.addInstance(geometryId), placement(slot, {rotateZ: TURN}))
+    }
+    const n = layout.length
+    mesh.instanceParents = layout.map((_, i) => 201 + i)
+    mesh.instanceOccurrenceIds = layout.map((_, i) => i)
+    mesh.instanceGeometryIds = layout.map(({geometryId}) => 5000 + geometryId)
+    mesh.instanceOccurrencePaths = layout.map((_, i) => [i + 1])
+    mesh.instanceSourceColors = Array.from({length: n}, () => ({...GREY}))
+    return mesh
+  }
+
+  /**
+   * @param {object} model batched model
+   * @return {Box3} the box of every placed vertex
+   */
+  function vertexBounds(model) {
+    const box = new Box3()
+    const v = new Vector3()
+    for (const flat of modelSpaceTriangles(model).values()) {
+      for (let i = 0; i < flat.length; i += 3) {
+        box.expandByPoint(v.fromArray(flat, i))
+      }
+    }
+    return box
+  }
+
+  /**
+   * What robustBounds measured per instance before #1896 — each instance's
+   * local box, placed — unioned.
+   *
+   * @param {object} model batched model
+   * @return {Box3}
+   */
+  function placedLocalBoxes(model) {
+    model.updateMatrixWorld(true)
+    const box = new Box3()
+    const local = new Box3()
+    const matrix = new Matrix4()
+    for (let i = 0; i < model.instanceParents.length; i++) {
+      model.getMatrixAt(i, matrix).premultiply(model.matrixWorld)
+      box.union(model.getBoundingBoxAt(model.getGeometryIdAt(i), local).applyMatrix4(matrix))
+    }
+    return box
+  }
+
+  /**
+   * @param {Box3} box
+   * @return {Array<number>} min then max
+   */
+  const corners = (box) => [...box.min.toArray(), ...box.max.toArray()]
+
+  it('frames the un-collapsed artifact to its vertices, as the collapsed one already was', async () => {
+    const reference = await parseAndHydrate(await batchedArtifactBytes(turnedModel(true)))
+    const collapsed = await parseAndHydrate(
+      await batchedArtifactBytes(turnedModel(true), {collapse: true}))
+    const truth = vertexBounds(reference)
+    // The fixture tells the two answers apart, or this could pass on the bug.
+    const overCover = placedLocalBoxes(reference)
+    expect(overCover.max.y - truth.max.y).toBeGreaterThan(1)
+
+    const digits = 5
+    for (const model of [turnedModel(true), reference, collapsed]) {
+      const framed = computeRobustBounds(model)
+      expect(framed.excludedElements).toBe(0)
+      corners(framed.box).forEach((v, i) => expect(v).toBeCloseTo(corners(truth)[i], digits))
+    }
+  }, TIMEOUT_MS)
+
+  it('leaves a collapsed artifact\'s range boxes bit-for-bit', async () => {
+    // Every instance here is a collapsed range, translation-only by
+    // construction, so none of them takes the vertex walk: the framing box
+    // must be exactly what the placed local boxes gave before #1896.
+    const collapsed = await parseAndHydrate(
+      await batchedArtifactBytes(turnedModel(false), {collapse: true}))
+    const rangeIds = collapsed.bldrsGeometryRangeIds
+    expect(collapsed.instanceParents).toHaveLength(5)
+    for (let i = 0; i < collapsed.instanceParents.length; i++) {
+      expect(rangeIds.has(collapsed.getGeometryIdAt(i))).toBe(true)
+    }
+
+    const framed = computeRobustBounds(collapsed)
+
+    expect(corners(framed.exactBox)).toEqual(corners(placedLocalBoxes(collapsed)))
+    expect(corners(framed.box)).toEqual(corners(framed.exactBox))
   }, TIMEOUT_MS)
 })
 
