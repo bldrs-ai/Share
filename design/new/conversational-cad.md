@@ -252,7 +252,9 @@ pivot, it renumbers to `search-200` (MLP) per the maintenance rules.
 ## 4. Epic 3 — Conversational CAD (`assist-310` + T10/T11)
 
 The conversation panel over the open model, single-user first, behind
-`?feature=convo` (W6). The multi-user mechanics stay in Epic 4.
+`?feature=assist` (W6; the flag was drafted as `convo` and renamed to match
+#1659/#1672, see `ai-workspace.md` D12). The multi-user mechanics stay in
+Epic 4.
 
 - **Convo tray + drawer threads (W6, W1b).** Conversations become the third
   level of the ProjectsDrawer hierarchy (project → models → convos, e.g.
@@ -322,7 +324,7 @@ design, not code.
 Nothing here changes the v0.6 call that the Assist arc is out of the MVP
 band — the pivot follows the trickle (§6.0, §7.4). Practical consequences:
 
-- Every epic ships behind its flag (`workspace`, `convo`, `presence`;
+- Every epic ships behind its flag (`workspace`, `assist`, `presence`;
   Epic 2 proposes its own `navSearch` flag rather than riding `workspace`,
   so the two UI arcs can flip independently). Default-off until each arc's
   screenshot baselines + E2E are in.
@@ -434,7 +436,7 @@ scope mechanic + unified current-path model; Versions re-home decision;
 #1254 fold-in.
 
 ### epic: assist-310: Conversational agent panel (single-user)
-> Convo tray (`?feature=convo`) + drawer threads; agent drives the viewer
+> Convo tray (`?feature=assist`) + drawer threads; agent drives the viewer
 > through the T11 MCP tool surface; message element-chips/anchors reuse
 > existing permalink machinery. Prereq: `design/new/ai-workspace.md`
 > (runtime/provider/store/sovereignty). Plan: §4; roadmap §7.4 AI.2;
