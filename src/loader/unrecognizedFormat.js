@@ -67,8 +67,12 @@ export function reportUnrecognizedFormat(alert) {
 /**
  * A file name's last extension, lowercased, safe to use as a Sentry tag.
  *
- * Only the extension: the name is the user's own text and stays out of
- * Sentry. Bounded to a short alphanumeric token so the tag's value set stays
+ * Only the extension: the name is the user's own text and stays out of the
+ * event's tags and grouping (the drop path's console warning still reaches
+ * Sentry as a breadcrumb; see `utils/dragAndDrop.js`). A trailing `.gz` is
+ * looked through, because the gzip envelope keeps the user's name
+ * (`loader/gzipEnvelope.js`): `Tower.rvt.gz` is a rejected .rvt, and tagging
+ * it `gz` would fold every compressed upload into one bucket. Bounded to a short alphanumeric token so the tag's value set stays
  * a closed-ish list of formats — `Tower_rev03.IFC.RVT` → `rvt`,
  * `model.ifc.log.html` → `html`; a name with no extension → `none`, and one
  * whose extension isn't a short ASCII token → `other`.
@@ -77,7 +81,10 @@ export function reportUnrecognizedFormat(alert) {
  * @return {string}
  */
 export function uploadExtension(fileName) {
-  const name = String(fileName || '')
+  const raw = String(fileName || '')
+  // Strip the `.gz` only when another extension sits inside it, so a bare
+  // `archive.gz` is still tagged `gz` rather than `none`.
+  const name = /\.[^.]+\.gz$/i.test(raw) ? raw.slice(0, -'.gz'.length) : raw
   const dot = name.lastIndexOf('.')
   if (dot < 0 || dot === name.length - 1) {
     return 'none'

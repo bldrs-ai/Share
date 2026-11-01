@@ -89,10 +89,13 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     const message = `File upload of unknown type: type(${uploadedFile.type}) size(${uploadedFile.size})`
     // The alert is the user's signal; this is the console's, which had none —
     // a rejected drop left nothing to go on when reported (test-models#69).
-    // It names the file, which the alert deliberately does not: the user's
-    // file name stays out of Sentry and GA (`loader/unrecognizedFormat.js`
-    // keeps only its extension). At WARN, the level prod logs at; a bare
-    // `debug()` is INFO and prints nothing there.
+    // It names the file, which the alert deliberately does not: the alert
+    // keeps only the extension (`loader/unrecognizedFormat.js`), so the name
+    // stays out of the Sentry event's title, grouping and tags, and out of GA.
+    // It does still reach Sentry through this line: the default breadcrumbs
+    // integration records console output, so the event AlertDialog captures
+    // carries it as a console breadcrumb. At WARN, the level prod logs at; a
+    // bare `debug()` is INFO and prints nothing there.
     debug(WARN).warn(
       `handleFileDrop: "${uploadedFile.name}" (${uploadedFile.size} bytes) is not a recognized model format`)
     setAlert(unrecognizedFormatAlert(message, uploadedFile.name, 'drop'))
