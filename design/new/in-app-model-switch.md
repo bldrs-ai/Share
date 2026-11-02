@@ -271,7 +271,7 @@ solve for free, which the cancellation plan was meant to cover:
 | SEESTRASSE, 24 MB | 350–390 MB | 15× |
 | sp-231MB | 1.25–1.4 GB (WASM 515 MB) | 5.4–6× |
 
-- **WASM `Memory` never shrinks.** `ReleaseModelGeometry` leaves it unchanged (144 MB stays 144 MB in Node).
+- **WASM `Memory` never shrinks.** After `ReleaseModelGeometry` the linear memory stays the same size (144 MB stays 144 MB in Node). That's expected of WASM: freed blocks go back to the instance's allocator, not to the browser. Whether the release lets the *same* instance reuse those pages (the intent documented at `src/loader/Loader.js:1015-1019`) was not measured; it would need allocator-usage numbers, not `byteLength`.
 - **Each new `IfcAPI` pays a cold instantiate** of 190–550 ms.
 - **Browser WASM `Memory` is 2–3.5× Node's** for the same model (515 MB vs 144 MB). This is not explained yet.
 
@@ -313,6 +313,17 @@ Each open model gets a session that owns:
   their selection ids, `versions`/`activeVersion`, `opfsFile`,
   `isCacheWriteInFlight`, `elementsById`, hidden elements (already keyed per
   model by `claimHiddenElementsForModel`);
+- its load status, so a background load can't overwrite the active model's:
+  `isModelLoading`, `loadReportLines` / `currentLoadLine` / `loadResult`,
+  `isModelReady`, `glbArtifact` and `loadedFileInfo`
+  (`src/store/IFCSlice.js:16, 24, 30, 43, 47, 88, 94`). The status bar,
+  load report and export controls read the active session's;
+- its selection, so returning to a model restores what was selected there:
+  `selectedElement`, `selectedElements`, `selectedAnchorIds`,
+  `selectedInstanceIds`, `selectedOccurrencePath` and
+  `selectedSolidExpressId` (`src/store/NavTreeSlice.js:33, 36, 43, 56, 63,
+  73`). The `#sel:` / element-path permalink is written from the active
+  session's selection on rebind;
 - its window-handler bindings (`window.ondblclick`, `setKeydownListeners`).
 
 The view binds to the active session; switching rebinds the view, it does
@@ -358,7 +369,7 @@ exceeded (phones first).
 - These figures exclude GPU memory, and they were measured in software WebGL.
 - On phones, a single 231 MB model already exceeds typical tab limits. The practical mobile policy is one large model resident.
 
-**WASM `Memory` never shrinks.** `ReleaseModelGeometry` reclaims none of it, so eviction must drop the whole `IfcAPI`. Releasing geometry inside a live engine doesn't make room for the next model. The steps:
+**WASM `Memory` never shrinks**, so memory goes back to the browser only when the whole instance is collected: eviction must drop the session's `IfcAPI`. `ReleaseModelGeometry` returns nothing to the browser. It may let the same instance reuse those pages, but that doesn't help here, because a new model gets a new instance (§4.3). The steps:
 
 1. abort the download and the parse — an `AbortSignal` through
    `Loader.load` to `ProgressiveLoadSession.abort()`
@@ -366,7 +377,8 @@ exceeded (phones first).
 2. drop or cancel the session's idle GLB writer;
 3. release every reference to the session's `IfcAPI` so the whole
    instance is collectable (§2.4), then `CloseModel` — never before the
-   parse has stopped. `ReleaseModelGeometry` alone reclaims nothing (§4.1).
+   parse has stopped. `ReleaseModelGeometry` alone returns nothing to the
+   browser (§4.1).
 
 An evicted model reopens like any other (its GLB cache hit makes that
 cheap where one exists).
@@ -442,12 +454,17 @@ A heap-size number can't fail reliably, so the test asserts **collection**:
   in a `FinalizationRegistry` and exposes the live count.
 - A `describeMobileAndDesktop` Playwright spec opens A → B → C in-app, forces
   GC over CDP (`HeapProfiler.collectGarbage`), waits for the registry
-  callbacks, and asserts exactly one live engine.
-- A mid-load case switches while A is still parsing.
-- A background session's engine stays live across a switch, and is
-  collected once that model is closed or evicted (§4.5).
-- Shown red with one teardown fix reverted (e.g. `model` left in the store
-  until B resolves).
+  callbacks, and asserts **three** live engines: switching neither closes
+  nor evicts (§4.0), so A and B are retained as background sessions.
+- It then closes A and B, forces GC again, and asserts each of their engines
+  was collected, leaving exactly one (C's).
+- An eviction case lowers the budget (a test-only override of §4.5's
+  figure) so that opening C must evict the least-recently-used session, and
+  asserts that session's engine is collected and the other two stay live.
+- A mid-load case switches while A is still parsing, then closes A, and
+  asserts A's engine is collected once its parse has stopped.
+- Shown red with one close/eviction step reverted (e.g. the store or the
+  idle GLB writer still holding the closed session's model).
 
 Chromium-only (CDP); the mobile project is a Chromium viewport, so both form
 factors are covered. Today's coverage: `noOpfsUpload.spec.ts` loads twice
@@ -493,7 +510,7 @@ only on close/eviction).
 **Measured (P1.0, 2026-11-02, §4.1):**
 - stage times, index vs all geometry;
 - main-thread blocking, with the long tasks attributed;
-- per-model memory, and the fact that WASM `Memory` never shrinks.
+- per-model memory, and the fact that WASM `Memory` never shrinks, even after `ReleaseModelGeometry` (whether that call enables reuse within the same instance was not measured).
 
 These were measured in a cloud container with software WebGL, so the absolute browser times are environment-dependent; the ratios and the attributions carry over.
 
