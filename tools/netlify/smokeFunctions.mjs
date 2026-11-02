@@ -146,6 +146,16 @@ export const PROBES = [
     strict: [MISSING_BEARER],
   },
   {
+    name: 'report-auth-error',
+    scenario: 'report-auth-error/malformed-report',
+    method: 'POST',
+    body: {},
+    // Open by design (the Auth0 error page is reached signed out), so the
+    // probe is a body with no error code.
+    accept: [{status: HTTP_BAD_REQUEST, body: 'invalid_auth_error_report'}],
+    strict: [{status: HTTP_BAD_REQUEST, body: 'invalid_auth_error_report'}],
+  },
+  {
     name: 'stripe-webhook',
     scenario: 'stripe-webhook/missing-signature',
     method: 'POST',

@@ -1,0 +1,12 @@
+{
+  "description": "What public/auth/error/ sends for a cancelled sign-in is accepted with 204. No SENTRY_DSN, so the capture makes no outbound call.",
+  "env": {"NODE_ENV": "test"},
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/report-auth-error",
+    "headers": {"content-type": "text/plain;charset=UTF-8"},
+    "body": "{\"error\":\"access_denied\",\"tracking\":\"abc123\",\"connection\":\"github\",\"client_id\":\"xyz\",\"error_description\":\"User cancelled\"}"
+  },
+  "exchanges": [],
+  "expect": {"statusCode": 204}
+}

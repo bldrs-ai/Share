@@ -9,8 +9,11 @@ import {
 import {useTheme} from '@mui/material/styles'
 import {captureException} from '@sentry/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {AUTH_STEPS} from '../../Auth0/authFailureCodes'
+import {openAuthPopup} from '../../Auth0/authPopup'
 import {abandonGateLogin, startLogin} from '../../Auth0/gateLogin'
 import {endSessionLogoutOptions} from '../../Auth0/logoutOptions'
+import {reportAuthFailure} from '../../Auth0/reportAuthFailure'
 import {getRenderMode, setRenderMode as saveRenderMode} from '../../privacy/preferences'
 import {trackSubscriptionFromToken} from '../../privacy/subscriptionTracking'
 import useStore from '../../store/useStore'
@@ -116,8 +119,7 @@ export default function ProfileControl() {
           })
           .catch((error) => {
             console.error('Error refreshing token:', error)
-            // report in sentry
-            captureException(error)
+            reportAuthFailure(AUTH_STEPS.POPUP_COMPLETE, error)
           })
       }
     }
@@ -145,7 +147,7 @@ export default function ProfileControl() {
     if (useMock) {
       loginWithRedirect(connection)
     } else {
-      window.open(`/popup-auth?connection=${connection}`, 'authPopup', 'width=600,height=600')
+      openAuthPopup(`/popup-auth?connection=${connection}`, {connection})
     }
   }
 

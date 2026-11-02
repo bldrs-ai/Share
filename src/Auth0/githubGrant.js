@@ -134,6 +134,22 @@ export function stashPendingGithubScope(scope) {
 
 
 /**
+ * Whether the popup this runs in is a GitHub scope change (an explicit
+ * scope was stashed by PopupAuth), so PopupCallback can tell a failed
+ * re-consent apart from a failed plain sign-in when reporting it.
+ *
+ * @return {boolean}
+ */
+export function hasPendingGithubScope() {
+  try {
+    return Boolean(sessionStorage.getItem(PENDING_SCOPE_KEY))
+  } catch {
+    return false
+  }
+}
+
+
+/**
  * Drop any stale stash. PopupAuth calls this for every request that does
  * not carry an explicit scope: the `authPopup` window is reused by name
  * across window.open calls, so an abandoned-but-still-open grant popup

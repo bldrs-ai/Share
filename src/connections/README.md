@@ -218,9 +218,77 @@ treats all of it as hostile:
   `error_description` is **never rendered**, even as text, because that would
   let a crafted link put any words it likes on a bldrs.ai page. It goes only
   into the prefilled support email (cleaned of control and bidi characters
-  and capped), where the user reads it before sending.
+  and capped), where the user reads it before sending, and into the Sentry
+  report (§"Reporting login failures").
 - `netlify.toml` gives `/auth/error/*` a same-origin-only CSP (no inline
-  script or style, no framing) plus `noindex` and `no-referrer`.
+  script or style, no framing; `connect-src 'self'` for that report) plus
+  `noindex` and `no-referrer`.
 
 Tests: `auth0ErrorPage.test.js` (jsdom, the sanitizing) and
 `auth0ErrorPage.spec.ts` (the real page in a browser, desktop + mobile).
+
+
+## Reporting login failures
+
+Every client path where a sign-in can fail reports to Sentry through one
+function, `src/Auth0/reportAuthFailure.js`, so each event carries the same
+tags and can be matched with the Auth0 log entry for it:
+
+| Tag | Value |
+|---|---|
+| `auth.step` | where it failed (`AUTH_STEPS` in `src/Auth0/authFailureCodes.js`) |
+| `auth.error` | the Auth0/OAuth error code (`access_denied`, `missing_refresh_token`, …), or `invalid_state` / `network` / `timeout` / `unknown` for the plain Errors |
+| `auth.connection` | `github`, `google-oauth2`, … when known |
+| `auth0.tracking` | Auth0's log tracking id (only the error page gets one) |
+| user id | the Auth0 `sub`, when signed in |
+
+**Search:** `auth.step:*` finds them all; `auth0.tracking:<id>` finds the one
+an Auth0 log line names; `user.id:"github|123"` finds one user's.
+
+| Path | Step | Before | Now |
+|---|---|---|---|
+| `window.open('/popup-auth…')` returns null (blocker) | `popup_open` | nothing | info `popup_blocked` |
+| PopupAuth `loginWithRedirect` throws | `authorize` | unhandled rejection, untagged | error |
+| `/popup-callback?error=…` or a failed code exchange | `callback`, `link_callback`, `scope_callback` | unhandled rejection, untagged; popup stuck on "Logging in…" | tagged by flow; `access_denied` is info; the popup says it didn't complete; a failed link clears `linkStatus` |
+| Provider's own redirect callback (full-page) / boot checkSession | `redirect_callback`, `session_restore` | parked in `useAuth0().error`, never reported | reported (`useAuthFailureReporting`) |
+| BaseRoutes cached-token pass | `token_restore` | `invalid_grant` silent logout; `login_required` silent; others rethrown → untagged unhandled rejection | `invalid_grant` info, `login_required` breadcrumb, others error; not rethrown |
+| BaseRoutes fresh-claims pass | `token_refresh` | swallowed | reported (same levels) |
+| Opener picking up a popup sign-in (`refreshAuth`) | `popup_complete` | untagged `captureException` | tagged |
+| `getAuth0AccessToken` bridge (cloud-source functions) | `token_bridge` | swallowed to `null` | reported, still `null` to callers |
+| ManageProfile link start / identity refresh / unlink | `link_start`, `link_refresh`, `unlink` | untagged `captureException` (unlink: raw response text as the message) | tagged; unlink code `unlink_http_<status>` |
+| Auth0's redirect to `/auth/error/` | `error_page` | nothing | beaconed to `report-auth-error`, which captures server-side |
+
+**Levels** (`authFailureLevel`): `login_required` is a breadcrumb only (the
+session ended; the app already treats it as signed out). The user saying no
+or the browser stopping us (`access_denied`, `consent_required`,
+`interaction_required`, `popup_blocked`) and a retired refresh token
+(`invalid_grant`) are `info`. Network and timeout are `warning`. Everything
+else is `error`, as an `AuthFailure` exception fingerprinted on
+`[auth-failure, step, code]`, so each pair is one issue.
+
+**Once per page load.** A `(step, code)` pair is reported once per load:
+BaseRoutes' auth effect repeats its token fetch on every navigation, and one
+dead refresh token would otherwise report on every route change.
+
+**What is never sent:** email, name, tokens, or a raw `error_description`.
+The exception is synthetic because an auth0-react `OAuthError`'s message is
+the raw description; a cleaned copy (markup, control characters and email
+addresses removed, 200 characters) goes in the `auth` context. Sentry is not
+consent-gated in this app; only the analytics client id is
+(`privacy/analytics.js#getOpenCidForSentry`). The `sub` is an account id the
+Netlify functions already attach (`netlify/functions/_lib/auth0.js`), so it is
+attached here too, per event.
+
+**Not detected: the user closing the popup.** Google and GitHub send a strict
+Cross-Origin-Opener-Policy that severs the popup from its opener, after which
+`popup.closed` reads true while it is still open, so polling it would call
+every sign-in abandoned. A cancel that reaches Auth0 comes back as
+`access_denied` and is reported at the callback.
+
+**The `/auth/error/` page** ships no Sentry SDK. `error.js` `sendBeacon`s the
+allowlisted fields to `netlify/functions/report-auth-error.js`, which
+re-checks them against the same allowlists and captures with the same tags.
+A relay rather than the page posting to Sentry: the DSN stays in the
+function's env instead of being templated into a public file, the page's CSP
+only widens to `connect-src 'self'`, and the endpoint lets a caller do no
+more than the app's public browser DSN already does.

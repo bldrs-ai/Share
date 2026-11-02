@@ -119,12 +119,14 @@
 # the page gets a CSP that allows nothing but its own same-origin files:
 # no inline script or style, no third-party loads, no framing. Everything
 # it uses is a file it ships, so there's nothing to hash or allowlist; a
-# change that needs more must widen this deliberately. The rule is on the
-# directory's splat so it covers index.html, error.js and error.css alike.
+# change that needs more must widen this deliberately. connect-src 'self'
+# is the one such widening: error.js beacons the failure to the
+# report-auth-error function on this origin. The rule is on the directory's
+# splat so it covers index.html, error.js and error.css alike.
 [[headers]]
   for = "/auth/error/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     X-Robots-Tag = "noindex"
     Referrer-Policy = "no-referrer"
 

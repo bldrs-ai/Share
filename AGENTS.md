@@ -115,7 +115,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Route schemas, URL parsing | [src/routes/README.md](src/routes/README.md) |
 | Keeping the test console clean — fix `act()` warnings, divert+assert expected `[glb]` output, narrow `suppressActWarnings()`, back a global mute with a static test (`singleThreeInstance.test.js`), jsdom canvas stubs | [PLAYBOOK.md](PLAYBOOK.md) §"Keep the test console clean" (+ [STYLE.md](STYLE.md) §"Console hygiene") |
 | Dev HTTPS certificate setup | [tools/esbuild/certificates/README.md](tools/esbuild/certificates/README.md) |
-| Cloud sources, OAuth flows, token storage, Auth0 gate, the Auth0 custom error page (`public/auth/error/`, the URL set in the Auth0 tenant, why `error_description` is never rendered) | [src/connections/README.md](src/connections/README.md) |
+| Cloud sources, OAuth flows, token storage, Auth0 gate, the Auth0 custom error page (`public/auth/error/`, the URL set in the Auth0 tenant, why `error_description` is never rendered), reporting login failures to Sentry (the `auth.*` tags, every failure path and its level, the `report-auth-error` relay, what is never sent) | [src/connections/README.md](src/connections/README.md) |
 | Sharing PR3 (GitHub adapter) carry-over notes | [design/new/sharing-pr3-github.md](design/new/sharing-pr3-github.md) |
 | Marketing / blog site (Next.js SSG, sibling build to the viewer SPA), MDX content collections, SEO pipeline | [marketing/README.md](marketing/README.md) |
 | AdSense / ads strategy, route policy, test-hermeticity rules | [design/new/ads.md](design/new/ads.md) |

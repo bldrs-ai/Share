@@ -11,9 +11,16 @@ import {MODEL_ACTIONS, MODEL_GATES, _resetGaClientIdForTests, setGaClientId, set
 import {trackModelActionWhenAuthSettled} from './privacy/modelActionTracking'
 import * as subscriptionTracking from './privacy/subscriptionTracking'
 import {HelmetThemeCtx} from './Share.fixture'
+import {reportAuthFailure} from './Auth0/reportAuthFailure'
 import BaseRoutes from './BaseRoutes'
 import {TIERS, getTier} from './quota/quota'
 import useStore from './store/useStore'
+
+
+jest.mock('./Auth0/reportAuthFailure', () => ({
+  ...jest.requireActual('./Auth0/reportAuthFailure'),
+  reportAuthFailure: jest.fn(),
+}))
 
 
 jest.mock('./ShareRoutes', () => {
@@ -106,6 +113,7 @@ describe('BaseRoutes - auth resolution', () => {
       hasGithubIdentity: false,
       appMetadata: {},
     })
+    reportAuthFailure.mockClear()
   })
 
   /**
@@ -187,6 +195,27 @@ describe('BaseRoutes - auth resolution', () => {
     // fail the same way, so the fresh-claims pass is not started.
     await act(() => new Promise((resolve) => setTimeout(resolve, WAIT_FOR_STRAY_CALL_MS)))
     expect(getToken.mock.calls.map(([opts]) => opts.cacheMode)).toEqual(['on'])
+  })
+
+  it('token fetch rejected with missing_refresh_token: reported, settled, not rethrown', async () => {
+    const MISSING = Object.assign(new Error('Missing Refresh Token'), {error: 'missing_refresh_token'})
+    const logout = jest.fn()
+    const getToken = jest.fn().mockRejectedValue(MISSING)
+    mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently: getToken, logout})
+    const onUnhandled = jest.fn()
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const state = await renderAndResolve()
+      expect(state.authResolvedFor).toBe(true)
+      expect(reportAuthFailure).toHaveBeenCalledWith('token_restore', MISSING)
+      expect(logout).not.toHaveBeenCalled()
+      // It used to be rethrown, reaching Sentry only as an untagged
+      // unhandled rejection.
+      await act(() => new Promise((resolve) => setTimeout(resolve, WAIT_FOR_STRAY_CALL_MS)))
+      expect(onUnhandled).not.toHaveBeenCalled()
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
   })
 
   // codex finding on #1912. auth0-spa-js coalesces concurrent
@@ -292,6 +321,7 @@ describe('BaseRoutes - auth resolution', () => {
       await renderAndResolve()
       await waitFor(() => expect(logout).toHaveBeenCalledTimes(1))
       expect(logout).toHaveBeenCalledWith({logoutParams: {returnTo: window.location.origin}})
+      expect(reportAuthFailure).toHaveBeenCalledWith('token_restore', INVALID_GRANT)
       // The cached call said the session is gone, so no fresh pass follows.
       expect(getToken.mock.calls.map(([opts]) => opts.cacheMode)).toEqual(['on'])
     })
@@ -308,6 +338,7 @@ describe('BaseRoutes - auth resolution', () => {
       await renderAndResolve()
       await waitFor(() => expect(logout).toHaveBeenCalledTimes(1))
       expect(logout).toHaveBeenCalledWith({logoutParams: {returnTo: window.location.origin}})
+      expect(reportAuthFailure).toHaveBeenCalledWith('token_refresh', INVALID_GRANT)
       expect(getToken.mock.calls.map(([opts]) => opts.cacheMode)).toEqual(['on', 'off'])
     })
   })
