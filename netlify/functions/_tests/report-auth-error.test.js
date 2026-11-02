@@ -7,8 +7,17 @@
  * top-level `.js` under `netlify/functions/` AS a function.
  */
 
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
 import * as Sentry from '@sentry/serverless'
-import {INVALID_REPORT, handler} from '../report-auth-error.js'
+import {
+  INVALID_REPORT,
+  _resetReleaseForTests,
+  handler,
+  sentryEnvironment,
+  shareRelease,
+} from '../report-auth-error.js'
 
 
 /* eslint-disable no-magic-numbers */
@@ -19,7 +28,39 @@ jest.mock('@sentry/serverless', () => ({
   },
   captureMessage: jest.fn(),
   captureException: jest.fn(),
+  // The handler adds an event processor to a scope it captures inside.
+  withScope: jest.fn((fn) => fn({addEventProcessor: (processor) => mockScopeProcessors.push(processor)})),
 }))
+
+
+// Event processors the handler registered, run in order as Sentry would.
+let mockScopeProcessors = []
+const PREVIEW_HOST = 'deploy-preview-2034--bldrs-share-prod.netlify.app'
+
+
+/**
+ * Lay out a task root the way the deployed bundle has it: the version
+ * tools/updateVersion.mjs wrote, at its repo-relative path.
+ *
+ * @param {string} version
+ * @return {string} the root directory
+ */
+function writeRelease(version) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'report-auth-error-'))
+  const dir = path.join(root, 'netlify', 'functions', '_build')
+  fs.mkdirSync(dir, {recursive: true})
+  fs.writeFileSync(path.join(dir, 'release.json'), JSON.stringify({version}))
+  return root
+}
+
+
+/**
+ * @param {object} sentryEvent
+ * @return {object} the event after the handler's scope processors
+ */
+function processed(sentryEvent) {
+  return mockScopeProcessors.reduce((ev, processor) => processor(ev), sentryEvent)
+}
 
 
 /**
@@ -30,7 +71,7 @@ jest.mock('@sentry/serverless', () => ({
 function beacon(body, overrides = {}) {
   return {
     httpMethod: 'POST',
-    headers: {'content-type': 'text/plain;charset=UTF-8'},
+    headers: {'content-type': 'text/plain;charset=UTF-8', 'host': PREVIEW_HOST},
     body: typeof body === 'string' ? body : JSON.stringify(body),
     ...overrides,
   }
@@ -38,8 +79,26 @@ function beacon(body, overrides = {}) {
 
 
 describe('netlify/functions/report-auth-error', () => {
+  const savedEnv = {SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT, CONTEXT: process.env.CONTEXT}
+
   beforeEach(() => {
     jest.clearAllMocks()
+    mockScopeProcessors = []
+    _resetReleaseForTests()
+    // As on a deploy preview where neither reaches the function: the
+    // request's host decides.
+    delete process.env.SENTRY_ENVIRONMENT
+    delete process.env.CONTEXT
+  })
+
+  afterAll(() => {
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    }
   })
 
   it('reports a cancelled sign-in at info level with the auth tags', async () => {
@@ -62,8 +121,26 @@ describe('netlify/functions/report-auth-error', () => {
         'auth0.tracking': 'abc123',
       },
       fingerprint: ['auth-failure', 'error_page', 'access_denied'],
-      contexts: {auth: {description: 'User cancelled', clientId: 'xyz'}},
+      contexts: {auth: {description: 'User cancelled', clientId: 'xyz', environmentSource: 'host'}},
     }))
+  })
+
+  it('files the event under the app\'s environment and release, not NODE_ENV', async () => {
+    const root = writeRelease('1.2034.0aa7ea1f')
+    process.env.LAMBDA_TASK_ROOT = root
+    try {
+      await handler(beacon({error: 'access_denied'}))
+    } finally {
+      delete process.env.LAMBDA_TASK_ROOT
+      fs.rmSync(root, {recursive: true, force: true})
+    }
+
+    // What the SDK filled in from its own options is replaced.
+    expect(processed({environment: 'production', message: 'm'})).toEqual({
+      environment: 'staging',
+      release: 'bldrs-share@1.2034.0aa7ea1f',
+      message: 'm',
+    })
   })
 
   it('reports anything else as an exception', async () => {
@@ -113,5 +190,58 @@ describe('netlify/functions/report-auth-error', () => {
   it('refuses anything but POST', async () => {
     const res = await handler({httpMethod: 'GET', headers: {}})
     expect(res.statusCode).toBe(405)
+  })
+
+  describe('sentryEnvironment', () => {
+    it.each([
+      ['SENTRY_ENVIRONMENT wins when the function can see it', {SENTRY_ENVIRONMENT: 'staging', CONTEXT: 'production'},
+        'bldrs.ai', 'staging', 'SENTRY_ENVIRONMENT'],
+      ['production context', {CONTEXT: 'production'}, PREVIEW_HOST, 'production', 'CONTEXT'],
+      ['deploy-preview context', {CONTEXT: 'deploy-preview'}, 'bldrs.ai', 'staging', 'CONTEXT'],
+      ['branch-deploy context', {CONTEXT: 'branch-deploy'}, 'bldrs.ai', 'staging', 'CONTEXT'],
+      ['netlify dev context', {CONTEXT: 'dev'}, 'localhost:8888', 'staging', 'CONTEXT'],
+      ['production host', {NODE_ENV: 'production'}, 'bldrs.ai', 'production', 'host'],
+      ['www host', {}, 'www.bldrs.ai', 'production', 'host'],
+      ['preview host', {NODE_ENV: 'production'}, PREVIEW_HOST, 'staging', 'host'],
+      ['deploy permalink host', {}, '6543210fedcba--bldrs-share-prod.netlify.app', 'staging', 'host'],
+      ['local host with a port', {}, 'localhost:8888', 'staging', 'host'],
+      ['no host at all', {}, undefined, 'staging', 'host'],
+      ['a stringified unset variable is ignored', {SENTRY_ENVIRONMENT: 'null', CONTEXT: 'undefined'}, 'bldrs.ai',
+        'production', 'host'],
+    ])('%s', (_, env, host, environment, source) => {
+      expect(sentryEnvironment(env, host === undefined ? {} : {host})).toEqual({environment, source})
+    })
+  })
+
+  describe('shareRelease', () => {
+    let roots = []
+
+    afterEach(() => {
+      jest.restoreAllMocks()
+      for (const root of roots) {
+        fs.rmSync(root, {recursive: true, force: true})
+      }
+      roots = []
+    })
+
+    it('reads the version the build wrote, at its repo-relative path under the task root', () => {
+      const root = writeRelease('1.2034.0aa7ea1f')
+      roots.push(root)
+      expect(shareRelease({LAMBDA_TASK_ROOT: root})).toBe('bldrs-share@1.2034.0aa7ea1f')
+    })
+
+    it('leaves the release off where no build wrote one, as in a fresh checkout', () => {
+      const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'report-auth-error-'))
+      roots.push(empty)
+      jest.spyOn(process, 'cwd').mockReturnValue(empty)
+      expect(shareRelease({LAMBDA_TASK_ROOT: empty})).toBeUndefined()
+    })
+
+    it('ignores a malformed version', () => {
+      const root = writeRelease('1.2034.<x>')
+      roots.push(root)
+      jest.spyOn(process, 'cwd').mockReturnValue(root)
+      expect(shareRelease({LAMBDA_TASK_ROOT: root})).toBeUndefined()
+    })
   })
 })

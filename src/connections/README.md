@@ -292,3 +292,15 @@ A relay rather than the page posting to Sentry: the DSN stays in the
 function's env instead of being templated into a public file, the page's CSP
 only widens to `connect-src 'self'`, and the endpoint lets a caller do no
 more than the app's public browser DSN already does.
+
+Its events are filed like the app's: environment `staging` on deploy
+previews and branch deploys (a hidden environment in the Sentry project, so
+search it with `environment:staging`), `production` only on the production
+deploy, and release `bldrs-share@<version>`. A function has no build step,
+so the environment comes from what it can read at request time
+(`SENTRY_ENVIRONMENT`, then `CONTEXT`, then the Host; the event's
+`auth.environmentSource` says which decided), and the release from
+`netlify/functions/_build/release.json`, which `tools/updateVersion.mjs`
+writes during the build and `included_files` ships. Not `package.json`
+itself: at the bundle root its `"type": "module"` makes Node load the
+CommonJS bundle as ESM and the function crash.
