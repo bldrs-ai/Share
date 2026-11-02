@@ -510,27 +510,46 @@ export default function CadView({
     // isolator, whose `setModel` may seed it (scene-graph loader defaults).
     useStore.getState().claimHiddenElementsForModel(modelIdentity(modelPath, installPrefix))
 
-    // open-205 #2029: bring the tree, properties and search up at the model's
-    // index, while geometry still streams, instead of after the last mesh — on
-    // a 231 MB IFC the index is ready ~35 s before the load resolves. The
-    // loader calls this between the deferred open and the geometry pump, and
-    // waits for it, so the tree walk runs alone on the engine (Loader#load).
-    // Only for Conway (IFC/STEP) cache misses on the streaming path; every
-    // other load brings the tree up in onModel, as before. `indexedTree` is
-    // what this delivered, which onModel reuses rather than walking the model
-    // a second time.
+    // open-205 #2029: bring the tree, properties and search up from the
+    // model's index, while geometry still streams, instead of after the last
+    // mesh. The loader calls onIndexed between the deferred open and the
+    // geometry pump and does NOT wait for it (conwayDirectIfcLoader.js
+    // #parseIfcWithConway says why): the tree walk runs beside the pump and
+    // its tree installs whenever the walk finishes, which on a small or
+    // resident model can be after the geometry. Only for Conway (IFC/STEP)
+    // cache misses on the streaming path; every other load brings the tree up
+    // in onModel, as before.
+    //
+    // One install path: the end-of-load code below waits for this delivery
+    // and onModel reuses its tree (`indexedTree`), walking the finished model
+    // only when the index delivered none. `indexedHandle` is this load's
+    // handle, cleared from the store once the finished model is in.
     let indexedTree = null
-    const onIndexed = async (indexedModel) => {
-      if (isLoadSuperseded()) {
+    let indexedHandle = null
+    let indexedDelivery = null
+    // A walk can settle after the load has failed, as well as after the user
+    // has left: neither may install its tree.
+    let hasLoadFailed = false
+    const isIndexedTreeStale = () => isLoadSuperseded() || hasLoadFailed
+    const deliverIndexedTree = async (indexedModel) => {
+      if (isIndexedTreeStale()) {
         return
       }
       const rootElt = await readModelTree(indexedModel, {isIndexed: true})
-      if (rootElt === null || isLoadSuperseded()) {
+      if (rootElt === null || isIndexedTreeStale()) {
         return
       }
-      if (await installModelTree(indexedModel, rootElt, isLoadSuperseded, {indexedModel})) {
+      if (await installModelTree(indexedModel, rootElt, isIndexedTreeStale, {indexedModel})) {
         indexedTree = rootElt
       }
+    }
+    const onIndexed = (indexedModel) => {
+      indexedHandle = indexedModel
+      indexedDelivery = deliverIndexedTree(indexedModel).catch((e) => {
+        // The end-of-load path reads the tree from the finished model then.
+        console.warn('CadView#onIndexed: tree not installed at the index:', e)
+      })
+      return indexedDelivery
     }
 
     let tmpModelRef
@@ -545,7 +564,8 @@ export default function CadView({
       // loaded: take it down with the load, so the panels don't offer rows of
       // a model that isn't there, and with it any selection made in it, which
       // Properties and the TopBar would otherwise keep showing (codex review
-      // on #2037).
+      // on #2037). A walk still running stays out: isIndexedTreeStale.
+      hasLoadFailed = true
       if (indexedTree !== null && !isLoadSuperseded()) {
         forgetIndexedTree()
         forgetIndexedSelection()
@@ -680,12 +700,26 @@ export default function CadView({
     }
 
     debug().log('CadView#onViewer: pathToLoad(${pathToLoad}), tmpModelRef: ', tmpModelRef)
+    // The index's tree walk runs beside the pump and can outlast it. Wait for
+    // it, so the tree installs once — from the index, or else in onModel —
+    // and never twice in a race. The model is not ready until its tree is,
+    // as before: prod walks the tree here too.
+    if (indexedDelivery !== null) {
+      await indexedDelivery
+    }
     // Reuse the index's tree only while it is still the one shown: an
     // auth retry (loadModelWithAuthRetry) may have replaced the attempt
     // that delivered it.
     const earlyTree = indexedTree !== null && useStore.getState().rootElement === indexedTree ?
       indexedTree : null
     await onModel(tmpModelRef, isLoadSuperseded, earlyTree)
+    // The finished model now answers everything the indexed one did, and it
+    // is what readers should hold from here (store/IFCSlice.js
+    // #selectReadModel). Only this load's own handle: a superseded load still
+    // runs to its end (#2019), and must not take down the shown model's.
+    if (indexedHandle !== null && useStore.getState().indexedModel === indexedHandle) {
+      setIndexedModel(null)
+    }
 
     const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     selectElementBasedOnFilepath(pathToLoad)
@@ -823,14 +857,6 @@ export default function CadView({
    * @return {object} loaded model
    */
   async function loadModel(routeResult, {onIndexed} = {}) {
-    // The handle this attempt indexed, so the clear after setModel below only
-    // takes down this load's own: a superseded load still runs to the end
-    // (#2019), and its clear must not take down the tree of the model shown.
-    let thisLoadIndexed = null
-    const onIndexedForThisLoad = onIndexed === undefined ? undefined : async (indexed) => {
-      thisLoadIndexed = indexed
-      await onIndexed(indexed)
-    }
     const isGoogleResult = routeResult.kind === 'provider' && routeResult.provider === 'google'
     const filepath = isGoogleResult ? routeResult.downloadUrl : (routeResult.downloadUrl || routeResult.filepath)
     const gitpath = routeResult.gitpath
@@ -899,7 +925,7 @@ export default function CadView({
           const blobUrl = URL.createObjectURL(download.blob)
           try {
             loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '',
-              {onIndexed: onIndexedForThisLoad})
+              {onIndexed})
           } finally {
             // The URL pins the whole download for the life of the page, and
             // each load mints a new one (a theme toggle reloads the model).
@@ -914,7 +940,7 @@ export default function CadView({
           // published) downloads this way, which is why the quota meter
           // treats a Drive file loaded here as public.
           loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, setOpfsFile, '',
-            {onIndexed: onIndexedForThisLoad})
+            {onIndexed})
         }
       } else {
         // Read the token at call time, not from the render closure — the
@@ -926,7 +952,7 @@ export default function CadView({
           (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow,
           // Route provenance, which the loader can't recover from `filepath`
           // alone: /v/local-only/<id> and /v/p/<id> give the same URL (#1956).
-          {isUploadedRoute: routeResult.isUploadedFile === true, onIndexed: onIndexedForThisLoad})
+          {isUploadedRoute: routeResult.isUploadedFile === true, onIndexed})
       }
     } catch (error) {
       loadError = error
@@ -964,12 +990,6 @@ export default function CadView({
     // always be 0.
     loadedModel.modelID = 0
     setModel(loadedModel)
-    // The finished model now answers everything the indexed one did, and it is
-    // what readers should hold from here (store/IFCSlice.js#selectReadModel).
-    // After setModel, so a reader never sees neither.
-    if (thisLoadIndexed !== null && useStore.getState().indexedModel === thisLoadIndexed) {
-      setIndexedModel(null)
-    }
     // For App API.  TODO(pablo): doublecheck this method still works with this
     // arg.. expected a url
     updateLoadedFileInfo(filepath)

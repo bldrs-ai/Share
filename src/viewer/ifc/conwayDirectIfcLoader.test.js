@@ -524,22 +524,40 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         expect(order).toEqual(['indexed 5', 'batch 64', 'batch 64', 'batch 22'])
       })
 
-      it('waits for onIndexed before pumping', async () => {
-        // Awaited, so its tree walk never interleaves with the pump's paging.
+      it('starts the pump without waiting for onIndexed', async () => {
+        // The caller's tree walk pages the source one record at a time, which
+        // on a large windowed model takes minutes (#2037's PSB stall); the
+        // geometry must not wait for it.
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(10)
         let release
-        const parsed = parseIfcWithConway(
-          new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn(), undefined,
-          () => new Promise((resolve) => {
-            release = resolve
-          }))
-        await new Promise((resolve) => setTimeout(resolve, 0))
+        const onIndexed = jest.fn(() => new Promise((resolve) => {
+          release = resolve
+        }))
+        const result = await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn(), undefined, onIndexed)
+        // The whole parse finished with onIndexed still pending.
+        expect(onIndexed).toHaveBeenCalledWith(5)
         expect(release).toBeDefined()
-        expect(ifcAPI.ExtractGeometryBatch).not.toHaveBeenCalled()
-        release()
-        await parsed
         expect(ifcAPI.ExtractGeometryBatch).toHaveBeenCalled()
+        expect(result.modelID).toBe(5)
+        release()
+      })
+
+      it('finishes the load when onIndexed throws synchronously', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        try {
+          const result = await parseIfcWithConway(
+            new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn(), undefined, () => {
+              throw new Error('handle failed')
+            })
+          expect(result.modelID).toBe(5)
+          expect(warn).toHaveBeenCalledWith(expect.stringContaining('onIndexed failed'), expect.any(Error))
+        } finally {
+          warn.mockRestore()
+        }
       })
 
       it('finishes the load when onIndexed throws', async () => {

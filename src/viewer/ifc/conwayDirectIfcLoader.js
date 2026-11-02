@@ -107,15 +107,15 @@ import {instanceMapFromGeometry} from './IfcInstanceMap'
  *   missing; replaced wholesale by the durable batches). Only on the
  *   `demandGeometry` deferred path with engines that support
  *   ON_PREVIEW_MESH; silently ignored otherwise.
- * @param {Function} [onIndexed] open-205 #2029: `async (modelID) => void`,
- *   called once the deferred open has returned — the entity index is
- *   built and the spatial tree and properties are queryable — and BEFORE
- *   the geometry pump starts. Awaited, so whatever it reads from the engine
- *   (the 'names' tree walk) runs alone rather than interleaved with the
- *   pump's paging; a throw is logged and the load carries on, leaving the
- *   caller's end-of-load path to deliver the tree as it did before. Only on
- *   the deferred path: the classic opens below extract every mesh inside
- *   one synchronous `StreamAllMeshes`, so there is no window to fill.
+ * @param {Function} [onIndexed] open-205 #2029: `(modelID) => any`, called
+ *   once the deferred open has returned — the entity index is built and the
+ *   spatial tree and properties are queryable — just before the geometry
+ *   pump starts. NOT awaited: the pump starts at once and the caller's tree
+ *   walk runs beside it, each paging the same source window. A throw or
+ *   rejection is logged and the load carries on; the caller's end-of-load
+ *   path then reads the tree as it did before. Only on the deferred path:
+ *   the classic opens below extract every mesh inside one synchronous
+ *   `StreamAllMeshes`, so there is no window to fill.
  * @return {Promise<{modelID: number, captured: Array,
  *   recapture: function(): Promise<Array>}>}
  */
@@ -239,13 +239,28 @@ export async function parseIfcWithConway(
         conwayOpenFailure(ifcAPI, attempt))
     }
     if (onIndexed) {
-      try {
-        await onIndexed(modelID)
-      } catch (e) {
+      // Started, not awaited (codex/PSB review on #2037). The caller's tree
+      // walk — conway's `properties.getSpatialStructure(modelID, 'names')` —
+      // awaits `ensureLine` for every relationship and every node, one at a
+      // time, and on a windowed source each miss pages in a window: ~86 s of
+      // serial I/O on the 860 MB PSB. Awaited here, it held the whole pump
+      // back for that long, and the load report counted it as Parsing. Prod
+      // runs the same walk after the load resolves (CadView#onModel), so it
+      // pays it too, outside Total. The walk itself stays this slow until
+      // conway reads the tree without a per-record await (proposed
+      // separately); what this order buys is geometry streaming while it
+      // runs. Called synchronously, so the walk is under way before the first
+      // batch.
+      const warnIndexFailure = (e) => {
         // Best-effort by contract: an early tree is an optimisation, and the
         // caller re-reads the tree from the finished model when this path
         // didn't deliver one.
         console.warn('[conwayDirect] onIndexed failed; tree waits for the load to finish:', e)
+      }
+      try {
+        Promise.resolve(onIndexed(modelID)).catch(warnIndexFailure)
+      } catch (e) {
+        warnIndexFailure(e)
       }
     }
     await holdGeometryPumpForTest()

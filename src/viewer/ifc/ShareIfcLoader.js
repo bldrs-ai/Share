@@ -374,7 +374,7 @@ export default class ShareIfcLoader {
    *   => void`, given the model at its index (`makeIndexedModelHandle`)
    *   once the deferred open returns and before geometry streams, so the
    *   caller can bring up the tree, properties and search while the pump
-   *   runs. Awaited ahead of the pump; see `parseIfcWithConway`.
+   *   runs. Started beside the pump, not awaited; see `parseIfcWithConway`.
    * @return {Promise<object|null>} the loaded IfcModel, or null on
    *   handled error (re-throws on OOM so the caller can show a
    *   tailored UX message).

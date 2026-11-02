@@ -1771,6 +1771,94 @@ describe('CadView', () => {
       expect(result.current.selectedElement).toBeNull()
     })
 
+    // The PSB stall (#2037): the loader starts the pump without waiting for
+    // onIndexed, so the tree walk can finish after the geometry. Its tree
+    // still installs, once; and not if the user has left or the load failed.
+    describe('when the tree walk outlasts the geometry', () => {
+      /**
+       * Mount on a load that reports its index without waiting for the tree,
+       * as parseIfcWithConway does, and then finishes (or fails) its geometry.
+       *
+       * @param {object} result renderHook result over the whole store
+       * @param {object} indexedModel what the loader hands onIndexed
+       * @param {boolean} [failGeometry]
+       */
+      async function mountOnLateTreeLoad(result, indexedModel, failGeometry = false) {
+        loadSpy = jest.spyOn(Loader, 'load').mockImplementation(async (...args) => {
+          const options = args[6] ?? {}
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          options.onIndexed?.(indexedModel)
+          if (failGeometry) {
+            throw new Error('geometry failed')
+          }
+          return getHarness()._loadedModel
+        })
+        await act(() => result.current.setIsOpfsAvailable(false))
+        await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+        render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+        await actAsyncFlush()
+      }
+
+      /**
+       * @return {{indexedModel: object, releaseTree: Function}} a model at its
+       *   index whose tree walk is held until `releaseTree()`
+       */
+      function makeSlowTreeModel() {
+        const indexedModel = makeIndexedModel()
+        let resolveTree
+        indexedModel.getSpatialStructure = jest.fn(() => new Promise((resolve) => {
+          resolveTree = () => resolve(makeTestTree())
+        }))
+        return {indexedModel, releaseTree: () => resolveTree()}
+      }
+
+      it('installs it from the index once the walk finishes, and only once', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const {indexedModel, releaseTree} = makeSlowTreeModel()
+        await mountOnLateTreeLoad(result, indexedModel)
+        // The geometry is in; the model waits for its tree, as prod's does.
+        await waitFor(() => expect(result.current.model).toBe(getHarness()._loadedModel))
+        expect(indexedModel.getSpatialStructure).toHaveBeenCalledTimes(1)
+        expect(result.current.rootElement).toBeNull()
+        expect(result.current.isModelReady).toBe(false)
+
+        await act(() => releaseTree())
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.isModelReady).toBe(true))
+        expect(result.current.rootElement.expressID).toBe(makeTestTree().expressID)
+        // One walk: the finished model's tree was never read.
+        expect(getHarness()._loadedModel.ifcManager.getSpatialStructure).not.toHaveBeenCalled()
+        expect(result.current.indexedModel).toBeNull()
+      })
+
+      it('does not install it when the user has left the model meanwhile', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const {indexedModel, releaseTree} = makeSlowTreeModel()
+        await mountOnLateTreeLoad(result, indexedModel)
+        await waitFor(() => expect(result.current.model).toBe(getHarness()._loadedModel))
+        loadSpy.mockImplementation(() => new Promise(() => {}))
+        await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+        await actAsyncFlush()
+
+        await act(() => releaseTree())
+        await actAsyncFlush()
+        expect(result.current.rootElement).toBeNull()
+        expect(result.current.indexedModel).toBeNull()
+      })
+
+      it('does not install it when the load has failed meanwhile', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const {indexedModel, releaseTree} = makeSlowTreeModel()
+        await mountOnLateTreeLoad(result, indexedModel, true)
+        await waitFor(() => expect(result.current.alert).not.toBeNull())
+
+        await act(() => releaseTree())
+        await actAsyncFlush()
+        expect(result.current.rootElement).toBeNull()
+        expect(result.current.indexedModel).toBeNull()
+      })
+    })
+
     it('does not install a tree whose model the user left while it was being installed', async () => {
       const {result} = renderHook(() => useStore((state) => state))
       // The install reads the root's name before it writes: hold that read,
