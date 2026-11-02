@@ -50,7 +50,11 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   `notes/` — but only from a branch's *second* push onward, since it
   bails to build when `CACHED_COMMIT_REF` is unset and a new branch has
   no prior deploy, so the push that opens a docs-only PR still builds
-  (#1766). Marketing posts are `.mdx`, so they always build.) Before editing those
+  (#1766). Marketing posts are `.mdx`, so they always build.) Only a PR
+  based on `main` gets a preview: one stacked on another PR's branch gets
+  none, and retargeting it to `main` or closing and reopening it doesn't
+  start one either. Only a push to the branch after it's based on `main`
+  does (#2034). Before editing those
   workflows: the gate is a job-level `if:` (a skipped-by-if job
   satisfies a required check; a workflow that never triggers leaves the
   PR waiting forever); `ready_for_review` and `converted_to_draft` must
