@@ -1846,6 +1846,52 @@ describe('CadView', () => {
         expect(result.current.indexedModel).toBeNull()
       })
 
+      // Codex review on #2037: the walk that was skipped as stale must not be
+      // replaced by a second one at the load's end. On PSB a walk is ~86 s,
+      // and the superseded load holds the next model's load back until it
+      // ends, so a second walk would delay B by that much.
+      it('walks the tree once when the user leaves meanwhile, and lets the next load start', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const {indexedModel, releaseTree} = makeSlowTreeModel()
+        // A second walk of the finished model would never end here, holding B
+        // back for good.
+        const finishedWalk = getHarness()._loadedModel.ifcManager.getSpatialStructure
+        finishedWalk.mockImplementation(() => new Promise(() => {}))
+        try {
+          await mountOnLateTreeLoad(result, indexedModel)
+          await waitFor(() => expect(result.current.model).toBe(getHarness()._loadedModel))
+          loadSpy.mockImplementation(() => new Promise(() => {}))
+          await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+          await actAsyncFlush()
+
+          await act(() => releaseTree())
+          await actAsyncFlush()
+          await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+          expect(String(loadSpy.mock.calls[1][0])).toContain('other.ifc')
+          expect(indexedModel.getSpatialStructure).toHaveBeenCalledTimes(1)
+          expect(finishedWalk).not.toHaveBeenCalled()
+        } finally {
+          finishedWalk.mockReset()
+          finishedWalk.mockReturnValue(makeTestTree())
+        }
+      })
+
+      it('reports a tree the index could not read once, without walking it again', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const indexedModel = makeIndexedModel()
+        indexedModel.getSpatialStructure = jest.fn(() => Promise.reject(new Error('walk failed')))
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        try {
+          await mountOnLateTreeLoad(result, indexedModel)
+          await waitFor(() => expect(result.current.isModelReady).toBe(true))
+          expect(result.current.alert).toMatch(/Could not read full model structure/)
+          expect(indexedModel.getSpatialStructure).toHaveBeenCalledTimes(1)
+          expect(getHarness()._loadedModel.ifcManager.getSpatialStructure).not.toHaveBeenCalled()
+        } finally {
+          warn.mockRestore()
+        }
+      })
+
       it('does not install it when the load has failed meanwhile', async () => {
         const {result} = renderHook(() => useStore((state) => state))
         const {indexedModel, releaseTree} = makeSlowTreeModel()

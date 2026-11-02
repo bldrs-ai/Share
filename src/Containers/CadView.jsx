@@ -530,12 +530,19 @@ export default function CadView({
     // A walk can settle after the load has failed, as well as after the user
     // has left: neither may install its tree.
     let hasLoadFailed = false
+    // Why the index's walk failed, for the load's end to report once.
+    let indexedWalkError = null
     const isIndexedTreeStale = () => isLoadSuperseded() || hasLoadFailed
     const deliverIndexedTree = async (indexedModel) => {
       if (isIndexedTreeStale()) {
         return
       }
-      const rootElt = await readModelTree(indexedModel, {isIndexed: true})
+      const rootElt = await readModelTree(indexedModel, {
+        isIndexed: true,
+        onIndexedFailure: (e) => {
+          indexedWalkError = e
+        },
+      })
       if (rootElt === null || isIndexedTreeStale()) {
         return
       }
@@ -712,7 +719,16 @@ export default function CadView({
     // that delivered it.
     const earlyTree = indexedTree !== null && useStore.getState().rootElement === indexedTree ?
       indexedTree : null
-    await onModel(tmpModelRef, isLoadSuperseded, earlyTree)
+    // At most one walk of this model's tree (codex review on #2037): on PSB a
+    // walk is ~86 s, and this load holds the next one back until it ends. So
+    // none here when the load is superseded (it would install nothing), and
+    // none when the index's walk failed (report that failure instead). A
+    // walk that came up with a tree has delivered it (earlyTree).
+    if (indexedWalkError !== null && !isLoadSuperseded()) {
+      reportTreeReadFailure(indexedWalkError)
+    }
+    const mayWalk = !isLoadSuperseded() && indexedWalkError === null
+    await onModel(tmpModelRef, isLoadSuperseded, earlyTree, {mayWalk})
     // The finished model now answers everything the indexed one did, and it
     // is what readers should hold from here (store/IFCSlice.js
     // #selectReadModel). Only this load's own handle: a superseded load still
@@ -1150,8 +1166,12 @@ export default function CadView({
    *   model; see onViewerInternal.
    * @param {object|null} [earlyTree] The tree already brought up from this
    *   load's index (open-205 #2029), or null to read it from `m` now.
+   * @param {object} [options]
+   * @param {boolean} [options.mayWalk] False when `m`'s tree must not be read
+   *   here: the load is superseded, so nothing it reads would be installed, or
+   *   its index already walked this model's tree (onViewerInternal).
    */
-  async function onModel(m, isLoadSuperseded, earlyTree = null) {
+  async function onModel(m, isLoadSuperseded, earlyTree = null, {mayWalk = true} = {}) {
     assertDefined(m)
     debug().log('CadView#onModel', m)
     // TODO(pablo): centralize capability check somewhere
@@ -1164,6 +1184,9 @@ export default function CadView({
     // Everything below here needs the rootElt, which may not be available
     // if we can't read the full model structure.
     if (earlyTree === null) {
+      if (!mayWalk) {
+        return
+      }
       const rootElt = await readModelTree(m, {isIndexed: false})
       if (rootElt === null) {
         return
@@ -1192,6 +1215,18 @@ export default function CadView({
 
 
   /**
+   * Tell the user the model's tree couldn't be read, and Sentry why.
+   *
+   * @param {Error} e
+   */
+  function reportTreeReadFailure(e) {
+    setAlert('Could not read full model structure.  Only model geometry will be available.')
+    captureException(e, 'Could not read full model structure')
+    console.error(e)
+  }
+
+
+  /**
    * Read the spatial tree from `m`, writing nothing to the store. Split from installModelTree so the index path (open-205 #2029) can
    * read the tree, check the load is still current, and only then show it.
    *
@@ -1199,11 +1234,12 @@ export default function CadView({
    *   (makeIndexedModelHandle): both carry the same spatial surface
    * @param {object} options
    * @param {boolean} options.isIndexed True at the index. A failure there is
-   *   logged and answers null, leaving onModel to try again once the load
-   *   finishes, which raises the alert then: one model, one alert.
+   *   logged, handed to `onIndexedFailure` and answers null; the load's end
+   *   raises the alert for it, once, and does not walk the tree again.
+   * @param {Function} [options.onIndexedFailure] `(error) => void`, at the index
    * @return {Promise<object|null>} the tree root, or null when it can't be read
    */
-  async function readModelTree(m, {isIndexed}) {
+  async function readModelTree(m, {isIndexed, onIndexedFailure}) {
     let rootElt
     try {
       // Three sources, in preference order:
@@ -1242,18 +1278,20 @@ export default function CadView({
       }
     } catch (e) {
       if (isIndexed) {
-        console.warn('CadView#readModelTree: tree not readable at the index; waiting for the load:', e)
+        // Reported at the load's end instead (onViewerInternal), once, so a
+        // model whose tree can't be read raises one alert.
+        console.warn('CadView#readModelTree: tree not readable at the index:', e)
+        onIndexedFailure?.(e)
         return null
       }
-      setAlert('Could not read full model structure.  Only model geometry will be available.')
-      captureException(e, 'Could not read full model structure')
-      console.error(e)
+      reportTreeReadFailure(e)
       return null
     }
     debug().log('CadView#readModelTree: rootElt: ', rootElt)
     if (rootElt.expressID === undefined) {
       if (isIndexed) {
-        console.warn('CadView#readModelTree: tree at the index has no root express ID; waiting for the load')
+        console.warn('CadView#readModelTree: tree at the index has no root express ID')
+        onIndexedFailure?.(new Error('Model has undefined root express ID'))
         return null
       }
       throw new Error('Model has undefined root express ID')
