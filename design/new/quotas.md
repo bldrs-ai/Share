@@ -925,8 +925,8 @@ who never came back to it — was never counted. The Stripe webhook now sends
 2. Netlify → **`bldrs-share-prod`** → Site configuration → Environment
    variables, scoped to **Functions** and the **Production** context only:
    `GA4_MEASUREMENT_ID` = `G-GRLNVMZRGW`, `GA4_API_SECRET` = the secret.
-   Not on deploy previews or `bldrs-share-dev`: their test traffic must not
-   reach the production property (the `livemode` check is a second guard,
+   Not on deploy previews: their test traffic must not reach the
+   production property (the `livemode` check is a second guard,
    not the only one).
 3. If `STRIPE_SECRET_KEY` is a restricted key (`rk_live_…`), give it
    **Checkout Sessions: Read**. Without it the lookup gets a 403 and every
