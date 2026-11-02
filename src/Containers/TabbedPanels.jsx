@@ -11,6 +11,7 @@ import PropertiesPanel from '../Components/Properties/PropertiesPanel'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import VersionsPanel from '../Components/Versions/VersionsPanel'
 import useStore from '../store/useStore'
+import {selectReadModel} from '../store/IFCSlice'
 import useExistInFeature from '../hooks/useExistInFeature'
 import {hasParams} from '../utils/location'
 
@@ -50,8 +51,8 @@ export default function TabbedPanels({
   const isBotEnabled = useExistInFeature('bot')
 
   // Next two are used by NavTree and Versions
-  // IFCSlice
-  const model = useStore((state) => state.model)
+  // IFCSlice. The indexed model while geometry still streams (open-205 #2029).
+  const model = useStore(selectReadModel)
   const rootElement = useStore((state) => state.rootElement)
 
   // RepositorySlice

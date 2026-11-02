@@ -107,11 +107,21 @@ import {instanceMapFromGeometry} from './IfcInstanceMap'
  *   missing; replaced wholesale by the durable batches). Only on the
  *   `demandGeometry` deferred path with engines that support
  *   ON_PREVIEW_MESH; silently ignored otherwise.
+ * @param {Function} [onIndexed] open-205 #2029: `async (modelID) => void`,
+ *   called once the deferred open has returned — the entity index is
+ *   built and the spatial tree and properties are queryable — and BEFORE
+ *   the geometry pump starts. Awaited, so whatever it reads from the engine
+ *   (the 'names' tree walk) runs alone rather than interleaved with the
+ *   pump's paging; a throw is logged and the load carries on, leaving the
+ *   caller's end-of-load path to deliver the tree as it did before. Only on
+ *   the deferred path: the classic opens below extract every mesh inside
+ *   one synchronous `StreamAllMeshes`, so there is no window to fill.
  * @return {Promise<{modelID: number, captured: Array,
  *   recapture: function(): Promise<Array>}>}
  */
 export async function parseIfcWithConway(
-  buffer, ifcAPI, settings = undefined, onProgress = undefined, onMeshBatch = undefined, onPreviewMesh = undefined) {
+  buffer, ifcAPI, settings = undefined, onProgress = undefined, onMeshBatch = undefined, onPreviewMesh = undefined,
+  onIndexed = undefined) {
   if (!ifcAPI || typeof ifcAPI.OpenModel !== 'function') {
     throw new Error('parseIfcWithConway: ifcAPI.OpenModel is unavailable')
   }
@@ -228,6 +238,17 @@ export async function parseIfcWithConway(
       throw await openModelFailure(modelID, buffer, conwayRefusedSchema(ifcAPI, attempt),
         conwayOpenFailure(ifcAPI, attempt))
     }
+    if (onIndexed) {
+      try {
+        await onIndexed(modelID)
+      } catch (e) {
+        // Best-effort by contract: an early tree is an optimisation, and the
+        // caller re-reads the tree from the finished model when this path
+        // didn't deliver one.
+        console.warn('[conwayDirect] onIndexed failed; tree waits for the load to finish:', e)
+      }
+    }
+    await holdGeometryPumpForTest()
     const captured = []
     // Does this engine expose conway#660's async whole-model ask? That is
     // the ONLY entry point that can answer a windowed deferred model, so it
@@ -796,6 +817,51 @@ function yieldToEventLoop() {
   }
   // Non-browser environments (tests); throttling doesn't apply there.
   return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+
+/**
+ * Test seam for open-205 #2029: hold the geometry pump between the deferred
+ * open and the first batch. The E2E that proves the NavTree is usable while
+ * geometry is still loading needs that window to stay open for as long as its
+ * assertions take; on any fixture small enough to ship it otherwise closes in
+ * well under a second, and a timing-based version of the test would pass or
+ * fail on runner speed. Playwright installs `window.__bldrsTestHoldGeometryPump`
+ * (a function returning a Promise) with `addInitScript` and resolves it to let
+ * the load finish. Absent in production, where this is a property read.
+ *
+ * @return {Promise<void>}
+ */
+async function holdGeometryPumpForTest() {
+  const hold = globalThis.__bldrsTestHoldGeometryPump
+  if (typeof hold === 'function') {
+    await hold()
+  }
+}
+
+
+/**
+ * The model as it is at the index (open-205 #2029): a plain object carrying
+ * the property and spatial surface the finished model will have, before any
+ * geometry exists. It is what the NavTree, Properties and search read while
+ * the pump streams, and is replaced by the finished model when the load
+ * resolves. Not an Object3D and has no geometry or capabilities, so it must
+ * never stand in for `model` where a scene object is expected (clipper,
+ * isolator, ViewCube) — which is why it travels as `indexedModel`, not
+ * `model` (store/IFCSlice.js).
+ *
+ * @param {object} ifcAPI Conway IfcAPI holding the open model
+ * @param {number} modelID the open model's handle
+ * @return {object} the handle
+ */
+export function makeIndexedModelHandle(ifcAPI, modelID) {
+  const handle = {
+    isIndexedModel: true,
+    modelID,
+    ifcManager: makeConwayDirectIfcManager(ifcAPI, modelID),
+  }
+  attachConwayDirectModelMethods(handle, ifcAPI, modelID)
+  return handle
 }
 
 

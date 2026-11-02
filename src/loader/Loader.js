@@ -215,6 +215,11 @@ function probeLfsBytes(data) {
  *   `isUploadedFile` here can't stand in for it: it's `testUuid(path)`, and
  *   a hosted `/v/p/<uuid>.ifc` reaches this function as the very same URL
  *   string as `/v/local-only/<uuid>.ifc` (codex review on #1956).
+ * @param {Function} [options.onIndexed] open-205 #2029: handed the model at
+ *   its index while a Conway (IFC/STEP) parse still streams geometry —
+ *   `ShareIfcLoader#parse`. Never called on a GLB cache hit, a non-Conway
+ *   format, or a classic (non-deferred) open; the caller's end-of-load path
+ *   covers those exactly as before.
  * @return {object} The model or undefined
  */
 export async function load(
@@ -224,7 +229,7 @@ export async function load(
   isOpfsAvailable,
   setOpfsFile,
   accessToken = '',
-  {isNestedLoad = false, isUploadedRoute = false} = {},
+  {isNestedLoad = false, isUploadedRoute = false, onIndexed = undefined} = {},
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
   // HACK: pathArg can be a URL or a string
@@ -763,7 +768,8 @@ export async function load(
   // truthy past this point — no post-call null check is needed here.
   let model
   try {
-    model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress)
+    model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress,
+      {onIndexed})
   } catch (e) {
     throw markIfOutOfMemory(e)
   }
@@ -1971,9 +1977,12 @@ export function convertToShareModel(model, viewer, {fileName = null} = {}) {
  * @param {object} viewer passed to convertToShareModel and optionally to fixupCb
  * @param {Function} [fixupCb] to modify the model
  * @param {Function} [onProgress] progress callback for IFC loading
+ * @param {object} [parseOptions] passed to an IFC/STEP loader's `parse` as
+ *   its options (`ShareIfcLoader#parse`: `onIndexed`)
  * @return {object}
  */
-export async function readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress) {
+export async function readModel(
+  loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress, parseOptions = {}) {
   let model
   // GLTFLoader is unique so far in using an onLoad and onError.
   // TODO(pablo): GLTF also generates errors for texture loads, but
@@ -1999,7 +2008,7 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
   } else if (isLoaderAsync) {
     debug().log(`async loader(->) parsing data:`, loader, modelData)
     if (isIfc && onProgress) {
-      model = await loader.parse(modelData, onProgress)
+      model = await loader.parse(modelData, onProgress, undefined, parseOptions)
     } else {
       if (onProgress) {
         onProgress('Parsing model data...')

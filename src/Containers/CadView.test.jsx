@@ -831,7 +831,7 @@ describe('CadView', () => {
       'Upload not in this browser',
       expect.objectContaining({level: 'info', fingerprint: ['upload-not-in-browser']}))
     // The route's provenance is what lets the loader reclassify at all.
-    expect(loadSpy.mock.calls[0][6]).toEqual({isUploadedRoute: true})
+    expect(loadSpy.mock.calls[0][6]).toEqual(expect.objectContaining({isUploadedRoute: true}))
   })
 
   // Same dedupe as a schema refusal: the auth-state effect re-runs the load
@@ -1008,7 +1008,7 @@ describe('CadView', () => {
     render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
     await actAsyncFlush()
     await waitFor(() => expect(loadSpy).toHaveBeenCalled())
-    expect(loadSpy.mock.calls[0][6]).toEqual({isUploadedRoute: false})
+    expect(loadSpy.mock.calls[0][6]).toEqual(expect.objectContaining({isUploadedRoute: false}))
   })
 
   // A model change that lands while another load is in flight is not a
@@ -1528,6 +1528,155 @@ describe('CadView', () => {
       await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
       await actAsyncFlush()
       expect(result.current.expandedElements).toEqual([])
+    })
+  })
+
+
+  // open-205 #2029: a Conway load hands CadView the model at its index
+  // (`Loader.load`'s `onIndexed`) while geometry still streams. The tree,
+  // properties and search come up then, not after the last mesh.
+  describe('interactive at the index (open-205 #2029)', () => {
+    let getHarness
+    let loadSpy
+    let finishGeometry
+
+    beforeEach(() => {
+      getHarness = require('../../__mocks__/shareViewerTestHarness').__getShareViewerMockSingleton
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+      // `viewer: null` so the held load starts on this mount's viewer: the
+      // store's is otherwise the previous test's, which this mount disposes
+      // while the load is held, and the load's tail then fails on it.
+      useStore.setState({
+        viewer: null,
+        alert: null, customViewSettings: null, isAuthResolved: false, isModelReady: false,
+        model: null, indexedModel: null, rootElement: null,
+        expandedElements: [], selectedElements: [], selectedAnchorIds: [], selectedOccurrencePath: null,
+      })
+      finishGeometry = undefined
+    })
+
+    afterEach(() => {
+      loadSpy?.mockRestore()
+      loadSpy = undefined
+    })
+
+    /** @return {object} the model at its index, as makeIndexedModelHandle shapes it */
+    function makeIndexedModel() {
+      return {
+        isIndexedModel: true,
+        modelID: 0,
+        ifcManager: {getSpatialStructure: jest.fn(() => makeTestTree())},
+        getSpatialStructure: jest.fn(() => makeTestTree()),
+        getItemProperties: jest.fn((id) => Promise.resolve({expressID: id, Name: {value: `item ${id}`}})),
+        getIfcType: (type) => type,
+      }
+    }
+
+    /**
+     * Mount CadView on a load that reports its index, then holds its geometry
+     * until `finishGeometry()` — or, with `failGeometry`, fails it then.
+     *
+     * @param {object} result renderHook result over the whole store
+     * @param {object} indexedModel what the loader hands onIndexed
+     * @param {boolean} [failGeometry]
+     */
+    async function mountOnStreamingLoad(result, indexedModel, failGeometry = false) {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(async (...args) => {
+        const options = args[6] ?? {}
+        // A real index comes after the download and the open, never in the
+        // tick the load starts in, by when the mount's effects have all run.
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        await options.onIndexed?.(indexedModel)
+        await new Promise((resolve) => {
+          finishGeometry = resolve
+        })
+        if (failGeometry) {
+          throw new Error('geometry failed')
+        }
+        return getHarness()._loadedModel
+      })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(finishGeometry).toBeDefined())
+      await actAsyncFlush()
+    }
+
+    it('brings the tree up while the geometry still streams', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel)
+
+      await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+      expect(result.current.rootElement.expressID).toBe(makeTestTree().expressID)
+      expect(result.current.indexedModel).toBe(indexedModel)
+      expect(result.current.isModelReady).toBe(false)
+      expect(result.current.model).toBeNull()
+
+      const treeAtIndex = result.current.rootElement
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.isModelReady).toBe(true))
+      // The finished model takes over, and the tree is the index's, not a
+      // second walk of the model.
+      expect(result.current.indexedModel).toBeNull()
+      expect(result.current.model).toBe(getHarness()._loadedModel)
+      expect(result.current.rootElement).toBe(treeAtIndex)
+      expect(getHarness()._loadedModel.ifcManager.getSpatialStructure).not.toHaveBeenCalled()
+    })
+
+    it('shows the properties of a row selected while the geometry streams', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel)
+      await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+
+      const leaf = makeTestTree().children[0].children[0].expressID
+      await act(() => result.current.setSelectedElements([`${leaf}`]))
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
+      expect(indexedModel.getItemProperties).toHaveBeenCalledWith(leaf)
+      expect(result.current.selectedElement.Name.value).toBe(`item ${leaf}`)
+    })
+
+    it('paints a selection made while the geometry streamed once the model is in', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const setSelectionSpy = jest.spyOn(ShareViewer.prototype, 'setSelection')
+      try {
+        await mountOnStreamingLoad(result, makeIndexedModel())
+        await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+        const leaf = makeTestTree().children[0].children[0].expressID
+        await act(() => {
+          result.current.setSelectedElements([`${leaf}`])
+          result.current.setSelectedAnchorIds([`${leaf}`])
+        })
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
+        const paintsWhileStreaming = setSelectionSpy.mock.calls.length
+
+        await act(() => finishGeometry())
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.isModelReady).toBe(true))
+        await waitFor(() => expect(setSelectionSpy.mock.calls.length).toBeGreaterThan(paintsWhileStreaming))
+        expect(setSelectionSpy.mock.calls.at(-1)[1]).toEqual([leaf])
+      } finally {
+        setSelectionSpy.mockRestore()
+      }
+    })
+
+    it('takes the tree down when the load fails after its index', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      await mountOnStreamingLoad(result, makeIndexedModel(), true)
+      await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      expect(result.current.rootElement).toBeNull()
+      expect(result.current.indexedModel).toBeNull()
     })
   })
 

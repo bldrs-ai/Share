@@ -23,7 +23,7 @@ import {assembleBatchedModel, buildBatchedConwayModel} from './buildBatchedConwa
 import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {conwayDirectError, conwayDirectInfo, conwayDirectWarn} from './conwayDirectLog'
-import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
+import {decorateConwayDirectIfcModel, makeIndexedModelHandle, parseIfcWithConway} from './conwayDirectIfcLoader'
 import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
 import {payloadToPreviewMesh} from './parsePreviewMesh'
@@ -369,11 +369,17 @@ export default class ShareIfcLoader {
    * @param {Function} [onProgress] progress callback (string message arg)
    * @param {Function} [onError] error callback. Errors are also stored
    *   on `this.ifcLastError` for ShareViewer to surface as an alert.
+   * @param {object} [options]
+   * @param {Function} [options.onIndexed] open-205 #2029: `async (handle)
+   *   => void`, given the model at its index (`makeIndexedModelHandle`)
+   *   once the deferred open returns and before geometry streams, so the
+   *   caller can bring up the tree, properties and search while the pump
+   *   runs. Awaited ahead of the pump; see `parseIfcWithConway`.
    * @return {Promise<object|null>} the loaded IfcModel, or null on
    *   handled error (re-throws on OOM so the caller can show a
    *   tailored UX message).
    */
-  async parse(buffer, onProgress, onError) {
+  async parse(buffer, onProgress, onError, {onIndexed} = {}) {
     const ifc = this._ifc
     // Clear any error stashed by a prior load on this shared IFC namespace.
     // readModel (Loader.js) reads `viewer.IFC.ifcLastError` to surface the
@@ -517,7 +523,8 @@ export default class ShareIfcLoader {
       // cannot be synchronous, and a missed `await` would feed a Promise to
       // a builder that iterates placements — an empty model, silently.
       const {modelID, recapture} =
-        await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh)
+        await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh,
+          onIndexed ? (openedModelID) => onIndexed(makeIndexedModelHandle(ifcAPI, openedModelID)) : undefined)
 
       session.beginAssembly()
 

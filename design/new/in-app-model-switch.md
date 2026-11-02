@@ -298,6 +298,15 @@ helps with or without the page reload, so it can land before sessions.
 
 Mid-stream property reads worked in the Node harness. Concurrent reads against Share's own batch pump in the browser still need a test as part of this work.
 
+**How it's built.**
+- **The seam is the deferred open's return,** inside `parseIfcWithConway` (`viewer/ifc/conwayDirectIfcLoader.js`), between the open and the first pump batch. IFC and STEP both take it, since both go through `ShareIfcLoader#parse`. Its `onIndexed(modelID)` is awaited, so the tree walk never interleaves with the pump's paging, and a throw there only costs the early tree. Classic opens, GLB cache hits and non-Conway formats don't call it; they bring the tree up at the end, as before.
+- **What CadView gets is the model at its index** (`makeIndexedModelHandle`): the finished model's property and spatial surface, with no geometry. It goes in the store as `indexedModel`, not `model`, because scene consumers (clipper, isolator, ViewCube) take `model` to be the object in the scene. The tree, Properties, TopBar and search read through `selectReadModel`, which prefers it. The load's own `setModel` clears it, and so does a failure, which also takes the tree down.
+- **The tree is walked once.** `onModel` reuses the index's tree instead of reading the finished model again.
+- **The loading overlay lifts at the index;** it swallowed every click. The camera follow's "first interaction stops it" caveat (`disableLoadOverlay`) applies from then on.
+- **Selections made while geometry streams are kept and painted at the end.** The logical selection, Properties and the URL path work at once. The scene highlight finds nothing to paint until the geometry is in, so `reapplySelectionToGeometry` re-runs the selection through the usual funnel once the model is installed. That includes STEP occurrence rows, whose instances only exist then.
+- **Hide and isolate wait for the finished model.** The isolator gets its model at the load's end, so the tree's eye icons appear then. Making them work on streamed geometry is a session concern (§4.3).
+- **For sessions (§4.3),** the stages map onto a session's lifecycle: *indexed* (`onIndexed`; tree and properties live), *streaming* (the pump; previews and durable batches), *ready* (`setModel`, isolator, link state). `indexedModel` is the first piece of state a session would own.
+
 ### 4.3 Per-model sessions (#2019)
 
 Each open model gets a session that owns:

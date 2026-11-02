@@ -899,7 +899,9 @@ describe('Loader', () => {
       const result = await readModel(mockIfcLoader, 'test-buffer', './', true, true, mockViewer, null, onProgress)
 
       expect(result).toBe(mockModel)
-      expect(mockIfcLoader.parse).toHaveBeenCalledWith('test-buffer', onProgress)
+      // The trailing options object carries `onIndexed` (open-205 #2029); none
+      // was passed to readModel here, so it is empty.
+      expect(mockIfcLoader.parse).toHaveBeenCalledWith('test-buffer', onProgress, undefined, {})
 
       // Verify that all expected progress messages were called
       expect(onProgress).toHaveBeenCalledWith('Configuring loader...')
