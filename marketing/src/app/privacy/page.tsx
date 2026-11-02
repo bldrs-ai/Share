@@ -24,7 +24,7 @@ export default function PrivacyPage() {
         <strong>Effective Date:</strong> January 1, 2022
       </Typography>
       <Typography variant="body2" sx={{opacity: 0.75, mb: 3}}>
-        <strong>Last Updated:</strong> October 23, 2025
+        <strong>Last Updated:</strong> November 2, 2026
       </Typography>
 
       <Typography variant="body1">
@@ -51,10 +51,32 @@ export default function PrivacyPage() {
         Google Drive), we only request access to the specific files you select.
         We do not scan or store other files from your account.
       </Typography>
+      {/* Keep this section in step with src/pages/Privacy.jsx, the in-app copy at
+          /share/privacy. What it describes is in src/connections/README.md
+          §"Reporting login failures". */}
       <Typography variant="body1">
-        <strong>Telemetry (optional).</strong> If enabled in a hosted deployment, we
-        may collect anonymized usage metrics (e.g., performance, feature use) to
-        improve reliability and UX.
+        <strong>Error and reliability monitoring (always on).</strong> To run and
+        secure the service, the hosted app reports errors and failures, including
+        failed sign-ins, to Sentry, our error-monitoring provider. A report includes
+        the error details, the page address, your browser and its version, the app
+        release and page timing; for a failed sign-in, the Auth0 tracking id; and,
+        if you are signed in, your account identifier (an opaque id, not your name
+        or email). Reports never include your email, name, sign-in tokens or the
+        contents of your files. Sentry processes this data on our behalf as our
+        service provider. We use it only to find and fix problems and keep the
+        service secure, never for advertising, and it is not shared for third-party
+        purposes.
+        {/* TODO(Pablo): state how long Sentry keeps reports. The retention period
+            isn't recorded in this repo; take it from the Sentry plan rather than
+            guessing. */}
+      </Typography>
+      <Typography variant="body1">
+        <strong>Analytics (optional).</strong> On bldrs.ai we use Google Analytics,
+        a third-party service, to understand how the product is used (e.g., page
+        views, feature use). Your analytics choice applies to Google Analytics only;
+        it does not turn off the error monitoring above. If you allow analytics,
+        error reports may also carry your Google Analytics client id, so we can
+        connect a problem to a visit; if you decline, they do not.
       </Typography>
 
       <Typography variant="h3" component="h2" sx={{mt: 4}}>2. Open-Source and Self-Hosted Use</Typography>
@@ -96,7 +118,8 @@ export default function PrivacyPage() {
       <Typography variant="h3" component="h2" sx={{mt: 4}}>6. Your Choices</Typography>
       <Typography variant="body1">
         You can disconnect Google access in your Google Account settings. You may
-        request deletion of any stored account metadata (if applicable) by emailing{' '}
+        request deletion of any stored account metadata or error reports tied to
+        your account (if applicable) by emailing{' '}
         <MuiLink href="mailto:support@bldrs.ai">support@bldrs.ai</MuiLink>. You can
         also use open-source/self-hosted deployments without accounts, subject to
         your configuration.

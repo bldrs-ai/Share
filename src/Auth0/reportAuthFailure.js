@@ -15,11 +15,14 @@ import {authErrorCode, authFailureTags, sanitizeAuthReport} from './authFailureC
  * exception is synthetic (AuthFailure), not the SDK's error, because an
  * OAuthError's message IS the raw description.
  *
- * Sentry itself is not consent-gated in this app (index/sentry.js); the
- * analytics client id is (privacy/analytics.js#getOpenCidForSentry). The
- * `sub` is an account id, not an analytics id, and the Netlify functions
- * already attach it to their events (netlify/functions/_lib/auth0.js), so
- * the app does the same, per event rather than on the global scope.
+ * The `sub` is sent whether or not analytics consent was given: error
+ * monitoring is necessary/functional (Sentry as bldrs' processor), and the
+ * privacy policy §1 says so. Only the GA client id is consent-gated
+ * (privacy/analytics.js#getOpenCidForSentry), because it is the analytics
+ * identifier. The Netlify functions attach the sub too
+ * (netlify/functions/_lib/auth0.js); here it goes per event rather than on
+ * the global scope. src/connections/README.md §"Reporting login failures"
+ * has the full split.
  */
 
 

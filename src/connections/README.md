@@ -273,11 +273,21 @@ dead refresh token would otherwise report on every route change.
 **What is never sent:** email, name, tokens, or a raw `error_description`.
 The exception is synthetic because an auth0-react `OAuthError`'s message is
 the raw description; a cleaned copy (markup, control characters and email
-addresses removed, 200 characters) goes in the `auth` context. Sentry is not
-consent-gated in this app; only the analytics client id is
-(`privacy/analytics.js#getOpenCidForSentry`). The `sub` is an account id the
-Netlify functions already attach (`netlify/functions/_lib/auth0.js`), so it is
-attached here too, per event.
+addresses removed, 200 characters) goes in the `auth` context.
+
+**Consent: the `sub` is sent either way; the GA client id is not.** Error
+monitoring is necessary/functional processing, always on, with Sentry as
+bldrs' processor; the analytics choice governs only Google Analytics, which
+is optional and third-party (decided by Pablo on #2034; disclosed in the
+privacy policy §1, both copies: `src/pages/Privacy.jsx` and
+`marketing/src/app/privacy/page.tsx`). So the `sub`, an account id the
+Netlify functions already attach (`netlify/functions/_lib/auth0.js`), is
+attached here per event whatever the consent cookie says. The `open_cid` tag
+is different: it is GA's identifier, so it stays behind the explicit
+`isAllowed()` check in `privacy/analytics.js#getOpenCidForSentry`. That check
+is load-bearing, not redundant: gtag/js loads on prod hosts regardless of
+consent (`index/ga.js#shouldInitGa`), so a visitor who declined still has a
+`_ga` cookie to read. If the policy text changes, keep this split.
 
 **Not detected: the user closing the popup.** Google and GitHub send a strict
 Cross-Origin-Opener-Policy that severs the popup from its opener, after which
