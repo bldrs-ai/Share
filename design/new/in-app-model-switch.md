@@ -1,8 +1,12 @@
 # In-app model switching — open a model without a page reload (open-205)
 
-**Status:** Phase 0 in flight. Phases 1–2 planned.
-**Epic:** `open-205` (#2011). Stories: Phase 0 #2012 (tasks #2013–#2018),
-Phase 1 #2019–#2023, Phase 2 #2024.
+**Status:** Phase 0 landed (#2026). Phase 1 re-planned 2026-11-02 (§4);
+Phase 2 planned.
+**Epic:** `open-205` (#2011). Stories: Phase 0 #2012 (tasks #2013–#2018,
+closed; #2017 moved to Phase 1), Phase 1 #2028 (measure), #2029
+(interactive at index), #2019 (sessions), #2030 (no blocking calls), #2031
+(close and eviction), #2017, #2021–#2023, Phase 2 #2024. #2020 folded into
+#2019.
 **Related:** #1251 (`open-210`, multi-model overlay), #1657 (`assist-300`,
 workspace shell, `?feature=workspace`), #1906 / #1957 (the no-OPFS in-memory
 open — the first in-app switch), #91 (the `modelID = 0` hack), #1776 (burned
@@ -25,8 +29,10 @@ were checked by reading and which are unmeasured.
 
 For **one model at a time**, the engine needs no Conway change. Each viewer
 already gets its own Conway WASM instance, and a dropped instance is
-ordinary garbage. The work is in Share: stop holding the old instance, cancel
-work still running against it, and reset per-model state.
+ordinary garbage. The work is in Share: give each model a session that owns
+its engine, load and state, so switching away leaves a load running in its
+own session instead of writing into the next model's, and free a session's
+engine only when the model is closed or evicted (decided 2026-11-02, §4).
 
 For **multi-model**, start with one engine per model (decided
 2026-11-01, §7). That needs no Conway change; it costs one WASM baseline per
@@ -103,7 +109,7 @@ The heap comes back only when every JS reference to the old `IfcAPI` is gone:
   replaced only when the *next* load succeeds (`CadView.jsx:838`). Peak
   memory during a switch is therefore old engine + new engine; a failed next
   load keeps the old one indefinitely.
-- **A load still running.** `Loader.load` has no cancellation; see §4.1.
+- **A load still running.** `Loader.load` has no cancellation; see §4.
 - **The idle GLB writer**, whose closure holds `model` and `viewer`
   (`Loader.js:989-1033`).
 - **`elementsById`** (`CadView.jsx:268`), never cleared (§3.4).
@@ -171,61 +177,127 @@ URL after `load` resolves.
 
 ## 4. Phase 1 — in-app switching, one model at a time
 
-### 4.1 Cancellable teardown (#2019)
+### 4.0 Decided 2026-11-02: switching away is not closing
 
-Order on a model change, before `initViewer`:
+The first Phase 1 plan cancelled the old load on every model change. That
+is the wrong default: a user who opens a large model, starts an AI session
+on it and moves to another model while the repo scripts run expects to come
+back to a finished load, not a cancelled one. So:
 
-1. **Abort the in-flight load.** Thread an `AbortSignal` through
-   `Loader.load` to `ProgressiveLoadSession.abort()`
-   (`src/viewer/ProgressiveLoadSession.js:298`; today called only from the
-   loader's own error path, `src/viewer/ifc/ShareIfcLoader.js:772`) and the
-   parse pump. Without it, CadView's in-flight guard (`CadView.jsx:360-383`)
-   only replays the new model *after* the old load ends — and the old parse
-   runs on against an `IfcAPI` whose processor `CloseModel` just freed (§2.3),
-   then can still `setModel` and send `real_model_open` / metering for a
-   model the user left.
-2. **Settle the idle GLB writer.** `runWriter` reads
-   `viewer?.IFC?.loader?.ifcManager` when it *runs* (`Loader.js:994`); after
-   `ShareIfc.dispose` nulls `loader` (`ShareIfc.js:239`) that is `null`, so
-   the export loses its spatial tree and the spill / release calls silently
-   no-op. Its `.finally` also clears `isCacheWriteInFlight` under a newer
-   model's writer. Either cancel it or bind it to the `ifcAPI` it was
-   scheduled for; `glbArtifactPublish.js`'s generation guard already stops a
-   stale publish but not the run.
-3. **`ReleaseModelGeometry`** each open model, so native geometry is freed
-   even while some reference is still keeping the instance alive.
+- **Switch away → the load keeps running** in the background, in its own
+  model's session.
+- **Close, or eviction under memory pressure, → cancel.** This is the only
+  cancel path (§4.5, #2031), and both are rare and explicit.
+- **Interactive at the index.** A model becomes usable — tree, properties,
+  search, the assistant's `model.*` reads — once its index and spatial tree
+  exist; geometry streams in after (§4.2, #2029).
+- **Avoid blocking calls**, and make async the ones we need (§4.4, #2030).
+- **Stale writes are solved by structure, not guards.** Each load writes
+  into its own session's state, never the global store, so a load that
+  finishes after the user moved on has nothing shared to corrupt (§4.3,
+  #2019).
+  This retires Phase 0's identity guard and replay-time clear
+  (`forgetLoadedModel`, `CadView.jsx:394, 419`) rather than adding more.
 
-### 4.2 `resetModelState()` (#2020)
+**What sessions + close must cover** — the four problems a page load used to
+solve for free, which the cancellation plan was meant to cover:
 
-One reset on model-identity change, before the new load starts. Already
-self-resetting and keyed per model: hidden elements
-(`claimHiddenElementsForModel`, `CadView.jsx:450`), the load report
-(`beginLoadProgress`), `glbArtifact` (`beginGlbArtifactLoad`). Not reset:
+1. **Waiting behind the old load.** `onViewer`'s in-flight guard queues B
+   and replays it only after A ends (`isViewerReloadPendingRef`,
+   `CadView.jsx:367`). Sessions remove the queue: B's session starts at
+   once, A's keeps going.
+2. **Peak memory.** A running load holds its engine's whole WASM heap.
+   Under sessions that's intended for an open model; close and eviction
+   (§4.5) are what bound it.
+3. **Stale writes.** `setModel`, `rootElement`, search, analytics and
+   metering, alerts and Sentry, the GLB writer — the inventory on #2019.
+   Session-scoped state makes each write land on its own model.
+4. **Freeing the processor mid-parse.** Disposing a viewer calls
+   `CloseModel`, which frees the geometry processor (§2.3) while a parse
+   may still run against it (read from code, not reproduced). Under
+   sessions a switch disposes nothing; close does, after aborting the load.
 
-- `model`, `rootElement`, `elementTypesMap`, `searchIndex` — null them
-  first so the old engine can be collected during B's load;
-- `preselectedElementIds` (`IFCSlice.js:100`);
-- NavTree expansion (`src/store/NavTreeSlice.js:16-26`);
-- isolation, incl. `isTempIsolationModeOn`, which also hides the ViewCube
-  (`src/store/IfcIsolatorSlice.js:23-27`, `CadView.jsx:2176`);
-- `displayOverrides` (`src/store/DisplaySlice.js:23`; `resetDisplayOverrides`
-  has no callers), which also feed the share link
-  (`src/Components/Share/ShareDialog.jsx:46-70`);
-- notes, markers and their selection ids (`src/store/NotesSlice.js`);
-- `versions`, `activeVersion` (`src/store/VersionsSlice.js:16-24`);
-- `opfsFile` — set only on `Loader.load`'s OPFS branch (`Loader.js:338-475`),
-  so after a Drive or `external` load Save would save the previous file;
-- `isCacheWriteInFlight` (§4.1).
+### 4.1 P1.0 Measure first (#2028)
 
-Window handlers: `window.ondblclick` and `setKeydownListeners`
-(`src/utils/shortcutKeys.js:8`) are rebound in `onModel` only after its
-`ifcManager` check (`CadView.jsx:1000-1005`); a model without one leaves them
-on the disposed viewer.
+Numbers decide §4.2 and §4.4; take them before building:
 
-Each slice should own its reset so new per-model fields get one by
+- per model (small, medium, large IFC): time to the index (open / parse),
+  to the spatial tree when asked for right after open, to first mesh, to
+  all geometry; a property lookup during and after streaming;
+- the longest synchronous Conway call — is the initial parse one call or
+  does it yield? — and main-thread long tasks per stage in the browser;
+- engine memory per model (`WebAssembly.Memory` size after open, after all
+  geometry, after `ReleaseModelGeometry`), which sizes the §4.5 budget.
+
+Engine numbers from a Node harness against the pinned conway; browser
+numbers from `browser-load-measurement.md`'s rig and the load report, cold
+(no OPFS cache, fresh WASM compile). A cloud container gives ratios more
+than absolutes.
+
+### 4.2 Interactive at the index (#2029)
+
+Today `onModel` asks for the spatial structure only after the whole load
+resolves (`await onModel(...)`, `CadView.jsx:639`, after
+`loadModelWithAuthRetry` at `:507`). Ask for it as soon as the engine has
+the index, and enable the NavTree, properties, search and the assistant's
+reads then; geometry keeps streaming through `ProgressiveLoadSession`. This
+helps with or without the page reload, so it can land before sessions.
+Open: whether property reads are safe between streaming batches on the same
+`IfcAPI` (JS is single-threaded, so calls serialize, but the batch pump's
+own state must tolerate it) — P1.0 checks.
+
+### 4.3 Per-model sessions (#2019)
+
+Each open model gets a session that owns:
+
+- its engine (`IfcAPI`) and loaded scene object;
+- its load job — download, parse, `ProgressiveLoadSession`, the idle GLB
+  writer bound to *this* session's `ifcAPI` rather than read from
+  `viewer?.IFC?.loader?.ifcManager` at run time (`Loader.js:994`);
+- its per-model state — the inventory from the earlier `resetModelState()`
+  plan (#2020, now folded in here): `model`, `rootElement`, `elementTypesMap`,
+  `searchIndex`, `preselectedElementIds`, NavTree expansion, isolation
+  (incl. `isTempIsolationModeOn`), `displayOverrides`, notes/markers and
+  their selection ids, `versions`/`activeVersion`, `opfsFile`,
+  `isCacheWriteInFlight`, `elementsById`, hidden elements (already keyed per
+  model by `claimHiddenElementsForModel`);
+- its window-handler bindings (`window.ondblclick`, `setKeydownListeners`).
+
+The view binds to the active session; switching rebinds the view, it does
+not reset or dispose the session. Viewer rebinding includes PlaceMark
+(#2017). This pulls Phase 2's per-model store shape (§7) forward. Each
+slice owns its session-scoped fields, so a new per-model field gets one by
 construction.
 
-### 4.3 `navigateToModel` in-app, behind a flag (#2021)
+### 4.4 No blocking calls (#2030)
+
+Conway runs on the main thread — the only workers are OPFS
+(`src/OPFS/OPFSService.js:54`) and the GLB writer
+(`src/loader/GlbWriterService.js:43`). Two loads at once therefore share
+one thread, and a background parse stutters the foreground model unless it
+yields often. The streaming pump already works in batches. If P1.0 shows a
+long synchronous step (the initial parse is the suspect), the options are
+chunking it in Conway or, later, moving the engine into a worker; P1.0's
+numbers pick.
+
+### 4.5 Close and eviction — the only cancel path (#2031)
+
+On an explicit close, or an LRU eviction when the memory budget is
+exceeded (phones first; budget from P1.0's per-model figure):
+
+1. abort the download and the parse — an `AbortSignal` through
+   `Loader.load` to `ProgressiveLoadSession.abort()`
+   (`src/viewer/ProgressiveLoadSession.js:298`) and the batch pump;
+2. drop or cancel the session's idle GLB writer;
+3. `ReleaseModelGeometry` each open model in the engine;
+4. release every reference to the session's `IfcAPI` so the instance is
+   collectable (§2.4), then `CloseModel` — never before the parse has
+   stopped.
+
+An evicted model reopens like any other (its GLB cache hit makes that
+cheap where one exists).
+
+### 4.6 `navigateToModel` in-app, behind a flag (#2021)
 
 `navigate()` instead of `location.assign`, keeping `withCurrentSearch`;
 `navigateToInMemoryModel` folds in.
@@ -239,6 +311,15 @@ disarm it), check Back/Forward through `Share.jsx`'s route effect (needs
 §3.1), and revisit the ProjectsDrawer capture's reload-shaped reasoning
 (`src/store/WorkspaceSlice.js:165-170`, `src/workspace/persistence.ts:140-143`,
 `src/Containers/ProjectsDrawer.jsx:197-203`).
+
+### 4.7 Open risks
+
+- **Main-thread contention** between concurrent loads (§4.4).
+- **Memory is the sum of open models**, one WASM instance each; the budget
+  and eviction (§4.5) are what keep phones alive.
+- **Whether Conway's initial parse is one long synchronous call** — if so,
+  "interactive at index" is bounded by it, and a background parse blocks
+  the foreground for that long.
 
 
 ## 5. "Once per page load" needs a per-open answer (#2022)
@@ -287,6 +368,8 @@ A heap-size number can't fail reliably, so the test asserts **collection**:
   GC over CDP (`HeapProfiler.collectGarbage`), waits for the registry
   callbacks, and asserts exactly one live engine.
 - A mid-load case switches while A is still parsing.
+- A background session's engine stays live across a switch, and is
+  collected once that model is closed or evicted (§4.5).
 - Shown red with one teardown fix reverted (e.g. `model` left in the store
   until B resolves).
 
@@ -313,8 +396,10 @@ dispose calls against a mocked ShareViewer.
   if measurement shows the per-instance overhead matters. It does not
   block anything.
 - **Store shape.** Selection, isolation, NavTree, properties and display
-  overrides are single-model. Keyed per model, or one active model with
-  read-only overlays — the latter may be enough for #1251's first cut.
+  overrides are single-model. Their per-model shape moves to Phase 1's
+  sessions (§4.3, decided 2026-11-02); what remains here is showing more
+  than one session at once — keyed per model, or one active model with
+  read-only overlays, which may be enough for #1251's first cut.
 
 
 ## 8. Evidence status
@@ -324,10 +409,13 @@ Phase 0 defect, the Phase 1 inventories, the writer's run-time `ifcManager`
 read, the literal-0 sites, `CloseModel`'s body and the smoke test's note,
 COEP and `pThreadsAllowed`.
 
-**Decisions** (2026-11-01, from the user): §4.3 flag, §5.1 return-is-a-new-open,
-§7 engine per model.
+**Decisions** (from the user): 2026-11-01 — §4.6 flag, §5.1
+return-is-a-new-open, §7 engine per model; 2026-11-02 — §4.0 switching away
+is not closing (background loads, sessions, interactive at index, cancel
+only on close/eviction).
 
-**Not measured or reproduced:** that an unreferenced single-threaded
+**Not measured or reproduced:** everything P1.0 (§4.1) measures — stage
+times, the longest synchronous Conway call, per-model engine memory; that an unreferenced single-threaded
 Emscripten instance's memory is reclaimed promptly in practice (§6 is how
 we find out); the UI repro of §3.2 via the clear button and of §3.5 via a
 theme toggle; the per-instance WASM baseline (§7).
