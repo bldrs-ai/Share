@@ -333,7 +333,11 @@ first time STEP occurrence paths needed encoding. Implemented in
 ```
 
 - **One ref vocabulary, three kinds.** `e<id>` for ids the file makes stable
-  (IFC; STEP product hides); `o<id>.<id>…` for a STEP occurrence — the ids the
+  (IFC; STEP product hides; and the row of a top-level STEP product with
+  geometry of its own, for that geometry, which has no occurrence path: a
+  whole product hidden is `hide=e7+o12+o13`, its children by path,
+  step-occurrence-selection.md "The whole product as rows", #1924);
+  `o<id>.<id>…` for a STEP occurrence — the ids the
   selection permalink already writes for it (`occurrenceElementPathIds` minus
   the root) and resolves back through the same `resolveElementPathOccurrence`;
   `n<seg>/<seg>…` for scene-graph formats (ADF, OBJ, GLB, …), whose ids are

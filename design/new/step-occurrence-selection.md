@@ -354,6 +354,8 @@ order; BVH permutes only the index buffer, not the numbering).
    (the store is keyed by node id); child-leaf eyes still read "shown." Toggling
    the assembly eye is the way to reveal them again. Making descendant eyes
    follow would need per-node hidden-state derived from the occurrence prefix.
+   The root of a top-level product with geometry of its own no longer has
+   this gap: it is hidden as its rows (#1924, "The whole product as rows").
 4. **Root-level parts** — mostly closed by conway#628, see §"Identity below
    the product". A *body* placed directly under the product root now carries
    `[bodyExpressID]`, so the no-NAUO multibody file (BLSN_007) reconciles
@@ -452,9 +454,101 @@ order; BVH permutes only the index buffer, not the numbering).
      product: the root-level instances plus every descendant's. The root's empty
      path gives `selectedOccurrences` nothing, so `IfcIsolator` adds the root
      as a pathless occurrence carrying its selected instances. A pick narrowed
-     to some shells keeps the owner-id route. The pathless root is not written
-     to the `#d:` link (it has no path to write); its children's hides and
-     isolations still are.
+     to some shells keeps the owner-id route. Hide and Isolate then act on it
+     as **rows**, not as that one entry; see "The whole product as rows"
+     below (#1924).
+
+   **The whole product as rows: the eye and the `#d:` link (#1924).** One
+   pathless entry holding the whole product's instances hid and isolated the
+   right geometry, but nothing else could read it. Its key marked the root's
+   row hidden and no other: the children's eyes read "visible" over hidden
+   geometry. The root's eye read hidden from it, but its click took the
+   element-id route (`hideElementsById(flattenChildren(root))`), and none of
+   those ids is hidden, or owns geometry. So the click did nothing, and on a
+   visible product it marked the row hidden and hid nothing. And the link
+   had no path to write, so a whole-product Hide or Isolate reopened as if
+   nothing had been done. Measured on `assemblyWithRootGeometry.step` before
+   the fix: after the row click and H, 0 of 42 visible, the root's eye
+   "hidden", both `Widget` eyes "visible", no `#d:` term; the root's eye
+   clicked, still 0 visible. The rule now:
+
+   - **A whole product is hidden or isolated as its rows**
+     (`IfcIsolator#splitProductOccurrences`). The product's own root-level
+     instances stay on the product's row, keyed `#<row>` with an empty path.
+     Everything below it goes to the fewest occurrences that hold exactly
+     those instances (`occurrencePaths.coverInstancesByOccurrences`): a child
+     that is wholly in the selection is one entry, and the walk goes below a
+     child only when part of it is out. Every entry reads back from the link
+     as exactly its instances. A row's `o<path>` reads back as everything at
+     and below the path. So geometry placed at a part-selected assembly's own
+     path, beside its children, can't be written as that assembly's row:
+     the link would reopen its other children too (codex on #2001). It is
+     named by the assembly's geometry pieces that lie wholly inside it,
+     `o<path>.<geometry id>`, the anonymous-geometry ref (conway#387). Any
+     part that no piece names alone is marked `inexact`. The instances are
+     the same, so what the scene shows does not change. Every row now reads
+     its own state, and
+     a child's eye shows just that child while the rest stays hidden. The gate
+     that decides when the selection is the whole product
+     (`_wholeRootOccurrences`, all of the product's own instances selected) is
+     unchanged. Which partial root selections should count is #1924 item 2.
+   - **The root's eye is the whole product.** On the row of a top-level
+     product with root-level geometry of its own, `HideToggleButton` calls
+     `IfcIsolator#hideProduct` and `#unHideProduct`. Hide takes what a row
+     click selects. Show takes the product's own entry and the occurrences
+     below it that were hidden with it, in the same call
+     (`IfcIsolator#_productParts`). An occurrence the user hid on its own eye
+     first stays hidden. That follows the STEP occurrence eyes: showing an
+     assembly occurrence removes only its own key (`unHideOccurrences`), so
+     a child hidden on its own eye stays hidden. It is also what main's
+     whole-product H did with its one `#<row>` entry (codex on #2001). H
+     again on a whole product shows the same set: the rows the selection
+     names itself, and the rows hidden with the product. The IFC eye is the
+     other precedent: it clears its whole subtree's ids. A link can't say
+     which rows were hidden on their own, so a product reopened from
+     `hide=e<row>+o…` counts every row the link lists under it as hidden
+     with it. Every
+     other row, a plain assembly's root (no root-level geometry, #1924 item
+     6) among them, keeps the route it had. Which rows get an eye is
+     unchanged (`NavTreePanel`, `canBeHidden`).
+   - **The link writes the product's own geometry as `e<row id>`**, and each
+     occurrence split off below it as its `o` path. The whole assembly
+     hidden is `#d:hide=e7+o<widget 1>+o<widget 2>`, and isolated is the
+     same refs under `iso=`. On reading, an `e` ref whose id is a top-level
+     product with root-level geometry
+     (`IfcIsolator#productRootLevelOccurrence`) is that geometry, hidden or
+     isolated as an occurrence. Any other `e` ref is an element id, as
+     before. A row id owns no geometry, so as an element id this ref would
+     hide nothing. A link that main's broken root eye wrote (`hide=e7`, with
+     nothing hidden) therefore now reopens with the root's own shells
+     hidden. A product with many direct children writes a ref for each, and
+     the 1500-character cap (model-display-controls §6.2) can drop the
+     visibility terms. The Share dialog says so when it does.
+   - **What no ref can name stays out of the link.** The root's own
+     geometry has no stable id of its own, so `e<row>` always means all of
+     it, which the gate guarantees today. A product entry holding only some
+     of it would be marked `inexact`, as #1924 item 2's possible fix would
+     make it. So would geometry at a part-selected assembly's own path that
+     shares its geometry id with a sibling's. An `inexact` entry is hidden
+     or isolated exactly in the session, but its ref would reopen more. A
+     link written with one would reopen something other than what is on
+     screen, while looking complete. So while any entry is `inexact`, the
+     link carries no visibility terms, as past the size cap
+     (`visibilityHash.js#visibilityRefsAreExact`). The Share dialog then
+     says the state is not in the link. Every link that is written reopens
+     exactly the hidden or isolated set it was written from.
+   - **The assistant's view tools go the same way** (`viewer/tools/`,
+     #1946). `view.hide` and `view.isolate` on a product's row name the
+     whole product as one pathless entry, and on a multi-root file's
+     `Model` wrapper as one entry for all its parts. They hand those to
+     `IfcIsolator#splitProductOccurrences`, which splits a wrapper into its
+     parts and each part into rows. Undo's snapshot
+     (`visibilityState.js`) keeps every entry as the isolator holds it: an
+     empty path (the product's own geometry) is not the same as none,
+     `inexact` is kept, and so is what each product hid with it
+     (`productHidePartsSnapshot`). An isolated product's own entry keeps
+     its instances in `isolatedOccurrences`, since it has no path to
+     resolve them by.
 
    The root's empty path is no key for `selectedOccurrences`/
    `getInstanceIdsForOccurrencePath`, so every row-driven path needs the

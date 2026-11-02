@@ -6,6 +6,11 @@
 jest.mock('three', () => jest.requireActual('three'))
 jest.mock('../three/IfcIsolator', () => jest.requireActual('../three/IfcIsolator'))
 import '../../../__mocks__/shareViewerTestHarness'
+import {
+  visibilityRefs,
+  visibilityRefsAreExact,
+  writeVisibilityHash,
+} from '../../Components/Residency/visibilityHash'
 import useStore from '../../store/useStore'
 import {ShareViewer} from '../ShareViewer'
 import {createShareAssistRegistry} from './assistHost'
@@ -19,6 +24,22 @@ import {
   visibleProducts,
 } from './tools.fixture'
 import {captureVisibility, restoreVisibility} from './visibilityState'
+
+
+/**
+ * @return {object} a location double with a normalized `hash`
+ */
+function loc() {
+  let value = ''
+  return {
+    get hash() {
+      return value
+    },
+    set hash(next) {
+      value = next && !next.startsWith('#') ? `#${next}` : next
+    },
+  }
+}
 
 
 /**
@@ -109,8 +130,80 @@ describe('viewer/tools on a STEP assembly', () => {
 
     expect(visibleProducts(fixture.batch)).toEqual([200, 500])
     expect(useStore.getState().isolatedElements).toEqual(isolatedBefore)
-    // The link still carries the pathful occurrence (a pathless one has no ref).
-    expect(isolator.isolatedOccurrences.map(({nodeId}) => nodeId)).toEqual([20])
+    // The link carries both: the occurrence by its path, the product's own
+    // geometry by its row (an empty path, written `e1`, #1924).
+    expect(isolator.isolatedOccurrences.map(({nodeId}) => nodeId)).toEqual([20, 1])
+  })
+
+  // #2001 after #1946: the tools hid the product as one pathless entry, so
+  // its rows' eyes read visible and the `#d:` link wrote only `e1`, the
+  // product's own geometry, which reopens without its children.
+  it('hides the top-level product as its rows, so the link names all of it', async () => {
+    const {isolator} = fixture.viewer
+    await registry.call('view.hide', {refs: ['e1']})
+    expect(visibleProducts(fixture.batch)).toEqual([])
+    expect(visibilityRefs(fixture.viewer).hide.sort()).toEqual(['e1', 'o10', 'o20'])
+    expect(isolator.unHideProduct(1)).toBe(true)
+    expect(visibleProducts(fixture.batch)).toEqual(ALL)
+  })
+
+  // An entry no ref names exactly (`inexact`, #2001) stays out of the link,
+  // and must still be after undo: restored as exact, its ref would reopen
+  // more than was hidden (`o20` here names all of Plate's placements).
+  it('keeps an inexact hide and isolation out of the link across a snapshot', () => {
+    const {isolator} = fixture.viewer
+    const plate = fixture.batch.instanceOccurrenceIds[3]
+    isolator.hideOccurrences([{nodeId: 20, occurrencePath: [20], solidExpressId: null, instanceIds: [plate], inexact: true}])
+    expect(visibilityRefsAreExact(fixture.viewer)).toBe(false)
+    const hidden = captureVisibility(isolator)
+    isolator.unHideAllElements()
+    restoreVisibility(isolator, hidden)
+    expect(visibleProducts(fixture.batch)).toEqual([100, 100, 500])
+    expect(visibilityRefsAreExact(fixture.viewer)).toBe(false)
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const location = loc()
+    expect(writeVisibilityHash(location, fixture.viewer)).toBe(false)
+    expect(location.hash).not.toContain('hide=')
+
+    isolator.unHideAllElements()
+    isolator.isolateOccurrences([{nodeId: 20, occurrencePath: [20], solidExpressId: null, instanceIds: [plate], inexact: true}])
+    const isolated = captureVisibility(isolator)
+    isolator.resetTempIsolation()
+    restoreVisibility(isolator, isolated)
+    expect(visibleProducts(fixture.batch)).toEqual([200])
+    expect(writeVisibilityHash(location, fixture.viewer)).toBe(false)
+    expect(location.hash).not.toContain('iso=')
+    warn.mockRestore()
+  })
+
+  // An occurrence hidden without a path (null) has no ref. Captured as an
+  // empty path, it came back as a top-level product's own geometry, which
+  // the link writes as `e<row>` and reopens as the product's shells.
+  it('restores an occurrence hidden without a path as one, which the link leaves out', () => {
+    const {isolator} = fixture.viewer
+    const plate = fixture.batch.instanceOccurrenceIds[3]
+    isolator.hideOccurrence(20, [plate])
+    expect(visibilityRefs(fixture.viewer).hide).toEqual([])
+    const snapshot = captureVisibility(isolator)
+    isolator.unHideAllElements()
+    restoreVisibility(isolator, snapshot)
+    expect(visibleProducts(fixture.batch)).toEqual([100, 100, 500])
+    expect(visibilityRefs(fixture.viewer).hide).toEqual([])
+  })
+
+  // #2001: undo restored the hides in one call, which counted every row as
+  // hidden with the product, so the product's eye then showed a row the user
+  // had hidden on its own.
+  it('undo keeps a row hidden on its own apart from the product hidden after it', async () => {
+    const {isolator} = fixture.viewer
+    await registry.call('view.hide', {refs: ['o20']})
+    await registry.call('view.hide', {refs: ['e1']})
+    const result = await registry.call('view.showAll', {})
+    expect(visibleProducts(fixture.batch)).toEqual(ALL)
+    await result.undo()
+    expect(visibleProducts(fixture.batch)).toEqual([])
+    isolator.unHideProduct(1)
+    expect(visibleProducts(fixture.batch)).toEqual([100, 100, 500])
   })
 })
 
@@ -160,6 +253,43 @@ describe('viewer/tools on a root-only multi-root STEP file (twoRootShells.step)'
     await registry.call('view.isolate', {refs: ['e0']})
     expect(visibleProducts(fixture.batch)).toEqual([8, 8, 3008, 3008])
     expect(useStore.getState().isTempIsolationModeOn).toBe(true)
+    // As each part (#2001): `e0` names no geometry, so a link that wrote
+    // the wrapper reopened isolating nothing.
+    expect(visibilityRefs(fixture.viewer).iso.sort()).toEqual(['e3007', 'e7'])
+  })
+})
+
+
+// A multi-root file's wrapper whose part has children of its own: the
+// wrapper splits into its parts, and each part into rows (#2001), so its
+// child is written by path rather than folded into the part's `e<row>`, which
+// reads back as the part's own geometry alone.
+describe('viewer/tools on a multi-root STEP file whose part has a child', () => {
+  let fixture
+  let registry
+  let unregister
+
+
+  beforeEach(async () => {
+    fixture = await loadFixture({
+      build: () => makeTwoRootStepModel({withChild: true}),
+      viewer: Object.create(ShareViewer.prototype),
+    })
+    registry = createShareAssistRegistry()
+    unregister = registerSelectionFunnel(makeStoreFunnel())
+  })
+
+
+  afterEach(() => {
+    unregister()
+    registry.dispose()
+  })
+
+
+  it('hides the wrapper as each part\'s own geometry and the part\'s child', async () => {
+    await registry.call('view.hide', {refs: ['e0']})
+    expect(visibleProducts(fixture.batch)).toEqual([])
+    expect(visibilityRefs(fixture.viewer).hide.sort()).toEqual(['e3007', 'e7', 'o3100'])
   })
 })
 

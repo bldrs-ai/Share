@@ -21,6 +21,7 @@ import {
   Mesh,
   MeshBasicMaterial,
 } from 'three'
+import {applyVisibilityHash, writeVisibilityHash} from '../../Components/Residency/visibilityHash'
 import IfcIsolator from './IfcIsolator'
 
 
@@ -1197,13 +1198,118 @@ describe('viewer/three/IfcIsolator', () => {
           expect(iso.hiddenOccurrences.size).toBe(0)
         })
 
-        it('isolates the whole product, and keeps the pathless root out of the link', () => {
+        it('isolates the whole product as its rows: the root\'s own geometry, and each child (#1924)', () => {
           const {iso} = setupRoot([0, 1, 2, 3])
           iso.isolateSelectedElements()
           expect([...iso.isolatedInstanceIds].sort()).toEqual([0, 1, 2, 3])
-          expect(iso.isolatedOccurrences).toEqual([])
+          // The link is built from this list. Isolated as one pathless entry,
+          // the product was left out of it, and the link reopened unisolated.
+          // The root's own geometry has no path to resolve, so it keeps its
+          // instances (what a snapshot restores it from).
+          expect(iso.isolatedOccurrences).toEqual([
+            {nodeId: 1, occurrencePath: [], solidExpressId: null, instanceIds: [2, 3]},
+            {nodeId: 10, occurrencePath: [10], solidExpressId: null},
+          ])
           expect(useStoreMock.setState).toHaveBeenCalledWith(
-            expect.objectContaining({isolatedOccurrenceKeys: {'#1': true}}))
+            expect.objectContaining({isolatedOccurrenceKeys: {'#1': true, '10#': true}}))
+        })
+
+        it('hides the whole product as its rows, so the children\'s eyes read hidden too (#1924)', () => {
+          const {iso, mesh} = setupRoot([0, 1, 2, 3])
+          iso.hideSelectedElements()
+          expect(visibility(mesh)).toEqual([false, false, false, false])
+          // As one pathless entry only the root's row was marked, and the
+          // child's eye read "visible" over hidden geometry.
+          expect(useStoreMock.setState).toHaveBeenLastCalledWith({
+            hiddenElements: {1: true, 10: true}, hiddenOccurrenceKeys: {'#1': true, '10#': true},
+          })
+          expect(iso.hiddenOccurrences.get('#1')).toEqual([2, 3])
+          expect(iso.hiddenOccurrences.get('10#')).toEqual([0, 1])
+          // The child's eye shows just the child.
+          iso.unHideOccurrence(10, {occurrencePath: [10], solidExpressId: null})
+          expect(visibility(mesh)).toEqual([true, true, false, false])
+        })
+
+        it('the root row\'s eye hides the whole product, and shows what H hid (#1924)', () => {
+          const {iso, mesh} = setupRoot([])
+          expect(iso.hideProduct(1)).toBe(true)
+          expect(visibility(mesh)).toEqual([false, false, false, false])
+          expect(useStoreMock.setState).toHaveBeenLastCalledWith({
+            hiddenElements: {1: true, 10: true}, hiddenOccurrenceKeys: {'#1': true, '10#': true},
+          })
+          expect(iso.unHideProduct(1)).toBe(true)
+          expect(visibility(mesh)).toEqual([true, true, true, true])
+          expect(iso.hiddenOccurrences.size).toBe(0)
+
+          // After a whole-product H. Its click went to the element-id route,
+          // found none of the product's ids hidden, and did nothing.
+          useStoreMock.getState.mockReturnValue({...useStoreMock.getState(), selectedInstanceIds: [0, 1, 2, 3]})
+          iso.hideSelectedElements()
+          expect(visibility(mesh)).toEqual([false, false, false, false])
+          expect(iso.unHideProduct(1)).toBe(true)
+          expect(visibility(mesh)).toEqual([true, true, true, true])
+          expect(iso.hiddenOccurrences.size).toBe(0)
+        })
+
+        // codex on #2001: a child the user hid on its own eye before the
+        // product was hidden is not the product's to show. The STEP
+        // occurrence eyes key each row on its own (`unHideOccurrences`
+        // removes only the keys it names), so showing an assembly occurrence
+        // leaves a child hidden on its own eye hidden, and main's
+        // whole-product H, one `#<root>` entry, left it hidden on H again.
+        it('showing the product leaves a child hidden on its own eye before it hidden', () => {
+          const {iso, mesh} = setupRoot([])
+          iso.hideOccurrence(10, [0, 1], {occurrencePath: [10], solidExpressId: null})
+          iso.hideProduct(1)
+          expect(visibility(mesh)).toEqual([false, false, false, false])
+          iso.unHideProduct(1)
+          expect(visibility(mesh)).toEqual([false, false, true, true])
+          expect(useStoreMock.setState).toHaveBeenLastCalledWith({
+            hiddenElements: {10: true}, hiddenOccurrenceKeys: {'10#': true},
+          })
+        })
+
+        it('H again on the whole product leaves a child hidden on its own eye before the first H hidden', () => {
+          const {iso, mesh} = setupRoot([0, 1, 2, 3])
+          iso.hideOccurrence(10, [0, 1], {occurrencePath: [10], solidExpressId: null})
+          iso.hideSelectedElements()
+          expect(visibility(mesh)).toEqual([false, false, false, false])
+          iso.hideSelectedElements()
+          expect(visibility(mesh)).toEqual([false, false, true, true])
+        })
+
+        it('showing the product shows a child shown and hidden again on its own eye only if it was hidden with it', () => {
+          const {iso, mesh} = setupRoot([])
+          iso.hideProduct(1)
+          // Shown on its own eye, then hidden on it again: its own hide now.
+          iso.unHideOccurrence(10, {occurrencePath: [10], solidExpressId: null})
+          iso.hideOccurrence(10, [0, 1], {occurrencePath: [10], solidExpressId: null})
+          iso.unHideProduct(1)
+          expect(visibility(mesh)).toEqual([false, false, true, true])
+        })
+
+        it('is no product eye on any other row', () => {
+          const {iso, mesh} = setupRoot([])
+          // A child row: its own path is what its eye hides.
+          expect(iso.hideProduct(10)).toBe(false)
+          expect(iso.unHideProduct(10)).toBe(false)
+          // A root with no root-level geometry (a plain assembly): the id route, as before.
+          iso.viewer.getRootLevelInstances = jest.fn(() => ({instanceIds: [], parentExpressIds: []}))
+          expect(iso.hideProduct(1)).toBe(false)
+          // IFC: the viewer has no root-level instances to ask for.
+          delete iso.viewer.getRootLevelInstances
+          expect(iso.hideProduct(1)).toBe(false)
+          expect(visibility(mesh)).toEqual([true, true, true, true])
+        })
+
+        it('names a top-level product\'s own root-level geometry for the link, and no other row', () => {
+          const {iso} = setupRoot([])
+          const {rootElement} = useStoreMock.getState()
+          expect(iso.productRootLevelOccurrence(1, rootElement))
+            .toEqual({nodeId: 1, occurrencePath: [], solidExpressId: null, instanceIds: [2, 3]})
+          expect(iso.productRootLevelOccurrence(10, rootElement)).toBeNull()
+          iso.viewer.getRootLevelInstances = jest.fn(() => ({instanceIds: [], parentExpressIds: []}))
+          expect(iso.productRootLevelOccurrence(1, rootElement)).toBeNull()
         })
 
         it('a pick narrowed to some of the root-level geometry keeps the owner-id route', () => {
@@ -1242,6 +1348,127 @@ describe('viewer/three/IfcIsolator', () => {
           expect(iso._selectionOccurrences()).toEqual([
             {nodeId: 3007, occurrencePath: [], solidExpressId: null, instanceIds: [0, 1, 3]},
           ])
+        })
+      })
+
+      describe('a nested assembly partly in a whole-product selection (codex on #2001)', () => {
+        // Root 1 owns instance 3 (empty path). Its child assembly 10 has
+        // geometry at its own path (instance 2) beside children 11
+        // (instance 0) and 12 (instance 1). The selection is the root's own
+        // geometry, 10's own, and 11: the whole product by the gate (all of
+        // the root's own instances are selected), but not all of 10.
+        const placements = [
+          {id: 0, path: '10/11', geometry: 600},
+          {id: 1, path: '10/12', geometry: 700},
+          {id: 2, path: '10', geometry: 500},
+        ]
+        const rootElement = {expressID: 1, occurrencePath: [], children: [
+          {expressID: 10, occurrencePath: [10], children: [
+            {expressID: 11, occurrencePath: [10, 11], children: []},
+            {expressID: 12, occurrencePath: [10, 12], children: []},
+          ]},
+        ]}
+
+        /**
+         * A loaded model, with ShareViewer's path and geometry lookups over
+         * `placements` (prefix-inclusive unless asked not to be).
+         *
+         * @param {Array<object>} [table] the placements
+         * @return {object} setupBatchedIsolator's result
+         */
+        function setupNested(table = placements) {
+          const setup = setupBatchedIsolator()
+          const {iso, mesh} = setup
+          mesh.occurrencePathToBatchIds = new Map([['10', [2]], ['10/11', [0]], ['10/12', [1]]])
+          const under = (path, includeDescendants) => {
+            const key = path.join('/')
+            return table.filter((placement) => placement.path === key ||
+              (includeDescendants && placement.path.startsWith(`${key}/`)))
+          }
+          iso.viewer.getInstanceIdsForOccurrencePath = jest.fn((modelId, path,
+            {includeDescendants = true, geometryExpressId = null} = {}) =>
+            under(path, includeDescendants)
+              .filter(({geometry}) => geometryExpressId === null || geometry === geometryExpressId)
+              .map(({id}) => id))
+          iso.viewer.getGeometryIdsForOccurrencePath = jest.fn((modelId, path) =>
+            [...new Set(under(path, true).map(({geometry}) => geometry))])
+          iso.viewer.getRootLevelInstances = jest.fn(() => ({instanceIds: [3], parentExpressIds: [100]}))
+          iso.viewer.isolator = iso
+          useStoreMock.getState.mockReturnValue({
+            elementTypesMap: [], selectedElements: ['1', '100'], selectedAnchorIds: ['1'],
+            selectedInstanceIds: [3, 2, 0], selectedOccurrencePath: null, selectedSolidExpressId: null,
+            rootElement,
+          })
+          return setup
+        }
+
+        /**
+         * @return {object} a location double with a normalized `hash`
+         */
+        function loc() {
+          let value = ''
+          return {
+            get hash() {
+              return value
+            },
+            set hash(next) {
+              value = next && !next.startsWith('#') ? `#${next}` : next
+            },
+          }
+        }
+
+        it('the link reopens exactly the instances the whole-product Hide hid', () => {
+          const sender = setupNested()
+          sender.iso.hideSelectedElements()
+          expect([...sender.iso._hiddenInstanceIdSet()].sort()).toEqual([0, 2, 3])
+          const location = loc()
+          expect(writeVisibilityHash(location, sender.iso.viewer)).toBe(true)
+
+          const receiver = setupNested()
+          expect(applyVisibilityHash(location, receiver.iso.viewer, rootElement)).toEqual([])
+          // Written as `o10` for 10's own geometry, the link hid 10's other
+          // child (instance 1) as well.
+          expect([...receiver.iso._hiddenInstanceIdSet()].sort()).toEqual([0, 2, 3])
+          expect(visibility(receiver.mesh)).toEqual(visibility(sender.mesh))
+          // The link can't say which rows were hidden on their own, so the
+          // reopened product's eye shows every row it lists under it.
+          expect(receiver.iso.unHideProduct(1)).toBe(true)
+          expect(receiver.iso.hiddenOccurrences.size).toBe(0)
+        })
+
+        it('the link reopens exactly the instances the whole-product Isolate isolated', () => {
+          const sender = setupNested()
+          sender.iso.isolateSelectedElements()
+          expect([...sender.iso.isolatedInstanceIds].sort()).toEqual([0, 2, 3])
+          const location = loc()
+          expect(writeVisibilityHash(location, sender.iso.viewer)).toBe(true)
+
+          const receiver = setupNested()
+          applyVisibilityHash(location, receiver.iso.viewer, rootElement)
+          expect([...receiver.iso.isolatedInstanceIds].sort()).toEqual([0, 2, 3])
+        })
+
+        it('leaves the state out of the link when no ref names a part exactly', () => {
+          // 10's own geometry shares its id with 11's, so no ref names it
+          // alone: `o10.600` is both, and `o10` all three.
+          const shared = placements.map((placement) => (placement.id === 2 ? {...placement, geometry: 600} : placement))
+          const sender = setupNested(shared)
+          sender.iso.hideSelectedElements()
+          expect([...sender.iso._hiddenInstanceIdSet()].sort()).toEqual([0, 2, 3])
+          const location = loc()
+          const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+          // Rather than a link that reopens something else and looks complete.
+          expect(writeVisibilityHash(location, sender.iso.viewer)).toBe(false)
+          expect(location.hash).not.toContain('hide=')
+          expect(warn).toHaveBeenCalled()
+
+          // Isolating it is the same.
+          sender.iso.hideSelectedElements()
+          sender.iso.isolateSelectedElements()
+          expect([...sender.iso.isolatedInstanceIds].sort()).toEqual([0, 2, 3])
+          expect(writeVisibilityHash(location, sender.iso.viewer)).toBe(false)
+          expect(location.hash).not.toContain('iso=')
+          warn.mockRestore()
         })
       })
 

@@ -897,6 +897,84 @@ export function selectedOccurrences({rootNode, anchorIds, occurrencePath = null,
 
 
 /**
+ * The occurrences under `nodes` that together hold exactly the instances in
+ * `wanted`, as few as the tree allows: a node all of whose instances (its
+ * descendants' included) are wanted is one entry, and the walk goes below a
+ * node only when some of them are not. This is how a whole-product hide or
+ * isolate of a top-level STEP product is split into rows (#1924): the
+ * product's own root-level instances have no path and stay with the
+ * product's row, and everything below it goes to the occurrences it belongs
+ * to, so each row's eye reads its own state and each is written to the `#d:`
+ * link by its path.
+ *
+ * Every entry stands for exactly the instances its ref reads back as: a row's
+ * `o<path>` resolves to everything at and below the path, and a geometry
+ * piece's `o<path>.<geometry id>` to that geometry at and below it
+ * (`visibilityHash.js#resolveOccurrence`). So a node that is only partly
+ * wanted, whose children don't account for the rest (geometry placed at the
+ * node's own path, beside children), can't keep that rest as its own row:
+ * its row reads back as all of it, children included (codex on #2001). The
+ * rest is named by the node's geometry pieces (`piecesOf`) that lie wholly
+ * inside it. What no piece names exactly is left as one entry marked
+ * `inexact`: hidden exactly in the session, but with no ref that reads back
+ * as just it, so the link leaves the state out (`visibilityHash.js`).
+ *
+ * @param {Array<object>} nodes tree nodes (a product's children)
+ * @param {Set<number>} wanted instance ids to cover
+ * @param {Function} instancesOf `(node) => Array<number>`: a node's
+ *   instances, its descendants' included (`getInstanceIdsForOccurrencePath`)
+ * @param {Function} [piecesOf] `(node) => Array<{geometryExpressId,
+ *   instanceIds}>`: the geometry pieces at and below a node, each with the
+ *   instances it resolves to the way the link reads it back. Without it,
+ *   every such rest is `inexact`.
+ * @return {Array<object>} `{nodeId, occurrencePath, solidExpressId,
+ *   instanceIds}`, the same row identity `selectedOccurrences` gives (for a
+ *   piece, the geometry id is the node id and the solid id), plus
+ *   `inexact: true` on a rest no ref names
+ */
+export function coverInstancesByOccurrences(nodes, wanted, instancesOf, piecesOf = null) {
+  const out = []
+  if (!(wanted?.size > 0)) {
+    return out
+  }
+  for (const node of nodes ?? []) {
+    if (!node || !Array.isArray(node.occurrencePath) || node.occurrencePath.length === 0) {
+      continue
+    }
+    const ids = instancesOf(node)
+    const hit = ids.filter((id) => wanted.has(id))
+    if (hit.length === 0) {
+      continue
+    }
+    const id = Number(node.expressID)
+    const solid = node.ephemeral === true ? id : null
+    const path = node.occurrencePath
+    if (hit.length === ids.length) {
+      out.push({nodeId: id, occurrencePath: path, solidExpressId: solid, instanceIds: ids})
+      continue
+    }
+    const below = coverInstancesByOccurrences(node.children, new Set(hit), instancesOf, piecesOf)
+    out.push(...below)
+    const rest = new Set(hit)
+    below.forEach(({instanceIds}) => instanceIds.forEach((instanceId) => rest.delete(instanceId)))
+    for (const {geometryExpressId, instanceIds} of (rest.size > 0 && piecesOf ? piecesOf(node) : [])) {
+      if (instanceIds.length > 0 && instanceIds.every((instanceId) => rest.has(instanceId))) {
+        out.push({nodeId: geometryExpressId, occurrencePath: path, solidExpressId: geometryExpressId, instanceIds})
+        instanceIds.forEach((instanceId) => rest.delete(instanceId))
+      }
+    }
+    if (rest.size > 0) {
+      out.push({
+        nodeId: id, occurrencePath: path, solidExpressId: solid,
+        instanceIds: hit.filter((instanceId) => rest.has(instanceId)), inexact: true,
+      })
+    }
+  }
+  return out
+}
+
+
+/**
  * One occurrence's identity, as a map key: its path plus, for a named body,
  * the solid's id. A row id can't be the key: the duplicates of a reused
  * sub-assembly share theirs, and each copy hides on its own.
