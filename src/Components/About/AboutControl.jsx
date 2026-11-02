@@ -68,7 +68,9 @@ export default function AboutControl() {
         title={`About Bldrs\n${PkgJson.version}`}
         icon={<LogoB/>}
         isDialogDisplayed={isAboutVisible}
-        setIsDialogDisplayed={setIsAboutVisible}
+        // Toggling About shut from the logo button must mark the visit too,
+        // same as AboutDialog's own close paths (see handleDialogClose).
+        setIsDialogDisplayed={(isDisplayed) => isDisplayed ? setIsAboutVisible(true) : handleDialogClose()}
         hashPrefix={HASH_PREFIX_ABOUT}
         placement='right'
         dataTestId={testId}
