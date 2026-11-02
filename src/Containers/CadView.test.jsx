@@ -18,6 +18,7 @@ import '../../__mocks__/shareViewerTestHarness'
 import {ShareViewer} from '../viewer/ShareViewer'
 import {getSelectionFunnel} from '../viewer/tools/selectionFunnel'
 import Clipper from '../viewer/three/Clipper'
+import ThreeContext from '../viewer/three/ThreeContext'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
@@ -38,8 +39,9 @@ import CadView from './CadView'
 window.HTMLElement.prototype.scrollIntoView = jest.fn()
 const mockedUseNavigate = jest.fn()
 const defaultLocationValue = {pathname: '/index.ifc', search: '', hash: '', state: null, key: 'default'}
-// mock createObjectURL
+// mock createObjectURL, and revokeObjectURL, which jsdom lacks too
 global.URL.createObjectURL = jest.fn(() => '1111111111111111111111111111111111111111')
+global.URL.revokeObjectURL = jest.fn()
 
 jest.mock('axios')
 jest.mock('@bldrs-ai/ifclib')
@@ -579,8 +581,11 @@ describe('CadView', () => {
     expect(deleteAllSpy).toHaveBeenCalled()
     expect(result.current.selectedElements).toHaveLength(0)
     expect(result.current.selectedElement).toBe(null)
-    // TODO(pablo): hack after refactor, was 0, but UI looks right
-    expect(result.current.cutPlanes.length).toBe(2)
+    // The store follows the scene: no planes, and the menu not active. This
+    // was pinned at 2 while CadView passed resetCutPlaneState its arguments
+    // one slot off, which made the reset a no-op (open-205, #2014).
+    expect(result.current.cutPlanes).toHaveLength(0)
+    expect(result.current.isCutPlaneActive).toBe(false)
     await actAsyncFlush()
   })
 
@@ -974,6 +979,18 @@ describe('CadView', () => {
       expect(getFileDownload).toHaveBeenCalledWith(DRIVE_CONNECTION, null, DRIVE_ROUTE.fileId)
       expect(loadSpy.mock.calls[0][0]).not.toBe(DRIVE_ROUTE.downloadUrl)
     })
+
+    // open-205 #2018: the blob URL a Drive download is loaded through pinned
+    // the whole file for the life of the page, one more copy per load (a
+    // theme toggle reloads the model). Released once `load` settles; this
+    // load fails, which must release it too.
+    it('releases the downloaded file\'s blob URL once the load settles', async () => {
+      mockAuthState.isAuthenticated = true
+      const {loadSpy} = await loadDriveRoute()
+      const blobUrl = loadSpy.mock.calls[0][0]
+      expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
+      await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith(blobUrl))
+    })
   })
 
   it('tells the loader a hosted UUID-named file is not an upload route', async () => {
@@ -1303,6 +1320,217 @@ describe('CadView', () => {
       }]])
     })
   })
+
+  // State that belongs to one model must not outlive it in a CadView that
+  // stays mounted across a model switch. Latent while opening a model reloads
+  // the page; reachable once it doesn't (open-205, #2021).
+  describe('after switching away from a model that loaded (open-205)', () => {
+    let getHarness
+    let loadSpy
+    let cameraControlsSpy
+
+    beforeEach(() => {
+      getHarness = require('../../__mocks__/shareViewerTestHarness').__getShareViewerMockSingleton
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+      // A's load can finish on a viewer the mount has already disposed (a
+      // pre-existing race, open-205 #2019), whose context then hands back no
+      // camera controls, and the tail of onViewerInternal throws. Sidestep
+      // it: these tests are about what happens after A has loaded.
+      cameraControlsSpy = jest.spyOn(ThreeContext.prototype, 'getCameraControls')
+        .mockImplementation(() => getHarness().IFC.context.ifcCamera.cameraControls)
+      // Earlier tests in this file leave view settings and auth state behind;
+      // either one re-runs a load on its own and muddies the counts below.
+      useStore.setState({
+        alert: null, customViewSettings: null, isAuthResolved: false, isModelReady: false,
+        expandedElements: [], selectedElements: [], selectedAnchorIds: [], selectedOccurrencePath: null,
+      })
+    })
+
+    afterEach(() => {
+      cameraControlsSpy.mockRestore()
+      loadSpy?.mockRestore()
+      loadSpy = undefined
+    })
+
+    /**
+     * Mount CadView on A (`/index.ifc`, the harness's a → b → c tree), let it
+     * load, then switch to B (`/other.ifc`), whose loads run `laterLoad`.
+     *
+     * @param {object} result renderHook result over the whole store
+     * @param {Function} laterLoad Loader.load implementation for B
+     * @param {Function} [beforeSwitch] Awaited once A is ready, before the switch
+     */
+    async function loadAThenSwitchToB(result, laterLoad, beforeSwitch) {
+      loadSpy = jest.spyOn(Loader, 'load')
+        .mockImplementationOnce(() => Promise.resolve(getHarness()._loadedModel))
+        .mockImplementation(laterLoad)
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.isModelReady).toBe(true))
+      await beforeSwitch?.()
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+    }
+
+    /**
+     * Like loadAThenSwitchToB, but the switch lands while A is still in its
+     * post-parse tail (onModel awaiting the spatial structure), and A then
+     * runs to the end anyway: nothing cancels a superseded load (#2019). B
+     * replays once A ends and fails.
+     *
+     * @param {object} result renderHook result over the whole store
+     */
+    async function supersedeAWithB(result) {
+      let releaseTree
+      getHarness()._loadedModel.ifcManager.getSpatialStructure.mockImplementationOnce(
+        () => new Promise((resolve) => {
+          releaseTree = () => resolve(makeTestTree())
+        }))
+      loadSpy = jest.spyOn(Loader, 'load')
+        .mockImplementationOnce(() => Promise.resolve(getHarness()._loadedModel))
+        .mockImplementation(() => {
+          throw new Error('OpenModel returned -1')
+        })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(releaseTree).toBeDefined())
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      await act(() => releaseTree())
+      await actAsyncFlush()
+      await waitFor(() => expect(String(loadSpy.mock.calls.at(-1)[0])).toContain('other.ifc'))
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+    }
+
+    // codex review on #2026: the superseded A marked itself loaded after the
+    // switch cleared the flag, which silenced B's retry all over again. A
+    // superseded load no longer writes the flag (onViewerInternal's
+    // isLoadSuperseded).
+    it('retries the new model on an auth change when the old load ran on past the switch', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      await supersedeAWithB(result)
+      const loadsBefore = loadSpy.mock.calls.length
+      await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+      expect(String(loadSpy.mock.calls.at(-1)[0])).toContain('other.ifc')
+    })
+
+    // codex review on #2026: the superseded A refilled the element table with
+    // its tree after the switch cleared it. A superseded load no longer fills
+    // it.
+    it('no longer resolves the old model\'s element ids when the old load ran on past the switch', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      await supersedeAWithB(result)
+      const leafOfA = makeTestTree().children[0].children[0].expressID
+      await act(() => result.current.setExpandedElements([]))
+      await act(() => result.current.setSelectedElements([`${leafOfA}`]))
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
+      await actAsyncFlush()
+      expect(result.current.expandedElements).toEqual([])
+    })
+
+    // codex review on #2026, round 3: A → B → A while the first A is held
+    // in onModel. Back on A, the identity guard counts that first load as
+    // current, so it marks itself loaded (for a viewer since disposed), and
+    // the replay of A must not start with the flag already set: if the replay
+    // fails, an auth change has to retry it.
+    it('retries the model the user returned to when the replay of its load fails', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      let releaseTree
+      getHarness()._loadedModel.ifcManager.getSpatialStructure.mockImplementationOnce(
+        () => new Promise((resolve) => {
+          releaseTree = () => resolve(makeTestTree())
+        }))
+      // The first A loads; everything after it (the replay of A) fails.
+      loadSpy = jest.spyOn(Loader, 'load')
+        .mockImplementationOnce(() => Promise.resolve(getHarness()._loadedModel))
+        .mockImplementation(() => {
+          throw new Error('OpenModel returned -1')
+        })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(releaseTree).toBeDefined())
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      await actAsyncFlush()
+      await act(() => releaseTree())
+      await actAsyncFlush()
+      // The replay is of A (the model shown), and it failed.
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+      expect(String(loadSpy.mock.calls[1][0])).toContain('index.ifc')
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+
+      await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(3))
+      expect(String(loadSpy.mock.calls[2][0])).toContain('index.ifc')
+    })
+
+    // #2014 follow-up (codex review on #2026): the reset on a model change
+    // runs after the location already shows the destination, so the `cp:`
+    // term there is the new model's for CutPlaneMenu to restore. The old
+    // planes still leave the store.
+    it('keeps the destination\'s cut-plane hash term while clearing the old planes', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      try {
+        await loadAThenSwitchToB(result, () => new Promise(() => {}), async () => {
+          await act(() => result.current.setCutPlaneDirections([{direction: 'y', offset: 0}]))
+          window.location.hash = `#${HASH_PREFIX_CUT_PLANE}:x=1`
+        })
+        expect(result.current.cutPlanes).toEqual([])
+        expect(window.location.hash).toBe(`#${HASH_PREFIX_CUT_PLANE}:x=1`)
+      } finally {
+        window.location.hash = ''
+      }
+    })
+
+    // #2015: `isViewerLoaded` gates the auth/OPFS retry effect. Set by A's
+    // success and never cleared, it silenced that effect for every later
+    // model, so a B whose first attempt failed (e.g. a private GitHub file
+    // tried before auth settled) was never retried.
+    it('retries the new model on an auth change', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      await loadAThenSwitchToB(result, () => {
+        throw new Error('OpenModel returned -1')
+      })
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      const loadsBefore = loadSpy.mock.calls.length
+      await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+      expect(String(loadSpy.mock.calls.at(-1)[0])).toContain('other.ifc')
+    })
+
+    // #2016: the element lookup table is per model. Never cleared, A's ids
+    // still resolved while B loaded, so selecting one opened A's ancestors in
+    // the NavTree (and A's whole tree stayed reachable).
+    it('no longer resolves the old model\'s element ids', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      // B never finishes, so nothing of B's refills the table.
+      await loadAThenSwitchToB(result, () => new Promise(() => {}))
+      const leafOfA = makeTestTree().children[0].children[0].expressID
+      await act(() => result.current.setExpandedElements([]))
+      await act(() => result.current.setSelectedElements([`${leafOfA}`]))
+      await actAsyncFlush()
+      // The selection effect has run to the end: it sets the properties and
+      // then the NavTree expansion.
+      await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
+      await actAsyncFlush()
+      expect(result.current.expandedElements).toEqual([])
+    })
+  })
+
 
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing
   /*

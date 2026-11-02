@@ -230,6 +230,14 @@ original list; landed via `googleDrive` flag now default-on).
   OPFS/local case, not just Drive).
 - Story to file: `open-200: Recents show typed unreachable alert + remove-recent`.
 
+**Epic `open-205`: In-app model switching — no page reload per open** 🟡 (NEW)
+*Not in PDF — the reload-per-open lifecycle blocks the workspace shell (`assist-300`)
+and `open-210`.*
+- Epic: <a href="https://github.com/bldrs-ai/Share/issues/2011" target="_blank" rel="noopener noreferrer">#2011</a>. Phase 0 per-model bug fixes (#2012), Phase 1 in-app
+  switching behind `?feature=spaModelNav` (#2019–#2023), Phase 2 multi-model groundwork (#2024).
+- Numbered between `open-200` and `open-210` because it is a prerequisite of the latter.
+- Doc: `design/new/in-app-model-switch.md`.
+
 **Epic `open-210`: Open multiple IFCs in one session** ⬜
 *PDF Open.3 — never started.*
 - Open: <a href="https://github.com/bldrs-ai/Share/issues/1251" target="_blank" rel="noopener noreferrer">#1251</a> Open 200: import and overlay multiple models.
