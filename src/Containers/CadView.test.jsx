@@ -1581,8 +1581,11 @@ describe('CadView', () => {
      * @param {object} result renderHook result over the whole store
      * @param {object} indexedModel what the loader hands onIndexed
      * @param {boolean} [failGeometry]
+     * @param {boolean} [untilHeld] Wait until the load holds its geometry,
+     *   i.e. until onIndexed has returned. False for a test that holds
+     *   onIndexed itself.
      */
-    async function mountOnStreamingLoad(result, indexedModel, failGeometry = false) {
+    async function mountOnStreamingLoad(result, indexedModel, failGeometry = false, untilHeld = true) {
       loadSpy = jest.spyOn(Loader, 'load').mockImplementation(async (...args) => {
         const options = args[6] ?? {}
         // A real index comes after the download and the open, never in the
@@ -1601,7 +1604,9 @@ describe('CadView', () => {
       await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
       render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
       await actAsyncFlush()
-      await waitFor(() => expect(finishGeometry).toBeDefined())
+      if (untilHeld) {
+        await waitFor(() => expect(finishGeometry).toBeDefined())
+      }
       await actAsyncFlush()
     }
 
@@ -1664,6 +1669,60 @@ describe('CadView', () => {
         expect(setSelectionSpy.mock.calls.at(-1)[1]).toEqual([leaf])
       } finally {
         setSelectionSpy.mockRestore()
+      }
+    })
+
+    // Codex review on #2037: a superseded load is not cancelled (#2019), so A
+    // runs on after the user moves to B, and B's own load can't start until A
+    // settles. A's indexed tree must go when the user leaves, and A must not
+    // bring it back as it finishes; B's load is covered by the overlay.
+    it('takes the tree down when the user leaves a model at its index, and keeps it down', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel)
+      await waitFor(() => expect(result.current.indexedModel).toBe(indexedModel))
+      // B never indexes and never finishes.
+      loadSpy.mockImplementation(() => new Promise(() => {}))
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      expect(result.current.indexedModel).toBeNull()
+      expect(result.current.rootElement).toBeNull()
+      // B's load is under the overlay: still loading, nothing indexed.
+      expect(result.current.isModelLoading).toBe(true)
+
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      // A ran to its end, B is now the one loading, and A's tree stayed down.
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+      expect(String(loadSpy.mock.calls[1][0])).toContain('other.ifc')
+      expect(result.current.rootElement).toBeNull()
+      expect(result.current.indexedModel).toBeNull()
+      expect(result.current.isModelLoading).toBe(true)
+    })
+
+    it('does not install a tree whose model the user left while it was being installed', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      // The install reads the root's name before it writes: hold that read,
+      // and move to B meanwhile.
+      let releaseRootName
+      const getPropertiesSpy = jest.spyOn(ShareViewer.prototype, 'getProperties')
+        .mockImplementationOnce(() => new Promise((resolve) => {
+          releaseRootName = () => resolve({Name: {value: 'A'}})
+        }))
+      try {
+        await mountOnStreamingLoad(result, makeIndexedModel(), false, false)
+        await waitFor(() => expect(releaseRootName).toBeDefined())
+        loadSpy.mockImplementation(() => new Promise(() => {}))
+        await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+        await actAsyncFlush()
+
+        await act(() => releaseRootName())
+        await actAsyncFlush()
+        expect(result.current.rootElement).toBeNull()
+        expect(result.current.indexedModel).toBeNull()
+      } finally {
+        getPropertiesSpy.mockRestore()
       }
     })
 

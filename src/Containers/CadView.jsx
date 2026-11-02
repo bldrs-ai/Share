@@ -409,6 +409,11 @@ export default function CadView({
    * - The element lookup, that model's tree (#2016). Cleared in place: it is
    *   one object for the life of this CadView, and the handlers that read it
    *   hold that object. onModel refills it.
+   * - A tree brought up at the index of a load the user has now left
+   *   (open-205 #2029; codex review on #2037). That load still runs to its end
+   *   (#2019), and until it does the new model can't start, so without this
+   *   the panels would go on serving the left model's tree and properties
+   *   under the new model's URL, with the loading overlay lifted.
    *
    * Runs when the model identity changes, and again just before a replay
    * of a load that a model change superseded (onViewer's finally). Two
@@ -422,6 +427,11 @@ export default function CadView({
     setIsViewerLoaded(false)
     for (const id of Object.keys(elementsById)) {
       delete elementsById[id]
+    }
+    // Nothing indexed belongs to the model about to be shown: its own load
+    // hasn't started (identity change), or hasn't been replayed yet.
+    if (useStore.getState().indexedModel !== null) {
+      forgetIndexedTree()
     }
   }
 
@@ -518,11 +528,9 @@ export default function CadView({
       if (rootElt === null || isLoadSuperseded()) {
         return
       }
-      // Before the tree, so the panels never pair this tree with the model
-      // shown before it (store/IFCSlice.js#selectReadModel).
-      setIndexedModel(indexedModel)
-      await installModelTree(indexedModel, rootElt, isLoadSuperseded)
-      indexedTree = rootElt
+      if (await installModelTree(indexedModel, rootElt, isLoadSuperseded, {indexedModel})) {
+        indexedTree = rootElt
+      }
     }
 
     let tmpModelRef
@@ -837,10 +845,6 @@ export default function CadView({
       }
     }
     const loadingMessageBase = `Loading ${isGoogleResult ? routeResult.fileId : filepath}`
-    // A model at its index belongs to the load that indexed it. Cleared before
-    // this attempt starts, so neither an earlier model's nor an earlier
-    // attempt's (loadModelWithAuthRetry) can stand in for this one's.
-    setIndexedModel(null)
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
 
@@ -1239,23 +1243,38 @@ export default function CadView({
    * Bring up a read tree: the element lookup, the search index, the root's
    * display name, the NavTree root and the types view.
    *
+   * Writes nothing once the user has moved to another model. The check sits
+   * after the one await and before the first write, so every write then lands
+   * in one synchronous run and none can republish this model's tree under the
+   * next (codex review on #2037). A superseded load is not cancelled (#2019),
+   * so it does reach here.
+   *
    * @param {object} m the model the tree was read from
    * @param {object} rootElt from readModelTree
    * @param {Function} isLoadSuperseded see onViewerInternal
+   * @param {object} [options]
+   * @param {object} [options.indexedModel] The model at its index, published
+   *   with the tree it was read from (open-205 #2029): before the tree, so the
+   *   panels never pair this tree with the model shown before it
+   *   (store/IFCSlice.js#selectReadModel).
+   * @return {Promise<boolean>} whether the tree was installed
    */
-  async function installModelTree(m, rootElt, isLoadSuperseded) {
-    if (!isLoadSuperseded()) {
-      setupLookupAndParentLinks(rootElt, elementsById)
-    }
-    initSearch(m, rootElt)
+  async function installModelTree(m, rootElt, isLoadSuperseded, {indexedModel = null} = {}) {
     // Root display name, in preference order: real properties from the
     // parser (IFC project Name/LongName), then whatever the tree root
     // already carries (convertToShareModel's composed
     // "<sceneName> (<fileName>)" for plain GLB/OBJ — see #1595), then
     // the generic 'Model' placeholder. The previous unconditional
     // overwrite stamped 'Model' over every non-IFC root because
-    // getProperties has nothing for unstructured models.
+    // getProperties has nothing for unstructured models. Read before
+    // anything is written; applied after the search index is built, which
+    // indexes the root under the name it came with, as it always has.
     const tmpProps = await viewer.getProperties(0, rootElt.expressID)
+    if (isLoadSuperseded()) {
+      return false
+    }
+    setupLookupAndParentLinks(rootElt, elementsById)
+    initSearch(m, rootElt)
     if (tmpProps && (tmpProps.Name || tmpProps.LongName)) {
       rootElt.Name = tmpProps.Name ?? rootElt.Name
       rootElt.LongName = tmpProps.LongName ?? rootElt.LongName
@@ -1263,11 +1282,15 @@ export default function CadView({
       rootElt.Name = {value: 'Model'}
       rootElt.LongName = {value: 'Model'}
     }
+    if (indexedModel !== null) {
+      setIndexedModel(indexedModel)
+    }
     // Ids are only unique within one file — transient anonymous-geometry
     // rows from the previous model must not leak into this tree.
     useStore.getState().clearTransientTreeNodes()
     setRootElement(rootElt)
     setElementTypesMap(groupElementsByTypes(rootElt))
+    return true
   }
 
 
