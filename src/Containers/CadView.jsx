@@ -1311,6 +1311,29 @@ export default function CadView({
 
 
   /**
+   * Drop a selection made in the tree of a model the user has left while it
+   * was still at its index (open-205 #2029; codex review on #2037): the rows,
+   * anchors, instances, occurrence and the Properties element. A model that
+   * finished loading has its selection reset by onModelPath's resetState; one
+   * left at its index never reached isModelReady, so nothing else would, and
+   * if the next model then failed before its own index, the left model's
+   * selection and properties stayed up under its URL. Clearing the selection
+   * also re-runs the selection effect, whose cleanup marks a property lookup
+   * still in flight for the left model stale, so it can't land afterwards.
+   *
+   * Only on the identity change, never before a replay: the replay is for the
+   * model the URL shows, whose `#sel:` link (selectFromSelectionHash) applies
+   * once its tree is up, and that selection must stand. The URL is not
+   * touched here. #2019's sessions turn this clear into restoring each
+   * model's own selection when the user returns to it.
+   */
+  function forgetIndexedSelection() {
+    selectItemsInScene([], false)
+    setSelectedElement(null)
+  }
+
+
+  /**
    * Re-run the current selection against the scene, for a selection made
    * while geometry was still streaming (open-205 #2029). At the time, the
    * scene half of it found nothing: `setSelection` had no model to paint, and
@@ -2194,7 +2217,11 @@ export default function CadView({
       reportedLoadFailureRef.current = null
       // Only on an identity change: re-runs for the same model (view
       // settings) keep this state, as they keep the dedupe refs above.
+      const wasIndexed = useStore.getState().indexedModel !== null
       forgetLoadedModel()
+      if (wasIndexed) {
+        forgetIndexedSelection()
+      }
     }
     onModelPath()
   }, [modelPath, customViewSettings])

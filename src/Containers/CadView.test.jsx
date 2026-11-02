@@ -1701,6 +1701,45 @@ describe('CadView', () => {
       expect(result.current.isModelLoading).toBe(true)
     })
 
+    // Codex review on #2037: a selection made in A's tree while A was at its
+    // index outlived the move to B, and if B then failed before its own index
+    // A's selection and Properties stayed up under B's URL. A property lookup
+    // still in flight for A must not land after the move either.
+    it('drops a selection made at the index when the user leaves, even if the next model fails early', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel)
+      await waitFor(() => expect(result.current.indexedModel).toBe(indexedModel))
+      // A's lookup of the row's properties is held until after the move.
+      let releaseLookup
+      indexedModel.getItemProperties.mockImplementationOnce((id) => new Promise((resolve) => {
+        releaseLookup = () => resolve({expressID: id, Name: {value: 'late A'}})
+      }))
+      const leaf = makeTestTree().children[0].children[0].expressID
+      await act(() => {
+        result.current.setSelectedElements([`${leaf}`])
+        result.current.setSelectedAnchorIds([`${leaf}`])
+      })
+      await actAsyncFlush()
+      await waitFor(() => expect(releaseLookup).toBeDefined())
+      // B fails before it reaches its index.
+      loadSpy.mockImplementation(() => Promise.reject(new Error('B failed before its index')))
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      await act(() => releaseLookup())
+      await actAsyncFlush()
+
+      expect(result.current.selectedElements).toEqual([])
+      expect(result.current.selectedAnchorIds).toEqual([])
+      expect(result.current.selectedOccurrencePath).toBeNull()
+      expect(result.current.selectedElement).toBeNull()
+    })
+
     it('does not install a tree whose model the user left while it was being installed', async () => {
       const {result} = renderHook(() => useStore((state) => state))
       // The install reads the root's name before it writes: hold that read,
