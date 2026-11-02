@@ -111,15 +111,19 @@ const SNAPSHOT_SLICE_MS = 30
  * @return {Promise<{bytes: Uint8Array, tableNodes: Array<object>,
  *   collapsed: boolean}|{edited: true}|null>} as the in-process writer, plus
  *   `{edited: true}` when the model was edited while the snapshot was
- *   yielded (nothing should be cached)
+ *   yielded, or before a decline that would send the caller to the merged
+ *   bake of the live model (nothing should be cached)
  */
 export async function exportBatchedModelOffThread(model, {collapse = false} = {}) {
   const taken = await snapshotBatchedModel(model, {
     budgetMs: SNAPSHOT_SLICE_MS,
     yieldFn: yieldToBrowser,
   })
-  if (!taken || taken.edited) {
+  if (taken?.edited) {
     return taken
+  }
+  if (!taken) {
+    return declined(model)
   }
   let result
   try {
@@ -134,5 +138,22 @@ export async function exportBatchedModelOffThread(model, {collapse = false} = {}
   for (const line of result.logs) {
     glbVerbose(line)
   }
-  return result.built
+  return result.built ?? declined(model)
+}
+
+
+/**
+ * The off-thread writer's "can't be written batched" answer. A null sends
+ * the caller to the merged bake, which reads the LIVE model — and the live
+ * model may have been edited while the build ran in the worker (seconds, on
+ * a large model), where the synchronous in-process writer gave an edit no
+ * such window. The snapshot's own check covers only the snapshot, so look
+ * again here: an edited model gets `{edited: true}`, which caches nothing,
+ * because the cache slot belongs to the unedited source (codex on #2035).
+ *
+ * @param {object} model the model being written
+ * @return {{edited: true}|null}
+ */
+function declined(model) {
+  return modelHasPostLoadEdits(model) ? {edited: true} : null
 }

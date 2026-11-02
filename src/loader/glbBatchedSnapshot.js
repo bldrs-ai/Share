@@ -89,15 +89,19 @@ export async function snapshotBatchedModel(model, {budgetMs, yieldFn} = {}) {
   const revisionsAtStart = meshes.map((mesh) => batchEditRevision(mesh))
   const isSliced = Number.isFinite(budgetMs) && typeof yieldFn === 'function'
   let sliceStart = isSliced ? performance.now() : 0
-  /** @return {Promise<boolean>} false when a batch was edited meanwhile */
-  const maybeYield = async () => {
-    if (!isSliced || performance.now() - sliceStart < budgetMs) {
-      return true
-    }
+  // Every suspension point in this walk is an explicit `await pause()`, taken
+  // only when `isDue()` — never an `await` on a helper that might not yield.
+  // A bare await still parks the walk at a microtask checkpoint, where other
+  // code (an edit's own promise chain) can run, so the revision check has to
+  // follow EVERY suspension, and the cheapest way to guarantee that is to
+  // have no suspensions but these. Without `budgetMs` there are none at all,
+  // so the in-process walk is synchronous end to end (codex on #2035).
+  const isDue = () => isSliced && performance.now() - sliceStart >= budgetMs
+  const pause = async () => {
     await yieldFn()
     sliceStart = performance.now()
-    return meshes.every((mesh, i) => batchEditRevision(mesh) === revisionsAtStart[i])
   }
+  const isEdited = () => meshes.some((mesh, i) => batchEditRevision(mesh) !== revisionsAtStart[i])
 
   // Shapes, keyed as the old per-pass reader keyed its cache.
   const shapeIndexByKey = new Map()
@@ -153,8 +157,11 @@ export async function snapshotBatchedModel(model, {budgetMs, yieldFn} = {}) {
   let i = 0
   for (const {m, mesh, colors, batchIds} of eligible) {
     for (let k = 0; k < batchIds.length; k++) {
-      if (k % CLOCK_CHECK_INTERVAL === 0 && !await maybeYield()) {
-        return {edited: true}
+      if (k % CLOCK_CHECK_INTERVAL === 0 && isDue()) {
+        await pause()
+        if (isEdited()) {
+          return {edited: true}
+        }
       }
       const batchId = batchIds[k]
       const color = colors[batchId]
@@ -192,7 +199,9 @@ export async function snapshotBatchedModel(model, {budgetMs, yieldFn} = {}) {
   }
 
   // Copy the used extent of every batch buffer a shape reads. Fresh arrays,
-  // so the live batch keeps its own and these can be transferred.
+  // so the live batch keeps its own and these can be transferred. Inline
+  // rather than through a helper, so that no `await` but `pause()` appears
+  // (see `isDue`).
   const transfer = []
   const batches = new Array(meshes.length).fill(null)
   for (let m = 0; m < meshes.length; m++) {
@@ -201,25 +210,29 @@ export async function snapshotBatchedModel(model, {budgetMs, yieldFn} = {}) {
     }
     const geometry = meshes[m].geometry
     const batch = {position: null, normal: null, index: null}
+    const jobs = []
     for (const name of ['position', 'normal']) {
       const attribute = geometry.attributes[name]
-      if (!attribute) {
-        continue
+      if (attribute) {
+        jobs.push({name, source: attribute.array, length: batchVertexEnd[m] * attribute.itemSize,
+          itemSize: attribute.itemSize})
       }
-      const array = await copyPrefix(
-        attribute.array, batchVertexEnd[m] * attribute.itemSize, maybeYield)
-      if (array === null) {
-        return {edited: true}
+    }
+    jobs.push({name: 'index', source: geometry.index.array, length: batchIndexEnd[m]})
+    for (const {name, source, length, itemSize} of jobs) {
+      const copy = new source.constructor(length)
+      for (let at = 0; at < length; at += COPY_CHUNK_ELEMENTS) {
+        if (isDue()) {
+          await pause()
+          if (isEdited()) {
+            return {edited: true}
+          }
+        }
+        copy.set(source.subarray(at, Math.min(length, at + COPY_CHUNK_ELEMENTS)), at)
       }
-      batch[name] = {array, itemSize: attribute.itemSize}
-      transfer.push(array.buffer)
+      batch[name] = name === 'index' ? copy : {array: copy, itemSize}
+      transfer.push(copy.buffer)
     }
-    const index = await copyPrefix(geometry.index.array, batchIndexEnd[m], maybeYield)
-    if (index === null) {
-      return {edited: true}
-    }
-    batch.index = index
-    transfer.push(index.buffer)
     batches[m] = batch
   }
 
@@ -249,26 +262,3 @@ export async function snapshotBatchedModel(model, {budgetMs, yieldFn} = {}) {
   return {snapshot: {batches, shapes, instances}, transfer}
 }
 
-
-/**
- * Copy `source[0, length)` into a fresh array of the same type, in chunks
- * that each give `maybeYield` a chance to yield.
- *
- * @param {Float32Array|Uint16Array|Uint32Array} source
- * @param {number} length element count to copy
- * @param {Function} maybeYield `() => Promise<boolean>`, false when the
- *   model was edited while yielded
- * @return {Promise<?(Float32Array|Uint16Array|Uint32Array)>} the copy, or
- *   null when edited
- */
-async function copyPrefix(source, length, maybeYield) {
-  const copy = new source.constructor(length)
-  for (let at = 0; at < length; at += COPY_CHUNK_ELEMENTS) {
-    if (!await maybeYield()) {
-      return null
-    }
-    const end = Math.min(length, at + COPY_CHUNK_ELEMENTS)
-    copy.set(source.subarray(at, end), at)
-  }
-  return copy
-}

@@ -304,6 +304,23 @@ describe('loader/glbBatched off-thread writer (open-205 #2030)', () => {
     expect(taken).toEqual({edited: true})
   })
 
+  for (const [label, opts] of [
+    ['in-process', undefined],
+    ['sliced, before any slice is due', {budgetMs: 1e9, yieldFn: () => Promise.resolve()}],
+  ]) {
+    it(`does not suspend where an edit could slip into the walk (${label})`, async () => {
+      // An edit that runs at a microtask checkpoint — from some other
+      // promise chain — must not land between two instances of one walk.
+      // The walk only suspends at a due slice, and re-checks revisions there;
+      // anywhere else it must not suspend at all, so this edit can only run
+      // after the snapshot is complete (codex on #2035).
+      const mesh = liveBatchedModel()
+      Promise.resolve().then(() => deleteBatchedInstance(mesh, 2))
+      const taken = await snapshotBatchedModel(mesh, opts)
+      expect(taken.snapshot.instances.count).toBe(3)
+    })
+  }
+
   describe('exportBatchedModelOffThread', () => {
     let originalWorker
     let originalCreateObjectURL
@@ -384,6 +401,33 @@ describe('loader/glbBatched off-thread writer (open-205 #2030)', () => {
       expect(await pending).toBe(built)
       expect(logs).toContainEqual(['info', 'batched writer: from the worker'])
       window.history.pushState({}, '', '/')
+    })
+
+    it('caches nothing when the worker declines a model that was edited meanwhile', async () => {
+      // A decline sends the caller to the merged bake of the LIVE model, and
+      // the build ran for seconds in the worker: an edit in that window must
+      // not reach the source's cache slot (codex on #2035).
+      const {exportBatchedModelOffThread: offThread} = require('./glbBatchedExport')
+      const model = liveBatchedModel()
+      const pending = offThread(model)
+      const request = await buildRequest()
+      deleteBatchedInstance(model, 2)
+      for (const fn of worker.listeners.message) {
+        fn({data: {command: 'build-batched-glb:done', id: request.data.id, ok: true, built: null,
+          logs: []}})
+      }
+      expect(await pending).toEqual({edited: true})
+    })
+
+    it('passes a decline through when nothing was edited', async () => {
+      const {exportBatchedModelOffThread: offThread} = require('./glbBatchedExport')
+      const pending = offThread(liveBatchedModel())
+      const request = await buildRequest()
+      for (const fn of worker.listeners.message) {
+        fn({data: {command: 'build-batched-glb:done', id: request.data.id, ok: true, built: null,
+          logs: []}})
+      }
+      expect(await pending).toBeNull()
     })
 
     it('builds in-process, with the same bytes, when the worker fails', async () => {
