@@ -118,9 +118,14 @@ describeMobileAndDesktop('Open 205: NavTree usable before geometry finishes', ()
       // More than the root came up: a real hierarchy, read at the index.
       expect(await rows.count()).toBeGreaterThan(1)
 
-      // IFC: a named leaf of index.ifc. STEP: the deepest mounted row.
-      const target = row === null ? rows.last() : navTreePanel.locator(`[data-node-label="${row}"]`).first()
-      const label = await target.getAttribute('data-node-label')
+      // IFC: a named leaf of index.ifc. STEP: the deepest mounted row — one
+      // occurrence of a part reused across the assembly, so its label repeats
+      // and the row is told apart by position, which selection keys on too
+      // (per occurrence, design/new/step-occurrence-selection.md).
+      const labels = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-node-label')))
+      const targetIndex = row === null ? labels.length - 1 : labels.indexOf(row)
+      expect(targetIndex).toBeGreaterThanOrEqual(0)
+      const target = rows.nth(targetIndex)
       await target.getByTestId('NavTreeNodeLabel').evaluate((e) => (e as HTMLElement).click())
       await expect(target).toHaveAttribute('data-is-selected', 'true')
 
@@ -137,9 +142,15 @@ describeMobileAndDesktop('Open 205: NavTree usable before geometry finishes', ()
 
       await releaseGeometry(page)
       await waitForModelReady(page)
-      // The selection made while streaming survives the load's end.
-      await expect(navTreePanel.locator(`[data-node-label="${label}"]`).first())
-        .toHaveAttribute('data-is-selected', 'true')
+      // The selection made while streaming survives the load's end. On a
+      // phone the panels share one tabbed drawer and Properties took the
+      // front; the tree is still open behind its own tab.
+      if (!(await navTreePanel.isVisible())) {
+        await page.getByRole('tab', {name: 'Nav'}).click()
+      }
+      await expect(rows.nth(targetIndex)).toHaveAttribute('data-is-selected', 'true')
+      // ...and only it: a reused STEP part's other occurrences stay unselected.
+      expect(await navTreePanel.locator('[data-is-selected="true"]').count()).toBe(1)
     })
   }
 })
