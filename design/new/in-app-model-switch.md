@@ -1,7 +1,7 @@
 # In-app model switching — open a model without a page reload (open-205)
 
 **Status:** Phase 0 landed (#2026). Phase 1 re-planned 2026-11-02 (§4);
-Phase 2 planned.
+P1.0 measured (§4.1); Phase 2 planned.
 **Epic:** `open-205` (#2011). Stories: Phase 0 #2012 (tasks #2013–#2018,
 closed; #2017 moved to Phase 1), Phase 1 #2028 (measure), #2029
 (interactive at index), #2019 (sessions), #2030 (no blocking calls), #2031
@@ -217,22 +217,70 @@ solve for free, which the cancellation plan was meant to cover:
    may still run against it (read from code, not reproduced). Under
    sessions a switch disposes nothing; close does, after aborting the load.
 
-### 4.1 P1.0 Measure first (#2028)
+### 4.1 P1.0 Measured 2026-11-02 (#2028)
 
-Numbers decide §4.2 and §4.4; take them before building:
+**Method.**
+- **Engine:** a Node harness against the pinned conway (`1.1626.740`). Single-threaded WASM, as in prod, with a cold compile per process. It drives the calls `parseIfcWithConway` makes on the `demandGeometry` path, with the same open settings (`DEFER_GEOMETRY`, `GEOMETRY_BUDGET_MB: 64`, `STREAMING_CONSUMER`). It covers both source modes: buffered (`OpenModelStreamed`) and windowed (`OpenModelStream` over a Blob, which is what OPFS-staged loads use). A 1 ms heartbeat measures event-loop blocking. Each model ran 3 times; medians are shown.
+- **Browser:** Share's own Playwright build of `c6006e7`, served locally. Each run used a fresh context, so there was no OPFS cache and no GLB cache hit. Each run recorded the load report, `rootElement` arrival, `PerformanceObserver('longtask')` and memory at `isModelReady`. CPU profiles were taken over CDP and resolved through the source map.
+- **Where:** a 4-vCPU cloud container with no GPU. Deployed Share (prod and deploy previews) was blocked by the environment's network policy.
 
-- per model (small, medium, large IFC): time to the index (open / parse),
-  to the spatial tree when asked for right after open, to first mesh, to
-  all geometry; a property lookup during and after streaming;
-- the longest synchronous Conway call — is the initial parse one call or
-  does it yield? — and main-thread long tasks per stage in the browser;
-- engine memory per model (`WebAssembly.Memory` size after open, after all
-  geometry, after `ReleaseModelGeometry`), which sizes the §4.5 budget.
+**Environment-dependent; read the ratios, not the absolutes.** The container's Chromium renders through SwiftShader, a software WebGL that runs on the CPU, on the main thread. At full frame rate, the render loop dominated every browser number. SEESTRASSE took 21.3 s at full rate, 4.7 s with frames throttled to 1 Hz, and sp-231MB failed to finish in 900 s. Browser numbers below were taken with rendering removed. In that mode the browser's engine time matches Node to within about 20%. Real-GPU frame cost was not measured.
 
-Engine numbers from a Node harness against the pinned conway; browser
-numbers from `browser-load-measurement.md`'s rig and the load report, cold
-(no OPFS cache, fresh WASM compile). A cloud container gives ratios more
-than absolutes.
+**Models:**
+
+| Model | Size | Products | Tree nodes |
+|---|---|---|---|
+| `index.ifc` | 0.02 MB | 13 | 11 |
+| Sculpture | 0.31 MB | 519 | 273 |
+| Momentum | 5.6 MB | 80 | 69 |
+| SEESTRASSE | 24.2 MB | 2,794 | 2,442 |
+| sp-231MB (`bldrs-ai/test-models`) | 231 MB | 38,683 | 4,432 |
+
+**The tree is ready well before the geometry** (Node, windowed path, median of 3). "Index" means open plus `getSpatialStructure` called right after the deferred open, before any geometry is extracted.
+
+| Model | Index | All geometry | Ratio |
+|---|---|---|---|
+| Momentum | 0.25 s | 0.65 s | 2.6× |
+| SEESTRASSE | 0.85 s | 2.7 s | 3.1× |
+| sp-231MB | 6.7 s | 27.4 s | 4.1× |
+
+- At that point the tree is complete: it has the same node count as after geometry.
+- `getItemProperties` answers before geometry in 0.3–0.7 ms, and mid-stream as well (about 10 ms windowed on sp-231MB).
+- In the browser today the tree waits for `load()`. For sp-231MB with rendering removed, Conway's parsing ended at +7.6 s from "Opening model", but `rootElement` arrived only at +42.5 s.
+- The first mesh already arrives early (+0.6–1.0 s) through the progressive preview.
+
+**Main-thread blocking.**
+- **Conway yields during the open,** in 50–130 ms slices on large files. The exception is one stretch at its end: `prepareDemandExtraction` → `prepareExtractionMaps_` → `populateStyledItemsMap` (73%) and `populateRelVoidsMap`. On 231 MB it takes about 1.0 s in Node and 0.6–0.7 s in the browser; on 24 MB about 130 ms. Conway's own comments mark this stretch as deliberately synchronous.
+- **The 'names' tree** is one synchronous call of about 200 ms at 231 MB on a buffered open. On a windowed open it pages and yields.
+- **Geometry-pump batches** block for at most about 250 ms at batch size 8.
+- **Share's own code blocks longer.** These are long tasks in the browser on sp-231MB, with rendering removed, source-mapped:
+
+| Long task | Duration | Where |
+|---|---|---|
+| GLB cache writer, main-thread part | **6.0 s**, one task | `Loader.js:1033` idle work → `exportAndCacheGlb` → `exportBatchedModelAsInstancedGlb`: `collectInstanceGroups`, `bakeCollapsedBin`, `glbSlim`, gltf-transform `writeBinary` |
+| End-of-load assembly | **2.2–2.4 s** | `ShareIfcLoader.parse` → `assembleBatchedModel` → `decorateBatchMeshes`: three-mesh-bvh `computeBatchedBoundsTree` (45%), `robustBoundsFor` (16%), `computeBoundingSphere` |
+| Tree build | 0.8–1.0 s | `getSpatialStructure` → `getChildren`, about 99% GC |
+| Conway `prepareDemandExtraction` | 0.6–0.7 s | `populateStyledItemsMap` |
+
+**Memory** is the WASM `Memory` plus the JS heap at `isModelReady`, minus the pre-load heap. It covers Share's whole pipeline: the BatchedMesh, BVH and GLB-writer state.
+
+| Model | Memory at ready | ÷ file size |
+|---|---|---|
+| ≤ 0.3 MB | about 65 MB | — |
+| Momentum, 5.6 MB | about 125 MB | 22× |
+| SEESTRASSE, 24 MB | 350–390 MB | 15× |
+| sp-231MB | 1.25–1.4 GB (WASM 515 MB) | 5.4–6× |
+
+- **WASM `Memory` never shrinks.** `ReleaseModelGeometry` leaves it unchanged (144 MB stays 144 MB in Node).
+- **Each new `IfcAPI` pays a cold instantiate** of 190–550 ms.
+- **Browser WASM `Memory` is 2–3.5× Node's** for the same model (515 MB vs 144 MB). This is not explained yet.
+
+**Not measured:**
+- deployed Share, because the network policy blocks it;
+- real-GPU frame cost and GPU memory;
+- a warm compile for a second `IfcAPI` in a live page;
+- two concurrent loads in one page;
+- memory after the GLB writer and the source spill settle.
 
 ### 4.2 Interactive at the index (#2029)
 
@@ -242,9 +290,13 @@ resolves (`await onModel(...)`, `CadView.jsx:639`, after
 the index, and enable the NavTree, properties, search and the assistant's
 reads then; geometry keeps streaming through `ProgressiveLoadSession`. This
 helps with or without the page reload, so it can land before sessions.
-Open: whether property reads are safe between streaming batches on the same
-`IfcAPI` (JS is single-threaded, so calls serialize, but the batch pump's
-own state must tolerate it) — P1.0 checks.
+
+**P1.0 says it's feasible and worth it.**
+- The engine returns the full tree right after the deferred open, and `getItemProperties` answers before and during streaming (§4.1).
+- On the windowed path the index is ready about 3–4× sooner than all the geometry: 0.85 s vs 2.7 s on 24 MB, and 6.7 s vs 27.4 s on 231 MB.
+- In the browser, sp-231MB's tree is ready to fetch at about +7.6 s but arrives at +42.5 s, so about 35 s of waiting is pure ordering.
+
+Mid-stream property reads worked in the Node harness. Concurrent reads against Share's own batch pump in the browser still need a test as part of this work.
 
 ### 4.3 Per-model sessions (#2019)
 
@@ -275,24 +327,46 @@ Conway runs on the main thread — the only workers are OPFS
 (`src/OPFS/OPFSService.js:54`) and the GLB writer
 (`src/loader/GlbWriterService.js:43`). Two loads at once therefore share
 one thread, and a background parse stutters the foreground model unless it
-yields often. The streaming pump already works in batches. If P1.0 shows a
-long synchronous step (the initial parse is the suspect), the options are
-chunking it in Conway or, later, moving the engine into a worker; P1.0's
-numbers pick.
+yields often.
+
+The suspect was a long synchronous initial parse, and P1.0 cleared it: Conway already yields (§4.1). The long blocks are mostly Share's own. In priority order:
+
+1. **The GLB cache writer's main-thread preparation: a single 6.0 s task on 231 MB.**
+   - Path: `exportBatchedModelAsInstancedGlb`, `src/loader/glbBatchedExport.js:264` → `collectInstanceGroups` `:111`, `bakeCollapsedBin` (`src/loader/glbCollapse.js:227`), `glbSlim` (`collectBufferViewHolders`, `src/loader/glbSlim.js:157`).
+   - It is scheduled as idle work (`Loader.js:1033`), but one idle callback runs it all at once.
+   - It already blocks every large cold load today, and it would land in the middle of the foreground model's interaction when a background load finishes.
+   - Fix: chunk it, or move the preparation into the existing GLB writer worker.
+2. **End-of-load assembly: 2.2–2.4 s.**
+   - Path: `assembleBatchedModel` (`src/viewer/ifc/buildBatchedConwayModel.js:165`) → `decorateBatchMeshes` `:81` → `computeBoundsTree` per batch (`:140`, three-mesh-bvh `computeBatchedBoundsTree`).
+   - `robustBoundsFor` (`src/viewer/three/robustBounds.js:204`) shows up in the same task.
+   - Fix: slice it across batches, or build the BVH lazily.
+3. **Conway's `prepareDemandExtraction` → `populateStyledItemsMap`: about 1 s on 231 MB in Node, 0.6–0.7 s in the browser.** It needs a Conway issue asking for it to be sliced.
+4. **A worker for the engine: deferred.**
+   - Even after 1–3, every 50–130 ms parse slice is a long task, so a background parse still drops some foreground frames.
+   - A worker is needed only if background loads must not drop foreground frames at all.
+   - Decide once there are two-concurrent-load numbers and real-GPU frame numbers; neither was measurable in the container.
+
+Items 1 and 2 are worth doing even before in-app switching: they are main-thread blocks of several seconds on every large cold load.
 
 ### 4.5 Close and eviction — the only cancel path (#2031)
 
 On an explicit close, or an LRU eviction when the memory budget is
-exceeded (phones first; budget from P1.0's per-model figure):
+exceeded (phones first).
+
+**Budget, from P1.0 (§4.1).**
+- Count about 6× file size per open large model, with a floor of 100–150 MB per open model, measured as WASM plus JS heap at ready. That's 1.25–1.4 GB for 231 MB, 350–390 MB for 24 MB, and about 65–125 MB for small models.
+- These figures exclude GPU memory, and they were measured in software WebGL.
+- On phones, a single 231 MB model already exceeds typical tab limits. The practical mobile policy is one large model resident.
+
+**WASM `Memory` never shrinks.** `ReleaseModelGeometry` reclaims none of it, so eviction must drop the whole `IfcAPI`. Releasing geometry inside a live engine doesn't make room for the next model. The steps:
 
 1. abort the download and the parse — an `AbortSignal` through
    `Loader.load` to `ProgressiveLoadSession.abort()`
    (`src/viewer/ProgressiveLoadSession.js:298`) and the batch pump;
 2. drop or cancel the session's idle GLB writer;
-3. `ReleaseModelGeometry` each open model in the engine;
-4. release every reference to the session's `IfcAPI` so the instance is
-   collectable (§2.4), then `CloseModel` — never before the parse has
-   stopped.
+3. release every reference to the session's `IfcAPI` so the whole
+   instance is collectable (§2.4), then `CloseModel` — never before the
+   parse has stopped. `ReleaseModelGeometry` alone reclaims nothing (§4.1).
 
 An evicted model reopens like any other (its GLB cache hit makes that
 cheap where one exists).
@@ -314,12 +388,14 @@ disarm it), check Back/Forward through `Share.jsx`'s route effect (needs
 
 ### 4.7 Open risks
 
-- **Main-thread contention** between concurrent loads (§4.4).
-- **Memory is the sum of open models**, one WASM instance each; the budget
-  and eviction (§4.5) are what keep phones alive.
-- **Whether Conway's initial parse is one long synchronous call** — if so,
-  "interactive at index" is bounded by it, and a background parse blocks
-  the foreground for that long.
+- **Main-thread contention between concurrent loads (§4.4).**
+  - Conway yields in 50–130 ms slices, so every slice is a long task, and a background parse will drop some foreground frames.
+  - Share's 6 s writer task and 2.3 s assembly task are the big blocks, and they're fixable.
+  - Two concurrent loads have not been measured.
+- **Memory is the sum of the open models,** one WASM instance each, at about 6× file size for large models (§4.1). The budget and eviction (§4.5) are what keep phones alive.
+- **Each new `IfcAPI` pays a cold instantiate of 190–550 ms.** Whether a second instance in a live page compiles warm is unmeasured. It affects reopen cost after eviction.
+- **Unexplained: browser WASM `Memory` is 2–3.5× Node's** for the same model.
+- **Resolved by P1.0:** the initial parse is *not* one long synchronous call; it yields, except for `populateStyledItemsMap` (§4.4 item 3).
 
 
 ## 5. "Once per page load" needs a per-open answer (#2022)
@@ -414,8 +490,14 @@ return-is-a-new-open, §7 engine per model; 2026-11-02 — §4.0 switching away
 is not closing (background loads, sessions, interactive at index, cancel
 only on close/eviction).
 
-**Not measured or reproduced:** everything P1.0 (§4.1) measures — stage
-times, the longest synchronous Conway call, per-model engine memory; that an unreferenced single-threaded
+**Measured (P1.0, 2026-11-02, §4.1):**
+- stage times, index vs all geometry;
+- main-thread blocking, with the long tasks attributed;
+- per-model memory, and the fact that WASM `Memory` never shrinks.
+
+These were measured in a cloud container with software WebGL, so the absolute browser times are environment-dependent; the ratios and the attributions carry over.
+
+**Not measured or reproduced:** real-GPU frame cost and GPU memory; two concurrent loads; a warm second `IfcAPI` compile; memory after the GLB writer and source spill settle; why browser WASM `Memory` is 2–3.5× Node's; that an unreferenced single-threaded
 Emscripten instance's memory is reclaimed promptly in practice (§6 is how
 we find out); the UI repro of §3.2 via the clear button and of §3.5 via a
 theme toggle; the per-instance WASM baseline (§7).
