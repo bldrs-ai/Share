@@ -1740,6 +1740,37 @@ describe('CadView', () => {
       expect(result.current.selectedElement).toBeNull()
     })
 
+    // Codex review on #2037, the failure-path twin of the case above: a load
+    // that fails after its index takes its selection down with its tree.
+    it('drops a selection made at the index when the load then fails', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel, true)
+      await waitFor(() => expect(result.current.indexedModel).toBe(indexedModel))
+      let releaseLookup
+      indexedModel.getItemProperties.mockImplementationOnce((id) => new Promise((resolve) => {
+        releaseLookup = () => resolve({expressID: id, Name: {value: 'late A'}})
+      }))
+      const leaf = makeTestTree().children[0].children[0].expressID
+      await act(() => {
+        result.current.setSelectedElements([`${leaf}`])
+        result.current.setSelectedAnchorIds([`${leaf}`])
+      })
+      await actAsyncFlush()
+      await waitFor(() => expect(releaseLookup).toBeDefined())
+
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      await act(() => releaseLookup())
+      await actAsyncFlush()
+
+      expect(result.current.rootElement).toBeNull()
+      expect(result.current.selectedElements).toEqual([])
+      expect(result.current.selectedAnchorIds).toEqual([])
+      expect(result.current.selectedElement).toBeNull()
+    })
+
     it('does not install a tree whose model the user left while it was being installed', async () => {
       const {result} = renderHook(() => useStore((state) => state))
       // The install reads the root's name before it writes: hold that read,

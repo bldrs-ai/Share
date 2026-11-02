@@ -543,9 +543,12 @@ export default function CadView({
     } catch (e) {
       // A tree that came up at the index belongs to a model that then never
       // loaded: take it down with the load, so the panels don't offer rows of
-      // a model that isn't there.
+      // a model that isn't there, and with it any selection made in it, which
+      // Properties and the TopBar would otherwise keep showing (codex review
+      // on #2037).
       if (indexedTree !== null && !isLoadSuperseded()) {
         forgetIndexedTree()
+        forgetIndexedSelection()
       }
       if (isOutOfMemoryError(e)) {
         isOOM = true
@@ -1312,7 +1315,8 @@ export default function CadView({
 
   /**
    * Drop a selection made in the tree of a model the user has left while it
-   * was still at its index (open-205 #2029; codex review on #2037): the rows,
+   * was still at its index, or whose load failed after it (open-205 #2029;
+   * codex review on #2037): the rows,
    * anchors, instances, occurrence and the Properties element. A model that
    * finished loading has its selection reset by onModelPath's resetState; one
    * left at its index never reached isModelReady, so nothing else would, and
