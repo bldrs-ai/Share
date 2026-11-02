@@ -15,10 +15,11 @@
 
 
 /**
- * The Netlify projects whose deploy previews may be smoked. Both post a
- * `netlify/<project>/deploy-preview` status (functions-smoke.yml).
+ * The Netlify projects whose deploy previews may be smoked. Each posts a
+ * `netlify/<project>/deploy-preview` status (functions-smoke.yml). Share has
+ * one: `bldrs-share-prod`, which also serves https://bldrs.ai.
  */
-export const LIVE_NETLIFY_PROJECTS = ['bldrs-share-prod', 'bldrs-share-dev']
+export const LIVE_NETLIFY_PROJECTS = ['bldrs-share-prod']
 
 /** Production origins that may be smoked. */
 export const LIVE_PRODUCTION_ORIGINS = ['https://bldrs.ai']

@@ -28,7 +28,7 @@ describe('Analytics', () => {
       configurable: true,
       value: {
         ...originalLocation,
-        hostname: 'deploy-preview-1757--bldrs-share-dev.netlify.app',
+        hostname: 'deploy-preview-1757--bldrs-share-prod.netlify.app',
         search: '?feature=gaEnableInPreview',
       },
     })
@@ -675,8 +675,8 @@ describe('Analytics', () => {
       expect(Analytics.isRealModelOpen({kind: 'url'})).toBe(true)
     })
 
-    // All *.netlify.app hosts (deploy previews, branch deploys, the dev
-    // site) serve the prod GA tag — opens there are team/CI traffic,
+    // All *.netlify.app hosts (deploy previews, branch deploys, the
+    // project's own netlify.app address) serve the prod GA tag — opens there are team/CI traffic,
     // not conversions.
     test('false on Netlify deploy hosts, even for real sources', () => {
       const githubOpen = {
@@ -685,14 +685,14 @@ describe('Analytics', () => {
         gitpath: 'https://github.com/bldrs-ai/test-models/blob/main/ifc/misc/box.ifc',
       }
       expect(Analytics.isRealModelOpen(githubOpen, 'deploy-preview-1741--bldrs-share-prod.netlify.app')).toBe(false)
-      expect(Analytics.isRealModelOpen(githubOpen, 'bldrs-share-dev.netlify.app')).toBe(false)
+      expect(Analytics.isRealModelOpen(githubOpen, 'bldrs-share-prod.netlify.app')).toBe(false)
     })
 
     it('counts an opted-in deploy-preview open but not a branch deploy', () => {
       const githubOpen = {kind: 'file', isUploadedFile: false, filepath: 'models/house.ifc'}
       const preview = 'deploy-preview-1741--bldrs-share-prod.netlify.app'
       expect(Analytics.isRealModelOpen(githubOpen, preview, true)).toBe(true)
-      expect(Analytics.isRealModelOpen(githubOpen, 'bldrs-share-dev.netlify.app', true)).toBe(false)
+      expect(Analytics.isRealModelOpen(githubOpen, 'main--bldrs-share-prod.netlify.app', true)).toBe(false)
     })
 
     test('true on production and localhost hosts for real sources', () => {

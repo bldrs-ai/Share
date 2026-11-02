@@ -7,7 +7,7 @@ describe('live-smoke/targets', () => {
   const inCI = {isCI: true}
 
   it('allows a deploy preview of an allowed Netlify project, in and out of CI', () => {
-    expect(LIVE_NETLIFY_PROJECTS).toEqual(['bldrs-share-prod', 'bldrs-share-dev'])
+    expect(LIVE_NETLIFY_PROJECTS).toEqual(['bldrs-share-prod'])
     for (const project of LIVE_NETLIFY_PROJECTS) {
       const url = `https://deploy-preview-1939--${project}.netlify.app/`
       for (const options of [outsideCI, inCI]) {

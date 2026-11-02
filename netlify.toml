@@ -26,9 +26,9 @@
 # default (18 on the current Noble image), which `package.json`'s
 # `engines.node: ">=20"` rejects — yarn then fails the install and the
 # whole deploy. That's exactly how the prod deploy of #1733 broke, while
-# deploy previews stayed green: previews and production are two separate
-# Netlify projects, and only one of them carried a NODE_VERSION in its UI
-# environment. Keeping the version here instead means every context —
+# deploy previews stayed green: previews and production were then two
+# separate Netlify projects, and only one of them carried a NODE_VERSION in
+# its UI environment. Keeping the version here instead means every context —
 # production, previews, branch deploys — reads the same number from the
 # repo, and it can't drift back apart.
 #

@@ -102,8 +102,9 @@ upstream, yet they only come back if the function started.
   set, lenient with none.
 
 The workflow runs:
-- **On each Netlify `deploy-preview` success status.** Both Netlify projects
-  post one, with the preview URL as `target_url`. Drafts included, because a
+- **On each Netlify `deploy-preview` success status.** The Netlify project
+  (`bldrs-share-prod`) posts one as `netlify/bldrs-share-prod/deploy-preview`,
+  with the preview URL as `target_url`. Drafts included, because a
   draft's preview is where a bundling fault first shows.
   The result is posted back onto the PR's commit as its own status,
   `functions-smoke/<project>`: pending while it runs, then success or
@@ -388,17 +389,18 @@ anyone with the URL run an apply sweep. Item failures are collected and
 reported without stopping the sweep. A failure of the sweep itself (the
 token, a discovery page) returns 500 and goes to Sentry as an error.
 
-**One sweep, two Netlify projects.** Share deploys `main` to two Netlify
-projects, and both run this scheduled function with the same Auth0 and
-Stripe credentials. Only the production project (**`bldrs-share-prod`**,
-which serves bldrs.ai) sweeps, with `RECONCILE_MODE=apply` in its Production
-context. The other (**`bldrs-share-dev`**) sets `RECONCILE_MODE=off`, so its
+**One sweep, one Netlify project.** Share deploys `main` to one Netlify
+project, **`bldrs-share-prod`**, which serves bldrs.ai and sweeps with
+`RECONCILE_MODE=apply` in its Production context. `RECONCILE_MODE=off` is
+the switch for a deploy that carries the function but must not sweep: its
 run logs one INFO line (`RECONCILE_MODE=off, not sweeping`) and returns
 before reading anything, even if its secrets are missing. `off` must be set
 explicitly: an unset or misspelled value still means report, so production
-can't stop sweeping by losing the variable. Until bldrs-ai/ops#36 the two
-names were swapped, so older logs and Sentry events from before the swap
-read the other way round.
+can't stop sweeping by losing the variable. History: until 2026-11 a second
+project, `bldrs-share-dev`, deployed the same function with the same
+credentials and was the one set to `off` (bldrs-ai/ops#36). Before ops#36
+the two projects' roles were swapped, so logs and Sentry events from before
+then name the projects the other way round.
 
 **Time budget.** Netlify stops a scheduled function after about 30 s, cold
 start included, so the sweep keeps two deadlines from the start of the
