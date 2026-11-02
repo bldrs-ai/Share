@@ -70,7 +70,7 @@ import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
   buildInstanceTablesExtensionData,
 } from './bldrsInstanceTables'
-import {exportBatchedModelAsInstancedGlb} from './glbBatchedExport'
+import {exportBatchedModelOffThread} from './glbBatchedExport'
 import {sceneHasRenderableGeometry} from './glbArtifactHealth'
 import {packGlbChunks} from './glbContainer'
 import {currentGlbArtifactGeneration, publishGlbArtifact} from './glbArtifactPublish'
@@ -294,8 +294,16 @@ export async function exportAndCacheGlb({
     // the two must never disagree.
     let collapsedTables = false
     if (isBatched && isGlbBatchedActive()) {
-      const batchedNative = await exportBatchedModelAsInstancedGlb(
+      // Snapshot here in yielding slices, build in the GlbWriter worker
+      // (open-205 #2030 target 1: this was one 6.0 s main-thread task on
+      // sp-231MB). `edited` is the same answer as the edit check above, for
+      // an edit that landed while the snapshot was yielded.
+      const batchedNative = await exportBatchedModelOffThread(
         model, {collapse: isGlbCollapseActive()})
+      if (batchedNative?.edited) {
+        glbInfo('writer: skipped (model was edited after load — the cache slot belongs to the source)')
+        return false
+      }
       if (batchedNative) {
         rawBytes = batchedNative.bytes
         batchedTables = batchedNative.tableNodes

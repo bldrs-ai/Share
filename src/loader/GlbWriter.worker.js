@@ -14,9 +14,16 @@
 //     ~1.7 s on a 68 MB artifact — the single biggest item here since
 //     #1855, and the reason this handler is async)
 //
+// Also, since open-205 #2030 target 1, the batched-native writer's build
+// (`build-batched-glb`, below): shape rebuild + content interning, TRS
+// decomposition, the collapse bake, the gltf-transform document and its
+// `writeBinary`, and the slim pass. That was a single 6.0 s main-thread task
+// on sp-231MB. The main thread now only snapshots the batches
+// (`glbBatchedSnapshot.js`) and transfers the copies here.
+//
 // What stays on main thread (intentionally — moving these is the
 // Phase 5 next-slice work):
-//   - GLTFExporter.parse (needs the three.js scene graph; not
+//   - GLTFExporter.parse (merged-layout fallback only) (needs the three.js scene graph; not
 //     trivially serialisable through postMessage)
 //   - captureBldrsSpatialTree / captureBldrsElementProperties (need
 //     live IfcManager + Conway adapter state; live IfcAPI is on the
@@ -58,9 +65,56 @@
 //
 // Reply (failure):
 //   { command: 'inject-and-pack:done', id, ok: false, error: string }
+//
+// Second command (request):
+//   {
+//     command: 'build-batched-glb',
+//     id: <correlation id>,
+//     snapshot: object,   // `glbBatchedSnapshot#snapshotBatchedModel`;
+//                         // its typed-array buffers are transferred
+//     collapse: boolean,
+//   }
+//
+// Reply (success; `built` is `buildInstancedGlbFromSnapshot`'s result, its
+// `bytes` transferred, or null when the model can't be written batched):
+//   { command: 'build-batched-glb:done', id, ok: true, built, logs: string[] }
+//
+// Reply (failure):
+//   { command: 'build-batched-glb:done', id, ok: false, error: string }
+//
+// `logs` carries the writer's verbose diagnostics back for the main thread
+// to replay through `glbVerbose` — the flag that gates them is read from
+// the page URL, which a worker can't see.
 
+import {buildInstancedGlbFromSnapshot} from './glbBatchedBuild'
 import {packGlbChunks} from './glbContainer'
 import {injectGlbExtensions} from './injectGlbExtensions'
+
+
+/**
+ * Run the batched-native build for a snapshot and post the result back.
+ *
+ * @param {object} data the `build-batched-glb` request
+ */
+async function buildBatched(data) {
+  const {id, snapshot, collapse} = data
+  const logs = []
+  try {
+    const built = await buildInstancedGlbFromSnapshot(
+      snapshot, {collapse}, (line) => logs.push(line))
+    self.postMessage(
+      {command: 'build-batched-glb:done', id, ok: true, built, logs},
+      built ? [built.bytes.buffer] : [],
+    )
+  } catch (e) {
+    self.postMessage({
+      command: 'build-batched-glb:done',
+      id,
+      ok: false,
+      error: e?.message || String(e),
+    })
+  }
+}
 
 
 // Async because `packGlbChunks` is: the container gzips its payload through
@@ -69,6 +123,10 @@ import {injectGlbExtensions} from './injectGlbExtensions'
 // exactly the kind of work the worker exists to keep off the main thread.
 self.addEventListener('message', async (event) => {
   const data = event.data
+  if (data?.command === 'build-batched-glb') {
+    await buildBatched(data)
+    return
+  }
   if (!data || data.command !== 'inject-and-pack') {
     return
   }
