@@ -238,6 +238,7 @@ export async function parseIfcWithConway(
       throw await openModelFailure(modelID, buffer, conwayRefusedSchema(ifcAPI, attempt),
         conwayOpenFailure(ifcAPI, attempt))
     }
+    await holdIndexForTest()
     if (onIndexed) {
       // Started, not awaited (codex/PSB review on #2037). The caller's tree
       // walk is conway's `properties.getSpatialStructure(modelID, 'names')`.
@@ -849,6 +850,28 @@ function yieldToEventLoop() {
  */
 async function holdGeometryPumpForTest() {
   const hold = globalThis.__bldrsTestHoldGeometryPump
+  if (typeof hold === 'function') {
+    await hold()
+  }
+}
+
+
+/**
+ * Test seam for open-205 #2043: hold the load between the end of the parse and
+ * the index, i.e. before `onIndexed` publishes the model at its index. The
+ * parse-time preview meshes are on screen by then and nothing else is: no
+ * tree, no properties, no durable geometry — the state a user is in for the
+ * whole parse of a large model, which on any fixture small enough to ship
+ * lasts well under a second. The E2E that proves the canvas is live from the
+ * first preview mesh (orbit, pick, the pick surviving into the finished
+ * model) installs `window.__bldrsTestHoldIndex` with `addInitScript` and
+ * resolves it to let the load go on. Absent in production, where this is a
+ * property read. Same shape as {@link holdGeometryPumpForTest}.
+ *
+ * @return {Promise<void>}
+ */
+async function holdIndexForTest() {
+  const hold = globalThis.__bldrsTestHoldIndex
   if (typeof hold === 'function') {
     await hold()
   }

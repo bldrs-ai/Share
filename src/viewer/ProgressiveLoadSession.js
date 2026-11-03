@@ -1,6 +1,7 @@
 import {Box3, Group, Sphere, Vector3} from 'three'
 import {reportFirstMesh, setLoadSummary} from '../loader/loadProgress'
 import debug, {WARN} from '../utils/debug'
+import {LOAD_PREVIEW_GROUP_KEY, PREVIEW_BASE_MATERIAL_KEY} from './previewSelection'
 import {FRAMING_MARGIN, applyCameraLimits, cameraLimitsForSphere} from './three/cameraLimits'
 import {ElementBoxes, robustBoundsFromElements} from './three/robustBounds'
 
@@ -87,8 +88,13 @@ export default class ProgressiveLoadSession {
    *   renders, but the follow leaves the camera where the permalink put
    *   it instead of framing the streaming geometry.
    * @param {Function} [args.onProgress] stage-label reporter.
+   * @param {object} [args.renderDemand] the viewer's RenderDemand
+   *   (`three/renderDemand.js`, open-205 #2043): painted on demand from here
+   *   until finish/abort, with each accepted mesh or bounds asking for a
+   *   background frame. Only with a scene: without one nothing streams on
+   *   screen, so there is nothing to save.
    */
-  constructor({scene = null, getControls, getCamera, frameCamera = true, onProgress}) {
+  constructor({scene = null, getControls, getCamera, frameCamera = true, onProgress, renderDemand = null}) {
     this.state = SessionState.IDLE
     this.scene = scene
     this.getControls = getControls ?? (() => null)
@@ -96,6 +102,22 @@ export default class ProgressiveLoadSession {
     this.frameCamera = frameCamera
     this.onProgress = onProgress ?? null
     this.previewGroup = scene !== null ? new Group() : null
+    if (this.previewGroup !== null) {
+      // How CadView's preview pick finds the group (previewSelection.js
+      // #loadPreviewGroups) without walking the scene.
+      // (`userData` defaulted for the mocked three.js some suites load.)
+      this.previewGroup.name = 'bldrsLoadPreview'
+      this.previewGroup.userData = this.previewGroup.userData ?? {}
+      this.previewGroup.userData[LOAD_PREVIEW_GROUP_KEY] = true
+    }
+    this.renderDemand = scene !== null ? renderDemand : null
+    this.hasAskedForFirstPaint = false
+    try {
+      this.renderDemand?.begin(this.getControls())
+    } catch (e) {
+      debug(WARN).warn('on-demand rendering not started:', e)
+      this.renderDemand = null
+    }
     this.previewInstalled = false
     // Camera follow state.
     this.followStopped = false
@@ -203,6 +225,7 @@ export default class ProgressiveLoadSession {
       } else {
         this.maybeRefit_()
       }
+      this.requestPaint_()
     } catch (e) {
       debug(WARN).warn('preview mesh skipped:', e)
     }
@@ -242,6 +265,7 @@ export default class ProgressiveLoadSession {
       } else {
         this.maybeRefit_()
       }
+      this.requestPaint_()
     } catch (e) {
       debug(WARN).warn('bounds notify skipped:', e)
     }
@@ -290,6 +314,7 @@ export default class ProgressiveLoadSession {
   finish() {
     this.stopFollow_()
     this.teardownPreview_()
+    this.endOnDemandRendering_()
     this.state = SessionState.FINISHED
   }
 
@@ -298,7 +323,41 @@ export default class ProgressiveLoadSession {
   abort() {
     this.stopFollow_()
     this.teardownPreview_()
+    this.endOnDemandRendering_()
     this.state = SessionState.ABORTED
+  }
+
+
+  /**
+   * Ask for a paint of geometry that just arrived: in the background, within
+   * the frame budget, except the load's first, which is what the user is
+   * waiting to see and paints on the next frame (renderDemand.js).
+   */
+  requestPaint_() {
+    if (this.renderDemand === null) {
+      return
+    }
+    if (this.hasAskedForFirstPaint) {
+      this.renderDemand.invalidateBackground()
+      return
+    }
+    this.hasAskedForFirstPaint = true
+    this.renderDemand.invalidate()
+  }
+
+
+  /**
+   * Back to painting every frame: the durable model is about to install (or
+   * the load failed), and everything after the load — cut planes, isolation,
+   * hover — expects a live loop.
+   */
+  endOnDemandRendering_() {
+    try {
+      this.renderDemand?.end()
+    } catch (e) {
+      debug(WARN).warn('on-demand rendering not ended:', e)
+    }
+    this.renderDemand = null
   }
 
 
@@ -471,7 +530,12 @@ export default class ProgressiveLoadSession {
     }
     try {
       this.followedControls = this.getControls() ?? null
+      // `control` as well as `controlstart`: camera-controls sends a wheel
+      // zoom as `control` alone (it can't tell a scroll's start or end), and
+      // a zoom is the user taking the camera as much as a drag is
+      // (open-205 #2043; design/new/in-app-model-switch.md §4.2a).
       this.followedControls?.addEventListener?.('controlstart', this.onControlStart)
+      this.followedControls?.addEventListener?.('control', this.onControlStart)
     } catch {
       this.followedControls = null
     }
@@ -648,6 +712,7 @@ export default class ProgressiveLoadSession {
     }
     try {
       this.followedControls?.removeEventListener?.('controlstart', this.onControlStart)
+      this.followedControls?.removeEventListener?.('control', this.onControlStart)
     } catch {
       // best-effort
     }
@@ -674,7 +739,11 @@ export default class ProgressiveLoadSession {
       if (obj.geometry !== undefined && obj.geometry !== null) {
         geometries.add(obj.geometry)
       }
-      const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
+      // A preview mesh painted as selected (previewSelection.js) wears the
+      // viewer's selection material, which outlives the load: dispose the
+      // mesh's own material instead.
+      const own = obj.userData?.[PREVIEW_BASE_MATERIAL_KEY] ?? obj.material
+      const mats = Array.isArray(own) ? own : [own]
       for (const material of mats) {
         if (material !== undefined && material !== null) {
           materials.add(material)

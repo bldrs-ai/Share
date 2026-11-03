@@ -118,6 +118,24 @@ future refactor pulls render-driving out of the highlighter — e.g. into
 a dedicated `RenderLoop` module — `setRenderUpdate` is the seam that
 moves with it.
 
+**On-demand painting while a model streams in (open-205 #2043).** The
+closure consults the viewer's `RenderDemand` (`src/viewer/three/renderDemand.js`,
+one per `IfcContext`, `ThreeContext#getRenderDemand`). Outside a load it is
+inert and every frame paints, as before. For the length of a load (CadView
+begins it as the load starts and ends it when the load settles;
+`ProgressiveLoadSession` ends it already at its finish, as the durable model
+goes in) the loop keeps ticking — camera-controls still updates in it — but paints
+only when asked: on the next frame for the user's camera moves, a selection
+change (`ShareViewer#setPreviewSelection`), a resize or the load's first
+geometry; within a frame budget
+(at least 100 ms apart and four times the last paint's cost, measured from
+the paint to the next frame, because the draw call itself returns long
+before the GPU work behind it is done) for arriving geometry, the camera
+follow's refits and a one-second heartbeat. Anything
+new that changes the picture *during* a load and must show at once calls
+`getRenderDemand().invalidate()`; after the load nothing needs to. Why:
+design/new/in-app-model-switch.md §4.2a.
+
 Perf instrumentation attaches at that seam, not inside the closure:
 
 ```js

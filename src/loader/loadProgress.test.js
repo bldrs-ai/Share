@@ -579,6 +579,24 @@ describe('loadProgress', () => {
         endLoadProgress()
         expect(getCompletedLoadStats().firstMeshMs).toBeUndefined()
       })
+
+      // open-205 #2043: the loading overlay lifts on it.
+      it('tells the store while the load runs, and not once it has ended', () => {
+        const store = useStore
+        store.setState({isFirstMeshShown: false})
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        reportFirstMesh()
+        expect(store.getState().isFirstMeshShown).toBe(true)
+        endLoadProgress()
+
+        store.setState({isFirstMeshShown: false})
+        beginLoadProgress({fileInfo: 'a.glb'})
+        endLoadProgress()
+        // A one-shot format's arrival after the load: the flag would outlive it.
+        reportFirstMesh()
+        expect(getCompletedLoadStats().firstMeshMs).toBeDefined()
+        expect(store.getState().isFirstMeshShown).toBe(false)
+      })
     })
 
     describe('getLoadFailureInfo', () => {

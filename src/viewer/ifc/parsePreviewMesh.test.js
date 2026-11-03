@@ -1,4 +1,5 @@
 /* eslint-disable no-magic-numbers */
+import {PREVIEW_EXPRESS_ID_KEY} from '../previewSelection'
 import {payloadToPreviewMesh} from './parsePreviewMesh'
 
 
@@ -166,5 +167,37 @@ describe('viewer/ifc/parsePreviewMesh', () => {
       makePayload({color: {x: 0.2, y: 0.4, z: 0.6, w: 0.5}}), new Map(), materialCache)
     expect(mesh.material.transparent).toBe(true)
     expect(mesh.material.opacity).toBe(0.5)
+  })
+
+  // open-205 #2043: a double-click on a preview mesh selects its element, so
+  // the payload's element id has to survive into the mesh.
+  describe('preview element id', () => {
+    it('carries the payload element id on a vertex-carrying mesh', () => {
+      const mesh = payloadToPreviewMesh(makePayload({expressID: 4242}), new Map(), new Map())
+      expect(mesh.userData[PREVIEW_EXPRESS_ID_KEY]).toBe(4242)
+      // Not `mesh.expressID`: that routes a pick down the finished model's branch.
+      expect(mesh.expressID).toBeUndefined()
+    })
+
+    it('carries each instance its own id when the geometry is shared', () => {
+      const geometryCache = new Map()
+      const materialCache = new Map()
+      const first = payloadToPreviewMesh(makePayload({expressID: 1}), geometryCache, materialCache)
+      const second = payloadToPreviewMesh(
+        makePayload({expressID: 2, vertexData: undefined, indexData: undefined}), geometryCache, materialCache)
+      expect(second.geometry).toBe(first.geometry)
+      expect(first.userData[PREVIEW_EXPRESS_ID_KEY]).toBe(1)
+      expect(second.userData[PREVIEW_EXPRESS_ID_KEY]).toBe(2)
+    })
+
+    it('leaves the id off a payload without one, and off an aabb imposter', () => {
+      const unnamed = payloadToPreviewMesh(makePayload({expressID: undefined}), new Map(), new Map())
+      expect(unnamed.userData[PREVIEW_EXPRESS_ID_KEY]).toBeUndefined()
+      const plate = payloadToPreviewMesh(
+        makePayload({expressID: 9, vertexData: undefined, indexData: undefined, aabb: {min: [0, 0, 0], max: [1, 1, 1]}}),
+        new Map(), new Map())
+      expect(plate.userData.aabbImposter).toBe(true)
+      expect(plate.userData[PREVIEW_EXPRESS_ID_KEY]).toBeUndefined()
+    })
   })
 })

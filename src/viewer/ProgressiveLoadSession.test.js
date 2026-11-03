@@ -1,6 +1,8 @@
 import {Box3, BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, Scene, Sphere, Vector3} from 'three'
 import {beginLoadProgress, endLoadProgress, getCompletedLoadStats} from '../loader/loadProgress'
 import ProgressiveLoadSession, {SessionState} from './ProgressiveLoadSession'
+import {LOAD_PREVIEW_GROUP_KEY, PREVIEW_EXPRESS_ID_KEY, loadPreviewGroups, paintPreviewSelection} from './previewSelection'
+import RenderDemand from './three/renderDemand'
 import {fitDistanceForRadius} from './three/cameraLimits'
 
 
@@ -197,6 +199,91 @@ describe('ProgressiveLoadSession', () => {
     session.lastFitMs = Date.now() - 10000
     session.addPreviewMesh(cubeAt(100))
     expect(controls.fits).toHaveLength(1)
+  })
+
+  // open-205 #2043: camera-controls sends a wheel zoom as `control` alone, and
+  // a zoom is the user taking the camera as much as a drag is.
+  it('stops following forever when the user zooms with the wheel', () => {
+    session.addPreviewMesh(cubeAt(0))
+    controls.listeners['control']()
+    session.lastFitMs = Date.now() - 10000
+    session.addPreviewMesh(cubeAt(100))
+    expect(controls.fits).toHaveLength(1)
+  })
+
+  // open-205 #2043: CadView's preview pick finds the group by its mark.
+  it('marks its preview group so a pick can find it in the scene', () => {
+    session.addPreviewMesh(cubeAt(0))
+    expect(session.previewGroup.userData[LOAD_PREVIEW_GROUP_KEY]).toBe(true)
+    expect(loadPreviewGroups(scene)).toEqual([session.previewGroup])
+    session.finish()
+    expect(loadPreviewGroups(scene)).toEqual([])
+  })
+
+  // open-205 #2043: a preview mesh painted as selected wears the viewer's
+  // selection material, which must outlive the load.
+  it('finish disposes a painted preview mesh\'s own material, not the borrowed selection material', () => {
+    const own = new MeshBasicMaterial()
+    const selection = new MeshBasicMaterial()
+    const ownDispose = jest.spyOn(own, 'dispose')
+    const selectionDispose = jest.spyOn(selection, 'dispose')
+    const mesh = cubeAt(0)
+    mesh.material = own
+    mesh.userData[PREVIEW_EXPRESS_ID_KEY] = 7
+    session.addPreviewMesh(mesh)
+    expect(paintPreviewSelection(scene, [7], selection)).toBe(1)
+    session.finish()
+    expect(ownDispose).toHaveBeenCalledTimes(1)
+    expect(selectionDispose).not.toHaveBeenCalled()
+  })
+
+  // open-205 #2043: the load paints on demand from start to finish.
+  describe('on-demand rendering', () => {
+    let demand
+
+    beforeEach(() => {
+      session.finish()
+      demand = new RenderDemand()
+      jest.spyOn(demand, 'invalidateBackground')
+      session = new ProgressiveLoadSession({
+        scene,
+        getControls: () => controls,
+        getCamera: () => camera,
+        renderDemand: demand,
+      })
+    })
+
+    it('paints on demand from the start of the load, with the camera controls attached', () => {
+      expect(demand.isOnDemand).toBe(true)
+      expect(demand.controls).toBe(controls)
+    })
+
+    it('paints the first geometry at once, and asks for a background frame for the rest', () => {
+      jest.spyOn(demand, 'invalidate')
+      session.addPreviewMesh(cubeAt(0))
+      expect(demand.invalidate).toHaveBeenCalledTimes(1)
+      expect(demand.invalidateBackground).not.toHaveBeenCalled()
+      session.addPreviewMesh(cubeAt(1))
+      expect(demand.invalidateBackground).toHaveBeenCalledTimes(1)
+      session.notifyBounds(new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1)))
+      expect(demand.invalidateBackground).toHaveBeenCalledTimes(2)
+      expect(demand.invalidate).toHaveBeenCalledTimes(1)
+    })
+
+    it('paints every frame again once the load finishes, or fails', () => {
+      session.finish()
+      expect(demand.isOnDemand).toBe(false)
+      session = new ProgressiveLoadSession({scene, renderDemand: demand})
+      expect(demand.isOnDemand).toBe(true)
+      session.abort()
+      expect(demand.isOnDemand).toBe(false)
+    })
+
+    it('leaves the loop alone when nothing streams on screen', () => {
+      session.finish()
+      session = new ProgressiveLoadSession({scene: null, renderDemand: demand})
+      expect(demand.isOnDemand).toBe(false)
+    })
   })
 
   it('finish removes aabb imposters even if they left the preview group', () => {

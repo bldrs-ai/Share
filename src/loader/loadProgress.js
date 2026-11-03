@@ -1358,10 +1358,18 @@ export function reportCacheHit(isHit) {
  * preview mesh or streamed bounds arrive, and from CadView right after the
  * finished model is added to the scene, so formats with no progressive path
  * report their one-shot arrival instead of nothing. Safe no-op with no load.
+ *
+ * While the load is still running it also tells the store
+ * (`isFirstMeshShown`, open-205 #2043), which lifts the loading overlay. Not
+ * after the load has ended: CadView's one-shot call comes after
+ * `endLoadProgress`, and a flag set then would outlive the load it belongs to.
  */
 export function reportFirstMesh() {
   if (activeReporter && activeReporter.firstMeshMs === undefined) {
     activeReporter.firstMeshMs = Date.now() - activeReporter.startTime
+    if (!activeReporter.ended) {
+      useStore.getState().setIsFirstMeshShown?.(true)
+    }
   }
 }
 

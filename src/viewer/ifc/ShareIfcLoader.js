@@ -412,6 +412,12 @@ export default class ShareIfcLoader {
       getCamera: () => ifc.context?.ifcCamera?.perspectiveCamera,
       frameCamera,
       onProgress,
+      // open-205 #2043: paint on demand while the model streams in, so the
+      // render loop doesn't compete with the parse and the pump for the main
+      // thread now that the canvas is live from the first preview mesh.
+      // `ifc.context` is the legacy IfcContext, which owns the RenderDemand
+      // (three/renderDemand.js).
+      renderDemand: ifc.context?.renderDemand ?? null,
     })
 
     let builder = null
