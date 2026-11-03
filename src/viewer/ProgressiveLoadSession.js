@@ -539,6 +539,15 @@ export default class ProgressiveLoadSession {
       this.followStopped = true
       return
     }
+    // The user took the camera before there was anything to follow (the
+    // overlay lifted early: `disableLoadOverlay`, or a fast index). The
+    // listeners below only attach now, so they never heard it; the load's
+    // RenderDemand did, from CadView's load-long scope, and is the one record
+    // of it (codex review on #2052).
+    if (this.renderDemand?.isUserDriving === true) {
+      this.followStopped = true
+      return
+    }
     if (this.followStopped || this.followTimer !== null) {
       return
     }

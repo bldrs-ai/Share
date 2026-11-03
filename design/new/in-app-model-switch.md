@@ -368,7 +368,10 @@ selects an element. Tree, properties and search still need the index
   snap, orbit or fit, a `#c:` pose — which sends no control event and calls
   `renderDemand.js#noteUserCamera` at the moment of input instead (codex
   review on #2052, closed at the round cap: with the follow stopped before
-  the UI queues its move, no refit can flush or overwrite it). It now also
+  the UI queues its move, no refit can flush or overwrite it). A touch before
+  the first mesh counts too: the follow, which attaches its listeners only
+  when it starts, reads the load's `RenderDemand#isUserDriving`, set from
+  CadView's load-long scope, and never starts. It now also
   **skips the end-of-load auto-fit**
   (`CadView#watchCameraTakenDuringLoad`); the camera limits are still sized to
   the model. A user who has orbited during a 60 s load is looking at

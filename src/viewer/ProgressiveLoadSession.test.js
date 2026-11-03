@@ -305,6 +305,26 @@ describe('ProgressiveLoadSession', () => {
       expect(demand.isOnDemand).toBe(false)
     })
 
+    // Codex review on #2052 (flip-time): with the overlay lifted before the
+    // first mesh, the user can take the camera before the follow has listeners
+    // to hear it; the load's RenderDemand heard it, and the follow must ask.
+    it('never starts following when the user took the camera before the first mesh', () => {
+      session.finish()
+      const endLoad = demand.begin(controls)
+      // A drag before any geometry: camera-controls' controlstart, which the
+      // load's RenderDemand (CadView's scope) is listening for.
+      controls.listeners['controlstart']()
+      expect(demand.isUserDriving).toBe(true)
+      session = new ProgressiveLoadSession({
+        scene, getControls: () => controls, getCamera: () => camera, renderDemand: demand,
+      })
+      session.addPreviewMesh(cubeAt(0))
+      session.lastFitMs = 0
+      session.addPreviewMesh(cubeAt(100))
+      expect(controls.fits).toHaveLength(0)
+      endLoad()
+    })
+
     // Codex review on #2052: the follow's camera update has to be made where
     // RenderDemand can tell it from a user's, synchronously in runFollowMove.
     it('makes the follow\'s move inside runFollowMove, applied at once', () => {
