@@ -91,7 +91,7 @@ let gaEnv
  * Called once at bundle start. Loads Google Analytics only when this host
  * may (shouldInitGa) AND the visitor has already consented. A visitor who
  * hasn't chosen yet gets nothing from Google: no gtag/js request, no
- * cookie, no collect. If they then allow analytics in the About dialog,
+ * collect, and any GA cookie left from before is deleted. If they then allow analytics in the About dialog,
  * updateGaConsent loads it on the spot. Design:
  * design/new/analytics-consent.md.
  *
@@ -103,7 +103,17 @@ let gaEnv
  */
 export default function setupGa(env = undefined) {
   gaEnv = env
-  if (!shouldInitGa(env) || !isAllowed()) {
+  if (!isAllowed()) {
+    // A visitor without consent may still carry `_ga` / `_gcl_*` from
+    // before: GA was default-on until 2026-11, and a CONSENT_VERSION bump
+    // un-decides everyone. Waiting for an explicit decline to clear them
+    // would leave an undecided visitor who never closes the dialog holding
+    // analytics identifiers, so clear them on every load without consent,
+    // on any host. Nothing here wrote them back: gtag/js isn't loaded.
+    deleteGoogleCookies(env?.hostname)
+    return
+  }
+  if (!shouldInitGa(env)) {
     return
   }
   loadGtag(env)

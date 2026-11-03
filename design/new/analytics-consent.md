@@ -57,7 +57,10 @@ changes, the summary copy and the privacy policy change with it, and
   from the real file against cookies `consent.js` wrote.
 - **`index/ga.js#setupGa`** injects gtag/js only when `shouldInitGa` (prod
   host, or an opted-in bldrs preview, never under webdriver) **and**
-  `isAllowed()`.
+  `isAllowed()`. Without consent it deletes any leftover `_ga` / `_gcl_*`
+  on every load, on any host: GA was default-on until this change, and a
+  `CONSENT_VERSION` bump un-decides everyone, so an undecided visitor who
+  never closes the dialog must not keep identifiers from before.
 - **`index/ga.js#updateGaConsent`**, after a choice:
   - allowed: clears `ga-disable-<ID>`, queues consent granted, queues the
     `config` the stub withheld (after the grant, so page_view goes out

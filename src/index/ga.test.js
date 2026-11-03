@@ -264,12 +264,17 @@ describe('setupGa', () => {
       expect(setTag).toHaveBeenLastCalledWith('open_cid', undefined)
     })
 
+    // A declined visitor's _ga is deleted at setup, so the id has to come
+    // back from gtag/js itself once the re-grant loads it.
     test('republishes the tag when consent is granted again', () => {
       Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
       setIsAllowed(false)
       setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+      expect(Cookies.get('_ga')).toBeUndefined()
 
       setIsAllowed(true)
+      updateGaConsent()
+      window.dataLayer.find((entry) => entry?.[0] === 'get')[3]('1234567890.0987654321')
       expect(setTag).toHaveBeenLastCalledWith('open_cid', '1234567890.0987654321')
     })
   })
@@ -301,6 +306,30 @@ describe('consent', () => {
     setupGa(PROD)
     expect(findGtagScript()).toBeNull()
     expect(window.dataLayer).toHaveLength(0)
+  })
+
+  // Codex on #2051: GA was default-on until this change, so a returning
+  // visitor can arrive undecided with GA cookies already set.
+  test.each([
+    ['has not chosen', null],
+    ['chose Browse only', '1.restricted'],
+  ])('deletes leftover GA cookies at setup when the visitor %s', (_, cookie) => {
+    if (cookie) {
+      Cookies.set('consentLevel', cookie)
+    } else {
+      Cookies.remove('consentLevel')
+    }
+    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+    Cookies.set('_gcl_au', '1.1.x')
+    setupGa({hostname: 'localhost', isWebdriver: false})
+    expect(Cookies.get('_ga')).toBeUndefined()
+    expect(Cookies.get('_gcl_au')).toBeUndefined()
+  })
+
+  test('keeps the GA cookie at setup for a consenting visitor', () => {
+    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+    setupGa({hostname: 'localhost', isWebdriver: false})
+    expect(Cookies.get('_ga')).toBe('GA1.1.1234567890.0987654321')
   })
 
   test('a visitor who chose Browse only gets no loader on prod', () => {
