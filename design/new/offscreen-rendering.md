@@ -1,11 +1,10 @@
 # Off-main-thread rendering — three.js in an OffscreenCanvas worker (open-205)
 
 **Status:** scoping (no code). Spike measured 2026-11-03 (§5).
-**Epic:** `open-205` (#2011). Story: off-main-thread rendering (filed with
-this doc). **Related:** #2043 (interactive at first mesh: stuttery camera
+**Epic:** `open-205` (#2011). Story: #2055. **Related:** #2043 (interactive at first mesh: stuttery camera
 expected), #2030 (no blocking calls), #2019 (per-model sessions), #2031
 (close and eviction), #1251 (`open-210`, multi-model overlay), the
-per-model Conway engine-worker story (scoped in parallel in
+per-model Conway engine-worker story #2053 (scoped in parallel in
 `design/new/engine-worker.md`; §6.4 says how the two compose).
 **Reads with:** [in-app-model-switch.md](in-app-model-switch.md) §4.1
 (P1.0 measurements) and §4.4 (Share's own long tasks),
