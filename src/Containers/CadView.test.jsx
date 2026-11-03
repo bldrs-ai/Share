@@ -831,7 +831,7 @@ describe('CadView', () => {
       'Upload not in this browser',
       expect.objectContaining({level: 'info', fingerprint: ['upload-not-in-browser']}))
     // The route's provenance is what lets the loader reclassify at all.
-    expect(loadSpy.mock.calls[0][6]).toEqual({isUploadedRoute: true})
+    expect(loadSpy.mock.calls[0][6]).toEqual(expect.objectContaining({isUploadedRoute: true}))
   })
 
   // Same dedupe as a schema refusal: the auth-state effect re-runs the load
@@ -1008,7 +1008,7 @@ describe('CadView', () => {
     render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
     await actAsyncFlush()
     await waitFor(() => expect(loadSpy).toHaveBeenCalled())
-    expect(loadSpy.mock.calls[0][6]).toEqual({isUploadedRoute: false})
+    expect(loadSpy.mock.calls[0][6]).toEqual(expect.objectContaining({isUploadedRoute: false}))
   })
 
   // A model change that lands while another load is in flight is not a
@@ -1528,6 +1528,419 @@ describe('CadView', () => {
       await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
       await actAsyncFlush()
       expect(result.current.expandedElements).toEqual([])
+    })
+  })
+
+
+  // open-205 #2029: a Conway load hands CadView the model at its index
+  // (`Loader.load`'s `onIndexed`) while geometry still streams. The tree,
+  // properties and search come up then, not after the last mesh.
+  describe('interactive at the index (open-205 #2029)', () => {
+    let getHarness
+    let loadSpy
+    let finishGeometry
+
+    beforeEach(() => {
+      getHarness = require('../../__mocks__/shareViewerTestHarness').__getShareViewerMockSingleton
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+      // `viewer: null` so the held load starts on this mount's viewer: the
+      // store's is otherwise the previous test's, which this mount disposes
+      // while the load is held, and the load's tail then fails on it.
+      useStore.setState({
+        viewer: null,
+        alert: null, customViewSettings: null, isAuthResolved: false, isModelReady: false,
+        model: null, indexedModel: null, rootElement: null,
+        expandedElements: [], selectedElements: [], selectedAnchorIds: [], selectedOccurrencePath: null,
+      })
+      finishGeometry = undefined
+    })
+
+    afterEach(() => {
+      loadSpy?.mockRestore()
+      loadSpy = undefined
+    })
+
+    /** @return {object} the model at its index, as makeIndexedModelHandle shapes it */
+    function makeIndexedModel() {
+      return {
+        isIndexedModel: true,
+        modelID: 0,
+        ifcManager: {getSpatialStructure: jest.fn(() => makeTestTree())},
+        getSpatialStructure: jest.fn(() => makeTestTree()),
+        getItemProperties: jest.fn((id) => Promise.resolve({expressID: id, Name: {value: `item ${id}`}})),
+        getIfcType: (type) => type,
+      }
+    }
+
+    /**
+     * Mount CadView on a load that reports its index, then holds its geometry
+     * until `finishGeometry()` — or, with `failGeometry`, fails it then.
+     *
+     * @param {object} result renderHook result over the whole store
+     * @param {object} indexedModel what the loader hands onIndexed
+     * @param {boolean} [failGeometry]
+     * @param {boolean} [untilHeld] Wait until the load holds its geometry,
+     *   i.e. until onIndexed has returned. False for a test that holds
+     *   onIndexed itself.
+     */
+    async function mountOnStreamingLoad(result, indexedModel, failGeometry = false, untilHeld = true) {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(async (...args) => {
+        const options = args[6] ?? {}
+        // A real index comes after the download and the open, never in the
+        // tick the load starts in, by when the mount's effects have all run.
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        await options.onIndexed?.(indexedModel)
+        await new Promise((resolve) => {
+          finishGeometry = resolve
+        })
+        if (failGeometry) {
+          throw new Error('geometry failed')
+        }
+        return getHarness()._loadedModel
+      })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      if (untilHeld) {
+        await waitFor(() => expect(finishGeometry).toBeDefined())
+      }
+      await actAsyncFlush()
+    }
+
+    it('brings the tree up while the geometry still streams', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel)
+
+      await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+      expect(result.current.rootElement.expressID).toBe(makeTestTree().expressID)
+      expect(result.current.indexedModel).toBe(indexedModel)
+      expect(result.current.isModelReady).toBe(false)
+      expect(result.current.model).toBeNull()
+
+      const treeAtIndex = result.current.rootElement
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.isModelReady).toBe(true))
+      // The finished model takes over, and the tree is the index's, not a
+      // second walk of the model.
+      expect(result.current.indexedModel).toBeNull()
+      expect(result.current.model).toBe(getHarness()._loadedModel)
+      expect(result.current.rootElement).toBe(treeAtIndex)
+      expect(getHarness()._loadedModel.ifcManager.getSpatialStructure).not.toHaveBeenCalled()
+    })
+
+    it('shows the properties of a row selected while the geometry streams', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel)
+      await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+
+      const leaf = makeTestTree().children[0].children[0].expressID
+      await act(() => result.current.setSelectedElements([`${leaf}`]))
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
+      expect(indexedModel.getItemProperties).toHaveBeenCalledWith(leaf)
+      expect(result.current.selectedElement.Name.value).toBe(`item ${leaf}`)
+    })
+
+    it('paints a selection made while the geometry streamed once the model is in', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const setSelectionSpy = jest.spyOn(ShareViewer.prototype, 'setSelection')
+      try {
+        await mountOnStreamingLoad(result, makeIndexedModel())
+        await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+        const leaf = makeTestTree().children[0].children[0].expressID
+        await act(() => {
+          result.current.setSelectedElements([`${leaf}`])
+          result.current.setSelectedAnchorIds([`${leaf}`])
+        })
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
+        const paintsWhileStreaming = setSelectionSpy.mock.calls.length
+
+        await act(() => finishGeometry())
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.isModelReady).toBe(true))
+        await waitFor(() => expect(setSelectionSpy.mock.calls.length).toBeGreaterThan(paintsWhileStreaming))
+        expect(setSelectionSpy.mock.calls.at(-1)[1]).toEqual([leaf])
+      } finally {
+        setSelectionSpy.mockRestore()
+      }
+    })
+
+    // Codex review on #2037: a superseded load is not cancelled (#2019), so A
+    // runs on after the user moves to B, and B's own load can't start until A
+    // settles. A's indexed tree must go when the user leaves, and A must not
+    // bring it back as it finishes; B's load is covered by the overlay.
+    it('takes the tree down when the user leaves a model at its index, and keeps it down', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel)
+      await waitFor(() => expect(result.current.indexedModel).toBe(indexedModel))
+      // B never indexes and never finishes.
+      loadSpy.mockImplementation(() => new Promise(() => {}))
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      expect(result.current.indexedModel).toBeNull()
+      expect(result.current.rootElement).toBeNull()
+      // B's load is under the overlay: still loading, nothing indexed.
+      expect(result.current.isModelLoading).toBe(true)
+
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      // A ran to its end, B is now the one loading, and A's tree stayed down.
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+      expect(String(loadSpy.mock.calls[1][0])).toContain('other.ifc')
+      expect(result.current.rootElement).toBeNull()
+      expect(result.current.indexedModel).toBeNull()
+      expect(result.current.isModelLoading).toBe(true)
+    })
+
+    // Codex review on #2037: a selection made in A's tree while A was at its
+    // index outlived the move to B, and if B then failed before its own index
+    // A's selection and Properties stayed up under B's URL. A property lookup
+    // still in flight for A must not land after the move either.
+    it('drops a selection made at the index when the user leaves, even if the next model fails early', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel)
+      await waitFor(() => expect(result.current.indexedModel).toBe(indexedModel))
+      // A's lookup of the row's properties is held until after the move.
+      let releaseLookup
+      indexedModel.getItemProperties.mockImplementationOnce((id) => new Promise((resolve) => {
+        releaseLookup = () => resolve({expressID: id, Name: {value: 'late A'}})
+      }))
+      const leaf = makeTestTree().children[0].children[0].expressID
+      await act(() => {
+        result.current.setSelectedElements([`${leaf}`])
+        result.current.setSelectedAnchorIds([`${leaf}`])
+      })
+      await actAsyncFlush()
+      await waitFor(() => expect(releaseLookup).toBeDefined())
+      // B fails before it reaches its index.
+      loadSpy.mockImplementation(() => Promise.reject(new Error('B failed before its index')))
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      await act(() => releaseLookup())
+      await actAsyncFlush()
+
+      expect(result.current.selectedElements).toEqual([])
+      expect(result.current.selectedAnchorIds).toEqual([])
+      expect(result.current.selectedOccurrencePath).toBeNull()
+      expect(result.current.selectedElement).toBeNull()
+    })
+
+    // Codex review on #2037, the failure-path twin of the case above: a load
+    // that fails after its index takes its selection down with its tree.
+    it('drops a selection made at the index when the load then fails', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel, true)
+      await waitFor(() => expect(result.current.indexedModel).toBe(indexedModel))
+      let releaseLookup
+      indexedModel.getItemProperties.mockImplementationOnce((id) => new Promise((resolve) => {
+        releaseLookup = () => resolve({expressID: id, Name: {value: 'late A'}})
+      }))
+      const leaf = makeTestTree().children[0].children[0].expressID
+      await act(() => {
+        result.current.setSelectedElements([`${leaf}`])
+        result.current.setSelectedAnchorIds([`${leaf}`])
+      })
+      await actAsyncFlush()
+      await waitFor(() => expect(releaseLookup).toBeDefined())
+
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      await act(() => releaseLookup())
+      await actAsyncFlush()
+
+      expect(result.current.rootElement).toBeNull()
+      expect(result.current.selectedElements).toEqual([])
+      expect(result.current.selectedAnchorIds).toEqual([])
+      expect(result.current.selectedElement).toBeNull()
+    })
+
+    // The PSB stall (#2037): the loader starts the pump without waiting for
+    // onIndexed, so the tree walk can finish after the geometry. Its tree
+    // still installs, once; and not if the user has left or the load failed.
+    describe('when the tree walk outlasts the geometry', () => {
+      /**
+       * Mount on a load that reports its index without waiting for the tree,
+       * as parseIfcWithConway does, and then finishes (or fails) its geometry.
+       *
+       * @param {object} result renderHook result over the whole store
+       * @param {object} indexedModel what the loader hands onIndexed
+       * @param {boolean} [failGeometry]
+       */
+      async function mountOnLateTreeLoad(result, indexedModel, failGeometry = false) {
+        loadSpy = jest.spyOn(Loader, 'load').mockImplementation(async (...args) => {
+          const options = args[6] ?? {}
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          options.onIndexed?.(indexedModel)
+          if (failGeometry) {
+            throw new Error('geometry failed')
+          }
+          return getHarness()._loadedModel
+        })
+        await act(() => result.current.setIsOpfsAvailable(false))
+        await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+        render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+        await actAsyncFlush()
+      }
+
+      /**
+       * @return {{indexedModel: object, releaseTree: Function}} a model at its
+       *   index whose tree walk is held until `releaseTree()`
+       */
+      function makeSlowTreeModel() {
+        const indexedModel = makeIndexedModel()
+        let resolveTree
+        indexedModel.getSpatialStructure = jest.fn(() => new Promise((resolve) => {
+          resolveTree = () => resolve(makeTestTree())
+        }))
+        return {indexedModel, releaseTree: () => resolveTree()}
+      }
+
+      it('installs it from the index once the walk finishes, and only once', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const {indexedModel, releaseTree} = makeSlowTreeModel()
+        await mountOnLateTreeLoad(result, indexedModel)
+        // The geometry is in; the model waits for its tree, as prod's does.
+        await waitFor(() => expect(result.current.model).toBe(getHarness()._loadedModel))
+        expect(indexedModel.getSpatialStructure).toHaveBeenCalledTimes(1)
+        expect(result.current.rootElement).toBeNull()
+        expect(result.current.isModelReady).toBe(false)
+
+        await act(() => releaseTree())
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.isModelReady).toBe(true))
+        expect(result.current.rootElement.expressID).toBe(makeTestTree().expressID)
+        // One walk: the finished model's tree was never read.
+        expect(getHarness()._loadedModel.ifcManager.getSpatialStructure).not.toHaveBeenCalled()
+        expect(result.current.indexedModel).toBeNull()
+      })
+
+      it('does not install it when the user has left the model meanwhile', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const {indexedModel, releaseTree} = makeSlowTreeModel()
+        await mountOnLateTreeLoad(result, indexedModel)
+        await waitFor(() => expect(result.current.model).toBe(getHarness()._loadedModel))
+        loadSpy.mockImplementation(() => new Promise(() => {}))
+        await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+        await actAsyncFlush()
+
+        await act(() => releaseTree())
+        await actAsyncFlush()
+        expect(result.current.rootElement).toBeNull()
+        expect(result.current.indexedModel).toBeNull()
+      })
+
+      // Codex review on #2037: the walk that was skipped as stale must not be
+      // replaced by a second one at the load's end. On PSB a walk was ~86 s
+      // before conway#753 (seconds after), and the superseded load holds the
+      // next model's load back until it ends, so a second walk would delay B
+      // by that much.
+      it('walks the tree once when the user leaves meanwhile, and lets the next load start', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const {indexedModel, releaseTree} = makeSlowTreeModel()
+        // A second walk of the finished model would never end here, holding B
+        // back for good.
+        const finishedWalk = getHarness()._loadedModel.ifcManager.getSpatialStructure
+        finishedWalk.mockImplementation(() => new Promise(() => {}))
+        try {
+          await mountOnLateTreeLoad(result, indexedModel)
+          await waitFor(() => expect(result.current.model).toBe(getHarness()._loadedModel))
+          loadSpy.mockImplementation(() => new Promise(() => {}))
+          await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+          await actAsyncFlush()
+
+          await act(() => releaseTree())
+          await actAsyncFlush()
+          await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+          expect(String(loadSpy.mock.calls[1][0])).toContain('other.ifc')
+          expect(indexedModel.getSpatialStructure).toHaveBeenCalledTimes(1)
+          expect(finishedWalk).not.toHaveBeenCalled()
+        } finally {
+          finishedWalk.mockReset()
+          finishedWalk.mockReturnValue(makeTestTree())
+        }
+      })
+
+      it('reports a tree the index could not read once, without walking it again', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const indexedModel = makeIndexedModel()
+        indexedModel.getSpatialStructure = jest.fn(() => Promise.reject(new Error('walk failed')))
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        try {
+          await mountOnLateTreeLoad(result, indexedModel)
+          await waitFor(() => expect(result.current.isModelReady).toBe(true))
+          expect(result.current.alert).toMatch(/Could not read full model structure/)
+          expect(indexedModel.getSpatialStructure).toHaveBeenCalledTimes(1)
+          expect(getHarness()._loadedModel.ifcManager.getSpatialStructure).not.toHaveBeenCalled()
+        } finally {
+          warn.mockRestore()
+        }
+      })
+
+      it('does not install it when the load has failed meanwhile', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const {indexedModel, releaseTree} = makeSlowTreeModel()
+        await mountOnLateTreeLoad(result, indexedModel, true)
+        await waitFor(() => expect(result.current.alert).not.toBeNull())
+
+        await act(() => releaseTree())
+        await actAsyncFlush()
+        expect(result.current.rootElement).toBeNull()
+        expect(result.current.indexedModel).toBeNull()
+      })
+    })
+
+    it('does not install a tree whose model the user left while it was being installed', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      // The install reads the root's name before it writes: hold that read,
+      // and move to B meanwhile.
+      let releaseRootName
+      const getPropertiesSpy = jest.spyOn(ShareViewer.prototype, 'getProperties')
+        .mockImplementationOnce(() => new Promise((resolve) => {
+          releaseRootName = () => resolve({Name: {value: 'A'}})
+        }))
+      try {
+        await mountOnStreamingLoad(result, makeIndexedModel(), false, false)
+        await waitFor(() => expect(releaseRootName).toBeDefined())
+        loadSpy.mockImplementation(() => new Promise(() => {}))
+        await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+        await actAsyncFlush()
+
+        await act(() => releaseRootName())
+        await actAsyncFlush()
+        expect(result.current.rootElement).toBeNull()
+        expect(result.current.indexedModel).toBeNull()
+      } finally {
+        getPropertiesSpy.mockRestore()
+      }
+    })
+
+    it('takes the tree down when the load fails after its index', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      await mountOnStreamingLoad(result, makeIndexedModel(), true)
+      await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      expect(result.current.rootElement).toBeNull()
+      expect(result.current.indexedModel).toBeNull()
     })
   })
 

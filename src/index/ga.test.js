@@ -53,6 +53,38 @@ describe('shouldInitGa', () => {
       enableInPreview: true,
     })).toBe(false)
   })
+
+  // A fork's Netlify site gets the same deploy-preview-N-- hostname shape;
+  // only bldrs' own project may opt into the production property.
+  test('does not let another Netlify project\'s deploy preview opt in', () => {
+    expect(shouldInitGa({
+      hostname: 'deploy-preview-12--some-fork-of-share.netlify.app',
+      isWebdriver: false,
+      enableInPreview: true,
+    })).toBe(false)
+    expect(shouldInitGa({
+      hostname: 'deploy-preview-12--bldrs-share-prod.netlify.app.example.com',
+      isWebdriver: false,
+      enableInPreview: true,
+    })).toBe(false)
+  })
+
+  // The kinds of non-production host a copy of the app runs on (local dev
+  // and CI, the dev domain, GitHub Pages, a self-hosted domain or a bare
+  // IP), plus lookalikes of the prod hostnames.
+  test.each([
+    'localhost',
+    '127.0.0.1',
+    '203.0.113.7',
+    'bldrs.dev',
+    'someone.github.io',
+    'share.example.com',
+    'bldrs.ai.example.com',
+    'notbldrs.ai',
+    'bldrs.ai.',
+  ])('false on non-production host %s', (hostname) => {
+    expect(shouldInitGa({hostname, isWebdriver: false, enableInPreview: true})).toBe(false)
+  })
 })
 
 

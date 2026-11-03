@@ -63,6 +63,7 @@ import modelIdentity from '../routes/modelIdentity'
 import useExistInFeature from '../hooks/useExistInFeature'
 import useDirectLinkQuota from '../quota/useDirectLinkQuota'
 import useStore from '../store/useStore'
+import {selectReadModel} from '../store/IFCSlice'
 import {
   expandedIdsForSelection,
   getDescendantExpressIds,
@@ -249,6 +250,7 @@ export default function CadView({
   const isModelReady = useStore((state) => state.isModelReady)
   const setIsModelReady = useStore((state) => state.setIsModelReady)
   const setModel = useStore((state) => state.setModel)
+  const setIndexedModel = useStore((state) => state.setIndexedModel)
 
   // NavTreeSlice
   const expandedTypes = useStore((state) => state.expandedTypes)
@@ -407,6 +409,11 @@ export default function CadView({
    * - The element lookup, that model's tree (#2016). Cleared in place: it is
    *   one object for the life of this CadView, and the handlers that read it
    *   hold that object. onModel refills it.
+   * - A tree brought up at the index of a load the user has now left
+   *   (open-205 #2029; codex review on #2037). That load still runs to its end
+   *   (#2019), and until it does the new model can't start, so without this
+   *   the panels would go on serving the left model's tree and properties
+   *   under the new model's URL, with the loading overlay lifted.
    *
    * Runs when the model identity changes, and again just before a replay
    * of a load that a model change superseded (onViewer's finally). Two
@@ -420,6 +427,11 @@ export default function CadView({
     setIsViewerLoaded(false)
     for (const id of Object.keys(elementsById)) {
       delete elementsById[id]
+    }
+    // Nothing indexed belongs to the model about to be shown: its own load
+    // hasn't started (identity change), or hasn't been replayed yet.
+    if (useStore.getState().indexedModel !== null) {
+      forgetIndexedTree()
     }
   }
 
@@ -498,14 +510,73 @@ export default function CadView({
     // isolator, whose `setModel` may seed it (scene-graph loader defaults).
     useStore.getState().claimHiddenElementsForModel(modelIdentity(modelPath, installPrefix))
 
+    // open-205 #2029: bring the tree, properties and search up from the
+    // model's index, while geometry still streams, instead of after the last
+    // mesh. The loader calls onIndexed between the deferred open and the
+    // geometry pump and does NOT wait for it (conwayDirectIfcLoader.js
+    // #parseIfcWithConway says why): the tree walk runs beside the pump and
+    // its tree installs whenever the walk finishes, which on a small or
+    // resident model can be after the geometry. Only for Conway (IFC/STEP)
+    // cache misses on the streaming path; every other load brings the tree up
+    // in onModel, as before.
+    //
+    // One install path: the end-of-load code below waits for this delivery
+    // and onModel reuses its tree (`indexedTree`), walking the finished model
+    // only when the index delivered none. `indexedHandle` is this load's
+    // handle, cleared from the store once the finished model is in.
+    let indexedTree = null
+    let indexedHandle = null
+    let indexedDelivery = null
+    // A walk can settle after the load has failed, as well as after the user
+    // has left: neither may install its tree.
+    let hasLoadFailed = false
+    // Why the index's walk failed, for the load's end to report once.
+    let indexedWalkError = null
+    const isIndexedTreeStale = () => isLoadSuperseded() || hasLoadFailed
+    const deliverIndexedTree = async (indexedModel) => {
+      if (isIndexedTreeStale()) {
+        return
+      }
+      const rootElt = await readModelTree(indexedModel, {
+        isIndexed: true,
+        onIndexedFailure: (e) => {
+          indexedWalkError = e
+        },
+      })
+      if (rootElt === null || isIndexedTreeStale()) {
+        return
+      }
+      if (await installModelTree(indexedModel, rootElt, isIndexedTreeStale, {indexedModel})) {
+        indexedTree = rootElt
+      }
+    }
+    const onIndexed = (indexedModel) => {
+      indexedHandle = indexedModel
+      indexedDelivery = deliverIndexedTree(indexedModel).catch((e) => {
+        // The end-of-load path reads the tree from the finished model then.
+        console.warn('CadView#onIndexed: tree not installed at the index:', e)
+      })
+      return indexedDelivery
+    }
+
     let tmpModelRef
     let isOOM = false
     // Read before the attempt so the catch can tell whether a load reporter
     // began for THIS attempt (getLoadFailureInfo).
     const loadSerialBefore = currentLoadSerial()
     try {
-      tmpModelRef = await loadModelWithAuthRetry(modelPath, isAuthSettledBeforeLoad)
+      tmpModelRef = await loadModelWithAuthRetry(modelPath, isAuthSettledBeforeLoad, {onIndexed})
     } catch (e) {
+      // A tree that came up at the index belongs to a model that then never
+      // loaded: take it down with the load, so the panels don't offer rows of
+      // a model that isn't there, and with it any selection made in it, which
+      // Properties and the TopBar would otherwise keep showing (codex review
+      // on #2037). A walk still running stays out: isIndexedTreeStale.
+      hasLoadFailed = true
+      if (indexedTree !== null && !isLoadSuperseded()) {
+        forgetIndexedTree()
+        forgetIndexedSelection()
+      }
       if (isOutOfMemoryError(e)) {
         isOOM = true
       }
@@ -636,10 +707,45 @@ export default function CadView({
     }
 
     debug().log('CadView#onViewer: pathToLoad(${pathToLoad}), tmpModelRef: ', tmpModelRef)
-    await onModel(tmpModelRef, isLoadSuperseded)
+    // The index's tree walk runs beside the pump and can outlast it. Wait for
+    // it, so the tree installs once — from the index, or else in onModel —
+    // and never twice in a race. The model is not ready until its tree is,
+    // as before: prod walks the tree here too.
+    if (indexedDelivery !== null) {
+      await indexedDelivery
+    }
+    // Reuse the index's tree only while it is still the one shown: an
+    // auth retry (loadModelWithAuthRetry) may have replaced the attempt
+    // that delivered it.
+    const earlyTree = indexedTree !== null && useStore.getState().rootElement === indexedTree ?
+      indexedTree : null
+    // At most one walk of this model's tree (codex review on #2037): on PSB a
+    // walk was ~86 s before conway#753 and is still seconds after it, and
+    // this load holds the next one back until it ends. So
+    // none here when the load is superseded (it would install nothing), and
+    // none when the index's walk failed (report that failure instead). A
+    // walk that came up with a tree has delivered it (earlyTree).
+    if (indexedWalkError !== null && !isLoadSuperseded()) {
+      reportTreeReadFailure(indexedWalkError)
+    }
+    const mayWalk = !isLoadSuperseded() && indexedWalkError === null
+    await onModel(tmpModelRef, isLoadSuperseded, earlyTree, {mayWalk})
+    // The finished model now answers everything the indexed one did, and it
+    // is what readers should hold from here (store/IFCSlice.js
+    // #selectReadModel). Only this load's own handle: a superseded load still
+    // runs to its end (#2019), and must not take down the shown model's.
+    if (indexedHandle !== null && useStore.getState().indexedModel === indexedHandle) {
+      setIndexedModel(null)
+    }
 
     const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     selectElementBasedOnFilepath(pathToLoad)
+    if (earlyTree !== null && !isLoadSuperseded()) {
+      // Anything selected while geometry streamed — a tree row, a search, a
+      // link's element path applied as the tree came up — highlighted nothing,
+      // there being nothing in the scene to highlight. Paint it now.
+      reapplySelectionToGeometry()
+    }
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
       .filter(([, value]) => value === true).map(([key]) => Number(key))
@@ -718,11 +824,12 @@ export default function CadView({
    *
    * @param {object} routeResult
    * @param {boolean} isAuthSettledBeforeLoad
+   * @param {object} [loadOptions] passed to every attempt's loadModel
    * @return {object} loaded model
    */
-  async function loadModelWithAuthRetry(routeResult, isAuthSettledBeforeLoad) {
+  async function loadModelWithAuthRetry(routeResult, isAuthSettledBeforeLoad, loadOptions = {}) {
     try {
-      return await loadModel(routeResult)
+      return await loadModel(routeResult, loadOptions)
     } catch (error) {
       if (isAuthSettledBeforeLoad) {
         throw error
@@ -737,7 +844,7 @@ export default function CadView({
           throw error
         }
         debug().log('CadView#loadModelWithAuthRetry: Drive load ran before sign-in settled; retrying via connection')
-        return await loadModel(routeResult)
+        return await loadModel(routeResult, loadOptions)
       }
       if (!isAuthShapedLoadError(error)) {
         throw error
@@ -752,7 +859,7 @@ export default function CadView({
         throw error
       }
       debug().log('CadView#loadModelWithAuthRetry: anonymous load failed auth-shaped; retrying with token')
-      return await loadModel(routeResult)
+      return await loadModel(routeResult, loadOptions)
     }
   }
 
@@ -761,10 +868,12 @@ export default function CadView({
    * Load IFC helper used by 1) useEffect on path change and 2) upload button
    *
    * @param {object} routeResult
-   * @param {string} gitpath to use for constructing API endpoints
+   * @param {object} [options]
+   * @param {Function} [options.onIndexed] handed the model at its index while
+   *   geometry still streams (open-205 #2029); see onViewerInternal
    * @return {object} loaded model
    */
-  async function loadModel(routeResult) {
+  async function loadModel(routeResult, {onIndexed} = {}) {
     const isGoogleResult = routeResult.kind === 'provider' && routeResult.provider === 'google'
     const filepath = isGoogleResult ? routeResult.downloadUrl : (routeResult.downloadUrl || routeResult.filepath)
     const gitpath = routeResult.gitpath
@@ -832,7 +941,8 @@ export default function CadView({
           const download = await browser.getFileDownload(connection, null, routeResult.fileId)
           const blobUrl = URL.createObjectURL(download.blob)
           try {
-            loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '')
+            loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '',
+              {onIndexed})
           } finally {
             // The URL pins the whole download for the life of the page, and
             // each load mints a new one (a theme toggle reloads the model).
@@ -846,7 +956,8 @@ export default function CadView({
           // connection. Only a file shared "Anyone with the link" (or
           // published) downloads this way, which is why the quota meter
           // treats a Drive file loaded here as public.
-          loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, setOpfsFile, '')
+          loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, setOpfsFile, '',
+            {onIndexed})
         }
       } else {
         // Read the token at call time, not from the render closure — the
@@ -858,7 +969,7 @@ export default function CadView({
           (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow,
           // Route provenance, which the loader can't recover from `filepath`
           // alone: /v/local-only/<id> and /v/p/<id> give the same URL (#1956).
-          {isUploadedRoute: routeResult.isUploadedFile === true})
+          {isUploadedRoute: routeResult.isUploadedFile === true, onIndexed})
       }
     } catch (error) {
       loadError = error
@@ -1054,8 +1165,14 @@ export default function CadView({
    * @param {object} m IFCjs loaded model.
    * @param {Function} isLoadSuperseded True once the user has moved to another
    *   model; see onViewerInternal.
+   * @param {object|null} [earlyTree] The tree already brought up from this
+   *   load's index (open-205 #2029), or null to read it from `m` now.
+   * @param {object} [options]
+   * @param {boolean} [options.mayWalk] False when `m`'s tree must not be read
+   *   here: the load is superseded, so nothing it reads would be installed, or
+   *   its index already walked this model's tree (onViewerInternal).
    */
-  async function onModel(m, isLoadSuperseded) {
+  async function onModel(m, isLoadSuperseded, earlyTree = null, {mayWalk = true} = {}) {
     assertDefined(m)
     debug().log('CadView#onModel', m)
     // TODO(pablo): centralize capability check somewhere
@@ -1067,12 +1184,70 @@ export default function CadView({
     setKeydownListeners(viewer, selectItemsInScene)
     // Everything below here needs the rootElt, which may not be available
     // if we can't read the full model structure.
+    if (earlyTree === null) {
+      if (!mayWalk) {
+        return
+      }
+      const rootElt = await readModelTree(m, {isIndexed: false})
+      if (rootElt === null) {
+        return
+      }
+      await installModelTree(m, rootElt, isLoadSuperseded)
+    }
+    // Load-time property reads are done: drop Conway's materialised
+    // entity/descriptor caches (the 'names' walk + type sweep touched
+    // O(products) entities). Entities rematerialise transparently on the
+    // next property access (Properties panel, GLB cache writer), so this
+    // only bounds memory. Conway extension — optional-chained so older
+    // conway versions no-op. The IsModelOpen gate keeps cache-hit GLB
+    // loads silent: they share the live conway ifcAPI via
+    // `viewer.IFC.loader.ifcManager` without ever opening model 0, and
+    // an ungated release would log a spurious model-undefined error.
+    // Released here at the load's end even when the tree came up at the
+    // index: the walk's entities are what the tree's first property reads
+    // hit while the geometry streamed.
+    const conwayApi = m.ifcManager?.ifcAPI
+    // eslint-disable-next-line new-cap
+    if (conwayApi?.ReleaseEntityCache && conwayApi.IsModelOpen?.(0)) {
+      // eslint-disable-next-line new-cap
+      conwayApi.ReleaseEntityCache(0)
+    }
+  }
+
+
+  /**
+   * Tell the user the model's tree couldn't be read, and Sentry why.
+   *
+   * @param {Error} e
+   */
+  function reportTreeReadFailure(e) {
+    setAlert('Could not read full model structure.  Only model geometry will be available.')
+    captureException(e, 'Could not read full model structure')
+    console.error(e)
+  }
+
+
+  /**
+   * Read the spatial tree from `m`, writing nothing to the store. Split from installModelTree so the index path (open-205 #2029) can
+   * read the tree, check the load is still current, and only then show it.
+   *
+   * @param {object} m a loaded model, or the model at its index
+   *   (makeIndexedModelHandle): both carry the same spatial surface
+   * @param {object} options
+   * @param {boolean} options.isIndexed True at the index. A failure there is
+   *   logged, handed to `onIndexedFailure` and answers null; the load's end
+   *   raises the alert for it, once, and does not walk the tree again.
+   * @param {Function} [options.onIndexedFailure] `(error) => void`, at the index
+   * @return {Promise<object|null>} the tree root, or null when it can't be read
+   */
+  async function readModelTree(m, {isIndexed, onIndexedFailure}) {
     let rootElt
     try {
       // Three sources, in preference order:
       //   1. Model's own `getSpatialStructure` (instance method) — attached
       //      by `decorateConwayDirectIfcModel` on cache-miss Conway-direct
       //      parses (routes to `ifcAPI.properties.getSpatialStructure`),
+      //      by `makeIndexedModelHandle` on the same parses at their index,
       //      or by `convertToShareModel` on cache-hit GLBs that carry the
       //      `BLDRS_spatial_tree` extension (closure returning the cached
       //      tree). `hasOwnProperty` discriminates this from wit-three's
@@ -1103,27 +1278,65 @@ export default function CadView({
         rootElt = await m.ifcManager.getSpatialStructure(0, 'names')
       }
     } catch (e) {
-      setAlert('Could not read full model structure.  Only model geometry will be available.')
-      captureException(e, 'Could not read full model structure')
-      console.error(e)
-      return
+      if (isIndexed) {
+        // Reported at the load's end instead (onViewerInternal), once, so a
+        // model whose tree can't be read raises one alert.
+        console.warn('CadView#readModelTree: tree not readable at the index:', e)
+        onIndexedFailure?.(e)
+        return null
+      }
+      reportTreeReadFailure(e)
+      return null
     }
-    debug().log('CadView#onModel: rootElt: ', rootElt)
+    debug().log('CadView#readModelTree: rootElt: ', rootElt)
     if (rootElt.expressID === undefined) {
+      if (isIndexed) {
+        console.warn('CadView#readModelTree: tree at the index has no root express ID')
+        onIndexedFailure?.(new Error('Model has undefined root express ID'))
+        return null
+      }
       throw new Error('Model has undefined root express ID')
     }
-    if (!isLoadSuperseded()) {
-      setupLookupAndParentLinks(rootElt, elementsById)
-    }
-    initSearch(m, rootElt)
+    return rootElt
+  }
+
+
+  /**
+   * Bring up a read tree: the element lookup, the search index, the root's
+   * display name, the NavTree root and the types view.
+   *
+   * Writes nothing once the user has moved to another model. The check sits
+   * after the one await and before the first write, so every write then lands
+   * in one synchronous run and none can republish this model's tree under the
+   * next (codex review on #2037). A superseded load is not cancelled (#2019),
+   * so it does reach here.
+   *
+   * @param {object} m the model the tree was read from
+   * @param {object} rootElt from readModelTree
+   * @param {Function} isLoadSuperseded see onViewerInternal
+   * @param {object} [options]
+   * @param {object} [options.indexedModel] The model at its index, published
+   *   with the tree it was read from (open-205 #2029): before the tree, so the
+   *   panels never pair this tree with the model shown before it
+   *   (store/IFCSlice.js#selectReadModel).
+   * @return {Promise<boolean>} whether the tree was installed
+   */
+  async function installModelTree(m, rootElt, isLoadSuperseded, {indexedModel = null} = {}) {
     // Root display name, in preference order: real properties from the
     // parser (IFC project Name/LongName), then whatever the tree root
     // already carries (convertToShareModel's composed
     // "<sceneName> (<fileName>)" for plain GLB/OBJ — see #1595), then
     // the generic 'Model' placeholder. The previous unconditional
     // overwrite stamped 'Model' over every non-IFC root because
-    // getProperties has nothing for unstructured models.
+    // getProperties has nothing for unstructured models. Read before
+    // anything is written; applied after the search index is built, which
+    // indexes the root under the name it came with, as it always has.
     const tmpProps = await viewer.getProperties(0, rootElt.expressID)
+    if (isLoadSuperseded()) {
+      return false
+    }
+    setupLookupAndParentLinks(rootElt, elementsById)
+    initSearch(m, rootElt)
     if (tmpProps && (tmpProps.Name || tmpProps.LongName)) {
       rootElt.Name = tmpProps.Name ?? rootElt.Name
       rootElt.LongName = tmpProps.LongName ?? rootElt.LongName
@@ -1131,26 +1344,82 @@ export default function CadView({
       rootElt.Name = {value: 'Model'}
       rootElt.LongName = {value: 'Model'}
     }
+    if (indexedModel !== null) {
+      setIndexedModel(indexedModel)
+    }
     // Ids are only unique within one file — transient anonymous-geometry
     // rows from the previous model must not leak into this tree.
     useStore.getState().clearTransientTreeNodes()
     setRootElement(rootElt)
     setElementTypesMap(groupElementsByTypes(rootElt))
-    // Load-time property reads are done: drop Conway's materialised
-    // entity/descriptor caches (the 'names' walk + type sweep touched
-    // O(products) entities). Entities rematerialise transparently on the
-    // next property access (Properties panel, GLB cache writer), so this
-    // only bounds memory. Conway extension — optional-chained so older
-    // conway versions no-op. The IsModelOpen gate keeps cache-hit GLB
-    // loads silent: they share the live conway ifcAPI via
-    // `viewer.IFC.loader.ifcManager` without ever opening model 0, and
-    // an ungated release would log a spurious model-undefined error.
-    const conwayApi = m.ifcManager?.ifcAPI
-    // eslint-disable-next-line new-cap
-    if (conwayApi?.ReleaseEntityCache && conwayApi.IsModelOpen?.(0)) {
-      // eslint-disable-next-line new-cap
-      conwayApi.ReleaseEntityCache(0)
+    return true
+  }
+
+
+  /**
+   * Take down a tree brought up at the index of a load that then failed
+   * (open-205 #2029): with no model behind it, its rows would select, search
+   * and show properties for a model that never arrived.
+   */
+  function forgetIndexedTree() {
+    setIndexedModel(null)
+    setRootElement(null)
+    setElementTypesMap([])
+    searchIndex.clearIndex()
+    for (const id of Object.keys(elementsById)) {
+      delete elementsById[id]
     }
+  }
+
+
+  /**
+   * Drop a selection made in the tree of a model the user has left while it
+   * was still at its index, or whose load failed after it (open-205 #2029;
+   * codex review on #2037): the rows,
+   * anchors, instances, occurrence and the Properties element. A model that
+   * finished loading has its selection reset by onModelPath's resetState; one
+   * left at its index never reached isModelReady, so nothing else would, and
+   * if the next model then failed before its own index, the left model's
+   * selection and properties stayed up under its URL. Clearing the selection
+   * also re-runs the selection effect, whose cleanup marks a property lookup
+   * still in flight for the left model stale, so it can't land afterwards.
+   *
+   * Only on the identity change, never before a replay: the replay is for the
+   * model the URL shows, whose `#sel:` link (selectFromSelectionHash) applies
+   * once its tree is up, and that selection must stand. The URL is not
+   * touched here. #2019's sessions turn this clear into restoring each
+   * model's own selection when the user returns to it.
+   */
+  function forgetIndexedSelection() {
+    selectItemsInScene([], false)
+    setSelectedElement(null)
+  }
+
+
+  /**
+   * Re-run the current selection against the scene, for a selection made
+   * while geometry was still streaming (open-205 #2029). At the time, the
+   * scene half of it found nothing: `setSelection` had no model to paint, and
+   * a STEP row resolved to no instances. The logical selection — the rows,
+   * the anchors, the occurrence — is in the store, so this goes back through
+   * the same funnel a tree click takes, without touching the URL.
+   */
+  function reapplySelectionToGeometry() {
+    const state = useStore.getState()
+    const selected = state.selectedElements
+    if (!Array.isArray(selected) || selected.length === 0) {
+      return
+    }
+    const occurrencePath = Array.isArray(state.selectedOccurrencePath) &&
+      state.selectedOccurrencePath.length > 0 ? state.selectedOccurrencePath : null
+    const solidExpressId = state.selectedSolidExpressId ?? null
+    // A tree row's occurrence resolves to its instances only now there are any;
+    // with no occurrence, selectItemsInScene resolves the anchors itself.
+    const instanceIds = occurrencePath === null ? [] :
+      occurrenceInstanceIds(occurrencePath, true, solidExpressId)
+    const anchors = Array.isArray(state.selectedAnchorIds) && state.selectedAnchorIds.length > 0 ?
+      state.selectedAnchorIds.map(Number) : null
+    selectItemsInScene(selected.map(Number), false, instanceIds, occurrencePath, solidExpressId, anchors)
   }
 
 
@@ -1940,7 +2209,7 @@ export default function CadView({
    */
   function materializeTransientNode(occurrencePath, geometryExpressId) {
     const pathKey = occurrencePathKey(occurrencePath)
-    labelForGeometryId(useStore.getState().model, geometryExpressId).then((label) => {
+    labelForGeometryId(selectReadModel(useStore.getState()), geometryExpressId).then((label) => {
       useStore.getState().addTransientTreeNodes(
         pathKey, [{expressID: geometryExpressId, label}])
     })
@@ -2011,7 +2280,11 @@ export default function CadView({
       reportedLoadFailureRef.current = null
       // Only on an identity change: re-runs for the same model (view
       // settings) keep this state, as they keep the dedupe refs above.
+      const wasIndexed = useStore.getState().indexedModel !== null
       forgetLoadedModel()
+      if (wasIndexed) {
+        forgetIndexedSelection()
+      }
     }
     onModelPath()
   }, [modelPath, customViewSettings])
@@ -2141,8 +2414,11 @@ export default function CadView({
         // stays as the fallback for non-IFC models / pre-decoration
         // ticks where the model-level method isn't attached yet.
         let props = null
-        if (model && typeof model.getItemProperties === 'function') {
-          props = await model.getItemProperties(Number(lastId))
+        // While geometry streams the tree is up but `model` is not this load's
+        // yet (open-205 #2029): read from the model at its index then.
+        const propsModel = selectReadModel(useStore.getState())
+        if (propsModel && typeof propsModel.getItemProperties === 'function') {
+          props = await propsModel.getItemProperties(Number(lastId))
         }
         if (!props && typeof viewer.getProperties === 'function') {
           props = await viewer.getProperties(0, Number(lastId))
@@ -2160,9 +2436,9 @@ export default function CadView({
         // the shape id directly, so this only runs on the cached path.
         const occurrenceLeaf = Array.isArray(selectedOccurrencePath) ?
           selectedOccurrencePath[selectedOccurrencePath.length - 1] : undefined
-        if (!props && occurrenceLeaf !== undefined && model &&
-            typeof model.getItemProperties === 'function') {
-          props = await model.getItemProperties(Number(occurrenceLeaf))
+        if (!props && occurrenceLeaf !== undefined && propsModel &&
+            typeof propsModel.getItemProperties === 'function') {
+          props = await propsModel.getItemProperties(Number(occurrenceLeaf))
         }
         if (isStale) {
           return

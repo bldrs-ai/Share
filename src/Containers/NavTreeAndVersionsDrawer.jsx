@@ -1,6 +1,7 @@
 import React, {ReactElement} from 'react'
 import {Box} from '@mui/material'
 import useStore from '../store/useStore'
+import {selectReadModel} from '../store/IFCSlice'
 import NavTreePanel from '../Components/NavTree/NavTreePanel'
 import VersionsPanel from '../Components/Versions/VersionsPanel'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
@@ -16,8 +17,9 @@ export default function NavTreeAndVersionsDrawer({
   branch,
   selectWithShiftClickEvents,
 }) {
-  // IFCSlice
-  const model = useStore((state) => state.model)
+  // IFCSlice. The tree can come up while geometry still streams, before the
+  // load has a `model` (open-205 #2029), so it reads the indexed one then.
+  const model = useStore(selectReadModel)
   const rootElement = useStore((state) => state.rootElement)
 
   // RepositorySlice

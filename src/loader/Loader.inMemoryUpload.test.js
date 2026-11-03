@@ -14,7 +14,7 @@ jest.mock('axios')
  * (#1906). Before that, the no-OPFS path fetched `blob:<origin>/<id>`, which
  * after the opener's full page load named nothing.
  */
-describe('Loader — in-memory uploads (no OPFS)', () => {
+describe('Loader — in-memory uploads', () => {
   const stlBytes = fs.readFileSync(path.resolve(__dirname, '../../testdata/models/stl/cube.stl'))
 
   /**
@@ -63,6 +63,23 @@ describe('Loader — in-memory uploads (no OPFS)', () => {
     // what the root label shows instead of the uuid.
     expect(model.name).toContain('cube.stl')
     expect(model.name).not.toContain(storageId)
+  })
+
+  // #2042: with OPFS available, a drop or pick whose OPFS store failed is
+  // held in memory instead, under a fresh id no OPFS entry has. Before, the
+  // Loader looked it up in OPFS only, and the load failed.
+  it('loads a held file with OPFS available, without touching OPFS or the network', async () => {
+    const file = pickedFile('cube.stl')
+    const storageId = registerInMemoryUpload(file, 'stl')
+    const setOpfsFile = jest.fn()
+
+    const model = await load(
+      `http://localhost/${storageId}`, makeViewer(), jest.fn(), true, setOpfsFile, '')
+
+    expect(model).toBeDefined()
+    expect(file.text.mock.calls.length + file.arrayBuffer.mock.calls.length).toBe(1)
+    expect(axios.get).not.toHaveBeenCalled()
+    expect(setOpfsFile).not.toHaveBeenCalled()
   })
 
   // Not held here (a Drive blob URL, say): unchanged, it is still fetched.

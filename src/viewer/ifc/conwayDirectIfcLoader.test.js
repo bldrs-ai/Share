@@ -11,6 +11,7 @@
 import {Mesh} from 'three'
 import {
   decorateConwayDirectIfcModel,
+  makeIndexedModelHandle,
   parseIfcWithConway,
 } from './conwayDirectIfcLoader'
 import {EngineOpenFailureError} from '../../loader/engineOpenFailure'
@@ -504,6 +505,86 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
         expect(settings.DEFER_GEOMETRY).toBe(true)
         expect(settings.ON_PREVIEW_MESH).toBe(onPreviewMesh)
+      })
+
+      // open-205 #2029: the tree comes up at the index, so the caller is told
+      // when the deferred open returns, and before the first batch.
+      it('calls onIndexed with the open model before the pump extracts anything', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(150)
+        const order = []
+        const onIndexed = jest.fn((modelID) => {
+          order.push(`indexed ${modelID}`)
+          return Promise.resolve()
+        })
+        await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, (batch) => order.push(`batch ${batch.length}`),
+          undefined, onIndexed)
+        expect(onIndexed).toHaveBeenCalledTimes(1)
+        expect(order).toEqual(['indexed 5', 'batch 64', 'batch 64', 'batch 22'])
+      })
+
+      it('starts the pump without waiting for onIndexed', async () => {
+        // The caller's tree walk pages the source one record at a time, which
+        // on a large windowed model takes minutes (#2037's PSB stall); the
+        // geometry must not wait for it.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        let release
+        const onIndexed = jest.fn(() => new Promise((resolve) => {
+          release = resolve
+        }))
+        const result = await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn(), undefined, onIndexed)
+        // The whole parse finished with onIndexed still pending.
+        expect(onIndexed).toHaveBeenCalledWith(5)
+        expect(release).toBeDefined()
+        expect(ifcAPI.ExtractGeometryBatch).toHaveBeenCalled()
+        expect(result.modelID).toBe(5)
+        release()
+      })
+
+      it('finishes the load when onIndexed throws synchronously', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        try {
+          const result = await parseIfcWithConway(
+            new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn(), undefined, () => {
+              throw new Error('handle failed')
+            })
+          expect(result.modelID).toBe(5)
+          expect(warn).toHaveBeenCalledWith(expect.stringContaining('onIndexed failed'), expect.any(Error))
+        } finally {
+          warn.mockRestore()
+        }
+      })
+
+      it('finishes the load when onIndexed throws', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        try {
+          const batches = []
+          const result = await parseIfcWithConway(
+            new ArrayBuffer(4), ifcAPI, undefined, undefined, (batch) => batches.push(batch.length),
+            undefined, () => Promise.reject(new Error('tree walk failed')))
+          expect(result.modelID).toBe(5)
+          expect(batches).toEqual([10])
+          expect(warn).toHaveBeenCalledWith(expect.stringContaining('onIndexed failed'), expect.any(Error))
+        } finally {
+          warn.mockRestore()
+        }
+      })
+
+      it('does not call onIndexed on the classic path', async () => {
+        // The classic open extracts every mesh in one synchronous call, so
+        // there is no streaming window for an early tree to fill.
+        mockIsFeatureEnabled.mockImplementation(() => false)
+        const ifcAPI = makeDemandAPI(10)
+        const onIndexed = jest.fn()
+        await parseIfcWithConway(new ArrayBuffer(4), ifcAPI, undefined, undefined, undefined, undefined, onIndexed)
+        expect(onIndexed).not.toHaveBeenCalled()
       })
 
       it('omits ON_PREVIEW_MESH when no preview callback is given', async () => {
@@ -1140,6 +1221,35 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       })
     })
   })
+
+  // open-205 #2029: what the tree, properties and search read while the
+  // geometry streams. It must answer like the finished model will.
+  describe('makeIndexedModelHandle', () => {
+    it('reads the tree, properties and types of the open model, with no geometry', async () => {
+      const tree = {expressID: 1, type: 'IFCPROJECT', children: []}
+      const ifcAPI = {
+        properties: {
+          getItemProperties: jest.fn().mockResolvedValue({expressID: 42}),
+          getPropertySets: jest.fn().mockResolvedValue([]),
+          getSpatialStructure: jest.fn().mockResolvedValue(tree),
+        },
+      }
+      const handle = makeIndexedModelHandle(ifcAPI, 3)
+      expect(handle.isIndexedModel).toBe(true)
+      expect(handle.modelID).toBe(3)
+      expect(handle.geometry).toBeUndefined()
+      // The tree as CadView#readModelTree asks for it, from the model's own
+      // closure, which is the one the NavTree feed takes (sub-solids on).
+      expect(await handle.getSpatialStructure(0, 'names')).toBe(tree)
+      expect(ifcAPI.properties.getSpatialStructure).toHaveBeenCalledWith(3, 'names', {includeSolids: true})
+      expect(await handle.getItemProperties(42)).toEqual({expressID: 42})
+      expect(ifcAPI.properties.getItemProperties).toHaveBeenCalledWith(3, 42, false)
+      expect(handle.getIfcType('IFCWALL')).toBe('IFCWALL')
+      // `onModel` and search discriminate an IFC model on its manager.
+      expect(handle.ifcManager.ifcAPI).toBe(ifcAPI)
+    })
+  })
+
 
   describe('decorateConwayDirectIfcModel — property-method closures', () => {
     /** @return {object} minimal Conway IfcAPI stub */

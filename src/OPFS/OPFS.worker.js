@@ -463,6 +463,80 @@ async function openSyncAccessHandleWithRetry(parentDirectory, fileHandle, fileNa
 
 
 /**
+ * Write `data` through a sync access handle, and throw unless every byte
+ * landed (#2042).
+ *
+ * `FileSystemSyncAccessHandle.write()` does not reliably throw when a write
+ * can't complete. Measured on Chromium 1243 in an incognito profile: past
+ * about 1 GB of OPFS data the first failing write lands only part of its
+ * chunk, and every later one returns 4294967288 (a negative file error, -8,
+ * read back as an unsigned long) without throwing, while the file stops
+ * growing. Every writer here used to ignore that result, so a large model
+ * was cached short and handed to Conway as if complete: PSB.ifc (860.7 MB)
+ * was stored as 807–840 MB and opened as a truncated model. A disk-backed
+ * profile writes the same 1.2 GB in full.
+ *
+ * The throw lands in each writer's existing error path, which posts an
+ * error; `Loader.js` then falls back to a direct fetch, since OPFS is only
+ * a cache. Each writer also removes the partial entry, so a later load
+ * can't take it for a cache hit.
+ *
+ * @param {FileSystemSyncAccessHandle} accessHandle
+ * @param {ArrayBuffer|Uint8Array} data
+ * @param {{at: number}} [options] Passed through to `write`; omitted when absent.
+ * @return {Promise<number>} The bytes written, always `data.byteLength`.
+ * @throws {Error} When the handle reports anything else.
+ */
+export async function writeAll(accessHandle, data, options) {
+  const expected = data.byteLength
+  // `await`: older Chromium's write() returned a Promise; current returns
+  // the count synchronously, and awaiting a number is harmless.
+  const written = options === undefined ?
+    await accessHandle.write(data) :
+    await accessHandle.write(data, options)
+  if (written !== expected) {
+    const at = options?.at ?? 0
+    throw new Error(
+      `OPFS write incomplete: ${written} of ${expected} bytes at offset ${at} (storage full or over quota?)`)
+  }
+  return written
+}
+
+
+/**
+ * Close a sync access handle and remove the entry behind it, ignoring
+ * failures: the cleanup half of a failed write (see {@link writeAll}). The
+ * handle has to be closed first, because an entry can't be removed while a
+ * sync access handle is open on it.
+ *
+ * @param {FileSystemSyncAccessHandle|null} accessHandle
+ * @param {FileSystemDirectoryHandle|null} directoryHandle
+ * @param {FileSystemFileHandle|null} fileHandle
+ */
+export async function discardPartialEntry(accessHandle, directoryHandle, fileHandle) {
+  if (accessHandle) {
+    try {
+      await accessHandle.close()
+    } catch (_) {/* idempotent */}
+  }
+  if (!fileHandle) {
+    return
+  }
+  try {
+    if (typeof fileHandle.remove === 'function') {
+      await fileHandle.remove()
+      return
+    }
+  } catch (_) {/* stale handle (e.g. replaced by the Safari retry): try by name */}
+  try {
+    if (directoryHandle) {
+      await directoryHandle.removeEntry(fileHandle.name)
+    }
+  } catch (_) {/* best effort: the error reply is what matters */}
+}
+
+
+/**
  * Write temporary file to OPFS (Origin Private File System)
  *
  * @param {Response} response - The response from the request.
@@ -542,11 +616,14 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
 
       try {
         if (value !== undefined) {
-          // Write buffer
-          // eslint-disable-next-line no-unused-vars
-          const blobWriteSize = await blobAccessHandle.write(value, {at: receivedLength})
+          await writeAll(blobAccessHandle, value, {at: receivedLength})
         }
       } catch (error) {
+        // A short write leaves a partial file under the etag-keyed name,
+        // which the lookup at the top of this function would serve as
+        // complete on the next load (#2042). Remove it.
+        reader.cancel()
+        await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, modelBlobFileHandle)
         const workerMessage = `Error writing to ${response.headers.etag}: ${error}.`
         postReply({error: workerMessage}, requestId)
         return
@@ -569,7 +646,9 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
       return [modelDirectoryHandle, modelBlobFileHandle]
     }
   } catch (error) {
+    // A stream that dies mid-download leaves the same partial entry.
     reader.cancel()
+    await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, modelBlobFileHandle)
     postReply({error: error}, requestId)
   } finally {
     // Always close the sync access handle. Leaking it leaves the OPFS file
@@ -620,10 +699,12 @@ export async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath,
     blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
     // Write buffer
     const arrayBuffer = await blob.arrayBuffer()
-    await blobAccessHandle.write(arrayBuffer, {at: 0})
+    await writeAll(blobAccessHandle, arrayBuffer, {at: 0})
 
     return [modelDirectoryHandle, modelBlobFileHandle]
   } catch (error) {
+    // Don't leave a partial entry for the etag lookup above to serve (#2042).
+    await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, modelBlobFileHandle)
     const workerMessage = `Error writing file handle for ${originalFilePath}: ${error}`
     postReply({error: workerMessage}, requestId)
   } finally {
@@ -1149,11 +1230,14 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
 
       try {
         if (value !== undefined) {
-          // Write buffer
-          // eslint-disable-next-line no-unused-vars
-          const blobWriteSize = await blobAccessHandle.write(value, {at: receivedLength})
+          await writeAll(blobAccessHandle, value, {at: receivedLength})
         }
       } catch (error) {
+        // The entry already carries its final `<name>.<commitHash>` name, so
+        // a partial one left here is served as cached on the next load
+        // (#2042). Remove it.
+        reader.cancel()
+        await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, modelBlobFileHandle)
         const workerMessage = `Error writing to ${commitHash}: ${error}.`
         postReply({error: workerMessage}, requestId)
         return
@@ -1194,7 +1278,9 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       }
     }
   } catch (error) {
+    // A stream that dies mid-download leaves the same partial entry.
     reader.cancel()
+    await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, modelBlobFileHandle)
     postReply({error: error}, requestId)
   } finally {
     // Always close the sync access handle. See writeTemporaryFileToOPFS for
@@ -1378,7 +1464,7 @@ export async function writeFileToHandle(blobAccessHandle, modelFile, requestId) 
     await blobAccessHandle.truncate(0)
 
     // Step 2: Write the ArrayBuffer to the blobAccessHandle
-    await blobAccessHandle.write(arrayBuffer)
+    await writeAll(blobAccessHandle, arrayBuffer)
 
     // Step 3: Close the handle after writing is done
     await blobAccessHandle.close()
@@ -1419,7 +1505,6 @@ export async function writeModelToOPFSFromFile(modelFile, objectKey, originalFil
   let modelBlobFileHandle = null
 
   try {
-    // eslint-disable-next-line no-unused-vars
     [modelDirectoryHandle, modelBlobFileHandle] = await
     retrieveFileWithPathNew(opfsRoot, cacheKey, computedShaHash, objectKey, true, requestId)
     // Create FileSystemSyncAccessHandle on the file.
@@ -1430,6 +1515,11 @@ export async function writeModelToOPFSFromFile(modelFile, objectKey, originalFil
       const mockResponse = generateMockResponse(computedShaHash)
       await CacheModule.updateCacheRaw(cacheKey, mockResponse, objectKey)
       postReply({completed: true, event: 'write'}, requestId)
+    } else {
+      // writeFileToHandle posted the error. Don't leave a partial upload
+      // under its sha-keyed name for a later open to read as complete
+      // (#2042).
+      await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, modelBlobFileHandle)
     }
   } catch (error) {
     const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
@@ -1515,10 +1605,17 @@ export async function renameFileInOPFS(parentDirectory, fileHandle, newFileName,
   try {
     for (let at = 0; at < srcFile.size; at += COPY_CHUNK_BYTES) {
       const slice = await srcFile.slice(at, Math.min(at + COPY_CHUNK_BYTES, srcFile.size)).arrayBuffer()
-      await destAccess.write(new Uint8Array(slice), {at})
+      await writeAll(destAccess, new Uint8Array(slice), {at})
     }
     await destAccess.truncate(srcFile.size)
     await destAccess.flush()
+  } catch (error) {
+    // Keep the source, drop the partial copy, and let the caller see the
+    // failure. Without the check, the truncate above would zero-fill the
+    // missing tail to full size, and that copy would replace a good source
+    // (#2042).
+    await discardPartialEntry(destAccess, parentDirectory, destHandle)
+    throw error
   } finally {
     try {
       await destAccess.close()
@@ -1627,12 +1724,17 @@ export async function writeBytesByPathToOPFS(bytes, commitHash, originalFilePath
       parentDirectory, fileHandle, fileHandle.name)
     try {
       const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-      await accessHandle.write(payload, {at: 0})
+      await writeAll(accessHandle, payload, {at: 0})
       // Unlike a writable stream, a sync handle doesn't implicitly discard
       // the previous contents — truncate so re-writing a shorter payload
       // over an existing entry can't leave a stale tail.
       await accessHandle.truncate(payload.byteLength)
       await accessHandle.flush()
+    } catch (error) {
+      // Don't leave a partial entry under this commit's key for a later read
+      // to serve (#2042). The outer catch posts the error.
+      await discardPartialEntry(accessHandle, parentDirectory, fileHandle)
+      throw error
     } finally {
       try {
         await accessHandle.close()
@@ -1823,10 +1925,12 @@ export async function writeModelToOPFS(objectUrl, objectKey, requestId) {
       blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
 
       // Write buffer at the beginning of the file
-      await blobAccessHandle.write(fileArrayBuffer, {at: 0})
+      await writeAll(blobAccessHandle, fileArrayBuffer, {at: 0})
 
       postReply({completed: true, event: 'write', fileName: objectKey}, requestId)
     } catch (error) {
+      // Don't leave a partial entry for readModelFromOPFS to serve (#2042).
+      await discardPartialEntry(blobAccessHandle, newFolderHandle, modelBlobFileHandle)
       const workerMessage = `Error writing to ${objectKey}: ${error}.`
       postReply({error: workerMessage}, requestId)
       return
@@ -1920,16 +2024,13 @@ export async function writeFileToOPFS(objectUrl, fileName, requestId) {
       // Create FileSystemSyncAccessHandle on the file.
       accessHandle = await newFileHandle.createSyncAccessHandle()
 
-      // Write buffer at the beginning of the file
-      const writeSize = await accessHandle.write(fileArrayBuffer, {at: 0})
-
-      if (writeSize > 0) {
-        postReply({completed: true, event: 'write', fileName: fileName}, requestId)
-      } else {
-        const workerMessage = `Error writing to file: ${fileName}`
-        postReply({error: workerMessage}, requestId)
-      }
+      // Write buffer at the beginning of the file. This used to accept any
+      // `writeSize > 0`, a partial write included (#2042).
+      await writeAll(accessHandle, fileArrayBuffer, {at: 0})
+      postReply({completed: true, event: 'write', fileName: fileName}, requestId)
     } catch (error) {
+      // Don't leave a partial entry for readFileFromOPFS to serve (#2042).
+      await discardPartialEntry(accessHandle, opfsRoot, newFileHandle)
       const workerMessage = `Error writing to ${fileName}: ${error}.`
       postReply({error: workerMessage}, requestId)
       return
