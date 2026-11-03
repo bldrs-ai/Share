@@ -41,6 +41,7 @@ describe('Privacy', () => {
     expect(monitoring).toMatch(/always on/)
     expect(monitoring).toMatch(/your account identifier/)
     expect(monitoring).toMatch(/never include your email, name, sign-in tokens or the contents of your files/)
+    expect(monitoring).toMatch(/keeps error reports for 90 days and page-timing data for 30 days/)
     const analytics = getByText(/Analytics \(optional\)/).closest('p').textContent
     expect(analytics).toMatch(/does not turn off the error monitoring/)
   })

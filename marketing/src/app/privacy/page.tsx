@@ -54,6 +54,10 @@ export default function PrivacyPage() {
       {/* Keep this section in step with src/pages/Privacy.jsx, the in-app copy at
           /share/privacy. What it describes is in src/connections/README.md
           §"Reporting login failures". */}
+      {/* Retention is Sentry's for bldrs-ai's Team plan (errors 90 days,
+          spans/transactions 30), per
+          docs.sentry.io/security-legal-pii/security/data-retention-periods/,
+          checked 2026-11-03. Update both copies if the plan changes. */}
       <Typography variant="body1">
         <strong>Error and reliability monitoring (always on).</strong> To run and
         secure the service, the hosted app reports errors and failures, including
@@ -66,9 +70,8 @@ export default function PrivacyPage() {
         service provider. We use it only to find and fix problems and keep the
         service secure, never for advertising, and it is not shared for third-party
         purposes.
-        {/* TODO(Pablo): state how long Sentry keeps reports. The retention period
-            isn't recorded in this repo; take it from the Sentry plan rather than
-            guessing. */}
+        Sentry keeps error reports for 90 days and page-timing data for 30
+        days, then deletes them.
       </Typography>
       <Typography variant="body1">
         <strong>Analytics (optional).</strong> On bldrs.ai we use Google Analytics,

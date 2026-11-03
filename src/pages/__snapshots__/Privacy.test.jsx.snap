@@ -89,7 +89,7 @@ exports[`Privacy renders 1`] = `
           <strong>
             Error and reliability monitoring (always on).
           </strong>
-           To run and secure the service, the hosted app reports errors and failures, including failed sign-ins, to Sentry, our error-monitoring provider. A report includes the error details, the page address, your browser and its version, the app release and page timing; for a failed sign-in, the Auth0 tracking id; and, if you are signed in, your account identifier (an opaque id, not your name or email). Reports never include your email, name, sign-in tokens or the contents of your files. Sentry processes this data on our behalf as our service provider. We use it only to find and fix problems and keep the service secure, never for advertising, and it is not shared for third-party purposes.
+           To run and secure the service, the hosted app reports errors and failures, including failed sign-ins, to Sentry, our error-monitoring provider. A report includes the error details, the page address, your browser and its version, the app release and page timing; for a failed sign-in, the Auth0 tracking id; and, if you are signed in, your account identifier (an opaque id, not your name or email). Reports never include your email, name, sign-in tokens or the contents of your files. Sentry processes this data on our behalf as our service provider. We use it only to find and fix problems and keep the service secure, never for advertising, and it is not shared for third-party purposes. Sentry keeps error reports for 90 days and page-timing data for 30 days, then deletes them.
         </p>
         <p
           class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
