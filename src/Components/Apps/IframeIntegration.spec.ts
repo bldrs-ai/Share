@@ -53,7 +53,10 @@ describe.skip('bldrs inside iframe', () => {
   beforeEach(async ({page}) => {
     await homepageSetup(page)
     await page.context().clearCookies()
-    await page.context().addCookies([{name: 'isFirstTime', value: '1', url: page.url()}])
+    await page.context().addCookies([
+      {name: 'isFirstTime', value: '1', url: page.url()},
+      {name: 'consentLevel', value: '1.functional', url: page.url()},
+    ])
 
     // Visit the iframe test page
     await page.goto('/cypress/static/bldrs-inside-iframe.html')

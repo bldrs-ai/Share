@@ -482,11 +482,11 @@ describe('Analytics', () => {
     beforeEach(() => {
       Analytics._resetGaClientIdForTests()
       Cookies.remove('_ga')
-      Cookies.remove('isAnalyticsAllowed')
+      Cookies.set('consentLevel', '1.functional')
     })
 
     afterEach(() => {
-      Cookies.remove('isAnalyticsAllowed')
+      Cookies.set('consentLevel', '1.functional')
     })
 
     test('null when no client id is available, so the tag is omitted', () => {
@@ -534,11 +534,11 @@ describe('Analytics', () => {
     beforeEach(() => {
       Analytics._resetGaClientIdForTests()
       Cookies.remove('_ga')
-      Cookies.remove('isAnalyticsAllowed')
+      Cookies.set('consentLevel', '1.functional')
     })
 
     afterEach(() => {
-      Cookies.remove('isAnalyticsAllowed')
+      Cookies.set('consentLevel', '1.functional')
     })
 
     test('encodes the client id with no dot, which Stripe would drop', () => {
@@ -568,11 +568,11 @@ describe('Analytics', () => {
       setTag.mockClear()
       Analytics._resetGaClientIdForTests()
       Cookies.remove('_ga')
-      Cookies.remove('isAnalyticsAllowed')
+      Cookies.set('consentLevel', '1.functional')
     })
 
     afterEach(() => {
-      Cookies.remove('isAnalyticsAllowed')
+      Cookies.set('consentLevel', '1.functional')
     })
 
     test('publishes the bare id when consent allows', () => {
@@ -586,7 +586,7 @@ describe('Analytics', () => {
     // tag while null would transmit as a literal value.
     test('retracts with undefined when consent is withheld', () => {
       Analytics.setGaClientId('1871520000.1754700000')
-      Cookies.set('isAnalyticsAllowed', 'false')
+      Cookies.set('consentLevel', '1.restricted')
       Analytics.syncSentryCidTag()
       expect(setTag).toHaveBeenCalledWith('open_cid', undefined)
     })

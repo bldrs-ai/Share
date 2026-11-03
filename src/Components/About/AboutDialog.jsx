@@ -1,13 +1,14 @@
-import React, {ReactElement} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import {Helmet} from 'react-helmet-async'
-import {Box, Link, Stack, SvgIcon, Typography} from '@mui/material'
+import {Box, Button, Link, Stack, SvgIcon, Typography} from '@mui/material'
 import {Email as EmailIcon, GitHub as GitHubIcon} from '@mui/icons-material'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import {LogoB} from '../Logo/Logo'
+import {defaultConsentLevel, getConsentLevel} from '../../privacy/consent'
+import chooseConsentLevel from '../../privacy/consentChoice'
 import {ABOUT_MISSION, ABOUT_PAGE_TITLE} from './component'
-// TODO(pablo): re-enable after prod freeze bug fixed
-// import PrivacyControl from './PrivacyControl'
+import ConsentControl from './ConsentControl'
 import DiscordIcon from './Discord.svg'
 
 
@@ -19,18 +20,36 @@ import DiscordIcon from './Discord.svg'
  */
 export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, onClose}) {
   const isMobile = useIsMobile()
+  // The slider's position. Not stored until OK: this is a proposal the
+  // visitor confirms, not a setting that applies as it moves. Re-read on
+  // every open so a Cancel last time doesn't leave a stale position.
+  const [consentLevel, setConsentLevel] = useState(() => getConsentLevel() ?? defaultConsentLevel())
+  useEffect(() => {
+    if (isDialogDisplayed) {
+      setConsentLevel(getConsentLevel() ?? defaultConsentLevel())
+    }
+  }, [isDialogDisplayed])
   // Dialog closes itself on backdrop click, Escape and the X button by
   // calling setIsDialogDisplayed(false) directly, which skips actionCb. Every
   // close has to go through onClose instead: that's where the first-time
-  // cookie is set (AboutControl/LogoMenu), and without it a first-timer who
-  // dismissed About by clicking the backdrop got About + the onboarding
-  // overlay replayed on the reload after their first drag-and-drop.
+  // cookie is set and where an undecided visitor's dismissal is stored as
+  // Browse only (AboutControl/LogoMenu, consentChoice#dismissConsent), and
+  // without it a first-timer who dismissed About by clicking the backdrop
+  // got About + the onboarding overlay replayed on the reload after their
+  // first drag-and-drop.
   const setIsDisplayed = (isDisplayed) => {
     if (isDisplayed) {
       setIsDialogDisplayed(true)
     } else {
       onClose()
     }
+  }
+  // OK is the only path that can consent to anything.
+  const onOk = () => {
+    if (consentLevel !== getConsentLevel()) {
+      chooseConsentLevel(consentLevel)
+    }
+    onClose()
   }
   return (
     <Dialog
@@ -50,10 +69,29 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
           />
         </Link>
       }
-      actionTitle='OK'
-      actionCb={onClose}
+      // Cancel and OK side by side at the same size, so declining is as
+      // easy as accepting. Both close through onClose like every other path.
+      actionTitle={
+        <>
+          <Button
+            variant='outlined'
+            onClick={() => setIsDisplayed(false)}
+            data-testid='button-dialog-cancel'
+          >
+            Cancel
+          </Button>
+          <Button
+            variant='contained'
+            onClick={onOk}
+            aria-label='action-button'
+            data-testid='button-dialog-main-action'
+          >
+            OK
+          </Button>
+        </>
+      }
     >
-      <AboutContent/>
+      <AboutContent consentLevel={consentLevel} setConsentLevel={setConsentLevel}/>
     </Dialog>
   )
 }
@@ -124,8 +162,12 @@ function Tdc({children}) {
 }
 
 
-/** @return {ReactElement} */
-function AboutContent() {
+/**
+ * @property {string} consentLevel the privacy slider's position
+ * @property {Function} setConsentLevel called with the slider's new position
+ * @return {ReactElement}
+ */
+function AboutContent({consentLevel, setConsentLevel}) {
   const isMobile = useIsMobile()
   return (
     <Stack align='center' justifyContent='center' spacing={2} sx={{width: '100%', paddingTop: '1em'}}>
@@ -168,6 +210,7 @@ function AboutContent() {
           <tr><td>Private</td><Tdc>X</Tdc><Tdc>X</Tdc><Tdc>✓</Tdc></tr>
         </tbody>
       </table>
+      <ConsentControl level={consentLevel} setLevel={setConsentLevel}/>
       <Stack direction='row' justifyContent='center' alignItems='center' spacing={1} sx={{fontSize: '0.9em', opacity: 0.5}}>
         <Link
           href='https://discord.gg/9SxguBkFfQ'

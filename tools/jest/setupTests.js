@@ -32,10 +32,19 @@ beforeAll(() => {
   })
 })
 
-// Start each test with empty capture buffers.
+// Start each test with empty capture buffers, and as a visitor who has
+// consented to analytics. The app's real default is the opposite (no
+// cookie = not consented, src/privacy/consent.js), but most suites assert
+// on the GA events their code sends and predate opt-in; the not-consented
+// paths are tested explicitly (consent.test.js, ga.test.js,
+// AboutConsent.test.jsx), which clear or override this cookie. Suites on
+// the node environment (`@jest-environment node`) have no document.
 beforeEach(() => {
   clearGlbLogs()
   clearConwayDirectLogs()
+  if (typeof document !== 'undefined') {
+    document.cookie = 'consentLevel=1.functional; path=/'
+  }
 })
 
 // Reset any request handlers that we may add during the tests,

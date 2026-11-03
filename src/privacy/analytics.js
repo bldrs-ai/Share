@@ -3,28 +3,32 @@ import {setTag} from '@sentry/react'
 import {assertDefined} from '../utils/assert'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {TIERS, getTier} from '../quota/quota'
-import Expires from './Expires'
+import {CONSENT_LEVELS, allowsAnalytics, getConsentLevel, setConsentLevel} from './consent'
 import {encodeGaClientReference} from './gaClientReference'
 import {SUBSCRIPTION_EVENT_NAMES} from './subscriptionEventNames'
 
 
-const COOKIE_NAME = 'isAnalyticsAllowed'
-const DEFAULT_VALUE = true
-
-
-/** @return {boolean} */
+/**
+ * Whether the visitor has consented to Google Analytics. Fails closed: a
+ * visitor who hasn't chosen yet has not consented (privacy/consent.js).
+ *
+ * @return {boolean}
+ */
 export function isAllowed() {
-  const val = Cookies.get(COOKIE_NAME)
-  return val === undefined ? DEFAULT_VALUE : val === 'true'
+  return allowsAnalytics(getConsentLevel())
 }
 
 
 /**
- * @param {boolean} allowed
+ * Store the visitor's privacy level and bring the identifiers that follow
+ * consent into line with it. The GA tag itself (load, consent update,
+ * opt-out) is index/ga.js#updateGaConsent's job; privacy/consentChoice.js
+ * calls both, and is what UI should call.
+ *
+ * @param {string} level one of consent#CONSENT_LEVELS
  */
-export function setIsAllowed(allowed) {
-  assertDefined(allowed)
-  Cookies.set(COOKIE_NAME, allowed, {expires: Expires.DAYS})
+export function setConsent(level) {
+  setConsentLevel(level)
   // gtagEvent re-reads consent on every call, so withholding it is
   // enough to stop our own events. A user property is different: it is
   // sticky once set, and gtag/js keeps attaching it to the automatic
@@ -39,6 +43,19 @@ export function setIsAllowed(allowed) {
   // deliberately cid-less event (loadProgress#captureDiagnostics) would
   // still inherit the stale one.
   syncSentryCidTag()
+}
+
+
+/**
+ * Boolean shorthand for setConsent: true is Functional, anything else
+ * Browse only. Strictly `=== true`, so a merely truthy 'false' can't
+ * grant consent.
+ *
+ * @param {boolean} allowed
+ */
+export function setIsAllowed(allowed) {
+  assertDefined(allowed)
+  setConsent(allowed === true ? CONSENT_LEVELS.FUNCTIONAL : CONSENT_LEVELS.RESTRICTED)
 }
 
 
@@ -785,16 +802,14 @@ export function setUserCidProperty() {
  * Publish or retract the user property to match current consent.
  *
  * Reads isAllowed() rather than taking the decision as an argument, so
- * a caller passing something merely truthy — setIsAllowed('false')
- * writes a cookie that isAllowed() then reads as a denial — cannot
- * publish an identifier the cookie says is not allowed. Consent gates
- * should fail closed.
+ * the cookie stays the one source of truth and the gate fails closed.
  *
- * Retraction sets the property to null. Verify in GA4 DebugView that
- * this actually clears it, rather than storing null as a value, before
- * PrivacyControl is restored to the UI (AboutDialog has it commented
- * out today, so nothing in the app can currently withdraw consent). If
- * null does not clear, this is the one place to change.
+ * Retraction sets the property to null. Whether GA4 treats null as a
+ * clear, rather than storing it as a value, is unverified in DebugView;
+ * if it doesn't, this is the one place to change. It matters less than
+ * it did: a withdrawal also sets ga-disable and denies consent
+ * (index/ga.js#updateGaConsent), so the tag sends nothing more for the
+ * rest of the page either way.
  */
 function syncUserCidProperty() {
   if (!window.gtag) {
