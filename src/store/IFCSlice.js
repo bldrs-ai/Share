@@ -97,6 +97,17 @@ export default function createIFCSlice(set, get) {
     model: null,
     setModel: (m) => set(() => ({model: m})),
 
+    // The model at its index while a Conway (IFC/STEP) load still streams
+    // geometry (open-205 #2029; `makeIndexedModelHandle` in
+    // viewer/ifc/conwayDirectIfcLoader.js). Carries the property and spatial
+    // surface only — no geometry, not an Object3D — so it is kept apart from
+    // `model`, which scene consumers (clipper, isolator, ViewCube) take to be
+    // the object in the scene. Readers of properties and the tree take it
+    // through `selectReadModel` below. Cleared when a load begins, and by the
+    // load that set it once its finished model is in `model`, or once it fails.
+    indexedModel: null,
+    setIndexedModel: (m) => set(() => ({indexedModel: m})),
+
     preselectedElementIds: null,
     setPreselectedElementIds: (ids) => set(() => ({preselectedElementIds: ids})),
 
@@ -106,4 +117,18 @@ export default function createIFCSlice(set, get) {
     viewer: {},
     setViewerStore: (viewer) => set(() => ({viewerStore: viewer})),
   }
+}
+
+
+/**
+ * The model to read properties, names and the tree from: the one at its index
+ * while a load streams (`indexedModel`), else the loaded `model`. Index first,
+ * because while a load runs `model` is whatever was loaded before it — null on
+ * a fresh page, but the previous model after an in-app switch.
+ *
+ * @param {object} state the store state
+ * @return {object|null}
+ */
+export function selectReadModel(state) {
+  return state.indexedModel ?? state.model
 }

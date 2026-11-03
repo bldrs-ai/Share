@@ -5,6 +5,7 @@ import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Hooks'
 import Toggle from '../Toggle'
 import useStore from '../../store/useStore'
+import {selectReadModel} from '../../store/IFCSlice'
 import {hexToRgba} from '../../utils/color'
 import ExpansionPanel from './ExpansionPanel'
 import {createPropertyTable} from './itemProperties'
@@ -16,7 +17,9 @@ import {createPropertyTable} from './itemProperties'
  * @return {ReactElement}
  */
 export default function Properties() {
-  const model = useStore((state) => state.model)
+  // The indexed model while geometry still streams, so a row picked in the
+  // tree before the load finishes shows its properties (open-205 #2029).
+  const model = useStore(selectReadModel)
   const element = useStore((state) => state.selectedElement)
   // Tracks the GLB cache writer's in-flight state. Set by `Loader.js`'s
   // wrapper around `exportAndCacheGlb` (true before scheduling, false in

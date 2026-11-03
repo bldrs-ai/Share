@@ -1,4 +1,5 @@
 import useStore from '../../store/useStore'
+import {selectReadModel} from '../../store/IFCSlice'
 import {nodeName, nodeType, nodesById, refMaker, walkTree} from './refs'
 
 
@@ -29,7 +30,12 @@ function formatCounts(counts) {
  */
 export function viewSnapshot() {
   const state = useStore.getState()
-  const {model, rootElement, viewer} = state
+  const {rootElement, viewer} = state
+  // The model at its index while geometry still streams (open-205 #2029): the
+  // model.* tools answer then, so this must not tell the agent nothing is
+  // loaded. It says the geometry is still coming, which the view.* tools need.
+  const model = selectReadModel(state)
+  const isGeometryLoading = state.indexedModel !== null && state.indexedModel !== undefined
   if (!model || !rootElement) {
     return {id: 'view', text: 'No model is loaded.', data: {loaded: false}}
   }
@@ -69,6 +75,9 @@ export function viewSnapshot() {
     selection: {count: anchors.length, types: selectionTypes},
     visibility: {hiddenCount, isolating, isolatedCount},
   }
+  if (isGeometryLoading) {
+    data.geometryLoading = true
+  }
   const levelText = levelCount === 0 ? 'no levels' :
     `${levelCount} level${levelCount === 1 ? '' : 's'} (${levels.map((l) => l.name || l.ref).join(', ')}` +
       `${levelCount > levels.length ? ', …' : ''})`
@@ -78,6 +87,9 @@ export function viewSnapshot() {
       `Selection: ${anchors.length} (${formatCounts(selectionTypes)}).`,
     `Hidden: ${hiddenCount}. Isolation: ${isolating ? `on (${isolatedCount})` : 'off'}.`,
   ]
+  if (isGeometryLoading) {
+    lines.push('Geometry: still loading; model.* reads work, view.* tools wait for it.')
+  }
   return {id: 'view', text: lines.join('\n'), data}
 }
 
