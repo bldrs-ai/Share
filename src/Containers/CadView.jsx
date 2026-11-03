@@ -720,7 +720,8 @@ export default function CadView({
     const earlyTree = indexedTree !== null && useStore.getState().rootElement === indexedTree ?
       indexedTree : null
     // At most one walk of this model's tree (codex review on #2037): on PSB a
-    // walk is ~86 s, and this load holds the next one back until it ends. So
+    // walk was ~86 s before conway#753 and is still seconds after it, and
+    // this load holds the next one back until it ends. So
     // none here when the load is superseded (it would install nothing), and
     // none when the index's walk failed (report that failure instead). A
     // walk that came up with a tree has delivered it (earlyTree).

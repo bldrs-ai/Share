@@ -1847,9 +1847,10 @@ describe('CadView', () => {
       })
 
       // Codex review on #2037: the walk that was skipped as stale must not be
-      // replaced by a second one at the load's end. On PSB a walk is ~86 s,
-      // and the superseded load holds the next model's load back until it
-      // ends, so a second walk would delay B by that much.
+      // replaced by a second one at the load's end. On PSB a walk was ~86 s
+      // before conway#753 (seconds after), and the superseded load holds the
+      // next model's load back until it ends, so a second walk would delay B
+      // by that much.
       it('walks the tree once when the user leaves meanwhile, and lets the next load start', async () => {
         const {result} = renderHook(() => useStore((state) => state))
         const {indexedModel, releaseTree} = makeSlowTreeModel()
