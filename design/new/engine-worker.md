@@ -380,12 +380,12 @@ construction, not by a guard).
 
 | event | payload | transfer |
 |---|---|---|
-| `progress` | conway `ProgressEvent` | — |
+| `progress` | conway `ProgressEvent`, plus the worker's current `wasmBytes` | — |
 | `modelInfo` | `ON_MODEL_INFO` object | — |
 | `log` | severity deltas, warning lines | — |
 | `preview` | preview payload | vertex / index buffers |
 | `indexed` | `modelID` | — |
-| `batch` | placement columns + new geometries + `{done, total}` | all buffers |
+| `batch` | placement columns + new geometries + `{done, total}`, plus the worker's current `wasmBytes` | all buffers |
 | `done` | summary: statistics, coordination matrix, applied matrix, linear scaling factor, build-relevant counts, `wasmBytes` | — |
 | `failed` | `{kind, message, statistics?, schema?}` | — |
 
@@ -444,12 +444,34 @@ One `EngineHost` per page owns every session's worker.
   - a total engine budget of half of `navigator.deviceMemory` where it
     exists (Chrome reports at most 8 GiB, so at most 4 GiB), and 4 GiB on
     desktop or 1 GiB on phones where it does not;
-  - a session's estimate is max(45 MB, reported wasm bytes + 1.9 × source
-    bytes) **+ its queued geometry bytes**. 1.9× is PSB's index-only JS
-    heap over its file size (1.6 GB / 860 MB, §3), and the wasm term
-    carries the geometry phase. The queued term is the transferred batch
-    buffers a background session holds main-side unassembled (§5.3). It is
-    not small: PSB streams 337 MB of geometry (§3).
+  - a session's estimate is **live wasm + a non-wasm allowance + its
+    queued geometry**, with a 45 MB floor (§3's empty `Init`ed worker):
+    - *live wasm* is the worker's `memory.buffer.byteLength`. Every
+      `progress` and `batch` event carries it (§4), because it is cheap to
+      read and it grows during the pump: PSB goes from 16 MB at its index
+      to 899 MB at the end (§3). An estimate taken only at `init` and
+      `done` would miss all of that growth.
+    - *the non-wasm allowance* is the worker's JS heap, which §3 shows is
+      most of an engine (PSB holds 1,625 MB at its index with 16 MB of
+      wasm). Two named constants, each with its source measurement next to
+      it: `ENGINE_BASE_JS_BYTES` = 30 MB, which is the `Init`ed worker's
+      45.5 MB less its 16 MB of wasm; and `ENGINE_JS_BYTES_PER_SOURCE_BYTE`
+      = 1.9, which is PSB's index-only JS heap over its file size
+      (1,609 MB / 860 MB). Against §3, that gives SEESTRASSE 92 MB at its
+      index (81 measured) and 176 MB at the end (191 measured); and PSB
+      1,680 MB at its index (1,625 measured) and 2,563 MB at the end
+      (2,249 measured). It under-counts small models by about 10 % and
+      over-counts PSB by about 14 %.
+    - *queued geometry* is the transferred batch buffers that a background
+      session holds main-side unassembled (§5.3). It is not small: PSB
+      streams 337 MB of geometry (§3).
+  - **Admission and backpressure use this live figure.** It is recomputed
+    on every event, not at fixed points.
+  - **If Share is ever cross-origin isolated**,
+    `performance.measureUserAgentSpecificMemory()` breaks memory down per
+    worker (§3 used it). It would replace the estimate with a measurement,
+    and the two constants would go. It is unavailable today because prod is
+    not isolated (§6).
   The active session is never evicted, even when it alone exceeds the
   budget.
 - **Backpressure before eviction.** When the total reaches the budget, the
@@ -645,6 +667,9 @@ These were the open questions of the scope. The user decided each one.
      still-loading background model goes into a user-visible "paused —
      will resume" state and resumes from OPFS when foregrounded, so a
      finished background load is best-effort on phones (§5.3).
+   - The estimate is live: wasm bytes ride on every `progress` and `batch`
+     event, plus a calibrated non-wasm allowance (§5.2). Step 7 re-measures
+     the two allowance constants against real loads.
 3. **Eviction order: as recommended.** An idle, artifact-backed engine goes
    before a background load is cancelled. §5.2 reconciles this with
    #2031's "eviction cancels".
