@@ -63,7 +63,9 @@
  * inside that call, and only those, paint in the background. Attribution is
  * by call, not by time: a time window after each follow fit, the first cut,
  * also swallowed a ViewCube snap that landed inside it (codex review on
- * #2052).
+ * #2052). And a camera UI of ours notes the user's camera at the moment of
+ * input (`noteUserCamera`), which stops the follow for good, so no follow move
+ * can run while a UI's own move is queued.
  */
 
 
@@ -77,6 +79,37 @@ export const BACKGROUND_MIN_GAP_MS = 100
 export const BACKGROUND_COST_FACTOR = 4
 /** With nothing asking, a background frame is still requested this often. */
 export const HEARTBEAT_MS = 1000
+/**
+ * The camera-controls event a camera UI sends when the user works it: see
+ * `noteUserCamera`.
+ */
+export const USER_CAMERA_EVENT = 'bldrsusercamera'
+
+
+/**
+ * The user has taken the camera through a UI of ours rather than the canvas:
+ * a ViewCube drag, snap, orbit or fit button, a `#c:` permalink pose. Call it
+ * at the moment of input, before the UI moves the camera.
+ *
+ * camera-controls sends `controlstart` / `control` only for input on its own
+ * canvas, so without this a UI command looks like nobody's move. Everything
+ * that reacts to the user taking the camera listens for this event as well as
+ * for those: the load's camera follow stops for good
+ * (ProgressiveLoadSession), the end-of-load fit is skipped
+ * (CadView#watchCameraTakenDuringLoad) and camera moves paint at once
+ * (RenderDemand). Because the follow stops before the UI's own move is even
+ * queued, no follow refit can run between the two and flush or overwrite it
+ * (codex review on #2052; design/new/in-app-model-switch.md §4.2a).
+ *
+ * @param {object|null} controls the viewer's camera-controls instance
+ */
+export function noteUserCamera(controls) {
+  try {
+    controls?.dispatchEvent?.({type: USER_CAMERA_EVENT})
+  } catch {
+    // A controls stand-in without events: nothing is listening either.
+  }
+}
 
 
 /** See the module doc. */
@@ -148,6 +181,7 @@ export default class RenderDemand {
       try {
         controls?.addEventListener?.('controlstart', this.onUserControl)
         controls?.addEventListener?.('control', this.onUserControl)
+        controls?.addEventListener?.(USER_CAMERA_EVENT, this.onUserControl)
         controls?.addEventListener?.('update', this.onCameraUpdate)
       } catch {
         // A controls stand-in without events: camera moves fall to the heartbeat.
@@ -252,6 +286,7 @@ export default class RenderDemand {
     try {
       this.controls?.removeEventListener?.('controlstart', this.onUserControl)
       this.controls?.removeEventListener?.('control', this.onUserControl)
+      this.controls?.removeEventListener?.(USER_CAMERA_EVENT, this.onUserControl)
       this.controls?.removeEventListener?.('update', this.onCameraUpdate)
     } catch {
       // best-effort

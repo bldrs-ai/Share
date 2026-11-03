@@ -97,6 +97,7 @@ import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
 import {loadPreviewGroups, pickPreviewExpressId} from '../viewer/previewSelection'
+import {USER_CAMERA_EVENT} from '../viewer/three/renderDemand'
 import {DEFAULT_LOOK} from '../viewer/looks'
 import {installAssistDevHook} from '../viewer/tools/assistHost'
 import {registerSelectionFunnel} from '../viewer/tools/selectionFunnel'
@@ -1599,7 +1600,8 @@ export default function CadView({
   /**
    * Note whether the user drives the camera while a model loads, for the
    * end-of-load fit (loadModel). camera-controls sends `controlstart` for a
-   * drag and only `control` for a wheel zoom; both are the user.
+   * drag and only `control` for a wheel zoom, and our camera UIs send
+   * USER_CAMERA_EVENT (renderDemand.js#noteUserCamera); all are the user.
    *
    * @return {Function} stops watching
    */
@@ -1614,9 +1616,11 @@ export default function CadView({
     }
     controls.addEventListener('controlstart', onTake)
     controls.addEventListener('control', onTake)
+    controls.addEventListener(USER_CAMERA_EVENT, onTake)
     return () => {
       controls.removeEventListener?.('controlstart', onTake)
       controls.removeEventListener?.('control', onTake)
+      controls.removeEventListener?.(USER_CAMERA_EVENT, onTake)
     }
   }
 

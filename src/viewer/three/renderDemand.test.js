@@ -1,5 +1,5 @@
 import RenderDemand, {
-  BACKGROUND_COST_FACTOR, BACKGROUND_MIN_GAP_MS, HEARTBEAT_MS,
+  BACKGROUND_COST_FACTOR, BACKGROUND_MIN_GAP_MS, HEARTBEAT_MS, USER_CAMERA_EVENT, noteUserCamera,
 } from './renderDemand'
 
 
@@ -160,6 +160,22 @@ describe('viewer/three/renderDemand', () => {
     expect(demand.shouldRender()).toBe(true)
   })
 
+  it('takes a camera UI\'s note of the user\'s camera as the user driving', () => {
+    const controls = makeControls()
+    controls.dispatchEvent = (event) => controls.fire(event.type)
+    demand.begin(controls)
+    paint(200, 600)
+    noteUserCamera(controls)
+    expect(demand.isUserDriving).toBe(true)
+    expect(controls.listeners[USER_CAMERA_EVENT].size).toBe(1)
+    paint(200, 600)
+    demand.runFollowMove(() => controls.fire('update'))
+    expect(demand.shouldRender()).toBe(true)
+    // A stand-in without events is fine.
+    expect(() => noteUserCamera({})).not.toThrow()
+    expect(() => noteUserCamera(null)).not.toThrow()
+  })
+
   it('stops counting moves as the follow\'s even when its move throws', () => {
     const controls = makeControls()
     demand.begin(controls)
@@ -178,7 +194,7 @@ describe('viewer/three/renderDemand', () => {
     end()
     expect(demand.isOnDemand).toBe(false)
     expect(demand.shouldRender()).toBe(true)
-    for (const type of ['control', 'controlstart', 'update']) {
+    for (const type of ['control', 'controlstart', 'update', USER_CAMERA_EVENT]) {
       expect(controls.listeners[type].size).toBe(0)
     }
     // Closing twice is harmless.

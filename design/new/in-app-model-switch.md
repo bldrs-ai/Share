@@ -364,7 +364,12 @@ selects an element. Tree, properties and search still need the index
   hands them the camera for the rest of the load.** A drag (`controlstart`) or a wheel zoom
   (`control`; camera-controls sends no `controlstart` for a wheel, and before
   this a zoom left the follow running) stops `ProgressiveLoadSession`'s
-  follow, as before, and now also **skips the end-of-load auto-fit**
+  follow, as before, and so does a camera UI of ours — a ViewCube drag,
+  snap, orbit or fit, a `#c:` pose — which sends no control event and calls
+  `renderDemand.js#noteUserCamera` at the moment of input instead (codex
+  review on #2052, closed at the round cap: with the follow stopped before
+  the UI queues its move, no refit can flush or overwrite it). It now also
+  **skips the end-of-load auto-fit**
   (`CadView#watchCameraTakenDuringLoad`); the camera limits are still sized to
   the model. A user who has orbited during a 60 s load is looking at
   something, and a fit at the end would yank it away; one who hasn't gets

@@ -3,6 +3,7 @@ import {reportFirstMesh, setLoadSummary} from '../loader/loadProgress'
 import debug, {WARN} from '../utils/debug'
 import {LOAD_PREVIEW_GROUP_KEY, PREVIEW_BASE_MATERIAL_KEY} from './previewSelection'
 import {FRAMING_MARGIN, applyCameraLimits, cameraLimitsForSphere} from './three/cameraLimits'
+import {USER_CAMERA_EVENT} from './three/renderDemand'
 import {ElementBoxes, robustBoundsFromElements} from './three/robustBounds'
 
 
@@ -547,8 +548,11 @@ export default class ProgressiveLoadSession {
       // zoom as `control` alone (it can't tell a scroll's start or end), and
       // a zoom is the user taking the camera as much as a drag is
       // (open-205 #2043; design/new/in-app-model-switch.md §4.2a).
+      // USER_CAMERA_EVENT for a camera UI of ours (the ViewCube, a `#c:`
+      // pose): renderDemand.js#noteUserCamera.
       this.followedControls?.addEventListener?.('controlstart', this.onControlStart)
       this.followedControls?.addEventListener?.('control', this.onControlStart)
+      this.followedControls?.addEventListener?.(USER_CAMERA_EVENT, this.onControlStart)
     } catch {
       this.followedControls = null
     }
@@ -746,6 +750,7 @@ export default class ProgressiveLoadSession {
     try {
       this.followedControls?.removeEventListener?.('controlstart', this.onControlStart)
       this.followedControls?.removeEventListener?.('control', this.onControlStart)
+      this.followedControls?.removeEventListener?.(USER_CAMERA_EVENT, this.onControlStart)
     } catch {
       // best-effort
     }
