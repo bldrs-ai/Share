@@ -410,6 +410,19 @@ describe('consent', () => {
     Cookies.remove('theme')
   })
 
+  // Codex on #2051: the decline path must not reach a host site's cookies
+  // either, on a self-hosted Share where our tag never ran.
+  test('declining on a self-hosted Share leaves the host site\'s GA cookies alone', () => {
+    const env = {hostname: 'share.example.com', isWebdriver: false}
+    setupGa(env)
+    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+    setIsAllowed(false)
+    updateGaConsent(env)
+    expect(window[`ga-disable-${GA_MEASUREMENT_ID}`]).toBe(true)
+    expect(Cookies.get('_ga')).toBe('GA1.1.1234567890.0987654321')
+    Cookies.remove('_ga')
+  })
+
   test('the consent signals never grant ad personalization', () => {
     expect(CONSENT_DEFAULT).toEqual({
       analytics_storage: 'denied', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied',
@@ -425,5 +438,14 @@ describe('consent', () => {
     const domains = remove.mock.calls.filter(([name]) => name === '_ga').map(([, opts]) => opts.domain)
     expect(domains).toEqual([undefined, 'www.bldrs.ai', 'bldrs.ai'])
     remove.mockRestore()
+  })
+
+  test('deleteGoogleCookies does nothing off our own GA hosts', () => {
+    const remove = jest.spyOn(Cookies, 'remove')
+    Cookies.set('_ga', 'GA1.1.1.2')
+    deleteGoogleCookies('share.example.com')
+    expect(remove).not.toHaveBeenCalled()
+    remove.mockRestore()
+    Cookies.remove('_ga')
   })
 })

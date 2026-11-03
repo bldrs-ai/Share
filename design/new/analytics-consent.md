@@ -60,10 +60,12 @@ changes, the summary copy and the privacy policy change with it, and
   `isAllowed()`. Without consent it deletes any leftover `_ga` / `_gcl_*`
   on every load: GA was default-on until this change, and a
   `CONSENT_VERSION` bump un-decides everyone, so an undecided visitor who
-  never closes the dialog must not keep identifiers from before. Only on
-  our own GA hosts (`isOwnGaHost`: prod and bldrs' deploy previews): a
-  self-hosted Share under another site never ran our tag, and the `_ga`
-  there is that site's. Jest covers this (`ga.test.js`); E2E can't, since
+  never closes the dialog must not keep identifiers from before.
+- **Cookie deletion, at setup and on decline, only happens on our own GA
+  hosts** (`isOwnGaHost`: prod and bldrs' deploy previews). The gate is
+  inside `deleteGoogleCookies`, so no caller can skip it: a self-hosted
+  Share under another site never ran our tag, and the `_ga` there is that
+  site's. Jest covers this (`ga.test.js`); E2E can't, since
   it runs on localhost, which isn't one of those hosts. The deploy-preview
   check below covers it end to end.
 - **`index/ga.js#updateGaConsent`**, after a choice:

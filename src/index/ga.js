@@ -124,13 +124,10 @@ export default function setupGa(env = undefined) {
     // before: GA was default-on until 2026-11, and a CONSENT_VERSION bump
     // un-decides everyone. Waiting for an explicit decline to clear them
     // would leave an undecided visitor who never closes the dialog holding
-    // analytics identifiers, so clear them on every load without consent —
-    // but only on our own GA hosts (isOwnGaHost), never a host site's.
-    // Nothing here writes them back: gtag/js isn't loaded.
-    const hostname = env?.hostname ?? window.location.hostname
-    if (isOwnGaHost(hostname)) {
-      deleteGoogleCookies(hostname)
-    }
+    // analytics identifiers, so clear them on every load without consent.
+    // deleteGoogleCookies only touches our own GA hosts. Nothing here
+    // writes them back: gtag/js isn't loaded.
+    deleteGoogleCookies(env?.hostname)
     return
   }
   if (!shouldInitGa(env)) {
@@ -186,9 +183,17 @@ export function updateGaConsent(env = gaEnv) {
  * was set with, so every parent domain is tried; removing with a domain
  * that doesn't apply is a no-op.
  *
+ * A no-op off our own GA hosts (isOwnGaHost). The gate lives here rather
+ * than at the callers so that no path, setup or decline, can reach a host
+ * site's cookies: on a self-hosted share.example.com, the `_ga` on
+ * example.com is that site's analytics, which our consent doesn't govern.
+ *
  * @param {string} [hostname]
  */
 export function deleteGoogleCookies(hostname = window.location.hostname) {
+  if (!isOwnGaHost(hostname)) {
+    return
+  }
   const names = Object.keys(Cookies.get()).filter((name) => GOOGLE_COOKIE_PATTERN.test(name))
   const labels = hostname.split('.')
   const domains = [undefined]
