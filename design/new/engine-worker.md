@@ -439,15 +439,26 @@ One `EngineHost` per page owns every session's worker.
   geometry is done; an index-only engine is 81 MB and 1.6 GB. The scene
   stays main-side and is budgeted separately; P1.0's 6× covered both.
 - **Caps** (decided, §8 item 2; named constants in `src/engine/`):
-  - live engines ≤ 3 on desktop and ≤ 1 on phones;
+  - at most 3 live engines on desktop. Phones have no fixed count: the
+    budget alone governs them (§8 item 2, revisable);
   - a total engine budget of half of `navigator.deviceMemory` where it
     exists (Chrome reports at most 8 GiB, so at most 4 GiB), and 4 GiB on
     desktop or 1 GiB on phones where it does not;
   - a session's estimate is max(45 MB, reported wasm bytes + 1.9 × source
-    bytes). 1.9× is PSB's index-only JS heap over its file size (1.6 GB /
-    860 MB, §3), and the wasm term carries the geometry phase.
+    bytes) **+ its queued geometry bytes**. 1.9× is PSB's index-only JS
+    heap over its file size (1.6 GB / 860 MB, §3), and the wasm term
+    carries the geometry phase. The queued term is the transferred batch
+    buffers a background session holds main-side unassembled (§5.3). It is
+    not small: PSB streams 337 MB of geometry (§3).
   The active session is never evicted, even when it alone exceeds the
   budget.
+- **Backpressure before eviction.** When the total reaches the budget, the
+  host first pauses every background pump (`pump {mode: 'pause'}`). A
+  paused worker stops at its next batch boundary and keeps its engine and
+  its place in the stream. It is resumed (`pump {mode: 'run'}`) as its
+  queue drains, which happens when it is foregrounded or assembled in idle
+  slices. **A paused background load is not an eviction:** nothing is
+  terminated or cancelled, and the load completes once it runs again.
 - **LRU by last-foreground time.** Among the rest, evict in this order:
   1. *ready, with its GLB artifact written* — it loses least, because
      properties fall back to the artifact;
@@ -463,8 +474,18 @@ One `EngineHost` per page owns every session's worker.
 
 ### 5.3 Switch, background load, eviction, close
 
-- **Switch A → B.** B's session spawns its worker at once; A's keeps its
-  worker and its load. Nothing is disposed.
+- **Switch A → B.** B's session spawns its worker at once if the total
+  still fits the budget; A's keeps its worker and its load. Nothing is
+  disposed. This is the common case, and on desktop the only one.
+- **Switch A → B when B does not fit** (a phone, in practice). The host
+  pauses background pumps first, then evicts idle engines (§5.2). If A is
+  still loading and B still does not fit, A is cancelled into an explicit,
+  user-visible **paused — will resume** state. It is not silently dropped:
+  A's tab says so, and when A is foregrounded again its load resumes from
+  the OPFS-staged source, through the sidecar if one was written (§8 item
+  4) and otherwise by a re-parse. So in-app-model-switch.md §4.0's "come
+  back to a finished load" holds on desktop and is **best-effort on
+  phones**. This is a provisional call, revisable (§8 item 2).
 - **Background load.** A's parse and pump run on A's worker thread and cost
   the foreground nothing there. What still lands on the main thread is
   *assembling* A's batches into A's scene (builder appends, the end-of-load
@@ -584,7 +605,12 @@ second, divergent path.
    flag.
 7. **Sessions own their worker** (with #2019). The engine moves from the
    viewer to the session; a switch keeps the old worker; the background
-   batch policy (§8 item 1).
+   batch policy (§8 item 1). Tests, each shown failing on revert: queued
+   geometry bytes count against the budget, and reaching it pauses the
+   background pump rather than evicting it (a unit on `EngineHost` with a
+   lowered budget); and a `describeMobileAndDesktop` E2E where the mobile
+   leg's lowered budget puts the background load into "paused — will
+   resume" and foregrounding it completes the load.
 8. **Close and eviction** (#2031, absorbed). `EngineHost`, the budget and
    LRU, `terminate`, the artifact fallback, lazy index-only rehydrate
    through the conway#756 sidecar (re-parse fallback). E2E:
@@ -608,8 +634,17 @@ These were the open questions of the scope. The user decided each one.
    which loses the "come back to a finished load" promise of
    in-app-model-switch.md §4.0.
 2. **Caps and budget: the recommended defaults** (§5.2), as named
-   constants with their reasoning in a comment: 3 live engines on desktop
-   and 1 on phones; half of `navigator.deviceMemory`, else 4 GiB or 1 GiB.
+   constants with their reasoning in a comment: 3 live engines on desktop;
+   half of `navigator.deviceMemory`, else 4 GiB or 1 GiB. Two refinements
+   from review, both provisional and revisable:
+   - Queued, unassembled background geometry counts against the budget, and
+     reaching the budget pauses background pumps (backpressure) before
+     anything is evicted.
+   - Phones have no fixed engine count; the budget governs them. A switch
+     may run a second engine while the total fits. When it does not, the
+     still-loading background model goes into a user-visible "paused —
+     will resume" state and resumes from OPFS when foregrounded, so a
+     finished background load is best-effort on phones (§5.3).
 3. **Eviction order: as recommended.** An idle, artifact-backed engine goes
    before a background load is cancelled. §5.2 reconciles this with
    #2031's "eviction cancels".
