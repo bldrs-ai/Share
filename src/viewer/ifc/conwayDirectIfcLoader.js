@@ -240,17 +240,17 @@ export async function parseIfcWithConway(
     }
     if (onIndexed) {
       // Started, not awaited (codex/PSB review on #2037). The caller's tree
-      // walk — conway's `properties.getSpatialStructure(modelID, 'names')` —
-      // awaits `ensureLine` for every relationship and every node, one at a
-      // time, and on a windowed source each miss pages in a window: ~86 s of
-      // serial I/O on the 860 MB PSB. Awaited here, it held the whole pump
-      // back for that long, and the load report counted it as Parsing. Prod
-      // runs the same walk after the load resolves (CadView#onModel), so it
-      // pays it too, outside Total. The walk itself stays this slow until
-      // conway reads the tree without a per-record await (proposed
-      // separately); what this order buys is geometry streaming while it
-      // runs. Called synchronously, so the walk is under way before the first
-      // batch.
+      // walk is conway's `properties.getSpatialStructure(modelID, 'names')`.
+      // Up to 1.1631 it awaited `ensureLine` for every relationship and node,
+      // one at a time, and on a windowed source each miss paged in a window:
+      // ~86 s of serial I/O on the 860 MB PSB. Awaited here, it held the
+      // whole pump back for that long, and the load report counted it as
+      // Parsing. conway#753 (pinned from 1.1632) walks once and pages in file
+      // order, ~4 s on PSB in Node, but it still awaits window reads, which
+      // a geometry pump running beside it competes with, so this order still
+      // buys geometry streaming while it runs. Prod runs the same walk after
+      // the load resolves (CadView#onModel), outside Total. Called
+      // synchronously, so the walk is under way before the first batch.
       const warnIndexFailure = (e) => {
         // Best-effort by contract: an early tree is an optimisation, and the
         // caller re-reads the tree from the finished model when this path
