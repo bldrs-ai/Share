@@ -12,15 +12,23 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..')
 // GoogleDriveProvider.ts error_callback. Prod and dev must both stay on
 // same-origin-allow-popups (or looser) while GIS is in use.
 const REQUIRED_COOP = 'same-origin-allow-popups'
+// SPIKE (#1610 re-measure, do not merge): the deploy headers are flipped to
+// full isolation so a deploy preview runs Conway's MT wasm. The dev proxy
+// keeps the GIS-safe policy above; only netlify.toml is pinned to this.
+const SPIKE_NETLIFY_COOP = 'same-origin'
+const SPIKE_NETLIFY_COEP = 'credentialless'
 
 describe('Cross-Origin-Opener-Policy', () => {
-  it('netlify.toml root route uses same-origin-allow-popups (GIS OAuth)', () => {
+  it('netlify.toml root route is cross-origin isolated (#1610 spike)', () => {
     const toml = fs.readFileSync(path.join(REPO_ROOT, 'netlify.toml'), 'utf8')
     const rootBlock = extractHeadersBlock(toml, '/*')
     expect(rootBlock).not.toBeNull()
     const coop = /Cross-Origin-Opener-Policy\s*=\s*"([^"]+)"/.exec(rootBlock)
     expect(coop).not.toBeNull()
-    expect(coop[1]).toBe(REQUIRED_COOP)
+    expect(coop[1]).toBe(SPIKE_NETLIFY_COOP)
+    const coep = /Cross-Origin-Embedder-Policy\s*=\s*"([^"]+)"/.exec(rootBlock)
+    expect(coep).not.toBeNull()
+    expect(coep[1]).toBe(SPIKE_NETLIFY_COEP)
   })
 
   it('dev proxy sends same-origin-allow-popups for app routes', () => {

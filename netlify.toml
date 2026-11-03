@@ -94,18 +94,30 @@
 [functions."reconcile-subscriptions"]
   schedule = "17 4 * * *"
 
-# COOP same-origin-allow-popups lets Google Identity Services deliver OAuth
-# tokens via postMessage without nulling window.opener in the cross-origin
-# popup. COEP is intentionally omitted (docs.google.com/picker sends
-# CORP: same-site, which Chrome enforces under any COEP value and blocks the
-# Picker iframe), so crossOriginIsolated is already false here — stricter
-# COOP: same-origin would block GIS OAuth without gaining any isolation. The
-# long-term fix is to load the Picker in a popup window that isn't subject
-# to the parent page's COEP policy (TODO).
+# SPIKE (#1610 re-measure, do not merge): full cross-origin isolation.
+# COOP same-origin + COEP credentialless makes `crossOriginIsolated` true,
+# which unlocks SharedArrayBuffer, and conway-geom's loader then selects the
+# multithreaded wasm (ConwayGeomWasmWebMT.{js,wasm}, already copied to
+# /static/js by build-share-copy-wasm-conway-MT) at runtime. No build change
+# and no conway change is needed: the worker-script URL fix (conway#421)
+# is in every pin since 1.421, and `ifc_api.Init` sets the module prefix for
+# isolated windows.
+#
+# KNOWN BREAKAGE under these headers (the #1612 break inventory, unfixed
+# here on purpose):
+#  - GIS OAuth popup: COOP same-origin severs window.opener, so Google's
+#    postMessage token delivery never arrives.
+#  - Google Drive Picker iframe: docs.google.com sends CORP: same-site, and
+#    a credentialless embed is cookie-less, so the Picker session is broken.
+#  - Cross-origin subresources without CORS load cookie-less under
+#    credentialless (rather than failing, as require-corp would).
+# The previous policy, and why, was: COOP same-origin-allow-popups for the
+# GIS popup, COEP omitted for the Picker iframe (crossOriginIsolated false).
 [[headers]]
   for = "/*"
   [headers.values]
-    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "credentialless"
 
 # Override headers for the /subscribe route so that no strict isolation is enforced.
 [[headers]]
