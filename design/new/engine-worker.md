@@ -1,0 +1,644 @@
+# Per-model engine worker — one Conway engine per model, in its own Web Worker (open-205)
+
+**Status:** scoping, for the user's review. Nothing here is built.
+**Epic:** `open-205` (#2011). Story: #2053. Absorbs #2031 (close and
+eviction): with an engine in a worker, terminating the worker *is* the
+eviction.
+**Related:** #2019 (per-model sessions), #2030 (no blocking calls), #2037
+(interactive at index, `indexedModel` / `selectReadModel`), #2043
+(interactive at first mesh), #2023 (memory E2E), #1756 (geometry worker
+pool, draft), conway#540 (no Worker branch in `isWebPlatform`), conway#541
+(`OpenModelFromIndex`, landed), conway#390 (M1 "parse still on the main
+thread"), Share#1610 / #2047 (MT wasm; not used here).
+**Parallel work:** OffscreenCanvas rendering is being scoped separately (§9
+says where the two meet).
+
+Read on code at `origin/main` `86f9908`, conway pinned at
+`1.1632.753-g409bb50d` (read from `node_modules/@bldrs-ai/conway/compiled`,
+which is the pin). §10 says what was measured and what was only read.
+
+
+## 1. Conclusion first
+
+- **It works without a Conway change.** The pinned conway instantiates,
+  opens PSB windowed from OPFS and pumps its geometry inside a plain module
+  worker. Nothing it does needs cross-origin isolation. The one shim is conway#540
+  (`isWebPlatform()` has no Worker branch): the worker declares
+  `process.env.PLATFORM = 'web'` before importing the engine, as #1756
+  already does. `OpenModelFromIndex` (conway#541) is on the pin, which
+  makes a cheap re-open after eviction possible later.
+- **What it buys, measured (§3):** on PSB the engine alone blocks the main
+  thread for 40.6 s of a 51.4 s load (254 long tasks, up to 0.96 s). In a
+  worker that drops to 0–3 long tasks of at most 70 ms. `terminate()`
+  returns all 2.2 GB, and the renderer's RSS is back at baseline within
+  10 s. With an OPFS sync access handle, which only a worker can open, the
+  worker load is also **20 % faster** than today's main thread (40.9 s
+  against 51.4 s), because source I/O drops from 12.6 s to 3.2 s.
+- **What it costs:** ~45 MB and 0.4–0.6 s per worker (module eval plus a
+  cold wasm compile; a second instance compiles no faster). With a Blob
+  store, ~5 % wall clock. Each geometry is copied out of the wasm heap once
+  and transferred: 337 MB on PSB, 4.5 s of copying in the worker, and 9 ms
+  on the page to receive it all.
+- **The Share work is a boundary, not a rewrite.** Of the 46 rows in the
+  §2.1 audit, 15 are already async, 19 are trivial (they move into the
+  worker wholesale, become one field of a reply, or are fire-and-forget),
+  and 12 need a design change. The three hard ones (§2.4) are geometry resolution (G1), the GLB
+  writer's property capture (G2) and the load report's engine-side signals
+  (G3).
+- **The worker is the document session.** The protocol in §4 is the
+  headless session the MVC-core review asks for (`reviews/2026-10-29-…` §7):
+  Conway, no Three, no Zustand, answering by expressID and the `e`/`o` refs.
+  The same handler runs in Node for a CLI or MCP.
+
+
+## 2. Audit — what assumes the engine is on the main thread
+
+Classes:
+
+- **async** — already returns a Promise to an awaiting caller; an RPC behind
+  the same signature changes nothing for the caller.
+- **trivial** — sync today, but either the whole function moves into the
+  worker (so the call stays sync, worker-side), or the value is computed
+  once and travels in a reply, or the result is unused (fire-and-forget).
+- **design** — a sync read the caller depends on, or an N-calls loop that
+  must become one worker-side job.
+
+### 2.1 Share
+
+| # | Where | What | Class |
+|---|---|---|---|
+| 1 | `viewer/ifc/ShareIfc.js:141` | `new IfcAPI()` per viewer, even for GLB cache hits (Init is lazy) | trivial: the worker owns construction; a cache hit spawns nothing |
+| 2 | `viewer/ShareViewer.js:259, 268` | `ShareIfc` + `ShareIfcLoader({ifcAPI})` share one engine per viewer | design: the engine belongs to the session (#2019), not the viewer |
+| 3 | `viewer/ifc/conwayDirectIfcLoader.js:134` | lazy `ifcAPI.Init()` on first parse | trivial (worker `init`) |
+| 4 | `conwayDirectIfcLoader.js:140, 903` | `getConwayVersion`, `SetLogLevel` | trivial (reply field / init arg) |
+| 5 | `conwayDirectIfcLoader.js:218, 230, 235` | `OpenModelStream` / `OpenModelStreamed` (deferred path) | async; moves into worker |
+| 6 | `conwayDirectIfcLoader.js:549–568` | classic opens incl. sync `OpenModel` | trivial: worker-side; the flag path keeps only the deferred open |
+| 7 | `conwayDirectIfcLoader.js:373, 379` | `ExtractGeometryBatch(Async)` pump | async; worker-side loop |
+| 8 | `conwayDirectIfcLoader.js:512–576, 715` | `StreamAllMeshes(Async)` + `recapture()` for degraded readers | design: `recapture` re-streams every mesh into main-side readers; under the worker it is a worker job that re-emits the batch stream, or the fallbacks go |
+| 9 | `ShareIfcLoader.js:485` → `incrementalBatchedBuilder.js:643, 658, 660` | **G1** builder resolves every placement with sync `GetGeometry` + `GetVertexArray` / `GetIndexArray` into the wasm heap | **design** (§2.4) |
+| 10 | `flatMeshToBatchedModel.js:572–594`, `flatMeshToBufferGeometry.js:142, 248–250` | same sync heap reads on the end-of-load and preview fallbacks | design (same fix as 9) |
+| 11 | `IfcItemsMap.js:320, 362`, `IfcInstanceMap.js:910` | sync heap reads in the `ifcItemsMapParity` probe only | trivial: run in the worker or drop under the flag |
+| 12 | `ShareIfcLoader.js:71–76` → `flatMeshToInstancedModel.js:194` | instancing stats probe, forced on when `batchedMesh` is on; calls `recapture()` | trivial: worker-side stats, or drop |
+| 13 | `ShareIfcLoader.js:452` `payloadToPreviewMesh` | preview payloads are already self-contained copies | trivial: transfer as-is |
+| 14 | `ShareIfcLoader.js:299` | `GetAppliedCoordinationMatrix` (sync) | trivial: `done` reply field |
+| 15 | `ShareIfcLoader.js:592` | `GetCoordinationMatrix` (awaited) | async; `done` field |
+| 16 | `ShareIfcLoader.js:638–676` | `getStatistics(modelID)` object, read through getters | trivial: plain-object `done` field |
+| 17 | `ShareIfcLoader.js:720` | `GetLinearScalingFactor` | trivial: `done` field |
+| 18 | `buildBatchedConwayModel.js:188, 216`; `conwayDirectIfcLoader.js:872–880, 1083–1154` | `makeConwayDirectIfcManager`, `attachConwayDirectModelMethods`, `makeIndexedModelHandle` bind closures over `ifcAPI` | trivial: same surface, closures over the session client |
+| 19 | `conwayDirectIfcLoader.js:1153` | `getIfcType` identity | trivial |
+| 20 | `loader/unsupportedSchema.js:166, 194, 223, 263` | **G3** `beginOpenAttempt` / `conwayRefusedSchema` / `conwayOpenFailure` read the engine's per-attempt statistics synchronously after a failed open | **design**: the worker classifies and returns `failed{kind, …}` |
+| 21 | `loader/loadProgress.js:14, 23, 195` | **G3** `LoadLogAccumulator` and conway's static `Logger`, tallied through `installDefectProxy`; the report's heap column is main-thread `performance.memory` | **design**: the worker's Logger is a different module instance; it forwards severity deltas and its wasm/heap bytes as events |
+| 22 | `loader/Loader.js:159` | `canOpenFromStore` feature-detects `ifcAPI.OpenModelStream` | trivial: capability from `init` |
+| 23 | `Loader.js:881` | `viewer.IFC.loader.ifcManager.state.models.push(model)` | trivial |
+| 24 | `Loader.js:994–1001` → `glbExport.js:482, 494, 499` | GLB writer reads `ifcManager` at run time for capture | design: bound to the session (#2019 already asks this) |
+| 25 | `loader/bldrsElementProperties.js:550` | **G2** sync `RootExpressIDs(modelID)` iterator | **design** (§2.4) |
+| 26 | `bldrsElementProperties.js:838, 878` | **G2** `getPropertySets` / `getItemProperties` per root record | **design**: one worker-side capture job, not one RPC per record |
+| 27 | `loader/bldrsFaceIds.js:422` | **G2** `getItemProperties` per face id | design (same job) |
+| 28 | `loader/bldrsSpatialTree.js:220, 222` | one `getSpatialStructure` | async |
+| 29 | `Loader.js:1020` → `opfsSourceByteStore.js:94, 99` | `IsModelOpen` + `SpillModelSource(makeBlobByteStore(file))` | trivial: worker-side, after the capture job; ordering is load-bearing (a sync read of a non-resident range throws) |
+| 30 | `Loader.js:1032` | `ReleaseModelGeometry` | trivial: worker-side, same point |
+| 31 | `Containers/CadView.jsx:1209–1213` | `ReleaseEntityCache(0)` gated on `IsModelOpen(0)` | trivial: fire-and-forget message |
+| 32 | `CadView.jsx:1276, 1278` | tree read, `getSpatialStructure(0, 'names')` | async |
+| 33 | `CadView.jsx:1334, 2421, 2424, 2441` | root and selected element properties | async |
+| 34 | `viewer/ifc/ShareIfc.js:204–213` | `getProperties` (+ psets) | async |
+| 35 | `ShareIfc.js:225–241` | `dispose` → `CloseModel` every model | trivial: `terminate()` replaces it |
+| 36 | `viewer/ifc/ShareIfcManager.js:118–177` | manager methods over `ifcAPI.properties` | async, except `getIfcType` (37) |
+| 37 | `ShareIfcManager.js:160`, `ShareViewer.js:741`, `Components/Properties/itemProperties.jsx:81–82` | sync `getIfcType(code)` | trivial: it is conway's static `IfcTypesMap` (`compat/web-ifc/properties.js:6`); import the table main-side |
+| 38 | `itemProperties.jsx:118` (`webIfcFor`) | entity-ref `deref` calls `model.ifcManager.ifcAPI.properties.getItemProperties` | async, but needs the facade to expose a `properties` proxy, not the raw `IfcAPI` |
+| 39 | `ShareViewer.js:729, 756, 837` | `getSelectedElementsProps`, `getByFloor`, `getProperties` | async |
+| 40 | `viewer/three/IfcIsolator.js:340, 342` | `getSpatialStructure(0, false)` | async |
+| 41 | `Components/Properties/Properties.jsx:81, 221` | `getItemProperties`, `getPropertySets` | async |
+| 42 | `utils/geometryLabels.js:83` | `getItemProperties` | async |
+| 43 | `viewer/tools/viewTools.js:460, 492, 503` | assistant `model.*` reads | async |
+| 44 | `Components/Bot/BotChat.jsx:162, 328–330` | legacy `?feature=bot` evals model-written code against `viewer.IFC.loader.ifcManager` | async (`idsByType`, `getItemProperties`); retiring with the bot port (ai-workspace.md §13) |
+| 45 | `Infrastructure/IfcElementsStyleManager.js:84–90`, `ViewRulesCompiler.js:31–34` | `?view=` rules: `GetLineIDsWithType`, `GetLine`, GUID mapping | design, or delete (viewer-replacement.md §8.1 already drops `IfcViewsManager`) |
+| 46 | `viewer/ProgressiveLoadSession.js:298` | `abort()` has no caller outside the loader's error path | design: `abort` message + terminate (§5.4) |
+
+**Not engine calls, and unaffected** (they read main-side tables built from
+the stream): picking through `IfcInstanceMap` (`CadView.jsx:1535, 1539`),
+the BVH, `batchedEdit.js` (every mutator acts on the main-side
+`BatchedMesh`; model-edit.md §6), `#d:` / `#sel:` / element-path permalinks
+(`viewer/tools/refs.js:157`, `Components/Residency/visibilityHash.js:168,
+270`, `Containers/selectionHash.js`), `SearchIndex`, NavTree (renders
+`rootElement`), and every `selectReadModel` consumer (`TabbedPanels`,
+`NavTreeAndVersionsDrawer`, `TopBar`, `viewContext.js`), which already go
+through async reads.
+
+**Counts, by row:** async 15 (5, 7, 15, 28, 32–34, 36, 38–44); trivial 19
+(1, 3, 4, 6, 11–14, 16–19, 22, 23, 29–31, 35, 37); design 12 (2, 8, 9, 10,
+20, 21, 24–27, 45, 46). Rows 25–27 are one job (G2).
+
+### 2.2 Conway
+
+- **DOM / `window`.** The compat engine touches `window` in exactly three
+  places, all guarded by `typeof window !== 'undefined'`:
+  `conway_geometry.js#isWebPlatform` (wasm build selection),
+  `#pThreadsAllowed` (`window.crossOriginIsolated`), and `IfcAPI.Init`'s
+  module-prefix branch (`compat/web-ifc/ifc_api.js:128`).
+  `utilities/environment.js:15` only logs. `rendering/threejs/*` uses the DOM
+  and is not imported by the compat surface.
+- **The blocker that isn't.** In a worker both arms of `isWebPlatform()`
+  are false (no `window`, no `process`), so conway picks the Node build and
+  `Init()` dies on `Dynamic require of "../Dist/ConwayGeomWasmNode.js"`
+  (conway#540, still open). A one-line prelude that sets
+  `globalThis.process = {env: {PLATFORM: 'web'}}` before the engine module
+  is imported fixes it (#1756 does the same). A bundler `define` does not,
+  because the guard is `typeof process`. The real fix is conway#540's
+  `WorkerGlobalScope` check.
+- **`pThreadsAllowed()` in a worker.** On prod (no isolation) there is no
+  `SharedArrayBuffer`, so it returns false before reaching `window`. In an
+  isolated context it would reach `window.crossOriginIsolated` and throw a
+  `ReferenceError`; the prototype sets `FORCE_SINGLE_THREAD` for that reason.
+  Conway#540 should read `self.crossOriginIsolated`.
+- **The wasm is inline.** `ConwayGeomWasmWeb.js` is an Emscripten
+  single-file build: `findWasmBinary()` decodes an embedded binary, and
+  there is no `.wasm` fetch. Every engine instance therefore compiles from
+  bytes, with no streaming compile and no code cache. §3 measures what
+  that costs per spawn (0.4–0.6 s, 22 MB of it the decoded glue). A
+  separate `.wasm` would let Share compile once and post the compiled
+  `WebAssembly.Module` to each new worker (Emscripten's `instantiateWasm`
+  hook); that is a conway-geom build option, not needed to start.
+- **Timers.** The engine yields through `yieldToEventLoop`
+  (`core/progress.js`: `scheduler.yield` / `MessageChannel`) and the preview
+  channel uses `setTimeout`. All exist in workers. Inside a worker the
+  yields are no longer needed for responsiveness; they only cost a little.
+- **How the windowed source gets its bytes today.** Share wraps the OPFS
+  `File` as a `StepExternalByteStore` (`loader/opfsSourceByteStore.js:40`):
+  each `read(offset, length)` is `blob.slice().arrayBuffer()`, an async
+  round-trip through the browser's blob machinery. Conway's
+  `WindowedStepBufferProvider` pages 4 MiB windows through it and serves
+  sync `acquire` from resident windows, with `ensureResident` awaited before
+  any sync extraction (`step/step_buffer_provider.d.ts`). The store contract
+  is async (`read → Promise<Uint8Array>`), so an OPFS
+  `FileSystemSyncAccessHandle` store fits it unchanged: it answers a resolved
+  promise instead of an I/O round-trip. Sync handles exist only in workers.
+- **`compat/web-ifc` in a worker, unchanged:** yes, with the prelude. The
+  prototype runs `Init`, `OpenModelStream` (Blob store and sync-handle
+  store), `properties.getSpatialStructure(…, 'names')`,
+  `getItemProperties`, `getPropertySets` and `ExtractGeometryBatchAsync` on
+  the pinned build.
+- **What crosses the boundary.**
+  - *Meshes:* `FlatMesh` / `PlacedGeometry` are Embind-backed views into the
+    worker's heap and cannot cross. The worker copies each geometry out once
+    (dedupe by `geometryExpressID`) into `Float32Array` / `Uint32Array`
+    and transfers them; placements travel as columns (parents, geometry ids,
+    `Float64Array` transforms, colours) — #1756's encoding. STEP adds an
+    occurrence-path column (offsets + ids).
+  - *Preview stream:* `ON_PREVIEW_MESH` payloads are already copies
+    (`vertexData`, `indexData`, colour, transform); transfer them as they are.
+  - *Progress log:* `ON_PROGRESS` events and `ON_MODEL_INFO` are plain
+    objects and clone as-is. Conway's `Logger` is module-static, so the
+    worker's Logger is not the one `loadProgress.installDefectProxy`
+    proxies; the worker forwards severity deltas.
+  - *Reads:* property records and the `'names'` spatial tree are plain
+    objects and structured-clone (checked in the prototype, §3).
+  - *Source:* a `File` structured-clones by reference (no copy); an
+    `ArrayBuffer` transfers. OPFS paths need nothing at all.
+
+### 2.3 STEP and the other loaders
+
+- **STEP / AP214 takes the same path.** It goes through
+  `ShareIfcLoader#parse` → `parseIfcWithConway` and the same compat
+  `IfcAPI` (`ifc_api_proxy_ap214.js`). Two differences: the store-backed
+  windowed open is IFC-only (`OpenModelStream` refuses STEP and Share falls
+  back to a buffered `OpenModelStreamed`), so a STEP source crosses as a
+  transferred `ArrayBuffer` and lives resident in the worker; and STEP
+  placements carry `occurrencePath` (`incrementalBatchedBuilder.js`,
+  `flatMeshToBatchedModel.js`) and the tree uses `includeSolids`. Both are
+  data, not engine calls. **Recommendation: IFC and STEP move together**, in
+  one worker type with one protocol. The STEP-only parts are a column and a
+  flag. (A windowed STEP open is a Conway ask, not a blocker.)
+- **GLB, glTF, OBJ, STL, PLY, PDB, XYZ, splats, USD, 3DM, ADF/MTS, FBX** use
+  three.js or Share's own JS decoders on the main thread. They have no wasm
+  engine and no retained heap that only a terminate can free: their whole
+  footprint is the scene, which drops like any object. **They stay on the
+  main thread for now.** Their sessions get the same session shape, with
+  `engine: null`; eviction for them is a scene drop (§5.3). A later "mesh
+  worker" for the large synchronous parsers (STL, OBJ) is separate work.
+- **GLB cache hits** never touch Conway (properties come from the
+  `BLDRS_element_properties` reader, `Loader.js:1868–1920`), so a cache hit
+  spawns no worker. This is the cheapest state a model can be in, and §5.3
+  uses it as the eviction fallback.
+
+### 2.4 The three hard ones
+
+- **G1 — geometry resolution (rows 9, 10).** `IncrementalBatchedBuilder`
+  calls `api.GetGeometry` and copies vertices out of the wasm heap per new
+  geometry, synchronously, on the main thread. The fix is #1756's: the
+  worker copies each geometry out once and transfers it; a main-side
+  `workerGeometryApi` serves the same four methods (`GetGeometry`,
+  `GetVertexArray`, `GetIndexArray`, sizes) from the received payloads, so
+  the builder does not change. The end-of-load fallbacks that call
+  `recapture()` either become a worker job that re-emits the stream or are
+  dropped under the flag.
+- **G2 — the GLB writer's capture (rows 24–27).** `bldrsElementProperties`
+  walks every IfcRoot record (`RootExpressIDs`, sync iterator) and awaits
+  `getItemProperties` / `getPropertySets` per record. PSB has ~9.7 M
+  records, of which the roots are about 4 %. An RPC per record would be
+  hundreds of thousands of messages. The capture moves into the worker as
+  one job: the worker runs the same capture code and returns the packed
+  `ElementPropertiesContainerWriter` bytes and the spatial tree as
+  transferables. The writer's `.finally` ordering (capture → spill →
+  release, `Loader.js:1005–1035`) moves with it.
+- **G3 — the load report's engine-side signals (rows 20, 21).** The
+  refused-schema and open-failure classification reads the engine's
+  per-attempt statistics synchronously after the open fails, and the defect
+  tally proxies conway's static `Logger`. Under a worker both live in
+  another module instance. The worker classifies its own failure and
+  returns `failed{kind: 'refusedSchema' | 'openFailure' | 'oom' | 'crash',
+  statistics, schema}`; it forwards Logger severity deltas as `log` events;
+  and it reports its own wasm bytes, because the report's heap column (main
+  `performance.memory`) can no longer see the engine (#1756 hit the same
+  thing and added `wasmHeapMb=`).
+
+
+## 3. Measurements
+
+**Method.** A throwaway prototype, not product code: a module worker that
+imports the pinned conway's compat `IfcAPI` (bundled with esbuild, the
+conway#540 prelude first), and a page that drives it with Playwright's
+Chromium (headless, 4-vCPU container, other agents serialised through the
+shared bench lock). The model is staged into OPFS first. The worker then
+runs Share's open settings (`DEFER_GEOMETRY`, `GEOMETRY_BUDGET_MB: 64`,
+`STREAMING_CONSUMER`, preview channel on), `OpenModelStream` over the OPFS
+file, the `'names'` tree, one leaf's properties and psets, and
+`ExtractGeometryBatchAsync` at batch size 8. It copies each geometry out
+once and transfers it, using #1756's encoding. The **main-thread baseline**
+runs the same module on the page itself.
+
+- There is no render loop and no Share-side assembly (builder, BVH, GLB
+  writer), so the numbers isolate the engine. That is equivalent to the
+  frozen render loop in browser-load-measurement.md, and it is why the
+  main-thread baseline is *better* than Share's own: Share adds its assembly
+  on top.
+- Main-thread blocking is a 1 ms `setTimeout` heartbeat. Gaps over 50 ms are
+  counted.
+- Memory is `performance.measureUserAgentSpecificMemory()`, which breaks
+  memory down per worker. It needs cross-origin isolation, so **the
+  measurement page was isolated (COOP/COEP) and the engine forced
+  single-threaded**. Prod is not isolated; the isolation affects only the
+  measurement. RSS is the renderer process (workers are threads in it).
+- One run per cell. Read the ratios more than the absolutes.
+- The page was garbage-collected over CDP before each sample; the worker
+  isolates were not, so worker figures are an upper bound. The Blob and
+  sync-handle runs end at the same 2,249 MB on PSB although their read
+  garbage differs, which suggests little of it is uncollected.
+
+**Per-worker floor and startup**
+
+| State | Worker memory | Renderer RSS | Time |
+|---|---|---|---|
+| Empty worker | 0.3 MB | +0–6 MB | 17 ms to ready |
+| Engine bundle evaluated, no `Init` | 22.5 MB | +16 MB | 270–425 ms (module eval) |
+| `Init` done (empty instance, wasm 16 MB) | 45.5 MB | +30–40 MB | 94–148 ms |
+| 2nd and 3rd instance in the same page | +45 MB each | +36–40 MB each | `Init` 121 / 148 ms: **no warm compile** |
+| SEESTRASSE at its index | 81 MB | +71 MB | — |
+| PSB at its index (wasm still 16 MB) | **1,625 MB** | +1.66 GB | — |
+| All workers terminated | back to 0.9 MB (page only) | back to baseline | — |
+
+- **A worker costs ~45 MB and ~0.4–0.6 s to stand up** (module eval + `Init`).
+  The wasm is inline in the glue (§2.2), so each spawn decodes and compiles
+  it again; a second instance compiles no faster than the first.
+- **The index is JS heap, not wasm.** PSB at its index holds 1.6 GB in the
+  worker with only 16 MB of wasm. Either way it lives in the worker and is
+  freed with it.
+
+**SEESTRASSE (24 MB) and PSB (860 MB), full load**
+
+| | SEESTRASSE main thread | SEESTRASSE worker, Blob store | SEESTRASSE worker, sync handle | PSB main thread | PSB worker, Blob store | PSB worker, sync handle |
+|---|---|---|---|---|---|---|
+| Open (index) | 1.08 s | 1.07 s | 0.83 s | 16.6 s | 16.8 s | **13.2 s** |
+| `'names'` tree | 65 ms | 85 ms | 55 ms | 2.04 s | 2.94 s | **0.66 s** |
+| Geometry pump | 2.49 s | 3.08 s | 2.98 s | 30.4 s | 31.6 s | **26.3 s** |
+| Total | 3.78 s | 4.28 s | 3.93 s | 51.4 s | 54.2 s | **40.9 s** |
+| Source I/O time (store `read`s) | 0.33 s | 0.28 s | 0.05 s | 12.6 s | 15.2 s | **3.2 s** |
+| **Main-thread blocks > 50 ms** | **6** (max 202 ms, 0.86 s total) | **0** | **0** | **254** (max 962 ms, **40.6 s total**) | 3 (max 70 ms) | **0** |
+| Worker memory at the end (wasm) | — | 191 MB (100) | 191 MB (100) | — | 2,249 MB (899) | 2,249 MB (899) |
+| Page memory at the end | 190 MB, held | 0.7 MB | 0.7 MB | **2,247 MB, held** | 0.7 MB | 0.7 MB |
+| After `terminate()` | — | 0.9 MB | 0.9 MB | — | 0.9 MB; RSS back to baseline within 10 s | same |
+
+- **The main thread goes quiet.** On PSB the main-thread engine blocks for
+  40.6 s of a 51.4 s load (79 %, before any of Share's own work), in 254
+  long tasks up to 0.96 s. In a worker that drops to 0–3 long tasks. The 3
+  in the Blob run are at most 70 ms (GC and message dispatch); the
+  page-side handler for every message totalled 9 ms.
+- **`terminate()` returns everything.** The measured worker memory goes to
+  zero at once, and the renderer's RSS returns to its pre-load baseline
+  within 10 s (330 MB at 1 s, 135 MB at 10 s on PSB). On the main thread the
+  2.2 GB stays.
+- **A worker with a Blob store costs ~5 % wall clock** (PSB 54.2 s against
+  51.4 s; SEESTRASSE 4.3 s against 3.8 s, which includes 0.4 s of spawn).
+- **A sync access handle makes the worker faster than today's main thread**:
+  PSB 40.9 s against 51.4 s (−20 %). The store's I/O time drops from
+  12.6–15.2 s to 3.2 s, the tree from 2–3 s to 0.66 s, and the open by
+  3.5 s. It needs `createSyncAccessHandle({mode: 'read-only'})`, which only
+  workers have. The saving is larger than the ~2.3 s that Share's own PSB
+  profile attributed to the windowed buffer provider, because every window
+  miss in the open, the tree walk and the pump pays the Blob round-trip.
+- **Reads cross cheaply.** PSB's `'names'` tree (7,872 nodes) clones in
+  11–12 ms; a property record in 0.1 ms. Property records and psets
+  structured-clone without error.
+- **Mesh transfer.** PSB streams 337 MB of geometry: 20,178 geometries and
+  23,454 placements in 987 batches. Copying out of the wasm heap costs
+  4.4–4.6 s, in the worker, off the main thread. That copy is not new:
+  Share's builder pays the same one today, on the main thread (4.7 s in the
+  baseline column). All `postMessage` calls
+  together cost 0.17–0.21 s worker-side, and the page receives them for
+  9 ms. The preview stream is 484 payloads, 4 MB, 47 ms to post.
+  SEESTRASSE: 21 MB, 10,675 geometries, 0.4 s copy-out, 86–98 ms of posts.
+- **Not caused by the worker, noticed in passing:** the first leaf
+  `getItemProperties` + `getPropertySets` on windowed PSB took ~3.3 s and
+  read ~1.9 GB of windows (with the Blob store). The pset lookup appears to
+  page in most of the file. Worth a conway issue; a sync handle hides most of
+  it.
+
+
+## 4. Protocol
+
+One worker per model session, one `MessagePort` (the worker's own). Every
+message carries `v: 1` and the session's `epoch` (bumped on every respawn,
+so a late message from a terminated or replaced worker is dropped by
+construction, not by a guard).
+
+**Requests** (main → worker) get one reply `{re: id, ok, result | error}`:
+
+| op | args | result |
+|---|---|---|
+| `init` | `logLevel`, engine-flag snapshot (`demandGeometry`, `disableStreamOpen`, budget) | `conwayVersion`, `capabilities` (`openStream`, `openFromIndex`, `asyncPump`), `wasmBytes`, `initMs` |
+| `open` | `source`: `{opfs: path}` \| `{file: File}` \| `{bytes: ArrayBuffer}` (transferred); `format`; `stream: {previews, batchSize, sink?: MessagePort}`; `sidecar?` | `{modelID, windowed, modelInfo}` once the index exists — then events |
+| `pump` | `{mode: 'run' \| 'throttle' \| 'pause'}` | ack |
+| `tree` | `{mode: 'names' \| true, includeSolids}` | the spatial tree (structured clone) |
+| `props` | `{ids, recursive, psets}` | records, in `ids` order (batched: one message for N ids) |
+| `itemsOfType` | `{type, verbose}` | ids |
+| `capture` | `{geometryIds, properties, spatialTree, faceIds}` | packed containers, transferred |
+| `release` | `{entityCache} \| {spill: true} \| {geometry: true}` | bool |
+| `abort` | — | ack; the pump stops at the next batch boundary |
+| `stats` | — | `wasmBytes`, resident window bytes, I/O counters |
+
+**Events** (worker → main, or to `stream.sink`), each with a sequence number:
+
+| event | payload | transfer |
+|---|---|---|
+| `progress` | conway `ProgressEvent` | — |
+| `modelInfo` | `ON_MODEL_INFO` object | — |
+| `log` | severity deltas, warning lines | — |
+| `preview` | preview payload | vertex / index buffers |
+| `indexed` | `modelID` | — |
+| `batch` | placement columns + new geometries + `{done, total}` | all buffers |
+| `done` | summary: statistics, coordination matrix, applied matrix, linear scaling factor, build-relevant counts, `wasmBytes` | — |
+| `failed` | `{kind, message, statistics?, schema?}` | — |
+
+`stream.sink` is a `MessagePort` the caller may pass so geometry goes
+straight to whoever builds the scene: the main thread today, a render
+worker later (§9). Without it, events go to the worker's own port.
+
+**Not in v1:** document writes (the op log, model-edit.md L1) and
+sidecar export. Both slot in as more ops without changing the shape.
+
+
+## 5. Main-thread API, cap, and lifecycle
+
+### 5.1 The async read surface
+
+`EngineSession` is the client half of one worker:
+
+```js
+session.indexed           // Promise, resolves at the index
+session.tree({mode})      // → Promise<Node>
+session.properties(id, {recursive, psets})
+session.propertiesMany(ids, opts)
+session.propertySets(id)
+session.itemsOfType(type)
+session.typeName(code)    // sync: conway's static IfcTypesMap, imported main-side
+session.capture(opts)     // GLB writer job
+session.close()           // abort + terminate
+```
+
+`makeWorkerModelHandle(session)` returns exactly today's model surface —
+`getSpatialStructure`, `getItemProperties`, `getPropertySets`,
+`getIfcType`, and `ifcManager.{getSpatialStructure, getItemProperties,
+getPropertySets, getIfcType, idsByType}` plus an `ifcManager.ifcAPI` that
+exposes only `properties.*` (for `itemProperties.jsx`'s `deref`). It
+replaces `makeIndexedModelHandle` and `makeConwayDirectIfcManager`, so every
+async consumer in §2.1 keeps its code. Nothing on the main thread can reach
+a sync engine method, because there is no `IfcAPI` object there to reach.
+
+Reads go to the first source that can answer: the live worker; a
+respawned worker (§5.3); the GLB artifact's `BLDRS_element_properties`
+reader, which already serves cache hits without an engine.
+
+### 5.2 Engine host: live-worker cap and LRU
+
+One `EngineHost` per page owns every session's worker.
+
+- **Budget per session** = max(45 MB, the engine's own estimate). The
+  engine is the whole worker (wasm plus its JS heap), and §3 puts it at
+  ~7.9× file size for SEESTRASSE (191 MB) and ~2.6× for PSB (2.25 GB) once
+  geometry is done; an index-only engine is 81 MB and 1.6 GB. The scene
+  stays main-side and is budgeted separately; P1.0's 6× covered both.
+- **Caps** (to decide, §8): live engines ≤ 3 on desktop and ≤ 1 on phones,
+  and a total engine budget scaled from `navigator.deviceMemory` where it
+  exists.
+- **LRU by last-foreground time.** The active session is never evicted.
+  Among the rest, evict in this order:
+  1. *ready, with its GLB artifact written* — it loses least, because
+     properties fall back to the artifact;
+  2. *ready, without an artifact*;
+  3. *still loading in the background* — which cancels that load. That is
+     #2031's rule; it is last on purpose.
+
+### 5.3 Switch, background load, eviction, close
+
+- **Switch A → B.** B's session spawns its worker at once; A's keeps its
+  worker and its load. Nothing is disposed.
+- **Background load.** A's parse and pump run on A's worker thread and cost
+  the foreground nothing there. What still lands on the main thread is
+  *assembling* A's batches into A's scene (builder appends, the end-of-load
+  BVH), which runs at a frame cost even when A is not shown. Options in §8;
+  the recommendation is to keep A pumping in its worker but queue its
+  batches main-side unassembled (they are transferred buffers, so queuing
+  is cheap) and assemble when A is foregrounded or the main thread is idle.
+- **Eviction** is `worker.terminate()`. It frees the whole engine — wasm
+  heap, parse buffers, resident windows — at once (§3 measures it). The
+  session keeps everything main-side: the scene, the instance maps and BVH,
+  the tree, `elementsById`, the search index, the selection, hidden and
+  isolated sets, display overrides and notes. Its `engine` state becomes
+  `evicted`.
+- **Rehydrate, lazily.** The first read that the artifact cannot answer
+  (an entity-ref `deref`, a recursive read, a model without an artifact,
+  later a document op) spawns a worker and re-opens the model **index-only**
+  from the OPFS-staged source: `DEFER_GEOMETRY` and no pump, because the
+  geometry is already in the scene. Cost (§3): ~0.5 s to stand the worker
+  up, then the open — ~1 s for SEESTRASSE, 13–17 s for PSB — and the engine
+  comes back smaller than it left (PSB 1.6 GB index-only against 2.25 GB
+  after geometry). With a cached index sidecar it becomes `OpenModelFromIndex` and
+  skips the parse; conway has the open but no export from an open model yet
+  (a small Conway ask, §8). A source that is not in OPFS (the no-OPFS
+  in-memory upload, #1906) re-opens from the `File` that `inMemoryUploads`
+  already holds.
+- **Close** = `abort`, `terminate`, drop the scene and the session's state.
+  It is eviction plus a scene drop.
+- **Scene eviction** is a second, separate tier (GPU and main-side memory),
+  re-entered through a GLB cache hit. It is not designed here; the engine
+  tier does not depend on it.
+
+### 5.4 Failure isolation
+
+- An exception, a wasm trap or a wasm `RangeError` on memory growth inside a
+  worker is caught there and reported as `failed{kind}`. Only that session
+  shows the alert; other sessions do not see it.
+- A worker that dies without a message (`error` / `messageerror`) or goes
+  silent past the load report's stall watchdog is terminated and marked
+  `failed`, with a retry.
+- **What it does not isolate:** dedicated workers are threads in the page's
+  renderer process. A process-level out-of-memory still takes the tab and
+  every worker down. The budget in §5.2 is what prevents that; the worker
+  only makes the memory *returnable*.
+- A replaced or terminated worker's late messages carry an old `epoch` and
+  are dropped.
+
+### 5.5 What survives an eviction
+
+| Survives (main-side) | Lost until rehydrate (engine-side) |
+|---|---|
+| scene, `BatchedMesh`, instance maps, BVH | psets and records the artifact did not capture |
+| `rootElement`, `elementsById`, search index | entity-ref `deref`, recursive reads |
+| selection, hidden / isolated sets, display overrides, notes | STEP sub-solid reads beyond the tree |
+| `e` / `o` / `n` / `g` refs and every permalink (`#sel:`, element path, `#d:`, `#c:`) | (later) document-op application |
+| the GLB artifact and the staged OPFS source | `modelID` (a new instance starts at 0) |
+
+Refs survive because they are pure strings keyed on expressIDs and STEP
+occurrence paths, which are the source file's own `#id`s and come back
+identical from a re-parse of the same bytes. model-edit.md §5 already
+forbids storing a `batchId` or any per-load id, and the scene's batch ids
+are not re-minted by an engine respawn because the scene is not rebuilt.
+
+
+## 6. The one-worker-per-model choice, against the alternatives
+
+- **One shared engine worker for all models** would need Conway to close a
+  model without `freeGeometryProcessor()` and would still never return wasm
+  pages to the browser; eviction could not free anything. Rejected for the
+  same reason in-app-model-switch.md §7 chose one `IfcAPI` per model.
+- **#1756's pool (N workers per model, sharded geometry)** is orthogonal.
+  It is a parallelism change *within* one model; this is an isolation change
+  *between* models. With an engine worker in place, the pool becomes "the
+  session's worker plus N−1 helpers fed `OpenModelFromIndex`", and the main
+  thread no longer has to hold its own engine. It stays behind its flag and
+  conway#541's numbers.
+- **MT wasm (pthreads)** needs cross-origin isolation, which breaks the
+  Google and GitHub sign-in popups (Share#1610, #2047). Not used.
+
+
+## 7. Migration plan
+
+Every PR is behind `?feature=engineWorker` (off), keeps the main-thread
+engine as the default and fallback, and carries desktop + mobile E2E per
+the UI rule.
+
+1. **conway: recognise a worker** (conway#540): `WorkerGlobalScope` in
+   `isWebPlatform`, `self.crossOriginIsolated` in `pThreadsAllowed`. Small;
+   Share carries the prelude until it is pinned.
+2. **Share: `src/engine/` protocol, worker entry, client.** The worker
+   module, its esbuild entry (like `GlbWriter.worker.js`), `EngineSession`,
+   and an in-process transport so Jest drives the same handler without a
+   real Worker. `init` / `open` (index only) / `tree` / `props`. No product
+   wiring.
+3. **IFC load in the worker.** `ShareIfcLoader#parse` drives the session
+   instead of `parseIfcWithConway`: previews, `indexed` → the worker-backed
+   handle in `indexedModel`, the batch stream through `workerGeometryApi`,
+   the `done` packet, `failed` classification and the forwarded log tally
+   and wasm bytes. The GLB cache write is skipped under the flag in this PR.
+   E2E: `navTreeAtIndex.spec.ts` and `conwayDirect.spec.ts` under the flag.
+4. **Sync-access-handle source store.** In the worker,
+   `createSyncAccessHandle({mode: 'read-only'})` backs the
+   `StepExternalByteStore` (§3: PSB −20 % total, I/O 12.6 s → 3.2 s). It
+   needs `OPFS.worker.js` not to hold a read-write handle on the same file
+   while the engine reads it, and a Blob-store fallback where read-only
+   handles are missing (Safari and Firefox not checked).
+5. **GLB writer capture in the worker.** The `capture` job (properties,
+   spatial tree, face ids), then spill and release worker-side, then the
+   flag's cache write turns on. E2E: `batchedGlbCache.spec.ts` under the
+   flag (cache hit after a worker load opens with properties).
+6. **STEP in the worker.** Buffered source transfer, the occurrence-path
+   column, `includeSolids`. E2E: `indexStepLogo`, `stepVisibility` under the
+   flag.
+7. **Sessions own their worker** (with #2019). The engine moves from the
+   viewer to the session; a switch keeps the old worker; the background
+   batch policy (§8, question 1).
+8. **Close and eviction** (#2031, absorbed). `EngineHost`, the budget and
+   LRU, `terminate`, the artifact fallback, lazy index-only rehydrate. E2E:
+   #2023's memory spec, asserting the evicted worker's memory is gone
+   (`measureUserAgentSpecificMemory` breakdown in an isolated test server,
+   or the renderer's RSS) and that properties still answer.
+9. **Default on**, after burn-in; then delete the main-thread engine path
+   or keep it as the no-module-worker fallback.
+
+
+## 8. Open questions for the user
+
+1. **Background geometry.** While A is not shown: (a) keep pumping *and*
+   assembling A's scene on the main thread; (b) keep pumping in A's worker
+   but queue the batches main-side and assemble on return or when idle
+   (recommended); (c) stop A's pump at the index until it is foregrounded.
+2. **Caps and budget.** Live engines on desktop and phones, and the total
+   engine budget. §3's per-worker floor and per-model numbers are the input.
+3. **Eviction order.** Is "evict an idle, artifact-backed engine before
+   cancelling a background load" right, given #2031 says eviction cancels?
+4. **Rehydrate.** Re-parse from OPFS (works today), or ask Conway for an
+   index-sidecar export from an open model so a respawn uses
+   `OpenModelFromIndex`?
+5. **Sync access handles.** Adopt them in the worker (step 4)? §3 measured
+   −20 % on PSB; the cost is lock coordination with `OPFS.worker.js` and a
+   fallback where read-only handles are missing.
+6. **Fallback.** Keep the main-thread engine permanently for browsers
+   without module workers, or delete it after burn-in?
+7. **Legacy sync consumers.** Delete `?view=` rules (`IfcViewsManager`) and
+   the bot's `new Function` path, or proxy them?
+8. **Engine and render topology** — with the OffscreenCanvas scope (§9).
+
+
+## 9. Where this meets OffscreenCanvas rendering
+
+The engine worker and a render worker meet at the geometry stream and at
+picking:
+
+- **Geometry goes engine → render directly.** `open`'s `stream.sink`
+  accepts a `MessagePort`. With a render worker, the main thread creates a
+  `MessageChannel`, gives one end to each worker, and preview and batch
+  buffers flow from the engine to the scene builder without the main thread
+  ever touching them. Without one, the sink is the main thread. Nothing in
+  the engine protocol changes between the two.
+- **One worker per model for both?** Not recommended. The render worker is
+  one per canvas and holds every visible model's scene (multi-model, #1251);
+  the engine worker is one per model and is terminated on eviction. Fusing
+  them would make evicting an engine tear down a scene that is still shown.
+  Keep them separate and connect them with a port.
+- **Picking stays where the scene is.** Instance maps and the BVH live with
+  the scene (main today, render worker later). A pick resolves to an
+  expressID there; properties are then an engine read from the main thread.
+- **Assembly moves with the scene.** The background-assembly cost in §5.3
+  disappears from the main thread once the scene builder runs in a render
+  worker, which makes option (a) of §8 question 1 free of main-thread cost.
+- **The load report** aggregates memory from both workers; neither is
+  visible to main-thread `performance.memory`.
+
+
+## 10. Evidence status
+
+**Read from code** (at the cited lines): every row of §2.1; conway's
+`window` uses, `isWebPlatform`, `pThreadsAllowed`, the inline wasm, the
+`StepExternalByteStore` contract, `OpenModelFromIndex`, `IfcTypesMap`.
+
+**Measured** (§3, one run per cell, prototype, headless Chromium in a
+4-vCPU container, measurement page cross-origin isolated): the per-worker
+floor and startup; the index-only and full-load memory of SEESTRASSE and
+PSB in a worker; what `terminate()` frees (measured memory and RSS);
+main-thread long tasks with the engine on the main thread versus in a
+worker; Blob-store versus sync-handle I/O; tree, property and mesh transfer
+costs.
+
+**Not measured:** real-GPU frames; Safari and Firefox (module workers and
+`createSyncAccessHandle({mode: 'read-only'})` support differ); two
+concurrent engine workers loading large models at once; a respawn with a
+sidecar; the main-side cost of assembling a background session's batches.
