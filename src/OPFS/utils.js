@@ -15,7 +15,7 @@ import {
   opfsWriteBase64Model,
 } from '../OPFS/OPFSService.js'
 import {assertDefined} from '../utils/assert'
-import debug from '../utils/debug'
+import debug, {WARN} from '../utils/debug'
 
 
 /**
@@ -507,8 +507,12 @@ export function deleteFileFromOPFS(
  * @param {File} file
  * @param {string} type As defined in Filetype.
  * @param {Function} callback Not optional since all known flows require it.
+ * @param {Function} [onFailed] Called with the error when the worker could
+ *   not store the file. That includes a write that came up short (#2042):
+ *   the worker has already removed the partial entry, so the caller can
+ *   still open the dropped File some other way.
  */
-export function saveDnDFileToOpfs(file, type, callback) {
+export function saveDnDFileToOpfs(file, type, callback, onFailed) {
   assertDefined(file, type, callback)
 
   const tmpUrl = URL.createObjectURL(file)
@@ -538,7 +542,14 @@ export function saveDnDFileToOpfs(file, type, callback) {
         }
       }
     })
-    .then((fileName) => callback(fileName))
+    .then((fileName) => callback(fileName), (error) => {
+      // WARN, not a bare debug(): prod logs at WARN, and a drop that failed
+      // to store otherwise left nothing in the console.
+      debug(WARN).warn('saveDnDFileToOpfs: could not store the upload in OPFS:', error)
+      if (onFailed) {
+        return onFailed(error)
+      }
+    })
     .catch((error) => debug().error('Error from worker:', error))
     // We can't revoke tmpUrl until the worker is done with it, so revoke once
     // the request settles either way.
