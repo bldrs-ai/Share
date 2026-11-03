@@ -303,8 +303,12 @@ export default function OpenModelDialog({
      *   `isInMemory`, the same-shaped in-memory id.
      * @param {number} lastModifiedUtc Epoch ms from the picked File.
      * @param {string} [originalName] The user's filename, e.g. `box.ifc`.
+     * @param {object} [held]
+     * @param {boolean} [held.inMemory] Set by `loadLocalFile` when OPFS is
+     *   available but storing the pick failed (#2042), so it is held in
+     *   memory after all and `storageId` is an in-memory id.
      */
-    const onLoad = async (storageId, lastModifiedUtc, originalName) => {
+    const onLoad = async (storageId, lastModifiedUtc, originalName, {inMemory: heldInMemory = isInMemory} = {}) => {
       const sharePath = localOnlyPath(appPrefix, storageId)
       const {allowed} = await record(sharePath)
       if (!allowed) {
@@ -312,7 +316,7 @@ export default function OpenModelDialog({
         // takes it back out. Left in OPFS, the refused file still opened
         // from its /v/local-only/ URL (bldrs-ai/ops#39). The delete isn't
         // awaited: a failure must not swallow the dialog.
-        if (isInMemory) {
+        if (heldInMemory) {
           forgetInMemoryUpload(storageId)
         } else {
           deleteUploadFromOPFS(storageId).catch((err) =>
@@ -321,7 +325,7 @@ export default function OpenModelDialog({
         setShowQuotaDialog(true)
         return
       }
-      if (isInMemory) {
+      if (heldInMemory) {
         // The file is held only in this page's memory, so no page load, and
         // no local recent: there is nothing stored to reopen it from.
         navigateToInMemoryModel(sharePath, navigate)

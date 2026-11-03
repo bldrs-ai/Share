@@ -165,6 +165,34 @@ describe('loadLocalFile', () => {
     expect(opfsWriteModel).toHaveBeenCalledWith('testId', 'download', 'testId.glb', 7)
   })
 
+  // #2042: a write can come up short without throwing (a private window
+  // past ~1 GB of OPFS). The worker reports it and removes the partial
+  // entry; the pick then opens from memory instead of opening nothing.
+  it('holds the pick in memory when the OPFS worker reports a failed store', async () => {
+    const worker = {addEventListener: jest.fn(), removeEventListener: jest.fn()}
+    initializeWorker.mockReturnValueOnce(worker)
+    const onLoad = jest.fn()
+    loadLocalFile(onLoad, true)
+
+    const inputElement = document.querySelector('input[type="file"]')
+    const picked = pickedFile(GLB_BYTES, 'big.glb')
+    Object.defineProperty(inputElement, 'files', {value: [picked]})
+    inputElement.dispatchEvent(new Event('change', {bubbles: true}))
+    await flushPick()
+
+    expect(opfsWriteModel).toHaveBeenCalledWith('testId', 'big.glb', 'testId.glb', 7)
+    const listener = worker.addEventListener.mock.calls[0][1]
+    listener({data: {requestId: 7, error: 'OPFS write incomplete: 4294967288 of 1024 bytes at offset 0'}})
+
+    expect(onLoad).toHaveBeenCalledTimes(1)
+    const [storageId, lastModifiedUtc, displayName, held] = onLoad.mock.calls[0]
+    expect(storageId).toMatch(/^[0-9a-f-]{36}\.glb$/)
+    expect(getInMemoryUpload(storageId)).toBe(picked)
+    expect([lastModifiedUtc, displayName, held]).toEqual([PICKED_AT, 'big.glb', {inMemory: true}])
+    expect(worker.removeEventListener).toHaveBeenCalledWith('message', listener)
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('testId')
+  })
+
   it('reports a pick no name and no header can identify, and writes nothing', async () => {
     // The picker has already closed, so without `onError` nothing would tell
     // the user why their file did not open.

@@ -637,6 +637,169 @@ describe('OPFS writes on a handle without createWritable (Safari)', () => {
 })
 
 
+/*
+ * #2042: Chromium's FileSystemSyncAccessHandle.write() can fail without
+ * throwing. Measured in an incognito profile past about 1 GB of OPFS, it
+ * returned 4294967288 for every chunk while the file stopped growing. The
+ * writers ignored that result and cached a truncated model as complete.
+ * `storageFullAfter(n)` reproduces that handle: it writes the first `n`
+ * bytes, then lands part of a chunk and returns the same bogus count from
+ * there on.
+ */
+describe('OPFS writes that fail without throwing (#2042)', () => {
+  const BOGUS_WRITE_RESULT = 4294967288
+  const KIB = 1024
+  const CHUNKS = 4
+  // Storage fills partway through the third of the four 1 KiB chunks.
+  const MID_THIRD_CHUNK = 2500
+  const UPLOAD_BYTES = 1000
+  const UPLOAD_LIMIT = 100
+  const SMALL_BYTES = 64
+  const SMALL_LIMIT = 16
+  let savedCreateSyncAccessHandle
+
+  /**
+   * @param {number} limit Bytes the "storage" accepts before writes start failing.
+   */
+  function storageFullAfter(limit) {
+    savedCreateSyncAccessHandle = FileHandle.prototype.createSyncAccessHandle
+    FileHandle.prototype.createSyncAccessHandle = async function() {
+      const real = await savedCreateSyncAccessHandle.call(this)
+      const fullWrite = real.write
+      real.write = async (buffer, opts = {}) => {
+        const arr = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : buffer
+        const at = opts.at || 0
+        if (at + arr.length <= limit) {
+          return fullWrite(buffer, opts)
+        }
+        if (at < limit) {
+          await fullWrite(arr.subarray(0, limit - at), {at})
+        }
+        return BOGUS_WRITE_RESULT
+      }
+      return real
+    }
+  }
+
+  afterEach(() => {
+    if (savedCreateSyncAccessHandle) {
+      FileHandle.prototype.createSyncAccessHandle = savedCreateSyncAccessHandle
+      savedCreateSyncAccessHandle = null
+    }
+    delete global.fetch
+  })
+
+  /**
+   * @param {object} dir
+   * @return {Promise<Array<string>>} Every file name under `dir`, recursively.
+   */
+  async function allFileNames(dir) {
+    const names = []
+    for await (const [name, handle] of dir.entries()) {
+      if (handle.kind === 'file') {
+        names.push(name)
+      } else {
+        names.push(...await allFileNames(handle))
+      }
+    }
+    return names
+  }
+
+  /**
+   * @param {number} chunks
+   * @param {number} chunkBytes
+   * @return {Response} A streamed response of `chunks` chunks of `chunkBytes` bytes.
+   */
+  function streamedResponse(chunks, chunkBytes) {
+    let sent = 0
+    const body = new ReadableStream({
+      pull(controller) {
+        if (sent === chunks) {
+          controller.close()
+          return
+        }
+        sent++
+        controller.enqueue(new Uint8Array(chunkBytes).fill(sent))
+      },
+    })
+    return new Response(body, {headers: {'Content-Length': String(chunks * chunkBytes)}})
+  }
+
+  test('writeAll returns the count when every byte lands', async () => {
+    const handle = await new FileHandle('ok.bin').createSyncAccessHandle()
+    await expect(worker.writeAll(handle, new Uint8Array(8), {at: 0})).resolves.toBe(8)
+  })
+
+  test('writeAll throws on a short or bogus write count', async () => {
+    storageFullAfter(4)
+    const handle = await new FileHandle('full.bin').createSyncAccessHandle()
+    await expect(worker.writeAll(handle, new Uint8Array(8), {at: 0}))
+      .rejects.toThrow('OPFS write incomplete: 4294967288 of 8 bytes at offset 0')
+  })
+
+  test('downloadModelToOPFS reports the failure and leaves no partial entry', async () => {
+    storageFullAfter(MID_THIRD_CHUNK)
+    global.fetch = jest.fn(() => Promise.resolve(streamedResponse(CHUNKS, KIB)))
+
+    await worker.downloadModelToOPFS(
+      'blob:x', 'bldrs-ai', 'big.ifc', 'BldrsLocalStorage', 'V1', 'Projects', false, 'opfs-1')
+
+    const replies = self.postMessage.mock.calls.map(([m]) => m)
+    expect(replies.some((m) => m.completed)).toBe(false)
+    expect(replies.some((m) => /OPFS write incomplete/.test(String(m.error)))).toBe(true)
+    // Before #2042 a partial `big.ifc.bldrs-ai` was left here, and the next
+    // load took it for a cache hit.
+    expect(await allFileNames(rootDir)).toEqual([])
+  })
+
+  test('downloadModelToOPFS still stores a download that fits', async () => {
+    global.fetch = jest.fn(() => Promise.resolve(streamedResponse(CHUNKS, KIB)))
+
+    await worker.downloadModelToOPFS(
+      'blob:x', 'bldrs-ai', 'big.ifc', 'BldrsLocalStorage', 'V1', 'Projects', false, 'opfs-2')
+
+    const done = self.postMessage.mock.calls.map(([m]) => m).find((m) => m.completed)
+    expect(done.file.size).toBe(CHUNKS * KIB)
+  })
+
+  test('writeModelToOPFSFromFile (an upload) reports the failure and leaves no partial entry', async () => {
+    storageFullAfter(UPLOAD_LIMIT)
+    const upload = new File([new Uint8Array(UPLOAD_BYTES).fill(3)], 'model.ifc')
+
+    await worker.writeModelToOPFSFromFile(
+      upload, 'obj-1', 'model.ifc', 'BldrsLocalStorage', 'V1', 'Projects', 'opfs-3')
+
+    const replies = self.postMessage.mock.calls.map(([m]) => m)
+    expect(replies.some((m) => m.completed)).toBe(false)
+    expect(replies.some((m) => /OPFS write incomplete/.test(String(m.error)))).toBe(true)
+    expect(await allFileNames(rootDir)).toEqual([])
+  })
+
+  test('writeBytesByPathToOPFS reports the failure and leaves no partial entry', async () => {
+    storageFullAfter(SMALL_LIMIT)
+
+    await worker.writeBytesByPathToOPFS(new Uint8Array(SMALL_BYTES), 'c1', 'model.glb', 'o', 'r', 'main', 'opfs-4')
+
+    expect(self.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      error: expect.stringContaining('OPFS write incomplete'), requestId: 'opfs-4'}))
+    expect(await allFileNames(rootDir)).toEqual([])
+  })
+
+  test('renameFileInOPFS copy fallback keeps the source when the copy is cut short', async () => {
+    const src = await rootDir.getFileHandle('src.bin', {create: true})
+    src.data = new Uint8Array(SMALL_BYTES).fill(9)
+    storageFullAfter(SMALL_LIMIT)
+
+    await expect(worker.renameFileInOPFS(rootDir, src, 'dest.bin')).rejects.toThrow('OPFS write incomplete')
+
+    // Before #2042, the truncate after the copy zero-filled the copy to full
+    // size and it replaced the source.
+    expect(await allFileNames(rootDir)).toEqual(['src.bin'])
+    expect(src.data.every((b) => b === 9)).toBe(true)
+  })
+})
+
+
 // ------------------------------------------------------------
 // fetchLatestCommitHash tests
 // ------------------------------------------------------------

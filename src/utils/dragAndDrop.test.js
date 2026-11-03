@@ -160,7 +160,7 @@ describe('dragAndDrop utility', () => {
       )
 
       expect(guessTypeFromFile).toHaveBeenCalledWith(mockFile)
-      expect(saveDnDFileToOpfs).toHaveBeenCalledWith(mockFile, mockType, expect.any(Function))
+      expect(saveDnDFileToOpfs).toHaveBeenCalledWith(mockFile, mockType, expect.any(Function), expect.any(Function))
       expect(disablePageReloadApprovalCheck).toHaveBeenCalled()
       expect(mockNavigate).toHaveBeenCalledWith('/prefix/v/local-only/generated-filename.ifc')
       expect(mockOnSuccess).toHaveBeenCalledWith(mockFileName)
@@ -195,6 +195,31 @@ describe('dragAndDrop utility', () => {
       expect(addRecentFileEntry).not.toHaveBeenCalled()
       expect(setPendingModelNameUpdate).not.toHaveBeenCalled()
       expect(mockSetAlert).not.toHaveBeenCalled()
+      expect(mockOnError).not.toHaveBeenCalled()
+    })
+
+    // #2042: a write can come up short without throwing (a private window
+    // past ~1 GB of OPFS). The worker now reports it instead of storing a
+    // truncated model, and the drop opens the file from memory instead.
+    it('holds the file in memory when OPFS is available but storing it fails', async () => {
+      const mockFile = {name: 'big.ifc', type: 'application/octet-stream', size: 1024}
+      mockEvent.dataTransfer.files = [mockFile]
+      guessTypeFromFile.mockResolvedValue('ifc')
+      let stored
+      saveDnDFileToOpfs.mockImplementation((file, type, onWritten, onFailed) => {
+        stored = onFailed(new Error('OPFS write incomplete: 4294967288 of 1024 bytes at offset 0'))
+      })
+
+      await handleFileDrop(
+        mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError)
+      await stored
+
+      expect(mockOnSuccess).toHaveBeenCalledTimes(1)
+      const storageId = mockOnSuccess.mock.calls[0][0]
+      expect(storageId).toMatch(/^[0-9a-f-]{36}\.ifc$/)
+      expect(getInMemoryUpload(storageId)).toBe(mockFile)
+      expect(mockNavigate).toHaveBeenCalledWith(`/prefix/v/local-only/${storageId}`)
+      expect(addRecentFileEntry).not.toHaveBeenCalled()
       expect(mockOnError).not.toHaveBeenCalled()
     })
 
@@ -433,7 +458,7 @@ describe('dragAndDrop utility', () => {
       expect(inflateIfGzipEnvelope).toHaveBeenCalledWith(droppedFile)
       // Sniffed AFTER the inflate, or the type would be whatever gzip is.
       expect(guessTypeFromFile).toHaveBeenCalledWith(inflatedFile)
-      expect(saveDnDFileToOpfs).toHaveBeenCalledWith(inflatedFile, 'glb', expect.any(Function))
+      expect(saveDnDFileToOpfs).toHaveBeenCalledWith(inflatedFile, 'glb', expect.any(Function), expect.any(Function))
       expect(mockNavigate).toHaveBeenCalledWith('/prefix/v/local-only/generated.glb')
       expect(mockOnError).not.toHaveBeenCalled()
     })

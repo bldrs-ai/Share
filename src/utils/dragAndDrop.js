@@ -206,7 +206,12 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     }
 
     if (hasOpfs) {
-      saveDnDFileToOpfs(uploadedFile, type, onWritten)
+      // OPFS is where an upload is kept, not a requirement for viewing it: a
+      // store that fails (e.g. a write that comes up short in a private
+      // window past ~1 GB, #2042) opens the file from memory instead, just
+      // as Loader falls back to a direct fetch when its OPFS cache fails.
+      saveDnDFileToOpfs(uploadedFile, type, onWritten,
+        () => onHeldInMemory(registerInMemoryUpload(uploadedFile, type)))
     } else {
       await onHeldInMemory(registerInMemoryUpload(uploadedFile, type))
     }
