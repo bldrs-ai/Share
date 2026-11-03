@@ -272,9 +272,10 @@ export async function load(
   // A local file opened in a browser without OPFS is held in this page's
   // memory under its `/v/local-only/` id (`inMemoryUploads.js`, #1906); there is no
   // blob URL to fetch, since the opener never minted one. Looked up before
-  // the blob-path rewrite below discards the id. Only consulted when OPFS is
-  // unavailable, the only case anything registers there.
-  const inMemoryFile = (isUploadedFile && !isOpfsAvailable) ?
+  // the blob-path rewrite below discards the id. Consulted with OPFS too: an
+  // upload whose OPFS store failed (a write that came up short, #2042) is
+  // held here instead, and its fresh in-memory id names no OPFS entry.
+  const inMemoryFile = isUploadedFile ?
     getInMemoryUpload(fileNameFromPath(path)) :
     undefined
   if (isUploadedFile) {
@@ -340,7 +341,7 @@ export async function load(
     glbVerbose('feature enabled')
   }
 
-  if (isOpfsAvailable) {
+  if (isOpfsAvailable && inMemoryFile === undefined) {
     // OPFS is a CACHE, not a hard dependency. Any failure inside this block
     // — Safari's `InvalidStateError` on `createSyncAccessHandle`, a corrupt
     // entry from a previous failed session, a missing rename target, etc. —
