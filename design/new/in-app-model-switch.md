@@ -320,9 +320,12 @@ selects an element. Tree, properties and search still need the index
 (§4.2).
 
 - **The overlay lifts at the load's first mesh** (`isFirstMeshShown`, set by
-  `loadProgress#reportFirstMesh` while the load is live and cleared when it
-  ends; `LoadingBackdrop`). The snackbar's live load line stays up as the
-  non-blocking progress indicator.
+  CadView from the session's `onFirstMesh` and cleared when the load ends;
+  `LoadingBackdrop`). Only while the load is the one shown
+  (`isLoadSuperseded`): a load the user has left keeps running (#2019), and
+  its first mesh must not lift the overlay over the next model (codex review
+  on #2052). The snackbar's live load line stays up as the non-blocking
+  progress indicator.
 - **Preview meshes say which element they are.** `parsePreviewMesh` keeps the
   payload's `expressID` (the product the scene walk reached the placement
   through, the same id the durable batch records in `instanceParents`) as
@@ -379,12 +382,16 @@ selects an element. Tree, properties and search still need the index
   (from CadView's load start, through the download and OPFS staging, to the
   session's finish as the durable model goes in) the loop paints only when
   asked: at once for the user (camera
-  moves once they have the camera, selection, resize), within a budget for
+  moves, selection, resize) and for the first geometry, within a budget for
   the load (geometry, the follow's tweens, a 1 s heartbeat; at least 100 ms
   apart and four times the last paint's cost, so background painting takes
   about a fifth of the time). After the load every frame paints, as before,
-  so nothing outside the load has to ask. It starts at CadView's load start,
-  not the session's, because the empty scene's paints during the download
+  so nothing outside the load has to ask. Scopes nest: CadView holds one for
+  the load and the session one for the parse, so an aborted first attempt
+  that CadView retries leaves the retry on demand. A camera move paints at
+  once unless the follow announced it (`noteFollowMove`): a ViewCube snap or
+  a fit moves the camera with no control event, and is the user's. It
+  starts at CadView's load start, not the session's, because the empty scene's paints during the download
   and OPFS staging cost as much: at native rate they put PSB's `Opening
   model` 48 s after navigation, against 12 s with them gone (13 s with the
   loop frozen).

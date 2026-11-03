@@ -2165,6 +2165,60 @@ describe('CadView', () => {
         }
       })
 
+      // Codex review on #2052: the session of a failed attempt that CadView
+      // retries closes its own scope, not the load's.
+      it('stays on demand when a session inside the load closes its scope', async () => {
+        const RenderDemand = require('../viewer/three/renderDemand').default
+        const legacy = getHarness().IFC.context
+        legacy.renderDemand = new RenderDemand()
+        try {
+          const {result} = renderHook(() => useStore((state) => state))
+          await mountOnParsingLoad(result, makeIndexedModel())
+          // What an aborted ProgressiveLoadSession does to its own scope.
+          legacy.renderDemand.begin(null)()
+          expect(legacy.renderDemand.isOnDemand).toBe(true)
+        } finally {
+          delete legacy.renderDemand
+        }
+      })
+
+      // Codex review on #2052: nothing cancels a load the user has left
+      // (#2019), and its first mesh must not lift the overlay over the next
+      // model's empty viewer.
+      it('lifts the overlay at the load\'s first mesh, but not for a load the user has left', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        let onFirstMesh
+        let releaseLeftLoad
+        loadSpy = jest.spyOn(Loader, 'load').mockImplementation(async (...args) => {
+          onFirstMesh = (args[6] ?? {}).onFirstMesh
+          await new Promise((resolve) => {
+            releaseLeftLoad = resolve
+          })
+          return getHarness()._loadedModel
+        })
+        await act(() => result.current.setIsOpfsAvailable(false))
+        await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+        render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+        await actAsyncFlush()
+        await waitFor(() => expect(onFirstMesh).toBeDefined())
+        expect(result.current.isFirstMeshShown).toBe(false)
+        await act(() => onFirstMesh())
+        expect(result.current.isFirstMeshShown).toBe(true)
+
+        // The user moves on; the first load still runs, and B never starts
+        // until it ends.
+        await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+        await actAsyncFlush()
+        expect(result.current.isFirstMeshShown).toBe(false)
+        // A late first mesh of the left load (one superseded before its own).
+        await act(() => onFirstMesh())
+        expect(result.current.isFirstMeshShown).toBe(false)
+        expect(result.current.isModelLoading).toBe(true)
+        loadSpy.mockImplementation(() => new Promise(() => {}))
+        await act(() => releaseLeftLoad())
+        await actAsyncFlush()
+      })
+
       it('stops painting on demand when the load fails', async () => {
         const RenderDemand = require('../viewer/three/renderDemand').default
         const legacy = getHarness().IFC.context

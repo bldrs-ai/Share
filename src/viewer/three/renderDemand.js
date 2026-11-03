@@ -15,7 +15,7 @@
  * controls still update in it) but paints only when something asks:
  *
  *  - **now**, on the next frame, for what the user is doing: a camera move
- *    once the user has touched the camera, a selection change, a resize;
+ *    other than the load's own follow, a selection change, a resize;
  *  - **in the background**, when the frame budget allows, for what the load
  *    is doing: geometry arriving, the camera follow's refits, and a one-second
  *    heartbeat that catches anything nobody asked for. The budget keeps
@@ -43,11 +43,24 @@
  * looks, hover, splat sorting) keeps working without having to ask.
  *
  * One instance per viewer, on the legacy `IfcContext`, reached through
- * `ThreeContext#getRenderDemand`. CadView begins it when a load starts and
- * ends it when the load settles, whatever the format; `ProgressiveLoadSession`
- * begins it again for a progressive parse (attaching the controls it frames)
- * and ends it at its finish, as the durable model goes in. The render closure
+ * `ThreeContext#getRenderDemand`. **Scopes nest:** `begin()` opens one and
+ * hands back the function that closes it, and the loop paints on demand
+ * while any is open. CadView opens one for the whole load, whatever the
+ * format; `ProgressiveLoadSession` opens its own for a progressive parse and
+ * closes it at its finish or abort. A failed first attempt that CadView
+ * retries (an auth-shaped failure, `loadModelWithAuthRetry`) aborts its
+ * session without ending CadView's scope, so the wait and the retried
+ * download stay on demand (codex review on #2052). The render closure
  * (`IfcHighlighter#newUpdateFunction`) consults it.
+ *
+ * **Camera moves are the user's unless the follow made them.** camera-controls
+ * reports a drag (`controlstart`) and a wheel zoom (`control`), but a ViewCube
+ * snap, a fit or a permalink pose move the camera with no control event at
+ * all, and those are the user's too: every camera `update` paints on the next
+ * frame. The one exception is the load's own camera follow, which announces
+ * each fit (`noteFollowMove`); updates in the following
+ * `FOLLOW_MOVE_WINDOW_MS` paint in the background, unless the user has taken
+ * the camera since.
  */
 
 
@@ -61,6 +74,11 @@ export const BACKGROUND_MIN_GAP_MS = 100
 export const BACKGROUND_COST_FACTOR = 4
 /** With nothing asking, a background frame is still requested this often. */
 export const HEARTBEAT_MS = 1000
+/**
+ * How long after the follow announces a fit its camera updates count as its
+ * own: a camera-controls fit tween settles well within this.
+ */
+export const FOLLOW_MOVE_WINDOW_MS = 1500
 
 
 /** See the module doc. */
@@ -78,11 +96,14 @@ export default class RenderDemand {
     this.lastPaintCostMs = 0
     // Set by a paint, cleared by the next frame, which measures it.
     this.isAwaitingFrameAfterPaint = false
-    // Whether the user has driven the camera during this load. Until they
-    // have, camera updates are the follow's (ProgressiveLoadSession), which
-    // paint in the background like the geometry it is following.
+    // Whether the user has driven the camera during this load: from then on
+    // even the follow's window doesn't make a camera update background work.
     this.isUserDriving = false
+    // Until when camera updates are the follow's (noteFollowMove).
+    this.followMoveUntilMs = -Infinity
     this.controls = null
+    // Open scopes (begin), by token.
+    this.scopes = new Set()
     // Paint counters for the whole life of the viewer, read by the load
     // measurement probes to show what on-demand painting saved.
     this.stats = {paints: 0, paintMs: 0}
@@ -91,10 +112,10 @@ export default class RenderDemand {
       this.invalidate()
     }
     this.onCameraUpdate = () => {
-      if (this.isUserDriving) {
-        this.invalidate()
-      } else {
+      if (!this.isUserDriving && this.now() < this.followMoveUntilMs) {
         this.invalidateBackground()
+      } else {
+        this.invalidate()
       }
     }
     this.onResize = () => this.invalidate()
@@ -102,38 +123,63 @@ export default class RenderDemand {
 
 
   /**
-   * Start painting on demand, for a load. The first frame paints so the scene
-   * is current when the mode starts.
+   * Open an on-demand scope, for a load or a part of one. The first frame
+   * paints, so the scene is current when the scope opens.
    *
    * @param {object} [controls] camera-controls instance, whose `control` /
    *   `controlstart` (user input; a wheel zoom sends only `control`) and
-   *   `update` (the camera moved) events drive the camera half of the demand
+   *   `update` (the camera moved) events drive the camera half of the demand.
+   *   The first scope to name one attaches it; a nested scope naming another
+   *   moves the listeners to it.
+   * @return {Function} closes this scope; idempotent. The loop paints every
+   *   frame again once every scope is closed.
    */
   begin(controls = null) {
-    if (this.isOnDemand) {
-      this.detach_()
-    }
+    const token = {}
+    const isFirst = this.scopes.size === 0
+    this.scopes.add(token)
     this.isOnDemand = true
-    this.isUserDriving = false
     this.isDirty = true
-    this.controls = controls
-    try {
-      controls?.addEventListener?.('controlstart', this.onUserControl)
-      controls?.addEventListener?.('control', this.onUserControl)
-      controls?.addEventListener?.('update', this.onCameraUpdate)
-    } catch {
-      // A controls stand-in without events: camera moves fall to the heartbeat.
+    if (isFirst) {
+      this.isUserDriving = false
+      this.followMoveUntilMs = -Infinity
+      globalThis.addEventListener?.('resize', this.onResize)
     }
-    globalThis.addEventListener?.('resize', this.onResize)
+    if (controls !== null && controls !== this.controls) {
+      this.detachControls_()
+      this.controls = controls
+      try {
+        controls?.addEventListener?.('controlstart', this.onUserControl)
+        controls?.addEventListener?.('control', this.onUserControl)
+        controls?.addEventListener?.('update', this.onCameraUpdate)
+      } catch {
+        // A controls stand-in without events: camera moves fall to the heartbeat.
+      }
+    }
+    return () => this.end_(token)
   }
 
 
-  /** Back to painting every frame. Safe to call when not on demand. */
-  end() {
-    if (!this.isOnDemand) {
+  /**
+   * The load's camera follow is about to move the camera: its updates for the
+   * next `FOLLOW_MOVE_WINDOW_MS` paint in the background (module doc).
+   */
+  noteFollowMove() {
+    this.followMoveUntilMs = this.now() + FOLLOW_MOVE_WINDOW_MS
+  }
+
+
+  /**
+   * Close one scope; back to painting every frame when it was the last.
+   *
+   * @param {object} token the scope begin() opened
+   */
+  end_(token) {
+    if (!this.scopes.delete(token) || this.scopes.size > 0) {
       return
     }
-    this.detach_()
+    this.detachControls_()
+    globalThis.removeEventListener?.('resize', this.onResize)
     this.isOnDemand = false
     this.isUserDriving = false
   }
@@ -196,8 +242,8 @@ export default class RenderDemand {
   }
 
 
-  /** Drop the listeners `begin` added. */
-  detach_() {
+  /** Drop the camera listeners `begin` added. */
+  detachControls_() {
     try {
       this.controls?.removeEventListener?.('controlstart', this.onUserControl)
       this.controls?.removeEventListener?.('control', this.onUserControl)
@@ -206,6 +252,5 @@ export default class RenderDemand {
       // best-effort
     }
     this.controls = null
-    globalThis.removeEventListener?.('resize', this.onResize)
   }
 }

@@ -1,4 +1,6 @@
-import RenderDemand, {BACKGROUND_COST_FACTOR, BACKGROUND_MIN_GAP_MS, HEARTBEAT_MS} from './renderDemand'
+import RenderDemand, {
+  BACKGROUND_COST_FACTOR, BACKGROUND_MIN_GAP_MS, FOLLOW_MOVE_WINDOW_MS, HEARTBEAT_MS,
+} from './renderDemand'
 
 
 /* eslint-disable no-magic-numbers */
@@ -122,14 +124,22 @@ describe('viewer/three/renderDemand', () => {
     expect(demand.shouldRender()).toBe(true)
   })
 
-  it('treats camera moves as the follow\'s until the user takes the camera, then as the user\'s', () => {
+  // Codex review on #2052: a ViewCube snap, a fit or a permalink pose moves
+  // the camera with no control event, and is the user's all the same.
+  it('paints a camera move at once, whoever made it, unless the follow announced it', () => {
     const controls = makeControls()
     demand.begin(controls)
     paint(200, 600)
+    // No control event: a ViewCube snap's rotateTo(…, true).
     controls.fire('update')
-    // The follow tweening: background, so it waits for the budget.
+    expect(demand.shouldRender()).toBe(true)
+    paint(200, 600)
+    // The follow's fit: background, so it waits for the budget.
+    demand.noteFollowMove()
+    controls.fire('update')
     expect(demand.shouldRender()).toBe(false)
-    // A wheel zoom sends only `control`.
+    // Once the user takes the camera (a wheel zoom sends only `control`),
+    // even the follow's window paints at once.
     controls.fire('control')
     expect(demand.shouldRender()).toBe(true)
     paint(200, 600)
@@ -137,18 +147,48 @@ describe('viewer/three/renderDemand', () => {
     expect(demand.shouldRender()).toBe(true)
   })
 
-  it('paints every frame again once the load ends, and drops its listeners', () => {
+  it('counts the follow\'s moves as its own only for a while', () => {
     const controls = makeControls()
     demand.begin(controls)
+    paint(200, 600)
+    demand.noteFollowMove()
+    clock += FOLLOW_MOVE_WINDOW_MS
+    controls.fire('update')
+    expect(demand.shouldRender()).toBe(true)
+  })
+
+  it('paints every frame again once its scope closes, and drops its listeners', () => {
+    const controls = makeControls()
+    const end = demand.begin(controls)
     paint()
-    demand.end()
+    end()
     expect(demand.isOnDemand).toBe(false)
     expect(demand.shouldRender()).toBe(true)
     for (const type of ['control', 'controlstart', 'update']) {
       expect(controls.listeners[type].size).toBe(0)
     }
-    // A second end is harmless.
-    demand.end()
+    // Closing twice is harmless.
+    end()
+    expect(demand.isOnDemand).toBe(false)
+  })
+
+  // Codex review on #2052: an aborted first attempt that CadView retries
+  // closes the session's scope, and must not close CadView's.
+  it('nests scopes: closing an inner one leaves the outer one painting on demand', () => {
+    const controls = makeControls()
+    const endLoad = demand.begin(controls)
+    const endSession = demand.begin(controls)
+    endSession()
+    expect(demand.isOnDemand).toBe(true)
+    expect(controls.listeners.update.size).toBe(1)
+    paint()
+    expect(demand.shouldRender()).toBe(false)
+    // A second session for the retry, and its abort.
+    demand.begin(controls)()
+    expect(demand.isOnDemand).toBe(true)
+    endLoad()
+    expect(demand.isOnDemand).toBe(false)
+    expect(controls.listeners.update.size).toBe(0)
   })
 
   it('counts its paints and their draw time', () => {

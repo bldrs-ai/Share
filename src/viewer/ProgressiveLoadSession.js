@@ -89,12 +89,19 @@ export default class ProgressiveLoadSession {
    *   it instead of framing the streaming geometry.
    * @param {Function} [args.onProgress] stage-label reporter.
    * @param {object} [args.renderDemand] the viewer's RenderDemand
-   *   (`three/renderDemand.js`, open-205 #2043): painted on demand from here
-   *   until finish/abort, with each accepted mesh or bounds asking for a
-   *   background frame. Only with a scene: without one nothing streams on
-   *   screen, so there is nothing to save.
+   *   (`three/renderDemand.js`, open-205 #2043): a scope of on-demand painting
+   *   open from here until finish/abort, with each accepted mesh or bounds
+   *   asking for a background frame. Only with a scene: without one nothing
+   *   streams on screen, so there is nothing to save.
+   * @param {Function} [args.onFirstMesh] `() => void`, called once, when the
+   *   load's first geometry is on screen (open-205 #2043: the caller lifts
+   *   its loading overlay). Called whatever happens to the load afterwards;
+   *   the caller decides whether the load is still the one it shows.
    */
-  constructor({scene = null, getControls, getCamera, frameCamera = true, onProgress, renderDemand = null}) {
+  constructor({
+    scene = null, getControls, getCamera, frameCamera = true, onProgress, renderDemand = null,
+    onFirstMesh = null,
+  }) {
     this.state = SessionState.IDLE
     this.scene = scene
     this.getControls = getControls ?? (() => null)
@@ -112,8 +119,10 @@ export default class ProgressiveLoadSession {
     }
     this.renderDemand = scene !== null ? renderDemand : null
     this.hasAskedForFirstPaint = false
+    this.onFirstMesh = onFirstMesh
+    this.endOnDemand = null
     try {
-      this.renderDemand?.begin(this.getControls())
+      this.endOnDemand = this.renderDemand?.begin(this.getControls()) ?? null
     } catch (e) {
       debug(WARN).warn('on-demand rendering not started:', e)
       this.renderDemand = null
@@ -331,18 +340,21 @@ export default class ProgressiveLoadSession {
   /**
    * Ask for a paint of geometry that just arrived: in the background, within
    * the frame budget, except the load's first, which is what the user is
-   * waiting to see and paints on the next frame (renderDemand.js).
+   * waiting to see and paints on the next frame (renderDemand.js). The first
+   * also tells the caller (`onFirstMesh`).
    */
   requestPaint_() {
-    if (this.renderDemand === null) {
-      return
-    }
     if (this.hasAskedForFirstPaint) {
-      this.renderDemand.invalidateBackground()
+      this.renderDemand?.invalidateBackground()
       return
     }
     this.hasAskedForFirstPaint = true
-    this.renderDemand.invalidate()
+    this.renderDemand?.invalidate()
+    try {
+      this.onFirstMesh?.()
+    } catch (e) {
+      debug(WARN).warn('first-mesh callback failed:', e)
+    }
   }
 
 
@@ -353,10 +365,11 @@ export default class ProgressiveLoadSession {
    */
   endOnDemandRendering_() {
     try {
-      this.renderDemand?.end()
+      this.endOnDemand?.()
     } catch (e) {
       debug(WARN).warn('on-demand rendering not ended:', e)
     }
+    this.endOnDemand = null
     this.renderDemand = null
   }
 
@@ -694,6 +707,9 @@ export default class ProgressiveLoadSession {
     // the projection between refits) while letting minDistance and near
     // come down off the defaults.
     applyCameraLimits(camera, controls, cameraLimitsForSphere(camera, sphere), true)
+    // The follow's own move: its camera updates paint in the background
+    // (renderDemand.js), unlike a move the user asked for.
+    this.renderDemand?.noteFollowMove()
     controls.fitToSphere(sphere, withTransition)
     this.fittedSphere = sphere
     this.overflowPending = false

@@ -211,6 +211,19 @@ describe('ProgressiveLoadSession', () => {
     expect(controls.fits).toHaveLength(1)
   })
 
+  // open-205 #2043: the caller lifts its loading overlay on the first mesh.
+  it('reports the load\'s first geometry once, from either stream', () => {
+    session.finish()
+    const onFirstMesh = jest.fn()
+    session = new ProgressiveLoadSession({scene, getControls: () => controls, getCamera: () => camera, onFirstMesh})
+    expect(onFirstMesh).not.toHaveBeenCalled()
+    session.notifyBounds(new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1)))
+    expect(onFirstMesh).toHaveBeenCalledTimes(1)
+    session.addPreviewMesh(cubeAt(0))
+    session.addPreviewMesh(cubeAt(1))
+    expect(onFirstMesh).toHaveBeenCalledTimes(1)
+  })
+
   // open-205 #2043: CadView's preview pick finds the group by its mark.
   it('marks its preview group so a pick can find it in the scene', () => {
     session.addPreviewMesh(cubeAt(0))
@@ -277,6 +290,25 @@ describe('ProgressiveLoadSession', () => {
       expect(demand.isOnDemand).toBe(true)
       session.abort()
       expect(demand.isOnDemand).toBe(false)
+    })
+
+    // Codex review on #2052: CadView retries an auth-shaped first failure,
+    // and its load-long scope must outlive the failed attempt's session.
+    it('closes only its own scope, leaving a caller\'s open', () => {
+      session.finish()
+      const endLoad = demand.begin(controls)
+      session = new ProgressiveLoadSession({scene, renderDemand: demand})
+      session.abort()
+      expect(demand.isOnDemand).toBe(true)
+      endLoad()
+      expect(demand.isOnDemand).toBe(false)
+    })
+
+    it('announces the follow\'s own camera moves, so they paint in the background', () => {
+      jest.spyOn(demand, 'noteFollowMove')
+      session.addPreviewMesh(cubeAt(0))
+      expect(controls.fits).toHaveLength(1)
+      expect(demand.noteFollowMove).toHaveBeenCalledTimes(1)
     })
 
     it('leaves the loop alone when nothing streams on screen', () => {

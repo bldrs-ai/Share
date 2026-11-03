@@ -21,9 +21,10 @@ export default function createIFCSlice(set, get) {
       {isModelLoading: false, isFirstMeshShown: false})),
 
     // Whether the load in flight has put geometry on screen yet (open-205
-    // #2043): set by loader/loadProgress.js#reportFirstMesh when a
-    // progressive load's first preview mesh or streamed batch lands, cleared
-    // when the load ends. The loading overlay lifts on it, so the camera and
+    // #2043): set by CadView when a progressive load's first preview mesh or
+    // streamed batch lands (ProgressiveLoadSession's `onFirstMesh`) and that
+    // load is still the one shown, cleared when the load ends or the user
+    // leaves it. The loading overlay lifts on it, so the camera and
     // scene picking are live from the first preview mesh, during the parse
     // (Components/LoadingBackdrop.jsx).
     isFirstMeshShown: false,

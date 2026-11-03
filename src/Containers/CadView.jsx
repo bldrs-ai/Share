@@ -600,13 +600,24 @@ export default function CadView({
     // download and the OPFS staging run under the overlay with nothing new
     // to draw, and on software GL sixty paints a second of the empty scene
     // took PSB's `Opening model` from 13 s to 48 s after navigation
-    // (design/new/in-app-model-switch.md §4.2a). The session re-begins it for
-    // the parse and ends it at its finish; the finally below ends it for
-    // every other path, so a load can't leave the loop on demand.
-    const renderDemand = viewer.context.getRenderDemand?.() ?? null
-    renderDemand?.begin(viewer.context.getCameraControls?.())
+    // (design/new/in-app-model-switch.md §4.2a). The session opens its own
+    // scope for the parse, which its finish or abort closes without closing
+    // this one (renderDemand.js: scopes nest), so a retried attempt stays on
+    // demand; the finally below closes this one on every path, so a load
+    // can't leave the loop on demand.
+    const endOnDemand = viewer.context.getRenderDemand?.()?.begin(viewer.context.getCameraControls?.())
+    // open-205 #2043: the loading overlay lifts at the load's first mesh, but
+    // only for the load that is still shown. Nothing cancels a load the user
+    // has left (#2019), and its first mesh, which arrives in a viewer since
+    // disposed, must not lift the overlay over the next model's empty one
+    // (codex review on #2052). The same guard as every other per-model write.
+    const onFirstMesh = () => {
+      if (!isLoadSuperseded()) {
+        useStore.getState().setIsFirstMeshShown(true)
+      }
+    }
     try {
-      tmpModelRef = await loadModelWithAuthRetry(modelPath, isAuthSettledBeforeLoad, {onIndexed})
+      tmpModelRef = await loadModelWithAuthRetry(modelPath, isAuthSettledBeforeLoad, {onIndexed, onFirstMesh})
     } catch (e) {
       // A tree that came up at the index belongs to a model that then never
       // loaded: take it down with the load, so the panels don't offer rows of
@@ -747,7 +758,7 @@ export default function CadView({
       setIsModelLoading(false)
       setSnackMessage(null)
       stopWatchingCamera()
-      renderDemand?.end()
+      endOnDemand?.()
     }
     if (!tmpModelRef && !isOOM) {
       setAlert('Failed to parse model')
@@ -928,9 +939,11 @@ export default function CadView({
    * @param {object} [options]
    * @param {Function} [options.onIndexed] handed the model at its index while
    *   geometry still streams (open-205 #2029); see onViewerInternal
+   * @param {Function} [options.onFirstMesh] called when a progressive load's
+   *   first geometry is on screen (open-205 #2043); see onViewerInternal
    * @return {object} loaded model
    */
-  async function loadModel(routeResult, {onIndexed} = {}) {
+  async function loadModel(routeResult, {onIndexed, onFirstMesh} = {}) {
     const isGoogleResult = routeResult.kind === 'provider' && routeResult.provider === 'google'
     const filepath = isGoogleResult ? routeResult.downloadUrl : (routeResult.downloadUrl || routeResult.filepath)
     const gitpath = routeResult.gitpath
@@ -999,7 +1012,7 @@ export default function CadView({
           const blobUrl = URL.createObjectURL(download.blob)
           try {
             loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '',
-              {onIndexed})
+              {onIndexed, onFirstMesh})
           } finally {
             // The URL pins the whole download for the life of the page, and
             // each load mints a new one (a theme toggle reloads the model).
@@ -1014,7 +1027,7 @@ export default function CadView({
           // published) downloads this way, which is why the quota meter
           // treats a Drive file loaded here as public.
           loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, setOpfsFile, '',
-            {onIndexed})
+            {onIndexed, onFirstMesh})
         }
       } else {
         // Read the token at call time, not from the render closure — the
@@ -1026,7 +1039,7 @@ export default function CadView({
           (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow,
           // Route provenance, which the loader can't recover from `filepath`
           // alone: /v/local-only/<id> and /v/p/<id> give the same URL (#1956).
-          {isUploadedRoute: routeResult.isUploadedFile === true, onIndexed})
+          {isUploadedRoute: routeResult.isUploadedFile === true, onIndexed, onFirstMesh})
       }
     } catch (error) {
       loadError = error

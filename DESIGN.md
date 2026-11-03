@@ -122,10 +122,11 @@ moves with it.
 closure consults the viewer's `RenderDemand` (`src/viewer/three/renderDemand.js`,
 one per `IfcContext`, `ThreeContext#getRenderDemand`). Outside a load it is
 inert and every frame paints, as before. For the length of a load (CadView
-begins it as the load starts and ends it when the load settles;
-`ProgressiveLoadSession` ends it already at its finish, as the durable model
-goes in) the loop keeps ticking — camera-controls still updates in it — but paints
-only when asked: on the next frame for the user's camera moves, a selection
+opens a scope as the load starts and closes it when the load settles;
+`ProgressiveLoadSession` holds a nested one for the parse) the loop keeps
+ticking — camera-controls still updates in it — but paints
+only when asked: on the next frame for camera moves (all but the load's
+camera follow, which announces its own with `noteFollowMove`), a selection
 change (`ShareViewer#setPreviewSelection`), a resize or the load's first
 geometry; within a frame budget
 (at least 100 ms apart and four times the last paint's cost, measured from
