@@ -126,7 +126,8 @@ opens a scope as the load starts and closes it when the load settles;
 `ProgressiveLoadSession` holds a nested one for the parse) the loop keeps
 ticking — camera-controls still updates in it — but paints
 only when asked: on the next frame for camera moves (all but the load's
-camera follow, which announces its own with `noteFollowMove`), a selection
+camera follow, which snaps inside `runFollowMove` so its updates are told
+apart by call), a selection
 change (`ShareViewer#setPreviewSelection`), a resize or the load's first
 geometry; within a frame budget
 (at least 100 ms apart and four times the last paint's cost, measured from

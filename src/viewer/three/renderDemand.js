@@ -57,10 +57,13 @@
  * reports a drag (`controlstart`) and a wheel zoom (`control`), but a ViewCube
  * snap, a fit or a permalink pose move the camera with no control event at
  * all, and those are the user's too: every camera `update` paints on the next
- * frame. The one exception is the load's own camera follow, which announces
- * each fit (`noteFollowMove`); updates in the following
- * `FOLLOW_MOVE_WINDOW_MS` paint in the background, unless the user has taken
- * the camera since.
+ * frame. The one exception is the load's own camera follow, which makes its
+ * move synchronously inside `runFollowMove` (a snap and an immediate
+ * controls `update`, ProgressiveLoadSession#fitUnionToFrame_): updates made
+ * inside that call, and only those, paint in the background. Attribution is
+ * by call, not by time: a time window after each follow fit, the first cut,
+ * also swallowed a ViewCube snap that landed inside it (codex review on
+ * #2052).
  */
 
 
@@ -74,11 +77,6 @@ export const BACKGROUND_MIN_GAP_MS = 100
 export const BACKGROUND_COST_FACTOR = 4
 /** With nothing asking, a background frame is still requested this often. */
 export const HEARTBEAT_MS = 1000
-/**
- * How long after the follow announces a fit its camera updates count as its
- * own: a camera-controls fit tween settles well within this.
- */
-export const FOLLOW_MOVE_WINDOW_MS = 1500
 
 
 /** See the module doc. */
@@ -99,8 +97,8 @@ export default class RenderDemand {
     // Whether the user has driven the camera during this load: from then on
     // even the follow's window doesn't make a camera update background work.
     this.isUserDriving = false
-    // Until when camera updates are the follow's (noteFollowMove).
-    this.followMoveUntilMs = -Infinity
+    // True only while runFollowMove runs the follow's move.
+    this.isFollowMoving = false
     this.controls = null
     // Open scopes (begin), by token.
     this.scopes = new Set()
@@ -112,7 +110,7 @@ export default class RenderDemand {
       this.invalidate()
     }
     this.onCameraUpdate = () => {
-      if (!this.isUserDriving && this.now() < this.followMoveUntilMs) {
+      if (this.isFollowMoving && !this.isUserDriving) {
         this.invalidateBackground()
       } else {
         this.invalidate()
@@ -142,7 +140,6 @@ export default class RenderDemand {
     this.isDirty = true
     if (isFirst) {
       this.isUserDriving = false
-      this.followMoveUntilMs = -Infinity
       globalThis.addEventListener?.('resize', this.onResize)
     }
     if (controls !== null && controls !== this.controls) {
@@ -161,11 +158,19 @@ export default class RenderDemand {
 
 
   /**
-   * The load's camera follow is about to move the camera: its updates for the
-   * next `FOLLOW_MOVE_WINDOW_MS` paint in the background (module doc).
+   * Run the load's camera follow's move: the camera updates `move` makes,
+   * synchronously, paint in the background (module doc). Nothing after it
+   * returns is counted as the follow's.
+   *
+   * @param {Function} move moves the camera and applies it at once
    */
-  noteFollowMove() {
-    this.followMoveUntilMs = this.now() + FOLLOW_MOVE_WINDOW_MS
+  runFollowMove(move) {
+    this.isFollowMoving = true
+    try {
+      move()
+    } finally {
+      this.isFollowMoving = false
+    }
   }
 
 

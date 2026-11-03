@@ -63,8 +63,8 @@ const PREVIEW_OUTLIER_WARMUP = 32
  *    uses, so the follow and the final frame never disagree). A refit
  *    fires when (and only when) new geometry lands OUTSIDE the volume
  *    the camera currently frames — so existing geometry is never pushed
- *    offscreen between timer beats. The first fit is instant; follow-up
- *    fits tween on a cadence that grows 250ms → 1s; the follow stops
+ *    offscreen between timer beats. Every fit is instant (a snap, not a
+ *    tween: see fitUnionToFrame_), on a cadence that grows 250ms → 1s; the follow stops
  *    forever the moment the user takes the camera.
  *  - progress reporting: stage labels pass through to the load
  *    reporter, and the model summary lands on the report's Total line.
@@ -553,7 +553,7 @@ export default class ProgressiveLoadSession {
       this.followedControls = null
     }
     try {
-      this.fitUnionToFrame_(false)
+      this.fitUnionToFrame_()
     } catch (e) {
       debug(WARN).warn('camera follow initial fit failed:', e)
     }
@@ -578,7 +578,7 @@ export default class ProgressiveLoadSession {
       return
     }
     try {
-      this.fitUnionToFrame_(true)
+      this.fitUnionToFrame_()
     } catch (e) {
       debug(WARN).warn('camera follow refit failed:', e)
     }
@@ -634,7 +634,7 @@ export default class ProgressiveLoadSession {
     }
     if (this.overflowPending || (staleFrameSuspect && this.isOverframed_())) {
       try {
-        this.fitUnionToFrame_(true)
+        this.fitUnionToFrame_()
       } catch (e) {
         debug(WARN).warn('camera follow refit failed:', e)
       }
@@ -658,9 +658,19 @@ export default class ProgressiveLoadSession {
    * the criterion also means the follow and the final frame agree —
    * there is no correction to watch when the load settles.
    *
-   * @param {boolean} withTransition tween the move (false = instant)
+   * **The fit snaps; it does not tween** (open-205 #2043, codex review on
+   * #2052). While a model streams in, the viewer paints on demand
+   * (three/renderDemand.js): a camera move the user asked for paints at once,
+   * the follow's in the background. Updates carry no author, so the follow's
+   * move is made where it can be told apart: synchronously, `fitToSphere`
+   * without a transition and the controls' `update(0)` inside
+   * `RenderDemand#runFollowMove`, which attributes exactly the updates made
+   * inside it. A tween's updates would arrive frames later, mixed with a
+   * ViewCube snap's or a fit's, and an earlier time window that tried to tell
+   * them apart swallowed those. A snap also suits geometry that is itself
+   * arriving in steps.
    */
-  fitUnionToFrame_(withTransition) {
+  fitUnionToFrame_() {
     const controls = this.getControls()
     const camera = this.getCamera()
     if (!controls || !camera) {
@@ -678,7 +688,7 @@ export default class ProgressiveLoadSession {
     sphere.radius *= FRAMING_MARGIN
     // Nothing to do when the pose already frames this sphere — refits
     // fire on any overflow, and geometry excluded as a stray leaves the
-    // framing unchanged, which would otherwise tween the camera to where
+    // framing unchanged, which would otherwise move the camera to where
     // it already is once per stray. Stamp lastFitMs anyway: evaluating
     // this cost a full robust-bounds pass, so it has to sit behind the
     // same cadence gate as a real fit or every arriving stray pays for
@@ -707,10 +717,17 @@ export default class ProgressiveLoadSession {
     // the projection between refits) while letting minDistance and near
     // come down off the defaults.
     applyCameraLimits(camera, controls, cameraLimitsForSphere(camera, sphere), true)
-    // The follow's own move: its camera updates paint in the background
-    // (renderDemand.js), unlike a move the user asked for.
-    this.renderDemand?.noteFollowMove()
-    controls.fitToSphere(sphere, withTransition)
+    const snap = () => {
+      controls.fitToSphere(sphere, false)
+      // Apply it now, not on the next frame, so its `update` is made inside
+      // runFollowMove (see this method's doc).
+      controls.update?.(0)
+    }
+    if (this.renderDemand === null) {
+      snap()
+    } else {
+      this.renderDemand.runFollowMove(snap)
+    }
     this.fittedSphere = sphere
     this.overflowPending = false
     this.lastFitMs = Date.now()

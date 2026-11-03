@@ -1,5 +1,5 @@
 import RenderDemand, {
-  BACKGROUND_COST_FACTOR, BACKGROUND_MIN_GAP_MS, FOLLOW_MOVE_WINDOW_MS, HEARTBEAT_MS,
+  BACKGROUND_COST_FACTOR, BACKGROUND_MIN_GAP_MS, HEARTBEAT_MS,
 } from './renderDemand'
 
 
@@ -126,7 +126,7 @@ describe('viewer/three/renderDemand', () => {
 
   // Codex review on #2052: a ViewCube snap, a fit or a permalink pose moves
   // the camera with no control event, and is the user's all the same.
-  it('paints a camera move at once, whoever made it, unless the follow announced it', () => {
+  it('paints a camera move at once, whoever made it, unless the follow made it', () => {
     const controls = makeControls()
     demand.begin(controls)
     paint(200, 600)
@@ -134,25 +134,39 @@ describe('viewer/three/renderDemand', () => {
     controls.fire('update')
     expect(demand.shouldRender()).toBe(true)
     paint(200, 600)
-    // The follow's fit: background, so it waits for the budget.
-    demand.noteFollowMove()
-    controls.fire('update')
+    // The follow's snap, made inside runFollowMove: background.
+    demand.runFollowMove(() => controls.fire('update'))
     expect(demand.shouldRender()).toBe(false)
     // Once the user takes the camera (a wheel zoom sends only `control`),
-    // even the follow's window paints at once.
+    // even the follow's move paints at once.
     controls.fire('control')
     expect(demand.shouldRender()).toBe(true)
     paint(200, 600)
+    demand.runFollowMove(() => controls.fire('update'))
+    expect(demand.shouldRender()).toBe(true)
+  })
+
+  // Codex review on #2052, round 2: a time window after each follow fit took
+  // a ViewCube snap made inside it for the follow's.
+  it('paints a ViewCube snap made right after a follow refit at once', () => {
+    const controls = makeControls()
+    demand.begin(controls)
+    paint(200, 600)
+    demand.runFollowMove(() => controls.fire('update'))
+    expect(demand.shouldRender()).toBe(false)
+    // The snap's first update, one frame after the refit.
+    clock += FRAME_MS
     controls.fire('update')
     expect(demand.shouldRender()).toBe(true)
   })
 
-  it('counts the follow\'s moves as its own only for a while', () => {
+  it('stops counting moves as the follow\'s even when its move throws', () => {
     const controls = makeControls()
     demand.begin(controls)
     paint(200, 600)
-    demand.noteFollowMove()
-    clock += FOLLOW_MOVE_WINDOW_MS
+    expect(() => demand.runFollowMove(() => {
+      throw new Error('fit failed')
+    })).toThrow('fit failed')
     controls.fire('update')
     expect(demand.shouldRender()).toBe(true)
   })

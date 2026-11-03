@@ -169,7 +169,7 @@ describe('ProgressiveLoadSession', () => {
     expect(controls.fits[0].withTransition).toBe(false)
   })
 
-  it('strictly frames the union: an escaping mesh triggers a tweened refit', () => {
+  it('strictly frames the union: an escaping mesh triggers a refit', () => {
     session.addPreviewMesh(cubeAt(0))
     expect(controls.fits).toHaveLength(1)
     // Make the refit gate pass immediately.
@@ -177,7 +177,8 @@ describe('ProgressiveLoadSession', () => {
     // Far outside the first fitted sphere.
     session.addPreviewMesh(cubeAt(100))
     expect(controls.fits).toHaveLength(2)
-    expect(controls.fits[1].withTransition).toBe(true)
+    // A snap, not a tween (fitUnionToFrame_'s doc says why).
+    expect(controls.fits[1].withTransition).toBe(false)
     // The refit's sphere covers BOTH meshes — center between them,
     // radius spanning the whole union.
     const fit = controls.fits[1]
@@ -304,11 +305,19 @@ describe('ProgressiveLoadSession', () => {
       expect(demand.isOnDemand).toBe(false)
     })
 
-    it('announces the follow\'s own camera moves, so they paint in the background', () => {
-      jest.spyOn(demand, 'noteFollowMove')
+    // Codex review on #2052: the follow's camera update has to be made where
+    // RenderDemand can tell it from a user's, synchronously in runFollowMove.
+    it('makes the follow\'s move inside runFollowMove, applied at once', () => {
+      let isInside = false
+      controls.update = jest.fn(() => {
+        expect(demand.isFollowMoving).toBe(true)
+        isInside = true
+      })
       session.addPreviewMesh(cubeAt(0))
       expect(controls.fits).toHaveLength(1)
-      expect(demand.noteFollowMove).toHaveBeenCalledTimes(1)
+      expect(controls.update).toHaveBeenCalledWith(0)
+      expect(isInside).toBe(true)
+      expect(demand.isFollowMoving).toBe(false)
     })
 
     it('leaves the loop alone when nothing streams on screen', () => {

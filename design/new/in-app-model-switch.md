@@ -383,16 +383,20 @@ selects an element. Tree, properties and search still need the index
   session's finish as the durable model goes in) the loop paints only when
   asked: at once for the user (camera
   moves, selection, resize) and for the first geometry, within a budget for
-  the load (geometry, the follow's tweens, a 1 s heartbeat; at least 100 ms
+  the load (geometry, the follow's refits, a 1 s heartbeat; at least 100 ms
   apart and four times the last paint's cost, so background painting takes
   about a fifth of the time). After the load every frame paints, as before,
   so nothing outside the load has to ask. Scopes nest: CadView holds one for
   the load and the session one for the parse, so an aborted first attempt
   that CadView retries leaves the retry on demand. A camera move paints at
-  once unless the follow announced it (`noteFollowMove`): a ViewCube snap or
-  a fit moves the camera with no control event, and is the user's. It
-  starts at CadView's load start, not the session's, because the empty scene's paints during the download
-  and OPFS staging cost as much: at native rate they put PSB's `Opening
+  once unless the follow made it. A ViewCube snap or a fit moves the camera
+  with no control event and is the user's; the follow's own fits are snaps,
+  made synchronously inside `RenderDemand#runFollowMove`, which attributes
+  exactly the updates made in the call (codex review on #2052: a time window
+  after each fit, the first cut, swallowed a ViewCube snap inside it).
+  On-demand painting starts at CadView's load start, not the session's,
+  because the empty scene's paints during the download and OPFS staging cost
+  as much: at native rate they put PSB's `Opening
   model` 48 s after navigation, against 12 s with them gone (13 s with the
   loop frozen).
   The cost is measured from a paint to the next frame, not around the draw
