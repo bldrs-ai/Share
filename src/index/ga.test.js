@@ -321,10 +321,30 @@ describe('consent', () => {
     }
     Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
     Cookies.set('_gcl_au', '1.1.x')
-    setupGa({hostname: 'localhost', isWebdriver: false})
+    setupGa({hostname: 'bldrs.ai', isWebdriver: false})
     expect(Cookies.get('_ga')).toBeUndefined()
     expect(Cookies.get('_gcl_au')).toBeUndefined()
   })
+
+  // A bldrs preview that didn't opt into GA this load could still have
+  // run the tag on an earlier one, so its leftovers go too.
+  test('deletes leftover GA cookies on a bldrs deploy preview without the GA flag', () => {
+    Cookies.remove('consentLevel')
+    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+    setupGa({hostname: 'deploy-preview-2051--bldrs-share-prod.netlify.app', isWebdriver: false, enableInPreview: false})
+    expect(Cookies.get('_ga')).toBeUndefined()
+  })
+
+  // Codex on #2051: a self-hosted Share under another site never ran our
+  // tag; the `_ga` there is that site's analytics, not ours to delete.
+  test.each(['share.example.com', 'localhost', 'deploy-preview-1--some-fork.netlify.app'])(
+    'leaves GA cookies alone on %s, where our tag never ran', (hostname) => {
+      Cookies.remove('consentLevel')
+      Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+      setupGa({hostname, isWebdriver: false, enableInPreview: true})
+      expect(Cookies.get('_ga')).toBe('GA1.1.1234567890.0987654321')
+      Cookies.remove('_ga')
+    })
 
   test('keeps the GA cookie at setup for a consenting visitor', () => {
     Cookies.set('_ga', 'GA1.1.1234567890.0987654321')

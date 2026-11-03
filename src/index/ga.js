@@ -45,6 +45,21 @@ export function shouldInitGa({
 }
 
 
+/**
+ * True on a host where this app's GA tag could ever have run: production,
+ * or one of bldrs' own deploy previews (whether or not this load opted in).
+ * Leftover GA cookies are only ours to delete there. A self-hosted Share
+ * under someone else's site (share.example.com) never ran our tag, and
+ * the `_ga` on example.com belongs to that site's own analytics.
+ *
+ * @param {string} hostname
+ * @return {boolean}
+ */
+export function isOwnGaHost(hostname) {
+  return PROD_HOSTNAMES.includes(hostname) || DEPLOY_PREVIEW_HOSTNAME.test(hostname)
+}
+
+
 /*
  * Google Consent Mode v2 signals. index.html's inline stub declares the
  * same two objects before the bundle loads (DEFAULT first, then GRANTED
@@ -91,7 +106,8 @@ let gaEnv
  * Called once at bundle start. Loads Google Analytics only when this host
  * may (shouldInitGa) AND the visitor has already consented. A visitor who
  * hasn't chosen yet gets nothing from Google: no gtag/js request, no
- * collect, and any GA cookie left from before is deleted. If they then allow analytics in the About dialog,
+ * collect, and on our own GA hosts any GA cookie left from before is
+ * deleted. If they then allow analytics in the About dialog,
  * updateGaConsent loads it on the spot. Design:
  * design/new/analytics-consent.md.
  *
@@ -108,9 +124,13 @@ export default function setupGa(env = undefined) {
     // before: GA was default-on until 2026-11, and a CONSENT_VERSION bump
     // un-decides everyone. Waiting for an explicit decline to clear them
     // would leave an undecided visitor who never closes the dialog holding
-    // analytics identifiers, so clear them on every load without consent,
-    // on any host. Nothing here wrote them back: gtag/js isn't loaded.
-    deleteGoogleCookies(env?.hostname)
+    // analytics identifiers, so clear them on every load without consent —
+    // but only on our own GA hosts (isOwnGaHost), never a host site's.
+    // Nothing here writes them back: gtag/js isn't loaded.
+    const hostname = env?.hostname ?? window.location.hostname
+    if (isOwnGaHost(hostname)) {
+      deleteGoogleCookies(hostname)
+    }
     return
   }
   if (!shouldInitGa(env)) {

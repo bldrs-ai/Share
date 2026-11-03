@@ -58,9 +58,14 @@ changes, the summary copy and the privacy policy change with it, and
 - **`index/ga.js#setupGa`** injects gtag/js only when `shouldInitGa` (prod
   host, or an opted-in bldrs preview, never under webdriver) **and**
   `isAllowed()`. Without consent it deletes any leftover `_ga` / `_gcl_*`
-  on every load, on any host: GA was default-on until this change, and a
+  on every load: GA was default-on until this change, and a
   `CONSENT_VERSION` bump un-decides everyone, so an undecided visitor who
-  never closes the dialog must not keep identifiers from before.
+  never closes the dialog must not keep identifiers from before. Only on
+  our own GA hosts (`isOwnGaHost`: prod and bldrs' deploy previews): a
+  self-hosted Share under another site never ran our tag, and the `_ga`
+  there is that site's. Jest covers this (`ga.test.js`); E2E can't, since
+  it runs on localhost, which isn't one of those hosts. The deploy-preview
+  check below covers it end to end.
 - **`index/ga.js#updateGaConsent`**, after a choice:
   - allowed: clears `ga-disable-<ID>`, queues consent granted, queues the
     `config` the stub withheld (after the grant, so page_view goes out
@@ -104,7 +109,7 @@ dataLayer), not what Google receives. The network half is checked on a
 deploy preview with `?feature=gaEnableInPreview` in a browser that isn't
 automation-flagged: a fresh visitor makes no request to
 googletagmanager.com and gets no `_ga`; OK loads gtag/js and sets `_ga`;
-Cancel, then reload, makes no Google request.
+Cancel, then reload, makes no Google request and leaves no `_ga`.
 
 ## Open questions (owner)
 

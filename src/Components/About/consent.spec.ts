@@ -143,18 +143,6 @@ describeMobileAndDesktop('Analytics consent', () => {
     expect(googleRequests).toEqual([])
   })
 
-  // GA was default-on until this change, so a returning visitor can arrive
-  // undecided with a `_ga` cookie; it goes on load, before any answer.
-  test('an undecided visitor\'s leftover GA cookie is deleted on load', async ({page}) => {
-    await page.context().addCookies([
-      {name: '_ga', value: 'GA1.1.1871520000.1754700000', domain: 'localhost', path: '/'},
-    ])
-    await page.reload({waitUntil: 'domcontentloaded'})
-    await expect(page.getByRole('dialog')).toBeVisible()
-    await expect.poll(async () =>
-      (await page.context().cookies()).filter((c) => c.name.startsWith('_ga')).length).toBe(0)
-  })
-
   test('Browse only on the slider, then OK, is a decline too', async ({page}) => {
     const sliderInput = page.getByRole('slider', {name: 'Privacy level'})
     await sliderInput.focus()
