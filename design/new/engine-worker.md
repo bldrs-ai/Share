@@ -1,6 +1,7 @@
 # Per-model engine worker — one Conway engine per model, in its own Web Worker (open-205)
 
-**Status:** scoping, for the user's review. Nothing here is built.
+**Status:** decided 2026-11-03 (§8); being built behind
+`?feature=engineWorker` in the §7 order.
 **Epic:** `open-205` (#2011). Story: #2053. Absorbs #2031 (close and
 eviction): with an engine in a worker, terminating the worker *is* the
 eviction.
@@ -392,8 +393,9 @@ construction, not by a guard).
 straight to whoever builds the scene: the main thread today, a render
 worker later (§9). Without it, events go to the worker's own port.
 
-**Not in v1:** document writes (the op log, model-edit.md L1) and
-sidecar export. Both slot in as more ops without changing the shape.
+**Not in v1:** document writes (the op log, model-edit.md L1). They slot
+in as more ops without changing the shape. The index-sidecar export
+(conway#756) arrives with eviction (§7 step 8) as an `exportIndex` op.
 
 
 ## 5. Main-thread API, cap, and lifecycle
@@ -436,16 +438,28 @@ One `EngineHost` per page owns every session's worker.
   ~7.9× file size for SEESTRASSE (191 MB) and ~2.6× for PSB (2.25 GB) once
   geometry is done; an index-only engine is 81 MB and 1.6 GB. The scene
   stays main-side and is budgeted separately; P1.0's 6× covered both.
-- **Caps** (to decide, §8): live engines ≤ 3 on desktop and ≤ 1 on phones,
-  and a total engine budget scaled from `navigator.deviceMemory` where it
-  exists.
-- **LRU by last-foreground time.** The active session is never evicted.
-  Among the rest, evict in this order:
+- **Caps** (decided, §8 item 2; named constants in `src/engine/`):
+  - live engines ≤ 3 on desktop and ≤ 1 on phones;
+  - a total engine budget of half of `navigator.deviceMemory` where it
+    exists (Chrome reports at most 8 GiB, so at most 4 GiB), and 4 GiB on
+    desktop or 1 GiB on phones where it does not;
+  - a session's estimate is max(45 MB, reported wasm bytes + 1.9 × source
+    bytes). 1.9× is PSB's index-only JS heap over its file size (1.6 GB /
+    860 MB, §3), and the wasm term carries the geometry phase.
+  The active session is never evicted, even when it alone exceeds the
+  budget.
+- **LRU by last-foreground time.** Among the rest, evict in this order:
   1. *ready, with its GLB artifact written* — it loses least, because
      properties fall back to the artifact;
   2. *ready, without an artifact*;
-  3. *still loading in the background* — which cancels that load. That is
-     #2031's rule; it is last on purpose.
+  3. *still loading in the background* — which cancels that load, and is
+     last on purpose.
+- **How this squares with #2031.** in-app-model-switch.md §4.0 says close
+  and eviction are the only paths that cancel a load. That stays true: they
+  are the only ones. But with the engine in a worker most evictions cancel
+  nothing, because they terminate an idle engine whose geometry is already
+  in the scene. Only the third tier cancels, and only when the first two are
+  empty.
 
 ### 5.3 Switch, background load, eviction, close
 
@@ -454,10 +468,10 @@ One `EngineHost` per page owns every session's worker.
 - **Background load.** A's parse and pump run on A's worker thread and cost
   the foreground nothing there. What still lands on the main thread is
   *assembling* A's batches into A's scene (builder appends, the end-of-load
-  BVH), which runs at a frame cost even when A is not shown. Options in §8;
-  the recommendation is to keep A pumping in its worker but queue its
-  batches main-side unassembled (they are transferred buffers, so queuing
-  is cheap) and assemble when A is foregrounded or the main thread is idle.
+  BVH), which runs at a frame cost even when A is not shown. Decided (§8
+  item 1): A keeps pumping in its worker, and its batches queue main-side
+  unassembled (they are transferred buffers, so queuing is cheap). They are
+  assembled when A is foregrounded, or in idle slices before then.
 - **Eviction** is `worker.terminate()`. It frees the whole engine — wasm
   heap, parse buffers, resident windows — at once (§3 measures it). The
   session keeps everything main-side: the scene, the instance maps and BVH,
@@ -471,9 +485,12 @@ One `EngineHost` per page owns every session's worker.
   geometry is already in the scene. Cost (§3): ~0.5 s to stand the worker
   up, then the open — ~1 s for SEESTRASSE, 13–17 s for PSB — and the engine
   comes back smaller than it left (PSB 1.6 GB index-only against 2.25 GB
-  after geometry). With a cached index sidecar it becomes `OpenModelFromIndex` and
-  skips the parse; conway has the open but no export from an open model yet
-  (a small Conway ask, §8). A source that is not in OPFS (the no-OPFS
+  after geometry). Decided (§8 item 4): before eviction the worker exports
+  an index sidecar (conway#756) into OPFS beside the staged source, and the
+  respawn opens with `OpenModelFromIndex`, skipping the parse. It falls
+  back to the re-parse when the sidecar is missing, or stale against the
+  source's size and modification time, or when the engine lacks the export
+  (a capability from `init`). A source that is not in OPFS (the no-OPFS
   in-memory upload, #1906) re-opens from the `File` that `inMemoryUploads`
   already holds.
 - **Close** = `abort`, `terminate`, drop the scene and the session's state.
@@ -534,7 +551,9 @@ are not re-minted by an engine respawn because the scene is not rebuilt.
 
 Every PR is behind `?feature=engineWorker` (off), keeps the main-thread
 engine as the default and fallback, and carries desktop + mobile E2E per
-the UI rule.
+the UI rule. The main-thread engine stays permanently (§8 item 6), but as
+the same protocol and session API over an in-process transport, not as a
+second, divergent path.
 
 1. **conway: recognise a worker** (conway#540): `WorkerGlobalScope` in
    `isWebPlatform`, `self.crossOriginIsolated` in `pThreadsAllowed`. Small;
@@ -565,37 +584,63 @@ the UI rule.
    flag.
 7. **Sessions own their worker** (with #2019). The engine moves from the
    viewer to the session; a switch keeps the old worker; the background
-   batch policy (§8, question 1).
+   batch policy (§8 item 1).
 8. **Close and eviction** (#2031, absorbed). `EngineHost`, the budget and
-   LRU, `terminate`, the artifact fallback, lazy index-only rehydrate. E2E:
+   LRU, `terminate`, the artifact fallback, lazy index-only rehydrate
+   through the conway#756 sidecar (re-parse fallback). E2E:
    #2023's memory spec, asserting the evicted worker's memory is gone
    (`measureUserAgentSpecificMemory` breakdown in an isolated test server,
    or the renderer's RSS) and that properties still answer.
-9. **Default on**, after burn-in; then delete the main-thread engine path
-   or keep it as the no-module-worker fallback.
+9. **Default on**, after steps 2–8 have merged. The in-process transport
+   stays as the fallback for browsers without module workers, and
+   `?feature=disableEngineWorker` is the kill switch. Before it: delete the
+   `?view=` rules stack (§8 item 7).
 
 
-## 8. Open questions for the user
+## 8. Decisions (2026-11-03)
 
-1. **Background geometry.** While A is not shown: (a) keep pumping *and*
-   assembling A's scene on the main thread; (b) keep pumping in A's worker
-   but queue the batches main-side and assemble on return or when idle
-   (recommended); (c) stop A's pump at the index until it is foregrounded.
-2. **Caps and budget.** Live engines on desktop and phones, and the total
-   engine budget. §3's per-worker floor and per-model numbers are the input.
-3. **Eviction order.** Is "evict an idle, artifact-backed engine before
-   cancelling a background load" right, given #2031 says eviction cancels?
-4. **Rehydrate.** Re-parse from OPFS (works today), or ask Conway for an
-   index-sidecar export from an open model so a respawn uses
-   `OpenModelFromIndex`?
-5. **Sync access handles.** Adopt them in the worker (step 4)? §3 measured
-   −20 % on PSB; the cost is lock coordination with `OPFS.worker.js` and a
-   fallback where read-only handles are missing.
-6. **Fallback.** Keep the main-thread engine permanently for browsers
-   without module workers, or delete it after burn-in?
-7. **Legacy sync consumers.** Delete `?view=` rules (`IfcViewsManager`) and
-   the bot's `new Function` path, or proxy them?
-8. **Engine and render topology** — with the OffscreenCanvas scope (§9).
+These were the open questions of the scope. The user decided each one.
+
+1. **Background geometry: (b).** A background model keeps pumping in its
+   worker. Its batches queue main-side unassembled, and are assembled when
+   it is foregrounded or the main thread is idle. Rejected: (a) assembling
+   while hidden, which costs foreground frames; (c) stopping at the index,
+   which loses the "come back to a finished load" promise of
+   in-app-model-switch.md §4.0.
+2. **Caps and budget: the recommended defaults** (§5.2), as named
+   constants with their reasoning in a comment: 3 live engines on desktop
+   and 1 on phones; half of `navigator.deviceMemory`, else 4 GiB or 1 GiB.
+3. **Eviction order: as recommended.** An idle, artifact-backed engine goes
+   before a background load is cancelled. §5.2 reconciles this with
+   #2031's "eviction cancels".
+4. **Rehydrate: an index-sidecar export** from the open model (conway#756),
+   consumed by `OpenModelFromIndex`. A re-parse is the fallback when the
+   sidecar is missing or stale. If conway#756 has not landed by step 8,
+   step 8 ships the re-parse and keeps the sidecar consumer behind its
+   capability check.
+5. **Sync access handles: adopt them** (step 4), with lock coordination
+   with `OPFS.worker.js` and the Blob store as the fallback where read-only
+   handles are missing.
+6. **Main-thread fallback: keep it permanently**, for browsers without
+   module workers and as a kill switch. Both paths share the new code: one
+   protocol and session API, with an in-process transport.
+7. **Legacy sync consumers.**
+   - **Delete** the `?view=` rules stack, as viewer-replacement.md §8.1
+     planned: `IfcViewsManager`, ShareViewer's `view=ch.sia380-1.heatmap`
+     branch, `IfcElementsStyleManager`, `ViewRulesCompiler`, `IfcColor` and
+     `ColorHelperFunctions`. First, migrate the WidgetApi
+     `ChangeViewSettingsEventHandler` off `IfcCustomViewSettings`.
+   - **Leave** the legacy `?feature=bot` `new Function` path on the
+     main-thread engine. It is off by default and retires with the
+     `?feature=assist` port (ai-workspace.md §13). Under
+     `?feature=engineWorker` it fails with a clear message, not a crash.
+   - **No synchronous proxy** over the worker: without `SharedArrayBuffer`
+     it cannot be built.
+8. **Topology: separate workers.** One engine worker per model, and later
+   one render worker per canvas. Geometry flows through
+   `open({stream: {sink}})` (§9). The render worker is not part of this
+   chain. It is revisited after the chain lands, and is gated on real-GPU
+   numbers.
 
 
 ## 9. Where this meets OffscreenCanvas rendering
@@ -619,7 +664,7 @@ picking:
   expressID there; properties are then an engine read from the main thread.
 - **Assembly moves with the scene.** The background-assembly cost in §5.3
   disappears from the main thread once the scene builder runs in a render
-  worker, which makes option (a) of §8 question 1 free of main-thread cost.
+  worker, which would make option (a) of §8 item 1 free of main-thread cost.
 - **The load report** aggregates memory from both workers; neither is
   visible to main-thread `performance.memory`.
 
