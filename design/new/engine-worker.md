@@ -441,27 +441,30 @@ Share at the pin):
     reads took 0–1 ms.
   - The Properties panel showed the column's three psets 1.8 s after its
     button was clicked.
-- **Rendering live in SwiftShader:**
-  - The same first read had not finished after 240 s. Each Blob `read`
-    resolved only between frames, ~10 s per read.
-  - This is an artifact of a GPU-less renderer: each frame costs seconds.
-    It is also why the PSB load itself takes ~170 s here.
-  - The lesson still holds: on a main thread that is busy, the index build
-    costs *store round trips*, not bytes.
-  - Follow-up options:
-    - More reads in flight.
-    - Coarser spans when the store is slow.
-    - Building it off the main thread. The engine worker gives that for
-      free, since its reads never queue behind a frame.
-- **`?feature=engineWorker`, rendering paused:**
-  - Reads go through the worker facade: the first `getPropertySets` in
-    0.75 s, later ones in 1–3 ms, and the panel in 2.1 s with the same
-    psets.
-  - That run's OPFS staging failed, because the container's disk was full.
-    So the worker opened PSB buffered (`windowed=no`), and **the windowed
-    worker path is not yet measured**. The reads cross the facade fine; the
-    span-read cost inside a worker is the open question, and it should be
-    the cheap case.
+- **`?feature=engineWorker`, windowed (`windowed=yes`), rendering paused:**
+  - The first `getPropertySets` through the worker facade took **1.59 s**.
+    Later reads took ~1 ms.
+  - The panel showed the same three psets 1.9 s after the click.
+  - A second run, with a buffered open (`windowed=no`) after its OPFS
+    staging failed, took 0.75 s for the first read and 1–3 ms after.
+- **Known measurement artifact: rendering live in SwiftShader,
+  main-thread engine.**
+  - The same first read had not finished after 240 s. In this GPU-less
+    container each frame costs seconds, and each Blob `read` resolved only
+    between frames: ~10 s per read. It is also why the PSB load takes
+    ~170 s here.
+  - It is not a measurement of a real GPU browser. What carries over: on a
+    busy main thread, the index build is bound by *store round trips*, not
+    bytes. It makes ~740–1,080 span reads, four in flight, against the 215
+    window reads of the old per-call sweep.
+  - Follow-up options, if it shows up on real hardware:
+    - more reads in flight;
+    - coarser spans when the store is slow;
+    - building the index in the engine worker, whose reads don't queue
+      behind frames.
+  - Not filed as an issue. It was not reproduced with the worker: the
+    live-render worker run lost its OPFS staging and opened buffered, so
+    it measured nothing windowed.
 
 ## 4. Protocol
 
@@ -869,8 +872,9 @@ costs.
 
 **Measured, §3.1:** property reads on a windowed open before and after
 conway#762, in conway's Node probe (three models) and in Share with the
-main-thread engine. **Not measured, §3.1:** the windowed open inside the
-engine worker.
+main-thread engine and in the engine worker (rendering paused). **Not
+measured, §3.1:** the live-render case on a real GPU, and the live-render
+case in the worker.
 
 **Not measured:** real-GPU frames; Safari and Firefox (module workers and
 `createSyncAccessHandle({mode: 'read-only'})` support differ); two
