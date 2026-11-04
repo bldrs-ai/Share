@@ -37,6 +37,9 @@ export const Op = Object.freeze({
 
 /** Unsolicited engine → main messages. */
 export const Ev = Object.freeze({
+  // Posted once by a worker when its module has evaluated, before any
+  // request, with the version it speaks (EngineSession#init waits for it).
+  HELLO: 'hello',
   PROGRESS: 'progress',
   MODEL_INFO: 'modelInfo',
   INDEXED: 'indexed',

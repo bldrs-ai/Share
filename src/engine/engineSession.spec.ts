@@ -102,8 +102,22 @@ describeMobileAndDesktop('Engine session', () => {
 
   test('a worker engine opens index.ifc at its index and answers the tree and properties', async ({page}) => {
     const workerUrls: string[] = []
-    page.on('worker', (worker) => workerUrls.push(worker.url()))
+    // close() must terminate the worker, which is what frees its engine
+    // (engine-worker.md §3): Playwright sees a terminated worker close.
+    const engineWorkerClosed = new Promise<boolean>((resolve) => {
+      page.on('worker', (worker) => {
+        workerUrls.push(worker.url())
+        if (worker.url().endsWith('/Engine.worker.js')) {
+          worker.on('close', () => resolve(true))
+        }
+      })
+    })
     const result = await probe(page, false)
+    const CLOSE_WAIT_MS = 10_000
+    expect(await Promise.race([
+      engineWorkerClosed,
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), CLOSE_WAIT_MS)),
+    ])).toBe(true)
 
     expect(result.kind).toBe('worker')
     // The engine really is the worker bundle, not the page's own Conway.

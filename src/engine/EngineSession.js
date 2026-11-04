@@ -17,13 +17,20 @@ import {ENGINE_PROTOCOL_VERSION, Ev, Op, ProtocolMismatchError, deserializeError
 export const SESSION_CLOSED = 'engine session closed'
 
 /**
- * How long `init` waits for the engine before giving up. §3 measured
- * 0.4–0.6 s to stand a worker up (module eval plus a cold wasm compile) on
- * a 4-vCPU container; 30 s is ~50× that, for a slow phone on a cold cache,
- * and still short enough that a worker which can never answer (it speaks
- * another protocol version and predates the echoed refusal, or it died
- * before its first message) surfaces as an error instead of a load that
- * never starts.
+ * How long `init` waits for the engine's reply before giving up.
+ *
+ * On a worker the clock starts at the worker's `hello`, which it posts once
+ * its module has evaluated, so what is timed is `Init()`: decoding and
+ * compiling the inline wasm, 94–148 ms per instance in §3. Fetching and
+ * evaluating the multi-MB worker script is not on the clock, so a slow
+ * network cannot kill a healthy worker; a script that fails to load fires
+ * the worker's `error` instead, which rejects at once. In process the clock
+ * starts at the request.
+ *
+ * 30 s is ~200× the measured Init, for a slow phone. Its job is narrow:
+ * an engine that started but never answers. Every v1+ engine echoes a
+ * version refusal (and announces its version in `hello`), so a mismatch is
+ * refused at once rather than waiting this out.
  */
 export const ENGINE_INIT_TIMEOUT_MS = 30_000
 
@@ -61,6 +68,17 @@ export class EngineSession {
     this.indexed.catch(() => null)
     this.resolveIndexed = resolveIndexed
     this.rejectIndexed = rejectIndexed
+    // A worker posts `hello {v}` once its module has evaluated
+    // (Engine.worker.js). `init` waits for it before starting its timeout,
+    // so the clock covers the engine's start-up and not the fetch of a
+    // multi-MB worker script on a slow network. In process there is nothing
+    // to load, so no hello is expected.
+    this.expectsHello = transport.kind === 'worker'
+    this.hello = new Promise((resolve, reject) => {
+      this.resolveHello = resolve
+      this.rejectHello = reject
+    })
+    this.hello.catch(() => null)
     transport.onMessage((msg) => this.receive(msg))
     transport.onCrash((error) => this.fail(error, 'crash'))
     this.propertiesApi = makePropertiesApi(this)
@@ -82,7 +100,14 @@ export class EngineSession {
     const id = this.nextId++
     return new Promise((resolve, reject) => {
       this.pending.set(id, {resolve, reject})
-      this.transport.post({v: ENGINE_PROTOCOL_VERSION, epoch: this.epoch, id, op, args}, transfer)
+      try {
+        this.transport.post({v: ENGINE_PROTOCOL_VERSION, epoch: this.epoch, id, op, args}, transfer)
+      } catch (e) {
+        // e.g. a DataCloneError on args that cannot cross: no reply will
+        // ever come for this id, so it must not wait in `pending`.
+        this.pending.delete(id)
+        reject(e)
+      }
     })
   }
 
@@ -106,6 +131,16 @@ export class EngineSession {
 
   /** @param {object} msg a reply or an event from the engine */
   receive(msg) {
+    if (this.closed) {
+      // A message the engine queued before terminate() can still be
+      // dispatched in some browsers; a closed session acts on nothing.
+      return
+    }
+    if (msg?.ev === Ev.HELLO) {
+      // Before the version filter: a hello from another version is exactly
+      // what `init` needs to see, to refuse at once.
+      this.resolveHello(msg.v)
+    }
     if (msg && msg.v !== ENGINE_PROTOCOL_VERSION && typeof msg.v === 'number') {
       // Remembered for `init`'s timeout: an engine that only ever speaks
       // another version is a mismatch, not a slow start.
@@ -115,8 +150,11 @@ export class EngineSession {
       // A late message from an engine this session replaced (§4).
       return
     }
-    if (typeof msg.wasmBytes === 'number') {
-      this.lastWasmBytes = msg.wasmBytes
+    // Live wasm bytes (§5.2): top-level on events, inside `result` on the
+    // init and stats replies.
+    const wasmBytes = typeof msg.wasmBytes === 'number' ? msg.wasmBytes : msg.result?.wasmBytes
+    if (typeof wasmBytes === 'number') {
+      this.lastWasmBytes = wasmBytes
     }
     if (typeof msg.re === 'number') {
       const slot = this.pending.get(msg.re)
@@ -158,6 +196,13 @@ export class EngineSession {
    * @return {Promise<object>} `{conwayVersion, capabilities, wasmBytes, initMs}`
    */
   async init({verbose = false, flags = {}, timeoutMs = ENGINE_INIT_TIMEOUT_MS} = {}) {
+    if (this.expectsHello) {
+      const helloVersion = await this.hello
+      if (helloVersion !== ENGINE_PROTOCOL_VERSION) {
+        this.close()
+        throw new ProtocolMismatchError(ENGINE_PROTOCOL_VERSION, helloVersion)
+      }
+    }
     let timer
     const timeout = new Promise((resolve, reject) => {
       timer = setTimeout(() => reject(this.foreignVersion === undefined ?
@@ -185,9 +230,9 @@ export class EngineSession {
    * @return {Promise<object>} `{modelID, windowed, openMs, wasmBytes}`
    */
   async open(source) {
-    const transfer = source?.bytes instanceof ArrayBuffer ? [source.bytes] : []
+    const {source: sent, transfer} = transferableSource(source)
     try {
-      const result = await this.request(Op.OPEN, {source}, transfer)
+      const result = await this.request(Op.OPEN, {source: sent}, transfer)
       if (result.failure) {
         // The engine's classification, for unsupportedSchema.js#openModelFailure
         // to turn into the user-facing error, as the main-thread path does.
@@ -298,6 +343,7 @@ export class EngineSession {
       slot.reject(error)
     }
     this.rejectIndexed(error)
+    this.rejectHello(error)
     // One teardown for every way a session ends. A worker that died with
     // `error` / `messageerror` is not necessarily gone (a `messageerror`
     // leaves it running), and until it is terminated it pins its whole heap
@@ -308,6 +354,9 @@ export class EngineSession {
         cb({ev: Ev.FAILED, kind: 'crash', message: error.message})
       }
     }
+    // Nothing is delivered after this, so nothing should stay reachable
+    // from a closed session (the dev hook keeps closed sessions around).
+    this.listeners.clear()
   }
 
 
@@ -321,6 +370,30 @@ export class EngineSession {
   close() {
     this.fail(new Error(SESSION_CLOSED), 'closed')
   }
+}
+
+
+/**
+ * A source ready to post: bytes are TRANSFERRED, never cloned, so a large
+ * buffered open does not hold the file twice across the boundary. A
+ * Uint8Array covering its whole buffer gives up that buffer; a view into a
+ * larger one is copied out first, since transferring would detach the rest
+ * of it for the caller.
+ *
+ * @param {object} source `{file}` or `{bytes}`
+ * @return {{source: object, transfer: Array}}
+ */
+function transferableSource(source) {
+  const bytes = source?.bytes
+  if (bytes === undefined || bytes === null) {
+    return {source, transfer: []}
+  }
+  if (ArrayBuffer.isView(bytes)) {
+    const whole = bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
+    const owned = whole ? bytes : bytes.slice()
+    return {source: {...source, bytes: owned}, transfer: [owned.buffer]}
+  }
+  return {source, transfer: [bytes]}
 }
 
 

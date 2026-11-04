@@ -11,6 +11,7 @@
 import './engineThreading'
 import './workerPlatform'
 import {createEngineHandler} from './engineHandler'
+import {ENGINE_PROTOCOL_VERSION, Ev} from './protocol'
 
 
 const handler = createEngineHandler({
@@ -23,3 +24,8 @@ const handler = createEngineHandler({
 self.addEventListener('message', (event) => {
   handler.handle(event.data)
 })
+
+// Announce the engine, and the protocol version it speaks, now that the
+// module (and its copy of Conway) has evaluated. EngineSession#init starts
+// its timeout from this, not from spawn (see ENGINE_INIT_TIMEOUT_MS).
+self.postMessage({v: ENGINE_PROTOCOL_VERSION, epoch: 0, ev: Ev.HELLO, seq: 0})

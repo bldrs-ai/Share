@@ -5,9 +5,15 @@
 // own engine and sends the verdict to the page (engine-worker.md §2.4 G3),
 // which builds the user-facing error with `openModelFailure` as before.
 //
-// In a worker, the "two loads in separate IfcAPIs share id 0 in conway's
+// In a WORKER, the "two loads in separate IfcAPIs share id 0 in conway's
 // module-level statistics map" caveat below does not arise: each worker has
-// its own conway module instance and so its own map.
+// its own conway module instance and so its own map. IN PROCESS (the
+// engine's main-thread fallback, engine/transports.js) it still does: a
+// session's IfcAPI shares the page's conway module, and so that map, with
+// the page's own engine and with any other in-process session. Share runs
+// one load at a time today, so this is noted; per-model sessions loading
+// in the background on the fallback (engine-worker.md §7 step 7) must guard
+// it.
 
 
 /**

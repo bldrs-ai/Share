@@ -502,3 +502,152 @@ describe('engine open: a schema refusal is final (review on #2057)', () => {
     expect(api.calls.map(([name]) => name)).toContain('OpenModelStreamed')
   })
 })
+
+
+describe('engine round-3 review fixes (#2057)', () => {
+  it('two concurrent opens: one wins, the other is refused, and the engine holds one model', async () => {
+    const api = makeStubApi()
+    let opens = 0
+    api.OpenModelStream = async () => {
+      opens++
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      return 0
+    }
+    const {session} = inProcessSession(api)
+    await session.init()
+    const results = await Promise.allSettled([
+      session.open({file: new Blob(['a'])}),
+      session.open({file: new Blob(['b'])}),
+    ])
+    expect(results.map((r) => r.status).sort()).toEqual(['fulfilled', 'rejected'])
+    expect(results.find((r) => r.status === 'rejected').reason.message).toMatch(/already open/)
+    expect(opens).toBe(1)
+  })
+
+  it('a second init is refused instead of replacing the engine', async () => {
+    const {session} = inProcessSession()
+    await session.init()
+    await expect(session.request(Op.INIT, {epoch: 7})).rejects.toThrow('init has already run')
+  })
+
+  it('in process, close during init leaves no engine: Init never runs after close', async () => {
+    const api = makeStubApi()
+    let releaseLoad
+    const posted = []
+    const transport = makeInProcessTransport((post) => createEngineHandler({
+      loadIfcAPI: () => new Promise((resolve) => {
+        releaseLoad = () => resolve(function IfcAPI() {
+          return api
+        })
+      }),
+      post: (m, t) => {
+        posted.push(m)
+        post(m, t)
+      },
+    }))
+    const session = new EngineSession(transport, {epoch: 7})
+    const init = session.init()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    session.close()
+    releaseLoad()
+    await expect(init).rejects.toThrow()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(api.calls.map(([name]) => name)).not.toContain('Init')
+  })
+
+  it('in process, close during open closes the model the open goes on to make', async () => {
+    const api = makeStubApi()
+    let releaseOpen
+    api.OpenModelStream = () => new Promise((resolve) => {
+      releaseOpen = () => resolve(0)
+    })
+    const {session} = inProcessSession(api)
+    await session.init()
+    const opened = session.open({file: new Blob(['x'])})
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    session.close()
+    releaseOpen()
+    await expect(opened).rejects.toThrow()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(api.calls).toContainEqual(['CloseModel', 0])
+  })
+
+  it('an Init() that leaves no wasm module fails init instead of reporting success', async () => {
+    const api = makeStubApi({async Init() {
+      this.calls.push(['Init'])
+    }})
+    const {session} = inProcessSession(api)
+    await expect(session.init()).rejects.toThrow('left no wasm module')
+  })
+
+  it('a post that throws clears its pending slot', async () => {
+    const transport = {
+      kind: 'test', onMessage: () => null, onCrash: () => null, terminate: jest.fn(),
+      post: () => {
+        throw new Error('DataCloneError')
+      },
+    }
+    const session = new EngineSession(transport, {epoch: 1})
+    await expect(session.stats()).rejects.toThrow('DataCloneError')
+    expect(session.pending.size).toBe(0)
+  })
+
+  it('a whole-buffer Uint8Array source is transferred, not cloned, and reaches the engine as-is', async () => {
+    const api = makeStubApi()
+    let received
+    api.OpenModelStreamed = async (bytes) => {
+      received = bytes
+      return 0
+    }
+    const {session} = inProcessSession(api)
+    await session.init()
+    const view = new Uint8Array(32)
+    await session.open({bytes: view})
+    expect(view.byteLength).toBe(0)
+    expect(received.byteLength).toBe(32)
+  })
+
+  it('a sub-view source is copied out before transfer, leaving the caller\'s buffer intact', async () => {
+    const {session} = inProcessSession()
+    await session.init()
+    const whole = new Uint8Array(64)
+    await session.open({bytes: whole.subarray(8, 40)})
+    expect(whole.byteLength).toBe(64)
+  })
+
+  it('lastWasmBytes is live from the init reply, before any event', async () => {
+    const {session} = inProcessSession()
+    await session.init()
+    expect(session.lastWasmBytes).toBe(16 * 1024 * 1024)
+  })
+
+  it('a closed session ignores late messages and drops its listeners', async () => {
+    const listeners = []
+    const transport = {kind: 'test', post: () => null, onMessage: (cb) => listeners.push(cb), onCrash: () => null, terminate: () => null}
+    const session = new EngineSession(transport, {epoch: 1})
+    const progress = jest.fn()
+    session.on('progress', progress)
+    session.close()
+    listeners[0]({v: ENGINE_PROTOCOL_VERSION, epoch: 1, ev: 'indexed', modelID: 3})
+    listeners[0]({v: ENGINE_PROTOCOL_VERSION, epoch: 1, ev: 'progress', seq: 1})
+    expect(progress).not.toHaveBeenCalled()
+    expect(session.modelID).toBe(-1)
+    expect(session.listeners.size).toBe(0)
+  })
+
+  it('a worker\'s init waits for its hello, and a hello of another version refuses at once', async () => {
+    const worker = new EventTarget()
+    worker.posted = []
+    worker.postMessage = (msg) => worker.posted.push(msg)
+    worker.terminate = jest.fn()
+    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 2})
+    const init = session.init({timeoutMs: 10})
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    // No hello yet: the init request has not even been sent, and the 10 ms
+    // clock has not started, so nothing has failed.
+    expect(worker.posted).toHaveLength(0)
+    worker.dispatchEvent(new MessageEvent('message', {data: {v: ENGINE_PROTOCOL_VERSION + 1, epoch: 0, ev: 'hello'}}))
+    await expect(init).rejects.toMatchObject({name: 'ProtocolMismatchError', engineVersion: ENGINE_PROTOCOL_VERSION + 1})
+    expect(worker.terminate).toHaveBeenCalled()
+  })
+})

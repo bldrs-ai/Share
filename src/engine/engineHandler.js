@@ -88,6 +88,18 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
   let api = null
   let modelID = -1
   let flags = {}
+  // Claimed synchronously on entry to INIT / OPEN, before their first
+  // await, because `handle()` does not serialise requests: two concurrent
+  // opens would otherwise both pass a `modelID >= 0` check made before
+  // either had assigned it, and one engine would hold two models (§6:
+  // terminating an engine must free exactly one model).
+  let initing = false
+  let opening = false
+  // Set by dispose(). In a worker, terminate() follows and stops everything;
+  // in process (the permanent fallback, §8 item 6) an INIT or OPEN still
+  // awaiting would otherwise carry on after close, rebuilding or keeping an
+  // engine nobody holds. Each checks it after every await.
+  let disposed = false
 
   const send = (msg, transfer) => post({v: ENGINE_PROTOCOL_VERSION, epoch, ...msg}, transfer)
   const emit = (ev, payload = {}) => send({ev, seq: ++seq, wasmBytes: wasmBytesOf(api), ...payload})
@@ -103,15 +115,35 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
 
   const ops = {
     async [Op.INIT](args = {}) {
+      if (api !== null || initing) {
+        // A second init would replace `api` and leak the first IfcAPI.
+        throw new Error('engine: init has already run')
+      }
+      initing = true
       if (typeof args.epoch === 'number') {
         epoch = args.epoch
       }
       flags = args.flags ?? {}
       const t0 = now()
-      const IfcAPI = await loadIfcAPI()
-      api = new IfcAPI()
-      // eslint-disable-next-line new-cap
-      await api.Init()
+      let created
+      try {
+        const IfcAPI = await loadIfcAPI()
+        throwIfDisposed()
+        created = new IfcAPI()
+        // eslint-disable-next-line new-cap
+        await created.Init()
+        throwIfDisposed()
+      } finally {
+        initing = false
+      }
+      if (created.wasmModule === undefined || created.wasmModule === null) {
+        // conway's Init() logs "Could not initialize Conway Wasm" and RETURNS
+        // when the wasm will not instantiate. Reporting success then would
+        // only move the failure to the first open, as an unrelated TypeError;
+        // failing here lets the caller fall back.
+        throw new Error('engine: Init() left no wasm module (the engine wasm did not instantiate)')
+      }
+      api = created
       if (typeof api.SetLogLevel === 'function') {
         // eslint-disable-next-line new-cap
         api.SetLogLevel(args.verbose ? ENGINE_LOG_LEVEL_DEBUG : ENGINE_LOG_LEVEL_WARN)
@@ -132,57 +164,24 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
       if (api === null) {
         throw new Error('engine: init has not run')
       }
-      if (modelID >= 0) {
+      if (modelID >= 0 || opening) {
         // One model per engine, by design (§6): eviction is terminating the
         // engine, which only frees one model if it holds only one.
         throw new Error('engine: a model is already open in this engine')
       }
-      const settings = {
-        ...BASE_OPEN_SETTINGS,
-        ON_PROGRESS: (event) => emit(Ev.PROGRESS, {event: plainProgress(event)}),
-        ON_MODEL_INFO: (info) => emit(Ev.MODEL_INFO, {info: plainProgress(info)}),
+      opening = true
+      try {
+        return await openModel(source)
+      } finally {
+        opening = false
       }
-      const t0 = now()
-      const blob = source?.file
-      const windowable = Boolean(blob && typeof blob.slice === 'function') &&
-        !flags.disableStreamOpen && typeof api.OpenModelStream === 'function'
-      // The same sequence the main-thread path runs (loader/conwayOpen.js):
-      // windowed from the Blob/File when it can be (a File structured-clones
-      // by reference, so nothing was copied to get it here, §2.2); else, or
-      // when that open fails other than by a schema refusal, buffered.
-      const {modelID: id, windowed, attempt} = await openDeferred(api, {
-        store: windowable ? makeBlobStore(blob) : null,
-        loadBytes: async () => {
-          const bytes = source?.bytes ?? (blob ? await blob.arrayBuffer() : null)
-          if (!bytes) {
-            throw new Error('engine: open needs source.file or source.bytes')
-          }
-          return new Uint8Array(bytes)
-        },
-        settings,
-      })
-      if (typeof id !== 'number' || id < 0) {
-        // Classified here, where conway's statistics are (§2.4 G3); the page
-        // builds the user-facing error from it with
-        // unsupportedSchema.js#openModelFailure, as the main-thread path does.
-        const failure = classifyOpenFailure(api, attempt, id)
-        emit(Ev.FAILED, {
-          kind: failure.refusedSchema ? 'refusedSchema' : 'openFailure',
-          message: `engine: open failed (${id})`,
-          ...failure,
-        })
-        return {modelID: -1, windowed: false, failure}
-      }
-      modelID = id
-      const result = {modelID, windowed, openMs: now() - t0, wasmBytes: wasmBytesOf(api)}
-      emit(Ev.INDEXED, {modelID, windowed})
-      return result
     },
 
     async [Op.TREE]({mode = 'names', includeSolids = false} = {}) {
       requireModel()
       return await api.properties.getSpatialStructure(modelID, mode, {includeSolids})
     },
+
 
     async [Op.PROPS]({ids, recursive = false} = {}) {
       requireModel()
@@ -228,6 +227,80 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
     },
   }
 
+
+  /**
+   * OPEN's body, once the one-model slot is claimed (see `opening`).
+   *
+   * @param {object} source `{file}` or `{bytes}`
+   * @return {Promise<object>}
+   */
+  async function openModel(source) {
+    const settings = {
+      ...BASE_OPEN_SETTINGS,
+      ON_PROGRESS: (event) => emit(Ev.PROGRESS, {event: plainProgress(event)}),
+      ON_MODEL_INFO: (info) => emit(Ev.MODEL_INFO, {info: plainProgress(info)}),
+    }
+    const t0 = now()
+    const blob = source?.file
+    const windowable = Boolean(blob && typeof blob.slice === 'function') &&
+      !flags.disableStreamOpen && typeof api.OpenModelStream === 'function'
+    // The same sequence the main-thread path runs (loader/conwayOpen.js):
+    // windowed from the Blob/File when it can be (a File structured-clones
+    // by reference, so nothing was copied to get it here, §2.2); else, or
+    // when that open fails other than by a schema refusal, buffered.
+    // Held locally: dispose() nulls `api`, and an open that finishes after
+    // close must still be able to CloseModel what it opened.
+    const engine = api
+    const {modelID: id, windowed, attempt} = await openDeferred(engine, {
+      store: windowable ? makeBlobStore(blob) : null,
+      loadBytes: async () => {
+        const bytes = source?.bytes ?? (blob ? await blob.arrayBuffer() : null)
+        if (!bytes) {
+          throw new Error('engine: open needs source.file or source.bytes')
+        }
+        // A transferred Uint8Array is used as it is: another copy here would
+        // briefly hold the file three times over on a buffered open.
+        return ArrayBuffer.isView(bytes) ? bytes : new Uint8Array(bytes)
+      },
+      settings,
+    })
+    if (disposed) {
+      // Closed while the open ran: release what it made, and stop.
+      if (typeof id === 'number' && id >= 0) {
+        try {
+          // eslint-disable-next-line new-cap
+          engine.CloseModel(id)
+        } catch {
+          // Best-effort; the reference drop in dispose() is what frees.
+        }
+      }
+      throw new Error('engine: closed during open')
+    }
+    if (typeof id !== 'number' || id < 0) {
+      // Classified here, where conway's statistics are (§2.4 G3); the page
+      // builds the user-facing error from it with
+      // unsupportedSchema.js#openModelFailure, as the main-thread path does.
+      const failure = classifyOpenFailure(engine, attempt, id)
+      emit(Ev.FAILED, {
+        kind: failure.refusedSchema ? 'refusedSchema' : 'openFailure',
+        message: `engine: open failed (${id})`,
+        ...failure,
+      })
+      return {modelID: -1, windowed: false, failure}
+    }
+    modelID = id
+    const result = {modelID, windowed, openMs: now() - t0, wasmBytes: wasmBytesOf(api)}
+    emit(Ev.INDEXED, {modelID, windowed})
+    return result
+  }
+
+  /** Abort INIT / OPEN after an await if dispose() ran meanwhile. */
+  function throwIfDisposed() {
+    if (disposed) {
+      throw new Error('engine: closed during init')
+    }
+  }
+
   /**
    * Close the model and drop the engine. In a worker this is a courtesy:
    * `terminate()` follows and frees everything regardless. In process it is
@@ -235,6 +308,7 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
    * nothing references the `IfcAPI` (in-app-model-switch.md §4.5).
    */
   function dispose() {
+    disposed = true
     if (api !== null && modelID >= 0) {
       try {
         // eslint-disable-next-line new-cap
