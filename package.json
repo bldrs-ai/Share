@@ -62,7 +62,7 @@
     "@babel/plugin-syntax-import-assertions": "7.18.6",
     "@babel/preset-env": "7.18.10",
     "@babel/preset-react": "7.18.6",
-    "@bldrs-ai/conway": "1.1633.540-gf0a5e606",
+    "@bldrs-ai/conway": "1.1635.762-gf6c6e8f7",
     "@bldrs-ai/ifclib": "6.0.0",
     "@emotion/react": "11.10.0",
     "@emotion/styled": "11.10.0",
