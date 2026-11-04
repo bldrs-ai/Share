@@ -135,7 +135,8 @@ describeMobileAndDesktop('STEP hide / isolate / pick, engine worker', () => {
     await setIsReturningUser(page.context())
   })
 
-  test('a leaf occurrence\'s eye hides just that occurrence, and Isolate shows just one', async ({page}) => {
+  test('a leaf occurrence\'s eye hides just that occurrence; Isolate shows just one, and its link reopens it', async ({page}) => {
+    test.setTimeout(TWO_LOADS_TIMEOUT_MS)
     const engine = watchEngineWorker(page)
     const {leaves} = await loadStepTree(page, WORKER_STEP_PATH)
     await engine.expectWorkerEngine()
@@ -151,6 +152,15 @@ describeMobileAndDesktop('STEP hide / isolate / pick, engine worker', () => {
     await page.getByTestId('Isolate').click()
     await expect.poll(() => visibleInstances(page)).toBe(1)
     await expect.poll(() => displayToken(page)).toMatch(/^iso=o[\d.]+$/)
+
+    // The `iso=o…` link names an occurrence path; reopened, from a fresh
+    // worker, it resolves to that one occurrence again.
+    expect(page.url()).toContain('feature=engineWorker')
+    const reopened = watchEngineWorker(page)
+    await page.reload()
+    await waitForModelReady(page)
+    await reopened.expectWorkerEngine()
+    await expect.poll(() => visibleInstances(page)).toBe(1)
   })
 
   test('a double-click in the scene selects one occurrence', async ({page}) => {

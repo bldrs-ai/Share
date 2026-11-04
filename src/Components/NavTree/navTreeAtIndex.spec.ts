@@ -60,6 +60,24 @@ async function releaseGeometry(page: Page) {
 
 
 /**
+ * @param page
+ * @return how many batched instances carry the selection's paint (the same
+ *   reading as stepVisibility.spec.ts#paintedInstances)
+ */
+function paintedInstances(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    let painted = 0
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    ;(window as any).useStore.getState().viewer.isolator.ifcModel.traverse((obj: any) => {
+      painted += obj.userData?.batchedHighlight?.selSet?.size ?? 0
+    })
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    return painted
+  })
+}
+
+
+/**
  * Expand the mounted tree, one toggle per settle. In-page clicks: the rows sit
  * over a live canvas that keeps Playwright's actionability wait busy.
  *
@@ -162,6 +180,13 @@ describeMobileAndDesktop('Open 205: NavTree usable before geometry finishes', ()
       await expect(rows.nth(targetIndex)).toHaveAttribute('data-is-selected', 'true')
       // ...and only it: a reused STEP part's other occurrences stay unselected.
       expect(await navTreePanel.locator('[data-is-selected="true"]').count()).toBe(1)
+      if (row === null) {
+        // In the scene too: the selection paints exactly one batched instance,
+        // the occurrence's, not every block sharing its part shape. On a
+        // worker load that holds only if each placement's occurrence path
+        // crossed the worker boundary.
+        await expect.poll(() => paintedInstances(page)).toBe(1)
+      }
       if (path.includes('engineWorker')) {
         // The worker leg really ran in the worker.
         await engine.expectWorkerEngine()

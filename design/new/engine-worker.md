@@ -636,19 +636,36 @@ second, divergent path.
    `engine/engineIfcLoad.js` became `engine/engineModelLoad.js`
    (`createEngineModelLoad({format})`), and `ShareIfcLoader#isEngineWorkerLoad`
    takes every loader type `engineFormatOf` maps (`ifc`, `ifczip`, `step`,
-   `stp`). Nothing else needed a STEP branch: step 3 had already put the
-   occurrence-path column in the batch encoding and forwarded
-   `includeSolids` through `EngineSession#propertiesApi`, and conway's
-   compat `IfcAPI` routes AP214 behind the same calls. `format` crosses as a
-   label only (the `open` request, the `done` packet, the
-   `engine worker pump: format=…` line). It decides nothing, because a suffix
-   is not evidence of the schema: the Loader's header sniff
-   (`Loader.js#canOpenFromStore`) already picks the source kind, a File for
-   a real IFC, bytes for a STEP, and the worker opens whichever it is handed.
+   `stp`). That list is now the ONE part-21 list
+   (`loader/part21Formats.js`), which `Loader.js`, `modelArchive.js` and
+   `ShareModel.js` also read instead of three copies of their own. No STEP
+   branch was needed: step 3 had already put the occurrence-path column in
+   the batch encoding and forwarded `includeSolids` through
+   `EngineSession#propertiesApi`, and conway's compat `IfcAPI` routes AP214
+   behind the same calls. Two fixes to shared code came out of it, both
+   about STEP's data:
+   - **An empty occurrence path survives the boundary.** A root-level
+     instance's path is `[]`, which the root-pick and root-row logic tell
+     from "no path" (#1901, #1909). The encoder sent a zero-length run, and
+     no columns at all when every path was empty, so the page saw "no path".
+     A per-placement `pathPresent` column now keeps the two apart
+     (step-occurrence-selection.md has the details).
+   - **Bytes are transferred, not copied first.** A STEP is always buffered,
+     so the copy held the whole file twice on the page for the length of the
+     open. Only a failed open's message reads the source again, and it needs
+     only the header and size (`openFailureSource`).
+   `format` crosses as a label only: the `open` request, the `done` packet,
+   and the `engine worker pump: format=… (by suffix)` line. It decides
+   nothing, because a suffix is no evidence of the schema. The Loader's
+   header sniff (`Loader.js#canOpenFromStore`) already picks the source
+   kind: a File for a real IFC, bytes for a STEP. The worker opens whichever
+   it is handed.
    E2E: `engineModelLoad.spec.ts` (STEP load, per-occurrence tree and scene
    selection, properties), worker legs in `navTreeAtIndex.spec.ts`,
    `indexStepLogo.spec.ts` (colour, world space) and
-   `stepVisibility.spec.ts` (eye, Isolate, scene pick), desktop and mobile.
+   `stepVisibility.spec.ts` (eye, Isolate and its reopened link, scene
+   pick) and `assistTools.spec.ts` (isolate in a root-only file, which needs
+   the empty path), desktop and mobile.
    Left for later, for both formats: the GLB cache write (step 5; a STEP
    worker load writes none either), and for STEP only a windowed open
    (conway's store-backed open is IFC-only) and an index sidecar

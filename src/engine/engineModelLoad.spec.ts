@@ -156,14 +156,33 @@ describeMobileAndDesktop('Engine worker: model load', () => {
     for (const name of ['Bldrs', 'Build', 'Every', 'Thing']) {
       await node(name).getByTestId('NavTreeNodeToggle').click()
     }
+    const selectedId = () => page.evaluate(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).store.getState().selectedElement?.expressID ?? null)
     await node(STEP_LEAF).first().getByTestId('NavTreeNodeLabel').click()
+    await expect.poll(selectedId).not.toBeNull()
+    const first = await selectedId()
 
     await page.getByTestId('control-button-properties').click()
     const propertiesPanel = page.getByTestId('PropertiesPanel')
     await expect(propertiesPanel).toBeVisible()
-    // The record is the worker's answer for the occurrence: its name, and
-    // an express id row.
+    // The record is the worker's answer for THIS occurrence: every block is
+    // named Together, so the name alone cannot tell them apart; the express
+    // id row must be the selected occurrence's own.
     await expect(propertiesPanel).toContainText(STEP_LEAF)
-    await expect(propertiesPanel.locator('tr').filter({hasText: 'Express Id'})).toHaveCount(1)
+    const expressIdValue = propertiesPanel.locator('tr').filter({hasText: 'Express Id'}).locator('td').last()
+    await expect(expressIdValue).toHaveText(`${first}`)
+
+    // Another block: another occurrence, another record.
+    if (!(await page.getByTestId('NavTreePanel').isVisible())) {
+      await page.getByRole('tab', {name: 'Nav'}).click()
+    }
+    await node(STEP_LEAF).last().getByTestId('NavTreeNodeLabel').click()
+    await expect.poll(selectedId).not.toBe(first)
+    const last = await selectedId()
+    if (!(await propertiesPanel.isVisible())) {
+      await page.getByRole('tab', {name: 'Props'}).click()
+    }
+    await expect(expressIdValue).toHaveText(`${last}`)
   })
 })

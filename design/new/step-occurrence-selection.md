@@ -201,13 +201,20 @@ rebuilt map — safe because the synthetic instance ids line up 1:1 (same emissi
 order; BVH permutes only the index buffer, not the numbering).
 
 **Under `?feature=engineWorker`** (engine-worker.md §7 step 6) the engine,
-and so every `PlacedGeometry`, lives in a worker. The paths cross as one
-column per pump batch (`engine/engineStream.js#makeBatchEncoder`: offsets
-plus a flat id list, a zero-length run for a placement without one), and
+and so every `PlacedGeometry`, lives in a worker. The paths cross as
+columns per pump batch (`engine/engineStream.js#makeBatchEncoder`: offsets
+into a flat id list, plus a per-placement `pathPresent` flag), and
 `engine/engineModelLoad.js#decodePlacements` puts each back on its placement
-as a plain array before the same `IncrementalBatchedBuilder` reads it. So
-the occurrence tables, and everything above that joins on them, are the
-main-thread ones. The tree's `includeSolids` travels on the `tree` request.
+as a plain array before the same `IncrementalBatchedBuilder` reads it.
+**"Present and empty" must survive that trip as `[]`, not as "no path"**:
+geometry placed on the root product itself, under no NAUO, has the empty
+path, and `getRootLevelInstances` (#1901) and the root-pick resolution
+(#1909) read `[]` as root-level and a missing path as "no occurrence data".
+A zero-length run alone cannot say which, which is what the flag is for;
+the columns are sent whenever any placement has a path, even if every path
+is empty (a root-only file). With that, the occurrence tables, and everything
+above that joins on them, are the main-thread ones. The tree's
+`includeSolids` travels on the `tree` request.
 
 ### Done (landed — PRs #1573 + #1575)
 

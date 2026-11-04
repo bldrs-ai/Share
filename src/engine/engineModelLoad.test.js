@@ -298,11 +298,39 @@ describe('engine/engineModelLoad streamed IFC load', () => {
     await expect(recapture()).resolves.toEqual([])
   })
 
-  it('a bytes source is copied for the engine, leaving the caller\'s buffer intact', async () => {
-    const load = createEngineModelLoad({spawn: spawnOver(makeStreamingApi())})
+  it('a bytes source is transferred to the engine, not copied first', async () => {
+    // A copy would hold a buffered source (every STEP) twice on the page for
+    // the length of the open; nothing reads the caller's buffer afterwards.
+    const api = makeStreamingApi()
+    let opened = null
+    api.OpenModelStreamed = async (bytes) => {
+      opened = bytes
+      return 0
+    }
+    const load = createEngineModelLoad({spawn: spawnOver(api)})
     const bytes = new Uint8Array([1, 2, 3, 4]).buffer
     await load.parse(bytes, {onMeshBatch: () => null})
-    expect(bytes.byteLength).toBe(4)
+    expect(bytes.byteLength).toBe(0)
+    expect(Array.from(opened)).toEqual([1, 2, 3, 4])
+  })
+
+  it('a refusal of a transferred bytes source still names the schema and the size', async () => {
+    const statistics = new Map()
+    const api = makeStreamingApi({
+      getStatistics: (id) => statistics.get(id),
+      async OpenModelStreamed() {
+        statistics.set(this.globalModelIDCounter, {getLoadStatus: () => 'UNSUPPORTED_SCHEMA'})
+        return -1
+      },
+    })
+    const text = 'ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'IFC4X3_RC2\'));\nENDSEC;\nDATA;\n'
+    const bytes = new TextEncoder().encode(text.padEnd(200_000, ' ')).buffer
+    const load = createEngineModelLoad({spawn: spawnOver(api)})
+    const error = await load.parse(bytes, {onMeshBatch: () => null}).catch((e) => e)
+    expect(bytes.byteLength).toBe(0)
+    expect(error).toBeInstanceOf(UnsupportedSchemaError)
+    expect(error.schema).toBe('IFC4X3_RC2')
+    expect(error.sizeBytes).toBe(200_000)
   })
 })
 
@@ -355,7 +383,27 @@ describe('engine/engineStream helpers', () => {
     expect(decoded[0].geometries[0].occurrencePath).toEqual([7, 8])
     expect(decoded[0].geometries[1].occurrencePath).toBeUndefined()
     // Every column and geometry buffer is in the transfer list.
-    expect(step.transfer).toHaveLength(6 + 2)
+    expect(step.transfer).toHaveLength(7 + 2)
+  })
+
+  it('keeps a present but EMPTY occurrence path apart from no path at all', () => {
+    // A STEP root-level instance (geometry on the root product, under no
+    // NAUO) has the path `[]`, which batchedInstanceTables.js
+    // #getRootLevelInstances needs to tell from "no occurrence data" (#1901,
+    // #1909). A batch of only empty paths must still send the columns.
+    const encoder = makeBatchEncoder(makeStreamingApi(), 0)
+    const onlyRoot = encoder.encode([flatMesh(8, [
+      {geometryExpressID: 100, flatTransformation: IDENTITY, color: {x: 1, y: 0, z: 0, w: 1}, occurrencePath: []},
+      {geometryExpressID: 101, flatTransformation: IDENTITY, color: {x: 1, y: 0, z: 0, w: 1}, occurrencePath: []},
+    ])])
+    expect(decodePlacements(onlyRoot.placements)[0].geometries.map((g) => g.occurrencePath)).toEqual([[], []])
+    const mixed = encoder.encode([flatMesh(9, [
+      {geometryExpressID: 100, flatTransformation: IDENTITY, color: {x: 1, y: 0, z: 0, w: 1}, occurrencePath: []},
+      {geometryExpressID: 100, flatTransformation: IDENTITY, color: {x: 1, y: 0, z: 0, w: 1}, occurrencePath: [5]},
+      {geometryExpressID: 100, flatTransformation: IDENTITY, color: {x: 1, y: 0, z: 0, w: 1}},
+    ])])
+    expect(decodePlacements(mixed.placements)[0].geometries.map((g) => g.occurrencePath))
+      .toEqual([[], [5], undefined])
   })
 
   it('previewMessage transfers a view that owns its buffer and copies one that does not', () => {
@@ -605,6 +653,12 @@ function makeStepApi() {
       {geometryExpressID: 200, flatTransformation: IDENTITY.map((v, i) => (i === 13 ? 30 : v)),
         color: {x: 0, y: 1, z: 0, w: 1}, occurrencePath: [44, 45, 46]},
     ])],
+    // Geometry on the root product itself, under no occurrence: the path is
+    // present and EMPTY, which is not the same as absent (#1901, #1909).
+    [flatMesh(32, [
+      {geometryExpressID: 200, flatTransformation: IDENTITY.map((v, i) => (i === 14 ? 45 : v)),
+        color: {x: 0, y: 1, z: 0, w: 1}, occurrencePath: []},
+    ])],
   ]
   api.ExtractGeometryBatchAsync = async (id, size, cb) => {
     const next = batches.shift()
@@ -628,7 +682,18 @@ describe('engine/engineModelLoad streamed STEP load', () => {
     const load = createEngineModelLoad({format: 'step', spawn: spawnOver(api)})
     const {summary} = await load.parse(new Uint8Array(9).buffer, {onMeshBatch: () => null})
     expect(api.calls.filter((c) => c.startsWith('Open'))).toEqual(['OpenModelStreamed:9'])
-    expect(summary).toMatchObject({format: 'step', windowed: false, meshes: 2, geometries: 1})
+    expect(summary).toMatchObject({format: 'step', windowed: false, meshes: 3, geometries: 1})
+  })
+
+  it('the format is a label: an IFC handed over as a File opens windowed even when labelled step', async () => {
+    // A suffix is not evidence of the schema (Loader.js#canOpenFromStore): an
+    // IFC payload named `.step` reaches the worker as a File, because the
+    // Loader's header sniff read it as IFC, and must keep its windowed open.
+    const api = makeStreamingApi()
+    const load = createEngineModelLoad({format: 'step', spawn: spawnOver(api)})
+    const {summary} = await load.parse(new Blob(['ISO-10303-21;']), {onMeshBatch: () => null})
+    expect(api.calls.filter((c) => c.startsWith('Open'))).toEqual(['OpenModelStream'])
+    expect(summary).toMatchObject({format: 'step', windowed: true})
   })
 
   it('every placement keeps its own occurrence path through the worker', async () => {
@@ -643,7 +708,7 @@ describe('engine/engineModelLoad streamed STEP load', () => {
         }
       },
     })
-    expect(paths).toEqual([[30, 200, [41, 42]], [30, 200, [41, 43]], [31, 200, [44, 45, 46]]])
+    expect(paths).toEqual([[30, 200, [41, 42]], [30, 200, [41, 43]], [31, 200, [44, 45, 46]], [32, 200, []]])
   })
 
   it('the at-index tree asks the worker for STEP\'s sub-solids', async () => {
@@ -673,7 +738,8 @@ describe('engine/engineModelLoad streamed STEP load', () => {
     expect(pumpLines).toHaveLength(2)
     expect(pumpLines[0]).toContain('format=step')
     expect(pumpLines[0]).toContain('windowed=no')
-    expect(pumpLines[1]).toContain('format=ifc')
+    expect(pumpLines[0]).toContain('(by suffix)')
+    expect(pumpLines[1]).toContain('format=unknown')
   })
 
   it('assembles the same per-occurrence tables through the facade as from the engine directly', async () => {
@@ -701,12 +767,12 @@ describe('engine/engineModelLoad streamed STEP load', () => {
     const expected = direct.finalize()
     const actual = viaWorker.finalize()
     expect(actual.stats).toEqual(expected.stats)
-    expect(actual.stats).toMatchObject({uniqueGeometryCount: 1, instanceCount: 3})
+    expect(actual.stats).toMatchObject({uniqueGeometryCount: 1, instanceCount: 4})
     const tables = (result) => result.batches.map((b) => ({
       parents: Array.from(b.mesh.instanceParents),
       paths: b.mesh.instanceOccurrencePaths,
     }))
     expect(tables(actual)).toEqual(tables(expected))
-    expect(tables(actual)[0].paths).toEqual([[41, 42], [41, 43], [44, 45, 46]])
+    expect(tables(actual)[0].paths).toEqual([[41, 42], [41, 43], [44, 45, 46], []])
   })
 })

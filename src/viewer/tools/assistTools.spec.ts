@@ -1,4 +1,5 @@
 import {Page, expect, test} from '@playwright/test'
+import {watchEngineWorker} from '../../tests/e2e/engineWorker'
 import {openLocalFile} from '../../tests/e2e/export'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {waitForModelReady} from '../../tests/e2e/models'
@@ -246,3 +247,38 @@ function hashToken(page: Page, name: string): string | null {
   const token = new URL(page.url()).hash.substring(1).split(';').find((part) => part.startsWith(`${name}:`))
   return token ? token.substring(name.length + 1) : null
 }
+
+
+// engine-worker.md §7 step 6: the root-only STEP file with its engine in a
+// worker. Every row of it is at the EMPTY occurrence path, and that `[]` has
+// to survive the worker boundary as `[]`, not as "no path": without it a
+// part's ref falls back to row ids that own no geometry, and isolate blanks
+// the model (the round-2 finding above, re-opened by a lossy encoding;
+// engineStream.js#makeBatchEncoder).
+describeMobileAndDesktop('Assist view tools, engine worker', () => {
+  test.beforeEach(async ({page}) => {
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+  })
+
+  test('isolates one part of a root-only multi-root STEP file parsed in a worker', async ({page}) => {
+    test.setTimeout(TWO_ROOT_TIMEOUT_MS)
+    // The flag rides the session across the Open dialog's navigation.
+    await page.goto(`${IFC_PATH},engineWorker`)
+    await waitForModelReady(page)
+    await pauseViewerRendering(page)
+    const engine = watchEngineWorker(page)
+    await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
+    await waitForModelReady(page)
+    await engine.expectWorkerEngine()
+    await enableAssistInPlace(page)
+    const total = await visibleInstances(page)
+    const plates = await instancesOf(page, PLATES_OWNER)
+    expect(plates).toBeGreaterThan(0)
+    expect(plates).toBeLessThan(total)
+
+    const isolate = await callTool(page, 'view.isolate', {refs: [`e${PLATES_ROW}`]})
+    expect(isolate.ok, JSON.stringify(isolate.error)).toBe(true)
+    await expect.poll(() => visibleInstances(page)).toBe(plates)
+  })
+})
