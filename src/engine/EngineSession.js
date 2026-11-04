@@ -17,20 +17,18 @@ import {ENGINE_PROTOCOL_VERSION, Ev, Op, ProtocolMismatchError, deserializeError
 export const SESSION_CLOSED = 'engine session closed'
 
 /**
- * How long `init` waits for the engine's reply before giving up.
+ * How long `init` waits for a working engine: the worker's `hello` and then
+ * the init reply, on one clock started when `init` is called, i.e. at
+ * spawn (spawnEngine.js).
  *
- * On a worker the clock starts at the worker's `hello`, which it posts once
- * its module has evaluated, so what is timed is `Init()`: decoding and
- * compiling the inline wasm, 94–148 ms per instance in §3. Fetching and
- * evaluating the multi-MB worker script is not on the clock, so a slow
- * network cannot kill a healthy worker; a script that fails to load fires
- * the worker's `error` instead, which rejects at once. In process the clock
- * starts at the request.
- *
- * 30 s is ~200× the measured Init, for a slow phone. Its job is narrow:
- * an engine that started but never answers. Every v1+ engine echoes a
- * version refusal (and announces its version in `hello`), so a mismatch is
- * refused at once rather than waiting this out.
+ * What the clock covers on a worker: fetching and evaluating the worker
+ * script (6.3 MB minified), then `Init()` (decoding and compiling the inline
+ * wasm, 94–148 ms per instance in §3). 30 s leaves room for a slow phone on
+ * a cold cache. When it runs out the load is not lost: spawnEngineSession
+ * falls back to the in-process engine, so a stalled worker costs at most
+ * this long, and never hangs the load. A version mismatch does not wait it
+ * out: every v1+ engine announces its version in `hello` and echoes a
+ * refusal, so a mismatch is refused at once.
  */
 export const ENGINE_INIT_TIMEOUT_MS = 30_000
 
@@ -69,10 +67,10 @@ export class EngineSession {
     this.resolveIndexed = resolveIndexed
     this.rejectIndexed = rejectIndexed
     // A worker posts `hello {v}` once its module has evaluated
-    // (Engine.worker.js). `init` waits for it before starting its timeout,
-    // so the clock covers the engine's start-up and not the fetch of a
-    // multi-MB worker script on a slow network. In process there is nothing
-    // to load, so no hello is expected.
+    // (Engine.worker.js). `init` waits for it, on the same clock as the init
+    // reply (ENGINE_INIT_TIMEOUT_MS), and refuses at once if it names
+    // another protocol version. In process there is nothing to load, so no
+    // hello is expected.
     this.expectsHello = transport.kind === 'worker'
     this.hello = new Promise((resolve, reject) => {
       this.resolveHello = resolve
@@ -190,49 +188,71 @@ export class EngineSession {
    * @param {boolean} [options.verbose] engine debug logging (`glbVerbose`)
    * @param {object} [options.flags] the engine-relevant feature flags,
    *   snapshotted: a worker cannot read the page's `?feature=` (§4 `init`)
-   * @param {number} [options.timeoutMs] see ENGINE_INIT_TIMEOUT_MS; rejects
-   *   with a ProtocolMismatchError if all the engine sent was another
-   *   version's
+   * @param {number} [options.timeoutMs] see ENGINE_INIT_TIMEOUT_MS, covering
+   *   the worker's hello too; rejects with a ProtocolMismatchError if all the
+   *   engine sent was another version's
    * @return {Promise<object>} `{conwayVersion, capabilities, wasmBytes, initMs}`
    */
   async init({verbose = false, flags = {}, timeoutMs = ENGINE_INIT_TIMEOUT_MS} = {}) {
-    if (this.expectsHello) {
-      const helloVersion = await this.hello
-      if (helloVersion !== ENGINE_PROTOCOL_VERSION) {
-        this.close()
-        throw new ProtocolMismatchError(ENGINE_PROTOCOL_VERSION, helloVersion)
-      }
-    }
+    // One clock from the start, covering the worker's hello as well as the
+    // init reply: a worker script whose fetch stalls without an `error`
+    // event never says hello, and a wait on hello alone would hang the load
+    // with no fallback (review on #2058).
     let timer
+    let helloSeen = !this.expectsHello
     const timeout = new Promise((resolve, reject) => {
       timer = setTimeout(() => reject(this.foreignVersion === undefined ?
-        new Error(`engine did not answer init within ${timeoutMs} ms`) :
+        // Which half never came says where to look: no hello is the worker
+        // script (fetch, evaluation); no reply is the engine's Init().
+        new Error(`engine did not answer init within ${timeoutMs} ms ` +
+          `(${helloSeen ? 'no init reply after hello' : 'no hello from the worker'})`) :
         new ProtocolMismatchError(ENGINE_PROTOCOL_VERSION, this.foreignVersion)), timeoutMs)
     })
     let result
     try {
+      if (this.expectsHello) {
+        const helloVersion = await Promise.race([this.hello, timeout])
+        helloSeen = true
+        if (helloVersion !== ENGINE_PROTOCOL_VERSION) {
+          this.close()
+          throw new ProtocolMismatchError(ENGINE_PROTOCOL_VERSION, helloVersion)
+        }
+      }
       result = await Promise.race([this.request(Op.INIT, {epoch: this.epoch, verbose, flags}), timeout])
     } finally {
       clearTimeout(timer)
     }
     this.capabilities = result.capabilities
+    /** `init`'s reply: `{conwayVersion, capabilities, wasmBytes, initMs}`. */
+    this.info = result
     return result
   }
 
 
   /**
-   * Open the session's one model, index only (no geometry). Resolves at the
-   * index, as `indexed` does.
+   * Open the session's one model. Resolves at the index, as `indexed` does.
+   * Without `stream` that is the whole open (index only). With it, the
+   * engine then streams `preview`, `batch` and `log` events and ends with
+   * `done` or `failed` (§4): subscribe with {@link on} before calling.
+   *
+   * A failed open rejects with an Error whose `engineFailure` is the
+   * engine's classification, `{code, refusedSchema, openFailure}`, for
+   * `unsupportedSchema.js#openModelFailure` to turn into the user-facing
+   * error.
    *
    * @param {object} source `{file}` (a File/Blob: windowed, and cloned by
    *   reference) or `{bytes}` (an ArrayBuffer: transferred, so the caller's
    *   buffer is detached)
+   * @param {object} [options]
+   * @param {object} [options.stream] `{previews, batchSize, startPaused}` to
+   *   stream the geometry after the index; `startPaused` waits for
+   *   {@link pump}`('run')` before the first batch
    * @return {Promise<object>} `{modelID, windowed, openMs, wasmBytes}`
    */
-  async open(source) {
+  async open(source, {stream = null} = {}) {
     const {source: sent, transfer} = transferableSource(source)
     try {
-      const result = await this.request(Op.OPEN, {source: sent}, transfer)
+      const result = await this.request(Op.OPEN, {source: sent, stream}, transfer)
       if (result.failure) {
         // The engine's classification, for unsupportedSchema.js#openModelFailure
         // to turn into the user-facing error, as the main-thread path does.
@@ -246,6 +266,29 @@ export class EngineSession {
       this.rejectIndexed(e)
       throw e
     }
+  }
+
+
+  /**
+   * Backpressure (§5.2): pause the pump at its next batch boundary, or let
+   * it run again. A paused load keeps its engine and its place.
+   *
+   * @param {'pause'|'run'} mode
+   * @return {Promise<{paused: boolean}>}
+   */
+  pump(mode) {
+    return this.request(Op.PUMP, {mode})
+  }
+
+
+  /**
+   * End a streamed load at its next batch boundary; it then emits
+   * `failed{kind: 'aborted'}`.
+   *
+   * @return {Promise<boolean>}
+   */
+  abort() {
+    return this.request(Op.ABORT)
   }
 
 
@@ -349,10 +392,11 @@ export class EngineSession {
     // leaves it running), and until it is terminated it pins its whole heap
     // (§3: PSB's 2.2 GB). `close()` after this is a no-op.
     this.transport.terminate()
-    if (kind === 'crash') {
-      for (const cb of this.listeners.get(Ev.FAILED) ?? []) {
-        cb({ev: Ev.FAILED, kind: 'crash', message: error.message})
-      }
+    // `failed` for a close too, not only a crash: a streamed load waiting on
+    // `done` or `failed` would otherwise wait forever on a session closed
+    // under it (eviction and close, steps 7 and 8).
+    for (const cb of this.listeners.get(Ev.FAILED) ?? []) {
+      cb({ev: Ev.FAILED, kind, message: error.message})
     }
     // Nothing is delivered after this, so nothing should stay reachable
     // from a closed session (the dev hook keeps closed sessions around).

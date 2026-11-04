@@ -310,6 +310,38 @@ class LoadProgressReporter {
   }
 
   /**
+   * Fold in what an engine WORKER logged (engine-worker.md §2.4 G3). The
+   * worker's conway Logger is another module instance and its console is
+   * its own, so neither reaches {@link installDefectProxy} or the console
+   * tee; the worker folds both by text with a count
+   * (`engine/engineStream.js#makeLogForwarder`), and this replays each row
+   * `count` times through the same two paths, so Total vs Distinct, the
+   * data-defect join and the diagnostics block read as they would for a
+   * main-thread engine. Nothing is echoed: the worker already printed it.
+   *
+   * @param {object} log `{entries: [{level, category, message, count}],
+   *   lines: [{level, text, count}]}`
+   */
+  ingestEngineLog({entries = [], lines = []} = {}) {
+    for (const {count = 1, ...entry} of entries) {
+      for (let i = 0; i < count; i++) {
+        this.defectProxy?.log(entry)
+      }
+    }
+    for (const {level, text, count = 1} of lines) {
+      if (level === 'warning') {
+        this.warningCount += count
+      } else {
+        this.errorCount += count
+      }
+      const collapsed = collapseWhitespace(text)
+      if (collapsed !== '') {
+        this.diagnostics.set(collapsed, (this.diagnostics.get(collapsed) ?? 0) + count)
+      }
+    }
+  }
+
+  /**
    * Close the capture window: restore the console methods the tee replaced
    * and detach the conway log proxy. Idempotent.
    */
@@ -1265,6 +1297,19 @@ export function reportLoadProgress(progressArg) {
 export function reportEngineVersion(versionLine) {
   if (activeReporter && !activeReporter.ended && versionLine) {
     activeReporter.addReportLine(versionLine)
+  }
+}
+
+
+/**
+ * An engine worker's forwarded log (see LoadProgressReporter#ingestEngineLog).
+ * Safe no-op with no active load.
+ *
+ * @param {object} log `{entries, lines}`
+ */
+export function reportEngineLog(log) {
+  if (activeReporter && !activeReporter.ended) {
+    activeReporter.ingestEngineLog(log)
   }
 }
 

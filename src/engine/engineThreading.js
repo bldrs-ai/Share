@@ -15,8 +15,8 @@
 // conway#540 needed its shim). tools/esbuild/build.js defines it for the
 // worker bundle as well, for any reader without that guard.
 //
-// Permanent, unlike `workerPlatform.js`: it does not go with the conway#540
-// pin.
+// Permanent: unlike the conway#540 platform shim this sat beside until
+// conway 1.1633.540 recognised a worker, it is not a workaround.
 const existing = globalThis.process
 globalThis.process = {
   ...existing,

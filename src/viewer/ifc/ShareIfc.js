@@ -222,6 +222,17 @@ export default class ShareIfc {
    * @return {void}
    */
   dispose() {
+    // A model whose engine runs in a worker (`?feature=engineWorker`,
+    // engine-worker.md) holds its session on its IfcAPI facade. Closing it
+    // terminates the worker, which frees the whole engine at once (§3) —
+    // the one thing `CloseModel` on a main-thread engine cannot do.
+    for (const model of this.context?.items?.ifcModels ?? []) {
+      try {
+        model?.ifcManager?.ifcAPI?.engineSession?.close()
+      } catch (e) {
+        console.warn('ShareIfc.dispose: engine session close failed:', e)
+      }
+    }
     const ifcAPI = this.loader?.ifcManager?.ifcAPI
     const models = ifcAPI?.models
     if (models && typeof models.keys === 'function' && typeof ifcAPI.CloseModel === 'function') {

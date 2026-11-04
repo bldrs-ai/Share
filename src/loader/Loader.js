@@ -777,6 +777,21 @@ export async function load(
   } catch (e) {
     throw markIfOutOfMemory(e)
   }
+  if (model?.ifcManager?.ifcAPI?.engineSession) {
+    // Parsed by a worker engine (`?feature=engineWorker`). No GLB cache write
+    // yet: the writer's property capture, source spill and geometry release
+    // all reach for a main-thread engine (`viewer.IFC.loader.ifcManager`),
+    // which holds no model here. They move into the worker as one `capture`
+    // job in engine-worker.md §7 step 5, which turns the write back on.
+    glbExportContext = null
+    // The writer's `finally` is where a main-thread load frees conway's
+    // native geometry (below); with no writer, free the worker's now, once
+    // the scene is built and nothing reads it again (§2.1 row 30).
+    if (isFeatureEnabled('demandGeometry')) {
+      // eslint-disable-next-line new-cap
+      model.ifcManager.ifcAPI.ReleaseModelGeometry?.(model.modelID)
+    }
+  }
 
   // Conway's handle for THIS parse, latched before the model leaves
   // `load()`. Two different numbers travel under the name "modelID" and
