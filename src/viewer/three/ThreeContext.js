@@ -219,6 +219,18 @@ export default class ThreeContext {
   }
 
 
+  /**
+   * The viewer's on-demand painting state (open-205 #2043): inert outside a
+   * progressive load, and while one streams, what decides whether a frame
+   * paints. See `renderDemand.js`.
+   *
+   * @return {object|null} the RenderDemand, or null on a context without one
+   */
+  getRenderDemand() {
+    return this._legacy?.renderDemand ?? null
+  }
+
+
   // -- Legacy escape hatches (kept narrow on purpose) -----------------------
 
 

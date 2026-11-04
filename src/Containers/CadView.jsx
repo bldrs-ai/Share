@@ -96,6 +96,8 @@ import {
 import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
+import {loadPreviewGroups, pickPreviewExpressId} from '../viewer/previewSelection'
+import {USER_CAMERA_EVENT} from '../viewer/three/renderDemand'
 import {DEFAULT_LOOK} from '../viewer/looks'
 import {installAssistDevHook} from '../viewer/tools/assistHost'
 import {registerSelectionFunnel} from '../viewer/tools/selectionFunnel'
@@ -225,6 +227,20 @@ export default function CadView({
   // This render's `selectItemsInScene`, for the funnel registered with
   // `viewer/tools/selectionFunnel.js` (see the effect near the end).
   const selectItemsInSceneRef = useRef(null)
+  // open-205 #2043: a double-click on a parse-time preview mesh, made before
+  // the model's index (selectFromPreviewPick). Holds the element id until the
+  // tree is up to resolve it against (resolvePendingPreviewPick); null when
+  // no such pick is waiting.
+  const pendingPreviewPickRef = useRef(null)
+  // Whether the load in flight took a preview pick at all, before or after
+  // its index: its selection has to be painted onto the finished model, and
+  // taken down if the user leaves or the load fails, like a selection made at
+  // the index (#2029). Reset as each load begins.
+  const previewPickedRef = useRef(false)
+  // Whether the user drove the camera during the load in flight. If so the
+  // end-of-load auto-fit is skipped: the user is looking at something
+  // (design/new/in-app-model-switch.md §4.2a).
+  const isCameraTakenDuringLoadRef = useRef(false)
   // How loadModel last downloaded a Drive file: `{fileId, connection}`, with
   // connection null for the API-key path. The direct-link quota meter reads
   // it to tell a link-shared (public, unmetered) file from a private one
@@ -428,6 +444,11 @@ export default function CadView({
     for (const id of Object.keys(elementsById)) {
       delete elementsById[id]
     }
+    // The left load's first mesh lifted the overlay (#2043); the model about
+    // to be shown has put nothing on screen yet. Its pick, if any, goes too.
+    useStore.getState().setIsFirstMeshShown(false)
+    pendingPreviewPickRef.current = null
+    previewPickedRef.current = false
     // Nothing indexed belongs to the model about to be shown: its own load
     // hasn't started (identity change), or hasn't been replayed yet.
     if (useStore.getState().indexedModel !== null) {
@@ -450,6 +471,13 @@ export default function CadView({
     const loadModelKey = modelIdentity(modelPath, installPrefix)
     const isLoadSuperseded = () => dedupeModelKeyRef.current !== loadModelKey
     setIsModelReady(false)
+    // open-205 #2043: the canvas is live from the load's first preview mesh,
+    // during the parse, so scene picks are too: the handler takes picks on
+    // the preview (canvasDoubleClickHandler) until the finished model is in.
+    // onModel installs it again at the end, as before.
+    pendingPreviewPickRef.current = null
+    previewPickedRef.current = false
+    window.ondblclick = canvasDoubleClickHandler
 
     // define mesh colors for selected and preselected element
     const preselectMat = new MeshLambertMaterial({
@@ -548,6 +576,9 @@ export default function CadView({
       }
       if (await installModelTree(indexedModel, rootElt, isIndexedTreeStale, {indexedModel})) {
         indexedTree = rootElt
+        // A pick made on the preview before this tree existed (#2043) can now
+        // be resolved against it: its row, its URL path, its properties.
+        resolvePendingPreviewPick()
       }
     }
     const onIndexed = (indexedModel) => {
@@ -564,8 +595,30 @@ export default function CadView({
     // Read before the attempt so the catch can tell whether a load reporter
     // began for THIS attempt (getLoadFailureInfo).
     const loadSerialBefore = currentLoadSerial()
+    const stopWatchingCamera = watchCameraTakenDuringLoad()
+    // Paint on demand for the whole load, not only the progressive session's
+    // part of it (three/renderDemand.js): before the session begins, the
+    // download and the OPFS staging run under the overlay with nothing new
+    // to draw, and on software GL sixty paints a second of the empty scene
+    // took PSB's `Opening model` from 13 s to 48 s after navigation
+    // (design/new/in-app-model-switch.md §4.2a). The session opens its own
+    // scope for the parse, which its finish or abort closes without closing
+    // this one (renderDemand.js: scopes nest), so a retried attempt stays on
+    // demand; the finally below closes this one on every path, so a load
+    // can't leave the loop on demand.
+    const endOnDemand = viewer.context.getRenderDemand?.()?.begin(viewer.context.getCameraControls?.())
+    // open-205 #2043: the loading overlay lifts at the load's first mesh, but
+    // only for the load that is still shown. Nothing cancels a load the user
+    // has left (#2019), and its first mesh, which arrives in a viewer since
+    // disposed, must not lift the overlay over the next model's empty one
+    // (codex review on #2052). The same guard as every other per-model write.
+    const onFirstMesh = () => {
+      if (!isLoadSuperseded()) {
+        useStore.getState().setIsFirstMeshShown(true)
+      }
+    }
     try {
-      tmpModelRef = await loadModelWithAuthRetry(modelPath, isAuthSettledBeforeLoad, {onIndexed})
+      tmpModelRef = await loadModelWithAuthRetry(modelPath, isAuthSettledBeforeLoad, {onIndexed, onFirstMesh})
     } catch (e) {
       // A tree that came up at the index belongs to a model that then never
       // loaded: take it down with the load, so the panels don't offer rows of
@@ -576,7 +629,12 @@ export default function CadView({
       if (indexedTree !== null && !isLoadSuperseded()) {
         forgetIndexedTree()
         forgetIndexedSelection()
+      } else if (previewPickedRef.current && !isLoadSuperseded()) {
+        // The same for a pick on the preview of a load that never indexed
+        // (#2043): its element is in no model that is coming.
+        forgetIndexedSelection()
       }
+      pendingPreviewPickRef.current = null
       if (isOutOfMemoryError(e)) {
         isOOM = true
       }
@@ -700,6 +758,8 @@ export default function CadView({
       // blocking the error dialog.
       setIsModelLoading(false)
       setSnackMessage(null)
+      stopWatchingCamera()
+      endOnDemand?.()
     }
     if (!tmpModelRef && !isOOM) {
       setAlert('Failed to parse model')
@@ -740,12 +800,21 @@ export default function CadView({
 
     const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     selectElementBasedOnFilepath(pathToLoad)
-    if (earlyTree !== null && !isLoadSuperseded()) {
+    // A pick on the preview (#2043) whose tree came up only now, in onModel —
+    // the index delivered none — resolves against it here.
+    const wasPickedInPreview = previewPickedRef.current
+    if (!isLoadSuperseded()) {
+      resolvePendingPreviewPick()
+    }
+    if ((earlyTree !== null || wasPickedInPreview) && !isLoadSuperseded()) {
       // Anything selected while geometry streamed — a tree row, a search, a
-      // link's element path applied as the tree came up — highlighted nothing,
-      // there being nothing in the scene to highlight. Paint it now.
+      // link's element path applied as the tree came up, a pick on the parse's
+      // preview meshes — highlighted nothing on the model, there being no
+      // model in the scene to highlight. The preview it was painted on is gone
+      // now: paint it on the finished model.
       reapplySelectionToGeometry()
     }
+    previewPickedRef.current = false
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
       .filter(([, value]) => value === true).map(([key]) => Number(key))
@@ -871,9 +940,11 @@ export default function CadView({
    * @param {object} [options]
    * @param {Function} [options.onIndexed] handed the model at its index while
    *   geometry still streams (open-205 #2029); see onViewerInternal
+   * @param {Function} [options.onFirstMesh] called when a progressive load's
+   *   first geometry is on screen (open-205 #2043); see onViewerInternal
    * @return {object} loaded model
    */
-  async function loadModel(routeResult, {onIndexed} = {}) {
+  async function loadModel(routeResult, {onIndexed, onFirstMesh} = {}) {
     const isGoogleResult = routeResult.kind === 'provider' && routeResult.provider === 'google'
     const filepath = isGoogleResult ? routeResult.downloadUrl : (routeResult.downloadUrl || routeResult.filepath)
     const gitpath = routeResult.gitpath
@@ -942,7 +1013,7 @@ export default function CadView({
           const blobUrl = URL.createObjectURL(download.blob)
           try {
             loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '',
-              {onIndexed})
+              {onIndexed, onFirstMesh})
           } finally {
             // The URL pins the whole download for the life of the page, and
             // each load mints a new one (a theme toggle reloads the model).
@@ -957,7 +1028,7 @@ export default function CadView({
           // published) downloads this way, which is why the quota meter
           // treats a Drive file loaded here as public.
           loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, setOpfsFile, '',
-            {onIndexed})
+            {onIndexed, onFirstMesh})
         }
       } else {
         // Read the token at call time, not from the render closure — the
@@ -969,7 +1040,7 @@ export default function CadView({
           (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow,
           // Route provenance, which the loader can't recover from `filepath`
           // alone: /v/local-only/<id> and /v/p/<id> give the same URL (#1956).
-          {isUploadedRoute: routeResult.isUploadedFile === true, onIndexed})
+          {isUploadedRoute: routeResult.isUploadedFile === true, onIndexed, onFirstMesh})
       }
     } catch (error) {
       loadError = error
@@ -1027,7 +1098,16 @@ export default function CadView({
     viewer.context.fitCameraLimitsToModel(loadedModel)
 
     const isCamHashSet = onHash(location, viewer.context.getCameraControls())
-    if (!isCamHashSet) {
+    // A user who drove the camera while the model streamed in (open-205
+    // #2043: orbit and zoom are live from the first preview mesh) is looking
+    // at something; framing the whole model now would yank it away. The
+    // limits above are still sized, so the model draws and dollies right.
+    // design/new/in-app-model-switch.md §4.2a.
+    const isCameraTakenDuringLoad = isCameraTakenDuringLoadRef.current
+    // Read once, for this load: loadModel is also called outside
+    // onViewerInternal's watch (an upload), which must not see this load's.
+    isCameraTakenDuringLoadRef.current = false
+    if (!isCamHashSet && !isCameraTakenDuringLoad) {
       // Framing target passed explicitly: the no-arg fallback frames the
       // last scene child, which is the model only by luck of ordering.
       viewer.context.fitModelToFrame(loadedModel)
@@ -1455,6 +1535,97 @@ export default function CadView({
 
 
   /**
+   * Select the element of a preview mesh the user double-clicked during a
+   * Conway load (open-205 #2043).
+   *
+   * Once the tree is up (the index, #2029) this is the finished model's pick:
+   * `elementSelection`, the same funnel, which writes the URL path and takes
+   * the element's descendants for the highlight. Before it there is nothing
+   * to resolve the id against, so the bare id is selected — the preview
+   * paints it (`ShareViewer#setPreviewSelection`) and the URL is left alone —
+   * and the pick waits in `pendingPreviewPickRef` for the tree. Shift is not
+   * a multi-select then: a toggle needs the rows it would toggle.
+   *
+   * @param {number} expressId the picked element
+   * @param {boolean} isShiftKeyDown
+   */
+  function selectFromPreviewPick(expressId, isShiftKeyDown) {
+    previewPickedRef.current = true
+    if (useStore.getState().rootElement === null) {
+      pendingPreviewPickRef.current = expressId
+      selectItemsInScene([expressId], false)
+      return
+    }
+    pendingPreviewPickRef.current = null
+    if (elementsById[expressId] !== undefined) {
+      elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressId)
+    } else {
+      // A product the tree doesn't list: selected by id, as the finished
+      // model's own picks fall back to when the tree has no row for them.
+      selectItemsInScene([expressId], false)
+    }
+  }
+
+
+  /**
+   * Resolve a preview pick made before the index, now that the tree is up
+   * (open-205 #2043): re-select it through the finished model's funnel, which
+   * writes its URL path and expands the tree to it, and so re-runs the
+   * selection effect, which reads its properties from the model at its index.
+   * A pick something has since replaced (the assistant's selection funnel,
+   * say) is dropped, and the selection that replaced it is re-run instead:
+   * the selection effect held its properties back for the index too. An
+   * element the tree doesn't have keeps its bare-id selection, re-run only
+   * for its properties.
+   */
+  function resolvePendingPreviewPick() {
+    const expressId = pendingPreviewPickRef.current
+    pendingPreviewPickRef.current = null
+    if (expressId === null) {
+      return
+    }
+    const anchors = useStore.getState().selectedAnchorIds ?? []
+    if (anchors.length !== 1 || Number(anchors[0]) !== expressId) {
+      reapplySelectionToGeometry()
+      return
+    }
+    if (elementsById[expressId] !== undefined) {
+      elementSelection(viewer, elementsById, selectItemsInScene, false, expressId)
+    } else {
+      selectItemsInScene([expressId], false)
+    }
+  }
+
+
+  /**
+   * Note whether the user drives the camera while a model loads, for the
+   * end-of-load fit (loadModel). camera-controls sends `controlstart` for a
+   * drag and only `control` for a wheel zoom, and our camera UIs send
+   * USER_CAMERA_EVENT (renderDemand.js#noteUserCamera); all are the user.
+   *
+   * @return {Function} stops watching
+   */
+  function watchCameraTakenDuringLoad() {
+    isCameraTakenDuringLoadRef.current = false
+    const controls = viewer?.context?.getCameraControls?.()
+    if (typeof controls?.addEventListener !== 'function') {
+      return () => undefined
+    }
+    const onTake = () => {
+      isCameraTakenDuringLoadRef.current = true
+    }
+    controls.addEventListener('controlstart', onTake)
+    controls.addEventListener('control', onTake)
+    controls.addEventListener(USER_CAMERA_EVENT, onTake)
+    return () => {
+      controls.removeEventListener?.('controlstart', onTake)
+      controls.removeEventListener?.('control', onTake)
+      controls.removeEventListener?.(USER_CAMERA_EVENT, onTake)
+    }
+  }
+
+
+  /**
    * Handle double click event on canvas.
    *
    * @param {Event} event - The double click event
@@ -1466,6 +1637,22 @@ export default function CadView({
       }
 
       const picker = new Picker(viewer.context)
+      // open-205 #2043: while a Conway load streams in, the scene's pickable
+      // geometry is its preview, whose meshes say which element they are. The
+      // durable batches streaming beside it carry no pick tables until the
+      // load's end (incrementalBatchedBuilder#finalize), so they are not
+      // raycast: a pick in a spot only they cover selects nothing yet.
+      const previewGroups = loadPreviewGroups(viewer.context.getScene())
+      if (previewGroups.length > 0) {
+        // The loop may be painting on demand (three/renderDemand.js), which
+        // leaves a mesh added since the last paint without its world matrix.
+        previewGroups.forEach((group) => group.updateMatrixWorld(true))
+        const previewId = pickPreviewExpressId(picker.castRay(previewGroups))
+        if (previewId !== null) {
+          selectFromPreviewPick(previewId, event.shiftKey)
+        }
+        return
+      }
       const pickedAll = picker.castRay(viewer.context.getScene().children)
       if (pickedAll.length === 0) {
         return
@@ -2281,8 +2468,11 @@ export default function CadView({
       // Only on an identity change: re-runs for the same model (view
       // settings) keep this state, as they keep the dedupe refs above.
       const wasIndexed = useStore.getState().indexedModel !== null
+      // A pick on the left load's preview (#2043) is a selection in a model
+      // the user has left, whether or not that load had reached its index.
+      const wasPickedInPreview = previewPickedRef.current
       forgetLoadedModel()
-      if (wasIndexed) {
+      if (wasIndexed || wasPickedInPreview) {
         forgetIndexedSelection()
       }
     }
@@ -2372,6 +2562,9 @@ export default function CadView({
       // Update The selection on the scene pick/unpick
       const ids = selectedElements.map((id) => parseInt(id))
       await viewer.setSelection(0, ids)
+      // While a Conway load parses there is no model for setSelection to
+      // paint, only the preview meshes (open-205 #2043); a no-op otherwise.
+      viewer.setPreviewSelection?.(ids)
       // Per-instance highlight (Conway-direct): if the click handler
       // tagged us with a specific PlacedGeometry's synthetic ID,
       // restrict the visible highlight to just that instance. The
@@ -2394,6 +2587,18 @@ export default function CadView({
           Array.isArray(selectedInstanceIds) && selectedInstanceIds.length > 0 &&
           typeof viewer.setInstanceSelection === 'function') {
         viewer.setInstanceSelection(0, selectedInstanceIds)
+      }
+      // A pick on the preview before the index (#2043): nothing can say what
+      // it is yet — the engine is still parsing, there is no tree to expand —
+      // so Properties waits, and resolvePendingPreviewPick re-runs this once
+      // the tree is up. Keyed on the index, not on selectReadModel: after an
+      // in-app switch `model` is still the previous model, whose answer for
+      // this id would be about something else.
+      if (pendingPreviewPickRef.current !== null && useStore.getState().indexedModel === null) {
+        if (!isStale) {
+          setSelectedElement(null)
+        }
+        return
       }
       // If current selection is not empty
       if (selectedElements.length > 0) {

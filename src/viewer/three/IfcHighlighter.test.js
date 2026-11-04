@@ -111,3 +111,46 @@ describe('viewer/three/IfcHighlighter', () => {
     })
   })
 })
+
+
+// open-205 #2043: while a model streams in, the render closure paints only
+// when the viewer's RenderDemand asks (renderDemand.js).
+describe('viewer/three/IfcHighlighter#newUpdateFunction', () => {
+  const RenderDemand = require('./renderDemand').default
+  const {newUpdateFunction} = require('./IfcHighlighter')
+
+  /**
+   * @param {object|null} demand
+   * @return {{update: Function, composer: object}}
+   */
+  function makeLoop(demand) {
+    const composer = {render: jest.fn()}
+    const context = {
+      getLegacyRendererWrapper: () => ({blocked: false}),
+      getRenderDemand: () => demand,
+    }
+    return {update: newUpdateFunction(context, composer), composer}
+  }
+
+  it('paints every frame with no load streaming, or no demand at all', () => {
+    for (const demand of [new RenderDemand(), null]) {
+      const {update, composer} = makeLoop(demand)
+      update()
+      update()
+      expect(composer.render).toHaveBeenCalledTimes(2)
+    }
+  })
+
+  it('paints only what is asked for while a load streams, and records the paint', () => {
+    const demand = new RenderDemand()
+    demand.begin(null)
+    const {update, composer} = makeLoop(demand)
+    update()
+    update()
+    expect(composer.render).toHaveBeenCalledTimes(1)
+    demand.invalidate()
+    update()
+    expect(composer.render).toHaveBeenCalledTimes(2)
+    expect(demand.stats.paints).toBe(2)
+  })
+})

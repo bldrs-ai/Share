@@ -14,6 +14,7 @@ import {Animator} from './animator'
 import {IfcEvent, IfcEvents} from './ifcEvent'
 import {NavigationModes} from './base-types'
 import {IfcMouse} from './mouse'
+import RenderDemand from '../renderDemand'
 
 
 /**
@@ -78,6 +79,10 @@ export class IfcContext {
     this.clippingPlanes = []
     this.ifcCaster = new IfcRaycaster(this)
     this.clock = new Clock(true)
+    // Whether a frame paints while a model streams in (open-205 #2043).
+    // Consulted by the render closure ThreeContext#setRenderUpdate installs;
+    // inert (every frame paints) outside a progressive load.
+    this.renderDemand = new RenderDemand()
     this.ifcAnimator = new Animator()
     this.setupWindowRescale()
     this.render()

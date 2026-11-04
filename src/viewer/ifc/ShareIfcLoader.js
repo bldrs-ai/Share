@@ -370,6 +370,9 @@ export default class ShareIfcLoader {
    * @param {Function} [onError] error callback. Errors are also stored
    *   on `this.ifcLastError` for ShareViewer to surface as an alert.
    * @param {object} [options]
+   * @param {Function} [options.onFirstMesh] open-205 #2043: `() => void`, once
+   *   the load's first geometry is on screen (ProgressiveLoadSession). The
+   *   caller lifts its loading overlay on it, if the load is still current.
    * @param {Function} [options.onIndexed] open-205 #2029: `async (handle)
    *   => void`, given the model at its index (`makeIndexedModelHandle`)
    *   once the deferred open returns and before geometry streams, so the
@@ -379,7 +382,7 @@ export default class ShareIfcLoader {
    *   handled error (re-throws on OOM so the caller can show a
    *   tailored UX message).
    */
-  async parse(buffer, onProgress, onError, {onIndexed} = {}) {
+  async parse(buffer, onProgress, onError, {onIndexed, onFirstMesh} = {}) {
     const ifc = this._ifc
     // Clear any error stashed by a prior load on this shared IFC namespace.
     // readModel (Loader.js) reads `viewer.IFC.ifcLastError` to surface the
@@ -412,6 +415,13 @@ export default class ShareIfcLoader {
       getCamera: () => ifc.context?.ifcCamera?.perspectiveCamera,
       frameCamera,
       onProgress,
+      // open-205 #2043: paint on demand while the model streams in, so the
+      // render loop doesn't compete with the parse and the pump for the main
+      // thread now that the canvas is live from the first preview mesh.
+      // `ifc.context` is the legacy IfcContext, which owns the RenderDemand
+      // (three/renderDemand.js).
+      renderDemand: ifc.context?.renderDemand ?? null,
+      onFirstMesh,
     })
 
     let builder = null

@@ -220,6 +220,9 @@ function probeLfsBytes(data) {
  *   `ShareIfcLoader#parse`. Never called on a GLB cache hit, a non-Conway
  *   format, or a classic (non-deferred) open; the caller's end-of-load path
  *   covers those exactly as before.
+ * @param {Function} [options.onFirstMesh] open-205 #2043: called once when a
+ *   Conway parse's first geometry is on screen (`ShareIfcLoader#parse`).
+ *   Never called on the paths that put the model on screen only at its end.
  * @return {object} The model or undefined
  */
 export async function load(
@@ -229,7 +232,7 @@ export async function load(
   isOpfsAvailable,
   setOpfsFile,
   accessToken = '',
-  {isNestedLoad = false, isUploadedRoute = false, onIndexed = undefined} = {},
+  {isNestedLoad = false, isUploadedRoute = false, onIndexed = undefined, onFirstMesh = undefined} = {},
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
   // HACK: pathArg can be a URL or a string
@@ -770,7 +773,7 @@ export async function load(
   let model
   try {
     model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress,
-      {onIndexed})
+      {onIndexed, onFirstMesh})
   } catch (e) {
     throw markIfOutOfMemory(e)
   }
@@ -1979,7 +1982,7 @@ export function convertToShareModel(model, viewer, {fileName = null} = {}) {
  * @param {Function} [fixupCb] to modify the model
  * @param {Function} [onProgress] progress callback for IFC loading
  * @param {object} [parseOptions] passed to an IFC/STEP loader's `parse` as
- *   its options (`ShareIfcLoader#parse`: `onIndexed`)
+ *   its options (`ShareIfcLoader#parse`: `onIndexed`, `onFirstMesh`)
  * @return {object}
  */
 export async function readModel(

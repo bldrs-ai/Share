@@ -37,6 +37,7 @@ import useStore from '../../store/useStore'
 import useAppsRail from '../Apps/useAppsRail'
 import {ROW_PITCH} from '../../Containers/layoutConstants'
 import debug from '../../utils/debug'
+import {noteUserCamera} from '../../viewer/three/renderDemand'
 
 
 /**
@@ -205,6 +206,9 @@ export default function ViewCube() {
       if (event.button !== 0) {
         return // Let right/middle click through to the context menu.
       }
+      // The user has the camera from here, before the drag or snap queues a
+      // move, so a load's camera follow can't refit in between (renderDemand.js).
+      noteUserCamera(cameraControls)
       isPointerDown = true
       isDragging = false
       lastX = event.clientX
@@ -296,6 +300,7 @@ export default function ViewCube() {
    */
   const orbit = (deltaAzimuthRad, deltaPolarRad) => {
     if (controlsRef.current) {
+      noteUserCamera(controlsRef.current)
       removeCameraUrlParams()
       controlsRef.current.rotate(deltaAzimuthRad, deltaPolarRad, true)
     }
@@ -308,6 +313,7 @@ export default function ViewCube() {
    */
   const snapView = (direction) => {
     if (controlsRef.current) {
+      noteUserCamera(controlsRef.current)
       removeCameraUrlParams()
       snapToDirection(controlsRef.current, direction.clone())
       fitModelToFrame()

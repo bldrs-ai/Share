@@ -8,6 +8,7 @@ import {
   Mesh,
 } from 'three'
 import {makeSurfaceColor, makeSurfaceMaterial} from '../lookMaterial'
+import {PREVIEW_EXPRESS_ID_KEY} from '../previewSelection'
 
 
 const AABB_GEOMETRY_KEY = -1
@@ -80,6 +81,15 @@ export function payloadToPreviewMesh(payload, geometryCache, materialCache, coor
   mesh.matrixAutoUpdate = false
   mesh.matrix.fromArray(payload.flatTransformation)
   recenterOntoCoordination_(mesh, coordination)
+  // open-205 #2043: the element this placement belongs to — the IFC product
+  // (or STEP owner) the scene walk reached it through, the same id the
+  // durable batch records in `instanceParents`. A double-click on a preview
+  // mesh selects it while the parse still runs (CadView's preview pick,
+  // `viewer/previewSelection.js`). Not `mesh.expressID`: that name routes a
+  // pick down CadView's finished-model branch, which needs the tree.
+  if (Number.isFinite(payload.expressID)) {
+    mesh.userData[PREVIEW_EXPRESS_ID_KEY] = payload.expressID
+  }
   return mesh
 }
 
@@ -155,5 +165,7 @@ function aabbPayloadToMesh_(payload, geometryCache, materialCache, coordination 
   mesh.matrix.fromArray(payload.flatTransformation)
   recenterOntoCoordination_(mesh, coordination)
   mesh.userData.aabbImposter = true
+  // No preview element id (see payloadToPreviewMesh): a plate stands for a
+  // spatial node such as a storey, not a product, so it is no pick target.
   return mesh
 }

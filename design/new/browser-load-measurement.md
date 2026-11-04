@@ -430,6 +430,17 @@ rather than a CPU-versus-bandwidth one. Playwright has no `page.metrics()`
   The effect itself is real, though: per-frame cost competing with the pump
   for the main thread is what a weak GPU sees, and it matters for
   first-mesh interactivity (#2043).
+  **Since #2043 a progressive Conway load paints on demand**
+  (`src/viewer/three/renderDemand.js`): the loop still ticks, but between the
+  session's start and finish a frame paints only for the user (camera,
+  selection, resize) or within a budget for the load. So at a native frame
+  rate a load no longer pays for sixty paints a second, and native-rate
+  numbers from before and after #2043 are not comparable either; the frozen
+  loop still is the like-for-like setting for engine and pump time. What the
+  user's own interaction costs (an orbit paints every frame) is measured in
+  design/new/in-app-model-switch.md §4.2a. A probe that wants paints rather
+  than frames must count render-closure calls that did work — a skipped
+  frame returns in microseconds.
 - **`waitForModelReady`'s budget.** The shared helper defaults to 15 s;
   `measureLoad` passes its own `timeoutMs` (120 s default) because a big
   model or a throttled CPU blows straight through 15 s.
