@@ -323,3 +323,86 @@ describe('engine/engineHandler helpers', () => {
       .toEqual({phase: 'p', completed: 1, residentSourceMb: 4})
   })
 })
+
+
+describe('engine/EngineSession teardown on a crash (review on #2057)', () => {
+  /** @return {object} a Worker-shaped EventTarget */
+  function makeFakeWorker() {
+    const worker = new EventTarget()
+    worker.postMessage = () => null
+    worker.terminate = jest.fn()
+    return worker
+  }
+
+  it('a messageerror terminates the worker, so its heap is freed', () => {
+    const worker = makeFakeWorker()
+    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 1})
+    worker.dispatchEvent(new Event('messageerror'))
+    expect(worker.terminate).toHaveBeenCalledTimes(1)
+    expect(session.closed).toBe(true)
+  })
+
+  it('an error terminates the worker, and a later close() is a no-op', () => {
+    const worker = makeFakeWorker()
+    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 1})
+    worker.dispatchEvent(Object.assign(new Event('error'), {message: 'boom'}))
+    expect(worker.terminate).toHaveBeenCalledTimes(1)
+    session.close()
+    session.close()
+    expect(worker.terminate).toHaveBeenCalledTimes(1)
+  })
+})
+
+
+describe('engine worker prelude modules', () => {
+  const g = globalThis
+  let savedProcess
+
+  beforeEach(() => {
+    savedProcess = Object.getOwnPropertyDescriptor(g, 'process')
+  })
+
+  afterEach(() => {
+    Object.defineProperty(g, 'process', savedProcess)
+  })
+
+  it('engineThreading forces the single-threaded engine through the guarded global', () => {
+    jest.isolateModules(() => {
+      require('./engineThreading')
+    })
+    // What conway reads: `typeof process !== 'undefined' &&
+    // process?.env?.FORCE_SINGLE_THREAD === 'true'`.
+    expect(typeof process).not.toBe('undefined')
+    expect(g.process.env.FORCE_SINGLE_THREAD).toBe('true')
+  })
+
+  it('the worker entry imports engineThreading before anything else', () => {
+    // A static check, because the worker bundle cannot run in Jest: the
+    // single-thread switch must be set before conway's module code runs.
+    const source = require('fs').readFileSync(require('path').join(__dirname, 'Engine.worker.js'), 'utf8')
+    const imports = source.split('\n').filter((line) => line.startsWith('import '))
+    expect(imports[0]).toBe('import \'./engineThreading\'')
+  })
+
+  it('workerPlatform binds the native log callbacks to conway\'s Logger', () => {
+    const names = ['logInfo', 'logWarning', 'logError']
+    const saved = names.map((name) => g[name])
+    for (const name of names) {
+      delete g[name]
+    }
+    try {
+      let Logger
+      jest.isolateModules(() => {
+        require('./workerPlatform')
+        Logger = require('@bldrs-ai/conway/src/logging/logger').default
+      })
+      expect(g.logInfo).toBe(Logger.info)
+      expect(g.logWarning).toBe(Logger.warning)
+      expect(g.logError).toBe(Logger.error)
+    } finally {
+      names.forEach((name, i) => {
+        g[name] = saved[i]
+      })
+    }
+  })
+})

@@ -242,7 +242,8 @@ export class EngineSession {
 
 
   /**
-   * Refuse everything still pending, and every later request.
+   * End the session, once: refuse everything still pending and every later
+   * request, and terminate the engine. Idempotent.
    *
    * @param {Error} error
    * @param {string} kind `crash` | `closed`
@@ -258,6 +259,11 @@ export class EngineSession {
       slot.reject(error)
     }
     this.rejectIndexed(error)
+    // One teardown for every way a session ends. A worker that died with
+    // `error` / `messageerror` is not necessarily gone (a `messageerror`
+    // leaves it running), and until it is terminated it pins its whole heap
+    // (§3: PSB's 2.2 GB). `close()` after this is a no-op.
+    this.transport.terminate()
     if (kind === 'crash') {
       for (const cb of this.listeners.get(Ev.FAILED) ?? []) {
         cb({ev: Ev.FAILED, kind: 'crash', message: error.message})
@@ -274,11 +280,7 @@ export class EngineSession {
    * would.
    */
   close() {
-    if (this.closed) {
-      return
-    }
     this.fail(new Error(SESSION_CLOSED), 'closed')
-    this.transport.terminate()
   }
 }
 

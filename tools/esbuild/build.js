@@ -78,6 +78,9 @@ const engineWorkerBuild = esbuild.build({
   outdir: undefined,
   outfile: path.join(buildDir, 'Engine.worker.js'),
   format: 'esm',
+  // Single-threaded engine, always (src/engine/engineThreading.js says why a
+  // define alone is not enough and sets the guarded global too).
+  define: {...config.define, 'process.env.FORCE_SINGLE_THREAD': '"true"'},
 })
 
 // Pro modules — premium export code, built OUTSIDE `docs/` so it is never

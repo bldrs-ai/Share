@@ -8,6 +8,7 @@
 // workers is the in-process transport, not a classic-IIFE bundle as the OPFS
 // and GLB writer workers have: that keeps one engine build per page (§8
 // item 6).
+import './engineThreading'
 import './workerPlatform'
 import {createEngineHandler} from './engineHandler'
 
