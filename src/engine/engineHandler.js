@@ -20,8 +20,9 @@
 // while the parse runs, then the geometry pump's batches as transferable
 // columns, then a `done` packet), with a failed open classified here, where
 // conway's statistics are (§2.4 G3); the async reads (`tree`, `props`,
-// `propertySets`, `itemsOfType`); and `pump` pause/run and `abort`. The GLB
-// capture job comes in step 5.
+// `propertySets`, `itemsOfType`, and the Properties panel's `propertyTables`);
+// and `pump` pause/run and `abort`. The GLB capture job comes in step 5.
+import {resolvePropertyTables, schemaTypeName} from '../Components/Properties/propertyTable'
 import {classifyOpenFailure, openDeferred} from '../loader/conwayOpen'
 import {ENGINE_PROTOCOL_VERSION, Ev, Op, serializeError} from './protocol'
 import {openSourceStore} from './engineSources'
@@ -149,6 +150,28 @@ export function createEngineHandler({
   }
 
 
+  // propertyTable.js's reads over this engine. The same calls the page's
+  // reads make through the facade (a model's `getItemProperties(id,
+  // recursive)` is a PROPS request, and its `getIfcType` the static table),
+  // so a table resolved here is the one resolved on the page
+  // (itemProperties.jsx#readerFor).
+  //
+  // A table is many awaited reads, and handle() does not serialise ops, so a
+  // CLOSE can land between two of them. Each read checks the model is still
+  // open, so the table then stops at its next read with "no model is open"
+  // rather than reading a disposed engine.
+  const tableReader = {
+    read: (id, recursive) => {
+      requireModel()
+      return api.properties.getItemProperties(modelID, id, recursive)
+    },
+    readMember: (id) => {
+      requireModel()
+      return api.properties.getItemProperties(modelID, id, false)
+    },
+    typeLookups: [schemaTypeName],
+  }
+
   const requireModel = () => {
     if (api === null) {
       throw new Error('engine: init has not run')
@@ -199,6 +222,10 @@ export function createEngineHandler({
           openStream: typeof api.OpenModelStream === 'function',
           openFromIndex: typeof api.OpenModelFromIndex === 'function',
           asyncPump: typeof api.ExtractGeometryBatchAsync === 'function',
+          // This handler's, not conway's: says the page may send
+          // PROPERTY_TABLES. A stale worker bundle (a deploy mid-session)
+          // does not say it, and the page resolves its tables itself.
+          propertyTables: true,
         },
         wasmBytes: wasmBytesOf(api),
         initMs: now() - t0,
@@ -257,6 +284,16 @@ export function createEngineHandler({
         records.push(await api.properties.getItemProperties(modelID, id, recursive))
       }
       return records
+    },
+
+    async [Op.PROPERTY_TABLES]({tables = []} = {}) {
+      requireModel()
+      // The panel's whole table in one reply (Share#2070): every read it
+      // needs is made here, under 1 ms each, instead of one round trip per
+      // reference, each waiting behind a page frame. `tableReader` makes the
+      // calls the page's facade would have made for each one, so the table is
+      // the one the main-thread engine builds.
+      return await resolvePropertyTables(tableReader, tables)
     },
 
     async [Op.PROPERTY_SETS]({id, recursive = false} = {}) {
