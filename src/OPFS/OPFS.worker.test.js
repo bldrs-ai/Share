@@ -360,6 +360,17 @@ test('computeGitBlobSha1FromHandle works', async () => {
   expect(hash).toBe('b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0')
 })
 
+test('computeGitBlobSha1FromHandle hashes through a READ-ONLY sync access handle', async () => {
+  // engine-worker.md §7 step 4: the engine worker holds a read-only handle
+  // on an open model's OPFS source. A default (readwrite) handle is
+  // exclusive and would fail beside it; read-only handles share.
+  const fileHandle = new FileHandle('test')
+  fileHandle.data = new Uint8Array(Buffer.from('hello'))
+  const spy = jest.spyOn(fileHandle, 'createSyncAccessHandle')
+  await worker.computeGitBlobSha1FromHandle(fileHandle)
+  expect(spy).toHaveBeenCalledWith({mode: 'read-only'})
+})
+
 test('retrieveFileWithPathNew matches file starting with segment', async () => {
   const folder = await rootDir.getDirectoryHandle('folder', {create: true})
   await folder.getFileHandle('model.ifc.etag.commit', {create: true})

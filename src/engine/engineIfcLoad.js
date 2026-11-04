@@ -15,7 +15,8 @@
 //     and applied matrices, the unit scale) come from the `done` packet.
 // There is no other engine on the page for this model, so no sync engine
 // method can be reached by accident: the facade has none to offer.
-import {reportEngineLog, reportEngineVersion} from '../loader/loadProgress'
+import {opfsFileHandleFor} from '../OPFS/opfsFileHandles'
+import {reportEngineLog, reportEngineVersion, reportSourceInfo} from '../loader/loadProgress'
 import {openModelFailure} from '../loader/unsupportedSchema'
 import {conwayDirectInfo, conwayDirectWarn} from '../viewer/ifc/conwayDirectLog'
 import {viewRules} from '../viewer/legacyViewRules'
@@ -322,6 +323,7 @@ export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
       session.close()
       throw e
     }
+    reportSourceInfo(sourceIoLine(ifcAPI.summary.source))
     // The integration-boundary line conwayDirectIfcLoader prints for the
     // main-thread pump (Share#1744), for a worker load. Named differently on
     // purpose: E2E specs tell the two engines apart by which line appears.
@@ -359,7 +361,11 @@ export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
  */
 function sourceFor(buffer) {
   if (typeof buffer?.slice === 'function' && typeof buffer?.size === 'number') {
-    return {file: buffer}
+    // An OPFS File comes with the entry it was read from, which the engine
+    // opens a read-only sync access handle on (§7 step 4,
+    // engineSources.js); FileSystemFileHandle structured-clones.
+    const opfsHandle = opfsFileHandleFor(buffer)
+    return opfsHandle ? {file: buffer, opfsHandle} : {file: buffer}
   }
   if (ArrayBuffer.isView(buffer)) {
     return {bytes: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)}
@@ -421,4 +427,29 @@ export const LEGACY_VIEW_RULES_MESSAGE =
 export function hasLegacyViewRules(search = globalThis.location?.search ?? '') {
   const view = new URLSearchParams(search).get('view')?.toLowerCase()
   return Boolean(view) && view !== 'default' && Object.hasOwn(viewRules, view)
+}
+
+
+/* eslint-disable no-magic-numbers */
+const MIB = 1024 * 1024
+const MS_PER_S = 1000
+/* eslint-enable no-magic-numbers */
+
+
+/**
+ * The load report's line for how the engine read its source (§7 step 4):
+ * through an OPFS sync access handle, or the Blob store and why.
+ *
+ * @param {object|undefined} source the `done` packet's `source`
+ * @return {string|undefined}
+ */
+export function sourceIoLine(source) {
+  if (!source || source.kind === 'resident') {
+    return undefined
+  }
+  const via = source.kind === 'syncHandle' ?
+    'OPFS sync access handle' :
+    `Blob store${source.fallbackReason ? ` (${source.fallbackReason})` : ''}`
+  return `Engine source I/O: ${via}, ${source.reads} reads, ` +
+    `${(source.bytes / MIB).toFixed(1)} MB, ${(source.ms / MS_PER_S).toFixed(2)}s`
 }

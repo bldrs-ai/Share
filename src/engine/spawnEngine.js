@@ -55,7 +55,10 @@ export function supportsModuleWorkers() {
  * @return {object}
  */
 export function engineFlagSnapshot() {
-  return {disableStreamOpen: isFeatureEnabled('disableStreamOpen')}
+  return {
+    disableStreamOpen: isFeatureEnabled('disableStreamOpen'),
+    disableEngineSyncHandle: isFeatureEnabled('disableEngineSyncHandle'),
+  }
 }
 
 

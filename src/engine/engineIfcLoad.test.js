@@ -23,6 +23,7 @@ import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
 jest.mock('../loader/loadProgress', () => ({
   reportEngineLog: jest.fn(),
   reportEngineVersion: jest.fn(),
+  reportSourceInfo: jest.fn(),
 }))
 
 

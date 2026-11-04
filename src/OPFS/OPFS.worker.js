@@ -342,8 +342,12 @@ export async function fetchRGHUC(modelUrl) {
  * @return {Promise<string>} The computed SHA-1 hash in hexadecimal format.
  */
 export async function computeGitBlobSha1FromHandle(modelBlobFileHandle) {
-  // Create FileSystemSyncAccessHandle on the file
-  const blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
+  // READ-ONLY where the browser has it: hashing only reads, and a default
+  // (readwrite) handle is exclusive, so it would fail with
+  // NoModificationAllowedError while an engine worker holds its own
+  // read-only handle on the same model (engine-worker.md §7 step 4) — the
+  // same model opened again, or in another tab. read-only handles share.
+  const blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle({mode: 'read-only'})
 
   try {
     // Get the size of the file
@@ -846,6 +850,10 @@ export async function postFinalDownloadEventAfterRename(
     completed: true,
     event: renamed ? 'renamed' : 'download',
     file: finalFile,
+    // The entry itself, beside the File snapshot, so the engine worker can
+    // open a read-only sync access handle on it (engine-worker.md §7 step
+    // 4). FileSystemFileHandle structured-clones; see opfsFileHandles.js.
+    fileHandle: finalFileHandle,
     lastModifiedGithub: lastModifiedGithub,
   }, requestId)
 }
@@ -909,7 +917,7 @@ export async function writeBase64Model(content, shaHash, originalFilePath, owner
           // Commit hash already known — file in OPFS is at its final name.
           // Single terminal event.
           const blobFile = await modelBlobFileHandle.getFile()
-          postReply({completed: true, event: 'exists', file: blobFile}, requestId)
+          postReply({completed: true, event: 'exists', file: blobFile, fileHandle: modelBlobFileHandle}, requestId)
           return
         }
 
@@ -1015,7 +1023,9 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
           // Commit hash already known — file in OPFS is at its final name,
           // single terminal event.
           const blobFile = await modelBlobFileHandle.getFile()
-          postReply({completed: true, event: 'exists', file: blobFile, lastModifiedGithub}, requestId)
+          postReply({
+            completed: true, event: 'exists', file: blobFile, fileHandle: modelBlobFileHandle, lastModifiedGithub,
+          }, requestId)
           return
         }
 
@@ -1178,7 +1188,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
     if (fileIsCached) {
       const blobFile = await modelBlobFileHandle.getFile()
 
-      postReply({completed: true, event: 'exists', file: blobFile}, requestId)
+      postReply({completed: true, event: 'exists', file: blobFile, fileHandle: modelBlobFileHandle}, requestId)
       return
     } else {
       await modelBlobFileHandle.remove()
@@ -1270,7 +1280,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       try {
         const blobFile = await modelBlobFileHandle.getFile()
 
-        postReply({completed: true, event: 'download', file: blobFile}, requestId)
+        postReply({completed: true, event: 'download', file: blobFile, fileHandle: modelBlobFileHandle}, requestId)
       } catch (error) {
         const workerMessage = `Error Getting file handle: ${error}.`
         postReply({error: workerMessage}, requestId)
@@ -1787,7 +1797,7 @@ export async function readModelByPathFromOPFS(commitHash, originalFilePath, owne
       postReply({completed: true, event: 'notexist', commitHash: commitHash}, requestId)
       return
     }
-    postReply({completed: true, event: 'read', file: file}, requestId)
+    postReply({completed: true, event: 'read', file: file, fileHandle: modelBlobFileHandle}, requestId)
   } catch (error) {
     postReply({error: `readModelByPath: ${error.message || error}`}, requestId)
   }
@@ -1976,7 +1986,7 @@ export async function readModelFromOPFS(objectKey, requestId) {
 
       const blobFile = await blobFileHandle.getFile()
 
-      postReply({completed: true, event: 'read', file: blobFile}, requestId)
+      postReply({completed: true, event: 'read', file: blobFile, fileHandle: blobFileHandle}, requestId)
     } catch (error) {
       const errorMessage = `Error retrieving File from ${objectKey}: ${error}.`
       postReply({error: errorMessage}, requestId)
@@ -2073,7 +2083,7 @@ export async function readFileFromOPFS(fileName, requestId) {
     try {
       const fileHandle = await newFileHandle.getFile()
 
-      postReply({completed: true, event: 'read', file: fileHandle}, requestId)
+      postReply({completed: true, event: 'read', file: fileHandle, fileHandle: newFileHandle}, requestId)
     } catch (error) {
       const errorMessage = `Error retrieving File from ${fileName}: ${error}.`
       postReply({error: errorMessage}, requestId)

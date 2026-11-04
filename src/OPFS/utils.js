@@ -1,3 +1,4 @@
+import {rememberOpfsFileHandle} from './opfsFileHandles'
 import {
   initializeWorker,
   nextRequestId,
@@ -78,6 +79,9 @@ function workerRequest(kickoff, onReply) {
         settle.reject(new Error(`OPFS worker finished ${requestId} without a reply`))
         return
       }
+      // Every reply that carries a File also carries the OPFS entry it came
+      // from; remember the pairing for the engine worker (opfsFileHandles.js).
+      rememberOpfsFileHandle(event.data.file, event.data.fileHandle)
       onReply(event.data, settle)
     }
     workerRef.addEventListener('message', listener)
