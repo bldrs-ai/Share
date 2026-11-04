@@ -645,6 +645,35 @@ describe('loader/bldrsElementProperties', () => {
       }
     })
 
+    it('does not yield per BFS generation on a small model', async () => {
+      // On a page that is painting, each yield waits out a frame (~1 s under
+      // SwiftShader): one per generation made index.ifc's 72-record capture
+      // take 8.7 s and timed out NavTree.cacheHit.spec.ts. The sweep yields
+      // once per ENTITIES_PER_YIELD records, as it always did.
+      const entities = {
+        10: root(10, [200]),
+        200: leaf(200, [300]),
+        300: leaf(300, [400]),
+        400: leaf(400),
+      }
+      const {mgr} = makeWindowedMgr(entities)
+      const hadScheduler = Object.hasOwn(globalThis, 'scheduler')
+      const savedScheduler = globalThis.scheduler
+      const yieldSpy = jest.fn(() => Promise.resolve())
+      globalThis.scheduler = {yield: yieldSpy}
+      try {
+        const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+        expect(Object.keys(captured.itemProperties)).toHaveLength(4)
+      } finally {
+        if (hadScheduler) {
+          globalThis.scheduler = savedScheduler
+        } else {
+          delete globalThis.scheduler
+        }
+      }
+      expect(yieldSpy).not.toHaveBeenCalled()
+    })
+
     it('keeps the rest of a chunk, and reports the records it could not read', async () => {
       // One record that throws fails conway's whole visit; the chunk is then
       // read record by record, and only that record is lost.

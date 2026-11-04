@@ -764,10 +764,13 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
 
     /**
      * Read `ids` a chunk at a time and hand each record to `handle` in the
-     * order of `ids`, not the order conway visited them in. One cooperative
-     * yield per chunk (see ENTITIES_PER_YIELD): the sweep is otherwise pure
-     * JS on a resident source and would hold the main thread for the whole
-     * walk.
+     * order of `ids`, not the order conway visited them in.
+     *
+     * Yields to the browser once per ENTITIES_PER_YIELD records over the
+     * whole sweep, the cadence the sweep always had, NOT once per chunk: a
+     * BFS generation is often a few records, and on a page that is painting
+     * every yield waits out a frame (about 1 s each under SwiftShader). A
+     * yield per generation made `index.ifc`'s 72-record capture take 8.7 s.
      *
      * @param {Array<number>} ids
      * @param {function(number, (object|undefined)): void} handle
@@ -779,8 +782,11 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
         for (const id of chunk) {
           handle(id, records.get(id))
         }
+        const before = iterCount
         iterCount += chunk.length
-        await yieldToBrowser()
+        if (Math.floor(iterCount / ENTITIES_PER_YIELD) > Math.floor(before / ENTITIES_PER_YIELD)) {
+          await yieldToBrowser()
+        }
       }
     }
 
