@@ -388,10 +388,12 @@ construction, not by a guard).
 | `batch` | placement columns + new geometries + `{done, total}`, plus the worker's current `wasmBytes` | all buffers |
 | `done` | summary: statistics, coordination matrix, applied matrix, linear scaling factor, build-relevant counts, `wasmBytes` | — |
 | `failed` | `{kind, message, statistics?, schema?}` | — |
+| `account` | only when batches go to a `stream.sink`: `{seq, wasmBytes, batchBytes}` per batch, on the control port (§9) | — |
 
 `stream.sink` is a `MessagePort` the caller may pass so geometry goes
 straight to whoever builds the scene: the main thread today, a render
-worker later (§9). Without it, events go to the worker's own port.
+worker later (§9). Without it, events go to the worker's own port. With
+it, the host's budget accounting still runs on the control port (§9).
 
 **Not in v1:** document writes (the op log, model-edit.md L1). They slot
 in as more ops without changing the shape. The index-sidecar export
@@ -498,16 +500,19 @@ One `EngineHost` per page owns every session's worker.
 
 - **Switch A → B.** B's session spawns its worker at once if the total
   still fits the budget; A's keeps its worker and its load. Nothing is
-  disposed. This is the common case, and on desktop the only one.
-- **Switch A → B when B does not fit** (a phone, in practice). The host
+  disposed. This is the common case.
+- **Switch A → B when B does not fit.** One budget-governed rule on every
+  platform. It is most likely on a phone, but two still-loading PSB-sized
+  models (~2.5 GB each, §5.2) reach it on a 4 GiB desktop too. The host
   pauses background pumps first, then evicts idle engines (§5.2). If A is
   still loading and B still does not fit, A is cancelled into an explicit,
   user-visible **paused — will resume** state. It is not silently dropped:
   A's tab says so, and when A is foregrounded again its load resumes from
   the OPFS-staged source, through the sidecar if one was written (§8 item
   4) and otherwise by a re-parse. So in-app-model-switch.md §4.0's "come
-  back to a finished load" holds on desktop and is **best-effort on
-  phones**. This is a provisional call, revisable (§8 item 2).
+  back to a finished load" becomes **a finished background load when the
+  budget allows; otherwise paused — will resume**. This is a provisional
+  call, revisable (§8 item 2).
 - **Background load.** A's parse and pump run on A's worker thread and cost
   the foreground nothing there. What still lands on the main thread is
   *assembling* A's batches into A's scene (builder appends, the end-of-load
@@ -630,9 +635,9 @@ second, divergent path.
    batch policy (§8 item 1). Tests, each shown failing on revert: queued
    geometry bytes count against the budget, and reaching it pauses the
    background pump rather than evicting it (a unit on `EngineHost` with a
-   lowered budget); and a `describeMobileAndDesktop` E2E where the mobile
-   leg's lowered budget puts the background load into "paused — will
-   resume" and foregrounding it completes the load.
+   lowered budget); and a `describeMobileAndDesktop` E2E where, on both
+   form factors, a lowered budget puts the background load into "paused —
+   will resume" and foregrounding it completes the load.
 8. **Close and eviction** (#2031, absorbed). `EngineHost`, the budget and
    LRU, `terminate`, the artifact fallback, lazy index-only rehydrate
    through the conway#756 sidecar (re-parse fallback). E2E:
@@ -662,11 +667,12 @@ These were the open questions of the scope. The user decided each one.
    - Queued, unassembled background geometry counts against the budget, and
      reaching the budget pauses background pumps (backpressure) before
      anything is evicted.
-   - Phones have no fixed engine count; the budget governs them. A switch
-     may run a second engine while the total fits. When it does not, the
-     still-loading background model goes into a user-visible "paused —
-     will resume" state and resumes from OPFS when foregrounded, so a
-     finished background load is best-effort on phones (§5.3).
+   - Phones have no fixed engine count; the budget governs them. On every
+     platform a switch may run another engine while the total fits. When
+     it does not, the still-loading background model goes into a
+     user-visible "paused — will resume" state and resumes from OPFS when
+     foregrounded. A finished background load is promised when the budget
+     allows, and otherwise it is paused, will resume (§5.3).
    - The estimate is live: wasm bytes ride on every `progress` and `batch`
      event, plus a calibrated non-wasm allowance (§5.2). Step 7 re-measures
      the two allowance constants against real loads.
@@ -714,6 +720,15 @@ picking:
   buffers flow from the engine to the scene builder without the main thread
   ever touching them. Without one, the sink is the main thread. Nothing in
   the engine protocol changes between the two.
+- **A sink keeps the host's accounting.** The budget (§5.2) is recomputed
+  from each batch's `wasmBytes` and from the bytes still queued
+  unassembled, and a sink would take both away from the host. So when
+  batches go to a sink, the engine also posts a small `account` event on
+  its control port for each one (`wasmBytes`, the batch's byte size,
+  `seq`). The sink's owner, the render worker, posts drain acks back to the
+  host (`{session, seq, assembledBytes}`) as it assembles. Queued bytes are
+  sent minus acked, and backpressure (`pump` pause/resume) stays the host's
+  decision.
 - **One worker per model for both?** Not recommended. The render worker is
   one per canvas and holds every visible model's scene (multi-model, #1251);
   the engine worker is one per model and is terminated on eviction. Fusing
