@@ -91,6 +91,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   re-blessing regression baselines, closing issues someone else filed —
   or for a decision the measurements genuinely don't settle, and say
   which it is.
+- **IFC and STEP converge.** The two pipelines (open, index, tree, properties, geometry pump, engine worker, export) should mostly converge over time. When you touch one, look for the shared seam first: extract shared modules rather than adding a format-specific copy, and route both formats through it. A format difference that has to stay is data (e.g. STEP's buffered source and occurrence paths vs IFC's express IDs), and the code that keeps it says why. New engine work lands for both formats, or names the follow-up for the other.
 - **PRs: auto-subscribe to CI / review activity.** Immediately after `create_pull_request` succeeds, call `subscribe_pr_activity` for that PR without asking. The default-prompt asks first — for this repo, skip that question and just subscribe. Babysitting is the expected mode here: watch CI, autofix tractable failures, respond to review comments per the system-prompt rules (small + confident → push the fix; ambiguous or architecturally significant → `AskUserQuestion` first; no-op-able → skip silently). Only `unsubscribe_pr_activity` when the user explicitly says to stop.
 
 
