@@ -480,6 +480,47 @@ test('clearCache reports what it skipped', async () => {
 })
 
 
+/**
+ * owner/repo/branch/<file>.<commit> in the in-memory OPFS, whose remove()
+ * fails the way a held entry's does (engine-worker.md §7 step 4).
+ *
+ * @param {string} fileName
+ * @param {string} commitHash
+ * @return {Promise<FileHandle>}
+ */
+async function lockedModelEntry(fileName, commitHash) {
+  const owner = await rootDir.getDirectoryHandle('owner', {create: true})
+  const repo = await owner.getDirectoryHandle('repo', {create: true})
+  const branch = await repo.getDirectoryHandle('main', {create: true})
+  const entry = await branch.getFileHandle(`${fileName}.${commitHash}`, {create: true})
+  entry.remove = () => Promise.reject(new DOMException('locked', 'NoModificationAllowedError'))
+  return entry
+}
+
+
+test('deleteModelFromOPFS answers a held entry with an error, not a false \'deleted\'', async () => {
+  await lockedModelEntry('m.ifc', 'c1')
+  await worker.deleteModelFromOPFS('c1', 'm.ifc', 'owner', 'repo', 'main', 3)
+  expect(self.postMessage.mock.calls.map(([m]) => m)).toEqual([
+    {error: 'deleteModelFromOPFS: m.ifc.c1 is open in an engine; not deleted', requestId: 3},
+  ])
+})
+
+
+test('downloadModelToOPFS answers a held stale copy with an error instead of throwing', async () => {
+  // The stale-commit branch: the found entry's name does not parse back to
+  // the commit asked for (a commit string that itself contains the file
+  // name is one way there).
+  await lockedModelEntry('a.ifc', 'a.ifc.x')
+  global.fetch = jest.fn()
+  await worker.downloadModelToOPFS('https://x/a.ifc', 'a.ifc.x', 'a.ifc', 'owner', 'repo', 'main', false, 4)
+  expect(self.postMessage.mock.calls.map(([m]) => m)).toEqual([
+    {error: 'downloadModelToOPFS: a.ifc.a.ifc.x is open in an engine; not replaced', requestId: 4},
+  ])
+  expect(global.fetch).not.toHaveBeenCalled()
+})
+
+
 test('snapshotCache posts directory snapshot', async () => {
   await rootDir.getFileHandle('foo.txt', {create: true})
   await worker.snapshotCache()

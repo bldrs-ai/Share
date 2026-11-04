@@ -140,6 +140,7 @@ const MAX_OPFS_ENTRIES_SCANNED = 10000
  * @param {object} root FileSystemDirectoryHandle to search under
  * @param {number} [maxEntries]
  * @return {Promise<object|null>} the FileSystemFileHandle, or null
+ * @throws {Error} past `maxEntries` (`OPFS scan limit (N entries)`)
  */
 export async function findOpfsEntry(file, root, maxEntries = MAX_OPFS_ENTRIES_SCANNED) {
   if (!root || typeof file?.name !== 'string' || file.name === '') {
@@ -151,12 +152,21 @@ export async function findOpfsEntry(file, root, maxEntries = MAX_OPFS_ENTRIES_SC
     const dir = dirs.pop()
     for await (const [name, handle] of dir.entries()) {
       if (++visited > maxEntries) {
-        return null
+        // Its own reason on the load report (via openSourceStore's catch),
+        // not "not an OPFS file", which would read like a fetched Blob.
+        throw new Error(`OPFS scan limit (${maxEntries} entries)`)
       }
       if (handle.kind === 'directory') {
         dirs.push(handle)
       } else if (name === file.name) {
-        const current = await handle.getFile()
+        let current
+        try {
+          current = await handle.getFile()
+        } catch {
+          // A same-named copy being torn down (another tab): not this one,
+          // and no reason to give up on the rest of the walk.
+          continue
+        }
         if (current.size === file.size && current.lastModified === file.lastModified) {
           return handle
         }
@@ -192,10 +202,12 @@ export async function findOpfsEntry(file, root, maxEntries = MAX_OPFS_ENTRIES_SC
  * @param {function(): number} [options.now]
  * @param {function(): Promise<object>} [options.getOpfsRoot] for tests
  * @param {function(): boolean} [options.canSyncHandle] for tests
+ * @param {number} [options.maxOpfsEntries] for tests
  * @return {Promise<{store: object, fallbackReason: (string|null)}>}
  */
 export async function openSourceStore(source, {
   allowSyncHandle = true, now, getOpfsRoot = opfsRoot, canSyncHandle = canOpenSyncHandles,
+  maxOpfsEntries = MAX_OPFS_ENTRIES_SCANNED,
 } = {}) {
   const blob = source.file
   const fallback = (reason) => ({store: makeBlobStore(blob, now), fallbackReason: reason})
@@ -209,7 +221,7 @@ export async function openSourceStore(source, {
   }
   let entry
   try {
-    entry = await findOpfsEntry(blob, await getOpfsRoot())
+    entry = await findOpfsEntry(blob, await getOpfsRoot(), maxOpfsEntries)
   } catch (e) {
     return fallback(`OPFS lookup failed: ${describe(e)}`)
   }

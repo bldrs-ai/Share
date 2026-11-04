@@ -658,14 +658,24 @@ second, divergent path.
        from the network, as on any OPFS error.
      - Another tab re-staging or evicting a model this tab has open hits
        the same lock, and is handled the same way.
-   - **Release.** A sync-handle session's `EngineSession#close()` sends
-     `close` and waits for its reply, at most `ENGINE_CLOSE_TIMEOUT_MS`
-     (1 s), before `terminate()`. The handler releases the handle after
-     `CloseModel`, at a known point rather than whenever the browser gets
-     to it after termination, so an in-app switch (step 7) can't race it.
-     Any other session is terminated at once, as before. An open that
-     doesn't adopt the store (buffered fallback, failed or refused open,
-     a throw, a close that came first) closes it in a `finally`.
+   - **Release.** When a sync-handle session's open has replied,
+     `EngineSession#close()` sends `close` and waits for the reply, at
+     most `ENGINE_CLOSE_TIMEOUT_MS` (1 s), before `terminate()`. The
+     handler releases the handle after `CloseModel`. Any other session,
+     including one still opening, is terminated at once, and its lock
+     goes a little after `terminate()` returns. An open that doesn't
+     adopt the store (buffered fallback, failed or refused open, a throw,
+     a close that came first) closes it in a `finally`.
+   - *Clear cache* therefore clears twice if it has to. `clearOPFSCache`
+     resolves with what it skipped, and `ProfileControl` clears again
+     once after `CACHE_CLEAR_RETRY_MS` (0.5 s). If entries are still held
+     (another tab), it tells the user and keeps the local recents. The
+     startup sweep (`pruneLocalRecents.js`) drops the recents whose
+     entries went.
+   - **A requirement on step 7:** an in-app switch must await
+     `close()` before it evicts or re-stages the previous model's entry.
+     Today's switch reloads the page, so it doesn't need to; none of the
+     existing callers await it, apart from `closeAllEngineSessions`.
    - Kill switch: `?feature=disableEngineSyncHandle`.
 5. **GLB writer capture in the worker.** The `capture` job (properties,
    spatial tree, face ids), then spill and release worker-side, then the

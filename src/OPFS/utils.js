@@ -467,12 +467,25 @@ export function snapshotOPFS(previewWindow = 0) {
 }
 
 /**
- * Deletes entirety of OPFS cache
+ * Deletes entirety of OPFS cache, except entries another handle holds: an
+ * engine worker reading its model through a read-only sync access handle
+ * locks that entry (engine-worker.md §7 step 4), in this tab or another.
  *
- * @return {boolean}
+ * @return {Promise<Array<string>>} OPFS paths left behind (locked); empty
+ *   when everything went
  */
 export function clearOPFSCache() {
-  return makePromise((requestId) => opfsClearCache(requestId), 'clear')
+  return workerRequest((requestId) => opfsClearCache(requestId), (data, settle) => {
+    if (data.error) {
+      debug().error('Error from worker:', data.error)
+      settle.reject(new Error(data.error))
+      return
+    }
+    if (data.completed && data.event === 'clear') {
+      console.warn('OPFS cache cleared.')
+      settle.resolve(Array.isArray(data.skipped) ? data.skipped : [])
+    }
+  })
 }
 
 /**

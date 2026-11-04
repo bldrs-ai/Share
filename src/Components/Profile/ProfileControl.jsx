@@ -336,15 +336,18 @@ export default function ProfileControl() {
           onClick={async () => {
             onCloseMenu()
             try {
-              // First: an engine worker reading its model through an OPFS
-              // sync access handle holds that entry locked against removal
-              // (engine-worker.md §7 step 4). The page reloads below anyway.
-              await closeAllEngineSessions()
-              await clearOPFSCache()
-              // Uploads exist only in OPFS, so their recents now point at
-              // nothing. Only on success: if the clear failed the uploads
-              // may still be there (the startup sweep catches a partial).
-              clearRecentFilesBySource('local')
+              const skipped = await clearLocalCacheReleasingEngines()
+              if (skipped.length === 0) {
+                // Uploads exist only in OPFS, so their recents now point at
+                // nothing. Only on a full clear: what survived (and any
+                // upload in it) keeps its recent, and the startup sweep
+                // (pruneLocalRecents.js) drops the recents that lost theirs.
+                clearRecentFilesBySource('local')
+              } else {
+                // Held by an engine in another tab. Said, not reloaded over
+                // as if the clear had worked.
+                window.alert(cacheClearSkippedMessage(skipped))
+              }
             } catch (err) {
               console.error('Clear OPFS cache failed (reloading anyway)', err)
               captureException(err)
@@ -383,3 +386,42 @@ export default function ProfileControl() {
 
 
 export const useMock = process.env.OAUTH2_CLIENT_ID === 'cypresstestaudience'
+
+
+/**
+ * How long to wait before clearing again what the first pass skipped. An
+ * engine session still opening when the cache is cleared is terminated, not
+ * closed politely (spawnEngine.js#closeAllEngineSessions), and the browser
+ * lets its sync access handle's lock go a little after terminate() returns.
+ */
+export const CACHE_CLEAR_RETRY_MS = 500
+
+
+/**
+ * Clear the local (OPFS) cache with the engines released first: an engine
+ * worker reading its model through an OPFS sync access handle holds that
+ * entry locked against removal (engine-worker.md §7 step 4). What the first
+ * pass skips is cleared again once, after CACHE_CLEAR_RETRY_MS.
+ *
+ * @return {Promise<Array<string>>} OPFS paths still left behind
+ */
+export async function clearLocalCacheReleasingEngines() {
+  await closeAllEngineSessions()
+  const skipped = await clearOPFSCache()
+  if (skipped.length === 0) {
+    return skipped
+  }
+  await new Promise((resolve) => setTimeout(resolve, CACHE_CLEAR_RETRY_MS))
+  return await clearOPFSCache()
+}
+
+
+/**
+ * @param {Array<string>} skipped OPFS paths left behind
+ * @return {string} what the user is told
+ */
+export function cacheClearSkippedMessage(skipped) {
+  const n = skipped.length
+  return `${n} cached file${n === 1 ? ' is' : 's are'} open in another tab and ` +
+    `${n === 1 ? 'was' : 'were'} not cleared. Close the other Share tabs and clear the cache again.`
+}

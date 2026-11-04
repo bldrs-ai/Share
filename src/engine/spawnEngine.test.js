@@ -143,4 +143,16 @@ describe('engine/closeAllEngineSessions', () => {
     expect([a.closed, b.closed]).toEqual([true, true])
     expect(await closeAllEngineSessions()).toBe(0)
   })
+
+  it('closes a session still initialising too', async () => {
+    await closeAllEngineSessions()
+    const hung = function IfcAPI() {
+      return {wasmModule: undefined, Init: () => new Promise(() => null), properties: {}}
+    }
+    const spawning = spawnEngineSession({inProcess: true, loadIfcAPI: async () => hung})
+    // Let the session be created and its init request go out.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(await closeAllEngineSessions()).toBe(1)
+    await expect(spawning).rejects.toThrow()
+  })
 })

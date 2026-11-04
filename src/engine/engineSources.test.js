@@ -121,8 +121,30 @@ describe('engine/engineSources', () => {
     // A Blob has no name, and an upload kept in memory matches nothing.
     expect(await findOpfsEntry(new Blob([BYTES]), root)).toBeNull()
     expect(await findOpfsEntry(new File([BYTES], 'other.ifc', {lastModified: MTIME}), root)).toBeNull()
-    // The scan is bounded.
-    expect(await findOpfsEntry(snapshot(), root, 3)).toBeNull()
+  })
+
+  it('does not take a same-named entry whose bytes are not the snapshot\'s', async () => {
+    // Only the stale copies, so the match test itself decides.
+    expect(await findOpfsEntry(snapshot(), fakeDir({[NAME]: fakeEntry({lastModified: MTIME - 1})}))).toBeNull()
+    expect(await findOpfsEntry(snapshot(), fakeDir({[NAME]: fakeEntry({size: 8})}))).toBeNull()
+  })
+
+  it('skips a same-named entry it cannot read and keeps looking', async () => {
+    const broken = fakeEntry()
+    broken.getFile = async () => {
+      throw Object.assign(new Error('gone'), {name: 'NotFoundError'})
+    }
+    const entry = fakeEntry()
+    const root = fakeDir({a: fakeDir({[NAME]: entry}), b: fakeDir({[NAME]: broken})})
+    expect(await findOpfsEntry(snapshot(), root)).toBe(entry)
+  })
+
+  it('a scan past its bound falls back with its own reason', async () => {
+    const root = fakeDir({x: fakeDir({y: fakeDir({[NAME]: fakeEntry()})})})
+    await expect(findOpfsEntry(snapshot(), root, 2)).rejects.toThrow('OPFS scan limit (2 entries)')
+    const {fallbackReason} = await openSourceStore({file: snapshot()},
+      {getOpfsRoot: async () => root, canSyncHandle: () => true, maxOpfsEntries: 2})
+    expect(fallbackReason).toBe('OPFS lookup failed: Error: OPFS scan limit (2 entries)')
   })
 
   it('opens a read-only sync access handle on that entry and reads through it', async () => {
@@ -274,6 +296,17 @@ describe('engine/engineHandler reads a windowed source through the sync handle',
     expect(opened.source).toMatchObject({kind: 'syncHandle', fallbackReason: null, reads: 1, bytes: 4})
     expect(log).toEqual([])
     await session.close()
+    expect(log).toEqual(['CloseModel', 'access.close', 'terminate'])
+  })
+
+  it('closing twice is one polite close', async () => {
+    const log = []
+    const api = readingApi(log)
+    const session = await workerSession(api, fakeDir({[NAME]: fakeEntry({log})}), log)
+    await session.open({file: snapshot()})
+    const first = session.close()
+    expect(session.close()).toBe(first)
+    await first
     expect(log).toEqual(['CloseModel', 'access.close', 'terminate'])
   })
 
