@@ -63,7 +63,7 @@ export function engineFlagSnapshot() {
 export async function spawnEngineSession({
   inProcess = false,
   makeWorker = defaultMakeWorker,
-  loadIfcAPI = () => import('web-ifc').then((m) => m.IfcAPI),
+  loadIfcAPI = () => import('@bldrs-ai/conway/web-ifc').then((m) => m.IfcAPI),
 } = {}) {
   const epoch = nextEpoch++
   const useWorker = !inProcess && supportsModuleWorkers()

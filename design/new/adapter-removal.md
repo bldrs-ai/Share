@@ -56,11 +56,16 @@ rewritten.
   `serveStaticIsolated.mjs`, the `*-webifc` package scripts,
   `tools/playwright.webifc.config.js`, `webIfcEngine.webifc.spec.ts` and
   the `playwright-webifc-run` CI job.
-- Kept: a `'web-ifc'` → Conway compat alias in `tools/esbuild/plugins.js`,
-  now unconditional, solely because `@bldrs-ai/ifclib` (5.3.3) still
-  imports `web-ifc` in its `src/IfcModel.js` and depends on
-  `web-ifc ^0.0.35`, which is why `web-ifc` remains in `yarn.lock`. The
-  alias goes when ifclib drops that dependency.
+- Kept until 2026-11-04: a `'web-ifc'` → Conway compat alias in
+  `tools/esbuild/plugins.js`, there only because `@bldrs-ai/ifclib` 5.3.3
+  imported `web-ifc` (its `src/IfcModel.js`, re-exported from the main
+  entry) and depended on `web-ifc ^0.0.35`. ifclib 6.0.0
+  (bldrs-ai/ifctool#47) made its main entry engine-free: the value-type
+  tags `Ifc.js` needs are its own, the web-ifc extractor moved to the
+  `@bldrs-ai/ifclib/ifctool` subpath, and `web-ifc` is an optional peer.
+  Share pins 6.0.0, the alias is deleted, and `web-ifc` is no longer in
+  `yarn.lock`. A bare `'web-ifc'` import anywhere in Share now fails the
+  build instead of being redirected.
 
 ---
 
@@ -119,8 +124,9 @@ resolves to the real package — that is the **engine-comparison build**
 
 > **2026-11-01:** the `USE_WEBIFC_SHIM=false` build and
 > `playwright-webifc-run` are gone (status note above). Share imports
-> `@bldrs-ai/conway/web-ifc` directly; the alias survives only for
-> ifclib's transitive `'web-ifc'` import.
+> `@bldrs-ai/conway/web-ifc` directly. **2026-11-04:** the alias that
+> survived for ifclib's transitive `'web-ifc'` import is gone too
+> (ifclib 6.0.0).
 
 ### 1.2 What the adapter is
 
