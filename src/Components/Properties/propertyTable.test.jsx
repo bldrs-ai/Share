@@ -7,7 +7,7 @@ import {createEngineHandler} from '../../engine/engineHandler'
 import {ENGINE_PROTOCOL_VERSION, Op} from '../../engine/protocol'
 import {makeInProcessTransport} from '../../engine/transports'
 import {MAX_ARRAY_MEMBERS, createPropertyTable, createPropertyTables} from './itemProperties'
-import {decodeIFCString, resolvePropertyTables, resolveValue, schemaTypeName} from './propertyTable'
+import {decodeIFCString, hasProperties, resolvePropertyTables, resolveValue, schemaTypeName} from './propertyTable'
 
 
 // Share#2070: the Properties panel's tables are resolved by ONE module
@@ -445,5 +445,30 @@ describe('Properties on a GLB cache hit (Share#2066)', () => {
     expect(screen.getByText('Gridaxis')).toBeInTheDocument()
     expect(screen.getByText('Polyline')).toBeInTheDocument()
     expect(screen.getByText('#2')).toBeInTheDocument()
+  })
+})
+
+
+describe('aggregate-valued NominalValue (Share#2069, conway#766)', () => {
+  it('shows a complex number and a compound plane angle as their joined members', async () => {
+    const num = (value) => ({type: REAL, value})
+    const lines = {
+      1: {
+        expressID: 1, type: IFCPROPERTYSINGLEVALUE, Name: {type: STRING, value: 'Z'},
+        NominalValue: {type: REAL, value: [num(1.5), num(-2)]},
+      },
+      2: {
+        expressID: 2, type: IFCPROPERTYSINGLEVALUE, Name: {type: STRING, value: 'Angle'},
+        NominalValue: {type: REAL, value: [num(52), num(30), num(15), num(0)]},
+      },
+      3: {expressID: 3, type: IFCPROPERTYSINGLEVALUE, Name: {type: STRING, value: 'Plain'}, NominalValue: {type: REAL, value: 6}},
+    }
+    const reader = {readMember: async (id) => lines[id], typeLookups: [schemaTypeName]}
+    const table = await hasProperties(reader, [ref(1), ref(2), ref(3)])
+    expect(table.rows).toEqual([
+      {label: 'Z', value: '1.5, -2'},
+      {label: 'Angle', value: '52, 30, 15, 0'},
+      {label: 'Plain', value: 6},
+    ])
   })
 })

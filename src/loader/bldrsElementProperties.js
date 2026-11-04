@@ -693,9 +693,14 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
       if (props.type === IFCRELDEFINESBYPROPERTIES) {
         psetRelCount++
         const psetRef = props.RelatingPropertyDefinition
-        const psetId = psetRef && typeof psetRef === 'object' ? psetRef.value : null
+        // IfcPropertySetDefinitionSet reads as an ARRAY of refs since
+        // conway#766 (it used to keep only the first member); a plain
+        // IfcPropertySetDefinition is still one ref. Index every member.
+        const psetIds = (Array.isArray(psetRef) ? psetRef : [psetRef])
+          .map((ref) => (ref && typeof ref === 'object' ? ref.value : null))
+          .filter((id) => typeof id === 'number')
         const relatedObjects = props.RelatedObjects
-        if (typeof psetId === 'number' && Array.isArray(relatedObjects)) {
+        if (psetIds.length > 0 && Array.isArray(relatedObjects)) {
           for (const obj of relatedObjects) {
             if (!obj || typeof obj !== 'object') {
               continue
@@ -710,8 +715,10 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
               propertySets[productId] = list
             }
             // De-dup defensively — IFCs occasionally double-register.
-            if (!list.includes(psetId)) {
-              list.push(psetId)
+            for (const psetId of psetIds) {
+              if (!list.includes(psetId)) {
+                list.push(psetId)
+              }
             }
           }
         }
