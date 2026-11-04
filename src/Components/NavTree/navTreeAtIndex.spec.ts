@@ -1,4 +1,5 @@
 import {Locator, Page, expect, test} from '@playwright/test'
+import {watchEngineWorker} from '../../tests/e2e/engineWorker'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
@@ -99,10 +100,15 @@ describeMobileAndDesktop('Open 205: NavTree usable before geometry finishes', ()
   for (const {format, path, row} of [
     {format: 'IFC', path: '/share/v/p/index.ifc', row: 'Together'},
     {format: 'STEP', path: '/share/v/p/index.step', row: null},
+    // engine-worker.md §7 step 3: the same, with the model's engine in its
+    // own worker. The hold is honoured there by starting the worker's pump
+    // paused (engine/engineIfcLoad.js).
+    {format: 'IFC (engine worker)', path: '/share/v/p/index.ifc?feature=engineWorker', row: 'Together'},
   ]) {
     test(`${format}: expand, select and read properties while geometry is held`, async ({page}) => {
       const TEST_TIMEOUT = 90_000
       test.setTimeout(TEST_TIMEOUT)
+      const engine = watchEngineWorker(page)
       await page.goto(path)
       await waitForGeometryHeld(page)
 
@@ -151,6 +157,10 @@ describeMobileAndDesktop('Open 205: NavTree usable before geometry finishes', ()
       await expect(rows.nth(targetIndex)).toHaveAttribute('data-is-selected', 'true')
       // ...and only it: a reused STEP part's other occurrences stay unselected.
       expect(await navTreePanel.locator('[data-is-selected="true"]').count()).toBe(1)
+      if (path.includes('engineWorker')) {
+        // The worker leg really ran in the worker.
+        await engine.expectWorkerEngine()
+      }
     })
   }
 })

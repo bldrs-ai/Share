@@ -31,6 +31,7 @@ import {
   reportEngineVersion,
   reportFirstMesh,
   reportFramingExclusion,
+  reportEngineLog,
   reportGeometryStats,
   reportLoadProgress,
   reportModelInfo,
@@ -417,6 +418,35 @@ describe('loadProgress', () => {
           engineErrorDistinct: 2,
           engineWarnDistinct: 2,
           dataDefectTotal: 2,
+        })
+      })
+
+      it('counts an engine WORKER\'s forwarded log exactly as the main-thread Logger would', () => {
+        // engine-worker.md §2.4 G3: the same entries as the test above, but
+        // arriving folded with counts from a worker's Logger, which this
+        // module's proxy cannot see.
+        beginLoadProgress({fileInfo: 'part.step'})
+        reportGeometryStats({vertexCount: 8, triangleCount: 4})
+        reportEngineLog({
+          entries: [
+            {level: 'error', message: 'Error extracting face', count: 3},
+            {level: 'error', message: 'Error extracting product', count: 1},
+            {level: 'warning', message: 'Unsupported type: IfcFoo', count: 2},
+            {level: 'warning', message: 'Unsupported type: IfcBar', count: 1},
+            {level: 'error', message: DEFECT, category: DATA_DEFECT, count: 1},
+            {level: 'warning', message: DEFECT, category: DATA_DEFECT, count: 1},
+          ],
+          lines: [{level: 'warning', text: 'Unsupported type: IfcFoo #5', count: 2}],
+        })
+        endLoadProgress()
+        expect(getCompletedLoadStats()).toMatchObject({
+          engineErrorTotal: 4,
+          engineErrorDistinct: 2,
+          engineWarnDistinct: 2,
+          dataDefectTotal: 2,
+          // The worker's console warnings count as page warnings, as the
+          // console tee counts a main-thread engine's.
+          pageWarnCount: 2,
         })
       })
 

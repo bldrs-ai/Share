@@ -38,6 +38,7 @@ import {occurrencePathKey} from '../utils/occurrencePaths'
 import {modelHasCapability} from './ShareModel'
 import {paintPreviewSelection} from './previewSelection'
 import {isFeatureEnabled} from '../FeatureFlags'
+import {viewRules} from './legacyViewRules'
 import {
   applyBatchedInstancePreselection,
   applyBatchedInstanceSelection,
@@ -158,10 +159,6 @@ ColorManagement.enabled = true
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
 
 
-const viewRules = {
-  'default': [],
-  'ch.sia380-1.heatmap': ['Rule1', 'Rule2'],
-}
 /* eslint-disable jsdoc/no-undefined-types */
 /**
  * ShareViewer — the top-level viewer facade for Bldrs Share.

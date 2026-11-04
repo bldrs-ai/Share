@@ -31,6 +31,10 @@ export const Op = Object.freeze({
   ITEMS_OF_TYPE: 'itemsOfType',
   RELEASE: 'release',
   STATS: 'stats',
+  // Pump control (§5.2 backpressure): `{mode: 'pause' | 'run'}`.
+  PUMP: 'pump',
+  // End a streamed load at its next batch boundary.
+  ABORT: 'abort',
   CLOSE: 'close',
 })
 
@@ -43,6 +47,14 @@ export const Ev = Object.freeze({
   PROGRESS: 'progress',
   MODEL_INFO: 'modelInfo',
   INDEXED: 'indexed',
+  // A streamed open (§7 step 3): parse-time preview payloads, the pump's
+  // batches as transferable columns, and the end-of-load summary.
+  PREVIEW: 'preview',
+  BATCH: 'batch',
+  DONE: 'done',
+  // The engine's Logger entries and console warnings, folded with counts,
+  // for the page's load report (engineStream.js#makeLogForwarder).
+  LOG: 'log',
   FAILED: 'failed',
 })
 

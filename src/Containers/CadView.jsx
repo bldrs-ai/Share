@@ -60,6 +60,7 @@ import {
 import {reportUploadNotInBrowser} from '../OPFS/reportUploadNotInBrowser'
 import {getBrowser} from '../connections/registry'
 import {installEngineDevHook} from '../engine/engineDevHook'
+import useLegacyViewRulesNotice from '../engine/useLegacyViewRulesNotice'
 import modelIdentity from '../routes/modelIdentity'
 import useExistInFeature from '../hooks/useExistInFeature'
 import useDirectLinkQuota from '../quota/useDirectLinkQuota'
@@ -2717,6 +2718,9 @@ export default function CadView({
   // sessions directly, for the E2E, before any load goes through them.
   // Same install-on-flag, uninstall-on-unflag shape as the assist hook.
   useEffect(() => (isEngineWorkerEnabled ? installEngineDevHook() : undefined), [isEngineWorkerEnabled])
+  // `?view=` rules cannot run on a worker-engine model; say so (engine-worker.md
+  // §8 item 7).
+  useLegacyViewRulesNotice(model, setSnackMessage)
 
 
   const abs = {position: 'absolute'}
