@@ -828,6 +828,22 @@ describe('loadProgress', () => {
         warnSpy.mockRestore()
       })
 
+      // The console tee feeds the diagnostics event's title, `messages` and
+      // the report's `Warnings & errors` line, none of which pass through
+      // beforeBreadcrumb; a warning naming a dropped file mid-load must
+      // arrive there with the name withheld.
+      it('withholds a teed warning\'s file name from the diagnostics event', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'a518f06c.stp'})
+        console.warn('handleFileDrop: "Secret Tower.dwg" (267 bytes) is not a recognized model format')
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+        const [title, context] = captureMessage.mock.calls.find(([message]) => message.startsWith('Load diagnostics'))
+        expect(title).toContain('handleFileDrop: (file name withheld)')
+        expect(JSON.stringify([title, context])).not.toContain('Secret Tower')
+        warnSpy.mockRestore()
+      })
+
       // The non-engine path (reportModelInfo) carries the user's own file
       // name, e.g. a Drive file's, so it is withheld the same way.
       it('withholds a non-engine format\'s file name too', () => {

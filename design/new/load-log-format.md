@@ -66,11 +66,19 @@ included a full UNC path to a company file share, with its private IP and
 project folder names (SHARE-1MT). Sentry's server-side scrubber left it alone.
 So Sentry's copy reads `Model: (name withheld) — <schema>, <size>, <tool>`,
 built from the reporter's latched fields with the tool taken from the
-`authoring_tool` allowlist (`LoadProgressReporter#sentryModelLine`). The same
-line's console echo, and `handleFileDrop`'s warning naming a dropped file, are
-rewritten as breadcrumbs by `privacy/sentryRedaction.js` (`beforeBreadcrumb`).
-The report dialog, the snackbar and the console keep the full line: that is
-the user reading their own file's header.
+`authoring_tool` allowlist (`LoadProgressReporter#sentryModelLine`). `privacy/sentryRedaction.js` is Sentry's
+`beforeBreadcrumb`, and rewrites three things as breadcrumbs:
+- the model line's console echo;
+- any console line that names a user's file through `consoleFileName`, i.e.
+  `<prefix>: "<name>" …` (the drop path's rejected-upload warning, the
+  no-model-in-archive warning). These have the quoted name withheld;
+- click breadcrumbs' `title`, `aria-label`, `alt` and `name` values, which
+  carry file names in the recent-files list and the projects drawer.
+
+The reporter's console tee runs teed text through the same redaction, because
+teed warnings reach the diagnostics event's title and `messages` without
+passing through `beforeBreadcrumb`. The report dialog, the snackbar and the
+console keep the full line: that is the user reading their own file's header.
 
 Canonical implementation: conway `src/core/progress_log.ts`
 (`LoadLogAccumulator` + formatters), consumed by the conway CLI renderer.

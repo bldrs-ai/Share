@@ -5,6 +5,7 @@ import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/pers
 import {getInMemoryUpload} from '../loader/inMemoryUploads'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {disablePageReloadApprovalCheck} from './event'
+import {redactBreadcrumb} from '../privacy/sentryRedaction'
 import {trackAlert} from './alertTracking'
 import debug, {WARN} from './debug'
 
@@ -137,6 +138,12 @@ describe('dragAndDrop utility', () => {
       expect(debug).toHaveBeenCalledWith(WARN)
       expect(mockDebug.warn).toHaveBeenCalledTimes(1)
       expect(mockDebug.warn).toHaveBeenCalledWith(expect.stringContaining('"test.unknown" (1024 bytes)'))
+      // Sentry records that line as a breadcrumb: the producer's real output
+      // must come out of the redactor with the name withheld and the size
+      // and verdict kept (privacy/sentryRedaction.js).
+      const [line] = mockDebug.warn.mock.calls[0]
+      const crumb = redactBreadcrumb({category: 'console', level: 'warning', message: line, data: {arguments: [line]}})
+      expect(crumb.message).toBe('handleFileDrop: (file name withheld) (1024 bytes) is not a recognized model format')
     })
 
     it('should handle successful file upload with OPFS available', async () => {

@@ -9,6 +9,8 @@ import {
   resolveArchiveUpload,
   unwrapIfcZip,
 } from './modelArchive'
+import {redactBreadcrumb} from '../privacy/sentryRedaction'
+import {WARN, disableDebug, setDebugLevel} from '../utils/debug'
 import {ZipArchiveError} from './zipArchive'
 
 
@@ -306,6 +308,27 @@ describe('modelArchive', () => {
         archive: {exts: ['rvt', 'pdf']},
       })
       expect(JSON.stringify(refusal)).not.toMatch(/Secret|Tower/)
+    })
+
+    // The console keeps which zip it was, for the user; Sentry records that
+    // line as a breadcrumb, and the producer's real output must come out of
+    // the redactor with the name withheld (privacy/sentryRedaction.js).
+    it('names the zip on the console in a line Sentry withholds the name from', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      // setupTests silences debug(); the production level is WARN.
+      setDebugLevel(WARN)
+      try {
+        const zip = zipSync({'Tower.rvt': PDF})
+        await openUploadThroughArchive(upload(zip, 'Secret "Tower" v2.zip'), {entry: 'drop', alert: jest.fn(), open: jest.fn()})
+      } finally {
+        disableDebug()
+      }
+      const line = warnSpy.mock.calls.map((args) => args.join(' ')).find((text) => text.startsWith('modelArchive:'))
+      expect(line).toContain('Secret "Tower" v2.zip')
+      const crumb = redactBreadcrumb({category: 'console', level: 'warning', message: line, data: {arguments: [line]}})
+      expect(crumb.message).toBe('modelArchive: (file name withheld) holds no model Share opens (rvt)')
+      expect(JSON.stringify(crumb)).not.toMatch(/Secret|Tower/)
+      warnSpy.mockRestore()
     })
 
     it('refuses an archive it can\'t read with the reason, still as an unrecognized format', async () => {

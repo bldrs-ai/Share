@@ -25,6 +25,7 @@
 import {analyzeHeader, supportedTypes} from '../Filetype'
 import debug, {WARN} from '../utils/debug'
 import {archiveGuidance} from './formatGuidance'
+import {consoleFileName} from '../privacy/sentryRedaction'
 import {extensionTag, unrecognizedFormatAlert} from './unrecognizedFormat'
 import {
   MAX_TOTAL_INFLATED_BYTES,
@@ -238,8 +239,11 @@ export function openUploadThroughArchive(file, {entry, alert, open}) {
     }
     if (resolution.kind === 'none') {
       // The console's record of which file, as the drop seam keeps for any
-      // rejected upload; the alert carries only extensions.
-      debug(WARN).warn(`modelArchive: "${file.name}" holds no model Share opens (${resolution.exts.join(', ')})`)
+      // rejected upload; the alert carries only extensions. consoleFileName
+      // marks the name for withholding from Sentry's breadcrumb of this line
+      // (`privacy/sentryRedaction.js`).
+      debug(WARN).warn(
+        `modelArchive: ${consoleFileName(file.name)} holds no model Share opens (${resolution.exts.join(', ')})`)
       alert(noModelInArchiveAlert(file.name, entry, resolution.exts))
       return 'refused'
     }

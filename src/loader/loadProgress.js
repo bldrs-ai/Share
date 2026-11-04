@@ -12,7 +12,7 @@ import {version as shareVersion} from '../../package.json'
 // (dependency-free — no wasm). Was an interim byte-identical local copy until
 // the 1.381.1195 pin shipped this module.
 import {LoadLogAccumulator, formatMb} from '@bldrs-ai/conway/src/core/progress_log'
-import {SENTRY_MODEL_LINE_PREFIX} from '../privacy/sentryRedaction'
+import {SENTRY_MODEL_LINE_PREFIX, redactConsoleMessage} from '../privacy/sentryRedaction'
 // Conway's static Logger, for the data-defect marker (conway#712) on the
 // entries it logs — see installDefectProxy. This is the SAME module instance
 // the engine logs through: `@bldrs-ai/conway/web-ifc` (ShareIfc's import)
@@ -227,9 +227,14 @@ class LoadProgressReporter {
       } else {
         this.errorCount++
       }
-      const text = collapseWhitespace(args
+      // Redacted at capture: teed text reaches Sentry as the diagnostics
+      // event's title, its `messages` and the report's `Warnings & errors`
+      // line, none of which pass through beforeBreadcrumb. A warning that
+      // names the user's file (a drop rejected mid-load) would otherwise
+      // carry the name there (`privacy/sentryRedaction.js`).
+      const text = redactConsoleMessage(collapseWhitespace(args
         .map((arg) => (arg instanceof Error ? arg.message : String(arg)))
-        .join(' '))
+        .join(' ')))
       if (text !== '') {
         this.diagnostics.set(text, (this.diagnostics.get(text) ?? 0) + 1)
       }
@@ -545,7 +550,8 @@ class LoadProgressReporter {
   sentryModelLine() {
     const parts = []
     if (this.schema !== undefined) {
-      parts.push(this.schema)
+      // FILE_SCHEMA is header text too; bounded as the model_schema tag is.
+      parts.push(this.schema.slice(0, MAX_TAG_CHARS))
     }
     if (Number.isFinite(this.fileSize)) {
       // Same rounding as conway's formatModelLine, so the two copies of the
