@@ -1,11 +1,16 @@
+/** @jest-environment node */ // eslint-disable-line jsdoc/check-tag-names
 /* eslint-disable no-magic-numbers, require-await */
-import {makeBlobStore, makeSyncHandleStore, openSourceStore} from './engineSources'
+import {ENGINE_CLOSE_TIMEOUT_MS, EngineSession} from './EngineSession'
+import {createEngineHandler} from './engineHandler'
 import {sourceIoLine} from './engineIfcLoad'
-import {opfsFileHandleFor, rememberOpfsFileHandle} from '../OPFS/opfsFileHandles'
+import {findOpfsEntry, makeBlobStore, makeSyncHandleStore, openSourceStore} from './engineSources'
+import {ENGINE_PROTOCOL_VERSION, Ev} from './protocol'
+import {makeWorkerTransport} from './transports'
 
 
-// engine-worker.md §7 step 4: the engine reads an OPFS source through a
-// READ-ONLY sync access handle when it can, and the Blob store otherwise.
+// engine-worker.md §7 step 4: the engine worker reads an OPFS source through a
+// READ-ONLY sync access handle on the entry it finds itself, and the Blob
+// store otherwise.
 
 jest.mock('../loader/loadProgress', () => ({
   reportEngineLog: jest.fn(),
@@ -15,23 +20,37 @@ jest.mock('../loader/loadProgress', () => ({
 
 
 const BYTES = Uint8Array.from({length: 64}, (_, i) => i)
+const NAME = 'model.ifc.etag.commit'
+const MTIME = 1_700_000_000_000
+
+
+/** @return {File} the snapshot OPFS.worker.js hands the page for the entry */
+function snapshot() {
+  return new File([BYTES], NAME, {lastModified: MTIME})
+}
 
 
 /**
  * A FileSystemFileHandle stand-in whose sync access handle reads BYTES.
  *
  * @param {object} [options]
+ * @param {string} [options.name]
  * @param {string} [options.mode] what the opened handle reports (a browser
  *   that ignores the option reports 'readwrite')
  * @param {Error} [options.refuse] thrown by createSyncAccessHandle
  * @param {number} [options.size]
+ * @param {number} [options.lastModified] of the entry as it is now
+ * @param {Array<string>} [options.log] records `access.close`
  * @return {object}
  */
-function fakeEntry({mode = 'read-only', refuse = null, size = BYTES.length} = {}) {
+function fakeEntry({name = NAME, mode = 'read-only', refuse = null, size = BYTES.length, lastModified = MTIME,
+  log = []} = {}) {
   const entry = {
+    kind: 'file',
+    name,
     requested: [],
     access: null,
-    getFile: () => new Blob([BYTES]),
+    getFile: async () => new File([BYTES.subarray(0, size)], name, {lastModified}),
     async createSyncAccessHandle(options) {
       entry.requested.push(options)
       if (refuse) {
@@ -48,6 +67,7 @@ function fakeEntry({mode = 'read-only', refuse = null, size = BYTES.length} = {}
         },
         close() {
           this.closed = true
+          log.push('access.close')
         },
       }
       return entry.access
@@ -57,10 +77,57 @@ function fakeEntry({mode = 'read-only', refuse = null, size = BYTES.length} = {}
 }
 
 
+/**
+ * @param {object} children name → entry or directory
+ * @return {object} a FileSystemDirectoryHandle stand-in
+ */
+function fakeDir(children) {
+  return {
+    kind: 'directory',
+    async* entries() {
+      for (const [name, handle] of Object.entries(children)) {
+        yield [name, handle]
+      }
+    },
+  }
+}
+
+
+/**
+ * openSourceStore as the engine worker runs it, over a fake OPFS.
+ *
+ * @param {object} root
+ * @param {object} [options]
+ * @return {Promise<object>}
+ */
+function openIn(root, options = {}) {
+  return openSourceStore({file: snapshot()}, {getOpfsRoot: async () => root, canSyncHandle: () => true, ...options})
+}
+
+
 describe('engine/engineSources', () => {
-  it('opens a read-only sync access handle and reads through it', async () => {
+  it('finds the entry by name, size and lastModified anywhere in OPFS', async () => {
     const entry = fakeEntry()
-    const {store, fallbackReason} = await openSourceStore({file: new Blob([BYTES]), opfsHandle: entry})
+    const root = fakeDir({
+      BldrsLocalStorage: fakeDir({
+        V1: fakeDir({
+          // Same name, other bytes: an older copy elsewhere is not the snapshot.
+          stale: fakeDir({[NAME]: fakeEntry({lastModified: MTIME - 1})}),
+          owner: fakeDir({repo: fakeDir({[NAME]: entry})}),
+        }),
+      }),
+    })
+    expect(await findOpfsEntry(snapshot(), root)).toBe(entry)
+    // A Blob has no name, and an upload kept in memory matches nothing.
+    expect(await findOpfsEntry(new Blob([BYTES]), root)).toBeNull()
+    expect(await findOpfsEntry(new File([BYTES], 'other.ifc', {lastModified: MTIME}), root)).toBeNull()
+    // The scan is bounded.
+    expect(await findOpfsEntry(snapshot(), root, 3)).toBeNull()
+  })
+
+  it('opens a read-only sync access handle on that entry and reads through it', async () => {
+    const entry = fakeEntry()
+    const {store, fallbackReason} = await openIn(fakeDir({[NAME]: entry}))
     expect(fallbackReason).toBeNull()
     expect(store.kind).toBe('syncHandle')
     // Asked for read-only, never the exclusive default.
@@ -74,7 +141,7 @@ describe('engine/engineSources', () => {
 
   it('closes and falls back when the browser ignored read-only and opened an exclusive handle', async () => {
     const entry = fakeEntry({mode: 'readwrite'})
-    const {store, fallbackReason} = await openSourceStore({file: new Blob([BYTES]), opfsHandle: entry})
+    const {store, fallbackReason} = await openIn(fakeDir({[NAME]: entry}))
     expect(store.kind).toBe('blob')
     expect(fallbackReason).toBe('read-only sync access handles unsupported')
     expect(entry.access.closed).toBe(true)
@@ -82,28 +149,37 @@ describe('engine/engineSources', () => {
 
   it('falls back with the reason when the file is locked for writing', async () => {
     const locked = Object.assign(new Error('locked'), {name: 'NoModificationAllowedError'})
-    const {store, fallbackReason} = await openSourceStore({
-      file: new Blob([BYTES]), opfsHandle: fakeEntry({refuse: locked}),
-    })
+    const {store, fallbackReason} = await openIn(fakeDir({[NAME]: fakeEntry({refuse: locked})}))
     expect(store.kind).toBe('blob')
     expect(fallbackReason).toBe('NoModificationAllowedError: locked')
     expect(Array.from(await store.read(0, 3))).toEqual([0, 1, 2])
   })
 
-  it('falls back when the entry is no longer the snapshot\'s bytes', async () => {
-    const entry = fakeEntry({size: 99})
-    const {store, fallbackReason} = await openSourceStore({file: new Blob([BYTES]), opfsHandle: entry})
+  it('falls back, and closes the handle, when the entry changed between the lookup and the open', async () => {
+    // Found as the snapshot, then rewritten under the same name and size
+    // before the handle opened: only lastModified tells.
+    const entry = fakeEntry()
+    let reads = 0
+    const first = entry.getFile
+    entry.getFile = async () => (reads++ === 0 ? first() : new File([BYTES], NAME, {lastModified: MTIME + 5}))
+    const {store, fallbackReason} = await openIn(fakeDir({[NAME]: entry}))
     expect(store.kind).toBe('blob')
-    expect(fallbackReason).toMatch(/entry is 99 bytes, snapshot 64/)
+    expect(fallbackReason).toMatch(/^entry changed since the snapshot/)
     expect(entry.access.closed).toBe(true)
   })
 
-  it('uses the Blob store for a non-OPFS file, and when the kill switch is on', async () => {
-    expect((await openSourceStore({file: new Blob([BYTES])})).fallbackReason).toBe('not an OPFS file')
-    const entry = fakeEntry()
-    const off = await openSourceStore({file: new Blob([BYTES]), opfsHandle: entry}, {allowSyncHandle: false})
-    expect(off).toMatchObject({fallbackReason: 'disabled'})
-    expect(entry.requested).toEqual([])
+  it('uses the Blob store off OPFS, on the page, and with the kill switch, without touching OPFS', async () => {
+    const getOpfsRoot = jest.fn(async () => fakeDir({}))
+    expect((await openSourceStore({file: snapshot()}, {getOpfsRoot, canSyncHandle: () => true})).fallbackReason)
+      .toBe('not an OPFS file')
+    getOpfsRoot.mockClear()
+    expect((await openSourceStore({file: snapshot()}, {getOpfsRoot, canSyncHandle: () => false})).fallbackReason)
+      .toBe('no sync access handles here')
+    expect((await openSourceStore({file: snapshot()}, {getOpfsRoot, allowSyncHandle: false})).fallbackReason)
+      .toBe('disabled')
+    expect(getOpfsRoot).not.toHaveBeenCalled()
+    // Jest's global, like a page, has no createSyncAccessHandle.
+    expect((await openSourceStore({file: snapshot()})).fallbackReason).toBe('no sync access handles here')
   })
 
   it('a short read through the handle fails the read rather than returning wrong bytes', async () => {
@@ -125,106 +201,143 @@ describe('engine/engineSources', () => {
       .toBe('Engine source I/O: Blob store (not an OPFS file), 1 reads, 0.0 MB, 0.00s')
     expect(sourceIoLine({kind: 'resident'})).toBeUndefined()
   })
-
-  it('opfsFileHandles pairs a File with the entry it came from', () => {
-    const file = new Blob(['x'])
-    const entry = fakeEntry()
-    expect(opfsFileHandleFor(file)).toBeNull()
-    rememberOpfsFileHandle(file, entry)
-    expect(opfsFileHandleFor(file)).toBe(entry)
-    rememberOpfsFileHandle(new Blob(['y']), {notAHandle: true})
-    expect(opfsFileHandleFor(null)).toBeNull()
-  })
 })
 
 
+/**
+ * A stub engine that reads 4 bytes through its store, logging CloseModel.
+ *
+ * @param {Array<string>} log
+ * @return {object}
+ */
+function readingApi(log) {
+  return {
+    wasmModule: undefined,
+    seen: null,
+    async Init() {
+      this.wasmModule = {HEAPU8: {byteLength: 1}}
+    },
+    async OpenModelStream(store) {
+      this.seen = Array.from(await store.read(0, 4))
+      return 0
+    },
+    CloseModel: jest.fn(() => log.push('CloseModel')),
+    IsModelOpen: () => true,
+    properties: {},
+  }
+}
+
+
+/**
+ * A session over the handler the way production runs it: a WORKER transport
+ * (whose terminate() does not run the handler's dispose; only a `close`
+ * request does), over a fake Worker that hands messages to the handler
+ * without cloning (the fake entry has functions).
+ *
+ * @param {object} api
+ * @param {object} root fake OPFS root
+ * @param {Array<string>} log records `terminate`
+ * @param {object} [flags] init flags
+ * @return {Promise<EngineSession>}
+ */
+async function workerSession(api, root, log, flags = {}) {
+  const listeners = []
+  const toPage = (data) => queueMicrotask(() => listeners.forEach((cb) => cb({data})))
+  const handler = createEngineHandler({
+    loadIfcAPI: async () => function IfcAPI() {
+      return api
+    },
+    post: toPage,
+    yieldToLoop: () => Promise.resolve(),
+    sourceOptions: {getOpfsRoot: async () => root, canSyncHandle: () => true},
+  })
+  const fakeWorker = {
+    addEventListener: (type, cb) => type === 'message' && listeners.push(cb),
+    postMessage: (msg) => queueMicrotask(() => handler.handle(msg)),
+    terminate: () => log.push('terminate'),
+  }
+  const session = new EngineSession(makeWorkerTransport(fakeWorker), {epoch: 1})
+  toPage({v: ENGINE_PROTOCOL_VERSION, epoch: 0, ev: Ev.HELLO, seq: 0})
+  await session.init({flags})
+  return session
+}
+
+
 describe('engine/engineHandler reads a windowed source through the sync handle', () => {
-  /**
-   * Drive a handler directly (no transport: a fake entry has functions, and
-   * does not structured-clone the way a real FileSystemFileHandle does).
-   *
-   * @param {object} api
-   * @return {Promise<object>} `{request, posted, handler}`
-   */
-  async function handlerOver(api) {
-    const {createEngineHandler} = require('./engineHandler')
-    const posted = []
-    const handler = createEngineHandler({
-      loadIfcAPI: async () => function IfcAPI() {
-        return api
-      },
-      post: (m) => posted.push(m),
-      yieldToLoop: () => Promise.resolve(),
-    })
-    let id = 0
-    const request = async (op, args) => {
-      const mine = ++id
-      await handler.handle({v: 1, id: mine, op, args})
-      const reply = posted.find((m) => m.re === mine)
-      if (!reply.ok) {
-        throw new Error(reply.error.message)
-      }
-      return reply.result
-    }
-    await request('init', {epoch: 1})
-    return {request, posted, handler}
-  }
-
-  /** @return {object} a stub engine that reads 4 bytes through its store */
-  function readingApi() {
-    return {
-      wasmModule: undefined,
-      seen: null,
-      async Init() {
-        this.wasmModule = {HEAPU8: {byteLength: 1}}
-      },
-      async OpenModelStream(store) {
-        this.seen = Array.from(await store.read(0, 4))
-        return 0
-      },
-      CloseModel: jest.fn(),
-      properties: {},
-    }
-  }
-
-  it('the open reports the sync handle, and close releases it after CloseModel', async () => {
-    const api = readingApi()
-    const entry = fakeEntry()
-    const {request, handler} = await handlerOver(api)
-    const opened = await request('open', {source: {file: new Blob([BYTES]), opfsHandle: entry}})
+  it('reports the sync handle, and a worker session\'s close releases it AFTER CloseModel and BEFORE terminate', async () => {
+    const log = []
+    const api = readingApi(log)
+    const entry = fakeEntry({log})
+    const session = await workerSession(api, fakeDir({[NAME]: entry}), log)
+    const opened = await session.open({file: snapshot()})
     expect(api.seen).toEqual([0, 1, 2, 3])
     expect(opened.source).toMatchObject({kind: 'syncHandle', fallbackReason: null, reads: 1, bytes: 4})
-    expect(entry.access.closed).toBe(false)
-    handler.dispose()
-    expect(api.CloseModel).toHaveBeenCalledWith(0)
-    expect(entry.access.closed).toBe(true)
+    expect(log).toEqual([])
+    await session.close()
+    expect(log).toEqual(['CloseModel', 'access.close', 'terminate'])
+  })
+
+  it('a session reading through the Blob store is terminated at once, with no close request', async () => {
+    const log = []
+    const api = readingApi(log)
+    const session = await workerSession(api, fakeDir({}), log)
+    expect((await session.open({file: snapshot()})).source).toMatchObject({kind: 'blob'})
+    await session.close()
+    expect(log).toEqual(['terminate'])
+  })
+
+  it('a close the engine never answers still terminates, after ENGINE_CLOSE_TIMEOUT_MS', async () => {
+    const log = []
+    const api = readingApi(log)
+    const session = await workerSession(api, fakeDir({[NAME]: fakeEntry({log})}), log)
+    await session.open({file: snapshot()})
+    // The engine wedged: requests go out, nothing comes back.
+    session.transport.post = () => null
+    jest.useFakeTimers()
+    try {
+      const closing = session.close()
+      expect(log).toEqual([])
+      jest.advanceTimersByTime(ENGINE_CLOSE_TIMEOUT_MS)
+      await closing
+    } finally {
+      jest.useRealTimers()
+    }
+    expect(log).toEqual(['terminate'])
   })
 
   it('a windowed open that falls back to buffered closes the handle at once', async () => {
-    const api = readingApi()
+    const log = []
+    const api = readingApi(log)
     api.OpenModelStream = async () => -1
     api.OpenModelStreamed = async () => 0
-    const entry = fakeEntry()
-    const {request} = await handlerOver(api)
-    const opened = await request('open', {source: {file: new Blob([BYTES]), opfsHandle: entry}})
+    const entry = fakeEntry({log})
+    const session = await workerSession(api, fakeDir({[NAME]: entry}), log)
+    const opened = await session.open({file: snapshot()})
     expect(opened).toMatchObject({windowed: false, source: {kind: 'resident'}})
     expect(entry.access.closed).toBe(true)
   })
 
-  it('the kill switch in the init flags keeps the Blob store', async () => {
-    const api = readingApi()
-    const entry = fakeEntry()
-    const {createEngineHandler} = require('./engineHandler')
-    const posted = []
-    const handler = createEngineHandler({
-      loadIfcAPI: async () => function IfcAPI() {
-        return api
-      },
-      post: (m) => posted.push(m),
-    })
-    await handler.handle({v: 1, id: 1, op: 'init', args: {epoch: 1, flags: {disableEngineSyncHandle: true}}})
-    await handler.handle({v: 1, id: 2, op: 'open', args: {source: {file: new Blob([BYTES]), opfsHandle: entry}}})
-    expect(posted.find((m) => m.re === 2).result.source).toMatchObject({kind: 'blob', fallbackReason: 'disabled'})
+  it('an open that throws still closes the handle it opened', async () => {
+    const log = []
+    const api = readingApi(log)
+    api.OpenModelStream = async () => {
+      throw new Error('engine source: short read')
+    }
+    api.OpenModelStreamed = async () => {
+      throw new Error('buffered too')
+    }
+    const entry = fakeEntry({log})
+    const session = await workerSession(api, fakeDir({[NAME]: entry}), log)
+    await expect(session.open({file: snapshot()})).rejects.toThrow()
+    expect(entry.access.closed).toBe(true)
+  })
+
+  it('the kill switch in the init flags keeps the Blob store and never looks in OPFS', async () => {
+    const log = []
+    const api = readingApi(log)
+    const entry = fakeEntry({log})
+    const session = await workerSession(api, fakeDir({[NAME]: entry}), log, {disableEngineSyncHandle: true})
+    expect((await session.open({file: snapshot()})).source).toMatchObject({kind: 'blob', fallbackReason: 'disabled'})
     expect(entry.requested).toEqual([])
   })
 })

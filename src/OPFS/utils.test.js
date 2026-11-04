@@ -14,7 +14,6 @@ import {
   snapshotOPFS,
   writeGlbBytesToOPFS,
   clearOPFSCache} from './utils'
-import {opfsFileHandleFor} from './opfsFileHandles'
 
 
 jest.mock('../OPFS/OPFSService.js')
@@ -122,23 +121,6 @@ describe('OPFS Test Suite', () => {
   })
 
   describe('getModelFromOPFS', () => {
-    it('remembers the OPFS entry a reply\'s File came from, for the engine worker', async () => {
-      // engine-worker.md §7 step 4: the reply carries the FileSystemFileHandle
-      // beside the File, and the File keys it (opfsFileHandles.js).
-      const mockFile = new Blob(['dummy content'])
-      const entry = {getFile: () => mockFile, createSyncAccessHandle: () => null}
-      const mockWorker = {
-        addEventListener: jest.fn((_, handler) => {
-          process.nextTick(() => handler({data: {completed: true, file: mockFile, fileHandle: entry, requestId: currentRequestId()}}))
-        }),
-        removeEventListener: jest.fn(),
-      }
-      OPFSService.initializeWorker.mockReturnValue(mockWorker)
-      const file = await getModelFromOPFS('owner', 'repo', 'branch', 'filepath')
-      expect(file).toBe(mockFile)
-      expect(opfsFileHandleFor(file)).toBe(entry)
-    })
-
     it('should resolve with file when worker completes retrieving file', async () => {
       // Create a mock file as the expected result
       const mockFile = new Blob(['dummy content'], {type: 'text/plain'})

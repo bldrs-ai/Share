@@ -1,4 +1,5 @@
 import {Page, expect, test} from '@playwright/test'
+import {watchEngineWorker} from '../tests/e2e/engineWorker'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 import {waitForModelReady} from '../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
@@ -14,7 +15,8 @@ import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
  *
  * The kill switch, `disableEngineSyncHandle`, must put the same load back on
  * the Blob store, and the model must still open: the fallback is not a
- * failure.
+ * failure. Both legs check the load ran in the WORKER (watchEngineWorker):
+ * the in-process fallback prints the same `Blob store (disabled)` line.
  */
 const MODEL = '/share/v/p/index.ifc'
 
@@ -45,15 +47,19 @@ describeMobileAndDesktop('Engine worker: OPFS sync access handle', () => {
   })
 
   test('the worker reads the staged model through a read-only sync access handle', async ({page}) => {
+    const engine = watchEngineWorker(page)
     await page.goto(`${MODEL}?feature=engineWorker`)
     const line = await engineSourceLine(page)
     expect(line).toMatch(/^Engine source I\/O: OPFS sync access handle, [1-9]\d* reads/)
+    await engine.expectWorkerEngine()
   })
 
-  test('with the kill switch the same load reads through the Blob store, and still opens', async ({page}) => {
+  test('with the kill switch the same worker load reads through the Blob store, and still opens', async ({page}) => {
+    const engine = watchEngineWorker(page)
     await page.goto(`${MODEL}?feature=engineWorker,disableEngineSyncHandle`)
+    // engineSourceLine waits for the model to be ready: it opened.
     const line = await engineSourceLine(page)
     expect(line).toMatch(/^Engine source I\/O: Blob store \(disabled\), [1-9]\d* reads/)
-    await expect(page.getByTestId('cadview-dropzone')).toHaveAttribute('data-model-ready', 'true')
+    await engine.expectWorkerEngine()
   })
 })

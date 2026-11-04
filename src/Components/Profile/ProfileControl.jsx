@@ -39,6 +39,7 @@ import {
   CleaningServicesOutlined as CleaningServicesOutlinedIcon,
 } from '@mui/icons-material'
 import {clearOPFSCache} from '../../OPFS/utils'
+import {closeAllEngineSessions} from '../../engine/spawnEngine'
 import {clearRecentFilesBySource} from '../../connections/persistence'
 import {reloadAfterCacheClear} from '../../utils/navigate'
 
@@ -335,6 +336,10 @@ export default function ProfileControl() {
           onClick={async () => {
             onCloseMenu()
             try {
+              // First: an engine worker reading its model through an OPFS
+              // sync access handle holds that entry locked against removal
+              // (engine-worker.md §7 step 4). The page reloads below anyway.
+              await closeAllEngineSessions()
               await clearOPFSCache()
               // Uploads exist only in OPFS, so their recents now point at
               // nothing. Only on success: if the clear failed the uploads

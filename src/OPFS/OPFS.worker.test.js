@@ -325,7 +325,40 @@ beforeEach(() => {
   }
 })
 
+/**
+ * A FileSystemHandle anywhere in a reply, or null. WebKit cannot
+ * structured-clone FileSystemHandles (bug 256712): a reply carrying one
+ * becomes a DataCloneError there, which turns every File-carrying reply into
+ * an error on Safari and iOS. So no reply may carry one (engine-worker.md §7
+ * step 4: the engine worker finds the entry itself).
+ *
+ * @param {*} value
+ * @param {Set} [seen]
+ * @return {object|null}
+ */
+function findHandle(value, seen = new Set()) {
+  if (value === null || typeof value !== 'object' || seen.has(value)) {
+    return null
+  }
+  seen.add(value)
+  if (value instanceof FileHandle || value instanceof DirectoryHandle ||
+      typeof value.getFile === 'function' || typeof value.createSyncAccessHandle === 'function') {
+    return value
+  }
+  for (const inner of Object.values(value)) {
+    const found = findHandle(inner, seen)
+    if (found) {
+      return found
+    }
+  }
+  return null
+}
+
 afterEach(() => {
+  // Every reply any test drew from the worker stays clone-safe everywhere.
+  for (const [message] of global.self?.postMessage?.mock?.calls ?? []) {
+    expect(findHandle(message)).toBeNull()
+  }
   jest.clearAllMocks()
 })
 
@@ -358,17 +391,6 @@ test('computeGitBlobSha1FromHandle works', async () => {
   fileHandle.data = new Uint8Array(Buffer.from('hello'))
   const hash = await worker.computeGitBlobSha1FromHandle(fileHandle)
   expect(hash).toBe('b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0')
-})
-
-test('computeGitBlobSha1FromHandle hashes through a READ-ONLY sync access handle', async () => {
-  // engine-worker.md §7 step 4: the engine worker holds a read-only handle
-  // on an open model's OPFS source. A default (readwrite) handle is
-  // exclusive and would fail beside it; read-only handles share.
-  const fileHandle = new FileHandle('test')
-  fileHandle.data = new Uint8Array(Buffer.from('hello'))
-  const spy = jest.spyOn(fileHandle, 'createSyncAccessHandle')
-  await worker.computeGitBlobSha1FromHandle(fileHandle)
-  expect(spy).toHaveBeenCalledWith({mode: 'read-only'})
 })
 
 test('retrieveFileWithPathNew matches file starting with segment', async () => {
@@ -408,6 +430,55 @@ test('deleteAllEntries removes all files', async () => {
   }
   expect(entries.length).toBe(0)
 })
+
+test('deleteAllEntries skips an entry another handle holds, and removes the rest', async () => {
+  // engine-worker.md §7 step 4: an engine worker reading an open model
+  // through a read-only sync access handle locks that entry against
+  // removeEntry (NoModificationAllowedError). The clear must go on past it.
+  const locked = new Set(['open.ifc', 'held.ifc'])
+  const lockable = (dir) => {
+    const remove = dir.removeEntry.bind(dir)
+    dir.removeEntry = async (name, options) => {
+      if (locked.has(name)) {
+        throw new DOMException('locked', 'NoModificationAllowedError')
+      }
+      return await remove(name, options)
+    }
+    return dir
+  }
+  lockable(rootDir)
+  await rootDir.getFileHandle('open.ifc', {create: true})
+  const sub = lockable(await rootDir.getDirectoryHandle('sub', {create: true}))
+  await sub.getFileHandle('held.ifc', {create: true})
+  await sub.getFileHandle('free.ifc', {create: true})
+  await rootDir.getDirectoryHandle('empty', {create: true})
+  await rootDir.getFileHandle('z.txt', {create: true})
+
+  const skipped = await worker.deleteAllEntries(rootDir)
+
+  expect(skipped).toEqual(['open.ifc', 'sub/held.ifc'])
+  expect(Array.from(rootDir.entriesMap.keys())).toEqual(['open.ifc', 'sub'])
+  expect(Array.from(sub.entriesMap.keys())).toEqual(['held.ifc'])
+})
+
+
+test('deleteAllEntries still fails on an error that is not a lock', async () => {
+  await rootDir.getFileHandle('a.ifc', {create: true})
+  rootDir.removeEntry = () => Promise.reject(new Error('disk on fire'))
+  await expect(worker.deleteAllEntries(rootDir)).rejects.toThrow('disk on fire')
+})
+
+
+test('clearCache reports what it skipped', async () => {
+  await rootDir.getFileHandle('open.ifc', {create: true})
+  rootDir.removeEntry = () => Promise.reject(new DOMException('locked', 'NoModificationAllowedError'))
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => null)
+  await worker.clearCache(7)
+  expect(self.postMessage).toHaveBeenCalledWith({completed: true, event: 'clear', skipped: ['open.ifc'], requestId: 7})
+  expect(warn).toHaveBeenCalledWith('OPFS clear: skipped 1 locked entry:', ['open.ifc'])
+  warn.mockRestore()
+})
+
 
 test('snapshotCache posts directory snapshot', async () => {
   await rootDir.getFileHandle('foo.txt', {create: true})

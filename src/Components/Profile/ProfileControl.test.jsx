@@ -4,6 +4,7 @@ import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__m
 import {noteGateLogin, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
 import {mockLogout} from '../../Auth0/mockLogout'
 import {clearOPFSCache} from '../../OPFS/utils'
+import {closeAllEngineSessions} from '../../engine/spawnEngine'
 import {RouteThemeCtx} from '../../Share.fixture'
 import {addRecentFileEntry, loadAllRecentFiles} from '../../connections/persistence'
 import {_resetSubscriptionTrackingForTests, trackSubscriptionFromToken} from '../../privacy/subscriptionTracking'
@@ -14,6 +15,7 @@ import {goToSubscription} from './subscriptionNav'
 
 
 jest.mock('../../OPFS/utils', () => ({clearOPFSCache: jest.fn()}))
+jest.mock('../../engine/spawnEngine', () => ({closeAllEngineSessions: jest.fn(() => Promise.resolve(0))}))
 // The upgrade door itself (and its begin_checkout event) is pinned in
 // subscriptionNav.test.js; here only that the menu goes through it.
 jest.mock('./subscriptionNav', () => ({goToSubscription: jest.fn()}))
@@ -99,6 +101,22 @@ describe('ProfileControl', () => {
       clearOPFSCache.mockResolvedValue(true)
       await clickClearLocalCache()
       expect(loadAllRecentFiles().map((f) => f.source)).toEqual(['github'])
+    })
+
+    // engine-worker.md §7 step 4: an engine worker's sync access handle locks
+    // its model's OPFS entry, so the sessions are closed BEFORE the clear.
+    it('closes the engine sessions before clearing OPFS', async () => {
+      const order = []
+      closeAllEngineSessions.mockImplementation(() => {
+        order.push('close engines')
+        return Promise.resolve(1)
+      })
+      clearOPFSCache.mockImplementation(() => {
+        order.push('clear')
+        return Promise.resolve(true)
+      })
+      await clickClearLocalCache()
+      expect(order).toEqual(['close engines', 'clear'])
     })
 
     it('keeps local recents when the OPFS clear failed', async () => {

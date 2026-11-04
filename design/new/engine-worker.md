@@ -624,21 +624,46 @@ second, divergent path.
    while the engine reads it, and a Blob-store fallback where read-only
    handles are missing (Safari and Firefox not checked).
    *As built:*
-   - `engine/engineSources.js#openSourceStore` opens
-     `createSyncAccessHandle({mode: 'read-only'})` on the file's own OPFS
-     entry. The page learns the entry from `OPFS.worker.js`'s
-     `fileHandle` reply field, kept in `OPFS/opfsFileHandles.js`, and it
-     travels in the `open` request's `source.opfsHandle`.
-   - It uses the handle only if the handle reports `mode === 'read-only'`:
-     a browser that ignores the option opens an exclusive `readwrite`
-     handle, which is closed at once. It also needs the entry's size to
-     equal the snapshot's.
-   - Otherwise it falls back to the Blob store and says why on the load
-     report's `Engine source I/O:` line.
-   - `OPFS.worker.js` hashes through read-only handles too, so the two
-     share the file.
-   - The handle is held for the session and closed after `CloseModel`,
-     or at once when a windowed open falls back to buffered.
+   - The engine worker finds the File's OPFS entry itself
+     (`engine/engineSources.js#findOpfsEntry`). It walks
+     `navigator.storage.getDirectory()` for an entry with the File's
+     `name` (`getFile()` names the File after its entry), `size` and
+     `lastModified`. Nothing about the entry is sent from the page:
+     WebKit cannot structured-clone a FileSystemHandle (bug 256712), so
+     `OPFS.worker.js`'s replies keep their old shape. A File that did not
+     come from OPFS (an upload kept in memory, an inflated `.gz`) matches
+     nothing and gets the Blob store.
+   - `openSourceStore` opens `createSyncAccessHandle({mode: 'read-only'})`
+     on that entry. It keeps the handle only if the handle reports
+     `mode === 'read-only'`: a browser that ignores the option opens an
+     exclusive `readwrite` handle, which is closed at once. With the
+     handle open, which freezes the entry, it checks `size` and
+     `lastModified` against the snapshot again. Otherwise it falls back
+     to the Blob store and gives the reason on the load report's
+     `Engine source I/O:` line.
+   - **The lock.** Even read-only, the handle holds a shared lock on the
+     entry for the session, so the entry can't be removed, moved or
+     written while the model is open (`NoModificationAllowedError`). A
+     File snapshot locked nothing. So:
+     - *Clear cache* closes every engine session first
+       (`spawnEngine.js#closeAllEngineSessions`).
+     - `OPFS.worker.js#deleteAllEntries` skips a locked entry and
+       reports it, rather than aborting the clear partway.
+     - The stale-commit remove in `downloadModelToOPFS` and
+       `deleteModelFromOPFS` both answer with an explicit error for a
+       locked entry. The first was an unguarded throw, the second an
+       unhandled rejection behind a `deleted` reply. The page then loads
+       from the network, as on any OPFS error.
+     - Another tab re-staging or evicting a model this tab has open hits
+       the same lock, and is handled the same way.
+   - **Release.** A sync-handle session's `EngineSession#close()` sends
+     `close` and waits for its reply, at most `ENGINE_CLOSE_TIMEOUT_MS`
+     (1 s), before `terminate()`. The handler releases the handle after
+     `CloseModel`, at a known point rather than whenever the browser gets
+     to it after termination, so an in-app switch (step 7) can't race it.
+     Any other session is terminated at once, as before. An open that
+     doesn't adopt the store (buffered fallback, failed or refused open,
+     a throw, a close that came first) closes it in a `finally`.
    - Kill switch: `?feature=disableEngineSyncHandle`.
 5. **GLB writer capture in the worker.** The `capture` job (properties,
    spatial tree, face ids), then spill and release worker-side, then the
@@ -678,7 +703,7 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 1 — conway#540 | merged (conway#759, published `1.1633.540`) |
 | 2 — protocol, worker entry, client | merged (#2057) |
 | 3 — IFC load in the worker | merged (#2058). PSB, n=3, flag off → on: main-thread long tasks over 50 ms 418 → 23, time blocked 63 → 12 s, Geometry 48.3 → 40.6 s, Total 94.8 → 83.3 s, page heap after load 2130 → 889 MB (the worker's own JS heap 65 MB). Buffered tree-at-index: SEESTRASSE 8.05 → 4.60 s, sp-231MB 37.4 → 11.9 s |
-| 4 — sync-access-handle source | in review. Measured flag on, Blob store vs read-only sync handle, at medians: PSB (n=3) source I/O 19.1 → 3.8 s, Parsing 28.3 → 20.2 s, time to index 44.2 → 35.8 s, Total 96.5 → 82.9 s; sp-231MB (n=2) I/O 8.5 → 2.1 s, Parsing 14.0 → 9.9 s, Total 64.8 → 60.1 s; SEESTRASSE (n=1) I/O 0.32 → 0.07 s, Total flat. Geometry, main-thread long tasks and page heap unchanged. Every leg was windowed, checked by its `Engine source I/O:` line, in a persistent profile |
+| 4 — sync-access-handle source | in review. Measured flag on, Blob store vs read-only sync handle, at medians: PSB (n=3) source I/O 19.1 → 3.8 s, Parsing 28.3 → 20.2 s, time to index 44.2 → 35.8 s, Total 96.5 → 82.9 s; sp-231MB (n=2) I/O 8.5 → 2.1 s, Parsing 14.0 → 9.9 s, Total 64.8 → 60.1 s; SEESTRASSE (n=1) I/O 0.32 → 0.07 s, Total flat. Geometry, main-thread long tasks and page heap unchanged. Every leg was windowed, checked by its `Engine source I/O:` line, in a persistent profile. Caveat: the Blob store's per-read time includes event-loop wait as well as I/O (each read is an async round trip), so the I/O figures are not pure I/O. The wall-clock stages (Parsing, time to index, Total) carry the claim |
 | 6 — STEP in the worker | in progress |
 | 5, 7, 8, 9 | not started; 9 is gated on #2061 and #2070 |
 

@@ -254,28 +254,69 @@ export async function traverseDirectory(dirHandle, path = '', previewLength = 0)
  */
 export async function clearCache(requestId) {
   const opfsRoot = await navigator.storage.getDirectory()
-  await deleteAllEntries(opfsRoot)
+  const skipped = await deleteAllEntries(opfsRoot)
+  if (skipped.length > 0) {
+    console.warn(`OPFS clear: skipped ${skipped.length} locked entr${skipped.length === 1 ? 'y' : 'ies'}:`, skipped)
+  }
 
   // Send the directory structure as a message to the main thread
-  postReply({completed: true, event: 'clear'}, requestId)
+  postReply({completed: true, event: 'clear', skipped}, requestId)
 }
 
 
 /**
- * Delete all entries for a given directory handle
+ * Whether an OPFS remove/move failed because another handle holds the
+ * entry. An engine worker reading a model's source through a read-only sync
+ * access handle (engine-worker.md §7 step 4) holds a shared lock on it for
+ * the session, and removeEntry / remove / move need an exclusive one.
+ *
+ * @param {*} error
+ * @return {boolean}
+ */
+export function isLockedEntryError(error) {
+  return error?.name === 'NoModificationAllowedError'
+}
+
+
+/**
+ * Delete all entries for a given directory handle. An entry another handle
+ * holds (a model open in an engine worker, here or in another tab:
+ * isLockedEntryError) is skipped, not fatal, so one open model does not stop
+ * the clear partway and leave every entry after it behind.
  *
  * @param {FileSystemDirectoryHandle} dirHandle - The directory handle to delete all entries from.
- * @return {Promise<void>}
+ * @param {string} [prefix] path of `dirHandle`, for the report
+ * @return {Promise<Array<string>>} paths of the entries left behind
  */
-export async function deleteAllEntries(dirHandle) {
-  for await (const [name, handle] of dirHandle.entries()) {
-    if (handle.kind === 'directory') {
-      await deleteAllEntries(handle)
-      await dirHandle.removeEntry(name, {recursive: true})
-    } else if (handle.kind === 'file') {
-      await dirHandle.removeEntry(name)
+export async function deleteAllEntries(dirHandle, prefix = '') {
+  const skipped = []
+  // Collected first: removing while iterating can end the iteration early.
+  const entries = []
+  for await (const entry of dirHandle.entries()) {
+    entries.push(entry)
+  }
+  for (const [name, handle] of entries) {
+    const path = `${prefix}${name}`
+    try {
+      if (handle.kind === 'directory') {
+        const inner = await deleteAllEntries(handle, `${path}/`)
+        if (inner.length > 0) {
+          // Keep the directory: it still holds what was skipped.
+          skipped.push(...inner)
+          continue
+        }
+        await dirHandle.removeEntry(name, {recursive: true})
+      } else if (handle.kind === 'file') {
+        await dirHandle.removeEntry(name)
+      }
+    } catch (error) {
+      if (!isLockedEntryError(error)) {
+        throw error
+      }
+      skipped.push(path)
     }
   }
+  return skipped
 }
 
 
@@ -342,12 +383,8 @@ export async function fetchRGHUC(modelUrl) {
  * @return {Promise<string>} The computed SHA-1 hash in hexadecimal format.
  */
 export async function computeGitBlobSha1FromHandle(modelBlobFileHandle) {
-  // READ-ONLY where the browser has it: hashing only reads, and a default
-  // (readwrite) handle is exclusive, so it would fail with
-  // NoModificationAllowedError while an engine worker holds its own
-  // read-only handle on the same model (engine-worker.md §7 step 4) — the
-  // same model opened again, or in another tab. read-only handles share.
-  const blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle({mode: 'read-only'})
+  // Create FileSystemSyncAccessHandle on the file
+  const blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
 
   try {
     // Get the size of the file
@@ -850,10 +887,6 @@ export async function postFinalDownloadEventAfterRename(
     completed: true,
     event: renamed ? 'renamed' : 'download',
     file: finalFile,
-    // The entry itself, beside the File snapshot, so the engine worker can
-    // open a read-only sync access handle on it (engine-worker.md §7 step
-    // 4). FileSystemFileHandle structured-clones; see opfsFileHandles.js.
-    fileHandle: finalFileHandle,
     lastModifiedGithub: lastModifiedGithub,
   }, requestId)
 }
@@ -917,7 +950,7 @@ export async function writeBase64Model(content, shaHash, originalFilePath, owner
           // Commit hash already known — file in OPFS is at its final name.
           // Single terminal event.
           const blobFile = await modelBlobFileHandle.getFile()
-          postReply({completed: true, event: 'exists', file: blobFile, fileHandle: modelBlobFileHandle}, requestId)
+          postReply({completed: true, event: 'exists', file: blobFile}, requestId)
           return
         }
 
@@ -1023,9 +1056,7 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
           // Commit hash already known — file in OPFS is at its final name,
           // single terminal event.
           const blobFile = await modelBlobFileHandle.getFile()
-          postReply({
-            completed: true, event: 'exists', file: blobFile, fileHandle: modelBlobFileHandle, lastModifiedGithub,
-          }, requestId)
+          postReply({completed: true, event: 'exists', file: blobFile, lastModifiedGithub}, requestId)
           return
         }
 
@@ -1188,10 +1219,22 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
     if (fileIsCached) {
       const blobFile = await modelBlobFileHandle.getFile()
 
-      postReply({completed: true, event: 'exists', file: blobFile, fileHandle: modelBlobFileHandle}, requestId)
+      postReply({completed: true, event: 'exists', file: blobFile}, requestId)
       return
     } else {
-      await modelBlobFileHandle.remove()
+      try {
+        await modelBlobFileHandle.remove()
+      } catch (error) {
+        if (!isLockedEntryError(error)) {
+          throw error
+        }
+        // A stale commit's copy that an engine worker still reads (this tab
+        // or another): it cannot be replaced until that model closes. Say
+        // so; the page loads from the network instead (Loader.js).
+        postReply({error: `downloadModelToOPFS: ${modelBlobFileHandle.name} is open in an engine; not replaced`},
+          requestId)
+        return
+      }
     }
   }
   try {
@@ -1280,7 +1323,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       try {
         const blobFile = await modelBlobFileHandle.getFile()
 
-        postReply({completed: true, event: 'download', file: blobFile, fileHandle: modelBlobFileHandle}, requestId)
+        postReply({completed: true, event: 'download', file: blobFile}, requestId)
       } catch (error) {
         const workerMessage = `Error Getting file handle: ${error}.`
         postReply({error: workerMessage}, requestId)
@@ -1797,7 +1840,7 @@ export async function readModelByPathFromOPFS(commitHash, originalFilePath, owne
       postReply({completed: true, event: 'notexist', commitHash: commitHash}, requestId)
       return
     }
-    postReply({completed: true, event: 'read', file: file, fileHandle: modelBlobFileHandle}, requestId)
+    postReply({completed: true, event: 'read', file: file}, requestId)
   } catch (error) {
     postReply({error: `readModelByPath: ${error.message || error}`}, requestId)
   }
@@ -1881,7 +1924,18 @@ export async function deleteModelFromOPFS(commitHash, originalFilePath, owner, r
   }
 
   if (fileIsCached && modelBlobFileHandle !== null) {
-    modelBlobFileHandle.remove()
+    // Awaited: un-awaited, a failure was an unhandled rejection while the
+    // reply said 'deleted'.
+    try {
+      await modelBlobFileHandle.remove()
+    } catch (error) {
+      postReply({
+        error: isLockedEntryError(error) ?
+          `deleteModelFromOPFS: ${modelBlobFileHandle.name} is open in an engine; not deleted` :
+          `deleteModelFromOPFS: ${error?.message ?? error}`,
+      }, requestId)
+      return
+    }
   }
 
   postReply({completed: true, event: 'deleted', commitHash: commitHash}, requestId)
@@ -1986,7 +2040,7 @@ export async function readModelFromOPFS(objectKey, requestId) {
 
       const blobFile = await blobFileHandle.getFile()
 
-      postReply({completed: true, event: 'read', file: blobFile, fileHandle: blobFileHandle}, requestId)
+      postReply({completed: true, event: 'read', file: blobFile}, requestId)
     } catch (error) {
       const errorMessage = `Error retrieving File from ${objectKey}: ${error}.`
       postReply({error: errorMessage}, requestId)
@@ -2083,7 +2137,7 @@ export async function readFileFromOPFS(fileName, requestId) {
     try {
       const fileHandle = await newFileHandle.getFile()
 
-      postReply({completed: true, event: 'read', file: fileHandle, fileHandle: newFileHandle}, requestId)
+      postReply({completed: true, event: 'read', file: fileHandle}, requestId)
     } catch (error) {
       const errorMessage = `Error retrieving File from ${fileName}: ${error}.`
       postReply({error: errorMessage}, requestId)

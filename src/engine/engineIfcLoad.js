@@ -15,7 +15,6 @@
 //     and applied matrices, the unit scale) come from the `done` packet.
 // There is no other engine on the page for this model, so no sync engine
 // method can be reached by accident: the facade has none to offer.
-import {opfsFileHandleFor} from '../OPFS/opfsFileHandles'
 import {reportEngineLog, reportEngineVersion, reportSourceInfo} from '../loader/loadProgress'
 import {openModelFailure} from '../loader/unsupportedSchema'
 import {conwayDirectInfo, conwayDirectWarn} from '../viewer/ifc/conwayDirectLog'
@@ -361,11 +360,7 @@ export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
  */
 function sourceFor(buffer) {
   if (typeof buffer?.slice === 'function' && typeof buffer?.size === 'number') {
-    // An OPFS File comes with the entry it was read from, which the engine
-    // opens a read-only sync access handle on (§7 step 4,
-    // engineSources.js); FileSystemFileHandle structured-clones.
-    const opfsHandle = opfsFileHandleFor(buffer)
-    return opfsHandle ? {file: buffer, opfsHandle} : {file: buffer}
+    return {file: buffer}
   }
   if (ArrayBuffer.isView(buffer)) {
     return {bytes: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)}

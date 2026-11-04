@@ -1,6 +1,6 @@
 /* eslint-disable require-await */
 import {ENGINE_PROTOCOL_VERSION} from './protocol'
-import {resetEngineWorkerFailureForTests, spawnEngineSession} from './spawnEngine'
+import {closeAllEngineSessions, resetEngineWorkerFailureForTests, spawnEngineSession} from './spawnEngine'
 
 
 // Review on #2058: a worker engine that cannot start must not fail the load.
@@ -125,5 +125,22 @@ describe('engine/spawnEngineSession fallback', () => {
         return {Init: () => Promise.resolve()}
       },
     })).rejects.toThrow('left no wasm module')
+  })
+})
+
+
+// engine-worker.md §7 step 4: clearing the OPFS cache closes every engine
+// first, since a sync access handle locks its model's entry.
+describe('engine/closeAllEngineSessions', () => {
+  it('closes every live session once, and forgets one that already closed', async () => {
+    // Sessions earlier tests left open.
+    await closeAllEngineSessions()
+    const a = await spawnEngineSession({inProcess: true, loadIfcAPI: async () => stubIfcAPI()})
+    const b = await spawnEngineSession({inProcess: true, loadIfcAPI: async () => stubIfcAPI()})
+    const c = await spawnEngineSession({inProcess: true, loadIfcAPI: async () => stubIfcAPI()})
+    await c.close()
+    expect(await closeAllEngineSessions()).toBe(2)
+    expect([a.closed, b.closed]).toEqual([true, true])
+    expect(await closeAllEngineSessions()).toBe(0)
   })
 })
