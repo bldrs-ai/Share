@@ -428,7 +428,8 @@ describe('engine protocol version mismatch (review on #2057)', () => {
   it('init times out plainly when the engine never answers at all', async () => {
     const transport = {kind: 'test', post: () => null, onMessage: () => null, onCrash: () => null, terminate: jest.fn()}
     const session = new EngineSession(transport, {epoch: 1})
-    await expect(session.init({timeoutMs: 20})).rejects.toThrow('engine did not answer init within 20 ms')
+    await expect(session.init({timeoutMs: 20})).rejects
+      .toThrow('engine did not answer init within 20 ms (no init reply after hello)')
   })
 })
 
@@ -633,6 +634,7 @@ describe('engine round-3 review fixes (#2057)', () => {
     worker.postMessage = jest.fn()
     worker.terminate = jest.fn()
     const session = new EngineSession(makeWorkerTransport(worker), {epoch: 2})
-    await expect(session.init({timeoutMs: 20})).rejects.toThrow('engine did not answer init within 20 ms')
+    await expect(session.init({timeoutMs: 20})).rejects
+      .toThrow('engine did not answer init within 20 ms (no hello from the worker)')
   })
 })

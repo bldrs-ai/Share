@@ -67,10 +67,10 @@ export class EngineSession {
     this.resolveIndexed = resolveIndexed
     this.rejectIndexed = rejectIndexed
     // A worker posts `hello {v}` once its module has evaluated
-    // (Engine.worker.js). `init` waits for it before starting its timeout,
-    // so the clock covers the engine's start-up and not the fetch of a
-    // multi-MB worker script on a slow network. In process there is nothing
-    // to load, so no hello is expected.
+    // (Engine.worker.js). `init` waits for it, on the same clock as the init
+    // reply (ENGINE_INIT_TIMEOUT_MS), and refuses at once if it names
+    // another protocol version. In process there is nothing to load, so no
+    // hello is expected.
     this.expectsHello = transport.kind === 'worker'
     this.hello = new Promise((resolve, reject) => {
       this.resolveHello = resolve
@@ -199,15 +199,20 @@ export class EngineSession {
     // event never says hello, and a wait on hello alone would hang the load
     // with no fallback (review on #2058).
     let timer
+    let helloSeen = !this.expectsHello
     const timeout = new Promise((resolve, reject) => {
       timer = setTimeout(() => reject(this.foreignVersion === undefined ?
-        new Error(`engine did not answer init within ${timeoutMs} ms`) :
+        // Which half never came says where to look: no hello is the worker
+        // script (fetch, evaluation); no reply is the engine's Init().
+        new Error(`engine did not answer init within ${timeoutMs} ms ` +
+          `(${helloSeen ? 'no init reply after hello' : 'no hello from the worker'})`) :
         new ProtocolMismatchError(ENGINE_PROTOCOL_VERSION, this.foreignVersion)), timeoutMs)
     })
     let result
     try {
       if (this.expectsHello) {
         const helloVersion = await Promise.race([this.hello, timeout])
+        helloSeen = true
         if (helloVersion !== ENGINE_PROTOCOL_VERSION) {
           this.close()
           throw new ProtocolMismatchError(ENGINE_PROTOCOL_VERSION, helloVersion)

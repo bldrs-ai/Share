@@ -31,6 +31,7 @@ self.addEventListener('message', (event) => {
 })
 
 // Announce the engine, and the protocol version it speaks, now that the
-// module (and its copy of Conway) has evaluated. EngineSession#init starts
-// its timeout from this, not from spawn (see ENGINE_INIT_TIMEOUT_MS).
+// module (and its copy of Conway) has evaluated. EngineSession#init waits for
+// this, on the same clock as its init reply (ENGINE_INIT_TIMEOUT_MS), and
+// refuses at once if the version is not the page's.
 self.postMessage({v: ENGINE_PROTOCOL_VERSION, epoch: 0, ev: Ev.HELLO, seq: 0})

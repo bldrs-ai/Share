@@ -11,6 +11,15 @@ import {makeInProcessTransport, makeWorkerTransport} from './transports'
 
 let nextEpoch = 1
 let moduleWorkersSupported = null
+// Set once a worker engine has failed to start on this page (see
+// spawnEngineSession); later opens go straight to the in-process engine.
+let workerFailedThisPage = false
+
+
+/** Tests only: forget a previous worker failure. */
+export function resetEngineWorkerFailureForTests() {
+  workerFailedThisPage = false
+}
 
 
 /**
@@ -70,12 +79,16 @@ export async function spawnEngineSession({
 } = {}) {
   const inProcessTransport = () =>
     makeInProcessTransport((post) => createEngineHandler({loadIfcAPI, post}))
-  if (inProcess || !supportsModuleWorkers()) {
+  if (inProcess || workerFailedThisPage || !supportsModuleWorkers()) {
     return await initSession(inProcessTransport())
   }
   try {
     return await initSession(makeWorkerTransport(makeWorker()), initTimeoutMs)
   } catch (e) {
+    // Remembered for the page's lifetime: what stopped this worker (a stale
+    // cached script, a stalled fetch, a broken bundle) will stop the next
+    // one too, and a stalled one costs the full init clock (30 s) per open.
+    workerFailedThisPage = true
     // The worker could not stand an engine up: its script failed to load,
     // it speaks another protocol version (a stale cached worker beside a new
     // page, ProtocolMismatchError), or it never answered init. The

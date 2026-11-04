@@ -1,6 +1,6 @@
 /* eslint-disable require-await */
 import {ENGINE_PROTOCOL_VERSION} from './protocol'
-import {spawnEngineSession} from './spawnEngine'
+import {resetEngineWorkerFailureForTests, spawnEngineSession} from './spawnEngine'
 
 
 // Review on #2058: a worker engine that cannot start must not fail the load.
@@ -45,6 +45,7 @@ describe('engine/spawnEngineSession fallback', () => {
   let savedWorker
 
   beforeEach(() => {
+    resetEngineWorkerFailureForTests()
     warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
     // Module workers "exist", so the worker transport is tried first.
     savedWorker = globalThis.Worker
@@ -99,6 +100,22 @@ describe('engine/spawnEngineSession fallback', () => {
     })
     expect(session.kind).toBe('inProcess')
     expect(worker.terminate).toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('no hello from the worker'))
+  })
+
+  it('after a worker fails once, later opens on the page go straight to in-process', async () => {
+    await spawnEngineSession({
+      makeWorker: () => {
+        throw new Error('blocked by CSP')
+      },
+      loadIfcAPI: async () => stubIfcAPI(),
+    })
+    const makeWorker = jest.fn(() => staleWorker())
+    const second = await spawnEngineSession({makeWorker, loadIfcAPI: async () => stubIfcAPI()})
+    expect(second.kind).toBe('inProcess')
+    // No second worker, and so no second wait on the init clock.
+    expect(makeWorker).not.toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledTimes(1)
   })
 
   it('an in-process failure is not retried: there is nowhere left to go', async () => {
