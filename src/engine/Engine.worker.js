@@ -19,9 +19,10 @@ const handler = createEngineHandler({
   // The page's load report cannot see this worker's Logger (another module
   // instance) or its console, so both are forwarded (§2.4 G3).
   logForwarder: makeLogForwarder({logger: Logger, console: self.console, dataDefect: DATA_DEFECT}),
-  // `web-ifc` is Conway's compat surface (tools/esbuild/plugins.js
-  // `webIfcShimAlias`); bundled into this worker as its own copy.
-  loadIfcAPI: () => import('web-ifc').then((m) => m.IfcAPI),
+  // Conway's web-ifc compat surface, imported by its own subpath (Share has
+  // no `web-ifc` package or alias since #2002 and ifclib 6.0.0); bundled
+  // into this worker as its own copy.
+  loadIfcAPI: () => import('@bldrs-ai/conway/web-ifc').then((m) => m.IfcAPI),
   post: (msg, transfer) => self.postMessage(msg, transfer ?? []),
 })
 

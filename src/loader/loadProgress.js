@@ -14,12 +14,10 @@ import {version as shareVersion} from '../../package.json'
 import {LoadLogAccumulator, formatMb} from '@bldrs-ai/conway/src/core/progress_log'
 // Conway's static Logger, for the data-defect marker (conway#712) on the
 // entries it logs — see installDefectProxy. This is the SAME module instance
-// the engine logs through: the esbuild `webIfcShimAlias` resolves 'web-ifc' to
-// compiled/src/compat/web-ifc/index.js, whose ifc_api.js imports
+// the engine logs through: `@bldrs-ai/conway/web-ifc` (ShareIfc's import)
+// resolves to compiled/src/compat/web-ifc/index.js, whose ifc_api.js imports
 // ../../logging/logger.js — the file this `./src/*` subpath resolves to — so
-// esbuild bundles one Logger, not two. In the real-web-ifc build nothing logs
-// through it and the proxy simply never fires; the import tree-shakes to a
-// few KB there (it does not drag in the conway-geom wasm glue).
+// esbuild bundles one Logger, not two.
 import Logger, {DATA_DEFECT} from '@bldrs-ai/conway/src/logging/logger'
 
 

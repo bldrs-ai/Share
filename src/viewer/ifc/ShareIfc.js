@@ -28,14 +28,13 @@
 // `addIfcModel`, `setWasmPath`, `dispose`, `context`, `type`,
 // `ifcLastError`.
 //
-// Conway construction: `new IfcAPI()` from 'web-ifc'. In production the
-// esbuild `webIfcShimAlias` plugin resolves 'web-ifc' to Conway's own
-// web-ifc compat surface, `@bldrs-ai/conway/compiled/src/compat/web-ifc/
-// index.js` (tools/esbuild/plugins.js). The alias is the kept Conway↔
-// web-ifc engine switch (`USE_WEBIFC_SHIM`), not a deletion target.
-// In Jest 'web-ifc' resolves to the real package, but ShareIfc is mocked
-// in the ShareViewer test harness (`__mocks__/ShareViewer.js`) so the
-// real `IfcAPI` is never constructed there. The wasm `Init` is lazy —
+// Conway construction: `new IfcAPI()` from `@bldrs-ai/conway/web-ifc`,
+// Conway's web-ifc-shaped compat surface (its `exports` map points that
+// subpath at `compiled/src/compat/web-ifc/index.js`). Share imports it
+// directly; the real `web-ifc` engine and its comparison build were
+// removed (design/new/adapter-removal.md, 2026-11-01 status). ShareIfc
+// is mocked in the ShareViewer test harness (`__mocks__/ShareViewer.js`)
+// so `IfcAPI` is never constructed under Jest. The wasm `Init` is lazy —
 // `parseIfcWithConway` runs `if (ifcAPI.wasmModule === undefined) await
 // ifcAPI.Init()` on the first parse — so `setWasmPath` only records the
 // path; it deliberately does not await an Init that hasn't been kicked
@@ -49,7 +48,7 @@ import {
   disposeBatchedBoundsTree,
   disposeBoundsTree,
 } from 'three-mesh-bvh'
-import {IfcAPI} from 'web-ifc'
+import {IfcAPI} from '@bldrs-ai/conway/web-ifc'
 import ShareIfcManager from './ShareIfcManager'
 import {raycastActiveInstances} from './batchedRaycast'
 

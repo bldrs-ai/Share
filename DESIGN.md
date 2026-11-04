@@ -74,7 +74,7 @@ GitHub API integration for model versioning and collaboration:
 
 ## Build System
 - **ESBuild** configuration in `tools/esbuild/`
-- Dual build targets: Conway engine (default) and web-ifc
+- Single engine: Conway (web-ifc-shaped API via `@bldrs-ai/conway/web-ifc`; the real-web-ifc comparison build was removed 2026-11-01, see design/new/adapter-removal.md)
 - Environment-specific configs: dev, prod, cypress
 - Multi-threading support with Conway engine
 - Bundle analysis and optimization tools
@@ -99,7 +99,7 @@ GitHub API integration for model versioning and collaboration:
 ## Model Processing Pipeline
 1. URL parsing and model path resolution (`Share.jsx`, `src/utils/urlHelpers.js`)
 2. File loading through format-specific loaders (`src/loader/`)
-3. IFC processing with Conway or web-ifc engines
+3. IFC processing with the Conway engine
 4. 3D scene setup and rendering (`Infrastructure/`)
 5. UI state synchronization and user interactions
 
