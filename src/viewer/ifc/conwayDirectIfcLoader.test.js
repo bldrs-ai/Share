@@ -307,7 +307,12 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
     it('refuses from the store open on the deferred-geometry path too', async () => {
       mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
       try {
+        // The demand pump is what makes parseIfcWithConway take the deferred
+        // branch (loader/conwayOpen.js#openDeferred, which the engine worker
+        // shares); without it the classic open runs and this test would not
+        // be exercising the path its name says (agent review on #2057).
         const ifcAPI = conwayLikeEngine(new Map(), {OpenModelStream: 'UNSUPPORTED_SCHEMA'})
+        ifcAPI.ExtractGeometryBatchAsync = jest.fn()
         await expect(parseIfcWithConway(new Blob([ifc4x3Header]), ifcAPI))
           .rejects.toBeInstanceOf(UnsupportedSchemaError)
         expect(ifcAPI.OpenModelStreamed).not.toHaveBeenCalled()

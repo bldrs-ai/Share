@@ -67,6 +67,21 @@ const opfsBuilds = workerBuilds('OPFS/OPFS.worker.js', 'OPFS.worker')
 // hover-pick / camera-controls stay responsive during the post-IFC-
 // parse write. See `src/loader/GlbWriter.worker.js`.
 const glbWriterBuilds = workerBuilds('loader/GlbWriter.worker.js', 'GlbWriter.worker')
+// Per-model engine worker (design/new/engine-worker.md, `?feature=engineWorker`):
+// one Conway engine per model, terminated on eviction. ESM only, unlike the
+// two above: where module workers are missing the engine runs in process on
+// the main thread through the same protocol (`src/engine/transports.js`),
+// so a classic bundle would be a second engine build nobody loads.
+const engineWorkerBuild = esbuild.build({
+  ...config,
+  entryPoints: [path.resolve(repoRoot, 'src', 'engine', 'Engine.worker.js')],
+  outdir: undefined,
+  outfile: path.join(buildDir, 'Engine.worker.js'),
+  format: 'esm',
+  // Single-threaded engine, always (src/engine/engineThreading.js says why a
+  // define alone is not enough and sets the guarded global too).
+  define: {...config.define, 'process.env.FORCE_SINGLE_THREAD': '"true"'},
+})
 
 // Pro modules — premium export code, built OUTSIDE `docs/` so it is never
 // published; the authenticated `pro-module` Netlify Function is the only
@@ -76,7 +91,7 @@ const proBuilds = proModuleBuilds()
 
 
 // Wait for every build to complete
-Promise.all([mainBuild, ...opfsBuilds, ...glbWriterBuilds, ...proBuilds])
+Promise.all([mainBuild, ...opfsBuilds, ...glbWriterBuilds, engineWorkerBuild, ...proBuilds])
   .then(([result]) => {
     // Remove development resources from non-development builds
     if (config.define['process.env.MSW_IS_ENABLED'] !== 'true') {
