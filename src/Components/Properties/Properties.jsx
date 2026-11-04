@@ -3,12 +3,17 @@ import {decodeIFCString} from '@bldrs-ai/ifclib'
 import {Box, Paper, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Hooks'
+import NoContent from '../NoContent'
 import Toggle from '../Toggle'
 import useStore from '../../store/useStore'
 import {selectReadModel} from '../../store/IFCSlice'
 import {hexToRgba} from '../../utils/color'
 import ExpansionPanel from './ExpansionPanel'
 import {createPropertyTable} from './itemProperties'
+
+
+/** Shown in place of a property table that could not be built. */
+export const PROPERTIES_UNAVAILABLE_MESSAGE = 'Properties for this element are not available.'
 
 
 /**
@@ -91,12 +96,26 @@ export default function Properties() {
         if (isStale) {
           return
         }
-        const table = await createPropertyTable(model, fullElement)
+        let table
+        try {
+          table = await createPropertyTable(model, fullElement)
+        } catch (e) {
+          // A table that cannot be built says so, rather than leaving the
+          // PREVIOUS element's properties on screen under this selection.
+          // (A throw while rendering is PropertiesPanel's ErrorBoundary's.)
+          console.warn('Properties: could not build the property table', e)
+          table = <NoContent message={PROPERTIES_UNAVAILABLE_MESSAGE}/>
+        }
         if (isStale) {
           return
         }
         setPropTable(table)
-        const psets = await createPsetsList(model, fullElement, expandAll)
+        let psets = null
+        try {
+          psets = await createPsetsList(model, fullElement, expandAll)
+        } catch (e) {
+          console.warn('Properties: could not build the property sets', e)
+        }
         if (isStale) {
           return
         }

@@ -1,7 +1,7 @@
 import React from 'react'
 import {render, screen} from '@testing-library/react'
 import {MockModel} from '../../utils/IfcMock.test'
-import {hasProperties, quantities} from './itemProperties'
+import {createPropertyTable, hasProperties, quantities, renderableValue} from './itemProperties'
 
 
 const REF_TYPE = 5
@@ -119,5 +119,112 @@ describe('quantities', () => {
     ], 0))
 
     expect(screen.getByText('GrossArea')).toBeInTheDocument()
+  })
+})
+
+
+const IFCGRID = 3009204131
+const IFCGRIDAXIS = 852622518
+const IFCPOLYLINE = 3724593414
+const IFCCARTESIANPOINT = 1123145078
+const STRING = 1
+const ENUM = 3
+const REAL = 4
+
+
+/**
+ * A model whose engine resolves references the way both of Share's engines do:
+ * `deref` calls `ifcAPI.properties.getItemProperties(0, id, true)`, and each
+ * call hands back a FRESH copy, as the worker facade (a structured clone) and
+ * the main-thread compat surface both do.
+ *
+ * @param {object} byId lines by expressID
+ * @return {object}
+ */
+function engineModel(byId) {
+  const read = (id) => (byId[id] === undefined ? undefined : structuredClone(byId[id]))
+  return {
+    getItemProperties: (id) => Promise.resolve(read(id)),
+    ifcManager: {ifcAPI: {properties: {getItemProperties: (modelID, id) => Promise.resolve(read(id))}}},
+  }
+}
+
+
+/**
+ * An IfcGrid as the engine returns it: its axes are REFERENCES to IfcGridAxis
+ * entities, which carry no GlobalId, so `deref` resolves each one into a whole
+ * entity object (and on through its curve to the curve's points).
+ *
+ * @return {object} `{model, grid}`
+ */
+function gridModel() {
+  const lines = {
+    9011: {
+      expressID: 9011, type: IFCGRIDAXIS, AxisTag: {type: STRING, value: 'A'},
+      AxisCurve: {type: 5, value: 9013}, SameSense: {type: ENUM, value: 'T'},
+    },
+    9012: {
+      expressID: 9012, type: IFCGRIDAXIS, AxisTag: {type: STRING, value: '1'},
+      AxisCurve: {type: 5, value: 9013}, SameSense: {type: ENUM, value: 'T'},
+    },
+    9013: {expressID: 9013, type: IFCPOLYLINE, Points: [{type: 5, value: 9014}]},
+    9014: {
+      expressID: 9014, type: IFCCARTESIANPOINT,
+      Coordinates: [{type: REAL, value: 0}, {type: REAL, value: 0}],
+    },
+  }
+  const grid = {
+    expressID: 9010, type: IFCGRID,
+    GlobalId: {type: STRING, value: '3vB2YO$MX4xv5uCqZZG05x'},
+    Name: {type: STRING, value: 'Grid'},
+    UAxes: [{type: 5, value: 9011}],
+    VAxes: [{type: 5, value: 9012}],
+  }
+  return {model: engineModel(lines), grid}
+}
+
+
+/**
+ * Share#2063: selecting an IfcGrid took the whole app down. Its UAxes / VAxes
+ * deref'd to arrays of entity OBJECTS, which the table handed to React as
+ * children (React #31), and the root ErrorBoundary replaced the page.
+ */
+describe('createPropertyTable with references deref resolves to entities', () => {
+  it('renders an array of references to entities without a GlobalId', async () => {
+    const {model, grid} = gridModel()
+    render(await createPropertyTable(model, grid))
+    expect(screen.getByText('A')).toBeInTheDocument()
+    expect(screen.getByText('1')).toBeInTheDocument()
+    expect(screen.getAllByText('Gridaxis')).toHaveLength(2)
+  })
+
+  it('stops nesting tables past the depth limit and shows the reference instead', async () => {
+    const {model, grid} = gridModel()
+    render(await createPropertyTable(model, grid))
+    // grid → axis (depth 1) → polyline (depth 2) → its point is past the limit.
+    expect(screen.getAllByText('#9014 Cartesianpoint')).toHaveLength(2)
+    expect(screen.queryByText('Coordinates')).not.toBeInTheDocument()
+  })
+
+  it('leaves the record it was given unchanged (deref rewrites in place)', async () => {
+    const {model, grid} = gridModel()
+    const before = structuredClone(grid)
+    await createPropertyTable(model, grid)
+    expect(grid).toEqual(before)
+  })
+})
+
+
+describe('renderableValue', () => {
+  const model = engineModel({})
+
+  it('never hands React a raw object', async () => {
+    expect(await renderableValue(model, true, 0)).toBe('true')
+    expect(await renderableValue(model, null, 0)).toBe('')
+    expect(await renderableValue(model, {type: 'IFCWALL', ref: 'guid-1'}, 0)).toBe('guid-1')
+    expect(await renderableValue(model, {a: 1}, 0)).toBe('{"a":1}')
+    render(<div>{await renderableValue(model, ['x', 2, {b: 3}], 0)}</div>)
+    expect(screen.getByText('x')).toBeInTheDocument()
+    expect(screen.getByText(', {"b":3}')).toBeInTheDocument()
   })
 })
