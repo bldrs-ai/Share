@@ -713,11 +713,50 @@ are not re-minted by an engine respawn because the scene is not rebuilt.
 
 ## 7. Migration plan
 
-Every PR is behind `?feature=engineWorker` (off), keeps the main-thread
-engine as the default and fallback, and carries desktop + mobile E2E per
-the UI rule. The main-thread engine stays permanently (§8 item 6), but as
-the same protocol and session API over an in-process transport, not as a
-second, divergent path.
+### Resume here (2026-11-04)
+
+Picking `open-205` back up after a break? Read this, then §7.1 (numbers)
+and §7.2 (step-9 criteria). Docs #2064 and #2068 are merged.
+
+**Release goal.** `?feature=engineWorker` on by default. That is step 9,
+the only thing left that users would see.
+
+**Merged.**
+- Steps 0–4: this doc (#2056), conway#540 (conway#759), protocol and
+  client (#2057), IFC load in the worker (#2058), the sync-access-handle
+  source (#2072).
+- Step 6, STEP in the worker (#2067), with the one part-21 list
+  (`loader/part21Formats.js`).
+- #2065, the Properties panel crash fix (not a worker bug).
+- #2074: one worker request per Properties table, and cache-hit refs.
+  Closes #2070 and #2066.
+- #2073 (#2038): GLB export capture through conway's file-order readers.
+- #2079 (#2075).
+
+**In flight.**
+- Step 5's draft PR: the GLB capture in the worker. A worker load writes
+  no cache artifact yet, so every reopen misses the GLB cache. This is the
+  flip blocker.
+- #2080: the conway `1.1636.766` pin, together with #2069 (the pin needs
+  it).
+- #2071: this section and §7.2.
+
+**Flip gates (step 9).** §7.2 is the list, each item needing a merged PR
+or a measurement in a PR body.
+1. Step 5 merged.
+2. #2061: the 350 MB worker JS heap on sp-231MB, explained and fixed or
+   accepted (needs a heap snapshot).
+3. Flip prep: the kill switch checked in a real browser, the `?view=`
+   rules stack deleted or its fallback settled, and the flag-on E2E suite
+   green as the default.
+4. A real-GPU check, plus Safari and Firefox by hand.
+
+**Next after the flip.**
+- STEP convergence in conway (§11): the STEP index sidecar (conway#757),
+  a windowed STEP open, STEP previews with an occurrence path.
+- #2077 and #2078 (priority residency), then #2076.
+- Steps 7–8 (sessions own their worker, close and eviction) only when
+  in-app model switching (#2011) is picked up. They do not gate the flip.
 
 1. **conway: recognise a worker** (conway#540): `WorkerGlobalScope` in
    `isWebPlatform`, `self.crossOriginIsolated` in `pThreadsAllowed`. Small;
@@ -860,7 +899,8 @@ second, divergent path.
    #2023's memory spec, asserting the evicted worker's memory is gone
    (`measureUserAgentSpecificMemory` breakdown in an isolated test server,
    or the renderer's RSS) and that properties still answer.
-9. **Default on**, after steps 2–8 have merged. The in-process transport
+9. **Default on**, after steps 2–6 have merged. Steps 7–8 are only needed
+   for in-app model switching (#2011), so they do not gate it. The in-process transport
    stays as the fallback for browsers without module workers, and
    `?feature=disableEngineWorker` is the kill switch. Before it: delete the
    `?view=` rules stack (§8 item 7).
@@ -879,7 +919,9 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 3 — IFC load in the worker | merged (#2058). PSB, n=3, flag off → on: main-thread long tasks over 50 ms 418 → 23, time blocked 63 → 12 s, Geometry 48.3 → 40.6 s, Total 94.8 → 83.3 s, page heap after load 2130 → 889 MB (the worker's own JS heap 65 MB). Buffered tree-at-index: SEESTRASSE 8.05 → 4.60 s, sp-231MB 37.4 → 11.9 s |
 | 4 — sync-access-handle source | merged (#2072). Measured flag on, Blob store vs read-only sync handle, at medians: PSB (n=3) source I/O 19.1 → 3.8 s, Parsing 28.3 → 20.2 s, time to index 44.2 → 35.8 s, Total 96.5 → 82.9 s; sp-231MB (n=2) I/O 8.5 → 2.1 s, Parsing 14.0 → 9.9 s, Total 64.8 → 60.1 s; SEESTRASSE (n=1) I/O 0.32 → 0.07 s, Total flat. Geometry, main-thread long tasks and page heap unchanged. Every leg was windowed, checked by its `Engine source I/O:` line, in a persistent profile. Caveat: the Blob store's per-read time includes event-loop wait as well as I/O (each read is an async round trip), so the I/O figures are not pure I/O. The wall-clock stages (Parsing, time to index, Total) carry the claim |
 | 6 — STEP in the worker | merged (#2067). A STEP is opened buffered (conway's store-backed open is IFC-only), so step 4's source store does not apply to it |
-| 5, 7, 8, 9 | not started; 9 is gated on #2061 (#2070's Properties panel cost is fixed by #2074) |
+| 5 — GLB capture in the worker | in flight (the flip blocker): #2073 (export capture completeness) is its groundwork |
+| 7, 8 | deferred; only in-app switching needs them |
+| 9 | not started; gated on step 5 and #2061. #2070 is closed: its Properties panel cost is fixed by #2074 |
 
 **Known issues.**
 
@@ -977,11 +1019,12 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 
 ### 7.2 Step 9 (default on): the criteria
 
-Kept on the long-lived docs branch until step 9's PR, which folds it in.
 Every item needs either a merged PR or a measurement in a PR body.
 
-1. **Steps 2–8 merged**, each behind the flag, each with its desktop and
-   mobile E2E.
+1. **Steps 2–6 merged**, each behind the flag, each with its desktop and
+   mobile E2E. Step 5 is the open one. Steps 7–8 are deferred (they serve
+   in-app switching, not the flip), so the memory-after-evict check in
+   item 5 waits with them.
 2. **The `?view=` rules stack deleted** (§8 item 7). WidgetApi's
    `ChangeViewSettingsEventHandler` is migrated first. Legacy
    `?feature=bot` stays on the main-thread engine and refuses clearly
@@ -989,15 +1032,15 @@ Every item needs either a merged PR or a measurement in a PR body.
 3. **#2061 explained and fixed or accepted.** That is the 350 MB worker
    JS heap after an sp-231MB load. It needs a heap snapshot, and its
    number goes against the §5.2 budget.
-4. **#2070 fixed.** One round trip per Properties table: a deref op that
-   runs in the worker, applying the depth limit and `MAX_ARRAY_MEMBERS`
-   there so it returns only what renders. Plus render-on-demand when
-   idle, so a reply doesn't wait behind a frame. Measured on a 41-axis
-   grid table, flag off vs on.
+4. **#2070 fixed. Met, by #2074.** One round trip per Properties table: a
+   `propertyTables` op that runs in the worker, applying the depth limit
+   and `MAX_ARRAY_MEMBERS` there so it returns only what renders. What
+   stays is the general cost of a frame-bound round trip for any other
+   sequential read (§7.1); it does not gate the flip.
 5. **No load regressions, flag off vs on.** PSB n≥3, plus SEESTRASSE and
    sp-231MB, at `RAF_THROTTLE_MS=3600000`:
    - main-thread long tasks over 50 ms, time to index, Geometry, Total;
-   - memory after evict (the #2023 E2E);
+   - memory after evict (the #2023 E2E; with step 8);
    - each windowed leg checked to have actually run windowed (its
      `Engine source I/O:` line present), with a persistent profile, since
      an incognito-like context's small OPFS quota silently falls back to
