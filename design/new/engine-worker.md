@@ -671,6 +671,14 @@ second, divergent path.
    (conway's store-backed open is IFC-only) and an index sidecar
    (conway#757), so a STEP is resident in its worker and re-parses on
    reopen.
+   Measured on four STEP models from 4 to 111 MB, with the loop frozen:
+   - main-thread long tasks during the load fall from 5.8–36 s to 3–4.5 s;
+     what is left is page boot and the end-of-load assembly;
+   - Geometry is unchanged within the spread;
+   - a small model's index comes about 1 s later, from the worker's spawn
+     and cold compile;
+   - the page heap is 30–73 % lower.
+   The table is on #2067.
 7. **Sessions own their worker** (with #2019). The engine moves from the
    viewer to the session; a switch keeps the old worker; the background
    batch policy (§8 item 1). Tests, each shown failing on revert: queued
