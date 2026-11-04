@@ -10,7 +10,7 @@ import useStore from '../../store/useStore'
 import {selectReadModel} from '../../store/IFCSlice'
 import {hexToRgba} from '../../utils/color'
 import ExpansionPanel from './ExpansionPanel'
-import {createPropertyTable} from './itemProperties'
+import {createPropertyTable, createPropertyTables} from './itemProperties'
 
 
 /** Shown in place of a property table that could not be built. */
@@ -257,18 +257,17 @@ function CacheWriteAffordance() {
  */
 async function createPsetsList(model, element, expandAll) {
   const psets = await model.getPropertySets(element.expressID)
+  // One resolve for every set: under the engine worker that is one request,
+  // not one per set and one per property in each (Share#2070).
+  const tables = await createPropertyTables(model, psets.map((ps) => ({record: ps, isPset: true})))
   return [
-    await Promise.all(
-      psets.map(async (ps, ndx) => {
-        return (
-          <ExpansionPanel
-            key={`pset-${ndx}`}
-            summary={decodeIFCString(ps.Name.value) || 'Property Set'}
-            detail={await createPropertyTable(model, ps, true, 0)}
-            expandState={expandAll}
-          />
-        )
-      }),
-    ),
+    psets.map((ps, ndx) => (
+      <ExpansionPanel
+        key={`pset-${ndx}`}
+        summary={decodeIFCString(ps.Name.value) || 'Property Set'}
+        detail={tables[ndx]}
+        expandState={expandAll}
+      />
+    )),
   ]
 }

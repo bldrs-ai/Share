@@ -372,6 +372,7 @@ construction, not by a guard).
 | `pump` | `{mode: 'run' \| 'throttle' \| 'pause'}` | ack |
 | `tree` | `{mode: 'names' \| true, includeSolids}` | the spatial tree (structured clone) |
 | `props` | `{ids, recursive, psets}` | records, in `ids` order (batched: one message for N ids) |
+| `propertyTables` | `{tables: [{record, isPset}]}` | the Properties panel's tables, resolved next to the engine by `propertyTable.js` and cut to what renders (#2070, §7.1); offered only when `init`'s `capabilities.propertyTables` says so |
 | `itemsOfType` | `{type, verbose}` | ids |
 | `capture` | `{geometryIds, properties, spatialTree, faceIds}` | packed containers, transferred |
 | `release` | `{entityCache} \| {spill: true} \| {geometry: true}` | bool |
@@ -414,6 +415,7 @@ session.tree({mode})      // → Promise<Node>
 session.properties(id, {recursive, psets})
 session.propertiesMany(ids, opts)
 session.propertySets(id)
+session.propertyTables(tables)  // the panel's tables, one request (§7.1, #2070)
 session.itemsOfType(type)
 session.typeName(code)    // sync: conway's static IfcTypesMap, imported main-side
 session.capture(opts)     // GLB writer job
@@ -424,9 +426,9 @@ session.close()           // abort + terminate
 `getSpatialStructure`, `getItemProperties`, `getPropertySets`,
 `getIfcType`, and `ifcManager.{getSpatialStructure, getItemProperties,
 getPropertySets, getIfcType, idsByType}` plus an `ifcManager.ifcAPI` that
-exposes only `properties.*` (for `itemProperties.jsx`'s `deref`). It
-replaces `makeIndexedModelHandle` and `makeConwayDirectIfcManager`, so every
-async consumer in §2.1 keeps its code. Nothing on the main thread can reach
+exposes only `properties.*` (where the Properties panel finds
+`resolvePropertyTables`, §7.1). It replaces `makeIndexedModelHandle` and
+`makeConwayDirectIfcManager`, so every async consumer in §2.1 keeps its code. Nothing on the main thread can reach
 a sync engine method, because there is no `IfcAPI` object there to reach.
 
 Reads go to the first source that can answer: the live worker; a

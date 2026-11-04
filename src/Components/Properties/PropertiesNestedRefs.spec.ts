@@ -15,7 +15,8 @@ import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
  * model. The fixture is box.ifc plus one two-axis grid.
  */
 const MODEL = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/grid-axes.ifc'
-const GRID_PATH = '/100/500/9010'
+const GRID_ID = 9010
+const GRID_PATH = `/100/500/${GRID_ID}`
 const APP_ERROR_TEXT = 'Oh no!'
 // The grid's own rows, and one of the box proxy's that the grid has not.
 const GRID_AXIS_TYPE = 'Gridaxis'
@@ -102,6 +103,51 @@ describeMobileAndDesktop('Properties: an element whose references resolve to ent
       }
     })
   }
+
+  // Share#2070: under the worker each engine read is a round trip that waits
+  // behind a page frame, and the panel made one per reference (and one per
+  // property of each property set). It now asks for each table whole
+  // (`propertyTables`, resolved next to the engine by propertyTable.js), so
+  // the grid's panel is a fixed handful of requests however many axes the
+  // grid has. Counted at the session, from the click that opens the panel.
+  test('engine worker: the grid\'s tables cost one request each, not one per reference', async ({page}) => {
+    const errors = collectPageErrors(page)
+    const engine = watchEngineWorker(page)
+    await page.goto(`${MODEL}${GRID_PATH}?feature=engineWorker`)
+    await waitForModelReady(page)
+    await engine.expectWorkerEngine()
+    await page.evaluate(() => {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const w = window as any
+      const session = w.store.getState().model.ifcManager.ifcAPI.engineSession
+      w.__bldrsTestOps = []
+      const request = session.request.bind(session)
+      session.request = (op: string, args: any, ...rest: unknown[]) => {
+        w.__bldrsTestOps.push(op === 'props' ? `props ${args.ids.join(',')}` : op)
+        return request(op, args, ...rest)
+      }
+      /* eslint-enable @typescript-eslint/no-explicit-any */
+    })
+    await page.getByTestId('control-button-properties').click()
+    const panel = page.getByTestId('PropertiesPanel')
+    await expect(panel.getByText(GRID_AXIS_TYPE).first()).toBeVisible()
+    await expect(panel.getByText('A', {exact: true}).first()).toBeVisible()
+    // Settle: the property sets come after the element's table.
+    const SETTLE_MS = 1000
+    await page.waitForTimeout(SETTLE_MS)
+    const ops: string[] = await page.evaluate(() =>
+      (window as unknown as Record<string, string[]>).__bldrsTestOps)
+    // The only `props` reads are of the grid itself (the panel's effect can
+    // run more than once as it mounts, and each run fetches the selection);
+    // its references are read inside `propertyTables`. Per reference, each of
+    // the grid's two axes was a `props` round trip of its own.
+    const reads = ops.filter((op) => op.startsWith('props'))
+    expect(reads.length, ops.join(', ')).toBeGreaterThanOrEqual(1)
+    expect(new Set(reads), ops.join(', ')).toEqual(new Set([`props ${GRID_ID}`]))
+    expect(ops, ops.join(', ')).toContain('propertyTables')
+    await expect(page.getByText(APP_ERROR_TEXT)).toHaveCount(0)
+    expect(errors).toEqual([])
+  })
 
   test('engine worker (smoke): rapid NavTree clicks across the end of the load leave the LAST selection\'s properties', async ({page}) => {
     const TEST_TIMEOUT = 90_000

@@ -4,7 +4,7 @@ import {
   homepageSetup,
   setIsReturningUser,
 } from '../../tests/e2e/utils'
-import {waitForModelReady} from '../../tests/e2e/models'
+import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
 import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 
@@ -144,6 +144,41 @@ describeMobileAndDesktop('View 100: Properties panel on cache-hit GLB', () => {
     // proves the payload survived gzip + JSON and inflated. Those are what
     // bldrs-ai/Share#1776 broke — the writer dropped the extension entirely
     // and the reload fell back to the scene graph.
+  })
+  // Share#2066: on a cache hit every reference row read `null`. The panel
+  // resolved references through `model.ifcManager.ifcAPI`, which on a cache
+  // hit is the viewer's engine, with no model open; the model's own
+  // `getItemProperties` (its BLDRS_element_properties records) is what holds
+  // them. The grid is the shape that shows it: its axes are references to
+  // IfcGridAxis entities, each its own nested table.
+  test('cache-hit GLB resolves a grid\'s axis references from its own records', async ({page}) => {
+    const TEST_TIMEOUT = 120_000
+    test.setTimeout(TEST_TIMEOUT)
+    const CACHE_TIMEOUT = 30_000
+    const GRID_MODEL = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/grid-axes.ifc'
+    await setupVirtualPathIntercept(page, GRID_MODEL, '')
+    const glbLogs = captureGlbLogs(page)
+    await page.goto(`${GRID_MODEL}?feature=glbVerbose`)
+    await waitForModelReady(page)
+    await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT)
+
+    resetGlbLogs(glbLogs)
+    await page.goto(`${GRID_MODEL}/100/500/9010?feature=glbVerbose`)
+    await waitForModelReady(page)
+    await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT)
+    await waitForGlbLog(
+      glbLogs, 'hydrated Properties panel from BLDRS_element_properties', CACHE_TIMEOUT)
+
+    await page.getByTestId('control-button-properties').click()
+    const panel = page.getByTestId('PropertiesPanel')
+    await expect(panel).toBeVisible()
+    await expect(panel.getByText('Grid', {exact: true}).first()).toBeVisible()
+    // Each axis resolved to its own table: its type and its tag. Before the
+    // fix both rows were the string `null`.
+    await expect(panel.getByText('Gridaxis')).toHaveCount(2)
+    await expect(panel.getByText('A', {exact: true}).first()).toBeVisible()
+    await expect(panel.getByText('1', {exact: true}).first()).toBeVisible()
+    await expect(panel.getByText('null', {exact: true})).toHaveCount(0)
   })
 })
 
