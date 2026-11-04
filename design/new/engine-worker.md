@@ -650,6 +650,62 @@ second, divergent path.
    `?view=` rules stack (§8 item 7).
 
 
+### 7.1 Progress and known issues
+
+Kept current by every code PR in the chain. Numbers are the PRs' own, with
+`RAF_THROTTLE_MS=3600000`.
+
+| Step | State |
+|---|---|
+| 0 — this doc | merged (#2056) |
+| 1 — conway#540 | merged (conway#759, published `1.1633.540`) |
+| 2 — protocol, worker entry, client | merged (#2057) |
+| 3 — IFC load in the worker | merged (#2058). PSB, n=3, flag off → on: main-thread long tasks over 50 ms 418 → 23, time blocked 63 → 12 s, Geometry 48.3 → 40.6 s, Total 94.8 → 83.3 s, page heap after load 2130 → 889 MB (the worker's own JS heap 65 MB). Buffered tree-at-index: SEESTRASSE 8.05 → 4.60 s, sp-231MB 37.4 → 11.9 s |
+| 4 — sync-access-handle source | in progress |
+| 6 — STEP in the worker | in progress |
+| 5, 7, 8, 9 | not started; 9 is gated on #2061 and #2070 |
+
+**Known issues.**
+
+- **#2061: worker JS heap on sp-231MB.** The engine worker holds about
+  350 MB of live JS heap after an sp-231MB load, against 65 MB for PSB.
+  This is unexplained (it needs a heap snapshot) and gates step 9.
+- **#2070: each engine round trip waits behind a main-thread frame.** A
+  worker reply is a main-thread task, so with the render loop running it
+  waits for the frame in progress. The engine itself answers a read in
+  under 1 ms inside the worker. In headless Chromium (software GL) the
+  round trip measured 127–217 ms, and 0.34 ms with rAF frozen. On a GPU
+  the cost is up to a frame per round trip. That makes sequential reads
+  frame-bound: the Properties panel's deref does one read per top-level
+  reference. The likely fixes are batching or not rendering while idle.
+  It gates step 9.
+- **#2063: the Properties panel took the app down. Fixed, and not a worker
+  bug.** Selecting an `IfcGrid` with the panel open replaced the page with
+  "Oh no!" on both engines. ifclib's `deref` resolves a reference to an
+  entity with no GlobalId (an `IfcGridAxis`) into the whole entity object,
+  and the panel handed an *array* of those to React, which throws #31. It
+  surfaced under the flag because that was where a large model was being
+  burned in. The panel now renders every resolved value safely, derefs a
+  copy (deref rewrites in place), and has its own ErrorBoundary.
+- **The properties hand-off at load end.** The panel reads through
+  `selectReadModel`: the indexed model's worker facade while geometry
+  streams, then the finished model. At the swap, the panel's effect re-runs
+  and reads the selection again, while answers to earlier selections can
+  still be in flight from the worker. `Properties.jsx`'s `isStale` guard
+  drops any answer for a selection or model that is no longer current.
+  Its test is a unit test: a slow earlier answer arrives after the current
+  one, and the test fails with the guard removed.
+  `PropertiesNestedRefs.spec.ts` is only a smoke test of the same
+  hand-off: rapid NavTree clicks under the worker, with the geometry
+  released mid-burst. It passes even with every isStale check removed.
+  The worker answers in order, so in practice nothing arrives out of
+  order.
+
+  The panel's ErrorBoundary is not keyed on the selection, so the panel
+  stays mounted. It resets itself when the selection or the read model
+  changes, so a failure at the indexed model is retried with the finished
+  one. No crash was traced to this race; #2063 is a different bug.
+
 ## 8. Decisions (2026-11-03)
 
 These were the open questions of the scope. The user decided each one.
