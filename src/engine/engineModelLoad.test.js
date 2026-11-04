@@ -387,6 +387,18 @@ describe('engine/engineStream helpers', () => {
     expect(step.transfer).toHaveLength(7 + 2)
   })
 
+  it('carries each colour at full precision, as the main-thread path hands it to the builder', () => {
+    // conway's colours are doubles, and the main-thread engine passes them to
+    // the builder as they are. A float32 column rounded them (0.2158605001…
+    // became 0.2158605277…), so a worker load's materials and instance
+    // tables, and so its GLB artifact, differed from a main-thread load's
+    // in the 8th digit (engine-worker.md §7 step 5).
+    const color = {x: 0.21586050010324417, y: 0.05126945836711536, z: 1 / 3, w: 1}
+    const encoder = makeBatchEncoder(makeStreamingApi(), 0)
+    const step = encoder.encode([flatMesh(8, [{geometryExpressID: 100, flatTransformation: IDENTITY, color}])])
+    expect(decodePlacements(step.placements)[0].geometries[0].color).toEqual(color)
+  })
+
   it('keeps a present but EMPTY occurrence path apart from no path at all', () => {
     // A STEP root-level instance (geometry on the root product, under no
     // NAUO) has the path `[]`, which batchedInstanceTables.js

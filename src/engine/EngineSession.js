@@ -388,6 +388,41 @@ export class EngineSession {
   }
 
 
+  /**
+   * The GLB writer's engine captures, as one job in the engine (§2.4 G2):
+   * the shape `glbExport.js#exportAndCacheGlb` takes as its `capture`.
+   *
+   * @param {object} [options]
+   * @param {Array<number>|null} [options.geometryExpressIds] ids whose
+   *   geometry identities to resolve (STEP, merged layout)
+   * @return {Promise<{spatialTree: (object|null), elementProperties:
+   *   (Uint8Array|null), geometryItemIdentities: (object|null),
+   *   captureMs: number, wasmBytes: number}>}
+   */
+  capture({geometryExpressIds = null} = {}) {
+    return this.request(Op.CAPTURE, {geometryExpressIds})
+  }
+
+
+  /**
+   * Release a resident source (a buffered open) to windows read from `file`,
+   * the OPFS File it was parsed from. A no-op answer for a windowed session.
+   *
+   * @param {File|Blob} file
+   * @return {Promise<{spilled: boolean, reason: (string|null), source: object}>}
+   */
+  async spill(file) {
+    const result = await this.request(Op.SPILL, {file})
+    if (result?.spilled && result.source?.kind) {
+      // A spill through a sync access handle takes the entry's OPFS lock for
+      // the session, as a windowed open does, so close() must release it
+      // politely too (engine-worker.md §7 step 4).
+      this.sourceKind = result.source.kind
+    }
+    return result
+  }
+
+
   /** @return {Promise<{wasmBytes: number, modelID: number}>} */
   stats() {
     return this.request(Op.STATS)

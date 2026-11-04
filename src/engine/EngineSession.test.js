@@ -308,6 +308,27 @@ describe('engine/transports worker transport', () => {
     session.close()
     expect(worker.terminate).toHaveBeenCalledTimes(1)
   })
+
+  it('a spill through a sync access handle makes close() release it before terminating', async () => {
+    // A buffered open (a STEP) holds no OPFS lock until the GLB writer's
+    // spill opens one (engine-worker.md §7 step 5); from then on close()
+    // must send `close` and wait, as after a windowed open (step 4).
+    const worker = makeFakeWorker()
+    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 2})
+    const reply = (posted, result) => worker.dispatchEvent(new MessageEvent('message', {
+      data: {v: ENGINE_PROTOCOL_VERSION, epoch: 2, re: posted.msg.id, ok: true, result},
+    }))
+    const spilled = session.spill(new Blob([new Uint8Array(4)]))
+    expect(worker.posted[0].msg).toMatchObject({op: Op.SPILL})
+    reply(worker.posted[0], {spilled: true, reason: null, source: {kind: 'syncHandle'}})
+    await spilled
+    const closing = session.close()
+    expect(worker.posted[1].msg).toMatchObject({op: Op.CLOSE})
+    expect(worker.terminate).not.toHaveBeenCalled()
+    reply(worker.posted[1], true)
+    await closing
+    expect(worker.terminate).toHaveBeenCalledTimes(1)
+  })
 })
 
 

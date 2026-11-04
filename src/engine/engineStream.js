@@ -140,7 +140,11 @@ export function makeBatchEncoder(api, modelID) {
       parents: Uint32Array.from(parents),
       geometryIds: Uint32Array.from(geometryIds),
       transforms: Float64Array.from(transforms),
-      colors: Float32Array.from(colors),
+      // Float64, not 32: conway's colours are doubles, and the main-thread
+      // path hands them to the builder as they are. A float32 column made a
+      // worker load's materials and instance tables, and so its GLB artifact,
+      // differ from a main-thread load's (engine-worker.md §7 step 5).
+      colors: Float64Array.from(colors),
     }
     if (pathPresent.includes(1)) {
       placements.pathOffsets = Uint32Array.from(pathOffsets)

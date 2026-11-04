@@ -1,8 +1,9 @@
 # Per-model engine worker — one Conway engine per model, in its own Web Worker (open-205)
 
 **Status:** decided 2026-11-03 (§8); being built behind
-`?feature=engineWorker` in the §7 order. Steps 1–3 and 6 have landed: IFC
-and STEP both load in the worker.
+`?feature=engineWorker` in the §7 order. Steps 1–4 and 6 have landed: IFC
+and STEP both load in the worker. Step 5 (the GLB artifact of a worker
+load) is in review.
 **Epic:** `open-205` (#2011). Story: #2053. Absorbs #2031 (close and
 eviction): with an engine in a worker, terminating the worker *is* the
 eviction.
@@ -486,8 +487,9 @@ construction, not by a guard).
 | `props` | `{ids, recursive, psets}` | records, in `ids` order (batched: one message for N ids) |
 | `propertyTables` | `{tables: [{record, isPset}]}` | the Properties panel's tables, resolved next to the engine by `propertyTable.js` and cut to what renders (#2070, §7.1); offered only when `init`'s `capabilities.propertyTables` says so |
 | `itemsOfType` | `{type, verbose}` | ids |
-| `capture` | `{geometryIds, properties, spatialTree, faceIds}` | packed containers, transferred |
-| `release` | `{entityCache} \| {spill: true} \| {geometry: true}` | bool |
+| `capture` | `{geometryExpressIds}` (the STEP merged layout's ids, else null) | `{spatialTree, elementProperties, geometryItemIdentities, captureMs, wasmBytes}`; the properties container transferred (§7 step 5) |
+| `spill` | `{file}`: the OPFS File the model was parsed from | `{spilled, reason, source}`; `reason: 'windowed'` for a store-backed open, which has nothing resident to release |
+| `release` | `{entityCache} \| {geometry: true}` | bool |
 | `abort` | — | ack; the pump stops at the next batch boundary |
 | `stats` | — | `wasmBytes`, resident window bytes, I/O counters |
 
@@ -530,7 +532,8 @@ session.propertySets(id)
 session.propertyTables(tables)  // the panel's tables, one request (§7.1, #2070)
 session.itemsOfType(type)
 session.typeName(code)    // sync: conway's static IfcTypesMap, imported main-side
-session.capture(opts)     // GLB writer job
+session.capture(opts)     // GLB writer's engine captures, one job
+session.spill(file)       // release a resident source to OPFS windows
 session.close()           // abort + terminate
 ```
 
@@ -796,6 +799,74 @@ second, divergent path.
    spatial tree, face ids), then spill and release worker-side, then the
    flag's cache write turns on. E2E: `batchedGlbCache.spec.ts` under the
    flag (cache hit after a worker load opens with properties).
+   *As built* (#2053 step 5, for IFC and STEP alike):
+   - **One capture job, one copy of the code.** The writer's engine
+     captures — the spatial tree with its names, the element-properties
+     container, and STEP's geometry-identity table — are
+     `loader/glbEngineCapture.js#captureEngineExtensions`. A main-thread
+     load runs it over `viewer.IFC.loader.ifcManager`, as before. A worker
+     load runs it inside the worker, as the `capture` op, over the worker's
+     own engine (`ifcManagerOver(api)`), and gets the result back in one
+     reply with the container transferred. `glbExport.js#exportAndCacheGlb`
+     takes it as its `capture` argument. Everything else in the artifact
+     (geometry, instance tables, title, coordination frame) comes from the
+     main-side scene, which a worker load builds the same way, so the
+     writer did not otherwise change.
+   - **The split it needed.** The capture used to live in
+     `bldrsElementProperties.js` with the GLTFLoader reader, which imports
+     the store (for its legacy-format alert); the store touches `window` at
+     import, which would kill the worker at evaluation. The capture and the
+     wire format moved to `bldrsElementPropertiesCapture.js`; the reader
+     stayed. `engine/engineWorkerImports.test.js` asks esbuild for the
+     worker bundle's real import graph and fails on any store, React, MUI,
+     three or `.jsx` module in it.
+   - **Yield.** In the worker the element-properties sweep gives the event
+     loop a turn with the handler's own tick (`yieldToEventLoop`), not
+     `scheduler.yield()`, whose continuation would go ahead of the page's
+     queued requests and hold a Properties read until the sweep ended.
+   - **Spill.** The writer's `finally` sends `spill {file}` with the OPFS
+     File the model came from, as a main-thread load calls
+     `spillModelSource`. A windowed open (an OPFS IFC) already reads through
+     its store and answers `windowed`. A buffered one (every STEP, and an
+     IFC whose windowed open fell back) is released to windows over a store
+     the worker opens on that File through `openSourceStore`: the read-only
+     sync access handle where it can be had, so it takes the same OPFS lock
+     as step 4's windowed open, and `EngineSession#spill` records the kind
+     so `close()` releases it politely.
+   - **Release.** The worker's native geometry is still released at load
+     end, not in the writer's `finally`: the writer reads geometry from the
+     scene, and the engine only for properties.
+   - **A failed capture writes nothing.** If the `capture` request rejects
+     (the session closed under the idle writer), the write is skipped: an
+     artifact without its properties would serve an empty Properties panel
+     to every later cache hit. Each capture's own soft failure is still a
+     null, as on the main thread.
+   - **The colour column is float64.** Comparing the two engines'
+     artifacts for PSB byte for byte found the captured extensions
+     identical (`BLDRS_spatial_tree`, and the 7,458,553 B
+     `BLDRS_element_properties` container, which is also main's resident
+     capture). The one difference was colour: the batch encoder
+     (`engineStream.js`) sent placement colours as float32, while the
+     main-thread engine hands conway's doubles to the builder as they are,
+     so a worker load's materials and instance tables differed in the 8th
+     digit (`0.21586050010324417` vs `0.21586052771560016`; 4 B on 86 MB).
+     The column is now float64, which costs 16 B per placement (about
+     375 KB on PSB).
+   - **#2038 first.** The capture's sync `getLine` dropped every record
+     outside the resident windows of a windowed source, and every worker IFC
+     load is windowed. #2073 fixed that first, for both engines.
+   - **Memory.** The `capture` reply carries `wasmBytes`, like every reply
+     the budget reads (§5.2). The capture's own transient JS heap is not
+     part of the estimate; it is measured below.
+   E2E: `engine/engineGlbCapture.spec.ts`, desktop and mobile, IFC and
+   STEP. It loads the model on the main-thread engine and keeps its
+   artifact, then clears OPFS and loads it in the worker
+   (`watchEngineWorker`), and requires the same artifact byte for byte.
+   It then exports it as Pro and checks that the file carries the tree and
+   the properties, and reloads it as a cache hit whose Properties come from
+   the artifact. The cache hit's reference rows rendering `null` (#2066) is
+   a known issue there, not asserted.
+
 6. **STEP in the worker.** Buffered source transfer, the occurrence-path
    column, `includeSolids`. E2E: `indexStepLogo`, `stepVisibility` under the
    flag.
@@ -833,8 +904,8 @@ second, divergent path.
    `stepVisibility.spec.ts` (eye, Isolate and its reopened link, scene
    pick) and `assistTools.spec.ts` (isolate in a root-only file, which needs
    the empty path), desktop and mobile.
-   Left for later, for both formats: the GLB cache write (step 5; a STEP
-   worker load writes none either), and for STEP only a windowed open
+   Left for later: the GLB cache write for both formats (step 5, above);
+   and, for STEP only, a windowed open
    (conway's store-backed open is IFC-only) and an index sidecar
    (conway#757), so a STEP is resident in its worker and re-parses on
    reopen.
@@ -879,7 +950,8 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 3 — IFC load in the worker | merged (#2058). PSB, n=3, flag off → on: main-thread long tasks over 50 ms 418 → 23, time blocked 63 → 12 s, Geometry 48.3 → 40.6 s, Total 94.8 → 83.3 s, page heap after load 2130 → 889 MB (the worker's own JS heap 65 MB). Buffered tree-at-index: SEESTRASSE 8.05 → 4.60 s, sp-231MB 37.4 → 11.9 s |
 | 4 — sync-access-handle source | merged (#2072). Measured flag on, Blob store vs read-only sync handle, at medians: PSB (n=3) source I/O 19.1 → 3.8 s, Parsing 28.3 → 20.2 s, time to index 44.2 → 35.8 s, Total 96.5 → 82.9 s; sp-231MB (n=2) I/O 8.5 → 2.1 s, Parsing 14.0 → 9.9 s, Total 64.8 → 60.1 s; SEESTRASSE (n=1) I/O 0.32 → 0.07 s, Total flat. Geometry, main-thread long tasks and page heap unchanged. Every leg was windowed, checked by its `Engine source I/O:` line, in a persistent profile. Caveat: the Blob store's per-read time includes event-loop wait as well as I/O (each read is an async round trip), so the I/O figures are not pure I/O. The wall-clock stages (Parsing, time to index, Total) carry the claim |
 | 6 — STEP in the worker | merged (#2067). A STEP is opened buffered (conway's store-backed open is IFC-only), so step 4's source store does not apply to it |
-| 5, 7, 8, 9 | not started; 9 is gated on #2061 (#2070's Properties panel cost is fixed by #2074) |
+| 5 — GLB capture in the worker | in review, after #2073 (#2038: the capture dropped every record a windowed source did not have resident). n=1 each, flag off → on, `RAF_THROTTLE_MS=3600000`, persistent profile. PSB: time to artifact 171.6 → 118.9 s; the writer 38.1 → 31.0 s, of which the worker's capture is 7.6 s; main-thread long tasks before ready 536 (81.6 s) → 35 (13.7 s), and during the write 71 (7.85 s, max 624 ms) → 4 (0.43 s, max 208 ms); page heap (`performance.memory`) at the end 1,127 → 522 MB, sampled peak 1,766 → 848 MB; the worker's JS heap peaked at 140 MB, beside 899 MB of wasm. 58 MB STEP: time to artifact 47.6 → 43.2 s; writer 7.6 → 6.8 s, capture 2.5 s; long tasks before ready 292 (35.8 s) → 10 (3.6 s), during the write 4 (0.35 s) → 1 (0.07 s); page heap at the end 688 → 148 MB; worker JS heap peak 322 MB beside 515 MB of wasm. The PSB artifacts' captured extensions are byte-identical across the two engines; their colours differed until the batch colour column became float64 (step 5 above) |
+| 7, 8, 9 | not started; 9 is gated on #2061 and step 5 (#2070's Properties panel cost is fixed by #2074) |
 
 **Known issues.**
 
