@@ -59,6 +59,7 @@ import {
 } from '../OPFS/messages'
 import {reportUploadNotInBrowser} from '../OPFS/reportUploadNotInBrowser'
 import {getBrowser} from '../connections/registry'
+import {installEngineDevHook} from '../engine/engineDevHook'
 import modelIdentity from '../routes/modelIdentity'
 import useExistInFeature from '../hooks/useExistInFeature'
 import useDirectLinkQuota from '../quota/useDirectLinkQuota'
@@ -320,6 +321,7 @@ export default function CadView({
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
   const [searchParams] = useSearchParams()
   const isAssistEnabled = useExistInFeature('assist')
+  const isEngineWorkerEnabled = useExistInFeature('engineWorker')
 
   // Begin helpers //
   /**
@@ -2711,6 +2713,10 @@ export default function CadView({
   // stays mounted across navigation, so the hook installs when the flag
   // appears and the cleanup uninstalls it when the flag goes.
   useEffect(() => (isAssistEnabled ? installAssistDevHook() : undefined), [isAssistEnabled])
+  // `window.__bldrsEngine` (engine-worker.md §7 step 2): drives engine
+  // sessions directly, for the E2E, before any load goes through them.
+  // Same install-on-flag, uninstall-on-unflag shape as the assist hook.
+  useEffect(() => (isEngineWorkerEnabled ? installEngineDevHook() : undefined), [isEngineWorkerEnabled])
 
 
   const abs = {position: 'absolute'}
