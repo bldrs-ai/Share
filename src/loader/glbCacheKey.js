@@ -20,6 +20,32 @@
  * it (`BLDRS_GLB_BATCHED_SCHEMA_VERSION` below) — deliberately, since that
  * is the slot most users actually read. Nothing extra to do here; the note
  * exists so the coupling is visible from where the bump gets written.
+ * 0.25.0 — retires artifacts whose `BLDRS_element_properties` and
+ *         `BLDRS_spatial_tree` were captured from a WINDOWED source and
+ *         lost every record that was not resident at the time (#2038).
+ *         Conway's store-backed open, which is how every IFC staged in
+ *         OPFS opens, keeps a few 4 MiB windows of the file resident, and
+ *         the capture's sync `getLine` threw on anything outside them and
+ *         skipped it without a word. Measured with the capture run against
+ *         conway in Node, windowed vs buffered: sp-231MB kept 41,244 of
+ *         161,754 records, 163 of 1,372 products with psets, and 0 of
+ *         4,432 tree names; PSB 101,299 of 341,410 records and 3,103 of
+ *         7,872 names; even SEESTRASSE (25 MB) lost 425 records and 18
+ *         names. In the browser which records survived depended on timing,
+ *         so two loads cached different sets. A cache hit on such an
+ *         artifact shows empty Properties and an unnamed NavTree
+ *         indefinitely, while a cache-miss user sees them whole — the
+ *         0.24.0 failure shape (a baked capture output nothing in the key
+ *         identifies), so the same remedy. The key cannot tell a complete
+ *         artifact from a partial one, so EVERY artifact pays one re-parse,
+ *         IFC and STEP alike, though a STEP artifact (always captured from
+ *         a resident source) and a resident IFC one were complete. What a
+ *         fresh write now holds: the same element-properties container as
+ *         a resident capture always wrote, byte for byte, from either kind
+ *         of source; and a spatial tree named by the `'names'` call the
+ *         live NavTree makes, which leaves a `$` (null) Name or LongName
+ *         out where the old `getLine` fill wrote `null` (IFC only; a STEP
+ *         tree is unchanged).
  * 0.24.0 — retires STEP artifacts whose `BLDRS_element_properties` part
  *         rows carry no entity type. conway's `AP214Properties.
  *         getItemProperties` answered a spatial-tree node (a NAUO
@@ -305,7 +331,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.24.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.25.0'
 
 
 /**
