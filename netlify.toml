@@ -114,6 +114,20 @@
     Cross-Origin-Opener-Policy = "unsafe-none"
     Cross-Origin-Embedder-Policy = "unsafe-none"
 
+# The Auth0 custom error page (public/auth/error/). Its query string is
+# attacker-controllable, so on top of rendering it as text only (error.js),
+# the page gets a CSP that allows nothing but its own same-origin files:
+# no inline script or style, no third-party loads, no framing. Everything
+# it uses is a file it ships, so there's nothing to hash or allowlist; a
+# change that needs more must widen this deliberately. The rule is on the
+# directory's splat so it covers index.html, error.js and error.css alike.
+[[headers]]
+  for = "/auth/error/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    X-Robots-Tag = "noindex"
+    Referrer-Policy = "no-referrer"
+
 # Redirect /subscribe to /subscribe/ to enforce a trailing slash.
 #
 # NOT forced. Netlify matches `from` ignoring a trailing slash, so this
