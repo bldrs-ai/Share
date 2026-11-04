@@ -133,21 +133,29 @@ describe('ProfileControl', () => {
     // its lock goes just after: the entry it held is skipped the first time.
     it('clears again what the first pass skipped, and drops local recents once all is gone', async () => {
       clearOPFSCache.mockResolvedValueOnce(['BldrsLocalStorage/V1/m.ifc']).mockResolvedValueOnce([])
-      const alert = jest.spyOn(window, 'alert').mockImplementation(() => null)
       await clickClearLocalCache()
       expect(clearOPFSCache).toHaveBeenCalledTimes(2)
-      expect(alert).not.toHaveBeenCalled()
+      expect(useStore.getState().alert).toBeNull()
       expect(loadAllRecentFiles().map((f) => f.source)).toEqual(['github'])
     })
 
-    it('says so, and keeps local recents, when entries are still held (another tab)', async () => {
+    it('says so through the app\'s alert, keeps local recents, and reloads only once it is dismissed', async () => {
       clearOPFSCache.mockResolvedValue(['BldrsLocalStorage/V1/m.ifc'])
-      const alert = jest.spyOn(window, 'alert').mockImplementation(() => null)
-      await clickClearLocalCache()
+      const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+      fireEvent.click(await findByTestId('control-button-profile'))
+      fireEvent.click(await findByTestId('clear-local-cache'))
+      await waitFor(() => expect(useStore.getState().alert).not.toBeNull())
+      const alert = useStore.getState().alert
       expect(clearOPFSCache).toHaveBeenCalledTimes(2)
-      expect(alert).toHaveBeenCalledWith(
-        '1 cached file is open in another tab and was not cleared. Close the other Share tabs and clear the cache again.')
+      expect(alert).toMatchObject({
+        type: 'cacheClearSkipped',
+        message: '1 file is open in another tab and wasn\'t cleared. Close that tab and clear again.',
+      })
       expect(loadAllRecentFiles().map((f) => f.source)).toEqual(['github', 'local'])
+      expect(reloadAfterCacheClear).not.toHaveBeenCalled()
+      act(() => alert.onDismiss())
+      expect(reloadAfterCacheClear).toHaveBeenCalled()
+      act(() => useStore.setState({alert: null}))
     })
 
     it('keeps local recents when the OPFS clear failed', async () => {

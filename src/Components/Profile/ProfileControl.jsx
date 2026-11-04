@@ -38,6 +38,7 @@ import {
   PaymentOutlined,
   CleaningServicesOutlined as CleaningServicesOutlinedIcon,
 } from '@mui/icons-material'
+import {cacheClearSkippedAlert} from '../../OPFS/messages'
 import {clearOPFSCache} from '../../OPFS/utils'
 import {closeAllEngineSessions} from '../../engine/spawnEngine'
 import {clearRecentFilesBySource} from '../../connections/persistence'
@@ -55,6 +56,7 @@ export default function ProfileControl() {
   const setAccessToken = useStore((state) => state.setAccessToken)
   const viewer = useStore((state) => state.viewer)
   const appPrefix = useStore((state) => state.appPrefix)
+  const setAlert = useStore((state) => state.setAlert)
   // The §6e Neutral/Flat render toggle only appears when the whole look system
   // is enabled (`?feature=look`); off, there's no look to switch.
   const isLookEnabled = isFeatureEnabled('look')
@@ -335,6 +337,7 @@ export default function ProfileControl() {
         <MenuItem
           onClick={async () => {
             onCloseMenu()
+            let reloadNow = true
             try {
               const skipped = await clearLocalCacheReleasingEngines()
               if (skipped.length === 0) {
@@ -345,8 +348,9 @@ export default function ProfileControl() {
                 clearRecentFilesBySource('local')
               } else {
                 // Held by an engine in another tab. Said, not reloaded over
-                // as if the clear had worked.
-                window.alert(cacheClearSkippedMessage(skipped))
+                // as if the clear had worked: the reload waits for the user.
+                reloadNow = false
+                setAlert(cacheClearSkippedAlert(skipped.length, () => reloadAfterCacheClear(appPrefix)))
               }
             } catch (err) {
               console.error('Clear OPFS cache failed (reloading anyway)', err)
@@ -355,7 +359,9 @@ export default function ProfileControl() {
               // On a temporary (uploaded) model the just-cleared OPFS was the
               // only copy, so reloading the same URL would error; go to the
               // home model instead. Normal models just reload from source.
-              reloadAfterCacheClear(appPrefix)
+              if (reloadNow) {
+                reloadAfterCacheClear(appPrefix)
+              }
             }
           }}
           data-testid='clear-local-cache'
@@ -415,13 +421,3 @@ export async function clearLocalCacheReleasingEngines() {
   return await clearOPFSCache()
 }
 
-
-/**
- * @param {Array<string>} skipped OPFS paths left behind
- * @return {string} what the user is told
- */
-export function cacheClearSkippedMessage(skipped) {
-  const n = skipped.length
-  return `${n} cached file${n === 1 ? ' is' : 's are'} open in another tab and ` +
-    `${n === 1 ? 'was' : 'were'} not cleared. Close the other Share tabs and clear the cache again.`
-}

@@ -669,9 +669,10 @@ second, divergent path.
    - *Clear cache* therefore clears twice if it has to. `clearOPFSCache`
      resolves with what it skipped, and `ProfileControl` clears again
      once after `CACHE_CLEAR_RETRY_MS` (0.5 s). If entries are still held
-     (another tab), it tells the user and keeps the local recents. The
-     startup sweep (`pruneLocalRecents.js`) drops the recents whose
-     entries went.
+     (another tab), it says so in the app's alert dialog
+     (`cacheClearSkipped`) and keeps the local recents. It reloads only
+     once the user dismisses the dialog. The startup sweep
+     (`pruneLocalRecents.js`) drops the recents whose entries went.
    - **A requirement on step 7:** an in-app switch must await
      `close()` before it evicts or re-stages the previous model's entry.
      Today's switch reloads the page, so it doesn't need to; none of the
