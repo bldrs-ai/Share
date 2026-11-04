@@ -1,7 +1,8 @@
 # Per-model engine worker — one Conway engine per model, in its own Web Worker (open-205)
 
 **Status:** decided 2026-11-03 (§8); being built behind
-`?feature=engineWorker` in the §7 order.
+`?feature=engineWorker` in the §7 order. Steps 1–3 and 6 have landed: IFC
+and STEP both load in the worker.
 **Epic:** `open-205` (#2011). Story: #2053. Absorbs #2031 (close and
 eviction): with an engine in a worker, terminating the worker *is* the
 eviction.
@@ -208,7 +209,8 @@ through async reads.
   `flatMeshToBatchedModel.js`) and the tree uses `includeSolids`. Both are
   data, not engine calls. **Recommendation: IFC and STEP move together**, in
   one worker type with one protocol. The STEP-only parts are a column and a
-  flag. (A windowed STEP open is a Conway ask, not a blocker.)
+  flag. (A windowed STEP open is a Conway ask, not a blocker.) Done in §7
+  step 6: one worker load (`engine/engineModelLoad.js`) serves both.
 - **GLB, glTF, OBJ, STL, PLY, PDB, XYZ, splats, USD, 3DM, ADF/MTS, FBX** use
   three.js or Share's own JS decoders on the main thread. They have no wasm
   engine and no retained heap that only a terminate can free: their whole
@@ -672,6 +674,53 @@ second, divergent path.
 6. **STEP in the worker.** Buffered source transfer, the occurrence-path
    column, `includeSolids`. E2E: `indexStepLogo`, `stepVisibility` under the
    flag.
+   **Landed** (2026-11-04) as a generalisation, not a twin:
+   `engine/engineIfcLoad.js` became `engine/engineModelLoad.js`
+   (`createEngineModelLoad({format})`), and `ShareIfcLoader#isEngineWorkerLoad`
+   takes every loader type `engineFormatOf` maps (`ifc`, `ifczip`, `step`,
+   `stp`). That list is now the ONE part-21 list
+   (`loader/part21Formats.js`), which `Loader.js`, `modelArchive.js` and
+   `ShareModel.js` also read instead of three copies of their own. No STEP
+   branch was needed: step 3 had already put the occurrence-path column in
+   the batch encoding and forwarded `includeSolids` through
+   `EngineSession#propertiesApi`, and conway's compat `IfcAPI` routes AP214
+   behind the same calls. Two fixes to shared code came out of it, both
+   about STEP's data:
+   - **An empty occurrence path survives the boundary.** A root-level
+     instance's path is `[]`, which the root-pick and root-row logic tell
+     from "no path" (#1901, #1909). The encoder sent a zero-length run, and
+     no columns at all when every path was empty, so the page saw "no path".
+     A per-placement `pathPresent` column now keeps the two apart
+     (step-occurrence-selection.md has the details).
+   - **Bytes are transferred, not copied first.** A STEP is always buffered,
+     so the copy held the whole file twice on the page for the length of the
+     open. Only a failed open's message reads the source again, and it needs
+     only the header and size (`openFailureSource`).
+   `format` crosses as a label only: the `open` request, the `done` packet,
+   and the `engine worker pump: format=… (by suffix)` line. It decides
+   nothing, because a suffix is no evidence of the schema. The Loader's
+   header sniff (`Loader.js#canOpenFromStore`) already picks the source
+   kind: a File for a real IFC, bytes for a STEP. The worker opens whichever
+   it is handed.
+   E2E: `engineModelLoad.spec.ts` (STEP load, per-occurrence tree and scene
+   selection, properties), worker legs in `navTreeAtIndex.spec.ts`,
+   `indexStepLogo.spec.ts` (colour, world space) and
+   `stepVisibility.spec.ts` (eye, Isolate and its reopened link, scene
+   pick) and `assistTools.spec.ts` (isolate in a root-only file, which needs
+   the empty path), desktop and mobile.
+   Left for later, for both formats: the GLB cache write (step 5; a STEP
+   worker load writes none either), and for STEP only a windowed open
+   (conway's store-backed open is IFC-only) and an index sidecar
+   (conway#757), so a STEP is resident in its worker and re-parses on
+   reopen.
+   Measured on four STEP models from 4 to 111 MB, with the loop frozen:
+   - main-thread long tasks during the load fall from 5.8–36 s to 3–4.5 s;
+     what is left is page boot and the end-of-load assembly;
+   - Geometry is unchanged within the spread;
+   - a small model's index comes about 1 s later, from the worker's spawn
+     and cold compile;
+   - the page heap is 30–73 % lower.
+   The table is on #2067.
 7. **Sessions own their worker** (with #2019). The engine moves from the
    viewer to the session; a switch keeps the old worker; the background
    batch policy (§8 item 1). Tests, each shown failing on revert: queued
@@ -704,7 +753,7 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 2 — protocol, worker entry, client | merged (#2057) |
 | 3 — IFC load in the worker | merged (#2058). PSB, n=3, flag off → on: main-thread long tasks over 50 ms 418 → 23, time blocked 63 → 12 s, Geometry 48.3 → 40.6 s, Total 94.8 → 83.3 s, page heap after load 2130 → 889 MB (the worker's own JS heap 65 MB). Buffered tree-at-index: SEESTRASSE 8.05 → 4.60 s, sp-231MB 37.4 → 11.9 s |
 | 4 — sync-access-handle source | in review. Measured flag on, Blob store vs read-only sync handle, at medians: PSB (n=3) source I/O 19.1 → 3.8 s, Parsing 28.3 → 20.2 s, time to index 44.2 → 35.8 s, Total 96.5 → 82.9 s; sp-231MB (n=2) I/O 8.5 → 2.1 s, Parsing 14.0 → 9.9 s, Total 64.8 → 60.1 s; SEESTRASSE (n=1) I/O 0.32 → 0.07 s, Total flat. Geometry, main-thread long tasks and page heap unchanged. Every leg was windowed, checked by its `Engine source I/O:` line, in a persistent profile. Caveat: the Blob store's per-read time includes event-loop wait as well as I/O (each read is an async round trip), so the I/O figures are not pure I/O. The wall-clock stages (Parsing, time to index, Total) carry the claim |
-| 6 — STEP in the worker | in progress |
+| 6 — STEP in the worker | merged (#2067). A STEP is opened buffered (conway's store-backed open is IFC-only), so step 4's source store does not apply to it |
 | 5, 7, 8, 9 | not started; 9 is gated on #2061 and #2070 |
 
 **Known issues.**

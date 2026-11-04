@@ -2,7 +2,7 @@
 /* eslint-disable no-magic-numbers, require-await */
 import {ENGINE_CLOSE_TIMEOUT_MS, EngineSession} from './EngineSession'
 import {createEngineHandler} from './engineHandler'
-import {sourceIoLine} from './engineIfcLoad'
+import {sourceIoLine} from './engineModelLoad'
 import {findOpfsEntry, makeBlobStore, makeSyncHandleStore, openSourceStore} from './engineSources'
 import {ENGINE_PROTOCOL_VERSION, Ev} from './protocol'
 import {makeWorkerTransport} from './transports'

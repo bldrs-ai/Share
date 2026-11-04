@@ -128,7 +128,9 @@ export function modelSourceOf(routeResult) {
 const BYTES_PER_KIB = 1024
 const BYTES_PER_MB = BYTES_PER_KIB * BYTES_PER_KIB
 const HEADER_SNIFF_KIB = 64
-const HEADER_SNIFF_BYTES = HEADER_SNIFF_KIB * BYTES_PER_KIB
+// Exported for engine/engineModelLoad.js#openFailureSource, which keeps
+// exactly this much of a source whose bytes it transfers to a worker.
+export const HEADER_SNIFF_BYTES = HEADER_SNIFF_KIB * BYTES_PER_KIB
 
 
 /**

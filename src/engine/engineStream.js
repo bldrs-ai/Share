@@ -76,11 +76,20 @@ export function makeBatchEncoder(api, modelID) {
     const transforms = []
     const colors = []
     // Occurrence paths (STEP), as offsets into one flat id list: placement i
-    // owns pathIds[pathOffsets[i] .. pathOffsets[i + 1]). Empty for IFC,
-    // where no placement carries one; a placement without a path has a
-    // zero-length run, which decodes back to no `occurrencePath` at all.
+    // owns pathIds[pathOffsets[i] .. pathOffsets[i + 1]), and pathPresent[i]
+    // says whether it had a path at all. A zero-length run is therefore
+    // TWO things, kept apart by pathPresent: no path (IFC, a placement
+    // without one: decoded to no `occurrencePath`), and a present, EMPTY
+    // path (decoded to `[]`). The empty one is load-bearing: it is how a
+    // STEP root-level instance — geometry placed on the root product, under
+    // no NAUO — is told from "no occurrence data"
+    // (batchedInstanceTables.js#getRootLevelInstances, #1901, #1909), and
+    // the main-thread builder keeps it as `[]`. The columns are sent when
+    // ANY placement in the batch has a path, empty or not; an IFC batch
+    // sends none.
     const pathOffsets = [0]
     const pathIds = []
+    const pathPresent = []
     const geometries = []
     let meshCount = 0
     for (const flatMesh of flatMeshes) {
@@ -117,9 +126,12 @@ export function makeBatchEncoder(api, modelID) {
           colors.push(NaN, NaN, NaN, NaN)
         }
         const path = placed.occurrencePath
-        if (path) {
+        if (path !== undefined && path !== null) {
+          pathPresent.push(1)
           // An Array or an Embind vector: forEachVectorItem reads either.
           forEachVectorItem(path, (id) => pathIds.push(id))
+        } else {
+          pathPresent.push(0)
         }
         pathOffsets.push(pathIds.length)
       })
@@ -130,9 +142,10 @@ export function makeBatchEncoder(api, modelID) {
       transforms: Float64Array.from(transforms),
       colors: Float32Array.from(colors),
     }
-    if (pathIds.length > 0) {
+    if (pathPresent.includes(1)) {
       placements.pathOffsets = Uint32Array.from(pathOffsets)
       placements.pathIds = Uint32Array.from(pathIds)
+      placements.pathPresent = Uint8Array.from(pathPresent)
     }
     const transfer = Object.values(placements).map((column) => column.buffer)
     let bytes = transfer.reduce((sum, buffer) => sum + buffer.byteLength, 0)

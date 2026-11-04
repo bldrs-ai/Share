@@ -1,5 +1,5 @@
 import {useEffect} from 'react'
-import {LEGACY_VIEW_RULES_MESSAGE, hasLegacyViewRules, isWorkerEngineModel} from './engineIfcLoad'
+import {LEGACY_VIEW_RULES_MESSAGE, hasLegacyViewRules, isWorkerEngineModel} from './engineModelLoad'
 
 
 /**

@@ -253,15 +253,17 @@ export class EngineSession {
    *   reference) or `{bytes}` (an ArrayBuffer: transferred, so the caller's
    *   buffer is detached)
    * @param {object} [options]
+   * @param {'ifc'|'step'|null} [options.format] a label the engine echoes
+   *   (engineHandler.js#openModel); conway reads the schema from the bytes
    * @param {object} [options.stream] `{previews, batchSize, startPaused}` to
    *   stream the geometry after the index; `startPaused` waits for
    *   {@link pump}`('run')` before the first batch
-   * @return {Promise<object>} `{modelID, windowed, openMs, wasmBytes}`
+   * @return {Promise<object>} `{modelID, windowed, format, openMs, wasmBytes}`
    */
-  async open(source, {stream = null} = {}) {
+  async open(source, {format = null, stream = null} = {}) {
     const {source: sent, transfer} = transferableSource(source)
     try {
-      const result = await this.request(Op.OPEN, {source: sent, stream}, transfer)
+      const result = await this.request(Op.OPEN, {source: sent, format, stream}, transfer)
       if (result.failure) {
         // The engine's classification, for unsupportedSchema.js#openModelFailure
         // to turn into the user-facing error, as the main-thread path does.

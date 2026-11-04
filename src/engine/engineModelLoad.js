@@ -1,7 +1,29 @@
-// An IFC load whose engine runs in its own worker (design/new/engine-worker.md
-// §7 step 3, `?feature=engineWorker`). The page side of a streamed open:
-// what `parseIfcWithConway` does for a main-thread engine, re-expressed over
-// an EngineSession so `ShareIfcLoader#parse` keeps one assembly path.
+// A Conway model load whose engine runs in its own worker
+// (design/new/engine-worker.md §7 steps 3 and 6, `?feature=engineWorker`).
+// The page side of a streamed open: what `parseIfcWithConway` does for a
+// main-thread engine, re-expressed over an EngineSession so
+// `ShareIfcLoader#parse` keeps one assembly path.
+//
+// ONE load for both Conway formats, IFC and STEP/AP214 (AGENTS.md "IFC and
+// STEP converge"; engine-worker.md §11 maps the two pipelines stage by
+// stage). Conway's web-ifc compat `IfcAPI` serves both (it routes AP214 to
+// its own proxy behind the same surface), so the worker, the protocol, the
+// session and this facade are format-neutral code. What differs between the
+// formats is data, and none of it needs a branch here:
+//   - the SOURCE kind: an IFC can be opened windowed from a File (`{file}`),
+//     while conway's store-backed open is IFC-only, so the Loader's header
+//     sniff (Loader.js#canOpenFromStore) hands a STEP over as bytes and it
+//     crosses as a transferred `{bytes}` buffer, resident in the worker;
+//   - the ID scheme: STEP placements carry an occurrence path, which rides
+//     the batch's path column (engineStream.js#makeBatchEncoder) and is
+//     decoded back onto each placement below;
+//   - the tree's `includeSolids`, which the caller already passes
+//     (conwayDirectIfcLoader.js#attachConwayDirectModelMethods) and the
+//     session forwards (EngineSession.js#makePropertiesApi).
+// `format` itself only travels as a label (the `open` request, the `done`
+// packet, the pump line): what the file's suffix names
+// (loader/part21Formats.js), which is not evidence of the schema, so it
+// decides nothing.
 //
 // The seam is an IfcAPI-shaped facade (`makeEngineIfcApi`). Everything that
 // assembles and decorates the model — `IncrementalBatchedBuilder`,
@@ -16,11 +38,17 @@
 // There is no other engine on the page for this model, so no sync engine
 // method can be reached by accident: the facade has none to offer.
 import {reportEngineLog, reportEngineVersion, reportSourceInfo} from '../loader/loadProgress'
-import {openModelFailure} from '../loader/unsupportedSchema'
+import {HEADER_SNIFF_BYTES, openModelFailure} from '../loader/unsupportedSchema'
+import {engineFormatOf} from '../loader/part21Formats'
 import {conwayDirectInfo, conwayDirectWarn} from '../viewer/ifc/conwayDirectLog'
 import {viewRules} from '../viewer/legacyViewRules'
 import {Ev, Op} from './protocol'
 import {spawnEngineSession} from './spawnEngine'
+
+
+// Re-exported: callers that pick an engine load ask the same list the
+// Loader does (loader/part21Formats.js).
+export {engineFormatOf}
 
 
 /* Column-major mat4 elements per placement. */
@@ -92,14 +120,14 @@ export function makeGeometryStore() {
  * (`engineStream.js#makeBatchEncoder`). Consecutive placements sharing a
  * parent are grouped into one entry, which changes nothing the builder
  * computes (it only sees `(parent, placement)` pairs). Adapted from #1756's
- * `decodePlacements`, plus the occurrence-path column.
+ * `decodePlacements`, plus the occurrence-path columns.
  *
  * @param {object} placements `{parents, geometryIds, transforms, colors,
- *   pathOffsets?, pathIds?}`
+ *   pathOffsets?, pathIds?, pathPresent?}`
  * @return {Array<object>}
  */
 export function decodePlacements(placements) {
-  const {parents, geometryIds, transforms, colors, pathOffsets, pathIds} = placements
+  const {parents, geometryIds, transforms, colors, pathOffsets, pathIds, pathPresent} = placements
   const flatMeshes = []
   let current = null
   for (let i = 0; i < parents.length; i++) {
@@ -122,7 +150,10 @@ export function decodePlacements(placements) {
       // builder applies its DEFAULT_COLOR.
       placed.color = {x: colors[c], y: colors[c + 1], z: colors[c + 2], w: colors[c + 3]}
     }
-    if (pathOffsets && pathOffsets[i + 1] > pathOffsets[i]) {
+    if (pathPresent && pathPresent[i] === 1) {
+      // Present, and possibly EMPTY: `[]` is a STEP root-level instance, not
+      // a missing path (engineStream.js#makeBatchEncoder says why it must
+      // survive). A plain Array, as the builder and its consumers expect.
       placed.occurrencePath = Array.from(pathIds.subarray(pathOffsets[i], pathOffsets[i + 1]))
     }
     current.geometries.push(placed)
@@ -211,10 +242,13 @@ export function makeEngineIfcApi(store) {
  * `ShareIfcLoader#parse` closes over `this.ifcManager.ifcAPI` today.
  *
  * @param {object} [options]
+ * @param {'ifc'|'step'|null} [options.format] from {@link engineFormatOf}:
+ *   what the file's SUFFIX names, so a label only (see the file header);
+ *   null when the caller did not say
  * @param {function(): Promise<object>} [options.spawn] for tests
  * @return {{ifcAPI: object, parse: Function}}
  */
-export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
+export function createEngineModelLoad({format = null, spawn = spawnEngineSession} = {}) {
   const store = makeGeometryStore()
   const ifcAPI = makeEngineIfcApi(store)
 
@@ -286,15 +320,19 @@ export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
     const holdPump = typeof globalThis.__bldrsTestHoldGeometryPump === 'function' ?
       globalThis.__bldrsTestHoldGeometryPump : null
     const startPaused = holdIndex !== null || holdPump !== null
+    // In this order: the failure's header and size first, because opening
+    // transfers (detaches) a bytes source.
+    const failureSource = openFailureSource(buffer)
+    const source = sourceFor(buffer)
     let opened
     try {
-      opened = await session.open(sourceFor(buffer),
-        {stream: {previews: Boolean(onPreviewMesh), startPaused}})
+      opened = await session.open(source,
+        {format, stream: {previews: Boolean(onPreviewMesh), startPaused}})
     } catch (e) {
       session.close()
       const failure = e.engineFailure
       if (failure) {
-        throw await openModelFailure(failure.code, buffer, failure.refusedSchema, failure.openFailure)
+        throw await openModelFailure(failure.code, failureSource, failure.refusedSchema, failure.openFailure)
       }
       throw e
     }
@@ -327,7 +365,10 @@ export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
     // main-thread pump (Share#1744), for a worker load. Named differently on
     // purpose: E2E specs tell the two engines apart by which line appears.
     const done = ifcAPI.summary
-    conwayDirectInfo(`engine worker pump: batches=${done.batches} meshes=${done.meshes} ` +
+    // `format` is what the suffix named (part21Formats.js), said as such: the
+    // bytes may be the other schema, and conway opened whatever they are.
+    conwayDirectInfo(`engine worker pump: format=${done.format ?? format ?? 'unknown'} (by suffix) ` +
+      `batches=${done.batches} meshes=${done.meshes} ` +
       `geometries=${done.geometries} windowed=${done.windowed ? 'yes' : 'no'}`)
     if (done.meshes === 0) {
       conwayDirectWarn('engine worker pump produced no meshes; the model has nothing to draw')
@@ -353,19 +394,63 @@ export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
 
 
 /**
+ * The `open` source. Which kind a load sends is decided upstream, by the
+ * Loader's header sniff (Loader.js#canOpenFromStore), not by the format
+ * tag: a mislabelled IFC named `.step` still arrives as a File and still
+ * opens windowed, and a STEP (conway's store-backed open is IFC-only)
+ * arrives as bytes.
+ *
+ * Bytes are TRANSFERRED as they are, not copied first (EngineSession.js
+ * #transferableSource copies only a view onto part of a larger buffer): the
+ * caller's buffer is detached, which is the point. A copy would hold a
+ * buffered source twice on the page for the length of the open — a STEP's
+ * whole file, since a STEP is always buffered — while nothing reads the
+ * caller's buffer after the parse (Loader.js#load hands it to `readModel`
+ * and drops it). The one late reader is a failed open's error, which needs
+ * only the header and the size: {@link openFailureSource} keeps those.
+ *
  * @param {Blob|ArrayBuffer|Uint8Array} buffer
- * @return {object} the `open` source: a Blob/File as-is (windowed,
- *   cloned by reference); bytes as a copy, transferred — the caller's buffer
- *   stays intact for whatever reads it after the parse
+ * @return {object} `{file}` for a Blob/File (windowed, cloned by
+ *   reference), else `{bytes}`
  */
 function sourceFor(buffer) {
-  if (typeof buffer?.slice === 'function' && typeof buffer?.size === 'number') {
+  if (isBlobLike(buffer)) {
     return {file: buffer}
   }
-  if (ArrayBuffer.isView(buffer)) {
-    return {bytes: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)}
+  return {bytes: buffer}
+}
+
+
+/**
+ * @param {*} source
+ * @return {boolean}
+ */
+function isBlobLike(source) {
+  return typeof source?.slice === 'function' && typeof source?.size === 'number' &&
+    !ArrayBuffer.isView(source) && Object.prototype.toString.call(source) !== '[object ArrayBuffer]'
+}
+
+
+/**
+ * What `unsupportedSchema.js#openModelFailure` reads off a failed open's
+ * source, taken BEFORE the bytes are transferred away: the header (it names
+ * a refused schema; exactly the bytes its sniff reads, HEADER_SNIFF_BYTES)
+ * and the size. A Blob/File is not transferred, so it is
+ * its own answer.
+ *
+ * @param {Blob|ArrayBuffer|Uint8Array} buffer
+ * @return {Blob|{size: number, slice: Function}} Blob-shaped, which is all
+ *   `openModelFailure` asks of a source
+ */
+export function openFailureSource(buffer) {
+  if (isBlobLike(buffer)) {
+    return buffer
   }
-  return {bytes: buffer.slice(0)}
+  const view = ArrayBuffer.isView(buffer) ?
+    new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength) :
+    new Uint8Array(buffer)
+  const header = new Blob([view.slice(0, HEADER_SNIFF_BYTES)])
+  return {size: view.byteLength, slice: (start, end) => header.slice(start, end)}
 }
 
 

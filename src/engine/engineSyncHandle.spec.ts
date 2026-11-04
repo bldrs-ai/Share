@@ -9,7 +9,7 @@ import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
  * engine-worker.md §7 step 4: a worker engine reads its OPFS-staged source
  * through a READ-ONLY sync access handle, not the Blob store, in a real
  * Chromium. The load report says which, on its `Engine source I/O:` line
- * (engine/engineIfcLoad.js#sourceIoLine); that line is the signal, because
+ * (engine/engineModelLoad.js#sourceIoLine); that line is the signal, because
  * the two stores give the same model and differ only in how fast the bytes
  * come.
  *
@@ -60,6 +60,24 @@ describeMobileAndDesktop('Engine worker: OPFS sync access handle', () => {
     // engineSourceLine waits for the model to be ready: it opened.
     const line = await engineSourceLine(page)
     expect(line).toMatch(/^Engine source I\/O: Blob store \(disabled\), [1-9]\d* reads/)
+    await engine.expectWorkerEngine()
+  })
+
+  test('a STEP worker load is buffered, so it has no source store, and still opens', async ({page}) => {
+    // §7 step 6: the Loader hands a STEP over as bytes (conway's
+    // store-backed open is IFC-only), so neither store applies and the
+    // load report has no `Engine source I/O:` line. Guards the store choice
+    // against reaching for a File the STEP open never had.
+    const STEP_TEST_TIMEOUT_MS = 90_000
+    test.setTimeout(STEP_TEST_TIMEOUT_MS)
+    const engine = watchEngineWorker(page)
+    await page.goto('/share/v/p/index.step?feature=engineWorker')
+    await waitForModelReady(page, STEP_TEST_TIMEOUT_MS)
+    const lines = await page.evaluate(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).store.getState().loadReportLines as string[])
+    expect(lines.some((line) => line.startsWith('Total:'))).toBe(true)
+    expect(lines.filter((line) => line.startsWith('Engine source I/O:'))).toEqual([])
     await engine.expectWorkerEngine()
   })
 })
