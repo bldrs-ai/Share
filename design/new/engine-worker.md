@@ -806,3 +806,10 @@ and the other lacks.
    first mesh selects the occurrence, as an IFC pick selects the element.
 4. §7 step 5 (the capture job) for both formats at once, including STEP's
    occurrence-path table.
+
+**Measured** (2026-11-04, §7 step 6 as first pushed in #2067):
+- `RAF_THROTTLE_MS=3600000`, one cold load per run, n=2 except the largest (n=1), medians, in a shared 4-vCPU container.
+- Four STEP models, 4 to 111 MB, flag off versus on. The full table is on #2067.
+- *Main-thread long tasks:* 5.8–36 s → 3–4.5 s in total. On the 58 MB model the count drops from 290 to 13. What remains in worker mode is page boot (before the load, the same in both modes) and the end-of-load assembly on the page (0.4–2.0 s). That assembly is the next main-thread cost, for IFC worker loads too.
+- *Engine time:* Geometry is unchanged within the spread. The worker's fixed cost is about +0.7 s in *Opening model* (spawn plus a cold wasm compile, as §3 measured), so the index and Total of a small model come 1–1.5 s later. From 58 MB up the difference is noise or a gain.
+- *Page heap at ready:* 30–73 % lower. The engine's JS heap (24–229 MB) is in the worker now.
