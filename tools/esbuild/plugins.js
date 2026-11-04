@@ -11,28 +11,6 @@ import svgrPlugin from 'esbuild-plugin-svgr'
  * @return {object}
  */
 export default function makePlugins(root, buildDir) {
-  // Resolve the bare `'web-ifc'` specifier to Conway's web-ifc compat
-  // surface (the same file the `@bldrs-ai/conway/web-ifc` subpath export
-  // names). Share's own code imports that subpath directly and no longer
-  // depends on the real `web-ifc` package, so this alias exists only for
-  // one transitive import: `@bldrs-ai/ifclib`'s `src/IfcModel.js` does
-  // `import * as WebIFC from 'web-ifc'` (reached via its `src/index.js` →
-  // `ifctool.js` re-export). Today `IfcModel.js` tree-shakes out of the
-  // bundle, but esbuild still resolves its imports; without the alias that
-  // would reach the real web-ifc that ifclib still depends on (and pull it
-  // in outright if Share ever used `IfcModel`). Drop this plugin once
-  // ifclib stops depending on web-ifc.
-  const webIfcToConwayAliasPlugin = {
-    name: 'webIfcToConwayAlias',
-    setup(build) {
-      build.onResolve({filter: /^web-ifc$/}, (args) => {
-        return {
-          path: path.resolve(root, 'node_modules/@bldrs-ai/conway/compiled/src/compat/web-ifc/index.js'),
-        }
-      })
-    },
-  }
-
   const fontDisplayPlugin = {
     name: 'fontDisplay',
     setup(build) {
@@ -91,7 +69,6 @@ export default function makePlugins(root, buildDir) {
     threeJsmCompatPlugin,
     fontDisplayPlugin,
     svgrPlugin({plugins: ['@svgr/plugin-jsx'], dimensions: false}),
-    webIfcToConwayAliasPlugin,
   ]
 
   return plugins

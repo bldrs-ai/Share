@@ -1395,8 +1395,9 @@ imports.
   > `*-webifc` scripts, `webIfcEngine.webifc.spec.ts` and the
   > `playwright-webifc-run` job are gone, and Share imports
   > `@bldrs-ai/conway/web-ifc` directly. The MT follow-up below is moot.
-  > A `'web-ifc'` → Conway alias stays only for `@bldrs-ai/ifclib`'s
-  > transitive import. See `adapter-removal.md`'s 2026-11-01 status note.
+  > The `'web-ifc'` → Conway alias that stayed for `@bldrs-ai/ifclib`'s
+  > transitive import went on 2026-11-04 with ifclib 6.0.0. See
+  > `adapter-removal.md`'s status note.
   > The rest of this slice is the historical record.
 
   **Done (2026-06).** The flag was secretly *dead*: `isWebIfcShimEnabled`
