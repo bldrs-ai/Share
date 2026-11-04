@@ -762,3 +762,47 @@ costs.
 `createSyncAccessHandle({mode: 'read-only'})` support differ); two
 concurrent engine workers loading large models at once; a respawn with a
 sidecar; the main-side cost of assembling a background session's batches.
+
+
+## 11. IFC and STEP, stage by stage
+
+AGENTS.md says the two Conway pipelines converge: one seam per stage, with
+a format difference kept as data and explained where it is kept. This is
+the map of where they stand after §7 step 6 (STEP in the worker), read on
+code at `origin/main` with conway `1.1635.762`. "Shared" means one code
+path serves both formats; "data" means the same code with a different
+value; "differs" means a separate code path, or a capability one format has
+and the other lacks.
+
+| Stage | Shared seam | IFC | STEP / AP214 | Status |
+|---|---|---|---|---|
+| Route | `Loader.js#findLoader`: one arm for `ifc`/`ifczip`/`step`/`stp` → `ShareIfcLoader`; one list of the part-21 types, `loader/part21Formats.js` (#2067), read by the Loader, `modelArchive.js`, `ShareModel.js` and the engine-worker routing | `.ifczip` unwrapped first (`Loader#load`) | — | shared |
+| Engine | conway's compat `IfcAPI` (`@bldrs-ai/conway/web-ifc`); it routes AP214 to `IfcApiProxyAP214` behind the same calls | `IfcApiProxyIfc` | `IfcApiProxyAP214` | shared surface; conway owns the split |
+| Source kind | `Loader.js#canOpenFromStore`: conway's own `ModelFormatDetector` over the 64 KiB prefix, never the suffix | a `File`, opened windowed from a `StepExternalByteStore` | an `ArrayBuffer`, opened buffered and resident | **data**; it stays until conway has a store-backed AP214 open (`fromStore` returns `undefined` for AP214) |
+| Open | `loader/conwayOpen.js#openDeferred`, in both engines (main thread and worker): windowed, else buffered; a schema refusal is final | `OpenModelStream`, then `OpenModelStreamed` | `OpenModelStreamed` (`IfcApiProxyAP214.createDeferred`) | shared |
+| Open failure | `classifyOpenFailure` → `unsupportedSchema.js#openModelFailure`, classified where the statistics are (§2.4 G3) | — | — | shared |
+| Engine worker | `engine/engineModelLoad.js` + `engineHandler.js` + `EngineSession` + the remembered in-process fallback (`spawnEngine.js`); `format` is a label | — | — | shared (§7 steps 3, 6) |
+| Index | `onIndexed` → `makeIndexedModelHandle` (`indexedModel`, #2037), started beside the pump | the deferred index | the AP214 assembly tree, built at open | shared |
+| Reopen without a re-parse | `OpenModelFromIndex` + index sidecar | conway#756 (§7 step 8) | conway#757 | **differs**: STEP re-parses on reopen until conway#757 |
+| Tree | `properties.getSpatialStructure(id, 'names', {includeSolids: true})`, through the indexed handle and `EngineSession#propertiesApi` | `includeSolids` ignored | multibody sub-solids as ephemeral `solid` nodes | shared call; data |
+| Ids and refs | `e` / `o` / `n` refs (`viewer/tools/refs.js`); selection joins on whichever key both sides carry | express IDs; tree id = geometry parent | tree id = the NAUO, geometry parent = the shared `product_definition_shape`; the join key is the occurrence path (step-occurrence-selection.md) | **data**: an assembly's reuse has no IFC equivalent, so the key differs, not the code |
+| Properties | `getItemProperties` / `getPropertySets`; the worker's batched `props` op | IFC entities and psets | AP214 records | shared |
+| Preview | `ON_PREVIEW_MESH` → `payloadToPreviewMesh` → `ProgressiveLoadSession`; picking via `previewSelection.js` (#2052) | store or streamed preview channel | `StreamedPreviewChannel` with `ap214PreviewAdapter` | shared, and the worker passes payloads through unchanged. Two STEP gaps, the same on both engines: none of the STEP models tried (the fixtures and real files up to 14 MB) put a preview mesh on screen before its index, and a STEP payload's `expressID` is the part shape, not the occurrence (it carries no occurrence path), so a pick before the index would select per part — both conway asks |
+| Geometry pump | `ExtractGeometryBatchAsync` → `IncrementalBatchedBuilder` (main) / the batch columns → `decodePlacements` → the same builder (worker) | — | `PlacedGeometry.occurrencePath`, the batch's path columns, where a present-but-empty path (a root-level instance) stays `[]` (#2067) | shared; data |
+| Assembly and decoration | `assembleBatchedModel`, `decorateConwayDirectIfcModel`, `stampAppliedCoordination` | — | per-occurrence tables carried onto the rebuilt instance map | shared |
+| Hide / isolate / `#d:` | `IfcIsolator.js`, `Residency/visibilityHash.js` | `e` refs | `o` refs (occurrence paths) | shared; data |
+| GLB writer capture | `bldrsElementProperties` / `bldrsSpatialTree` / `bldrsFaceIds` (main thread); a worker load writes no artifact for either format until §7 step 5 | `RootExpressIDs` fast path | full record scan (no IfcRoot); occurrence-path table beside the face ids | shared writer, with a STEP table; step 5 moves it into the worker for both |
+| Cache hit | the `BLDRS_*` GLB reader; spawns no engine | — | restores the occurrence and geometry-id tables | shared |
+| Load report | `loadProgress.js`; the worker forwards its Logger and console, and `engineWasmMb=` on the Total line | `ifcVersion` = the IFC schema | the AP schema | shared |
+
+**What is left to converge, in order of value:**
+
+1. A windowed STEP open (conway): the one stage where STEP still holds the
+   whole source in memory, in the worker now rather than on the page.
+2. The STEP index sidecar (conway#757), so a STEP reopen or an eviction
+   rehydrate (§7 step 8) skips the parse as an IFC's will.
+3. STEP previews (conway): first a preview that appears at all on the
+   models tried, then an occurrence path on its payload, so a STEP pick at
+   first mesh selects the occurrence, as an IFC pick selects the element.
+4. §7 step 5 (the capture job) for both formats at once, including STEP's
+   occurrence-path table.
