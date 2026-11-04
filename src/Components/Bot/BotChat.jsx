@@ -20,7 +20,7 @@ import ChatMessage from './ChatMessage'
 import {safeJsonFromCodeBlock} from './eval'
 import {askLLM} from './openRouterClient'
 import BotSettings from './BotSettings'
-import {isWorkerEngineModel} from '../../engine/engineIfcLoad'
+import {isWorkerEngineModel} from '../../engine/engineModelLoad'
 import 'react-chat-elements/dist/main.css'
 import './chat-bubbles.css'
 

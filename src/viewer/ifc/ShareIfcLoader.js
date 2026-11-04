@@ -31,7 +31,7 @@ import {isOutOfMemoryError, markIfOutOfMemory} from '../../utils/oom'
 import {hasParams} from '../../utils/location'
 import {HASH_PREFIX_CAMERA} from '../../Components/Camera/hashState'
 import {isFeatureEnabled} from '../../FeatureFlags'
-import {createEngineIfcLoad} from '../../engine/engineIfcLoad'
+import {createEngineModelLoad, engineFormatOf} from '../../engine/engineModelLoad'
 import {reportGeometryStats} from '../../loader/loadProgress'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ProgressiveLoadSession from '../ProgressiveLoadSession'
@@ -326,8 +326,10 @@ const BYTES_PER_MIB = BYTES_PER_KIB * BYTES_PER_KIB
 
 /**
  * Does this parse run its engine in a worker (`?feature=engineWorker`,
- * engine-worker.md §7 step 3)? IFC (and an unwrapped `.ifczip`) only, and
- * only on the streamed path that feeds the incremental builder.
+ * engine-worker.md §7 steps 3 and 6)? Every format a Conway engine parses —
+ * IFC (and an unwrapped `.ifczip`) and STEP/AP214 — through one worker load
+ * (engine/engineModelLoad.js), and only on the streamed path that feeds the
+ * incremental builder.
  *
  * @param {string|undefined} loaderType `loader.type` (Loader.js#findLoader)
  * @param {object|null} scene
@@ -337,7 +339,7 @@ export function isEngineWorkerLoad(loaderType, scene) {
   return isFeatureEnabled('engineWorker') &&
     isFeatureEnabled('demandGeometry') &&
     scene !== null &&
-    (loaderType === 'ifc' || loaderType === 'ifczip')
+    engineFormatOf(loaderType) !== null
 }
 
 
@@ -448,15 +450,18 @@ export default class ShareIfcLoader {
     let builder = null
     // The first error the incremental builder hit on a batch, if any.
     let batchError = null
-    // `?feature=engineWorker` (engine-worker.md §7 step 3): this model's
-    // engine runs in its own worker, and `ifcAPI` below is the IfcAPI-shaped
-    // facade over it (engine/engineIfcLoad.js), so everything after the parse
-    // assembles exactly as it does for the main-thread engine. IFC only in
-    // this step: STEP keeps the main-thread engine until its occurrence-path
-    // column and `includeSolids` tree land (§7 step 6). The streamed path
-    // only: with `demandGeometry` off, or no scene to stream into, there is
-    // no incremental builder for the worker's batches to feed.
-    const engineLoad = isEngineWorkerLoad(this.type, scene) ? createEngineIfcLoad() : null
+    // `?feature=engineWorker` (engine-worker.md §7 steps 3 and 6): this
+    // model's engine runs in its own worker, and `ifcAPI` below is the
+    // IfcAPI-shaped facade over it (engine/engineModelLoad.js), so everything
+    // after the parse assembles exactly as it does for the main-thread
+    // engine. IFC and STEP alike: STEP's occurrence paths cross as a batch
+    // column and land on the same placements the builder reads, and its
+    // `includeSolids` tree is the same request the main-thread handle makes.
+    // The streamed path only: with `demandGeometry` off, or no scene to
+    // stream into, there is no incremental builder for the worker's batches
+    // to feed.
+    const engineLoad = isEngineWorkerLoad(this.type, scene) ?
+      createEngineModelLoad({format: engineFormatOf(this.type)}) : null
 
     try {
       session.report('Opening model...')

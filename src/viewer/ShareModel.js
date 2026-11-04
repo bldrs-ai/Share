@@ -17,6 +17,7 @@
  * This module is the only place that decides which capabilities follow
  * from which format.
  */
+import {PART21_LOADER_TYPES} from '../loader/part21Formats'
 
 
 /**
@@ -70,7 +71,6 @@
  */
 
 
-const IFC_LIKE = new Set(['ifc', 'step', 'stp'])
 // Gaussian splat formats (ply/spz/splat/ksplat/sog) are intentionally
 // mesh-only: flat arrays of gaussians with no element structure, so no
 // picking/subset/property capability applies (see src/loader/splats.js).
@@ -86,7 +86,8 @@ const UNSTRUCTURED_MESH = new Set([
  * @return {ShareModelCapabilities}
  */
 export function capabilitiesForFormat(format) {
-  if (IFC_LIKE.has(format)) {
+  // The Conway (part-21) formats, from the one list (loader/part21Formats.js).
+  if (PART21_LOADER_TYPES.has(format)) {
     return {
       expressIdPicking: true,
       spatialStructure: true,

@@ -1,7 +1,8 @@
 # Per-model engine worker — one Conway engine per model, in its own Web Worker (open-205)
 
 **Status:** decided 2026-11-03 (§8); being built behind
-`?feature=engineWorker` in the §7 order.
+`?feature=engineWorker` in the §7 order. Steps 1–3 and 6 have landed: IFC
+and STEP both load in the worker.
 **Epic:** `open-205` (#2011). Story: #2053. Absorbs #2031 (close and
 eviction): with an engine in a worker, terminating the worker *is* the
 eviction.
@@ -208,7 +209,8 @@ through async reads.
   `flatMeshToBatchedModel.js`) and the tree uses `includeSolids`. Both are
   data, not engine calls. **Recommendation: IFC and STEP move together**, in
   one worker type with one protocol. The STEP-only parts are a column and a
-  flag. (A windowed STEP open is a Conway ask, not a blocker.)
+  flag. (A windowed STEP open is a Conway ask, not a blocker.) Done in §7
+  step 6: one worker load (`engine/engineModelLoad.js`) serves both.
 - **GLB, glTF, OBJ, STL, PLY, PDB, XYZ, splats, USD, 3DM, ADF/MTS, FBX** use
   three.js or Share's own JS decoders on the main thread. They have no wasm
   engine and no retained heap that only a terminate can free: their whole
@@ -735,6 +737,59 @@ second, divergent path.
    needs `OPFS.worker.js` not to hold a read-write handle on the same file
    while the engine reads it, and a Blob-store fallback where read-only
    handles are missing (Safari and Firefox not checked).
+   *As built:*
+   - The engine worker finds the File's OPFS entry itself
+     (`engine/engineSources.js#findOpfsEntry`). It walks
+     `navigator.storage.getDirectory()` for an entry with the File's
+     `name` (`getFile()` names the File after its entry), `size` and
+     `lastModified`. Nothing about the entry is sent from the page:
+     WebKit cannot structured-clone a FileSystemHandle (bug 256712), so
+     `OPFS.worker.js`'s replies keep their old shape. A File that did not
+     come from OPFS (an upload kept in memory, an inflated `.gz`) matches
+     nothing and gets the Blob store.
+   - `openSourceStore` opens `createSyncAccessHandle({mode: 'read-only'})`
+     on that entry. It keeps the handle only if the handle reports
+     `mode === 'read-only'`: a browser that ignores the option opens an
+     exclusive `readwrite` handle, which is closed at once. With the
+     handle open, which freezes the entry, it checks `size` and
+     `lastModified` against the snapshot again. Otherwise it falls back
+     to the Blob store and gives the reason on the load report's
+     `Engine source I/O:` line.
+   - **The lock.** Even read-only, the handle holds a shared lock on the
+     entry for the session, so the entry can't be removed, moved or
+     written while the model is open (`NoModificationAllowedError`). A
+     File snapshot locked nothing. So:
+     - *Clear cache* closes every engine session first
+       (`spawnEngine.js#closeAllEngineSessions`).
+     - `OPFS.worker.js#deleteAllEntries` skips a locked entry and
+       reports it, rather than aborting the clear partway.
+     - The stale-commit remove in `downloadModelToOPFS` and
+       `deleteModelFromOPFS` both answer with an explicit error for a
+       locked entry. The first was an unguarded throw, the second an
+       unhandled rejection behind a `deleted` reply. The page then loads
+       from the network, as on any OPFS error.
+     - Another tab re-staging or evicting a model this tab has open hits
+       the same lock, and is handled the same way.
+   - **Release.** When a sync-handle session's open has replied,
+     `EngineSession#close()` sends `close` and waits for the reply, at
+     most `ENGINE_CLOSE_TIMEOUT_MS` (1 s), before `terminate()`. The
+     handler releases the handle after `CloseModel`. Any other session,
+     including one still opening, is terminated at once, and its lock
+     goes a little after `terminate()` returns. An open that doesn't
+     adopt the store (buffered fallback, failed or refused open, a throw,
+     a close that came first) closes it in a `finally`.
+   - *Clear cache* therefore clears twice if it has to. `clearOPFSCache`
+     resolves with what it skipped, and `ProfileControl` clears again
+     once after `CACHE_CLEAR_RETRY_MS` (0.5 s). If entries are still held
+     (another tab), it says so in the app's alert dialog
+     (`cacheClearSkipped`) and keeps the local recents. It reloads only
+     once the user dismisses the dialog. The startup sweep
+     (`pruneLocalRecents.js`) drops the recents whose entries went.
+   - **A requirement on step 7:** an in-app switch must await
+     `close()` before it evicts or re-stages the previous model's entry.
+     Today's switch reloads the page, so it doesn't need to; none of the
+     existing callers await it, apart from `closeAllEngineSessions`.
+   - Kill switch: `?feature=disableEngineSyncHandle`.
 5. **GLB writer capture in the worker.** The `capture` job (properties,
    spatial tree, face ids), then spill and release worker-side, then the
    flag's cache write turns on. E2E: `batchedGlbCache.spec.ts` under the
@@ -742,6 +797,53 @@ second, divergent path.
 6. **STEP in the worker.** Buffered source transfer, the occurrence-path
    column, `includeSolids`. E2E: `indexStepLogo`, `stepVisibility` under the
    flag.
+   **Landed** (2026-11-04) as a generalisation, not a twin:
+   `engine/engineIfcLoad.js` became `engine/engineModelLoad.js`
+   (`createEngineModelLoad({format})`), and `ShareIfcLoader#isEngineWorkerLoad`
+   takes every loader type `engineFormatOf` maps (`ifc`, `ifczip`, `step`,
+   `stp`). That list is now the ONE part-21 list
+   (`loader/part21Formats.js`), which `Loader.js`, `modelArchive.js` and
+   `ShareModel.js` also read instead of three copies of their own. No STEP
+   branch was needed: step 3 had already put the occurrence-path column in
+   the batch encoding and forwarded `includeSolids` through
+   `EngineSession#propertiesApi`, and conway's compat `IfcAPI` routes AP214
+   behind the same calls. Two fixes to shared code came out of it, both
+   about STEP's data:
+   - **An empty occurrence path survives the boundary.** A root-level
+     instance's path is `[]`, which the root-pick and root-row logic tell
+     from "no path" (#1901, #1909). The encoder sent a zero-length run, and
+     no columns at all when every path was empty, so the page saw "no path".
+     A per-placement `pathPresent` column now keeps the two apart
+     (step-occurrence-selection.md has the details).
+   - **Bytes are transferred, not copied first.** A STEP is always buffered,
+     so the copy held the whole file twice on the page for the length of the
+     open. Only a failed open's message reads the source again, and it needs
+     only the header and size (`openFailureSource`).
+   `format` crosses as a label only: the `open` request, the `done` packet,
+   and the `engine worker pump: format=… (by suffix)` line. It decides
+   nothing, because a suffix is no evidence of the schema. The Loader's
+   header sniff (`Loader.js#canOpenFromStore`) already picks the source
+   kind: a File for a real IFC, bytes for a STEP. The worker opens whichever
+   it is handed.
+   E2E: `engineModelLoad.spec.ts` (STEP load, per-occurrence tree and scene
+   selection, properties), worker legs in `navTreeAtIndex.spec.ts`,
+   `indexStepLogo.spec.ts` (colour, world space) and
+   `stepVisibility.spec.ts` (eye, Isolate and its reopened link, scene
+   pick) and `assistTools.spec.ts` (isolate in a root-only file, which needs
+   the empty path), desktop and mobile.
+   Left for later, for both formats: the GLB cache write (step 5; a STEP
+   worker load writes none either), and for STEP only a windowed open
+   (conway's store-backed open is IFC-only) and an index sidecar
+   (conway#757), so a STEP is resident in its worker and re-parses on
+   reopen.
+   Measured on four STEP models from 4 to 111 MB, with the loop frozen:
+   - main-thread long tasks during the load fall from 5.8–36 s to 3–4.5 s;
+     what is left is page boot and the end-of-load assembly;
+   - Geometry is unchanged within the spread;
+   - a small model's index comes about 1 s later, from the worker's spawn
+     and cold compile;
+   - the page heap is 30–73 % lower.
+   The table is on #2067.
 7. **Sessions own their worker** (with #2019). The engine moves from the
    viewer to the session; a switch keeps the old worker; the background
    batch policy (§8 item 1). Tests, each shown failing on revert: queued
@@ -761,6 +863,62 @@ second, divergent path.
    `?feature=disableEngineWorker` is the kill switch. Before it: delete the
    `?view=` rules stack (§8 item 7).
 
+
+### 7.1 Progress and known issues
+
+Kept current by every code PR in the chain. Numbers are the PRs' own, with
+`RAF_THROTTLE_MS=3600000`.
+
+| Step | State |
+|---|---|
+| 0 — this doc | merged (#2056) |
+| 1 — conway#540 | merged (conway#759, published `1.1633.540`) |
+| 2 — protocol, worker entry, client | merged (#2057) |
+| 3 — IFC load in the worker | merged (#2058). PSB, n=3, flag off → on: main-thread long tasks over 50 ms 418 → 23, time blocked 63 → 12 s, Geometry 48.3 → 40.6 s, Total 94.8 → 83.3 s, page heap after load 2130 → 889 MB (the worker's own JS heap 65 MB). Buffered tree-at-index: SEESTRASSE 8.05 → 4.60 s, sp-231MB 37.4 → 11.9 s |
+| 4 — sync-access-handle source | in review. Measured flag on, Blob store vs read-only sync handle, at medians: PSB (n=3) source I/O 19.1 → 3.8 s, Parsing 28.3 → 20.2 s, time to index 44.2 → 35.8 s, Total 96.5 → 82.9 s; sp-231MB (n=2) I/O 8.5 → 2.1 s, Parsing 14.0 → 9.9 s, Total 64.8 → 60.1 s; SEESTRASSE (n=1) I/O 0.32 → 0.07 s, Total flat. Geometry, main-thread long tasks and page heap unchanged. Every leg was windowed, checked by its `Engine source I/O:` line, in a persistent profile. Caveat: the Blob store's per-read time includes event-loop wait as well as I/O (each read is an async round trip), so the I/O figures are not pure I/O. The wall-clock stages (Parsing, time to index, Total) carry the claim |
+| 6 — STEP in the worker | merged (#2067). A STEP is opened buffered (conway's store-backed open is IFC-only), so step 4's source store does not apply to it |
+| 5, 7, 8, 9 | not started; 9 is gated on #2061 and #2070 |
+
+**Known issues.**
+
+- **#2061: worker JS heap on sp-231MB.** The engine worker holds about
+  350 MB of live JS heap after an sp-231MB load, against 65 MB for PSB.
+  This is unexplained (it needs a heap snapshot) and gates step 9.
+- **#2070: each engine round trip waits behind a main-thread frame.** A
+  worker reply is a main-thread task, so with the render loop running it
+  waits for the frame in progress. The engine itself answers a read in
+  under 1 ms inside the worker. In headless Chromium (software GL) the
+  round trip measured 127–217 ms, and 0.34 ms with rAF frozen. On a GPU
+  the cost is up to a frame per round trip. That makes sequential reads
+  frame-bound: the Properties panel's deref does one read per top-level
+  reference. The likely fixes are batching or not rendering while idle.
+  It gates step 9.
+- **#2063: the Properties panel took the app down. Fixed, and not a worker
+  bug.** Selecting an `IfcGrid` with the panel open replaced the page with
+  "Oh no!" on both engines. ifclib's `deref` resolves a reference to an
+  entity with no GlobalId (an `IfcGridAxis`) into the whole entity object,
+  and the panel handed an *array* of those to React, which throws #31. It
+  surfaced under the flag because that was where a large model was being
+  burned in. The panel now renders every resolved value safely, derefs a
+  copy (deref rewrites in place), and has its own ErrorBoundary.
+- **The properties hand-off at load end.** The panel reads through
+  `selectReadModel`: the indexed model's worker facade while geometry
+  streams, then the finished model. At the swap, the panel's effect re-runs
+  and reads the selection again, while answers to earlier selections can
+  still be in flight from the worker. `Properties.jsx`'s `isStale` guard
+  drops any answer for a selection or model that is no longer current.
+  Its test is a unit test: a slow earlier answer arrives after the current
+  one, and the test fails with the guard removed.
+  `PropertiesNestedRefs.spec.ts` is only a smoke test of the same
+  hand-off: rapid NavTree clicks under the worker, with the geometry
+  released mid-burst. It passes even with every isStale check removed.
+  The worker answers in order, so in practice nothing arrives out of
+  order.
+
+  The panel's ErrorBoundary is not keyed on the selection, so the panel
+  stays mounted. It resets itself when the selection or the read model
+  changes, so a failure at the indexed model is retried with the finished
+  one. No crash was traced to this race; #2063 is a different bug.
 
 ## 8. Decisions (2026-11-03)
 

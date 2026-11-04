@@ -6,6 +6,7 @@
 import {isFeatureEnabled} from '../FeatureFlags'
 import {EngineSession} from './EngineSession'
 import {createEngineHandler} from './engineHandler'
+import {Ev} from './protocol'
 import {makeInProcessTransport, makeWorkerTransport} from './transports'
 
 
@@ -55,7 +56,10 @@ export function supportsModuleWorkers() {
  * @return {object}
  */
 export function engineFlagSnapshot() {
-  return {disableStreamOpen: isFeatureEnabled('disableStreamOpen')}
+  return {
+    disableStreamOpen: isFeatureEnabled('disableStreamOpen'),
+    disableEngineSyncHandle: isFeatureEnabled('disableEngineSyncHandle'),
+  }
 }
 
 
@@ -111,6 +115,11 @@ export async function spawnEngineSession({
  */
 async function initSession(transport, timeoutMs = undefined) {
   const session = new EngineSession(transport, {epoch: nextEpoch++})
+  // Registered before init, not after: a session still initialising can
+  // already be on its way to an open, and must be closable by a page-wide
+  // close too.
+  liveSessions.add(session)
+  session.on(Ev.FAILED, () => liveSessions.delete(session))
   try {
     await session.init({verbose: isFeatureEnabled('glbVerbose'), flags: engineFlagSnapshot(), timeoutMs})
   } catch (e) {
@@ -118,6 +127,35 @@ async function initSession(transport, timeoutMs = undefined) {
     throw e
   }
   return session
+}
+
+
+// Every session not yet closed or crashed (`failed` fires for both),
+// initialising ones included, so a page-wide action can end them all:
+// closeAllEngineSessions.
+const liveSessions = new Set()
+
+
+/**
+ * Close every live engine session, and wait until each has let go of what
+ * it holds. Clearing the OPFS cache needs this first: an engine reading its
+ * model through a read-only sync access handle locks that model's OPFS
+ * entry against removal (engine-worker.md §7 step 4), and the clear would
+ * have to skip it. The page reloads after a clear, so nothing is lost by
+ * closing the models on screen.
+ *
+ * Only a session whose open has replied is known to hold a handle, and only
+ * it is closed politely (EngineSession#close); one still opening is
+ * terminated, and its lock goes shortly AFTER this resolves. A caller that
+ * must see the entry free (ProfileControl's clear) retries what it skipped.
+ *
+ * @return {Promise<number>} how many sessions were closed
+ */
+export async function closeAllEngineSessions() {
+  const sessions = Array.from(liveSessions)
+  liveSessions.clear()
+  await Promise.all(sessions.map((session) => session.close()))
+  return sessions.length
 }
 
 
