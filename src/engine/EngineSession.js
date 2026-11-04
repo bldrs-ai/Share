@@ -343,6 +343,18 @@ export class EngineSession {
 
 
   /**
+   * The Properties panel's tables, resolved in the engine
+   * (Components/Properties/propertyTable.js): one request for all of them.
+   *
+   * @param {Array<object>} tables `{record, isPset}` each
+   * @return {Promise<Array<object>>} propertyTable.js `Node.TABLE`s, in order
+   */
+  propertyTables(tables) {
+    return this.request(Op.PROPERTY_TABLES, {tables})
+  }
+
+
+  /**
    * @param {number} id
    * @param {object} [options]
    * @param {boolean} [options.recursive]
@@ -490,7 +502,7 @@ function transferableSource(source) {
  * @return {object}
  */
 function makePropertiesApi(session) {
-  return {
+  const api = {
     getSpatialStructure: (_modelID, mode = false, opts = {}) =>
       session.tree({mode, includeSolids: opts?.includeSolids === true}),
     getItemProperties: (_modelID, id, recursive = false) => session.properties(id, {recursive}),
@@ -498,4 +510,15 @@ function makePropertiesApi(session) {
     getAllItemsOfType: (_modelID, type, verbose = false) => session.itemsOfType(type, {verbose}),
     getIfcType: (code) => session.typeName(code),
   }
+  // Not web-ifc's: the Properties panel feature-detects it
+  // (itemProperties.jsx#resolveTables) and resolves its tables itself when
+  // it is absent. Present only once the engine's init said it serves the op,
+  // so a stale worker bundle without it costs the old per-read path, not a
+  // failed table.
+  Object.defineProperty(api, 'resolvePropertyTables', {
+    enumerable: true,
+    get: () => (session.capabilities?.propertyTables === true ?
+      (_modelID, tables) => session.propertyTables(tables) : undefined),
+  })
+  return api
 }

@@ -28,6 +28,10 @@ export const Op = Object.freeze({
   TREE: 'tree',
   PROPS: 'props',
   PROPERTY_SETS: 'propertySets',
+  // The Properties panel's tables, resolved next to the engine
+  // (Components/Properties/propertyTable.js, Share#2070): one request per
+  // table instead of one read per reference.
+  PROPERTY_TABLES: 'propertyTables',
   ITEMS_OF_TYPE: 'itemsOfType',
   RELEASE: 'release',
   STATS: 'stats',

@@ -10,7 +10,7 @@ import useStore from '../../store/useStore'
 import {selectReadModel} from '../../store/IFCSlice'
 import {hexToRgba} from '../../utils/color'
 import ExpansionPanel from './ExpansionPanel'
-import {createPropertyTable} from './itemProperties'
+import {createPropertyTable, createPropertyTables} from './itemProperties'
 
 
 /** Shown in place of a property table that could not be built. */
@@ -141,15 +141,24 @@ export default function Properties() {
         'padding': '0.5em',
         'paddingBottom': isMobile ? '80px' : '0px',
         '& td': {
-          minWidth: '130px',
-          maxWidth: '130px',
           verticalAlign: 'top',
           cursor: 'pointer',
           padding: '3px 0',
           borderBottom: `.2px solid ${propSeparatorColor}`,
         },
+        // Members of a list of nested tables (UAxes, ...): spacing and a hairline.
+        '& .prop-member + .prop-member': {
+          marginTop: '3px',
+          paddingTop: '3px',
+          borderTop: `.2px solid ${propSeparatorColor}`,
+        },
+        '& .prop-nested': {
+          paddingLeft: '8px',
+        },
         '& table': {
-          tableLayout: 'fixed',
+          // Auto layout: Row sizes the label column to its content (capped)
+          // and gives the rest to the value column (Share#2075).
+          tableLayout: 'auto',
           width: '100%',
           overflow: 'hidden',
           borderSpacing: 0,
@@ -257,18 +266,17 @@ function CacheWriteAffordance() {
  */
 async function createPsetsList(model, element, expandAll) {
   const psets = await model.getPropertySets(element.expressID)
+  // One resolve for every set: under the engine worker that is one request,
+  // not one per set and one per property in each (Share#2070).
+  const tables = await createPropertyTables(model, psets.map((ps) => ({record: ps, isPset: true})))
   return [
-    await Promise.all(
-      psets.map(async (ps, ndx) => {
-        return (
-          <ExpansionPanel
-            key={`pset-${ndx}`}
-            summary={decodeIFCString(ps.Name.value) || 'Property Set'}
-            detail={await createPropertyTable(model, ps, true, 0)}
-            expandState={expandAll}
-          />
-        )
-      }),
-    ),
+    psets.map((ps, ndx) => (
+      <ExpansionPanel
+        key={`pset-${ndx}`}
+        summary={decodeIFCString(ps.Name.value) || 'Property Set'}
+        detail={tables[ndx]}
+        expandState={expandAll}
+      />
+    )),
   ]
 }

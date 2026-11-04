@@ -93,7 +93,7 @@ describe('engine/EngineSession over the in-process transport', () => {
     const {session, api} = inProcessSession()
     const info = await session.init({flags: {}})
     expect(info.conwayVersion).toBe('Conway v-test')
-    expect(info.capabilities).toEqual({openStream: true, openFromIndex: false, asyncPump: true})
+    expect(info.capabilities).toEqual({openStream: true, openFromIndex: false, asyncPump: true, propertyTables: true})
     expect(info.wasmBytes).toBe(16 * MB)
     expect(session.capabilities).toEqual(info.capabilities)
     expect(api.calls[0]).toEqual(['Init'])
