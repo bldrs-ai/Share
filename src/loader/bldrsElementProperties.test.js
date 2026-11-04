@@ -674,32 +674,46 @@ describe('loader/bldrsElementProperties', () => {
       expect(yieldSpy).not.toHaveBeenCalled()
     })
 
-    it('keeps the rest of a chunk, and reports the records it could not read', async () => {
+    it('keeps the rest of a chunk, paging each record in, and reports the records it could not read', async () => {
       // One record that throws fails conway's whole visit; the chunk is then
-      // read record by record, and only that record is lost.
+      // read record by record. On a windowed source that retry must page
+      // each record in (getLineResident): the mock's sync getLine throws for
+      // every record, as it would outside the resident windows, so a sync
+      // retry would lose the whole chunk.
       const entities = {10: root(10, [200, 300]), 200: leaf(200), 300: leaf(300)}
-      const {mgr, proxy} = makeWindowedMgr(entities, {unreadable: new Set([200])})
-      proxy.getLine.mockImplementation((id) => {
-        if (id === 200) {
-          throw new Error('malformed record #200')
-        }
-        return entities[id]
-      })
+      const unreadable = new Set([200])
+      const {mgr, proxy} = makeWindowedMgr(entities, {unreadable})
+      proxy.getLineResident = jest.fn((id) => (unreadable.has(id) ?
+        Promise.reject(new Error(`malformed record #${id}`)) :
+        Promise.resolve(entities[id])))
       const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
       expect(Object.keys(captured.itemProperties).sort()).toEqual(['10', '300'])
+      expect(proxy.getLine).not.toHaveBeenCalled()
       expect(getGlbLogs().some((l) => l.level === 'warn' &&
         l.text.includes('1 record(s) could not be read'))).toBe(true)
     })
 
-    it('says so when a windowed source cannot be read in file order', async () => {
-      // An older conway, or the AP214 proxy: the per-record sync read drops
-      // whatever is not resident, and that must not be silent.
+    it('pages record by record when a windowed source cannot be read in file order', async () => {
+      // An older conway: no file-order visit, but getLineResident.
+      const entities = {10: root(10, [200]), 200: leaf(200)}
+      const {mgr, proxy} = makeWindowedMgr(entities)
+      delete proxy.visitLineDataInFileOrder
+      proxy.getLineResident = jest.fn((id) => Promise.resolve(entities[id]))
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+      expect(Object.keys(captured.itemProperties).sort()).toEqual(['10', '200'])
+      expect(getGlbLogs().some((l) => l.level === 'warn')).toBe(false)
+    })
+
+    it('says so when a windowed source can only be read synchronously', async () => {
+      // The AP214 proxy: neither the file-order visit nor getLineResident,
+      // so the sync read drops whatever is not resident, and that must not
+      // be silent.
       const entities = {10: root(10)}
       const {mgr, proxy} = makeWindowedMgr(entities)
       delete proxy.visitLineDataInFileOrder
       await captureBldrsElementProperties(mgr, 0, null)
       expect(getGlbLogs().some((l) => l.level === 'warn' &&
-        l.text.includes('cannot read it in file order'))).toBe(true)
+        l.text.includes('can only read it synchronously'))).toBe(true)
     })
   })
 

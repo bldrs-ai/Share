@@ -575,16 +575,19 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
   // paged in and no entity is materialised. On a resident one it is
   // `getLine` in file order. Either way each record arrives as `getLine`
   // returns it. A proxy without it (an older conway, the AP214 proxy) is
-  // read record by record, synchronously: right for a resident source, and
-  // said out loud for a windowed one, since that read drops whatever is not
-  // resident.
+  // read record by record: synchronously on a resident source, and on a
+  // windowed one through `getLineResident`, which pages each record in. A
+  // windowed source with neither reader is said out loud, since a sync read
+  // drops whatever is not resident.
   const isWindowed = proxy.sourceIsExternal === true
   const visitsInFileOrder = typeof proxy.visitLineDataInFileOrder === 'function'
-  if (isWindowed && !visitsInFileOrder) {
+  // The per-record read's windowed arm (see readChunk).
+  const pagesPerRecord = isWindowed && typeof proxy.getLineResident === 'function'
+  if (isWindowed && !visitsInFileOrder && typeof proxy.getLineResident !== 'function') {
     glbWarn(
       `${BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME}: the source is windowed but this engine ` +
-      'cannot read it in file order (no visitLineDataInFileOrder); records outside the ' +
-      'resident windows will be missing from the cached properties')
+      'can only read it synchronously (no visitLineDataInFileOrder or getLineResident); ' +
+      'records outside the resident windows will be missing from the cached properties')
   }
   // Records whose read threw (a corrupt record, a failed store read, a
   // windowed source read without file-order visits). Counted and reported
@@ -617,7 +620,11 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
     }
     for (const id of ids) {
       try {
-        records.set(id, proxy.getLine(id))
+        // On a windowed source the record is paged in first
+        // (`getLineResident` pins its window, conway#761): a sync getLine
+        // there would throw for every record outside the resident windows,
+        // and the retry would lose exactly what the visit was there to read.
+        records.set(id, pagesPerRecord ? await proxy.getLineResident(id, false) : proxy.getLine(id))
       } catch (e) {
         unreadable++
       }
