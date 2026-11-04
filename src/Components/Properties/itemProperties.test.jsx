@@ -206,6 +206,20 @@ describe('createPropertyTable with references deref resolves to entities', () =>
     expect(screen.queryByText('Coordinates')).not.toBeInTheDocument()
   })
 
+  // Share#2075: a bare ", " row sat between the nested tables of an array.
+  it('separates nested-table members with a divider, not a comma', async () => {
+    const {model, grid} = gridModel()
+    grid.UAxes = [{type: 5, value: 9011}, {type: 5, value: 9012}]
+    const {container} = render(await createPropertyTable(model, grid))
+    const members = container.querySelectorAll('.prop-member')
+    // Two UAxes members and the one VAxes member.
+    expect(members).toHaveLength(3)
+    expect(members[0].querySelector('table')).not.toBeNull()
+    const bareCommas = [...container.querySelectorAll('span')]
+      .filter((el) => el.querySelector('table') && /^\s*,/.test(el.textContent))
+    expect(bareCommas).toHaveLength(0)
+  })
+
   it('leaves the record it was given unchanged (deref rewrites in place)', async () => {
     const {model, grid} = gridModel()
     const before = structuredClone(grid)

@@ -212,7 +212,7 @@ function renderTable(table, serial) {
   table.rows.forEach((row, i) => {
     rows.push(row.k === Node.SUBTABLE ?
       renderSubtable(row, i) :
-      <Row d1={row.label} d2={renderValue(row.value, `${serial}-${i}`)} key={i}/>)
+      <Row d1={row.label} d2={renderValue(row.value, `${serial}-${i}`)} nested={holdsTable(row.value)} key={i}/>)
   })
   return (
     <table key={`table-${serial}`} role="table" aria-label="Element properties">
@@ -246,6 +246,15 @@ function renderSubtable(subtable, serial) {
 
 
 /**
+ * @param {*} value a propertyTable.js value
+ * @return {boolean} whether it renders as a nested table, or a list of them
+ */
+function holdsTable(value) {
+  return value?.k === Node.TABLE || (value?.k === Node.LIST && value.items.some((item) => item?.k === Node.TABLE))
+}
+
+
+/**
  * @param {*} value a propertyTable.js value: a string, number or node
  * @param {string|number} serial react key base
  * @return {*} a React node
@@ -262,11 +271,27 @@ function renderValue(value, serial) {
       return name ? `${name} ${value.ref}` : value.ref
     }
     case Node.LIST: {
-      const parts = value.items.map((item, i) => (
-        <span key={`${serial}-${i}`}>{i > 0 ? ', ' : ''}{renderValue(item, `${serial}-${i}`)}</span>
-      ))
+      // Members that are tables (an IfcGrid's UAxes: one IfcGridAxis table
+      // each) are separated by spacing and a hairline (`.prop-member`,
+      // styled in Properties.jsx), not by a ", " line between two tables.
+      // The ", " stays between the inline members (`#id Type` strings,
+      // primitives), where it reads as a list.
+      const parts = []
+      let prevWasTable = false
+      value.items.forEach((item, i) => {
+        const key = `${serial}-${i}`
+        if (item?.k === Node.TABLE) {
+          parts.push(<div className='prop-member' key={key}>{renderValue(item, key)}</div>)
+        } else {
+          parts.push(<span key={key}>{i > 0 && !prevWasTable ? ', ' : ''}{renderValue(item, key)}</span>)
+        }
+        prevWasTable = item?.k === Node.TABLE
+      })
       if (value.more > 0) {
-        parts.push(<span key={`${serial}-more`}>, {moreText(value.more)}</span>)
+        const key = `${serial}-more`
+        parts.push(prevWasTable ?
+          <div className='prop-member' key={key}>{moreText(value.more)}</div> :
+          <span key={key}>, {moreText(value.more)}</span>)
       }
       return parts
     }
@@ -285,24 +310,49 @@ function renderValue(value, serial) {
  *
  * @param {object} d1 Table cell data 1
  * @param {object} d2 Table cell data 2
- * @param {number} serial
+ * @param {boolean} [nested] d2 is a nested table (or a list of them): the
+ *   label sits above it and it takes the row's full width, indented, rather
+ *   than sharing the row with the label. Side by side, each level of nesting
+ *   would cost a label column, and three levels in (an IfcGrid's UAxes ->
+ *   Gridaxis -> AxisCurve) a 340 px panel had ~70 px left for values
+ *   (Share#2075).
  * @return {object} The react component
  */
-function Row({d1, d2}) {
+function Row({d1, d2, nested = false}) {
   const [isActive, setIsActive] = useState(false)
   const toggleActive = () => {
     setIsActive(!isActive)
   }
-  const rowStyleInactive = {
+  // Label column: sized to its content (`width: 1%` shrinks an auto-layout
+  // cell to its widest label), capped at 40% of the table, truncated with an
+  // ellipsis past that; `title` keeps the full label readable. Value column:
+  // `maxWidth: 0` stops its content from claiming width in the auto table
+  // layout, so it takes whatever the label column leaves, at every nesting
+  // level (Share#2075). The design system sets no table column widths; these
+  // are the minimal values that give that split.
+  const truncate = {
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   }
+  const labelCellStyle = {...truncate, width: '1%', maxWidth: '40%', paddingRight: '8px'}
+  const valueCellStyle = {...truncate, width: '99%', maxWidth: 0}
+  const valueTitle = (typeof d2 === 'string' || typeof d2 === 'number') ? String(d2) : undefined
   if (d1 === null || d1 === undefined || d2 === undefined) {
     debug().warn('Row with invalid data: ', d1, d2)
   }
   if (d2 === null) {
     return <tr onDoubleClick={toggleActive}><td colSpan='2'>{d1}</td></tr>
+  }
+  if (nested) {
+    return (
+      <tr role='row'>
+        <td colSpan={2} role='cell' aria-label={`Property: ${d1}`}>
+          <Typography variant='propTitle' sx={{display: 'block'}}>{d1}</Typography>
+          <div className='prop-nested'>{d2}</div>
+        </td>
+      </tr>
+    )
   }
   return (
     isActive ? (
@@ -314,10 +364,10 @@ function Row({d1, d2}) {
       </tr>
     ) : (
       <tr onDoubleClick={toggleActive} role='row' aria-expanded='false'>
-        <td style={rowStyleInactive} role='cell' aria-label={`Property: ${d1}`}>
+        <td style={labelCellStyle} role='cell' title={String(d1)} aria-label={`Property: ${d1}`}>
           <Typography variant='propTitle'>{d1}</Typography>
         </td>
-        <td style={rowStyleInactive} role='cell' aria-label={`Value: ${d2}`}>
+        <td style={valueCellStyle} role='cell' title={valueTitle} aria-label={`Value: ${d2}`}>
           <Typography variant='propValue'>{d2}</Typography>
         </td>
       </tr>

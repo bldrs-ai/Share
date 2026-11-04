@@ -174,8 +174,9 @@ describeMobileAndDesktop('View 100: Properties panel on cache-hit GLB', () => {
     await expect(panel).toBeVisible()
     await expect(panel.getByText('Grid', {exact: true}).first()).toBeVisible()
     // Each axis resolved to its own table: its type and its tag. Before the
-    // fix both rows were the string `null`.
-    await expect(panel.getByText('Gridaxis')).toHaveCount(2)
+    // fix both rows were the string `null`. (Three axes: the fixture's UAxes
+    // holds A and B so a list of nested tables is exercised; VAxes holds 1.)
+    await expect(panel.getByText('Gridaxis')).toHaveCount(3)
     await expect(panel.getByText('A', {exact: true}).first()).toBeVisible()
     await expect(panel.getByText('1', {exact: true}).first()).toBeVisible()
     await expect(panel.getByText('null', {exact: true})).toHaveCount(0)

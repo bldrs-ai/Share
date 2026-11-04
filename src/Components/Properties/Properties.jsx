@@ -141,15 +141,24 @@ export default function Properties() {
         'padding': '0.5em',
         'paddingBottom': isMobile ? '80px' : '0px',
         '& td': {
-          minWidth: '130px',
-          maxWidth: '130px',
           verticalAlign: 'top',
           cursor: 'pointer',
           padding: '3px 0',
           borderBottom: `.2px solid ${propSeparatorColor}`,
         },
+        // Members of a list of nested tables (UAxes, ...): spacing and a hairline.
+        '& .prop-member + .prop-member': {
+          marginTop: '3px',
+          paddingTop: '3px',
+          borderTop: `.2px solid ${propSeparatorColor}`,
+        },
+        '& .prop-nested': {
+          paddingLeft: '8px',
+        },
         '& table': {
-          tableLayout: 'fixed',
+          // Auto layout: Row sizes the label column to its content (capped)
+          // and gives the rest to the value column (Share#2075).
+          tableLayout: 'auto',
           width: '100%',
           overflow: 'hidden',
           borderSpacing: 0,
