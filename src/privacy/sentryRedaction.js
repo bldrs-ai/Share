@@ -34,19 +34,26 @@
  */
 export const SENTRY_MODEL_LINE_PREFIX = 'Model: (name withheld)'
 
-const WITHHELD_NAME = '(file name withheld)'
+const WITHHELD_NAME = 'file (name withheld)'
 const WITHHELD_VALUE = '(withheld)'
+// Past this, a click breadcrumb's element path is withheld whole rather than
+// scanned: the attribute pattern below is quadratic on a pathological run of
+// unclosed `[title="`, and no real element path of Share's gets near it.
+const MAX_ELEMENT_PATH_CHARS = 4096
 
 const MODEL_LINE = /^Model: /
-// `<prefix>: "<name>"<rest>`, where the prefix is a code identifier such as
-// `handleFileDrop` or `modelArchive`. Greedy on the name, so a quote inside
-// it can't end the match early: at worst a quote in <rest> withholds some of
-// <rest> too, which over-redacts rather than leaks.
-const QUOTED_FILE_NAME = /^([A-Za-z_$][\w$.#-]*): "(.*)"(.*)$/s
+// `<prefix>: file "<name>"<rest>`, as consoleFileName writes it, where the
+// prefix is a code identifier such as `handleFileDrop` or `modelArchive`. The
+// `file ` marker keeps ordinary library warnings out (three.js writes
+// `THREE.Sprite: "Raycaster.camera" needs to be set`). Greedy on the name, so
+// a quote inside it can't end the match early: at worst a quote in <rest>
+// withholds some of <rest> too, which over-redacts rather than leaks.
+const QUOTED_FILE_NAME = /^([A-Za-z_$][\w$.#-]*): file "(.*)"(.*)$/s
 // Sentry serializes a clicked element and its ancestors as CSS-like text,
 // `p.MuiTypography-root[title="Tower.ifc"]`, without escaping quotes in the
-// value; the lazy match up to `"]` takes a value with quotes in it whole.
-const NAMED_ATTRIBUTE = /\[(title|aria-label|alt|name)=".*?"\]/g
+// value; the lazy match up to `"]` takes a value with quotes in it whole,
+// and `s` takes one with a newline in it.
+const NAMED_ATTRIBUTE = /\[(title|aria-label|alt|name)=".*?"\]/gs
 
 
 /**
@@ -55,10 +62,10 @@ const NAMED_ATTRIBUTE = /\[(title|aria-label|alt|name)=".*?"\]/g
  * `` `<prefix>: ${consoleFileName(name)} <rest>` ``.
  *
  * @param {string} name the user's file name
- * @return {string} the name, quoted
+ * @return {string} `file "<name>"`
  */
 export function consoleFileName(name) {
-  return `"${name}"`
+  return `file "${name}"`
 }
 
 
@@ -85,7 +92,9 @@ export function redactBreadcrumb(breadcrumb) {
     return {...breadcrumb, message: redacted, data: {...breadcrumb.data, arguments: [redacted]}}
   }
   if (typeof breadcrumb.category === 'string' && breadcrumb.category.startsWith('ui.')) {
-    const redacted = breadcrumb.message.replace(NAMED_ATTRIBUTE, `[$1="${WITHHELD_VALUE}"]`)
+    const redacted = breadcrumb.message.length > MAX_ELEMENT_PATH_CHARS ?
+      WITHHELD_VALUE :
+      breadcrumb.message.replace(NAMED_ATTRIBUTE, `[$1="${WITHHELD_VALUE}"]`)
     return redacted === breadcrumb.message ? breadcrumb : {...breadcrumb, message: redacted}
   }
   return breadcrumb

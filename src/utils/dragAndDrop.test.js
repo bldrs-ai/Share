@@ -143,7 +143,7 @@ describe('dragAndDrop utility', () => {
       // and verdict kept (privacy/sentryRedaction.js).
       const [line] = mockDebug.warn.mock.calls[0]
       const crumb = redactBreadcrumb({category: 'console', level: 'warning', message: line, data: {arguments: [line]}})
-      expect(crumb.message).toBe('handleFileDrop: (file name withheld) (1024 bytes) is not a recognized model format')
+      expect(crumb.message).toBe('handleFileDrop: file (name withheld) (1024 bytes) is not a recognized model format')
     })
 
     it('should handle successful file upload with OPFS available', async () => {

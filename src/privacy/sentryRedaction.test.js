@@ -41,8 +41,16 @@ describe('privacy/sentryRedaction', () => {
   it('withholds a file name written through consoleFileName, keeping the rest of the line', () => {
     const name = 'Jane\'s "final" plan.dwg'
     const line = `someNewSeam: ${consoleFileName(name)} (267 bytes) was refused`
-    expect(redactConsoleMessage(line)).toBe('someNewSeam: (file name withheld) (267 bytes) was refused')
+    expect(redactConsoleMessage(line)).toBe('someNewSeam: file (name withheld) (267 bytes) was refused')
     expect(redactBreadcrumb(consoleCrumb(line, 'warning')).message).not.toMatch(/Jane|plan\.dwg/)
+  })
+
+  // The `file ` marker is what tells a file name from any other quoted text:
+  // three.js warns `THREE.Sprite: "Raycaster.camera" needs to be set …`,
+  // and Share renders sprites (Infrastructure/PlaceMark.js).
+  it('leaves a library warning with quoted text alone', () => {
+    const line = 'THREE.Sprite: "Raycaster.camera" needs to be set in order to raycast against sprites.'
+    expect(redactConsoleMessage(line)).toBe(line)
   })
 
   // Sentry's click breadcrumb is the element path as CSS-like text, values
@@ -59,6 +67,14 @@ describe('privacy/sentryRedaction', () => {
     // An unnamed click is passed through as the same object.
     const plain = {category: 'ui.click', message: 'button.MuiButton-root'}
     expect(redactBreadcrumb(plain)).toBe(plain)
+  })
+
+  it('withholds a click value with a newline in it, and an oversized element path whole', () => {
+    expect(redactBreadcrumb({category: 'ui.click', message: 'p[title="Sec\nret.ifc"]'}).message)
+      .toBe('p[title="(withheld)"]')
+    const OVERSIZED = 5000 // past the 4096-char element-path bound
+    const huge = {category: 'ui.click', message: `p[title="${'x'.repeat(OVERSIZED)}`}
+    expect(redactBreadcrumb(huge).message).toBe('(withheld)')
   })
 
   it('passes every other breadcrumb through untouched', () => {

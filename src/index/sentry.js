@@ -222,8 +222,9 @@ export default function setupSentry() {
     beforeSend(event) {
       return shouldSendSentryEvent(event) ? event : null
     },
-    // Console breadcrumbs that name the user's file are rewritten before
-    // they're recorded (privacy/sentryRedaction.js); the console keeps them.
+    // Console and click breadcrumbs that name the user's file are rewritten
+    // before they're recorded (privacy/sentryRedaction.js); the page and the
+    // console keep them.
     beforeBreadcrumb: redactBreadcrumb,
     integrations: [
       reactRouterV6BrowserTracingIntegration({

@@ -317,18 +317,19 @@ describe('modelArchive', () => {
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
       // setupTests silences debug(); the production level is WARN.
       setDebugLevel(WARN)
+      let line
       try {
         const zip = zipSync({'Tower.rvt': PDF})
         await openUploadThroughArchive(upload(zip, 'Secret "Tower" v2.zip'), {entry: 'drop', alert: jest.fn(), open: jest.fn()})
+        line = warnSpy.mock.calls.map((args) => args.join(' ')).find((text) => text.startsWith('modelArchive:'))
       } finally {
         disableDebug()
+        warnSpy.mockRestore()
       }
-      const line = warnSpy.mock.calls.map((args) => args.join(' ')).find((text) => text.startsWith('modelArchive:'))
       expect(line).toContain('Secret "Tower" v2.zip')
       const crumb = redactBreadcrumb({category: 'console', level: 'warning', message: line, data: {arguments: [line]}})
-      expect(crumb.message).toBe('modelArchive: (file name withheld) holds no model Share opens (rvt)')
+      expect(crumb.message).toBe('modelArchive: file (name withheld) holds no model Share opens (rvt)')
       expect(JSON.stringify(crumb)).not.toMatch(/Secret|Tower/)
-      warnSpy.mockRestore()
     })
 
     it('refuses an archive it can\'t read with the reason, still as an unrecognized format', async () => {

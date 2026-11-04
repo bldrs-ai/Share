@@ -9,6 +9,7 @@ import Cookies from 'js-cookie'
 import Logger, {DATA_DEFECT} from '@bldrs-ai/conway/src/logging/logger'
 import {captureMessage, setContext, setTag} from '@sentry/react'
 import {_resetGaClientIdForTests} from '../privacy/analytics'
+import {consoleFileName} from '../privacy/sentryRedaction'
 import useStore from '../store/useStore'
 import {
   STALL_TIMEOUT_MS,
@@ -834,14 +835,17 @@ describe('loadProgress', () => {
       // arrive there with the name withheld.
       it('withholds a teed warning\'s file name from the diagnostics event', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'a518f06c.stp'})
-        console.warn('handleFileDrop: "Secret Tower.dwg" (267 bytes) is not a recognized model format')
-        endLoadProgress()
+        try {
+          beginLoadProgress({fileInfo: 'a518f06c.stp'})
+          console.warn(`handleFileDrop: ${consoleFileName('Secret Tower.dwg')} (267 bytes) is not a recognized model format`)
+          endLoadProgress()
+        } finally {
+          warnSpy.mockRestore()
+        }
         captureLoadDiagnostics({warningCount: 1})
         const [title, context] = captureMessage.mock.calls.find(([message]) => message.startsWith('Load diagnostics'))
-        expect(title).toContain('handleFileDrop: (file name withheld)')
+        expect(title).toContain('handleFileDrop: file (name withheld)')
         expect(JSON.stringify([title, context])).not.toContain('Secret Tower')
-        warnSpy.mockRestore()
       })
 
       // The non-engine path (reportModelInfo) carries the user's own file

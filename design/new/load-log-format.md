@@ -70,15 +70,19 @@ built from the reporter's latched fields with the tool taken from the
 `beforeBreadcrumb`, and rewrites three things as breadcrumbs:
 - the model line's console echo;
 - any console line that names a user's file through `consoleFileName`, i.e.
-  `<prefix>: "<name>" …` (the drop path's rejected-upload warning, the
-  no-model-in-archive warning). These have the quoted name withheld;
+  `<prefix>: file "<name>" …` (the drop path's rejected-upload warning, the
+  no-model-in-archive warning). These have the quoted name withheld. The
+  `file ` marker keeps ordinary library warnings such as three.js's
+  `THREE.Sprite: "Raycaster.camera" …` from matching;
 - click breadcrumbs' `title`, `aria-label`, `alt` and `name` values, which
   carry file names in the recent-files list and the projects drawer.
 
 The reporter's console tee runs teed text through the same redaction, because
 teed warnings reach the diagnostics event's title and `messages` without
-passing through `beforeBreadcrumb`. The report dialog, the snackbar and the
-console keep the full line: that is the user reading their own file's header.
+passing through `beforeBreadcrumb`. That makes the report's own `Warnings &
+errors` line redacted as well; the console prints the warning whole. The model
+line keeps the full header text in the report dialog, the snackbar and the
+console: that is the user reading their own file's header.
 
 Canonical implementation: conway `src/core/progress_log.ts`
 (`LoadLogAccumulator` + formatters), consumed by the conway CLI renderer.

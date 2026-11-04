@@ -231,7 +231,11 @@ class LoadProgressReporter {
       // event's title, its `messages` and the report's `Warnings & errors`
       // line, none of which pass through beforeBreadcrumb. A warning that
       // names the user's file (a drop rejected mid-load) would otherwise
-      // carry the name there (`privacy/sentryRedaction.js`).
+      // carry the name there (`privacy/sentryRedaction.js`). The user's own
+      // report shows the redacted form too, since its warnings line is built
+      // from the same tally; the console still prints the warning whole.
+      // Keying the tally by the redacted text also folds the same warning
+      // about different files into one diagnostic.
       const text = redactConsoleMessage(collapseWhitespace(args
         .map((arg) => (arg instanceof Error ? arg.message : String(arg)))
         .join(' ')))
