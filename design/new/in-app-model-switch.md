@@ -188,6 +188,9 @@ back to a finished load, not a cancelled one. So:
   model's session.
 - **Close, or eviction under memory pressure, → cancel.** This is the only
   cancel path (§4.5, #2031), and both are rare and explicit.
+  With the engine in a per-model worker (engine-worker.md §5.2), eviction
+  first terminates idle engines, which cancels nothing; it cancels a load
+  only when no idle engine is left to evict.
 - **Interactive at the index.** A model becomes usable — tree, properties,
   search, the assistant's `model.*` reads — once its index and spatial tree
   exist; geometry streams in after (§4.2, #2029).
