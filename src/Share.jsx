@@ -13,6 +13,7 @@ import {pageTitleForModel} from './utils/modelDisplayName'
 import {navToDefault} from './utils/navigate'
 import {FilenameParseError} from './Filetype'
 import {isLocalOnlyPath} from './routes/localOnly'
+import modelIdentity from './routes/modelIdentity'
 import {UNSUPPORTED_FILE_ALERT, handleRoute} from './routes/routes'
 
 
@@ -94,16 +95,28 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         navToDefault(navigate, appPrefix)
         return true
       }
-      // `isUploadedFile` is compared too: `/share/v/local-only/<id>` and
-      // `/share/v/p/<id>` parse to the same filepath and no gitpath, so
-      // without it a navigation between the two would keep the previous
-      // route's upload provenance, which CadView hands the loader as
-      // `isUploadedRoute` (#1955, codex review on #1956). Coerced because
+      // "Same model" is `modelIdentity`, the key CadView already uses for
+      // per-model state; it reads `downloadUrl`, which every route carries
+      // and which excludes the element path. Comparing `filepath`/`gitpath`
+      // instead missed Drive and generic-URL routes, which have neither: from
+      // a Drive model, the alert's Reset (`navToDefault`, an in-app
+      // navigation) left the Drive modelPath in the store under an
+      // index.ifc URL, and the remounted CadView loaded the Drive file again
+      // (open-205, #2013).
+      //
+      // A shared downloadUrl is not a shared route, though, so the route's
+      // provenance is compared as well; quota and analytics classify by it.
+      // `kind` and `provider`: `/share/v/p/index.ifc` and
+      // `/share/v/u/https://<this host>/index.ifc` give the same URL, as do a
+      // GitHub route and a generic URL naming its github.com address (codex
+      // review on #2026). `isUploadedFile`: `/share/v/local-only/<id>` and
+      // `/share/v/p/<id>` do too, and CadView hands it to the loader as
+      // `isUploadedRoute` (#1955, codex review on #1956); coerced because
       // non-file routes don't set it.
       if (modelPath === null ||
-          (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
-          (modelPath.gitpath && modelPath.gitpath !== mp.gitpath) ||
-          (!modelPath.gitpath && mp.gitpath) ||
+          modelIdentity(modelPath, installPrefix) !== modelIdentity(mp, installPrefix) ||
+          modelPath.kind !== mp.kind ||
+          modelPath.provider !== mp.provider ||
           Boolean(modelPath.isUploadedFile) !== Boolean(mp.isUploadedFile)) {
         setModelPath(mp)
         debug().log('Share#onChangeUrlParams: new model path: ', mp)

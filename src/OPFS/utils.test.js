@@ -7,6 +7,7 @@ import {
   downloadModel,
   doesFileExistInOPFS,
   doesUploadExistInOPFS,
+  deleteUploadFromOPFS,
   deleteFileFromOPFS,
   checkOPFSAvailability,
   readModelByPathFromOPFS,
@@ -805,6 +806,52 @@ describe('OPFS Test Suite', () => {
     it('rejects when it could not look, rather than answering false', async () => {
       mockRoot(jest.fn().mockRejectedValue(domError('SecurityError')))
       await expect(doesUploadExistInOPFS('a.ifc')).rejects.toThrow('SecurityError')
+    })
+  })
+
+  // The refused-upload delete (bldrs-ai/ops#39): the same root-level
+  // <id>/<id> layout the probe above reads.
+  describe('deleteUploadFromOPFS', () => {
+    const originalStorage = global.navigator.storage
+
+    afterEach(() => {
+      global.navigator.storage = originalStorage
+    })
+
+    /**
+     * @param {Function} removeEntry Root's removeEntry
+     */
+    function mockRoot(removeEntry) {
+      global.navigator.storage = {getDirectory: jest.fn().mockResolvedValue({removeEntry})}
+    }
+
+    const domError = (name) => Object.assign(new Error(name), {name})
+
+    it('removes the upload\'s root-level folder, with the file in it', async () => {
+      const removeEntry = jest.fn().mockResolvedValue(undefined)
+      mockRoot(removeEntry)
+      expect(await deleteUploadFromOPFS('a.ifc')).toBe(true)
+      expect(removeEntry.mock.calls).toEqual([['a.ifc', {recursive: true}]])
+    })
+
+    it('is false when the upload is not there', async () => {
+      mockRoot(jest.fn().mockRejectedValue(domError('NotFoundError')))
+      expect(await deleteUploadFromOPFS('a.ifc')).toBe(false)
+    })
+
+    it('is false, without touching OPFS, for an id that is not a legal entry name', async () => {
+      const removeEntry = jest.fn()
+      mockRoot(removeEntry)
+      for (const id of ['', '.', '..', 'a/b.ifc', 'a\\b.ifc', undefined]) {
+        expect(await deleteUploadFromOPFS(id)).toBe(false)
+      }
+      expect(removeEntry).not.toHaveBeenCalled()
+      expect(global.navigator.storage.getDirectory).not.toHaveBeenCalled()
+    })
+
+    it('rejects when it could not delete, rather than answering false', async () => {
+      mockRoot(jest.fn().mockRejectedValue(domError('NoModificationAllowedError')))
+      await expect(deleteUploadFromOPFS('a.ifc')).rejects.toThrow('NoModificationAllowedError')
     })
   })
 })

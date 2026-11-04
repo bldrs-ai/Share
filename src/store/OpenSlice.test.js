@@ -40,6 +40,15 @@ describe('store/OpenSlice', () => {
       expect(store.getState().isOpenModelVisible).toBe(true)
     })
 
+    it('setIsDropQuotaDialogVisible shows and hides the drop\'s limit dialog, hidden by default', () => {
+      const store = makeStore()
+      expect(store.getState().isDropQuotaDialogVisible).toBe(false)
+      store.getState().setIsDropQuotaDialogVisible(true)
+      expect(store.getState().isDropQuotaDialogVisible).toBe(true)
+      store.getState().setIsDropQuotaDialogVisible(false)
+      expect(store.getState().isDropQuotaDialogVisible).toBe(false)
+    })
+
     it('setCurrentTab stores the tab index', () => {
       const store = makeStore()
       store.getState().setCurrentTab(2)

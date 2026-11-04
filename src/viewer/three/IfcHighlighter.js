@@ -100,12 +100,21 @@ export default class IfcHighlighter {
  * @param {EffectComposer} composer
  * @return {Function} the new render function
  */
-function newUpdateFunction(context, composer) {
+export function newUpdateFunction(context, composer) {
   const rendererWrapper = context.getLegacyRendererWrapper()
+  // Read once: one RenderDemand lives for the whole context.
+  const demand = context.getRenderDemand?.() ?? null
   return function newUpdateFn() {
     if (rendererWrapper.blocked || !context) {
       return
     }
+    // While a model streams in, paint only when something asked
+    // (renderDemand.js); every frame otherwise.
+    if (demand !== null && !demand.shouldRender()) {
+      return
+    }
+    const startMs = performance.now()
     composer.render()
+    demand?.rendered(performance.now() - startMs)
   }
 }

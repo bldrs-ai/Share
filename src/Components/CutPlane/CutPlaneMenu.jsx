@@ -220,7 +220,7 @@ export default function CutPlaneMenu() {
 
 
 /**
- * Called by this component and CadView for consistent reset
+ * "Clear all": the planes leave the scene, the store and the `cp:` hash term.
  *
  * @param {object} viewer
  * @param {Function} setCutPlaneDirections
@@ -229,8 +229,26 @@ export default function CutPlaneMenu() {
 export function resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive) {
   // These aren't setup when CadView inits
   if (viewer && viewer.clipper && setCutPlaneDirections && setIsCutPlaneActive) {
-    removePlanes(viewer)
+    resetPlanes(viewer, setCutPlaneDirections, setIsCutPlaneActive)
     removePlanesFromHashState()
+  }
+}
+
+
+/**
+ * Take the planes out of the scene and the store, and leave the hash alone.
+ * CadView's reset runs on a model or view-settings change, after the location
+ * already shows where the user is going, so a `cp:` term there belongs to the
+ * model being opened, and this component's [model] effect restores it from
+ * the hash (codex review on #2026).
+ *
+ * @param {object} viewer
+ * @param {Function} setCutPlaneDirections
+ * @param {Function} setIsCutPlaneActive
+ */
+export function resetPlanes(viewer, setCutPlaneDirections, setIsCutPlaneActive) {
+  if (viewer && viewer.clipper && setCutPlaneDirections && setIsCutPlaneActive) {
+    removePlanes(viewer)
     setCutPlaneDirections([])
     setIsCutPlaneActive(false)
   }

@@ -1,7 +1,9 @@
 import {Box3, Group, Sphere, Vector3} from 'three'
 import {reportFirstMesh, setLoadSummary} from '../loader/loadProgress'
 import debug, {WARN} from '../utils/debug'
+import {LOAD_PREVIEW_GROUP_KEY, PREVIEW_BASE_MATERIAL_KEY} from './previewSelection'
 import {FRAMING_MARGIN, applyCameraLimits, cameraLimitsForSphere} from './three/cameraLimits'
+import {USER_CAMERA_EVENT} from './three/renderDemand'
 import {ElementBoxes, robustBoundsFromElements} from './three/robustBounds'
 
 
@@ -62,8 +64,8 @@ const PREVIEW_OUTLIER_WARMUP = 32
  *    uses, so the follow and the final frame never disagree). A refit
  *    fires when (and only when) new geometry lands OUTSIDE the volume
  *    the camera currently frames — so existing geometry is never pushed
- *    offscreen between timer beats. The first fit is instant; follow-up
- *    fits tween on a cadence that grows 250ms → 1s; the follow stops
+ *    offscreen between timer beats. Every fit is instant (a snap, not a
+ *    tween: see fitUnionToFrame_), on a cadence that grows 250ms → 1s; the follow stops
  *    forever the moment the user takes the camera.
  *  - progress reporting: stage labels pass through to the load
  *    reporter, and the model summary lands on the report's Total line.
@@ -87,8 +89,20 @@ export default class ProgressiveLoadSession {
    *   renders, but the follow leaves the camera where the permalink put
    *   it instead of framing the streaming geometry.
    * @param {Function} [args.onProgress] stage-label reporter.
+   * @param {object} [args.renderDemand] the viewer's RenderDemand
+   *   (`three/renderDemand.js`, open-205 #2043): a scope of on-demand painting
+   *   open from here until finish/abort, with each accepted mesh or bounds
+   *   asking for a background frame. Only with a scene: without one nothing
+   *   streams on screen, so there is nothing to save.
+   * @param {Function} [args.onFirstMesh] `() => void`, called once, when the
+   *   load's first geometry is on screen (open-205 #2043: the caller lifts
+   *   its loading overlay). Called whatever happens to the load afterwards;
+   *   the caller decides whether the load is still the one it shows.
    */
-  constructor({scene = null, getControls, getCamera, frameCamera = true, onProgress}) {
+  constructor({
+    scene = null, getControls, getCamera, frameCamera = true, onProgress, renderDemand = null,
+    onFirstMesh = null,
+  }) {
     this.state = SessionState.IDLE
     this.scene = scene
     this.getControls = getControls ?? (() => null)
@@ -96,6 +110,24 @@ export default class ProgressiveLoadSession {
     this.frameCamera = frameCamera
     this.onProgress = onProgress ?? null
     this.previewGroup = scene !== null ? new Group() : null
+    if (this.previewGroup !== null) {
+      // How CadView's preview pick finds the group (previewSelection.js
+      // #loadPreviewGroups) without walking the scene.
+      // (`userData` defaulted for the mocked three.js some suites load.)
+      this.previewGroup.name = 'bldrsLoadPreview'
+      this.previewGroup.userData = this.previewGroup.userData ?? {}
+      this.previewGroup.userData[LOAD_PREVIEW_GROUP_KEY] = true
+    }
+    this.renderDemand = scene !== null ? renderDemand : null
+    this.hasAskedForFirstPaint = false
+    this.onFirstMesh = onFirstMesh
+    this.endOnDemand = null
+    try {
+      this.endOnDemand = this.renderDemand?.begin(this.getControls()) ?? null
+    } catch (e) {
+      debug(WARN).warn('on-demand rendering not started:', e)
+      this.renderDemand = null
+    }
     this.previewInstalled = false
     // Camera follow state.
     this.followStopped = false
@@ -203,6 +235,7 @@ export default class ProgressiveLoadSession {
       } else {
         this.maybeRefit_()
       }
+      this.requestPaint_()
     } catch (e) {
       debug(WARN).warn('preview mesh skipped:', e)
     }
@@ -242,6 +275,7 @@ export default class ProgressiveLoadSession {
       } else {
         this.maybeRefit_()
       }
+      this.requestPaint_()
     } catch (e) {
       debug(WARN).warn('bounds notify skipped:', e)
     }
@@ -290,6 +324,7 @@ export default class ProgressiveLoadSession {
   finish() {
     this.stopFollow_()
     this.teardownPreview_()
+    this.endOnDemandRendering_()
     this.state = SessionState.FINISHED
   }
 
@@ -298,7 +333,45 @@ export default class ProgressiveLoadSession {
   abort() {
     this.stopFollow_()
     this.teardownPreview_()
+    this.endOnDemandRendering_()
     this.state = SessionState.ABORTED
+  }
+
+
+  /**
+   * Ask for a paint of geometry that just arrived: in the background, within
+   * the frame budget, except the load's first, which is what the user is
+   * waiting to see and paints on the next frame (renderDemand.js). The first
+   * also tells the caller (`onFirstMesh`).
+   */
+  requestPaint_() {
+    if (this.hasAskedForFirstPaint) {
+      this.renderDemand?.invalidateBackground()
+      return
+    }
+    this.hasAskedForFirstPaint = true
+    this.renderDemand?.invalidate()
+    try {
+      this.onFirstMesh?.()
+    } catch (e) {
+      debug(WARN).warn('first-mesh callback failed:', e)
+    }
+  }
+
+
+  /**
+   * Back to painting every frame: the durable model is about to install (or
+   * the load failed), and everything after the load — cut planes, isolation,
+   * hover — expects a live loop.
+   */
+  endOnDemandRendering_() {
+    try {
+      this.endOnDemand?.()
+    } catch (e) {
+      debug(WARN).warn('on-demand rendering not ended:', e)
+    }
+    this.endOnDemand = null
+    this.renderDemand = null
   }
 
 
@@ -466,17 +539,34 @@ export default class ProgressiveLoadSession {
       this.followStopped = true
       return
     }
+    // The user took the camera before there was anything to follow (the
+    // overlay lifted early: `disableLoadOverlay`, or a fast index). The
+    // listeners below only attach now, so they never heard it; the load's
+    // RenderDemand did, from CadView's load-long scope, and is the one record
+    // of it (codex review on #2052).
+    if (this.renderDemand?.isUserDriving === true) {
+      this.followStopped = true
+      return
+    }
     if (this.followStopped || this.followTimer !== null) {
       return
     }
     try {
       this.followedControls = this.getControls() ?? null
+      // `control` as well as `controlstart`: camera-controls sends a wheel
+      // zoom as `control` alone (it can't tell a scroll's start or end), and
+      // a zoom is the user taking the camera as much as a drag is
+      // (open-205 #2043; design/new/in-app-model-switch.md §4.2a).
+      // USER_CAMERA_EVENT for a camera UI of ours (the ViewCube, a `#c:`
+      // pose): renderDemand.js#noteUserCamera.
       this.followedControls?.addEventListener?.('controlstart', this.onControlStart)
+      this.followedControls?.addEventListener?.('control', this.onControlStart)
+      this.followedControls?.addEventListener?.(USER_CAMERA_EVENT, this.onControlStart)
     } catch {
       this.followedControls = null
     }
     try {
-      this.fitUnionToFrame_(false)
+      this.fitUnionToFrame_()
     } catch (e) {
       debug(WARN).warn('camera follow initial fit failed:', e)
     }
@@ -501,7 +591,7 @@ export default class ProgressiveLoadSession {
       return
     }
     try {
-      this.fitUnionToFrame_(true)
+      this.fitUnionToFrame_()
     } catch (e) {
       debug(WARN).warn('camera follow refit failed:', e)
     }
@@ -557,7 +647,7 @@ export default class ProgressiveLoadSession {
     }
     if (this.overflowPending || (staleFrameSuspect && this.isOverframed_())) {
       try {
-        this.fitUnionToFrame_(true)
+        this.fitUnionToFrame_()
       } catch (e) {
         debug(WARN).warn('camera follow refit failed:', e)
       }
@@ -581,9 +671,19 @@ export default class ProgressiveLoadSession {
    * the criterion also means the follow and the final frame agree —
    * there is no correction to watch when the load settles.
    *
-   * @param {boolean} withTransition tween the move (false = instant)
+   * **The fit snaps; it does not tween** (open-205 #2043, codex review on
+   * #2052). While a model streams in, the viewer paints on demand
+   * (three/renderDemand.js): a camera move the user asked for paints at once,
+   * the follow's in the background. Updates carry no author, so the follow's
+   * move is made where it can be told apart: synchronously, `fitToSphere`
+   * without a transition and the controls' `update(0)` inside
+   * `RenderDemand#runFollowMove`, which attributes exactly the updates made
+   * inside it. A tween's updates would arrive frames later, mixed with a
+   * ViewCube snap's or a fit's, and an earlier time window that tried to tell
+   * them apart swallowed those. A snap also suits geometry that is itself
+   * arriving in steps.
    */
-  fitUnionToFrame_(withTransition) {
+  fitUnionToFrame_() {
     const controls = this.getControls()
     const camera = this.getCamera()
     if (!controls || !camera) {
@@ -601,7 +701,7 @@ export default class ProgressiveLoadSession {
     sphere.radius *= FRAMING_MARGIN
     // Nothing to do when the pose already frames this sphere — refits
     // fire on any overflow, and geometry excluded as a stray leaves the
-    // framing unchanged, which would otherwise tween the camera to where
+    // framing unchanged, which would otherwise move the camera to where
     // it already is once per stray. Stamp lastFitMs anyway: evaluating
     // this cost a full robust-bounds pass, so it has to sit behind the
     // same cadence gate as a real fit or every arriving stray pays for
@@ -630,7 +730,17 @@ export default class ProgressiveLoadSession {
     // the projection between refits) while letting minDistance and near
     // come down off the defaults.
     applyCameraLimits(camera, controls, cameraLimitsForSphere(camera, sphere), true)
-    controls.fitToSphere(sphere, withTransition)
+    const snap = () => {
+      controls.fitToSphere(sphere, false)
+      // Apply it now, not on the next frame, so its `update` is made inside
+      // runFollowMove (see this method's doc).
+      controls.update?.(0)
+    }
+    if (this.renderDemand === null) {
+      snap()
+    } else {
+      this.renderDemand.runFollowMove(snap)
+    }
     this.fittedSphere = sphere
     this.overflowPending = false
     this.lastFitMs = Date.now()
@@ -648,6 +758,8 @@ export default class ProgressiveLoadSession {
     }
     try {
       this.followedControls?.removeEventListener?.('controlstart', this.onControlStart)
+      this.followedControls?.removeEventListener?.('control', this.onControlStart)
+      this.followedControls?.removeEventListener?.(USER_CAMERA_EVENT, this.onControlStart)
     } catch {
       // best-effort
     }
@@ -674,7 +786,11 @@ export default class ProgressiveLoadSession {
       if (obj.geometry !== undefined && obj.geometry !== null) {
         geometries.add(obj.geometry)
       }
-      const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
+      // A preview mesh painted as selected (previewSelection.js) wears the
+      // viewer's selection material, which outlives the load: dispose the
+      // mesh's own material instead.
+      const own = obj.userData?.[PREVIEW_BASE_MATERIAL_KEY] ?? obj.material
+      const mats = Array.isArray(own) ? own : [own]
       for (const material of mats) {
         if (material !== undefined && material !== null) {
           materials.add(material)

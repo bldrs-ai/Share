@@ -431,7 +431,8 @@ export function gtagFunnelEvent(eventName, parameters = {}) {
  *   SHARE_INTEREST  {feature: 'save_to_cloud', signed_in}  ShareControl, on
  *                   the "coming soon" line in that help
  *   QUOTA_SOFT_LIMIT_EXCEEDED  {tier, used, limit, route_kind: 'gdrive'|
- *                   'github'}  quota/useDirectLinkQuota, when a model opened
+ *                   'github'|'local' ('local' only with the meterLocalFiles
+ *                   switch on)}  quota/useDirectLinkQuota, when a model opened
  *                   straight from its URL is over the private-model limit.
  *                   The load is NOT blocked (a soft gate, measured first);
  *                   once per model per page load (design/new/quotas.md

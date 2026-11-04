@@ -1,6 +1,6 @@
 import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from './dragAndDrop'
 import {guessTypeFromFile} from '../Filetype'
-import {checkOPFSAvailability, saveDnDFileToOpfs} from '../OPFS/utils'
+import {checkOPFSAvailability, deleteUploadFromOPFS, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {getInMemoryUpload} from '../loader/inMemoryUploads'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
@@ -87,7 +87,6 @@ describe('dragAndDrop utility', () => {
         mockOnError,
       )
 
-      expect(trackAlert).toHaveBeenCalledWith('File upload initiated but found no data')
       expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated but found no data')
       expect(mockOnError).toHaveBeenCalledWith('File upload initiated but found no data')
       expect(mockNavigate).not.toHaveBeenCalled()
@@ -106,7 +105,6 @@ describe('dragAndDrop utility', () => {
         mockOnError,
       )
 
-      expect(trackAlert).toHaveBeenCalledWith('File upload initiated for more than 1 file')
       expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated for more than 1 file')
       expect(mockOnError).toHaveBeenCalledWith('File upload initiated for more than 1 file')
       expect(mockNavigate).not.toHaveBeenCalled()
@@ -128,8 +126,10 @@ describe('dragAndDrop utility', () => {
       )
 
       const expectedMessage = `File upload of unknown type: type(${mockFile.type}) size(${mockFile.size})`
-      expect(trackAlert).toHaveBeenCalledWith(expectedMessage)
-      expect(mockSetAlert).toHaveBeenCalledWith(expectedMessage)
+      // An alert object AlertDialog reports as one info issue, carrying the
+      // extension but never the file name (loader/unrecognizedFormat.js).
+      expect(mockSetAlert).toHaveBeenCalledWith(
+        {type: 'unrecognizedFormat', message: expectedMessage, ext: 'unknown', entry: 'drop'})
       expect(mockOnError).toHaveBeenCalledWith(expectedMessage)
       expect(mockNavigate).not.toHaveBeenCalled()
       // And the console hears about it, at a level prod prints — naming the
@@ -160,7 +160,7 @@ describe('dragAndDrop utility', () => {
       )
 
       expect(guessTypeFromFile).toHaveBeenCalledWith(mockFile)
-      expect(saveDnDFileToOpfs).toHaveBeenCalledWith(mockFile, mockType, expect.any(Function))
+      expect(saveDnDFileToOpfs).toHaveBeenCalledWith(mockFile, mockType, expect.any(Function), expect.any(Function))
       expect(disablePageReloadApprovalCheck).toHaveBeenCalled()
       expect(mockNavigate).toHaveBeenCalledWith('/prefix/v/local-only/generated-filename.ifc')
       expect(mockOnSuccess).toHaveBeenCalledWith(mockFileName)
@@ -198,6 +198,31 @@ describe('dragAndDrop utility', () => {
       expect(mockOnError).not.toHaveBeenCalled()
     })
 
+    // #2042: a write can come up short without throwing (a private window
+    // past ~1 GB of OPFS). The worker now reports it instead of storing a
+    // truncated model, and the drop opens the file from memory instead.
+    it('holds the file in memory when OPFS is available but storing it fails', async () => {
+      const mockFile = {name: 'big.ifc', type: 'application/octet-stream', size: 1024}
+      mockEvent.dataTransfer.files = [mockFile]
+      guessTypeFromFile.mockResolvedValue('ifc')
+      let stored
+      saveDnDFileToOpfs.mockImplementation((file, type, onWritten, onFailed) => {
+        stored = onFailed(new Error('OPFS write incomplete: 4294967288 of 1024 bytes at offset 0'))
+      })
+
+      await handleFileDrop(
+        mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError)
+      await stored
+
+      expect(mockOnSuccess).toHaveBeenCalledTimes(1)
+      const storageId = mockOnSuccess.mock.calls[0][0]
+      expect(storageId).toMatch(/^[0-9a-f-]{36}\.ifc$/)
+      expect(getInMemoryUpload(storageId)).toBe(mockFile)
+      expect(mockNavigate).toHaveBeenCalledWith(`/prefix/v/local-only/${storageId}`)
+      expect(addRecentFileEntry).not.toHaveBeenCalled()
+      expect(mockOnError).not.toHaveBeenCalled()
+    })
+
     it('gates an in-memory drop on the quota like any other', async () => {
       mockEvent.dataTransfer.files = [{name: 'test.ifc', type: 'application/octet-stream', size: 1024}]
       guessTypeFromFile.mockResolvedValue('ifc')
@@ -216,6 +241,65 @@ describe('dragAndDrop utility', () => {
       expect(getInMemoryUpload(deniedId)).toBeUndefined()
       expect(mockNavigate).not.toHaveBeenCalled()
       expect(mockOnSuccess).not.toHaveBeenCalled()
+    })
+
+    // bldrs-ai/ops#39: with `meterLocalFiles` on, an OPFS drop is written
+    // before record() answers. Left there on a refusal, its storage id still
+    // opened from the /v/local-only/ URL, past the refusal.
+    describe('with the drop written to OPFS before the quota answers', () => {
+      const STORAGE_ID = 'blob-uuid.ifc'
+      let written
+
+      beforeEach(() => {
+        mockEvent.dataTransfer.files = [{name: 'test.ifc', type: 'application/octet-stream', size: 1024}]
+        guessTypeFromFile.mockResolvedValue('ifc')
+        deleteUploadFromOPFS.mockResolvedValue(true)
+        // onWritten is async and handleFileDrop doesn't await the write, so
+        // keep its promise to settle the record() answer on.
+        saveDnDFileToOpfs.mockImplementation((file, type, onWritten) => {
+          written = onWritten(STORAGE_ID)
+        })
+      })
+
+      it('deletes a refused drop from OPFS', async () => {
+        const quotaOptions = {record: jest.fn().mockResolvedValue({allowed: false}), onExceeded: jest.fn()}
+
+        await handleFileDrop(
+          mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError, quotaOptions)
+        await written
+
+        expect(quotaOptions.record).toHaveBeenCalledWith(`/prefix/v/local-only/${STORAGE_ID}`)
+        expect(deleteUploadFromOPFS.mock.calls).toEqual([[STORAGE_ID]])
+        expect(quotaOptions.onExceeded).toHaveBeenCalledTimes(1)
+        expect(mockNavigate).not.toHaveBeenCalled()
+        expect(addRecentFileEntry).not.toHaveBeenCalled()
+      })
+
+      it('still raises the limit dialog when the delete fails', async () => {
+        deleteUploadFromOPFS.mockRejectedValue(new Error('SecurityError'))
+        const quotaOptions = {record: jest.fn().mockResolvedValue({allowed: false}), onExceeded: jest.fn()}
+
+        await handleFileDrop(
+          mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError, quotaOptions)
+        await written
+        // Let the rejected delete's catch run.
+        await Promise.resolve()
+
+        expect(quotaOptions.onExceeded).toHaveBeenCalledTimes(1)
+        expect(mockDebug.warn).toHaveBeenCalledWith(
+          'handleFileDrop: could not delete the refused upload', STORAGE_ID, expect.any(Error))
+      })
+
+      it('keeps an allowed drop in OPFS', async () => {
+        const quotaOptions = {record: jest.fn().mockResolvedValue({allowed: true}), onExceeded: jest.fn()}
+
+        await handleFileDrop(
+          mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError, quotaOptions)
+        await written
+
+        expect(deleteUploadFromOPFS).not.toHaveBeenCalled()
+        expect(mockNavigate).toHaveBeenCalledWith(`/prefix/v/local-only/${STORAGE_ID}`)
+      })
     })
 
     // Share#1966: a local file is free and unmetered, so a user at their
@@ -374,7 +458,7 @@ describe('dragAndDrop utility', () => {
       expect(inflateIfGzipEnvelope).toHaveBeenCalledWith(droppedFile)
       // Sniffed AFTER the inflate, or the type would be whatever gzip is.
       expect(guessTypeFromFile).toHaveBeenCalledWith(inflatedFile)
-      expect(saveDnDFileToOpfs).toHaveBeenCalledWith(inflatedFile, 'glb', expect.any(Function))
+      expect(saveDnDFileToOpfs).toHaveBeenCalledWith(inflatedFile, 'glb', expect.any(Function), expect.any(Function))
       expect(mockNavigate).toHaveBeenCalledWith('/prefix/v/local-only/generated.glb')
       expect(mockOnError).not.toHaveBeenCalled()
     })
@@ -389,11 +473,28 @@ describe('dragAndDrop utility', () => {
 
       await handleFileDrop(mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError)
 
-      expect(trackAlert).toHaveBeenCalledWith(message)
       expect(mockSetAlert).toHaveBeenCalledWith(message)
       expect(mockOnError).toHaveBeenCalledWith(message)
       expect(saveDnDFileToOpfs).not.toHaveBeenCalled()
       expect(mockNavigate).not.toHaveBeenCalled()
+    })
+
+    // Every rejected drop used to reach Sentry twice in the same second:
+    // once from here and once from AlertDialog's effect, which captures what
+    // setAlert hands it. AlertDialog is the single capture point now.
+    it('leaves Sentry capture to AlertDialog for every rejected drop', async () => {
+      const unknown = {name: 'plan.dwg', type: '', size: 305}
+      guessTypeFromFile.mockResolvedValue(null)
+      for (const files of [[], [{name: 'a.ifc'}, {name: 'b.ifc'}], [unknown]]) {
+        mockEvent.dataTransfer.files = files
+        await handleFileDrop(mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError)
+      }
+      inflateIfGzipEnvelope.mockRejectedValue(new Error('Cannot open a compressed (.gz) model in this browser.'))
+      mockEvent.dataTransfer.files = [{name: 'index.glb.gz', type: 'application/gzip', size: 512}]
+      await handleFileDrop(mockEvent, mockNavigate, '/prefix', true, mockSetAlert, mockOnSuccess, mockOnError)
+
+      expect(mockSetAlert).toHaveBeenCalledTimes(4)
+      expect(trackAlert).not.toHaveBeenCalled()
     })
 
     it('should handle error without onError callback', async () => {
@@ -407,7 +508,6 @@ describe('dragAndDrop utility', () => {
         mockSetAlert,
       )
 
-      expect(trackAlert).toHaveBeenCalledWith('File upload initiated but found no data')
       expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated but found no data')
       // Should not throw errors when onError callback is not provided
     })

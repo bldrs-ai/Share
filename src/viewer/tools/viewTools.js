@@ -2,6 +2,7 @@ import {Sphere, Vector3} from 'three'
 import {decodeIFCString} from '@bldrs-ai/ifclib'
 import {ToolError} from '../../assist'
 import useStore from '../../store/useStore'
+import {selectReadModel} from '../../store/IFCSlice'
 import {getDescendantExpressIds} from '../../utils/TreeUtils'
 import {prettyType} from '../../utils/ifc'
 import {
@@ -214,6 +215,30 @@ function asTool(fn) {
 
 
 /**
+ * The store's state for the read-only `model.*` tools, with `model` the one to
+ * read from (store/IFCSlice.js#selectReadModel): the model at its index while a
+ * Conway load still streams geometry (open-205 #2029), else the loaded one. The
+ * tree and properties are complete at the index, so these answer from then
+ * on. STEP `o` refs still wait for the geometry: they resolve to instances,
+ * which only exist once it has streamed (refs.js#resolveOccurrence).
+ *
+ * @return {object} the store's state, `model` replaced by the read model
+ * @throws {ToolError} not_ready without a tree to read
+ */
+function readState() {
+  const state = useStore.getState()
+  const model = selectReadModel(state)
+  if (!state.viewer || !model || !state.rootElement) {
+    throw new ToolError('not_ready', 'No model is loaded yet.')
+  }
+  return {...state, model}
+}
+
+
+/**
+ * The store's state for the `view.*` tools, which act on the scene: they need
+ * the finished model, whose geometry is there to select, hide and frame.
+ *
  * @return {object} the store's model state
  * @throws {ToolError} not_ready without a loaded model
  */
@@ -287,7 +312,7 @@ function storeysOf(rootElement) {
  * @return {object} ToolResult
  */
 function query({ifcType, level, name, text, limit = DEFAULT_QUERY_LIMIT}) {
-  const {viewer, rootElement, searchIndex} = loadedState()
+  const {viewer, rootElement, searchIndex} = readState()
   const refOf = nodeRefMaker(viewer)
   let onLevel = null
   if (level !== undefined) {
@@ -454,7 +479,7 @@ async function summarizePset(model, set) {
  * @return {Promise<object>} ToolResult
  */
 async function properties({refs}) {
-  const state = loadedState()
+  const state = readState()
   const {model, rootElement} = state
   const targets = assertResolved(resolveRefs(refs, state))
   const nodes = nodesById(rootElement)

@@ -276,6 +276,42 @@ describe('BaseRoutes - auth resolution', () => {
     expect(getToken.mock.calls.filter(([opts]) => opts.cacheMode === 'off').length).toBe(1)
   })
 
+  // Share#1923: a dead refresh token signs out through Auth0's /v2/logout
+  // and back to the origin. auth0-spa-js 2.x reads the destination only from
+  // `logoutParams.returnTo`; the v1-style top-level `returnTo` both handlers
+  // used to pass was dropped, so Auth0 picked the destination itself.
+  // `toEqual` on the whole options object, so an `openUrl` (which would skip
+  // or replace the /v2/logout visit) fails it too.
+  describe('invalid_grant signs out through /v2/logout back to the origin', () => {
+    const INVALID_GRANT = Object.assign(new Error('invalid_grant'), {error: 'invalid_grant'})
+
+    it('from the cached-token pass', async () => {
+      const logout = jest.fn()
+      const getToken = jest.fn().mockRejectedValue(INVALID_GRANT)
+      mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently: getToken, logout})
+      await renderAndResolve()
+      await waitFor(() => expect(logout).toHaveBeenCalledTimes(1))
+      expect(logout).toHaveBeenCalledWith({logoutParams: {returnTo: window.location.origin}})
+      // The cached call said the session is gone, so no fresh pass follows.
+      expect(getToken.mock.calls.map(([opts]) => opts.cacheMode)).toEqual(['on'])
+    })
+
+    it('from the background fresh-claims pass', async () => {
+      const token = 'github-jwt'
+      tokenClaims[token] = {
+        'https://bldrs.ai/identities': [{connection: 'github', provider: 'github', user_id: '1'}],
+      }
+      const logout = jest.fn()
+      const getToken = jest.fn((opts) =>
+        opts.cacheMode === 'off' ? Promise.reject(INVALID_GRANT) : Promise.resolve(token))
+      mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently: getToken, logout})
+      await renderAndResolve()
+      await waitFor(() => expect(logout).toHaveBeenCalledTimes(1))
+      expect(logout).toHaveBeenCalledWith({logoutParams: {returnTo: window.location.origin}})
+      expect(getToken.mock.calls.map(([opts]) => opts.cacheMode)).toEqual(['on', 'off'])
+    })
+  })
+
   it('background pass surfaces pendingReauth that the cached token missed', async () => {
     const staleToken = 'stale-jwt'
     const freshToken = 'fresh-jwt'
@@ -443,11 +479,11 @@ describe('BaseRoutes - in-page sign-in and model-action tiers', () => {
     expect(sent('model_export')).toEqual([{tier: 'pro', gate: 'none', source: 'hosted'}])
   })
 
-  // codex review on Share#1986: OpenModelDialog's GitHub Remove signs out IN
-  // PLACE (`logout({openUrl: false})`). If the signed-in pass's token fetch
-  // is still in flight then, its late .finally must not replace the
-  // signed-out settlement with `true`, or every anon action after it would
-  // wait out the 60 s cap.
+  // codex review on Share#1986: a sign-out IN PLACE, with no reload (see
+  // BaseRoutes' authPassRef for what can produce one). If the signed-in
+  // pass's token fetch is still in flight then, its late .finally must not
+  // replace the signed-out settlement with `true`, or every anon action after
+  // it would wait out the 60 s cap.
   it('an in-place sign-out during a signed-in fetch keeps the signed-out settlement', async () => {
     const token = 'late-jwt'
     tokenClaims[token] = {'https://bldrs.ai/identities': [{connection: 'github', provider: 'github', user_id: '1'}]}

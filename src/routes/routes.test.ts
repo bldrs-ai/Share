@@ -33,6 +33,22 @@ describe('routes', () => {
         })
       })
 
+      // Share#2006 added `ifczip` to supportedTypes. Before, the unanchored
+      // suffix regex stopped at its `.ifc` prefix and split this route into
+      // a `file.ifc` that doesn't exist plus an element path `zip/1234`.
+      it('keeps a .ifczip whole, ahead of its .ifc prefix', () => {
+        const routeParams: RouteParams = {'*': 'file.ifczip/1234'}
+        const result = handleRoute(`/${pathPrefixProject}`, routeParams) as FileResult
+        expect(result).toStrictEqual({
+          originalUrl: new URL(`http://bldrs.test/${pathPrefixProject}/file.ifczip/1234`),
+          downloadUrl: new URL(`http://bldrs.test/file.ifczip`),
+          kind: 'file',
+          isUploadedFile: false,
+          filepath: 'file.ifczip',
+          eltPath: '1234',
+        })
+      })
+
       it('handles variant casing of IFC', () => {
         for (const ext of [
           'ifc', 'Ifc', 'IFC', 'IfC', 'iFc', 'IFc',

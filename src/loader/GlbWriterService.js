@@ -55,7 +55,7 @@ function getWorker() {
     }
     pending.delete(reply.id)
     if (reply.ok) {
-      slot.resolve({bytes: reply.bytes, extStats: reply.extStats})
+      slot.resolve(slot.pick(reply))
     } else {
       slot.reject(new Error(reply.error || 'GlbWriter worker reported failure'))
     }
@@ -100,24 +100,65 @@ function getWorker() {
  * @return {Promise<{bytes: Uint8Array, extStats: object}>}
  */
 export function injectAndPackInWorker({bytes, mode, extensions, sceneExtras, sceneName}) {
+  return dispatch(
+    {
+      command: 'inject-and-pack',
+      bytes,
+      mode,
+      extensions,
+      sceneExtras: sceneExtras ?? null,
+      sceneName: sceneName ?? null,
+    },
+    [bytes.buffer],
+    (reply) => ({bytes: reply.bytes, extStats: reply.extStats}))
+}
+
+
+/**
+ * Dispatch the batched-native GLB build (`glbBatchedBuild.js`) to the
+ * worker (open-205 #2030 target 1).
+ *
+ * @param {object} args
+ * @param {object} args.snapshot `glbBatchedSnapshot#snapshotBatchedModel`'s
+ *   `snapshot`
+ * @param {boolean} args.collapse collapse mode, as for the in-process writer
+ * @param {Array<ArrayBuffer>} transfer the snapshot's `transfer` list. These
+ *   buffers are detached from this thread once the call returns, so a caller
+ *   that needs to retry must snapshot again
+ * @return {Promise<{built: ?object, logs: Array<string>}>} `built` is the
+ *   writer's result (`{bytes, tableNodes, collapsed}`) or null when the model
+ *   can't be written batched; `logs` the verbose lines to replay
+ */
+export function buildBatchedGlbInWorker({snapshot, collapse}, transfer) {
+  return dispatch(
+    {command: 'build-batched-glb', snapshot, collapse: Boolean(collapse)},
+    transfer,
+    (reply) => ({built: reply.built, logs: reply.logs ?? []}))
+}
+
+
+/**
+ * Post one request to the worker and route its reply back by correlation id.
+ *
+ * @param {object} message the request, without its `id`
+ * @param {Array<ArrayBuffer>} transfer transferables for `postMessage`
+ * @param {Function} pick `(reply) => result` for a successful reply
+ * @return {Promise<*>}
+ */
+function dispatch(message, transfer, pick) {
   return new Promise((resolve, reject) => {
-    const worker = getWorker()
+    let worker
+    try {
+      worker = getWorker()
+    } catch (e) {
+      reject(e)
+      return
+    }
     const id = nextRequestId
     nextRequestId += 1
-    pending.set(id, {resolve, reject})
+    pending.set(id, {resolve, reject, pick})
     try {
-      worker.postMessage(
-        {
-          command: 'inject-and-pack',
-          id,
-          bytes,
-          mode,
-          extensions,
-          sceneExtras: sceneExtras ?? null,
-          sceneName: sceneName ?? null,
-        },
-        [bytes.buffer],
-      )
+      worker.postMessage({...message, id}, transfer)
     } catch (e) {
       pending.delete(id)
       reject(e)

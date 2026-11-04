@@ -36,6 +36,7 @@ import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
 import {occurrencePathKey} from '../utils/occurrencePaths'
 import {modelHasCapability} from './ShareModel'
+import {paintPreviewSelection} from './previewSelection'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {
   applyBatchedInstancePreselection,
@@ -1824,6 +1825,33 @@ export class ShareViewer {
   /** @param {Array<Mesh>} meshes */
   setHighlighted(meshes) {
     this.highlighter.setHighlighted(meshes)
+  }
+
+
+  /**
+   * Paint a selection on the parse-time preview meshes (open-205 #2043): the
+   * highlight for a selection made while a Conway load is still parsing,
+   * before there is a model for `setSelection` to paint. A no-op once the
+   * preview is gone; the finished model's highlight is `setSelection`'s.
+   *
+   * @param {Array<number>} expressIds the selected elements
+   * @return {number} preview meshes painted
+   */
+  setPreviewSelection(expressIds) {
+    let scene = null
+    try {
+      scene = this.context?.getScene?.() ?? null
+    } catch {
+      // A disposed viewer (a selection effect outliving a model switch).
+      return 0
+    }
+    if (scene === null) {
+      return 0
+    }
+    const painted = paintPreviewSelection(scene, expressIds, this.selector?.getSelectionMaterial?.() ?? null)
+    // The scene changed under a viewer that may be painting on demand.
+    this.context.getRenderDemand?.()?.invalidate()
+    return painted
   }
 
 

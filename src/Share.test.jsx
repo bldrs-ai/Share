@@ -4,7 +4,8 @@ import {MemoryRouter, Route, Routes} from 'react-router-dom'
 import {MockComponent} from './__mocks__/MockComponent'
 import MockRoutes from './BaseRoutesMock.test'
 import useStore from './store/useStore'
-import {UNSUPPORTED_FILE_ALERT} from './routes/routes'
+import {UNSUPPORTED_FILE_ALERT, processFile} from './routes/routes'
+import {processGoogleFileId} from './routes/google'
 import {actAsyncFlush} from './utils/tests'
 // Slice 5d.4: Share renders the app, which loads ShareViewer (→
 // IfcContext / ShareIfc). ShareViewer no longer self-imports the fork to
@@ -177,5 +178,84 @@ describe('Share when only the upload provenance of the route changes', () => {
     useStore.setState({modelPath: {filepath: storageId, isUploadedFile: false}})
     renderFileRoute('/share/v/new')
     expect(useStore.getState().modelPath.isUploadedFile).toBe(true)
+  })
+})
+
+
+/**
+ * open-205 #2013: "a different model" is `modelIdentity` plus the route's
+ * provenance, not a comparison of `filepath`/`gitpath`. Drive and generic-URL
+ * routes carry neither, so from a Drive model an in-app navigation — today,
+ * the alert's Reset after a failed Drive load (`navToDefault`) — left the
+ * Drive modelPath in the store and the remounted CadView loaded the Drive
+ * file again under an index.ifc URL. The seeds are real parsed routes
+ * (`processGoogleFileId`, `processFile`), not hand-built objects, so they
+ * carry the `downloadUrl` every production route has.
+ */
+describe('Share deciding whether a route names a new model', () => {
+  const driveFileIdA = '1AbCdEfGhIjKlMnOpQrStUvWxYz012345'
+  const driveFileIdB = '1ZyXwVuTsRqPoNmLkJiHgFeDcBa543210'
+
+  beforeEach(() => {
+    useStore.setState({alert: null, modelPath: null})
+  })
+
+  /**
+   * @param {string} prefix e.g. '/share/v/p'
+   * @param {string} splat The route's '*', e.g. 'index.ifc'
+   */
+  function renderRoute(prefix, splat) {
+    render(
+      <MockComponent>
+        <MemoryRouter initialEntries={[`${prefix}/${splat}`]}>
+          <Routes>
+            <Route
+              path={`${prefix}/*`}
+              element={<Share installPrefix='' appPrefix='/share' pathPrefix={prefix}/>}
+            />
+          </Routes>
+        </MemoryRouter>
+      </MockComponent>)
+  }
+
+  /**
+   * @param {string} fileId
+   * @return {object} The route result /share/v/g/<fileId> parses to
+   */
+  function driveModelPath(fileId) {
+    return processGoogleFileId(new URL(`http://localhost/share/v/g/${fileId}`), fileId)
+  }
+
+  it('replaces a Drive modelPath when the route moves to a hosted file', async () => {
+    useStore.setState({modelPath: driveModelPath(driveFileIdA)})
+    renderRoute('/share/v/p', 'index.ifc')
+    await actAsyncFlush()
+    expect(useStore.getState().modelPath.kind).toBe('file')
+    expect(useStore.getState().modelPath.filepath).toBe('index.ifc')
+  })
+
+  it('replaces a Drive modelPath when the route moves to another Drive file', async () => {
+    useStore.setState({modelPath: driveModelPath(driveFileIdA)})
+    renderRoute('/share/v/g', driveFileIdB)
+    await actAsyncFlush()
+    expect(useStore.getState().modelPath.fileId).toBe(driveFileIdB)
+  })
+
+  // Same downloadUrl, different route: the provenance quota and analytics
+  // classify by must follow the route (codex review on #2026).
+  it('replaces a hosted-file modelPath with a generic-URL route to the same file', async () => {
+    useStore.setState({modelPath: processFile(new URL('http://localhost/share/v/p'), 'index.ifc')})
+    renderRoute('/share/v/u', 'http://localhost/index.ifc')
+    await actAsyncFlush()
+    expect(useStore.getState().modelPath.kind).toBe('url')
+  })
+
+  it('keeps the modelPath when the route names the same Drive file', async () => {
+    const seeded = driveModelPath(driveFileIdA)
+    useStore.setState({modelPath: seeded})
+    renderRoute('/share/v/g', driveFileIdA)
+    await actAsyncFlush()
+    // Same object: a re-parse of the same model must not re-trigger a load.
+    expect(useStore.getState().modelPath).toBe(seeded)
   })
 })

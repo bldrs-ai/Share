@@ -301,11 +301,48 @@ default**: the `meterLocalFiles` flag in `src/FeatureFlags.js`.
   preview needs both the URL flag and the env var.
 - **MSW mock:** reads the flag, standing in for both.
 
-With the switch on, `record(key)` is again a local open's only gate: the
-removed pre-gates don't come back, so an OPFS drop is written before
-`record-load` answers, and a refused one is left in OPFS (an orphan blob, not
-a counted load). Turning it on also makes the pricing page untrue. Change the
-copy first, or the guard test fails once the copy says otherwise.
+With the switch on, `record(key)` is again a local open's only gate at
+open time: the removed pre-gates don't come back, so an upload is stored
+before `record-load` answers. A refused one is then taken back out
+(bldrs-ai/ops#39): `OPFS/utils.js#deleteUploadFromOPFS` for an OPFS write
+(`dragAndDrop.js#onWritten`, which serves the dropzone, the onboarding
+overlay and a zip entry chosen from a drop; `OpenModelDialog#openFile`'s
+`onLoad`, which serves the picker and a zip entry chosen from a pick), and
+`forgetInMemoryUpload` for one held in memory, as before. Left in OPFS, a
+refused file still opened from its `/v/local-only/<id>` URL. The delete isn't
+awaited, so a failed one (logged) never swallows the dialog. A refused reopen
+from Recents deletes nothing: that file is the user's from an earlier open.
+
+The load itself is then soft-gated like any other direct link
+(§"Direct links: soft gate"): loading `/v/local-only/<id>` straight from
+the URL, which also covers reopening a past upload after its slot rolled off,
+is recorded under the same key, and over the limit sends
+`quota_soft_limit_exceeded` with `route_kind: local` instead of blocking.
+
+**The limit dialog for a drop is ViewerContainer's** (bldrs-ai/ops#39). Both
+drop targets raise it through the store (`OpenSlice#isDropQuotaDialogVisible`):
+the dropzone, and the onboarding overlay, which has to close itself (its
+zIndex is above MUI's modal layer) and so unmounts. HelpControl and
+AboutControl render it only while it has a source. A dialog kept in the
+overlay's own state went with it, and the refusal showed nothing. The
+overlay closes with `onClose(true)`, as a successful drop does, so Help
+doesn't open over the dialog.
+
+Covered by `utils/dragAndDrop.test.js` and `Open/OpenModelDialog.test.jsx`
+(a refused drop or pick is deleted, an allowed one and a refused Recents
+reopen are not), `OnboardingOverlayQuota.test.jsx` (the dialog shows after
+the overlay unmounts, and Help doesn't), and
+`Components/Onboarding/onboardingQuotaDialog.spec.ts` (desktop and mobile: a
+signed-in free user at the limit, with `?feature=quotas,meterLocalFiles`,
+drops a file on the overlay opened from Help: the dialog shows, Help
+doesn't, the URL and the ledger are unchanged, and no upload is left in
+OPFS).
+
+All of this is client-side and stops casual reuse, nothing more: a local
+file never reaches the server, and whether `record()` is called at all is
+the client's choice (bldrs-ai/ops#39 item 3). Turning the switch on also makes
+the pricing page untrue. Change the copy first, or the guard test fails once
+the copy says otherwise.
 
 ### GitHub privacy detection
 
@@ -336,13 +373,17 @@ workaround is used before deciding whether it should be gated:
   link-shared one, which is what a pasted link with no Drive connection
   downloads, is public and never counted: §"Drive visibility"), and `/v/gh/`
   files, whose privacy record-load decides (a public repo comes back
-  not-quotable and is never counted). Never local files, hosted `/v/p/`
-  models or generic `/v/u/` URLs, and never anything a signed-out user
-  opens.
+  not-quotable and is never counted). With the `meterLocalFiles` switch on
+  (§"Metering local files again"), local `/v/local-only/` files too
+  (bldrs-ai/ops#39); with it off, the hook makes no `record()` call for one
+  at all. Never hosted `/v/p/` models or generic `/v/u/` URLs, and never
+  anything a signed-out user opens.
 - **Same key as the dialog**, so the ledger's dedup by share path holds:
   Drive is `${appPrefix}/v/g/<fileId>` (a `/v/g/<drive URL>` link parses to
   the same id), GitHub is `navigateBaseOnModelPath(org, repo, branch, path)`
-  without the element path. A model the dialog already recorded, or one
+  without the element path, and a local file is
+  `localOnlyPath(appPrefix, <storageId>)`, as the drop and the picker record
+  it. A model the dialog already recorded, or one
   reloaded within the window, comes back `alreadyCounted` from `record()`
   (record-load's ledger) and costs no new slot.
   The hook does not short-circuit on the local mirror: OPFS is per browser,
@@ -360,7 +401,13 @@ workaround is used before deciding whether it should be gated:
 
 | Event | Params | Fires |
 |---|---|---|
-| `quota_soft_limit_exceeded` | `tier` (`free`; `anonymous` before the anonymous tier was removed), `used`, `limit`, `route_kind` (`gdrive` \| `github`), `open_cid` | `useDirectLinkQuota`, when a direct-link load is over the limit; at most once per model per page load |
+| `quota_soft_limit_exceeded` | `tier` (`free`; `anonymous` before the anonymous tier was removed), `used`, `limit`, `route_kind` (`gdrive` \| `github` \| `local`, the last only with `meterLocalFiles` on), `open_cid` | `useDirectLinkQuota`, when a direct-link load is over the limit; at most once per model per page load |
+
+`route_kind` is a closed set, registered GA-side. `local` was added for
+bldrs-ai/ops#39. It is `MODEL_ROUTE_KINDS.LOCAL`, the value `model_view` and
+`model_share` already send for a local file, so the events still share one
+vocabulary and no new registration is needed. Its `model_share {gate: soft}`
+twin carries `source: local`, not `hosted`.
 
 **What the removal of the anonymous tier and Drive visibility changed in
 these numbers** (bizdev#341's soft-gate count): `tier: anonymous` events stop
@@ -379,7 +426,8 @@ may already exist) and `used` / `limit` as custom metrics.
 mean showing `QuotaLimitDialog` over the loaded model (or before the load)
 from this same seam; the event count is the input to that decision.
 
-Covered by `src/quota/useDirectLinkQuota.test.js`,
+Covered by `src/quota/useDirectLinkQuota.test.js` (including local files
+with the switch on and off, signed in and out),
 `src/quota/directLinkSoftGate.spec.ts` (desktop and mobile: a free user at the
 limit opens a private GitHub link, it loads, no dialog, one event; it used a
 Drive link with no connection until that became public) and
@@ -639,17 +687,21 @@ The parts that aren't obvious:
   `auth0|`). For a linked account that is the *primary* identity, not
   necessarily the button the user pressed.
   - **A sign-out forgets the reported sign-in.** `auth_time` alone can't
-    tell a sign-in apart from the one before a sign-out, because none of
-    the app's logouts end the Auth0 session: `ProfileControl` passes an
-    `openUrl` that only reloads the origin, `OpenModelDialog` passes
-    `openUrl: false`, and auth0-spa-js then clears only its local cache and
-    never visits `/v2/logout`. The next popup sign-in (no `prompt: 'login'`
+    tell a sign-in apart from the one before a signed-out period that left
+    the Auth0 session alive: the next popup sign-in (no `prompt: 'login'`
     unless a scope is being changed) completes from that live session and
-    its ID token carries the same `auth_time`. So whenever a tab settles
-    signed out — in place, or on a page load that comes up signed out, as
-    after `ProfileControl`'s reload — it clears the marker, under the same
-    Web Lock. A cached-session boot never passes through signed out, so it
-    never clears. Other tabs aren't told about a sign-out (the SDK doesn't
+    its ID token carries the same `auth_time`. The app's own sign-outs —
+    Profile → Log out, the Open dialog's GitHub Remove and the
+    `invalid_grant` logout — all end the session, via `/v2/logout` and back
+    to the origin (`src/Auth0/logoutOptions.js`, Share#1923). A tab can
+    still settle signed out with the session alive, though: auth0-react
+    re-derives `isAuthenticated` from the SDK's cached user after every
+    token call, and a `logout` passing `openUrl` flips it in place without
+    visiting `/v2/logout`. So whenever a tab settles signed out — in place,
+    or on a page load that comes up signed out, as on the return from
+    `/v2/logout` — it clears the marker, under the same Web Lock, whichever
+    way it got there. A cached-session boot never passes through signed out,
+    so it never clears. Other tabs aren't told about a sign-out (the SDK doesn't
     broadcast it): a tab still signed in in memory makes no edge for the
     next sign-in, so it neither clears nor claims. The tabs that do claim
     are signed out themselves and cleared on the way in, well before the
@@ -873,8 +925,8 @@ who never came back to it — was never counted. The Stripe webhook now sends
 2. Netlify → **`bldrs-share-prod`** → Site configuration → Environment
    variables, scoped to **Functions** and the **Production** context only:
    `GA4_MEASUREMENT_ID` = `G-GRLNVMZRGW`, `GA4_API_SECRET` = the secret.
-   Not on deploy previews or `bldrs-share-dev`: their test traffic must not
-   reach the production property (the `livemode` check is a second guard,
+   Not on deploy previews: their test traffic must not reach the
+   production property (the `livemode` check is a second guard,
    not the only one).
 3. If `STRIPE_SECRET_KEY` is a restricted key (`rk_live_…`), give it
    **Checkout Sessions: Read**. Without it the lookup gets a 403 and every
@@ -1126,10 +1178,12 @@ Three timing rules keep the cells honest (codex review on Share#1976):
   finishes. The load gates read it (CadView, the GitHub hooks), and what
   they need is "the token, if any, is in", not whose claims these are. So
   only the analytics wait is per sign-in state. The reverse holds too.
-  Signing out can happen in place, with no reload: the Open dialog's GitHub
-  Remove calls `logout({openUrl: false})`. A signed-in pass whose token
-  fetch was still in flight then must not record its late settlement over
-  the signed-out one. BaseRoutes drops it by generation (`authPassRef`), so
+  Signing out can happen in place, with no reload. The app's own sign-outs
+  navigate to `/v2/logout` (Share#1923), but auth0-react still flips
+  `isAuthenticated` in place when the SDK's cached user is gone after a
+  token call, or on a `logout` that passes `openUrl`. A signed-in pass
+  whose token fetch was still in flight then must not record its late
+  settlement over the signed-out one. BaseRoutes drops it by generation (`authPassRef`), so
   anon actions after the sign-out are not held for the 60 s cap (codex
   review on Share#1986). One case is left uncovered: switching accounts
   with no signed-out state in between keeps `isAuthenticated` true. Share

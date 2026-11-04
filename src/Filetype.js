@@ -15,6 +15,11 @@ export const supportedTypes = [
   'glb',
   'gltf',
   'ifc',
+  // The IFC transport: a zip holding one .ifc. Unwrapped before conway sees
+  // it, at the upload seams and in `Loader#load` (`loader/modelArchive.js`).
+  // It also keeps `model.ifczip` from parsing as `model.ifc` plus an element
+  // path `zip`, which the unanchored suffix regex did while it was absent.
+  'ifczip',
   // Gaussian splat formats (loaded via Spark — see src/loader/splats.js).
   // Listed with the rest so routes, drag-drop and permalinks all pick
   // them up.

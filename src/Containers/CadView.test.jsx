@@ -18,11 +18,15 @@ import '../../__mocks__/shareViewerTestHarness'
 import {ShareViewer} from '../viewer/ShareViewer'
 import {getSelectionFunnel} from '../viewer/tools/selectionFunnel'
 import Clipper from '../viewer/three/Clipper'
+import IfcIsolator from '../viewer/three/IfcIsolator'
+import Picker from '../viewer/three/Picker'
+import ThreeContext from '../viewer/three/ThreeContext'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
 import {EngineOpenFailureError} from '../loader/engineOpenFailure'
 import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
+import {ZipArchiveError} from '../loader/zipArchive'
 import {registerInMemoryUpload, resetInMemoryUploadsForTest} from '../loader/inMemoryUploads'
 import {
   InMemoryUploadGoneError,
@@ -37,8 +41,9 @@ import CadView from './CadView'
 window.HTMLElement.prototype.scrollIntoView = jest.fn()
 const mockedUseNavigate = jest.fn()
 const defaultLocationValue = {pathname: '/index.ifc', search: '', hash: '', state: null, key: 'default'}
-// mock createObjectURL
+// mock createObjectURL, and revokeObjectURL, which jsdom lacks too
 global.URL.createObjectURL = jest.fn(() => '1111111111111111111111111111111111111111')
+global.URL.revokeObjectURL = jest.fn()
 
 jest.mock('axios')
 jest.mock('@bldrs-ai/ifclib')
@@ -578,8 +583,11 @@ describe('CadView', () => {
     expect(deleteAllSpy).toHaveBeenCalled()
     expect(result.current.selectedElements).toHaveLength(0)
     expect(result.current.selectedElement).toBe(null)
-    // TODO(pablo): hack after refactor, was 0, but UI looks right
-    expect(result.current.cutPlanes.length).toBe(2)
+    // The store follows the scene: no planes, and the menu not active. This
+    // was pinned at 2 while CadView passed resetCutPlaneState its arguments
+    // one slot off, which made the reset a no-op (open-205, #2014).
+    expect(result.current.cutPlanes).toHaveLength(0)
+    expect(result.current.isCutPlaneActive).toBe(false)
     await actAsyncFlush()
   })
 
@@ -753,6 +761,26 @@ describe('CadView', () => {
     }))
   })
 
+  // Share#2006: a hosted `.ifczip` that isn't one readable IFC is the user's
+  // file, not a defect — its own alert, and no Sentry exception.
+  it('alerts on an unopenable hosted .ifczip without capturing it as a defect', async () => {
+    const zipErr = new ZipArchiveError('This .ifczip holds no IFC model.')
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw zipErr
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => {
+      expect(result.current.alert).toEqual({type: 'archiveUnreadable', message: 'This .ifczip holds no IFC model.'})
+    })
+    expect(captureExceptionSpy).not.toHaveBeenCalled()
+  })
+
   it('keeps the generic alert and capture when the engine gave no reason', async () => {
     const genericErr = new Error('parseIfcWithConway: OpenModel returned -1')
     jest.spyOn(Loader, 'load').mockImplementation(() => {
@@ -805,7 +833,7 @@ describe('CadView', () => {
       'Upload not in this browser',
       expect.objectContaining({level: 'info', fingerprint: ['upload-not-in-browser']}))
     // The route's provenance is what lets the loader reclassify at all.
-    expect(loadSpy.mock.calls[0][6]).toEqual({isUploadedRoute: true})
+    expect(loadSpy.mock.calls[0][6]).toEqual(expect.objectContaining({isUploadedRoute: true}))
   })
 
   // Same dedupe as a schema refusal: the auth-state effect re-runs the load
@@ -953,6 +981,18 @@ describe('CadView', () => {
       expect(getFileDownload).toHaveBeenCalledWith(DRIVE_CONNECTION, null, DRIVE_ROUTE.fileId)
       expect(loadSpy.mock.calls[0][0]).not.toBe(DRIVE_ROUTE.downloadUrl)
     })
+
+    // open-205 #2018: the blob URL a Drive download is loaded through pinned
+    // the whole file for the life of the page, one more copy per load (a
+    // theme toggle reloads the model). Released once `load` settles; this
+    // load fails, which must release it too.
+    it('releases the downloaded file\'s blob URL once the load settles', async () => {
+      mockAuthState.isAuthenticated = true
+      const {loadSpy} = await loadDriveRoute()
+      const blobUrl = loadSpy.mock.calls[0][0]
+      expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
+      await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith(blobUrl))
+    })
   })
 
   it('tells the loader a hosted UUID-named file is not an upload route', async () => {
@@ -970,7 +1010,7 @@ describe('CadView', () => {
     render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
     await actAsyncFlush()
     await waitFor(() => expect(loadSpy).toHaveBeenCalled())
-    expect(loadSpy.mock.calls[0][6]).toEqual({isUploadedRoute: false})
+    expect(loadSpy.mock.calls[0][6]).toEqual(expect.objectContaining({isUploadedRoute: false}))
   })
 
   // A model change that lands while another load is in flight is not a
@@ -1282,6 +1322,936 @@ describe('CadView', () => {
       }]])
     })
   })
+
+  // State that belongs to one model must not outlive it in a CadView that
+  // stays mounted across a model switch. Latent while opening a model reloads
+  // the page; reachable once it doesn't (open-205, #2021).
+  describe('after switching away from a model that loaded (open-205)', () => {
+    let getHarness
+    let loadSpy
+    let cameraControlsSpy
+
+    beforeEach(() => {
+      getHarness = require('../../__mocks__/shareViewerTestHarness').__getShareViewerMockSingleton
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+      // A's load can finish on a viewer the mount has already disposed (a
+      // pre-existing race, open-205 #2019), whose context then hands back no
+      // camera controls, and the tail of onViewerInternal throws. Sidestep
+      // it: these tests are about what happens after A has loaded.
+      cameraControlsSpy = jest.spyOn(ThreeContext.prototype, 'getCameraControls')
+        .mockImplementation(() => getHarness().IFC.context.ifcCamera.cameraControls)
+      // Earlier tests in this file leave view settings and auth state behind;
+      // either one re-runs a load on its own and muddies the counts below.
+      useStore.setState({
+        alert: null, customViewSettings: null, isAuthResolved: false, isModelReady: false,
+        expandedElements: [], selectedElements: [], selectedAnchorIds: [], selectedOccurrencePath: null,
+      })
+    })
+
+    afterEach(() => {
+      cameraControlsSpy.mockRestore()
+      loadSpy?.mockRestore()
+      loadSpy = undefined
+    })
+
+    /**
+     * Mount CadView on A (`/index.ifc`, the harness's a → b → c tree), let it
+     * load, then switch to B (`/other.ifc`), whose loads run `laterLoad`.
+     *
+     * @param {object} result renderHook result over the whole store
+     * @param {Function} laterLoad Loader.load implementation for B
+     * @param {Function} [beforeSwitch] Awaited once A is ready, before the switch
+     */
+    async function loadAThenSwitchToB(result, laterLoad, beforeSwitch) {
+      loadSpy = jest.spyOn(Loader, 'load')
+        .mockImplementationOnce(() => Promise.resolve(getHarness()._loadedModel))
+        .mockImplementation(laterLoad)
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.isModelReady).toBe(true))
+      await beforeSwitch?.()
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+    }
+
+    /**
+     * Like loadAThenSwitchToB, but the switch lands while A is still in its
+     * post-parse tail (onModel awaiting the spatial structure), and A then
+     * runs to the end anyway: nothing cancels a superseded load (#2019). B
+     * replays once A ends and fails.
+     *
+     * @param {object} result renderHook result over the whole store
+     */
+    async function supersedeAWithB(result) {
+      let releaseTree
+      getHarness()._loadedModel.ifcManager.getSpatialStructure.mockImplementationOnce(
+        () => new Promise((resolve) => {
+          releaseTree = () => resolve(makeTestTree())
+        }))
+      loadSpy = jest.spyOn(Loader, 'load')
+        .mockImplementationOnce(() => Promise.resolve(getHarness()._loadedModel))
+        .mockImplementation(() => {
+          throw new Error('OpenModel returned -1')
+        })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(releaseTree).toBeDefined())
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      await act(() => releaseTree())
+      await actAsyncFlush()
+      await waitFor(() => expect(String(loadSpy.mock.calls.at(-1)[0])).toContain('other.ifc'))
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+    }
+
+    // codex review on #2026: the superseded A marked itself loaded after the
+    // switch cleared the flag, which silenced B's retry all over again. A
+    // superseded load no longer writes the flag (onViewerInternal's
+    // isLoadSuperseded).
+    it('retries the new model on an auth change when the old load ran on past the switch', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      await supersedeAWithB(result)
+      const loadsBefore = loadSpy.mock.calls.length
+      await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+      expect(String(loadSpy.mock.calls.at(-1)[0])).toContain('other.ifc')
+    })
+
+    // codex review on #2026: the superseded A refilled the element table with
+    // its tree after the switch cleared it. A superseded load no longer fills
+    // it.
+    it('no longer resolves the old model\'s element ids when the old load ran on past the switch', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      await supersedeAWithB(result)
+      const leafOfA = makeTestTree().children[0].children[0].expressID
+      await act(() => result.current.setExpandedElements([]))
+      await act(() => result.current.setSelectedElements([`${leafOfA}`]))
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
+      await actAsyncFlush()
+      expect(result.current.expandedElements).toEqual([])
+    })
+
+    // codex review on #2026, round 3: A → B → A while the first A is held
+    // in onModel. Back on A, the identity guard counts that first load as
+    // current, so it marks itself loaded (for a viewer since disposed), and
+    // the replay of A must not start with the flag already set: if the replay
+    // fails, an auth change has to retry it.
+    it('retries the model the user returned to when the replay of its load fails', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      let releaseTree
+      getHarness()._loadedModel.ifcManager.getSpatialStructure.mockImplementationOnce(
+        () => new Promise((resolve) => {
+          releaseTree = () => resolve(makeTestTree())
+        }))
+      // The first A loads; everything after it (the replay of A) fails.
+      loadSpy = jest.spyOn(Loader, 'load')
+        .mockImplementationOnce(() => Promise.resolve(getHarness()._loadedModel))
+        .mockImplementation(() => {
+          throw new Error('OpenModel returned -1')
+        })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(releaseTree).toBeDefined())
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      await actAsyncFlush()
+      await act(() => releaseTree())
+      await actAsyncFlush()
+      // The replay is of A (the model shown), and it failed.
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+      expect(String(loadSpy.mock.calls[1][0])).toContain('index.ifc')
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+
+      await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(3))
+      expect(String(loadSpy.mock.calls[2][0])).toContain('index.ifc')
+    })
+
+    // #2014 follow-up (codex review on #2026): the reset on a model change
+    // runs after the location already shows the destination, so the `cp:`
+    // term there is the new model's for CutPlaneMenu to restore. The old
+    // planes still leave the store.
+    it('keeps the destination\'s cut-plane hash term while clearing the old planes', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      try {
+        await loadAThenSwitchToB(result, () => new Promise(() => {}), async () => {
+          await act(() => result.current.setCutPlaneDirections([{direction: 'y', offset: 0}]))
+          window.location.hash = `#${HASH_PREFIX_CUT_PLANE}:x=1`
+        })
+        expect(result.current.cutPlanes).toEqual([])
+        expect(window.location.hash).toBe(`#${HASH_PREFIX_CUT_PLANE}:x=1`)
+      } finally {
+        window.location.hash = ''
+      }
+    })
+
+    // #2015: `isViewerLoaded` gates the auth/OPFS retry effect. Set by A's
+    // success and never cleared, it silenced that effect for every later
+    // model, so a B whose first attempt failed (e.g. a private GitHub file
+    // tried before auth settled) was never retried.
+    it('retries the new model on an auth change', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      await loadAThenSwitchToB(result, () => {
+        throw new Error('OpenModel returned -1')
+      })
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      const loadsBefore = loadSpy.mock.calls.length
+      await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
+      expect(String(loadSpy.mock.calls.at(-1)[0])).toContain('other.ifc')
+    })
+
+    // #2016: the element lookup table is per model. Never cleared, A's ids
+    // still resolved while B loaded, so selecting one opened A's ancestors in
+    // the NavTree (and A's whole tree stayed reachable).
+    it('no longer resolves the old model\'s element ids', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      // B never finishes, so nothing of B's refills the table.
+      await loadAThenSwitchToB(result, () => new Promise(() => {}))
+      const leafOfA = makeTestTree().children[0].children[0].expressID
+      await act(() => result.current.setExpandedElements([]))
+      await act(() => result.current.setSelectedElements([`${leafOfA}`]))
+      await actAsyncFlush()
+      // The selection effect has run to the end: it sets the properties and
+      // then the NavTree expansion.
+      await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
+      await actAsyncFlush()
+      expect(result.current.expandedElements).toEqual([])
+    })
+  })
+
+
+  // open-205 #2029: a Conway load hands CadView the model at its index
+  // (`Loader.load`'s `onIndexed`) while geometry still streams. The tree,
+  // properties and search come up then, not after the last mesh.
+  describe('interactive at the index (open-205 #2029)', () => {
+    let getHarness
+    let loadSpy
+    let finishGeometry
+
+    beforeEach(() => {
+      getHarness = require('../../__mocks__/shareViewerTestHarness').__getShareViewerMockSingleton
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+      // `viewer: null` so the held load starts on this mount's viewer: the
+      // store's is otherwise the previous test's, which this mount disposes
+      // while the load is held, and the load's tail then fails on it.
+      useStore.setState({
+        viewer: null,
+        alert: null, customViewSettings: null, isAuthResolved: false, isModelReady: false,
+        model: null, indexedModel: null, rootElement: null,
+        expandedElements: [], selectedElements: [], selectedAnchorIds: [], selectedOccurrencePath: null,
+      })
+      finishGeometry = undefined
+    })
+
+    afterEach(() => {
+      loadSpy?.mockRestore()
+      loadSpy = undefined
+    })
+
+    /** @return {object} the model at its index, as makeIndexedModelHandle shapes it */
+    function makeIndexedModel() {
+      return {
+        isIndexedModel: true,
+        modelID: 0,
+        ifcManager: {getSpatialStructure: jest.fn(() => makeTestTree())},
+        getSpatialStructure: jest.fn(() => makeTestTree()),
+        getItemProperties: jest.fn((id) => Promise.resolve({expressID: id, Name: {value: `item ${id}`}})),
+        getIfcType: (type) => type,
+      }
+    }
+
+    /**
+     * Mount CadView on a load that reports its index, then holds its geometry
+     * until `finishGeometry()` — or, with `failGeometry`, fails it then.
+     *
+     * @param {object} result renderHook result over the whole store
+     * @param {object} indexedModel what the loader hands onIndexed
+     * @param {boolean} [failGeometry]
+     * @param {boolean} [untilHeld] Wait until the load holds its geometry,
+     *   i.e. until onIndexed has returned. False for a test that holds
+     *   onIndexed itself.
+     */
+    async function mountOnStreamingLoad(result, indexedModel, failGeometry = false, untilHeld = true) {
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(async (...args) => {
+        const options = args[6] ?? {}
+        // A real index comes after the download and the open, never in the
+        // tick the load starts in, by when the mount's effects have all run.
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        await options.onIndexed?.(indexedModel)
+        await new Promise((resolve) => {
+          finishGeometry = resolve
+        })
+        if (failGeometry) {
+          throw new Error('geometry failed')
+        }
+        return getHarness()._loadedModel
+      })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      if (untilHeld) {
+        await waitFor(() => expect(finishGeometry).toBeDefined())
+      }
+      await actAsyncFlush()
+    }
+
+    it('brings the tree up while the geometry still streams', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel)
+
+      await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+      expect(result.current.rootElement.expressID).toBe(makeTestTree().expressID)
+      expect(result.current.indexedModel).toBe(indexedModel)
+      expect(result.current.isModelReady).toBe(false)
+      expect(result.current.model).toBeNull()
+
+      const treeAtIndex = result.current.rootElement
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.isModelReady).toBe(true))
+      // The finished model takes over, and the tree is the index's, not a
+      // second walk of the model.
+      expect(result.current.indexedModel).toBeNull()
+      expect(result.current.model).toBe(getHarness()._loadedModel)
+      expect(result.current.rootElement).toBe(treeAtIndex)
+      expect(getHarness()._loadedModel.ifcManager.getSpatialStructure).not.toHaveBeenCalled()
+    })
+
+    it('shows the properties of a row selected while the geometry streams', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel)
+      await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+
+      const leaf = makeTestTree().children[0].children[0].expressID
+      await act(() => result.current.setSelectedElements([`${leaf}`]))
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
+      expect(indexedModel.getItemProperties).toHaveBeenCalledWith(leaf)
+      expect(result.current.selectedElement.Name.value).toBe(`item ${leaf}`)
+    })
+
+    it('paints a selection made while the geometry streamed once the model is in', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const setSelectionSpy = jest.spyOn(ShareViewer.prototype, 'setSelection')
+      try {
+        await mountOnStreamingLoad(result, makeIndexedModel())
+        await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+        const leaf = makeTestTree().children[0].children[0].expressID
+        await act(() => {
+          result.current.setSelectedElements([`${leaf}`])
+          result.current.setSelectedAnchorIds([`${leaf}`])
+        })
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
+        const paintsWhileStreaming = setSelectionSpy.mock.calls.length
+
+        await act(() => finishGeometry())
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.isModelReady).toBe(true))
+        await waitFor(() => expect(setSelectionSpy.mock.calls.length).toBeGreaterThan(paintsWhileStreaming))
+        expect(setSelectionSpy.mock.calls.at(-1)[1]).toEqual([leaf])
+      } finally {
+        setSelectionSpy.mockRestore()
+      }
+    })
+
+    // Codex review on #2037: a superseded load is not cancelled (#2019), so A
+    // runs on after the user moves to B, and B's own load can't start until A
+    // settles. A's indexed tree must go when the user leaves, and A must not
+    // bring it back as it finishes; B's load is covered by the overlay.
+    it('takes the tree down when the user leaves a model at its index, and keeps it down', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel)
+      await waitFor(() => expect(result.current.indexedModel).toBe(indexedModel))
+      // B never indexes and never finishes.
+      loadSpy.mockImplementation(() => new Promise(() => {}))
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      expect(result.current.indexedModel).toBeNull()
+      expect(result.current.rootElement).toBeNull()
+      // B's load is under the overlay: still loading, nothing indexed.
+      expect(result.current.isModelLoading).toBe(true)
+
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      // A ran to its end, B is now the one loading, and A's tree stayed down.
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+      expect(String(loadSpy.mock.calls[1][0])).toContain('other.ifc')
+      expect(result.current.rootElement).toBeNull()
+      expect(result.current.indexedModel).toBeNull()
+      expect(result.current.isModelLoading).toBe(true)
+    })
+
+    // Codex review on #2037: a selection made in A's tree while A was at its
+    // index outlived the move to B, and if B then failed before its own index
+    // A's selection and Properties stayed up under B's URL. A property lookup
+    // still in flight for A must not land after the move either.
+    it('drops a selection made at the index when the user leaves, even if the next model fails early', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel)
+      await waitFor(() => expect(result.current.indexedModel).toBe(indexedModel))
+      // A's lookup of the row's properties is held until after the move.
+      let releaseLookup
+      indexedModel.getItemProperties.mockImplementationOnce((id) => new Promise((resolve) => {
+        releaseLookup = () => resolve({expressID: id, Name: {value: 'late A'}})
+      }))
+      const leaf = makeTestTree().children[0].children[0].expressID
+      await act(() => {
+        result.current.setSelectedElements([`${leaf}`])
+        result.current.setSelectedAnchorIds([`${leaf}`])
+      })
+      await actAsyncFlush()
+      await waitFor(() => expect(releaseLookup).toBeDefined())
+      // B fails before it reaches its index.
+      loadSpy.mockImplementation(() => Promise.reject(new Error('B failed before its index')))
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      await act(() => releaseLookup())
+      await actAsyncFlush()
+
+      expect(result.current.selectedElements).toEqual([])
+      expect(result.current.selectedAnchorIds).toEqual([])
+      expect(result.current.selectedOccurrencePath).toBeNull()
+      expect(result.current.selectedElement).toBeNull()
+    })
+
+    // Codex review on #2037, the failure-path twin of the case above: a load
+    // that fails after its index takes its selection down with its tree.
+    it('drops a selection made at the index when the load then fails', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const indexedModel = makeIndexedModel()
+      await mountOnStreamingLoad(result, indexedModel, true)
+      await waitFor(() => expect(result.current.indexedModel).toBe(indexedModel))
+      let releaseLookup
+      indexedModel.getItemProperties.mockImplementationOnce((id) => new Promise((resolve) => {
+        releaseLookup = () => resolve({expressID: id, Name: {value: 'late A'}})
+      }))
+      const leaf = makeTestTree().children[0].children[0].expressID
+      await act(() => {
+        result.current.setSelectedElements([`${leaf}`])
+        result.current.setSelectedAnchorIds([`${leaf}`])
+      })
+      await actAsyncFlush()
+      await waitFor(() => expect(releaseLookup).toBeDefined())
+
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      await act(() => releaseLookup())
+      await actAsyncFlush()
+
+      expect(result.current.rootElement).toBeNull()
+      expect(result.current.selectedElements).toEqual([])
+      expect(result.current.selectedAnchorIds).toEqual([])
+      expect(result.current.selectedElement).toBeNull()
+    })
+
+    // The PSB stall (#2037): the loader starts the pump without waiting for
+    // onIndexed, so the tree walk can finish after the geometry. Its tree
+    // still installs, once; and not if the user has left or the load failed.
+    describe('when the tree walk outlasts the geometry', () => {
+      /**
+       * Mount on a load that reports its index without waiting for the tree,
+       * as parseIfcWithConway does, and then finishes (or fails) its geometry.
+       *
+       * @param {object} result renderHook result over the whole store
+       * @param {object} indexedModel what the loader hands onIndexed
+       * @param {boolean} [failGeometry]
+       */
+      async function mountOnLateTreeLoad(result, indexedModel, failGeometry = false) {
+        loadSpy = jest.spyOn(Loader, 'load').mockImplementation(async (...args) => {
+          const options = args[6] ?? {}
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          options.onIndexed?.(indexedModel)
+          if (failGeometry) {
+            throw new Error('geometry failed')
+          }
+          return getHarness()._loadedModel
+        })
+        await act(() => result.current.setIsOpfsAvailable(false))
+        await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+        render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+        await actAsyncFlush()
+      }
+
+      /**
+       * @return {{indexedModel: object, releaseTree: Function}} a model at its
+       *   index whose tree walk is held until `releaseTree()`
+       */
+      function makeSlowTreeModel() {
+        const indexedModel = makeIndexedModel()
+        let resolveTree
+        indexedModel.getSpatialStructure = jest.fn(() => new Promise((resolve) => {
+          resolveTree = () => resolve(makeTestTree())
+        }))
+        return {indexedModel, releaseTree: () => resolveTree()}
+      }
+
+      it('installs it from the index once the walk finishes, and only once', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const {indexedModel, releaseTree} = makeSlowTreeModel()
+        await mountOnLateTreeLoad(result, indexedModel)
+        // The geometry is in; the model waits for its tree, as prod's does.
+        await waitFor(() => expect(result.current.model).toBe(getHarness()._loadedModel))
+        expect(indexedModel.getSpatialStructure).toHaveBeenCalledTimes(1)
+        expect(result.current.rootElement).toBeNull()
+        expect(result.current.isModelReady).toBe(false)
+
+        await act(() => releaseTree())
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.isModelReady).toBe(true))
+        expect(result.current.rootElement.expressID).toBe(makeTestTree().expressID)
+        // One walk: the finished model's tree was never read.
+        expect(getHarness()._loadedModel.ifcManager.getSpatialStructure).not.toHaveBeenCalled()
+        expect(result.current.indexedModel).toBeNull()
+      })
+
+      it('does not install it when the user has left the model meanwhile', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const {indexedModel, releaseTree} = makeSlowTreeModel()
+        await mountOnLateTreeLoad(result, indexedModel)
+        await waitFor(() => expect(result.current.model).toBe(getHarness()._loadedModel))
+        loadSpy.mockImplementation(() => new Promise(() => {}))
+        await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+        await actAsyncFlush()
+
+        await act(() => releaseTree())
+        await actAsyncFlush()
+        expect(result.current.rootElement).toBeNull()
+        expect(result.current.indexedModel).toBeNull()
+      })
+
+      // Codex review on #2037: the walk that was skipped as stale must not be
+      // replaced by a second one at the load's end. On PSB a walk was ~86 s
+      // before conway#753 (seconds after), and the superseded load holds the
+      // next model's load back until it ends, so a second walk would delay B
+      // by that much.
+      it('walks the tree once when the user leaves meanwhile, and lets the next load start', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const {indexedModel, releaseTree} = makeSlowTreeModel()
+        // A second walk of the finished model would never end here, holding B
+        // back for good.
+        const finishedWalk = getHarness()._loadedModel.ifcManager.getSpatialStructure
+        finishedWalk.mockImplementation(() => new Promise(() => {}))
+        try {
+          await mountOnLateTreeLoad(result, indexedModel)
+          await waitFor(() => expect(result.current.model).toBe(getHarness()._loadedModel))
+          loadSpy.mockImplementation(() => new Promise(() => {}))
+          await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+          await actAsyncFlush()
+
+          await act(() => releaseTree())
+          await actAsyncFlush()
+          await waitFor(() => expect(loadSpy).toHaveBeenCalledTimes(2))
+          expect(String(loadSpy.mock.calls[1][0])).toContain('other.ifc')
+          expect(indexedModel.getSpatialStructure).toHaveBeenCalledTimes(1)
+          expect(finishedWalk).not.toHaveBeenCalled()
+        } finally {
+          finishedWalk.mockReset()
+          finishedWalk.mockReturnValue(makeTestTree())
+        }
+      })
+
+      it('reports a tree the index could not read once, without walking it again', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const indexedModel = makeIndexedModel()
+        indexedModel.getSpatialStructure = jest.fn(() => Promise.reject(new Error('walk failed')))
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        try {
+          await mountOnLateTreeLoad(result, indexedModel)
+          await waitFor(() => expect(result.current.isModelReady).toBe(true))
+          expect(result.current.alert).toMatch(/Could not read full model structure/)
+          expect(indexedModel.getSpatialStructure).toHaveBeenCalledTimes(1)
+          expect(getHarness()._loadedModel.ifcManager.getSpatialStructure).not.toHaveBeenCalled()
+        } finally {
+          warn.mockRestore()
+        }
+      })
+
+      it('does not install it when the load has failed meanwhile', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const {indexedModel, releaseTree} = makeSlowTreeModel()
+        await mountOnLateTreeLoad(result, indexedModel, true)
+        await waitFor(() => expect(result.current.alert).not.toBeNull())
+
+        await act(() => releaseTree())
+        await actAsyncFlush()
+        expect(result.current.rootElement).toBeNull()
+        expect(result.current.indexedModel).toBeNull()
+      })
+    })
+
+    it('does not install a tree whose model the user left while it was being installed', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      // The install reads the root's name before it writes: hold that read,
+      // and move to B meanwhile.
+      let releaseRootName
+      const getPropertiesSpy = jest.spyOn(ShareViewer.prototype, 'getProperties')
+        .mockImplementationOnce(() => new Promise((resolve) => {
+          releaseRootName = () => resolve({Name: {value: 'A'}})
+        }))
+      try {
+        await mountOnStreamingLoad(result, makeIndexedModel(), false, false)
+        await waitFor(() => expect(releaseRootName).toBeDefined())
+        loadSpy.mockImplementation(() => new Promise(() => {}))
+        await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+        await actAsyncFlush()
+
+        await act(() => releaseRootName())
+        await actAsyncFlush()
+        expect(result.current.rootElement).toBeNull()
+        expect(result.current.indexedModel).toBeNull()
+      } finally {
+        getPropertiesSpy.mockRestore()
+      }
+    })
+
+    it('takes the tree down when the load fails after its index', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      await mountOnStreamingLoad(result, makeIndexedModel(), true)
+      await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+
+      await act(() => finishGeometry())
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).not.toBeNull())
+      expect(result.current.rootElement).toBeNull()
+      expect(result.current.indexedModel).toBeNull()
+    })
+
+
+    // open-205 #2043: the canvas is live from the parse's first preview mesh,
+    // so a double-click can select an element before the index exists. It
+    // is highlighted on the preview at once, resolved (properties, tree row,
+    // URL path) once the index is up, and painted on the finished model.
+    describe('picks on the preview during the parse (open-205 #2043)', () => {
+      let releaseIndex
+      let castRaySpy
+      let originalGetScene
+      let previewPaintSpy
+
+      beforeEach(() => {
+        releaseIndex = undefined
+        const legacy = getHarness().IFC.context
+        originalGetScene = legacy.getScene
+        // The scene during the parse: the progressive session's preview
+        // group, marked the way ProgressiveLoadSession marks it.
+        const previewGroup = {userData: {isLoadPreview: true}, children: [], updateMatrixWorld: jest.fn()}
+        legacy.getScene = jest.fn(() => ({children: [previewGroup], add: jest.fn(), remove: jest.fn()}))
+        castRaySpy = jest.spyOn(Picker.prototype, 'castRay')
+        previewPaintSpy = jest.spyOn(ShareViewer.prototype, 'setPreviewSelection')
+        // The harness automocks the isolator; nothing is hidden here.
+        IfcIsolator.prototype.canBePickedInScene.mockReturnValue(true)
+      })
+
+      afterEach(() => {
+        IfcIsolator.prototype.canBePickedInScene.mockReset()
+        getHarness().IFC.context.getScene = originalGetScene
+        castRaySpy.mockRestore()
+        previewPaintSpy.mockRestore()
+      })
+
+      /**
+       * Mount CadView on a load held in its parse, before onIndexed, until
+       * `releaseIndex()`; then held again before the end until
+       * `finishGeometry()`.
+       *
+       * @param {object} result renderHook result over the whole store
+       * @param {object} indexedModel what the loader hands onIndexed
+       * @param {object} [options]
+       * @param {boolean} [options.failInParse] fail the load at the index instead
+       */
+      async function mountOnParsingLoad(result, indexedModel, {failInParse = false} = {}) {
+        loadSpy = jest.spyOn(Loader, 'load').mockImplementation(async (...args) => {
+          const options = args[6] ?? {}
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          await new Promise((resolve) => {
+            releaseIndex = resolve
+          })
+          if (failInParse) {
+            throw new Error('parse failed')
+          }
+          await options.onIndexed?.(indexedModel)
+          await new Promise((resolve) => {
+            finishGeometry = resolve
+          })
+          return getHarness()._loadedModel
+        })
+        await act(() => result.current.setIsOpfsAvailable(false))
+        await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+        render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+        await actAsyncFlush()
+        await waitFor(() => expect(releaseIndex).toBeDefined())
+        await actAsyncFlush()
+      }
+
+      /**
+       * Double-click the canvas over a preview mesh of `expressId`.
+       *
+       * @param {number} expressId
+       */
+      async function doubleClickPreviewOf(expressId) {
+        castRaySpy.mockReturnValue([
+          // An imposter plate in front, which names no element.
+          {object: {userData: {aabbImposter: true}}},
+          {object: {userData: {previewExpressID: expressId}}},
+        ])
+        await act(() => window.ondblclick({target: {tagName: 'CANVAS'}, shiftKey: false}))
+        await actAsyncFlush()
+      }
+
+      const leaf = makeTestTree().children[0].children[0].expressID
+
+      it('selects the element before the index, and resolves its properties at the index', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const indexedModel = makeIndexedModel()
+        await mountOnParsingLoad(result, indexedModel)
+        await doubleClickPreviewOf(leaf)
+
+        // Selected and painted on the preview now; nothing can say what it
+        // is yet, and the URL keeps no element path it can't resolve.
+        expect(result.current.selectedAnchorIds).toEqual([`${leaf}`])
+        expect(result.current.selectedElements).toEqual([`${leaf}`])
+        expect(result.current.rootElement).toBeNull()
+        expect(result.current.selectedElement).toBeNull()
+        expect(indexedModel.getItemProperties).not.toHaveBeenCalled()
+        await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith([leaf]))
+        const navigationsBeforeIndex = mockedUseNavigate.mock.calls.length
+
+        await act(() => releaseIndex())
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.selectedElement?.Name?.value).toBe(`item ${leaf}`))
+        expect(indexedModel.getItemProperties).toHaveBeenCalledWith(leaf)
+        expect(result.current.selectedAnchorIds).toEqual([`${leaf}`])
+        // Resolved through the finished model's pick funnel: the URL now
+        // carries the element's path.
+        expect(mockedUseNavigate.mock.calls.length).toBeGreaterThan(navigationsBeforeIndex)
+        expect(String(mockedUseNavigate.mock.calls.at(-1)[0])).toMatch(new RegExp(`/${leaf}(#|$)`))
+      })
+
+      it('paints the pick on the finished model', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        const setSelectionSpy = jest.spyOn(ShareViewer.prototype, 'setSelection')
+        try {
+          await mountOnParsingLoad(result, makeIndexedModel())
+          await doubleClickPreviewOf(leaf)
+          await act(() => releaseIndex())
+          await actAsyncFlush()
+          await waitFor(() => expect(finishGeometry).toBeDefined())
+          const paintsBeforeTheModel = setSelectionSpy.mock.calls.length
+
+          await act(() => finishGeometry())
+          await actAsyncFlush()
+          await waitFor(() => expect(result.current.isModelReady).toBe(true))
+          await waitFor(() => expect(setSelectionSpy.mock.calls.length).toBeGreaterThan(paintsBeforeTheModel))
+          expect(setSelectionSpy.mock.calls.at(-1)[1]).toEqual([leaf])
+          expect(result.current.selectedAnchorIds).toEqual([`${leaf}`])
+        } finally {
+          setSelectionSpy.mockRestore()
+        }
+      })
+
+      it('a pick replaced before the index is not resolved over its replacement', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        await mountOnParsingLoad(result, makeIndexedModel())
+        await doubleClickPreviewOf(leaf)
+        // Something else selects meanwhile (the assistant's selection funnel,
+        // say), straight through the store.
+        const other = makeTestTree().children[0].expressID
+        await act(() => {
+          result.current.setSelectedElements([`${other}`])
+          result.current.setSelectedAnchorIds([`${other}`])
+        })
+        await actAsyncFlush()
+        await act(() => releaseIndex())
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
+        expect(result.current.selectedAnchorIds).toEqual([`${other}`])
+      })
+
+      it('drops the pick when the user leaves before the index', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        await mountOnParsingLoad(result, makeIndexedModel())
+        await doubleClickPreviewOf(leaf)
+        expect(result.current.selectedAnchorIds).toEqual([`${leaf}`])
+        loadSpy.mockImplementation(() => new Promise(() => {}))
+
+        await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+        await actAsyncFlush()
+        expect(result.current.selectedElements).toEqual([])
+        expect(result.current.selectedAnchorIds).toEqual([])
+        expect(result.current.isFirstMeshShown).toBe(false)
+      })
+
+      it('drops the pick when the load fails before the index', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        await mountOnParsingLoad(result, makeIndexedModel(), {failInParse: true})
+        await doubleClickPreviewOf(leaf)
+        await act(() => releaseIndex())
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.alert).not.toBeNull())
+        expect(result.current.selectedElements).toEqual([])
+        expect(result.current.selectedAnchorIds).toEqual([])
+      })
+
+      // The camera-follow decision (design/new/in-app-model-switch.md §4.2a):
+      // the user who drove the camera during the load keeps it at the end.
+      it('skips the end-of-load fit when the user drove the camera during the load', async () => {
+        const controls = getHarness().IFC.context.ifcCamera.cameraControls
+        const fit = getHarness().IFC.context.ifcCamera.currentNavMode.fitModelToFrame
+        const {result} = renderHook(() => useStore((state) => state))
+        await mountOnParsingLoad(result, makeIndexedModel())
+        const onControl = controls.addEventListener.mock.calls.filter(([type]) => type === 'control').at(-1)?.[1]
+        expect(onControl).toBeDefined()
+        fit.mockClear()
+        // A wheel zoom: camera-controls sends `control` alone.
+        onControl({type: 'control'})
+        await act(() => releaseIndex())
+        await actAsyncFlush()
+        await waitFor(() => expect(finishGeometry).toBeDefined())
+        await act(() => finishGeometry())
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.isModelReady).toBe(true))
+        expect(fit).not.toHaveBeenCalled()
+        expect(getHarness().IFC.context.ifcCamera.currentNavMode.fitCameraLimitsToModel).toHaveBeenCalled()
+      })
+
+      // The whole load paints on demand (three/renderDemand.js), from before
+      // the download to the end, success or failure.
+      it('paints on demand for the length of the load, and every frame after', async () => {
+        const RenderDemand = require('../viewer/three/renderDemand').default
+        const legacy = getHarness().IFC.context
+        legacy.renderDemand = new RenderDemand()
+        try {
+          const {result} = renderHook(() => useStore((state) => state))
+          await mountOnParsingLoad(result, makeIndexedModel())
+          expect(legacy.renderDemand.isOnDemand).toBe(true)
+          await act(() => releaseIndex())
+          await actAsyncFlush()
+          await waitFor(() => expect(finishGeometry).toBeDefined())
+          expect(legacy.renderDemand.isOnDemand).toBe(true)
+          await act(() => finishGeometry())
+          await actAsyncFlush()
+          await waitFor(() => expect(result.current.isModelReady).toBe(true))
+          expect(legacy.renderDemand.isOnDemand).toBe(false)
+        } finally {
+          delete legacy.renderDemand
+        }
+      })
+
+      // Codex review on #2052: the session of a failed attempt that CadView
+      // retries closes its own scope, not the load's.
+      it('stays on demand when a session inside the load closes its scope', async () => {
+        const RenderDemand = require('../viewer/three/renderDemand').default
+        const legacy = getHarness().IFC.context
+        legacy.renderDemand = new RenderDemand()
+        try {
+          const {result} = renderHook(() => useStore((state) => state))
+          await mountOnParsingLoad(result, makeIndexedModel())
+          // What an aborted ProgressiveLoadSession does to its own scope.
+          legacy.renderDemand.begin(null)()
+          expect(legacy.renderDemand.isOnDemand).toBe(true)
+        } finally {
+          delete legacy.renderDemand
+        }
+      })
+
+      // Codex review on #2052: nothing cancels a load the user has left
+      // (#2019), and its first mesh must not lift the overlay over the next
+      // model's empty viewer.
+      it('lifts the overlay at the load\'s first mesh, but not for a load the user has left', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        let onFirstMesh
+        let releaseLeftLoad
+        loadSpy = jest.spyOn(Loader, 'load').mockImplementation(async (...args) => {
+          onFirstMesh = (args[6] ?? {}).onFirstMesh
+          await new Promise((resolve) => {
+            releaseLeftLoad = resolve
+          })
+          return getHarness()._loadedModel
+        })
+        await act(() => result.current.setIsOpfsAvailable(false))
+        await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+        render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+        await actAsyncFlush()
+        await waitFor(() => expect(onFirstMesh).toBeDefined())
+        expect(result.current.isFirstMeshShown).toBe(false)
+        await act(() => onFirstMesh())
+        expect(result.current.isFirstMeshShown).toBe(true)
+
+        // The user moves on; the first load still runs, and B never starts
+        // until it ends.
+        await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+        await actAsyncFlush()
+        expect(result.current.isFirstMeshShown).toBe(false)
+        // A late first mesh of the left load (one superseded before its own).
+        await act(() => onFirstMesh())
+        expect(result.current.isFirstMeshShown).toBe(false)
+        expect(result.current.isModelLoading).toBe(true)
+        loadSpy.mockImplementation(() => new Promise(() => {}))
+        await act(() => releaseLeftLoad())
+        await actAsyncFlush()
+      })
+
+      it('stops painting on demand when the load fails', async () => {
+        const RenderDemand = require('../viewer/three/renderDemand').default
+        const legacy = getHarness().IFC.context
+        legacy.renderDemand = new RenderDemand()
+        try {
+          const {result} = renderHook(() => useStore((state) => state))
+          await mountOnParsingLoad(result, makeIndexedModel(), {failInParse: true})
+          expect(legacy.renderDemand.isOnDemand).toBe(true)
+          await act(() => releaseIndex())
+          await actAsyncFlush()
+          await waitFor(() => expect(result.current.alert).not.toBeNull())
+          expect(legacy.renderDemand.isOnDemand).toBe(false)
+        } finally {
+          delete legacy.renderDemand
+        }
+      })
+
+      it('frames the model at the end of a load the user did not touch', async () => {
+        const fit = getHarness().IFC.context.ifcCamera.currentNavMode.fitModelToFrame
+        const {result} = renderHook(() => useStore((state) => state))
+        await mountOnParsingLoad(result, makeIndexedModel())
+        fit.mockClear()
+        await act(() => releaseIndex())
+        await actAsyncFlush()
+        await waitFor(() => expect(finishGeometry).toBeDefined())
+        await act(() => finishGeometry())
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.isModelReady).toBe(true))
+        expect(fit).toHaveBeenCalled()
+      })
+    })
+  })
+
 
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing
   /*

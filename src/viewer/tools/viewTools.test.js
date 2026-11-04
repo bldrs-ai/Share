@@ -90,6 +90,40 @@ describe('viewer/tools (model, view and share providers)', () => {
   })
 
 
+  // open-205 #2029: a Conway load hands the store the model at its index
+  // (`indexedModel`) while geometry still streams, before `model` is set. The
+  // document reads answer from it; the scene tools wait for the geometry.
+  describe('while the geometry streams (open-205 #2029)', () => {
+    /** Put the fixture's model where a load at its index would. */
+    function streamGeometry() {
+      const {model} = useStore.getState()
+      useStore.setState({indexedModel: model, model: null})
+    }
+
+    afterEach(() => useStore.setState({indexedModel: null}))
+
+    it('answers model.query and model.properties from the indexed model', async () => {
+      streamGeometry()
+      expect((await registry.call('model.query', {ifcType: 'IfcDoor'})).refs).toEqual(['e202'])
+      const {items} = (await registry.call('model.properties', {refs: ['e102']})).content
+      expect(items[0].attributes).toMatchObject({Name: 'Window 1'})
+    })
+
+    it('keeps the view.* tools waiting for the finished model', async () => {
+      streamGeometry()
+      expect((await rejection(registry.call('view.select', {refs: ['e100']}))).code).toBe('not_ready')
+    })
+
+    it('tells the agent the model is there and its geometry still coming', () => {
+      streamGeometry()
+      const [context] = registry.context()
+      expect(context.data.loaded).toBe(true)
+      expect(context.data.geometryLoading).toBe(true)
+      expect(context.text).toMatch(/Geometry: still loading/)
+    })
+  })
+
+
   // Every tool, on inputs that reach the attribute with a typed array in it
   // (Wall A, e100): a summarizer that passed raw values through would put a
   // Float32Array in `content`, and this would name it.

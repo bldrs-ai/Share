@@ -14,7 +14,21 @@ export default function createIFCSlice(set, get) {
     setCustomViewSettings: (settings) => set(() => ({customViewSettings: settings})),
 
     isModelLoading: false,
-    setIsModelLoading: (isLoading) => set(() => ({isModelLoading: isLoading})),
+    // A load that ends also ends its first mesh: `isFirstMeshShown` belongs to
+    // the load in flight, and the next one starts without it.
+    setIsModelLoading: (isLoading) => set(() => (isLoading ?
+      {isModelLoading: true} :
+      {isModelLoading: false, isFirstMeshShown: false})),
+
+    // Whether the load in flight has put geometry on screen yet (open-205
+    // #2043): set by CadView when a progressive load's first preview mesh or
+    // streamed batch lands (ProgressiveLoadSession's `onFirstMesh`) and that
+    // load is still the one shown, cleared when the load ends or the user
+    // leaves it. The loading overlay lifts on it, so the camera and
+    // scene picking are live from the first preview mesh, during the parse
+    // (Components/LoadingBackdrop.jsx).
+    isFirstMeshShown: false,
+    setIsFirstMeshShown: (isShown) => set(() => ({isFirstMeshShown: isShown})),
 
     // The normalized load-log report (design/new/load-log-format.md):
     // frozen lines (Share/engine/model preamble + finished stage lines +
@@ -97,6 +111,17 @@ export default function createIFCSlice(set, get) {
     model: null,
     setModel: (m) => set(() => ({model: m})),
 
+    // The model at its index while a Conway (IFC/STEP) load still streams
+    // geometry (open-205 #2029; `makeIndexedModelHandle` in
+    // viewer/ifc/conwayDirectIfcLoader.js). Carries the property and spatial
+    // surface only — no geometry, not an Object3D — so it is kept apart from
+    // `model`, which scene consumers (clipper, isolator, ViewCube) take to be
+    // the object in the scene. Readers of properties and the tree take it
+    // through `selectReadModel` below. Cleared when a load begins, and by the
+    // load that set it once its finished model is in `model`, or once it fails.
+    indexedModel: null,
+    setIndexedModel: (m) => set(() => ({indexedModel: m})),
+
     preselectedElementIds: null,
     setPreselectedElementIds: (ids) => set(() => ({preselectedElementIds: ids})),
 
@@ -106,4 +131,18 @@ export default function createIFCSlice(set, get) {
     viewer: {},
     setViewerStore: (viewer) => set(() => ({viewerStore: viewer})),
   }
+}
+
+
+/**
+ * The model to read properties, names and the tree from: the one at its index
+ * while a load streams (`indexedModel`), else the loaded `model`. Index first,
+ * because while a load runs `model` is whatever was loaded before it — null on
+ * a fresh page, but the previous model after an in-app switch.
+ *
+ * @param {object} state the store state
+ * @return {object|null}
+ */
+export function selectReadModel(state) {
+  return state.indexedModel ?? state.model
 }

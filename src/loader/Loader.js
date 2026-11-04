@@ -54,6 +54,7 @@ import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import glbToThree from './glb'
 import {decodeGzipEnvelope} from './gzipEnvelope'
+import {unwrapIfcZip} from './modelArchive'
 import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
 import {
   APPLIED_COORDINATION_KEY,
@@ -214,6 +215,14 @@ function probeLfsBytes(data) {
  *   `isUploadedFile` here can't stand in for it: it's `testUuid(path)`, and
  *   a hosted `/v/p/<uuid>.ifc` reaches this function as the very same URL
  *   string as `/v/local-only/<uuid>.ifc` (codex review on #1956).
+ * @param {Function} [options.onIndexed] open-205 #2029: handed the model at
+ *   its index while a Conway (IFC/STEP) parse still streams geometry —
+ *   `ShareIfcLoader#parse`. Never called on a GLB cache hit, a non-Conway
+ *   format, or a classic (non-deferred) open; the caller's end-of-load path
+ *   covers those exactly as before.
+ * @param {Function} [options.onFirstMesh] open-205 #2043: called once when a
+ *   Conway parse's first geometry is on screen (`ShareIfcLoader#parse`).
+ *   Never called on the paths that put the model on screen only at its end.
  * @return {object} The model or undefined
  */
 export async function load(
@@ -223,7 +232,7 @@ export async function load(
   isOpfsAvailable,
   setOpfsFile,
   accessToken = '',
-  {isNestedLoad = false, isUploadedRoute = false} = {},
+  {isNestedLoad = false, isUploadedRoute = false, onIndexed = undefined, onFirstMesh = undefined} = {},
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
   // HACK: pathArg can be a URL or a string
@@ -266,9 +275,10 @@ export async function load(
   // A local file opened in a browser without OPFS is held in this page's
   // memory under its `/v/local-only/` id (`inMemoryUploads.js`, #1906); there is no
   // blob URL to fetch, since the opener never minted one. Looked up before
-  // the blob-path rewrite below discards the id. Only consulted when OPFS is
-  // unavailable, the only case anything registers there.
-  const inMemoryFile = (isUploadedFile && !isOpfsAvailable) ?
+  // the blob-path rewrite below discards the id. Consulted with OPFS too: an
+  // upload whose OPFS store failed (a write that came up short, #2042) is
+  // held here instead, and its fresh in-memory id names no OPFS entry.
+  const inMemoryFile = isUploadedFile ?
     getInMemoryUpload(fileNameFromPath(path)) :
     undefined
   if (isUploadedFile) {
@@ -325,12 +335,16 @@ export async function load(
   // Set when we swap the IFC source with a cached GLB. Drives post-parse
   // diagnostics so the user can see what the GLTF parser produced.
   let cameFromGlbCache = false
-  const wantGlb = isFeatureEnabled('glb') && isIfc
+  // Not for a hosted `.ifczip`: every handle the cache path keeps is the
+  // source file, which here is the zip — `spillModelSource` would back
+  // conway's later reads of the IFC with it. It still opens, uncached. An
+  // UPLOADED `.ifczip` is stored as the `.ifc` inside it and caches as one.
+  const wantGlb = isFeatureEnabled('glb') && isIfc && loader.type !== 'ifczip'
   if (wantGlb) {
     glbVerbose('feature enabled')
   }
 
-  if (isOpfsAvailable) {
+  if (isOpfsAvailable && inMemoryFile === undefined) {
     // OPFS is a CACHE, not a hard dependency. Any failure inside this block
     // — Safari's `InvalidStateError` on `createSyncAccessHandle`, a corrupt
     // entry from a previous failed session, a missing rename target, etc. —
@@ -719,6 +733,18 @@ export async function load(
   // gzip is that format's own container. See `loader/gzipEnvelope.js`.
   modelData = await decodeGzipEnvelope(modelData, loader.type)
 
+  // A hosted `.ifczip` is still the zip here (uploads were unwrapped before
+  // OPFS); conway gets the `.ifc` inside it. The type is the inner model's
+  // from here on, so the model and everything that reads `loader.type` after
+  // this — capabilities, analytics — see an IFC. The arms before this that
+  // key on it (`canOpenFromStore`, the truncated-part-21 check, `wantGlb`)
+  // correctly saw a zip. See `loader/modelArchive.js`.
+  if (loader.type === 'ifczip') {
+    const unwrapped = await unwrapIfcZip(modelData)
+    modelData = unwrapped.modelData
+    loader.type = unwrapped.type
+  }
+
   // Provide basePath for multi-file models.  Keep the last '/' for
   // correct resolution of subpaths with '../'.
   const basePath = path.substring(0, path.lastIndexOf('/') + 1)
@@ -746,7 +772,8 @@ export async function load(
   // truthy past this point — no post-call null check is needed here.
   let model
   try {
-    model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress)
+    model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress,
+      {onIndexed, onFirstMesh})
   } catch (e) {
     throw markIfOutOfMemory(e)
   }
@@ -1954,9 +1981,12 @@ export function convertToShareModel(model, viewer, {fileName = null} = {}) {
  * @param {object} viewer passed to convertToShareModel and optionally to fixupCb
  * @param {Function} [fixupCb] to modify the model
  * @param {Function} [onProgress] progress callback for IFC loading
+ * @param {object} [parseOptions] passed to an IFC/STEP loader's `parse` as
+ *   its options (`ShareIfcLoader#parse`: `onIndexed`, `onFirstMesh`)
  * @return {object}
  */
-export async function readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress) {
+export async function readModel(
+  loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress, parseOptions = {}) {
   let model
   // GLTFLoader is unique so far in using an onLoad and onError.
   // TODO(pablo): GLTF also generates errors for texture loads, but
@@ -1982,7 +2012,7 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
   } else if (isLoaderAsync) {
     debug().log(`async loader(->) parsing data:`, loader, modelData)
     if (isIfc && onProgress) {
-      model = await loader.parse(modelData, onProgress)
+      model = await loader.parse(modelData, onProgress, undefined, parseOptions)
     } else {
       if (onProgress) {
         onProgress('Parsing model data...')
@@ -2107,7 +2137,10 @@ async function findLoader(pathname, viewer) {
     }
     case 'step':
     case 'stp':
-    case 'ifc': {
+    case 'ifc':
+    case 'ifczip': {
+      // A `.ifczip` shares this arm and is unwrapped to its `.ifc` before
+      // `readModel` (`load`, beside the gzip net; `modelArchive.js`).
       // ShareIfcLoader (`src/viewer/ifc/ShareIfcLoader.js`) is wired
       // up as `viewer.ifcLoader` at viewer construction (see
       // `src/viewer/ShareViewer.js`). It owns the Conway-direct parse

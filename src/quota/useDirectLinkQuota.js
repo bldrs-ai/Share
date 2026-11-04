@@ -10,16 +10,26 @@ import {
   modelContentId,
 } from '../privacy/analytics'
 import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
+import {localOnlyPath} from '../routes/localOnly'
 import {navigateBaseOnModelPath} from '../utils/location'
 import {driveFileQuotaVisibility} from './driveVisibility'
+import {isLocalFileMeteringEnabled} from './quota'
 
 
 /**
- * The `route_kind` param of quota_soft_limit_exceeded, by route.
+ * The `route_kind` param of quota_soft_limit_exceeded, by route. A closed
+ * set, registered GA-side as a custom dimension. `local` (bldrs-ai/ops#39)
+ * is sent only while the `meterLocalFiles` switch is on, and is the value
+ * MODEL_ROUTE_KINDS.LOCAL already gives a local file on model_view and
+ * model_share, so the events still share one vocabulary (the test pins the
+ * two equal). A literal, not a reference to that constant: suites that mock
+ * privacy/analytics wholesale load this module through quota/modelSlotKey.js,
+ * and a module-scope read of their mock fails at import.
  */
 export const DIRECT_LINK_ROUTE_KINDS = Object.freeze({
   GDRIVE: 'gdrive',
   GITHUB: 'github',
+  LOCAL: 'local',
 })
 
 
@@ -43,16 +53,35 @@ export const DIRECT_LINK_ROUTE_KINDS = Object.freeze({
  *   Whether a GitHub file is private is the SERVER's call (record-load's
  *   unauthenticated repo lookup): a public repo comes back not-quotable and
  *   is never counted.
- * - Everything else (local files, hosted `/v/p/`, generic `/v/u/` URLs):
- *   null. Local files are unmetered (Share#1966), and a `/v/local-only/` link
- *   only opens in the browser that already recorded it from the dialog.
+ * - Local files (`/v/local-only/`), only while the `meterLocalFiles` abuse
+ *   switch is on: `localOnlyPath(appPrefix, <storageId>)`, the key the drop
+ *   and the Open dialog record. Local files are unmetered (Share#1966), so
+ *   with the switch off this is null and record() is never called for one.
+ *   With it on, a refused drop or pick never navigates, but its storage id
+ *   could still be loaded straight from the URL, and a past upload reopened
+ *   from its URL after its slot rolled off was never counted
+ *   (bldrs-ai/ops#39). A legacy `/v/new/` route, should it load before
+ *   ShareRoutes' redirect lands, parses the same and gets the same key.
+ *   An upload the drop or the dialog just recorded is reported again here
+ *   once it loads, and comes back `alreadyCounted`.
+ * - Everything else (hosted `/v/p/`, generic `/v/u/` URLs): null.
  *
  * @param {object|null} modelPath route result (routes/routes.ts#handleRoute)
  * @param {string} appPrefix e.g. '/share'
+ * @param {boolean} [meterLocalFiles] the switch, parameterized for tests
  * @return {{key: string, routeKind: string, fileId: (string|undefined)}|null}
  */
-export function directLinkQuotaKey(modelPath, appPrefix) {
-  if (!modelPath || modelPath.kind !== 'provider') {
+export function directLinkQuotaKey(modelPath, appPrefix, meterLocalFiles = isLocalFileMeteringEnabled()) {
+  if (!modelPath) {
+    return null
+  }
+  if (modelPath.kind === 'file' && modelPath.isUploadedFile === true && meterLocalFiles === true) {
+    return {
+      key: localOnlyPath(appPrefix, modelPath.filepath),
+      routeKind: DIRECT_LINK_ROUTE_KINDS.LOCAL,
+    }
+  }
+  if (modelPath.kind !== 'provider') {
     return null
   }
   if (modelPath.provider === 'google' && modelPath.fileId) {
@@ -74,7 +103,8 @@ export function directLinkQuotaKey(modelPath, appPrefix) {
 
 /**
  * Meters a model loaded straight from its URL — a pasted or clicked
- * `/share/v/g/…` or `/share/v/gh/…` link — which never passes through the
+ * `/share/v/g/…` or `/share/v/gh/…` link, and with the `meterLocalFiles`
+ * switch on a `/share/v/local-only/…` one — which never passes through the
  * Open dialog's record() gate (codex P1 on Share#1971).
  *
  * This is a SOFT gate, by the owner's decision (2026-10-23): the load is
@@ -179,7 +209,8 @@ export default function useDirectLinkQuota(appPrefix) {
       // itself is model_view {gate: 'none'} from CadView.
       trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
         gate: MODEL_GATES.SOFT,
-        source: MODEL_SOURCES.HOSTED,
+        // A local file is the one route here that isn't hosted.
+        source: routeKind === DIRECT_LINK_ROUTE_KINDS.LOCAL ? MODEL_SOURCES.LOCAL : MODEL_SOURCES.HOSTED,
         routeKind,
         contentId,
         tier: outcome.tier,

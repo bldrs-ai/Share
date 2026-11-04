@@ -2,6 +2,7 @@ import React from 'react'
 import {act, fireEvent, render, waitFor, within} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
 import {noteGateLogin, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
+import {mockLogout} from '../../Auth0/mockLogout'
 import {clearOPFSCache} from '../../OPFS/utils'
 import {RouteThemeCtx} from '../../Share.fixture'
 import {addRecentFileEntry, loadAllRecentFiles} from '../../connections/persistence'
@@ -117,6 +118,51 @@ describe('ProfileControl', () => {
 
     const LoginWithGithub = await findByText('Log out')
     expect(LoginWithGithub).toBeInTheDocument()
+  })
+
+
+  // Share#1923: Log out must end the Auth0 session, not only this page's
+  // token cache. The SDK does that by navigating to /v2/logout, and only when
+  // the caller passes no `openUrl` and puts the destination in `logoutParams`.
+  describe('Log out', () => {
+    /**
+     * Click Log out with `logout` run through the SDK-parity mock
+     * (Auth0/mockLogout.js, pinned against the real auth0-spa-js), so the
+     * assertion is on what the SDK would do with the call, not on its spelling.
+     *
+     * @return {Promise<object>} the call's options and the mock's spies
+     */
+    async function clickLogOut() {
+      const sdk = {assign: jest.fn(), dispatchLogout: jest.fn(), clearSession: jest.fn()}
+      const logout = jest.fn((options) => mockLogout(options, {
+        domain: 'https://bldrs.us.auth0.com.jest',
+        clientId: 'testaudiencejest',
+        ...sdk,
+      }))
+      mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, logout})
+      const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+      fireEvent.click(await findByTestId('control-button-profile'))
+      fireEvent.click(await findByTestId('menu-open-logout-dialog'))
+      await waitFor(() => expect(logout).toHaveBeenCalledTimes(1))
+      return {options: logout.mock.calls[0][0], ...sdk}
+    }
+
+    it('calls logout with logoutParams.returnTo and no openUrl override', async () => {
+      const {options} = await clickLogOut()
+      expect(options).toEqual({logoutParams: {returnTo: window.location.origin}})
+      expect(options).not.toHaveProperty('openUrl')
+      expect(options).not.toHaveProperty('returnTo')
+    })
+
+    it('reaches /v2/logout with the origin as returnTo, rather than only reloading', async () => {
+      const {assign, dispatchLogout} = await clickLogOut()
+      expect(assign).toHaveBeenCalledTimes(1)
+      const url = new URL(assign.mock.calls[0][0])
+      expect(url.pathname).toBe('/v2/logout')
+      expect(url.searchParams.get('returnTo')).toBe(window.location.origin)
+      // A navigating logout leaves the in-memory state to the next page load.
+      expect(dispatchLogout).not.toHaveBeenCalled()
+    })
   })
 
 

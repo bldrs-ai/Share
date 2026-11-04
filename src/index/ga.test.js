@@ -34,7 +34,7 @@ describe('shouldInitGa', () => {
     expect(shouldInitGa({hostname: 'bldrs.ai', isWebdriver: false})).toBe(true)
     expect(shouldInitGa({hostname: 'www.bldrs.ai', isWebdriver: false})).toBe(true)
     expect(shouldInitGa({hostname: 'localhost', isWebdriver: false})).toBe(false)
-    expect(shouldInitGa({hostname: 'bldrs-share-dev.netlify.app', isWebdriver: false})).toBe(false)
+    expect(shouldInitGa({hostname: 'bldrs-share-prod.netlify.app', isWebdriver: false})).toBe(false)
     expect(shouldInitGa({hostname: 'deploy-preview-1741--bldrs-share-prod.netlify.app', isWebdriver: false})).toBe(false)
     expect(shouldInitGa({hostname: 'bldrs-ai.github.io', isWebdriver: false})).toBe(false)
   })
@@ -48,10 +48,42 @@ describe('shouldInitGa', () => {
     expect(shouldInitGa({hostname: preview, isWebdriver: false, enableInPreview: true})).toBe(true)
     expect(shouldInitGa({hostname: preview, isWebdriver: true, enableInPreview: true})).toBe(false)
     expect(shouldInitGa({
-      hostname: 'bldrs-share-dev.netlify.app',
+      hostname: 'main--bldrs-share-prod.netlify.app',
       isWebdriver: false,
       enableInPreview: true,
     })).toBe(false)
+  })
+
+  // A fork's Netlify site gets the same deploy-preview-N-- hostname shape;
+  // only bldrs' own project may opt into the production property.
+  test('does not let another Netlify project\'s deploy preview opt in', () => {
+    expect(shouldInitGa({
+      hostname: 'deploy-preview-12--some-fork-of-share.netlify.app',
+      isWebdriver: false,
+      enableInPreview: true,
+    })).toBe(false)
+    expect(shouldInitGa({
+      hostname: 'deploy-preview-12--bldrs-share-prod.netlify.app.example.com',
+      isWebdriver: false,
+      enableInPreview: true,
+    })).toBe(false)
+  })
+
+  // The kinds of non-production host a copy of the app runs on (local dev
+  // and CI, the dev domain, GitHub Pages, a self-hosted domain or a bare
+  // IP), plus lookalikes of the prod hostnames.
+  test.each([
+    'localhost',
+    '127.0.0.1',
+    '203.0.113.7',
+    'bldrs.dev',
+    'someone.github.io',
+    'share.example.com',
+    'bldrs.ai.example.com',
+    'notbldrs.ai',
+    'bldrs.ai.',
+  ])('false on non-production host %s', (hostname) => {
+    expect(shouldInitGa({hostname, isWebdriver: false, enableInPreview: true})).toBe(false)
   })
 })
 
@@ -76,7 +108,7 @@ describe('setupGa', () => {
     const consoleInfo = jest.spyOn(console, 'info').mockImplementation(() => {})
     const consoleWarn = jest.spyOn(console, 'warn').mockImplementation(() => {})
     setupGa({
-      hostname: 'deploy-preview-1757--bldrs-share-dev.netlify.app',
+      hostname: 'deploy-preview-1757--bldrs-share-prod.netlify.app',
       isWebdriver: false,
       enableInPreview: true,
     })

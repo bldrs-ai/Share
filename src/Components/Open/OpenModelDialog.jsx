@@ -2,7 +2,9 @@ import React, {ReactElement, useEffect, useState} from 'react'
 import {Box, Button, Divider, Slide, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {startLogin} from '../../Auth0/gateLogin'
+import {endSessionLogoutOptions} from '../../Auth0/logoutOptions'
 import {forgetInMemoryUpload} from '../../loader/inMemoryUploads'
+import {deleteUploadFromOPFS} from '../../OPFS/utils'
 import {localOnlyPath, toLocalOnlyPath} from '../../routes/localOnly'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
@@ -16,6 +18,7 @@ import {
 } from '../../connections/persistence'
 import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
+import debug, {WARN} from '../../utils/debug'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToInMemoryModel, navigateToModel} from '../../utils/navigate'
 import Dialog from '../Dialog'
@@ -300,18 +303,29 @@ export default function OpenModelDialog({
      *   `isInMemory`, the same-shaped in-memory id.
      * @param {number} lastModifiedUtc Epoch ms from the picked File.
      * @param {string} [originalName] The user's filename, e.g. `box.ifc`.
+     * @param {object} [held]
+     * @param {boolean} [held.inMemory] Set by `loadLocalFile` when OPFS is
+     *   available but storing the pick failed (#2042), so it is held in
+     *   memory after all and `storageId` is an in-memory id.
      */
-    const onLoad = async (storageId, lastModifiedUtc, originalName) => {
+    const onLoad = async (storageId, lastModifiedUtc, originalName, {inMemory: heldInMemory = isInMemory} = {}) => {
       const sharePath = localOnlyPath(appPrefix, storageId)
       const {allowed} = await record(sharePath)
       if (!allowed) {
-        if (isInMemory) {
+        // The pick was stored before the quota could answer, so a refusal
+        // takes it back out. Left in OPFS, the refused file still opened
+        // from its /v/local-only/ URL (bldrs-ai/ops#39). The delete isn't
+        // awaited: a failure must not swallow the dialog.
+        if (heldInMemory) {
           forgetInMemoryUpload(storageId)
+        } else {
+          deleteUploadFromOPFS(storageId).catch((err) =>
+            debug(WARN).warn('OpenModelDialog: could not delete the refused upload', storageId, err))
         }
         setShowQuotaDialog(true)
         return
       }
-      if (isInMemory) {
+      if (heldInMemory) {
         // The file is held only in this page's memory, so no page load, and
         // no local recent: there is nothing stored to reopen it from.
         navigateToInMemoryModel(sharePath, navigate)
@@ -393,7 +407,13 @@ export default function OpenModelDialog({
   const githubIdentity = user?.[BLDRS_IDENTITIES_CLAIM]?.find((id) => id.connection === 'github')
   const githubUsername = githubIdentity?.profileData?.nickname || user?.nickname
 
-  const handleGithubRemove = () => logout({openUrl: false})
+  // A full sign-out, the same as Profile → Log out (Auth0/logoutOptions.js):
+  // through /v2/logout, ending the Auth0 session, and back to the origin.
+  // GitHub is the account's Auth0 identity, so there is no "disconnect
+  // GitHub, stay signed in" to offer without account linking. A local-only
+  // sign-out would leave the session alive, and the next sign-in would
+  // complete silently as the same user (Share#1923).
+  const handleGithubRemove = () => logout(endSessionLogoutOptions())
 
   const handleLoginGithub = () => {
     // Not a gate's sign-in: drop any stale gate attempt (Auth0/gateLogin.js).

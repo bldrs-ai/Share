@@ -13,6 +13,12 @@ export const GA_MEASUREMENT_ID = 'G-GRLNVMZRGW'
 // previews/dev, GitHub Pages installs — must not feed prod analytics.
 const PROD_HOSTNAMES = ['bldrs.ai', 'www.bldrs.ai']
 
+// Deploy previews of bldrs' own Netlify project only (the one that serves
+// bldrs.ai; cf. tools/live-smoke/targets.js#LIVE_NETLIFY_PROJECTS). Any
+// other Netlify site, a fork's included, gets the same `deploy-preview-N--`
+// shape, and must not be able to opt into the production property.
+const DEPLOY_PREVIEW_HOSTNAME = /^deploy-preview-\d+--bldrs-share-prod\.netlify\.app$/
+
 
 /**
  * True when this page should load Google Analytics: production hosts, or a
@@ -33,7 +39,7 @@ export function shouldInitGa({
   isWebdriver = navigator.webdriver === true,
   enableInPreview = isFeatureEnabled('gaEnableInPreview'),
 } = {}) {
-  const isDeployPreview = hostname.startsWith('deploy-preview-') && hostname.endsWith('.netlify.app')
+  const isDeployPreview = DEPLOY_PREVIEW_HOSTNAME.test(hostname)
   return (PROD_HOSTNAMES.includes(hostname) || (isDeployPreview && enableInPreview)) && !isWebdriver
 }
 
@@ -60,8 +66,7 @@ export default function setupGa(env = undefined) {
   try {
     const hostname = env?.hostname ?? window.location.hostname
     const enableInPreview = env?.enableInPreview ?? isFeatureEnabled('gaEnableInPreview')
-    const isPreviewSmokeTest = hostname.startsWith('deploy-preview-') &&
-      hostname.endsWith('.netlify.app') && enableInPreview
+    const isPreviewSmokeTest = DEPLOY_PREVIEW_HOSTNAME.test(hostname) && enableInPreview
     if (isPreviewSmokeTest) {
       // Unlike GA DebugView, this remains visible when Brave/Shields or an
       // extension blocks googletagmanager.com, making that failure explicit.

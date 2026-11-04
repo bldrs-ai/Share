@@ -414,6 +414,33 @@ rather than a CPU-versus-bandwidth one. Playwright has no `page.metrics()`
   15–20 s each; that was 2–3× too pessimistic, because the local figure
   amortized Playwright's fixed per-worker startup over four tests instead of
   157.
+- **The render loop, on software WebGL.** Headless Chromium here renders
+  through SwiftShader, on the CPU. On a big model the three.js loop then
+  competes with the geometry pump for the main thread, and the cost of each
+  frame grows with the scene, so it can take over a load. The ad-hoc probes
+  used for #2029/#2044 throttle `requestAnimationFrame` with
+  `RAF_THROTTLE_MS`. On windowed PSB (860 MB, persistent profile,
+  2026-11-03), 1000 (one frame a second) gave Geometry 670–695 s on every
+  build from conway 750 to 753. 3600000 (the loop frozen) gave 37–38 s on
+  the same builds. At 1 fps Geometry reached 50 % in ~26 s and then crawled
+  at ~1 % per 45 s, with about one long task per frame. That looked like a
+  code regression and was briefly reported as one (#2045). **Compare builds
+  only at the same throttle, and freeze the loop
+  (`RAF_THROTTLE_MS=3600000`) when the question is engine or pump time.**
+  The effect itself is real, though: per-frame cost competing with the pump
+  for the main thread is what a weak GPU sees, and it matters for
+  first-mesh interactivity (#2043).
+  **Since #2043 a progressive Conway load paints on demand**
+  (`src/viewer/three/renderDemand.js`): the loop still ticks, but between the
+  session's start and finish a frame paints only for the user (camera,
+  selection, resize) or within a budget for the load. So at a native frame
+  rate a load no longer pays for sixty paints a second, and native-rate
+  numbers from before and after #2043 are not comparable either; the frozen
+  loop still is the like-for-like setting for engine and pump time. What the
+  user's own interaction costs (an orbit paints every frame) is measured in
+  design/new/in-app-model-switch.md §4.2a. A probe that wants paints rather
+  than frames must count render-closure calls that did work — a skipped
+  frame returns in microseconds.
 - **`waitForModelReady`'s budget.** The shared helper defaults to 15 s;
   `measureLoad` passes its own `timeoutMs` (120 s default) because a big
   model or a throttled CPU blows straight through 15 s.

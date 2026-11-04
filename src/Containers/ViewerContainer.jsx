@@ -20,7 +20,10 @@ export default function ViewerContainer() {
   const isMobile = useIsMobile()
 
   const [, setIsDragActive] = useState(false)
-  const [showQuotaDialog, setShowQuotaDialog] = useState(false)
+  // In the store, not local state: OnboardingOverlay raises this same dialog
+  // for a drop on it, and unmounts as it does (store/OpenSlice.js).
+  const isDropQuotaDialogVisible = useStore((state) => state.isDropQuotaDialogVisible)
+  const setIsDropQuotaDialogVisible = useStore((state) => state.setIsDropQuotaDialogVisible)
 
   const navigate = useNavigate()
   const {tier, record} = useQuota()
@@ -34,7 +37,7 @@ export default function ViewerContainer() {
     setIsDragActive(false)
     await handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert, undefined, undefined, {
       record,
-      onExceeded: () => setShowQuotaDialog(true),
+      onExceeded: () => setIsDropQuotaDialogVisible(true),
     })
   }
 
@@ -64,8 +67,8 @@ export default function ViewerContainer() {
       />
       <QuotaLimitDialog
         tier={tier}
-        isOpen={showQuotaDialog}
-        onClose={() => setShowQuotaDialog(false)}
+        isOpen={isDropQuotaDialogVisible}
+        onClose={() => setIsDropQuotaDialogVisible(false)}
       />
     </>
   )

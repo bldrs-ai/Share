@@ -302,12 +302,17 @@ export const flags = [
   // `?feature=disableLoadOverlay` leaves the canvas live so a load can be
   // inspected while it streams.
   //
-  // Note when using it: taking the camera fires `controlstart`, which
-  // stops ProgressiveLoadSession's camera follow permanently (by design
-  // — the user outranks the follow). So the first interaction freezes
-  // the camera for the rest of the load. That is what makes the flag
-  // useful for "where did it go", and also why the follow's own framing
-  // can't be observed in the same run.
+  // Since open-205 the overlay lifts by itself at the first mesh (#2043),
+  // during the parse, so this only adds the stretch before it: download,
+  // wasm init, and the parse of a model too small to preview.
+  //
+  // Note when using it: taking the camera (a drag's `controlstart`, a
+  // wheel's `control`) stops ProgressiveLoadSession's camera follow
+  // permanently, and skips the end-of-load fit (by design — the user
+  // outranks the follow; design/new/in-app-model-switch.md §4.2a). So the
+  // first interaction freezes the camera for the rest of the load. That is
+  // what makes the flag useful for "where did it go", and also why the
+  // follow's own framing can't be observed in the same run.
   //
   // Inverted semantics on purpose: `?feature=` can only turn flags ON,
   // so an off-switch for default-on behavior has to be an off-flag.
