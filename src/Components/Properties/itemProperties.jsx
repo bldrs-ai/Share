@@ -16,9 +16,11 @@ import {stoi} from '../../utils/strings'
  * Recursive calls will pass children
  * @param {boolean} isPset Is property set
  * @param {number} serial
+ * @param {number} [depth] how deep this table is nested inside another
+ *   (see renderableValue)
  * @return {object} A property table react component
  */
-export async function createPropertyTable(model, ifcProps, isPset = false, serial = 0) {
+export async function createPropertyTable(model, ifcProps, isPset = false, serial = 0, depth = 0) {
   const ROWS = []
   let rowKey = 0
   const typeName = entityTypeName(model, ifcProps)
@@ -32,7 +34,7 @@ export async function createPropertyTable(model, ifcProps, isPset = false, seria
       continue
     }
     const val = ifcProps[key]
-    const propRow = await prettyProps(model, key, val, false, rowKey++ )
+    const propRow = await prettyProps(model, key, val, false, rowKey++, depth)
     if (propRow) {
       if (propRow.key === null) {
         throw new Error(`Row for key=(${key}) created with invalid react key`)
@@ -120,6 +122,127 @@ function webIfcFor(model) {
 
 
 /**
+ * How deep nested entities render as their own tables before they are shown
+ * as `#id TYPE` instead. A reference chain can be long (an IfcGrid's axis →
+ * its IfcPolyline → its points), and each level is a table in a 130 px cell.
+ *
+ * This bounds RENDERING only. `deref` has already resolved the whole
+ * transitive closure of every reference before renderableValue sees it: one
+ * `getItemProperties(0, id, true)` per reference (a worker round trip each
+ * under `?feature=engineWorker`), with no cycle guard. That predates this
+ * limit; bounding it means a lazier deref, not a smaller number here.
+ */
+const MAX_NESTED_TABLE_DEPTH = 2
+
+
+/**
+ * How many members of an array are shown before `… and N more`. Arrays the
+ * panel can reach run to tens of thousands of members (an
+ * IfcCartesianPointList3D's coordinates, a shell's faces), and each entity
+ * member is a nested table.
+ */
+export const MAX_ARRAY_MEMBERS = 50
+
+
+/**
+ * A deref'd property value as something React can render, whatever shape it
+ * came back in: a string or number as is; an entity (an object with
+ * `expressID`) as a nested table, or past MAX_NESTED_TABLE_DEPTH as its
+ * `#id TYPE`; an array member by member; any other object as compact JSON.
+ * Never a raw object, which is what React throws on (#31) and what took the
+ * whole page down from one property (Share#2063).
+ *
+ * @param {object} model IFC model
+ * @param {*} value deref's result
+ * @param {number} serial react key base
+ * @param {number} [depth] nesting depth so far
+ * @return {Promise<*>} a React node
+ */
+export async function renderableValue(model, value, serial, depth = 0) {
+  if (value === null || value === undefined) {
+    return ''
+  }
+  const type = typeof value
+  if (type === 'string' || type === 'number' || type === 'bigint') {
+    return value
+  }
+  if (type === 'boolean') {
+    return String(value)
+  }
+  if (Array.isArray(value)) {
+    const shown = value.length > MAX_ARRAY_MEMBERS ? value.slice(0, MAX_ARRAY_MEMBERS) : value
+    const more = value.length - shown.length
+    const moreText = more > 0 ? `… and ${more} more` : null
+    if (shown.every(isPrimitive)) {
+      // The common case (coordinates, indices, labels): one string, not a
+      // span and an await per member.
+      const text = shown.map((member) => (member === null || member === undefined ? '' : String(member))).join(', ')
+      return moreText ? `${text}, ${moreText}` : text
+    }
+    const parts = []
+    for (let i = 0; i < shown.length; i++) {
+      const part = await renderableValue(model, shown[i], `${serial}-${i}`, depth)
+      parts.push(<span key={`${serial}-${i}`}>{i > 0 ? ', ' : ''}{part}</span>)
+    }
+    if (moreText) {
+      parts.push(<span key={`${serial}-more`}>, {moreText}</span>)
+    }
+    return parts
+  }
+  if (type === 'object') {
+    if (value.expressID !== undefined) {
+      if (depth >= MAX_NESTED_TABLE_DEPTH) {
+        const name = entityTypeName(model, value)
+        return `#${value.expressID}${name ? ` ${prettyType(name)}` : ''}`
+      }
+      return await createPropertyTable(model, value, false, serial, depth + 1)
+    }
+    if (value.ref !== undefined) {
+      // deref's shape for a reference to a rooted entity: {type, ref:
+      // GlobalId}, `type` already a name ('IFCWALL').
+      const name = typeof value.type === 'string' ? prettyType(value.type) : ''
+      return name ? `${name} ${value.ref}` : String(value.ref)
+    }
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+  return String(value)
+}
+
+
+/**
+ * @param {*} value
+ * @return {boolean} whether React renders it as text
+ */
+function isPrimitive(value) {
+  return value === null || value === undefined || (typeof value !== 'object' && typeof value !== 'function')
+}
+
+
+/**
+ * A copy for deref to rewrite in place. structuredClone where there is one;
+ * values that will not clone (none are expected from either engine) are used
+ * as they are.
+ *
+ * @param {*} value
+ * @return {*}
+ */
+function cloneForDeref(value) {
+  if (value === null || typeof value !== 'object' || typeof structuredClone !== 'function') {
+    return value
+  }
+  try {
+    return structuredClone(value)
+  } catch {
+    return value
+  }
+}
+
+
+/**
  * The keys are defined here:
  * https://standards.buildingsmart.org/IFC/DEV/IFC4_3/RC2/HTML/schema/ifcproductextension/lexical/ifcelement.htm
  *
@@ -128,9 +251,10 @@ function webIfcFor(model) {
  * @param {object | string} propValue Property value
  * @param {boolean} isPset
  * @param {number} serial
+ * @param {number} [depth] nesting depth of the table this row is in
  * @return {object}
  */
-async function prettyProps(model, propName, propValue, isPset, serial = 0) {
+async function prettyProps(model, propName, propValue, isPset, serial = 0, depth = 0) {
   let label = `${propName}`
   const refPrefix = 'Ref'
   if (label.startsWith(refPrefix)) {
@@ -181,15 +305,27 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
       // entity" callback this used to pass was never invoked, so a
       // resolved reference came back as a raw entity object and React
       // threw "Objects are not valid as a React child", aborting the
-      // table. Nest it into its own table here instead. Arrays are left
-      // alone: React renders them, and deref has already resolved each
-      // member.
-      const derefed = await deref(propValue, webIfcFor(model), serial)
-      const isEntity = derefed !== null && typeof derefed === 'object' && !Array.isArray(derefed)
+      // table. Every resolved value now goes through renderableValue,
+      // which nests an entity into its own table — including an entity
+      // INSIDE an array: an IfcGrid's UAxes / VAxes are references to
+      // IfcGridAxis entities, which have no GlobalId, so deref resolves
+      // each to a whole object, and rendering that array as React children
+      // took down the whole app (React #31; the PSB grid, Share#2063).
+      //
+      // `structuredClone` first: deref rewrites the value IN PLACE, and two
+      // records the panel is given ARE shared: on a GLB cache hit,
+      // `getRecord` returns the object held in bldrsElementProperties.js's
+      // LRU block cache; and the spatial-tree node Properties.jsx falls
+      // back to is the NavTree's own, whose `Name` handle deref would turn
+      // into a bare string under the tree's label. Only this top-level
+      // value is copied: the entities deref fetches for each reference are
+      // mutated too, which is safe only because both engines' (and the
+      // worker facade's) getItemProperties return a fresh object per call.
+      const derefed = await deref(cloneForDeref(propValue), webIfcFor(model), serial)
       return (
         <Row
           d1={label}
-          d2={isEntity ? await createPropertyTable(model, derefed, false, serial) : derefed}
+          d2={await renderableValue(model, derefed, serial, depth)}
           key={serial}
         />
       )
