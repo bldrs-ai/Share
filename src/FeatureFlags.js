@@ -158,6 +158,13 @@ export const flags = [
   // milestone: PSB 77s -> 57s); `?feature=disableStreamOpen` remains
   // the classic-path escape hatch and this flag the demand kill switch.
   {name: 'demandGeometry', isActive: true},
+  // Per-model engine worker (design/new/engine-worker.md, open-205 #2053):
+  // each model's Conway engine runs in its own module Worker and is freed
+  // by terminate(). Off while the §7 steps land behind it. Step 2 (this
+  // flag's first use) ships only the session layer in `src/engine/` and the
+  // `window.__bldrsEngine` dev hook (`engineDevHook.js`); no load goes
+  // through it yet.
+  {name: 'engineWorker', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-
