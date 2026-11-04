@@ -1,15 +1,15 @@
 // ShareIfcLoader#parse under `?feature=engineWorker` (engine-worker.md §7
-// step 3): an IFC load drives the worker-engine load instead of the
+// steps 3 and 6): an IFC or STEP load drives the worker-engine load instead of the
 // main-thread parse, and everything after the parse assembles against the
 // facade it returns. The facade and the session are mocked here; their own
-// behaviour is engine/engineIfcLoad.test.js's.
+// behaviour is engine/engineModelLoad.test.js's.
 import ShareIfcLoader, {isEngineWorkerLoad} from './ShareIfcLoader'
 import {assembleBatchedModel} from './buildBatchedConwayModel'
 import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {parseIfcWithConway} from './conwayDirectIfcLoader'
 import {isFeatureEnabled} from '../../FeatureFlags'
-import {createEngineIfcLoad} from '../../engine/engineIfcLoad'
+import {createEngineModelLoad} from '../../engine/engineModelLoad'
 
 
 jest.mock('./conwayDirectIfcLoader', () => ({
@@ -28,7 +28,10 @@ jest.mock('./flatMeshToInstancedModel', () => ({flatMeshToInstancedModel: jest.f
 jest.mock('./parsePreviewMesh', () => ({payloadToPreviewMesh: jest.fn(() => null)}))
 jest.mock('./ifcItemsMapParity', () => ({runIfcItemsMapParityCheck: jest.fn()}))
 jest.mock('../../FeatureFlags', () => ({isFeatureEnabled: jest.fn()}))
-jest.mock('../../engine/engineIfcLoad', () => ({createEngineIfcLoad: jest.fn()}))
+jest.mock('../../engine/engineModelLoad', () => ({
+  createEngineModelLoad: jest.fn(),
+  engineFormatOf: jest.requireActual('../../engine/engineModelLoad').engineFormatOf,
+}))
 jest.mock('../../utils/location', () => ({hasParams: jest.fn(() => false)}))
 jest.mock('../ProgressiveLoadSession', () => jest.fn().mockImplementation(() => ({
   previewGroup: {add: jest.fn(), remove: jest.fn(), children: []},
@@ -97,7 +100,7 @@ describe('viewer/ifc/ShareIfcLoader with ?feature=engineWorker', () => {
       // eslint-disable-next-line require-await
       return {modelID: OPENED_MODEL_ID, recapture: async () => [], summary: {}}
     })
-    createEngineIfcLoad.mockImplementation(() => ({ifcAPI: facade, parse: engineParse}))
+    createEngineModelLoad.mockImplementation(() => ({ifcAPI: facade, parse: engineParse}))
     IncrementalBatchedBuilder.mockImplementation(() => ({
       root: {parent: null},
       appendBatch: jest.fn(),
@@ -135,7 +138,34 @@ describe('viewer/ifc/ShareIfcLoader with ?feature=engineWorker', () => {
     expect(facade.properties.getSpatialStructure).toHaveBeenCalledWith(OPENED_MODEL_ID, 'names', {includeSolids: true})
   })
 
-  it('STEP keeps the main-thread engine until step 6', async () => {
+  // engine-worker.md §7 step 6: STEP goes through the SAME worker load as
+  // IFC (one createEngineModelLoad, told the format as a label), and the
+  // at-index handle asks the worker's tree for STEP's sub-solids.
+  it.each(['step', 'stp'])('a .%s load goes through the worker engine as format \'step\'', async (type) => {
+    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+    loader.type = type
+    let handle
+    const model = await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn(), {onIndexed: (h) => {
+      handle = h
+    }})
+    expect(model).toBeTruthy()
+    expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'step'})
+    expect(engineParse).toHaveBeenCalledTimes(1)
+    expect(parseIfcWithConway).not.toHaveBeenCalled()
+    expect(IncrementalBatchedBuilder.mock.calls[0][0]).toBe(facade)
+    await handle.getSpatialStructure(0, 'names')
+    expect(facade.properties.getSpatialStructure)
+      .toHaveBeenCalledWith(OPENED_MODEL_ID, 'names', {includeSolids: true})
+  })
+
+  it('an IFC load is told format \'ifc\'', async () => {
+    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+    loader.type = 'ifc'
+    await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
+    expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'ifc'})
+  })
+
+  it('a format no Conway engine parses keeps to its own loader', async () => {
     // eslint-disable-next-line require-await
     parseIfcWithConway.mockImplementation(async (b, api, s, p, onMeshBatch) => {
       onMeshBatch?.([{expressID: 101, geometries: {size: () => 1}}], 0, {done: 1, total: 1})
@@ -143,9 +173,9 @@ describe('viewer/ifc/ShareIfcLoader with ?feature=engineWorker', () => {
       return {modelID: 0, captured: [], recapture: async () => []}
     })
     const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
-    loader.type = 'step'
+    loader.type = 'glb'
     await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
-    expect(createEngineIfcLoad).not.toHaveBeenCalled()
+    expect(createEngineModelLoad).not.toHaveBeenCalled()
     expect(parseIfcWithConway).toHaveBeenCalledTimes(1)
   })
 
@@ -239,10 +269,13 @@ describe('viewer/ifc/ShareIfcLoader with ?feature=engineWorker', () => {
     expect(buildConwayIfcModel).toHaveBeenCalledWith([], facade, OPENED_MODEL_ID, expect.anything())
   })
 
-  it('isEngineWorkerLoad: IFC and .ifczip, with the flag, demand geometry and a scene', () => {
+  it('isEngineWorkerLoad: IFC, .ifczip and STEP, with the flag, demand geometry and a scene', () => {
     expect(isEngineWorkerLoad('ifc', {})).toBe(true)
     expect(isEngineWorkerLoad('ifczip', {})).toBe(true)
-    expect(isEngineWorkerLoad('step', {})).toBe(false)
+    expect(isEngineWorkerLoad('step', {})).toBe(true)
+    expect(isEngineWorkerLoad('stp', {})).toBe(true)
+    expect(isEngineWorkerLoad('glb', {})).toBe(false)
+    expect(isEngineWorkerLoad(undefined, {})).toBe(false)
     expect(isEngineWorkerLoad('ifc', null)).toBe(false)
     isFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
     expect(isEngineWorkerLoad('ifc', {})).toBe(false)

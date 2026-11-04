@@ -64,6 +64,7 @@ import {
 } from '../viewer/ifc/appliedCoordination'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {spillModelSource} from './opfsSourceByteStore'
+import {PART21_LOADER_TYPES} from './part21Formats'
 import {STORE_DETECT_PREFIX_BYTES, isConwayIfcFormat, looksLikeTruncatedPart21Blob} from './stepFormat'
 import {
   externalCacheKey,
@@ -98,11 +99,6 @@ import {markIfOutOfMemory} from '../utils/oom'
 // would notice "cache hasn't warmed yet."
 const SCHEDULE_IDLE_TIMEOUT_MS = 5_000
 const LFS_POINTER_PROBE_BYTES = 256
-
-// The formats `findLoader` routes to conway via `parseIfcWithConway`. All
-// three are ISO-10303-21 part-21 files sharing one loader; only FILE_SCHEMA
-// separates IFC from STEP, so the suffix is not evidence either way.
-const PART21_LOADER_TYPES = new Set(['ifc', 'step', 'stp'])
 
 
 /**

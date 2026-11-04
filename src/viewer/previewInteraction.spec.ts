@@ -18,7 +18,7 @@ const MODEL_PATH = '/share/v/p/__test_fixtures__/Momentum.ifc'
 // The same load with the model's engine in its own worker
 // (engine-worker.md §7 step 3): its preview payloads cross from the worker,
 // and the index hold is honoured by starting its pump paused
-// (engine/engineIfcLoad.js).
+// (engine/engineModelLoad.js).
 const ENGINES = [
   {engine: 'main-thread engine', path: MODEL_PATH},
   {engine: 'engine worker', path: `${MODEL_PATH}?feature=engineWorker`},

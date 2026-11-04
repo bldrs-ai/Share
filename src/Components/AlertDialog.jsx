@@ -7,6 +7,7 @@ import {ARCHIVE_ENTRY_CHOICE, ARCHIVE_UNREADABLE} from '../loader/modelArchive'
 import {NotFoundError} from '../loader/Loader'
 import {UNRECOGNIZED_FORMAT_ALERT_EVENT, reportUnrecognizedFormat} from '../loader/unrecognizedFormat'
 import {getProvider} from '../connections/registry'
+import {CACHE_CLEAR_SKIPPED} from '../OPFS/messages'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import ArchiveEntryChoice from './ArchiveEntryChoice'
@@ -51,8 +52,9 @@ export default function AlertDialog({onClose}) {
     if (typeof alert !== 'object') {
       return
     }
-    if (alert.type === ARCHIVE_ENTRY_CHOICE) {
-      // A question, not a failure: nothing to count. Its entry names are the
+    if (alert.type === ARCHIVE_ENTRY_CHOICE || alert.type === CACHE_CLEAR_SKIPPED) {
+      // A question, or a cache clear another tab held back (ProfileControl):
+      // not a failure, nothing to count. Its entry names are the
       // user's file names, which must not reach Sentry or GA anyway.
       return
     }
@@ -104,6 +106,7 @@ export default function AlertDialog({onClose}) {
   const isUploadNotInBrowser = alert && typeof alert === 'object' && alert.type === 'uploadNotInBrowser'
   const isNoGeometry = alert && typeof alert === 'object' && alert.type === 'noGeometry'
   const isEntryChoice = alert && typeof alert === 'object' && alert.type === ARCHIVE_ENTRY_CHOICE
+  const isCacheClearSkipped = alert && typeof alert === 'object' && alert.type === CACHE_CLEAR_SKIPPED
   // A rejected file whose extension we can say something useful about: a
   // Revit project, a SolidWorks part, a PDF (loader/formatGuidance.js). Only
   // the header and body change; it is still an unrecognizedFormat alert, so
@@ -165,6 +168,13 @@ export default function AlertDialog({onClose}) {
   // are still there to look at.
   const dismiss = () => setAlert(null)
 
+  // A partial cache clear: ProfileControl holds its reload until this is read.
+  const acknowledgeCacheClear = () => {
+    const onDismiss = alert.onDismiss
+    setAlert(null)
+    onDismiss?.()
+  }
+
   let actionCb
   let actionTitle
   if (isOom) {
@@ -183,6 +193,9 @@ export default function AlertDialog({onClose}) {
     actionTitle = 'Open a file'
   } else if (isNoGeometry) {
     actionCb = dismiss
+    actionTitle = 'OK'
+  } else if (isCacheClearSkipped) {
+    actionCb = acknowledgeCacheClear
     actionTitle = 'OK'
   } else if (isEntryChoice) {
     // The rows are the actions; the close button is the way out.
@@ -208,6 +221,8 @@ export default function AlertDialog({onClose}) {
     headerText = 'No 3D geometry'
   } else if (isEntryChoice) {
     headerText = 'Choose a model'
+  } else if (isCacheClearSkipped) {
+    headerText = 'Cache partly cleared'
   } else if (guidance) {
     headerText = guidance.header
   } else {
@@ -220,7 +235,7 @@ export default function AlertDialog({onClose}) {
   // so there is nothing for support to diagnose. A guided format is the same:
   // the guidance, and its help link, is the help.
   const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema && !isInMemoryUploadGone &&
-    !isUploadNotInBrowser && !isNoGeometry && !guidance && !isEntryChoice
+    !isUploadNotInBrowser && !isNoGeometry && !guidance && !isEntryChoice && !isCacheClearSkipped
   // Choosing finishes the drop or pick that raised the chooser, from inside
   // this click; closing leaves whatever model is open, as the user had it.
   const chooseEntry = (entry) => {
@@ -232,9 +247,9 @@ export default function AlertDialog({onClose}) {
     <Dialog
       headerText={headerText}
       isDialogDisplayed={alert !== null}
-      setIsDialogDisplayed={isNoGeometry || isEntryChoice ? dismiss : onCloseInner}
+      setIsDialogDisplayed={isCacheClearSkipped ? acknowledgeCacheClear : (isNoGeometry || isEntryChoice ? dismiss : onCloseInner)}
       actionCb={actionCb}
-      headerIcon={isNoGeometry || isEntryChoice ?
+      headerIcon={isNoGeometry || isEntryChoice || isCacheClearSkipped ?
         <InfoOutlinedIcon className='icon-share'/> :
         <ErrorOutlineIcon className='icon-share'/>}
       actionTitle={actionTitle}
@@ -304,7 +319,7 @@ function createAlertReport(a) {
   } else if (typeof a === 'object') {
     if (a && (a.type === 'oom' || a.type === 'needsReconnect' || a.type === 'unsupportedSchema' ||
         a.type === 'inMemoryUploadGone' || a.type === 'uploadNotInBrowser' || a.type === 'engineFailure' ||
-        a.type === 'noGeometry' || a.type === 'unrecognizedFormat')) {
+        a.type === 'noGeometry' || a.type === 'unrecognizedFormat' || a.type === CACHE_CLEAR_SKIPPED)) {
       return a.message
     } else if (a instanceof NotFoundError) {
       return displayPathAlert(a)
