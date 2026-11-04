@@ -55,6 +55,7 @@
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {reportEngineVersion} from '../../loader/loadProgress'
 import {makeBlobByteStore} from '../../loader/opfsSourceByteStore'
+import {openDeferred} from '../../loader/conwayOpen'
 import {beginOpenAttempt, conwayOpenFailure, conwayRefusedSchema, openModelFailure} from '../../loader/unsupportedSchema'
 import debug, {WARN} from '../../utils/debug'
 import {attachInstanceMapSubsets} from '../three/elementSubsets'
@@ -198,8 +199,6 @@ export async function parseIfcWithConway(
       // settings are ignored), so no feature detection is needed here.
       deferSettings.ON_PREVIEW_MESH = onPreviewMesh
     }
-    let modelID
-    let openData = data
     // Did the open land on a WINDOWED source — bytes paged on demand out of
     // an OPFS/Blob store — rather than a resident buffer? Load-bearing for
     // the retention decision below, and knowable only here: conway exposes
@@ -208,32 +207,17 @@ export async function parseIfcWithConway(
     // this loader produces a windowed model. Nothing later flips it — the
     // one call that would (`spillModelSource`) runs from the GLB writer's
     // `finally`, long after `parse` has returned.
-    let windowedSource = false
-    // The LAST open below, marked immediately before it is made — how a
-    // refusal's load status is found (unsupportedSchema.js#beginOpenAttempt).
-    let attempt
-    if (store !== null) {
-      attempt = beginOpenAttempt(ifcAPI)
-      // eslint-disable-next-line new-cap
-      modelID = await ifcAPI.OpenModelStream(store, deferSettings)
-      windowedSource = typeof modelID === 'number' && modelID >= 0
-      // A schema refusal is final: the buffered fallback would only reach
-      // the same refusal after up to two more whole-file parses (conway's
-      // streamed open falls back to the classic one), and a large file
-      // could run out of memory before refusing.
-      if (!windowedSource && !conwayRefusedSchema(ifcAPI, attempt)) {
-        // IFC-only store path: STEP / failed sniff falls back to a
-        // buffered streamed open (conway#510 contract).
-        openData = await bytesFromSource(buffer)
-        attempt = beginOpenAttempt(ifcAPI)
-        // eslint-disable-next-line new-cap
-        modelID = await ifcAPI.OpenModelStreamed(openData, deferSettings)
-      }
-    } else {
-      attempt = beginOpenAttempt(ifcAPI)
-      // eslint-disable-next-line new-cap
-      modelID = await ifcAPI.OpenModelStreamed(openData, deferSettings)
-    }
+    //
+    // The open sequence itself (windowed, then buffered unless the windowed
+    // open was a schema refusal) is shared with the engine worker
+    // (loader/conwayOpen.js#openDeferred), so the two engines cannot drift.
+    // `data` is null on the store path; the buffered fallback reads the
+    // source then.
+    const {modelID, windowed: windowedSource, attempt} = await openDeferred(ifcAPI, {
+      store,
+      loadBytes: async () => data ?? await bytesFromSource(buffer),
+      settings: deferSettings,
+    })
     if (typeof modelID !== 'number' || modelID < 0) {
       throw await openModelFailure(modelID, buffer, conwayRefusedSchema(ifcAPI, attempt),
         conwayOpenFailure(ifcAPI, attempt))

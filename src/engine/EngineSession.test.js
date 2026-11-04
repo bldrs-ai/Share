@@ -406,3 +406,99 @@ describe('engine worker prelude modules', () => {
     }
   })
 })
+
+
+describe('engine protocol version mismatch (review on #2057)', () => {
+  it('an engine on another version refuses init promptly, typed, instead of hanging', async () => {
+    // The handler as a v(N+1) worker would run it, against this v(N) page.
+    let createForeignHandler
+    jest.isolateModules(() => {
+      jest.doMock('./protocol', () => ({
+        ...jest.requireActual('./protocol'),
+        ENGINE_PROTOCOL_VERSION: ENGINE_PROTOCOL_VERSION + 1,
+      }))
+      createForeignHandler = require('./engineHandler').createEngineHandler
+    })
+    const transport = makeInProcessTransport((post) =>
+      createForeignHandler({loadIfcAPI: async () => null, post}))
+    const session = new EngineSession(transport, {epoch: 3})
+    // A long backstop, so only the echoed refusal can make this settle in
+    // time: without it the reply is dropped and the test times out.
+    const init = session.init({timeoutMs: 60_000})
+    await expect(init).rejects.toMatchObject({
+      name: 'ProtocolMismatchError',
+      pageVersion: ENGINE_PROTOCOL_VERSION,
+      engineVersion: ENGINE_PROTOCOL_VERSION + 1,
+    })
+  }, 5_000)
+
+  it('init times out as a mismatch when the engine only ever spoke another version', async () => {
+    // An older worker that drops what it cannot read, and only announces
+    // itself in its own version.
+    const listeners = []
+    const transport = {
+      kind: 'test',
+      post: () => listeners.forEach((cb) => cb({v: ENGINE_PROTOCOL_VERSION + 1, epoch: 0, ev: 'progress'})),
+      onMessage: (cb) => listeners.push(cb),
+      onCrash: () => null,
+      terminate: jest.fn(),
+    }
+    const session = new EngineSession(transport, {epoch: 1})
+    await expect(session.init({timeoutMs: 20})).rejects.toMatchObject({name: 'ProtocolMismatchError'})
+  })
+
+  it('init times out plainly when the engine never answers at all', async () => {
+    const transport = {kind: 'test', post: () => null, onMessage: () => null, onCrash: () => null, terminate: jest.fn()}
+    const session = new EngineSession(transport, {epoch: 1})
+    await expect(session.init({timeoutMs: 20})).rejects.toThrow('engine did not answer init within 20 ms')
+  })
+})
+
+
+describe('engine open: a schema refusal is final (review on #2057)', () => {
+  /**
+   * An engine whose windowed open is refused on schema, as conway's IFC4X3
+   * gate does: -1, with the attempt's statistics saying UNSUPPORTED_SCHEMA.
+   *
+   * @return {object}
+   */
+  function refusingApi() {
+    const statistics = new Map()
+    return makeStubApi({
+      globalModelIDCounter: 0,
+      getStatistics: (id) => statistics.get(id),
+      async OpenModelStream() {
+        this.calls.push(['OpenModelStream'])
+        statistics.set(this.globalModelIDCounter, {
+          getLoadStatus: () => 'UNSUPPORTED_SCHEMA',
+          getLoadFailureReason: () => 'IFC4X3 is not supported',
+        })
+        return -1
+      },
+      async OpenModelStreamed() {
+        this.calls.push(['OpenModelStreamed'])
+        return 0
+      },
+    })
+  }
+
+  it('never retries as a buffered open, and rejects with the refusal classified', async () => {
+    const api = refusingApi()
+    const {session} = inProcessSession(api)
+    await session.init()
+    const opened = session.open({file: new Blob(['ISO-10303-21;'])})
+    await expect(opened).rejects.toMatchObject({
+      engineFailure: {code: -1, refusedSchema: true, openFailure: {status: 'UNSUPPORTED_SCHEMA'}},
+    })
+    expect(api.calls.map(([name]) => name)).toContain('OpenModelStream')
+    expect(api.calls.map(([name]) => name)).not.toContain('OpenModelStreamed')
+  })
+
+  it('a windowed failure that is NOT a refusal still falls back to buffered', async () => {
+    const api = makeStubApi({globalModelIDCounter: 0, getStatistics: () => undefined, OpenModelStream: async () => -1})
+    const {session} = inProcessSession(api)
+    await session.init()
+    await expect(session.open({file: new Blob(['x'])})).resolves.toMatchObject({modelID: 0, windowed: false})
+    expect(api.calls.map(([name]) => name)).toContain('OpenModelStreamed')
+  })
+})

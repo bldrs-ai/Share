@@ -10,11 +10,22 @@
 // async consumer in §2.1 can be handed it unchanged (step 3).
 // Resolves via conway's `./src/*` export map; a few KB, no wasm glue.
 import {IfcTypesMap} from '@bldrs-ai/conway/src/compat/web-ifc/types-map'
-import {ENGINE_PROTOCOL_VERSION, Ev, Op, deserializeError} from './protocol'
+import {ENGINE_PROTOCOL_VERSION, Ev, Op, ProtocolMismatchError, deserializeError} from './protocol'
 
 
 /** Why a pending request was refused once the session can no longer answer. */
 export const SESSION_CLOSED = 'engine session closed'
+
+/**
+ * How long `init` waits for the engine before giving up. §3 measured
+ * 0.4–0.6 s to stand a worker up (module eval plus a cold wasm compile) on
+ * a 4-vCPU container; 30 s is ~50× that, for a slow phone on a cold cache,
+ * and still short enough that a worker which can never answer (it speaks
+ * another protocol version and predates the echoed refusal, or it died
+ * before its first message) surfaces as an error instead of a load that
+ * never starts.
+ */
+export const ENGINE_INIT_TIMEOUT_MS = 30_000
 
 
 /**
@@ -95,6 +106,11 @@ export class EngineSession {
 
   /** @param {object} msg a reply or an event from the engine */
   receive(msg) {
+    if (msg && msg.v !== ENGINE_PROTOCOL_VERSION && typeof msg.v === 'number') {
+      // Remembered for `init`'s timeout: an engine that only ever speaks
+      // another version is a mismatch, not a slow start.
+      this.foreignVersion = msg.v
+    }
     if (!msg || msg.v !== ENGINE_PROTOCOL_VERSION || msg.epoch !== this.epoch) {
       // A late message from an engine this session replaced (§4).
       return
@@ -110,6 +126,8 @@ export class EngineSession {
       this.pending.delete(msg.re)
       if (msg.ok) {
         slot.resolve(msg.result)
+      } else if (msg.error?.name === 'ProtocolMismatchError') {
+        slot.reject(new ProtocolMismatchError(ENGINE_PROTOCOL_VERSION, msg.error.engineVersion))
       } else {
         slot.reject(deserializeError(msg.error))
       }
@@ -134,10 +152,24 @@ export class EngineSession {
    * @param {boolean} [options.verbose] engine debug logging (`glbVerbose`)
    * @param {object} [options.flags] the engine-relevant feature flags,
    *   snapshotted: a worker cannot read the page's `?feature=` (§4 `init`)
+   * @param {number} [options.timeoutMs] see ENGINE_INIT_TIMEOUT_MS; rejects
+   *   with a ProtocolMismatchError if all the engine sent was another
+   *   version's
    * @return {Promise<object>} `{conwayVersion, capabilities, wasmBytes, initMs}`
    */
-  async init({verbose = false, flags = {}} = {}) {
-    const result = await this.request(Op.INIT, {epoch: this.epoch, verbose, flags})
+  async init({verbose = false, flags = {}, timeoutMs = ENGINE_INIT_TIMEOUT_MS} = {}) {
+    let timer
+    const timeout = new Promise((resolve, reject) => {
+      timer = setTimeout(() => reject(this.foreignVersion === undefined ?
+        new Error(`engine did not answer init within ${timeoutMs} ms`) :
+        new ProtocolMismatchError(ENGINE_PROTOCOL_VERSION, this.foreignVersion)), timeoutMs)
+    })
+    let result
+    try {
+      result = await Promise.race([this.request(Op.INIT, {epoch: this.epoch, verbose, flags}), timeout])
+    } finally {
+      clearTimeout(timer)
+    }
     this.capabilities = result.capabilities
     return result
   }
@@ -156,6 +188,13 @@ export class EngineSession {
     const transfer = source?.bytes instanceof ArrayBuffer ? [source.bytes] : []
     try {
       const result = await this.request(Op.OPEN, {source}, transfer)
+      if (result.failure) {
+        // The engine's classification, for unsupportedSchema.js#openModelFailure
+        // to turn into the user-facing error, as the main-thread path does.
+        const error = new Error(`engine: open failed (${result.failure.code})`)
+        error.engineFailure = result.failure
+        throw error
+      }
       this.modelID = result.modelID
       return result
     } catch (e) {

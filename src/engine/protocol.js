@@ -77,3 +77,24 @@ export function deserializeError(shape) {
   }
   return error
 }
+
+
+/**
+ * The page and its engine speak different protocol versions: a stale worker
+ * bundle served beside a new page (a deploy mid-session, a cached worker),
+ * or the reverse. Typed, so a caller can tell it from an engine failure and
+ * fall back to the in-process engine, which is always the page's own
+ * version.
+ */
+export class ProtocolMismatchError extends Error {
+  /**
+   * @param {number} pageVersion this side's ENGINE_PROTOCOL_VERSION
+   * @param {number|undefined} engineVersion the other side's, when it said
+   */
+  constructor(pageVersion, engineVersion) {
+    super(`engine protocol mismatch: page v${pageVersion}, engine v${engineVersion ?? '?'}`)
+    this.name = 'ProtocolMismatchError'
+    this.pageVersion = pageVersion
+    this.engineVersion = engineVersion
+  }
+}

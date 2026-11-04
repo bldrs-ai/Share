@@ -15,6 +15,7 @@
 // pump), and the async reads (`tree`, `props`, `propertySets`,
 // `itemsOfType`). The pump, previews, failure classification and the GLB
 // capture job come in steps 3–5.
+import {classifyOpenFailure, openDeferred} from '../loader/conwayOpen'
 import {ENGINE_PROTOCOL_VERSION, Ev, Op, serializeError} from './protocol'
 
 
@@ -142,33 +143,35 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
         ON_MODEL_INFO: (info) => emit(Ev.MODEL_INFO, {info: plainProgress(info)}),
       }
       const t0 = now()
-      let windowed = false
-      let id
       const blob = source?.file
-      if (blob && typeof blob.slice === 'function' &&
-          !flags.disableStreamOpen && typeof api.OpenModelStream === 'function') {
-        // Windowed: the engine pages 4 MiB windows from the Blob/File on
-        // demand. A File structured-clones by reference, so nothing was
-        // copied to get it here (§2.2).
-        // eslint-disable-next-line new-cap
-        id = await api.OpenModelStream(makeBlobStore(blob), settings)
-        windowed = typeof id === 'number' && id >= 0
-      }
-      if (!windowed) {
-        // STEP, a failed IFC sniff, or no Blob at all: a buffered open of the
-        // whole source, held resident in this engine (conway#510's
-        // contract for the store-backed open's refusal).
-        const bytes = source?.bytes ?? (blob ? await blob.arrayBuffer() : null)
-        if (!bytes) {
-          throw new Error('engine: open needs source.file or source.bytes')
-        }
-        // eslint-disable-next-line new-cap
-        id = await api.OpenModelStreamed(new Uint8Array(bytes), settings)
-      }
+      const windowable = Boolean(blob && typeof blob.slice === 'function') &&
+        !flags.disableStreamOpen && typeof api.OpenModelStream === 'function'
+      // The same sequence the main-thread path runs (loader/conwayOpen.js):
+      // windowed from the Blob/File when it can be (a File structured-clones
+      // by reference, so nothing was copied to get it here, §2.2); else, or
+      // when that open fails other than by a schema refusal, buffered.
+      const {modelID: id, windowed, attempt} = await openDeferred(api, {
+        store: windowable ? makeBlobStore(blob) : null,
+        loadBytes: async () => {
+          const bytes = source?.bytes ?? (blob ? await blob.arrayBuffer() : null)
+          if (!bytes) {
+            throw new Error('engine: open needs source.file or source.bytes')
+          }
+          return new Uint8Array(bytes)
+        },
+        settings,
+      })
       if (typeof id !== 'number' || id < 0) {
-        const message = `engine: open failed (${id})`
-        emit(Ev.FAILED, {kind: 'openFailure', message, code: id})
-        throw new Error(message)
+        // Classified here, where conway's statistics are (§2.4 G3); the page
+        // builds the user-facing error from it with
+        // unsupportedSchema.js#openModelFailure, as the main-thread path does.
+        const failure = classifyOpenFailure(api, attempt, id)
+        emit(Ev.FAILED, {
+          kind: failure.refusedSchema ? 'refusedSchema' : 'openFailure',
+          message: `engine: open failed (${id})`,
+          ...failure,
+        })
+        return {modelID: -1, windowed: false, failure}
       }
       modelID = id
       const result = {modelID, windowed, openMs: now() - t0, wasmBytes: wasmBytesOf(api)}
@@ -255,7 +258,21 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
       return
     }
     if (msg.v !== ENGINE_PROTOCOL_VERSION) {
-      send({re: msg.id, ok: false, error: {name: 'Error', message: `engine: protocol v${msg.v} unsupported`}})
+      // Echo the REQUEST's version and epoch, not ours: the client drops any
+      // message whose version or epoch is not its own, and a refusal it
+      // drops leaves its `init` waiting forever. `engineVersion` says what
+      // this side speaks, for EngineSession's ProtocolMismatchError.
+      post({
+        v: msg.v,
+        epoch: msg.epoch,
+        re: msg.id,
+        ok: false,
+        error: {
+          name: 'ProtocolMismatchError',
+          message: `engine: protocol v${msg.v} unsupported (engine speaks v${ENGINE_PROTOCOL_VERSION})`,
+          engineVersion: ENGINE_PROTOCOL_VERSION,
+        },
+      })
       return
     }
     const op = ops[msg.op]
