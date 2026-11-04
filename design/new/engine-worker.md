@@ -623,6 +623,23 @@ second, divergent path.
    needs `OPFS.worker.js` not to hold a read-write handle on the same file
    while the engine reads it, and a Blob-store fallback where read-only
    handles are missing (Safari and Firefox not checked).
+   *As built:*
+   - `engine/engineSources.js#openSourceStore` opens
+     `createSyncAccessHandle({mode: 'read-only'})` on the file's own OPFS
+     entry. The page learns the entry from `OPFS.worker.js`'s
+     `fileHandle` reply field, kept in `OPFS/opfsFileHandles.js`, and it
+     travels in the `open` request's `source.opfsHandle`.
+   - It uses the handle only if the handle reports `mode === 'read-only'`:
+     a browser that ignores the option opens an exclusive `readwrite`
+     handle, which is closed at once. It also needs the entry's size to
+     equal the snapshot's.
+   - Otherwise it falls back to the Blob store and says why on the load
+     report's `Engine source I/O:` line.
+   - `OPFS.worker.js` hashes through read-only handles too, so the two
+     share the file.
+   - The handle is held for the session and closed after `CloseModel`,
+     or at once when a windowed open falls back to buffered.
+   - Kill switch: `?feature=disableEngineSyncHandle`.
 5. **GLB writer capture in the worker.** The `capture` job (properties,
    spatial tree, face ids), then spill and release worker-side, then the
    flag's cache write turns on. E2E: `batchedGlbCache.spec.ts` under the
@@ -661,7 +678,7 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 1 — conway#540 | merged (conway#759, published `1.1633.540`) |
 | 2 — protocol, worker entry, client | merged (#2057) |
 | 3 — IFC load in the worker | merged (#2058). PSB, n=3, flag off → on: main-thread long tasks over 50 ms 418 → 23, time blocked 63 → 12 s, Geometry 48.3 → 40.6 s, Total 94.8 → 83.3 s, page heap after load 2130 → 889 MB (the worker's own JS heap 65 MB). Buffered tree-at-index: SEESTRASSE 8.05 → 4.60 s, sp-231MB 37.4 → 11.9 s |
-| 4 — sync-access-handle source | in progress |
+| 4 — sync-access-handle source | in review. Measured flag on, Blob store vs read-only sync handle, at medians: PSB (n=3) source I/O 19.1 → 3.8 s, Parsing 28.3 → 20.2 s, time to index 44.2 → 35.8 s, Total 96.5 → 82.9 s; sp-231MB (n=2) I/O 8.5 → 2.1 s, Parsing 14.0 → 9.9 s, Total 64.8 → 60.1 s; SEESTRASSE (n=1) I/O 0.32 → 0.07 s, Total flat. Geometry, main-thread long tasks and page heap unchanged. Every leg was windowed, checked by its `Engine source I/O:` line, in a persistent profile |
 | 6 — STEP in the worker | in progress |
 | 5, 7, 8, 9 | not started; 9 is gated on #2061 and #2070 |
 
