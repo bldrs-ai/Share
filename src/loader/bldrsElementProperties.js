@@ -83,7 +83,7 @@ import * as pako from 'pako'
 import {IFCRELDEFINESBYPROPERTIES} from '@bldrs-ai/conway/web-ifc'
 import useStore from '../store/useStore'
 import {yieldToBrowser} from '../utils/scheduling'
-import {glbInfo, glbVerbose} from './glbLog'
+import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 
 
 export const BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME = 'BLDRS_element_properties'
@@ -474,7 +474,9 @@ export async function captureBldrsElementProperties(ifcManager, modelID, spatial
  *
  * Two sweeps, identical decoded output to the old capture-then-filter
  * fast path:
- *   1. Root-seed scan via sync `proxy.getLine`. Preferred enumeration
+ *   1. Root-seed scan via `proxy.getLine` (sync on a resident source;
+ *      `getLineResident`, which pages the record's window first, on a
+ *      windowed one — see `read` in the body). Preferred enumeration
  *      is conway's `RootExpressIDs` (≥1.383) — the type index yields
  *      just the IfcRoot-derived ids, skipping the ~96% of records that
  *      are geometric resources without materialising a descriptor per
@@ -487,7 +489,9 @@ export async function captureBldrsElementProperties(ifcManager, modelID, spatial
  *      Records not kept are dropped on the spot.
  *   2. Ref-closure drain: queued ids (non-root entities reachable from
  *      a root — property values, materials, owner history etc.) are
- *      fetched by id, serialized, and their refs queued in turn.
+ *      fetched by id, serialized, and their refs queued in turn, one
+ *      generation at a time in ascending id order (file order, so a
+ *      windowed source pages forward).
  *      `collectRefIds` skips the geometric backbone (Representation /
  *      ObjectPlacement / RepresentationContexts / Representations) at
  *      the entity top level, so the closure stops at the geometric
@@ -509,6 +513,10 @@ export async function captureBldrsElementProperties(ifcManager, modelID, spatial
  *   - the proxy's internal `model` field isn't where we expect
  *   - the iteration yields zero entities (parser state empty)
  *   - assembling the container throws (gzip failure)
+ *
+ * A record the sweep reaches but cannot read is NOT a reason to fall
+ * back: it is counted and reported with a `[glb]` warning, and the rest
+ * of the closure is kept (#2038).
  *
  * Coupling notes: this reaches `ifcAPI.getPassthrough(modelID)` and
  * then `proxy.model[0]` (the IfcStepModel) — both are stable on
@@ -553,8 +561,46 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
     }
   }
 
+  // A windowed source (conway's store-backed open, which is how every IFC
+  // staged in OPFS opens, or a model already spilled) keeps only a few
+  // 4 MiB windows of the file resident, and a SYNC `getLine` on a record
+  // outside them throws `StepBufferNotResidentError`. Those throws used to
+  // be skipped as per-entity failures, so the capture silently dropped
+  // every record that happened not to be resident: 75 % of sp-231MB's
+  // records, and a different set on every load, because what is resident
+  // depends on timing (#2038). `getLineResident` pins the record's window,
+  // pages it in, reads, and unpins (conway#761). A resident source keeps
+  // the plain sync read: an await per record there would be a microtask hop
+  // on every one of hundreds of thousands of iterations, for nothing.
+  const pagesWindows = proxy.sourceIsExternal === true &&
+    typeof proxy.getLineResident === 'function'
+  // Records whose read threw anyway (a corrupt record, a store read that
+  // failed). Counted and reported rather than dropped without a word.
+  let unreadable = 0
+  const countUnreadable = () => {
+    unreadable++
+    return undefined
+  }
+  /**
+   * One record, or a promise of it on a windowed source: the caller awaits
+   * only then, so the resident sweep stays synchronous. Undefined when the
+   * read failed (counted in `unreadable`).
+   *
+   * @param {number} expressID
+   * @return {object|undefined|Promise<object|undefined>}
+   */
+  const read = (expressID) => {
+    try {
+      return pagesWindows ?
+        proxy.getLineResident(expressID, false).catch(countUnreadable) :
+        proxy.getLine(expressID)
+    } catch (e) {
+      return countUnreadable()
+    }
+  }
+
   const startMs = Date.now()
-  // Records land in the container writer in BFS discovery order (not
+  // Records land in the container writer in discovery order (not
   // ascending-integer) — block assignment is arbitrary anyway; the
   // reader looks entries up through the header's id→block index.
   const writer = new ElementPropertiesContainerWriter()
@@ -567,8 +613,9 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
   // ref-closure entities during the drain; a root first discovered as
   // someone's ref drains from the queue instead and the scan skips it).
   const visited = new Set()
-  const queue = []
-  let queueHead = 0
+  // The ref frontier still to drain: the first generation is filled by
+  // sweep 1, and sweep 2 replaces it generation by generation.
+  let frontier = []
   const propertySets = {}
   let sawEntity = false
   let psetRelCount = 0
@@ -582,24 +629,18 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
   try {
     /**
      * Sweep-1 record body, shared by the roots-only and full-scan
-     * enumerations below: decode one record via sync `getLine`, feed
+     * enumerations below: given one record as `read` returned it, feed
      * the pset index, emit IfcRoot seeds, queue the ref frontier.
      *
+     * The read stays in the loops, not here, so a resident sweep makes
+     * no Promise per record: sync `getLine` is the 10-min-to-10-sec win
+     * on Snowdon (~576k entities × ~10µs each instead of × ~1ms each
+     * through the async manager surface).
+     *
      * @param {number} expressID
+     * @param {object|undefined} props the record, undefined when unreadable
      */
-    const scanRecord = (expressID) => {
-      let props
-      try {
-        // Sync — no Promise allocation, no microtask hop. This is the
-        // 10-min-to-10-sec win on Snowdon: ~576k entities × ~10µs each
-        // instead of × ~1ms each through the async manager surface.
-        props = proxy.getLine(expressID)
-      } catch (e) {
-        // Per-entity failures are non-fatal — skip and continue. The
-        // wit-three slow path swallows the same way (one entity gap
-        // means one missing Properties row; not a cache abort).
-        return
-      }
+    const scanRecord = (expressID, props) => {
       if (!props || typeof props !== 'object') {
         return
       }
@@ -665,7 +706,7 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
       for (const refId of refs) {
         if (!visited.has(refId)) {
           visited.add(refId)
-          queue.push(refId)
+          frontier.push(refId)
         }
       }
     }
@@ -687,7 +728,11 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
         if (typeof expressID !== 'number') {
           continue
         }
-        scanRecord(expressID)
+        let props = read(expressID)
+        if (pagesWindows) {
+          props = await props
+        }
+        scanRecord(expressID, props)
       }
       if (!sawEntity) {
         // Degenerate: the iterator yielded nothing usable (nothing has
@@ -708,7 +753,11 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
         if (typeof expressID !== 'number') {
           continue
         }
-        scanRecord(expressID)
+        let props = read(expressID)
+        if (pagesWindows) {
+          props = await props
+        }
+        scanRecord(expressID, props)
       }
     }
 
@@ -725,30 +774,41 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
     // NominalValue refs, Material*, Classification*, OwnerHistory)
     // ARE followed because those field names aren't in
     // `GEOMETRIC_FIELD_NAMES`.
-    while (queueHead < queue.length) {
-      if (++iterCount % ENTITIES_PER_YIELD === 0) {
-        await yieldToBrowser()
-      }
-      const id = queue[queueHead++]
-      let props
-      try {
-        props = proxy.getLine(id)
-      } catch (e) {
-        continue
-      }
-      if (!props || typeof props !== 'object') {
-        // Dangling ref (id not in the file) — same skip the legacy
-        // filter applied via its `itemProperties[refId] !== undefined`
-        // existence check.
-        continue
-      }
-      emitRecord(id, props)
-      const refs = []
-      collectRefIds(props, refs)
-      for (const refId of refs) {
-        if (!visited.has(refId)) {
-          visited.add(refId)
-          queue.push(refId)
+    //
+    // Breadth-first by GENERATION, each sorted by express ID: the refs a
+    // generation discovers are drained as the next one. Express IDs run in
+    // file order in practice, so on a windowed source a sorted generation
+    // pages its windows in one forward pass instead of hopping across the
+    // file in discovery order. Measured on PSB (860 MB, 16 × 4 MiB
+    // windows): 3.9 GB of window reads in discovery order, 1.7 GB sorted
+    // (#2038). Sorted on a resident source too, so the container's record
+    // order (and so its bytes) never depends on how the source was read.
+    while (frontier.length > 0) {
+      frontier.sort((a, b) => a - b)
+      const generation = frontier
+      frontier = []
+      for (const id of generation) {
+        if (++iterCount % ENTITIES_PER_YIELD === 0) {
+          await yieldToBrowser()
+        }
+        let props = read(id)
+        if (pagesWindows) {
+          props = await props
+        }
+        if (!props || typeof props !== 'object') {
+          // Dangling ref (id not in the file) — same skip the legacy
+          // filter applied via its `itemProperties[refId] !== undefined`
+          // existence check — or an unreadable record, counted in `read`.
+          continue
+        }
+        emitRecord(id, props)
+        const refs = []
+        collectRefIds(props, refs)
+        for (const refId of refs) {
+          if (!visited.has(refId)) {
+            visited.add(refId)
+            frontier.push(refId)
+          }
         }
       }
     }
@@ -770,7 +830,16 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
       `${psetRelCount} IfcRelDefinesByProperties → ` +
       `${Object.keys(propertySets).length} products with psets) into ` +
       `${containerBytes.byteLength}B container ` +
-      `(${writer.gzippedBlocks.length} blocks) in ${Date.now() - startMs}ms`)
+      `(${writer.gzippedBlocks.length} blocks) in ${Date.now() - startMs}ms` +
+      `${pagesWindows ? ' (windowed source)' : ''}`)
+    if (unreadable > 0) {
+      // Every record the sweep reached but could not read is missing from
+      // the cached artifact's Properties. Said once, with the count, so a
+      // partial capture is never silent again (#2038).
+      glbWarn(
+        `${BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME}: ${unreadable} record(s) could not be read ` +
+        'and are missing from the cached properties')
+    }
 
     return containerBytes
   } finally {

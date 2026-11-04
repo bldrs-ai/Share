@@ -227,6 +227,53 @@ describe('loader/bldrsSpatialTree', () => {
       expect(captured.children[0].Name).toBeUndefined() // throw → no name
       expect(captured.children[1].Name).toEqual({value: 'e3'})
     })
+
+    // #2038: on a windowed source (conway's store-backed open, how an
+    // OPFS-staged IFC opens) a sync getLine throws for any record outside
+    // the resident windows, so the old walk left every such node unnamed —
+    // all 4,432 of sp-231MB's. The proxy here has NOTHING resident: sync
+    // getLine always throws, as it would for a record in an evicted window.
+    describe('windowed source (#2038)', () => {
+      /**
+       * @param {object} bareTree
+       * @return {{mgr: object, proxy: object}}
+       */
+      function makeWindowedMgr(bareTree) {
+        const proxy = {
+          sourceIsExternal: true,
+          getLine: jest.fn(() => {
+            throw new Error('StepBufferNotResidentError: not resident')
+          }),
+          getLineResident: jest.fn((id) => Promise.resolve({Name: {type: 1, value: `n${id}`}})),
+        }
+        return {proxy, mgr: {getSpatialStructure: () => bareTree, ifcAPI: {getPassthrough: () => proxy}}}
+      }
+
+      it('names every node by paging its record in', async () => {
+        const {mgr, proxy} = makeWindowedMgr({
+          expressID: 1, type: 'IFCPROJECT', children: [
+            {expressID: 2, type: 'IFCSITE', children: []},
+          ],
+        })
+        const captured = await captureBldrsSpatialTree(mgr, 0)
+        expect(captured.Name).toEqual({type: 1, value: 'n1'})
+        expect(captured.children[0].Name).toEqual({type: 1, value: 'n2'})
+        expect(proxy.getLine).not.toHaveBeenCalled()
+      })
+
+      it('reads the nodes in express-ID order, not tree order', async () => {
+        // Tree order hops across the file (on a windowed PSB it paged
+        // 1.9 GB of windows for 7,872 nodes); id order is file order.
+        const {mgr, proxy} = makeWindowedMgr({
+          expressID: 50, type: 'IFCPROJECT', children: [
+            {expressID: 900, type: 'IFCSITE', children: [{expressID: 10, type: 'IFCBUILDING'}]},
+            {expressID: 400, type: 'IFCSITE'},
+          ],
+        })
+        await captureBldrsSpatialTree(mgr, 0)
+        expect(proxy.getLineResident.mock.calls.map(([id]) => id)).toEqual([10, 50, 400, 900])
+      })
+    })
   })
 
   describe('BldrsSpatialTreeReader', () => {

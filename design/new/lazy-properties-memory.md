@@ -213,6 +213,17 @@ run `?feature=glbDraco` / `?feature=glbMeshopt` on a large model and compare.
   after all sync sweeps. If a future feature adds a sync `getLine` sweep on
   the load path, it must run before the spill or route through
   `ensureLineResident`.
+  **This happened (#2038).** Conway's store-backed open (`OpenModelStream`
+  from a byte store, conway#510) made every OPFS-staged IFC windowed *from
+  birth*, so "after the spill" became "always", and the capture's sync
+  `getLine` skipped every record outside the resident windows without a
+  word: sp-231MB's artifact kept 41,244 of 161,754 records and none of its
+  4,432 tree names. Both capture walks now read with `getLineResident`
+  when `proxy.sourceIsExternal` (the element-properties sweep keeps its
+  sync arm for a resident source), and they read in express-ID order so a
+  windowed source pages forward: PSB's whole capture reads 3.4 GB of
+  windows. The GLB slot was bumped to 0.25.0 to retire the partial
+  artifacts.
 - **Draco vs. worker freeze:** compression encode is CPU-heavy; keep it in
   the GlbWriter worker, not the main thread.
 

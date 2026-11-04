@@ -202,7 +202,7 @@ export async function captureBldrsSpatialTree(ifcManager, modelID) {
     // poor performance" when the manager calls `getItemProperties` per
     // node inline. We don't need inline props in the spatial tree — we
     // serialize only {expressID, type, Name, LongName, children}, and
-    // Name/LongName can be enriched sync via `proxy.getLine` (same
+    // Name/LongName can be enriched via `proxy.getLine` (same
     // fast surface the element-properties capture uses) in one walk
     // over the typically-small tree (~6k nodes on Snowdon).
     //
@@ -210,8 +210,8 @@ export async function captureBldrsSpatialTree(ifcManager, modelID) {
     // isn't reachable (test stubs, non-Conway loaders) — the warning
     // fires there, but the codepath is otherwise unchanged.
     const proxy = ifcManager.ifcAPI?.getPassthrough?.(modelID)
-    const canEnrichSync = proxy && typeof proxy.getLine === 'function'
-    const includeProperties = !canEnrichSync
+    const canEnrich = proxy && typeof proxy.getLine === 'function'
+    const includeProperties = !canEnrich
     // `includeSolids` matches the live-load NavTree feed
     // (`attachConwayDirectModelMethods`) so a cache-hit tree shows the same
     // STEP ephemeral solid nodes as a fresh parse. Ignored by the IFC surface
@@ -235,8 +235,8 @@ export async function captureBldrsSpatialTree(ifcManager, modelID) {
         'Properties. Check that this is the handle the model parsed under.')
       return null
     }
-    if (canEnrichSync) {
-      enrichNodeNamesSync(root, proxy)
+    if (canEnrich) {
+      await enrichNodeNames(root, proxy)
     }
     return serializeNode(root)
   } catch (e) {
@@ -251,24 +251,55 @@ export async function captureBldrsSpatialTree(ifcManager, modelID) {
 /**
  * Walk a bare spatial tree (just `{expressID, type, children}` per
  * node — the shape `getSpatialStructure(modelID, false)` returns) and
- * fill in `Name` / `LongName` from `proxy.getLine(expressID)`. Sync
- * end-to-end; the proxy's `getLine` is the same sync-bulk surface the
- * element-properties capture uses. One call per node, no async hops.
+ * fill in `Name` / `LongName` from the proxy's `getLine(expressID)`,
+ * the same surface the element-properties capture uses. One call per
+ * node.
+ *
+ * Sync on a resident source. On a windowed one (conway's store-backed
+ * open, which is how an OPFS-staged IFC opens) a sync `getLine` throws
+ * for any record outside the few resident windows, and each throw used
+ * to leave that node unnamed: every one of sp-231MB's 4,432 nodes, so a
+ * cache hit showed a NavTree of bare types (#2038). There it reads with
+ * `getLineResident`, which pages the record's window in first, awaited
+ * only on that arm.
  *
  * Mutates the input tree in place. Bounded by `MAX_TREE_DEPTH` (same
  * recursion cap `serializeNode` uses).
  *
- * @param {object} node spatial-tree node, mutated
- * @param {object} proxy IfcApiProxyIfc with sync `getLine`
- * @param {number} [depth] recursion depth — bounded by `MAX_TREE_DEPTH`
+ * @param {object} root spatial-tree root, mutated
+ * @param {object} proxy IfcApiProxyIfc with `getLine` (and, windowed,
+ *   `sourceIsExternal` / `getLineResident`)
+ * @return {Promise<void>}
  */
-function enrichNodeNamesSync(node, proxy, depth = 0) {
-  if (!node || depth >= MAX_TREE_DEPTH) {
-    return
+async function enrichNodeNames(root, proxy) {
+  const pagesWindows = proxy.sourceIsExternal === true &&
+    typeof proxy.getLineResident === 'function'
+  // Collected first and read in express-ID order (file order in practice)
+  // rather than in tree order, which hops across the file: on a windowed
+  // PSB the tree-order walk paged 1.9 GB of windows for 7,872 nodes. Each
+  // node's names are independent of the others, so the order changes
+  // nothing in the result.
+  const nodes = []
+  const collect = (node, depth) => {
+    if (!node || depth >= MAX_TREE_DEPTH) {
+      return
+    }
+    if (typeof node.expressID === 'number' && node.Name === undefined) {
+      nodes.push(node)
+    }
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) {
+        collect(child, depth + 1)
+      }
+    }
   }
-  if (typeof node.expressID === 'number' && node.Name === undefined) {
+  collect(root, 0)
+  nodes.sort((a, b) => a.expressID - b.expressID)
+  for (const node of nodes) {
     try {
-      const line = proxy.getLine(node.expressID)
+      const line = pagesWindows ?
+        await proxy.getLineResident(node.expressID, false) :
+        proxy.getLine(node.expressID)
       if (line) {
         if (line.Name !== undefined) {
           node.Name = line.Name
@@ -281,11 +312,6 @@ function enrichNodeNamesSync(node, proxy, depth = 0) {
       // Per-node failure is non-fatal — node renders without Name.
       // Don't log per-node; the parent capture's bookkeeping logs
       // the aggregate.
-    }
-  }
-  if (Array.isArray(node.children)) {
-    for (const child of node.children) {
-      enrichNodeNamesSync(child, proxy, depth + 1)
     }
   }
 }

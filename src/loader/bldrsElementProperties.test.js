@@ -510,6 +510,108 @@ describe('loader/bldrsElementProperties', () => {
     })
   })
 
+  // #2038. A windowed source (conway's store-backed open — how every IFC
+  // staged in OPFS opens — or a spilled one) keeps a few 4 MiB windows
+  // resident, and a SYNC getLine on a record outside them throws
+  // StepBufferNotResidentError. The capture used to skip those as
+  // per-entity failures: 75 % of sp-231MB's records were missing from its
+  // artifact, and a different set on every load. The proxy here has
+  // NOTHING resident (sync getLine always throws, as for a record in an
+  // evicted window), so with the old sync-only read the capture finds no
+  // record at all.
+  describe('captureBldrsElementProperties — windowed source (#2038)', () => {
+    const root = (id, refs = []) => ({
+      expressID: id, type: 3124254112, GlobalId: {type: 1, value: `g${id}`},
+      // Refs ride a non-geometric field, so the drain follows them.
+      HasAssignments: refs.map((value) => ({type: 5, value})),
+    })
+    const leaf = (id, refs = []) => ({
+      expressID: id, type: 1, Name: {type: 1, value: `l${id}`},
+      HasProperties: refs.map((value) => ({type: 5, value})),
+    })
+
+    /**
+     * @param {object} entitiesById
+     * @param {object} [options]
+     * @param {Set<number>} [options.unreadable] ids whose paged read rejects
+     * @return {{mgr: object, proxy: object}}
+     */
+    function makeWindowedMgr(entitiesById, {unreadable = new Set()} = {}) {
+      const roots = Object.values(entitiesById).filter((e) => e.GlobalId).map((e) => e.expressID)
+      const proxy = {
+        // The full-scan fallback's model; never walked here, since
+        // RootExpressIDs answers.
+        model: [{[Symbol.iterator]: () => [][Symbol.iterator]()}],
+        sourceIsExternal: true,
+        getLine: jest.fn(() => {
+          throw new Error('StepBufferNotResidentError: not resident')
+        }),
+        getLineResident: jest.fn((id) => (unreadable.has(id) ?
+          Promise.reject(new Error(`store read failed for #${id}`)) :
+          Promise.resolve(entitiesById[id]))),
+      }
+      const mgr = {
+        ifcAPI: {
+          getPassthrough: () => proxy,
+          RootExpressIDs: () => roots[Symbol.iterator](),
+        },
+      }
+      return {mgr, proxy}
+    }
+
+    it('captures every reachable record by paging it in', async () => {
+      const entities = {
+        10: root(10, [200]),
+        11: root(11),
+        200: leaf(200, [300]),
+        300: leaf(300),
+      }
+      const {mgr, proxy} = makeWindowedMgr(entities)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+      expect(Object.keys(captured.itemProperties).sort()).toEqual(['10', '11', '200', '300'])
+      expect(captured.itemProperties[300]).toEqual(entities[300])
+      expect(proxy.getLine).not.toHaveBeenCalled()
+    })
+
+    it('drains each generation of refs in ascending express-ID order', async () => {
+      // Roots discover 300, 200, 250 in that order; 200 discovers 150.
+      // Id order is file order, so a sorted generation pages its windows
+      // in one forward pass (PSB: 3.9 GB of window reads in discovery
+      // order, 1.7 GB sorted).
+      const entities = {
+        10: root(10, [300, 200]),
+        11: root(11, [250]),
+        150: leaf(150),
+        200: leaf(200, [150]),
+        250: leaf(250),
+        300: leaf(300),
+      }
+      const {mgr, proxy} = makeWindowedMgr(entities)
+      await captureBldrsElementProperties(mgr, 0, null)
+      const drained = proxy.getLineResident.mock.calls.map(([id]) => id).slice(2)
+      expect(drained).toEqual([200, 250, 300, 150])
+    })
+
+    it('keeps the rest of the closure and reports how many records it could not read', async () => {
+      const entities = {10: root(10, [200, 300]), 200: leaf(200), 300: leaf(300)}
+      const {mgr} = makeWindowedMgr(entities, {unreadable: new Set([200])})
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+      expect(Object.keys(captured.itemProperties).sort()).toEqual(['10', '300'])
+      expect(getGlbLogs().some((l) => l.level === 'warn' &&
+        l.text.includes('1 record(s) could not be read'))).toBe(true)
+    })
+
+    it('reads a resident source synchronously, without paging', async () => {
+      const entities = {10: root(10, [200]), 200: leaf(200)}
+      const {mgr, proxy} = makeWindowedMgr(entities)
+      proxy.sourceIsExternal = false
+      proxy.getLine.mockImplementation((id) => entities[id])
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+      expect(Object.keys(captured.itemProperties).sort()).toEqual(['10', '200'])
+      expect(proxy.getLineResident).not.toHaveBeenCalled()
+    })
+  })
+
   describe('captureBldrsElementProperties — null paths', () => {
     it('returns null when ifcManager is missing', async () => {
       const tree = {expressID: 1, type: 'IFCPROJECT', children: []}
