@@ -706,6 +706,47 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
   changes, so a failure at the indexed model is retried with the finished
   one. No crash was traced to this race; #2063 is a different bug.
 
+### 7.2 Step 9 (default on): the criteria
+
+Kept on the long-lived docs branch until step 9's PR, which folds it in.
+Every item needs either a merged PR or a measurement in a PR body.
+
+1. **Steps 2–8 merged**, each behind the flag, each with its desktop and
+   mobile E2E.
+2. **The `?view=` rules stack deleted** (§8 item 7). WidgetApi's
+   `ChangeViewSettingsEventHandler` is migrated first. Legacy
+   `?feature=bot` stays on the main-thread engine and refuses clearly
+   under the worker (in place since #2058).
+3. **#2061 explained and fixed or accepted.** That is the 350 MB worker
+   JS heap after an sp-231MB load. It needs a heap snapshot, and its
+   number goes against the §5.2 budget.
+4. **#2070 fixed.** One round trip per Properties table: a deref op that
+   runs in the worker, applying the depth limit and `MAX_ARRAY_MEMBERS`
+   there so it returns only what renders. Plus render-on-demand when
+   idle, so a reply doesn't wait behind a frame. Measured on a 41-axis
+   grid table, flag off vs on.
+5. **No load regressions, flag off vs on.** PSB n≥3, plus SEESTRASSE and
+   sp-231MB, at `RAF_THROTTLE_MS=3600000`:
+   - main-thread long tasks over 50 ms, time to index, Geometry, Total;
+   - memory after evict (the #2023 E2E);
+   - each windowed leg checked to have actually run windowed (its
+     `Engine source I/O:` line present), with a persistent profile, since
+     an incognito-like context's small OPFS quota silently falls back to
+     a buffered open.
+6. **The kill switches work in a real browser:**
+   - `?feature=disableEngineWorker` puts the main-thread engine back;
+   - the in-process fallback runs when a worker cannot start (unit-tested
+     since #2058; one E2E with `Worker` stubbed to throw);
+   - `disableEngineSyncHandle` puts the Blob store back (step 4).
+7. **Other browsers checked by hand.** Safari and Firefox: module workers,
+   `createSyncAccessHandle({mode: 'read-only'})` or its Blob fallback, and
+   one model opening end to end with properties. Recorded in the step-9
+   PR.
+8. **The flag-on E2E suite green** as the default:
+   - navTreeAtIndex, previewInteraction, engineIfcLoad, engineSyncHandle;
+   - PropertiesNestedRefs, the STEP specs from step 6;
+   - batchedGlbCache, the cache hit after a worker load (step 5).
+
 ## 8. Decisions (2026-11-03)
 
 These were the open questions of the scope. The user decided each one.
