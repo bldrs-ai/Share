@@ -56,9 +56,21 @@ hugged box renders them as a narrow clipped column. Expanding also grows
 MUI's message slot (`flexGrow`), which otherwise stays content-sized and turns
 the extra width into empty space on the right.
 
-A user pasting any of these into a bug report produces the same text; Sentry
-receives the same trail as breadcrumbs plus the final report string in the
-`load` context.
+A user pasting any of these into a bug report produces the same text. Sentry
+receives the same trail as breadcrumbs, plus the final report string in the
+`load` context (stall and failure events) and the `loadDiagnostics` context
+(diagnostics events), **with one line changed: the model line.** conway's
+`Model: <header FILE_NAME> — <schema>, <size>, <originating system>
+(<preprocessor>)` is the exporter's free text, and in the wild that has
+included a full UNC path to a company file share, with its private IP and
+project folder names (SHARE-1MT). Sentry's server-side scrubber left it alone.
+So Sentry's copy reads `Model: (name withheld) — <schema>, <size>, <tool>`,
+built from the reporter's latched fields with the tool taken from the
+`authoring_tool` allowlist (`LoadProgressReporter#sentryModelLine`). The same
+line's console echo, and `handleFileDrop`'s warning naming a dropped file, are
+rewritten as breadcrumbs by `privacy/sentryRedaction.js` (`beforeBreadcrumb`).
+The report dialog, the snackbar and the console keep the full line: that is
+the user reading their own file's header.
 
 Canonical implementation: conway `src/core/progress_log.ts`
 (`LoadLogAccumulator` + formatters), consumed by the conway CLI renderer.

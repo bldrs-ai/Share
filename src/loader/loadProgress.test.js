@@ -776,6 +776,72 @@ describe('loadProgress', () => {
     })
 
     /*
+     * The header's FILE_NAME and author text reached Sentry verbatim in the
+     * report context, including a full UNC path to a company file share
+     * (SHARE-1MT). The report the user sees keeps them; the Sentry copy
+     * carries only fields already known to be safe.
+     */
+    describe('the Sentry copy of the report withholds header text', () => {
+      const header = {
+        fileName: '\\\\10.0.0.5\\Projects\\ACME Tower\\Bracket rev2.stp',
+        schema: 'CONFIG_CONTROL_DESIGN',
+        byteLength: 127_611_699, // 121.7 MB
+        originatingSystem: 'CATIA V5 exported by jane@example.com',
+        preprocessorVersion: 'CATIA V5 STEP AP203 v1',
+      }
+
+      /** @param {string} report the report text Sentry would receive */
+      function expectWithheld(report) {
+        expect(report).toContain('Model: (name withheld) — CONFIG_CONTROL_DESIGN, 121.7 MB, Dassault CATIA')
+        expect(report).not.toContain('10.0.0.5')
+        expect(report).not.toContain('ACME')
+        expect(report).not.toContain('Bracket')
+        expect(report).not.toContain('jane@example.com')
+        expect(report).not.toContain('AP203')
+      }
+
+      it('keeps the full model line in the report the user sees', () => {
+        beginLoadProgress({fileInfo: 'a518f06c.stp'})
+        reportLoadProgress({modelInfo: header})
+        expect(reportLines().join('\n')).toContain('Bracket rev2.stp')
+      })
+
+      it('withholds it from the failure context', () => {
+        beginLoadProgress({fileInfo: 'a518f06c.stp'})
+        reportLoadProgress({modelInfo: header})
+        reportLoadProgress({phase: 'geometry', completed: 1, total: 4, elapsedMs: 10})
+        endLoadProgress()
+        const {report} = loadFailureCaptureContext().contexts.load
+        expect(report).toMatch(/^Share v/)
+        expectWithheld(report)
+      })
+
+      it('withholds it from the diagnostics event', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'a518f06c.stp'})
+        reportLoadProgress({modelInfo: header})
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+        const call = captureMessage.mock.calls.find(([message]) => message.startsWith('Load diagnostics'))
+        expectWithheld(call[1].contexts.loadDiagnostics.report)
+        warnSpy.mockRestore()
+      })
+
+      // The non-engine path (reportModelInfo) carries the user's own file
+      // name, e.g. a Drive file's, so it is withheld the same way.
+      it('withholds a non-engine format\'s file name too', () => {
+        beginLoadProgress({fileInfo: 'gdrive:abc123'})
+        reportModelInfo({fileName: 'Client site survey.glb', schema: 'GLB', byteLength: 39_950_000})
+        endLoadProgress()
+        const {report} = loadFailureCaptureContext().contexts.load
+        expect(report).toContain('Model: (name withheld) — GLB, 38.1 MB')
+        expect(report).not.toContain('Client site survey')
+        expect(reportLines()).toContain('Model: Client site survey.glb — GLB, 38.1 MB')
+      })
+    })
+
+    /*
      * The end-of-load diagnostics event (issue #1767): the counterpart
      * a dashboard model-open chip with non-zero errors/warnings links
      * to. CadView drives it from inside the real_model_open branch, so

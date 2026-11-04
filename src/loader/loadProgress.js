@@ -12,6 +12,7 @@ import {version as shareVersion} from '../../package.json'
 // (dependency-free — no wasm). Was an interim byte-identical local copy until
 // the 1.381.1195 pin shipped this module.
 import {LoadLogAccumulator, formatMb} from '@bldrs-ai/conway/src/core/progress_log'
+import {SENTRY_MODEL_LINE_PREFIX} from '../privacy/sentryRedaction'
 // Conway's static Logger, for the data-defect marker (conway#712) on the
 // entries it logs — see installDefectProxy. This is the SAME module instance
 // the engine logs through: `@bldrs-ai/conway/web-ifc` (ShareIfc's import)
@@ -133,6 +134,17 @@ class LoadProgressReporter {
     // stage lines interleaved as they actually happened) — the accumulator
     // tracks stage state; this list is the single source of line order.
     this.lines = []
+    // The same report as Sentry receives it: line for line `lines`, except
+    // that a model line is rebuilt from fields known to be safe
+    // (sentryModelLine). The header's FILE_NAME and its author and
+    // originating-system text are whatever the exporter wrote, and in the
+    // wild that has included a full UNC path to a company file share, with
+    // its private IP and project folder names (SHARE-1MT, 2026-11-03).
+    // Sentry's server-side scrubber did not touch it, so it is kept out
+    // here rather than left for the scrubber. `lines` still feeds the
+    // report dialog and the console, where the user reads their own file's
+    // header.
+    this.sentryLines = []
     this.lastEvent = null
     this.lastBreadcrumbTime = 0
     this.lastStatusLineTime = 0
@@ -374,9 +386,12 @@ class LoadProgressReporter {
    * @param {string} line
    * @param {boolean} [echo] mirror to console.info (default true); false for
    *   the post-Total diagnostics, which were already on the console
+   * @param {string} [sentryLine] this line as the Sentry copy of the report
+   *   carries it, when that must differ (a model line: sentryModelLine)
    */
-  addReportLine(line, echo = true) {
+  addReportLine(line, echo = true, sentryLine = line) {
     this.lines.push(line)
+    this.sentryLines.push(sentryLine)
     if (echo) {
       // eslint-disable-next-line no-console
       console.info(line)
@@ -404,7 +419,7 @@ class LoadProgressReporter {
 
     if (isModelInfoProgress(progressArg)) {
       this.recordModelInfo(progressArg.modelInfo)
-      this.addReportLine(this.log.setModelInfo(progressArg.modelInfo))
+      this.addReportLine(this.log.setModelInfo(progressArg.modelInfo), true, this.sentryModelLine())
       this.armStallWatchdog()
       return
     }
@@ -511,6 +526,37 @@ class LoadProgressReporter {
   authoringTool() {
     return knownAuthoringTool(this.originatingSystem) ??
       knownAuthoringTool(this.preprocessorVersion)
+  }
+
+  /**
+   * The model line as the Sentry copy of the report carries it: schema,
+   * size and the allowlisted authoring tool, which are the same fields the
+   * event's tags already hold, and no file name or header free text.
+   *
+   * conway's formatModelLine writes the header's FILE_NAME as the line's
+   * name and its originating system and preprocessor verbatim; this is
+   * built from this reporter's latched fields instead (recordModelInfo), so
+   * nothing in it is a span of the header. The name is withheld rather than
+   * replaced by `fallbackName`: that is the URL's basename, which for a
+   * Drive or GitHub model is the user's own file name.
+   *
+   * @return {string}
+   */
+  sentryModelLine() {
+    const parts = []
+    if (this.schema !== undefined) {
+      parts.push(this.schema)
+    }
+    if (Number.isFinite(this.fileSize)) {
+      // Same rounding as conway's formatModelLine, so the two copies of the
+      // report differ only in what is withheld.
+      parts.push(`${(this.fileSize / BYTES_PER_MB).toFixed(1)} MB`)
+    }
+    const tool = this.authoringTool()
+    if (tool !== undefined) {
+      parts.push(tool)
+    }
+    return `${SENTRY_MODEL_LINE_PREFIX}${parts.length > 0 ? ` — ${parts.join(', ')}` : ''}`
   }
 
   /**
@@ -638,7 +684,7 @@ class LoadProgressReporter {
           elapsedMs: event?.elapsedMs ?? elapsedMs,
           memoryMb: event?.memoryMb,
           fileInfo: this.fileInfo,
-          report: this.lines.join('\n'),
+          report: this.sentryLines.join('\n'),
         },
       },
     }
@@ -836,7 +882,7 @@ class LoadProgressReporter {
           consoleTotal: summary.total,
           consoleDistinct: summary.distinct,
           messages: this.topDiagnostics(MAX_SENTRY_DIAGNOSTICS),
-          report: this.lines.join('\n'),
+          report: this.sentryLines.join('\n'),
         },
       },
     })
@@ -1278,7 +1324,7 @@ export function reportEngineVersion(versionLine) {
 export function reportModelInfo(info) {
   if (activeReporter && !activeReporter.ended) {
     activeReporter.recordModelInfo(info)
-    activeReporter.addReportLine(activeReporter.log.setModelInfo(info))
+    activeReporter.addReportLine(activeReporter.log.setModelInfo(info), true, activeReporter.sentryModelLine())
   }
 }
 
