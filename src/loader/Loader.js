@@ -777,6 +777,14 @@ export async function load(
   } catch (e) {
     throw markIfOutOfMemory(e)
   }
+  if (model?.ifcManager?.ifcAPI?.engineSession) {
+    // Parsed by a worker engine (`?feature=engineWorker`). No GLB cache write
+    // yet: the writer's property capture, source spill and geometry release
+    // all reach for a main-thread engine (`viewer.IFC.loader.ifcManager`),
+    // which holds no model here. They move into the worker as one `capture`
+    // job in engine-worker.md §7 step 5, which turns the write back on.
+    glbExportContext = null
+  }
 
   // Conway's handle for THIS parse, latched before the model leaves
   // `load()`. Two different numbers travel under the name "modelID" and

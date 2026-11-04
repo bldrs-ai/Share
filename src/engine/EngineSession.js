@@ -216,23 +216,36 @@ export class EngineSession {
       clearTimeout(timer)
     }
     this.capabilities = result.capabilities
+    /** `init`'s reply: `{conwayVersion, capabilities, wasmBytes, initMs}`. */
+    this.info = result
     return result
   }
 
 
   /**
-   * Open the session's one model, index only (no geometry). Resolves at the
-   * index, as `indexed` does.
+   * Open the session's one model. Resolves at the index, as `indexed` does.
+   * Without `stream` that is the whole open (index only). With it, the
+   * engine then streams `preview`, `batch` and `log` events and ends with
+   * `done` or `failed` (§4): subscribe with {@link on} before calling.
+   *
+   * A failed open rejects with an Error whose `engineFailure` is the
+   * engine's classification, `{code, refusedSchema, openFailure}`, for
+   * `unsupportedSchema.js#openModelFailure` to turn into the user-facing
+   * error.
    *
    * @param {object} source `{file}` (a File/Blob: windowed, and cloned by
    *   reference) or `{bytes}` (an ArrayBuffer: transferred, so the caller's
    *   buffer is detached)
+   * @param {object} [options]
+   * @param {object} [options.stream] `{previews, batchSize, startPaused}` to
+   *   stream the geometry after the index; `startPaused` waits for
+   *   {@link pump}`('run')` before the first batch
    * @return {Promise<object>} `{modelID, windowed, openMs, wasmBytes}`
    */
-  async open(source) {
+  async open(source, {stream = null} = {}) {
     const {source: sent, transfer} = transferableSource(source)
     try {
-      const result = await this.request(Op.OPEN, {source: sent}, transfer)
+      const result = await this.request(Op.OPEN, {source: sent, stream}, transfer)
       if (result.failure) {
         // The engine's classification, for unsupportedSchema.js#openModelFailure
         // to turn into the user-facing error, as the main-thread path does.
@@ -246,6 +259,29 @@ export class EngineSession {
       this.rejectIndexed(e)
       throw e
     }
+  }
+
+
+  /**
+   * Backpressure (§5.2): pause the pump at its next batch boundary, or let
+   * it run again. A paused load keeps its engine and its place.
+   *
+   * @param {'pause'|'run'} mode
+   * @return {Promise<{paused: boolean}>}
+   */
+  pump(mode) {
+    return this.request(Op.PUMP, {mode})
+  }
+
+
+  /**
+   * End a streamed load at its next batch boundary; it then emits
+   * `failed{kind: 'aborted'}`.
+   *
+   * @return {Promise<boolean>}
+   */
+  abort() {
+    return this.request(Op.ABORT)
   }
 
 

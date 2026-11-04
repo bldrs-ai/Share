@@ -14,6 +14,14 @@ const {beforeEach} = test
 // page.route: the model fetch goes through MSW's service worker, which
 // context.route does not see.
 const MODEL_PATH = '/share/v/p/__test_fixtures__/Momentum.ifc'
+// The same load with the model's engine in its own worker
+// (engine-worker.md §7 step 3): its preview payloads cross from the worker,
+// and the index hold is honoured by starting its pump paused
+// (engine/engineIfcLoad.js).
+const ENGINES = [
+  {engine: 'main-thread engine', path: MODEL_PATH},
+  {engine: 'engine worker', path: `${MODEL_PATH}?feature=engineWorker`},
+]
 const TEST_TIMEOUT_MS = 120_000
 const HELD_TIMEOUT_MS = 60_000
 const DRAG_PX = 160
@@ -61,9 +69,10 @@ async function holdIndex(page: Page) {
  * preview on screen during the parse.
  *
  * @param page
+ * @param path the model URL
  */
-async function openHeldAtParse(page: Page) {
-  await page.goto(MODEL_PATH, {waitUntil: 'domcontentloaded'})
+async function openHeldAtParse(page: Page, path: string) {
+  await page.goto(path, {waitUntil: 'domcontentloaded'})
   await page.waitForFunction(() =>
     typeof (window as unknown as Record<string, unknown>).__bldrsTestReleaseIndex === 'function',
   null, {timeout: HELD_TIMEOUT_MS})
@@ -222,113 +231,115 @@ describeMobileAndDesktop('Open 205: interactive at first mesh', () => {
     await holdIndex(page)
   })
 
-  test('orbit and zoom work before the index, and the end of the load leaves the camera there', async ({page}) => {
-    test.setTimeout(TEST_TIMEOUT_MS)
-    await openHeldAtParse(page)
-    await expect(page.getByTestId('LoadingBackdrop')).toBeHidden()
+  for (const {engine, path} of ENGINES) {
+    test(`${engine}: orbit and zoom work before the index, and the end of the load leaves the camera there`, async ({page}) => {
+      test.setTimeout(TEST_TIMEOUT_MS)
+      await openHeldAtParse(page, path)
+      await expect(page.getByTestId('LoadingBackdrop')).toBeHidden()
 
-    const before = await settledCamera(page)
-    const box = await page.locator('canvas').first().boundingBox()
-    if (box === null) {
-      throw new Error('the viewer canvas has no box')
-    }
-    const cx = box.x + (box.width / 2)
-    const cy = box.y + (box.height / 2)
-    await page.mouse.move(cx, cy)
-    await page.mouse.down()
-    await page.mouse.move(cx + DRAG_PX, cy, {steps: DRAG_STEPS})
-    await page.mouse.up()
-    const orbited = await settledCamera(page)
-    expect(orbited.pose).not.toEqual(before.pose)
-
-    await page.mouse.move(cx, cy)
-    await page.mouse.wheel(0, WHEEL_PX)
-    const zoomed = await settledCamera(page)
-    expect(Math.abs(zoomed.distance - orbited.distance)).toBeGreaterThan(ZOOM_EPSILON)
-    await expectStillParsing(page)
-
-    // The user took the camera, so neither the follow nor the end-of-load fit
-    // moves it (design/new/in-app-model-switch.md §4.2a).
-    await releaseIndex(page)
-    await waitForModelReady(page, HELD_TIMEOUT_MS)
-    const after = await settledCamera(page)
-    after.pose.forEach((v, i) => expect(v).toBeCloseTo(zoomed.pose[i], 3))
-  })
-
-  test('a double-click on a preview mesh selects its element during the parse', async ({page}) => {
-    test.setTimeout(TEST_TIMEOUT_MS)
-    await openHeldAtParse(page)
-    const id = await doubleClickSelectsAPreviewElement(page)
-    await expectStillParsing(page)
-
-    // Highlighted now, on the preview: the element's preview meshes wear the
-    // viewer's selection material.
-    const paint = await page.evaluate((target) => {
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      const viewer = (window as any).store.getState().viewer
-      const selection = viewer.selector.getSelectionMaterial()
-      const meshes = viewer.context.getScene().children.filter((c: any) => c.userData?.isLoadPreview)
-        .flatMap((g: any) => g.children)
-      const own = meshes.filter((m: any) => m.userData?.previewExpressID === target)
-      return {
-        hasSelectionMaterial: selection !== null,
-        painted: own.filter((m: any) => m.material === selection).length,
-        own: own.length,
-        others: meshes.filter((m: any) => m.userData?.previewExpressID !== target && m.material === selection).length,
+      const before = await settledCamera(page)
+      const box = await page.locator('canvas').first().boundingBox()
+      if (box === null) {
+        throw new Error('the viewer canvas has no box')
       }
-      /* eslint-enable @typescript-eslint/no-explicit-any */
-    }, id)
-    expect(paint.hasSelectionMaterial).toBe(true)
-    expect(paint.painted).toBe(paint.own)
-    expect(paint.painted).toBeGreaterThan(0)
-    expect(paint.others).toBe(0)
+      const cx = box.x + (box.width / 2)
+      const cy = box.y + (box.height / 2)
+      await page.mouse.move(cx, cy)
+      await page.mouse.down()
+      await page.mouse.move(cx + DRAG_PX, cy, {steps: DRAG_STEPS})
+      await page.mouse.up()
+      const orbited = await settledCamera(page)
+      expect(orbited.pose).not.toEqual(before.pose)
 
-    // Its properties come with the index.
-    await releaseIndex(page)
-    await page.waitForFunction((target) =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).store.getState().selectedElement?.expressID === target,
-    id, {timeout: HELD_TIMEOUT_MS})
-  })
+      await page.mouse.move(cx, cy)
+      await page.mouse.wheel(0, WHEEL_PX)
+      const zoomed = await settledCamera(page)
+      expect(Math.abs(zoomed.distance - orbited.distance)).toBeGreaterThan(ZOOM_EPSILON)
+      await expectStillParsing(page)
 
-  test('a selection made on the preview survives into the finished model', async ({page}) => {
-    test.setTimeout(TEST_TIMEOUT_MS)
-    await openHeldAtParse(page)
-    const id = await doubleClickSelectsAPreviewElement(page)
-    await releaseIndex(page)
-    await waitForModelReady(page, HELD_TIMEOUT_MS)
+      // The user took the camera, so neither the follow nor the end-of-load fit
+      // moves it (design/new/in-app-model-switch.md §4.2a).
+      await releaseIndex(page)
+      await waitForModelReady(page, HELD_TIMEOUT_MS)
+      const after = await settledCamera(page)
+      after.pose.forEach((v, i) => expect(v).toBeCloseTo(zoomed.pose[i], 3))
+    })
 
-    const state = await page.evaluate((target) => {
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      const s = (window as any).store.getState()
-      // The finished model paints it: some instance of the element is in the
-      // batched selection layer (viewer/ifc/batchedHighlight.js).
-      let paintedInstances = 0
-      s.model.traverse((o: any) => {
-        const selected: Set<number> | undefined = o.userData?.batchedHighlight?.selSet
-        if (o.isBatchedMesh && o.instanceParents && selected) {
-          for (const batchId of selected) {
-            if (o.instanceParents[batchId] === target) {
-              paintedInstances++
+    test(`${engine}: a double-click on a preview mesh selects its element during the parse`, async ({page}) => {
+      test.setTimeout(TEST_TIMEOUT_MS)
+      await openHeldAtParse(page, path)
+      const id = await doubleClickSelectsAPreviewElement(page)
+      await expectStillParsing(page)
+
+      // Highlighted now, on the preview: the element's preview meshes wear the
+      // viewer's selection material.
+      const paint = await page.evaluate((target) => {
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        const viewer = (window as any).store.getState().viewer
+        const selection = viewer.selector.getSelectionMaterial()
+        const meshes = viewer.context.getScene().children.filter((c: any) => c.userData?.isLoadPreview)
+          .flatMap((g: any) => g.children)
+        const own = meshes.filter((m: any) => m.userData?.previewExpressID === target)
+        return {
+          hasSelectionMaterial: selection !== null,
+          painted: own.filter((m: any) => m.material === selection).length,
+          own: own.length,
+          others: meshes.filter((m: any) => m.userData?.previewExpressID !== target && m.material === selection).length,
+        }
+        /* eslint-enable @typescript-eslint/no-explicit-any */
+      }, id)
+      expect(paint.hasSelectionMaterial).toBe(true)
+      expect(paint.painted).toBe(paint.own)
+      expect(paint.painted).toBeGreaterThan(0)
+      expect(paint.others).toBe(0)
+
+      // Its properties come with the index.
+      await releaseIndex(page)
+      await page.waitForFunction((target) =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).store.getState().selectedElement?.expressID === target,
+      id, {timeout: HELD_TIMEOUT_MS})
+    })
+
+    test(`${engine}: a selection made on the preview survives into the finished model`, async ({page}) => {
+      test.setTimeout(TEST_TIMEOUT_MS)
+      await openHeldAtParse(page, path)
+      const id = await doubleClickSelectsAPreviewElement(page)
+      await releaseIndex(page)
+      await waitForModelReady(page, HELD_TIMEOUT_MS)
+
+      const state = await page.evaluate((target) => {
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        const s = (window as any).store.getState()
+        // The finished model paints it: some instance of the element is in the
+        // batched selection layer (viewer/ifc/batchedHighlight.js).
+        let paintedInstances = 0
+        s.model.traverse((o: any) => {
+          const selected: Set<number> | undefined = o.userData?.batchedHighlight?.selSet
+          if (o.isBatchedMesh && o.instanceParents && selected) {
+            for (const batchId of selected) {
+              if (o.instanceParents[batchId] === target) {
+                paintedInstances++
+              }
             }
           }
+        })
+        const previews = s.viewer.context.getScene().children.filter((c: any) => c.userData?.isLoadPreview).length
+        return {
+          anchors: s.selectedAnchorIds,
+          properties: s.selectedElement?.expressID ?? null,
+          paintedInstances,
+          previews,
         }
-      })
-      const previews = s.viewer.context.getScene().children.filter((c: any) => c.userData?.isLoadPreview).length
-      return {
-        anchors: s.selectedAnchorIds,
-        properties: s.selectedElement?.expressID ?? null,
-        paintedInstances,
-        previews,
-      }
-      /* eslint-enable @typescript-eslint/no-explicit-any */
-    }, id)
-    expect(state.anchors).toEqual([`${id}`])
-    expect(state.properties).toBe(id)
-    expect(state.previews).toBe(0)
-    expect(state.paintedInstances).toBeGreaterThan(0)
-    // The tree came up at the index and resolved the pick to its row, so the
-    // URL carries its element path.
-    expect(new URL(page.url()).pathname).toMatch(new RegExp(`/${id}$`))
-  })
+        /* eslint-enable @typescript-eslint/no-explicit-any */
+      }, id)
+      expect(state.anchors).toEqual([`${id}`])
+      expect(state.properties).toBe(id)
+      expect(state.previews).toBe(0)
+      expect(state.paintedInstances).toBeGreaterThan(0)
+      // The tree came up at the index and resolved the pick to its row, so the
+      // URL carries its element path.
+      expect(new URL(page.url()).pathname).toMatch(new RegExp(`/${id}$`))
+    })
+  }
 })

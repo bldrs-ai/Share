@@ -11,12 +11,15 @@
 // each bundle their own copy of Conway, and the Jest suite drives it with a
 // stub.
 //
-// Step 2 of §7 scope: `init`, an index-only `open` (deferred, no geometry
-// pump), and the async reads (`tree`, `props`, `propertySets`,
-// `itemsOfType`). The pump, previews, failure classification and the GLB
-// capture job come in steps 3–5.
+// What it does: `init`; `open`, index-only or streamed (§7 step 3: previews
+// while the parse runs, then the geometry pump's batches as transferable
+// columns, then a `done` packet), with a failed open classified here, where
+// conway's statistics are (§2.4 G3); the async reads (`tree`, `props`,
+// `propertySets`, `itemsOfType`); and `pump` pause/run and `abort`. The GLB
+// capture job comes in step 5.
 import {classifyOpenFailure, openDeferred} from '../loader/conwayOpen'
 import {ENGINE_PROTOCOL_VERSION, Ev, Op, serializeError} from './protocol'
+import {makeBatchEncoder, previewMessage, snapshotStatistics} from './engineStream'
 
 
 /**
@@ -33,6 +36,22 @@ const BASE_OPEN_SETTINGS = Object.freeze({
   GEOMETRY_BUDGET_MB,
   STREAMING_CONSUMER: true,
 })
+
+/**
+ * Products per pump call. The same as the main-thread path's async pump
+ * (`conwayDirectIfcLoader.js` ASYNC_DEMAND_EXTRACT_BATCH_SIZE): a windowed
+ * extract pages each product's #ref closure before extracting it, and 8
+ * keeps file-order streaming while still amortising the page-side append.
+ */
+export const PUMP_BATCH_SIZE = 8
+
+/**
+ * FlatMeshes per `batch` event when a load that pumped nothing is served by
+ * the one-shot whole-model ask instead (see `oneShotFallback`). Bigger than a
+ * pump call because nothing renders in between anyway; bounded so a large
+ * one-shot model is not one multi-hundred-MB message.
+ */
+const ONE_SHOT_CHUNK = 256
 
 /** Conway log levels; see `conwayDirectIfcLoader.js#applyEngineLogLevel`. */
 const ENGINE_LOG_LEVEL_DEBUG = 1
@@ -80,9 +99,17 @@ export function makeBlobStore(blob) {
  * @param {function(object, Array=): void} options.post sends one message to
  *   the client, with an optional transfer list
  * @param {function(): number} [options.now] clock, for timings
+ * @param {object} [options.logForwarder] `engineStream.js#makeLogForwarder`,
+ *   in a worker only: in process the page's load report already sees the
+ *   engine's Logger and console, and forwarding would count them twice
+ * @param {function(): Promise<void>} [options.yieldToLoop] between pump
+ *   calls, so requests (a tree read, `pump` pause, `abort`) get a turn
  * @return {{handle: function(object): Promise<void>, dispose: function(): void}}
  */
-export function createEngineHandler({loadIfcAPI, post, now = () => performance.now()}) {
+export function createEngineHandler({
+  loadIfcAPI, post, now = () => performance.now(), logForwarder = null,
+  yieldToLoop = yieldToEventLoop,
+}) {
   let epoch = 0
   let seq = 0
   let api = null
@@ -100,9 +127,27 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
   // awaiting would otherwise carry on after close, rebuilding or keeping an
   // engine nobody holds. Each checks it after every await.
   let disposed = false
+  // Pump control. `paused` is backpressure from the page (§5.2): the pump
+  // stops at the next batch boundary and waits, keeping its engine and its
+  // place in the stream. `aborted` ends it there for good.
+  let paused = false
+  let aborted = false
+  let resume = null
 
   const send = (msg, transfer) => post({v: ENGINE_PROTOCOL_VERSION, epoch, ...msg}, transfer)
-  const emit = (ev, payload = {}) => send({ev, seq: ++seq, wasmBytes: wasmBytesOf(api), ...payload})
+  const flushLog = () => {
+    const log = logForwarder?.take()
+    if (log) {
+      send({ev: Ev.LOG, seq: ++seq, wasmBytes: wasmBytesOf(api), ...log})
+    }
+  }
+  const emit = (ev, payload = {}, transfer = undefined) => {
+    // The log first, so the page's tally is never behind the event that
+    // follows it (a `failed` carries the count the report needs).
+    flushLog()
+    send({ev, seq: ++seq, wasmBytes: wasmBytesOf(api), ...payload}, transfer)
+  }
+
 
   const requireModel = () => {
     if (api === null) {
@@ -160,7 +205,7 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
       }
     },
 
-    async [Op.OPEN]({source} = {}) {
+    async [Op.OPEN]({source, stream = null} = {}) {
       if (api === null) {
         throw new Error('engine: init has not run')
       }
@@ -171,10 +216,28 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
       }
       opening = true
       try {
-        return await openModel(source)
+        return await openModel(source, stream)
       } finally {
         opening = false
       }
+    },
+
+    [Op.PUMP]({mode = 'run'} = {}) {
+      paused = mode === 'pause'
+      if (!paused && resume !== null) {
+        resume()
+        resume = null
+      }
+      return {paused}
+    },
+
+    [Op.ABORT]() {
+      aborted = true
+      if (resume !== null) {
+        resume()
+        resume = null
+      }
+      return true
     },
 
     async [Op.TREE]({mode = 'names', includeSolids = false} = {}) {
@@ -232,13 +295,26 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
    * OPEN's body, once the one-model slot is claimed (see `opening`).
    *
    * @param {object} source `{file}` or `{bytes}`
+   * @param {object|null} stream `{previews, batchSize, startPaused}`, or null
+   *   for an index-only open
    * @return {Promise<object>}
    */
-  async function openModel(source) {
+  async function openModel(source, stream) {
     const settings = {
       ...BASE_OPEN_SETTINGS,
       ON_PROGRESS: (event) => emit(Ev.PROGRESS, {event: plainProgress(event)}),
       ON_MODEL_INFO: (info) => emit(Ev.MODEL_INFO, {info: plainProgress(info)}),
+    }
+    if (stream?.previews) {
+      settings.ON_PREVIEW_MESH = (payload) => {
+        try {
+          const {payload: out, transfer} = previewMessage(payload)
+          emit(Ev.PREVIEW, {payload: out}, transfer)
+        } catch {
+          // Best-effort, as on the main thread: a preview must never break
+          // the load (ShareIfcLoader#parse's onPreviewMesh).
+        }
+      }
     }
     const t0 = now()
     const blob = source?.file
@@ -291,6 +367,17 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
     modelID = id
     const result = {modelID, windowed, openMs: now() - t0, wasmBytes: wasmBytesOf(api)}
     emit(Ev.INDEXED, {modelID, windowed})
+    if (stream) {
+      // `startPaused`: the page's test hold (engineIfcLoad.js); the pump
+      // waits at its first boundary for `pump {mode: 'run'}`.
+      if (stream.startPaused) {
+        paused = true
+      }
+      // Started, not awaited: the open's reply is the index (§4), and the
+      // page's reads (tree, properties) are served beside the pump, each
+      // paging the same windows, exactly as on the main thread (#2037).
+      runPump({windowed, batchSize: stream.batchSize ?? PUMP_BATCH_SIZE})
+    }
     return result
   }
 
@@ -301,6 +388,151 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
     }
   }
 
+  /** @return {Promise<void>} settles when `pump {mode: 'run'}` or `abort` arrives */
+  function waitForResume() {
+    return new Promise((resolve) => {
+      resume = resolve
+    })
+  }
+
+  /**
+   * The geometry pump, worker-side (§2.4 G1): extract, copy each new
+   * geometry out once, post the batch as transferable columns, repeat; then
+   * the `done` packet. Mirrors `conwayDirectIfcLoader.js#parseIfcWithConway`'s
+   * deferred loop, including its geometry progress and its one-shot fallback
+   * when the pump produced nothing. Any throw ends the load as `failed`.
+   *
+   * @param {object} opts
+   * @param {boolean} opts.windowed
+   * @param {number} opts.batchSize
+   */
+  async function runPump({windowed, batchSize}) {
+    const encoder = makeBatchEncoder(api, modelID)
+    let total
+    let done = 0
+    let batches = 0
+    let meshes = 0
+    let bytes = 0
+    const tPump = now()
+    const reportGeometry = () => emit(Ev.PROGRESS, {event: {phase: 'geometry', completed: done, total, unit: 'products'}})
+    const postBatch = (flatMeshes, progress) => {
+      const encoded = encoder.encode(flatMeshes)
+      batches++
+      meshes += encoded.meshCount
+      bytes += encoded.bytes
+      emit(Ev.BATCH, {
+        placements: encoded.placements,
+        geometries: encoded.geometries,
+        progress,
+        bytes: encoded.bytes,
+      }, encoded.transfer)
+    }
+    try {
+      for (;;) {
+        if (paused) {
+          await waitForResume()
+        }
+        if (aborted) {
+          emit(Ev.FAILED, {kind: 'aborted', message: 'engine: load aborted'})
+          return
+        }
+        const batch = []
+        let pumped
+        if (typeof api.ExtractGeometryBatchAsync === 'function') {
+          // eslint-disable-next-line new-cap
+          pumped = await api.ExtractGeometryBatchAsync(modelID, batchSize, (flatMesh) => batch.push(flatMesh))
+        } else {
+          // eslint-disable-next-line new-cap
+          pumped = api.ExtractGeometryBatch(modelID, batchSize, (flatMesh) => batch.push(flatMesh))
+        }
+        const {extracted, remaining} = pumped
+        if (total === undefined && (extracted > 0 || remaining > 0)) {
+          total = extracted + remaining
+          reportGeometry()
+        }
+        done += extracted
+        if (total !== undefined) {
+          reportGeometry()
+        }
+        if (batch.length > 0) {
+          // Copied out inside the pump call's turn, before the next call can
+          // evict anything (engineStream.js#makeBatchEncoder).
+          postBatch(batch, {done, total})
+        }
+        if (remaining === 0 && extracted === 0) {
+          break
+        }
+        await yieldToLoop()
+      }
+      if (meshes === 0) {
+        await oneShotFallback(windowed, postBatch)
+      }
+      emit(Ev.DONE, {summary: await summarize({batches, meshes, bytes, pumpMs: now() - tPump,
+        geometries: encoder.sentCount(), windowed})})
+    } catch (e) {
+      emit(Ev.FAILED, {kind: 'pump', message: e?.message ?? String(e), name: e?.name})
+    }
+  }
+
+  /**
+   * A load whose pump produced nothing (conway fell back to a classic open
+   * internally, or a deferred model with nothing to pump): serve the
+   * one-shot whole-model ask and re-emit it as batches, so the page has one
+   * delivery path and keeps no `recapture` (§2.4 G1). The same entry-point
+   * choice as `parseIfcWithConway`'s: the async ask only where the sync one
+   * cannot page a windowed source.
+   *
+   * @param {boolean} windowed
+   * @param {function(Array, object): void} postBatch
+   */
+  async function oneShotFallback(windowed, postBatch) {
+    const captured = []
+    const push = (flatMesh) => captured.push(flatMesh)
+    if (windowed && typeof api.StreamAllMeshesAsync === 'function') {
+      // eslint-disable-next-line new-cap
+      await api.StreamAllMeshesAsync(modelID, push)
+    } else {
+      // eslint-disable-next-line new-cap
+      api.StreamAllMeshes(modelID, push)
+    }
+    for (let at = 0; at < captured.length; at += ONE_SHOT_CHUNK) {
+      postBatch(captured.slice(at, at + ONE_SHOT_CHUNK), {done: undefined, total: undefined})
+    }
+  }
+
+  /**
+   * The `done` packet: everything `ShareIfcLoader#parse` reads off the engine
+   * after the build, as plain data (§4).
+   *
+   * @param {object} counts
+   * @return {Promise<object>}
+   */
+  async function summarize(counts) {
+    const summary = {...counts, wasmBytes: wasmBytesOf(api)}
+    if (typeof api.getStatistics === 'function') {
+      summary.statistics = snapshotStatistics(api.getStatistics(modelID))
+    }
+    if (typeof api.GetCoordinationMatrix === 'function') {
+      // eslint-disable-next-line new-cap
+      summary.coordinationMatrix = Array.from(await api.GetCoordinationMatrix(modelID))
+    }
+    if (typeof api.GetAppliedCoordinationMatrix === 'function') {
+      try {
+        // eslint-disable-next-line new-cap
+        const applied = api.GetAppliedCoordinationMatrix(modelID)
+        summary.appliedCoordination = applied ? Array.from(applied) : applied
+      } catch {
+        // Left absent: stampAppliedCoordination then leaves the model
+        // unstamped, as it does for an engine without the call.
+      }
+    }
+    if (typeof api.GetLinearScalingFactor === 'function') {
+      // eslint-disable-next-line new-cap
+      summary.linearScalingFactor = api.GetLinearScalingFactor(modelID)
+    }
+    return summary
+  }
+
   /**
    * Close the model and drop the engine. In a worker this is a courtesy:
    * `terminate()` follows and frees everything regardless. In process it is
@@ -309,6 +541,14 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
    */
   function dispose() {
     disposed = true
+    // A pump still running stops at its next boundary instead of reaching
+    // for an engine that is gone.
+    aborted = true
+    if (resume !== null) {
+      resume()
+      resume = null
+    }
+    logForwarder?.dispose()
     if (api !== null && modelID >= 0) {
       try {
         // eslint-disable-next-line new-cap
@@ -363,6 +603,36 @@ export function createEngineHandler({loadIfcAPI, post, now = () => performance.n
   }
 
   return {handle, dispose}
+}
+
+
+/**
+ * Give queued requests (a tree read, `pump` pause, `abort`) a turn between
+ * pump calls, without a timer. NOT `setTimeout(0)`: nested timeouts are
+ * clamped to 4 ms after the fifth level, and a pump yields once per batch of
+ * 8 products, so on sp-231MB (thousands of batches) the clamp alone added
+ * ~16 s to Geometry in this PR's first measurement. Same order as conway's
+ * own `core/progress.js#yieldToEventLoop`: `scheduler.yield`, else a
+ * MessageChannel round trip, which is not clamped.
+ *
+ * @return {Promise<void>}
+ */
+export function yieldToEventLoop() {
+  const scheduler = globalThis.scheduler
+  if (typeof scheduler?.yield === 'function') {
+    return scheduler.yield()
+  }
+  if (typeof MessageChannel === 'function') {
+    return new Promise((resolve) => {
+      const channel = new MessageChannel()
+      channel.port1.onmessage = () => {
+        channel.port1.close()
+        resolve()
+      }
+      channel.port2.postMessage(null)
+    })
+  }
+  return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 

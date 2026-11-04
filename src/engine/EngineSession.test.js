@@ -383,28 +383,6 @@ describe('engine worker prelude modules', () => {
     const imports = source.split('\n').filter((line) => line.startsWith('import '))
     expect(imports[0]).toBe('import \'./engineThreading\'')
   })
-
-  it('workerPlatform binds the native log callbacks to conway\'s Logger', () => {
-    const names = ['logInfo', 'logWarning', 'logError']
-    const saved = names.map((name) => g[name])
-    for (const name of names) {
-      delete g[name]
-    }
-    try {
-      let Logger
-      jest.isolateModules(() => {
-        require('./workerPlatform')
-        Logger = require('@bldrs-ai/conway/src/logging/logger').default
-      })
-      expect(g.logInfo).toBe(Logger.info)
-      expect(g.logWarning).toBe(Logger.warning)
-      expect(g.logError).toBe(Logger.error)
-    } finally {
-      names.forEach((name, i) => {
-        g[name] = saved[i]
-      })
-    }
-  })
 })
 
 

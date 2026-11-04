@@ -9,12 +9,16 @@
 // and GLB writer workers have: that keeps one engine build per page (§8
 // item 6).
 import './engineThreading'
-import './workerPlatform'
+import Logger, {DATA_DEFECT} from '@bldrs-ai/conway/src/logging/logger'
 import {createEngineHandler} from './engineHandler'
+import {makeLogForwarder} from './engineStream'
 import {ENGINE_PROTOCOL_VERSION, Ev} from './protocol'
 
 
 const handler = createEngineHandler({
+  // The page's load report cannot see this worker's Logger (another module
+  // instance) or its console, so both are forwarded (§2.4 G3).
+  logForwarder: makeLogForwarder({logger: Logger, console: self.console, dataDefect: DATA_DEFECT}),
   // `web-ifc` is Conway's compat surface (tools/esbuild/plugins.js
   // `webIfcShimAlias`); bundled into this worker as its own copy.
   loadIfcAPI: () => import('web-ifc').then((m) => m.IfcAPI),
